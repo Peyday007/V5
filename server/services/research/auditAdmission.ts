@@ -18,7 +18,9 @@
  * its instructions are not asked to; that is the point of deciding here.
  */
 import { getDb } from '../../db/database.ts';
-import { getWorkerSession, listRoutines } from '../../repos/fleet.ts';
+import { getWorkerSession, listAccounts, listRoutines } from '../../repos/fleet.ts';
+import { getWorker } from '../../repos/identity.ts';
+import type { FleetRoutine } from '../../domain/types.ts';
 import { passesInCurrentRound } from './auditRound.ts';
 import { parseJson } from '../../repos/util.ts';
 import { AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
@@ -342,14 +344,39 @@ function predictTier(
  * with independence, and it says so in those words.
  */
 export async function healthySurfaceCount(): Promise<number> {
-  const routines = await listRoutines();
-  return routines.filter(
-    (routine) =>
-      routine.workerId !== null &&
-      routine.tokenDigest !== null &&
-      routine.tokenDigest !== '' &&
-      (routine.state === 'ENABLED' || routine.state === 'DRAINING'),
-  ).length;
+  return (await healthySurfaces()).length;
+}
+
+/**
+ * The surfaces that could take a role, and the one definition of that here.
+ *
+ * A Routine's own state was the only state read, so a surface whose *account*
+ * was quarantined or taken out of routing, and one bound to a worker that had
+ * been disabled or archived, both counted — and in a pool of several accounts
+ * that is exactly how one account's health masquerades as the pool's: a
+ * mission asking for account separation launched against three accounts one
+ * of which Brain would never fire. The account is read beside the Routine, and
+ * the worker must be a row that can authenticate, because a worker id that
+ * resolves to nothing is not evidence of one.
+ */
+async function healthySurfaces(): Promise<FleetRoutine[]> {
+  const [routines, accounts] = await Promise.all([listRoutines(), listAccounts()]);
+  const accountState = new Map(accounts.map((account) => [account.id, account.state]));
+  const live = (state: string | undefined): boolean => state === 'ENABLED' || state === 'DRAINING';
+  const workerActive = new Map<string, boolean>();
+  const out: FleetRoutine[] = [];
+  for (const routine of routines) {
+    if (routine.workerId === null) continue;
+    if (routine.tokenDigest === null || routine.tokenDigest === '') continue;
+    if (!live(routine.state) || !live(accountState.get(routine.accountId))) continue;
+    if (!workerActive.has(routine.workerId)) {
+      const worker = await getWorker(routine.workerId);
+      workerActive.set(routine.workerId, worker !== null && !worker.disabled && !worker.archived);
+    }
+    if (!workerActive.get(routine.workerId)) continue;
+    out.push(routine);
+  }
+  return out;
 }
 
 /**
@@ -381,14 +408,7 @@ export interface SeparationCapacity {
 }
 
 export async function separationCapacity(): Promise<SeparationCapacity> {
-  const routines = await listRoutines();
-  const healthy = routines.filter(
-    (routine) =>
-      routine.workerId !== null &&
-      routine.tokenDigest !== null &&
-      routine.tokenDigest !== '' &&
-      (routine.state === 'ENABLED' || routine.state === 'DRAINING'),
-  );
+  const healthy = await healthySurfaces();
   const accounts = new Set(healthy.map((r) => r.accountId)).size;
   const workers = new Set(healthy.map((r) => r.workerId!)).size;
   const capacity: SeparationCapacity = {

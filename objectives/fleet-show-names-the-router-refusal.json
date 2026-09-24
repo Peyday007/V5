@@ -1,0 +1,39 @@
+{
+  "objective": "Make `npm run fleet -- show` say, for every registered Routine, whether the dispatcher would fire it and, when it would not, the router's own reason. Today each Routine line prints `(not routable)` only when its deployment secret is missing, and otherwise prints an in-flight count — so an ENABLED Routine whose account is UNAVAILABLE, whose bound worker is disabled or archived, or whose worker holds no project membership reads exactly like one the router would fire. The router already answers this question: `routingRefusalByRoutine` in server/services/dispatch/candidates.ts returns, per Routine id, null when the router would consider it and the refusal sentence when it would not.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Every Routine line `fleet show` prints ends in either `routable` or `not routable: <the refusal routingRefusalByRoutine returned>`, and the two cannot disagree with the dispatcher because they are read from the same function. The fleet header's eligible count is unchanged.",
+  "nonGoals": [
+    "Changing what the router decides. This is a reading of the router's answer, never a second definition of eligibility.",
+    "Printing a secret's value, a token, a digest or anything else §17 keeps out of output. The secret's *name* is already printed and stays as it is.",
+    "Changing any other `fleet` subcommand, any route, any page, or any database schema."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "`fleet show` reads routingRefusalByRoutine once per invocation and prints, on each Routine's line, `routable` when it returns null for that Routine and `not routable: <reason>` otherwise, in place of the current `(not routable)` / in-flight suffix logic for that decision. The in-flight count is still printed for a routable Routine.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A test drives `fleet show` (or the function it is extracted into) over a fleet holding one routable Routine, one ENABLED Routine bound to a disabled worker, and one whose deployment secret is absent, and asserts each line's routable/not-routable text, including the words `disabled or archived` and `deployment secret is not present`.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks and the whole existing suite still passes.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "scripts/fleet.ts",
+    "tests/fleetShowRouting.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Only scripts/fleet.ts and one new test file are touched; nothing is migrated and no route or page changes."
+}

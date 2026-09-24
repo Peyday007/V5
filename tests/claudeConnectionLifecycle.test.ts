@@ -27,7 +27,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { createUser, getWorkerByName } from '../server/repos/identity.ts';
+import { createUser, getWorkerByName, setWorkerStatus } from '../server/repos/identity.ts';
 import { createAccount, createRoutine, getRoutine, setRoutineState } from '../server/repos/fleet.ts';
 import { issueToken, listTokensForWorker, registerClient, touchToken } from '../server/repos/oauth.ts';
 import { connectionForUser } from '../server/repos/capacityConnections.ts';
@@ -302,6 +302,32 @@ describe('a surface bound to somebody else is named rather than counted', () => 
     expect(mine.usable).toBe(false);
     expect(mine.because).toMatch(/not the one this connection names/i);
     expect(capacity.usable).toBe(0);
+  });
+});
+
+describe('contributed capacity is what the dispatcher would fire', () => {
+  it('stops counting a proven surface the moment its worker is disabled', async () => {
+    const { routineId } = await registerSurface(member);
+    const routine = (await getRoutine(routineId))!;
+    process.env[routine.tokenSecretName] = 'present-for-test';
+    try {
+      await getDb().run(
+        `UPDATE capacity_connections SET state = 'HEALTHY', healthy_at = ? WHERE user_id = ?`,
+        [new Date().toISOString(), member.id],
+      );
+      const before = (await contributedCapacity()).surfaces.find((one) => one.userId === member.id)!;
+      expect(before.because).toBeNull();
+      expect(before.usable).toBe(true);
+
+      // Disabling keeps the memberships and the Routine keeps reading ENABLED;
+      // the router refuses it all the same (§23).
+      await setWorkerStatus(routine.workerId!, 'DISABLED');
+      const after = (await contributedCapacity()).surfaces.find((one) => one.userId === member.id)!;
+      expect(after.usable).toBe(false);
+      expect(after.because).toMatch(/dispatcher would not fire this surface: bound worker is disabled or archived/);
+    } finally {
+      delete process.env[routine.tokenSecretName];
+    }
   });
 });
 

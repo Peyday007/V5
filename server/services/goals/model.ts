@@ -59,8 +59,9 @@ import { viewOf, type WorkstreamView } from '../register/view.ts';
 import type { LinkReading } from '../register/resolve.ts';
 import { rankGoals, type PriorityFacts } from './priority.ts';
 import { listDispatchesForBin } from '../../repos/bins.ts';
-import { REFUSAL_WAIT, type RoutingRefusal } from '../dispatch/router.ts';
+import { REFUSAL_WAIT, surfaceIneligibility, type RoutingRefusal } from '../dispatch/router.ts';
 import { listRoutines } from '../../repos/fleet.ts';
+import { fleetSnapshot } from '../dispatch/candidates.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
 
 // ---------------------------------------------------------------------------
@@ -492,10 +493,27 @@ async function surfaceRemedy(
       since: null,
     };
   }
-  const down = serving.filter((one) => one.state !== 'ENABLED');
+  /*
+   * "Out of routing" is the router's answer, not the Routine's state column. An
+   * ENABLED Routine whose secret is not deployed, whose account is unavailable
+   * or whose bound worker is disabled is never fired, and reading it as enabled
+   * here told a person the dispatcher would route to it (§23: one eligibility
+   * definition, `surfaceIneligibility`, asked by every reader).
+   */
+  const snapshot = await fleetSnapshot();
+  const candidateById = new Map(snapshot.candidates.map((one) => [one.routine.id, one]));
+  const outOfRouting = (routine: (typeof serving)[number]): string | null => {
+    const candidate = candidateById.get(routine.id);
+    if (!candidate) return routine.state === 'ENABLED' ? 'its deployment secret is not present' : routine.state;
+    const refusal = surfaceIneligibility(candidate);
+    if (refusal === null) return null;
+    return refusal === `routine ${routine.state}` ? routine.state : refusal;
+  };
+  const down = serving.filter((one) => outOfRouting(one) !== null);
   const reasons = new Map<string, string[]>();
   for (const routine of down) {
-    const why = `${routine.state}${routine.stateReason ? `: ${routine.stateReason.replace(/\s+/g, ' ').slice(0, 140)}` : ''}`;
+    const head = outOfRouting(routine) ?? routine.state;
+    const why = `${head}${routine.stateReason && head === routine.state ? `: ${routine.stateReason.replace(/\s+/g, ' ').slice(0, 140)}` : ''}`;
     const list = reasons.get(why);
     if (list) list.push(routine.name);
     else reasons.set(why, [routine.name]);
@@ -505,7 +523,7 @@ async function surfaceRemedy(
     return {
       diagnosis: null,
       remedy:
-        'At least one Routine serving this project is enabled, so the dispatcher will route to it as capacity frees; if it does not, read the bin trace (Dispatch diagnose).',
+        'At least one Routine serving this project is eligible for routing, so the dispatcher will route to it as capacity frees; if it does not, read the bin trace (Dispatch diagnose).',
       since: null,
     };
   }
@@ -521,7 +539,7 @@ async function surfaceRemedy(
   const since = down.map((one) => one.updatedAt).sort().at(-1) ?? null;
   const remedy = `Every Routine that serves this project is out of routing — ${listed}. When the reason is sessions that never checked in, the Brain connector in the Claude account behind those Routines has stopped authorizing: reconnect it there, then lift the quarantine (npm run fleet -- set-state --kind routine --to ENABLED). The bin fires on the next tick after that, with nothing else to press.`;
   return {
-    diagnosis: `no enabled Routine serves this project — ${serving.length} would, and every one is out of routing`,
+    diagnosis: `no routable Routine serves this project — ${serving.length} would, and every one is out of routing`,
     remedy,
     since,
   };

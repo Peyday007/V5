@@ -1540,6 +1540,40 @@ not a pool. The engine passing its tests says nothing about whether the fleet
 behaves this way, which is the separation Step 3 drew and which this does not
 get to waive.
 
+**The acceptance pass against four *distinct* identities found the lane's own
+defect class four more times — correct machinery, a false sentence about it.**
+The lane tested one worker on several accounts; the four people this fleet is
+for each hold their own connector, and that shape is where these live.
+`docs/FLEET-FOUR-ACCOUNT-ACCEPTANCE.md` is the record.
+
+- **"Eligible" had four definitions.** The router asked account, Routine and
+  project; `capacityReading` asked only *is it a routing candidate* — which is
+  *its secret is deployed* — so a QUARANTINED surface with an old proof read
+  **HEALTHY**, and a disabled account, a disabled worker and an archived one all
+  counted as capacity Brain would never fire; the Fleet page's `usable` never
+  asked about the secret, the worker or the project at all; and
+  `separationCapacity` counted a quarantined *account* toward the three account
+  separation needs. `surfaceIneligibility` in `router.ts` is now the one
+  bin-independent answer, asked by the router first and by both readings.
+- **A disabled worker was routable.** Archiving revokes memberships, so the
+  project check already refused it; disabling is reversible and keeps them, so a
+  Routine bound to a disabled worker was fired — a session certain to be refused
+  at sign-in, an activation each time — until three unanswered fires
+  quarantined it. And `verify-pool` let a past proof stand over it, the §2.1
+  defect for the one worker state it had not named.
+- **An arrival was credited to whichever Routine the bin was fired at, whoever
+  arrived.** With one worker that was the known imprecision; with four it is the
+  ordinary case — a session that finished its own bin is handed the next one,
+  fired at somebody else's Routine — and `creditDispatchArrival` wrote the
+  arriving credential into `worker_sessions` under the **other person's
+  account**, first observation winning for ever, which is the lineage every
+  audit tier is computed from. An identity other than the bound one is credited
+  only when it is provably the fired session (its provider session matches the
+  dispatch row), which keeps the one case the surface proof exists for; and in a
+  pooled worker a sibling reporting a *different* provider session is not
+  credited either. Unknown stays uncredited, because an attribution that cannot
+  be established reads as absent.
+
 ## 24. Russell is a way in, not a second brain.
 
 Step 12A (`server/services/russell/`, `client/src/russell/`,
@@ -10663,6 +10697,18 @@ where a proof would do.
   patched one would be a row whose stored hash describes something the
   specification no longer renders, and a repair is a new generator version and
   a new master.
+- **A rate needs a sample behind it before it is a rate, and four attempts was
+  not one.** The ceiling was checked from the fourth attempt, so two unlucky
+  seeds in the first four stopped a healthy generator and recorded *"a defect in
+  the generator … rather than a run of bad luck"* — the one outcome that sentence
+  exists to rule out. Word search fails about 2.8% of the time, measured over
+  300 random masters (a random fill occasionally spells a prohibited word), and
+  seeds derive from the master's generated id, so this happened on roughly one
+  run in a hundred: deploy 336's test gate made two puzzles out of twenty-five
+  and stopped, with nothing released. `DEFECT_MIN_SAMPLE` is twelve, judged at
+  the batch's own ceiling when that comes first so a small batch of a broken
+  generator is still named, and `tests/puzzleDefectCeiling.test.ts` fails
+  against the old floor.
 - **The maturity ladder has three rungs that are unreachable by
   construction.** `GENERATABLE` is read from the format registry, which is a
   directory of implementations somebody can open; `VALIDATABLE` needs an

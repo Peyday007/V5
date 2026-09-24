@@ -11,7 +11,7 @@
  * Each test below is one of those joins, and every one of them is checked in both
  * directions: what onboarding makes possible, and what it still refuses.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { createUser, createWorker, getWorkerByName, getWorkerRouting, grantMembership, listMembershipsForPrincipal, setWorkerRouting } from '../server/repos/identity.ts';
 import { listRepositoryGrants } from '../server/services/factory/repositoryEnvelope.ts';
@@ -346,6 +346,13 @@ describe('readiness is derived, and says what is left', () => {
     const worker = (await getWorkerByName(factoryWorkerName(GRANT().id)))!;
     await bindRoutineWorker(routine.id, worker.id);
 
+    // Registered, bound and ENABLED, and its secret is not in this deployment:
+    // the router would not fire it, so this is not READY (§23).
+    const unfired = (await repositoryOnboarding(fixture.project.id))[0]!;
+    expect(unfired.readiness).toBe('AWAITING_SURFACE');
+    expect(unfired.remaining.join(' ')).toMatch(/deployment secret is not present/);
+
+    process.env.A_SECRET_NAME = 'present-for-test';
     const ready = (await repositoryOnboarding(fixture.project.id))[0]!;
     expect(ready.readiness).toBe('READY');
     expect(ready.remaining).toHaveLength(0);
@@ -356,6 +363,7 @@ describe('readiness is derived, and says what is left', () => {
     expect(ready.surfaces[0]!.proven).toBe(false);
     expect(ready.provenSurfaces).toBe(0);
     expect(ready.accountsServing).toBe(1);
+    delete process.env.A_SECRET_NAME;
   });
 });
 
@@ -821,6 +829,14 @@ describe('a duplicate action produces no duplicate execution', () => {
  * `/people` — and did not refuse here.
  */
 describe('surfaces are counted by account, and proof is not assumed', () => {
+  // These surfaces are meant to be routable, and routable includes a secret
+  // this deployment actually holds.
+  beforeEach(() => {
+    for (const name of ['SECRET_A', 'SECRET_B', 'SECRET_C']) process.env[name] = 'present-for-test';
+  });
+  afterEach(() => {
+    for (const name of ['SECRET_A', 'SECRET_B', 'SECRET_C']) delete process.env[name];
+  });
   /** Two Routines on one account, both enabled, neither ever fired. */
   async function twoOnOneAccount(): Promise<{ workerId: string; accountName: string }> {
     await onboard();

@@ -566,3 +566,46 @@ describe('the person reading is always on the Who list', () => {
     expect(view!.people.find((person) => person.id === ownerId)!.roleLabel).toBe('Owner');
   });
 });
+
+describe('Who describes capacity the way the router decides it', () => {
+  it('does not call an ENABLED surface healthy when its bound worker is disabled', async () => {
+    const { createWorker, setWorkerStatus } = await import('../server/repos/identity.ts');
+    const { createAccount, createRoutine } = await import('../server/repos/fleet.ts');
+    const worker = await createWorker({ name: `who-worker-${Math.random().toString(36).slice(2, 8)}`, displayName: 'Worker', createdByType: 'SYSTEM', createdById: 'test' });
+    await grantMembership({
+      projectId: project.id,
+      principalType: 'WORKER',
+      principalId: worker.id,
+      role: null,
+      scopes: ['queue:read', 'queue:claim'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'test',
+    });
+    const secretName = `WHO_SURFACE_${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    process.env[secretName] = 'present-for-test';
+    try {
+      const account = await createAccount({ name: `who-acct-${Math.random().toString(36).slice(2, 8)}` });
+      const routine = await createRoutine({
+        accountId: account.id,
+        routineRef: `trig_${Math.random().toString(36).slice(2, 12)}`,
+        name: 'Who surface',
+        tokenSecretName: secretName,
+        workerId: worker.id,
+      });
+      const admin = personPrincipal({ id: ownerId, memberships: await membershipsFor(ownerId) });
+      const before = await whoForProject({ principal: admin, projectId: project.id });
+      expect(before!.surfaces!.find((one) => one.id === routine.id)!.health).toBe('Healthy');
+      expect(before!.capacity).toBe('READY');
+
+      await setWorkerStatus(worker.id, 'DISABLED');
+      const after = await whoForProject({ principal: admin, projectId: project.id });
+      const surface = after!.surfaces!.find((one) => one.id === routine.id)!;
+      expect(surface.state).toBe('ENABLED');
+      expect(surface.health).toBe('Not routable');
+      expect(surface.reason).toMatch(/disabled or archived/);
+      expect(after!.capacity).not.toBe('READY');
+    } finally {
+      delete process.env[secretName];
+    }
+  });
+});

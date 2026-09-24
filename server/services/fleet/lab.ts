@@ -41,6 +41,7 @@ import { newId, nowIso, parseJson, toJson } from '../../repos/util.ts';
 import { getProject } from '../../repos/projects.ts';
 import { listAccounts, listRoutines, setPolicy, currentPolicy } from '../../repos/fleet.ts';
 import { workloadProfile } from '../dispatch/profiles.ts';
+import { fleetSnapshot } from '../dispatch/candidates.ts';
 import { fleetView, usability, type Evidence } from './view.ts';
 import {
   MAX_CONCURRENCY,
@@ -412,8 +413,12 @@ export async function runHealthCheck(projectId: string | null): Promise<HealthFi
     });
   } else {
     const byAccount = new Map(accounts.map((account) => [account.id, account]));
+    const snapshot = await fleetSnapshot(new Date(now));
+    const candidateById = new Map(snapshot.candidates.map((one) => [one.routine.id, one]));
     for (const routine of routines) {
-      const { usable, reason } = usability(routine, byAccount.get(routine.accountId), now);
+      const { usable, reason } = usability(routine, byAccount.get(routine.accountId), now, {
+        candidate: candidateById.get(routine.id) ?? null,
+      });
       findings.push({
         check: `Surface: ${routine.name}`,
         verdict: usable ? 'OK' : routine.state === 'QUARANTINED' ? 'ATTENTION' : 'BROKEN',
