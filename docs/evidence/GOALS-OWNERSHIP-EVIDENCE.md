@@ -237,6 +237,26 @@ failed; asking again in 30s`, `The cloud answered`, all 92 migrations applied,
 the schedule, the single hand-over, and that boot retries `proveCloud` itself;
 its wiring assertion fails against the previous `server/index.ts`.
 
+## Deploy 335: the recovery, and the privacy check reading a real foreign goal
+
+Deploy 335 re-released `fa4e3cd` at 00:08:40Z and `/healthz` answered 200 in
+0.4s — the end of the 23:12–00:08 outage. Before the restart the harness read
+`HOSTED-VERIFICATION: PASS 245/245`, and its goals section is no longer vacuous
+in either half: *a member may read the goals briefing — 200*; *reads no goal
+from a project it may not read — 1 goal(s) readable, 0 outside*; *does read the
+goal in its own project — wst_5a7ed0e628c945c192f2*; *may open that goal —
+200*; *another operation's goal is not found — 404*, *byte-identical to a goal
+that does not exist (wst_16f9e97d749c4b9f92cc)*; *a worker credential is
+refused the goals — 404*.
+
+After the restart the machine answered after four polls, and the harness never
+reached it: `DatabaseConfigurationError … (ECHECKOUTTIMEOUT) unable to check out
+connection from the pool after 15000ms in Session mode … in: SELECT version()`
+at the harness's own connect. That is the pooler condition §27 names and the
+same database slowness the operator reads showed all evening — not a finding
+about the release, which was live and serving throughout. It is recorded as a
+failed half rather than rounded up.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
