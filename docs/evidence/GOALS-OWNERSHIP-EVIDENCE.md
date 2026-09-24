@@ -443,6 +443,82 @@ The same logs show two things that are not these failures:
   using, on a degraded database. That is recorded as a reading. It is not
   established as the cause of `brain_propose_fragments`.
 
+## Deploy 345: released; the verification ran into Storage 544, and found a real defect
+
+Run 35977673363 on `e126121`, which carries the timer-promise catch. **`release:
+success`.** Before the restart, the harness passed everything from identity
+through the research gate, then stopped on two conditions:
+
+- **`brain_submit_synthesis` (`req_kFklh2zf9WVQ`) was infrastructure.** Brain's own log
+  reads `StorageConfigurationError: The document store refused a listing (HTTP
+  544)`, `DatabaseTimeout`, in `storeFile` → `uniqueKey` → `exists`. Supabase
+  Storage's own database timed out.
+- **`an administrator can inspect operations — 500`** took 2m11s. The log buffer
+  starts at 09:23Z, so its line is gone and the cause is **unread**. The route is
+  bounded to 500 rows and ordered on `created_at`. There is no
+  `(project_id, created_at)` index, so it sorts the project's whole history, but
+  that is not established as the cause.
+
+After the restart, the harness **could not start**. Its own `initStorage` died on
+`The document store could not be checked (HTTP 544)`. The Brain itself rebooted
+into the same 544 at 09:31:51, served the error page, and was replaced by the
+Brain at 09:32:32 when the proof held. `bootRetry.ts` did exactly its job.
+
+**One defect was found beside them, and it is an application defect.** At 09:26:55
+and 09:38:57, `could not resume packet … canceling statement due to statement
+timeout` fired in `auditRoundFor`:
+
+    SELECT created_at, payload FROM project_events
+     WHERE event_type IN ($1, $2) ORDER BY created_at DESC, seq DESC LIMIT 50
+
+That statement scans every project's events, which is the timeout. It also
+filters to one orchestration *after* the `LIMIT`. So once fifty round events
+happened anywhere in the Brain after a packet's own boundary, that packet read
+as having **no round at all**: `since: null`, and every audit pass counted as
+current. This is the wrong answer about which round a packet is in, and it is
+silent. It is scoped to the orchestration's own project now, with no limit; both
+writers already record that project. `tests/auditRoundScope.test.ts` fails on the
+old query with `expected null to be '2026-09-24T09:00:00.000Z'`.
+
+The timer-promise fix leaves nothing to see here, which is the point: no
+`an unhandled rejection reached the process` line appears in the captured
+buffer (09:23–09:39Z). `resume worker-driven packets` took 345.7s this boot, and
+this time it failed on a pool timeout that was caught, and the Brain served on.
+
+## Deploy 346: released; the audit-round timeout is gone, and a second statement timeout named itself
+
+Run 35984483641 on `edcb5b7`, which carries the audit-round scoping fix.
+**`release: success`.** Both halves ended `FAIL could-not-complete`. Every
+failing line was read from Brain's own log (Logs run 30):
+
+- **Infrastructure: the labor read and the shared Cash frontier, 500 in both
+  halves.** The Brain's log shows `The database would not give this pool a
+  connection within 10000ms: 6/10 connection(s) in use, 4 idle … The pool was
+  below its ceiling, so this is the database or the network`. Six idempotency
+  duplicates answered `503` after the restart for the same reason. This is the
+  same degraded Supabase as 344 and 345.
+- **Application: `an administrator can inspect operations — 500`, for the third
+  deploy running.** It read `canceling statement due to statement timeout` in
+  `SELECT * FROM idempotency_operations WHERE project_id = $1 ORDER BY
+  created_at DESC, id LIMIT 100`. The only project index was
+  `(project_id, state)`, so every call read and sorted the project's whole
+  history, and the verification project gains operations on every deploy. A
+  timeout that repeats identically across three deploys, on a table that grows
+  per deploy, is not noise. Migration `094_operations_list_index.sql` / pg
+  `085_operations_list_index.sql` adds `(project_id, created_at DESC, id)`.
+  `tests/operationsListIndex.test.ts` reads SQLite's own query plan and fails
+  without the index: the plan named `(project_id, state)` and a temp B-tree
+  sort. On Postgres the test asserts the index's definition. It was run
+  against a real Postgres 16 there.
+- **The beacon was missing after the restart** because the pass before the
+  restart never reached the step that leaves one. That is a consequence of the
+  above, not a separate failure.
+
+The audit-round fix is holding: no `auditRoundFor` statement timeout appears
+anywhere in the captured window (10:45–11:08Z), where 345 had two. There is no
+unhandled rejection either. `resume worker-driven packets` took 1271.8s on this
+boot, and it ran after the port opened.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain

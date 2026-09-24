@@ -764,8 +764,11 @@ shape for `connectSite`'s reason. One action on the Build surface, behind
 grant already carries, and a level no worker principal can reach by type. Brain
 creates or reuses one worker per grant, writes `FACTORY_WORKER_SCOPES` and an
 exhaustive routing row **from constants rather than from anything the caller
-sent**, revokes any prior invitation and issues exactly one. Nothing is asked
-that has a wrong answer.
+sent**, revokes onboarding's own prior invitation and issues exactly one.
+Nothing is asked that has a wrong answer. Further accounts for a pool are
+**Invite another Factory account**: one link per named member, issued beside the
+others rather than replacing them, spent only by a browser signed in as that
+member, and writing nothing about the worker.
 
 It issues **no credential**. A factory worker reaches Brain through the Cowork
 connector, which authenticates with OAuth, so what it needs is not a secret to

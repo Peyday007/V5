@@ -56,8 +56,10 @@ import { REPOSITORY_ENVELOPE_ID, decideRepository, listRepositoryGrants } from '
 import type { RepositoryGrant } from './repositoryEnvelope.ts';
 import {
   createWorker,
+  getUser,
   getWorkerByName,
   getWorkerRouting,
+  listUsers,
   grantMembership,
   listMembershipsForPrincipal,
   recordIdentityEvent,
@@ -75,13 +77,20 @@ import {
   surfaceEligibility,
   type SurfaceDispatch,
 } from '../dispatch/surfaceEligibility.ts';
-import { createInvitation, revokeInvitationsForWorker } from '../../repos/invitations.ts';
+import {
+  createInvitation,
+  listInvitationsForWorker,
+  revokeInvitationForWorker,
+  revokeRotatingInvitationsForWorker,
+} from '../../repos/invitations.ts';
 import { getProjectRepository, setProjectRepository } from '../../repos/factory.ts';
 import { ScopeError, describeBoundary, directoriesOf, scopeFromDeclaration } from './projectScope.ts';
 import type { ScopeDeclaration } from './projectScope.ts';
 import { generateInvitationToken } from '../identity/secrets.ts';
 import { FACTORY_WORKER_SCOPES } from '../../domain/types.ts';
-import type { Bin, Principal, User, WorkerScope } from '../../domain/types.ts';
+import type { Bin, Principal, User, WorkerInvitation, WorkerScope } from '../../domain/types.ts';
+import { personName } from '../../domain/personName.ts';
+import { peopleReading, type MemberState } from '../identity/people.ts';
 import type { FactoryScopeKind } from '../../domain/factory.ts';
 import {
   contributedCapacity,
@@ -619,7 +628,9 @@ export type OnboardRefusal =
  * rewrites the membership and the routing row from the constants, and replaces the
  * invitation rather than adding a second one — so this is a **repair** and a
  * **rotation** as much as a setup, which is `connectSite`'s reasoning and the same
- * property: there is never more than one live invitation to reason about.
+ * property: there is never more than one live *onboarding* invitation to reason
+ * about. The member-bound links `issueFactoryInvitation` issues for a pool are a
+ * different kind and are left alone (`095_worker_invitation_members.sql`).
  */
 export async function onboardRepository(input: {
   projectId: string;
@@ -741,7 +752,12 @@ export async function onboardRepository(input: {
     setBy: `factory-onboarding:${input.actor.id}`,
   });
 
-  const revokedInvitations = await revokeInvitationsForWorker(worker.id);
+  /*
+   * Onboarding's own link only. The links issued beside it for a pool of
+   * accounts (`issueFactoryInvitation`) each belong to somebody who may not
+   * have opened theirs yet, and repairing the worker must not withdraw them.
+   */
+  const revokedInvitations = await revokeRotatingInvitationsForWorker(worker.id);
   const token = generateInvitationToken();
   const invitation = await createInvitation({
     workerId: worker.id,
@@ -789,81 +805,334 @@ export async function onboardRepository(input: {
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/*  More accounts for a worker that is already onboarded                        */
+/* -------------------------------------------------------------------------- */
+
 /**
- * Another single-use connector invitation for a repository this project has
- * already onboarded — and nothing else.
+ * What an administrator sees about one issued link, after it was shown once.
  *
- * A pool is one worker on several Claude accounts, and each account's
- * `Factory Brain` connector is approved from that account's owner's browser.
- * An administrator signed in to Brain sees the chooser and needs no link; a
- * friend adding the connector in their own browser does. Onboarding issues one,
- * but pressing Onboard again re-asks the directory question and rewrites the
- * project's boundary to get a second — a repair wearing the wrong clothes — and
- * once the repository read READY Build offered neither. So the fourth account
- * of a four-account pool had no product path at all.
- *
- * This touches no membership, no routing row and no boundary. It refuses a
- * repository this project has not onboarded (nothing to connect), revokes the
- * live invitation for that worker before issuing, so there is never more than
- * one, and audits the id rather than the token — `onboardRepository`'s own
- * rules. The link grants nothing on its own: approving a connector with it
- * connects `factory-brain`, whose reach was already decided.
+ * Never the token, never its prefix: a list somebody can read again is exactly
+ * where a secret must not be. `status` is derived from the row on every read.
  */
-export async function issueConnectorInvitation(input: {
-  projectId: string;
+export interface FactoryInvitationView {
+  id: string;
+  kind: WorkerInvitation['kind'];
+  /** The member it was issued for, or null for onboarding's unbound link. */
+  intendedUserId: string | null;
+  intendedName: string | null;
+  issuedByName: string | null;
+  createdAt: string;
+  expiresAt: string;
+  status: 'WAITING' | 'CONNECTED' | 'EXPIRED' | 'WITHDRAWN';
+  /** When it was spent or withdrawn. */
+  endedAt: string | null;
+}
+
+/** A Brain member a link may be issued for. Real people only; never a fixture. */
+export interface InvitableMember {
+  userId: string;
+  name: string;
+}
+
+export interface FactoryInvitations {
   grantId: string;
-  actor: User;
-  origin: string;
-}): Promise<
-  | { ok: true; invitationUrl: string; invitationExpiresAt: string; workerName: string }
-  | { ok: false; reason: string }
+  workerName: string;
+  /** False when the repository is not onboarded on this project, and nothing may be issued. */
+  mayIssue: boolean;
+  /** Why not, when `mayIssue` is false. */
+  refusal: string | null;
+  members: InvitableMember[];
+  invitations: FactoryInvitationView[];
+}
+
+export interface IssuedFactoryInvitation {
+  invitation: FactoryInvitationView;
+  /** Shown once. Stored only as a digest. */
+  invitationUrl: string;
+}
+
+function invitationStatus(one: WorkerInvitation, now: string): FactoryInvitationView['status'] {
+  if (one.redeemedAt) return 'CONNECTED';
+  if (one.revokedAt) return 'WITHDRAWN';
+  if (one.expiresAt <= now) return 'EXPIRED';
+  return 'WAITING';
+}
+
+/**
+ * Whether a grant's worker is onboarded on this project, read from the rows
+ * that make it so — the same five facts `describeGrant` calls `registered`.
+ *
+ * Asked before a link is issued rather than inferred from the card, because a
+ * link for a worker whose routing or boundary is missing would connect an
+ * account to something that can be handed no work.
+ */
+async function onboardedWorker(
+  projectId: string,
+  grantId: string,
+): Promise<
+  | { ok: true; grant: RepositoryGrant; repositoryId: string; workerId: string; workerName: string }
+  | { ok: false; reason: string; workerName: string }
 > {
-  const grant = listRepositoryGrants().find((candidate) => candidate.id === input.grantId);
-  if (!grant) {
+  const workerName = factoryWorkerName(grantId);
+  const grant = listRepositoryGrants().find((candidate) => candidate.id === grantId);
+  const repositoryId = grant ? repositoryIdOfRemote(grant.remote) : null;
+  if (!grant || !repositoryId || !decideRepository(grant.remote).ok) {
     return {
       ok: false,
+      workerName,
       reason: 'That is not a repository this factory is authorized to work in.',
     };
   }
-  const onboarding = await describeGrant(input.projectId, grant, await fleetInputs());
-  if (onboarding.readiness === 'NOT_ONBOARDED' || !onboarding.workerId) {
+  const worker = await getWorkerByName(workerName);
+  const notYet =
+    'This repository is not onboarded on this project yet. Onboard it first — that is where ' +
+    'what this project may change is decided — and then more accounts can be invited.';
+  if (!worker || worker.archived) return { ok: false, workerName, reason: notYet };
+  if (worker.disabled) {
     return {
       ok: false,
-      reason:
-        'This project has not onboarded that repository, so there is no Factory worker to connect ' +
-        'an account to. Onboard it first; that issues the first invitation.',
+      workerName,
+      reason: `The worker ${workerName} is disabled, so a link for it would connect nothing.`,
     };
   }
-  const revokedInvitations = await revokeInvitationsForWorker(onboarding.workerId);
-  const token = generateInvitationToken();
-  const invitation = await createInvitation({
-    workerId: onboarding.workerId,
-    tokenPrefix: token.prefix,
-    tokenDigest: token.digest,
-    createdByUserId: input.actor.id,
-    note: `Connecting another Claude account to the factory pool for ${onboarding.repositoryId}.`,
-  });
-  await recordIdentityEvent({
-    actorType: 'HUMAN',
-    actorId: input.actor.id,
-    action: 'ISSUE_WORKER_INVITATION',
-    targetType: 'WORKER',
-    targetId: onboarding.workerId,
-    projectId: input.projectId,
-    result: 'SUCCESS',
-    metadata: {
-      grantId: grant.id,
-      repositoryId: onboarding.repositoryId,
-      invitationId: invitation.id,
-      revokedInvitations,
-      purpose: 'FACTORY_POOL_ACCOUNT',
-    },
-  });
+  const memberships = await listMembershipsForPrincipal('WORKER', worker.id);
+  const here = memberships.find((m) => m.projectId === projectId && m.active);
+  const routing = await getWorkerRouting(worker.id);
+  const boundary = await getProjectRepository(projectId, grant.id);
+  if (
+    !here ||
+    !sameSet(here.scopes, FACTORY_WORKER_SCOPES) ||
+    !(routing?.families ?? []).includes('FACTORY') ||
+    !(routing?.repositories ?? []).includes(repositoryId) ||
+    !boundary
+  ) {
+    return { ok: false, workerName, reason: notYet };
+  }
+  return { ok: true, grant, repositoryId, workerId: worker.id, workerName };
+}
+
+async function invitableMembers(): Promise<InvitableMember[]> {
+  return (await listUsers())
+    .filter((user) => user.kind === 'PERSON' && !user.disabled)
+    .map((user) => ({ userId: user.id, name: personName(user) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function viewsFor(workerId: string): Promise<FactoryInvitationView[]> {
+  const now = new Date().toISOString();
+  const names = new Map<string, string>();
+  const nameOf = async (id: string | null): Promise<string | null> => {
+    if (!id) return null;
+    if (!names.has(id)) {
+      const user = await getUser(id);
+      names.set(id, user ? personName(user) : 'a removed account');
+    }
+    return names.get(id) ?? null;
+  };
+  const out: FactoryInvitationView[] = [];
+  for (const one of await listInvitationsForWorker(workerId)) {
+    out.push({
+      id: one.id,
+      kind: one.kind,
+      intendedUserId: one.intendedUserId,
+      intendedName: await nameOf(one.intendedUserId),
+      issuedByName: await nameOf(one.createdByUserId),
+      createdAt: one.createdAt,
+      expiresAt: one.expiresAt,
+      status: invitationStatus(one, now),
+      endedAt: one.redeemedAt ?? one.revokedAt,
+    });
+  }
+  return out;
+}
+
+/** The links issued for a grant's worker, and who they may be issued for. */
+export async function factoryInvitations(
+  projectId: string,
+  grantId: string,
+): Promise<FactoryInvitations> {
+  const worker = await onboardedWorker(projectId, grantId);
+  if (!worker.ok) {
+    return {
+      grantId,
+      workerName: worker.workerName,
+      mayIssue: false,
+      refusal: worker.reason,
+      members: [],
+      invitations: [],
+    };
+  }
   return {
-    ok: true,
-    invitationUrl: `${input.origin.replace(/\/+$/, '')}/oauth/invite/${token.plaintext}`,
-    invitationExpiresAt: invitation.expiresAt,
-    workerName: onboarding.workerName,
+    grantId,
+    workerName: worker.workerName,
+    mayIssue: true,
+    refusal: null,
+    members: await invitableMembers(),
+    invitations: await viewsFor(worker.workerId),
   };
 }
 
+/**
+ * Why a link bound to a member in each state could not be spent, or null where
+ * it could.
+ *
+ * A `Record` over the whole union rather than a list of the bad ones, so a
+ * member state added later is a compile error until somebody says whether a
+ * bound link would work for it — the same shape `REFUSAL_WAIT` has in the
+ * dispatch router, and for the same reason: two sets that must be total
+ * between them are how a case falls into the permissive branch by default.
+ *
+ * Each sentence names the control that answers it, because the administrator
+ * reading this refusal is already on the page that carries it.
+ */
+const CANNOT_SPEND_A_BOUND_LINK: Record<MemberState, string | null> = {
+  READY: null,
+  // Holds a live link that ends in a PIN, so they have a way in. Refusing here
+  // would be about the order two links are opened in rather than about whether
+  // this person can connect at all.
+  INVITED: null,
+  NEEDS_A_NEW_LINK:
+    'That member holds a passkey and no PIN, and the sign-in screen no longer takes a device — ' +
+    'so they cannot sign in, and a link bound to them cannot be spent. Issue them a recovery ' +
+    'link from People & capacity first; redeeming it ends in them setting a PIN. Nothing ' +
+    'already issued is withdrawn by this refusal.',
+  NOT_INVITED:
+    'That member holds no credential of any kind, so they cannot sign in and a link bound to ' +
+    'them cannot be spent. Issue them an enrollment link from People & capacity first; ' +
+    'redeeming it ends in them setting a PIN. Nothing already issued is withdrawn by this ' +
+    'refusal.',
+  NAME_IS_AMBIGUOUS:
+    'Two live accounts answer to that member’s sign-in name, so the sign-in screen cannot ' +
+    'resolve them and a link bound to them cannot be spent. Rename one of them from People & ' +
+    'capacity first. Nothing already issued is withdrawn by this refusal.',
+};
+
+/**
+ * Issue one more link for an already-onboarded factory worker, for one member.
+ *
+ * This is the commissioning path for a pool: several Claude accounts, one
+ * logical worker (§23). It changes **nothing** about the worker — no identity is
+ * created, no membership, scope, routing row or boundary is written, and no
+ * other invitation is touched, so issuing a link for one friend cannot withdraw
+ * the link another friend has not opened yet, and cannot disturb an
+ * authorization anybody already holds. The only row it writes is the invitation
+ * itself, plus the audit event naming its id.
+ *
+ * The member is chosen by the administrator from real accounts and is required:
+ * the consent screen then spends the link only for a browser signed in as that
+ * member, so a forwarded link cannot connect a stranger's Claude account in a
+ * friend's name. Nothing here infers who a link is for.
+ */
+export async function issueFactoryInvitation(input: {
+  projectId: string;
+  grantId: string;
+  intendedUserId: string;
+  actor: User;
+  origin: string;
+}): Promise<{ ok: false; reason: string } | { ok: true; result: IssuedFactoryInvitation }> {
+  const worker = await onboardedWorker(input.projectId, input.grantId);
+  if (!worker.ok) return { ok: false, reason: worker.reason };
+
+  const member = await getUser(input.intendedUserId);
+  if (!member || member.kind !== 'PERSON' || member.disabled) {
+    return {
+      ok: false,
+      reason: 'Choose the Brain member this link is for, from the people who have joined.',
+    };
+  }
+
+  /*
+   * A member who cannot sign in cannot spend a link bound to them.
+   *
+   * `memberCheck` in `routes/oauth.ts` refuses a bound invitation for any
+   * browser not signed in as the member it names, so the link is dead from the
+   * moment it is written — and what that person meets is a sign-in screen
+   * asking for a six-digit PIN, which is the one thing they do not have. §24's
+   * escalation with no answering transition, created at issue time, and the
+   * administrator who could have fixed it was told the issue succeeded.
+   *
+   * Production had three such members when this was written: two holding a
+   * passkey and no PIN, one holding no credential at all. The sign-in screen
+   * stopped accepting a device when the PIN landed, so a member who enrolled
+   * before that quietly stopped having a way in, and nothing on this path
+   * looked.
+   *
+   * The reading is `peopleReading`'s rather than a second derivation of the
+   * same fact. That module already decides what each state means and names the
+   * remedy, `foundation.ts` reports it, and the People page renders the control
+   * that answers it — a copy here would eventually disagree with the screen the
+   * administrator is looking at while they read this sentence.
+   *
+   * `INVITED` is deliberately allowed: that member holds a live link which ends
+   * in a PIN, so they have a way in and this refusal would be about timing
+   * rather than about capability.
+   */
+  const reading = (await peopleReading(null)).people.find((one) => one.userId === member.id);
+  const cannotSpend = reading ? CANNOT_SPEND_A_BOUND_LINK[reading.state] : null;
+  if (cannotSpend) return { ok: false, reason: cannotSpend };
+
+  const token = generateInvitationToken();
+  const invitation = await createInvitation({
+    workerId: worker.workerId,
+    tokenPrefix: token.prefix,
+    tokenDigest: token.digest,
+    createdByUserId: input.actor.id,
+    kind: 'ADDITIONAL',
+    intendedUserId: member.id,
+    note: `Another Claude account for ${worker.repositoryId}, for ${personName(member)}.`,
+  });
+
+  await recordIdentityEvent({
+    actorType: 'HUMAN',
+    actorId: input.actor.id,
+    action: 'ISSUE_FACTORY_INVITATION',
+    targetType: 'WORKER',
+    targetId: worker.workerId,
+    projectId: input.projectId,
+    result: 'SUCCESS',
+    // The invitation *id* and the member it is for. Never the token.
+    metadata: {
+      grantId: worker.grant.id,
+      repositoryId: worker.repositoryId,
+      invitationId: invitation.id,
+      intendedUserId: member.id,
+      expiresAt: invitation.expiresAt,
+    },
+  });
+
+  const view = (await viewsFor(worker.workerId)).find((one) => one.id === invitation.id);
+  if (!view) throw new Error('The invitation disappeared immediately after being written.');
+  return {
+    ok: true,
+    result: {
+      invitation: view,
+      invitationUrl: `${input.origin.replace(/\/+$/, '')}/oauth/invite/${token.plaintext}`,
+    },
+  };
+}
+
+/** Withdraw one unused link for this grant's worker, and no other. */
+export async function withdrawFactoryInvitation(input: {
+  projectId: string;
+  grantId: string;
+  invitationId: string;
+  actor: User;
+}): Promise<boolean> {
+  const worker = await onboardedWorker(input.projectId, input.grantId);
+  if (!worker.ok) return false;
+  const withdrawn = await revokeInvitationForWorker(input.invitationId, worker.workerId);
+  if (withdrawn) {
+    await recordIdentityEvent({
+      actorType: 'HUMAN',
+      actorId: input.actor.id,
+      action: 'WITHDRAW_FACTORY_INVITATION',
+      targetType: 'WORKER',
+      targetId: worker.workerId,
+      projectId: input.projectId,
+      result: 'SUCCESS',
+      metadata: { grantId: worker.grant.id, invitationId: input.invitationId },
+    });
+  }
+  return withdrawn;
+}

@@ -28,6 +28,9 @@ import type {
 import type { CampaignMetrics } from '../../../server/services/factory/metrics.ts';
 import type { RepositoryGrant } from '../../../server/services/factory/repositoryEnvelope.ts';
 import type {
+  FactoryInvitations,
+  FactoryInvitationView,
+  IssuedFactoryInvitation,
   OnboardResult,
   RepositoryOnboarding,
 } from '../../../server/services/factory/onboard.ts';
@@ -42,6 +45,9 @@ export type {
   FactoryRelease,
   FactoryReview,
   FactoryWorkUnit,
+  FactoryInvitations,
+  FactoryInvitationView,
+  IssuedFactoryInvitation,
   OnboardResult,
   RepositoryGrant,
   RepositoryOnboarding,
@@ -162,17 +168,35 @@ export const FactoryApi = {
     ),
 
   /**
-   * Another single-use connector link for a repository already onboarded, so
-   * another Claude account can join its Factory pool. Changes nothing else.
+   * The links issued for an onboarded repository's worker, and the members one
+   * may be issued for. Never a token: a link is shown once, when it is issued.
    */
-  inviteAccount: (
-    projectId: string,
-    grantId: string,
-  ): Promise<{ invitationUrl: string; invitationExpiresAt: string; workerName: string }> =>
+  invitations: (projectId: string, grantId: string): Promise<FactoryInvitations> =>
     api(
       `/api/projects/${encodeURIComponent(projectId)}/factory/repositories/` +
-        `${encodeURIComponent(grantId)}/invitation`,
-      { method: 'POST', body: '{}' },
+        `${encodeURIComponent(grantId)}/invitations`,
+    ),
+
+  /**
+   * One more Claude account for an already-onboarded worker, for one member.
+   * Nothing about the repository is asked again, and no other link is touched.
+   */
+  invite: (projectId: string, grantId: string, intendedUserId: string): Promise<IssuedFactoryInvitation> =>
+    api(
+      `/api/projects/${encodeURIComponent(projectId)}/factory/repositories/` +
+        `${encodeURIComponent(grantId)}/invitations`,
+      { method: 'POST', body: JSON.stringify({ intendedUserId }) },
+    ),
+
+  withdrawInvitation: (
+    projectId: string,
+    grantId: string,
+    invitationId: string,
+  ): Promise<{ withdrawn: boolean }> =>
+    api(
+      `/api/projects/${encodeURIComponent(projectId)}/factory/repositories/` +
+        `${encodeURIComponent(grantId)}/invitations/${encodeURIComponent(invitationId)}/withdraw`,
+      { method: 'POST' },
     ),
 
   changeRequests: (projectId: string): Promise<{ changeRequests: FactoryChangeRequest[] }> =>

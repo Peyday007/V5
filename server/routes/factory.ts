@@ -52,9 +52,11 @@ import { throughputReport } from '../services/factory/throughput.ts';
 import { pullRequestFor } from '../services/factory/pullRequest.ts';
 import { approveAndStartCampaign } from '../services/factory/start.ts';
 import {
-  issueConnectorInvitation,
+  factoryInvitations,
+  issueFactoryInvitation,
   onboardRepository,
   repositoryOnboarding,
+  withdrawFactoryInvitation,
 } from '../services/factory/onboard.ts';
 import { getUser } from '../repos/identity.ts';
 import {
@@ -345,25 +347,71 @@ factoryRouter.post(
   }),
 );
 
+/**
+ * The links issued for an onboarded repository's worker, and who they may be
+ * issued for.
+ *
+ * The same level as onboarding, because reading who has been sent a link is part
+ * of deciding who gets the next one. No token and no prefix is ever in it.
+ */
+factoryRouter.get(
+  '/projects/:projectId/factory/repositories/:grantId/invitations',
+  handler(async (req, res) => {
+    requirePerson();
+    const projectId = pathId(req, 'projectId');
+    await projectForFactory(projectId, 'write');
+    res.json(await factoryInvitations(projectId, pathId(req, 'grantId')));
+  }),
+);
+
+/**
+ * Invite one more Claude account to an already-onboarded factory worker.
+ *
+ * Nothing about the repository is asked again: the worker, its routing row and
+ * this project's boundary are the ones onboarding already wrote, and this writes
+ * none of them. The one field is the member the link is for, chosen from real
+ * accounts; the link is shown once and every other link is left exactly as it
+ * was.
+ */
 factoryRouter.post(
-  '/projects/:projectId/factory/repositories/:grantId/invitation',
+  '/projects/:projectId/factory/repositories/:grantId/invitations',
   handler(async (req, res) => {
     const principal = requirePerson();
     const projectId = pathId(req, 'projectId');
     await projectForFactory(projectId, 'write');
     const actor = await getUser(principal.id);
     if (!actor || actor.disabledAt) throw notFound('No such route.');
-    const outcome = await issueConnectorInvitation({
+    const outcome = await issueFactoryInvitation({
       projectId,
       grantId: pathId(req, 'grantId'),
+      intendedUserId: requiredString(bodyOf(req)['intendedUserId'], 'intendedUserId'),
       actor,
       origin: originOf(req),
     });
     if (!outcome.ok) {
-      res.status(422).json({ error: 'NOT_ONBOARDED', message: outcome.reason });
+      res.status(422).json({ error: 'CANNOT_INVITE', message: outcome.reason });
       return;
     }
-    res.json(outcome);
+    res.json(outcome.result);
+  }),
+);
+
+/** Withdraw one unused link. Every other link, and every connection, is untouched. */
+factoryRouter.post(
+  '/projects/:projectId/factory/repositories/:grantId/invitations/:invitationId/withdraw',
+  handler(async (req, res) => {
+    const principal = requirePerson();
+    const projectId = pathId(req, 'projectId');
+    await projectForFactory(projectId, 'write');
+    const actor = await getUser(principal.id);
+    if (!actor || actor.disabledAt) throw notFound('No such route.');
+    const withdrawn = await withdrawFactoryInvitation({
+      projectId,
+      grantId: pathId(req, 'grantId'),
+      invitationId: pathId(req, 'invitationId'),
+      actor,
+    });
+    res.json({ withdrawn });
   }),
 );
 

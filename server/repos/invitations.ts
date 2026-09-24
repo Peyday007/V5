@@ -18,7 +18,11 @@
 import { getDb } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
 import { constantTimeEquals, digestSecret } from '../services/identity/secrets.ts';
-import type { WorkerInvitation, WorkerInvitationRow } from '../domain/types.ts';
+import type {
+  WorkerInvitation,
+  WorkerInvitationKind,
+  WorkerInvitationRow,
+} from '../domain/types.ts';
 
 /** Long enough to send and act on, short enough that a stale link is dead. */
 export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -34,6 +38,8 @@ function mapInvitation(row: WorkerInvitationRow): WorkerInvitation {
     redeemedAt: row.redeemed_at,
     revokedAt: row.revoked_at,
     note: row.note,
+    kind: row.kind,
+    intendedUserId: row.intended_user_id,
   };
 }
 
@@ -44,6 +50,10 @@ export interface CreateInvitationInput {
   createdByUserId: string;
   note?: string | null;
   ttlMs?: number;
+  /** Defaults to `ROTATING`, onboarding's link. */
+  kind?: WorkerInvitationKind;
+  /** The member it is for. Only ever chosen by the administrator issuing it. */
+  intendedUserId?: string | null;
 }
 
 export async function createInvitation(input: CreateInvitationInput): Promise<WorkerInvitation> {
@@ -52,8 +62,8 @@ export async function createInvitation(input: CreateInvitationInput): Promise<Wo
   await getDb().run(
     `INSERT INTO worker_invitations
        (id, worker_id, token_prefix, token_digest, created_by_user_id,
-        created_at, expires_at, redeemed_at, revoked_at, note)
-     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)`,
+        created_at, expires_at, redeemed_at, revoked_at, note, kind, intended_user_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)`,
     [
       id,
       input.workerId,
@@ -63,6 +73,8 @@ export async function createInvitation(input: CreateInvitationInput): Promise<Wo
       new Date(now).toISOString(),
       new Date(now + (input.ttlMs ?? INVITATION_TTL_MS)).toISOString(),
       input.note ?? null,
+      input.kind ?? 'ROTATING',
+      input.intendedUserId ?? null,
     ],
   );
   const row = await getDb().get<WorkerInvitationRow>(
@@ -138,4 +150,32 @@ export async function revokeInvitationsForWorker(workerId: string): Promise<numb
     [nowIso(), workerId],
   );
   return result.changes;
+}
+
+/**
+ * Withdraw onboarding's own unused link, and nothing else.
+ *
+ * Onboarding is a rotation: running it again replaces the one link it issued.
+ * It must not reach the `ADDITIONAL` links an administrator sent to several
+ * people for a pool — each of those belongs to somebody who has not opened it
+ * yet, and withdrawing it because a different link was issued is exactly the
+ * defect `095_worker_invitation_members.sql` exists to close.
+ */
+export async function revokeRotatingInvitationsForWorker(workerId: string): Promise<number> {
+  const result = await getDb().run(
+    `UPDATE worker_invitations SET revoked_at = ?
+      WHERE worker_id = ? AND kind = 'ROTATING' AND revoked_at IS NULL AND redeemed_at IS NULL`,
+    [nowIso(), workerId],
+  );
+  return result.changes;
+}
+
+/** Withdraw one invitation, only if it belongs to this worker. Guarded in the statement. */
+export async function revokeInvitationForWorker(id: string, workerId: string): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE worker_invitations SET revoked_at = ?
+      WHERE id = ? AND worker_id = ? AND revoked_at IS NULL AND redeemed_at IS NULL`,
+    [nowIso(), id, workerId],
+  );
+  return result.changes > 0;
 }

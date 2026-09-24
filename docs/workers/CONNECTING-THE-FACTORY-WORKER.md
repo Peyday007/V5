@@ -236,13 +236,14 @@ done in that friend's own Claude account**:
 | Registered and bound by | the connection journey | an administrator: `register-account`, `register-routine`, `bind-worker` |
 | Proven by | the page's self-test | `verify-surface --ref trig_… --probe` (pinned) |
 
-**What the friend does and what the owner does.** The owner presses **Connect
-another Claude account** on Build → Repositories beside `Peyday007/V5` — it
-issues one single-use link for `factory-brain` and changes nothing else — and
-sends it to the friend. The friend opens that link first, in their own browser,
-then, signed in to Claude in their own account, adds the `Factory Brain`
-connector (step 3), approving `factory-brain`, and creates the Routine
-(step 4). The friend sends the owner the
+**What the friend does and what the owner does.** The owner opens Build →
+Repositories and, beside `Peyday007/V5`, under **Invite another Factory
+account**, chooses the friend and presses **Issue a link** — one single-use link
+for `factory-brain`, bound to that friend, which changes nothing else and
+withdraws no other link — and sends it to the friend. The friend signs in to
+Brain as themselves in the browser they will use, opens that link, then, signed
+in to Claude in their own account, adds the `Factory Brain` connector (step 3),
+approving `factory-brain`, and creates the Routine (step 4). The friend sends the owner the
 Routine's `trig_…` id and, privately, its bearer. The owner sets the deployment
 secret (step 5), registers and binds the surface (step 6) and runs the pinned
 proof (step 7). **Nobody needs access to anybody else's Claude account**, and
@@ -318,11 +319,28 @@ gives it the fixed factory scope set, writes an exhaustive routing row naming
 repair and a rotation, so the second press reuses the same worker, revokes the
 lost invitation and issues a fresh one. Nothing accumulates.
 
-**One link per Claude account.** A link is spent when a connection is approved
-with it, so each further account needs a fresh press. The rotation revokes
-*unspent invitations only* — never a connector another account has already
-authorized — so pressing it again for the next person costs the previous one
-nothing.
+**One link per Claude account — from *Invite another Factory account*.**
+Onboarding's own button is shown only until the repository is ready, and it is a
+rotation: pressing it again withdraws onboarding's previous unused link. So it
+was never the way to commission a pool, and **an earlier version of this
+paragraph said to press it once per person — corrected here rather than quietly**:
+once the first account worked the card was `READY`, the button was gone, and
+had it been there, the second press would have withdrawn the first person's
+unopened link.
+
+Every onboarded repository card now carries **Invite another Factory account**,
+in every state including `READY`. Choose the Brain member the link is for and
+press **Issue a link**; it is shown once with a **Copy link** control. It asks
+nothing about the repository again and changes nothing — not the worker, its
+routing, the boundary, or any connection already made — and **issuing one never
+withdraws another**, so you can issue one per friend in a row and send them all
+at once. The list under it says who each link was for and whether it is
+waiting, used, expired or withdrawn, and never shows a link again.
+
+A member link works only in a browser **signed in to Brain as that member**. A
+forwarded link, or one opened in a browser signed in as somebody else or as
+nobody, is refused on the consent screen and is **not spent**; its page says to
+sign in first. Each is single-use and expires after seven days.
 
 The link is not a credential. On its own it cannot read anything, call a tool or
 obtain a token; all it does is make one browser able to approve **that one
@@ -381,6 +399,10 @@ You will see one of two screens, and **both are correct**:
   only to name and preselect the worker, and it is **not spent** here.
 - **Not signed in, invitation open in this browser** — one worker named, no
   list. Press **Approve**. This spends the invitation.
+- **A friend's member link** — they sign in to Brain as themselves in that
+  browser (their own device or PIN), open their link, and then connect in
+  Claude: one worker named, no list, **Approve**. Signed in as anybody else, or
+  not at all, it refuses and leaves the link unspent.
 
 **A list is not a fault.** `/oauth/authorize` looks for a signed-in
 administrator *before* it looks for an invitation, deliberately: an invitation
@@ -784,8 +806,9 @@ What remains after `VERIFIED` is one decision: an objective — said to Russell 
 an ordinary thread, entered in Build, or committed under `objectives/` — and
 approved by a person. Nothing about the surface changes.
 
-A **second account later** — more throughput on this same repository — is steps
-3 to 7 again in that account, with `N` one higher, and step 8 to read the pool.
+A **second account later** — more throughput on this same repository — is one
+**Invite another Factory account** link for the member who holds it, then steps
+2 to 7 again in that account, with `N` one higher, and step 8 to read the pool.
 No code change, no deployment, no re-onboarding, and nothing about the surfaces
 already proven is touched.
 

@@ -516,11 +516,21 @@ describe('an invited project member', () => {
       body: { scopeKind: 'WHOLE_REPOSITORY' },
     });
     expect(result.status).toBe(404);
-    const invite = await call('POST', `/api/projects/${projectId}/factory/repositories/brain/invitation`, {
+    const invite = await call('POST', `/api/projects/${projectId}/factory/repositories/brain/invitations`, {
       cookie: member.cookie,
-      body: {},
+      body: { intendedUserId: member.id },
     });
     expect(invite.status).toBe(404);
+    const sent = await call('GET', `/api/projects/${projectId}/factory/repositories/brain/invitations`, {
+      cookie: member.cookie,
+    });
+    expect(sent.status).toBe(404);
+    // Not vacuous: the same routes answer an administrator, so the 404 above is
+    // the refusal and not a route that does not exist.
+    const listed = await call('GET', `/api/projects/${projectId}/factory/repositories/brain/invitations`, {
+      cookie: adminCookie,
+    });
+    expect(listed.status).toBe(200);
     // And the screen is told so, rather than offered a control that cannot succeed.
     const read = await call<{ mayConnectAccounts: boolean; connectAccountsRefusal: string | null }>(
       'GET',

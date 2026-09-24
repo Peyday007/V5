@@ -559,12 +559,26 @@ describe('client registration', () => {
 });
 
 describe('the consent screen', () => {
-  it('sends an unauthenticated visitor to sign in with their device, and asks for nothing', async () => {
+  it('sends an unauthenticated visitor to sign in, names the credential that works, and asks for nothing', async () => {
     const { challenge } = pkce();
     const response = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge)}`);
     const html = await response.text();
     expect(response.status).toBe(200);
-    expect(html).toContain('Sign in with your device');
+    expect(html).toContain('Sign in to connect a worker');
+    /*
+     * And it names the credential the served screen actually asks for.
+     *
+     * This page told people to press **Sign in with your device** and said the
+     * Brain has no sign-in form. Both were true before a six-digit PIN replaced
+     * the passkey and neither has been since: the screen is a form, it takes a
+     * name and a PIN, and there is no device button to press. A member who
+     * followed it met a PIN box with nothing to type and no way to find out
+     * why — and this assertion pinned the wrong instruction in place, which is
+     * why it survived the migration that made it false.
+     */
+    expect(html).not.toContain('Sign in with your device');
+    expect(html).not.toContain('no sign-in form');
+    expect(html).toContain('six-digit PIN');
     /*
      * And it collects nothing. This page used to carry an address and a
      * password and post them to `/api/auth/login`, which was the one surface

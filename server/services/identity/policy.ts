@@ -292,9 +292,10 @@ const OVERRIDES: Override[] = [
   // machine that could register itself for repository work is precisely what §22
   // was protecting against.
   { pattern: /^\/api\/projects\/[^/]+\/factory\/repositories\/[^/]+\/onboard$/, method: 'POST', level: 'ADMIN' },
-  // Another connector invitation for an onboarded repository's worker: the
-  // same authority onboarding carries, because it is the same kind of link.
-  { pattern: /^\/api\/projects\/[^/]+\/factory\/repositories\/[^/]+\/invitation$/, method: 'POST', level: 'ADMIN' },
+  // Inviting one more Claude account to an onboarded factory worker is the same
+  // authority as onboarding's own invitation, reading and withdrawing included:
+  // who has been sent a link is part of deciding who gets the next one.
+  { pattern: /^\/api\/projects\/[^/]+\/factory\/repositories\/[^/]+\/invitations(\/[^/]+\/withdraw)?$/, level: 'ADMIN' },
   { pattern: /^\/api\/russell\/projects\/[^/]+\/sites/, method: 'GET', level: 'READ' },
 
   // ---------------------------------------------------------------------

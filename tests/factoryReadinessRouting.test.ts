@@ -423,19 +423,38 @@ describe('verify-pool reads eligibility from the router too', () => {
 });
 
 describe('another Claude account can be invited into a READY repository’s pool', () => {
-  it('issues one link for the worker and changes no membership, routing or boundary', async () => {
-    const { issueConnectorInvitation } = await import('../server/services/factory/onboard.ts');
+  it('issues one link per member, keeps every earlier link live, and changes no membership, routing or boundary', async () => {
+    const { issueFactoryInvitation } = await import('../server/services/factory/onboard.ts');
     const { listInvitationsForWorker } = await import('../server/repos/invitations.ts');
-    const { getWorkerRouting, listMembershipsForPrincipal } = await import('../server/repos/identity.ts');
+    const { createUser, getWorkerRouting, listMembershipsForPrincipal } = await import('../server/repos/identity.ts');
     const { getProjectRepository } = await import('../server/repos/factory.ts');
-
-    const refused = await issueConnectorInvitation({
-      projectId: fixture.project.id,
-      grantId: GRANT().id,
-      actor,
-      origin: 'https://brain.example',
+    const friend = await createUser({
+      email: `friend-${Date.now()}@example.com`,
+      displayName: 'A friend',
+      password: 'a-long-enough-test-password',
+      isBrainAdmin: false,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
     });
-    expect(refused.ok).toBe(false);
+    const another = await createUser({
+      email: `another-${Date.now()}@example.com`,
+      displayName: 'Another friend',
+      password: 'a-long-enough-test-password',
+      isBrainAdmin: false,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const issue = (intendedUserId: string) =>
+      issueFactoryInvitation({
+        projectId: fixture.project.id,
+        grantId: GRANT().id,
+        intendedUserId,
+        actor,
+        origin: 'https://brain.example',
+      });
+
+    // Nothing to connect to before onboarding.
+    expect((await issue(friend.id)).ok).toBe(false);
 
     const workerId = await onboard();
     await surface(workerId);
@@ -446,27 +465,22 @@ describe('another Claude account can be invited into a READY repository’s pool
       memberships: await listMembershipsForPrincipal('WORKER', workerId),
       boundary: await getProjectRepository(fixture.project.id, GRANT().id),
     };
-    const first = await issueConnectorInvitation({
-      projectId: fixture.project.id,
-      grantId: GRANT().id,
-      actor,
-      origin: 'https://brain.example',
-    });
-    const second = await issueConnectorInvitation({
-      projectId: fixture.project.id,
-      grantId: GRANT().id,
-      actor,
-      origin: 'https://brain.example',
-    });
+    const live = async () =>
+      (await listInvitationsForWorker(workerId)).filter((one) => !one.revokedAt && !one.redeemedAt);
+    const onboardingLinks = (await live()).length;
+
+    const first = await issue(friend.id);
+    const second = await issue(another.id);
     expect(first.ok && second.ok).toBe(true);
     if (!first.ok || !second.ok) return;
-    expect(first.invitationUrl).toMatch(/\/oauth\/invite\//);
-    expect(second.invitationUrl).not.toBe(first.invitationUrl);
-    // One live link at a time, for this worker.
-    const live = (await listInvitationsForWorker(workerId)).filter(
-      (one) => !one.revokedAt && !one.redeemedAt,
+    expect(first.result.invitationUrl).toMatch(/\/oauth\/invite\//);
+    expect(second.result.invitationUrl).not.toBe(first.result.invitationUrl);
+    // Issuing the second withdrew nothing: both are live, beside onboarding's own.
+    const nowLive = await live();
+    expect(nowLive).toHaveLength(onboardingLinks + 2);
+    expect(nowLive.map((one) => one.intendedUserId)).toEqual(
+      expect.arrayContaining([friend.id, another.id]),
     );
-    expect(live).toHaveLength(1);
     expect(await getWorkerRouting(workerId)).toEqual(before.routing);
     expect(await listMembershipsForPrincipal('WORKER', workerId)).toEqual(before.memberships);
     expect(await getProjectRepository(fixture.project.id, GRANT().id)).toEqual(before.boundary);
