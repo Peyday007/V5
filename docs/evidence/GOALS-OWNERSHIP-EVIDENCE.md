@@ -257,6 +257,15 @@ same database slowness the operator reads showed all evening — not a finding
 about the release, which was live and serving throughout. It is recorded as a
 failed half rather than rounded up.
 
+## Deploy 336: refused by its own test gate, and rightly
+
+Deploy 336 (`d59a46a`, the boot retry) never reached Fly: `puzzleIntegrationPass`
+failed with `expected 2 to be greater than or equal to 20`, so nothing was
+released and production kept serving `fa4e3cd`. The test was right and the code
+was wrong: the puzzle batch judged its defect rate after four attempts, and two
+unlucky word searches in a row stopped a healthy generator. The fix, a
+twelve-attempt sample floor, is recorded in CLAUDE.md §48.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
