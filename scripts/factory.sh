@@ -5,11 +5,10 @@
 # session in `/`, and the CLI resolves paths relative to the repository root.
 set -e
 cd "$(dirname "$0")/.."
-# Two connections, because this runs *beside* the server that is already holding
-# most of the pooler's allowance. The hosted pooler caps a session-mode client at
-# fifteen, the server takes what it needs, and a CLI that opened a default-sized
-# pool of its own got FATAL (EMAXCONNSESSION) — a read refused for asking too
-# much rather than for anything about the data. `verify-hosted.ts` does the same
-# for the same reason.
-export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-2}"
+# One pooler client, like every other wrapper here (§39): every command is
+# sequential, and a statement inside a transaction goes to that transaction's
+# own client rather than back to the pool. This read two until 2026-09-23, and
+# its reads then failed four times running on a pooler connection timeout
+# while the one-client goals read beside them succeeded.
+export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-1}"
 exec node --import tsx scripts/factory.ts "$@"

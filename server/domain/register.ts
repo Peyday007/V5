@@ -135,6 +135,17 @@ export interface WorkstreamRow {
   created_by_user_id: string | null;
   created_at: string;
   updated_at: string;
+  // Migration 092: what a person said this goal is for, and their decisions
+  // about it. Optional on the row type because a row read by a caller that
+  // predates the migration must still map.
+  outcome?: string | null;
+  owner_user_id?: string | null;
+  due_at?: string | null;
+  commitment?: string | null;
+  paused_at?: string | null;
+  paused_reason?: string | null;
+  cancelled_at?: string | null;
+  cancelled_reason?: string | null;
 }
 
 export interface Workstream {
@@ -148,6 +159,15 @@ export interface Workstream {
   createdByUserId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** What counts as finished, in the words of whoever set the goal. */
+  outcome: string | null;
+  ownerUserId: string | null;
+  dueAt: string | null;
+  commitment: 'NONE' | 'INTERNAL' | 'CUSTOMER';
+  pausedAt: string | null;
+  pausedReason: string | null;
+  cancelledAt: string | null;
+  cancelledReason: string | null;
 }
 
 export interface WorkstreamLinkRow {

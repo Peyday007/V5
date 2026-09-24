@@ -1488,12 +1488,43 @@ for.
   completed chain behind it. Both report two numbers now, each labelled as what
   it counts, and which surfaces have actually run.
 
-`docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` records the whole lane. **None of it has
-a production reading**: no four-account Factory pool has been commissioned, so
-the quarantine has never fired against a real dead surface and `STALE` has never
-been printed about a real revoked connector. The engine passing its tests says
-nothing about whether the fleet behaves this way, which is the separation Step 3
-drew and which this does not get to waive.
+`docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` records the whole lane. **The quarantine
+has a production reading and the rest does not**, and that sentence used to say
+none of it did — corrected rather than edited away, because it was true when it
+was written and the rows disproved half of it on 2026-09-23. At 12:15:04,
+12:15:05, 12:16:27 and 12:16:28 the four `Airyn` Routines were taken out of
+routing, each with the recorded reason and `refusals=0`, **while five surfaces
+bound to the same worker stayed enabled and three of them held work at that
+instant**. That last clause is what makes it a reading of the repair rather than
+of an outage: under `consecutive_no_shows` any one of those arrivals would have
+cleared the counter for all nine, so the four could never have reached the
+threshold. `shouldQuarantine` is no longer a mechanism nothing calls.
+
+**Two hours later the other five had crossed as well, and the staggered
+crossing is stronger evidence than either reading alone.** At 14:14Z `fleet
+show` reports nine of eighteen Routines quarantined and every one of them bound
+to `wkr_1cdd82cfb2a54faf8edd`, with the four still eligible on a different
+worker. Each of the five accumulated its own unanswered fires and crossed on
+its own schedule, which is what a per-surface count produces and what a shared
+counter cannot: the first reading needed the five to *stay enabled* and the
+second needs them to cross *separately*, and only counting per surface gives
+both. **Eight of the nine are no-shows and the ninth is not** — `V2` reads
+`unanswered=0`, so it cannot have crossed a threshold of three and is the
+`AUTH 403` quarantine §29 records; a state column is not evidence of the
+mechanism that wrote it, which is the whole reason `unanswered` exists. **What
+it establishes is a worker rather than eight surface faults** — eight
+independent counts against one bound identity is a reading that the identity
+stopped answering — so the remedy is not `fleet set-state` on eight rows, which
+would put each back three unanswered fires from where it started at one
+activation each.
+
+What still has no production reading: no four-account Factory pool has been
+commissioned, `STALE` has never been printed about a real revoked connector,
+and no fire has been routed across four accounts. The four surfaces above carry
+`caps=[]` and resolve to one worker identity, so they are research surfaces and
+not a pool. The engine passing its tests says nothing about whether the fleet
+behaves this way, which is the separation Step 3 drew and which this does not
+get to waive.
 
 **The acceptance pass against four *distinct* identities found the lane's own
 defect class four more times — correct machinery, a false sentence about it.**
@@ -3669,6 +3700,29 @@ remote.
   its code is **not established and is not required** — asserting `XX000` for
   it would be a guess wearing a matcher. The marker carries the specificity in
   both. Both functions stay pure and report; nothing acts on either string.
+
+  **And the submission itself is what is pinned now, because the two readers
+  it was repaired through are not the whole transaction.** A regression in
+  `tests/packet.test.ts` drives the JUDGE `brain_submit_audit` through the real
+  tool, queue and independence matrix, twice, with twenty-five readable
+  documents added to the layer between: production's tree went **400 → 577
+  statements**, about seven per document, and the repaired one **372 → 372**.
+  Counting the store as well found the half the statement count could not see:
+  **16 → 120 existence checks on both trees**, about four per document per
+  submission, because the brief checks every sibling and each recompute inside
+  the submission re-asked, its memo scoped to that one recompute — in cloud mode
+  a bucket request each, inside the same transaction, on the release whose
+  successor's storage API answered `544 DatabaseTimeout`. The effect runs inside
+  one `withExistenceMemo` now, so the submission asks once per document
+  (**4 → 30** for 26 more). Nothing in it writes an object, so no answer can go
+  stale inside it. That half is still linear in the layer, deliberately — a
+  recompute exists to notice a file that has gone — and is bounded at sixteen
+  in flight.
+
+  **Deploy 323's 1m42s was measured before this third half existed**, so it
+  says what the statement-count repair and the per-recompute memo bought
+  together and nothing about the submission-wide memo, which reaches
+  production with the release that carries this paragraph.
 
   A sentence here used to end *"whatever is actually driving the growth is
   still unmeasured"*, and it survived two rewrites that each measured it — the
@@ -11253,7 +11307,8 @@ that would have chosen between them exists.**
   way the product does. A row id belongs where somebody can look the row up,
   so `cash-report` prints it, with the instant the question was opened beside
   it — §45's rule that every line resolves to a row, at the one reading that
-  will be used as production acceptance for this loop.
+  was used as production acceptance for this loop, and it is what makes the
+  three commission ids below quotable rather than merely counted.
 
   Each of the four regressions was run against its own defect before it was
   trusted to pass, because a regression nobody has seen fail is a claim rather
@@ -11292,6 +11347,59 @@ that would have chosen between them exists.**
   aborts their release, so a branch waits for the deploy in flight rather than
   racing it.
 
+- **The loop ran in production, and what it produced is three questions rather
+  than a figure.** Deploy 327 released `96b1bfc` inside `6708990`, and the
+  reading taken through `cash-report.yml` inside that image — the container
+  naming its own `SERVING_REVISION 6708990938e1bbc82af535b12f374315ae5b1b18`,
+  because a report read out of a container says nothing about *which*
+  container unless the container says so (§45) — is:
+
+      possibilities=802 ledger_sourced=0 ledger_proposed=28
+      asked=3 asking_now=3 answered=0 unresolved=0 abandoned=0
+
+  Eight hundred and two possibilities enumerated from the forty real
+  discoveries this sprint already held, `MONETIZATION_PATHS_ENUMERATED=40` on
+  the project's own append-only history beside it. Every one of the 802 reads
+  `BLOCKED`, and the eight the report prints each carry twelve of thirteen
+  attributes open — which is the audit's own finding holding on live rows.
+  Twenty-eight answers across eight hundred possibilities, **none of them from
+  a published source**, is what a ledger looks like when `carryFigures` is the
+  only thing writing to it, and it is the number the commissioning loop exists
+  to move.
+
+  **What it asked is the ordering rule rather than the ranking.** All three
+  questions are `requiredCapability` under the blocker rule, on the three
+  top-ranked possibilities, each recorded reason beginning *"This possibility
+  is blocked"* — so the rule that a blocker outranks a position is what chose
+  the work, which is the one thing about this allocator that reading it could
+  not establish. Each row names what it serves: `mzc_ed9c18222fe4466dbc9a`,
+  `mzc_b0460e34190543f4a9ef` and `mzc_21c035fa3acf47239f86`, each with its
+  path, its attribute, its round, its reason and the idea it created —
+  `rcn_30acfb36fea24632980b`, `rcn_dba057453d184df986f9`,
+  `rcn_f22e90cb5c64460ea7b5`. That last column is the attribution answered by
+  a row rather than by a claim, and it is also the proof that the question
+  entered the Russell path that already exists rather than a second one.
+
+  **Three open is exactly `MAX_OPEN_COMMISSIONS`, and the second reading is
+  what makes that a bound rather than a coincidence.** A second `cash-report`
+  thirty-two minutes later — some sixty-four durable ticks at
+  `RUSSELL_TICK_MS` — printed the identical three ids and the identical
+  `asked=3 asking_now=3`. Nothing was asked twice, no fourth question was
+  created, and the ceiling held with nobody involved. That is the
+  duplicate-commissioning requirement observed in production rather than
+  argued from the unique index, and it is the reading the index exists for.
+
+  **`answered=0` is the honest boundary and is not rounded up.** The three
+  questions are open and their research has not come back, so the last link of
+  the chain — accepted evidence answering a ledger attribute, recomputing the
+  status and the rank, and appending a movement when the ordering actually
+  changes — is proven by `tests/monetizationCommissioning.test.ts` on both
+  backends and **not yet by production rows**. Calling it proven because the
+  machinery is correct is the separation Step 3 drew between an engine passing
+  its tests and a real job having actually run, and this section does not get
+  to waive it either. What production has established is everything up to the
+  question: the space, the selection, the bound and the entrance.
+
 - **This pair moved three times, and the third move is what says the rule is
   about position rather than about being first.** It was written at `088` /
   pg `079`, moved to `089` / pg `080` when the four-account fleet lane landed
@@ -11311,6 +11419,95 @@ that would have chosen between them exists.**
   (§25). A reader following a *number* in prose has the same problem one layer
   along, which is why §32 names its file: **a number is a position two
   workstreams can both reach for; a filename is the thing itself.**
+
+## 50. A goal is owned when a person's decision about it reaches the work.
+
+Brain recorded every part of a goal — the campaign, the mission, the packet,
+the bin, the request, the document — and nothing held the goal. A person who
+came back had to join six surfaces by hand to learn what happened, what was
+happening, what came next and what needed them; a person who said "not now"
+had no way to make it true; and the fleet handed out capacity in whatever order
+bins happened to be created, whoever's they were. `server/services/goals/`,
+`server/repos/goals.ts`, `server/domain/goals.ts` and `docs/GOALS.md` are the
+repair, and the shape is the register's (§43) carried one level up.
+
+- **A goal is a workstream with four things a person said** — what counts as
+  finished, whose it is, by when, and whether it is owed to a customer — **and
+  three decisions a person made**: paused, cancelled, archived. Nothing else is
+  stored. The lifecycle, the waiting condition, the next action and who takes
+  it, the blockers and their ages, the decisions, the evidence, the authority
+  and the obligations are derived on every read, and `workstreams` still has no
+  `state` column.
+- **A decision reaches the work through a hold on the bin, asked in the one
+  predicate every reader composes.** `claimableStateSql` now begins
+  `held_by_workstream_id IS NULL`, so the dispatcher, the assigner, the no-show
+  reopen and the pre-fire re-read all refuse a held bin without a fifth copy of
+  the rule — §24's sentence about the fifth reader of `state = 'READY'`, taken
+  before a sixth could be written. A hold keeps the lease, the attempts, the
+  generation and every event, so a worker already inside finishes, and a resume
+  continues rather than restarts.
+- **Resume is the tick, never a button.** `advanceGoals` runs on the durable
+  Russell tick, derives which bins each goal wants held, releases what no longer
+  should be and holds what should, and writes an event either way. A paused
+  goal resumed, a cancelled one reinstated and a goal whose dependency completed
+  all continue on the next pass with nobody pressing anything — the proof of
+  which is that no route or command added here advances a stage.
+- **A hold never stops work somebody else is pursuing.** A bin shared by two
+  goals is held only when every live goal pursuing it wants it held, and the
+  current holder keeps it so two goals never trade a hold back and forth.
+- **Capacity follows each owner's goals, ranked within an owner and a
+  project.** Lexicographic — workable, commitment, deadline, purpose, unblocks,
+  age — and never a score; the first criterion two goals differ on is the
+  sentence each carries. The rank maps to bin priority 8, 7, 6, then 5, capped
+  below a conversation turn's 9. Per owner *and* project so one private
+  operation's commitments never decide another's capacity and no rank reveals
+  work in a project a reader cannot see. An unknown deadline sorts after a
+  stated one — invariant 39 at an ordering.
+- **Complete is every pursued piece delivered, never a claim.** The register's
+  "furthest reading wins" would call a goal done because one of its missions
+  finished beside a running campaign; completion asks every `PURSUES` link.
+- **Cancelling ends pursuit, not obligation.** A cancelled goal's bins are held
+  and reinstatable, a customer commitment and any cash held against its
+  opportunities are reported as still owed, and nothing is released
+  (invariant 40). Resuming retries no effect: Step 6 still keys every effect by
+  work item, and the count of `UNCERTAIN` effects in the project is reported to
+  the person resuming rather than assumed away (invariant 26).
+- **Needs You holds only a person's decision, prepared.** An open request on a
+  pursued mission, an unapproved change request, a campaign awaiting release, a
+  pull request only a person can merge — each with the proposed action, every
+  answer and what it causes, what waits on it, and what Brain does afterwards.
+  A `PRIVATE` request stays in its owner's own Needs You and never appears on a
+  goal the project can read.
+- **A dependency on a goal you cannot read is reported as unreadable, never
+  described**, and a dependency that would close a cycle is refused, because
+  two goals each waiting on the other would hold each other's work for ever.
+
+- **A finished campaign was offered back by one of two ticks, so a merged PR
+  asked to be merged.** `listCampaignsPendingOutcome` names the campaigns whose
+  outcome still needs attesting or a merge observing, and only the local
+  `tickAllCampaigns` read it; production runs `tickAllRemoteCampaigns`, which
+  visited live campaigns only. PR #31 merged on 2026-09-22 and its goal put
+  *"Read and merge PR #31"* in Needs You until the hosted tick read the same
+  list — observed at 20:04:09Z seconds after the release carrying it. A rule
+  applied by one of two runners, for the fourth time in this file.
+- **A blocker's sentence must agree with its remedy and its age.** The
+  dispatcher's refusal text named a missing membership beside a remedy about
+  quarantined Routines, aged `0h` because the intent is re-stamped every tick.
+  Where every serving Routine is out of routing the goal says so, aged from the
+  latest time one went out.
+- **The release gate's privacy check was vacuous twice, and then acted on a
+  real person's goal.** It first skipped the foreign comparison while printing
+  PASS (the verification administrator could see no foreign goal); then it
+  compared against a live production goal, POSTing a refused pause at it, while
+  its positive half read *0 goals* — which a route refusing everyone also
+  prints. The harness now files both goals itself, proves the member reads and
+  opens its own, is refused the other byte-identically to an absent id, and
+  archives both. **A gate must never depend on a refusal holding in order not
+  to change a person's work.** `tests/goalsHttp.test.ts` reads the harness.
+
+`npm run goals` and the `Goals` workflow are the terminal and production doors;
+`file --from <row>` files real recorded work with that row's own words as the
+intent and composes nothing.
 
 ## Repository map
 
@@ -11364,6 +11561,7 @@ server/
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
     researchIntelligence.ts  the judgement above the engine: what to learn, and what changed it
     register.ts       workstreams, what they point at, and what happened to them
+    goals.ts          a person's decisions about a goal, holds on bins, priority history
     bridge.ts         a person's bearer, a transcript exactly as it arrived, and its receipts
     dealflow.ts       both sides of a transaction, and everything hard between them
     puzzle.ts         the universe, the systems, the puzzles, the products, the trade
@@ -11465,6 +11663,12 @@ server/
     storageHealth.ts    how much room is left, measured rather than guessed
     knowledge/
       shared.ts         what crosses between projects, and what may never
+    goals/
+      model.ts          a goal as Brain can read it: what happened, now, next, needs you
+      priority.ts       each owner's goals in order, and the one fact that decides it
+      tick.ts           holds, releases and allocation, on the durable tick
+      decide.ts         pause, resume, cancel, reinstate, terms, objective — one writer each
+      briefing.ts       the answer across goals, for somebody coming back
     register/
       resolve.ts        what the row behind a link says right now, or that it is gone
       view.ts           the six answers, derived on the read path and stored nowhere
