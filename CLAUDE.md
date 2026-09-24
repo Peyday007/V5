@@ -493,6 +493,16 @@ worth having if it is honest about which it is doing.
 - Having the environment variables set is not the same fact as the database
   answering. Boot runs a real query and a real bucket listing, and only then may
   anything say cloud mode is active.
+- **Stopping the boot is not stopping for ever, and for a while it was.** The
+  process served the error and nothing asked again, and Fly does not restart a
+  machine for failing a health check — so a Supabase timeout at the instant of
+  a deploy (319, 324, 334, each `544 DatabaseTimeout`) left production at `503`
+  until somebody deployed again, with the database answering within the hour.
+  `server/bootRetry.ts` re-runs the identical proof, `proveCloud`, on a doubling
+  wait capped at five minutes, serves nothing but the error until it holds, and
+  then replaces the error page with the Brain on the same port. That is asking
+  the real thing again, which §18 never forbade; falling back is what it
+  forbids, and nothing here serves anything the proof did not establish.
 - Secrets are server-side. The connection string and the service-role key appear
   in the Postgres connection and one `Authorization` header, and nowhere else —
   not in a log line, not in an API response, not in the frontend bundle. A
@@ -11482,6 +11492,7 @@ server/
   index.ts              boot: migrate -> seed -> recompute -> serve
   env.ts                every path the app uses
   config.ts             which database and which store, validated; no silent fallback
+  bootRetry.ts          a boot whose cloud proof failed asks again, and falls back to nothing
   db/
     types.ts            the async Database interface both backends implement
     driver.ts           SQLite driver abstraction (node:sqlite, or better-sqlite3 if installed)

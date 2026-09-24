@@ -214,6 +214,29 @@ Brain printed no diagnosis for: neither `describePoolerRefusal` nor the boot
 hint recognised `EAUTHQUERY`. Both do now, and say the database rather than the
 password or the client count.
 
+## Deploy 334: a release refused by the store, and an outage nobody could end
+
+Deploy 334 (`fa4e3cd`) built, passed its gate, and failed at `flyctl deploy`
+with `timeout reached waiting for health checks`. **Nothing was released**: the
+step `Record what was released` is `skipped`, the §27 reading that separates a
+failed release from a failed gate. The new machine's boot log reads
+`Brain could not use the document storage it was configured for` /
+`HTTP 544 DatabaseTimeout` — §18 refusing correctly while the database was the
+slow one the operator reads had already shown. Infrastructure, not the change.
+
+What was a defect is what followed. The machine served the error, nothing asked
+again, and Fly does not restart a machine for a failing health check, so
+`/healthz` answered `503` after 35s through the proxy long after a one-client
+goals read at 23:44Z showed the database answering again. Recovery needed a
+redeploy (335). `server/bootRetry.ts` is the remedy: the same proof, asked
+again on a capped backoff, with the error page replaced by the Brain on the
+same port once it holds. Proved with a real local boot against a bucket stub
+that answered `544` twice and then `200`: error page served, `attempt 1
+failed; asking again in 30s`, `The cloud answered`, all 92 migrations applied,
+`/healthz` `200` — no restart and no redeploy. `tests/bootRetry.test.ts` pins
+the schedule, the single hand-over, and that boot retries `proveCloud` itself;
+its wiring assertion fails against the previous `server/index.ts`.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
