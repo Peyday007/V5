@@ -15,7 +15,7 @@ import {
   listRoutines,
 } from '../../repos/fleet.ts';
 import { resolveToken } from './fire.ts';
-import type { RoutingCandidate } from './router.ts';
+import { surfaceIneligibility, type RoutingCandidate } from './router.ts';
 import type { FleetAccount, FleetPolicy } from '../../domain/types.ts';
 import { getWorker, getWorkerRouting, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { derivedFamiliesFrom } from '../bins/routing.ts';
@@ -289,4 +289,29 @@ async function routingScopeForWorker(workerId: string): Promise<WorkerRoutingSco
      */
     return { families: ['RESEARCH', 'GENERAL'], repositories: null, projects: [], active: false };
   }
+}
+
+/**
+ * Why the router would refuse each registered Routine, independent of any bin.
+ *
+ * `surfaceIneligibility` answers for a routing candidate; a Routine whose secret
+ * is not deployed never becomes one, and a Routine whose account row is gone is
+ * skipped outright. Readers that describe a surface to a person (Who, goals,
+ * the Fleet page) need an answer for all three, and deriving it here keeps
+ * them asking the router's question rather than reading a state column — the
+ * disagreement §23 records at four readers already.
+ *
+ * `null` means the router would consider it; it says nothing about headroom.
+ */
+export function routingRefusalByRoutine(snapshot: FleetSnapshot, routineIds: readonly string[]): Map<string, string | null> {
+  const candidates = new Map(snapshot.candidates.map((one) => [one.routine.id, one]));
+  const missing = new Set(snapshot.missingSecrets.map((one) => one.routineId));
+  const out = new Map<string, string | null>();
+  for (const id of routineIds) {
+    const candidate = candidates.get(id);
+    if (candidate) out.set(id, surfaceIneligibility(candidate));
+    else if (missing.has(id)) out.set(id, 'its deployment secret is not present');
+    else out.set(id, 'its account is not registered');
+  }
+  return out;
 }
