@@ -37,7 +37,7 @@ import {
   setPolicy,
   setRoutineState,
 } from '../server/repos/fleet.ts';
-import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
+import { fleetSnapshot, routingRefusalByRoutine, type FleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
 import { proveSurface } from '../server/services/dispatch/surfaceProof.ts';
 import { resolveToken } from '../server/services/dispatch/fire.ts';
@@ -131,6 +131,23 @@ function ok(line: string): void {
 function refuse(line: string): void {
   console.log(`FLEET REFUSED: ${line}`);
   process.exitCode = 1;
+}
+
+/**
+ * The end of a Routine's `show` line: `routable`, with the in-flight count
+ * kept beside it, or `not routable: <reason>` in the router's own words.
+ *
+ * Reading `routingRefusalByRoutine`'s answer — rather than asking whether the
+ * Routine happens to appear in the snapshot's candidate list, which is what
+ * this line used to do — is what keeps this text unable to disagree with the
+ * dispatcher: a candidate can exist in the snapshot and still be refused (an
+ * UNAVAILABLE account, a disabled worker, no project membership), and the old
+ * check read every one of those exactly like a Routine the router would fire.
+ */
+export function routineRoutabilitySuffix(snapshot: FleetSnapshot, routineId: string, refusal: string | null): string {
+  if (refusal !== null) return `  not routable: ${refusal}`;
+  const inFlight = snapshot.candidates.find((c) => c.routine.id === routineId);
+  return `  in-flight=${inFlight ? inFlight.routineInFlight : 0}  routable`;
 }
 
 async function main(): Promise<void> {
@@ -769,6 +786,15 @@ async function main(): Promise<void> {
      * same function, so the screen and the decision cannot disagree.
      */
     const unanswered = await unansweredFiresByRoutine();
+    /*
+     * Whether the router would fire each registered Routine, and why not
+     * when it would not — asked once, over every Routine this fleet holds,
+     * so the per-Routine line below reads the same answer for all of them.
+     */
+    const refusals = routingRefusalByRoutine(
+      snapshot,
+      routines.map((r) => r.id),
+    );
 
     console.log('FLEET');
     console.log(`  accounts    ${accounts.length}`);
@@ -838,7 +864,6 @@ async function main(): Promise<void> {
           (account.retryAt ? `  retry_at=${account.retryAt}` : ''),
       );
       for (const routine of mine) {
-        const inFlight = snapshot.candidates.find((c) => c.routine.id === routine.id);
         console.log(
           `      ${routine.name}  ${routine.state}  ref=${routine.routineRef}  ` +
             // The binding is what `lineageForWorker` reads, so it is what
@@ -852,7 +877,7 @@ async function main(): Promise<void> {
             `caps=[${routine.capabilities.join(',')}]  ` +
             `secret=${routine.tokenSecretName}  fires=${routine.totalFires} ` +
             `refusals=${routine.totalRefusals} unanswered=${unanswered.get(routine.id) ?? 0}` +
-            (inFlight ? `  in-flight=${inFlight.routineInFlight}` : '  (not routable)') +
+            routineRoutabilitySuffix(snapshot, routine.id, refusals.get(routine.id) ?? null) +
             (routine.retryAt ? `  retry_at=${routine.retryAt}` : ''),
         );
         /*
@@ -1659,9 +1684,17 @@ async function probeBin(input: {
   );
 }
 
-main()
-  .catch((error) => {
-    console.error('FLEET: FAILED', error);
-    process.exitCode = 1;
-  })
-  .finally(() => closeDatabase());
+/*
+ * Run only when this file is the entry point.
+ *
+ * It is imported by its own test, and a script that reads the live fleet the
+ * moment it is imported is one that cannot be tested at all.
+ */
+if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '\u0000')) {
+  main()
+    .catch((error) => {
+      console.error('FLEET: FAILED', error);
+      process.exitCode = 1;
+    })
+    .finally(() => closeDatabase());
+}
