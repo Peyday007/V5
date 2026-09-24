@@ -128,7 +128,14 @@ export const FactoryApi = {
    * had to guess a remote and be refused would be learning the envelope by
    * trial, and the envelope is not a secret — it holds no credential.
    */
-  repositories: (projectId: string): Promise<{ repositories: RepositoryOnboarding[] }> =>
+  repositories: (
+    projectId: string,
+  ): Promise<{
+    repositories: RepositoryOnboarding[];
+    /** Whether this reader may connect another Claude account to a pool here. */
+    mayConnectAccounts?: boolean;
+    connectAccountsRefusal?: string | null;
+  }> =>
     api(`/api/projects/${encodeURIComponent(projectId)}/factory/repositories`),
 
   /**

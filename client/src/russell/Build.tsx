@@ -36,7 +36,11 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
     () =>
       projectId
         ? FactoryApi.repositories(projectId)
-        : Promise.resolve({ repositories: [] as RepositoryOnboarding[] }),
+        : Promise.resolve({
+            repositories: [] as RepositoryOnboarding[],
+            mayConnectAccounts: false,
+            connectAccountsRefusal: null as string | null,
+          }),
     [projectId],
   );
   const campaigns = useAsync(
@@ -104,6 +108,11 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
             key={projectId ?? 'none'}
             projectId={projectId}
             repositories={state.items}
+            mayConnectAccounts={repositories.data?.mayConnectAccounts === true}
+            connectAccountsRefusal={
+              repositories.data?.connectAccountsRefusal ??
+              'This control was not offered by the server.'
+            }
             onChanged={repositories.reload}
           />
           <Submit
@@ -156,10 +165,14 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
 function Repositories({
   projectId,
   repositories,
+  mayConnectAccounts = false,
+  connectAccountsRefusal = null,
   onChanged,
 }: {
   projectId: string | null;
   repositories: RepositoryOnboarding[];
+  mayConnectAccounts?: boolean;
+  connectAccountsRefusal?: string | null;
   onChanged(): void;
 }): JSX.Element | null {
   const [busy, setBusy] = useState<string | null>(null);
@@ -175,7 +188,6 @@ function Repositories({
    */
   const [scope, setScope] = useState<Record<string, 'WHOLE_REPOSITORY' | 'DIRECTORIES'>>({});
   const [directories, setDirectories] = useState<Record<string, string>>({});
-
   if (repositories.length === 0) return null;
 
   async function onboard(grantId: string): Promise<void> {
@@ -219,44 +231,51 @@ function Repositories({
               <span className="rs-repo-readiness">{READINESS[repo.readiness]}</span>
             </div>
             <p className="rs-hint">{repo.description}</p>
-            {repo.readiness === 'READY' ? (
+            {/*
+              * The server's own sentence first: which readiness this is and why,
+              * composed once so the card and the picker below cannot disagree.
+              */}
+            <p className="rs-hint rs-repo-summary">{repo.summary}</p>
+            {repo.surfaces.length > 0 ? (
               /*
-               * Accounts, then surfaces, then what has actually run.
+               * Accounts, then surfaces, then what each one would actually do.
                *
-               * This used to be one sentence — "running on A, B and C" — and a
-               * reader counted three Claude accounts out of it. Three Routines
-               * on one subscription produce exactly that sentence, and §23's
-               * whole account-versus-Routine distinction is that a second
-               * Routine doubles how fast Brain can *start* sessions and changes
-               * nothing about how much that account may *do*. Sizing a fleet on
-               * it is sizing it on a fiction.
-               *
-               * And a Routine registered a minute ago read the same as one with
-               * a completed chain behind it. `proven` is the four-row chain the
-               * server read through the same module `/people` reads, so the two
-               * screens cannot disagree about whether a surface works.
+               * This used to render only on READY, and READY used to mean "an
+               * enabled Routine is bound" — so a surface with no deployed secret,
+               * or no repository-write, read *Ready to execute* while the
+               * dispatcher would fire none of it. Every configured surface is
+               * listed now with the dispatcher's own decision about it, and
+               * whether it has ever completed work is a separate fact beside it:
+               * a proof is history, and a surface taken out of routing since
+               * counts for nothing here however well it ran.
                */
-              <p className="rs-hint">
-                Registered as <code>{repo.workerName}</code>, on{' '}
-                {repo.accountsServing === 1 ? '1 Claude account' : `${repo.accountsServing} Claude accounts`}
-                {repo.surfaces.length === repo.accountsServing
-                  ? ''
-                  : ` across ${repo.surfaces.length} surfaces`}
-                .{' '}
-                {repo.provenSurfaces === repo.surfaces.length
-                  ? 'Each has completed work Brain sent it.'
-                  : `${repo.provenSurfaces} of ${repo.surfaces.length} have completed work Brain sent them; the rest are configured rather than proven.`}
-              </p>
-            ) : null}
-            {repo.readiness === 'READY' ? (
-              <ul className="rs-repo-surfaces">
-                {repo.surfaces.map((surface) => (
-                  <li key={`${surface.accountName}/${surface.routineName}`}>
-                    {surface.routineName} — {surface.accountName}
-                    {surface.proven ? '' : ' (not yet proven)'}
-                  </li>
-                ))}
-              </ul>
+              <>
+                <p className="rs-hint">
+                  Registered as <code>{repo.workerName}</code>.{' '}
+                  {repo.eligibleSurfaces} of {repo.surfaces.length} configured{' '}
+                  {repo.surfaces.length === 1 ? 'surface' : 'surfaces'} can take work now, on{' '}
+                  {repo.accountsServing === 1
+                    ? '1 Claude account'
+                    : `${repo.accountsServing} Claude accounts`}
+                  ; {repo.provenSurfaces} {repo.provenSurfaces === 1 ? 'has' : 'have'} completed work
+                  Brain sent {repo.provenSurfaces === 1 ? 'it' : 'them'}.
+                </p>
+                <ul className="rs-repo-surfaces">
+                  {repo.surfaces.map((surface) => (
+                    <li
+                      key={`${surface.accountName}/${surface.routineName}`}
+                      className={`rs-repo-surface rs-repo-surface-${surface.dispatch.toLowerCase()}`}
+                    >
+                      {surface.routineName} — {surface.accountName} —{' '}
+                      <strong>{DISPATCH[surface.dispatch]}</strong>
+                      {surface.proven ? ' (has completed work)' : ' (not yet proven)'}
+                      {surface.dispatch === 'ELIGIBLE' ? null : (
+                        <span className="rs-hint"> {surface.dispatchReason}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
             ) : null}
             {/*
               * Member-contributed Claude accounts this repository may use.
@@ -324,15 +343,27 @@ function Repositories({
                * More Claude accounts for the worker this repository already has.
                *
                * Offered in every onboarded state and above all in READY, which
-               * is when a pool is being commissioned — the control that used to
-               * issue a link lived only in the not-ready branch, so the moment
-               * the first account worked there was no way to invite the second.
-               * It asks nothing about the repository: the worker, its routing
-               * and this project's boundary are the ones onboarding wrote.
+               * is when a pool is being commissioned. It asks nothing about the
+               * repository, and each link is for one named member and leaves
+               * every other link alone. Disabled with the server's reason for
+               * somebody who may not issue one, never removed, so two people
+               * reading one project see one page.
                */
-              <FactoryInvites projectId={projectId} grantId={repo.grantId} />
+              <FactoryInvites
+                projectId={projectId}
+                grantId={repo.grantId}
+                connectorUrl={`${window.location.origin}${repo.connectorPath}`}
+                mayIssue={mayConnectAccounts}
+                refusal={connectAccountsRefusal}
+              />
             ) : null}
-            {repo.readiness !== 'READY' ? (
+            {/*
+              * Onboarding is the remedy for exactly two readinesses. A surface
+              * that is configured and refused, or merely busy, is not answered by
+              * a new invitation — offering one would rotate a working connector's
+              * link to fix a missing secret or a cooldown.
+              */}
+            {repo.readiness === 'NOT_ONBOARDED' || repo.readiness === 'AWAITING_SURFACE' ? (
               <div className="rs-repo-scope">
                 {/*
                   * The one question here that has a wrong answer, asked rather
@@ -444,7 +475,15 @@ function Repositories({
 const READINESS: Record<RepositoryOnboarding['readiness'], string> = {
   NOT_ONBOARDED: 'No worker registered',
   AWAITING_SURFACE: 'Registered — waiting for a surface',
+  NO_USABLE_SURFACE: 'No Factory surface can take work',
+  WAITING_FOR_CAPACITY: 'Waiting for capacity',
   READY: 'Ready to execute',
+};
+
+const DISPATCH: Record<RepositoryOnboarding['surfaces'][number]['dispatch'], string> = {
+  ELIGIBLE: 'can take work now',
+  WAITING: 'waiting for capacity',
+  UNUSABLE: 'will not be fired',
 };
 
 /**
@@ -537,7 +576,7 @@ function Submit({
             {repositories.map((grant) => (
               <option key={grant.grantId} value={grant.remote}>
                 {grant.remote.replace('https://github.com/', '')}
-                {grant.readiness === 'READY' ? '' : ' — not ready to execute'}
+                {grant.readiness === 'READY' ? '' : ` — ${READINESS[grant.readiness].toLowerCase()}`}
               </option>
             ))}
           </select>
@@ -546,6 +585,18 @@ function Submit({
           {repositories.find((grant) => grant.remote === repository)?.description ??
             'Pick the repository this objective is about.'}
         </p>
+        {/*
+          * What executing here would actually meet, in the server's own words.
+          * A submission is still accepted when nothing can execute it — the work
+          * waits and resumes by itself — but a person should know that before
+          * they write the objective rather than after the campaign stalls.
+          */}
+        {(() => {
+          const chosen = repositories.find((grant) => grant.remote === repository);
+          return chosen && chosen.readiness !== 'READY' ? (
+            <p className="rs-hint rs-build-not-ready">{chosen.summary}</p>
+          ) : null;
+        })()}
 
         <label>
           <span>The objective</span>
@@ -944,7 +995,6 @@ function Unapproved({
   );
 }
 
-
 function inviteStatusText(one: FactoryInvitationView): string {
   const when = (iso: string | null): string => (iso ? new Date(iso).toLocaleString() : '');
   switch (one.status) {
@@ -967,7 +1017,20 @@ function inviteStatusText(one: FactoryInvitationView): string {
  * control; the list afterwards says who it was for and whether it has been
  * used, and never shows a link again. Issuing one never withdraws another.
  */
-function FactoryInvites({ projectId, grantId }: { projectId: string; grantId: string }): JSX.Element {
+function FactoryInvites({
+  projectId,
+  grantId,
+  connectorUrl,
+  mayIssue,
+  refusal,
+}: {
+  projectId: string;
+  grantId: string;
+  connectorUrl: string;
+  /** The server's decision for this reader; the routes re-decide regardless. */
+  mayIssue: boolean;
+  refusal: string | null;
+}): JSX.Element {
   const [state, setState] = useState<FactoryInvitations | null>(null);
   const [member, setMember] = useState('');
   const [busy, setBusy] = useState(false);
@@ -983,7 +1046,9 @@ function FactoryInvites({ projectId, grantId }: { projectId: string; grantId: st
     }
   }
   useEffect(() => {
-    void load();
+    // Somebody who may not issue a link may not read who was sent one either;
+    // the control is shown disabled with the server's reason instead.
+    if (mayIssue) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, grantId]);
 
@@ -1036,8 +1101,16 @@ function FactoryInvites({ projectId, grantId }: { projectId: string; grantId: st
         again, changes nothing already connected, and leaves every other link as it is. It only
         works in a browser signed in to Brain as the member it is for, once, within seven days.
       </p>
+      {!mayIssue ? (
+        <p className="rs-hint">
+          <button type="button" disabled>
+            Issue a link
+          </button>{' '}
+          {refusal}
+        </p>
+      ) : null}
       {state && !state.mayIssue ? <p className="rs-hint">{state.refusal}</p> : null}
-      {state?.mayIssue ? (
+      {mayIssue && state?.mayIssue ? (
         <div className="rs-factory-invite-form">
           <label>
             <span>Who is this link for?</span>
@@ -1068,6 +1141,10 @@ function FactoryInvites({ projectId, grantId }: { projectId: string; grantId: st
           </p>
           <p className="rs-repo-invite">
             <code>{one.invitationUrl}</code>
+          </p>
+          <p className="rs-hint">
+            They sign in to Brain as themselves in the browser they will use, open this link, then
+            add a Claude connector named Factory Brain at <code>{connectorUrl}</code> and approve.
           </p>
           <button type="button" onClick={() => void copy(one.invitationUrl, one.invitation.id)}>
             {copied === one.invitation.id ? 'Copied' : 'Copy link'}

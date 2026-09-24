@@ -314,6 +314,177 @@ restart and nobody pressing anything. The two outages before the boot retry
 (another session's `3a3bd1e`) ran during the outage and correctly released
 nothing, because its health check could not pass against the same 544.
 
+## Deploy 339: refused at the health check while Supabase refused connections
+
+Deploy 339 (`93cd734`, which carries the route escape catch) passed its test gate.
+`flyctl deploy` then failed (`Record what was released: skipped`), so nothing in
+it was released by that run. The boot log says why. At 03:30:48, still on the
+337 image, the pool was full (`10/10 connection(s) in use, 3 caller(s)
+waiting`). After the machine was replaced at 03:36:56, Supabase's storage API
+answered `544 DatabaseTimeout` and then `429 too_many_connections`, and the
+pooler itself stopped handing out connections (`Connection terminated due to
+connection timeout` at 03:41:35). The boot retry did what §18 asks: it served
+the error and asked again at 30, 60, 120 and 240 seconds. The health check could
+not pass inside flyctl's window, so the release was refused. This is
+infrastructure, not this commit. Deploy 341 (`caba2b2`, another session's fix
+for stacked Russell ticks holding pool connections) contains `93cd734` and is
+the next attempt to release it.
+
+## Deploy 341: the proof held and the port was still closed
+
+Deploy 341 (`caba2b2`, which contains `93cd734`) also ended with
+`release: failure`, so neither run released anything. This time the boot retry
+got through: at 04:18:56 the machine logged *The cloud answered. Replacing the
+error page with the Brain.* But `continueBoot` recomputed every project,
+asking the store about every document, before it opened the port. Supabase
+Storage was still slow, so the proxy kept reporting no healthy instance until
+flyctl gave up. That is a boot-ordering defect, not this commit's.
+`45f338c` (another session: open the port first, recompute after it) fixes it
+and is in Deploy 342, which also contains `93cd734`.
+
+## Deploy 342: the recompute was not the whole gap
+
+Run 35956355757 on `45f338c`, which moved the recompute behind the listen.
+`release: failure`, both verification halves `skipped`, and the image serving
+throughout was the one that became healthy at 04:34:35. The boot log from the
+new machine:
+
+    04:58:59  health check failing (machine started)
+    04:59:10  The document store could not be checked (HTTP 544) — DatabaseTimeout
+    04:59:50  The cloud answered. Replacing the error page with the Brain.
+    05:00:01  Design kernel: 8 surface(s), 7 pattern(s), 10 declared capability(ies).
+    05:04:12  flyctl gives up; no "Brain is running." line ever printed
+
+The boot retry did its job in forty seconds. What held the port for the next
+four minutes was not the recompute, which no longer ran before `listen`. It was
+the work between the design kernel and the port: advancing every pending packet,
+re-driving every dispatchable bin, repairing launches and queueing unread
+documents. All of those are passes over rows, and none is needed to answer
+`/healthz`.
+
+**Deploy 341 had the same shape and I read it wrong.** That boot went from
+04:19:01 to 04:34:26, and I blamed the recompute alone. The recompute was part
+of it. 342 shows the rest was still there once the recompute had moved.
+
+The fix is on the branch: every re-derivation step now runs after the port opens,
+in the same order as before. Each step is timed (`boot: <step> took Ns`), and a
+failing step is logged rather than stopping the others. A line saying how long
+after the cloud answered the port opened is printed too, so the next slow boot
+names its step rather than leaving a gap between two log lines.
+`tests/bootRetry.test.ts` fails against `45f338c`'s order.
+
+## Deploy 343: the same gap, on another session's tree
+
+Run 35960856346 on `f84d306`: `release: failure`, both halves `skipped`. The
+new machine served the 544/429 error from 06:01:17, the boot retry's second
+attempt held at **06:02:17**, the design kernel seeded at 06:02:24, and there
+was no `Brain is running.` line when flyctl gave up at about 06:06. That is
+342's shape again: the proof took a minute and the port stayed closed for four
+more. `1f99be1` is what removes that wait, and it is what is being deployed
+next.
+
+## Deploy 344: released, and the port opened 14.2 seconds after the cloud answered
+
+Run 35965025952 on `87c5c87`, which carries `1f99be1`. **`release: success`**,
+the first release since 337. The boot log from the new machine:
+
+    06:52:31  The cloud answered. Replacing the error page with the Brain.
+    06:52:45  boot: opening the port 14.2s after the cloud answered
+    06:52:45  Brain is running.
+
+Compare 342 and 343, which were still closed four minutes after the same line.
+No `boot: <step> took Ns` line was printed for anything before the port, which
+fits the remaining pre-listen steps being cheap row updates. **The boot fix is
+proven in production.**
+
+Both hosted verification halves then ended `FAIL could-not-complete`, each on a
+single `UNAVAILABLE` from a mutation deep in the scripted research packet:
+
+- **Before the restart:** `brain_propose_fragments`, 07:10:50 → 07:15:35 (4m45s),
+  reference `req_tjlvRADe5ndT`. Everything before it passed: identity, the queue,
+  idempotency, the MCP gateway, and the goals privacy check.
+- **After the restart:** `brain_submit_synthesis`, 07:45:54 → 07:46:21 (27s),
+  reference `req_RCQDMLeUEG8l`. That half passed further, through proposal,
+  approval, claims, verification and the gate.
+
+The two failures come from two different tools, at two different points in the
+packet, with two different durations, on a day when Supabase has answered 544
+and 429 for hours. Nothing is concluded from that alone: the
+`[mcp] tool call failed` lines carrying the underlying errors were requested
+through the Logs workflow (run 28), and this is what they say:
+
+- **`brain_submit_synthesis`: infrastructure.** `StorageConfigurationError: The
+  document store refused a listing (HTTP 429) too_many_connections`, raised in
+  `storeFile` → `uniqueKey` → `exists` while the report was being filed.
+  Supabase Storage refused the request. §18's rule is working: nothing fell back,
+  nothing recorded half a filing, and the tool returned its request id.
+- **`brain_propose_fragments`: cause unreadable.** The log buffer no longer
+  reaches 07:15Z, so its line is gone. It is **not** classified as
+  infrastructure by analogy; what is established is only that it ran 4m45s
+  during the same degraded window, alongside the boot step below.
+
+The same logs show two things that are not these failures:
+
+- **An application defect, now fixed.** At 07:54:14 and 07:56:03 there were two
+  `[brain] an unhandled rejection reached the process` lines, both
+  `Connection terminated due to connection timeout` at `extendCampaignTick`. The
+  factory's tick heartbeat was `void extendCampaignTick(...)` inside a
+  `setInterval`, so a pool timeout had nowhere to go. §18's backstop kept the
+  process serving; without it, Node 22 would have exited. The fix gives every
+  promise fired from a timer its own catch: both campaign heartbeats and the
+  local plane's unit heartbeat, which had the same shape.
+  `tests/campaignTickHeartbeat.test.ts` refuses the class across `server/`, and
+  it finds all three sites on the unfixed tree.
+- **Where the post-listen boot spent its time.** `resume worker-driven packets`
+  took **1933.0s** (32 minutes), `rebuild derived state` 911.9s (it failed on a
+  pool timeout and was caught), re-drive dispatch 17.1s, repair launches 7.8s,
+  and queue unread 6.0s. All of it ran after the port opened, which is what
+  `1f99be1` was for. It also ran against the same pool the verification was
+  using, on a degraded database. That is recorded as a reading. It is not
+  established as the cause of `brain_propose_fragments`.
+
+## Deploy 345: released; the verification ran into Storage 544, and found a real defect
+
+Run 35977673363 on `e126121`, which carries the timer-promise catch. **`release:
+success`.** Before the restart, the harness passed everything from identity
+through the research gate, then stopped on two conditions:
+
+- **`brain_submit_synthesis` (`req_kFklh2zf9WVQ`) was infrastructure.** Brain's own log
+  reads `StorageConfigurationError: The document store refused a listing (HTTP
+  544)`, `DatabaseTimeout`, in `storeFile` → `uniqueKey` → `exists`. Supabase
+  Storage's own database timed out.
+- **`an administrator can inspect operations — 500`** took 2m11s. The log buffer
+  starts at 09:23Z, so its line is gone and the cause is **unread**. The route is
+  bounded to 500 rows and ordered on `created_at`. There is no
+  `(project_id, created_at)` index, so it sorts the project's whole history, but
+  that is not established as the cause.
+
+After the restart, the harness **could not start**. Its own `initStorage` died on
+`The document store could not be checked (HTTP 544)`. The Brain itself rebooted
+into the same 544 at 09:31:51, served the error page, and was replaced by the
+Brain at 09:32:32 when the proof held. `bootRetry.ts` did exactly its job.
+
+**One defect was found beside them, and it is an application defect.** At 09:26:55
+and 09:38:57, `could not resume packet … canceling statement due to statement
+timeout` fired in `auditRoundFor`:
+
+    SELECT created_at, payload FROM project_events
+     WHERE event_type IN ($1, $2) ORDER BY created_at DESC, seq DESC LIMIT 50
+
+That statement scans every project's events, which is the timeout. It also
+filters to one orchestration *after* the `LIMIT`. So once fifty round events
+happened anywhere in the Brain after a packet's own boundary, that packet read
+as having **no round at all**: `since: null`, and every audit pass counted as
+current. This is the wrong answer about which round a packet is in, and it is
+silent. It is scoped to the orchestration's own project now, with no limit; both
+writers already record that project. `tests/auditRoundScope.test.ts` fails on the
+old query with `expected null to be '2026-09-24T09:00:00.000Z'`.
+
+The timer-promise fix leaves nothing to see here, which is the point: no
+`an unhandled rejection reached the process` line appears in the captured
+buffer (09:23–09:39Z). `resume worker-driven packets` took 345.7s this boot, and
+this time it failed on a pool timeout that was caught, and the Brain served on.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain

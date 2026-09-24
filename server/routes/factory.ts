@@ -25,6 +25,7 @@ import { Router } from 'express';
 import type { Principal } from '../domain/types.ts';
 import { FACTORY_DEPLOYMENT_POLICIES } from '../domain/factory.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
+import { decideProjectAccess } from '../services/identity/policy.ts';
 import {
   getCampaign,
   getChangeRequest,
@@ -158,7 +159,7 @@ async function campaignFor(campaignId: string, level: 'READ' | 'WRITE') {
 factoryRouter.post(
   '/projects/:projectId/factory/change-requests',
   handler(async (req, res) => {
-    requirePerson();
+    const principal = requirePerson();
     const projectId = pathId(req, 'projectId');
     await projectForFactory(projectId, 'write');
 
@@ -219,6 +220,9 @@ factoryRouter.post(
         FACTORY_DEPLOYMENT_POLICIES,
         'deploymentPolicy',
       ),
+      // From the authenticated person and from no field: attribution a caller
+      // could supply would be a caller writing its own audit trail.
+      submittedByUserId: principal.id,
     }).catch((error: unknown) => {
       if (error instanceof ContractError) throw unprocessable(error.message, error.detail);
       throw error;
@@ -258,7 +262,21 @@ factoryRouter.get(
      * offers a repository it cannot run is the shape §24 keeps finding: a state
      * that says waiting when the honest answer is that somebody has to act.
      */
-    res.json({ repositories: await repositoryOnboarding(projectId) });
+    /*
+     * Whether this reader may connect another Claude account to a repository's
+     * Factory pool — the same `decideProjectAccess` at ADMIN the invitation route
+     * is guarded by. A convenience for the screen, never the control: the route
+     * re-decides. A member sees the control disabled with this reason rather than
+     * not at all, so two people reading one project see one page.
+     */
+    const mayConnectAccounts = decideProjectAccess(currentPrincipal(), projectId, 'ADMIN').allowed;
+    res.json({
+      repositories: await repositoryOnboarding(projectId),
+      mayConnectAccounts,
+      connectAccountsRefusal: mayConnectAccounts
+        ? null
+        : 'Only an administrator of this project can issue a link that connects a Claude account to its Factory pool.',
+    });
   }),
 );
 

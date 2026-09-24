@@ -562,7 +562,30 @@ async function main(): Promise<void> {
   await continueBoot(migrations);
 }
 
+/**
+ * One boot step that runs after the port is open: timed, and caught.
+ *
+ * Timed because a slow boot has twice been diagnosed from the gap between two
+ * log lines, and a gap does not say which step filled it. Caught because the
+ * port is already open, so a step that fails is that step failing — its rows
+ * stay exactly as the next tick or completion will find them — and never a
+ * reason to stop the steps after it.
+ */
+async function afterListenStep<T>(name: string, run: () => Promise<T>): Promise<T | null> {
+  const started = Date.now();
+  try {
+    return await run();
+  } catch (error) {
+    console.error(`[brain] boot step "${name}" failed; serving on:`, error);
+    return null;
+  } finally {
+    const seconds = (Date.now() - started) / 1000;
+    if (seconds >= 1) console.log(`  boot: ${name} took ${seconds.toFixed(1)}s`);
+  }
+}
+
 async function continueBoot(migrations: MigrationReport): Promise<void> {
+  const bootStarted = Date.now();
   // The gate, decided the moment cloud persistence is a proven fact and before
   // any of the work below. A deployment missing its token should cost a failed
   // boot in seconds — which somebody notices — rather than an open Brain.
@@ -636,135 +659,6 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
     );
   }
 
-  // Worker-driven packets resume differently, and the difference is the point.
-  // A push-model research run needs a process to continue it, so an interrupted
-  // one is closed and left for a person. A pulled packet's next step is a
-  // function of its rows, so re-deriving it *is* resuming it — and if the
-  // shutdown happened between a completion and the enqueue that should have
-  // followed, this is what closes that gap.
-  //
-  // Nothing is spent by this. It queues work; a worker still has to claim it,
-  // and a plan a person has not approved stays exactly where it is.
-  const resumed = await resumePulledPackets();
-  if (resumed > 0) {
-    console.log(`  ${resumed} worker-driven research packet(s) picked back up from their rows`);
-  }
-
-  // Dispatch intent the last shutdown never sent.
-  //
-  // The outbox is the reason a crash between "this bin is ready" and "a worker
-  // was started for it" loses nothing: the intent is a row, it is still there,
-  // and the first tick after boot sends it. This call only makes that visible
-  // in the telemetry, so a restart appears in the record rather than being
-  // inferred from a gap in it.
-  const redriven = await recoverDispatchAtBoot();
-  if (redriven > 0) {
-    console.log(`  ${redriven} ready bin(s) had no dispatch intent and now do`);
-  }
-
-  // The dispatcher itself. A plain interval, no model, and nothing waiting on a
-  // socket: it reads two indexed tables and occasionally makes one HTTP call.
-  // An idle Brain spends essentially nothing here.
-  startDispatcher();
-
-  /*
-   * The factory's own loop, beside the dispatcher.
-   *
-   * It creates no workers and runs no commands: each tick reads what a worker
-   * finished, believes the forge rather than the worker about what is in the
-   * repository, and makes the next stage available as a bin. That is why it is
-   * safe on a machine with no checkout, and why a campaign keeps moving while the
-   * session that submitted it is long gone.
-   *
-   * Twenty seconds matters more than it looks: a worker's activation lasts minutes,
-   * so a stage that becomes ready inside one is taken by the worker that is still
-   * there — which is how a whole campaign finishes inside one firing instead of one
-   * stage per firing.
-   */
-  startFactoryRemoteLoop();
-
-  /*
-   * One reading of Brain's own parts, if the last one is no longer about this
-   * system.
-   *
-   * Derived rather than hooked: `scanIfStale` compares the running revision and
-   * the applied schema against the last recorded reading, so a deployment and a
-   * migration both make it due without either of them having to remember to
-   * call anything. That is the correction §24, §27 and §30 all record — a hook
-   * fixes one entrance, and the rows reach every entrance plus the ones already
-   * stale.
-   *
-   * Deliberately not awaited and deliberately not fatal. It walks the source
-   * tree, which is fast and is not worth delaying the first request for, and a
-   * Brain whose self-model could not be read must still serve — a self-model is
-   * a reading *about* the system and never a precondition of it.
-   */
-  /*
-   * Deliberately after a delay rather than immediately.
-   *
-   * The scan walks the source tree and writes a row per component — around six
-   * hundred statements on this Brain — and §27 records six production failures
-   * whose common feature is the database being busy during or just after a
-   * restart. None of them was caused by this, and adding six hundred statements
-   * to the boot window of a system with that history is a risk with no upside:
-   * the reading is just as true a minute later, and the deploy's own
-   * verification runs in exactly the window this stays out of.
-   *
-   * `unref` so it never holds the process open — a Brain shutting down should
-   * not wait to find out about itself.
-   */
-  const BOOT_SCAN_DELAY_MS = 60_000;
-  setTimeout(() => {
-    void scanIfStale()
-      .then((report) => {
-        if (report && report.drift.length > 0) {
-          console.log(
-            `  Self-model      ${report.drift.length} level(s) moved since the last reading`,
-          );
-        }
-      })
-      .catch((error: unknown) => {
-        console.warn(
-          `  Self-model      could not be read: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      });
-  }, BOOT_SCAN_DELAY_MS).unref();
-
-  /*
-   * Russell's loop, beside the dispatcher and after recovery.
-   *
-   * Here rather than anywhere else because the requirement is that Russell
-   * keeps working while nobody is on the site and the laptop is closed — so it
-   * has to belong to the server process, not to a browser tab, a coding
-   * session or a cron on somebody's machine.
-   *
-   * A half-built launch is finished before it starts ticking. `repairLaunches`
-   * is the same function the launcher uses, re-entered: whichever step a crash
-   * left missing is the step that runs, and a second implementation of a
-   * recovery path is the one nobody tests.
-   */
-  const repaired = await repairLaunches();
-  if (repaired.completed.length > 0 || repaired.orphaned.length > 0) {
-    console.log(
-      `  Russell: ${repaired.completed.length} mission(s) finished launching, ` +
-        `${repaired.orphaned.length} orphaned`,
-    );
-  }
-  startRussell(`brain:${process.pid}`);
-
-  /*
-   * The connected site's delta feed.
-   *
-   * Beside Russell's loop rather than inside it, and for the reason the
-   * dispatcher is separate too: this is two indexed queries on a five-second
-   * cadence, and folding it into a claimed thirty-second cycle would make a
-   * site's view of its own records as slow as the slowest thing in that cycle.
-   * It writes nothing when nothing has changed.
-   */
-  startConnectRefresh();
-
   // A folder import interrupted by the shutdown is paused rather than left
   // looking live. Nothing already imported is re-read when it resumes.
   const pausedImports = await recoverInterruptedImports();
@@ -774,21 +668,6 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
         'continue with the files that were not reached.',
     );
   }
-
-  // Documents that have never been read are queued now, so a folder dropped in
-  // while the server was down becomes auditable without anyone asking.
-  const unread = await queueUnreadDocuments();
-  if (unread > 0) console.log(`  reading ${unread} document(s) in the background`);
-
-  // Derived state is rebuilt before the first request rather than lazily, so a
-  // file deleted or added while the server was down is already accounted for.
-  for (const project of await listProjects()) {
-    await recomputeProject(project.id);
-    await writeProjectState(project.id);
-  }
-  // One runtime file, so it describes the project the app opens on.
-  const primary = await getDefaultProject();
-  if (primary) await writeProjectState(primary.id);
 
   // The first administrator, if this Brain has never had one. Runs before the
   // port opens, so an installation that cannot be signed into says so in the
@@ -801,9 +680,194 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
     bootstrapNote: bootstrap.created || bootstrap.reset ? null : bootstrap.reason,
   };
 
+  console.log(`  boot: opening the port ${((Date.now() - bootStarted) / 1000).toFixed(1)}s after the cloud answered`);
   const server = buildApp(gate).listen(PORT, () => logBanner(migrations, gate, identity));
   server.on('error', onListenError);
   installShutdown(server);
+
+  /*
+   * Derived state is rebuilt at boot, so a file deleted or added while the
+   * server was down is accounted for — and it is rebuilt *after* the port
+   * opens, not before it.
+   *
+   * It used to gate the port. A recompute asks the document store about every
+   * document in every project, and on 2026-09-24 Supabase Storage was degraded:
+   * the database answered at 04:18:56, the boot then sat in this loop behind a
+   * closed port, and the Brain served 503 for another quarter of an hour with
+   * nothing wrong on its side. Every route that reads derived state already
+   * recomputes the rows it needs (§6), and in cloud mode the runtime file is
+   * not written at all (§18), so opening first costs a stale reading for the
+   * length of this pass and nothing else. One project's failure is logged and
+   * does not stop the rest.
+   */
+  /*
+   * Everything below re-derives work from rows, and none of it is needed to
+   * answer a request — so it runs after the port opens rather than before it.
+   *
+   * Deploy 342, 2026-09-24: the cloud proof held at 04:59:50, the design kernel
+   * seeded at 05:00:01, and the port was still closed when flyctl gave up at
+   * 05:04:12, with the recompute already moved behind the listen. What was left
+   * between them was this: advancing every pending packet, re-driving every
+   * dispatchable bin, repairing every launch — each a pass over rows, and each
+   * slow on a degraded database. The order among them is unchanged, each is
+   * timed so the next slow boot names itself, and one failing is logged rather
+   * than stopping the rest: a step that cannot run leaves its rows exactly as
+   * the next tick or completion will find them.
+   */
+  void (async () => {
+    // Worker-driven packets resume differently, and the difference is the point.
+    // A push-model research run needs a process to continue it, so an interrupted
+    // one is closed and left for a person. A pulled packet's next step is a
+    // function of its rows, so re-deriving it *is* resuming it — and if the
+    // shutdown happened between a completion and the enqueue that should have
+    // followed, this is what closes that gap.
+    //
+    // Nothing is spent by this. It queues work; a worker still has to claim it,
+    // and a plan a person has not approved stays exactly where it is.
+    const resumed = (await afterListenStep('resume worker-driven packets', resumePulledPackets)) ?? 0;
+    if (resumed > 0) {
+      console.log(`  ${resumed} worker-driven research packet(s) picked back up from their rows`);
+    }
+
+    // Dispatch intent the last shutdown never sent.
+    //
+    // The outbox is the reason a crash between "this bin is ready" and "a worker
+    // was started for it" loses nothing: the intent is a row, it is still there,
+    // and the first tick after boot sends it. This call only makes that visible
+    // in the telemetry, so a restart appears in the record rather than being
+    // inferred from a gap in it.
+    const redriven = (await afterListenStep('re-drive dispatch', recoverDispatchAtBoot)) ?? 0;
+    if (redriven > 0) {
+      console.log(`  ${redriven} ready bin(s) had no dispatch intent and now do`);
+    }
+
+    // The dispatcher itself. A plain interval, no model, and nothing waiting on a
+    // socket: it reads two indexed tables and occasionally makes one HTTP call.
+    // An idle Brain spends essentially nothing here.
+    startDispatcher();
+
+    /*
+     * The factory's own loop, beside the dispatcher.
+     *
+     * It creates no workers and runs no commands: each tick reads what a worker
+     * finished, believes the forge rather than the worker about what is in the
+     * repository, and makes the next stage available as a bin. That is why it is
+     * safe on a machine with no checkout, and why a campaign keeps moving while the
+     * session that submitted it is long gone.
+     *
+     * Twenty seconds matters more than it looks: a worker's activation lasts minutes,
+     * so a stage that becomes ready inside one is taken by the worker that is still
+     * there — which is how a whole campaign finishes inside one firing instead of one
+     * stage per firing.
+     */
+    startFactoryRemoteLoop();
+
+    /*
+     * One reading of Brain's own parts, if the last one is no longer about this
+     * system.
+     *
+     * Derived rather than hooked: `scanIfStale` compares the running revision and
+     * the applied schema against the last recorded reading, so a deployment and a
+     * migration both make it due without either of them having to remember to
+     * call anything. That is the correction §24, §27 and §30 all record — a hook
+     * fixes one entrance, and the rows reach every entrance plus the ones already
+     * stale.
+     *
+     * Deliberately not awaited and deliberately not fatal. It walks the source
+     * tree, which is fast and is not worth delaying the first request for, and a
+     * Brain whose self-model could not be read must still serve — a self-model is
+     * a reading *about* the system and never a precondition of it.
+     */
+    /*
+     * Deliberately after a delay rather than immediately.
+     *
+     * The scan walks the source tree and writes a row per component — around six
+     * hundred statements on this Brain — and §27 records six production failures
+     * whose common feature is the database being busy during or just after a
+     * restart. None of them was caused by this, and adding six hundred statements
+     * to the boot window of a system with that history is a risk with no upside:
+     * the reading is just as true a minute later, and the deploy's own
+     * verification runs in exactly the window this stays out of.
+     *
+     * `unref` so it never holds the process open — a Brain shutting down should
+     * not wait to find out about itself.
+     */
+    const BOOT_SCAN_DELAY_MS = 60_000;
+    setTimeout(() => {
+      void scanIfStale()
+        .then((report) => {
+          if (report && report.drift.length > 0) {
+            console.log(
+              `  Self-model      ${report.drift.length} level(s) moved since the last reading`,
+            );
+          }
+        })
+        .catch((error: unknown) => {
+          console.warn(
+            `  Self-model      could not be read: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        });
+    }, BOOT_SCAN_DELAY_MS).unref();
+
+    /*
+     * Russell's loop, beside the dispatcher and after recovery.
+     *
+     * Here rather than anywhere else because the requirement is that Russell
+     * keeps working while nobody is on the site and the laptop is closed — so it
+     * has to belong to the server process, not to a browser tab, a coding
+     * session or a cron on somebody's machine.
+     *
+     * A half-built launch is finished before it starts ticking. `repairLaunches`
+     * is the same function the launcher uses, re-entered: whichever step a crash
+     * left missing is the step that runs, and a second implementation of a
+     * recovery path is the one nobody tests.
+     */
+    const repaired = (await afterListenStep('repair launches', repairLaunches)) ?? {
+      completed: [],
+      orphaned: [],
+    };
+    if (repaired.completed.length > 0 || repaired.orphaned.length > 0) {
+      console.log(
+        `  Russell: ${repaired.completed.length} mission(s) finished launching, ` +
+          `${repaired.orphaned.length} orphaned`,
+      );
+    }
+    startRussell(`brain:${process.pid}`);
+
+    /*
+     * The connected site's delta feed.
+     *
+     * Beside Russell's loop rather than inside it, and for the reason the
+     * dispatcher is separate too: this is two indexed queries on a five-second
+     * cadence, and folding it into a claimed thirty-second cycle would make a
+     * site's view of its own records as slow as the slowest thing in that cycle.
+     * It writes nothing when nothing has changed.
+     */
+    startConnectRefresh();
+
+    // Documents that have never been read are queued now, so a folder dropped in
+    // while the server was down becomes auditable without anyone asking.
+    const unread = (await afterListenStep('queue unread documents', queueUnreadDocuments)) ?? 0;
+    if (unread > 0) console.log(`  reading ${unread} document(s) in the background`);
+
+    await afterListenStep('rebuild derived state', async () => {
+      for (const project of await listProjects()) {
+        try {
+          await recomputeProject(project.id);
+          await writeProjectState(project.id);
+        } catch (error) {
+          console.error(`[brain] boot recompute of ${project.id} failed; serving on:`, error);
+        }
+      }
+      // One runtime file, so it describes the project the app opens on.
+      const primary = await getDefaultProject();
+      if (primary) await writeProjectState(primary.id);
+    });
+  })().catch((error: unknown) => {
+    console.error('[brain] the after-listen recovery could not run; serving on:', error);
+  });
 }
 
 // A rejection nothing caught is one request's failure, not the Brain's. Node 22

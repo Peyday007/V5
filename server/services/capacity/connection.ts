@@ -66,6 +66,7 @@
  * Routine — nothing is created twice, which is the property a person retrying
  * something after an error most needs and most rarely gets.
  */
+import { CONNECTION_SCOPE, type ConnectionScope } from '../../domain/connectionScope.ts';
 import {
   attachProbe,
   connectionForUser,
@@ -306,6 +307,14 @@ export interface ConnectionView {
   controls: ConnectionControl[];
   /** The same reference list for everybody. It describes the mechanism. */
   troubleshooting: TroubleshootingEntry[];
+  /**
+   * What this connection is, and what it is not — the same constant for
+   * everybody. It exists because the next step after "Connected and proven"
+   * reads, to a friend, like "and now I can run the Software Factory", and it
+   * cannot: this journey makes a *research* worker, and a Factory account is a
+   * separate connector, Routine, secret, registration and proof.
+   */
+  scope: ConnectionScope;
   /** Whether the deployment secret is present. Never its value. */
   secretPresent: boolean;
   /** Whether a live connector of theirs has authenticated as this worker. */
@@ -1033,6 +1042,7 @@ export async function connectionView(input: {
     }),
     controls: controlsFor({ connection, connectorAuthenticated }),
     troubleshooting: [...CONNECTION_TROUBLESHOOTING],
+    scope: { ...CONNECTION_SCOPE },
     steps: stepsFor({
       connection,
       origin: input.origin,

@@ -245,7 +245,9 @@ export async function executeUnit(input: ExecuteUnitInput): Promise<ExecuteUnitR
    * `unitLeaseMs` safe to shorten for a recovery drill.
    */
   const heartbeat = setInterval(() => {
-    void heartbeatUnit(proof, HEARTBEAT_LEASE_MS);
+    void heartbeatUnit(proof, HEARTBEAT_LEASE_MS).catch((error: unknown) => {
+      console.error(`[factory] unit heartbeat failed for ${unit.id}; the run carries on:`, error);
+    });
   }, HEARTBEAT_INTERVAL_MS);
   let result;
   try {

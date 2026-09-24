@@ -1230,9 +1230,14 @@ describe('a proof is not a certificate', () => {
       ...first,
       routineInFlight: 99,
       routineTarget: 1,
+      // The router is the one reader of eligibility now (`routerSays`), so a
+      // hand-edited snapshot states what the router answers for it: at its
+      // target is waiting, never broken.
+      routerSays: { dispatch: 'WAITING', reason: 'routine at target 99/1' },
     });
     expect(report.surfaces[0]!.verdict).toBe('PROVEN');
     expect(report.surfaces[0]!.eligible).toBe(false);
+    expect(report.surfaces[0]!.ineligibleBecause).toEqual(['routine at target 99/1']);
   });
 });
 

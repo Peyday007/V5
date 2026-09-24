@@ -252,6 +252,22 @@ export function ClaudeConnectionPanel({
         */}
       {view.nextAction ? <p className="rs-hint">{view.nextAction}</p> : null}
 
+      {/*
+        * What this connects, and what it does not. The same constant for
+        * everybody, so it cannot branch on a reader: a research connection is
+        * never a Factory account, and the one place a person decides whether
+        * they have "connected their Claude" is where that has to be said.
+        */}
+      {view.scope ? (
+        <div className="rs-connection-scope">
+          <p className="rs-hint">{view.scope.connects}</p>
+          <p className="rs-hint">
+            <strong>{view.scope.doesNotConnect}</strong>
+          </p>
+          <p className="rs-hint">{view.scope.factoryInstead}</p>
+        </div>
+      ) : null}
+
       {view.invitationUrl ? (
         <div className="rs-ready-link">
           <p className="rs-item-title">Your one-time connector link</p>

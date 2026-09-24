@@ -51,7 +51,6 @@
  * repository that is not in the envelope cannot be onboarded here however the
  * request is spelled.
  */
-import { fleetSnapshot, routingRefusalByRoutine } from '../dispatch/candidates.ts';
 import { FACTORY_MCP_PATH, MCP_PATH } from '../../mcp/endpoint.ts';
 import { REPOSITORY_ENVELOPE_ID, decideRepository, listRepositoryGrants } from './repositoryEnvelope.ts';
 import type { RepositoryGrant } from './repositoryEnvelope.ts';
@@ -70,7 +69,14 @@ import {
 import { capacityReading } from '../fleet/capacity.ts';
 import { listRoutines } from '../../repos/fleet.ts';
 import { listBins } from '../../repos/bins.ts';
-import { repositoryIdOf } from '../bins/routing.ts';
+import { decideBinRouting, repositoryIdOf } from '../bins/routing.ts';
+import { workerRoutingFor } from '../bins/service.ts';
+import { fleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.ts';
+import {
+  repositoryProbeWork,
+  surfaceEligibility,
+  type SurfaceDispatch,
+} from '../dispatch/surfaceEligibility.ts';
 import {
   createInvitation,
   listInvitationsForWorker,
@@ -82,7 +88,7 @@ import { ScopeError, describeBoundary, directoriesOf, scopeFromDeclaration } fro
 import type { ScopeDeclaration } from './projectScope.ts';
 import { generateInvitationToken } from '../identity/secrets.ts';
 import { FACTORY_WORKER_SCOPES } from '../../domain/types.ts';
-import type { User, WorkerInvitation, WorkerScope } from '../../domain/types.ts';
+import type { Bin, Principal, User, WorkerInvitation, WorkerScope } from '../../domain/types.ts';
 import { personName } from '../../domain/personName.ts';
 import type { FactoryScopeKind } from '../../domain/factory.ts';
 import {
@@ -123,9 +129,21 @@ export function factoryWorkerName(grantId: string): string {
 export type RepositoryReadiness =
   /** No identity, no routing row: nothing could execute this repository. */
   | 'NOT_ONBOARDED'
-  /** Brain's half is done; no enabled Routine resolves to this worker yet. */
+  /** Brain's half is done; no Routine is configured for this worker yet. */
   | 'AWAITING_SURFACE'
-  /** A worker is registered for it and an enabled Routine is bound to that worker. */
+  /**
+   * Routines are configured for this worker and the dispatcher would fire none
+   * of them — a missing deployment secret, a missing capability, a surface or
+   * account out of routing. Every one names the operator write that answers it.
+   */
+  | 'NO_USABLE_SURFACE'
+  /**
+   * A surface passes every dimension an operator controls and is refused only
+   * for capacity — a provider cooldown, a target reached, a paused fleet. It
+   * resumes by itself; nothing about the registration is wrong.
+   */
+  | 'WAITING_FOR_CAPACITY'
+  /** The dispatcher would fire at least one surface for this repository's work now. */
   | 'READY';
 
 export interface RepositoryOnboarding {
@@ -159,15 +177,40 @@ export interface RepositoryOnboarding {
    * CONFIGURED-masquerading-as-VERIFIED refusal `fleet verify-surface`,
    * `verify-pool` and `capacity.ts` all already make, and this card did not.
    */
-  surfaces: { routineName: string; accountName: string; proven: boolean }[];
+  surfaces: {
+    routineName: string;
+    accountName: string;
+    /** Configured, as the fleet row says it: ENABLED, DRAINING, QUARANTINED… */
+    state: string;
+    /**
+     * What the dispatcher would do with this repository's work on this surface
+     * now — read from `routeBin` through `surfaceEligibility`, never restated.
+     */
+    dispatch: SurfaceDispatch;
+    /** The router's decision about this surface, and its remedy, in one sentence. */
+    dispatchReason: string;
+    /** History: a completed fire → arrive → assign → finish chain. Not capacity. */
+    proven: boolean;
+  }[];
   /**
-   * Distinct Claude accounts behind those surfaces.
+   * Distinct Claude accounts behind the surfaces that can take this work —
+   * eligible now, or waiting only on capacity.
    *
    * The number a reader is actually after, and never the length of `surfaces`.
+   * A configured surface the dispatcher will not fire is not an account serving
+   * anything, however it is registered.
    */
   accountsServing: number;
-  /** How many of them have a completed fire → arrive → assign → finish chain. */
+  /** Surfaces the dispatcher would fire for this work now. */
+  eligibleSurfaces: number;
+  /**
+   * How many configured surfaces have a completed fire → arrive → assign →
+   * finish chain. History, not capacity: a proven surface that has since been
+   * taken out of routing still counts here and still counts for nothing above.
+   */
   provenSurfaces: number;
+  /** One sentence, composed by the server, saying which of the readiness answers this is and why. */
+  summary: string;
   /**
    * Member-contributed Claude connections this repository could actually use.
    *
@@ -289,21 +332,51 @@ const SURFACE_STEP =
  * now.
  */
 export async function repositoryOnboarding(projectId: string): Promise<RepositoryOnboarding[]> {
-  const routines = await listRoutines();
-  // Read once for the whole list. It walks every member's connection, and the
-  // answer cannot differ between two repositories on one page.
-  const contributed = await contributedCapacity();
-  /*
-   * And the fleet's own reading of which surfaces have actually run, once, for
-   * the same reason: it walks every Routine's sessions and bins, and the answer
-   * cannot differ between two repositories on one page.
-   */
-  const capacity = await capacityReading();
+  const inputs = await fleetInputs();
   const out: RepositoryOnboarding[] = [];
   for (const grant of listRepositoryGrants()) {
-    out.push(await describeGrant(projectId, grant, routines, contributed, capacity));
+    out.push(await describeGrant(projectId, grant, inputs));
   }
   return out;
+}
+
+/**
+ * Everything `describeGrant` reads about the fleet, read once.
+ *
+ * Each of these walks every Routine (or every member's connection) and the
+ * answer cannot differ between two repositories on one page, so asking inside
+ * the loop would be that walk multiplied by the number of authorized
+ * repositories for nothing.
+ *
+ * `snapshot` is `fleetSnapshot()` — the identical read the dispatch tick
+ * performs — and it is what every surface's eligibility is judged against, so
+ * this card and the dispatcher are reading one set of numbers.
+ */
+interface FleetInputs {
+  routines: Awaited<ReturnType<typeof listRoutines>>;
+  contributed: Awaited<ReturnType<typeof contributedCapacity>>;
+  capacity: Awaited<ReturnType<typeof capacityReading>>;
+  snapshot: FleetSnapshot;
+  now: string;
+}
+
+async function fleetInputs(): Promise<FleetInputs> {
+  const now = new Date();
+  return {
+    routines: await listRoutines(),
+    contributed: await contributedCapacity(),
+    capacity: await capacityReading(),
+    snapshot: await fleetSnapshot(now),
+    now: now.toISOString(),
+  };
+}
+
+/**
+ * The work a campaign in this repository would put in front of the fleet —
+ * `repositoryProbeWork` with the capabilities the pushing stages require.
+ */
+export function factoryProbeWork(projectId: string, remote: string): Bin {
+  return repositoryProbeWork({ projectId, remote, requiredCapabilities: FACTORY_ROUTING_CAPABILITIES });
 }
 
 /**
@@ -328,30 +401,27 @@ async function waitingFor(projectId: string, repositoryId: string | null): Promi
 async function describeGrant(
   projectId: string,
   grant: RepositoryGrant,
-  routines: Awaited<ReturnType<typeof listRoutines>>,
-  /*
-   * Read once by the caller and passed down, rather than read per grant.
-   *
-   * It walks every member's connection and the rows behind it, so asking it
-   * inside the loop would be that walk multiplied by the number of authorized
-   * repositories — for an answer that cannot differ between them.
-   */
-  contributed: Awaited<ReturnType<typeof contributedCapacity>>,
-  /** The fleet's own per-surface reading, read once by the caller. */
-  capacity: Awaited<ReturnType<typeof capacityReading>>,
+  inputs: FleetInputs,
 ): Promise<RepositoryOnboarding> {
+  const { routines, contributed, capacity, snapshot, now } = inputs;
   const workerName = factoryWorkerName(grant.id);
   const worker = await getWorkerByName(workerName);
   const repositoryId = repositoryIdOfRemote(grant.remote);
+  const work = factoryProbeWork(projectId, grant.remote);
 
   let scopesCorrect = false;
   let routedFamilies: string[] = [];
   let routedRepositories: string[] = [];
+  /**
+   * Whether an arriving session of this worker would be *handed* this work —
+   * the assigner's decision, `decideBinRouting`, over the worker's own rows.
+   * The fire and the hand-over are two readers of one routing boundary; the
+   * card asks both, so it cannot read ready over a worker the assigner refuses.
+   */
+  let admission: { ok: boolean; reason?: string } = { ok: false };
   let surfaces: RepositoryOnboarding['surfaces'] = [];
   /** The same list with the account id kept, which only the count needs. */
   let live: (RepositoryOnboarding['surfaces'][number] & { accountId: string })[] = [];
-  /** Why the router refuses each bound surface; `null` for one it would fire. */
-  let refusals = new Map<string, string | null>();
 
   if (worker && !worker.archived) {
     const memberships = await listMembershipsForPrincipal('WORKER', worker.id);
@@ -360,33 +430,46 @@ async function describeGrant(
     const routing = await getWorkerRouting(worker.id);
     routedFamilies = routing?.families ?? [];
     routedRepositories = routing?.repositories ?? [];
+
+    const principal = { type: 'WORKER', id: worker.id, memberships } as unknown as Principal;
+    admission = decideBinRouting({
+      bin: work,
+      principal,
+      routing: await workerRoutingFor(worker.id, principal),
+    });
+
     /*
      * A surface the fleet has no reading for is reported as unproven rather
      * than skipped. `capacityReading` leaves out the verification identities
      * and separates retired Routines, so an absent entry means "the fleet does
      * not count this as live capacity" — which is not the same fact as a
      * completed chain, and must never be rounded into one.
+     *
+     * Every configured Routine is listed, not only the enabled ones. The card
+     * used to filter to `ENABLED` and call the rest nothing, so a quarantined
+     * surface vanished instead of saying what took it out. A RETIRED one is
+     * history rather than configuration and is left out: retiring is how a
+     * surface is removed on purpose.
      */
     const health = new Map(capacity.surfaces.map((one) => [one.routineId, one]));
-    const bound = routines.filter((routine) => routine.workerId === worker.id && routine.state === 'ENABLED');
-    refusals = routingRefusalByRoutine(await fleetSnapshot(), bound.map((one) => one.id));
-    live = bound
-      .map((routine) => ({
-        routineName: routine.name,
-        // The id, so the count below is on identity rather than on a label.
-        // Names are unique — `register-account` refuses a duplicate — and a
-        // count keyed on one would still be a count that two renames could
-        // change. A surface the fleet has no reading for keys on its own
-        // Routine name, so it is never silently merged with another.
-        accountId: health.get(routine.id)?.accountId ?? `unattributed:${routine.id}`,
-        accountName: health.get(routine.id)?.accountName ?? '—',
-        proven: health.get(routine.id)?.proven === true,
-      }));
-    surfaces = live.map(({ routineName, accountName, proven }) => ({
-      routineName,
-      accountName,
-      proven,
-    }));
+    live = routines
+      .filter((routine) => routine.workerId === worker.id && routine.state !== 'RETIRED')
+      .map((routine) => {
+        const eligibility = surfaceEligibility({ routine, work, snapshot, now });
+        return {
+          routineName: routine.name,
+          // The id, so the count below is on identity rather than on a label.
+          // A surface the fleet has no reading for keys on its own Routine id,
+          // so it is never silently merged with another.
+          accountId: health.get(routine.id)?.accountId ?? `unattributed:${routine.id}`,
+          accountName: health.get(routine.id)?.accountName ?? '—',
+          state: routine.state,
+          dispatch: eligibility.dispatch,
+          dispatchReason: eligibility.reason,
+          proven: health.get(routine.id)?.proven === true,
+        };
+      });
+    surfaces = live.map(({ accountId: _accountId, ...surface }) => surface);
   }
 
   const boundaryRow = await getProjectRepository(projectId, grant.id);
@@ -399,6 +482,7 @@ async function describeGrant(
     routedFamilies.includes('FACTORY') &&
     repositoryId !== null &&
     routedRepositories.includes(repositoryId) &&
+    admission.ok &&
     /*
      * The boundary is part of being onboarded rather than a later step.
      *
@@ -408,34 +492,44 @@ async function describeGrant(
      */
     boundaryRow !== null;
 
-  /*
-   * READY means the dispatcher would fire one of these surfaces — the router's
-   * answer (§23), not the Routine's state column. A disabled worker keeps its
-   * memberships and its Routine keeps reading ENABLED; an account can be
-   * unavailable; a secret can be missing. None of those is ready, and a card
-   * reading READY over them tells a person their submission will run.
-   */
-  const routable = [...refusals.values()].filter((one) => one === null).length;
+  const eligible = surfaces.filter((one) => one.dispatch === 'ELIGIBLE');
+  const waitingOnCapacity = surfaces.filter((one) => one.dispatch === 'WAITING');
+
   const readiness: RepositoryReadiness = !registered
     ? 'NOT_ONBOARDED'
-    : routable === 0
+    : surfaces.length === 0
       ? 'AWAITING_SURFACE'
-      : 'READY';
+      : eligible.length > 0
+        ? 'READY'
+        : waitingOnCapacity.length > 0
+          ? 'WAITING_FOR_CAPACITY'
+          : 'NO_USABLE_SURFACE';
 
   const remaining: string[] = [];
   if (!registered) {
-    remaining.push('Onboard this repository, which registers a worker for it and issues one invitation.');
+    remaining.push(
+      worker && !worker.archived && !admission.ok && admission.reason
+        ? `Onboard this repository again, which repairs its worker: ${admission.reason}`
+        : 'Onboard this repository, which registers a worker for it and issues one invitation.',
+    );
   }
   if (registered && surfaces.length === 0) {
     remaining.push(connectorStep(workerName), SURFACE_STEP);
   }
-  if (registered && surfaces.length > 0 && routable === 0) {
-    const why = [...new Set([...refusals.values()].filter((one): one is string => one !== null))].join('; ');
-    remaining.push(
-      `A surface is registered for this worker and the dispatcher would not fire it (${why}). ` +
-        'A Brain administrator corrects that condition; nothing has to be registered again.',
-    );
+  if (readiness === 'NO_USABLE_SURFACE') {
+    for (const surface of surfaces) remaining.push(`${surface.routineName}: ${surface.dispatchReason}`);
   }
+
+  const usable = live.filter((one) => one.dispatch !== 'UNUSABLE');
+  const proven = surfaces.filter((one) => one.proven).length;
+  const summary = summaryFor({
+    readiness,
+    workerName,
+    configured: surfaces.length,
+    eligible: eligible.length,
+    proven,
+    waitingOnCapacity: waitingOnCapacity.map((one) => `${one.routineName}: ${one.dispatchReason}`),
+  });
 
   return {
     grantId: grant.id,
@@ -450,8 +544,10 @@ async function describeGrant(
     routedFamilies,
     routedRepositories,
     surfaces,
-    accountsServing: new Set(live.map((one) => one.accountId)).size,
-    provenSurfaces: surfaces.filter((one) => one.proven).length,
+    accountsServing: new Set(usable.map((one) => one.accountId)).size,
+    eligibleSurfaces: eligible.length,
+    provenSurfaces: proven,
+    summary,
     contributedSurfaces: forThisOne.map((one) => ({
       displayName: one.displayName,
       workerName: one.workerName,
@@ -469,6 +565,46 @@ async function describeGrant(
         }
       : null,
   };
+}
+
+/**
+ * The one sentence the card leads with, composed here so the Build card, the
+ * repository picker and anything else that shows readiness say the same thing.
+ */
+function summaryFor(input: {
+  readiness: RepositoryReadiness;
+  workerName: string;
+  configured: number;
+  eligible: number;
+  proven: number;
+  waitingOnCapacity: string[];
+}): string {
+  const provenClause =
+    input.proven === 0
+      ? 'none has completed work Brain sent it yet, so it is configured rather than proven'
+      : `${input.proven} of ${input.configured} ${input.proven === 1 ? 'has' : 'have'} completed work Brain sent ${input.proven === 1 ? 'it' : 'them'} before`;
+  switch (input.readiness) {
+    case 'NOT_ONBOARDED':
+      return 'No Factory worker is registered for this repository in this project, so nothing can execute work here.';
+    case 'AWAITING_SURFACE':
+      return `${input.workerName} is registered and no Factory surface is configured for it yet, so nothing can execute work here.`;
+    case 'NO_USABLE_SURFACE':
+      return (
+        `${input.configured} Factory ${input.configured === 1 ? 'surface is' : 'surfaces are'} configured ` +
+        'and the dispatcher would fire none of them, so nothing can execute work here until the steps ' +
+        'below are done. Work submitted now waits and resumes by itself.'
+      );
+    case 'WAITING_FOR_CAPACITY':
+      return (
+        'Every usable Factory surface is busy or asked to wait, which resolves by itself — nothing about ' +
+        `the registration is wrong. ${input.waitingOnCapacity.join(' ')}`
+      );
+    case 'READY':
+      return (
+        `The dispatcher would fire ${input.eligible} of ${input.configured} configured Factory ` +
+        `${input.configured === 1 ? 'surface' : 'surfaces'} for this repository now; ${provenClause}.`
+      );
+  }
 }
 
 export interface OnboardResult {
@@ -493,7 +629,7 @@ export type OnboardRefusal =
  * **rotation** as much as a setup, which is `connectSite`'s reasoning and the same
  * property: there is never more than one live *onboarding* invitation to reason
  * about. The member-bound links `issueFactoryInvitation` issues for a pool are a
- * different kind and are left alone (migration 093).
+ * different kind and are left alone (`094_worker_invitation_members.sql`).
  */
 export async function onboardRepository(input: {
   projectId: string;
@@ -562,13 +698,7 @@ export async function onboardRepository(input: {
     };
   }
 
-  const before = await describeGrant(
-    input.projectId,
-    grant,
-    await listRoutines(),
-    await contributedCapacity(),
-    await capacityReading(),
-  );
+  const before = await describeGrant(input.projectId, grant, await fleetInputs());
 
   const worker =
     existing ??
@@ -661,13 +791,7 @@ export async function onboardRepository(input: {
     },
   });
 
-  const onboarding = await describeGrant(
-    input.projectId,
-    grant,
-    await listRoutines(),
-    await contributedCapacity(),
-    await capacityReading(),
-  );
+  const onboarding = await describeGrant(input.projectId, grant, await fleetInputs());
   return {
     ok: true,
     result: {
@@ -679,7 +803,6 @@ export async function onboardRepository(input: {
     },
   };
 }
-
 
 /* -------------------------------------------------------------------------- */
 /*  More accounts for a worker that is already onboarded                        */

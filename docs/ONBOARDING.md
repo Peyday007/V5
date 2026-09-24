@@ -277,6 +277,19 @@ new is that a member can **ask**, which is §24's rule that every escalation
 needs an answering transition, at the first step of the journey rather than the
 last.
 
+**What this journey connects, and what it does not.** It connects the member's
+Claude account as **research** capacity: a personal `research-…` worker and a
+Routine fired for research and general work. It does **not** put that account in
+the Software Factory's pool, and nothing in Brain counts it as Factory capacity —
+the page says so in the same words to everybody. A Factory surface is a separate
+connector (`Factory Brain`, at `/mcp/factory`), a separate Routine with the
+target repository attached, its own trigger secret, a registration and binding
+an administrator writes, and a pinned proof; that is
+`docs/workers/CONNECTING-THE-FACTORY-WORKER.md`, done in the member's own Claude
+account with the owner. Submitting and approving a Factory request is separate
+again and needs no Claude connection: a project `MEMBER` can do it on **Build**,
+and the request records them as its submitter.
+
 ### Checking it, and getting it back
 
 The same page carries three things that do not depend on being mid-setup:

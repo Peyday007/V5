@@ -67,11 +67,19 @@ const ORDINAL_BY_ROLE: Record<string, number> = { PRIMARY: 5, ADVERSARIAL: 6, JU
 
 export async function auditRoundFor(orchestrationId: string): Promise<AuditRound> {
   const rows = await getDb().all<{ created_at: string; payload: string }>(
+    /*
+     * Scoped to the packet's own project, and unbounded. Both writers record
+     * the orchestration's project, so nothing is lost by the scope; what it
+     * removes is the Brain-wide `LIMIT 50` this used to filter afterwards —
+     * a packet whose boundary was older than fifty round events *anywhere*
+     * read as having no round at all, and on production the unscoped scan hit
+     * the statement timeout (deploy 345). One project's round events are few.
+     */
     `SELECT created_at, payload FROM project_events
-      WHERE event_type IN (${ROUND_EVENTS.map(() => '?').join(', ')})
-      ORDER BY created_at DESC, rowid DESC
-      LIMIT 50`,
-    [...ROUND_EVENTS],
+      WHERE project_id = (SELECT project_id FROM research_orchestrations WHERE id = ?)
+        AND event_type IN (${ROUND_EVENTS.map(() => '?').join(', ')})
+      ORDER BY created_at DESC, rowid DESC`,
+    [orchestrationId, ...ROUND_EVENTS],
   );
   for (const row of rows) {
     const payload = parseJson<Record<string, unknown>>(row.payload, {});

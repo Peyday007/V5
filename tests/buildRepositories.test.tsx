@@ -21,8 +21,7 @@
  *   - the invitation is shown once, is selectable rather than a link, and never
  *     reaches the page for a repository nobody onboarded;
  *   - a refusal is shown as a refusal — the card does not pretend it worked;
- *   - a repository that is ready offers no onboarding decision again — only
- *     "Invite another Factory account", which asks nothing about the repository.
+ *   - a repository that is ready offers no button at all.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -77,7 +76,10 @@ function grant(over: Partial<RepositoryOnboarding> = {}): RepositoryOnboarding {
     routedRepositories: [],
     surfaces: [],
     accountsServing: 0,
+    eligibleSurfaces: 0,
     provenSurfaces: 0,
+    summary:
+      'No Factory worker is registered for this repository in this project, so nothing can execute work here.',
     contributedSurfaces: [],
     connectorPath: '/mcp/factory',
     boundary: null,
@@ -238,13 +240,29 @@ describe('the Build card says what is connected and what is missing', () => {
               routedFamilies: ['FACTORY'],
               routedRepositories: ['Peyday007/brain-worker-bootstrap'],
               surfaces: [
-                { routineName: 'V1 factory', accountName: 'primary', proven: true },
+                {
+                  routineName: 'V1 factory',
+                  accountName: 'primary',
+                  state: 'ENABLED',
+                  dispatch: 'ELIGIBLE',
+                  dispatchReason: 'Brain would fire this surface for this work now.',
+                  proven: true,
+                },
                 // A second Routine on the **same** subscription. Two surfaces,
                 // one account's allowance, and the card must not add them up.
-                { routineName: 'V1 factory spare', accountName: 'primary', proven: false },
+                {
+                  routineName: 'V1 factory spare',
+                  accountName: 'primary',
+                  state: 'ENABLED',
+                  dispatch: 'ELIGIBLE',
+                  dispatchReason: 'Brain would fire this surface for this work now.',
+                  proven: false,
+                },
               ],
               accountsServing: 1,
+              eligibleSurfaces: 2,
               provenSurfaces: 1,
+              summary: 'The dispatcher would fire 2 of 2 configured Factory surfaces for this repository now.',
               readiness: 'READY',
               remaining: [],
               waiting: 0,
@@ -257,17 +275,19 @@ describe('the Build card says what is connected and what is missing', () => {
     await waitFor(() => expect(card()).toBeTruthy());
     expect(within(card()).getByText('Ready to execute')).toBeTruthy();
     /*
-     * No onboarding decision is offered again: not the scope question, and not
-     * the re-onboarding button. The one control is inviting another account,
-     * which asks nothing about the repository. This used to assert that there
-     * was no button at all — which was the defect: once the first account
-     * worked, nobody could invite the second.
+     * Nothing to onboard and no invitation to rotate: the one control a READY
+     * repository offers is inviting another Factory account, which asks nothing
+     * about the repository. This used to be asserted as *no button at all* —
+     * which was the defect: once the first account worked, nobody could invite
+     * the second. (Disabled here, because this reader was not told they may.)
      */
-    expect(within(card()).queryByRole('button', { name: /Onboard|Issue a new invitation/ })).toBeNull();
+    expect(
+      within(card())
+        .queryAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Issue a link']);
+    expect(within(card()).getByText('Invite another Factory account')).toBeTruthy();
     expect(within(card()).queryByLabelText(/The whole repository/)).toBeNull();
-    await waitFor(() =>
-      expect(within(card()).getByRole('button', { name: 'Issue a link' })).toBeTruthy(),
-    );
 
     /*
      * Two surfaces on one subscription, and what the card says about them.
@@ -279,13 +299,12 @@ describe('the Build card says what is connected and what is missing', () => {
      * differ, and neither is presented as the other.
      */
     const text = card().textContent ?? '';
-    expect(text).toContain('1 Claude account');
-    expect(text).toContain('across 2 surfaces');
+    expect(text).toContain('2 of 2 configured surfaces can take work now, on 1 Claude account');
     expect(text).not.toContain('2 Claude accounts');
 
     // And registered is not proven. One of these two has completed work Brain
     // sent it; the card says which, rather than implying both have.
-    expect(text).toContain('1 of 2 have completed work');
+    expect(text).toContain('1 has completed work');
     const surfaces = [...card().querySelectorAll('.rs-repo-surfaces li')].map(
       (li) => li.textContent ?? '',
     );
@@ -299,18 +318,99 @@ describe('the Build card says what is connected and what is missing', () => {
   });
 });
 
-const READY = grant({
-  workerId: 'wrk_1',
-  scopesCorrect: true,
-  routedFamilies: ['FACTORY'],
-  routedRepositories: ['Peyday007/brain-worker-bootstrap'],
-  surfaces: [{ routineName: 'Factory Brain A', accountName: 'primary', proven: true }],
-  accountsServing: 1,
-  provenSurfaces: 1,
-  readiness: 'READY',
-  remaining: [],
-  waiting: 0,
-  boundary: { scopeKind: 'WHOLE_REPOSITORY', directories: [], sentence: 'the whole repository' },
+describe('a configured surface the dispatcher will not fire is not ready', () => {
+  /*
+   * The defect: an enabled Routine bound to the worker read "Ready to execute"
+   * while its trigger token was not deployed. The server now asks the router,
+   * and this pins what the screen does with that answer — the label, every
+   * surface's own reason, no "issue a new invitation" that would rotate a
+   * working connector to fix a missing secret, and the picker saying the same.
+   */
+  const BLOCKED = grant({
+    workerId: 'wrk_1',
+    scopesCorrect: true,
+    routedFamilies: ['FACTORY'],
+    routedRepositories: ['Peyday007/brain-worker-bootstrap'],
+    surfaces: [
+      {
+        routineName: 'Factory_surface_1',
+        accountName: 'primary',
+        state: 'ENABLED',
+        dispatch: 'UNUSABLE',
+        dispatchReason:
+          'Its trigger token is not deployed: this deployment has no secret named BRAIN_ROUTINE_TOKEN_FACTORY_1.',
+        proven: true,
+      },
+    ],
+    accountsServing: 0,
+    eligibleSurfaces: 0,
+    provenSurfaces: 1,
+    readiness: 'NO_USABLE_SURFACE',
+    summary:
+      '1 Factory surface is configured and the dispatcher would fire none of them, so nothing can execute work here.',
+    remaining: ['Factory_surface_1: Its trigger token is not deployed.'],
+    boundary: { scopeKind: 'WHOLE_REPOSITORY', directories: [], sentence: 'the whole repository' },
+  });
+
+  it('says no surface can take work, and why, on the card', async () => {
+    base({ [REPOSITORIES]: { body: { repositories: [BLOCKED] } } });
+    await mount();
+    await waitFor(() => expect(card()).toBeTruthy());
+    const text = card().textContent ?? '';
+    expect(within(card()).getByText('No Factory surface can take work')).toBeTruthy();
+    expect(text).not.toContain('Ready to execute');
+    expect(text).toContain('BRAIN_ROUTINE_TOKEN_FACTORY_1');
+    expect(text).toContain('0 of 1 configured surface can take work now');
+    // A past proof is shown as history, never as capacity.
+    expect(text).toContain('has completed work');
+    expect(within(card()).queryByRole('button', { name: /invitation|Onboard/ })).toBeNull();
+  });
+
+  it('offers another Factory account to an administrator, and says why not to anybody else', async () => {
+    base({
+      [REPOSITORIES]: { body: { repositories: [BLOCKED], mayConnectAccounts: true, connectAccountsRefusal: null } },
+      [INVITE]: { body: issuedFor(9, MEMBERS[0]!) },
+    });
+    await mount();
+    await chooseMember('Friend A');
+    const button = within(card()).getByRole('button', { name: 'Issue a link' });
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    await waitFor(() => expect(card().textContent).toContain('brnv_link-9'));
+    expect(calls).toContain(INVITE);
+
+    cleanup();
+    calls = [];
+    base({
+      [REPOSITORIES]: {
+        body: {
+          repositories: [BLOCKED],
+          mayConnectAccounts: false,
+          connectAccountsRefusal: 'Only an administrator of this project can issue a link.',
+        },
+      },
+    });
+    await mount();
+    await waitFor(() => expect(card()).toBeTruthy());
+    const disabled = within(card()).getByRole('button', { name: 'Issue a link' });
+    expect((disabled as HTMLButtonElement).disabled).toBe(true);
+    expect(card().textContent).toContain('Only an administrator of this project');
+    // And nobody who may not issue one is shown who was sent one.
+    expect(calls).not.toContain(INVITATIONS);
+  });
+
+  it('says the same in the repository picker', async () => {
+    base({ [REPOSITORIES]: { body: { repositories: [BLOCKED] } } });
+    await mount();
+    await waitFor(() => expect(card()).toBeTruthy());
+    const option = [...document.querySelectorAll('.rs-build-submit option')].map((o) => o.textContent ?? '');
+    expect(option[0]).toContain('no factory surface can take work');
+    expect(document.querySelector('.rs-build-not-ready')?.textContent).toContain(
+      'the dispatcher would fire none',
+    );
+  });
 });
 
 function issuedFor(n: number, member: (typeof MEMBERS)[number]): unknown {
@@ -330,20 +430,46 @@ function issuedFor(n: number, member: (typeof MEMBERS)[number]): unknown {
   };
 }
 
-describe('inviting another Factory account to a repository that is already ready', () => {
-  async function chooseMember(name: string): Promise<void> {
-    await waitFor(() => expect(within(card()).getByLabelText('Member this link is for')).toBeTruthy());
-    const select = within(card()).getByLabelText('Member this link is for') as HTMLSelectElement;
-    const value = MEMBERS.find((one) => one.name === name)!.userId;
-    await act(async () => {
-      fireEvent.change(select, { target: { value } });
-    });
-  }
+async function chooseMember(name: string): Promise<void> {
+  await waitFor(() => expect(within(card()).getByLabelText('Member this link is for')).toBeTruthy());
+  const select = within(card()).getByLabelText('Member this link is for') as HTMLSelectElement;
+  const value = MEMBERS.find((one) => one.name === name)!.userId;
+  await act(async () => {
+    fireEvent.change(select, { target: { value } });
+  });
+}
 
-  it('is reachable when READY, and asks only who the link is for', async () => {
+describe('inviting another Factory account to a repository that is already ready', () => {
+  const READY = grant({
+    workerId: 'wrk_1',
+    scopesCorrect: true,
+    routedFamilies: ['FACTORY'],
+    routedRepositories: ['Peyday007/brain-worker-bootstrap'],
+    surfaces: [
+      {
+        routineName: 'Factory Brain A',
+        accountName: 'primary',
+        state: 'ENABLED',
+        dispatch: 'ELIGIBLE',
+        dispatchReason: 'Brain would fire this surface for this work now.',
+        proven: true,
+      },
+    ],
+    accountsServing: 1,
+    eligibleSurfaces: 1,
+    provenSurfaces: 1,
+    summary: 'The dispatcher would fire 1 of 1 configured Factory surface for this repository now.',
+    readiness: 'READY',
+    remaining: [],
+    waiting: 0,
+    boundary: { scopeKind: 'WHOLE_REPOSITORY', directories: [], sentence: 'the whole repository' },
+  });
+  const ADMIN_READ = { repositories: [READY], mayConnectAccounts: true, connectAccountsRefusal: null };
+
+  it('is reachable when READY, asks only who the link is for, and keeps every link it issued', async () => {
     let n = 0;
     base({
-      [REPOSITORIES]: { body: { repositories: [READY] } },
+      [REPOSITORIES]: { body: ADMIN_READ },
       [INVITE]: () => {
         n += 1;
         return { body: issuedFor(n, MEMBERS[n - 1]!) };
@@ -351,9 +477,9 @@ describe('inviting another Factory account to a repository that is already ready
     });
     await mount();
     await waitFor(() => expect(within(card()).getByText('Invite another Factory account')).toBeTruthy());
-    const button = within(card()).getByRole('button', { name: 'Issue a link' }) as HTMLButtonElement;
+    await waitFor(() => expect(within(card()).getByLabelText('Member this link is for')).toBeTruthy());
     // Nothing is issued until somebody says who it is for.
-    expect(button.disabled).toBe(true);
+    expect((within(card()).getByRole('button', { name: 'Issue a link' }) as HTMLButtonElement).disabled).toBe(true);
 
     await chooseMember('Friend A');
     await act(async () => {
@@ -364,7 +490,6 @@ describe('inviting another Factory account to a repository that is already ready
     // Onboarding was never called, so no scope was asked or sent.
     expect(calls).not.toContain(ONBOARD);
 
-    // A second link, for somebody else, and the first stays on the screen.
     await chooseMember('Friend B');
     await act(async () => {
       fireEvent.click(within(card()).getByRole('button', { name: 'Issue a link' }));
@@ -382,10 +507,7 @@ describe('inviting another Factory account to a repository that is already ready
       ...navigator,
       clipboard: { writeText: async (text: string) => void written.push(text) },
     });
-    base({
-      [REPOSITORIES]: { body: { repositories: [READY] } },
-      [INVITE]: { body: issuedFor(7, MEMBERS[0]!) },
-    });
+    base({ [REPOSITORIES]: { body: ADMIN_READ }, [INVITE]: { body: issuedFor(7, MEMBERS[0]!) } });
     await mount();
     await chooseMember('Friend A');
     await act(async () => {
@@ -401,7 +523,7 @@ describe('inviting another Factory account to a repository that is already ready
 
   it('lists what was sent without ever showing a link again', async () => {
     base({
-      [REPOSITORIES]: { body: { repositories: [READY] } },
+      [REPOSITORIES]: { body: ADMIN_READ },
       [INVITATIONS]: {
         body: {
           grantId: GRANT,
@@ -410,7 +532,7 @@ describe('inviting another Factory account to a repository that is already ready
           refusal: null,
           members: MEMBERS,
           invitations: [
-            { ...(issuedFor(1, MEMBERS[0]!) as { invitation: object }).invitation },
+            (issuedFor(1, MEMBERS[0]!) as { invitation: object }).invitation,
             {
               ...(issuedFor(2, MEMBERS[1]!) as { invitation: object }).invitation,
               status: 'CONNECTED',
@@ -426,7 +548,6 @@ describe('inviting another Factory account to a repository that is already ready
     expect(rows[0]).toMatch(/Friend A — Waiting to be used — expires/);
     expect(rows[1]).toMatch(/Friend B — Used to connect a Claude account/);
     expect(card().textContent).not.toContain('brnv_');
-    // Only a waiting link can be withdrawn.
     expect(within(card()).getAllByRole('button', { name: 'Withdraw' })).toHaveLength(1);
   });
 });
@@ -487,18 +608,27 @@ describe('the boundary is asked, never defaulted', () => {
       [REPOSITORIES]: {
         body: {
           repositories: [
-            {
-              ...grant(),
+            grant({
               readiness: 'READY',
-              surfaces: [{ routineName: 'V1 factory', accountName: 'primary', proven: true }],
+              surfaces: [
+                {
+                  routineName: 'V1 factory',
+                  accountName: 'primary',
+                  state: 'ENABLED',
+                  dispatch: 'ELIGIBLE',
+                  dispatchReason: 'Brain would fire this surface for this work now.',
+                  proven: true,
+                },
+              ],
               accountsServing: 1,
+              eligibleSurfaces: 1,
               provenSurfaces: 1,
               boundary: {
                 scopeKind: 'DIRECTORIES',
                 directories: ['sites/v4'],
                 sentence: 'sites/v4/',
               },
-            },
+            }),
           ],
         },
       },

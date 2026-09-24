@@ -4233,7 +4233,7 @@ export interface WorkerInvitationRow {
 /**
  * `ROTATING` is onboarding's one link, withdrawn when onboarding runs again.
  * `ADDITIONAL` is issued beside the others for a pool of accounts, and is only
- * ever withdrawn on its own. See migration 093.
+ * ever withdrawn on its own. See `094_worker_invitation_members.sql`.
  */
 export type WorkerInvitationKind = 'ROTATING' | 'ADDITIONAL';
 
