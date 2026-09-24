@@ -469,6 +469,53 @@ function installShutdown(server: Server): void {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
+/**
+ * What boot is doing, said before it does it.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this exists
+ * ---------------------------------------------------------------------------
+ *
+ * `logBanner` runs inside the `listen` callback, so **a boot that never reaches
+ * `listen()` prints nothing at all.** Every phase below reports only a
+ * non-zero *result*, and only after it has returned, so a phase that does not
+ * return is indistinguishable from a phase that did nothing.
+ *
+ * That is what production looked like on 2026-09-23: machine
+ * `811d651c26d948` `started` since 07:20:21Z with `1 total, 1 critical`
+ * checks, not one application line in the log buffer for the twenty-eight
+ * minutes that followed, and `/healthz` answering 503 after 35s because the
+ * proxy had no healthy instance to route to. A process that had crashed would
+ * have been restarted and printed a *second* boot; the silence is what says it
+ * was alive and had not opened the port. Which phase it was in was not
+ * recorded anywhere, and could not be.
+ *
+ * And the remedy an operator reached for did not exist: `logs.yml` was run
+ * with `LOG_PATTERN=boot` and answered `LOGS: EXCERPT pattern=boot /
+ * (no line matched)`. §24's sentence at a log grep — a remedy the person
+ * cannot use is not a remedy — so the prefix is the word they already looked
+ * for.
+ *
+ * The property that makes this a diagnosis rather than noise: **the last
+ * `boot:` line printed is the phase that did not return.** One line each, in
+ * order, with the elapsed time, so a slow boot and a hung boot are told apart
+ * by reading rather than by guessing which is which.
+ *
+ * ---------------------------------------------------------------------------
+ * It is instrumentation and not a cure
+ * ---------------------------------------------------------------------------
+ *
+ * Nothing about what boot does, or the order it does it in, is changed here,
+ * and no phase is moved after `listen()`. §27 records the rule twice and the
+ * cost of breaking it once: *instrument first, size from the reading*, and a
+ * remedy for a condition that was never established is worse than none. The
+ * next occurrence names itself instead of being a sixth anecdote.
+ */
+const BOOT_STARTED = Date.now();
+function bootPhase(what: string): void {
+  console.log(`  boot: ${((Date.now() - BOOT_STARTED) / 1000).toFixed(1)}s ${what}`);
+}
+
 async function main(): Promise<void> {
   ensureDataDirs();
 
@@ -478,6 +525,7 @@ async function main(): Promise<void> {
   //
   // `verify()` runs a real operation. Having SUPABASE_URL set is not the same
   // fact as the bucket answering, and only one of those may be reported.
+  bootPhase('reaching the document store');
   try {
     await initStorage();
   } catch (error) {
@@ -500,6 +548,7 @@ async function main(): Promise<void> {
     return;
   }
 
+  bootPhase('opening the database and applying migrations');
   let migrations: MigrationReport;
   try {
     migrations = (await initDatabase()).migrations;
@@ -550,6 +599,7 @@ async function main(): Promise<void> {
 
   // First boot creates Deal Dispatch; later boots only backfill missing layers
   // and re-create the folder tree.
+  bootPhase('seeding');
   await seedIfEmpty();
 
   /*
@@ -562,6 +612,7 @@ async function main(): Promise<void> {
    * kernel that could not seed is a design surface that cannot be evaluated,
    * never a Brain that cannot serve.
    */
+  bootPhase('seeding the design kernel');
   try {
     const design = await seedDesignKernel();
     console.log(
@@ -577,6 +628,7 @@ async function main(): Promise<void> {
   // An extraction still marked in-flight was interrupted by a crash or a
   // restart. Mark it so, before anything can mistake a half-read document for a
   // readable one, and leave it available to reprocess.
+  bootPhase('closing interrupted extractions');
   const interrupted = await recoverInterruptedExtractions();
   if (interrupted > 0) {
     console.log(
@@ -589,6 +641,7 @@ async function main(): Promise<void> {
   // it is a lie, so it is closed as INTERRUPTED with its completed passes and
   // accepted fragments intact. Nothing restarts on its own — research spends the
   // user's quota, so resuming is their decision.
+  bootPhase('closing interrupted research');
   const interruptedResearch = await recoverInterruptedResearch();
   if (interruptedResearch > 0) {
     console.log(
@@ -606,6 +659,7 @@ async function main(): Promise<void> {
   //
   // Nothing is spent by this. It queues work; a worker still has to claim it,
   // and a plan a person has not approved stays exactly where it is.
+  bootPhase('resuming worker-driven packets');
   const resumed = await resumePulledPackets();
   if (resumed > 0) {
     console.log(`  ${resumed} worker-driven research packet(s) picked back up from their rows`);
@@ -618,6 +672,7 @@ async function main(): Promise<void> {
   // and the first tick after boot sends it. This call only makes that visible
   // in the telemetry, so a restart appears in the record rather than being
   // inferred from a gap in it.
+  bootPhase('recovering dispatch intent');
   const redriven = await recoverDispatchAtBoot();
   if (redriven > 0) {
     console.log(`  ${redriven} ready bin(s) had no dispatch intent and now do`);
@@ -706,6 +761,7 @@ async function main(): Promise<void> {
    * left missing is the step that runs, and a second implementation of a
    * recovery path is the one nobody tests.
    */
+  bootPhase('repairing half-built launches');
   const repaired = await repairLaunches();
   if (repaired.completed.length > 0 || repaired.orphaned.length > 0) {
     console.log(
@@ -728,6 +784,7 @@ async function main(): Promise<void> {
 
   // A folder import interrupted by the shutdown is paused rather than left
   // looking live. Nothing already imported is re-read when it resumes.
+  bootPhase('pausing interrupted imports');
   const pausedImports = await recoverInterruptedImports();
   if (pausedImports > 0) {
     console.log(
@@ -738,12 +795,24 @@ async function main(): Promise<void> {
 
   // Documents that have never been read are queued now, so a folder dropped in
   // while the server was down becomes auditable without anyone asking.
+  bootPhase('queueing unread documents');
   const unread = await queueUnreadDocuments();
   if (unread > 0) console.log(`  reading ${unread} document(s) in the background`);
 
   // Derived state is rebuilt before the first request rather than lazily, so a
   // file deleted or added while the server was down is already accounted for.
-  for (const project of await listProjects()) {
+  /*
+   * Named per project rather than once, because this is the one phase whose
+   * cost is unbounded in data rather than fixed in code: it is a recompute per
+   * project, and §27 measured a single `recomputeProject` growing from four
+   * minutes to over fifteen as one project's archive grew from 373 documents
+   * to 431. So "stuck in derived state" is not a useful reading and "stuck on
+   * this project, this far in" is — and the two are one `bootPhase` call apart.
+   */
+  const projects = await listProjects();
+  bootPhase(`rebuilding derived state for ${projects.length} project(s)`);
+  for (const project of projects) {
+    bootPhase(`  derived state: ${project.slug}`);
     await recomputeProject(project.id);
     await writeProjectState(project.id);
   }
@@ -754,6 +823,7 @@ async function main(): Promise<void> {
   // The first administrator, if this Brain has never had one. Runs before the
   // port opens, so an installation that cannot be signed into says so in the
   // boot log rather than at the first person who tries.
+  bootPhase('the first administrator');
   const bootstrap = await bootstrapFirstAdmin();
   const identity: IdentityBanner = {
     accounts: await hasAnyAccount(),
@@ -762,6 +832,7 @@ async function main(): Promise<void> {
     bootstrapNote: bootstrap.created || bootstrap.reset ? null : bootstrap.reason,
   };
 
+  bootPhase('opening the port');
   const server = buildApp(gate).listen(PORT, () => logBanner(migrations, gate, identity));
   server.on('error', onListenError);
   installShutdown(server);

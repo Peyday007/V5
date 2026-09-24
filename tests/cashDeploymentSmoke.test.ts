@@ -263,6 +263,63 @@ describe('the deployable artifact', () => {
     expect(log).toMatch(/Schema version\s+\d+/);
   });
 
+  /*
+   * And it says what it is doing on the way, which is the half a hung boot
+   * needs.
+   *
+   * §27 records the reading this is written from: a production machine
+   * `started` with a critical health check for over an hour, `/healthz`
+   * answering 503 after 35.5s, and **not one application line** in the log
+   * buffer — because `logBanner` runs inside the `listen` callback and every
+   * phase before it reports only a non-zero result, after returning. A phase
+   * that does not return was indistinguishable from a phase that did nothing,
+   * and an operator reading the log with `LOG_PATTERN=boot` got
+   * `(no line matched)`.
+   *
+   * This is asserted here rather than by reading the source because the
+   * property is about *output*, and a source read cannot tell a `bootPhase`
+   * call that runs from one that is unreachable — the exact difference this
+   * repository has had to correct more than any other. The suite already pays
+   * to spawn the real entry point and already captures its whole stdout, so
+   * the reading costs nothing beyond the assertions.
+   */
+  it('names each boot phase before it runs, so a hang says where it stopped', () => {
+    const phases = [...log.matchAll(/^ {2}boot: [\d.]+s (.+)$/gm)].map((m) => m[1]!.trim());
+
+    // The word an operator greps for. `logs.yml` takes a LOG_PATTERN and this
+    // is the one that was reached for and found nothing.
+    expect(phases.length).toBeGreaterThan(5);
+
+    // In order, and the first thing boot does is the first thing it says.
+    expect(phases[0]).toBe('reaching the document store');
+    expect(phases[1]).toBe('opening the database and applying migrations');
+
+    // The one phase whose cost is unbounded in data names each project rather
+    // than itself, so "stuck on this project" is readable where "stuck in
+    // derived state" is not.
+    expect(phases.some((one) => /^rebuilding derived state for \d+ project\(s\)$/.test(one))).toBe(
+      true,
+    );
+    expect(phases.some((one) => one.startsWith('derived state: '))).toBe(true);
+
+    /*
+     * The property that makes it a diagnosis: the last `boot:` line printed is
+     * the phase that did not return. On a boot that finished, that is the port
+     * — and it is printed *before* the banner, which is what a boot that never
+     * opens the port can never reach.
+     */
+    expect(phases.at(-1)).toBe('opening the port');
+    expect(log.indexOf('boot: ')).toBeLessThan(log.indexOf('Brain is running'));
+
+    /*
+     * What this cannot see, said rather than implied: a phase added before
+     * `listen()` and *not* named produces no output at all, so no reading of
+     * the output can catch it. The bound is inherent rather than an omission —
+     * what is checkable is that the sequence exists, is ordered, and ends at
+     * the port, and that is what is checked.
+     */
+  });
+
   it('1. activates one private operation, and 2. the tick finds work by itself', async () => {
     // The two decisions a person makes, through the routes the screen calls.
     const research = await call('POST', `/api/russell/projects/${project}/authority`, {
