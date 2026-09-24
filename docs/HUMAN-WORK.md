@@ -4,8 +4,8 @@
 six reasons makes it so. Until this, nothing came after that decision: no row said
 which person, on what terms, with whose authorization, what they were told, what
 they handed back, or whether it met the need. `server/services/humanwork/`,
-`server/repos/humanWork.ts` and migrations `092_human_work.sql` /
-pg `083_human_work.sql` are that half.
+`server/repos/humanWork.ts` and migrations `094_human_work.sql` /
+pg `085_human_work.sql` are that half.
 
 ## The five steps, and the row each one is
 

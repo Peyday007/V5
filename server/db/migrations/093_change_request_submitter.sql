@@ -1,0 +1,15 @@
+-- Who asked for a change, beside who approved it.
+--
+-- A change request recorded its approver and not its submitter, so in a project
+-- several people share — an owner and the members they invited — "my request"
+-- had no row to be read from: two members' asks and a request Brain compiled for
+-- itself looked identical. It is attribution, never authority: nothing decides
+-- anything on it, the submission route writes it from the authenticated person
+-- and from no field, and the first submission of an ask keeps it — a second
+-- person submitting the identical objective collides on the submission key and
+-- is handed the row that already exists, author and all.
+--
+-- Nullable, because every row written before this existed has no recorded
+-- submitter, and a Brain-compiled request (§37's handoff) has no person to name.
+-- Unknown is an answer here; inventing one would be worse.
+ALTER TABLE factory_change_requests ADD COLUMN submitted_by_user_id TEXT REFERENCES users(id);

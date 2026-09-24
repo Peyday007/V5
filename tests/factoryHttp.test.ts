@@ -405,3 +405,153 @@ describe('the release decision', () => {
     expect(nonsense.status).toBe(400);
   });
 });
+
+/* ========================================================================= */
+
+/**
+ * An invited project MEMBER — not a Brain administrator — driving their own
+ * request end to end, against the booted server.
+ *
+ * The friend onboarding journey ends here: a person invited onto a project
+ * that has the repository onboarded can submit, approve and follow their own
+ * Factory request. What they may **not** do is the other half — onboard a
+ * repository (ADMIN, because it is a membership grant for a worker), see
+ * another project's campaigns, or have their request attributed to anybody
+ * else. A viewer can read and cannot ask.
+ */
+describe('an invited project member', () => {
+  async function person(
+    email: string,
+    role: 'MEMBER' | 'VIEWER',
+  ): Promise<{ id: string; cookie: string }> {
+    const temporary = 'temporary-password-02';
+    const created = await call<{ user: { id: string } }>('POST', '/api/admin/users', {
+      cookie: adminCookie,
+      body: { email, displayName: email.split('@')[0], password: temporary },
+    });
+    expect(created.status).toBe(200);
+    const granted = await call('POST', `/api/admin/projects/${projectId}/members`, {
+      cookie: adminCookie,
+      body: { principalType: 'HUMAN', principalId: created.body.user.id, role },
+    });
+    expect(granted.status).toBeLessThan(300);
+    const first = await signIn(email, temporary);
+    const settled = 'a-settled-password-0003';
+    await call('POST', '/api/auth/password', {
+      cookie: first,
+      body: { currentPassword: temporary, newPassword: settled },
+    });
+    return { id: created.body.user.id, cookie: await signIn(email, settled) };
+  }
+
+  const MEMBER_OBJECTIVE = {
+    objective: 'A member of this project asks for one bounded change of their own.',
+    expectedOutcome: 'The request is attributed to them and they can follow it.',
+    acceptanceConditions: [
+      { statement: 'the request names its submitter', verification: 'read the change request' },
+    ],
+    mutationScope: ['tests/**'],
+  };
+
+  it('submits, approves and follows their own request, attributed to them', async () => {
+    const member = await person('invited-member@example.invalid', 'MEMBER');
+
+    const submitted = await call<{
+      changeRequest: { id: string; submittedByUserId: string | null };
+      created: boolean;
+    }>('POST', `/api/projects/${projectId}/factory/change-requests`, {
+      cookie: member.cookie,
+      body: MEMBER_OBJECTIVE,
+    });
+    expect(submitted.status).toBe(201);
+    // From the authenticated person, never from a field.
+    expect(submitted.body.changeRequest.submittedByUserId).toBe(member.id);
+
+    const approved = await call<{
+      changeRequest: { approvedByUserId: string | null; submittedByUserId: string | null };
+      campaign: { id: string; projectId: string };
+    }>('POST', `/api/factory/change-requests/${submitted.body.changeRequest.id}/approve`, {
+      cookie: member.cookie,
+    });
+    expect(approved.status).toBe(200);
+    expect(approved.body.changeRequest.approvedByUserId).toBe(member.id);
+    expect(approved.body.campaign.projectId).toBe(projectId);
+
+    const followed = await call<{ objective: string }>(
+      'GET',
+      `/api/factory/campaigns/${approved.body.campaign.id}`,
+      { cookie: member.cookie },
+    );
+    expect(followed.status).toBe(200);
+    expect(followed.body.objective).toBe(MEMBER_OBJECTIVE.objective);
+
+    // And it is theirs, not the administrator's request that already exists.
+    const listed = await call<{ changeRequests: { id: string; submittedByUserId: string | null }[] }>(
+      'GET',
+      `/api/projects/${projectId}/factory/change-requests`,
+      { cookie: member.cookie },
+    );
+    const mine = listed.body.changeRequests.filter((one) => one.submittedByUserId === member.id);
+    expect(mine.map((one) => one.id)).toEqual([submitted.body.changeRequest.id]);
+    expect(listed.body.changeRequests.find((one) => one.id === changeRequestId)?.submittedByUserId).not.toBe(
+      member.id,
+    );
+
+    // A submitter named in the body is ignored rather than trusted.
+    const forged = await call<{ changeRequest: { submittedByUserId: string | null } }>(
+      'POST',
+      `/api/projects/${projectId}/factory/change-requests`,
+      {
+        cookie: member.cookie,
+        body: { ...MEMBER_OBJECTIVE, submissionKey: 'forged-author', submittedByUserId: 'usr_somebody_else' },
+      },
+    );
+    expect(forged.body.changeRequest.submittedByUserId).toBe(member.id);
+  });
+
+  it('may not onboard a repository or connect a pool account, which are administrator decisions', async () => {
+    const member = await person('invited-member-2@example.invalid', 'MEMBER');
+    const result = await call('POST', `/api/projects/${projectId}/factory/repositories/brain/onboard`, {
+      cookie: member.cookie,
+      body: { scopeKind: 'WHOLE_REPOSITORY' },
+    });
+    expect(result.status).toBe(404);
+    const invite = await call('POST', `/api/projects/${projectId}/factory/repositories/brain/invitation`, {
+      cookie: member.cookie,
+      body: {},
+    });
+    expect(invite.status).toBe(404);
+    // And the screen is told so, rather than offered a control that cannot succeed.
+    const read = await call<{ mayConnectAccounts: boolean; connectAccountsRefusal: string | null }>(
+      'GET',
+      `/api/projects/${projectId}/factory/repositories`,
+      { cookie: member.cookie },
+    );
+    expect(read.status).toBe(200);
+    expect(read.body.mayConnectAccounts).toBe(false);
+    expect(read.body.connectAccountsRefusal).toMatch(/administrator/);
+    const asAdmin = await call<{ mayConnectAccounts: boolean }>(
+      'GET',
+      `/api/projects/${projectId}/factory/repositories`,
+      { cookie: adminCookie },
+    );
+    expect(asAdmin.body.mayConnectAccounts).toBe(true);
+  });
+
+  it('as a viewer, can read and cannot submit or approve', async () => {
+    const viewer = await call('GET', `/api/projects/${projectId}/factory/campaigns`, {
+      cookie: (await person('invited-viewer@example.invalid', 'VIEWER')).cookie,
+    });
+    expect(viewer.status).toBe(200);
+    const again = await person('invited-viewer-2@example.invalid', 'VIEWER');
+    const submit = await call('POST', `/api/projects/${projectId}/factory/change-requests`, {
+      cookie: again.cookie,
+      body: { ...MEMBER_OBJECTIVE, submissionKey: 'viewer-attempt' },
+    });
+    expect(submit.status).toBe(404);
+    const approve = await call('POST', `/api/factory/change-requests/${changeRequestId}/approve`, {
+      cookie: again.cookie,
+    });
+    expect(approve.status).toBe(404);
+  });
+});

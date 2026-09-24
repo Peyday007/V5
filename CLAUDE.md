@@ -3344,6 +3344,54 @@ remote.
   counts, from rows, **how much work is already waiting on this repository**,
   which is the one thing that makes a setup task worth doing today: the work
   resumes by itself and nothing has to be submitted again.
+- **`READY` meant "an enabled Routine is bound", and the dispatcher meant
+  something else. The correction is recorded rather than quietly applied.**
+  Build read *Ready to execute* over a Routine whose trigger token was not
+  deployed, one declaring no `repository-write`, and one whose account was
+  quarantined — the dispatcher refuses every one, so a person could submit an
+  objective against a repository nothing would ever fire for. §24's *waiting
+  nobody can resolve*, wearing the one green label on the page. The remedy is
+  not a better copy of the routing rules in Build, because a copy is the
+  *two readers of one fact* defect this file records more than any other:
+  `services/dispatch/surfaceEligibility.ts` pins a `FACTORY_UNITS`-shaped
+  probe to each surface and asks `routeBin` itself, over the same
+  `fleetSnapshot` the tick reads, and the admission half asks
+  `decideBinRouting` over the worker's own rows. So there are five answers now
+  — `NOT_ONBOARDED`, `AWAITING_SURFACE`, `NO_USABLE_SURFACE`,
+  `WAITING_FOR_CAPACITY`, `READY` — and the middle two are apart because their
+  remedies are opposite: a missing secret is an operator's write, and a
+  cooldown or a reached target resolves by itself and must never send somebody
+  to re-register a surface that works (§23: *a refusal is not misconduct*).
+  **Proof is reported beside readiness and never instead of it** — a surface
+  that completed work and has since been quarantined reads both facts and
+  counts for nothing as capacity.
+
+  **Two sessions fixed this within the same hour, and the reconciliation is
+  recorded rather than merged silently.** The four-account lane landed first
+  with `routingRefusalByRoutine` — `surfaceIneligibility` per Routine, which
+  also moved `capacityReading`, Who and contributed capacity onto the router,
+  and whose `capacity.ts` is the one that ships. For the Build card it is the
+  weaker question: it is asked independently of any bin, so it cannot see this
+  project, this repository, a missing `repository-write`, or a cooldown, and it
+  read `AWAITING_SURFACE` — *connect a surface* — over a surface that exists
+  and is merely refused. So `onboard.ts` keeps the pinned-probe version, which
+  asks `routeBin` itself and therefore inherits every check theirs has,
+  `workerActive` included; `verify-pool`'s private copy of the routing rules
+  reads `surfaceEligibility` too. `tests/factoryReadinessRouting.test.ts` holds
+  the card against `routeBin` over a real units bin in every scenario, and was
+  run against the unfixed code to watch twelve of its assertions fail.
+
+  **And "Your Claude connection" is research capacity, which the page now
+  says.** It creates a member's personal `research-…` worker, and nothing
+  about it — routing, the card, the pool — counts it as a Factory account; a
+  Factory surface is a second connector, Routine, secret, registration and
+  pinned proof in that member's own Claude account. Submitting is separate
+  again: a project `MEMBER` can submit, approve and follow a Factory request,
+  and `factory_change_requests.submitted_by_user_id` (`093_change_request_submitter.sql`,
+  pg `084_change_request_submitter.sql`) records who asked, from the
+  authenticated principal and never from a field — the change request had
+  recorded its approver and not its author, so in a shared project nobody's
+  request was readable as theirs.
 - **A rendered card is not a passing service test.** Pressing the button reloads
   the list, the reload counted as loading, and loading unmounted the section —
   taking the invitation *shown once* down with it. Every server test passed: the
@@ -11584,7 +11632,7 @@ intent and composes nothing.
 ## 51. A decision that a person is needed is not the person doing it.
 
 §41 decides *whether* a task needs a person and why. `server/services/humanwork/`
-(`docs/HUMAN-WORK.md`, migrations `093_human_work.sql` / pg `084_human_work.sql`)
+(`docs/HUMAN-WORK.md`, migrations `094_human_work.sql` / pg `085_human_work.sql`)
 is everything after that decision, and it was found missing by reading
 production rather than by reading code: on 2026-09-23 `labor-report` answered
 `maps=0` across all thirteen projects, while `people foundation` showed a real
