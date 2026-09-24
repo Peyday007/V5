@@ -12227,6 +12227,7 @@ tests/                  Vitest suites
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
   humanWork.test.ts          four principals, one journey, and every boundary between them
+  humanWorkBrowserToDatabase.test.ts  the assignee's Home card and Russell's line, over the real route
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```
