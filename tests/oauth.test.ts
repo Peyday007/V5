@@ -1121,21 +1121,32 @@ describe('the worker chooser reads as a decision', () => {
     'Manufacturing empire',
   ];
   const REPOSITORY = 'peyday007/v5';
-  /** The bound in `clip`. Stated here so a change to it fails this on purpose. */
-  const MAX_OPTION = 96;
+  /**
+   * `IDENTITY_MAX + SURFACE_MAX` plus two separators plus a worker id.
+   *
+   * Stated as the sum rather than as one magic number, so that widening either
+   * field fails this on purpose — and so that the id is visibly *outside* the
+   * bound, which is the property the second assertion below exists for.
+   */
+  const MAX_OPTION = 24 + 3 + 48 + 3 + 'wkr_'.length + 20;
 
   let factoryId = '';
   let factoryLabel = '';
 
-  function optionTexts(html: string): string[] {
-    return [...html.matchAll(/<option\b[^>]*>([\s\S]*?)<\/option>/g)].map((m) =>
-      (m[1] ?? '')
+  function optionRows(html: string): { value: string; text: string }[] {
+    return [...html.matchAll(/<option value="([^"]+)"[^>]*>([\s\S]*?)<\/option>/g)].map((m) => ({
+      value: m[1] ?? '',
+      text: (m[2] ?? '')
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'"),
-    );
+    }));
+  }
+
+  function optionTexts(html: string): string[] {
+    return optionRows(html).map((o) => o.text);
   }
 
   beforeAll(async () => {
@@ -1189,6 +1200,22 @@ describe('the worker chooser reads as a decision', () => {
     expect(options.some((text) => text.startsWith(factoryLabel))).toBe(true);
 
     for (const text of options) expect(text.length).toBeLessThanOrEqual(MAX_OPTION);
+
+    /*
+     * And the bound is spent on the fields rather than on the identifier.
+     *
+     * The first version of the fix clipped the finished string, which ends in
+     * the worker id — so the one case the bound existed for would have spent
+     * itself truncating the one field somebody compares against `fleet show`.
+     * An id you can read most of is worse than none, because it is completed
+     * from memory. Every option ends in its own value, whole.
+     */
+    const response2 = await fetch(`${BASE}/oauth/authorize?${authorizeForm(pkce().challenge)}`, {
+      headers: { cookie: adminCookie },
+    });
+    for (const option of optionRows(await response2.text())) {
+      expect(option.text.endsWith(` \u00b7 ${option.value}`)).toBe(true);
+    }
 
     // On the old code this option was the label plus all nine names — 130-odd
     // characters, and one longer for every future grant.

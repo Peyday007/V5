@@ -1017,17 +1017,26 @@ function surfaceOf(routing: { families: string[]; repositories: string[] } | nul
 }
 
 /**
- * A hard bound on one option's text.
+ * A hard bound on one *field* of an option, never on the whole line.
  *
- * Belt and braces over `surfaceOf`, which is already bounded: the point of the
- * rewrite is that nothing in an option may grow with the number of rows behind
- * it, and a limit stated once is easier to keep than a promise repeated at each
- * call site. It is deliberately generous — long enough that no real worker id
- * is ever cut, short enough that the popup cannot leave the viewport.
+ * Which field is the point. An earlier version of this bounded the finished
+ * string, and the finished string ends in the worker id — so the one case the
+ * bound existed for, a label longer than expected, would have spent itself
+ * truncating the identifier. An id you can read most of is worse than no id at
+ * all: it is the field somebody compares against `fleet show`, and a
+ * half-printed one is something they complete from memory. So the id is
+ * excluded from every bound by construction, and the two fields that *can*
+ * grow — a legacy handle standing in for a label, a routing scope naming a
+ * long repository — are bounded separately.
  */
-function clip(text: string, max = 96): string {
+function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
+
+/** The identity, which is `worker-NN` unless a pre-074 row fell back to a handle. */
+const IDENTITY_MAX = 24;
+/** The routing scope, which grows with a repository name. */
+const SURFACE_MAX = 48;
 
 async function consentPage(
   _req: Request,
@@ -1103,7 +1112,9 @@ async function consentPage(
        * head of the string: the head is what a person reads while choosing,
        * and the id is what they read when confirming, with the menu open.
        */
-      const label = clip(`${workerIdentity(worker)} · ${surfaceOf(routing)} · ${worker.id}`);
+      const label =
+        `${clip(workerIdentity(worker), IDENTITY_MAX)} · ` +
+        `${clip(surfaceOf(routing), SURFACE_MAX)} · ${worker.id}`;
       return `<option value="${esc(worker.id)}"${
         worker.id === heldInvitationFor?.id ? ' selected' : ''
       }>${esc(label)}</option>`;
