@@ -12291,19 +12291,36 @@ data/                   database, documents, backups, runtime state (gitignored)
 
 ## Checks before you call a change done
 
+**While developing — every intermediate commit:**
+
 ```
 npm run typecheck
-npm test
+npm run test:impacted
 ```
+
+`test:impacted` runs the tests that import a changed file directly (a type-only
+import does not count, because it runs no code), every test file the change
+edited, and the structural guards no module graph reaches — the deployment
+ownership walk, the workflow rules, and both migration chains whenever either
+moved. If the change touched persistence, run the same selection against the
+other backend:
+
+```
+BRAIN_TEST_DATABASE_URL=postgresql://... npm run test:impacted
+```
+
+`--list` prints the selection without running it; `--transitive` widens it to
+everything the module graph reaches, for a change whose reach genuinely is that
+wide. **Do not run the full suite on intermediate commits, on either backend**,
+and do not add a feature branch to `postgres-suite.yml`'s push trigger:
+`tests/testingWorkflow.test.ts` refuses it.
+
+**The full cross-system gate is paid once, on the SHA that is integrated and
+released:** the `Postgres suite` workflow runs the whole suite against Postgres
+on every push to the canonical branch, and `Deploy`'s own test job runs it
+against SQLite on the commit it releases. A merge is not done until the first is
+green, and a release is not done until the second is. Both stay dispatchable by
+hand for a deliberate full run.
 
 Then verify the two boot paths that matter: migrating from an empty database, and
 restarting against an existing one.
-
-If the change touched persistence, run the suite against Postgres too — it is
-the same 490 tests against the other backend, and it is the only thing that
-proves one repository layer over two databases is true rather than merely
-compiling:
-
-```
-BRAIN_TEST_DATABASE_URL=postgresql://... npm test
-```
