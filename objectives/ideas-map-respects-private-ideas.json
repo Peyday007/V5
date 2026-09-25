@@ -1,0 +1,55 @@
+{
+  "objective": "Stop the project Ideas map from showing a member the PRIVATE ideas that came from somebody else's private conversation. Opening a single idea already enforces the rule: `requireCandidate` in server/routes/russell.ts refuses a PRIVATE candidate unless its conversation is readable by the caller (`conversationIsReadable` in server/services/russell/turn.ts — the owner, or anybody who may READ the project when the thread is SHARED). But `ideaMapForProject` in server/services/russell/ideas.ts, which backs `GET /api/russell/projects/:projectId/ideas` and the constellation, loads every candidate in the project with `listCandidates({ projectId, limit: 500 })` and applies no visibility rule at all. So every project member reads every other member's private idea titles and statements, plus counts derived from them, on the map. That breaks §24's rule that a private thread, and the idea it produced, is its owner's whatever their role. It is also the one reader that disagrees with the single-idea route about the same row.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "The Ideas map, list and constellation show a viewer exactly the ideas that viewer could open one at a time. A PRIVATE idea from another member's private thread is absent: not a node, not an edge, not part of any count (children of a layer, folded-into counts). The viewer's own PRIVATE ideas, every SHARED idea, and PRIVATE ideas on a SHARED thread of a project the viewer may read all still appear exactly as before. Brain-originated ideas are SHARED and are unaffected.",
+  "nonGoals": [
+    "Changing who may open a single idea. `requireCandidate`'s rule is the definition this change adopts, not something it revises.",
+    "Changing any file under server/services/identity/, the authorization policy, or any route's authorization level.",
+    "Changing a candidate's visibility, or any stored row. This is a read-path filter.",
+    "Changing the client. The map already renders whatever nodes the server returns."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "`ideaMapForProject` decides visibility per candidate with the same rule `requireCandidate` applies: a SHARED candidate is visible to any viewer who may read the project; a PRIVATE candidate is visible only when it has a conversation and that conversation is readable by the viewer under `conversationIsReadable`'s rule. There is one rule, not a second copy that could drift: either a shared helper that both call, or `ideaMapForProject` calling `conversationIsReadable` for the viewer principal.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A test with two members A and B of one project, where B owns a PRIVATE conversation that produced a PRIVATE idea: the map built for A contains no node, no edge and no title or statement from B's private idea, and no count in A's map includes it. The same map built for B contains it.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A test asserts that a SHARED idea, and a PRIVATE idea whose conversation is SHARED, both appear in member A's map. So does A's own PRIVATE idea.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "An HTTP-level test calls `GET /api/russell/projects/:projectId/ideas` as member A and asserts B's private idea title does not appear anywhere in the response body.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing suites that read the idea map (tests/readLayer.test.ts, tests/russellHttp.test.ts, tests/russellIntegrationPass.test.ts) still pass unchanged or with changes limited to supplying a viewer.",
+      "verification": "npm test",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/ideas.ts",
+    "server/routes/russell.ts",
+    "server/services/russell/turn.ts",
+    "tests/ideasMapPrivacy.test.ts",
+    "tests/readLayer.test.ts",
+    "tests/russellHttp.test.ts",
+    "tests/russellIntegrationPass.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. The change is a read-path filter in server/services/russell/ideas.ts plus tests; no schema, stored row or authorization policy changes."
+}

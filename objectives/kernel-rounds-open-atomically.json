@@ -1,0 +1,57 @@
+{
+  "objective": "Make every research kernel open a question and record its round as one atomic step, so Brain never creates a research idea that nothing will read the answer to. In each kernel's `openAsks`, a Russell candidate is created first and the kernel's round row second, with `ON CONFLICT DO NOTHING`, and a losing insert simply `continue`s. See server/services/industry/expand.ts (the loop after the comment 'The round is written *after* the candidate'), and the same pattern in server/services/manufacturing/expand.ts, server/services/dealflow/expand.ts, server/services/puzzle/expand.ts and server/services/labor/expand.ts, plus the discovery round in server/repos/cashDiscovery.ts and server/services/cash/discovery.ts. The comment claims the orphan 'is never asked anything'. That is false: the candidate is SHARED, has a project, and Russell's tick judges and launches unjudged candidates. So a crash between the two writes, or two passes racing on the same round key, produces a research mission Brain pays for while no round points at it, and its answer is never absorbed.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "In each of the six places, creating the candidate and inserting the round happen in one database transaction, and a round insert that loses the conflict rolls its candidate back. After any interleaving of two passes, or a failure between the two writes, every candidate a kernel created is referenced by exactly one of that kernel's round rows. The false comment is removed or corrected.",
+  "nonGoals": [
+    "Changing what any allocator asks, in what order, or how often.",
+    "Deleting or rewriting candidates or rounds that already exist in a database. Existing orphans, if any, are left as they are.",
+    "Changing the Russell tick, the candidate judgment, or `unjudged()`.",
+    "Any schema change beyond what a transaction needs (none is expected)."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "For each of the industry, manufacturing, dealflow, puzzle and labor kernels and for cash discovery rounds, a test forces the round insert to fail after the candidate would have been created (for example by pre-inserting the identical round key) and asserts that no candidate exists without a round pointing at it.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "For each of the six, a test runs the opening step twice concurrently for the same round key and asserts exactly one round row and exactly one candidate for it.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The comments claiming an orphaned candidate 'is never asked anything' no longer appear in server/services/**/expand.ts or server/repos/cashDiscovery.ts.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing kernel suites (tests/industryKernel*, tests/manufacturingKernel*, tests/dealflowKernel*, tests/puzzleKernel*, tests/laborKernel*, tests/cashDiscovery*) still pass.",
+      "verification": "npm test",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/industry/expand.ts",
+    "server/services/manufacturing/expand.ts",
+    "server/services/dealflow/expand.ts",
+    "server/services/puzzle/expand.ts",
+    "server/services/labor/expand.ts",
+    "server/services/cash/discovery.ts",
+    "server/repos/cashDiscovery.ts",
+    "server/repos/industry.ts",
+    "server/repos/manufacturing.ts",
+    "server/repos/dealflow.ts",
+    "server/repos/puzzle.ts",
+    "server/repos/labor.ts",
+    "server/repos/russellCandidates.ts",
+    "tests/kernelRoundAtomicity.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. The change wraps existing writes in transactions; it adds no schema and rewrites no stored row."
+}

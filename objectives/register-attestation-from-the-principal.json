@@ -1,0 +1,49 @@
+{
+  "objective": "Stop the work register believing an attestation the caller typed. `POST /api/register/workstreams/:workstreamId/links` (server/routes/register.ts) stores the request body's `detail` object verbatim, and `readAttested` in server/services/register/resolve.ts reads `detail.attestedBy`, `detail.attestedAt`, `detail.merged` and `detail.verifiedLive` from it. So any member with write access can post a link whose detail says `attestedBy: 'pull-request-merge-observation'` (a machine attester's name) or another person's name, with any timestamp and `verifiedLive: true`. The register then reads VERIFIED_LIVE, and `server/services/goals/model.ts` counts the goal as delivered. §43 says an unattested pull request is not a merge and that an attestation names who and when. Invariant 45 says no claim about the world without somebody attesting to it. Both are defeated when the somebody and the when are whatever the caller typed.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A link recorded through the HTTP route carries an attestation only if the server wrote one, naming the authenticated person as `person:<their user id>` and the server's own clock. Caller-supplied `attestedBy`, `attestedAt`, `merged` and `verifiedLive` inside `detail` are never stored and never read. Links written by Brain's own observers (`campaignPullRequestLink.ts`, `pullRequestMergeObservation.ts`) keep working exactly as today.",
+  "nonGoals": [
+    "Giving Brain a forge credential or polling GitHub (§27).",
+    "Adding a state column to workstreams; the state stays derived on the read path.",
+    "Changing server/services/identity/, the authorization policy, or the route's authorization level.",
+    "Rewriting existing link rows. Rows already stored keep their detail; this changes what the route accepts from now on."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "An HTTP test posts a link whose `detail` contains `attestedBy: 'pull-request-merge-observation'`, an `attestedAt` timestamp, `merged: true` and `verifiedLive: true`. The resulting reading's state is null ('recorded, with nobody attesting to its state'), the workstream does not read MERGED or VERIFIED_LIVE, and a goal pursuing only that link is not complete.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "If the route offers a person a way to attest, the stored attestation's `attestedBy` is exactly `person:<authenticated principal id>` and `attestedAt` is the server's clock, whatever the body says. A test asserts both, including that a body naming a different person or a machine attester is ignored.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing register and goals suites (tests/workRegister.test.ts and any goals suite reading attested links) still pass: the campaign pull-request link and the merge observation still produce PR_READY and MERGED readings through their own service-level writers.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The set of reserved detail keys is one exported constant read by the route, so a later writer cannot re-admit one key while another is filtered.",
+      "verification": "npm test",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/routes/register.ts",
+    "server/services/register/**",
+    "server/repos/register.ts",
+    "tests/workRegister.test.ts",
+    "tests/registerAttestation.test.ts",
+    "tests/goals*.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Only the register route, the register services and their tests change; no schema or stored row changes."
+}
