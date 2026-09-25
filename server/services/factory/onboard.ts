@@ -333,12 +333,20 @@ const SURFACE_STEP =
  * now.
  */
 export async function repositoryOnboarding(projectId: string): Promise<RepositoryOnboarding[]> {
+  return (await repositoryOnboardingWithSnapshot(projectId)).repositories;
+}
+
+/** Also return the exact snapshot used by readiness, for Build's allocation preview. */
+export async function repositoryOnboardingWithSnapshot(projectId: string): Promise<{
+  repositories: RepositoryOnboarding[];
+  snapshot: FleetSnapshot;
+}> {
   const inputs = await fleetInputs();
   const out: RepositoryOnboarding[] = [];
   for (const grant of listRepositoryGrants()) {
     out.push(await describeGrant(projectId, grant, inputs));
   }
-  return out;
+  return { repositories: out, snapshot: inputs.snapshot };
 }
 
 /**

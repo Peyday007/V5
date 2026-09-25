@@ -218,6 +218,57 @@ describe('a caller with no credentials', () => {
   });
 });
 
+describe('Factory allocation', () => {
+  it('previews routing for an administrator without firing a Routine, and guards reports', async () => {
+    const path = `/api/projects/${projectId}/factory/allocation`;
+    const preview = await call<{ repositories: unknown[]; reportExpiresAfterHours: number }>(
+      'GET', path, { cookie: adminCookie },
+    );
+    expect(preview.status).toBe(200);
+    expect(preview.body.reportExpiresAfterHours).toBe(6);
+    expect(Array.isArray(preview.body.repositories)).toBe(true);
+    expect((await call('GET', path, { cookie: outsiderCookie })).status).toBe(404);
+    expect((await call('GET', path, { bearer: workerBearer })).status).toBe(404);
+    expect((await call('POST', `${path}/acct_made_up/report`, {
+      cookie: adminCookie, body: { remainingPercent: 40 },
+    })).status).toBe(404);
+    expect((await call('POST', `${path}/acct_made_up/report`, {
+      cookie: adminCookie, body: { remainingPercent: 105 },
+    })).status).toBe(400);
+  });
+
+  it('lets a project MEMBER read the allocation and refuses their report like a missing project', async () => {
+    const created = await call<{ user: { id: string } }>('POST', '/api/admin/users', {
+      cookie: adminCookie,
+      body: { email: 'alloc-member@example.invalid', displayName: 'alloc member',
+        password: 'temporary-password-02' },
+    });
+    await call('POST', `/api/admin/projects/${projectId}/members`, {
+      cookie: adminCookie,
+      body: { principalType: 'HUMAN', principalId: created.body.user.id, role: 'MEMBER' },
+    });
+    const first = await signIn('alloc-member@example.invalid', 'temporary-password-02');
+    await call('POST', '/api/auth/password', {
+      cookie: first,
+      body: { currentPassword: 'temporary-password-02', newPassword: 'alloc-member-password-02' },
+    });
+    const memberCookie = await signIn('alloc-member@example.invalid', 'alloc-member-password-02');
+    const path = `/api/projects/${projectId}/factory/allocation`;
+    const read = await call<{ canReport: boolean }>('GET', path, { cookie: memberCookie });
+    expect(read.status).toBe(200);
+    expect(read.body.canReport).toBe(false);
+
+    const refused = await call('POST', `${path}/acct_made_up/report`, {
+      cookie: memberCookie, body: { remainingPercent: 40 },
+    });
+    const absent = await call('POST', `/api/projects/prj_does_not_exist/factory/allocation/acct_made_up/report`, {
+      cookie: memberCookie, body: { remainingPercent: 40 },
+    });
+    expect(refused.status).toBe(404);
+    expect(JSON.stringify(refused.body)).toBe(JSON.stringify(absent.body));
+  });
+});
+
 describe('somebody signed in who is a member of nothing', () => {
   it('cannot tell a campaign they may not see from one that does not exist', async () => {
     const real = await call('GET', `/api/factory/campaigns/${campaignId}`, {

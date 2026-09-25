@@ -1418,6 +1418,23 @@ property became an optional tier.
 **Never infer fleet capacity from account count.** Throughput is measured per
 account, Routine, workload class and reset period, or it is reported as unknown.
 
+**A remaining allowance is reported by a person, and it is labelled that way
+everywhere.** Brain cannot see a Claude subscription balance, so
+`fleet_allowance_reports` (`096_fleet_allowance_reports.sql`, pg
+`087_fleet_allowance_reports.sql`) holds what an account holder's usage screen
+said, who typed it and when — append-only, and never derived from fires. It
+enters routing in exactly one place: `routeBin`'s ordering, and only when
+**every** eligible surface has a report from the last six hours, because
+comparing one account's reading against another's silence would be an unknown
+read as a favourable assumption. It is a preference *after* eligibility —
+account and Routine state, cooldowns and targets decide first and a high report
+overrides none of them. Build's allocation card
+(`services/factory/allocation.ts`) is `routeBin` over the tick's own snapshot
+and a probe bin nothing writes, lists accounts by the router's own
+`servesBinScope`, and counts fires, arrivals and provider refusals from
+`bin_events` — so the preview cannot name an account the dispatcher would not,
+and asking fires nothing.
+
 **Two accounts are registered live with distinct credential digests, and Brain
 has fired both.** `primary` / `V1` runs the same trigger Step 10 used;
 `friend-2` / `V2` is registered under its own deployment secret. As of
@@ -12274,19 +12291,36 @@ data/                   database, documents, backups, runtime state (gitignored)
 
 ## Checks before you call a change done
 
+**While developing — every intermediate commit:**
+
 ```
 npm run typecheck
-npm test
+npm run test:impacted
 ```
+
+`test:impacted` runs the tests that import a changed file directly (a type-only
+import does not count, because it runs no code), every test file the change
+edited, and the structural guards no module graph reaches — the deployment
+ownership walk, the workflow rules, and both migration chains whenever either
+moved. If the change touched persistence, run the same selection against the
+other backend:
+
+```
+BRAIN_TEST_DATABASE_URL=postgresql://... npm run test:impacted
+```
+
+`--list` prints the selection without running it; `--transitive` widens it to
+everything the module graph reaches, for a change whose reach genuinely is that
+wide. **Do not run the full suite on intermediate commits, on either backend**,
+and do not add a feature branch to `postgres-suite.yml`'s push trigger:
+`tests/testingWorkflow.test.ts` refuses it.
+
+**The full cross-system gate is paid once, on the SHA that is integrated and
+released:** the `Postgres suite` workflow runs the whole suite against Postgres
+on every push to the canonical branch, and `Deploy`'s own test job runs it
+against SQLite on the commit it releases. A merge is not done until the first is
+green, and a release is not done until the second is. Both stay dispatchable by
+hand for a deliberate full run.
 
 Then verify the two boot paths that matter: migrating from an empty database, and
 restarting against an existing one.
-
-If the change touched persistence, run the suite against Postgres too — it is
-the same 490 tests against the other backend, and it is the only thing that
-proves one repository layer over two databases is true rather than merely
-compiling:
-
-```
-BRAIN_TEST_DATABASE_URL=postgresql://... npm test
-```

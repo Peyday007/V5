@@ -46,6 +46,8 @@ const REPOSITORIES = `GET /api/projects/${PROJECT}/factory/repositories`;
 const ONBOARD = `POST /api/projects/${PROJECT}/factory/repositories/${GRANT}/onboard`;
 const INVITATIONS = `GET /api/projects/${PROJECT}/factory/repositories/${GRANT}/invitations`;
 const INVITE = `POST /api/projects/${PROJECT}/factory/repositories/${GRANT}/invitations`;
+const REPORT_A = `POST /api/projects/${PROJECT}/factory/allocation/acct_a/report`;
+const ALLOCATION = `GET /api/projects/${PROJECT}/factory/allocation`;
 
 const MEMBERS = [
   { userId: 'usr_friend_a', name: 'Friend A' },
@@ -113,7 +115,9 @@ const ISSUED = {
 
 function base(over: Record<string, Reply | (() => Reply)> = {}): void {
   routes = {
-    [REPOSITORIES]: { body: { repositories: [grant()] } },
+    [REPOSITORIES]: { body: { repositories: [grant()], allocation: {
+      windowHours: 24, reportExpiresAfterHours: 6, canReport: true, repositories: [],
+    } } },
     [`GET /api/projects/${PROJECT}/factory/campaigns`]: { body: { campaigns: [] } },
     [`GET /api/projects/${PROJECT}/factory/change-requests`]: { body: { changeRequests: [] } },
     [INVITATIONS]: {
@@ -183,6 +187,60 @@ async function chooseWholeRepository(): Promise<void> {
 function card(): HTMLElement {
   return document.querySelector('.rs-factory-repositories') as HTMLElement;
 }
+
+describe('account allocation on Build', () => {
+  const account = (over: Record<string, unknown> = {}) => ({
+    id: 'acct_a', name: 'account A', remainingPercent: 100,
+    reportedAt: '2026-09-25T00:00:00.000Z', reportFresh: true,
+    fires: 5, arrivals: 4, providerRefusals: 1, unavailable: null, ...over,
+  });
+  const allocation = (accounts: unknown[], next: string | null, explanation: string) => ({
+    windowHours: 24, reportExpiresAfterHours: 6, canReport: true,
+    repositories: [{ grantId: GRANT, remote: 'https://github.com/Peyday007/brain-worker-bootstrap',
+      nextAccountId: next, explanation, accounts }],
+  });
+
+  it('labels measured activity and a reported allowance as different kinds of fact, and records a report', async () => {
+    base({
+      [REPOSITORIES]: { body: { repositories: [grant()],
+        allocation: allocation([account()], 'acct_a', 'Selected account A from fresh reports.') } },
+      [REPORT_A]: { body: { report: { accountId: 'acct_a', remainingPercent: 40,
+        reportedAt: '2026-09-25T01:00:00.000Z' } } },
+    });
+    await mount();
+    const section = await screen.findByRole('heading', { name: 'Factory account allocation' });
+    const card = section.closest('section')!;
+    expect(within(card).getByText(/Measured, last 24 hours in this project: 5 fires,/)).toBeTruthy();
+    expect(within(card).getByText(/4 arrivals, 1 provider refusals/)).toBeTruthy();
+    expect(within(card).getByText(/Reported remaining: 100%/)).toBeTruthy();
+    expect(within(card).getByText('Selected account A from fresh reports.')).toBeTruthy();
+    await act(async () => {
+      fireEvent.change(within(card).getByLabelText('Remaining allowance shown in Claude (%)'),
+        { target: { value: '40' } });
+      fireEvent.click(within(card).getByRole('button', { name: 'Save reading' }));
+    });
+    await waitFor(() => expect(bodies[REPORT_A]).toEqual({ remainingPercent: 40 }));
+  });
+
+  it('says an old report is not used, and the test button reads the router without firing', async () => {
+    base({
+      [REPOSITORIES]: { body: { repositories: [grant()],
+        allocation: allocation([account({ reportFresh: false, remainingPercent: 70 })], 'acct_a', 'Before.') } },
+      [ALLOCATION]: { body: allocation(
+        [account({ unavailable: 'Factory A: rate limited until 2026-09-25T02:00:00.000Z' })],
+        null, 'Every eligible surface is rate limited.') },
+    });
+    await mount();
+    const card = (await screen.findByRole('heading', { name: 'Factory account allocation' })).closest('section')!;
+    expect(within(card).getByText(/70% \(older than 6 hours, not used\)/)).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(within(card).getByRole('button', { name: 'Test next routing choice' }));
+    });
+    await waitFor(() => expect(within(card).getByText('Every eligible surface is rate limited.')).toBeTruthy());
+    expect(within(card).getByText('nobody right now')).toBeTruthy();
+    expect(within(card).getByText(/Not available now: Factory A: rate limited/)).toBeTruthy();
+  });
+});
 
 describe('the Build card says what is connected and what is missing', () => {
   it('names the repository, its readiness, and the one action that starts it', async () => {

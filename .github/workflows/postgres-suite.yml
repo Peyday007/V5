@@ -57,13 +57,14 @@ on:
         default: 'the repository layer against the other backend'
   push:
     branches:
-      # The canonical branch, because that is the tree that deploys. A feature
-      # branch may add itself here while it is being worked on; production must
-      # never come off the list.
+      # The canonical branch and nothing else: the full Postgres suite is the
+      # cross-system gate for the SHA that is integrated and released, and it is
+      # paid once, there. A feature branch runs `npm run test:impacted` (with
+      # BRAIN_TEST_DATABASE_URL for this backend) on its intermediate commits,
+      # and a branch that adds itself here makes every push to it pay the whole
+      # suite for an answer the push to production will give again.
+      # `tests/testingWorkflow.test.ts` refuses a second entry.
       - 'production'
-      - 'claude/pensive-bell-dr81a4'
-      - 'claude/cash-access-people-capacity-uk7sqa'
-      - 'claude/brain-first-labor-allocation-fyrbtx'
 
 # One at a time, and the newest commit is the one worth the twenty minutes: a
 # push that supersedes the commit a run is verifying makes that run's answer

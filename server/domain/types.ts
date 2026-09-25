@@ -5132,6 +5132,25 @@ export interface FleetAccountRow {
 }
 
 /**
+ * A person's reading of a Claude usage gauge: PERSON-REPORTED, never measured.
+ * Brain cannot see a subscription balance and never derives one from fires.
+ */
+export interface AllowanceReport {
+  accountId: string;
+  remainingPercent: number;
+  reportedAt: string;
+}
+
+/** Append-only person-supplied gauge reading, separate from provider telemetry. */
+export interface FleetAllowanceReportRow {
+  id: string;
+  account_id: string;
+  remaining_percent: number;
+  reported_at: string;
+  reported_by: string;
+}
+
+/**
  * Whether an account is capacity somebody bought, or a verification fixture.
  *
  * `verify-hosted-account-a` and `-b` expect the sentinel secret
