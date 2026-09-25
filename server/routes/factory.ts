@@ -55,10 +55,12 @@ import {
   factoryInvitations,
   issueFactoryInvitation,
   onboardRepository,
-  repositoryOnboarding,
+  repositoryOnboardingWithSnapshot,
   withdrawFactoryInvitation,
 } from '../services/factory/onboard.ts';
 import { getUser } from '../repos/identity.ts';
+import { recordAllowanceReport } from '../repos/allowance.ts';
+import { factoryAllocation } from '../services/factory/allocation.ts';
 import {
   authorizeProject,
   badRequest,
@@ -270,13 +272,65 @@ factoryRouter.get(
      * not at all, so two people reading one project see one page.
      */
     const mayConnectAccounts = decideProjectAccess(currentPrincipal(), projectId, 'ADMIN').allowed;
+    const { repositories, snapshot } = await repositoryOnboardingWithSnapshot(projectId);
     res.json({
-      repositories: await repositoryOnboarding(projectId),
+      repositories,
+      allocation: await factoryAllocation({ projectId, canReport: mayConnectAccounts, snapshot }),
       mayConnectAccounts,
       connectAccountsRefusal: mayConnectAccounts
         ? null
         : 'Only an administrator of this project can issue a link that connects a Claude account to its Factory pool.',
     });
+  }),
+);
+
+/**
+ * Which Factory account the dispatcher would fire next, and what each account
+ * has measurably done. A read: `routeBin` over the tick's own snapshot, with a
+ * probe bin that is never written, so asking fires nothing.
+ */
+factoryRouter.get(
+  '/projects/:projectId/factory/allocation',
+  handler(async (req) => {
+    requirePerson();
+    const projectId = pathId(req, 'projectId');
+    await projectForFactory(projectId, 'write');
+    const canReport = decideProjectAccess(currentPrincipal(), projectId, 'ADMIN').allowed;
+    return factoryAllocation({ projectId, canReport });
+  }),
+);
+
+/**
+ * Record what an account holder's Claude usage screen says is left.
+ *
+ * ADMIN by `services/identity/policy.ts`, so a member is refused by
+ * `projectForFactory` with the same body a missing project gets. The account
+ * must be one the router could fire for Factory work in *this* project, so a
+ * project's administrator cannot write a reading about somebody else's pool.
+ */
+factoryRouter.post(
+  '/projects/:projectId/factory/allocation/:accountId/report',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const projectId = pathId(req, 'projectId');
+    await projectForFactory(projectId, 'write');
+    const accountId = pathId(req, 'accountId');
+    const percent: unknown = bodyOf(req)['remainingPercent'];
+    if (typeof percent !== 'number' || !Number.isInteger(percent) || percent < 0 || percent > 100) {
+      throw badRequest('`remainingPercent` must be a whole number from 0 to 100.');
+    }
+    const view = await factoryAllocation({ projectId, canReport: true });
+    if (!view.repositories.some((repo) => repo.accounts.some((account) => account.id === accountId))) {
+      throw notFound('No such account in this Factory pool.');
+    }
+    return {
+      report: await recordAllowanceReport({
+        accountId,
+        remainingPercent: percent,
+        reportedBy: principal.id,
+        projectId,
+      }),
+    };
   }),
 );
 

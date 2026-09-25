@@ -19,6 +19,7 @@ import { surfaceIneligibility, type RoutingCandidate } from './router.ts';
 import type { FleetAccount, FleetPolicy } from '../../domain/types.ts';
 import { getWorker, getWorkerRouting, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { derivedFamiliesFrom } from '../bins/routing.ts';
+import { latestAllowanceReports } from '../../repos/allowance.ts';
 
 /**
  * How long a sent activation counts as in flight.
@@ -123,11 +124,12 @@ export async function inFlightByRoutine(nowMs: number): Promise<Map<string, numb
  */
 export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
   const nowIso = now.toISOString();
-  const [accounts, routines, fleetPolicy, perRoutine] = await Promise.all([
+  const [accounts, routines, fleetPolicy, perRoutine, allowanceReports] = await Promise.all([
     listAccounts(),
     listRoutines(),
     currentPolicy('FLEET', null),
     inFlightByRoutine(now.getTime()),
+    latestAllowanceReports(),
   ]);
 
   const accountById = new Map<string, FleetAccount>(accounts.map((a) => [a.id, a]));
@@ -203,6 +205,7 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
       accountInFlight: perAccount.get(account.id) ?? 0,
       routineTarget: routinePolicy ? effectiveTarget(routinePolicy, nowIso).target : null,
       accountTarget: accountPolicy ? effectiveTarget(accountPolicy, nowIso).target : null,
+      allowanceReport: allowanceReports.get(account.id) ?? null,
     });
   }
 

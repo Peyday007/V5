@@ -29,7 +29,7 @@
  * firing at a surface whose provider told us to wait, or beyond a target the
  * operator set, spends that resource to be told something the rows already say.
  */
-import type { Bin, FleetAccount, FleetPolicy, FleetRoutine } from '../../domain/types.ts';
+import type { AllowanceReport, Bin, FleetAccount, FleetPolicy, FleetRoutine } from '../../domain/types.ts';
 import { familyOf, repositoryIdOf } from '../bins/routing.ts';
 
 /** Why no Routine was chosen. A closed set, because each one has its own fix. */
@@ -247,6 +247,8 @@ export interface RoutingCandidate {
   accountInFlight: number;
   routineTarget: number | null;
   accountTarget: number | null;
+  /** A person's timestamped gauge reading, never a measured provider balance. */
+  allowanceReport?: AllowanceReport | null;
 }
 
 export interface RoutingInput {
@@ -364,6 +366,22 @@ function servesProject(candidate: RoutingCandidate, projectId: string): boolean 
   return candidate.servesProjects.includes(projectId);
 }
 
+/**
+ * Whether this surface is *in scope* for this bin — project, family,
+ * repository, capabilities and pin — ignoring health, cooldowns and targets.
+ *
+ * The same four predicates `routeBin` asks, in its order, so a reader listing
+ * "the accounts that could take this work" (Build's allocation card) cannot
+ * disagree with the fire about which accounts those are.
+ */
+export function servesBinScope(candidate: RoutingCandidate, bin: Bin): boolean {
+  if (bin.pinnedRoutineId && candidate.routine.id !== bin.pinnedRoutineId) return false;
+  return servesProject(candidate, bin.projectId) &&
+    servesFamily(candidate, familyOf(bin)) &&
+    servesRepository(candidate, repositoryIdOf(bin)) &&
+    capable(candidate.routine, requiredCapabilities(bin));
+}
+
 function capable(routine: FleetRoutine, required: string[]): boolean {
   if (required.length === 0) return true;
   const has = new Set(routine.capabilities);
@@ -389,7 +407,10 @@ function requiredCapabilities(bin: Bin): string[] {
  *
  * The ordering is deliberate and is the fairness rule: among surfaces that are
  * eligible at all, prefer the one with the most headroom *relative to its own
- * target*, and break ties on the least recently fired. Absolute headroom would
+ * target*, and break ties on the least recently fired. When *every* eligible
+ * account has a recent gauge report, prefer the higher reported remaining
+ * percentage first. Missing or old reports never become an invented zero.
+ * Absolute headroom would
  * send everything to the biggest account until it filled; relative headroom
  * spreads load in proportion to what each surface was configured to carry, and
  * the recency tiebreak stops two equally idle surfaces from having one of them
@@ -696,7 +717,15 @@ export function routeBin(input: RoutingInput): RoutingResult {
     };
   }
 
+  const comparableAllowance = eligible.every((one) =>
+    freshAllowancePercent(one.allowanceReport, now) !== null,
+  );
   eligible.sort((a, b) => {
+    if (comparableAllowance) {
+      const remaining = freshAllowancePercent(b.allowanceReport, now)! -
+        freshAllowancePercent(a.allowanceReport, now)!;
+      if (remaining !== 0) return remaining;
+    }
     const headroom = relativeHeadroom(b) - relativeHeadroom(a);
     if (Math.abs(headroom) > 1e-9) return headroom;
     // Least recently fired first, so two idle surfaces alternate rather than
@@ -717,8 +746,27 @@ export function routeBin(input: RoutingInput): RoutingResult {
     reason:
       `Selected ${chosen.routine.name} on ${chosen.account.name}: ` +
       `${chosen.routineInFlight}/${chosen.routineTarget ?? '∞'} on the Routine, ` +
-      `${chosen.accountInFlight}/${chosen.accountTarget ?? '∞'} on the account.`,
+      `${chosen.accountInFlight}/${chosen.accountTarget ?? '∞'} on the account.` +
+      (comparableAllowance
+        ? ` Compared fresh person-reported balances; ${chosen.account.name} reported ` +
+          `${freshAllowancePercent(chosen.allowanceReport, now)}% remaining.`
+        : ' Remaining allowance was not compared, because not every eligible account has a ' +
+          'person-reported reading from the last six hours; chose on measured headroom.'),
   };
+}
+
+/** A report informs ranking for six hours. It cannot establish provider usage. */
+export const ALLOWANCE_REPORT_MAX_AGE_MS = 6 * 60 * 60_000;
+
+export function freshAllowancePercent(
+  report: AllowanceReport | null | undefined,
+  now: string,
+): number | null {
+  if (!report || !Number.isInteger(report.remainingPercent) ||
+      report.remainingPercent < 0 || report.remainingPercent > 100) return null;
+  const age = Date.parse(now) - Date.parse(report.reportedAt);
+  return Number.isFinite(age) && age >= 0 && age <= ALLOWANCE_REPORT_MAX_AGE_MS
+    ? report.remainingPercent : null;
 }
 
 /**
