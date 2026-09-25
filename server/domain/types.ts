@@ -5131,6 +5131,16 @@ export interface FleetAccountRow {
   updated_at: string;
 }
 
+/**
+ * A person's reading of a Claude usage gauge: PERSON-REPORTED, never measured.
+ * Brain cannot see a subscription balance and never derives one from fires.
+ */
+export interface AllowanceReport {
+  accountId: string;
+  remainingPercent: number;
+  reportedAt: string;
+}
+
 /** Append-only person-supplied gauge reading, separate from provider telemetry. */
 export interface FleetAllowanceReportRow {
   id: string;

@@ -29,9 +29,8 @@
  * firing at a surface whose provider told us to wait, or beyond a target the
  * operator set, spends that resource to be told something the rows already say.
  */
-import type { Bin, FleetAccount, FleetPolicy, FleetRoutine } from '../../domain/types.ts';
+import type { AllowanceReport, Bin, FleetAccount, FleetPolicy, FleetRoutine } from '../../domain/types.ts';
 import { familyOf, repositoryIdOf } from '../bins/routing.ts';
-import type { AllowanceReport } from '../../repos/allowance.ts';
 
 /** Why no Routine was chosen. A closed set, because each one has its own fix. */
 export type RoutingRefusal =
@@ -365,6 +364,22 @@ function servesRepository(candidate: RoutingCandidate, repository: string | null
 function servesProject(candidate: RoutingCandidate, projectId: string): boolean {
   if (!Array.isArray(candidate.servesProjects)) return false;
   return candidate.servesProjects.includes(projectId);
+}
+
+/**
+ * Whether this surface is *in scope* for this bin — project, family,
+ * repository, capabilities and pin — ignoring health, cooldowns and targets.
+ *
+ * The same four predicates `routeBin` asks, in its order, so a reader listing
+ * "the accounts that could take this work" (Build's allocation card) cannot
+ * disagree with the fire about which accounts those are.
+ */
+export function servesBinScope(candidate: RoutingCandidate, bin: Bin): boolean {
+  if (bin.pinnedRoutineId && candidate.routine.id !== bin.pinnedRoutineId) return false;
+  return servesProject(candidate, bin.projectId) &&
+    servesFamily(candidate, familyOf(bin)) &&
+    servesRepository(candidate, repositoryIdOf(bin)) &&
+    capable(candidate.routine, requiredCapabilities(bin));
 }
 
 function capable(routine: FleetRoutine, required: string[]): boolean {
@@ -735,7 +750,8 @@ export function routeBin(input: RoutingInput): RoutingResult {
       (comparableAllowance
         ? ` Compared fresh person-reported balances; ${chosen.account.name} reported ` +
           `${freshAllowancePercent(chosen.allowanceReport, now)}% remaining.`
-        : ' Remaining subscription balances are incomplete or old; used measured headroom.'),
+        : ' Remaining allowance was not compared, because not every eligible account has a ' +
+          'person-reported reading from the last six hours; chose on measured headroom.'),
   };
 }
 

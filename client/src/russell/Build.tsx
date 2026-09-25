@@ -154,7 +154,15 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
   );
 }
 
-function Allocation({ projectId, allocation, loading, error, onReload }: {
+/**
+ * Which Factory account gets the next task, and what each has done.
+ *
+ * Every sentence about the choice is the router's own (`explanation`); the
+ * card composes none. Measured activity and a reported allowance are labelled
+ * as what they are, because a percentage a person typed in and a count Brain
+ * recorded are different kinds of fact.
+ */
+function Allocation({ projectId, allocation: initial, loading, error, onReload }: {
   projectId: string | null;
   allocation: FactoryAllocation | null;
   loading: boolean;
@@ -164,9 +172,29 @@ function Allocation({ projectId, allocation, loading, error, onReload }: {
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [tested, setTested] = useState<{ view: FactoryAllocation; at: string } | null>(null);
+  const [testing, setTesting] = useState(false);
+  // A test result is newer than what the repository list carried until that
+  // list is read again, which a report or a reload does.
+  useEffect(() => { setTested(null); }, [initial]);
+  const allocation = tested?.view ?? initial;
+
+  async function test(): Promise<void> {
+    if (!projectId) return;
+    setTesting(true);
+    setProblem(null);
+    try {
+      const view = await FactoryApi.allocation(projectId);
+      setTested({ view, at: new Date().toLocaleTimeString() });
+    } catch (cause) {
+      setProblem(cause instanceof Error ? cause.message : 'Could not read the routing choice.');
+    } finally {
+      setTesting(false);
+    }
+  }
 
   async function report(accountId: string): Promise<void> {
-    const raw = values[accountId] ?? '';
+    const raw = (values[accountId] ?? '').trim();
     if (!/^\d{1,3}$/.test(raw) || Number(raw) > 100 || !projectId) {
       setProblem('Enter a whole percentage from 0 to 100.');
       return;
@@ -184,51 +212,81 @@ function Allocation({ projectId, allocation, loading, error, onReload }: {
     }
   }
 
+  const hours = allocation?.reportExpiresAfterHours ?? 6;
   return (
     <section className="rs-card rs-factory-allocation">
       <h3>Factory account allocation</h3>
       <p className="rs-hint">
-        Brain automatically chooses an eligible account for each new Factory task. It measures
-        fires, arrivals and provider refusals; these are not a subscription balance. A remaining
-        percentage comes from the account holder’s Claude usage screen and expires after six hours.
-        When every eligible account has a fresh report, Brain prefers more remaining allowance;
-        otherwise it uses its measured headroom and recent activity. A provider cooldown always wins.
+        Brain chooses an eligible account for each new Factory task by itself. Fires, arrivals and
+        provider refusals are measured by Brain; they are not a subscription balance. A remaining
+        percentage is <em>reported</em> by a person from the account holder’s Claude usage screen
+        and stops counting after {hours} hours. When every eligible account has a fresh report,
+        Brain prefers the one with more remaining; otherwise it uses measured headroom. Cooldowns,
+        account health and concurrency limits always decide first.
       </p>
-      <button type="button" onClick={onReload} disabled={loading}>
-        Test next routing choice
+      <button type="button" onClick={() => { void test(); }} disabled={testing || !projectId}>
+        {testing ? 'Testing…' : 'Test next routing choice'}
       </button>
-      <p className="rs-hint">This preview reads the router’s decision. It does not fire a Routine.</p>
+      <p className="rs-hint">
+        This asks the dispatcher’s own routing decision. It does not fire a Routine.
+        {tested ? ` Tested at ${tested.at}.` : ''}
+      </p>
       {loading && !allocation ? <p className="rs-hint">Reading Factory capacity…</p> : null}
-      {error ? <p role="alert">Could not read allocation: {error.message} <button type="button" onClick={onReload}>Try again</button></p> : null}
+      {error && !allocation ? (
+        <p role="alert">
+          Could not read allocation: {error.message}{' '}
+          <button type="button" onClick={onReload}>Try again</button>
+        </p>
+      ) : null}
       {problem ? <p role="alert">{problem}</p> : null}
       {allocation?.repositories.map((repo) => (
         <div className="rs-allocation-repository" key={repo.grantId}>
           <h4>{repo.remote.replace('https://github.com/', '')}</h4>
-          {repo.accounts.length === 0 ? <p className="rs-hint">No Factory accounts are configured for this repository yet.</p> : (
+          {repo.accounts.length === 0 ? (
+            <p className="rs-hint">No Factory account can take work for this repository in this project yet.</p>
+          ) : (
             <>
-              <p className="rs-hint">
-                Next task: <strong>{repo.accounts.find((account) => account.id === repo.nextAccountId)?.name ?? 'waiting for capacity'}</strong>.{' '}
-                {repo.explanation}
+              <p>
+                Next task goes to:{' '}
+                <strong>
+                  {repo.accounts.find((account) => account.id === repo.nextAccountId)?.name ??
+                    'nobody right now'}
+                </strong>
               </p>
+              <p className="rs-hint">{repo.explanation}</p>
               <ul className="rs-allocation-accounts">
                 {repo.accounts.map((account) => (
                   <li key={account.id}>
-                    <strong>{account.name}</strong>{' — '}
-                    {account.remainingPercent === null ? 'balance unknown'
-                      : `${account.remainingPercent}% reported remaining${account.reportFresh ? '' : ' (old)'}`}
-                    {account.reportedAt ? `, reported ${new Date(account.reportedAt).toLocaleString()}` : ''}
-                    <span className="rs-hint">
-                      {' · '}Last 24 hours in this project: {account.fires} fires, {account.arrivals} arrivals,
-                      {' '}{account.providerRefusals} provider refusals.
-                    </span>
+                    <strong>{account.name}</strong>
+                    {account.id === repo.nextAccountId ? ' (next)' : ''}
+                    <div>
+                      Reported remaining:{' '}
+                      {account.remainingPercent === null
+                        ? 'not reported'
+                        : `${account.remainingPercent}%${account.reportFresh ? '' : ` (older than ${hours} hours, not used)`}`}
+                      {account.reportedAt ? `, reported ${new Date(account.reportedAt).toLocaleString()}` : ''}
+                    </div>
+                    <div className="rs-hint">
+                      Measured, last {allocation.windowHours} hours in this project: {account.fires} fires,{' '}
+                      {account.arrivals} arrivals, {account.providerRefusals} provider refusals.
+                    </div>
+                    {account.unavailable ? (
+                      <div className="rs-hint">Not available now: {account.unavailable}</div>
+                    ) : null}
                     {allocation.canReport ? (
                       <form onSubmit={(event) => { event.preventDefault(); void report(account.id); }}>
                         <label>
                           Remaining allowance shown in Claude (%)
-                          <input type="number" min="0" max="100" step="1" value={values[account.id] ?? ''}
-                            onChange={(event) => setValues((prior) => ({ ...prior, [account.id]: event.target.value }))} />
+                          <input
+                            type="number" min="0" max="100" step="1" inputMode="numeric"
+                            value={values[account.id] ?? ''}
+                            onChange={(event) =>
+                              setValues((prior) => ({ ...prior, [account.id]: event.target.value }))}
+                          />
                         </label>
-                        <button type="submit" disabled={busy !== null}>Save reading</button>
+                        <button type="submit" disabled={busy !== null}>
+                          {busy === account.id ? 'Saving…' : 'Save reading'}
+                        </button>
                       </form>
                     ) : null}
                   </li>

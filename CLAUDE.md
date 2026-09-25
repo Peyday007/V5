@@ -1418,6 +1418,23 @@ property became an optional tier.
 **Never infer fleet capacity from account count.** Throughput is measured per
 account, Routine, workload class and reset period, or it is reported as unknown.
 
+**A remaining allowance is reported by a person, and it is labelled that way
+everywhere.** Brain cannot see a Claude subscription balance, so
+`fleet_allowance_reports` (`096_fleet_allowance_reports.sql`, pg
+`087_fleet_allowance_reports.sql`) holds what an account holder's usage screen
+said, who typed it and when — append-only, and never derived from fires. It
+enters routing in exactly one place: `routeBin`'s ordering, and only when
+**every** eligible surface has a report from the last six hours, because
+comparing one account's reading against another's silence would be an unknown
+read as a favourable assumption. It is a preference *after* eligibility —
+account and Routine state, cooldowns and targets decide first and a high report
+overrides none of them. Build's allocation card
+(`services/factory/allocation.ts`) is `routeBin` over the tick's own snapshot
+and a probe bin nothing writes, lists accounts by the router's own
+`servesBinScope`, and counts fires, arrivals and provider refusals from
+`bin_events` — so the preview cannot name an account the dispatcher would not,
+and asking fires nothing.
+
 **Two accounts are registered live with distinct credential digests, and Brain
 has fired both.** `primary` / `V1` runs the same trigger Step 10 used;
 `friend-2` / `V2` is registered under its own deployment secret. As of

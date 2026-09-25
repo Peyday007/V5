@@ -284,7 +284,11 @@ factoryRouter.get(
   }),
 );
 
-/** Read the next Factory routing choice and each account's observed activity. */
+/**
+ * Which Factory account the dispatcher would fire next, and what each account
+ * has measurably done. A read: `routeBin` over the tick's own snapshot, with a
+ * probe bin that is never written, so asking fires nothing.
+ */
 factoryRouter.get(
   '/projects/:projectId/factory/allocation',
   handler(async (req) => {
@@ -296,16 +300,20 @@ factoryRouter.get(
   }),
 );
 
-/** A project administrator records what the account holder's gauge actually says. */
+/**
+ * Record what an account holder's Claude usage screen says is left.
+ *
+ * ADMIN by `services/identity/policy.ts`, so a member is refused by
+ * `projectForFactory` with the same body a missing project gets. The account
+ * must be one the router could fire for Factory work in *this* project, so a
+ * project's administrator cannot write a reading about somebody else's pool.
+ */
 factoryRouter.post(
   '/projects/:projectId/factory/allocation/:accountId/report',
   handler(async (req) => {
     const principal = requirePerson();
     const projectId = pathId(req, 'projectId');
     await projectForFactory(projectId, 'write');
-    if (!decideProjectAccess(currentPrincipal(), projectId, 'ADMIN').allowed) {
-      throw notFound('No such route.');
-    }
     const accountId = pathId(req, 'accountId');
     const percent: unknown = bodyOf(req)['remainingPercent'];
     if (typeof percent !== 'number' || !Number.isInteger(percent) || percent < 0 || percent > 100) {
@@ -315,12 +323,14 @@ factoryRouter.post(
     if (!view.repositories.some((repo) => repo.accounts.some((account) => account.id === accountId))) {
       throw notFound('No such account in this Factory pool.');
     }
-    return { report: await recordAllowanceReport({
-      accountId,
-      remainingPercent: percent,
-      reportedBy: principal.id,
-      projectId,
-    }) };
+    return {
+      report: await recordAllowanceReport({
+        accountId,
+        remainingPercent: percent,
+        reportedBy: principal.id,
+        projectId,
+      }),
+    };
   }),
 );
 

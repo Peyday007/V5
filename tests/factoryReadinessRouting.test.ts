@@ -37,7 +37,8 @@ import {
   setAccountState,
   setRoutineState,
 } from '../server/repos/fleet.ts';
-import { createBin, getBin } from '../server/repos/bins.ts';
+import { createBin, getBin, recordBinEvent } from '../server/repos/bins.ts';
+import { getDb } from '../server/db/database.ts';
 import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
 import { recordAllowanceReport } from '../server/repos/allowance.ts';
@@ -161,26 +162,72 @@ async function both(projectId = fixture.project.id) {
 }
 
 describe('Build previews the same account allocation as the dispatcher', () => {
-  it('routes from 40/100 reports, then around a provider refusal without firing a probe', async () => {
+  /** The preview, and the dispatcher's own decision about a real units bin. */
+  async function previewAndFire() {
+    const view = await factoryAllocation({ projectId: fixture.project.id, canReport: true });
+    const repo = view.repositories.find((one) => one.grantId === GRANT().id)!;
+    const snapshot = await fleetSnapshot();
+    const decision = routeBin({
+      bin: await unitsBin(),
+      candidates: snapshot.candidates,
+      fleetPolicy: snapshot.fleetPolicy,
+      fleetInFlight: snapshot.fleetInFlight,
+      now: new Date().toISOString(),
+    });
+    expect(repo.nextAccountId).toBe(decision.ok ? decision.account.id : null);
+    return repo;
+  }
+
+  it('routes from 40/100 reports, then around a provider refusal, without firing anything', async () => {
     const workerId = await onboard();
     const owner = await surface(workerId, { label: 'owner' });
     const friend = await surface(workerId, { label: 'friend' });
+    const dispatchesBefore = (await getDb().get<{ n: number }>('SELECT COUNT(*) AS n FROM bin_dispatch'))!.n;
+
     await recordAllowanceReport({ accountId: owner.account.id, remainingPercent: 40,
       reportedBy: actor.id, projectId: fixture.project.id });
     await recordAllowanceReport({ accountId: friend.account.id, remainingPercent: 100,
       reportedBy: actor.id, projectId: fixture.project.id });
-    const view = await factoryAllocation({ projectId: fixture.project.id, canReport: true });
-    const repo = view.repositories.find((one) => one.grantId === GRANT().id)!;
+    const repo = await previewAndFire();
     expect(repo.nextAccountId).toBe(friend.account.id);
+    expect(repo.explanation).toMatch(/person-reported/);
     expect(repo.accounts.map((one) => [one.id, one.remainingPercent])).toEqual(
       expect.arrayContaining([[owner.account.id, 40], [friend.account.id, 100]]),
     );
     expect(repo.accounts.every((one) => one.fires === 0 && one.arrivals === 0)).toBe(true);
+
+    // A cooldown always wins over a higher reported allowance.
     await recordAccountRefusal({ accountId: friend.account.id, reason: 'provider asked to wait',
       retryAt: new Date(Date.now() + 60_000).toISOString() });
-    const after = await factoryAllocation({ projectId: fixture.project.id, canReport: true });
-    expect(after.repositories.find((one) => one.grantId === GRANT().id)?.nextAccountId)
-      .toBe(owner.account.id);
+    const after = await previewAndFire();
+    expect(after.nextAccountId).toBe(owner.account.id);
+    expect(after.accounts.find((one) => one.id === friend.account.id)?.unavailable)
+      .toMatch(/rate limited/);
+
+    // Nothing was fired, claimed or queued to answer either question.
+    const dispatchesAfter = (await getDb().get<{ n: number }>('SELECT COUNT(*) AS n FROM bin_dispatch'))!.n;
+    expect(Number(dispatchesAfter)).toBe(Number(dispatchesBefore));
+  });
+});
+
+describe('the allocation counts are read from bin_events, never inferred', () => {
+  it('counts fires, arrivals at the next generation and provider refusals, per account', async () => {
+    const workerId = await onboard();
+    const counted = await surface(workerId, { label: 'counted' });
+    const bin = await unitsBin();
+    const common = { binId: bin.id, projectId: fixture.project.id, accountId: counted.account.id,
+      routineId: counted.routine.id, workloadClass: 'FACTORY_UNIT' };
+    // Two fires; only the first one's bin was then taken by a session.
+    await recordBinEvent({ ...common, eventType: 'DISPATCH_SENT', leaseGeneration: 0 });
+    await recordBinEvent({ binId: bin.id, projectId: fixture.project.id, eventType: 'BIN_ASSIGNED', leaseGeneration: 1 });
+    await recordBinEvent({ ...common, eventType: 'DISPATCH_SENT', leaseGeneration: 5 });
+    await recordBinEvent({ ...common, eventType: 'PROVIDER_ALLOWANCE' });
+
+    const view = await factoryAllocation({ projectId: fixture.project.id, canReport: false });
+    const row = view.repositories.find((one) => one.grantId === GRANT().id)!
+      .accounts.find((one) => one.id === counted.account.id)!;
+    expect(row).toMatchObject({ fires: 2, arrivals: 1, providerRefusals: 1, remainingPercent: null });
+    expect(row.reportFresh).toBe(false);
   });
 });
 

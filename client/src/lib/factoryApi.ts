@@ -120,9 +120,14 @@ export interface CampaignDetail {
   openFindings: FactoryFinding[];
 }
 
+/**
+ * Build's account allocation. `fires`, `arrivals` and `providerRefusals` are
+ * measured by Brain; `remainingPercent` is PERSON-REPORTED from the account
+ * holder's Claude usage screen and is never derived from fires.
+ */
 export interface FactoryAllocation {
-  windowHours: 24;
-  reportExpiresAfterHours: 6;
+  windowHours: number;
+  reportExpiresAfterHours: number;
   canReport: boolean;
   repositories: {
     grantId: string;
@@ -138,6 +143,8 @@ export interface FactoryAllocation {
       fires: number;
       arrivals: number;
       providerRefusals: number;
+      /** Why the router would not fire this account right now, or null. */
+      unavailable: string | null;
     }[];
   }[];
 }

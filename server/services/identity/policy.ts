@@ -296,6 +296,11 @@ const OVERRIDES: Override[] = [
   // authority as onboarding's own invitation, reading and withdrawing included:
   // who has been sent a link is part of deciding who gets the next one.
   { pattern: /^\/api\/projects\/[^/]+\/factory\/repositories\/[^/]+\/invitations(\/[^/]+\/withdraw)?$/, level: 'ADMIN' },
+  // Recording what an account holder's Claude usage gauge says changes which
+  // account the dispatcher prefers, so it is the pool's administrator's to say —
+  // the same authority as inviting an account into that pool. Reading the
+  // allocation takes the default: it is the same fleet reading Build already shows.
+  { pattern: /^\/api\/projects\/[^/]+\/factory\/allocation\/[^/]+\/report$/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/russell\/projects\/[^/]+\/sites/, method: 'GET', level: 'READ' },
 
   // ---------------------------------------------------------------------
