@@ -1,85 +1,83 @@
 # Factory run record — 2026-09-25, Airyn-first
 
-This is a record of one operator session. It is not project state: the Brain is
-authoritative, and every line below names the read it was taken from so it can
-be checked again.
+This records one operator session. It is not project state: Brain is
+authoritative, and every claim below names the reading or code location it
+comes from.
 
-## Routing override (temporary)
+## Routing override (temporary, still in force)
 
-- **What changed:** `fleet set-target --scope ROUTINE --ref trig_01JN1h6UdhvR3bMpWFvaRbD2 --target 0`
-  (Factory surface 1, account *Brain Research A*). Recorded as `fleet_policy`
-  version 1 for that Routine, actor `operator:fleet-cli`, 2026-09-25T17:58:09Z,
-  with the reason on the row.
-- **Effect, read back:** `factory allocation` → `next task -> Airyn
-  (acct_a5bac7f8350840f9bdbc)`, *Selected Factory surface 2 on Airyn*; Factory
-  surface 1 reads *routine at target 0/0*.
-- **What did not change:** no lease was touched; no research Routine, account
-  target, fleet target or routing row was written. Factory surface 1 is a
-  repository-capability Routine that serves no research.
-- **What was there before:** Factory surface 1 had **no** Routine-level policy
-  (dry run printed `— -> 0`); it was bounded only by its account target of 4.
-- **Caveat:** a target of 0 excludes the surface, so this is Airyn-*only* for V5
-  Factory work, not Airyn-then-fallback. The router has no preferred-account
-  knob. The only other ordering input, person-reported allowance, is a reading a
-  person takes, and writing one to steer routing would record something nobody
-  saw.
-- **To remove it:** `Fleet` workflow, `command=set-target`, `scope=ROUTINE`,
-  `ref=trig_01JN1h6UdhvR3bMpWFvaRbD2`, `target=4`, with a reason. That matches
-  the old behaviour, because the account target of 4 was already the bound. The
-  version-1 row stays in the history.
-- **Airyn's surface, before the change:** `fleet verify-pool --repository
-  Peyday007/V5` → Factory surface 2 (Airyn) `PROVEN`: fired
-  2026-09-25T04:54:55Z, arrived as worker-10, assigned and completed
-  `bin_ed2fd51d47fb46c29670`.
+- **Change:** `fleet set-target --scope ROUTINE --ref trig_01JN1h6UdhvR3bMpWFvaRbD2 --target 0`
+  — Factory surface 1, under account *Brain Research A*. This is policy
+  version 1 for that Routine (actor `operator:fleet-cli`, 2026-09-25T17:58:09Z),
+  with the reason recorded on the row.
+- **Read back:** `factory allocation` → `next task -> Airyn`, *Selected Factory
+  surface 2 on Airyn*.
+- **Airyn's surface:** `verify-pool` reports PROVEN (it completed
+  `bin_ed2fd51d47fb46c29670`).
+- **Scope:** no lease was touched and no research routing was changed.
+- **This is Airyn-only, not Airyn-first-with-fallback.** The router has no
+  preferred-account setting. Its only other ordering input is a person's
+  allowance report, and it would be false to enter one that nobody made.
+- **To remove:** run the `Fleet` workflow with `set-target`, `scope=ROUTINE`,
+  `ref=trig_01JN1h6UdhvR3bMpWFvaRbD2`, `target=4`, and a reason. Before the
+  override the Routine had no Routine-level policy and was bounded by its
+  account target of 4, so this restores the old behaviour.
 
-## The live Factory backlog, as read
+## Unfinished code builds in V5 — inventory
 
-| Source | Read | Unfinished and executable |
-|---|---|---|
-| Factory campaigns | `factory campaigns` | none. `fcp_76e5…` (#38), `fcp_189e…` (#31) and `fcp_84a5…` (oakwood #1) are COMPLETE; `fcp_bd17…` and `fcp_05bc…` were CANCELLED ("retired by an operator; the work is obsolete"); `fcp_bb1f…` is a verification beacon |
-| Change requests | `goals show` → UNFILED | none. All six are `APPROVED`, each has a campaign listed above, and none is `DRAFT` |
-| Realization packets | `capability packets` | none. See below |
-| Open V5 pull requests | GitHub | #3, #23, #30, #35, #36, #37 come from interactive sessions, not Factory campaigns. Merging is a person's decision, and none of them has a Factory objective to resume |
+This lists software builds only. Research backlog was used as evidence and is
+not counted as a build. Sources: three read-only code surveys, `cash-report`,
+`goals show`, `capability packets`, `fleet show`, and a direct reading of the
+cited files.
 
-### Realization packets: every one is skipped, with the reason
+| # | Build | Health | What is missing (code) | Magnitude | Disposition | Factory now? |
+|---|---|---|---|---|---|---|
+| 1 | Ideas map privacy | broken (live) | `ideaMapForProject` (russell/ideas.ts) lists every candidate. `requireCandidate` (routes/russell.ts:199) refuses PRIVATE ideas from threads the caller cannot read. The map therefore shows other members' private idea titles and statements. | small | FINISH | **yes — objective filed** |
+| 2 | Work-register attestation integrity | broken (live) | The link route stores the caller's `detail`. `readAttested` trusts `attestedBy/attestedAt/merged/verifiedLive` from it (register/resolve.ts:333), so anyone with write access can make a workstream read VERIFIED_LIVE and a goal read delivered. | small | FINISH | **yes — objective filed** |
+| 3 | Atomic kernel round opening | broken (latent) | Six places create a Russell candidate and then insert a round with `ON CONFLICT DO NOTHING`. A losing insert leaves a paid, launched candidate that no round reads: industry, manufacturing, dealflow, puzzle and labor `expand.ts`, plus cash discovery. | small–medium | FINISH | **yes — objective filed** |
+| 4 | Bridge bearer authority scope | working, over-broad (security) | A `brnc_` key resolves to a full HUMAN principal with every project role (authenticate.ts:276). It can therefore approve Factory objectives and releases, grant authority, and issue site credentials. | small | NEEDS DECISION (which routes a chat key may reach) | no — `server/services/identity/**` is forbidden to Factory; a person must make this change |
+| 5 | Cash: the "Brain acts" branch records unperformed effects | broken (latent) | `advanceWithinAuthority` (cash/operate.ts:636) writes `performedBy: BRAIN, "Reached …"` as soon as a capability reads PRESENT, with no external call and no `services/effects` receipt. That violates invariants 25–26. It is latent only because all five integrations read MISSING. | medium | FINISH | yes (needs a `perform` hook plus UNCERTAIN handling) |
+| 6 | Cash: commercial actions after execution | partial | `recordAction` has one caller: the first action inside `beginExecution`. `QUOTE_AND_INVOICE` and the others cannot be recorded later, so dealflow's QUOTING stage is unreachable. | small–medium | FINISH | yes |
+| 7 | Cash: controls missing for existing server routes | partial | No client calls commit/settle a spend commitment (routes/cash.ts:955, 992), `reoffer`/`exhaust`/`archive` (:847–895), or monetization SEED/LINK/MERGE/UNMERGE/SPLIT/compare (:1653, :1939–2028). LINK is the only writer of a blocking edge. | small each | FINISH | yes (one objective per group) |
+| 8 | Bridge UI | partial | Every bridge route exists; `BridgeApi` (registerApi.ts:95) has no caller. The docs tell the owner to mint a credential with a raw POST. | small | FINISH **after #4** (a UI minting over-broad keys amplifies #4) | blocked on #4 |
+| 9 | Russell: ideas parked for missing authority never resume | partial | `unjudged()` requires `priority IS NULL` (russell/loop.ts:2770). Only Cash and the person-override path re-judge. Recorded in STEP-12B-BACKLOG.md:311. | small | FINISH | yes |
+| 10 | Fleet auto-scale switch | broken (declared, unreachable) | `fleet_policy.auto_scale` is written. `proposeScale` is read only by `fleet scale-advice`, which prints. The dispatch loop never applies it. | medium | NEEDS DECISION (wire it, or refuse the flag) | no |
+| 11 | Kernel operator surfaces (puzzle, industry, dealflow, design) | partial | Routes exist under `/cash/{puzzles,industries,dealflow}`, but no client calls them; the design kernel has no route. Labor and Machines already closed this same gap. | medium each | FINISH (puzzle first) | yes |
+| 12 | Capability realization state mover | partial / stalled | `packet.advance` has no production caller, so every packet stays DRAFT for ever. Gap readings are terminal-only. | medium | NEEDS DECISION (terminal semantics are explicitly undecided, §37) | no |
+| 13 | Research Intelligence reader | working, no reader | `GET /research/:id/intelligence` is read only by verify-hosted. | small | FINISH | yes |
+| 14 | PR #36 — software change delivered back into the conversation | coded, unmerged | The Authorize card sent no acceptance conditions, so every Authorize was refused. Its fix and delivery-back live on the branch. | done (review + merge) | NEEDS DECISION (person merges) | n/a |
+| 15 | PR #37 — human work coordination | coded, unmerged | Migration 094 / pg 085 collides with production; section number collides with #36. | small (renumber) + merge | MERGE after #36 | yes (renumber) |
+| 16 | PR #35 — puzzle kernel production fixes | coded, unmerged | `puzzle_rounds_unique` keys on nullable columns (the defect is still in production at 089:511); migration number collides. | small | FINISH (port) | yes |
+| 17 | PR #23 — commerce kernel | abandoned | 4,400 lines on a branch with no merge base; overlaps Cash and monetization. | large | NEEDS DECISION (default PAUSE) | no |
+| 18 | In-process provider research path | superseded in production | orchestrator/queue/runDynamicAudit/findings are reachable only with a provider, which production lacks. | — | NEEDS DECISION (keep for local mode or delete) | no |
+| 19 | Puzzle typesetting | missing | Every physical route is behind `TYPESET_FOR_PRINT`. | medium | NEEDS DECISION (output format, PDF library) | no |
+| — | PR #3, PR #30 | superseded | Branches with no merge base. #30's one unique fix is folded into #3 above. | — | KILL | — |
 
-- **Research Intelligence `rlp_ca981f0b0933427098b5`.** This is the only one
-  that compiles. Objective: *"Implement the 1 missing part(s) of Research
-  Intelligence … suggested experiments or simulations"* (gap
-  `rlg_c15e0c958d7d4e679c6f`, MUST_BE_BUILT). **Skipped: not executable.**
-  - `packet show` gives `Ready: no`. Seven design sections are unwritten:
-    TARGET_TOPOLOGY, INFORMATION_SUPPLY, KNOWLEDGE_COMPILATION,
-    COGNITIVE_CONTRACT, FACTORY_DEPENDENCIES, EVALUATION_GRAPH and
-    CAPABILITY_REGISTRATION. Brain declines to write any of them itself, because
-    a design filled in from a template would look the same as one somebody made.
-    `realize/advance.ts` hands off only a packet that passes that readiness
-    check.
-  - Its single acceptance condition, "the change serves this requirement", says
-    nothing checkable about what success means.
-  - Submitting and approving the compile output by hand would get around a
-    refusal Brain makes on purpose. It would also invent the design. Both are
-    outside the authorization given.
-  - Handing it off also requires the architecture-scope project to be onboarded
-    for V5. That is a person's action on Build. Filing it under Deal Dispatch
-    instead would change which project it belongs to.
-- **Simulation and Modeling `rlp_28c4eede67ea41b9b1dd`.** Sampled.
-  `packet compile` → refused: 13 gaps still need a reading and one needs a
-  person (*resource and authority constraints*).
-- **The other twelve packets.** The durable tick runs readiness and handoff on
-  every packet on every pass. None has produced a change request. By the
-  kernel's own rule, that means none has passed readiness.
+### Priority order and why
 
-## Outcome
+1. **#1 ideas-map privacy.** A live leak of other members' private content in a
+   Brain that now has several members. The rule already exists one route over,
+   so nothing is invented.
+2. **#2 register attestation.** A live integrity hole in the control plane that
+   is meant to become the first-class build and goal record. A goal can read
+   delivered on a typed claim.
+3. **#3 atomic kernel rounds.** A latent correctness defect that spends research
+   allowance on questions whose answers are discarded. It unblocks trust in six
+   kernels at once.
+4. **#5, #6, #7** Cash code (honest effects, then later actions, then controls).
+   Their current leverage is limited: production has 0 of 40 openings
+   qualified, so there is nothing ready for these controls to act on yet.
+5. **#9, #11, #13, #16**, then the NEEDS DECISION items.
 
-**State B.** No unfinished V5 Factory build is currently executable. Each
-recorded candidate is complete, retired, or blocked, and the reason is written
-above. No objective was submitted or approved, and nothing was invented.
+**Decisions only the owner can make:** #4 (bridge key scope — the most severe
+item, outside Factory's permitted paths), #10, #12, #14 (merge PR #36), #17, #18
+and #19.
 
-## What would unblock the next build
+## Factory state
 
-1. A person writes the seven design sections of `rlp_ca981f0b0933427098b5`
-   (or of another packet), and the architecture-scope project is onboarded for
-   V5 on Build. The durable tick then compiles the packet and records a DRAFT
-   change request. That is covered by this session's authorization to approve.
-2. Or a new objective arrives through Build, Russell, or `objectives/*.json`
-   followed by `factory submit`.
+- Objectives for #1–#3 are committed under `objectives/` on `production`
+  (`acbe345`) and are being deployed so that `factory submit` can read them
+  inside the image.
+- The plan is to submit and approve #1 into project Deal Dispatch, where V5 is
+  onboarded, route it to Airyn, and follow it to its pull request. Then take #2,
+  then #3.
