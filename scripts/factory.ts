@@ -54,6 +54,7 @@ import { runCampaign, tickAllCampaigns, tickCampaign } from '../server/services/
 import { campaignMetrics, FACTORY_EVENT_KINDS } from '../server/services/factory/metrics.ts';
 import { throughputReport } from '../server/services/factory/throughput.ts';
 import { pullRequestFor } from '../server/services/factory/pullRequest.ts';
+import { factoryAllocation } from '../server/services/factory/allocation.ts';
 import type { FactoryCapability, FactoryWorkerKind } from '../server/domain/factory.ts';
 import { campaignSpecFor } from '../server/services/factory/remote.ts';
 import {
@@ -116,6 +117,44 @@ async function main(): Promise<void> {
             `x${worker.maxConcurrency} ${worker.capabilities.join('/')} ` +
             `${worker.availability}${probe ? ` surface:${probe.ok ? 'ok' : 'unusable'}` : ''}\n`,
         );
+      }
+      break;
+    }
+
+    /*
+     * What Build's "Factory account allocation" card shows, read the same way:
+     * `routeBin` over the tick's snapshot with a probe bin nothing writes. It
+     * fires nothing and writes nothing. `--project` narrows it; without it,
+     * every project that has an in-scope Factory account is printed.
+     */
+    case 'allocation': {
+      const only = flagString(flags, 'project');
+      const projects = (await listProjects()).filter((project) => !only || project.id === only);
+      if (only && projects.length === 0) fail(`No project ${only}.`);
+      for (const project of projects) {
+        const view = await factoryAllocation({ projectId: project.id, canReport: false });
+        const repos = view.repositories.filter((repo) => only || repo.accounts.length > 0);
+        if (repos.length === 0) continue;
+        process.stdout.write(`project ${project.id} (${project.name})\n`);
+        for (const repo of repos) {
+          const next = repo.accounts.find((one) => one.id === repo.nextAccountId);
+          process.stdout.write(
+            `  ${repo.remote}\n    next task -> ${next ? `${next.name} (${next.id})` : 'nobody right now'}\n` +
+              `    router: ${repo.explanation}\n`,
+          );
+          for (const account of repo.accounts) {
+            const reported = account.remainingPercent === null
+              ? 'not reported'
+              : `${account.remainingPercent}% at ${account.reportedAt}${account.reportFresh ? '' : ' (stale, not used)'}`;
+            process.stdout.write(
+              `    ${account.name} ${account.id}\n` +
+                `      reported remaining (PERSON-REPORTED): ${reported}\n` +
+                `      measured last ${view.windowHours}h: fires=${account.fires} arrivals=${account.arrivals} ` +
+                `provider_refusals=${account.providerRefusals}\n` +
+                (account.unavailable ? `      not available now: ${account.unavailable}\n` : ''),
+            );
+          }
+        }
       }
       break;
     }
@@ -1100,7 +1139,7 @@ async function main(): Promise<void> {
 
     default:
       process.stdout.write(
-        'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
+        'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
           '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
           '  set-state,\n' +
           '  answer-bin,\n' +
