@@ -5131,6 +5131,15 @@ export interface FleetAccountRow {
   updated_at: string;
 }
 
+/** Append-only person-supplied gauge reading, separate from provider telemetry. */
+export interface FleetAllowanceReportRow {
+  id: string;
+  account_id: string;
+  remaining_percent: number;
+  reported_at: string;
+  reported_by: string;
+}
+
 /**
  * Whether an account is capacity somebody bought, or a verification fixture.
  *

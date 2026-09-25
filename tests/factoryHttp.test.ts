@@ -98,7 +98,7 @@ beforeAll(async () => {
   server = spawn(
     process.execPath,
     [
-      path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+      '--import', 'tsx',
       path.join(REPO_ROOT, 'server', 'index.ts'),
     ],
     {
@@ -215,6 +215,26 @@ describe('a caller with no credentials', () => {
       const result = await call(method, route, { body });
       expect([401, 403, 404], `${method} ${route}`).toContain(result.status);
     }
+  });
+});
+
+describe('Factory allocation', () => {
+  it('previews routing for an administrator without firing a Routine, and guards reports', async () => {
+    const path = `/api/projects/${projectId}/factory/allocation`;
+    const preview = await call<{ repositories: unknown[]; reportExpiresAfterHours: number }>(
+      'GET', path, { cookie: adminCookie },
+    );
+    expect(preview.status).toBe(200);
+    expect(preview.body.reportExpiresAfterHours).toBe(6);
+    expect(Array.isArray(preview.body.repositories)).toBe(true);
+    expect((await call('GET', path, { cookie: outsiderCookie })).status).toBe(404);
+    expect((await call('GET', path, { bearer: workerBearer })).status).toBe(404);
+    expect((await call('POST', `${path}/acct_made_up/report`, {
+      cookie: adminCookie, body: { remainingPercent: 40 },
+    })).status).toBe(404);
+    expect((await call('POST', `${path}/acct_made_up/report`, {
+      cookie: adminCookie, body: { remainingPercent: 105 },
+    })).status).toBe(400);
   });
 });
 

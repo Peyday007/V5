@@ -120,7 +120,41 @@ export interface CampaignDetail {
   openFindings: FactoryFinding[];
 }
 
+export interface FactoryAllocation {
+  windowHours: 24;
+  reportExpiresAfterHours: 6;
+  canReport: boolean;
+  repositories: {
+    grantId: string;
+    remote: string;
+    nextAccountId: string | null;
+    explanation: string;
+    accounts: {
+      id: string;
+      name: string;
+      remainingPercent: number | null;
+      reportedAt: string | null;
+      reportFresh: boolean;
+      fires: number;
+      arrivals: number;
+      providerRefusals: number;
+    }[];
+  }[];
+}
+
 export const FactoryApi = {
+  allocation: (projectId: string): Promise<FactoryAllocation> =>
+    api(`/api/projects/${encodeURIComponent(projectId)}/factory/allocation`),
+
+  reportAllowance: (
+    projectId: string, accountId: string, remainingPercent: number,
+  ): Promise<{ report: { accountId: string; remainingPercent: number; reportedAt: string } }> =>
+    api(
+      `/api/projects/${encodeURIComponent(projectId)}/factory/allocation/` +
+        `${encodeURIComponent(accountId)}/report`,
+      { method: 'POST', body: JSON.stringify({ remainingPercent }) },
+    ),
+
   /**
    * The repositories this factory may be pointed at.
    *
@@ -132,6 +166,8 @@ export const FactoryApi = {
     projectId: string,
   ): Promise<{
     repositories: RepositoryOnboarding[];
+    /** Same fleet snapshot as repository readiness, with account allocation. */
+    allocation?: FactoryAllocation;
     /** Whether this reader may connect another Claude account to a pool here. */
     mayConnectAccounts?: boolean;
     connectAccountsRefusal?: string | null;

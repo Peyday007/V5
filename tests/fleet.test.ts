@@ -16,6 +16,8 @@ import { freshProject } from './helpers.ts';
 import { assignNextBin, createBin, finishBin, getBin, listBinEvents } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
 import { createWorker, grantMembership } from '../server/repos/identity.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { latestAllowanceReports, recordAllowanceReport } from '../server/repos/allowance.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import {
   bindRoutineWorker,
@@ -392,6 +394,63 @@ describe('routing chooses on fleet state, and says why when it will not', () => 
     if (!result.ok) throw new Error('unreachable');
     // Never fired beats fired a minute ago.
     expect(result.account.name).toBe('a2');
+  });
+});
+
+describe('Factory allocation uses reported allowance only while it is comparable', () => {
+  const owner = (percent: number | null, reportedAt = NOW) => candidate(
+    { id: 'rtn_owner', lastFiredAt: null }, { id: 'acct_owner', name: 'owner' },
+    { allowanceReport: percent === null ? null : { accountId: 'acct_owner', remainingPercent: percent, reportedAt } },
+  );
+  const friend = (percent: number | null, reportedAt = NOW) => candidate(
+    { id: 'rtn_friend', lastFiredAt: NOW }, { id: 'acct_friend', name: 'friend' },
+    { allowanceReport: percent === null ? null : { accountId: 'acct_friend', remainingPercent: percent, reportedAt } },
+  );
+  const choose = (candidates: RoutingCandidate[]) => routeBin({
+    bin: binLike(), candidates, fleetPolicy: null, fleetInFlight: 0, now: NOW,
+  });
+
+  it('prefers 100% over 40% without changing either account target', () => {
+    const decision = choose([owner(40), friend(100)]);
+    expect(decision.ok).toBe(true);
+    if (decision.ok) {
+      expect(decision.account.id).toBe('acct_friend');
+      expect(decision.reason).toMatch(/person-reported balances/i);
+    }
+  });
+
+  it('falls back to fair headroom when one report is missing or older than six hours', () => {
+    for (const candidates of [
+      [owner(40), friend(null)],
+      [owner(40), friend(100, '2026-09-02T05:00:00.000Z')],
+    ]) {
+      const decision = choose(candidates);
+      expect(decision.ok).toBe(true);
+      if (decision.ok) expect(decision.account.id).toBe('acct_owner');
+    }
+  });
+
+  it('never overrides provider cooldown or account health with a high report', () => {
+    const cooling = friend(100);
+    cooling.account.retryAt = '2026-09-02T13:00:00.000Z';
+    expect(choose([owner(40), cooling])).toMatchObject({ ok: true, account: { id: 'acct_owner' } });
+    const quarantined = friend(100);
+    quarantined.routine.state = 'QUARANTINED';
+    expect(choose([owner(40), quarantined])).toMatchObject({ ok: true, account: { id: 'acct_owner' } });
+  });
+
+  it('retains the latest signed report and rejects invalid values', async () => {
+    const account = await createAccount({ name: 'factory-account' });
+    const user = await createUser({ email: 'allowance@example.test', displayName: 'Owner', password: 'fixture-password-123' });
+    await recordAllowanceReport({ accountId: account.id, remainingPercent: 40, reportedBy: user.id, projectId });
+    await recordAllowanceReport({ accountId: account.id, remainingPercent: 100, reportedBy: user.id, projectId });
+    expect((await latestAllowanceReports()).get(account.id)?.remainingPercent).toBe(100);
+    await expect(recordAllowanceReport({ accountId: account.id, remainingPercent: 101, reportedBy: user.id, projectId }))
+      .rejects.toThrow(/0 to 100/);
+    const rows = await getDb().all<{ remaining_percent: number }>(
+      'SELECT remaining_percent FROM fleet_allowance_reports WHERE account_id = ?', [account.id],
+    );
+    expect(rows).toHaveLength(2);
   });
 });
 

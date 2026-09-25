@@ -1974,6 +1974,38 @@ button.rs-card:hover {
   list-style: none;
 }
 
+.rs-allocation-repository {
+  border-top: 1px solid var(--rule);
+  padding-block: var(--gap-3);
+}
+
+.rs-allocation-accounts {
+  display: grid;
+  gap: var(--gap-3);
+  padding-left: var(--gap-4);
+}
+
+.rs-allocation-accounts li {
+  overflow-wrap: anywhere;
+}
+
+.rs-allocation-accounts form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--gap-2);
+  margin-top: var(--gap-2);
+}
+
+.rs-allocation-accounts label {
+  display: grid;
+  gap: var(--gap-1);
+}
+
+.rs-allocation-accounts input {
+  max-width: 8rem;
+}
+
 .rs-build-campaign {
   display: flex;
   flex-direction: column;

@@ -40,6 +40,8 @@ import {
 import { createBin, getBin } from '../server/repos/bins.ts';
 import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
+import { recordAllowanceReport } from '../server/repos/allowance.ts';
+import { factoryAllocation } from '../server/services/factory/allocation.ts';
 import { capacityReading } from '../server/services/fleet/capacity.ts';
 import { FACTORY_CAPABILITY, FACTORY_WRITE_CAPABILITY } from '../server/services/factory/remote.ts';
 import type { Bin, User } from '../server/domain/types.ts';
@@ -157,6 +159,30 @@ async function both(projectId = fixture.project.id) {
   expect(card.readiness === 'READY').toBe(decision.ok);
   return { card, decision };
 }
+
+describe('Build previews the same account allocation as the dispatcher', () => {
+  it('routes from 40/100 reports, then around a provider refusal without firing a probe', async () => {
+    const workerId = await onboard();
+    const owner = await surface(workerId, { label: 'owner' });
+    const friend = await surface(workerId, { label: 'friend' });
+    await recordAllowanceReport({ accountId: owner.account.id, remainingPercent: 40,
+      reportedBy: actor.id, projectId: fixture.project.id });
+    await recordAllowanceReport({ accountId: friend.account.id, remainingPercent: 100,
+      reportedBy: actor.id, projectId: fixture.project.id });
+    const view = await factoryAllocation({ projectId: fixture.project.id, canReport: true });
+    const repo = view.repositories.find((one) => one.grantId === GRANT().id)!;
+    expect(repo.nextAccountId).toBe(friend.account.id);
+    expect(repo.accounts.map((one) => [one.id, one.remainingPercent])).toEqual(
+      expect.arrayContaining([[owner.account.id, 40], [friend.account.id, 100]]),
+    );
+    expect(repo.accounts.every((one) => one.fires === 0 && one.arrivals === 0)).toBe(true);
+    await recordAccountRefusal({ accountId: friend.account.id, reason: 'provider asked to wait',
+      retryAt: new Date(Date.now() + 60_000).toISOString() });
+    const after = await factoryAllocation({ projectId: fixture.project.id, canReport: true });
+    expect(after.repositories.find((one) => one.grantId === GRANT().id)?.nextAccountId)
+      .toBe(owner.account.id);
+  });
+});
 
 describe('the probe is the stage that pushes', () => {
   it('requires exactly what a units bin requires', () => {

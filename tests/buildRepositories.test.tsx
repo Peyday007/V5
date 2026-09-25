@@ -46,6 +46,7 @@ const REPOSITORIES = `GET /api/projects/${PROJECT}/factory/repositories`;
 const ONBOARD = `POST /api/projects/${PROJECT}/factory/repositories/${GRANT}/onboard`;
 const INVITATIONS = `GET /api/projects/${PROJECT}/factory/repositories/${GRANT}/invitations`;
 const INVITE = `POST /api/projects/${PROJECT}/factory/repositories/${GRANT}/invitations`;
+const REPORT_A = `POST /api/projects/${PROJECT}/factory/allocation/acct_a/report`;
 
 const MEMBERS = [
   { userId: 'usr_friend_a', name: 'Friend A' },
@@ -113,7 +114,9 @@ const ISSUED = {
 
 function base(over: Record<string, Reply | (() => Reply)> = {}): void {
   routes = {
-    [REPOSITORIES]: { body: { repositories: [grant()] } },
+    [REPOSITORIES]: { body: { repositories: [grant()], allocation: {
+      windowHours: 24, reportExpiresAfterHours: 6, canReport: true, repositories: [],
+    } } },
     [`GET /api/projects/${PROJECT}/factory/campaigns`]: { body: { campaigns: [] } },
     [`GET /api/projects/${PROJECT}/factory/change-requests`]: { body: { changeRequests: [] } },
     [INVITATIONS]: {
@@ -183,6 +186,35 @@ async function chooseWholeRepository(): Promise<void> {
 function card(): HTMLElement {
   return document.querySelector('.rs-factory-repositories') as HTMLElement;
 }
+
+describe('account allocation on Build', () => {
+  it('shows the routing preview and measured activity, and records a reported gauge separately', async () => {
+    base({
+      [REPOSITORIES]: { body: { repositories: [grant()], allocation: {
+        windowHours: 24, reportExpiresAfterHours: 6, canReport: true,
+        repositories: [{ grantId: GRANT, remote: 'https://github.com/Peyday007/brain-worker-bootstrap',
+          nextAccountId: 'acct_a', explanation: 'Selected account A from fresh reports.',
+          accounts: [{ id: 'acct_a', name: 'account A', remainingPercent: 100,
+            reportedAt: '2026-09-25T00:00:00.000Z', reportFresh: true,
+            fires: 5, arrivals: 4, providerRefusals: 1 }] }] } } },
+      [REPORT_A]: { body: { report: { accountId: 'acct_a', remainingPercent: 40,
+        reportedAt: '2026-09-25T01:00:00.000Z' } } },
+    });
+    await mount();
+    const section = await screen.findByRole('heading', { name: 'Factory account allocation' });
+    const card = section.closest('section')!;
+    expect(within(card).getByText(/5 fires, 4 arrivals, 1 provider refusals/)).toBeTruthy();
+    expect(within(card).getByText(/100% reported remaining/)).toBeTruthy();
+    expect(within(card).getByText(/Next task:/)).toBeTruthy();
+    expect(within(card).getByRole('button', { name: 'Test next routing choice' })).toBeTruthy();
+    await act(async () => {
+      fireEvent.change(within(card).getByLabelText('Remaining allowance shown in Claude (%)'),
+        { target: { value: '40' } });
+      fireEvent.click(within(card).getByRole('button', { name: 'Save reading' }));
+    });
+    await waitFor(() => expect(bodies[REPORT_A]).toEqual({ remainingPercent: 40 }));
+  });
+});
 
 describe('the Build card says what is connected and what is missing', () => {
   it('names the repository, its readiness, and the one action that starts it', async () => {

@@ -25,6 +25,7 @@ import type {
   FactoryInvitations,
   FactoryInvitationView,
   FactoryRelease,
+  FactoryAllocation,
   IssuedFactoryInvitation,
   OnboardResult,
   RepositoryOnboarding,
@@ -115,6 +116,14 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
             }
             onChanged={repositories.reload}
           />
+          <Allocation
+            key={`allocation-${projectId ?? 'none'}`}
+            projectId={projectId}
+            allocation={repositories.data?.allocation ?? null}
+            loading={repositories.loading}
+            error={repositories.error}
+            onReload={repositories.reload}
+          />
           <Submit
             projectId={projectId}
             repositories={state.items}
@@ -141,6 +150,94 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
           requests.reload();
         }}
       />
+    </section>
+  );
+}
+
+function Allocation({ projectId, allocation, loading, error, onReload }: {
+  projectId: string | null;
+  allocation: FactoryAllocation | null;
+  loading: boolean;
+  error: { status: number; message: string } | null;
+  onReload(): void;
+}): JSX.Element {
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  async function report(accountId: string): Promise<void> {
+    const raw = values[accountId] ?? '';
+    if (!/^\d{1,3}$/.test(raw) || Number(raw) > 100 || !projectId) {
+      setProblem('Enter a whole percentage from 0 to 100.');
+      return;
+    }
+    setBusy(accountId);
+    setProblem(null);
+    try {
+      await FactoryApi.reportAllowance(projectId, accountId, Number(raw));
+      setValues((prior) => ({ ...prior, [accountId]: '' }));
+      onReload();
+    } catch (cause) {
+      setProblem(cause instanceof Error ? cause.message : 'Could not save that reading.');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="rs-card rs-factory-allocation">
+      <h3>Factory account allocation</h3>
+      <p className="rs-hint">
+        Brain automatically chooses an eligible account for each new Factory task. It measures
+        fires, arrivals and provider refusals; these are not a subscription balance. A remaining
+        percentage comes from the account holder’s Claude usage screen and expires after six hours.
+        When every eligible account has a fresh report, Brain prefers more remaining allowance;
+        otherwise it uses its measured headroom and recent activity. A provider cooldown always wins.
+      </p>
+      <button type="button" onClick={onReload} disabled={loading}>
+        Test next routing choice
+      </button>
+      <p className="rs-hint">This preview reads the router’s decision. It does not fire a Routine.</p>
+      {loading && !allocation ? <p className="rs-hint">Reading Factory capacity…</p> : null}
+      {error ? <p role="alert">Could not read allocation: {error.message} <button type="button" onClick={onReload}>Try again</button></p> : null}
+      {problem ? <p role="alert">{problem}</p> : null}
+      {allocation?.repositories.map((repo) => (
+        <div className="rs-allocation-repository" key={repo.grantId}>
+          <h4>{repo.remote.replace('https://github.com/', '')}</h4>
+          {repo.accounts.length === 0 ? <p className="rs-hint">No Factory accounts are configured for this repository yet.</p> : (
+            <>
+              <p className="rs-hint">
+                Next task: <strong>{repo.accounts.find((account) => account.id === repo.nextAccountId)?.name ?? 'waiting for capacity'}</strong>.{' '}
+                {repo.explanation}
+              </p>
+              <ul className="rs-allocation-accounts">
+                {repo.accounts.map((account) => (
+                  <li key={account.id}>
+                    <strong>{account.name}</strong>{' — '}
+                    {account.remainingPercent === null ? 'balance unknown'
+                      : `${account.remainingPercent}% reported remaining${account.reportFresh ? '' : ' (old)'}`}
+                    {account.reportedAt ? `, reported ${new Date(account.reportedAt).toLocaleString()}` : ''}
+                    <span className="rs-hint">
+                      {' · '}Last 24 hours in this project: {account.fires} fires, {account.arrivals} arrivals,
+                      {' '}{account.providerRefusals} provider refusals.
+                    </span>
+                    {allocation.canReport ? (
+                      <form onSubmit={(event) => { event.preventDefault(); void report(account.id); }}>
+                        <label>
+                          Remaining allowance shown in Claude (%)
+                          <input type="number" min="0" max="100" step="1" value={values[account.id] ?? ''}
+                            onChange={(event) => setValues((prior) => ({ ...prior, [account.id]: event.target.value }))} />
+                        </label>
+                        <button type="submit" disabled={busy !== null}>Save reading</button>
+                      </form>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      ))}
     </section>
   );
 }
