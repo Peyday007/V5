@@ -44,6 +44,7 @@
  * also the cheapest possible answer to "credentials must never appear in prompts,
  * logs, database content or browser output": there is nothing to place anywhere.
  */
+import { factoryEnvelope } from '../../domain/engineering.ts';
 import type {
   Bin,
   BinManifest,
@@ -230,7 +231,20 @@ function baseManifest(input: {
   authorized: string[];
   baseSha: string;
 }): BinManifest {
+  const paths = input.units.flatMap((unit) => {
+    try {
+      const parsed = JSON.parse(unit.input) as { ownedPaths?: unknown };
+      return Array.isArray(parsed.ownedPaths) ? parsed.ownedPaths.filter((p): p is string => typeof p === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
   return {
+    engineering: factoryEnvelope({
+      role: input.role,
+      paths: paths.length > 0 ? paths : input.changeRequest.mutationScope,
+      verificationCommands: input.changeRequest.verificationCommands,
+    }),
     objective: input.objective,
     why: input.why,
     repository: repositoryFor(

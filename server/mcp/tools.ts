@@ -50,6 +50,7 @@ import { conflictError, invalidInput, notFoundError } from './errors.ts';
 import type { McpTool } from './toolkit.ts';
 import { RESEARCH_TOOLS } from './researchTools.ts';
 import { BIN_TOOLS } from './binTools.ts';
+import { ENGINEERING_TOOLS } from './engineeringTools.ts';
 import { activeBinForWorker, confinementFor } from '../repos/bins.ts';
 import { RESEARCH_METHOD, RESEARCH_METHOD_VERSION } from '../services/research/method.ts';
 import {
@@ -950,6 +951,10 @@ export const TOOLS: readonly McpTool[] = [
   // caller may *succeed* with is decided at execution time by the one policy
   // module, never by filtering this.
   ...BIN_TOOLS,
+  // The engineering connector: one policy every coding worker shares — risk,
+  // evidence, test policy, existing owners, next action, blockers. Same array,
+  // same reason as the two above.
+  ...ENGINEERING_TOOLS,
 ];
 
 const BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));

@@ -7,6 +7,45 @@ frozen) into this file — that lives in SQLite.
 
 ---
 
+## How to work here: the engineering connector, and milestone-only reporting
+
+Brain decides how much rigor a change has earned; a session does not invent its
+own. The policy is `server/domain/engineering.ts`, served to every coding worker
+as MCP tools and on a terminal as `npm run engineering`:
+
+| before you… | ask | terminal |
+|---|---|---|
+| start a task | `brain_engineering_preflight` | `npm run engineering -- preflight --objective … --paths … --root-cause … --proposal …` |
+| prove anything | `brain_evidence_lookup` | `npm run engineering -- lookup --repo owner/name --key …` |
+| run tests | `brain_test_policy` | `npm run engineering -- policy --paths a,b [--sha S --repo R]` |
+| build a scheduler, queue, verifier, auth, retry or orchestration mechanism | `brain_duplicate_mechanism_check` | `npm run engineering -- duplicate --proposal …` |
+| stop, wait, or ask a person | `brain_next_engineering_action` / `brain_engineering_blocker` | `npm run engineering -- next --outcome … --reached …` |
+
+The rules it applies, in one line each:
+
+1. Root cause known, fix reversible, blast radius small → the smallest root-cause fix first, then retry the real journey. No schema, migration, service or proof system before that retry fails.
+2. Real evidence first. A property real work already proved is not re-proved, and never synthetically.
+3. No redundant full suites: typecheck + `test:impacted` while developing; the full gate once, in CI, on the released SHA; never again on a SHA that already passed it.
+4. Watch an observable process to termination (background it and do independent work if it is long). Never "check back in 15 minutes" on something you can watch.
+5. Done is the user's outcome. A plan, branch, green test or PR is not done when the outcome is production working.
+6. Extend the existing owner. A new mechanism needs a stated reason extension cannot work.
+7. Do not ask a person what the repo, git, the database, Brain records, GitHub, workflow logs or configuration can answer.
+8. Independent work (no dependency, disjoint paths, separate branches) runs in parallel.
+9. Executable work beside idle capacity is a defect; the watchdog records it and the dispatch tick continues it.
+10. Production broken → restore the journey first, harden after.
+
+`.claude/hooks/engineering-guard.mjs` enforces the two hard edges (a full suite on
+an intermediate commit; a delayed check-in under 45 minutes) and names the way
+past each. What the policy refused is in `engineering_interventions`; `npm run
+engineering -- report` prints it with the metrics.
+
+**Report milestones, not activity.** Conversation output is for `DONE`,
+`BLOCKED`, `DECISION_REQUIRED`, an important defect, or a meaningful status
+change. Do not narrate "reading X", "now checking Y", "waiting", "let me
+inspect Z" — tool activity is already in the tool log and Brain's records.
+
+---
+
 ## 1. Query project state. Never guess it.
 
 The authoritative operational state is:
@@ -11831,6 +11870,7 @@ server/
     industry.ts         what a structural finding means, and what it may create
     monetization.ts     every shape of transaction, what it needs and what it leaves
     labor.ts            what a labor finding means, and the one validator both doors call
+    engineering.ts      the engineering policy: risk, tests, owners, next action, evidence
     dealflow.ts         what a claim establishes about a transaction, and where it lands
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
@@ -11862,6 +11902,7 @@ server/
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
     labor.ts          workflows, tasks, who produces each, and what has been asked
     monetization.ts   the possibility ledger; nothing in it is ever deleted
+    engineering.ts    evidence, interventions and blockers; append-only
   services/
     storage.ts          document keys, confinement, and writing through the store
     storage/
@@ -11952,6 +11993,9 @@ server/
       adopt.ts          a surface Brain already fires, recorded as somebody's
       contribution.ts   whose connection is usable capacity, and why not when it is not
     storageHealth.ts    how much room is left, measured rather than guessed
+    engineering/
+      evidence.ts       what is already known: rows, delivery proofs, and CI via the forge
+      watchdog.ts       executable work beside idle capacity, recorded and continued
     knowledge/
       shared.ts         what crosses between projects, and what may never
     goals/
@@ -12196,6 +12240,7 @@ server/
     errors.ts           the closed set of tool error categories
     limits.ts           sizes, pages, rate and concurrency
     tools.ts            the permanent tool surface, over existing services
+    engineeringTools.ts the seven engineering-connector tools every coding worker shares
     execute.ts          one call: rate slot, authorize, bound, audit
     modern.ts           the 2026-07-28 dispatcher
     legacy.ts           the 2025-11-25 front-end, over the official SDK
@@ -12258,6 +12303,7 @@ scripts/
                             (reached by .github/workflows/puzzle-report.yml, which
                             checks the marker it prints)
   admin.ts                  emergency administration, on a terminal rather than a page
+  engineering.ts            the engineering connector on a terminal; the only door for CI/OPERATOR evidence
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain, verify a pool
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one

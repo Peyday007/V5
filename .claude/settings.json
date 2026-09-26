@@ -9,7 +9,62 @@
       "mcp__factory-brain",
       "mcp__factory-brain__*",
       "mcp__factory_brain",
-      "mcp__factory_brain__*"
+      "mcp__factory_brain__*",
+      "mcp__Factory_Brain__*",
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit",
+      "Write",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(git switch -c:*)",
+      "Bash(git switch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge-base:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git ls-remote:*)",
+      "Bash(git worktree list:*)",
+      "Bash(git push -u origin claude/:*)",
+      "Bash(git push origin claude/:*)",
+      "Bash(git push -u origin factory/:*)",
+      "Bash(git push origin factory/:*)",
+      "Bash(npm ci:*)",
+      "Bash(npm install)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run test:impacted:*)",
+      "Bash(npm run build)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run engineering:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest run:*)",
+      "Bash(node scripts/test-impacted.mjs:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push origin production:*)",
+      "Bash(git push origin HEAD:production:*)",
+      "Bash(flyctl secrets set:*)",
+      "Bash(flyctl deploy:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|mcp__Claude_Code_Remote__send_later",
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/engineering-guard.mjs\"" }
+        ]
+      }
     ]
   }
 }
