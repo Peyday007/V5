@@ -384,6 +384,63 @@ describe('an unknown belief, and the absence of an invented score', () => {
 });
 
 /* --------------------------------------------------------------------------
+ * A disposition and a verdict are shown in plain words, never the raw enum
+ * ------------------------------------------------------------------------ */
+
+describe('a disposition and a verdict, read in plain words', () => {
+  it('renders the decisive question\'s disposition and the sufficiency verdict as words, not the raw enum', async () => {
+    base({
+      [WORK]: { body: workBody(workEntry()) },
+      [INTELLIGENCE]: { body: intelligenceBody() },
+    });
+    await mount();
+    await waitFor(() => expect(missionCard()).toBeTruthy());
+    await openDisclosure();
+    await waitFor(() =>
+      expect(within(missionCard()).getByText(UNDERSTANDING.outcomeSought)).toBeTruthy(),
+    );
+
+    // The fixture's decisive question carries disposition 'OPEN' and the
+    // sufficiency reading carries verdict 'KEEP_RESEARCHING'. Neither raw
+    // token may appear in the panel — only the plain-word translation of it.
+    expect(within(missionCard()).getByText('Open')).toBeTruthy();
+    expect(within(missionCard()).getByText('Keep researching')).toBeTruthy();
+
+    const panelText = missionCard().textContent ?? '';
+    expect(panelText).not.toMatch(/\bOPEN\b/);
+    expect(panelText).not.toMatch(/KEEP_RESEARCHING/);
+  });
+
+  it('falls back to the raw value for a disposition or verdict this screen has no word for', async () => {
+    base({
+      [WORK]: { body: workBody(workEntry()) },
+      [INTELLIGENCE]: {
+        body: intelligenceBody({
+          decisive: [unknownQuestion({ disposition: 'SOMETHING_NEW' })],
+          sufficiency: {
+            verdict: 'SOMETHING_ELSE_ENTIRELY',
+            detail: 'The decisive question above is still open.',
+            decisive: { settled: 0, total: 1 },
+            mandatory: { covered: 2, total: 3 },
+            readiness: 42,
+            blockers: ['Something is still standing in the way.'],
+          },
+        }),
+      },
+    });
+    await mount();
+    await waitFor(() => expect(missionCard()).toBeTruthy());
+    await openDisclosure();
+    await waitFor(() =>
+      expect(within(missionCard()).getByText(UNDERSTANDING.outcomeSought)).toBeTruthy(),
+    );
+
+    expect(within(missionCard()).getByText('SOMETHING_NEW')).toBeTruthy();
+    expect(within(missionCard()).getByText('SOMETHING_ELSE_ENTIRELY')).toBeTruthy();
+  });
+});
+
+/* --------------------------------------------------------------------------
  * A04: absent and forbidden are one state; an error and an empty packet are
  * neither that state nor each other
  * ------------------------------------------------------------------------ */
