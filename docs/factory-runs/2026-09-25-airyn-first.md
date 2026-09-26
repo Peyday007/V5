@@ -75,9 +75,12 @@ and #19.
 
 ## Factory state
 
-- Objectives for #1–#3 are committed under `objectives/` on `production`
-  (`acbe345`) and are being deployed so that `factory submit` can read them
-  inside the image.
-- The plan is to submit and approve #1 into project Deal Dispatch, where V5 is
-  onboarded, route it to Airyn, and follow it to its pull request. Then take #2,
-  then #3.
+| Time (UTC) | Event |
+|---|---|
+| 09-25 20:27–21:00 | Deploy 351 released `acbe345`; the post-restart proof passed |
+| 09-26 01:19 | `factory submit` of objective #1 created `fcr_8390e40c3ea14eceb22b`, pinned to `acbe345`, project Deal Dispatch |
+| 09-26 01:21 | Approved under the owner's standing authorization; this created campaign `fcp_11e2e481b79d4a948049` |
+| 09-26 01:23 | Plan bin `bin_9bf63d096c0d45c4ab36` was fired at **Airyn's Factory surface 2** (`trig_01H6Ngiv7NbPjva5mtz2zPWD`). Session `cse_0156a7HaFqipzXdFSu4p6cCg` arrived and holds the lease (gen 1) |
+
+Next up: #2 (register attestation), then #3 (atomic kernel rounds). Both
+objective files are already in the deployed image.
