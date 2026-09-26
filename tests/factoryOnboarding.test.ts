@@ -359,14 +359,13 @@ describe('readiness is derived, and says what is left', () => {
 
     process.env['A_SECRET_NAME'] = 'placeholder-not-a-token';
     /*
-     * Deployed, enabled and bound is still **not** ready until the surface's own
-     * session has delivered to the repository once. On 2026-09-26 a surface in
-     * exactly this state was handed implementation work and could not push,
-     * because its Claude Routine was attached to another repository.
+     * Deployed, enabled and bound is ready with no delivery reading: a surface
+     * nothing has contradicted is provisional, and its first real implementation
+     * proves or refuses it. Only a recorded refusal would make it unusable.
      */
-    const undelivered = (await repositoryOnboarding(fixture.project.id))[0]!;
-    expect(undelivered.readiness).toBe('NO_USABLE_SURFACE');
-    expect(undelivered.remaining.join(' ')).toMatch(/delivery probe/);
+    // No reading yet is provisional, not unusable: its first real implementation proves it.
+    const provisional = (await repositoryOnboarding(fixture.project.id))[0]!;
+    expect(provisional.readiness).toBe('READY');
     await recordDeliveryProven(routine.id, GRANT().remote);
     const ready = (await repositoryOnboarding(fixture.project.id))[0]!;
     delete process.env['A_SECRET_NAME'];

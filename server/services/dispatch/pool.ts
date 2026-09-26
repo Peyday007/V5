@@ -403,9 +403,9 @@ function judgeSurface(
 
   const undelivered =
     input.deliveryProven === false && input.routine.capabilities.includes('repository-write')
-      ? `no delivery probe has passed for ${repository} — its session has not been shown able to push ` +
-        'or open a pull request there, so it is given no implementation work. ' +
-        'Run: fleet commission --ref <trig> --repository ' + repository + ' --probe'
+      ? `a real session from this Routine was refused a push to ${repository}, so it is given no ` +
+        'implementation work until the repository is attached to its Claude Routine. ' +
+        'Then: fleet commission --ref <trig> --repository ' + repository
       : null;
   const verdict: PoolVerdict = fault
     ? 'FAULT'
@@ -613,8 +613,8 @@ export async function readFactoryPool(input: {
   const { bestEligibility, repositoryProbeWork, surfaceEligibility } = await import(
     './surfaceEligibility.ts'
   );
-  const { deliveryProvenRepositories, normalizeRepository } = await import('../../repos/deliveryProofs.ts');
-  const provenByRoutine = await deliveryProvenRepositories();
+  const { deliveryReadings, normalizeRepository } = await import('../../repos/deliveryProofs.ts');
+  const readingsByRoutine = await deliveryReadings();
 
   const expectedWorker = await getWorkerByName(input.workerName);
   if (!expectedWorker) {
@@ -725,7 +725,8 @@ export async function readFactoryPool(input: {
       accountTarget: accountPolicy ? effectiveTarget(accountPolicy, nowIso).target : null,
       sessions,
       unansweredFires,
-      deliveryProven: provenByRoutine.get(routine.id)?.has(normalizeRepository(input.repository)) ?? false,
+      // Only a recorded refusal is `false`; no reading is provisional, not undelivered.
+      deliveryProven: readingsByRoutine.get(routine.id)?.get(normalizeRepository(input.repository)) !== 'FAILED',
       bins,
       dispatches,
       routerSays: routerAnswer

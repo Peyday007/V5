@@ -283,6 +283,33 @@ async function main(): Promise<void> {
   }
 
   /*
+   * Put a Routine refused a push back to provisional.
+   *
+   * The answering transition for a FAILED delivery reading: somebody attached
+   * the repository to the Claude Routine. It proves nothing — the next real
+   * implementation proves it, or refuses it again — and it cannot erase a proof.
+   */
+  if (command === 'clear-delivery-refusal') {
+    const ref = option('ref');
+    const repository = option('repository');
+    const reason = option('reason');
+    if (!ref || !repository || !reason) {
+      return refuse('pass --ref <trig_…> --repository <owner/name> --reason <what was fixed>.');
+    }
+    const routine = await getRoutineByRef(ref);
+    if (!routine) return refuse(`no Routine registered as ${ref}.`);
+    const { clearDeliveryRefusal } = await import('../server/repos/deliveryProofs.ts');
+    const cleared = await clearDeliveryRefusal({
+      routineId: routine.id,
+      repository,
+      reason,
+      requestedBy: 'fleet-cli',
+    });
+    if (!cleared) return refuse(`${ref} has no recorded push refusal for ${repository}; nothing to clear.`);
+    return ok(`clear-delivery-refusal ${ref} ${repository} -> provisional; its next real implementation proves it`);
+  }
+
+  /*
    * Point a Routine at a different deployment secret.
    *
    * The companion to `set-capabilities`, and for the same reason: a row that is
@@ -1307,14 +1334,18 @@ async function probeBin(input: {
       console.log('  EXECUTION_VERIFIED  a fire to this Routine produced a session that authenticated as');
       console.log(`            ${worker!.name}, was handed a bin and completed it.`);
       if (routine.capabilities.includes('repository-write')) {
-        const { deliveryProvenRepositories } = await import('../server/repos/deliveryProofs.ts');
-        const proven = [...((await deliveryProvenRepositories()).get(routine.id) ?? [])];
-        console.log(
-          proven.length > 0
-            ? `  DELIVERY_VERIFIED   for ${proven.join(', ')}`
-            : '  NOT DELIVERY_VERIFIED  no repository delivery probe has passed — this surface is ' +
-                'not given implementation work. Run: fleet commission --ref <trig> --repository owner/name --probe',
-        );
+        const { deliveryReadings } = await import('../server/repos/deliveryProofs.ts');
+        const readings = [...((await deliveryReadings()).get(routine.id) ?? [])];
+        const proven = readings.filter(([, state]) => state === 'PROVEN').map(([repo]) => repo);
+        const refused = readings.filter(([, state]) => state === 'FAILED').map(([repo]) => repo);
+        if (proven.length > 0) console.log(`  DELIVERY_VERIFIED   for ${proven.join(', ')}`);
+        if (refused.length > 0) {
+          console.log(`  PUSH REFUSED        for ${refused.join(', ')} — no implementation work there until the`);
+          console.log('            repository is attached to the Claude Routine.');
+        }
+        if (readings.length === 0) {
+          console.log('  PROVISIONAL         no real push recorded yet; its first real implementation proves it.');
+        }
       }
       return ok(`verify-surface ${ref} EXECUTION_VERIFIED`);
     }

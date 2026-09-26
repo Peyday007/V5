@@ -204,6 +204,9 @@ export async function dispatchTick(
   try {
     const { settleDeliveryProofs } = await import('./deliveryProof.ts');
     await settleDeliveryProofs();
+    // Real deliveries already in the ledger prove their surfaces, once per process.
+    const { backfillDeliveryEvidenceOnce } = await import('./deliveryEvidence.ts');
+    await backfillDeliveryEvidenceOnce();
   } catch (error) {
     console.warn('[dispatch] delivery proof settlement failed:', (error as Error).message);
   }

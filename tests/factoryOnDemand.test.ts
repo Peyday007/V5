@@ -262,10 +262,9 @@ describe('an authorized objective survives its setup being missing', () => {
     await bindRoutineWorker(routine.id, factoryWorkerId);
     process.env[FIRE_SECRET] = 'not-a-real-token';
 
-    // Registered and deployed is not ready until this surface's own session has
-    // delivered to the repository once — the commissioning probe, recorded here.
-    const undelivered = (await repositoryOnboarding(fixture.project.id))[0]!;
-    expect(undelivered.readiness).toBe('NO_USABLE_SURFACE');
+    // No reading yet is provisional, not unusable: its first real implementation proves it.
+    const provisional = (await repositoryOnboarding(fixture.project.id))[0]!;
+    expect(provisional.readiness).toBe('READY');
     await recordDeliveryProven(routine.id, GRANT().remote);
 
     const ready = (await repositoryOnboarding(fixture.project.id))[0]!;

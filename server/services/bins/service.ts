@@ -298,21 +298,22 @@ export async function binAdmission(input: {
         const { DELIVERY_PROBE_CLASS, WRITE_CAPABILITY } = await import('../dispatch/router.ts');
         const { repositoryIdOf } = await import('./routing.ts');
         /*
-         * A declared `repository-write` counts only where the Routine has passed a
-         * delivery probe for this bin's repository — the router's rule, asked
-         * again here for the session that finished one bin and asks for the next.
+         * A declared `repository-write` counts unless the Routine's own session
+         * was recorded refused a push to this bin's repository — the router's
+         * rule, asked again for the session that finished one bin and asks for the
+         * next. No reading at all is provisional, and is admitted.
          */
         const writeRepository =
           needed.includes(WRITE_CAPABILITY) && bin.workloadClass !== DELIVERY_PROBE_CLASS
             ? repositoryIdOf(bin)
             : null;
-        const proven = writeRepository
-          ? await (await import('../../repos/deliveryProofs.ts')).deliveryProvenRepositories()
+        const readings = writeRepository
+          ? await (await import('../../repos/deliveryProofs.ts')).deliveryReadings()
           : null;
         const able = known.some(
           (routine) =>
             needed.every((cap) => routine.capabilities.includes(cap)) &&
-            (!proven || !writeRepository || (proven.get(routine.id)?.has(writeRepository) ?? false)),
+            (!readings || !writeRepository || readings.get(routine.id)?.get(writeRepository) !== 'FAILED'),
         );
         if (known.length === refs.length && !able) {
           return {
@@ -321,7 +322,7 @@ export async function binAdmission(input: {
             reason:
               `This session was started by ${known.map((routine) => routine.name).join(', ')}, which does not ` +
               `declare ${needed.join(' and ')}` +
-              (proven ? ` with a passing delivery probe for ${writeRepository}` : '') +
+              (readings ? ` without a recorded push refusal for ${writeRepository}` : '') +
               '; the bin is left for a surface that does.',
           };
         }

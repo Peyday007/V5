@@ -5,9 +5,11 @@
  * fired, authenticated, been handed a bin and completed it — was handed real
  * implementation work, and its session could not push, because the Claude
  * Routine behind it was attached to another repository. These tests pin the
- * rule that replaced the declaration: a bin that pushes is fired only at a
- * Routine whose own session has delivered to that repository once, verified
- * against the forge, and whose newest probe did not fail.
+ * rule that replaced the declaration: real work is the evidence. A Routine
+ * with no reading is provisional and takes one real push at a time; a real
+ * push the forge confirmed proves it; a real refusal takes it out of push
+ * routing until a person says the repository was attached. The probe is the
+ * fallback for a surface with no real work.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
@@ -22,7 +24,13 @@ import {
   parseDeliveryProbeReport,
   settleDeliveryProofs,
 } from '../server/services/dispatch/deliveryProof.ts';
-import { deliveryProvenRepositories, getDeliveryProofByBin } from '../server/repos/deliveryProofs.ts';
+import {
+  clearDeliveryRefusal,
+  deliveryProvenRepositories,
+  deliveryReadings,
+  getDeliveryProofByBin,
+} from '../server/repos/deliveryProofs.ts';
+import { isRepositoryAccessRefusal, recordDeliveryEvidence } from '../server/services/dispatch/deliveryEvidence.ts';
 import { readCommission } from '../server/services/fleet/commission.ts';
 import { getDb } from '../server/db/database.ts';
 import type { Bin, FleetRoutine } from '../server/domain/types.ts';
@@ -159,6 +167,17 @@ async function answer(binId: string, value: unknown): Promise<void> {
   await getDb().run("UPDATE bins SET state = 'COMPLETE' WHERE id = ?", [binId]);
 }
 
+/** The row Brain writes when it fires a Routine and the provider names the session. */
+async function dispatched(binId: string, routineRef: string, sessionRef: string): Promise<void> {
+  const now = new Date().toISOString();
+  await getDb().run(
+    `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count,
+       next_attempt_at, routine_ref, session_ref, created_at, updated_at)
+     VALUES (?, ?, 0, 'SENT', 1, ?, ?, ?, ?, ?)`,
+    [`bdp_${binId}`, binId, now, routineRef, sessionRef, now, now] as never[],
+  );
+}
+
 async function probe() {
   return createDeliveryProbe({
     routine: {
@@ -175,14 +194,97 @@ async function probe() {
 }
 
 describe('a declared repository-write is not a capability until a delivery probe passes', () => {
-  it('refuses to fire implementation work at an unproven surface, and says what would fix it', async () => {
-    const decision = await route(await writeBin(['repository', 'repository-write']));
-    expect(decision.ok).toBe(false);
-    if (!decision.ok) {
-      expect(decision.refusal).toBe('NO_CAPABLE_SURFACE');
-      expect(decision.reason).toMatch(/delivery probe/);
-      expect(decision.considered[0]?.verdict).toMatch(/no passing delivery probe for peyday007\/v5/);
+  it('routes one real implementation to a surface with no reading — provisional, not refused', async () => {
+    const bin = await writeBin(['repository', 'repository-write']);
+    expect((await route(bin)).ok).toBe(true);
+
+    // One real push at a time: a provisional surface with work in flight waits.
+    const snapshot = await fleetSnapshot();
+    const busy = routeBin({
+      bin,
+      candidates: snapshot.candidates.map((c) => ({ ...c, routineInFlight: 1 })),
+      fleetPolicy: snapshot.fleetPolicy,
+      fleetInFlight: 1,
+      now: new Date().toISOString(),
+    });
+    expect(busy.ok).toBe(false);
+    if (!busy.ok) expect(busy.considered[0]?.verdict).toMatch(/provisional/);
+
+    // This fixture's surface has never run, so an earlier step blocks; the
+    // delivery step itself reads provisional rather than failed.
+    const reading = await readCommission({ routineRef: routine.routineRef, repository: REMOTE });
+    const delivery = reading.steps.find((step) => step.key === 'delivery')!;
+    expect(delivery.state).toBe('PENDING');
+    expect(delivery.detail).toMatch(/provisional/);
+  });
+
+  it('takes a surface out the moment its real session is refused a push, and puts it back on a person\'s word', async () => {
+    const refusal =
+      "remote: Peyday007/V5 is not in this session's authorized repository set. " +
+      'fatal: unable to access https://github.com/Peyday007/V5/: The requested URL returned error: 403';
+    expect(isRepositoryAccessRefusal(refusal)).toBe(true);
+    expect(isRepositoryAccessRefusal('npm test exited 1')).toBe(false);
+
+    const work = await writeBin(['repository', 'repository-write']);
+    await dispatched(work.id, routine.routineRef, 'cse_AIRYN0SESSION01');
+    const credited = await recordDeliveryEvidence({
+      sessionRef: 'session_AIRYN0SESSION01',
+      repository: REMOTE,
+      evidenceKey: work.id,
+      state: 'FAILED',
+      detail: refusal,
+    });
+    expect(credited).toBe(routine.id);
+
+    const refused = await route(await writeBin(['repository', 'repository-write']));
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.refusal).toBe('NO_CAPABLE_SURFACE');
+      expect(refused.considered[0]?.verdict).toMatch(/refused a push to peyday007\/v5/);
     }
+    // Planning and review still go to it.
+    expect((await route(await writeBin(['repository']))).ok).toBe(true);
+
+    expect(await clearDeliveryRefusal({ routineId: routine.id, repository: REMOTE, reason: 'attached', requestedBy: 't' })).toBe(true);
+    expect(await clearDeliveryRefusal({ routineId: routine.id, repository: REMOTE, reason: 'again', requestedBy: 't' })).toBe(false);
+    expect((await route(await writeBin(['repository', 'repository-write']))).ok).toBe(true);
+  });
+
+  it('credits real delivery only to the one Routine Brain fired that session at', async () => {
+    const other = await createRoutine({
+      accountId: routine.accountId,
+      routineRef: 'trig_other',
+      name: 'Other',
+      tokenSecretName: SECRET,
+      capabilities: ['repository', 'repository-write'],
+      workerId: routine.workerId,
+    });
+    const a = await writeBin(['repository']);
+    const b = await writeBin(['repository']);
+    await dispatched(a.id, routine.routineRef, 'cse_SHAREDSESSION1');
+    await dispatched(b.id, other.routineRef, 'cse_SHAREDSESSION1');
+    // Ambiguous: two Routines fired that provider session. Nobody is credited.
+    expect(
+      await recordDeliveryEvidence({ sessionRef: 'cse_SHAREDSESSION1', repository: REMOTE, evidenceKey: 'x', state: 'PROVEN' }),
+    ).toBeNull();
+    // Unknown session: nobody is credited either.
+    expect(
+      await recordDeliveryEvidence({ sessionRef: 'cse_NEVERFIRED0000', repository: REMOTE, evidenceKey: 'y', state: 'PROVEN' }),
+    ).toBeNull();
+    expect((await deliveryReadings()).size).toBe(0);
+
+    const c = await writeBin(['repository']);
+    await dispatched(c.id, routine.routineRef, 'cse_ONLYONE0000001');
+    expect(
+      await recordDeliveryEvidence({ sessionRef: 'cse_ONLYONE0000001', repository: REMOTE, evidenceKey: c.id, state: 'PROVEN' }),
+    ).toBe(routine.id);
+    // Idempotent by the evidence key.
+    await recordDeliveryEvidence({ sessionRef: 'cse_ONLYONE0000001', repository: REMOTE, evidenceKey: c.id, state: 'PROVEN' });
+    expect((await deliveryReadings()).get(routine.id)?.get(REPOSITORY)).toBe('PROVEN');
+    const reading = await readCommission({ routineRef: routine.routineRef, repository: REMOTE });
+    const delivery = reading.steps.find((s) => s.key === 'delivery')!;
+    expect(delivery.state).toBe('PASS');
+    expect(delivery.detail).toMatch(/real Factory work/);
   });
 
   it('still routes read-only Factory work (planning, review) to the same surface', async () => {

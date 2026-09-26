@@ -205,21 +205,22 @@ export interface RoutingCandidate {
    */
   servesRepositories: string[] | null;
   /**
-   * The repositories this Routine is **currently proven** to deliver to — the
-   * newest settled delivery probe for each (Routine, repository) pair said
-   * PROVEN. `fleetSnapshot` always sets it; absent means a hand-built candidate
-   * that predates the rule and is not asked.
+   * What this Routine's own fired sessions have established about delivering to
+   * each repository: the newest settled reading, `PROVEN` or `FAILED`, keyed by
+   * `owner/name`. A repository with no entry has no reading — *provisional*.
+   * `fleetSnapshot` always sets it; absent means a hand-built candidate that
+   * predates the rule and is not asked.
    *
    * `repository-write` on a Routine is what an operator declared, and a
-   * declaration is intent. Production measured the gap: a surface declaring it
-   * fired, authenticated, planned, implemented, typechecked and passed review,
-   * and then could not push, because the Claude session its Routine starts was
-   * attached to another repository and the git proxy would not inject a
-   * credential for this one. So a bin that pushes is fired only at a Routine
-   * whose own fired session has already pushed to that repository, opened a pull
-   * request and cleaned up after itself — see `services/dispatch/deliveryProof.ts`.
+   * declaration is intent: production measured a surface that fired, planned,
+   * implemented, typechecked and passed review, and then could not push, because
+   * its Claude Routine was attached to another repository. The answer is real
+   * work first — see `services/dispatch/deliveryEvidence.ts`. A real push the
+   * forge confirmed records PROVEN; a real refusal records FAILED, and only FAILED
+   * takes a surface out. A provisional surface may take one write bin at a time,
+   * so an unknown costs at most one real attempt rather than a queue of them.
    */
-  deliveryProvenRepositories?: readonly string[];
+  deliveryReadings?: Readonly<Record<string, 'PROVEN' | 'FAILED'>>;
   /**
    * The projects the worker this Routine is bound to holds a live membership
    * on. Empty when it is bound to no worker, or to one that is a member of
@@ -403,22 +404,28 @@ export function servesBinScope(candidate: RoutingCandidate, bin: Bin): boolean {
 export const DELIVERY_PROBE_CLASS = 'FACTORY_DELIVERY_PROBE';
 export const WRITE_CAPABILITY = 'repository-write';
 
+export type DeliveryStanding = 'NOT_ASKED' | 'PROVEN' | 'PROVISIONAL' | 'FAILED';
+
 /**
- * Whether a declared `repository-write` is backed by a measured delivery to
- * *this* bin's repository.
+ * Where this surface stands on delivering *this* bin's push.
  *
  * Only a bin that requires the write capability is asked, so planning and
- * review still go to any surface that can read. The delivery probe itself is
- * exempt, because it is the thing that produces the proof. A write bin naming
- * no repository fails closed: there is nothing a proof could be about.
+ * review go to any surface that can read, and the probe is exempt because it is
+ * what produces a reading. A write bin naming no repository is FAILED: there is
+ * nothing a delivery could be about.
  */
-export function deliveryProvenFor(candidate: RoutingCandidate, bin: Bin): boolean {
-  if (!requiredCapabilities(bin).includes(WRITE_CAPABILITY)) return true;
-  if (bin.workloadClass === DELIVERY_PROBE_CLASS) return true;
-  if (candidate.deliveryProvenRepositories === undefined) return true;
+export function deliveryStandingFor(candidate: RoutingCandidate, bin: Bin): DeliveryStanding {
+  if (!requiredCapabilities(bin).includes(WRITE_CAPABILITY)) return 'NOT_ASKED';
+  if (bin.workloadClass === DELIVERY_PROBE_CLASS) return 'NOT_ASKED';
+  if (candidate.deliveryReadings === undefined) return 'NOT_ASKED';
   const repository = repositoryIdOf(bin);
-  if (!repository) return false;
-  return candidate.deliveryProvenRepositories.includes(repository);
+  if (!repository) return 'FAILED';
+  return candidate.deliveryReadings[repository] ?? 'PROVISIONAL';
+}
+
+/** In scope for a push: anything but a recorded refusal. Provisional is in scope. */
+export function deliveryProvenFor(candidate: RoutingCandidate, bin: Bin): boolean {
+  return deliveryStandingFor(candidate, bin) !== 'FAILED';
 }
 
 function capable(routine: FleetRoutine, required: string[]): boolean {
@@ -606,15 +613,26 @@ export function routeBin(input: RoutingInput): RoutingResult {
       considered.push({ routineId: routine.id, verdict: 'lacks a required capability' });
       continue;
     }
-    if (!deliveryProvenFor(candidate, bin)) {
+    const standing = deliveryStandingFor(candidate, bin);
+    if (standing === 'FAILED') {
       considered.push({
         routineId: routine.id,
         verdict:
-          `declares ${WRITE_CAPABILITY} but has no passing delivery probe for ${repository ?? 'this repository'}`,
+          `a real session from this Routine was refused a push to ${repository ?? 'this repository'}; ` +
+          'attach the repository to the Claude Routine, then record a passing delivery',
       });
       continue;
     }
     sawCapable = true;
+    // Provisional: one real push at a time proves it or refuses it, never a queue of them.
+    if (standing === 'PROVISIONAL' && candidate.routineInFlight > 0) {
+      considered.push({
+        routineId: routine.id,
+        verdict: `provisional for ${repository}: one real push at a time until one is confirmed`,
+      });
+      sawTargetReached = true;
+      continue;
+    }
 
     // A provider that told us to wait is the one input policy may not override.
     // Recorded from a refusal, honoured until it passes.
@@ -732,8 +750,8 @@ export function routeBin(input: RoutingInput): RoutingResult {
         refusal: 'NO_CAPABLE_SURFACE',
         reason: required.includes(WRITE_CAPABILITY)
           ? `No enabled Routine declares every capability this bin requires (${required.join(', ')}) ` +
-            `and has passed a delivery probe for ${repository ?? 'its repository'}. ` +
-            'Run `fleet commission --ref trig_… --repository owner/name --probe` for the surface that should take it.'
+            `without a recorded push refusal for ${repository ?? 'its repository'}. Attach the ` +
+            'repository to the refused Claude Routine, then `fleet commission --ref trig_… --repository owner/name`.'
           : `No enabled Routine declares every capability this bin requires: ${required.join(', ')}.`,
         considered,
         retryAt: null,
@@ -772,6 +790,9 @@ export function routeBin(input: RoutingInput): RoutingResult {
     freshAllowancePercent(one.allowanceReport, now) !== null,
   );
   eligible.sort((a, b) => {
+    // A surface that has already delivered this push goes before one that has not.
+    const proven = Number(deliveryStandingFor(b, bin) === 'PROVEN') - Number(deliveryStandingFor(a, bin) === 'PROVEN');
+    if (proven !== 0) return proven;
     if (comparableAllowance) {
       const remaining = freshAllowancePercent(b.allowanceReport, now)! -
         freshAllowancePercent(a.allowanceReport, now)!;

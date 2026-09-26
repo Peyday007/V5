@@ -10366,7 +10366,7 @@ export interface PuzzleObservation {
 // Routine delivery proofs (migration 098_routine_delivery_proofs.sql)
 // ---------------------------------------------------------------------------
 
-export const DELIVERY_PROOF_STATES = ['PENDING', 'PROVEN', 'FAILED'] as const;
+export const DELIVERY_PROOF_STATES = ['PENDING', 'PROVEN', 'FAILED', 'CLEARED'] as const;
 export type DeliveryProofState = (typeof DELIVERY_PROOF_STATES)[number];
 
 /**
@@ -10388,11 +10388,16 @@ export const DELIVERY_FAILURE_STEPS = [
 ] as const;
 export type DeliveryFailureStep = (typeof DELIVERY_FAILURE_STEPS)[number];
 
+export const DELIVERY_PROOF_SOURCES = ['PROBE', 'REAL_WORK'] as const;
+export type DeliveryProofSource = (typeof DELIVERY_PROOF_SOURCES)[number];
+
 export interface RoutineDeliveryProofRow {
   id: string;
   routine_id: string;
   repository: string;
   bin_id: string;
+  /** PROBE: a disposable branch and PR. REAL_WORK: a real Factory bin's push, or its refusal. */
+  source: DeliveryProofSource;
   state: DeliveryProofState;
   branch: string;
   probe_path: string;
@@ -10410,6 +10415,7 @@ export interface RoutineDeliveryProof {
   routineId: string;
   repository: string;
   binId: string;
+  source: DeliveryProofSource;
   state: DeliveryProofState;
   branch: string;
   probePath: string;

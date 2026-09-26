@@ -11,6 +11,7 @@ import { getDb } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
 import type {
   DeliveryFailureStep,
+  DeliveryProofSource,
   DeliveryProofState,
   RoutineDeliveryProof,
   RoutineDeliveryProofRow,
@@ -22,6 +23,7 @@ function map(row: RoutineDeliveryProofRow): RoutineDeliveryProof {
     routineId: row.routine_id,
     repository: row.repository,
     binId: row.bin_id,
+    source: row.source ?? 'PROBE',
     state: row.state,
     branch: row.branch,
     probePath: row.probe_path,
@@ -114,7 +116,7 @@ export async function listDeliveryProofs(routineId?: string): Promise<RoutineDel
  */
 export async function settleDeliveryProof(input: {
   id: string;
-  state: Exclude<DeliveryProofState, 'PENDING'>;
+  state: 'PROVEN' | 'FAILED';
   headSha?: string | null;
   pullRequest?: number | null;
   failureStep?: DeliveryFailureStep | null;
@@ -138,26 +140,114 @@ export async function settleDeliveryProof(input: {
 }
 
 /**
- * The newest settled reading per (routine, repository), as a set of
- * repositories each Routine is *currently* proven to deliver to. A Routine
- * whose newest settled probe failed is absent, whatever it proved before.
+ * Record what a real Factory bin established about a Routine's delivery.
+ *
+ * Settled at birth: PROVEN only from an event Brain wrote after the forge
+ * confirmed the push (`UNIT_IMPLEMENTED`, `INTEGRATION_MERGED`,
+ * `PR_DELIVERED`), FAILED only from a worker's report that the git proxy
+ * refused this repository. One row per bin, so a bin read on every tick, and
+ * the history backfill run on every tick, record once.
  */
-export async function deliveryProvenRepositories(): Promise<Map<string, Set<string>>> {
+export async function recordRealDelivery(input: {
+  routineId: string;
+  repository: string;
+  binId: string;
+  state: 'PROVEN' | 'FAILED';
+  branch?: string | null;
+  headSha?: string | null;
+  pullRequest?: number | null;
+  failureStep?: DeliveryFailureStep | null;
+  detail?: string | null;
+  requestedBy: string;
+}): Promise<boolean> {
+  const now = nowIso();
+  const result = await getDb().run(
+    `INSERT INTO routine_delivery_proofs
+       (id, routine_id, repository, bin_id, source, state, branch, probe_path, head_sha,
+        pull_request, failure_step, detail, requested_by, created_at, settled_at)
+     VALUES (?, ?, ?, ?, 'REAL_WORK', ?, ?, '', ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (bin_id) DO NOTHING`,
+    [
+      newId('rdp'),
+      input.routineId,
+      normalizeRepository(input.repository),
+      input.binId,
+      input.state,
+      input.branch ?? '',
+      input.headSha ?? null,
+      input.pullRequest ?? null,
+      input.failureStep ?? null,
+      input.detail ?? null,
+      input.requestedBy,
+      now,
+      now,
+    ],
+  );
+  return result.changes > 0;
+}
+
+export type DeliveryReading = 'PROVEN' | 'FAILED';
+
+/**
+ * A person saying the cause of a refusal was fixed — the repository attached to
+ * the Claude Routine. It proves nothing: it only returns the pair to
+ * provisional, so the next real implementation proves or refuses it. Refused
+ * unless the newest reading is FAILED, so it can never erase a proof.
+ */
+export async function clearDeliveryRefusal(input: {
+  routineId: string;
+  repository: string;
+  reason: string;
+  requestedBy: string;
+}): Promise<boolean> {
+  const repository = normalizeRepository(input.repository);
+  const current = (await deliveryReadings()).get(input.routineId)?.get(repository);
+  if (current !== 'FAILED') return false;
+  const now = nowIso();
+  const id = newId('rdp');
+  await getDb().run(
+    `INSERT INTO routine_delivery_proofs
+       (id, routine_id, repository, bin_id, source, state, branch, probe_path, detail,
+        requested_by, created_at, settled_at)
+     VALUES (?, ?, ?, ?, 'REAL_WORK', 'CLEARED', '', '', ?, ?, ?, ?)`,
+    [id, input.routineId, repository, `clear:${id}`, input.reason.slice(0, 500), input.requestedBy, now, now],
+  );
+  await getDb().run('UPDATE fleet_routines SET updated_at = ? WHERE id = ?', [now, input.routineId]);
+  return true;
+}
+
+/**
+ * The newest settled reading per (routine, repository). A pair with no entry
+ * has no reading at all, which is *provisional*, not refused: the first real
+ * implementation is what proves it. A later FAILED outranks an earlier PROVEN.
+ */
+export async function deliveryReadings(): Promise<Map<string, Map<string, DeliveryReading>>> {
   const rows = await getDb().all<RoutineDeliveryProofRow>(
     `SELECT * FROM routine_delivery_proofs
-      WHERE state IN ('PROVEN', 'FAILED')
+      WHERE state IN ('PROVEN', 'FAILED', 'CLEARED')
       ORDER BY routine_id, repository, settled_at DESC, created_at DESC`,
   );
+  const out = new Map<string, Map<string, DeliveryReading>>();
   const seen = new Set<string>();
-  const out = new Map<string, Set<string>>();
   for (const row of rows) {
     const key = `${row.routine_id}\u0000${row.repository}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    if (row.state !== 'PROVEN') continue;
-    const set = out.get(row.routine_id) ?? new Set<string>();
-    set.add(row.repository);
-    out.set(row.routine_id, set);
+    // CLEARED is the newest word and it says nothing is known: provisional.
+    if (row.state === 'CLEARED') continue;
+    const readings = out.get(row.routine_id) ?? new Map<string, DeliveryReading>();
+    readings.set(row.repository, row.state as DeliveryReading);
+    out.set(row.routine_id, readings);
+  }
+  return out;
+}
+
+/** Kept for readers that only ask what is proven. */
+export async function deliveryProvenRepositories(): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>();
+  for (const [routineId, readings] of await deliveryReadings()) {
+    const proven = [...readings].filter(([, state]) => state === 'PROVEN').map(([repo]) => repo);
+    if (proven.length > 0) out.set(routineId, new Set(proven));
   }
   return out;
 }

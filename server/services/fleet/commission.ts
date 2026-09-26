@@ -22,6 +22,7 @@ import { getWorker, getWorkerRouting, listMembershipsForPrincipal } from '../../
 import { listTokensForWorker } from '../../repos/oauth.ts';
 import { listDeliveryProofs, normalizeRepository } from '../../repos/deliveryProofs.ts';
 import { resolveToken } from '../dispatch/fire.ts';
+import { workerIdentity } from '../identity/authenticate.ts';
 import { proveSurface } from '../dispatch/surfaceProof.ts';
 import { DELIVERY_REMEDY } from '../dispatch/deliveryProof.ts';
 import type { Bin, BinDispatch, RoutineDeliveryProof } from '../../domain/types.ts';
@@ -52,6 +53,12 @@ export interface CommissionReading {
   /** Whether a delivery probe could usefully be created now. */
   mayProbe: boolean;
   routineId: string | null;
+  /**
+   * Whether the router would give this surface push work now. True when ready,
+   * and also when the only open step is a delivery nobody has read yet: that is
+   * provisional, and its first real implementation proves or refuses it.
+   */
+  routable: boolean;
   /** The one line an operator reads. */
   verdict: string;
 }
@@ -66,10 +73,12 @@ export async function readCommission(input: { routineRef: string; repository: st
   const routine = await getRoutineByRef(input.routineRef);
   let tier: SurfaceTier = 'NONE';
   let latestProof: RoutineDeliveryProof | null = null;
+  let provisionalDelivery = false;
 
   const finish = (mayProbe: boolean): CommissionReading => {
     const blocking = steps.find((s) => s.state !== 'PASS') ?? null;
     const ready = blocking === null;
+    const provisional = blocking?.key === 'delivery' && blocking.state === 'PENDING' && provisionalDelivery;
     return {
       routineRef: input.routineRef,
       repository,
@@ -80,9 +89,13 @@ export async function readCommission(input: { routineRef: string; repository: st
       latestProof,
       mayProbe,
       routineId: routine?.id ?? null,
+      routable: ready || provisional,
       verdict: ready
         ? `READY FOR ${repository} IMPLEMENTATION — this account can complete Factory work end to end`
-        : `NOT READY — ${blocking!.label}: ${blocking!.remedy ?? blocking!.detail}`,
+        : provisional
+          ? `PROVISIONAL FOR ${repository} IMPLEMENTATION — it takes one real implementation at a time; ` +
+            'the first push the forge confirms proves it, and a refused push takes it out'
+          : `NOT READY — ${blocking!.label}: ${blocking!.remedy ?? blocking!.detail}`,
     };
   };
 
@@ -115,8 +128,8 @@ export async function readCommission(input: { routineRef: string; repository: st
   }
   steps.push(
     worker.disabled
-      ? step('worker', 'Bound to a Factory worker', 'FAIL', `${worker.name} is ${worker.status}.`, 'Re-enable or re-bind the worker.')
-      : step('worker', 'Bound to a Factory worker', 'PASS', worker.label ?? worker.name),
+      ? step('worker', 'Bound to a Factory worker', 'FAIL', `${workerIdentity(worker)} is ${worker.status}.`, 'Re-enable or re-bind the worker.')
+      : step('worker', 'Bound to a Factory worker', 'PASS', workerIdentity(worker)),
   );
 
   const routing = await getWorkerRouting(worker.id);
@@ -186,7 +199,9 @@ export async function readCommission(input: { routineRef: string; repository: st
   if (settled?.state === 'PROVEN' && !pending) {
     if (tier === 'EXECUTION_VERIFIED') tier = 'DELIVERY_VERIFIED';
     steps.push(step('delivery', `Delivers to ${repository}`, 'PASS',
-      `pushed ${settled.headSha?.slice(0, 12)}, opened and closed PR #${settled.pullRequest} (${settled.settledAt})`));
+      settled.source === 'REAL_WORK'
+        ? `real Factory work from this Routine pushed and the forge confirmed it (${settled.binId}, ${settled.settledAt})`
+        : `probe pushed ${settled.headSha?.slice(0, 12)}, opened and closed PR #${settled.pullRequest} (${settled.settledAt})`));
   } else if (pending) {
     steps.push(step('delivery', `Delivers to ${repository}`, 'PENDING', `probe ${pending.binId} is in flight`,
       'Wait for the fired session to finish; re-read this command.'));
@@ -194,10 +209,14 @@ export async function readCommission(input: { routineRef: string; repository: st
     const failure = settled.failureStep ?? 'FORGE_DID_NOT_CONFIRM';
     steps.push(step('delivery', `Delivers to ${repository}`, 'FAIL',
       `${failure}${settled.detail ? `: ${settled.detail}` : ''}`,
-      `${DELIVERY_REMEDY[failure]} Then re-run with --probe.`));
+      `${DELIVERY_REMEDY[failure]} Then \`fleet clear-delivery-refusal --ref <trig> ` +
+        `--repository ${repository} --reason attached\` puts it back to provisional, and its next real ` +
+        'implementation proves it.'));
   } else {
-    steps.push(step('delivery', `Delivers to ${repository}`, 'FAIL', 'no delivery probe has ever run for this repository',
-      'Run with --probe: the fired session pushes a disposable branch, opens and closes a PR, and deletes the branch.'));
+    provisionalDelivery = true;
+    steps.push(step('delivery', `Delivers to ${repository}`, 'PENDING',
+      'no real push from this Routine recorded yet — provisional, one real implementation at a time',
+      'Nothing to do: its first real implementation proves it. --probe exists only for a surface with no real work.'));
   }
 
   const preconditions = steps.filter((s) => ['routine', 'state', 'secret', 'worker', 'routing', 'membership', 'capabilities'].includes(s.key));

@@ -248,6 +248,38 @@ async function ingestUnitsBin(
     if (await alreadyActedOn(campaign.id, unit.id, bin.id)) continue;
     if (unitReport.outcome === 'BLOCKED') {
       report.notes.push(`${key} reported blocked: ${unitReport.blockedReason ?? 'no reason given'}`);
+      /*
+       * The git proxy refusing this repository is a fact about the surface, not
+       * the work: the unit keeps its attempt, the surface's push eligibility is
+       * withdrawn by a FAILED reading, and the next units bin routes elsewhere.
+       * Recorded against the bin so it is read once however many ticks see it.
+       */
+      const { isRepositoryAccessRefusal } = await import('../dispatch/deliveryEvidence.ts');
+      if (isRepositoryAccessRefusal(unitReport.blockedReason)) {
+        const routineId = await creditDelivery(bin, changeRequest.repository, 'FAILED', {
+          detail: unitReport.blockedReason,
+        });
+        await recordFactoryEvent({
+          campaignId: campaign.id,
+          unitId: unit.id,
+          sessionId: who.sessionId,
+          workerId: who.workerId,
+          kind: FACTORY_EVENT_KINDS.unitDeferred,
+          evidenceClass: 'MEASURED',
+          detail: {
+            unitKey: key,
+            binId: bin.id,
+            reason: 'REPOSITORY_NOT_IN_SESSION',
+            routineId,
+            blockedReason: (unitReport.blockedReason ?? '').slice(0, 500),
+          },
+        });
+        report.notes.push(
+          `${key}: the surface's session could not push to ${changeRequest.repository}; no attempt charged, ` +
+            (routineId ? `Routine ${routineId} no longer takes push work here.` : 'the Routine could not be attributed.'),
+        );
+        continue;
+      }
       await refuseUnit(
         campaign,
         unit,
@@ -334,6 +366,7 @@ async function ingestUnitsBin(
     moved += 1;
   }
   if (moved > 0) {
+    await creditDelivery(bin, changeRequest.repository, 'PROVEN', { detail: `units bin ${bin.id} confirmed by the forge` });
     await promoteReadyUnits(campaign.id);
     report.ingested.push(`units:${bin.id}`);
     report.notes.push(`${moved} unit(s) confirmed by the forge and integrated.`);
@@ -518,7 +551,7 @@ async function alreadyActedOn(
   binId: string,
 ): Promise<boolean> {
   const events = await listFactoryEvents(campaignId, {
-    kinds: [FACTORY_EVENT_KINDS.unitFailed, FACTORY_EVENT_KINDS.unitImplemented],
+    kinds: [FACTORY_EVENT_KINDS.unitFailed, FACTORY_EVENT_KINDS.unitImplemented, FACTORY_EVENT_KINDS.unitDeferred],
     limit: 500,
   });
   return events.some((event) => {
@@ -526,6 +559,33 @@ async function alreadyActedOn(
     const detail = (event.detail ?? {}) as { binId?: unknown };
     return detail.binId === binId;
   });
+}
+
+/**
+ * Record what a real bin established about its surface's delivery: PROVEN when
+ * the forge confirmed its push, FAILED when the git proxy refused the
+ * repository. Never allowed to stop an ingest — the reading is a routing input,
+ * and the work's own rows are already correct without it.
+ */
+async function creditDelivery(
+  bin: Bin,
+  repository: string,
+  state: 'PROVEN' | 'FAILED',
+  extra: { branch?: string | null; headSha?: string | null; pullRequest?: number | null; detail?: string | null } = {},
+): Promise<string | null> {
+  try {
+    const { recordDeliveryEvidence } = await import('../dispatch/deliveryEvidence.ts');
+    return await recordDeliveryEvidence({
+      sessionRef: bin.leaseSessionRef,
+      repository,
+      evidenceKey: bin.id,
+      state,
+      ...extra,
+    });
+  } catch (error) {
+    console.warn('[factory] delivery evidence not recorded:', (error as Error).message);
+    return null;
+  }
 }
 
 /**
@@ -819,6 +879,10 @@ async function ingestIntegrateBin(
         units: implemented.map((unit) => unit.unitKey),
       },
     });
+    if (!aboutTheWork) {
+      const { isRepositoryAccessRefusal } = await import('../dispatch/deliveryEvidence.ts');
+      if (isRepositoryAccessRefusal(why)) await creditDelivery(bin, changeRequest.repository, 'FAILED', { detail: why });
+    }
     report.ingested.push(`integrate:${bin.id}`);
     report.notes.push(
       aboutTheWork
@@ -967,6 +1031,10 @@ async function ingestIntegrateBin(
     );
   }
 
+  await creditDelivery(bin, changeRequest.repository, 'PROVEN', {
+    branch: parsed.value.integrationBranch,
+    headSha: parsed.value.headSha,
+  });
   report.ingested.push(`integrate:${bin.id}`);
   report.notes.push(
     `${accepted.integrated.length} unit(s) integrated at ${parsed.value.headSha.slice(0, 12)}` +
@@ -1024,6 +1092,10 @@ async function ingestDeliverBin(
   }
   if (parsed.value.outcome === 'BLOCKED') {
     report.notes.push(`the pull request was not delivered: ${parsed.value.blockedReason}`);
+    const { isRepositoryAccessRefusal } = await import('../dispatch/deliveryEvidence.ts');
+    if (isRepositoryAccessRefusal(parsed.value.blockedReason)) {
+      await creditDelivery(bin, changeRequest.repository, 'FAILED', { detail: parsed.value.blockedReason });
+    }
     await noteIngestRefused(campaign, bin, 'DELIVER', INGEST_REFUSALS.workerReportedBlocked, {
       blockedReason: parsed.value.blockedReason,
     });
@@ -1059,11 +1131,16 @@ async function ingestDeliverBin(
     kind: FACTORY_EVENT_KINDS.prDelivered,
     evidenceClass: 'MEASURED',
     detail: {
+      binId: bin.id,
       pullRequest: verdict.number,
       action: parsed.value.action,
       headSha: verdict.headSha,
       verifiedBy: 'forge',
     },
+  });
+  await creditDelivery(bin, changeRequest.repository, 'PROVEN', {
+    headSha: verdict.headSha,
+    pullRequest: verdict.number,
   });
   report.ingested.push(`deliver:${bin.id}`);
   report.notes.push(`pull request #${verdict.number} carries ${head.slice(0, 12)}`);

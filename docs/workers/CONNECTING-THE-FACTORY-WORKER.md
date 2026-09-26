@@ -134,9 +134,13 @@ the Routine's **sources**, not of the connector:
 
 Nothing in Brain can *read* which repository a Routine attaches; it is a setting
 in the Claude account that owns the Routine. What Brain can do is **measure it**,
-and since 2026-09-26 it does: a surface declaring `repository-write` is handed no
-implementation work until its own fired session has passed a **delivery probe**
-for the target repository (step 7b). A GitHub collaborator grant is not enough on
+and since 2026-09-26 it does, from real work: a surface's first real
+implementation proves it (the forge confirming the push records PROVEN), and a
+real push the git proxy refuses records FAILED, which takes the surface out of
+implementation routing without charging the unit. Until either happens the
+surface is provisional and takes one implementation at a time. After attaching
+the repository to a refused Routine, run `command: clear-delivery-refusal`,
+`ref: trig_…`, `extra: --repository Peyday007/V5 --reason attached`. A GitHub collaborator grant is not enough on
 its own — without the target attached, Claude's git proxy answers *"… is not in
 this session's authorized repository set, so the proxy will not inject a
 credential for it"* however much access the account holder has.
@@ -680,7 +684,8 @@ whether the session can push. That is step 7b.
 
 ## 7b. Commission it — one command, one answer
 
-`command: commission`, `ref: trig_…`, `extra: --repository Peyday007/V5 --probe`.
+`command: commission`, `ref: trig_…`, `extra: --repository Peyday007/V5`.
+Add `--probe` only for a surface with no real work to prove itself on.
 
 It asks every step in the order it has to be true — Routine registered and
 enabled, trigger token deployed, bound to the Factory worker, worker authorized

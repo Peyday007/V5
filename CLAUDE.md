@@ -2723,27 +2723,39 @@ remote.
   `repository-write`, exist for exactly this: a reviewer needs to read and run,
   and only the bins that push need a surface that can push, so a one-pushing-
   surface fleet does not make the reviewer the implementer.
-- **A declared capability is intent; `repository-write` counts only once a
-  delivery probe has passed for that repository.** On 2026-09-26 a surface whose
+- **A declared capability is intent; `repository-write` stops counting the
+  moment a real push is refused.** On 2026-09-26 a surface whose
   Brain chain was closed — fired, authenticated, handed a bin, completed it, and
   reported `VERIFIED` — was given real work, planned it, implemented it,
   typechecked it, passed review, and could not push: the Claude Routine behind it
   was attached to `brain-worker-airyn`, and the git proxy answered *"Peyday007/V5
   is not in this session's authorized repository set"*. A collaborator grant does
   not put a repository in a session; the Routine's attachment does, and it is a
-  setting Brain cannot read. So Brain **measures** it:
-  `services/dispatch/deliveryProof.ts` fires one pinned `FACTORY_DELIVERY_PROBE_V1`
-  bin at the Routine, whose session pushes a disposable branch, opens a pull
-  request, closes it unmerged and deletes the branch, and Brain records PROVEN in
-  `routine_delivery_proofs` only after reading the forge. The router
-  (`deliveryProvenFor`) and the assigner both refuse a pushing bin to a Routine
-  whose newest settled probe for that repository is not PROVEN; planning and
-  review still go to any surface that can read. The tiers are three and named
-  apart — `CONNECTED`, `EXECUTION_VERIFIED`, `DELIVERY_VERIFIED` — and
-  `verify-surface` stopped calling the second one by the third one's name.
-  `fleet commission --ref trig_… --repository owner/name --probe` asks every step
-  of commissioning in order and ends in one line: `READY FOR … IMPLEMENTATION` or
-  `NOT READY — <first missing step>`.
+  setting Brain cannot read. So Brain **measures** it, from what the forge
+  confirms. The tiers are three and named apart — `CONNECTED`,
+  `EXECUTION_VERIFIED`, `DELIVERY_VERIFIED` — and `verify-surface` stopped
+  calling the second one by the third one's name. `fleet commission --ref trig_…
+  --repository owner/name` asks every step in order and ends in one line.
+
+  **The first version measured it with a ceremony, and the owner rejected it —
+  the correction is recorded rather than quietly applied.** It required every
+  surface to push a throwaway branch and open a throwaway pull request before it
+  could ever be given implementation work, and it would have taken the one
+  surface that had already delivered five real pull requests out of routing
+  because a new table held no synthetic row for it. **Real work is the
+  evidence** (`services/dispatch/deliveryEvidence.ts`): `UNIT_IMPLEMENTED`,
+  `INTEGRATION_MERGED` and `PR_DELIVERED` are written only after the forge
+  confirmed a push, each carries the lease session, and `routineRefsForSession`
+  resolves that session to the one Routine Brain fired it at — so a confirmed
+  push records PROVEN, and the history already in the ledger is backfilled once
+  per process. A surface with no reading is **provisional**: routed, one write
+  bin at a time, and its first real implementation proves it. Only a **FAILED**
+  reading — written the moment a real unit, integration or delivery report says
+  the git proxy refused the repository, with the unit's attempt *not* charged —
+  takes a surface out of push routing, and `fleet clear-delivery-refusal` is its
+  answering transition once the repository is attached. A session that resolves
+  to no Routine or to two is credited to nobody. The pinned probe stays, as the
+  fallback for a surface with no real work to prove itself on.
 - **A capability gates the fire, and nothing gates the assignment — after two
   corrections, both recorded rather than quietly applied.**
   `requiredCapabilities` decides which Routine Brain *fires*. Reading it again to
@@ -11886,6 +11898,7 @@ server/
       router.ts         a pure decision, and its named refusals: which wait, which end a burst
       pool.ts           every surface serving one logical worker, and what each has proved
       deliveryProof.ts  the repository half of a surface: push, pull request, cleanup, verified
+      deliveryEvidence.ts  real work is the proof: a confirmed push proves a surface, a refused one takes it out
       scaler.ts         raise, lower, quarantine — proposals, never actions
       simulate.ts       a deterministic projection, structurally labelled
       profiles.ts       workload cost and activation traces, as queries
