@@ -19,6 +19,7 @@ import {
   approveChangeRequest,
   ensureCampaign,
   ensureChangeRequest,
+  chargeAndReopenUnit,
   ensureUnit,
   getCampaign,
   getUnitByKey,
@@ -1680,6 +1681,87 @@ describe('who produced a bin result is read from the row Brain wrote', () => {
 });
 
 /* ========================================================================= */
+
+describe('a refused remote report charges the attempt and decides from the charged count', () => {
+  /*
+   * Production, 2026-09-26: the old order judged "exhausted?" before charging, so
+   * the third refusal left a three-attempt unit READY at 3 of 3. A bin was built,
+   * a surface did the work, the forge confirmed it — and the acceptance could not
+   * claim a unit at its ceiling, so the confirmed work was thrown away.
+   */
+  async function unit(label: string) {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: `charge-${label}`,
+      objective: 'Something whose unit is refused three times.',
+      expectedOutcome: 'It retires on the third refusal, not after a fourth run.',
+      nonGoals: [],
+      acceptanceConditions: [{ id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true }],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    const created = await ensureUnit({
+      campaignId: campaign.id,
+      unitKey: `unit-${label}`,
+      kind: 'IMPLEMENTATION',
+      role: 'IMPLEMENTER',
+      title: 'A unit refused three times',
+      objective: 'Do one bounded thing.',
+      acceptance: ['it is done'],
+      ownedPaths: ['index.html'],
+      requiredContext: [],
+      verification: [],
+      expectedArtifact: 'a change',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+      state: 'READY',
+    });
+    return created.unit;
+  }
+
+  it('retires the unit on its last attempt, so no bin is ever built for a unit acceptance cannot claim', async () => {
+    const target = await unit('three');
+    const { getUnit } = await import('../server/repos/factory.ts');
+    const max = (await getUnit(target.id))!.maxAttempts;
+    const states: Array<string | null> = [];
+    for (let i = 0; i < max; i += 1) states.push(await chargeAndReopenUnit(target.id, 'WORKER_ERROR', `refusal ${i + 1}`));
+    expect(states.slice(0, -1).every((state) => state === 'READY')).toBe(true);
+    expect(states[states.length - 1]).toBe('FAILED');
+    const after = (await getUnit(target.id))!;
+    expect(after.state).toBe('FAILED');
+    expect(after.attempt).toBe(max);
+    // Nothing further to charge.
+    expect(await chargeAndReopenUnit(target.id, 'WORKER_ERROR', 'again')).toBeNull();
+  });
+
+  it('retires a unit the old order left READY at its ceiling, without charging it again', async () => {
+    const target = await unit('legacy');
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run(`UPDATE factory_work_units SET attempt = max_attempts WHERE id = ?`, [target.id]);
+    expect(await chargeAndReopenUnit(target.id, 'WORKER_ERROR', 'at the ceiling')).toBe('FAILED');
+    const { getUnit } = await import('../server/repos/factory.ts');
+    const after = (await getUnit(target.id))!;
+    expect(after.attempt).toBe(after.maxAttempts);
+  });
+});
 
 describe('a unit out of attempts stops the campaign before any review', () => {
   it('blocks with the unit\'s own reason rather than reviewing an unimplemented tree', async () => {
