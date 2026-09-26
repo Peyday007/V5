@@ -2292,6 +2292,48 @@ button.rs-card:hover {
   font-weight: 600;
 }
 
+/*
+ * The rest of a change's life in the thread: the proposal a person authorizes,
+ * the release card, and what happened. Paths and commit ids are long and
+ * unbreakable, so they are allowed to wrap anywhere rather than push the thread
+ * sideways on a phone.
+ */
+.rs-thread-software-entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.rs-thread-software-entry code,
+.rs-thread-release code {
+  overflow-wrap: anywhere;
+}
+
+.rs-thread-software-conditions,
+.rs-thread-release-files {
+  list-style: disc;
+  padding-inline-start: var(--gap-3);
+  display: block;
+}
+
+.rs-thread-release {
+  border-left: 2px solid var(--rule);
+  padding-inline-start: var(--gap-2);
+}
+
+.rs-thread-software-refuse {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.rs-thread-software-timeline ol {
+  display: block;
+  padding-inline-start: var(--gap-3);
+}
+
 /* ------------------------------------------------- the living constellation
  *
  * A real spatial diagram (§20), not a nested list renamed "map". The list

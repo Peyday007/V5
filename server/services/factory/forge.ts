@@ -252,6 +252,12 @@ export interface ForgeComparison {
   /** True when the forge truncated the file list, so the set is not complete. */
   truncated: boolean;
   /**
+   * The same files with the forge's own line counts, for a person deciding
+   * whether to release them. Never an input to an ownership decision — `files`
+   * is that — and read from the same single response.
+   */
+  fileStats: { path: string; status: string; additions: number; deletions: number }[];
+  /**
    * The forge's own word for how the two commits relate: `identical`, `ahead`,
    * `behind` or `diverged`. It is what makes containment answerable — `head`
    * contains `base` exactly when this is `identical` or `ahead` — and containment
@@ -282,11 +288,23 @@ export async function compareCommits(
   const reply = await get<{
     ahead_by?: number;
     status?: string;
-    files?: { filename?: string }[];
+    files?: { filename?: string; status?: string; additions?: number; deletions?: number }[];
     base_commit?: { sha?: string };
     merge_base_commit?: { sha?: string };
   }>(`/repos/${repository.slug}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`);
   if (!reply.ok) return { ...reply, body: null };
+  const fileStats = (reply.body?.files ?? []).flatMap((file) =>
+    typeof file.filename === 'string'
+      ? [
+          {
+            path: file.filename,
+            status: String(file.status ?? 'modified'),
+            additions: Number(file.additions ?? 0),
+            deletions: Number(file.deletions ?? 0),
+          },
+        ]
+      : [],
+  );
   const files = (reply.body?.files ?? [])
     .map((file) => (typeof file.filename === 'string' ? file.filename : null))
     .filter((name): name is string => name !== null);
@@ -297,6 +315,7 @@ export async function compareCommits(
       headSha: head,
       aheadBy: Number(reply.body?.ahead_by ?? 0),
       files,
+      fileStats,
       // The documented cap. Equality rather than `>=` because the forge reports
       // exactly this many and then stops.
       truncated: files.length >= 300,
@@ -315,6 +334,10 @@ export interface ForgePullRequest {
   url: string;
   title: string;
   updatedAt: string;
+  /** The commit the merge produced, when the forge reports one. */
+  mergeCommitSha?: string | null;
+  mergedAt?: string | null;
+  closedAt?: string | null;
 }
 
 /** One pull request, so Brain can say whether the worker really updated it. */
@@ -329,6 +352,9 @@ export async function readPullRequest(
     html_url?: string;
     title?: string;
     updated_at?: string;
+    merge_commit_sha?: string | null;
+    merged_at?: string | null;
+    closed_at?: string | null;
     head?: { sha?: string; ref?: string };
     base?: { ref?: string };
   }>(`/repos/${repository.slug}/pulls/${number}`);
@@ -355,6 +381,9 @@ export async function readPullRequest(
       url: String(body.html_url ?? ''),
       title: String(body.title ?? ''),
       updatedAt: String(body.updated_at ?? ''),
+      mergeCommitSha: typeof body.merge_commit_sha === 'string' ? body.merge_commit_sha : null,
+      mergedAt: typeof body.merged_at === 'string' ? body.merged_at : null,
+      closedAt: typeof body.closed_at === 'string' ? body.closed_at : null,
     },
   };
 }

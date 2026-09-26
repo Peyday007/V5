@@ -89,6 +89,11 @@ function waiting(over: Record<string, unknown> = {}): Record<string, unknown> {
       campaignId: null,
       authorizedByUserId: null,
       declineReason: null,
+      acceptanceConditions: [
+        { statement: 'The total changes when the quantity does.', verification: 'npm test' },
+      ],
+      liveCheck: null,
+      deliveryPolledAt: null,
       createdAt: '2026-09-13T00:00:00.000Z',
       updatedAt: '2026-09-13T00:00:00.000Z',
     },
@@ -96,6 +101,7 @@ function waiting(over: Record<string, unknown> = {}): Record<string, unknown> {
     pullRequestUrl: null,
     line: 'Waiting for you to authorize it. Nothing has been spent.',
     awaitingPerson: true,
+    delivery: null,
     ...over,
   };
 }
@@ -221,7 +227,18 @@ describe('the authorization card renders and operates', () => {
       fireEvent.click(within(card()).getByRole('button', { name: /Authorize/ }));
     });
 
-    expect(bodies[AUTHORIZE]).toEqual({ grantId: 'sites-monorepo' });
+    /*
+     * What success is travels with the decision. This assertion used to be
+     * `{ grantId }` alone — which pinned the defect: the server refuses to
+     * invent conditions, the factory refuses a contract without them, and so
+     * every Authorize from this card was refused.
+     */
+    expect(bodies[AUTHORIZE]).toEqual({
+      grantId: 'sites-monorepo',
+      acceptanceConditions: [
+        { statement: 'The total changes when the quantity does.', verification: 'npm test' },
+      ],
+    });
     // No optimistic update: the list re-reads, so what a person sees afterwards
     // is what the server did rather than what was asked for.
     expect(calls.filter((c) => c === NEEDS_YOU).length).toBeGreaterThan(1);

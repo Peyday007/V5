@@ -11776,6 +11776,77 @@ repair, and the shape is the register's (§43) carried one level up.
 `npm run goals` and the `Goals` workflow are the terminal and production doors;
 `file --from <row>` files real recorded work with that row's own words as the
 intent and composes nothing.
+## 51. A change asked for in a conversation is answered in that conversation, all the way to production.
+
+The Software Factory could be reached from Russell (§27) and stopped halfway
+back. A person asked for a change, a card appeared, and from there the journey
+was theirs to carry: the card's one button could never start a campaign, the
+conversation heard nothing while the work ran, the release decision lived on
+GitHub with nothing in Brain describing what it would release, and nothing
+anywhere observed the change reaching production or behaving there.
+`services/russell/softwareDelivery.ts` and `docs/SOFTWARE-SERVICE.md` are the
+other half, and they add an entrance and a ledger rather than a second set of
+rules.
+
+- **The Authorize button could never have worked, and two tests pinned it.**
+  `authorizeSoftwareRequest` refuses to invent acceptance conditions — correctly:
+  what success is is the person's, and a model supplying the conditions its own
+  work is judged against is §27's grading-its-own-exam — and the factory refuses
+  to approve a contract with none. Both cards posted `{ grantId }` and nothing
+  else, so every Authorize in Russell was refused, and
+  `softwareDecisionCard.test.tsx` asserted exactly that body. **A test that pins
+  the request a control sends is pinning whatever the control does, including
+  the defect.** The request now carries a *proposal* — the worker's conditions,
+  or the expected outcome itself when it proposed none — the card shows it
+  editable above the button, and Authorize sends what is on the screen. §24's
+  rule that a decision is a proposal to approve, at the one field the factory
+  will not start without. The server still refuses a request that sends none.
+- **Every fact is read, never reported.** A stage is the campaign row; a merge is
+  the forge's `merged` flag and merge commit; *released* is this process's own
+  `BRAIN_REVISION` containing that commit, answered by the forge's compare; the
+  live check is a GET the process makes against itself. No worker's summary
+  decides anything on this path.
+- **The release decision stays where the repository puts it.** For a hosted
+  campaign the release is merging the pull request, and §27 says the factory may
+  never merge one; Brain holds no forge credential and must not. So Russell
+  makes the decision *legible* — the files and line counts, the head commit and
+  whether it is the one Brain integrated and had reviewed, the verdict and its
+  independence tier, the checks, the conditions — links the place it is made,
+  and records a refusal. It observes the person's merge and performs none. A
+  refusal closes nothing on the forge, and the message says so.
+- **Brain can observe the deployment of one repository: its own.** The only
+  deployment it can read is the revision it was built from, so a merge anywhere
+  else is reported as a merge and its deployment as outside what Brain can see —
+  never guessed. `SELF_GRANT_ID` names the grant by the envelope's id rather than
+  by a remote, so a fork or a mirror is not mistaken for it.
+- **Each milestone once, in the conversation once.** `(request_id,
+  milestone_key)` is unique, only the inserting caller writes the message, and a
+  milestone whose message a crashed tick never wrote is finished by a later one
+  after a delay long enough never to race its inserter. Messages are `SYSTEM`
+  and render as **Brain**: they are facts Brain read, and attributing them to
+  Russell would make an observation read like an opinion.
+- **A resumed campaign says so.** The count of blockers seen is part of a stage
+  milestone's key, because otherwise a campaign blocked and resumed in the same
+  stage would leave "Blocked" as the conversation's last word over work that is
+  moving — §29's status contradicting the rows, in a thread.
+- **The forge is asked as little as the facts allow.** At most once per request
+  per `DELIVERY_POLL_MS`, claimed by a compare-and-swap on the last poll time; a
+  merge is permanent, so the pull request is never read again after one; and
+  whether a revision contains a merge can change only with a new process, so it
+  is asked once per revision and remembered in memory for exactly that reason.
+- **The live check is Brain's URL with the person's path.** A proposal supplies a
+  path and a piece of text, validated to start with `/`, never climb and never
+  name a host; the host is `127.0.0.1` and this process's own port. It follows
+  only same-origin script and style references, because a single-page
+  application's text is in its bundle, and a check that read only the HTML would
+  fail every interface change. It is on the card before anybody authorizes.
+
+**What it does not claim.** The acceptance conditions are verified on the
+integrated tree before release and are not re-run against production; the live
+check is one declared behaviour. The fixture suites prove the mechanism on both
+backends; `docs/SOFTWARE-SERVICE-EVIDENCE.md` records the live journey, and
+until a real request has travelled it this section is a design with tests, not
+a production reading — the separation Step 3 drew.
 
 ## Repository map
 
@@ -12113,6 +12184,7 @@ server/
       probeEnvelope.ts  where a probe may look — in code, named by id
       proposal.ts       zero-trust validation of what a model proposes
       writeback.ts      what happens when a mission finishes, exactly once
+      softwareDelivery.ts  a change asked for here, followed to production and back
       needsHuman.ts     the park a packet stops at, and the answer that finishes it
       planning.ts       the judgment pass, its post-probe repeat, and the mission spec
       loop.ts           the durable tick, beside the dispatcher
