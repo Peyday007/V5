@@ -34,6 +34,7 @@
  * output well enough. Those findings are recorded as evidence on their claims
  * and move no question, which is a refusal rather than a gap.
  */
+import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { listMissions } from '../../repos/russellMissions.ts';
@@ -85,13 +86,26 @@ export interface OpenedRound {
 }
 
 /**
+ * A round insert lost its `ON CONFLICT DO NOTHING` race.
+ *
+ * Thrown to roll back the candidate created in the same transaction, never
+ * caught outside `openAsks`'s own loop.
+ */
+class RoundNotOpened extends Error {}
+
+/**
  * Turn the allocator's decisions into work.
  *
- * The round is written *after* the candidate and the insert is
- * `ON CONFLICT DO NOTHING`, so a tick that dies between the two leaves a
- * candidate nothing points at — harmless, because the next tick's insert
- * collides on the same key and the orphan is never asked anything. The shape
- * `openRound` and `openAsks` already have, for the same reason.
+ * The candidate and its round commit together, in one transaction. A round
+ * insert that loses its `ON CONFLICT DO NOTHING` race means another pass
+ * already opened this exact question, and the candidate this call just
+ * created would otherwise be left committed with nothing pointing at it —
+ * **not** harmless: the candidate is created `SHARED` with a project, and
+ * Russell's tick judges and can launch any unjudged `SHARED` candidate,
+ * orphan or not. So a crash between the two writes, or two passes racing on
+ * the same round key, could produce a research mission Brain pays for while
+ * no round points at it and its answer is never absorbed. Rolling both writes
+ * back together makes a lost race exactly as if this call had never happened.
  */
 export async function openAsks(input: {
   projectId: string;
@@ -113,33 +127,43 @@ export async function openAsks(input: {
     const context = contextFor({ workflow: coverage.workflow.name });
     const composed = compose(ask.purpose, subject, context, ask.round);
 
-    const candidate = await createCandidate({
-      projectId: input.projectId,
-      visibility: 'SHARED',
-      conversationId: null,
-      sourceMessageId: null,
-      title: ask.round === 1 ? composed.title : `${composed.title} (round ${ask.round})`,
-      statement: composed.question,
-    });
+    let round: LaborRound;
+    try {
+      round = await getDb().transaction(async (): Promise<LaborRound> => {
+        const candidate = await createCandidate({
+          projectId: input.projectId,
+          visibility: 'SHARED',
+          conversationId: null,
+          sourceMessageId: null,
+          title: ask.round === 1 ? composed.title : `${composed.title} (round ${ask.round})`,
+          statement: composed.question,
+        });
 
-    const opened = await openLaborRound({
-      projectId: input.projectId,
-      taskId: ask.taskId,
-      purpose: ask.purpose,
-      round: ask.round,
-      candidateId: candidate.id,
-    });
-    if (!opened.created) continue;
+        const result = await openLaborRound({
+          projectId: input.projectId,
+          taskId: ask.taskId,
+          purpose: ask.purpose,
+          round: ask.round,
+          candidateId: candidate.id,
+        });
+        if (!result.created) throw new RoundNotOpened();
+        return result.round;
+      });
+    } catch (error) {
+      if (error instanceof RoundNotOpened) continue;
+      throw error;
+    }
 
+    const candidateId = round.candidateId;
     await recordEvent({
       projectId: input.projectId,
       entityType: 'labor_task',
       entityId: ask.taskId,
       eventType: OPENED,
       payload: {
-        roundId: opened.round.id,
+        roundId: round.id,
         purpose: ask.purpose,
-        candidateId: candidate.id,
+        candidateId,
         round: ask.round,
         subject: ask.subject,
         /*
@@ -156,10 +180,10 @@ export async function openAsks(input: {
     });
 
     out.push({
-      roundId: opened.round.id,
+      roundId: round.id,
       taskId: ask.taskId,
       purpose: ask.purpose,
-      candidateId: candidate.id,
+      candidateId,
       round: ask.round,
       question: composed.question,
       why: ask.why,

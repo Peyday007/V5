@@ -38,10 +38,15 @@ function mapRound(row: CashDiscoveryRoundRow): CashDiscoveryRound {
  * Open one round of one bucket, or find the one that is already open.
  *
  * `ON CONFLICT DO NOTHING` on `(project, bucket, round)` then read back, which
- * is the shape every idempotent write in this repository takes: a tick that
- * dies between creating the candidate and recording the round leaves a candidate
- * nothing points at — harmless, because the next tick's insert collides on the
- * same key and the orphan is never asked anything.
+ * is the shape every idempotent write in this repository takes. A losing
+ * insert here is never harmless on its own: the candidate this call's caller
+ * created is `SHARED` with a project, and Russell's tick judges and can
+ * launch any unjudged `SHARED` candidate, orphan or not, so a candidate left
+ * with no round pointing at it is a research mission Brain pays for that
+ * nothing will ever absorb the answer to. `openDiscovery` is what actually
+ * makes a lost race harmless, by creating the candidate and calling this
+ * function inside one transaction and rolling both back together when the
+ * insert loses.
  */
 export async function openRound(input: {
   projectId: string;
