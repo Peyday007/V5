@@ -56,6 +56,7 @@ import { getNeed, getOpportunity } from '../repos/cashPortfolio.ts';
 import { getNode } from '../repos/industry.ts';
 import { seedSubject, retireSubject } from '../services/industry/seed.ts';
 import { industryView } from '../services/industry/view.ts';
+import { industryCapabilities, industryVocabulary } from '../services/industry/access.ts';
 import { isIndustryNodeKind } from '../domain/industry.ts';
 import { getDeal } from '../repos/dealflow.ts';
 import { observe, retire, seedParty } from '../services/dealflow/seed.ts';
@@ -1131,7 +1132,18 @@ cashRouter.get(
   handler(async (req) => {
     requirePerson();
     const project = await requireProject(pathId(req, 'projectId'));
-    return industryView(project.id);
+    /*
+     * The reading, plus what a control over it may be offered for.
+     *
+     * Composed here rather than inside `industryView`, the same way
+     * `routes/labor.ts` composes `laborCapabilities` and `laborVocabulary`
+     * at its own GET route rather than inside `laborView`.
+     */
+    return {
+      ...(await industryView(project.id)),
+      capabilities: industryCapabilities(project.id),
+      vocabulary: industryVocabulary(),
+    };
   }),
 );
 
