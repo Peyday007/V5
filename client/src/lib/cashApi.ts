@@ -782,6 +782,14 @@ export const CashApi = {
       body: JSON.stringify({ reason }),
     }),
 
+  /**
+   * Every lifecycle move an opportunity has, behind one route on the server —
+   * this is that route, generic over which one. `record-action` (a quote, an
+   * invoice, a payment accepted, on a piece already executing or delivering)
+   * is one more case on it rather than a dedicated method: it takes the exact
+   * same `{ action, detail, reference?, occurrence? }` shape `execute` already
+   * sends, and a second method here would only restate that.
+   */
   act: (
     opportunityId: string,
     action: string,
