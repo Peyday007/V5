@@ -86,6 +86,19 @@ and #19.
 | 09-26 ~02:10 | Override narrowed rather than dropped. Surface 1 was restored to target 4. Airyn's capabilities went to `repository` only (it may still review; it cannot be sent a push bin), with the reason recorded on the row. The bin was answered `surface-blocked`, raising its ceiling to 4 |
 | 09-26 02:19 | Objective #2 was submitted and approved, creating campaign `fcp_8878eedce08547b382af` |
 | 09-26 02:31 | `ae510f8` (the factory line) went to production; Deploy 352 dispatched |
+| 09-26 02:54 | Deploy 352 **released** `ae510f8`. Before the restart the hosted verification failed on one call: `brain_submit_synthesis` was refused because Supabase Storage answered **HTTP 429** to the upload (`req__mB3skHrKqo_`, read from the production log). After the restart the same filing passed and the run was 258/259; the one failure was the missing beacon the first pass never left. That is an external rate limit, not the line |
+| 09-26 03:10 | First `factory line` reading: AUTO ON (1), 2 integrations running, 0 arriving, not idle. ready→fire was 2.6 s on campaign #1 and 2.3 s on campaign #2 |
+| 09-26 03:13 | Campaign #1 integrated its first unit (`acbe345`→`3deb6c3`); the test unit's bin was created **0.5 s** after the merge |
+| 09-26 03:17 | Objective #3 was submitted as `fcr_373e0c2396c74deaa6d4` and queued as `fqe_0155abb05f4d46baaf84` at priority 30. Admission went 1→2, because two campaigns were already running on separate branches. #3 starts on Brain's own tick when a slot frees |
+| 09-26 03:39 | Line: #1 EXECUTING (the test unit on surface 1), #2 REVIEWING on Airyn (read-only, which is its role now), #3 queued. Not idle |
+| 09-26 03:4x | `58d7763` (Build panel, parked-stage slot rule, surface names instead of trigger refs) went to production; Deploy dispatched |
+
+**Stage timings measured so far** (Brain's own rows):
+
+| Campaign | Stage | ready→fire | stage duration | transition idle |
+|---|---|---|---|---|
+| #1 | integrate | 2.6 s | 25 min (it runs the full `npm test` on the merged tree) | 0.5 s to the next bin |
+| #2 | integrate | 2.3 s | about 25 min | — |
 
 ## The autonomous-loop fault (Phase 1)
 
