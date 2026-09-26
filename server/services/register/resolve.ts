@@ -319,6 +319,29 @@ function readBranch(link: WorkstreamLink): LinkReading {
 }
 
 /**
+ * The detail keys an attestation reading depends on.
+ *
+ * This is the whole of what makes a `PULL_REQUEST` or `DEPLOY` link's `detail`
+ * an attestation rather than an ordinary pointer: `readAttested` below reads
+ * exactly these five fields and nothing else to decide `state`, `status` and
+ * `attested`. Anything that writes a link on a caller's behalf — a route that
+ * takes a request body's `detail` verbatim, in particular — must strip these
+ * keys from what the caller supplied before the write, because a caller who
+ * can set `attestedBy` and `attestedAt` can name any attester and any moment,
+ * which is the invented citation §12 refuses at a new door. Declaring the set
+ * once, here, beside the function that reads it, is what stops a second reader
+ * or a second stripper from silently disagreeing about which fields matter —
+ * §27's own rule, at a register.
+ */
+export const ATTESTATION_DETAIL_KEYS = [
+  'attestedBy',
+  'attestedAt',
+  'merged',
+  'verifiedLive',
+  'state',
+] as const;
+
+/**
  * A fact about the world outside this Brain.
  *
  * Brain holds no credential for any forge and never will (§27), so what it
