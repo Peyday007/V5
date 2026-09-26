@@ -67,6 +67,7 @@
  * never a favourable assumption, arriving at the moment an opportunity is born
  * rather than being asserted away by whoever created it.
  */
+import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
   createOpportunity,
@@ -299,24 +300,45 @@ export async function openDiscovery(input: {
     const next = nextRoundFor(history, now);
     if (next === null) continue;
 
-    const candidate = await createCandidate({
-      projectId: input.projectId,
-      visibility: 'SHARED',
-      conversationId: null,
-      sourceMessageId: null,
-      title: next === 1 ? bucket.title : `${bucket.title} (round ${next})`,
-      statement: questionFor(bucket, mode.objective, next, history),
-    });
+    /*
+     * The candidate and its round commit together, in one transaction.
+     *
+     * A round insert that loses its `ON CONFLICT DO NOTHING` race means
+     * another pass already opened this exact bucket's round, and the
+     * candidate this call just created would otherwise be left committed with
+     * nothing pointing at it — not harmless, whatever `openRound`'s own
+     * comment used to claim: the candidate is created SHARED with a project,
+     * and Russell's tick judges and can launch any unjudged SHARED candidate,
+     * orphan or not. Rolling both writes back together makes a lost race
+     * exactly as if this call had never happened.
+     */
+    let round: CashDiscoveryRound;
+    try {
+      round = await getDb().transaction(async (): Promise<CashDiscoveryRound> => {
+        const candidate = await createCandidate({
+          projectId: input.projectId,
+          visibility: 'SHARED',
+          conversationId: null,
+          sourceMessageId: null,
+          title: next === 1 ? bucket.title : `${bucket.title} (round ${next})`,
+          statement: questionFor(bucket, mode.objective, next, history),
+        });
 
-    const opened = await openRound({
-      projectId: input.projectId,
-      cashModeId: mode.id,
-      bucketId: bucket.id,
-      mechanism: bucket.mechanism,
-      round: next,
-      candidateId: candidate.id,
-    });
-    if (!opened.created) continue;
+        const result = await openRound({
+          projectId: input.projectId,
+          cashModeId: mode.id,
+          bucketId: bucket.id,
+          mechanism: bucket.mechanism,
+          round: next,
+          candidateId: candidate.id,
+        });
+        if (!result.created) throw new RoundNotOpened();
+        return result.round;
+      });
+    } catch (error) {
+      if (error instanceof RoundNotOpened) continue;
+      throw error;
+    }
 
     await recordCashEvent({
       projectId: input.projectId,
@@ -326,16 +348,24 @@ export async function openDiscovery(input: {
       detail: {
         bucketId: bucket.id,
         mechanism: bucket.mechanism,
-        candidateId: candidate.id,
+        candidateId: round.candidateId,
         cashModeId: mode.id,
         round: next,
         objective: mode.objective,
       },
     });
-    out.push({ bucketId: bucket.id, candidateId: candidate.id, round: next });
+    out.push({ bucketId: bucket.id, candidateId: round.candidateId, round: next });
   }
   return out;
 }
+
+/**
+ * A round insert lost its `ON CONFLICT DO NOTHING` race.
+ *
+ * Thrown to roll back the candidate created in the same transaction, never
+ * caught outside `openDiscovery`'s own loop.
+ */
+class RoundNotOpened extends Error {}
 
 /**
  * How long a finished bucket waits before Brain asks it again.
