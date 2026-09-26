@@ -27,6 +27,11 @@ import type {
 } from '../../../server/services/cash/monetization/surface.ts';
 import type { LedgerEntry } from '../../../server/services/cash/monetization/ledger.ts';
 import type { RankExplanation } from '../../../server/services/cash/monetization/rank.ts';
+import type {
+  MonetizationEdgeKind,
+  MonetizationMethod,
+  MonetizationPath,
+} from '../../../server/domain/types.ts';
 
 export type {
   CashReadiness,
@@ -37,6 +42,9 @@ export type {
   LedgerEntry,
   TopEntry,
   RankExplanation,
+  MonetizationEdgeKind,
+  MonetizationMethod,
+  MonetizationPath,
 };
 
 /**
@@ -639,6 +647,38 @@ export const CashApi = {
     body: { method: string; opportunityId?: string; industryNodeId?: string; thesis?: string },
   ): Promise<{ message: string }> =>
     api(`/api/projects/${p(projectId)}/cash/monetization/paths`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Say that two possibilities are one, that one is several, or that they
+   * relate to each other &mdash; the only writer of a blocking edge (§49).
+   *
+   * The response shape depends on which action was sent: `MERGE` and
+   * `UNMERGE` return the one path that changed, `SPLIT` returns every child
+   * it produced, and `LINK` returns only whether the relation was new. All
+   * four carry the server's own message, rendered verbatim rather than
+   * paraphrased.
+   */
+  pathLineage: (
+    pathId: string,
+    body:
+      | { action: 'MERGE'; into: string; reason: string }
+      | { action: 'UNMERGE' }
+      | {
+          action: 'SPLIT';
+          into: { method: MonetizationMethod; title?: string; thesis?: string }[];
+          reason: string;
+        }
+      | { action: 'LINK'; kind: MonetizationEdgeKind; to: string; rationale: string },
+  ): Promise<{
+    path?: MonetizationPath;
+    paths?: MonetizationPath[];
+    created?: boolean;
+    message: string;
+  }> =>
+    api(`/api/cash/monetization/paths/${p(pathId)}/lineage`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
