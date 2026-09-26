@@ -3350,19 +3350,21 @@ export async function countDispatches(binId: string, state: BinDispatchState): P
  * own dispatch rows.
  *
  * A dispatch row stores the provider's session as `cse_<id>`, and a worker
- * checking in reports the same session as `session_<id>`; both spellings are
- * asked. This is Brain's record of which surface started the session, never
+ * checking in reports the same session as `session_<id>` or
+ * `claude-code-session_<id>`; every spelling is asked. This is Brain's record of which surface started the session, never
  * anything the worker said about itself — the reported id only selects which
  * of Brain's rows to read. Empty when Brain fired nothing that produced it (a
  * scheduled arrival, or a session id nobody reported).
  */
 export async function routineRefsForSession(sessionRef: string): Promise<string[]> {
-  const bare = sessionRef.replace(/^(cse|session)_/, '');
-  if (!bare) return [];
+  // `cse_<id>`, `session_<id>` and `claude-code-session_<id>` are all seen in
+  // production for one provider session; the id is what follows the last prefix.
+  const bare = sessionRef.replace(/^(?:.*session_|cse_)/, '');
+  if (!bare || bare === sessionRef && !/^[A-Za-z0-9]{8,}$/.test(bare)) return [];
   const rows = await getDb().all<{ routine_ref: string | null }>(
     `SELECT DISTINCT routine_ref FROM bin_dispatch
-      WHERE state = 'SENT' AND routine_ref IS NOT NULL AND session_ref IN (?, ?, ?)`,
-    [sessionRef, `cse_${bare}`, `session_${bare}`],
+      WHERE state = 'SENT' AND routine_ref IS NOT NULL AND session_ref IN (?, ?, ?, ?)`,
+    [sessionRef, `cse_${bare}`, `session_${bare}`, `claude-code-session_${bare}`],
   );
   return rows.map((row) => row.routine_ref).filter((ref): ref is string => !!ref);
 }

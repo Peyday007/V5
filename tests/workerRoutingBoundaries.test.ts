@@ -898,6 +898,14 @@ describe('a session started by a surface that cannot push is not handed push wor
     expect(after.dispatchNotBefore ?? null).toBeNull();
   });
 
+  it('recognises the session however the worker spells it', async () => {
+    const { workerId, principal } = await factoryWorker('pool-ro-spelled');
+    await firedSession('trig_readonly', '01SPELLED');
+    const bin = await factoryBin();
+    const admit = await binAdmission({ workerId, principal, sessionRef: 'claude-code-session_01SPELLED' });
+    expect((await admit(bin)).ok).toBe(false);
+  });
+
   it('hands the same bin to a session a push-capable surface started', async () => {
     const { workerId, principal } = await factoryWorker('pool-rw');
     await firedSession('trig_writer', '01WRITER');
