@@ -100,6 +100,7 @@ import {
   reoffer,
   settleSpend,
 } from '../services/cash/opportunities.ts';
+import { recordFurtherAction } from '../services/cash/actions.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
 import { cashView } from '../services/cash/view.ts';
 import { cashCapabilities, decideCashRead } from '../services/cash/access.ts';
@@ -818,6 +819,33 @@ cashRouter.post(
                   },
                 }
               : {}),
+          }),
+        );
+        return { opportunity: value, message };
+      }
+      case 'record-action': {
+        /*
+         * Everything a person does after execution has begun and before the
+         * money is collected: a quote, an invoice, a payment accepted. Unlike
+         * `execute`, there is no continuation shape here — this route exists
+         * only to record something, so the action and the detail are both
+         * required, and nothing about the opportunity's state moves.
+         */
+        const performed = requiredString(body['action'], 'action');
+        const detail = requiredString(body['detail'], 'detail');
+        const { value, message } = taken(
+          await recordFurtherAction({
+            opportunityId: opportunity.id,
+            actorRef: principal.id,
+            action: performed,
+            performedBy: 'PERSON' as const,
+            detail,
+            reference: optionalString(body['reference'], 'reference') ?? null,
+            requestKey: actionKey(
+              opportunity.id,
+              performed,
+              optionalString(body['occurrence'], 'occurrence') ?? 'first',
+            ),
           }),
         );
         return { opportunity: value, message };

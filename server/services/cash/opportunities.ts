@@ -68,7 +68,7 @@ export type Refusal = { ok: false; reason: string };
 export type Accepted<T> = { ok: true; value: T; message: string };
 export type Outcome<T> = Accepted<T> | Refusal;
 
-function refuse(reason: string): Refusal {
+export function refuse(reason: string): Refusal {
   return { ok: false, reason };
 }
 
