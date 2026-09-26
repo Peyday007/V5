@@ -1756,6 +1756,55 @@ describe('a further commercial action, once execution has begun', () => {
     });
   });
 
+  it('carries a reference in its own field, so two similar-sounding occurrences can be told apart', async () => {
+    // A reviewer found that this panel had no separate reference field at
+    // all: the label promised "any reference it has outside Brain" and then
+    // folded whatever was typed into `detail` alone, so `reference` was
+    // always sent as nothing. Two genuinely distinct occurrences typed with
+    // near-identical wording had no way to tell the server they differed.
+    // This is the fix, asserted as what actually reaches the wire.
+    base({
+      [VIEW]: {
+        body: executingView({
+          exists: true,
+          lines: ['It authorizes: CONTACT_BUYER, QUOTE_AND_INVOICE.'],
+          allowedActions: ['CONTACT_BUYER', 'QUOTE_AND_INVOICE'],
+        }),
+      },
+      'POST /api/cash/opportunities/cop_2/record-action': {
+        body: { opportunity: {}, message: 'Recorded.' },
+      },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /record a further action/i })).toBeTruthy(),
+    );
+    fireEvent.click(
+      yourWork().getByRole('button', { name: /record a further action/i }),
+    );
+    fireEvent.change(yourWork().getByLabelText(/which action did you take/i), {
+      target: { value: 'QUOTE_AND_INVOICE' },
+    });
+    fireEvent.change(yourWork().getByLabelText(/who you contacted or what you sent/i), {
+      target: { value: 'Sent the invoice.' },
+    });
+    /*
+     * The reference is a field of its own — not a suffix appended to
+     * `detail` — so filling it must not change what `detail` reads.
+     */
+    fireEvent.change(yourWork().getByLabelText(/any reference it has outside brain/i), {
+      target: { value: 'inv-0042' },
+    });
+    await act(async () => {
+      fireEvent.click(yourWork().getByRole('button', { name: 'Confirm' }));
+    });
+    expect(bodies['POST /api/cash/opportunities/cop_2/record-action']).toEqual({
+      action: 'QUOTE_AND_INVOICE',
+      detail: 'Sent the invoice.',
+      reference: 'inv-0042',
+    });
+  });
+
   it('renders disabled with the server’s own reason when the grant covers no action', async () => {
     base({
       [VIEW]: {
