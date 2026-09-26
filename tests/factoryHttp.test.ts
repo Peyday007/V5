@@ -269,6 +269,32 @@ describe('Factory allocation', () => {
   });
 });
 
+describe('the production line', () => {
+  it('answers a member of the project, and refuses anybody else exactly as a missing project', async () => {
+    const path = `/api/projects/${projectId}/factory/line`;
+    const reading = await call<{
+      auto: boolean;
+      executable: { total: number };
+      capacity: { surfaces: Record<string, unknown>[] };
+      because: string;
+    }>('GET', path, { cookie: adminCookie });
+    expect(reading.status).toBe(200);
+    expect(typeof reading.body.auto).toBe('boolean');
+    expect(typeof reading.body.because).toBe('string');
+    // A surface's row id is the operator's; the panel is read by any member.
+    for (const surface of reading.body.capacity.surfaces) expect(surface).not.toHaveProperty('routineId');
+
+    const outsider = await call('GET', path, { cookie: outsiderCookie });
+    const invented = await call('GET', '/api/projects/prj_0000000000000000dead/factory/line', {
+      cookie: outsiderCookie,
+    });
+    expect(outsider.status).toBe(404);
+    expect(invented.status).toBe(404);
+    expect(outsider.text).toBe(invented.text);
+    expect((await call('GET', path, { bearer: workerBearer })).status).toBe(404);
+  });
+});
+
 describe('somebody signed in who is a member of nothing', () => {
   it('cannot tell a campaign they may not see from one that does not exist', async () => {
     const real = await call('GET', `/api/factory/campaigns/${campaignId}`, {

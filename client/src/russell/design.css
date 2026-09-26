@@ -4228,3 +4228,10 @@ details.rs-card > section.rs-card {
 .rs-goal[data-lifecycle='CANCELLED'] {
   opacity: 0.85;
 }
+
+/* The factory's production line: five figures read at a glance, then the lists. */
+.rs-factory-line .rs-line-headline { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.5rem; margin: 0 0 0.5rem; }
+.rs-factory-line .rs-line-headline dt { font-size: 0.8em; color: var(--ink-soft); }
+.rs-factory-line .rs-line-headline dd { margin: 0; font-weight: 600; }
+.rs-factory-line .rs-line-fault { color: var(--ochre-ink); text-decoration: underline; }
+.rs-factory-line .rs-line-list { padding-left: 1.1rem; }

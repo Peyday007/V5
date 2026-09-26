@@ -37,7 +37,7 @@ import type {
   FactoryChangeRequest,
 } from '../../domain/factory.ts';
 import {
-  advanceUnitAttempt,
+  chargeAndReopenUnit,
   claimCampaignTick,
   extendCampaignTick,
   getCampaign,
@@ -47,7 +47,6 @@ import {
   patchCampaign,
   promoteReadyUnits,
   releaseCampaignTick,
-  reopenUnit,
 } from '../../repos/factory.ts';
 import {
   listFactoryEvents,
@@ -440,8 +439,8 @@ async function ingestReviewBin(
  * A unit whose report Brain would not believe.
  *
  * Two things happen and both matter. The unit goes back to READY with the reason
- * recorded — or to FAILED if it has no attempt left, which `reopenUnit` already
- * decides — and it is charged an attempt. The charge is what makes the next round
+ * recorded — or to FAILED when the attempt it is charged was its last, decided
+ * from the charged count in the same statement — and it is charged an attempt. The charge is what makes the next round
  * different work rather than the same work: the branch name carries the attempt,
  * so a re-implementation gets a clean branch instead of pushing on top of commits
  * Brain has already refused.
@@ -458,8 +457,9 @@ async function refuseUnit(
   report: RemoteTickReport,
   binId: string,
 ): Promise<void> {
-  const reopened = await reopenUnit(unit.id, category, detail);
-  if (reopened) await advanceUnitAttempt(unit.id);
+  // Charged and judged in one statement, from the charged count: see
+  // `chargeAndReopenUnit` for what the old two-call order cost.
+  const outcome = await chargeAndReopenUnit(unit.id, category, detail);
   await recordFactoryEvent({
     campaignId: campaign.id,
     unitId: unit.id,
@@ -469,7 +469,11 @@ async function refuseUnit(
     // idempotent: one bin's report is refused once, however many ticks read it.
     detail: { unitKey: unit.unitKey, category, binId, detail: detail.slice(0, 500) },
   });
-  report.notes.push(`${unit.unitKey} goes back for another attempt: ${category}.`);
+  report.notes.push(
+    outcome === 'FAILED'
+      ? `${unit.unitKey} has used its attempts: ${category}.`
+      : `${unit.unitKey} goes back for another attempt: ${category}.`,
+  );
 }
 
 /** How many times a confirmed units report may fail to record before it costs an attempt. */
@@ -2148,7 +2152,25 @@ export function startFactoryRemoteLoop(intervalMs = DEFAULT_INTERVAL_MS): void {
     if (running) return;
     running = true;
     void tickAllRemoteCampaigns()
-      .then(async (reports) => {
+      .then(async (ticked) => {
+        /*
+         * The step between campaigns, on the same timer as the step between
+         * stages. A campaign that finishes, blocks or delivers frees its slot on
+         * this pass, and the next objective a person queued starts on it —
+         * ticked here so its first bin exists before the dispatch below, rather
+         * than twenty seconds later. Caught on its own: a line that cannot read
+         * its queue must never stop the campaigns already running.
+         */
+        const reports = [...ticked];
+        try {
+          const { runLinePass } = await import('./line.ts');
+          const pass = await runLinePass();
+          for (const started of pass.admission.admitted) {
+            reports.push(await tickRemoteCampaign(started.campaignId));
+          }
+        } catch {
+          // The next pass reads the same rows.
+        }
         /*
          * Place what this tick created, now, instead of leaving it for the
          * dispatcher's own wake.

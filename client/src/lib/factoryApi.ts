@@ -149,7 +149,66 @@ export interface FactoryAllocation {
   }[];
 }
 
+/**
+ * The factory as a production line, for one project. Every sentence is the
+ * server's (`because`, `blocked.remedy`, `next`, `why`); the panel composes none.
+ */
+export interface FactoryLine {
+  at: string;
+  policy: { maxActive: number; actor: string; reason: string; createdAt: string | null };
+  auto: boolean;
+  executable: { queued: number; readyBins: number; total: number };
+  active: { leasedBins: number; arriving: number; workingCampaigns: number };
+  capacity: {
+    freeSurfaces: number;
+    surfaces: {
+      routineName: string;
+      accountName: string;
+      capabilities: string[];
+      inFlight: number;
+      target: number | null;
+      refusal: string | null;
+      free: boolean;
+    }[];
+  };
+  unexplainedIdle: boolean;
+  because: string;
+  campaigns: {
+    campaign: FactoryCampaign;
+    objective: string;
+    working: boolean;
+    bins: {
+      binId: string;
+      kind: string;
+      state: string;
+      readyAt: string | null;
+      leasedAt: string | null;
+      sessionRef: string | null;
+      lastSentAt: string | null;
+      lastRoutine: string | null;
+    }[];
+    blocked: null | {
+      wait: 'AUTOMATIC' | 'PERSON';
+      kind: string;
+      detail: string;
+      remedy: string;
+      since: string | null;
+    };
+    next: string;
+    elapsedMs: number | null;
+  }[];
+  queue: {
+    entry: { id: string; changeRequestId: string; priority: number; queuedAt: string };
+    objective: string;
+    position: number;
+    executableNow: boolean;
+    why: string;
+  }[];
+}
+
 export const FactoryApi = {
+  line: (projectId: string): Promise<FactoryLine> =>
+    api(`/api/projects/${encodeURIComponent(projectId)}/factory/line`),
   allocation: (projectId: string): Promise<FactoryAllocation> =>
     api(`/api/projects/${encodeURIComponent(projectId)}/factory/allocation`),
 

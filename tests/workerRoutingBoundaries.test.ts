@@ -14,7 +14,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { createWorker, setWorkerRouting } from '../server/repos/identity.ts';
-import { createBin, getBin, listBins } from '../server/repos/bins.ts';
+import { createBin, ensureDispatchIntent, getBin, listBins, markDispatchSent } from '../server/repos/bins.ts';
+import { createAccount, createRoutine } from '../server/repos/fleet.ts';
+import { getDb } from '../server/db/database.ts';
 import { binAdmission, checkIn, workerRoutingFor } from '../server/services/bins/service.ts';
 import {
   allAdmissions,
@@ -819,5 +821,105 @@ describe('retiring obsolete work leaves the history and takes the claim away', (
     expect(stale.ok).toBe(false);
     expect(stale.refusal).toBe('STALE_GENERATION');
     expect((await getBin(bin.id))!.state).toBe('READY');
+  });
+});
+
+describe('a session started by a surface that cannot push is not handed push work', () => {
+  /*
+   * Production, 2026-09-26: a read-only Factory surface's plan session finished
+   * its bin, checked in again, was offered the next ready bin — an implementation
+   * — pushed, was refused 403, and spent the unit's attempts. Brain wrote the
+   * dispatch row that started that session, and the row names the Routine.
+   */
+  async function firedSession(routineRef: string, sessionId: string): Promise<void> {
+    const plan = await createBin({
+      projectId: fixture.project.id,
+      kind: 'FACTORY_PLAN',
+      title: 'Plan',
+      objective: 'Plan the campaign.',
+      manifest: manifest(),
+      completionContract: 'FACTORY_UNITS_V1',
+      workloadClass: 'FACTORY_PLAN',
+      requiredCapabilities: ['repository'],
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+    });
+    await ensureDispatchIntent((await getBin(plan.id))!);
+    const intent = await getDb().get<{ id: string }>(`SELECT id FROM bin_dispatch WHERE bin_id = ?`, [plan.id]);
+    await markDispatchSent(intent!.id, { routineRef, sessionRef: `cse_${sessionId}` });
+    await getDb().run(`UPDATE bins SET state = 'COMPLETE' WHERE id = ?`, [plan.id]);
+  }
+
+  async function factoryWorker(name: string): Promise<{ workerId: string; principal: Principal }> {
+    const workerId = await worker(name);
+    await setWorkerRouting({
+      workerId,
+      families: ['FACTORY'],
+      repositories: ['peyday007/oakwood-junk-removal'],
+      capabilities: [],
+      reason: 'authorized for this repository',
+      setBy: 'test',
+    });
+    return { workerId, principal: principalFor(workerId, ['queue:claim', 'queue:complete']) };
+  }
+
+  beforeEach(async () => {
+    const account = await createAccount({ name: `acct-${Math.random().toString(36).slice(2, 8)}` });
+    await createRoutine({
+      accountId: account.id, routineRef: 'trig_readonly', name: 'Read-only surface',
+      tokenSecretName: 'RO_SECRET', capabilities: ['repository'],
+    });
+    await createRoutine({
+      accountId: account.id, routineRef: 'trig_writer', name: 'Writer surface',
+      tokenSecretName: 'RW_SECRET', capabilities: ['repository', 'repository-write'],
+    });
+  });
+
+  it('skips the push bin for the read-only session, quietly, and leaves it to be fired', async () => {
+    const { workerId, principal } = await factoryWorker('pool-ro');
+    await firedSession('trig_readonly', '01READONLY');
+    const bin = await factoryBin();
+    const admit = await binAdmission({ workerId, principal, sessionRef: 'session_01READONLY' });
+    const verdict = await admit(bin);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.quiet).toBe(true);
+    expect(verdict.reason).toContain('Read-only surface');
+
+    const arrival = await checkIn({ principal, workerId, sessionRef: 'session_01READONLY' });
+    expect(arrival.assigned).toBe(false);
+    const after = (await getBin(bin.id))!;
+    expect(after.state).toBe('READY');
+    expect(after.attemptCount).toBe(0);
+    // No refusal row and no deferral: the surface that can push is fired as soon as ever.
+    const refusals = await getDb().get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM bin_session_refusals WHERE bin_id = ?`, [bin.id]);
+    expect(Number(refusals?.n ?? 0)).toBe(0);
+    expect(after.dispatchNotBefore ?? null).toBeNull();
+  });
+
+  it('recognises the session however the worker spells it', async () => {
+    const { workerId, principal } = await factoryWorker('pool-ro-spelled');
+    await firedSession('trig_readonly', '01SPELLED');
+    const bin = await factoryBin();
+    const admit = await binAdmission({ workerId, principal, sessionRef: 'claude-code-session_01SPELLED' });
+    expect((await admit(bin)).ok).toBe(false);
+  });
+
+  it('hands the same bin to a session a push-capable surface started', async () => {
+    const { workerId, principal } = await factoryWorker('pool-rw');
+    await firedSession('trig_writer', '01WRITER');
+    const bin = await factoryBin();
+    const arrival = await checkIn({ principal, workerId, sessionRef: 'session_01WRITER' });
+    expect(arrival.assigned).toBe(true);
+    if (arrival.assigned) expect(arrival.assignment.binId).toBe(bin.id);
+  });
+
+  it('fails open for a session Brain did not fire, because it cannot tell', async () => {
+    const { workerId, principal } = await factoryWorker('pool-unknown');
+    const bin = await factoryBin();
+    const arrival = await checkIn({ principal, workerId, sessionRef: 'session_01NOBODYFIRED' });
+    expect(arrival.assigned).toBe(true);
+    if (arrival.assigned) expect(arrival.assignment.binId).toBe(bin.id);
   });
 });

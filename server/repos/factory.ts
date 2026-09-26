@@ -1452,6 +1452,53 @@ export async function reopenUnit(
 }
 
 /**
+ * Charge a remote unit the attempt a refused report cost, and decide from the
+ * charged count whether it goes back to work or retires — in one statement.
+ *
+ * The remote plane does not claim a unit until a report is believed, so a
+ * refusal is where the attempt is spent. It used to be two calls in the wrong
+ * order: `reopenUnit` judged "exhausted?" from the count *before* the charge,
+ * and `advanceUnitAttempt` charged afterwards. So the third refusal of a
+ * three-attempt unit left it READY at 3 of 3 — a bin was built for it, a
+ * surface did the work, the forge confirmed it, and the acceptance could not
+ * claim a unit already at its ceiling, so confirmed work was thrown away and
+ * only then did the unit retire. Production, 2026-09-26, campaign
+ * fcp_943652c5…: both units, on a surface that had done everything right.
+ *
+ * `attempt + 1 >= max_attempts` reads the pre-update row, as SQL defines, so
+ * the state and the count move together. A unit already at or past its
+ * ceiling — only reachable through the old ordering — is retired without a
+ * further charge.
+ */
+export async function chargeAndReopenUnit(
+  unitId: string,
+  category: FactoryFailureCategory,
+  detail: string,
+): Promise<'READY' | 'FAILED' | null> {
+  const db = getDb();
+  const at = factoryNow();
+  const charged = await db.run(
+    `UPDATE factory_work_units
+        SET attempt = attempt + 1,
+            state = CASE WHEN attempt + 1 >= max_attempts THEN 'FAILED' ELSE 'READY' END,
+            failure_category = ?, failure_detail = ?, updated_at = ?
+      WHERE id = ? AND state IN ('IMPLEMENTED','READY') AND attempt < max_attempts`,
+    [category, bound(detail), at, unitId],
+  );
+  if (charged.changes === 1) {
+    const row = await db.get<{ state: string }>(`SELECT state FROM factory_work_units WHERE id = ?`, [unitId]);
+    return (row?.state as 'READY' | 'FAILED' | undefined) ?? null;
+  }
+  const retired = await db.run(
+    `UPDATE factory_work_units
+        SET state = 'FAILED', failure_category = ?, failure_detail = ?, updated_at = ?
+      WHERE id = ? AND state IN ('IMPLEMENTED','READY') AND attempt >= max_attempts`,
+    [category, bound(detail), at, unitId],
+  );
+  return retired.changes === 1 ? 'FAILED' : null;
+}
+
+/**
  * Raise a unit's attempt ceiling, and put a unit that ran out back to work.
  *
  * The answer to `UNIT_EXHAUSTED_ATTEMPTS`, which had none: its remedy read

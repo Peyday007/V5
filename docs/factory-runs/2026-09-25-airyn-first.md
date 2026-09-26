@@ -1,0 +1,158 @@
+# Factory run record — 2026-09-25, Airyn-first
+
+This records one operator session. It is not project state: Brain is
+authoritative, and every claim below names the reading or code location it
+comes from.
+
+## Routing override (temporary, still in force)
+
+- **Change:** `fleet set-target --scope ROUTINE --ref trig_01JN1h6UdhvR3bMpWFvaRbD2 --target 0`
+  — Factory surface 1, under account *Brain Research A*. This is policy
+  version 1 for that Routine (actor `operator:fleet-cli`, 2026-09-25T17:58:09Z),
+  with the reason recorded on the row.
+- **Read back:** `factory allocation` → `next task -> Airyn`, *Selected Factory
+  surface 2 on Airyn*.
+- **Airyn's surface:** `verify-pool` reports PROVEN (it completed
+  `bin_ed2fd51d47fb46c29670`).
+- **Scope:** no lease was touched and no research routing was changed.
+- **This is Airyn-only, not Airyn-first-with-fallback.** The router has no
+  preferred-account setting. Its only other ordering input is a person's
+  allowance report, and it would be false to enter one that nobody made.
+- **To remove:** run the `Fleet` workflow with `set-target`, `scope=ROUTINE`,
+  `ref=trig_01JN1h6UdhvR3bMpWFvaRbD2`, `target=4`, and a reason. Before the
+  override the Routine had no Routine-level policy and was bounded by its
+  account target of 4, so this restores the old behaviour.
+
+## Unfinished code builds in V5 — inventory
+
+This lists software builds only. Research backlog was used as evidence and is
+not counted as a build. Sources: three read-only code surveys, `cash-report`,
+`goals show`, `capability packets`, `fleet show`, and a direct reading of the
+cited files.
+
+| # | Build | Health | What is missing (code) | Magnitude | Disposition | Factory now? |
+|---|---|---|---|---|---|---|
+| 1 | Ideas map privacy | broken (live) | `ideaMapForProject` (russell/ideas.ts) lists every candidate. `requireCandidate` (routes/russell.ts:199) refuses PRIVATE ideas from threads the caller cannot read. The map therefore shows other members' private idea titles and statements. | small | FINISH | **yes — objective filed** |
+| 2 | Work-register attestation integrity | broken (live) | The link route stores the caller's `detail`. `readAttested` trusts `attestedBy/attestedAt/merged/verifiedLive` from it (register/resolve.ts:333), so anyone with write access can make a workstream read VERIFIED_LIVE and a goal read delivered. | small | FINISH | **yes — objective filed** |
+| 3 | Atomic kernel round opening | broken (latent) | Six places create a Russell candidate and then insert a round with `ON CONFLICT DO NOTHING`. A losing insert leaves a paid, launched candidate that no round reads: industry, manufacturing, dealflow, puzzle and labor `expand.ts`, plus cash discovery. | small–medium | FINISH | **yes — objective filed** |
+| 4 | Bridge bearer authority scope | working, over-broad (security) | A `brnc_` key resolves to a full HUMAN principal with every project role (authenticate.ts:276). It can therefore approve Factory objectives and releases, grant authority, and issue site credentials. | small | NEEDS DECISION (which routes a chat key may reach) | no — `server/services/identity/**` is forbidden to Factory; a person must make this change |
+| 5 | Cash: the "Brain acts" branch records unperformed effects | broken (latent) | `advanceWithinAuthority` (cash/operate.ts:636) writes `performedBy: BRAIN, "Reached …"` as soon as a capability reads PRESENT, with no external call and no `services/effects` receipt. That violates invariants 25–26. It is latent only because all five integrations read MISSING. | medium | FINISH | yes (needs a `perform` hook plus UNCERTAIN handling) |
+| 6 | Cash: commercial actions after execution | partial | `recordAction` has one caller: the first action inside `beginExecution`. `QUOTE_AND_INVOICE` and the others cannot be recorded later, so dealflow's QUOTING stage is unreachable. | small–medium | FINISH | yes |
+| 7 | Cash: controls missing for existing server routes | partial | No client calls commit/settle a spend commitment (routes/cash.ts:955, 992), `reoffer`/`exhaust`/`archive` (:847–895), or monetization SEED/LINK/MERGE/UNMERGE/SPLIT/compare (:1653, :1939–2028). LINK is the only writer of a blocking edge. | small each | FINISH | yes (one objective per group) |
+| 8 | Bridge UI | partial | Every bridge route exists; `BridgeApi` (registerApi.ts:95) has no caller. The docs tell the owner to mint a credential with a raw POST. | small | FINISH **after #4** (a UI minting over-broad keys amplifies #4) | blocked on #4 |
+| 9 | Russell: ideas parked for missing authority never resume | partial | `unjudged()` requires `priority IS NULL` (russell/loop.ts:2770). Only Cash and the person-override path re-judge. Recorded in STEP-12B-BACKLOG.md:311. | small | FINISH | yes |
+| 10 | Fleet auto-scale switch | broken (declared, unreachable) | `fleet_policy.auto_scale` is written. `proposeScale` is read only by `fleet scale-advice`, which prints. The dispatch loop never applies it. | medium | NEEDS DECISION (wire it, or refuse the flag) | no |
+| 11 | Kernel operator surfaces (puzzle, industry, dealflow, design) | partial | Routes exist under `/cash/{puzzles,industries,dealflow}`, but no client calls them; the design kernel has no route. Labor and Machines already closed this same gap. | medium each | FINISH (puzzle first) | yes |
+| 12 | Capability realization state mover | partial / stalled | `packet.advance` has no production caller, so every packet stays DRAFT for ever. Gap readings are terminal-only. | medium | NEEDS DECISION (terminal semantics are explicitly undecided, §37) | no |
+| 13 | Research Intelligence reader | working, no reader | `GET /research/:id/intelligence` is read only by verify-hosted. | small | FINISH | yes |
+| 14 | PR #36 — software change delivered back into the conversation | coded, unmerged | The Authorize card sent no acceptance conditions, so every Authorize was refused. Its fix and delivery-back live on the branch. | done (review + merge) | NEEDS DECISION (person merges) | n/a |
+| 15 | PR #37 — human work coordination | coded, unmerged | Migration 094 / pg 085 collides with production; section number collides with #36. | small (renumber) + merge | MERGE after #36 | yes (renumber) |
+| 16 | PR #35 — puzzle kernel production fixes | coded, unmerged | `puzzle_rounds_unique` keys on nullable columns (the defect is still in production at 089:511); migration number collides. | small | FINISH (port) | yes |
+| 17 | PR #23 — commerce kernel | abandoned | 4,400 lines on a branch with no merge base; overlaps Cash and monetization. | large | NEEDS DECISION (default PAUSE) | no |
+| 18 | In-process provider research path | superseded in production | orchestrator/queue/runDynamicAudit/findings are reachable only with a provider, which production lacks. | — | NEEDS DECISION (keep for local mode or delete) | no |
+| 19 | Puzzle typesetting | missing | Every physical route is behind `TYPESET_FOR_PRINT`. | medium | NEEDS DECISION (output format, PDF library) | no |
+| — | PR #3, PR #30 | superseded | Branches with no merge base. #30's one unique fix is folded into #3 above. | — | KILL | — |
+
+### Priority order and why
+
+1. **#1 ideas-map privacy.** A live leak of other members' private content in a
+   Brain that now has several members. The rule already exists one route over,
+   so nothing is invented.
+2. **#2 register attestation.** A live integrity hole in the control plane that
+   is meant to become the first-class build and goal record. A goal can read
+   delivered on a typed claim.
+3. **#3 atomic kernel rounds.** A latent correctness defect that spends research
+   allowance on questions whose answers are discarded. It unblocks trust in six
+   kernels at once.
+4. **#5, #6, #7** Cash code (honest effects, then later actions, then controls).
+   Their current leverage is limited: production has 0 of 40 openings
+   qualified, so there is nothing ready for these controls to act on yet.
+5. **#9, #11, #13, #16**, then the NEEDS DECISION items.
+
+**Decisions only the owner can make:** #4 (bridge key scope — the most severe
+item, outside Factory's permitted paths), #10, #12, #14 (merge PR #36), #17, #18
+and #19.
+
+## Factory state
+
+| Time (UTC) | Event |
+|---|---|
+| 09-25 20:27–21:00 | Deploy 351 released `acbe345`; the post-restart proof passed |
+| 09-26 01:19 | `factory submit` of objective #1 created `fcr_8390e40c3ea14eceb22b`, pinned to `acbe345`, project Deal Dispatch |
+| 09-26 01:21 | Approved under the owner's standing authorization; this created campaign `fcp_11e2e481b79d4a948049` |
+| 09-26 01:23 | Plan bin `bin_9bf63d096c0d45c4ab36` was fired at **Airyn's Factory surface 2** (`trig_01H6Ngiv7NbPjva5mtz2zPWD`). Session `cse_0156a7HaFqipzXdFSu4p6cCg` arrived and holds the lease (gen 1) |
+
+| 09-26 ~01:50 | Units bin `bin_ea21df767f104e04b5f2` exhausted its attempts. Airyn's surface committed twice and never pushed: no `factory/fcp_11e2e481…` branch reached origin. Surface 1 was at target 0 under the override, so nothing else could take it |
+| 09-26 ~02:10 | Override narrowed rather than dropped. Surface 1 was restored to target 4. Airyn's capabilities went to `repository` only (it may still review; it cannot be sent a push bin), with the reason recorded on the row. The bin was answered `surface-blocked`, raising its ceiling to 4 |
+| 09-26 02:19 | Objective #2 was submitted and approved, creating campaign `fcp_8878eedce08547b382af` |
+| 09-26 02:31 | `ae510f8` (the factory line) went to production; Deploy 352 dispatched |
+| 09-26 02:54 | Deploy 352 **released** `ae510f8`. Before the restart the hosted verification failed on one call: `brain_submit_synthesis` was refused because Supabase Storage answered **HTTP 429** to the upload (`req__mB3skHrKqo_`, read from the production log). After the restart the same filing passed and the run was 258/259; the one failure was the missing beacon the first pass never left. That is an external rate limit, not the line |
+| 09-26 03:10 | First `factory line` reading: AUTO ON (1), 2 integrations running, 0 arriving, not idle. ready→fire was 2.6 s on campaign #1 and 2.3 s on campaign #2 |
+| 09-26 03:13 | Campaign #1 integrated its first unit (`acbe345`→`3deb6c3`); the test unit's bin was created **0.5 s** after the merge |
+| 09-26 03:17 | Objective #3 was submitted as `fcr_373e0c2396c74deaa6d4` and queued as `fqe_0155abb05f4d46baaf84` at priority 30. Admission went 1→2, because two campaigns were already running on separate branches. #3 starts on Brain's own tick when a slot frees |
+| 09-26 03:39 | Line: #1 EXECUTING (the test unit on surface 1), #2 REVIEWING on Airyn (read-only, which is its role now), #3 queued. Not idle |
+| 09-26 03:4x | `58d7763` (Build panel, parked-stage slot rule, surface names instead of trigger refs) went to production; Deploy dispatched |
+
+| 09-26 03:47 | Campaign #2 delivered **PR #40** (review PASS, 0 findings) and went COMPLETE |
+| 09-26 03:51 | **Brain started #3 by itself** as campaign `fcp_57fc1d9fc6de4d799c77`: #2 stopped holding its slot and the queue entry was admitted on the next tick. Its plan bin was fired 3 s after it was ready. This is Phase 1 proven in production |
+| 09-26 04:22 | `f93a90c` released (Deploy 354). The Build panel is live; its first deploy failed its own test gate on a literal colour in the new CSS, and nothing was released that time |
+| 09-26 04:3x | Four more objectives submitted: #5 `fcr_1ae377b67039444f952b` (queued, p10), #9 `fcr_5c867ae923614e17ac4d` (queued, p20), #6 `fcr_12c1252cc75a49b0acb0`, #16 `fcr_2fe47a1e87864ac6a08d`. #6 and #16 are queued once the overlap gate is live |
+| 09-26 05:1x | `6137a8b` went to production: admission holds an objective whose mutation scope overlaps a live campaign, and starts non-overlapping work meanwhile |
+
+| 09-26 05:33 | #5 was **admitted by Brain on its own** as `fcp_943652c59abd40ee901b` |
+| 09-26 05:40 | The overlap gate is live and holding three objectives, each with the right reason: #9 (shares `cash/discovery.ts` with #3), #6 (shares cash opportunity code with #5) and #16 (`tests/**`) |
+| 09-26 05:40 | **Six units of #3 and #1's repair unit had retired**, all with the same `git push` 403. Cause, traced from bin events: bin `bin_32e60…` was fired at Factory surface 1 (session `cse_01PHwYzo…`). Five seconds later **Airyn's plan session** `session_01HZHi4f…`, which had just finished planning, checked in and took it. It cannot push. Surface 1 was never at fault |
+| 09-26 06:2x | `b23e4d7` released: `binAdmission` quietly skips a bin whose required capabilities no Routine that fired the arriving session declares. It reads Brain's own dispatch rows and fails open when it cannot tell. §27 of CLAUDE.md carries the correction |
+| 09-26 06:29–06:34 | Seven units regranted 3→5 with `surface-blocked`. #1 was unblocked by itself and a new units bin was created 34 s after the regrant |
+| 09-26 06:4x | `cf6f105` deploying: sessions spelled `claude-code-session_<id>` (Caleb's surface) are matched too |
+
+**Burn-in, 00:25–04:25** (`factory burnin --hours 4`): 12 stages and 15 fires; 3 retries, all on the units bin Airyn could not push; 0 no-shows and 0 deferrals. Median ready→fire **3 s**, fire→arrival **6 s**, transition idle **1 s**. **Unexplained idle 0 s.** Utilization reads 1.06, which means stage-time over window with two campaigns running at once, so it exceeds 1.
+
+**Hosted verification on the last three deploys (352, 354, 355).** Each one *released*. Each time the pre-restart pass failed at the same step, `brain_submit_synthesis`, for three different reasons:
+
+- 352: Supabase Storage answered HTTP 429 to the upload.
+- 354: Storage answered 429 `too_many_connections` on its own check.
+- 355: Fly sent SIGINT to the machine at 04:55:54, 180 s after boot. No Actions workflow restarted it; the workflow's own restart step began at 04:56:00.
+
+The post-restart pass was 258/259 on 352 and 355. Its only failure was the missing beacon, which the interrupted first pass never left. On 354 the post-restart pass never ran: storage refused the harness's own boot check. The database backend count jumps from 18 to about 40 during the restart window each time. That is an environmental condition around the restart, not the line, and it is not yet fixed.
+
+**Stage timings measured so far** (Brain's own rows):
+
+| Campaign | Stage | ready→fire | stage duration | transition idle |
+|---|---|---|---|---|
+| #1 | integrate | 2.6 s | 25 min (it runs the full `npm test` on the merged tree) | 0.5 s to the next bin |
+| #2 | integrate | 2.3 s | about 25 min | — |
+
+## The autonomous-loop fault (Phase 1)
+
+**What stopped the first build** was not the Brain-side stage loop. A completed
+bin already ticks its campaign and dispatches what that creates, with a 20 s
+remote tick as the fallback. The stop had two causes:
+
+1. **A surface that could not push.** Airyn's surface was the only
+   write-capable target under the override, and it could not push. Each
+   release of the units bin still spent an attempt, so the bin exhausted and
+   the stage parked at NEEDS_HUMAN.
+2. **Nothing between campaigns.** When a campaign finished or parked, nothing
+   started the next approved objective. Somebody had to run `approve`, and in
+   practice that somebody was a reminder in this session.
+
+**Fixed in code:**
+
+- `ae510f8`: the factory line.
+  - A queue entry is a person's approval given in advance (`factory queue`).
+  - Admission runs on the remote loop's own tick. It starts queued objectives in priority order while fewer than the admission limit are working (default 1; `factory admission --max-active N`).
+  - BLOCKED, AWAITING_RELEASE and COMPLETE campaigns hold no slot, so a PR waiting for a merge does not idle the line.
+  - Executable work beside a free surface with nothing leased or arriving for 2 min is written to the ledger as `FACTORY_IDLE_STARTED`, and closed with `FACTORY_IDLE_ENDED`.
+  - `factory burnin` reads per-stage executable, fired, arrived and completed timestamps back from `bin_events`.
+- `b68f19a`: a working-state campaign whose only stage bin is parked at NEEDS_HUMAN now holds no slot either. Build opens with the production line panel.
+
+**Still open:**
+
+- **Surface failures still spend bin attempts.** A release caused by a surface failure still charges an attempt. Worse, the router may fire the same failing surface again, because nothing yet routes a retry away from the surface that just failed it. This is the next loop defect.
+- **Needs You (owner): Factory surface 3 (Caleb) was registered with `repository-write`.** Whether its own fired sessions can push is being measured on #1's repair bin `bin_13a9b6dd6c92403e8336`. If that bin 403s too, it gets the same narrowing as Airyn's (`repository` only, reason on the row).
+- **Needs You (owner): merge PR #40** (campaign #2, register attestation). It was reviewed PASS with 0 findings.
+- **Needs You (owner): grant Airyn's Factory surface push access to Peyday007/V5.** Then restore `repository-write` on `trig_01H6Ngiv7NbPjva5mtz2zPWD`. Until then Airyn reviews and surface 1 writes.
+
+Next up: #3 (atomic kernel rounds) goes in the queue once the line is live, so
+it starts by itself when a slot frees.

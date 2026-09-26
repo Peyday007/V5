@@ -221,6 +221,8 @@ export interface BinAdmissionVerdict {
   reason?: string;
   /** An instant, never a credential. Null means "no opinion; use the ladder". */
   retryNotLaterThan?: string | null;
+  /** Skip without a refusal row or a fire deferral: a fact about the session's surface, not the bin. */
+  quiet?: boolean;
 }
 
 export type BinAdmission = (bin: Bin) => Promise<BinAdmissionVerdict>;
@@ -260,32 +262,51 @@ export async function binAdmission(input: {
     }
 
     /*
-     * There is no capability check here, and that is the end of two corrections
-     * rather than an omission.
+     * A capability check, from the one row that can answer it — and the third
+     * correction at this seam, recorded rather than quietly applied.
      *
-     * `requiredCapabilities` decides which Routine Brain *fires*, and it was
-     * tempting to read it again when deciding which bin an arriving worker may be
-     * *handed* — any authenticated worker is offered the oldest ready bin in its
-     * scopes, so a surface fired for one bin can be handed another it cannot do.
-     * Twice that check refused the only surface that could do the work, for two
-     * different reasons, and the second one is why it cannot exist:
+     * Two earlier checks read the wrong rows and refused the only surface that
+     * could do the work, and the comment that stood here concluded Brain cannot
+     * tell which surface has arrived: the static worker → Routine binding names
+     * whichever Routine is enabled, and `worker_sessions` is keyed by a
+     * per-connector credential. Both are true and neither is the row that
+     * answers. **Brain fired the session**, and the dispatch row it wrote names
+     * the Routine and the provider session it produced (`routineRefsForSession`).
+     * A session that finished one bin checks in again and is offered the next —
+     * which is how, on 2026-09-26, the plan session of a read-only Factory
+     * surface was handed an implementation bin, pushed, was refused 403, and
+     * spent the unit's attempts; six units of one campaign and a repair unit of
+     * another retired that way while a surface that could push stood idle.
      *
-     *   * reading the *static* worker → Routine binding attributes an arrival to
-     *     whichever Routine is enabled, which in a fleet sharing one worker
-     *     identity is the wrong one; and
-     *   * reading the *observed* lineage does not help either, because
-     *     `worker_sessions` is keyed by the credential and **the credential is
-     *     per-connector rather than per-session**. Every session this account
-     *     fires presents the same one, so the row describes the fleet and not the
-     *     arrival.
-     *
-     * So Brain cannot tell, before handing out a bin, which surface has turned
-     * up. The cost of admitting one that cannot push is a fire and an attempt,
-     * and the worker reports BLOCKED with the operation that was refused, which
-     * every stage already handles. The cost of refusing wrongly was a campaign
-     * that could never move. Between a gate that sometimes wastes a fire and one
-     * that sometimes stops all work, only the first is tolerable.
+     * So: when the arriving session traces to Routines Brain fired, and none of
+     * them declares every capability this bin needs, the bin is skipped —
+     * quietly, costing nothing and deferring nothing, so the router can fire a
+     * surface that can do it. It fails **open** everywhere it cannot tell: no
+     * reported session, a session Brain did not fire, a Routine no longer on the
+     * table. §27's rule stands — fail closed where the unknown could record
+     * something false, fail open where it could only waste a fire — and this is
+     * the case where the answer is known.
      */
+    const needed = bin.requiredCapabilities ?? [];
+    if (needed.length > 0 && input.sessionRef) {
+      const { routineRefsForSession } = await import('../../repos/bins.ts');
+      const { getRoutineByRef } = await import('../../repos/fleet.ts');
+      const refs = await routineRefsForSession(input.sessionRef);
+      if (refs.length > 0) {
+        const routines = await Promise.all(refs.map((ref) => getRoutineByRef(ref)));
+        const known = routines.filter((routine): routine is NonNullable<typeof routine> => routine !== null);
+        const able = known.some((routine) => needed.every((cap) => routine.capabilities.includes(cap)));
+        if (known.length === refs.length && !able) {
+          return {
+            ok: false,
+            quiet: true,
+            reason:
+              `This session was started by ${known.map((routine) => routine.name).join(', ')}, which does not ` +
+              `declare ${needed.join(' and ')}; the bin is left for a surface that does.`,
+          };
+        }
+      }
+    }
 
     /*
      * A factory review is refused here, before the lease, for §23's reason.

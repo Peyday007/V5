@@ -1,0 +1,56 @@
+{
+  "objective": "Stop Cash Mode recording that Brain performed a commercial effect that nothing performed. `advanceWithinAuthority` in server/services/cash/operate.ts (around line 570-669) checks the standing commercial authority for CONTACT_BUYER and reads the SEND_A_MESSAGE capability; the moment that capability reads PRESENT it calls `beginExecution` with `firstAction: { action: 'CONTACT_BUYER', performedBy: 'BRAIN', detail: 'Reached <payer> through <channel> with the offer on this card.' }`, which writes a cash_actions row, a CASH_ACTION_RECORDED event saying the action 'was performed by brain', and moves the opportunity READY -> EXECUTING. No message is sent and no path goes through server/services/effects, so invariants 25 and 26 are broken: an effect is claimed without a receipt, and an unknown outcome is never recorded as unknown. It is latent only because every integration capability in server/services/cash/capabilities.ts has `read: null` and reads MISSING; the first integration that reads PRESENT would make Brain record contacts that never happened. A related defect in the same path: `beginExecution` (server/services/cash/opportunities.ts around 476-610) inserts the first action before the READY -> EXECUTING transition, so a call on an opportunity that is not READY leaves an action row behind for a transition that was refused.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Brain records a BRAIN-performed commercial action only from the outcome of an effect run through server/services/effects (`runExternalEffect` with a registered adapter for that capability): CONFIRMED records the action with the receipt reference and begins execution; UNCERTAIN records no performed action, begins nothing, and leaves a visible cash need saying the outcome is unknown and must not be retried automatically; FAILED records nothing and withholds with the reason. With no adapter registered for a capability, that capability cannot read PRESENT for this branch and the opportunity is withheld exactly as today. beginExecution records the first action only in the same transaction as a transition that succeeds.",
+  "nonGoals": [
+    "Building any real messaging, invoicing or payment integration. No adapter that talks to the outside world is added; tests register a synthetic adapter.",
+    "Changing the standing commercial authority, COMMERCIAL_ACTIONS, the ceilings, or the evidence card.",
+    "Changing what a person records through POST /cash/opportunities/:id/execute, which stays PERSON-performed.",
+    "Rewriting or deleting any cash_actions or cash_events row already stored."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A test makes SEND_A_MESSAGE read PRESENT without registering an effect adapter and asserts advanceWithinAuthority records no cash_actions row with performed_by BRAIN, leaves the opportunity READY, and reports it withheld with a reason naming the missing effect path.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "With a synthetic adapter registered that returns CONFIRMED, the action row carries the receipt reference and the opportunity moves to EXECUTING; run twice, exactly one action row and one effect operation exist.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "With a synthetic adapter that returns UNCERTAIN (and one that throws a timeout), no performed action is recorded, the opportunity stays READY, an open cash need names the unknown outcome, and a second pass does not send again.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "beginExecution called with a firstAction on an opportunity that is not READY writes no cash_actions row.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing suites tests/cashProposal.test.ts, tests/cashIntegrationPass.test.ts and tests/cashOperate.test.ts still pass, and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/cash/operate.ts",
+    "server/services/cash/opportunities.ts",
+    "server/services/cash/capabilities.ts",
+    "server/services/cash/effects.ts",
+    "server/repos/cashActions.ts",
+    "tests/cashBrainEffects.test.ts",
+    "tests/cashProposal.test.ts",
+    "tests/cashOperate.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Discard the branch. The change adds no schema and rewrites no stored row; the path it changes is unreachable in production because every integration capability reads MISSING."
+}
