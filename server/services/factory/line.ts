@@ -454,7 +454,13 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
       };
     });
   const freeSurfaces = surfaces.filter((surface) => surface.free).length;
-  const routineNames = new Map(surfaces.map((surface) => [surface.routineId, surface.routineName]));
+  // A dispatch row names the Routine by its trigger reference, which is operator
+  // depth (§34); a reader is shown the surface's name. An unknown reference —
+  // a Routine no longer registered — reads as a surface nobody can name rather
+  // than leaking the reference.
+  const routineNames = new Map(
+    snapshot.candidates.map((candidate) => [candidate.routine.routineRef, candidate.routine.name]),
+  );
 
   const campaigns: LineCampaign[] = [];
   for (const campaign of live) {
@@ -498,7 +504,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
       working: inWorkingState(campaign) && parked === null,
       bins: campaignBins.map((bin) => ({
         ...bin,
-        lastRoutine: bin.lastRoutine ? routineNames.get(bin.lastRoutine) ?? bin.lastRoutine : null,
+        lastRoutine: bin.lastRoutine ? routineNames.get(bin.lastRoutine) ?? 'a surface no longer registered' : null,
       })),
       blocked,
       next: nextFor(campaign, campaignBins, blocked),
