@@ -99,6 +99,13 @@ and #19.
 | 09-26 04:3x | Four more objectives submitted: #5 `fcr_1ae377b67039444f952b` (queued, p10), #9 `fcr_5c867ae923614e17ac4d` (queued, p20), #6 `fcr_12c1252cc75a49b0acb0`, #16 `fcr_2fe47a1e87864ac6a08d`. #6 and #16 are queued once the overlap gate is live |
 | 09-26 05:1x | `6137a8b` went to production: admission holds an objective whose mutation scope overlaps a live campaign, and starts non-overlapping work meanwhile |
 
+| 09-26 05:33 | #5 was **admitted by Brain on its own** as `fcp_943652c59abd40ee901b` |
+| 09-26 05:40 | The overlap gate is live and holding three objectives, each with the right reason: #9 (shares `cash/discovery.ts` with #3), #6 (shares cash opportunity code with #5) and #16 (`tests/**`) |
+| 09-26 05:40 | **Six units of #3 and #1's repair unit had retired**, all with the same `git push` 403. Cause, traced from bin events: bin `bin_32e60…` was fired at Factory surface 1 (session `cse_01PHwYzo…`). Five seconds later **Airyn's plan session** `session_01HZHi4f…`, which had just finished planning, checked in and took it. It cannot push. Surface 1 was never at fault |
+| 09-26 06:2x | `b23e4d7` released: `binAdmission` quietly skips a bin whose required capabilities no Routine that fired the arriving session declares. It reads Brain's own dispatch rows and fails open when it cannot tell. §27 of CLAUDE.md carries the correction |
+| 09-26 06:29–06:34 | Seven units regranted 3→5 with `surface-blocked`. #1 was unblocked by itself and a new units bin was created 34 s after the regrant |
+| 09-26 06:4x | `cf6f105` deploying: sessions spelled `claude-code-session_<id>` (Caleb's surface) are matched too |
+
 **Burn-in, 00:25–04:25** (`factory burnin --hours 4`): 12 stages and 15 fires; 3 retries, all on the units bin Airyn could not push; 0 no-shows and 0 deferrals. Median ready→fire **3 s**, fire→arrival **6 s**, transition idle **1 s**. **Unexplained idle 0 s.** Utilization reads 1.06, which means stage-time over window with two campaigns running at once, so it exceeds 1.
 
 **Hosted verification on the last three deploys (352, 354, 355).** Each one *released*. Each time the pre-restart pass failed at the same step, `brain_submit_synthesis`, for three different reasons:
@@ -143,6 +150,8 @@ remote tick as the fallback. The stop had two causes:
 **Still open:**
 
 - **Surface failures still spend bin attempts.** A release caused by a surface failure still charges an attempt. Worse, the router may fire the same failing surface again, because nothing yet routes a retry away from the surface that just failed it. This is the next loop defect.
+- **Needs You (owner): Factory surface 3 (Caleb) was registered with `repository-write`.** Whether its own fired sessions can push is being measured on #1's repair bin `bin_13a9b6dd6c92403e8336`. If that bin 403s too, it gets the same narrowing as Airyn's (`repository` only, reason on the row).
+- **Needs You (owner): merge PR #40** (campaign #2, register attestation). It was reviewed PASS with 0 findings.
 - **Needs You (owner): grant Airyn's Factory surface push access to Peyday007/V5.** Then restore `repository-write` on `trig_01H6Ngiv7NbPjva5mtz2zPWD`. Until then Airyn reviews and surface 1 writes.
 
 Next up: #3 (atomic kernel rounds) goes in the queue once the line is live, so
