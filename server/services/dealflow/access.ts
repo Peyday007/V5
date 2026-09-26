@@ -51,8 +51,9 @@
  */
 import { currentPrincipal } from '../identity/context.ts';
 import { decideProjectAccess } from '../identity/policy.ts';
+import { listDeals, listParties } from '../../repos/dealflow.ts';
 import { DEAL_OBSERVATION_KINDS, DEAL_PARTY_KINDS } from '../../domain/types.ts';
-import type { DealObservationKind, DealPartyKind } from '../../domain/types.ts';
+import type { DealObservationKind, DealParty, DealPartyKind } from '../../domain/types.ts';
 
 export interface DealflowCapabilities {
   /** Seed a party, retire one, or record an observation. Project `ADMIN`. */
@@ -85,5 +86,73 @@ export function dealflowAccess(projectId: string): DealflowAccess {
       partyKinds: DEAL_PARTY_KINDS,
       observationKinds: DEAL_OBSERVATION_KINDS,
     },
+  };
+}
+
+/**
+ * A party a person retired, kept and shown rather than hidden.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this lives beside access rather than beside the kernel view
+ * ---------------------------------------------------------------------------
+ *
+ * `dealflowView` filters a retired party out of `buyers`/`suppliers` on
+ * purpose: retiring one is a signal to the *allocator* — Brain stops asking
+ * about it — and that filter is the kernel's own reading of the map it would
+ * research next. It says nothing about whether the *operator surface* may
+ * still show what was decided, which is exactly the question this module
+ * already answers for every other control on this screen: a decision does
+ * not make a row disappear, it changes what a reader is shown about it (§35).
+ * So a retired party's continued visibility is composed here, alongside
+ * `dealflowAccess`, and merged into the same response the identical way.
+ *
+ * `services/industry/view.ts` keeps a `retired` list inside its own view for
+ * the identical reason — a person retiring a subject there does not stop that
+ * subject being readable, only stops it being researched. The same fact is
+ * shown here from outside the kernel view rather than inside it, because nothing about
+ * an operator-surface reading needs the kernel's own derivation.
+ */
+export interface RetiredPartyView {
+  id: string;
+  name: string;
+  country: string | null;
+  equipmentClass: string;
+  note: string | null;
+  decisionMaker: string | null;
+  /** The claim that established it, so every line resolves to a passage. */
+  sourceClaimId: string | null;
+  deals: number;
+  retiredAt: string;
+  retiredReason: string | null;
+}
+
+export interface DealflowRetired {
+  retiredBuyers: RetiredPartyView[];
+  retiredSuppliers: RetiredPartyView[];
+}
+
+function isRetired(party: DealParty): party is DealParty & { retiredAt: string } {
+  return party.retiredAt !== null;
+}
+
+export async function retiredDealflowParties(projectId: string): Promise<DealflowRetired> {
+  const [parties, deals] = await Promise.all([listParties(projectId), listDeals(projectId)]);
+  const retired = parties.filter(isRetired);
+  const toView = (party: DealParty & { retiredAt: string }): RetiredPartyView => ({
+    id: party.id,
+    name: party.name,
+    country: party.country,
+    equipmentClass: party.equipmentClass,
+    note: party.note,
+    decisionMaker: party.decisionMaker,
+    sourceClaimId: party.sourceClaimId,
+    deals: deals.filter((one) => one.buyerPartyId === party.id || one.supplierPartyId === party.id)
+      .length,
+    retiredAt: party.retiredAt,
+    retiredReason: party.retiredReason,
+  });
+  return {
+    retiredBuyers: retired.filter((one) => one.kind === 'BUYER').map(toView),
+    retiredSuppliers: retired.filter((one) => one.kind === 'SUPPLIER').map(toView),
   };
 }

@@ -9,13 +9,13 @@
 import { api } from './api.ts';
 import type { DealflowView } from '../../../server/services/dealflow/view.ts';
 import type { dealDetail } from '../../../server/services/dealflow/view.ts';
-import type { DealflowAccess } from '../../../server/services/dealflow/access.ts';
+import type { DealflowAccess, DealflowRetired } from '../../../server/services/dealflow/access.ts';
 import type { DealParty, DealPartyKind } from '../../../server/domain/types.ts';
 import type { DealObservation, DealObservationKind } from '../../../server/domain/types.ts';
 
 export type { DealPartyKind, DealObservationKind };
 
-export type DealflowViewReading = DealflowView & DealflowAccess;
+export type DealflowViewReading = DealflowView & DealflowAccess & DealflowRetired;
 
 export type DealDetailReading = Awaited<ReturnType<typeof dealDetail>>;
 

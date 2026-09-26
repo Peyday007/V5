@@ -140,6 +140,7 @@ export function DealflowScreen({ projectId }: { projectId: string | null }): JSX
         because={view.capabilities.because}
         reload={query.reload}
       />
+      <RetiredParties buyers={view.retiredBuyers} suppliers={view.retiredSuppliers} />
       <SeedParty
         projectId={projectId}
         vocabulary={view.vocabulary}
@@ -322,6 +323,48 @@ function Parties({
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+/**
+ * Parties a person retired, kept visible with the reason rather than
+ * disappearing (§45's A02). Retiring never deletes a row — the same argument
+ * `services/industry/view.ts` makes for its own `retired` list — so what this
+ * renders is exactly what the server kept: the party, and the sentence a
+ * person gave for stopping. There is no un-retire control here, because no
+ * such route exists on this kernel; the row is history, not a form.
+ */
+function RetiredParties({
+  buyers,
+  suppliers,
+}: {
+  buyers: DealflowViewReading['retiredBuyers'];
+  suppliers: DealflowViewReading['retiredSuppliers'];
+}): JSX.Element | null {
+  const rows: { kind: DealPartyKind; party: DealflowViewReading['retiredBuyers'][number] }[] = [
+    ...buyers.map((party) => ({ kind: 'BUYER' as DealPartyKind, party })),
+    ...suppliers.map((party) => ({ kind: 'SUPPLIER' as DealPartyKind, party })),
+  ];
+  if (rows.length === 0) return null;
+  return (
+    <section className="rs-card rs-dealflow-parties-retired">
+      <h4>Retired</h4>
+      <ul className="rs-list">
+        {rows.map(({ kind, party }) => (
+          <li key={party.id} className="rs-row">
+            <span className="rs-item-title">{party.name}</span>
+            <span className="rs-item-meta">
+              {kind === 'BUYER' ? 'Buyer' : 'Supplier'} — {party.equipmentClass}
+              {party.country ? ` — ${party.country}` : ''}
+            </span>
+            <span className="rs-item-meta">
+              {party.retiredReason ?? 'A person retired this party.'}
+              {party.retiredAt ? ` — ${party.retiredAt}` : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

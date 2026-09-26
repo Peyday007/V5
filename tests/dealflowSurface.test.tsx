@@ -16,21 +16,20 @@
  * closed this same gap before it.
  *
  * ---------------------------------------------------------------------------
- * One place this deliberately does not match its own brief
+ * A retired party stays visible, with its reason
  * ---------------------------------------------------------------------------
  *
- * The objective that produced this file says a retired party "remains
- * visible on the page with the reason rather than disappearing." That is not
- * what the shipped code does, and it should not be made to say otherwise:
- * `dealflowView` filters `buyers`/`suppliers` to `retiredAt === null` on
- * purpose (`services/dealflow/kernel.ts`'s own comment says so — "Brain stops
- * offering them"), and the retire route's own success message says the same
- * thing in words: *"Brain stops offering them ... Nothing was destroyed."*
- * So what actually survives is the **row** — its `retiredAt` and
- * `retiredReason` — and the **sentence** shown at the moment of retiring, not
- * a permanent line item on the map. Asserting that the party vanishes from
- * the offered list and that its row keeps the reason is the honest reading of
- * "nothing was destroyed," and is what this file checks instead.
+ * A02 requires a retired party to remain visible on the page with the reason
+ * rather than disappearing. `dealflowView` still stops *offering* a retired
+ * party — it drops out of `buyers`/`suppliers`, which is what "Brain stops
+ * offering them" means, and the allocator will not ask about it again — but
+ * the row is never hidden: `retiredDealflowParties`
+ * (`services/dealflow/access.ts`) reads it back alongside `dealflowAccess`,
+ * carrying its own `retiredAt` and `retiredReason`, and `Dealflow.tsx` renders
+ * that list under its own "Retired" heading. So a retire is asserted three
+ * ways below: the row keeps the reason, the live list stops offering the
+ * party, and the operator surface still shows it with the reason rather than
+ * making it disappear.
  *
  * ---------------------------------------------------------------------------
  * What is asserted here and nowhere else
@@ -387,13 +386,28 @@ describe('the Dealflow screen, over the real route', () => {
     expect(after?.retiredAt).not.toBeNull();
     expect(after?.retiredReason).toBe('They stopped exporting this class.');
 
-    // dealflowView filters a retired party out of what it offers — Brain
-    // "stops offering them", in the route's own words — so a re-read of the
-    // page must not still list it as a live supplier.
+    // dealflowView stops offering a retired party for research — it drops out
+    // of the live `suppliers` list — but A02 requires it to remain visible
+    // with its reason rather than disappearing, so `retiredDealflowParties`
+    // (composed alongside it on the same route) still names it.
     const view = await import('../server/services/dealflow/view.ts').then((mod) =>
       mod.dealflowView(projectId),
     );
     expect(view.suppliers.find((one) => one.id === seeded.id)).toBeUndefined();
+    const retiredParties = await import('../server/services/dealflow/access.ts').then((mod) =>
+      mod.retiredDealflowParties(projectId),
+    );
+    const retired = retiredParties.retiredSuppliers.find((one) => one.id === seeded.id);
+    expect(retired).toBeTruthy();
+    expect(retired?.retiredReason).toBe('They stopped exporting this class.');
+    expect(retired?.retiredAt).not.toBeNull();
+
+    // And the operator surface actually renders it there — a reader who
+    // retires a party must be able to see it and its reason afterwards
+    // without reading a database row.
+    await waitFor(() => expect(screen.getByText('Retired')).toBeTruthy());
+    expect(screen.getAllByText('Continental Tank Works').length).toBeGreaterThan(0);
+    expect(screen.getByText(/They stopped exporting this class\./)).toBeTruthy();
 
     const patches = requestsTo('/dealflow/parties/').filter((one) => one.method === 'PATCH');
     expect(patches).toHaveLength(1);
