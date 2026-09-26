@@ -60,6 +60,7 @@ import { isIndustryNodeKind } from '../domain/industry.ts';
 import { getDeal } from '../repos/dealflow.ts';
 import { observe, retire, seedParty } from '../services/dealflow/seed.ts';
 import { dealDetail, dealflowView } from '../services/dealflow/view.ts';
+import { dealflowAccess } from '../services/dealflow/access.ts';
 import { isDealObservationKind, isDealPartyKind } from '../domain/dealflow.ts';
 import { getPuzzleInstance, getPuzzleProduct } from '../repos/puzzle.ts';
 import { defineMaster, observe as observePuzzle, retireFormat, seedFormat } from '../services/puzzle/seed.ts';
@@ -1244,7 +1245,16 @@ cashRouter.get(
   handler(async (req) => {
     requirePerson();
     const project = await requireProject(pathId(req, 'projectId'));
-    return dealflowView(project.id);
+    /*
+     * The reading, plus what a control over it may be offered for. Composed
+     * here rather than inside `dealflowView`, for `routes/labor.ts`'s reason:
+     * `dealflowAccess` needs the authenticated principal, and `dealflowView`
+     * has no such caller to depend on.
+     */
+    return {
+      ...(await dealflowView(project.id)),
+      ...dealflowAccess(project.id),
+    };
   }),
 );
 
