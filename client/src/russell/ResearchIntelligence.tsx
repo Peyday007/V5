@@ -248,12 +248,43 @@ function QuestionGroup({
   );
 }
 
+/**
+ * Plain words for a question's disposition, never the enum. Matches the
+ * codebase's own convention — `PROVENANCE_WORDS` in `Views.tsx`, `STATE_WORDS`
+ * in `Register.tsx`, `INQUIRY_WORDS` in `Frontier.tsx` — a dictionary with a
+ * raw fallback so an unmapped value is still shown rather than dropped.
+ */
+const DISPOSITION_WORDS: Record<string, string> = {
+  OPEN: 'Open',
+  INVESTIGATING: 'Being investigated',
+  RESOLVED: 'Resolved',
+  REFUTED: 'Refuted',
+  UNRESOLVABLE: 'Cannot be resolved',
+  RETIRED: 'Retired',
+  DEFERRED: 'Deferred',
+  PERSON_ONLY: 'Needs a person',
+};
+
+/** Plain words for the sufficiency verdict, never the enum. */
+const SUFFICIENCY_VERDICT_WORDS: Record<string, string> = {
+  ANSWERED: 'Answered',
+  USABLE_WITH_GAPS: 'Usable, with gaps',
+  KEEP_RESEARCHING: 'Keep researching',
+  INSUFFICIENT_EVIDENCE: 'Not enough evidence',
+  BLOCKED_BY_ACCESS: 'Blocked by access',
+  CONTRADICTION_OPEN: 'A contradiction is open',
+  NEEDS_PERSON: 'Needs a person',
+  NOT_WORTH_CONTINUING: 'Not worth continuing',
+};
+
 function Question({ question }: { question: QuestionView }): JSX.Element {
   return (
     <article className="rs-card">
       <div className="rs-row">
         <span className="rs-item-title">{question.question}</span>
-        <span className="rs-pill">{question.disposition}</span>
+        <span className="rs-pill">
+          {DISPOSITION_WORDS[question.disposition] ?? question.disposition}
+        </span>
         {question.couldInvalidateEverything ? (
           <span className="rs-pill rs-pill-watch">Could invalidate everything</span>
         ) : null}
@@ -279,7 +310,9 @@ function Sufficiency({
     <section className="rs-group">
       <h4 className="rs-group-title">Sufficiency</h4>
       <div className="rs-row">
-        <span className="rs-pill">{sufficiency.verdict}</span>
+        <span className="rs-pill">
+          {SUFFICIENCY_VERDICT_WORDS[sufficiency.verdict] ?? sufficiency.verdict}
+        </span>
       </div>
       <p className="rs-item-meta">{sufficiency.detail}</p>
       <p className="rs-item-meta rs-at-interested">
