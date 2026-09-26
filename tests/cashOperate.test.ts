@@ -55,6 +55,7 @@ import {
   actionKey,
   beginExecution,
   capture,
+  decline,
   fillCard,
   markReady,
 } from '../server/services/cash/opportunities.ts';
@@ -289,6 +290,44 @@ describe('executing means something happened', () => {
     });
     expect(refused.ok).toBe(false);
     expect(await countActions(id)).toBe(0);
+  });
+
+  it('writes no action for a transition that does not land', async () => {
+    /*
+     * A card can stay complete — every load-bearing field still answered —
+     * after the piece has moved on to something that is not READY. `decline`
+     * does exactly that: it never touches the card. So a call carrying a
+     * firstAction here is the shape the defect actually took: the card gate
+     * at the top of `beginExecution` passes, and only the transition itself
+     * discovers the opportunity is not `READY`.
+     *
+     * The action and the transition now share one transaction, so a
+     * transition that does not land must leave nothing behind — not a
+     * `cash_actions` row, and not the `CASH_ACTION_RECORDED` event beside it.
+     */
+    await granted();
+    const id = await readyPiece();
+    expect((await decline({ opportunityId: id, actorUserId: userId, reason: 'Changed our mind.' })).ok).toBe(
+      true,
+    );
+    expect((await getOpportunity(id))!.state).toBe('DECLINED');
+
+    const refused = await beginExecution({
+      opportunityId: id,
+      actorRef: userId,
+      firstAction: {
+        action: 'CONTACT_BUYER',
+        performedBy: 'PERSON',
+        detail: 'Emailed the owner anyway.',
+        requestKey: actionKey(id, 'CONTACT_BUYER', 'first'),
+      },
+    });
+    expect(refused.ok).toBe(false);
+    if (refused.ok) throw new Error('unreachable');
+    expect(refused.reason).toContain('declined rather than ready to execute');
+    expect((await getOpportunity(id))!.state).toBe('DECLINED');
+    expect(await countActions(id)).toBe(0);
+    expect(await actionsFor(id)).toEqual([]);
   });
 });
 
