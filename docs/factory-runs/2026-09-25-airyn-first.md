@@ -110,6 +110,9 @@ and #19.
 | 09-26 07:13 | #5 BLOCKED on a second defect. After three misrouted 403 attempts, surface 1 did the work correctly and the forge confirmed it, but the report was refused five times ("somebody else holds it") and discarded. Cause: `refuseUnit` judged "exhausted?" *before* charging the attempt, which left the unit READY at 3/3, where acceptance can never claim it |
 | 09-26 07:3x | `8bcf7b2` deploying: `chargeAndReopenUnit` charges and decides in one statement. #5's two units were regranted 3→5 (`surface-blocked`) |
 
+| 09-26 07:5x | `8bcf7b2` released (245/245 before the restart). Campaign #1 delivered **PR #41** (the Ideas map privacy fix) after its repair and review round 2. #3 and #5 run their units on surface 1. The queue holds #9, #6 and #16, each overlapping a live campaign |
+| 09-26 08:0x | The Supabase pooler refused one operator read (client limit); `/healthz` stayed at 0.15 s. Operator reads were paused 15 min to relieve it |
+
 **Burn-in, 00:25–04:25** (`factory burnin --hours 4`): 12 stages and 15 fires; 3 retries, all on the units bin Airyn could not push; 0 no-shows and 0 deferrals. Median ready→fire **3 s**, fire→arrival **6 s**, transition idle **1 s**. **Unexplained idle 0 s.** Utilization reads 1.06, which means stage-time over window with two campaigns running at once, so it exceeds 1.
 
 **Hosted verification on the last three deploys (352, 354, 355).** Each one *released*. Each time the pre-restart pass failed at the same step, `brain_submit_synthesis`, for three different reasons:
@@ -155,7 +158,7 @@ remote tick as the fallback. The stop had two causes:
 
 - **Surface failures still spend bin attempts.** A release caused by a surface failure still charges an attempt. Worse, the router may fire the same failing surface again, because nothing yet routes a retry away from the surface that just failed it. This is the next loop defect.
 - **Needs You (owner): Factory surface 3 (Caleb) was registered with `repository-write`.** Whether its own fired sessions can push is being measured on #1's repair bin `bin_13a9b6dd6c92403e8336`. If that bin 403s too, it gets the same narrowing as Airyn's (`repository` only, reason on the row).
-- **Needs You (owner): merge PR #40** (campaign #2, register attestation). It was reviewed PASS with 0 findings.
+- **Needs You (owner): merge PR #40** (campaign #2, register attestation; reviewed PASS, 0 findings) **and PR #41** (campaign #1, Ideas map privacy; repaired, then reviewed again).
 - **Needs You (owner): grant Airyn's Factory surface push access to Peyday007/V5.** Then restore `repository-write` on `trig_01H6Ngiv7NbPjva5mtz2zPWD`. Until then Airyn reviews and surface 1 writes.
 
 Next up: #3 (atomic kernel rounds) goes in the queue once the line is live, so
