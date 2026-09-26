@@ -34,6 +34,7 @@
  * well-sourced claims about what motorcycle production develops leave every
  * capability in this ledger exactly as unheld as it was.
  */
+import { getDb } from '../../db/database.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { listMissions } from '../../repos/russellMissions.ts';
 import { capabilityClaims } from '../../repos/research.ts';
@@ -103,12 +104,26 @@ export interface OpenedRound {
 }
 
 /**
+ * A round insert lost its `ON CONFLICT DO NOTHING` race.
+ *
+ * Thrown to roll back the candidate created in the same transaction, never
+ * caught outside `openAsks`'s own loop.
+ */
+class RoundNotOpened extends Error {}
+
+/**
  * Turn the allocator's decisions into work.
  *
- * The round is written *after* the candidate and the insert is
- * `ON CONFLICT DO NOTHING`, so a tick that dies between the two leaves a
- * candidate nothing points at — harmless, because the next tick's insert
- * collides on the same key and the orphan is never asked anything.
+ * The candidate and its round commit together, in one transaction. A round
+ * insert that loses its `ON CONFLICT DO NOTHING` race means another pass
+ * already opened this exact question, and the candidate this call just
+ * created would otherwise be left committed with nothing pointing at it —
+ * **not** harmless: the candidate is created `SHARED` with a project, and
+ * Russell's tick judges and can launch any unjudged `SHARED` candidate,
+ * orphan or not. So a crash between the two writes, or two passes racing on
+ * the same round key, could produce a research mission Brain pays for while
+ * no round points at it and its answer is never absorbed. Rolling both writes
+ * back together makes a lost race exactly as if this call had never happened.
  */
 export async function openAsks(input: {
   projectId: string;
@@ -133,35 +148,45 @@ export async function openAsks(input: {
     const composed = compose({ ask, snapshot, byId, coverageById, directive });
     if (!composed) continue;
 
-    const candidate = await createCandidate({
-      projectId: input.projectId,
-      visibility: 'SHARED',
-      conversationId: null,
-      sourceMessageId: null,
-      title: ask.round === 1 ? composed.title : `${composed.title} (round ${ask.round})`,
-      statement: composed.question,
-    });
+    let round: ManufacturingRound;
+    try {
+      round = await getDb().transaction(async (): Promise<ManufacturingRound> => {
+        const candidate = await createCandidate({
+          projectId: input.projectId,
+          visibility: 'SHARED',
+          conversationId: null,
+          sourceMessageId: null,
+          title: ask.round === 1 ? composed.title : `${composed.title} (round ${ask.round})`,
+          statement: composed.question,
+        });
 
-    const opened = await openManufacturingRound({
-      programId: snapshot.program.id,
-      projectId: input.projectId,
-      categoryId: ask.categoryId,
-      purpose: ask.purpose,
-      round: ask.round,
-      candidateId: candidate.id,
-    });
-    if (!opened.created) continue;
+        const result = await openManufacturingRound({
+          programId: snapshot.program.id,
+          projectId: input.projectId,
+          categoryId: ask.categoryId,
+          purpose: ask.purpose,
+          round: ask.round,
+          candidateId: candidate.id,
+        });
+        if (!result.created) throw new RoundNotOpened();
+        return result.round;
+      });
+    } catch (error) {
+      if (error instanceof RoundNotOpened) continue;
+      throw error;
+    }
 
+    const candidateId = round.candidateId;
     await recordEvent({
       projectId: input.projectId,
       entityType: 'MANUFACTURING_ROUND',
-      entityId: opened.round.id,
+      entityId: round.id,
       eventType: 'MANUFACTURING_ROUND_OPENED',
       payload: {
         summary: `${ask.purpose} round ${ask.round} opened: ${composed.title}.`,
         purpose: ask.purpose,
         categoryId: ask.categoryId,
-        candidateId: candidate.id,
+        candidateId,
         round: ask.round,
         /*
          * The allocator's own reason, recorded beside the work it produced.
@@ -177,10 +202,10 @@ export async function openAsks(input: {
     });
 
     out.push({
-      roundId: opened.round.id,
+      roundId: round.id,
       purpose: ask.purpose,
       categoryId: ask.categoryId,
-      candidateId: candidate.id,
+      candidateId,
       round: ask.round,
       title: composed.title,
       question: composed.question,
