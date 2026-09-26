@@ -1299,6 +1299,11 @@ export interface AssignBinInput {
      * than the answer is true for. It carries an instant and never a credential.
      */
     retryNotLaterThan?: string | null;
+    /**
+     * Skip without recording a session refusal or deferring the bin's fire.
+     * For a refusal about the arriving session's surface rather than the bin.
+     */
+    quiet?: boolean;
   }>;
   /**
    * The workload classes this worker may be offered, as prefixes, and whether a
@@ -1671,6 +1676,14 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
           }
         }
         const verdict = await input.admit(mapBin(row));
+        if (!verdict.ok && verdict.quiet) {
+          // A refusal about *this session's surface*, not about the bin: skipped
+          // as losing the race is, with no refusal row and no fire deferral, so
+          // a surface that can do the work is fired as soon as it would have
+          // been. Deferring here would let a session that keeps asking push the
+          // right surface's fire back for as long as it asked.
+          continue;
+        }
         if (!verdict.ok) {
           if (sessionRef) {
             await recordSessionRefusal({
@@ -3330,4 +3343,26 @@ export async function countDispatches(binId: string, state: BinDispatchState): P
     [binId, state],
   );
   return Number(row?.n ?? 0);
+}
+
+/**
+ * The Routines Brain fired that produced a provider session, read from Brain's
+ * own dispatch rows.
+ *
+ * A dispatch row stores the provider's session as `cse_<id>`, and a worker
+ * checking in reports the same session as `session_<id>`; both spellings are
+ * asked. This is Brain's record of which surface started the session, never
+ * anything the worker said about itself — the reported id only selects which
+ * of Brain's rows to read. Empty when Brain fired nothing that produced it (a
+ * scheduled arrival, or a session id nobody reported).
+ */
+export async function routineRefsForSession(sessionRef: string): Promise<string[]> {
+  const bare = sessionRef.replace(/^(cse|session)_/, '');
+  if (!bare) return [];
+  const rows = await getDb().all<{ routine_ref: string | null }>(
+    `SELECT DISTINCT routine_ref FROM bin_dispatch
+      WHERE state = 'SENT' AND routine_ref IS NOT NULL AND session_ref IN (?, ?, ?)`,
+    [sessionRef, `cse_${bare}`, `session_${bare}`],
+  );
+  return rows.map((row) => row.routine_ref).filter((ref): ref is string => !!ref);
 }

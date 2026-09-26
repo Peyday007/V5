@@ -2749,6 +2749,25 @@ remote.
   work, only the first is tolerable** — and the rule it is an instance of is: fail
   closed when the unknown could let something false be recorded, fail open when it
   could only waste a fire.
+- **And "Brain cannot tell which surface has arrived" was false for a session
+  Brain fired, which is the ordinary case. The correction is recorded rather
+  than quietly applied.** The static binding and the per-connector credential
+  cannot say, and the paragraph above is right about both. But Brain wrote the
+  dispatch row that started the session, and the row names the Routine and the
+  provider session (`cse_<id>`, reported at check-in as `session_<id>`). A session
+  that finishes one bin checks in and is offered the next. On 2026-09-26 the plan
+  and review sessions of two read-only surfaces were handed implementation bins.
+  Each pushed, was refused 403, and spent a unit attempt. Six units of one
+  campaign and the repair unit of another retired that way while a surface that
+  could push stood idle. The cost was not "a fire and an attempt"; it was every
+  attempt, and a campaign BLOCKED.
+  `binAdmission` now skips a bin whose required capabilities no Routine that
+  fired the arriving session declares (`routineRefsForSession`). The skip is
+  **quiet**: no refusal row and no fire deferral, because deferring would let a
+  session that keeps asking push the capable surface's fire back. It fails open
+  wherever it cannot tell (no reported session, a session Brain did not fire, a
+  Routine no longer registered), so the rule above still stands; this is the case
+  where the answer is known.
 - **That paragraph is right about capabilities and wrong about scope, and the
   difference is the subject of the sentence. The correction is recorded rather
   than quietly applied.** Brain cannot tell which *Routine* has arrived, for the
