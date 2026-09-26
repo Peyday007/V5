@@ -2148,7 +2148,25 @@ export function startFactoryRemoteLoop(intervalMs = DEFAULT_INTERVAL_MS): void {
     if (running) return;
     running = true;
     void tickAllRemoteCampaigns()
-      .then(async (reports) => {
+      .then(async (ticked) => {
+        /*
+         * The step between campaigns, on the same timer as the step between
+         * stages. A campaign that finishes, blocks or delivers frees its slot on
+         * this pass, and the next objective a person queued starts on it —
+         * ticked here so its first bin exists before the dispatch below, rather
+         * than twenty seconds later. Caught on its own: a line that cannot read
+         * its queue must never stop the campaigns already running.
+         */
+        const reports = [...ticked];
+        try {
+          const { runLinePass } = await import('./line.ts');
+          const pass = await runLinePass();
+          for (const started of pass.admission.admitted) {
+            reports.push(await tickRemoteCampaign(started.campaignId));
+          }
+        } catch {
+          // The next pass reads the same rows.
+        }
         /*
          * Place what this tick created, now, instead of leaving it for the
          * dispatcher's own wake.

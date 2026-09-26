@@ -1137,11 +1137,143 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * The production line (services/factory/line.ts).
+     *
+     * `queue` is a person approving an objective in advance and putting it in
+     * the line; Brain starts it when a slot frees. `withdraw` takes it back out,
+     * keeping the row. `admission` sets how many campaigns may work at once, as
+     * an append-only row. `line` is the reading the Build panel shows, and
+     * `burnin` is the timeline behind it.
+     */
+    case 'queue': {
+      const changeRequestId = flagString(flags, 'change-request') ?? fail('--change-request is required');
+      const priority = Number(flagString(flags, 'priority') ?? '100');
+      const admin = flagString(flags, 'admin');
+      const users = await listUsers();
+      const actor = admin
+        ? users.find((one) => one.email === admin && one.isBrainAdmin && !one.disabled)
+        : users.find((one) => one.isBrainAdmin && !one.disabled);
+      if (!actor) fail(admin ? 'no enabled administrator with that address' : 'no enabled administrator exists');
+      const { queueObjective, LineError } = await import('../server/services/factory/line.ts');
+      try {
+        const outcome = await queueObjective({ changeRequestId, userId: actor.id, priority });
+        process.stdout.write(
+          `${outcome.created ? 'queued' : 'already queued'} ${outcome.entry.id} ` +
+            `${outcome.entry.changeRequestId} priority=${outcome.entry.priority} state=${outcome.entry.state}\n` +
+            `approved by ${actor.email}\n`,
+        );
+      } catch (error) {
+        if (error instanceof LineError) {
+          process.stdout.write(`FACTORY REFUSED: ${error.message}\n`);
+          process.exitCode = 1;
+          break;
+        }
+        throw error;
+      }
+      break;
+    }
+
+    case 'withdraw': {
+      const changeRequestId = flagString(flags, 'change-request') ?? fail('--change-request is required');
+      const reason = (flagString(flags, 'reason') ?? '').replace(/_/g, ' ');
+      if (!reason) fail('--reason is required');
+      const { withdrawQueueEntry } = await import('../server/repos/factoryLine.ts');
+      const moved = await withdrawQueueEntry({ changeRequestId, reason });
+      process.stdout.write(`withdrawn=${moved}\n`);
+      break;
+    }
+
+    case 'admission': {
+      const { currentAdmissionPolicy, setAdmissionPolicy } = await import('../server/repos/factoryLine.ts');
+      const raw = flagString(flags, 'max-active');
+      if (raw === undefined) {
+        const policy = await currentAdmissionPolicy();
+        process.stdout.write(`max-active ${policy.maxActive}  by ${policy.actor}  ${policy.createdAt ?? '(default)'}\n  ${policy.reason}\n`);
+        break;
+      }
+      const reason = (flagString(flags, 'reason') ?? '').replace(/_/g, ' ');
+      if (!reason) fail('--reason is required: an admission change with no reason answers nothing later');
+      const before = await currentAdmissionPolicy();
+      const after = await setAdmissionPolicy({ maxActive: Number(raw), actor: 'operator:factory-cli', reason });
+      process.stdout.write(`max-active ${before.maxActive} -> ${after.maxActive}\n`);
+      break;
+    }
+
+    case 'line': {
+      const { readLine } = await import('../server/services/factory/line.ts');
+      const reading = await readLine();
+      process.stdout.write(
+        `LINE ${reading.at}\n` +
+          `  AUTO               ${reading.auto ? 'ON' : 'OFF'} (max active ${reading.policy.maxActive})\n` +
+          `  executable backlog ${reading.executable.total} (queued admissible ${reading.executable.queued}, ready stages ${reading.executable.readyBins})\n` +
+          `  active             ${reading.active.leasedBins} running, ${reading.active.arriving} arriving, ${reading.active.workingCampaigns} working campaign(s)\n` +
+          `  available capacity ${reading.capacity.freeSurfaces} free surface(s)\n` +
+          `  UNEXPLAINED IDLE   ${reading.unexplainedIdle ? 'YES' : 'no'}\n` +
+          `  because            ${reading.because}\n`,
+      );
+      for (const surface of reading.capacity.surfaces) {
+        process.stdout.write(
+          `  surface ${surface.routineName} (${surface.accountName}) caps=[${surface.capabilities.join(',')}] ` +
+            `${surface.inFlight}/${surface.target ?? '∞'} ${surface.free ? 'FREE' : surface.refusal ?? 'at target'}\n`,
+        );
+      }
+      for (const row of reading.campaigns) {
+        process.stdout.write(`  campaign ${row.campaign.id} ${row.campaign.state}${row.working ? '' : ' (holds no slot)'}\n`);
+        if (row.campaign.blockerDetail) process.stdout.write(`      blocker ${row.campaign.blockerKind}: ${row.campaign.blockerDetail.slice(0, 200)}\n`);
+        for (const bin of row.bins) {
+          process.stdout.write(
+            `      ${bin.binId} ${bin.kind} ${bin.state} ready=${bin.readyAt ?? '—'} sent=${bin.lastSentAt ?? '—'} ` +
+              `routine=${bin.lastRoutine ?? '—'} session=${bin.sessionRef ?? '—'}\n`,
+          );
+        }
+      }
+      for (const entry of reading.queue) {
+        process.stdout.write(`  queued ${entry.id} ${entry.changeRequestId} priority=${entry.priority} since ${entry.queuedAt}\n`);
+      }
+      break;
+    }
+
+    case 'burnin': {
+      const hours = Number(flagString(flags, 'hours') ?? '6');
+      const { readBurnIn } = await import('../server/services/factory/burnin.ts');
+      const reading = await readBurnIn({ hours });
+      const s = (value: number | null) => (value === null ? '—' : `${Math.round(value / 1000)}s`);
+      process.stdout.write(`BURN-IN ${reading.since} -> ${reading.until}\n`);
+      for (const campaign of reading.campaigns) {
+        process.stdout.write(
+          `  campaign ${campaign.campaignId} ${campaign.state} duration=${s(campaign.durationMs)}\n    ${campaign.objective}\n`,
+        );
+        for (const stage of campaign.stages) {
+          process.stdout.write(
+            `    ${stage.binId} ${stage.kind.padEnd(16)} ${stage.state.padEnd(11)} ` +
+              `exec->fire ${s(stage.executableToFireMs)} fire->arrive ${s(stage.fireToArrivalMs)} ` +
+              `stage ${s(stage.stageDurationMs)} idle-before ${s(stage.transitionIdleMs)} ` +
+              `fires=${stage.fires} assigns=${stage.assignments} releases=${stage.releases} ` +
+              `noshows=${stage.noShows} deferrals=${stage.deferrals} routines=${stage.routines.join(',') || '—'}\n`,
+          );
+        }
+      }
+      for (const interval of reading.idle) {
+        process.stdout.write(
+          `  UNEXPLAINED IDLE ${interval.startedAt} -> ${interval.endedAt ?? 'open'} ${s(interval.durationMs)} ${interval.because ?? ''}\n`,
+        );
+      }
+      const t = reading.totals;
+      process.stdout.write(
+        `  totals stages=${t.stages} fires=${t.fires} retries=${t.retries} noshows=${t.noShows} deferrals=${t.deferrals} ` +
+          `worked=${s(t.workedMs)} utilization=${t.utilization ?? '—'} unexplained-idle=${s(t.unexplainedIdleMs)} ` +
+          `median exec->fire ${s(t.medianExecutableToFireMs)} fire->arrive ${s(t.medianFireToArrivalMs)} ` +
+          `transition-idle ${s(t.medianTransitionIdleMs)}\n`,
+      );
+      break;
+    }
+
     default:
       process.stdout.write(
         'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
           '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
-          '  set-state,\n' +
+          '  set-state, queue, withdraw, admission, line, burnin,\n' +
           '  answer-bin,\n' +
           '  reauthorize, regrant-unit, retire, release\n',
       );
