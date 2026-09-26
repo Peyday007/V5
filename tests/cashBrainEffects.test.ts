@@ -287,6 +287,38 @@ describe('A03: an UNCERTAIN adapter', () => {
     expect(need.whyItMatters).toContain('unknown');
   });
 
+  it('treats an adapter whose send() throws a timeout the same as one that returns UNCERTAIN', async () => {
+    // `runExternalEffect` converts a thrown transport error into UNCERTAIN —
+    // proven generically in tests/idempotency.test.ts — but nothing here had
+    // exercised that conversion for cash.contact_buyer specifically. A send
+    // that throws is exactly what a real timeout looks like from the caller's
+    // side, and this Brain must treat it identically to a provider that
+    // answers UNCERTAIN outright: no action recorded, no execution begun, the
+    // opportunity stays READY, and an open need names the unknown outcome.
+    registerAdapter(
+      adapter('test.throws-timeout', async (): Promise<SendOutcome> => {
+        throw new Error('timed out waiting for a response');
+      }),
+    );
+    await granted();
+    const piece = await readyToTest();
+    await advanceWithinAuthority(projectId); // marks READY
+
+    const advanced = await advanceWithinAuthority(projectId);
+    const withheld = advanced.withheld.find((one) => one.opportunityId === piece.id)!;
+    expect(withheld).toBeDefined();
+    expect(withheld.because).toContain('outcome unknown');
+    expect(advanced.took.some((one) => one.did === 'BEGAN_EXECUTION')).toBe(false);
+
+    expect((await getOpportunity(piece.id))!.state).toBe('READY');
+    expect(await actionsFor(piece.id)).toEqual([]);
+
+    const needs = await listNeeds({ projectId, states: ['OPEN'] });
+    const need = needs.find((one) => one.opportunityId === piece.id)!;
+    expect(need).toBeDefined();
+    expect(need.whyItMatters).toContain('unknown');
+  });
+
   it('a second pass asks the same question rather than resending', async () => {
     let sends = 0;
     registerAdapter(
