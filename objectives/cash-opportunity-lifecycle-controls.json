@@ -1,0 +1,62 @@
+{
+  "objective": "Give a person on the Cash page the three opportunity transitions the server already implements and nothing calls: reoffer, exhaust and archive. POST /api/cash/opportunities/:opportunityId/:action (server/routes/cash.ts ~774-892) handles `reoffer` (~845-866: requires toProjectId and reason, authorizes the destination through requireProject and refuses a project not running Cash Mode; `reoffer` in server/services/cash/opportunities.ts ~722-771 accepts only a DECLINED opportunity), `exhaust` (~867-876; server ~774-801, refuses a second exhaust) and `archive` (~877-886; server ~804-830, from any non-archived state, reason required). client/src/lib/cashApi.ts already has a generic `act` (~787-794), but the `Actions` component in client/src/russell/Cash.tsx (~2337-2500) offers only ready, decline, execute, deliver and collect, so a declined opening can never be offered to another operation, a finished one can never be marked exhausted, and nothing can be archived — while Cash.tsx already renders `exhaustedAt`/`exhaustedReason` (~2095-2100) and plain-event labels for CASH_OPPORTUNITY_ARCHIVED and CASH_OPPORTUNITY_REOFFERED (~2774-2775) that only these transitions can produce.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "`Actions` in Cash.tsx offers **Archive** (asks for a reason) on every opportunity that is not ARCHIVED, **Mark exhausted** (asks for a reason) on one whose exhaustedAt is null, and **Offer to another operation** only on a DECLINED one, asking for a reason and a destination chosen from the projects the person can read (the existing projects list the client already fetches from GET /api/projects, excluding the opportunity's own project). All three go through `CashApi.act` with exactly the body the route reads ({reason} or {toProjectId, reason}). A refusal — including 'That operation is not running Cash Mode, so it takes no openings.' — is rendered in the server's words, the reason input keeps what was typed on failure, and the section re-reads the view on success. Nothing is removed from the page: an archived or exhausted opening stays listed with its reason.",
+  "nonGoals": [
+    "Changing reoffer, exhaust, archiveOpportunity, decline or any state machine in server/services/cash/**.",
+    "Adding a route, a listing endpoint for destinations, a column or a migration.",
+    "An unarchive or un-exhaust transition (none exists on the server).",
+    "Deleting or hiding any opportunity, event or card fact.",
+    "Offering these controls to a SHARED-scope reader."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A test drives the Cash section over the real routes and database: archiving an opportunity with a reason moves its row to ARCHIVED with archived_reason set, a CASH_OPPORTUNITY_ARCHIVED event exists, and the opportunity is still rendered with that reason.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Marking an opportunity exhausted with a reason sets exhausted_at and exhausted_reason, and the control is no longer offered for it on the next render.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The Offer control is rendered only for a DECLINED opportunity; for a DISCOVERED, READY or EXECUTING one it is absent, asserted in the rendered document.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Offering a declined opportunity to a readable project that is not running Cash Mode renders the server's refusal verbatim, creates no opportunity in that project, and leaves the typed reason in the input.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Each control posts only the fields the route reads ({reason}, or {toProjectId, reason}); a test inspects the request bodies and finds no other key, and a reason left empty keeps the Confirm button disabled so no request is made.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A SHARED-scope member's page renders none of the three controls, and a WORKER principal posting any of the three actions is refused with no row changed.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing tests/cashSection.test.tsx and tests/cashBrowserToDatabase.test.ts still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/lib/cashApi.ts",
+    "client/src/russell/Cash.tsx",
+    "tests/cashOpportunityLifecycle.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Client and test changes only; every transition the new controls perform is an existing guarded server transition that keeps the row and its reason."
+}

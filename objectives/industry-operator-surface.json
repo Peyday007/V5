@@ -1,0 +1,70 @@
+{
+  "objective": "Give the industry map (§38) an operator surface. Three finished routes have no client caller: GET /api/projects/:projectId/cash/industries (server/routes/cash.ts ~1129-1136, returns `industryView` from server/services/industry/view.ts ~99, shape `IndustryView` ~79-97: subjects, retired, bootstrap, next, declined, capital with executableNow YES/NO/UNKNOWN and minimumOwnerCents or the unknown reason, deployableCents, byKind), POST /api/projects/:projectId/cash/industries (~1138-1187, seed a subject: name required, kind from INDUSTRY_NODE_KINDS in server/domain/types.ts ~868, optional description, parentId, reason) and PATCH /api/projects/:projectId/cash/industries/:nodeId (~1189-1216, retire with a required reason). services/identity/policy.ts (~364-365) makes both writes ADMIN and the read the default READ. Labor (client/src/russell/Labor.tsx, server/services/labor/access.ts, server/routes/labor.ts ~60-75 composing `laborCapabilities` at the route) and Machines closed this same gap; this follows them.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A new route INDUSTRIES at /industries in client/src/lib/router.ts (parse and format), a secondary nav entry and a view switch in client/src/russell/RussellShell.tsx beside MACHINES and LABOR, a new client/src/lib/industryApi.ts for the three calls, and a new client/src/russell/Industry.tsx rendering the whole view: every subject with its path, kind and origin, retired subjects with their reason (shown, never hidden), the bootstrap state, what Brain would ask next with the allocator's own sentence, what was declined and why, and each capital reading — where executableNow is UNKNOWN or minimumOwnerCents is null the screen shows the server's unknown reason and never a number. The GET response additionally carries `capabilities` (whether this principal may seed or retire, with the server's reason when not) and `vocabulary` (INDUSTRY_NODE_KINDS), composed at the route as labor does, via a new server/services/industry/access.ts that uses decideProjectAccess and nothing else; the seed form offers exactly that vocabulary and parents chosen from the view's own subjects. A control the reader may not use is disabled with the server's reason rather than removed.",
+  "nonGoals": [
+    "Changing industryView, seedSubject, retireSubject, the allocator, the kernel tick or any policy entry (server/services/identity/** is out of scope).",
+    "A control that marks anything researched, answers a capital figure or sets executableNow — those are derived.",
+    "A delete for a subject, or hiding a retired one.",
+    "Any new migration or table."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A browser-to-database test mounts the Industry view over the real routes and database: a project ADMIN seeds a subject through the form, an industry_nodes row with origin SEED exists with that name and kind, and the subject is listed on the re-read.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Retiring that subject with a reason sets retired_at and the reason, and the subject is then rendered under retired subjects with its reason rather than disappearing.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "For a project MEMBER who is not ADMIN the seed and retire controls are rendered disabled with the server's reason from `capabilities`, and a POST as that member is refused 404 with no row written.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A capital reading whose executableNow is UNKNOWN or whose minimumOwnerCents is null renders the server's unknown reason and no currency figure for that line, asserted against the rendered document.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The seed form's kind options are exactly the `vocabulary` the server sent, and the request body contains only name, kind, description, parentId and reason.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A WORKER principal is refused at the GET and at both writes, and the GET performs no write (industry_nodes and industry_rounds counts unchanged).",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The /industries path parses to INDUSTRIES and INDUSTRIES formats back to /industries, and the shell renders the Industry view for it.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing Labor, Machines and Cash suites still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/lib/router.ts",
+    "client/src/russell/RussellShell.tsx",
+    "client/src/lib/industryApi.ts",
+    "client/src/russell/Industry.tsx",
+    "server/routes/cash.ts",
+    "server/services/industry/access.ts",
+    "tests/industrySurface.test.tsx"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. A new screen, a new client module and an additive capabilities/vocabulary field on one read route; no schema change and no change to what any write does."
+}

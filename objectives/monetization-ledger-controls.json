@@ -1,0 +1,63 @@
+{
+  "objective": "Give the monetization section of the Cash page the ledger decisions the server implements and no client calls: naming a possibility (SEED), recording a relation between two (LINK — the only writer of a blocking edge), merging, un-merging and splitting, and the two-path comparison. The routes are POST /api/projects/:projectId/cash/monetization/paths (server/routes/cash.ts ~1832-1870, `seedPath`, method from MONETIZATION_METHODS in server/domain/types.ts ~9347), POST /api/cash/monetization/paths/:pathId/lineage (~1928-2028, action MERGE {into, reason} / UNMERGE / SPLIT {into:[{method,title?,thesis?}], reason} / LINK {kind, to, rationale} with kind from MONETIZATION_EDGE_KINDS ~9494) and GET /api/projects/:projectId/cash/monetization/compare?a=&b= (~1652-1690). client/src/lib/cashApi.ts already has `whyRanked` (~533-550) and `seedPath` (~639-646) with no caller anywhere in client/src, and has no lineage function at all; client/src/russell/Cash.tsx's `Monetization` (~3165-3435), `PathDetail` (~3512) and `PathJudgment` (~3722) call only pathDetail and judgePath. CLAUDE.md §49 records that a recorded edge is what makes a possibility BLOCKED and that for a while nothing could write one; the route now exists and the product still cannot reach it.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "CashApi gains `pathLineage(pathId, body)` for the four lineage actions; `whyRanked` and `seedPath` gain callers. Inside the existing monetization section (FULL scope, gated on `page.capabilities.mayActOnJob` like `PathJudgment`): a **Name a possibility** form (method chosen from a closed list the page already holds or the server sends, optional thesis, attached to the opportunity it is shown under); per path, **Record a relation** (kind chosen from the eight edge kinds, the other path chosen from the ledger's own entries, rationale required), **Merge into…** (survivor chosen from the ledger, reason required), **Un-merge** on a merged path, and **Split** (one or more methods, reason required); and a **Compare with…** control that calls whyRanked with b and renders the server's comparison sentences. Every refusal is rendered in the server's words, every success re-reads the page, and relations shown in PathDetail name who recorded them. Nothing is deleted and no possibility disappears from *All monetization paths* because of any of these decisions.",
+  "nonGoals": [
+    "Changing seedPath, linkPaths, mergePaths, unmergePath, splitPath, the rank, the status derivation or any service in server/services/cash/monetization/**.",
+    "Any control that answers a Brain-owned attribute: no person-answer form for a ledger fact, a price, a payer or any of the thirteen attributes (§49, §33).",
+    "Any probability, percentage, score or confidence figure anywhere in the new controls.",
+    "A delete, a hide or any control that removes a possibility, a relation or a judgement.",
+    "Adding a route, a column or a migration.",
+    "Offering any of these controls, or the compare result's money-bearing sentences, to a SHARED-scope reader."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A test drives the Cash section over the real routes and database: recording a REQUIRES relation between two live paths writes one monetization_path_edges row with the rationale and the person as decided_by_id, and the dependent path's status on the next read is BLOCKED.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Naming a possibility through the new form writes a SEED-origin monetization_paths row for the chosen method; naming the same method again for the same discovery creates no second row and renders the server's 'already in the ledger' message.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Merging a path into another sets its merged_into_id, un-merging clears it, and splitting leaves the parent row unchanged while creating children that name it; after each the parent, the child and the absorbed path are all still listed under All monetization paths.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Compare with another path renders the comparison the compare route returns and makes no write: a test asserts the row counts of monetization_paths, monetization_path_edges and monetization_path_judgments are unchanged by it.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "No new control renders an input for any monetization attribute value, and no rendered text in the new controls contains a percent sign or the word probability, asserted against the rendered document.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A SHARED-scope member's page renders none of the new controls, and a WORKER principal posting to the paths or lineage route is refused with no row changed; request bodies carry only the fields each lineage action reads.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing tests/cashSection.test.tsx, tests/monetizationLedger.test.ts and tests/monetizationCommissioning.test.ts still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/lib/cashApi.ts",
+    "client/src/russell/Cash.tsx",
+    "tests/monetizationLedgerControls.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Client and test changes only; every decision the new controls record is reversible through the same existing routes (unmerge, a later relation, a later judgement) and nothing is deleted."
+}
