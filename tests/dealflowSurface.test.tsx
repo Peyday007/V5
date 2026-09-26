@@ -303,6 +303,9 @@ describe('the Dealflow screen, over the real route', () => {
   it('seeds a party through the form, and the row follows', async () => {
     await mounted();
     expect(screen.getAllByText('None on the map yet.')).toHaveLength(2);
+    // Nobody is administering-decision-locked here: an administrator gets
+    // no reason at all, because there is nothing to explain.
+    expect(screen.queryByText(/decisions an administrator of this project makes/i)).toBeNull();
 
     // Exactly the server's vocabulary, never a literal list in the component.
     const kindSelect = screen.getByLabelText(/which side of the transaction/i) as HTMLSelectElement;
@@ -508,7 +511,21 @@ describe('the Dealflow screen, over the real route', () => {
 
     // Reading is unrestricted: the whole map, empty as it is, is on the page.
     expect(screen.getAllByText('None on the map yet.')).toHaveLength(2);
-    expect(screen.getAllByText(/administrator's decision here/i).length).toBeGreaterThan(0);
+    // The server's own sentence (`dealflowAccess`'s `capabilities.because`),
+    // not a fixed string composed in the component — the same property
+    // `laborSurface.test.tsx` asserts of `LaborCapabilities.because`.
+    expect(
+      screen.getAllByText(/decisions an administrator of this project makes/i).length,
+    ).toBeGreaterThan(0);
+
+    // The reason travels on the row rather than living only on the screen:
+    // `capabilities.because` is non-null for a member and null for whoever
+    // may actually administer this project — a server fact, not a client one.
+    const memberView = (await (await fetch(`/api/projects/${projectId}/cash/dealflow`)).json()) as {
+      capabilities: { mayAdminister: boolean; because: string | null };
+    };
+    expect(memberView.capabilities.mayAdminister).toBe(false);
+    expect(memberView.capabilities.because).toMatch(/decisions an administrator of this project makes/i);
 
     expect(screen.queryByLabelText(/which side of the transaction/i)).toBeNull();
     expect(screen.queryByLabelText(/what kind of outcome/i)).toBeNull();

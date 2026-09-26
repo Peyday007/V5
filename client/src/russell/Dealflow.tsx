@@ -30,6 +30,9 @@
  * exactly as `Labor.tsx` and `Machines.tsx` already do it, and a control
  * somebody may not use is disabled with an explanatory sentence rather than
  * removed (§35): a screen that removes it has a different shape per reader.
+ * The sentence itself is `capabilities.because`, composed on the server —
+ * a sentence written here would be a second reader of a decision the server
+ * already made, and it would eventually say something the server did not.
  *
  * Every kind option in the two forms is read from `vocabulary.partyKinds` /
  * `vocabulary.observationKinds`, which travel with the reading rather than
@@ -72,22 +75,16 @@ function describeError(error: unknown): string {
 }
 
 /**
- * A control somebody may not use, disabled with an explanatory sentence.
+ * A control somebody may not use, disabled with the server's own sentence.
  *
- * `DealflowCapabilities` carries only the boolean — there is no per-request
- * `because` sentence the way `Labor.tsx`'s does — so the sentence is fixed and
- * factual rather than composed from anything the server sent, matching the
- * plain no-grant sentences already used elsewhere on this shell (for example
- * `Cash.tsx`'s `Authority` "no grant" branch).
+ * `because` is `capabilities.because` — composed in `services/dealflow/access.ts`,
+ * exactly as `Labor.tsx`'s `Locked` renders `capabilities.because` rather than
+ * a sentence written here. A fallback covers only the case the server never
+ * actually sends: `because` is null exactly when `mayAdminister` is true, at
+ * which point this component is not rendered at all.
  */
-function Locked(): JSX.Element {
-  return (
-    <p className="rs-hint">
-      Seeding a party, retiring one and recording an observation are a project administrator's
-      decision here — the same level the route itself requires. Reading everything below is not
-      restricted.
-    </p>
-  );
+function Locked({ because }: { because: string | null }): JSX.Element {
+  return <p className="rs-hint">{because ?? 'This is not yours to change.'}</p>;
 }
 
 export function DealflowScreen({ projectId }: { projectId: string | null }): JSX.Element {
@@ -131,6 +128,7 @@ export function DealflowScreen({ projectId }: { projectId: string | null }): JSX
         parties={view.buyers}
         projectId={projectId}
         mayAdminister={view.capabilities.mayAdminister}
+        because={view.capabilities.because}
         reload={query.reload}
       />
       <Parties
@@ -139,12 +137,14 @@ export function DealflowScreen({ projectId }: { projectId: string | null }): JSX
         parties={view.suppliers}
         projectId={projectId}
         mayAdminister={view.capabilities.mayAdminister}
+        because={view.capabilities.because}
         reload={query.reload}
       />
       <SeedParty
         projectId={projectId}
         vocabulary={view.vocabulary}
         mayAdminister={view.capabilities.mayAdminister}
+        because={view.capabilities.because}
         reload={query.reload}
       />
       <Deals view={view} projectId={projectId} />
@@ -155,6 +155,7 @@ export function DealflowScreen({ projectId }: { projectId: string | null }): JSX
         deals={view.deals}
         vocabulary={view.vocabulary}
         mayAdminister={view.capabilities.mayAdminister}
+        because={view.capabilities.because}
         reload={query.reload}
       />
     </div>
@@ -269,6 +270,7 @@ function Parties({
   parties,
   projectId,
   mayAdminister,
+  because,
   reload,
 }: {
   title: string;
@@ -276,12 +278,13 @@ function Parties({
   parties: DealflowViewReading['buyers'];
   projectId: string;
   mayAdminister: boolean;
+  because: string | null;
   reload(): void;
 }): JSX.Element {
   return (
     <section className={`rs-card rs-dealflow-parties rs-dealflow-parties-${kind.toLowerCase()}`}>
       <h4>{title}</h4>
-      {!mayAdminister ? <Locked /> : null}
+      {!mayAdminister ? <Locked because={because} /> : null}
       {parties.length === 0 ? (
         <p className="rs-empty">None on the map yet.</p>
       ) : (
@@ -408,11 +411,13 @@ function SeedParty({
   projectId,
   vocabulary,
   mayAdminister,
+  because,
   reload,
 }: {
   projectId: string;
   vocabulary: DealflowViewReading['vocabulary'];
   mayAdminister: boolean;
+  because: string | null;
   reload(): void;
 }): JSX.Element {
   const [kind, setKind] = useState<DealPartyKind>(vocabulary.partyKinds[0] ?? 'BUYER');
@@ -432,7 +437,7 @@ function SeedParty({
         when to ask about it. Nobody is contacted by naming somebody here.
       </p>
       {!mayAdminister ? (
-        <Locked />
+        <Locked because={because} />
       ) : (
         <>
           <label className="rs-field-label" htmlFor="dealflow-seed-kind">
@@ -776,12 +781,14 @@ function RecordObservation({
   deals,
   vocabulary,
   mayAdminister,
+  because,
   reload,
 }: {
   projectId: string;
   deals: DealflowViewReading['deals'];
   vocabulary: DealflowViewReading['vocabulary'];
   mayAdminister: boolean;
+  because: string | null;
   reload(): void;
 }): JSX.Element {
   const [kind, setKind] = useState<DealObservationKind>(vocabulary.observationKinds[0] ?? 'BUYER_RESPONDED');
@@ -801,7 +808,7 @@ function RecordObservation({
         with the sample size printed beside it — nothing here gates a deal or skips a question.
       </p>
       {!mayAdminister ? (
-        <Locked />
+        <Locked because={because} />
       ) : (
         <>
           <label className="rs-field-label" htmlFor="dealflow-obs-kind">

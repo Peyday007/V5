@@ -32,6 +32,11 @@
  * reader, and *there is no button* and *the button is not for you* are
  * answers a person reads very differently.
  *
+ * `because` is on the row for the same reason every verdict on the Labor and
+ * Machines screens is: a sentence composed in the browser is a second reader
+ * of a decision the server already made, and it will eventually say
+ * something the server did not.
+ *
  * ---------------------------------------------------------------------------
  * The vocabulary travels with the reading
  * ---------------------------------------------------------------------------
@@ -52,6 +57,8 @@ import type { DealObservationKind, DealPartyKind } from '../../domain/types.ts';
 export interface DealflowCapabilities {
   /** Seed a party, retire one, or record an observation. Project `ADMIN`. */
   mayAdminister: boolean;
+  /** Why not, in the server's own words, or null where there is nothing to say. */
+  because: string | null;
 }
 
 export interface DealflowVocabulary {
@@ -67,7 +74,13 @@ export interface DealflowAccess {
 export function dealflowAccess(projectId: string): DealflowAccess {
   const administers = decideProjectAccess(currentPrincipal(), projectId, 'ADMIN').allowed;
   return {
-    capabilities: { mayAdminister: administers },
+    capabilities: {
+      mayAdminister: administers,
+      because: administers
+        ? null
+        : 'Seeding a party, retiring one and recording an observation are decisions an ' +
+          'administrator of this project makes. Reading everything below is not restricted.',
+    },
     vocabulary: {
       partyKinds: DEAL_PARTY_KINDS,
       observationKinds: DEAL_OBSERVATION_KINDS,
