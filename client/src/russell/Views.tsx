@@ -321,8 +321,17 @@ function MissionCard({ entry }: { entry: WorkEntry }): JSX.Element {
       ) : null}
 
       {orchestrationId ? (
+        /*
+         * `rs-mission-how`'s own box and summary rules (border-top, padding,
+         * the faint summary colour and pointer cursor) apply to any details
+         * element carrying the class, not only to one holding a `dl`, so this
+         * disclosure shares its sibling's box treatment exactly rather than
+         * rendering with unstyled browser defaults beside it. The narrower
+         * `rs-mission-intelligence` class stays alongside it as the hook a
+         * later change would use for anything specific to this content.
+         */
         <details
-          className="rs-mission-intelligence rs-at-interested"
+          className="rs-mission-how rs-mission-intelligence rs-at-interested"
           onToggle={(event) => setIntelligenceOpen(event.currentTarget.open)}
         >
           <summary>What Brain is working out</summary>

@@ -291,6 +291,21 @@ describe('the disclosure on a mission card', () => {
     expect(calls).not.toContain(INTELLIGENCE);
   });
 
+  it('shares its box styling with the sibling disclosure rather than rendering unstyled', async () => {
+    base({ [WORK]: { body: workBody(workEntry()) } });
+    await mount();
+    await waitFor(() => expect(missionCard()).toBeTruthy());
+
+    const summary = within(missionCard()).getByText('What Brain is working out');
+    const details = summary.closest('details');
+    if (!details) throw new Error('the disclosure is not inside a <details> element');
+    // `.rs-mission-how` carries the box treatment (border, padding, summary
+    // colour) every disclosure on this card is meant to share; a details
+    // element with none of the classes this stylesheet knows about renders
+    // with unstyled browser defaults instead.
+    expect(details.classList.contains('rs-mission-how')).toBe(true);
+  });
+
   it('opening it issues the one request and renders the packet in the server’s own words', async () => {
     base({
       [WORK]: { body: workBody(workEntry()) },
