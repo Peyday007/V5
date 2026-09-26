@@ -62,11 +62,38 @@ import {
   updateWorkstream,
 } from '../repos/register.ts';
 import { assembleRegister, viewOf } from '../services/register/view.ts';
+import { ATTESTATION_DETAIL_KEYS } from '../services/register/resolve.ts';
 import { decideProjectAccess } from '../services/identity/policy.ts';
 import { listProjects } from '../repos/projects.ts';
 import type { Principal } from '../domain/types.ts';
 
 export const registerRouter: Router = Router();
+
+/**
+ * A caller's own `detail` object, with the fields an attestation reading
+ * depends on removed.
+ *
+ * `readAttested` in `services/register/resolve.ts` trusts `detail.attestedBy`,
+ * `detail.attestedAt`, `detail.merged`, `detail.verifiedLive` and
+ * `detail.state` as a fact somebody or something observed and recorded. This
+ * route accepts a request body from any authenticated person with WRITE, so
+ * passing those fields through verbatim would let that caller name any
+ * attester — including `pull-request-merge-observation`, the name Brain's own
+ * forge observation uses — at any timestamp, and have the register read
+ * VERIFIED_LIVE or MERGED on the strength of it. §43 says an attestation names
+ * who and when; it must never say whoever and whenever the caller typed.
+ *
+ * Brain's own writers (`attestCampaignPullRequest`,
+ * `observeCampaignPullRequestMerge`) call `linkWorkstream` directly and never
+ * pass through this route, so they are untouched by this stripping.
+ */
+function stripAttestation(detail: Record<string, unknown>): Record<string, unknown> {
+  const clean = { ...detail };
+  for (const key of ATTESTATION_DETAIL_KEYS) {
+    delete clean[key];
+  }
+  return clean;
+}
 
 /**
  * The projects this caller may read, from the policy module.
@@ -164,7 +191,7 @@ registerRouter.post(
             `links[${index}].relation`,
           ),
           label: optionalString(one.label, `links[${index}].label`) ?? null,
-          detail: optionalRecord(one.detail, `links[${index}].detail`) ?? {},
+          detail: stripAttestation(optionalRecord(one.detail, `links[${index}].detail`) ?? {}),
           recordedBy: 'PERSON',
           recordedByUserId: principal.id,
         }),
@@ -250,7 +277,7 @@ registerRouter.post(
         'relation',
       ),
       label: optionalString(body.label, 'label') ?? null,
-      detail: optionalRecord(body.detail, 'detail') ?? {},
+      detail: stripAttestation(optionalRecord(body.detail, 'detail') ?? {}),
       recordedBy: 'PERSON',
       recordedByUserId: principal.id,
     });
