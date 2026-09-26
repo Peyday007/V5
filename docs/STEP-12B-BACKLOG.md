@@ -326,6 +326,20 @@ Not a Step 12A completion requirement: it affects ideas parked *before* an
 authority exists, and the replacement acceptance run starts after one is
 granted. Recorded so the next park is not discovered the same way.
 
+**Fixed, twice, and the general fix is the one that matters.** Cash Mode's own
+`resumeAuthorityParkedCandidates` (`server/services/cash/discoveryAuthority.ts`)
+was the first remedy, and it was Cash-Mode-specific by construction: gated on a
+goal named `'Cash Mode internal discovery'` and called only from
+`runDiscovery`, so a park on any other project stayed exactly as permanent as
+this entry describes. The rule it applied is now `server/services/russell/
+resumeParked.ts`, asked generically — `checkAuthority({ projectId, workClass:
+'RESEARCH' })`, whichever goal actually covers it — and run on the durable
+tick (`server/services/russell/loop.ts`) for every project that is not
+currently running Cash Mode, which keeps handling its own the way it always
+did. Cash Mode's function is now a caller of the shared one rather than a
+second implementation of the same rule, so there is one place this defect can
+recur in rather than two.
+
 ## Defect: `maxConcurrent` on a standing authority enforces nothing — 2026-09-06
 
 `ceilingFor` returns `Math.min(goal.maxMissions, goal.maxConcurrent)` for a
