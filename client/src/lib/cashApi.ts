@@ -772,6 +772,31 @@ export const CashApi = {
       body: JSON.stringify(body),
     }),
 
+  /**
+   * Hold part of the ceiling for a named obstacle.
+   *
+   * Names the obstacle, the result to expect and where to stop, because a
+   * commitment that named none of those would be a budget line rather than a
+   * decision about this opening. The action is checked against the grant
+   * server-side and is never echoed back on the commitment row.
+   */
+  commitSpend: (
+    projectId: string,
+    body: {
+      action: string;
+      amountCents: number;
+      purpose: string;
+      expectedResult: string;
+      stopCondition: string;
+      idempotencyKey: string;
+      opportunityId?: string;
+    },
+  ): Promise<{ commitment: { id: string; state: string }; message: string }> =>
+    api(`/api/projects/${p(projectId)}/cash/commitments`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   /** Release a commitment that is not going to be spent. */
   releaseCommitment: (
     commitmentId: string,
@@ -780,6 +805,21 @@ export const CashApi = {
     api(`/api/cash/commitments/${p(commitmentId)}/release`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
+    }),
+
+  /**
+   * The spend happened: the hold becomes history and what it actually cost is
+   * recorded. Never released by a clock — this is somebody saying what the
+   * money bought.
+   */
+  settleCommitment: (
+    commitmentId: string,
+    spentCents: number,
+    note?: string,
+  ): Promise<{ commitment: { id: string; state: string }; settled: boolean; message: string }> =>
+    api(`/api/cash/commitments/${p(commitmentId)}/settle`, {
+      method: 'POST',
+      body: JSON.stringify({ spentCents, note }),
     }),
 
   act: (
