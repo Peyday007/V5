@@ -212,6 +212,11 @@ export function plainLayerState(status: LayerStatus): string {
  * Missions carry a `layer_id`; candidates do not. So the answer is a fact about
  * the work that was actually launched for the idea, which is the strongest
  * evidence available and is null when there is none.
+ *
+ * Callers must pass only missions the viewer may see. A SHARED candidate whose
+ * only mission is PRIVATE and owned by someone else would otherwise be filed
+ * under — and counted in — a major the viewer cannot actually see any work in,
+ * which is the same leak as showing the mission itself.
  */
 function layerOfCandidate(candidateId: string, missions: RussellMission[]): string | null {
   for (const mission of missions) {
@@ -358,7 +363,7 @@ export async function ideaMapForProject(input: {
   for (const candidate of candidates) {
     if (!isVisible(candidate.id)) continue;
     const own = visibleMissions.filter((mission) => mission.candidateId === candidate.id);
-    const layerId = layerOfCandidate(candidate.id, missions);
+    const layerId = layerOfCandidate(candidate.id, visibleMissions);
     const folded =
       candidate.state === 'MERGED' &&
       candidate.canonicalCandidateId !== null &&

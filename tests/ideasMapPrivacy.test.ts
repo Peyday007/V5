@@ -191,6 +191,52 @@ describe('a PRIVATE idea belongs to the conversation it came from', () => {
   });
 });
 
+describe('a SHARED idea is not filed under a major named by a mission its viewer cannot see', () => {
+  it("does not file a visible idea under the layer a private mission names, and does not count it there", async () => {
+    const shared = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'A shared idea with only a private mission',
+      statement: 'anybody on the project may read this idea, but not the mission behind it',
+    });
+    const { conversation } = await privateIdeaFor(bobId, 'a private thread with no idea of its own');
+
+    const before = await ideaMapForProject({ projectId, viewerUserId: aliceId });
+    const majorBefore = before!.nodes.find((n) => n.id === `major:${firstLayer.id}`)!;
+
+    await launchMission({
+      projectId,
+      layerId: firstLayer.id,
+      visibility: 'PRIVATE',
+      candidateId: shared.id,
+      conversationId: conversation.id,
+      objective: "Look into this on Bob's own thread",
+      whyNow: 'because Bob asked',
+      idempotencyKey: `test-mission-for-${shared.id}`,
+    });
+
+    // The idea itself is SHARED, so it must still appear for Alice — that part
+    // already worked. What must not happen is filing it under the mission's
+    // layer, or counting it as one of that layer's children, when the mission
+    // that names the layer is invisible to her.
+    const asAlice = await ideaMapForProject({ projectId, viewerUserId: aliceId });
+    const node = asAlice!.nodes.find((n) => n.id === `idea:${shared.id}`);
+    expect(node).toBeDefined();
+    expect(node!.parentId).not.toBe(`major:${firstLayer.id}`);
+    expect(node!.parentId).toBe(`site:${projectId}`);
+
+    const majorAfter = asAlice!.nodes.find((n) => n.id === `major:${firstLayer.id}`)!;
+    expect(majorAfter.counts.children).toBe(majorBefore.counts.children);
+
+    // Bob, who may read the mission, sees it filed and counted correctly.
+    const asBob = await ideaMapForProject({ projectId, viewerUserId: bobId });
+    const nodeForBob = asBob!.nodes.find((n) => n.id === `idea:${shared.id}`)!;
+    expect(nodeForBob.parentId).toBe(`major:${firstLayer.id}`);
+    const majorForBob = asBob!.nodes.find((n) => n.id === `major:${firstLayer.id}`)!;
+    expect(majorForBob.counts.children).toBe(majorBefore.counts.children + 1);
+  });
+});
+
 describe("a PRIVATE idea's mission does not inflate a count on a node it cannot appear as", () => {
   it("leaves the SITE and MAJOR work counts unchanged by another member's private mission", async () => {
     const { candidate: bobsIdea, conversation } = await privateIdeaFor(
