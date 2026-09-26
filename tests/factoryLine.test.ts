@@ -62,7 +62,7 @@ afterEach(async () => {
 });
 
 /** A remote objective the forge cannot parse, so no network is ever asked. */
-async function objective(label: string, conditions = true) {
+async function objective(label: string, conditions = true, scope: string[] = [`server/line-${label}/**`]) {
   const { changeRequest } = await ensureChangeRequest({
     projectId: fixture.project.id,
     submissionKey: `line-${label}-${Math.random().toString(36).slice(2)}`,
@@ -77,7 +77,7 @@ async function objective(label: string, conditions = true) {
     baseSha: 'a'.repeat(40),
     environment: 'LOCAL',
     riskClass: 'LOW',
-    mutationScope: ['server/**'],
+    mutationScope: scope,
     deploymentPolicy: 'NONE',
     rollbackRequirement: 'discard the branch',
     verificationCommands: [],
@@ -334,5 +334,47 @@ describe('a project reads its own line and nobody else\'s', () => {
     expect(line.campaigns).toHaveLength(0);
     const own = await readLine(new Date(), { projectId: fixture.project.id });
     expect(own.queue.map((row) => row.entry.changeRequestId)).toEqual([mine.id]);
+  });
+});
+
+describe('two objectives that would edit the same files are not run at once', () => {
+  it('holds an overlapping objective and starts the independent one behind it, then the held one when the first is done', async () => {
+    const first = await objective('shared-a', true, ['server/services/shared/**']);
+    const clash = await objective('shared-b', true, ['server/services/shared/thing.ts']);
+    const independent = await objective('elsewhere', true, ['client/src/elsewhere.tsx']);
+    await queueObjective({ changeRequestId: first.id, userId: adminId, priority: 1 });
+    await queueObjective({ changeRequestId: clash.id, userId: adminId, priority: 2 });
+    await queueObjective({ changeRequestId: independent.id, userId: adminId, priority: 3 });
+    await setAdmissionPolicy({ maxActive: 3, actor: 'test', reason: 'room for all three' });
+
+    const pass = await admitQueued();
+    expect(pass.admitted.map((one) => one.changeRequestId)).toEqual([first.id, independent.id]);
+    expect(pass.skipped.find((one) => one.reason.includes('overlaps'))).toBeTruthy();
+
+    const line = await readLine(new Date(), { projectId: fixture.project.id });
+    const held = line.queue.find((row) => row.entry.changeRequestId === clash.id)!;
+    expect(held.executableNow).toBe(false);
+    expect(held.why).toMatch(/overlap/);
+    // A wait with a reason is not idle work.
+    expect(line.executable.queued).toBe(0);
+
+    const firstCampaign = pass.admitted[0]!.campaignId;
+    await patchCampaign(firstCampaign, { state: 'COMPLETE', prUrl: 'https://example.invalid/pr/2' });
+    expect((await admitQueued()).admitted.map((one) => one.changeRequestId)).toEqual([clash.id]);
+  });
+
+  it('holds it while the overlapping campaign is BLOCKED, because a blocked campaign still owns its branch', async () => {
+    const first = await objective('owner', true, ['server/services/owned/**']);
+    const clash = await objective('waiter', true, ['server/services/owned/**']);
+    await queueObjective({ changeRequestId: first.id, userId: adminId, priority: 1 });
+    await queueObjective({ changeRequestId: clash.id, userId: adminId, priority: 2 });
+    await setAdmissionPolicy({ maxActive: 2, actor: 'test', reason: 'two' });
+    const started = (await admitQueued()).admitted[0]!;
+    await patchCampaign(started.campaignId, {
+      state: 'BLOCKED',
+      blockerKind: 'UNIT_EXHAUSTED_ATTEMPTS',
+      blockerDetail: 'waiting',
+    });
+    expect((await admitQueued()).admitted).toHaveLength(0);
   });
 });

@@ -33,6 +33,7 @@ import {
   getCampaignByChangeRequest,
   getChangeRequest,
   listLiveCampaigns,
+  pathsOverlap,
 } from '../../repos/factory.ts';
 import { listFactoryEvents, recordFactoryEvent } from '../../repos/factoryFleet.ts';
 import {
@@ -177,6 +178,40 @@ async function countWorking(campaigns: FactoryCampaign[]): Promise<number> {
   return n;
 }
 
+
+/**
+ * The live campaign a queued objective's mutation scope intersects, if any.
+ *
+ * Two campaigns whose declared scopes overlap would each branch from the same
+ * base and edit the same files, and the second pull request would arrive
+ * conflicted with the first. The factory already refuses to lease two *units*
+ * whose surfaces intersect (`pathsOverlap`, the same coarse prefix comparison,
+ * whose expensive mistake is answering no); this is that rule one level up.
+ * Compared against every live campaign — a BLOCKED one still owns its branch —
+ * and never against a finished one, whose work is on a pull request a person
+ * merges. It is a wait, not a refusal: the entry starts on the pass after the
+ * other campaign stops being live, and lower-priority work that does not
+ * overlap is started meanwhile.
+ */
+async function overlappingLiveCampaign(
+  scope: string[],
+  live: Array<{ campaignId: string; scope: string[] }>,
+): Promise<string | null> {
+  for (const other of live) {
+    if (pathsOverlap(scope, other.scope)) return other.campaignId;
+  }
+  return null;
+}
+
+async function liveScopes(live: FactoryCampaign[]): Promise<Array<{ campaignId: string; scope: string[] }>> {
+  const scopes: Array<{ campaignId: string; scope: string[] }> = [];
+  for (const campaign of live) {
+    const request = await getChangeRequest(campaign.changeRequestId);
+    if (request) scopes.push({ campaignId: campaign.id, scope: request.mutationScope });
+  }
+  return scopes;
+}
+
 /**
  * Start queued campaigns while fewer than the admission limit are working.
  *
@@ -190,6 +225,7 @@ export async function admitQueued(): Promise<AdmissionReport> {
   let working = await countWorking(live);
   const report: AdmissionReport = { policy, working, admitted: [], skipped: [] };
   if (working >= policy.maxActive) return report;
+  const scopes = await liveScopes(live);
 
   for (const entry of await listQueueEntries(['QUEUED'])) {
     if (working >= policy.maxActive) break;
@@ -204,6 +240,16 @@ export async function admitQueued(): Promise<AdmissionReport> {
     }
 
     const already = await getCampaignByChangeRequest(changeRequest.id);
+    if (!already) {
+      const clash = await overlappingLiveCampaign(changeRequest.mutationScope, scopes);
+      if (clash) {
+        report.skipped.push({
+          entryId: entry.id,
+          reason: `its mutation scope overlaps live campaign ${clash}; it starts once that campaign is no longer live`,
+        });
+        continue;
+      }
+    }
     let campaign = already;
     if (!campaign) {
       const spec = await campaignSpecFor(changeRequest);
@@ -236,6 +282,7 @@ export async function admitQueued(): Promise<AdmissionReport> {
       },
     });
     report.admitted.push({ entryId: entry.id, changeRequestId: changeRequest.id, campaignId: campaign.id });
+    scopes.push({ campaignId: campaign.id, scope: changeRequest.mutationScope });
     if (await holdsSlot(campaign)) working += 1;
   }
   report.working = working;
@@ -514,7 +561,36 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
 
   const workingCampaigns = campaigns.filter((one) => one.working).length;
   const room = Math.max(0, policy.maxActive - workingCampaigns);
-  const admissibleQueued = Math.min(room, queue.length);
+  const queued: LineQueued[] = [];
+  const scopes = await liveScopes(allLive);
+  let slotsLeft = room;
+  for (const [index, entry] of queue.entries()) {
+    const request = await getChangeRequest(entry.changeRequestId);
+    const clash = request ? await overlappingLiveCampaign(request.mutationScope, scopes) : null;
+    const executableNow = policy.maxActive > 0 && clash === null && slotsLeft > 0;
+    if (executableNow) {
+      slotsLeft -= 1;
+      if (request) scopes.push({ campaignId: `queued:${entry.id}`, scope: request.mutationScope });
+    }
+    queued.push({
+      entry,
+      objective: request?.objective ?? '',
+      position: index + 1,
+      executableNow,
+      why:
+        policy.maxActive === 0
+          ? 'AUTO is off.'
+          : clash
+            ? `Priority ${entry.priority}; its files overlap live campaign ${clash.startsWith('queued:') ? 'an objective ahead of it' : clash}, so it waits for that to finish.`
+            : executableNow
+              ? `Priority ${entry.priority}; a slot is free, so the next pass starts it.`
+              : `Priority ${entry.priority}; waits for one of ${policy.maxActive} slot(s) to free.`,
+    });
+  }
+
+  // Only what admission would actually start counts as executable: an entry
+  // waiting on an overlapping campaign is a wait with a reason, not idle work.
+  const admissibleQueued = queued.filter((row) => row.executableNow).length;
   const executableTotal = readyBins + admissibleQueued;
   const unexplainedIdle =
     executableTotal > 0 && freeSurfaces > 0 && leasedBins === 0 && arriving === 0;
@@ -532,24 +608,6 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   else if (queue.length > 0)
     because = `${queue.length} objective(s) queued behind ${workingCampaigns} working campaign(s), the limit being ${policy.maxActive}.`;
   else because = 'Nothing is queued and no campaign has a stage waiting.';
-
-  const queued: LineQueued[] = [];
-  for (const [index, entry] of queue.entries()) {
-    const request = await getChangeRequest(entry.changeRequestId);
-    const executableNow = policy.maxActive > 0 && index < room;
-    queued.push({
-      entry,
-      objective: request?.objective ?? '',
-      position: index + 1,
-      executableNow,
-      why:
-        policy.maxActive === 0
-          ? 'AUTO is off.'
-          : executableNow
-            ? `Priority ${entry.priority}; a slot is free, so the next pass starts it.`
-            : `Priority ${entry.priority}; waits for one of ${policy.maxActive} slot(s) to free.`,
-    });
-  }
 
   return {
     at: nowIso,
