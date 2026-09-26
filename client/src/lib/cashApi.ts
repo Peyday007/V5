@@ -787,8 +787,14 @@ export const CashApi = {
    * this is that route, generic over which one. `record-action` (a quote, an
    * invoice, a payment accepted, on a piece already executing or delivering)
    * is one more case on it rather than a dedicated method: it takes the exact
-   * same `{ action, detail, reference?, occurrence? }` shape `execute` already
-   * sends, and a second method here would only restate that.
+   * same `{ action, detail, reference? }` shape `execute` already sends, and a
+   * second method here would only restate that.
+   *
+   * There is deliberately no `occurrence` field here for a caller to set. The
+   * server derives it from `detail` and `reference` (see `contentOccurrence`
+   * on the cash opportunities service) so that a genuinely different action —
+   * a second invoice, a different reference — is never silently deduped
+   * against an earlier one just because nothing on this side numbered it.
    */
   act: (
     opportunityId: string,

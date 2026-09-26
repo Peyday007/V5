@@ -2533,9 +2533,7 @@ function Actions({
             type="button"
             className="rs-button-quiet"
             disabled={busy || reason.trim().length === 0}
-            onClick={() =>
-              void run(asking, { action: performed, detail: reason, occurrence: 'first' })
-            }
+            onClick={() => void run(asking, { action: performed, detail: reason })}
           >
             Confirm
           </button>
