@@ -106,6 +106,10 @@ and #19.
 | 09-26 06:29–06:34 | Seven units regranted 3→5 with `surface-blocked`. #1 was unblocked by itself and a new units bin was created 34 s after the regrant |
 | 09-26 06:4x | `cf6f105` deploying: sessions spelled `claude-code-session_<id>` (Caleb's surface) are matched too |
 
+| 09-26 07:0x | Deploy 358 (`cf6f105`) was **fully green**: 245/245 before the restart and 264/264 after it. #1's repair landed and #1 is in review round 2 on Airyn. Brain quarantined Caleb's surface 3 by itself |
+| 09-26 07:13 | #5 BLOCKED on a second defect. After three misrouted 403 attempts, surface 1 did the work correctly and the forge confirmed it, but the report was refused five times ("somebody else holds it") and discarded. Cause: `refuseUnit` judged "exhausted?" *before* charging the attempt, which left the unit READY at 3/3, where acceptance can never claim it |
+| 09-26 07:3x | `8bcf7b2` deploying: `chargeAndReopenUnit` charges and decides in one statement. #5's two units were regranted 3→5 (`surface-blocked`) |
+
 **Burn-in, 00:25–04:25** (`factory burnin --hours 4`): 12 stages and 15 fires; 3 retries, all on the units bin Airyn could not push; 0 no-shows and 0 deferrals. Median ready→fire **3 s**, fire→arrival **6 s**, transition idle **1 s**. **Unexplained idle 0 s.** Utilization reads 1.06, which means stage-time over window with two campaigns running at once, so it exceeds 1.
 
 **Hosted verification on the last three deploys (352, 354, 355).** Each one *released*. Each time the pre-restart pass failed at the same step, `brain_submit_synthesis`, for three different reasons:
