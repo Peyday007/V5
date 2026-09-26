@@ -2347,6 +2347,20 @@ function Actions({
   const [problem, setProblem] = useState<string | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  /*
+   * A reviewer found that this panel's single box promised "any reference it
+   * has outside Brain" and then folded whatever was typed into `detail`
+   * alone, so `contentOccurrence` (server/services/cash/opportunities.ts)
+   * never actually received one: every confirm from this screen sent
+   * `reference: undefined`, and two genuinely distinct occurrences typed with
+   * similar wording had nothing to tell them apart with. This is its own
+   * field now, wired through separately, so a person has somewhere to put the
+   * invoice number or confirmation code that actually distinguishes one
+   * occurrence from the next — and leaving it blank on two that read
+   * identically is still, correctly, the same claim: nobody has said they
+   * differ.
+   */
+  const [reference, setReference] = useState('');
   const allowedActions = authority.allowedActions;
   const [performed, setPerformed] = useState(allowedActions[0] ?? 'CONTACT_BUYER');
   const state = placement.opportunity.state;
@@ -2433,6 +2447,7 @@ function Actions({
       await CashApi.act(placement.opportunity.id, action, body);
       setAsking(null);
       setReason('');
+      setReference('');
       onChanged();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
@@ -2521,19 +2536,35 @@ function Actions({
             ))}
           </select>
           <label className="rs-field-label" htmlFor={`cash-detail-${placement.opportunity.id}`}>
-            Who you contacted or what you sent, and any reference it has outside Brain. This is
-            the record of the action, not a description of work Brain should do.
+            Who you contacted or what you sent. This is the record of the action, not a
+            description of work Brain should do.
           </label>
           <input
             id={`cash-detail-${placement.opportunity.id}`}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
           />
+          <label className="rs-field-label" htmlFor={`cash-reference-${placement.opportunity.id}`}>
+            Any reference it has outside Brain, if it has one &mdash; an invoice number, a
+            confirmation code, a message id. This is what tells two similar-sounding actions apart;
+            leaving it blank on two that read identically is still the same claim.
+          </label>
+          <input
+            id={`cash-reference-${placement.opportunity.id}`}
+            value={reference}
+            onChange={(event) => setReference(event.target.value)}
+          />
           <button
             type="button"
             className="rs-button-quiet"
             disabled={busy || reason.trim().length === 0}
-            onClick={() => void run(asking, { action: performed, detail: reason })}
+            onClick={() =>
+              void run(asking, {
+                action: performed,
+                detail: reason,
+                ...(reference.trim().length > 0 ? { reference: reference.trim() } : {}),
+              })
+            }
           >
             Confirm
           </button>
