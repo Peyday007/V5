@@ -38,6 +38,80 @@ import {
   type Placement,
   type ReviewItem,
 } from '../lib/cashApi.ts';
+import type { MonetizationEdgeKind, MonetizationMethod } from '../../../server/domain/types.ts';
+
+/**
+ * The two closed vocabularies the ledger's decisions are made from.
+ *
+ * Copied rather than imported as values, the way `PromptPanel.tsx`'s
+ * `RUN_TYPES` already is: a client-side value import from a server module
+ * pulls that module into the client's own build and test graph rather than
+ * erasing to nothing the way `import type` does, and this codebase's
+ * established boundary keeps the server side of that line type-only. Each
+ * array is typed against the imported union, so a value here that the
+ * server's own `isMonetizationMethod` / `isMonetizationEdgeKind` would
+ * refuse is a compile error rather than a silent drift.
+ */
+const MONETIZATION_METHODS: readonly MonetizationMethod[] = [
+  'DIRECT_SALE',
+  'PRODUCTIZED_SERVICE',
+  'CONSULTING',
+  'DONE_WITH_YOU',
+  'TRAINING',
+  'AUDIT_OR_ASSESSMENT',
+  'MANAGED_SERVICE',
+  'MAINTENANCE_CONTRACT',
+  'SUBCONTRACTED_FULFILMENT',
+  'AGENCY_REPRESENTATION',
+  'BROKERAGE',
+  'LEAD_GENERATION',
+  'REFERRAL_FEE',
+  'AFFILIATE',
+  'MARKETPLACE',
+  'PLATFORM_FEE',
+  'ADVERTISING',
+  'SPONSORSHIP',
+  'DATA_SUBSCRIPTION',
+  'INTELLIGENCE_REPORT',
+  'API_ACCESS',
+  'SOFTWARE_TOOL',
+  'TEMPLATE_OR_ASSET_SALE',
+  'COMMUNITY_MEMBERSHIP',
+  'CERTIFICATION',
+  'EVENTS',
+  'LICENSING',
+  'WHITE_LABEL',
+  'FRANCHISE',
+  'ARBITRAGE',
+  'RESALE',
+  'DROP_SHIP',
+  'CONSIGNMENT',
+  'RENTAL',
+  'LEASING',
+  'AUCTION',
+  'BOUNTY',
+  'COMPETITION_PRIZE',
+  'GRANT',
+  'PROCUREMENT_CONTRACT',
+  'TENDER_SUPPORT',
+  'RECOVERY_OR_CLAIMS',
+  'COMPLIANCE_SERVICE',
+  'REVENUE_SHARE',
+  'JOINT_VENTURE',
+  'PURCHASE_ORDER_FINANCE',
+  'RECEIVABLES_FINANCE',
+];
+
+const MONETIZATION_EDGE_KINDS: readonly MonetizationEdgeKind[] = [
+  'ENABLES',
+  'REQUIRES',
+  'COMPETES_WITH',
+  'COEXISTS_WITH',
+  'PRODUCES_DATA_FOR',
+  'PRODUCES_RELATIONSHIPS_FOR',
+  'STEPPING_STONE_TO',
+  'VIABLE_ONLY_AT_SCALE_OF',
+];
 
 /**
  * What a round is really doing, in the words a person reads.
@@ -276,7 +350,7 @@ export function CashView_({
         * and because the possibility space is the thing this section exists to
         * stop being collapsed into one answer at promotion.
         */}
-      <Monetization page={page} onChanged={view.reload} />
+      <Monetization page={page} projectId={rootId} onChanged={view.reload} />
       <MoneyRow page={page} />
       <Details page={page} onChanged={view.reload} />
       {/*
@@ -3162,11 +3236,40 @@ const WORK_STATE_LABEL: Readonly<Record<string, string>> = Object.freeze({
   STOPPED: 'Did not finish.',
 });
 
-function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }): JSX.Element {
+function Monetization({
+  page,
+  projectId,
+  onChanged,
+}: {
+  page: CashPage;
+  projectId: string;
+  onChanged(): void;
+}): JSX.Element {
   const shared = page.frontier.monetization ?? null;
   const owner = page.full?.monetization ?? null;
   const byId = new Map((shared?.paths ?? []).map((one) => [one.id, one]));
   const ownerTop = new Map((owner?.top ?? []).map((one) => [one.pathId, one]));
+
+  /*
+   * The discovery each possibility is a way of monetizing, for the SEED form
+   * that is attached to it &mdash; read from the owner's own entries, because
+   * only they carry the subject's *kind* (§49's OPPORTUNITY / INDUSTRY_NODE),
+   * and a `SharedMonetizationPath` deliberately carries only the subject's id.
+   * Present only when `mayActOnJob` is, which is exactly when these forms are
+   * offered at all.
+   */
+  const subjectByPathId = new Map(
+    (owner?.entries ?? []).map((entry) => [entry.path.id, entry.subject]),
+  );
+
+  /*
+   * Every possibility in the project, named, for the "other path" a LINK, a
+   * MERGE or a comparison names. The shared list rather than a private one:
+   * which possibilities exist is discovery (§34), so it is the same list
+   * whichever role reads it, and it is what a MERGE or a LINK partner is
+   * chosen from either way.
+   */
+  const allPaths = (shared?.paths ?? []).map((one) => ({ id: one.id, title: one.title }));
 
   return (
     <section className="rs-card rs-cash-monetization">
@@ -3329,7 +3432,24 @@ function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }
 
                   <PathDetail pathId={pathId} />
                   {page.capabilities.mayActOnJob ? (
-                    <PathJudgment pathId={pathId} status={path.status} onChanged={onChanged} />
+                    <>
+                      <PathJudgment pathId={pathId} status={path.status} onChanged={onChanged} />
+                      <SeedPathForm
+                        projectId={projectId}
+                        subject={subjectByPathId.get(pathId) ?? null}
+                        onChanged={onChanged}
+                      />
+                      <PathLineageActions
+                        pathId={pathId}
+                        allPaths={allPaths}
+                        onChanged={onChanged}
+                      />
+                      <ComparePathControl
+                        projectId={projectId}
+                        pathId={pathId}
+                        allPaths={allPaths}
+                      />
+                    </>
                   ) : null}
                 </li>
               );
@@ -3400,11 +3520,28 @@ function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }
                               */}
                             <PathDetail pathId={id} />
                             {page.capabilities.mayActOnJob ? (
-                              <PathJudgment
-                                pathId={id}
-                                status={path.status}
-                                onChanged={onChanged}
-                              />
+                              <>
+                                <PathJudgment
+                                  pathId={id}
+                                  status={path.status}
+                                  onChanged={onChanged}
+                                />
+                                <SeedPathForm
+                                  projectId={projectId}
+                                  subject={subjectByPathId.get(id) ?? null}
+                                  onChanged={onChanged}
+                                />
+                                <PathLineageActions
+                                  pathId={id}
+                                  allPaths={allPaths}
+                                  onChanged={onChanged}
+                                />
+                                <ComparePathControl
+                                  projectId={projectId}
+                                  pathId={id}
+                                  allPaths={allPaths}
+                                />
+                              </>
                             ) : null}
                           </li>
                         );
@@ -3796,5 +3933,489 @@ function PathJudgment({
       </button>
       {message ? <span className="rs-hint">{message}</span> : null}
     </form>
+  );
+}
+
+/** A closed identifier turned into words, for a select option nobody labelled. */
+function methodLabel(method: string): string {
+  return method
+    .toLowerCase()
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * What each edge kind means, in the words `domain/types.ts` already carries
+ * on the constant itself &mdash; not composed here, so there is nowhere for
+ * this label to say something the server's own vocabulary does not.
+ */
+const EDGE_KIND_LABEL: Record<MonetizationEdgeKind, string> = {
+  ENABLES: 'Enables it — running this makes the other possible',
+  REQUIRES: 'Requires it — this cannot start until the other has',
+  COMPETES_WITH: 'Competes with it — two ways of being the same party',
+  COEXISTS_WITH: 'Coexists with it — both can run, and neither costs the other anything',
+  PRODUCES_DATA_FOR: 'Produces data for it — this produces what the other sells or uses',
+  PRODUCES_RELATIONSHIPS_FOR:
+    'Produces relationships for it — this produces the people the other needs',
+  STEPPING_STONE_TO: 'Stepping stone to it — the cheaper thing to do on the way to the other',
+  VIABLE_ONLY_AT_SCALE_OF:
+    'Viable only at the scale of it — the other only works once this has volume or an audience',
+};
+
+/**
+ * Name a possibility the enumeration could not produce, attached to the
+ * discovery a possibility is already shown under.
+ *
+ * `SEED` is the one origin Brain may never write (§49), so this is the only
+ * client entrance to it. It spends nothing and starts nothing: it writes a
+ * row, and every gate downstream still decides where the new possibility
+ * ranks.
+ *
+ * Renders nothing when the subject this possibility is a way of monetizing is
+ * not known &mdash; an older deployment whose response carries no
+ * `monetization` block, or a possibility whose subject could not be read.
+ */
+function SeedPathForm({
+  projectId,
+  subject,
+  onChanged,
+}: {
+  projectId: string;
+  subject: { id: string; kind: 'OPPORTUNITY' | 'INDUSTRY_NODE' } | null;
+  onChanged(): void;
+}): JSX.Element | null {
+  const [open, setOpen] = useState(false);
+  const [method, setMethod] = useState<MonetizationMethod>(MONETIZATION_METHODS[0]!);
+  const [thesis, setThesis] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (!subject) return null;
+
+  if (!open) {
+    return (
+      <div className="rs-cash-actions">
+        <button type="button" className="rs-button-quiet" onClick={() => setOpen(true)}>
+          Name another possibility for this discovery
+        </button>
+        {message ? <span className="rs-hint">{message}</span> : null}
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="rs-cash-actions"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (busy) return;
+        setBusy(true);
+        CashApi.seedPath(projectId, {
+          method,
+          opportunityId: subject.kind === 'OPPORTUNITY' ? subject.id : undefined,
+          industryNodeId: subject.kind === 'INDUSTRY_NODE' ? subject.id : undefined,
+          thesis: thesis.trim() ? thesis : undefined,
+        })
+          .then((answer) => {
+            setMessage(answer.message);
+            setOpen(false);
+            setThesis('');
+            onChanged();
+          })
+          .catch((error: unknown) =>
+            setMessage(error instanceof Error ? error.message : 'It did not go through.'),
+          )
+          .finally(() => setBusy(false));
+      }}
+    >
+      <label>
+        <span>Shape of transaction</span>
+        <select
+          value={method}
+          onChange={(event) => setMethod(event.target.value as MonetizationMethod)}
+        >
+          {MONETIZATION_METHODS.map((one) => (
+            <option key={one} value={one}>
+              {methodLabel(one)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Who would pay, for what (optional)</span>
+        <input
+          value={thesis}
+          onChange={(event) => setThesis(event.target.value)}
+          placeholder="Optional"
+        />
+      </label>
+      <button type="submit" disabled={busy}>
+        {busy ? 'Naming…' : 'Name it'}
+      </button>
+      <button type="button" className="rs-button-quiet" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+      {message ? <span className="rs-hint">{message}</span> : null}
+    </form>
+  );
+}
+
+/** One split child: a shape of transaction, and an optional title and thesis. */
+interface SplitChild {
+  method: MonetizationMethod;
+  title: string;
+  thesis: string;
+}
+
+function newSplitChild(method: MonetizationMethod): SplitChild {
+  return { method, title: '', thesis: '' };
+}
+
+/**
+ * The ledger decisions the server implements and nothing in the client called
+ * &mdash; relating this possibility to another, merging it into one,
+ * un-merging it, and splitting it into several (§49).
+ *
+ * One panel rather than four, because they are one decision about this
+ * possibility's place in the ledger and a person chooses which shape it takes
+ * before filling in the rest &mdash; the same pattern `PathJudgment` already
+ * uses for its own four judgements.
+ */
+function PathLineageActions({
+  pathId,
+  allPaths,
+  onChanged,
+}: {
+  pathId: string;
+  allPaths: { id: string; title: string }[];
+  onChanged(): void;
+}): JSX.Element {
+  const others = allPaths.filter((one) => one.id !== pathId);
+
+  const [open, setOpen] = useState(false);
+  const [action, setAction] = useState<'LINK' | 'MERGE' | 'UNMERGE' | 'SPLIT'>('LINK');
+
+  const [linkKind, setLinkKind] = useState<MonetizationEdgeKind>(MONETIZATION_EDGE_KINDS[0]!);
+  const [linkTo, setLinkTo] = useState(others[0]?.id ?? '');
+  const [linkRationale, setLinkRationale] = useState('');
+
+  const [mergeInto, setMergeInto] = useState(others[0]?.id ?? '');
+  const [mergeReason, setMergeReason] = useState('');
+
+  /*
+   * `splitPath` refuses fewer than two children (§49's `decisions.ts`), so the
+   * form starts with two rather than one — a default that cannot be submitted
+   * would be a control that pretends.
+   */
+  const [splitChildren, setSplitChildren] = useState<SplitChild[]>([
+    newSplitChild(MONETIZATION_METHODS[0]!),
+    newSplitChild(MONETIZATION_METHODS[1]!),
+  ]);
+  const [splitReason, setSplitReason] = useState('');
+
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (!open) {
+    return (
+      <div className="rs-cash-actions">
+        <button type="button" className="rs-button-quiet" onClick={() => setOpen(true)}>
+          Relate, merge or split it
+        </button>
+        {message ? <span className="rs-hint">{message}</span> : null}
+      </div>
+    );
+  }
+
+  function submit(body: Parameters<typeof CashApi.pathLineage>[1]): void {
+    if (busy) return;
+    setBusy(true);
+    CashApi.pathLineage(pathId, body)
+      .then((answer) => {
+        setMessage(answer.message);
+        setOpen(false);
+        onChanged();
+      })
+      .catch((error: unknown) =>
+        setMessage(error instanceof Error ? error.message : 'It did not go through.'),
+      )
+      .finally(() => setBusy(false));
+  }
+
+  const canSubmit =
+    (action === 'LINK' && linkTo !== '' && linkRationale.trim().length > 0) ||
+    (action === 'MERGE' && mergeInto !== '' && mergeReason.trim().length > 0) ||
+    action === 'UNMERGE' ||
+    (action === 'SPLIT' && splitChildren.length >= 2 && splitReason.trim().length > 0);
+
+  return (
+    <form
+      className="rs-cash-actions"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!canSubmit) return;
+        if (action === 'LINK') {
+          submit({ action: 'LINK', kind: linkKind, to: linkTo, rationale: linkRationale });
+        } else if (action === 'MERGE') {
+          submit({ action: 'MERGE', into: mergeInto, reason: mergeReason });
+        } else if (action === 'UNMERGE') {
+          submit({ action: 'UNMERGE' });
+        } else {
+          submit({
+            action: 'SPLIT',
+            into: splitChildren.map((one) => ({
+              method: one.method,
+              title: one.title.trim() || undefined,
+              thesis: one.thesis.trim() || undefined,
+            })),
+            reason: splitReason,
+          });
+        }
+      }}
+    >
+      <label>
+        <span>Decision</span>
+        <select
+          value={action}
+          onChange={(event) =>
+            setAction(event.target.value as 'LINK' | 'MERGE' | 'UNMERGE' | 'SPLIT')
+          }
+        >
+          <option value="LINK">Relate it to another possibility</option>
+          <option value="MERGE">Merge it into another possibility</option>
+          <option value="UNMERGE">Un-merge it &mdash; make it separate again</option>
+          <option value="SPLIT">Split it into several</option>
+        </select>
+      </label>
+
+      {action === 'LINK' ? (
+        others.length === 0 ? (
+          <p className="rs-hint">There is nothing else in the ledger yet to relate this to.</p>
+        ) : (
+          <>
+            <label>
+              <span>How it relates</span>
+              <select
+                value={linkKind}
+                onChange={(event) => setLinkKind(event.target.value as MonetizationEdgeKind)}
+              >
+                {MONETIZATION_EDGE_KINDS.map((kind) => (
+                  <option key={kind} value={kind}>
+                    {EDGE_KIND_LABEL[kind]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>To</span>
+              <select value={linkTo} onChange={(event) => setLinkTo(event.target.value)}>
+                {others.map((one) => (
+                  <option key={one.id} value={one.id}>
+                    {one.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Why</span>
+              <input
+                value={linkRationale}
+                required
+                onChange={(event) => setLinkRationale(event.target.value)}
+                placeholder="What holds between these two in particular."
+              />
+            </label>
+          </>
+        )
+      ) : null}
+
+      {action === 'MERGE' ? (
+        others.length === 0 ? (
+          <p className="rs-hint">There is nothing else in the ledger yet to merge this into.</p>
+        ) : (
+          <>
+            <label>
+              <span>Into</span>
+              <select value={mergeInto} onChange={(event) => setMergeInto(event.target.value)}>
+                {others.map((one) => (
+                  <option key={one.id} value={one.id}>
+                    {one.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Why</span>
+              <input
+                value={mergeReason}
+                required
+                onChange={(event) => setMergeReason(event.target.value)}
+                placeholder="Why these are one possibility rather than two."
+              />
+            </label>
+          </>
+        )
+      ) : null}
+
+      {action === 'SPLIT' ? (
+        <>
+          {splitChildren.map((child, index) => (
+            <fieldset key={index} className="rs-cash-split-child">
+              <label>
+                <span>Shape of transaction</span>
+                <select
+                  value={child.method}
+                  onChange={(event) => {
+                    const next = splitChildren.slice();
+                    next[index] = { ...child, method: event.target.value as MonetizationMethod };
+                    setSplitChildren(next);
+                  }}
+                >
+                  {MONETIZATION_METHODS.map((one) => (
+                    <option key={one} value={one}>
+                      {methodLabel(one)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Title (optional)</span>
+                <input
+                  value={child.title}
+                  onChange={(event) => {
+                    const next = splitChildren.slice();
+                    next[index] = { ...child, title: event.target.value };
+                    setSplitChildren(next);
+                  }}
+                />
+              </label>
+              <label>
+                <span>Who would pay, for what (optional)</span>
+                <input
+                  value={child.thesis}
+                  onChange={(event) => {
+                    const next = splitChildren.slice();
+                    next[index] = { ...child, thesis: event.target.value };
+                    setSplitChildren(next);
+                  }}
+                />
+              </label>
+              {splitChildren.length > 2 ? (
+                <button
+                  type="button"
+                  className="rs-button-quiet"
+                  onClick={() => setSplitChildren(splitChildren.filter((_, at) => at !== index))}
+                >
+                  Remove this one
+                </button>
+              ) : null}
+            </fieldset>
+          ))}
+          <button
+            type="button"
+            className="rs-button-quiet"
+            onClick={() => setSplitChildren([...splitChildren, newSplitChild(MONETIZATION_METHODS[0]!)])}
+          >
+            Add another shape
+          </button>
+          <label>
+            <span>Why</span>
+            <input
+              value={splitReason}
+              required
+              onChange={(event) => setSplitReason(event.target.value)}
+              placeholder="Why this is really several possibilities."
+            />
+          </label>
+        </>
+      ) : null}
+
+      <button type="submit" disabled={busy || !canSubmit}>
+        {busy ? 'Recording…' : 'Record'}
+      </button>
+      <button type="button" className="rs-button-quiet" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+      {message ? <span className="rs-hint">{message}</span> : null}
+    </form>
+  );
+}
+
+/**
+ * Why one possibility outranks another, named &mdash; for any second path
+ * somebody chooses, not only the one directly below it.
+ *
+ * It reads and writes nothing: the sentence is the server's own comparison,
+ * rendered verbatim rather than composed here, and no fetch happens until
+ * somebody presses Compare.
+ */
+function ComparePathControl({
+  projectId,
+  pathId,
+  allPaths,
+}: {
+  projectId: string;
+  pathId: string;
+  allPaths: { id: string; title: string }[];
+}): JSX.Element | null {
+  const others = allPaths.filter((one) => one.id !== pathId);
+  const [against, setAgainst] = useState(others[0]?.id ?? '');
+  const [state, setState] = useState<
+    | { kind: 'IDLE' }
+    | { kind: 'LOADING' }
+    | { kind: 'ERROR'; because: string }
+    | { kind: 'READY'; sentence: string }
+  >({ kind: 'IDLE' });
+
+  if (others.length === 0) return null;
+
+  function compare(): void {
+    if (!against) return;
+    setState({ kind: 'LOADING' });
+    CashApi.whyRanked(projectId, pathId, against)
+      .then((answer) => {
+        setState({
+          kind: 'READY',
+          sentence: answer.comparison?.sentence ?? 'Nothing was returned to compare.',
+        });
+      })
+      .catch((error: unknown) =>
+        setState({
+          kind: 'ERROR',
+          because: error instanceof Error ? error.message : 'It could not be compared.',
+        }),
+      );
+  }
+
+  return (
+    <div className="rs-cash-actions rs-cash-compare">
+      <label>
+        <span>Compare with&hellip;</span>
+        <select
+          value={against}
+          onChange={(event) => {
+            setAgainst(event.target.value);
+            setState({ kind: 'IDLE' });
+          }}
+        >
+          {others.map((one) => (
+            <option key={one.id} value={one.id}>
+              {one.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="rs-button-quiet"
+        onClick={compare}
+        disabled={state.kind === 'LOADING'}
+      >
+        {state.kind === 'LOADING' ? 'Comparing…' : 'Compare'}
+      </button>
+      {state.kind === 'READY' ? <p className="rs-hint">{state.sentence}</p> : null}
+      {state.kind === 'ERROR' ? <p className="rs-hint">{state.because}</p> : null}
+    </div>
   );
 }
