@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 098. A software change asked for in a conversation, followed all the way back to
+-- The Postgres half of SQLite migration 099. A software change asked for in a conversation, followed all the way back to
 -- that conversation.
 --
 -- Three columns on the request and one append-only ledger beside it.
