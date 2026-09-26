@@ -56,7 +56,7 @@ import type {
   FactoryChangeRequest,
   FactoryWorkUnit,
 } from '../../domain/factory.ts';
-import { createBin, getBin, listBinUnitResults } from '../../repos/bins.ts';
+import { createBin, getBin, leaseCredentialFor, listBinUnitResults } from '../../repos/bins.ts';
 import type { CreateBinInput } from '../../repos/bins.ts';
 import { manifestProblems } from '../bins/contracts.ts';
 import { FactoryError } from './errors.ts';
@@ -1727,7 +1727,12 @@ export async function campaignSpecFor(
  */
 export async function binIdentity(
   bin: Bin,
-): Promise<{ sessionId: string | null; workerId: string | null; accountId: string | null }> {
+): Promise<{
+  sessionId: string | null;
+  workerId: string | null;
+  accountId: string | null;
+  credentialId: string | null;
+}> {
   const { workerSessionForBin } = await import('../../repos/fleet.ts');
   const observed = await workerSessionForBin(bin.id);
   return {
@@ -1744,6 +1749,8 @@ export async function binIdentity(
     // from anything the worker said about itself.
     workerId: observed?.workerId ?? bin.workerId,
     accountId: observed?.accountId ?? null,
+    // The connector that held the lease, from the assignment event.
+    credentialId: await leaseCredentialFor(bin.id, bin.leaseGeneration),
   };
 }
 
@@ -1763,9 +1770,15 @@ export async function binIdentity(
  */
 export const UNKNOWN_WORKER = 'unknown-worker';
 
-export async function implementingSessions(
-  campaignId: string,
-): Promise<{ sessions: Set<string>; workers: Set<string>; unknownWorker: boolean }> {
+export async function implementingSessions(campaignId: string): Promise<{
+  sessions: Set<string>;
+  workers: Set<string>;
+  unknownWorker: boolean;
+  /** Connectors that implemented under a session nobody recorded. */
+  unknownSessionCredentials: Set<string>;
+  /** An implementing row with no session and no recoverable connector either. */
+  unknownSessionUnresolved: boolean;
+}> {
   const { listFactoryEvents } = await import('../../repos/factoryFleet.ts');
   const events = await listFactoryEvents(campaignId, {
     kinds: [FACTORY_EVENT_KINDS.unitImplemented, FACTORY_EVENT_KINDS.integrationMerged],
@@ -1776,12 +1789,31 @@ export async function implementingSessions(
   // Any implementing row whose worker nobody can name. It must not vanish from
   // the set — that is how an unknown implementer read as "not this reviewer".
   let unknownWorker = false;
+  /*
+   * And the same rule for sessions, which nothing applied until production
+   * recorded `SESSION_SEPARATED` on a review written by the activation that
+   * implemented and integrated the change (`fcp_03a8a0ad`): both implementing
+   * rows carried no session, dropped out of the set, and any reviewer session
+   * then looked independent of them. An implementer with no session is kept as
+   * the connector that held its lease, so a reviewer on that connector — who
+   * could be that very activation — is refused; one with neither is kept as
+   * unresolved, which refuses every reviewer.
+   */
+  const unknownSessionCredentials = new Set<string>();
+  let unknownSessionUnresolved = false;
   for (const event of events) {
     if (event.sessionId) sessions.add(event.sessionId);
+    else {
+      const binId = typeof event.detail['binId'] === 'string' ? (event.detail['binId'] as string) : null;
+      const bin = binId ? await getBin(binId) : null;
+      const credential = bin ? await leaseCredentialFor(bin.id, bin.leaseGeneration) : null;
+      if (credential) unknownSessionCredentials.add(credential);
+      else unknownSessionUnresolved = true;
+    }
     if (!event.workerId || event.workerId === UNKNOWN_WORKER) unknownWorker = true;
     else workers.add(event.workerId);
   }
-  return { sessions, workers, unknownWorker };
+  return { sessions, workers, unknownWorker, unknownSessionCredentials, unknownSessionUnresolved };
 }
 
 export interface ReviewLineage {
@@ -1812,7 +1844,7 @@ export interface ReviewLineage {
  */
 export async function reviewLineage(
   campaignId: string,
-  reviewer: { sessionId: string | null; workerId: string | null },
+  reviewer: { sessionId: string | null; workerId: string | null; credentialId?: string | null },
 ): Promise<ReviewLineage> {
   if (!reviewer.sessionId) {
     return {
@@ -1823,7 +1855,23 @@ export async function reviewLineage(
         'established. An audit whose independence cannot be established did not establish it.',
     };
   }
-  const { sessions, workers, unknownWorker } = await implementingSessions(campaignId);
+  const { sessions, workers, unknownWorker, unknownSessionCredentials, unknownSessionUnresolved } =
+    await implementingSessions(campaignId);
+  const couldBeUnrecordedImplementer =
+    unknownSessionUnresolved ||
+    (unknownSessionCredentials.size > 0 &&
+      (!reviewer.credentialId || unknownSessionCredentials.has(reviewer.credentialId)));
+  if (couldBeUnrecordedImplementer) {
+    return {
+      ok: false,
+      independence: 'SESSION_SEPARATED',
+      reason:
+        'Part of this campaign was implemented by a session Brain could not record, and this ' +
+        'reviewer arrives on the same connector (or on one Brain cannot name), so it could be that ' +
+        'very session. Nothing is recorded. The remedy is operational: a review from a surface ' +
+        'on a different Claude connector.',
+    };
+  }
   if (sessions.has(reviewer.sessionId)) {
     return {
       ok: false,

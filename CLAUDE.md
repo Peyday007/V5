@@ -2847,6 +2847,22 @@ remote.
   §24 settled the same question the same way, and the account and worker identity
   still come from Brain's own dispatch row rather than from anything the worker
   said.
+- **Brain's record of a fire names who was fired, not who arrived, and one
+  activation reviewed its own change because the two were read as one. The
+  correction is recorded rather than quietly applied.** A lease with no reported
+  `session_ref` was stamped with the session Brain fired *for that bin* — but an
+  activation that finishes one bin checks in again and is handed the next,
+  which Brain has just fired at another Routine. Production, `fcp_03a8a0ad`: one
+  activation implemented, integrated and reviewed the same commit; its
+  implementing rows carried no session, dropped out of the set the reviewer is
+  compared against, and the review read `SESSION_SEPARATED`. The same stamp is
+  what delivery evidence credits a Routine from, so it would also have proved a
+  surface by a push another surface made. `firedSessionForArrival` gives the
+  fired session only to a connector that held no other lease at or after the
+  fire, and otherwise records none; an implementer with no session is compared by
+  the connector that held its lease (from the assignment event, which now carries
+  the credential id), and one with neither refuses every reviewer. Unknown fails
+  closed, because what it would record is lineage.
 - **A finished bin cannot say who finished it**, because `finishBin` clears the
   worker, the lease and the credential in the same statement. `worker_sessions`
   can, written from Brain's own dispatch row, and that is where the account and

@@ -1721,7 +1721,8 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
        * reader still fails closed.
        */
       const leaseSession =
-        input.sessionRef ?? (await dispatchedSessionForBin(row.id, row.lease_generation));
+        input.sessionRef ??
+        (await firedSessionForArrival(row.id, row.lease_generation, input.credentialId));
 
       // Everything that decides ownership is in this one statement. There is no
       // read-then-write window for a race to live in, and the generation the
@@ -1779,7 +1780,14 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
         leaseGeneration: nextGeneration,
         attempt: bin.attemptCount,
         durationMs: bin.readyAt ? new Date(at).getTime() - new Date(bin.readyAt).getTime() : null,
-        measures: { leaseMs, queueWaitMs: bin.readyAt ? new Date(at).getTime() - new Date(bin.readyAt).getTime() : null },
+        // The credential id — an identifier, never the secret — is what lets a
+        // later arrival be told apart from the activation already holding this
+        // lease (`firedSessionForArrival`).
+        measures: {
+          leaseMs,
+          queueWaitMs: bin.readyAt ? new Date(at).getTime() - new Date(bin.readyAt).getTime() : null,
+          credentialId: input.credentialId ?? null,
+        },
         outcome: takeover ? 'TAKEOVER' : 'ASSIGNED',
       });
 
@@ -2750,6 +2758,91 @@ export async function dispatchedSessionForBin(
     [binId, leaseGeneration],
   );
   return row?.session_ref ?? null;
+}
+
+/**
+ * The connector credential that held one lease, read from the assignment event.
+ *
+ * `finishBin` clears `lease_credential_id`, so a completed bin cannot say which
+ * connector did its work; the `BIN_ASSIGNED` / `BIN_TAKEOVER` row written when
+ * the lease was taken can. An identifier, never the secret. Null for a lease
+ * taken before the assignment event carried it, which a caller must read as
+ * *we could not tell*.
+ */
+export async function leaseCredentialFor(
+  binId: string,
+  leaseGeneration: number | null | undefined,
+): Promise<string | null> {
+  if (leaseGeneration === null || leaseGeneration === undefined) return null;
+  const row = await getDb().get<{ measures: string | null }>(
+    `SELECT measures FROM bin_events
+      WHERE bin_id = ? AND lease_generation = ?
+        AND event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER')
+      ORDER BY at DESC LIMIT 1`,
+    [binId, leaseGeneration],
+  );
+  const measures = parseJson<Record<string, unknown>>(row?.measures ?? null, {});
+  return typeof measures['credentialId'] === 'string' ? (measures['credentialId'] as string) : null;
+}
+
+/**
+ * The session Brain fired for this bin, **only when the arriving worker can be
+ * that session** — otherwise null.
+ *
+ * `dispatchedSessionForBin` answers *whom Brain fired for this bin*, and a
+ * caller that stamps that onto whoever took the bin is asserting they are the
+ * same. They are not, in the ordinary case: an activation that finishes one bin
+ * checks in again, reports no `session_ref`, and is handed the next ready bin —
+ * which Brain has just fired at some other Routine. Production, campaign
+ * `fcp_03a8a0ad`: one activation implemented, integrated and then reviewed its
+ * own change, the review bin's lease was stamped with the session Brain fired
+ * at Airyn, and review independence read `SESSION_SEPARATED`. The same stamp is
+ * what delivery evidence credits a Routine from, so it would also have proved a
+ * surface by a push another surface made.
+ *
+ * The arrival is attributable to the fire only when this credential held no
+ * other bin's lease at or after the moment Brain fired this one. A credential
+ * that did is an activation already running — the continuing session, or a
+ * sibling session on the same connector — and which of them arrived cannot be
+ * told, so nothing is attributed. Unknown fails closed here because what it
+ * would record is lineage every independence tier and every delivery proof is
+ * read from. A worker that reports its own `session_ref` never reaches this.
+ */
+export async function firedSessionForArrival(
+  binId: string,
+  leaseGeneration: number,
+  credentialId: string | null | undefined,
+): Promise<string | null> {
+  if (!credentialId) return null;
+  const db = getDb();
+  const fire = await db.get<{ session_ref: string | null; sent_at: string | null }>(
+    `SELECT session_ref, sent_at FROM bin_dispatch
+      WHERE bin_id = ? AND lease_generation = ? AND state = 'SENT'`,
+    [binId, leaseGeneration],
+  );
+  if (!fire?.session_ref || !fire.sent_at) return null;
+  // A lease this credential holds right now, on another bin.
+  const live = await db.get<{ id: string }>(
+    `SELECT id FROM bins WHERE lease_credential_id = ? AND id <> ? AND state = 'LEASED' LIMIT 1`,
+    [credentialId, binId],
+  );
+  if (live) return null;
+  // A lease this credential held on another bin that was still in use at or
+  // after the fire: assigned after it, or with any event of that lease after it.
+  const overlapped = await db.get<{ id: string }>(
+    `SELECT a.id FROM bin_events a
+      WHERE a.event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER')
+        AND a.bin_id <> ?
+        AND a.lease_id IS NOT NULL
+        AND a.measures LIKE ?
+        AND (a.at >= ?
+             OR EXISTS (SELECT 1 FROM bin_events b
+                         WHERE b.lease_id = a.lease_id AND b.at >= ?))
+      LIMIT 1`,
+    [binId, `%"credentialId":${JSON.stringify(credentialId)}%`, fire.sent_at, fire.sent_at],
+  );
+  if (overlapped) return null;
+  return fire.session_ref;
 }
 
 /**

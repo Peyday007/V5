@@ -38,7 +38,7 @@ import {
   countBinEvents,
   finishBin,
   creditRefusedAssignments,
-  dispatchedSessionForBin,
+  firedSessionForArrival,
   getBin,
   heartbeatBin,
   listBins,
@@ -365,7 +365,7 @@ export async function binAdmission(input: {
        * Brain chose the surface, fired it, the provider created the session, and
        * the bin sat `READY` at nought attempts with no row naming a reason.
        *
-       * `dispatchedSessionForBin` is strictly stronger than the reported value
+       * `firedSessionForArrival` is strictly stronger than the reported value
        * rather than a softening of the floor: it is Brain's own record of which
        * session it fired for this bin at this generation, which is where §24 says
        * a session identity comes from. The worker's value is still preferred when
@@ -373,10 +373,12 @@ export async function binAdmission(input: {
        * — and if neither exists the floor still fails closed.
        */
       const reportedSession =
-        input.sessionRef ?? (await dispatchedSessionForBin(bin.id, bin.leaseGeneration));
+        input.sessionRef ??
+        (await firedSessionForArrival(bin.id, bin.leaseGeneration, input.principal.credentialId));
       const lineage = await reviewLineage(bin.factoryCampaignId, {
         sessionId: reportedSession,
         workerId: input.workerId,
+        credentialId: input.principal.credentialId,
       });
       if (!lineage.ok) return { ok: false, reason: lineage.reason ?? 'not independent of the work' };
     }
@@ -402,7 +404,8 @@ export async function binAdmission(input: {
         '../capability/independence.ts'
       );
       const reportedSession =
-        input.sessionRef ?? (await dispatchedSessionForBin(bin.id, bin.leaseGeneration));
+        input.sessionRef ??
+        (await firedSessionForArrival(bin.id, bin.leaseGeneration, input.principal.credentialId));
       const lineage = await capabilityAuditLineage({
         extractionBinId: await extractionBinForAudit(bin.id),
         reviewer: { sessionId: reportedSession, workerId: input.workerId },

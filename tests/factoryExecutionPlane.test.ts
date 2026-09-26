@@ -31,10 +31,13 @@ import {
   assignNextBin,
   createBin,
   finishBin,
+  firedSessionForArrival,
   getBin,
   listBins,
   putBinUnitResult,
+  recordBinEvent,
 } from '../server/repos/bins.ts';
+import { getDb } from '../server/db/database.ts';
 import { binAdmission } from '../server/services/bins/service.ts';
 import { recordFactoryEvent } from '../server/repos/factoryFleet.ts';
 import {
@@ -1355,6 +1358,35 @@ describe('a worker that finishes a factory bin has its report read from rows', (
 
 /* ========================================================================= */
 
+/** A units bin with nothing about it that matters to lineage. */
+async function plainUnitsBin() {
+  return createBin({
+    projectId: fixture.project.id,
+    kind: 'FACTORY_UNITS',
+    title: 'Lineage fixture',
+    objective: 'Implement something.',
+    manifest: {
+      objective: 'Implement something.',
+      why: 'a test',
+      lineage: { projectId: fixture.project.id, layerId: null, goal: null, orchestrationId: null },
+      units: [{ key: 'u', establishes: 'a branch', input: '{}', transform: 'FACTORY_UNIT', dependsOn: [] }],
+      acceptableSources: [],
+      excludedSources: [],
+      evidence: ['a pushed branch'],
+      outputs: ['one result'],
+      authorizedActions: ['push the branch Brain named'],
+      prohibitedActions: ['anything else'],
+      budgetUnits: null,
+      retry: { maxAttempts: 2, backoffSeconds: 60 },
+      stoppingConditions: ['a result per unit'],
+    },
+    completionContract: 'FACTORY_UNITS_V1',
+    createdByType: 'SYSTEM',
+    createdById: 'test',
+    ready: true,
+  });
+}
+
 describe('a reviewer is independent by lineage, or it is refused', () => {
   let campaignId = '';
 
@@ -1467,6 +1499,90 @@ describe('a reviewer is independent by lineage, or it is refused', () => {
     });
     const unnamed = await reviewLineage(campaignId, { sessionId: 'cred-session-B', workerId: 'wkr-two' });
     expect(unnamed.independence).toBe('SESSION_SEPARATED');
+  });
+
+  /*
+   * Production, `fcp_03a8a0ad`: one activation implemented, integrated and then
+   * reviewed the same change. Its implementing rows recorded no session, dropped
+   * out of the set, and the review read SESSION_SEPARATED. An implementer with
+   * no session is compared by the connector that held its lease, and one with
+   * neither refuses every reviewer.
+   */
+  it('refuses a reviewer on the connector of an implementer whose session was never recorded', async () => {
+    const bin = await plainUnitsBin();
+    await recordBinEvent({
+      eventType: 'BIN_ASSIGNED',
+      binId: bin.id,
+      leaseId: 'bls_test',
+      leaseGeneration: 0,
+      measures: { credentialId: 'crd_same' },
+    });
+    await recordFactoryEvent({
+      campaignId,
+      kind: 'UNIT_IMPLEMENTED',
+      evidenceClass: 'MEASURED',
+      sessionId: null,
+      workerId: 'wkr-one',
+      detail: { unitKey: 'w', binId: bin.id },
+    });
+    const same = await reviewLineage(campaignId, {
+      sessionId: 'cred-session-B',
+      workerId: 'wkr-one',
+      credentialId: 'crd_same',
+    });
+    expect(same.ok).toBe(false);
+    expect(same.reason).toMatch(/could not record/);
+    const unnamed = await reviewLineage(campaignId, { sessionId: 'cred-session-B', workerId: 'wkr-one' });
+    expect(unnamed.ok).toBe(false);
+    const other = await reviewLineage(campaignId, {
+      sessionId: 'cred-session-B',
+      workerId: 'wkr-one',
+      credentialId: 'crd_other',
+    });
+    expect(other.ok).toBe(true);
+
+    // With no connector recoverable at all, nobody may review.
+    await recordFactoryEvent({
+      campaignId,
+      kind: 'INTEGRATION_MERGED',
+      evidenceClass: 'MEASURED',
+      sessionId: null,
+      workerId: 'wkr-one',
+      detail: { units: ['w'] },
+    });
+    const any = await reviewLineage(campaignId, {
+      sessionId: 'cred-session-B',
+      workerId: 'wkr-two',
+      credentialId: 'crd_other',
+    });
+    expect(any.ok).toBe(false);
+  });
+
+  it("attributes a bin's fired session only to an arrival that can be that session", async () => {
+    const bin = await plainUnitsBin();
+    const earlier = await plainUnitsBin();
+    const firedAt = new Date(Date.now() - 60_000).toISOString();
+    await getDb().run(
+      `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, next_attempt_at, session_ref,
+                                 created_at, updated_at, sent_at)
+       VALUES ('bdp_attr', ?, 0, 'SENT', ?, 'cse_FIRED', ?, ?, ?)`,
+      [bin.id, firedAt, firedAt, firedAt, firedAt],
+    );
+    // A fresh connector: nothing else leased since the fire. It can be the fired session.
+    expect(await firedSessionForArrival(bin.id, 0, 'crd_fresh')).toBe('cse_FIRED');
+    // No credential: nothing can be told.
+    expect(await firedSessionForArrival(bin.id, 0, null)).toBeNull();
+
+    // A connector whose activation was still working another bin after the fire.
+    await recordBinEvent({
+      eventType: 'BIN_ASSIGNED',
+      binId: earlier.id,
+      leaseId: 'bls_earlier',
+      leaseGeneration: 1,
+      measures: { credentialId: 'crd_busy' },
+    });
+    expect(await firedSessionForArrival(bin.id, 0, 'crd_busy')).toBeNull();
+    expect(await firedSessionForArrival(bin.id, 0, 'crd_fresh')).toBe('cse_FIRED');
   });
 });
 
