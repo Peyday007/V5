@@ -1,3 +1,4 @@
+import { recordDeliveryProven, recordDeliveryProvenForWorker } from './helpers/deliveryProven.ts';
 /**
  * A scope that cannot distinguish the callers it separates is not a scope.
  *
@@ -870,10 +871,11 @@ describe('a session started by a surface that cannot push is not handed push wor
       accountId: account.id, routineRef: 'trig_readonly', name: 'Read-only surface',
       tokenSecretName: 'RO_SECRET', capabilities: ['repository'],
     });
-    await createRoutine({
+    const writer = await createRoutine({
       accountId: account.id, routineRef: 'trig_writer', name: 'Writer surface',
       tokenSecretName: 'RW_SECRET', capabilities: ['repository', 'repository-write'],
     });
+    await recordDeliveryProven(writer.id, OAKWOOD);
   });
 
   it('skips the push bin for the read-only session, quietly, and leaves it to be fired', async () => {

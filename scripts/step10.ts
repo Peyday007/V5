@@ -2625,7 +2625,9 @@ async function main(): Promise<void> {
         `    ${event.at}  ${event.eventType.padEnd(24)} ` +
           `worker ${(event.workerId ?? '—').padEnd(24)} session ${event.sessionRef ?? '—'}` +
           (event.outcome ? `  ${event.outcome}` : '') +
-          (event.reason ? `  ${event.reason.slice(0, 80)}` : ''),
+          (event.reason
+            ? `  ${arg(1) === 'full' ? event.reason : event.reason.slice(0, 80)}`
+            : ''),
       );
     }
     console.log('');

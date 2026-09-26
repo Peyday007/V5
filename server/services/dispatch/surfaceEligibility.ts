@@ -78,7 +78,9 @@ const REMEDY: Record<RoutingRefusal, string> = {
     'Fix what took it out, then put it back with `fleet set-state --to ENABLED`.',
   ALL_SURFACES_RATE_LIMITED: 'The provider asked Brain to wait; it resumes by itself.',
   NO_CAPABLE_SURFACE:
-    'Declare the missing capability with `fleet set-capabilities` — a Factory surface needs both repository and repository-write.',
+    'A Factory surface needs repository and repository-write declared (`fleet set-capabilities`) and a passing ' +
+    'delivery probe for this repository — its own fired session pushing, opening and closing a pull request. ' +
+    'Run `fleet commission --ref <trig> --repository <owner/name> --probe`; it names the first missing step.',
   NO_SURFACE_SERVES_THIS_FAMILY:
     'Its worker may not be handed Software Factory work; onboard the repository for that worker, or bind the Routine to the Factory worker with `fleet bind-worker`.',
   NO_SURFACE_SERVES_THIS_REPOSITORY:

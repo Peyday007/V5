@@ -12,6 +12,7 @@
  * length of one test and removed after it. Nothing here fires anything: the
  * router is pure and the card only reads.
  */
+import { recordDeliveryProven, recordDeliveryProvenForWorker } from './helpers/deliveryProven.ts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import {
@@ -100,6 +101,7 @@ async function surface(
     capabilities: [...(options.capabilities ?? FACTORY_ROUTING_CAPABILITIES)],
   });
   await bindRoutineWorker(routine.id, workerId);
+  await recordDeliveryProvenForWorker(routine.id, workerId, routine.capabilities);
   if (options.deploySecret !== false) {
     process.env[secret] = 'placeholder-not-a-token';
     deployed.push(secret);

@@ -851,6 +851,8 @@ const EVALUATORS: Record<string, Evaluator> = {
   FACTORY_DELIVERY_V1: evaluateFactoryDelivery,
   DESIGN_REVIEW_V1: evaluateDesignReview,
   DESIGN_RENDER_V1: evaluateDesignRender,
+  FACTORY_DELIVERY_PROBE_V1: async (bin) =>
+    (await import('../dispatch/deliveryProof.ts')).evaluateDeliveryProbe(bin),
 };
 
 /**

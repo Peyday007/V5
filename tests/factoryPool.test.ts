@@ -66,6 +66,7 @@ import { createProbeBin } from '../server/services/fleet/probe.ts';
 import { NO_SHOW_QUARANTINE_THRESHOLD } from '../server/services/dispatch/scaler.ts';
 import { getDb } from '../server/db/database.ts';
 import fs from 'node:fs';
+import { recordDeliveryProven } from './helpers/deliveryProven.ts';
 import type { BinManifest, Principal } from '../server/domain/types.ts';
 
 const REPOSITORY = 'peyday007/v5';
@@ -180,6 +181,7 @@ beforeEach(async () => {
       capabilities: ['repository', 'repository-write'],
     });
     await bindRoutineWorker(routine.id, factory.id);
+    await recordDeliveryProven(routine.id, REPOSITORY);
     surfaces.push({
       accountId: account.id,
       accountName: account.name,

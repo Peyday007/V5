@@ -2723,6 +2723,27 @@ remote.
   `repository-write`, exist for exactly this: a reviewer needs to read and run,
   and only the bins that push need a surface that can push, so a one-pushing-
   surface fleet does not make the reviewer the implementer.
+- **A declared capability is intent; `repository-write` counts only once a
+  delivery probe has passed for that repository.** On 2026-09-26 a surface whose
+  Brain chain was closed — fired, authenticated, handed a bin, completed it, and
+  reported `VERIFIED` — was given real work, planned it, implemented it,
+  typechecked it, passed review, and could not push: the Claude Routine behind it
+  was attached to `brain-worker-airyn`, and the git proxy answered *"Peyday007/V5
+  is not in this session's authorized repository set"*. A collaborator grant does
+  not put a repository in a session; the Routine's attachment does, and it is a
+  setting Brain cannot read. So Brain **measures** it:
+  `services/dispatch/deliveryProof.ts` fires one pinned `FACTORY_DELIVERY_PROBE_V1`
+  bin at the Routine, whose session pushes a disposable branch, opens a pull
+  request, closes it unmerged and deletes the branch, and Brain records PROVEN in
+  `routine_delivery_proofs` only after reading the forge. The router
+  (`deliveryProvenFor`) and the assigner both refuse a pushing bin to a Routine
+  whose newest settled probe for that repository is not PROVEN; planning and
+  review still go to any surface that can read. The tiers are three and named
+  apart — `CONNECTED`, `EXECUTION_VERIFIED`, `DELIVERY_VERIFIED` — and
+  `verify-surface` stopped calling the second one by the third one's name.
+  `fleet commission --ref trig_… --repository owner/name --probe` asks every step
+  of commissioning in order and ends in one line: `READY FOR … IMPLEMENTATION` or
+  `NOT READY — <first missing step>`.
 - **A capability gates the fire, and nothing gates the assignment — after two
   corrections, both recorded rather than quietly applied.**
   `requiredCapabilities` decides which Routine Brain *fires*. Reading it again to
@@ -11785,6 +11806,7 @@ server/
     design.ts           surfaces, captures, findings, patterns, corrections, gaps
     auditReopens.ts     the record behind a re-audit, and its one reservation
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
+    deliveryProofs.ts   what each Routine has been shown able to deliver, per repository
     factory.ts          the contract, the campaign, and units that own a surface
     factoryFleet.ts     factory workers, sessions, reviews, findings, the ledger
     externalRecords.ts  a site's record, its version guard, and its refusals
@@ -11863,6 +11885,7 @@ server/
       candidates.ts     the fleet as numbers, read once per tick
       router.ts         a pure decision, and its named refusals: which wait, which end a burst
       pool.ts           every surface serving one logical worker, and what each has proved
+      deliveryProof.ts  the repository half of a surface: push, pull request, cleanup, verified
       scaler.ts         raise, lower, quarantine — proposals, never actions
       simulate.ts       a deterministic projection, structurally labelled
       profiles.ts       workload cost and activation traces, as queries
@@ -11917,6 +11940,7 @@ server/
       view.ts           three capacity numbers that are not each other, and why it is slow
       capacity.ts       what the dispatcher would fire, counted once and labelled honestly
       probe.ts          the one bounded self-test that turns configured into proven
+      commission.ts     every commissioning step in order, and one READY / NOT READY answer
       lab.ts            the eight test modes, and the five this version refuses to run
     cash/
       access.ts         where the shared frontier ends and a private job begins

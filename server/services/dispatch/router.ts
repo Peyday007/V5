@@ -205,6 +205,22 @@ export interface RoutingCandidate {
    */
   servesRepositories: string[] | null;
   /**
+   * The repositories this Routine is **currently proven** to deliver to — the
+   * newest settled delivery probe for each (Routine, repository) pair said
+   * PROVEN. `fleetSnapshot` always sets it; absent means a hand-built candidate
+   * that predates the rule and is not asked.
+   *
+   * `repository-write` on a Routine is what an operator declared, and a
+   * declaration is intent. Production measured the gap: a surface declaring it
+   * fired, authenticated, planned, implemented, typechecked and passed review,
+   * and then could not push, because the Claude session its Routine starts was
+   * attached to another repository and the git proxy would not inject a
+   * credential for this one. So a bin that pushes is fired only at a Routine
+   * whose own fired session has already pushed to that repository, opened a pull
+   * request and cleaned up after itself — see `services/dispatch/deliveryProof.ts`.
+   */
+  deliveryProvenRepositories?: readonly string[];
+  /**
    * The projects the worker this Routine is bound to holds a live membership
    * on. Empty when it is bound to no worker, or to one that is a member of
    * nothing.
@@ -379,7 +395,30 @@ export function servesBinScope(candidate: RoutingCandidate, bin: Bin): boolean {
   return servesProject(candidate, bin.projectId) &&
     servesFamily(candidate, familyOf(bin)) &&
     servesRepository(candidate, repositoryIdOf(bin)) &&
-    capable(candidate.routine, requiredCapabilities(bin));
+    capable(candidate.routine, requiredCapabilities(bin)) &&
+    deliveryProvenFor(candidate, bin);
+}
+
+/** The workload class of the probe that establishes delivery; it cannot need what it proves. */
+export const DELIVERY_PROBE_CLASS = 'FACTORY_DELIVERY_PROBE';
+export const WRITE_CAPABILITY = 'repository-write';
+
+/**
+ * Whether a declared `repository-write` is backed by a measured delivery to
+ * *this* bin's repository.
+ *
+ * Only a bin that requires the write capability is asked, so planning and
+ * review still go to any surface that can read. The delivery probe itself is
+ * exempt, because it is the thing that produces the proof. A write bin naming
+ * no repository fails closed: there is nothing a proof could be about.
+ */
+export function deliveryProvenFor(candidate: RoutingCandidate, bin: Bin): boolean {
+  if (!requiredCapabilities(bin).includes(WRITE_CAPABILITY)) return true;
+  if (bin.workloadClass === DELIVERY_PROBE_CLASS) return true;
+  if (candidate.deliveryProvenRepositories === undefined) return true;
+  const repository = repositoryIdOf(bin);
+  if (!repository) return false;
+  return candidate.deliveryProvenRepositories.includes(repository);
 }
 
 function capable(routine: FleetRoutine, required: string[]): boolean {
@@ -567,6 +606,14 @@ export function routeBin(input: RoutingInput): RoutingResult {
       considered.push({ routineId: routine.id, verdict: 'lacks a required capability' });
       continue;
     }
+    if (!deliveryProvenFor(candidate, bin)) {
+      considered.push({
+        routineId: routine.id,
+        verdict:
+          `declares ${WRITE_CAPABILITY} but has no passing delivery probe for ${repository ?? 'this repository'}`,
+      });
+      continue;
+    }
     sawCapable = true;
 
     // A provider that told us to wait is the one input policy may not override.
@@ -683,7 +730,11 @@ export function routeBin(input: RoutingInput): RoutingResult {
       return {
         ok: false,
         refusal: 'NO_CAPABLE_SURFACE',
-        reason: `No enabled Routine declares every capability this bin requires: ${required.join(', ')}.`,
+        reason: required.includes(WRITE_CAPABILITY)
+          ? `No enabled Routine declares every capability this bin requires (${required.join(', ')}) ` +
+            `and has passed a delivery probe for ${repository ?? 'its repository'}. ` +
+            'Run `fleet commission --ref trig_… --repository owner/name --probe` for the surface that should take it.'
+          : `No enabled Routine declares every capability this bin requires: ${required.join(', ')}.`,
         considered,
         retryAt: null,
       };

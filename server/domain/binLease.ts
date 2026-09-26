@@ -92,6 +92,8 @@ export const CONTRACT_MIN_LEASE_MS: Record<CompletionContract, number | null> = 
   BLUEPRINT_AUDIT_V1: null,
   DESIGN_REVIEW_V1: null,
   DESIGN_RENDER_V1: null,
+  // Clones the repository and pushes one file. No suite runs.
+  FACTORY_DELIVERY_PROBE_V1: null,
 };
 
 /**
