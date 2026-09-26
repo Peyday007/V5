@@ -82,5 +82,39 @@ and #19.
 | 09-26 01:21 | Approved under the owner's standing authorization; this created campaign `fcp_11e2e481b79d4a948049` |
 | 09-26 01:23 | Plan bin `bin_9bf63d096c0d45c4ab36` was fired at **Airyn's Factory surface 2** (`trig_01H6Ngiv7NbPjva5mtz2zPWD`). Session `cse_0156a7HaFqipzXdFSu4p6cCg` arrived and holds the lease (gen 1) |
 
-Next up: #2 (register attestation), then #3 (atomic kernel rounds). Both
-objective files are already in the deployed image.
+| 09-26 ~01:50 | Units bin `bin_ea21df767f104e04b5f2` exhausted its attempts. Airyn's surface committed twice and never pushed: no `factory/fcp_11e2e481…` branch reached origin. Surface 1 was at target 0 under the override, so nothing else could take it |
+| 09-26 ~02:10 | Override narrowed rather than dropped. Surface 1 was restored to target 4. Airyn's capabilities went to `repository` only (it may still review; it cannot be sent a push bin), with the reason recorded on the row. The bin was answered `surface-blocked`, raising its ceiling to 4 |
+| 09-26 02:19 | Objective #2 was submitted and approved, creating campaign `fcp_8878eedce08547b382af` |
+| 09-26 02:31 | `ae510f8` (the factory line) went to production; Deploy 352 dispatched |
+
+## The autonomous-loop fault (Phase 1)
+
+**What stopped the first build** was not the Brain-side stage loop. A completed
+bin already ticks its campaign and dispatches what that creates, with a 20 s
+remote tick as the fallback. The stop had two causes:
+
+1. **A surface that could not push.** Airyn's surface was the only
+   write-capable target under the override, and it could not push. Each
+   release of the units bin still spent an attempt, so the bin exhausted and
+   the stage parked at NEEDS_HUMAN.
+2. **Nothing between campaigns.** When a campaign finished or parked, nothing
+   started the next approved objective. Somebody had to run `approve`, and in
+   practice that somebody was a reminder in this session.
+
+**Fixed in code:**
+
+- `ae510f8`: the factory line.
+  - A queue entry is a person's approval given in advance (`factory queue`).
+  - Admission runs on the remote loop's own tick. It starts queued objectives in priority order while fewer than the admission limit are working (default 1; `factory admission --max-active N`).
+  - BLOCKED, AWAITING_RELEASE and COMPLETE campaigns hold no slot, so a PR waiting for a merge does not idle the line.
+  - Executable work beside a free surface with nothing leased or arriving for 2 min is written to the ledger as `FACTORY_IDLE_STARTED`, and closed with `FACTORY_IDLE_ENDED`.
+  - `factory burnin` reads per-stage executable, fired, arrived and completed timestamps back from `bin_events`.
+- `b68f19a`: a working-state campaign whose only stage bin is parked at NEEDS_HUMAN now holds no slot either. Build opens with the production line panel.
+
+**Still open:**
+
+- **Surface failures still spend bin attempts.** A release caused by a surface failure still charges an attempt. Worse, the router may fire the same failing surface again, because nothing yet routes a retry away from the surface that just failed it. This is the next loop defect.
+- **Needs You (owner): grant Airyn's Factory surface push access to Peyday007/V5.** Then restore `repository-write` on `trig_01H6Ngiv7NbPjva5mtz2zPWD`. Until then Airyn reviews and surface 1 writes.
+
+Next up: #3 (atomic kernel rounds) goes in the queue once the line is live, so
+it starts by itself when a slot frees.
