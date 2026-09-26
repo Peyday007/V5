@@ -18,19 +18,22 @@ import { freshProject } from './helpers.ts';
 import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { createConversation } from '../server/repos/russellConversations.ts';
 import { createCandidate } from '../server/repos/russellCandidates.ts';
+import { launchMission } from '../server/repos/russellMissions.ts';
 import { getDb } from '../server/db/database.ts';
 import { russellRouter } from '../server/routes/russell.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
 import { ideaMapForProject } from '../server/services/russell/ideas.ts';
-import type { Principal, ProjectMembership } from '../server/domain/types.ts';
+import type { Layer, Principal, ProjectMembership } from '../server/domain/types.ts';
 
 let projectId = '';
 let aliceId = '';
 let bobId = '';
+let firstLayer: Layer;
 
 beforeEach(async () => {
   const fixture = await freshProject();
   projectId = fixture.project.id;
+  firstLayer = fixture.layers[0]!;
 
   const alice = await createUser({
     email: `alice-${Math.random().toString(36).slice(2, 10)}@example.test`,
@@ -185,6 +188,49 @@ describe('a PRIVATE idea belongs to the conversation it came from', () => {
     expect(node).toBeDefined();
     expect(node!.title).toBe("Bob's own idea");
     expect(node!.purpose).toBe(bobsIdea.statement);
+  });
+});
+
+describe("a PRIVATE idea's mission does not inflate a count on a node it cannot appear as", () => {
+  it("leaves the SITE and MAJOR work counts unchanged by another member's private mission", async () => {
+    const { candidate: bobsIdea, conversation } = await privateIdeaFor(
+      bobId,
+      "Bob's private idea with a mission",
+    );
+
+    const before = await ideaMapForProject({ projectId, viewerUserId: aliceId });
+    const siteBefore = before!.nodes.find((n) => n.level === 'SITE')!;
+    const majorBefore = before!.nodes.find((n) => n.id === `major:${firstLayer.id}`)!;
+
+    await launchMission({
+      projectId,
+      layerId: firstLayer.id,
+      visibility: 'PRIVATE',
+      candidateId: bobsIdea.id,
+      conversationId: conversation.id,
+      objective: "Look into Bob's private idea",
+      whyNow: 'because Bob asked',
+      idempotencyKey: `test-${bobsIdea.id}`,
+    });
+
+    // Nobody but Bob may see this candidate, so the node still must not
+    // exist — but that is the old assertion. What broke was the counts on
+    // the nodes that *do* render for Alice.
+    const asAlice = await ideaMapForProject({ projectId, viewerUserId: aliceId });
+    expect(asAlice!.nodes.find((n) => n.id === `idea:${bobsIdea.id}`)).toBeUndefined();
+
+    const siteAfter = asAlice!.nodes.find((n) => n.level === 'SITE')!;
+    const majorAfter = asAlice!.nodes.find((n) => n.id === `major:${firstLayer.id}`)!;
+    expect(siteAfter.counts.work).toBe(siteBefore.counts.work);
+    expect(majorAfter.counts.work).toBe(majorBefore.counts.work);
+
+    // And the mission is not merely invisible by accident — Bob, who may
+    // actually read it, sees it counted on both nodes.
+    const asBob = await ideaMapForProject({ projectId, viewerUserId: bobId });
+    const siteForBob = asBob!.nodes.find((n) => n.level === 'SITE')!;
+    const majorForBob = asBob!.nodes.find((n) => n.id === `major:${firstLayer.id}`)!;
+    expect(siteForBob.counts.work).toBe(siteBefore.counts.work + 1);
+    expect(majorForBob.counts.work).toBe(majorBefore.counts.work + 1);
   });
 });
 
