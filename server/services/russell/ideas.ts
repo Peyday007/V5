@@ -241,6 +241,28 @@ async function candidateIsVisibleTo(
 }
 
 /**
+ * The same rule, read from a mission's own fields rather than through the
+ * candidate that produced it.
+ *
+ * A mission carries the visibility of the candidate it was launched for, so
+ * this is not a second policy — it is the identical rule, applied directly to
+ * the row so a mission survives being judged correctly even if its candidate
+ * has since dropped out of the (bounded, 500-row) candidates list. Any place
+ * that reports a count derived from missions — a layer's work count, a
+ * project's work count — must filter through this first, or a private idea's
+ * mission inflates a number every other member can see, which is the same
+ * leak as showing the idea node itself.
+ */
+async function missionIsVisibleTo(
+  mission: RussellMission,
+  viewerPrincipal: Principal | null,
+): Promise<boolean> {
+  if (mission.visibility !== 'PRIVATE') return true;
+  if (!viewerPrincipal || !mission.conversationId) return false;
+  return conversationIsReadable(viewerPrincipal, mission.conversationId);
+}
+
+/**
  * The whole shape of one project.
  *
  * Reads eight authoritative sources once each and joins them in memory rather
@@ -285,6 +307,21 @@ export async function ideaMapForProject(input: {
   );
   const isVisible = (candidateId: string) => visibility.get(candidateId) ?? false;
 
+  // Every count derived from missions — a layer's work count, the project's
+  // own work count — reads this rather than `missions` directly. A count
+  // computed over the unfiltered list inflates for a mission launched against
+  // a PRIVATE candidate the viewer cannot read, which discloses that hidden
+  // work exists even though the idea node itself stays correctly absent.
+  const missionVisibility = new Map(
+    await Promise.all(
+      missions.map(
+        async (mission) => [mission.id, await missionIsVisibleTo(mission, viewerPrincipal)] as const,
+      ),
+    ),
+  );
+  const isMissionVisible = (missionId: string) => missionVisibility.get(missionId) ?? false;
+  const visibleMissions = missions.filter((mission) => isMissionVisible(mission.id));
+
   const probedCandidates = new Set(probes.map((probe) => probe.candidateId));
   const nodes: IdeaNode[] = [];
   const edges: IdeaEdge[] = [];
@@ -320,7 +357,7 @@ export async function ideaMapForProject(input: {
 
   for (const candidate of candidates) {
     if (!isVisible(candidate.id)) continue;
-    const own = missions.filter((mission) => mission.candidateId === candidate.id);
+    const own = visibleMissions.filter((mission) => mission.candidateId === candidate.id);
     const layerId = layerOfCandidate(candidate.id, missions);
     const folded =
       candidate.state === 'MERGED' &&
@@ -407,7 +444,7 @@ export async function ideaMapForProject(input: {
    * ------------------------------------------------------------------ */
   for (const layer of layers) {
     const layerKnows = knows.filter((entry) => entry.layerId === layer.id);
-    const layerMissions = missions.filter((mission) => mission.layerId === layer.id);
+    const layerMissions = visibleMissions.filter((mission) => mission.layerId === layer.id);
     const versions = layer.expectedVersions;
 
     nodes.push({
@@ -548,7 +585,7 @@ export async function ideaMapForProject(input: {
         (entry) =>
           entry.kind === 'GAP' || entry.kind === 'UNKNOWN' || entry.kind === 'CONTRADICTION',
       ).length,
-      work: missions.length,
+      work: visibleMissions.length,
       conversations: conversationCount,
       children: layers.length,
     },
