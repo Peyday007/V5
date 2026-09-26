@@ -1,0 +1,57 @@
+{
+  "objective": "Give Research Intelligence a reader on the product surface. `GET /api/research/:orchestrationId/intelligence` (server/routes/research.ts ~289, built by `researchIntelligenceView` in server/services/research/intelligence/view.ts) returns what Brain believes it was asked, the ordered agenda, the decisive / settled / retired / needs-a-person questions, open contradictions, what changed the plan, the sufficiency reading and the lessons — and the only caller anywhere is scripts/verify-hosted.ts. A person watching a research packet on the Work view (client/src/russell/Views.tsx, `MissionCard` ~265) cannot see any of it, although every `WorkEntry` already carries `links.orchestrationId` (server/services/russell/work.ts ~131). This is inventory item #13 in docs/factory-runs/2026-09-25-airyn-first.md.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A mission card whose entry names an orchestration offers a closed-by-default disclosure, 'What Brain is working out', that loads the intelligence view for that orchestration only when opened and renders it in the server's own words: the understanding (outcome sought, decision supported, non-goals, assumptions, and unexplained examples called out as not a whitelist), the agenda in order with each item's why, the decisive questions first with their disposition, belief and belief basis shown as a word (UNKNOWN is rendered as 'not known yet', never as an empty or zero value), questions that need a person, open contradictions, the plan changes newest first, and the sufficiency reading. Loading, empty, forbidden-or-absent (the route's 404) and error are four distinct states. A card with no orchestration shows no disclosure. The client calls live in a new module, not in russellApi.ts, and the view component in its own file.",
+  "nonGoals": [
+    "Any server change: the route, `researchIntelligenceView`, the repositories and the research engine are untouched.",
+    "Any control that changes research state — no approve, cancel, reprioritise, retire or answer; the view is read-only exactly as the route is.",
+    "Composing new prose on the client about what a question means; every sentence shown is a field the server returned.",
+    "Fetching intelligence for every card on page load."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A component test renders a mission card whose entry has links.orchestrationId, opens the disclosure, and asserts the request went to /api/research/<that id>/intelligence and that the understanding, the agenda, a decisive question with its belief basis, and the sufficiency reading are rendered from the response.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The disclosure is closed by default and no intelligence request is made until it is opened; a card whose entry has no orchestrationId renders no disclosure at all.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A question whose beliefBasis is UNKNOWN and whose belief is null is rendered as not known yet, and no numeric percentage or score appears anywhere in the rendered panel.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A 404 from the route renders the same not-available state for absent and forbidden, without claiming the packet does not exist, and an error response renders an error state distinct from empty.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The client response type is checked against the server's ResearchIntelligenceView keys by a test, so a field the server adds or renames fails the suite rather than being silently dropped.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks, and the existing Work view tests still pass.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/russell/ResearchIntelligence.tsx",
+    "client/src/lib/researchIntelligenceApi.ts",
+    "client/src/russell/Views.tsx",
+    "tests/researchIntelligenceSurface.test.tsx"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Client-only and read-only: no schema change, no server change, and nothing the new panel does can write."
+}

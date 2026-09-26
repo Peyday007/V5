@@ -5359,6 +5359,12 @@ export const COMPLETION_CONTRACTS = [
   // or a second picture of one thing refuses the whole submission. See
   // `services/design/render.ts`.
   'DESIGN_RENDER_V1',
+  // One disposable delivery to a repository, from the session Brain fired at one
+  // Routine: branch, push, pull request, close unmerged, delete. Brain verifies
+  // it against the forge and records the result in `routine_delivery_proofs`; a
+  // bin that pushes is fired only at a Routine whose newest probe for that
+  // repository is PROVEN. See `services/dispatch/deliveryProof.ts`.
+  'FACTORY_DELIVERY_PROBE_V1',
 ] as const;
 export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
 
@@ -10432,4 +10438,70 @@ export interface PuzzleObservation {
   /** A person, or BRAIN reading its own rows. `lessons` counts them apart. */
   recordedBy: string;
   createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Routine delivery proofs (migration 098_routine_delivery_proofs.sql)
+// ---------------------------------------------------------------------------
+
+export const DELIVERY_PROOF_STATES = ['PENDING', 'PROVEN', 'FAILED', 'CLEARED'] as const;
+export type DeliveryProofState = (typeof DELIVERY_PROOF_STATES)[number];
+
+/**
+ * The step a delivery probe stopped at, from a closed vocabulary, so a failed
+ * proof names what an operator must fix rather than leaving it to be inferred
+ * from a worker's prose. The first three are the worker's to report; the rest
+ * are Brain's own reading of the forge.
+ */
+export const DELIVERY_FAILURE_STEPS = [
+  'REPOSITORY_NOT_IN_SESSION',
+  'CLONE_REFUSED',
+  'BRANCH_OR_PUSH_REFUSED',
+  'PULL_REQUEST_REFUSED',
+  'CLEANUP_REFUSED',
+  'REPORT_UNREADABLE',
+  'FORGE_DID_NOT_CONFIRM',
+  'PULL_REQUEST_MERGED',
+  'BIN_NOT_COMPLETED',
+] as const;
+export type DeliveryFailureStep = (typeof DELIVERY_FAILURE_STEPS)[number];
+
+export const DELIVERY_PROOF_SOURCES = ['PROBE', 'REAL_WORK'] as const;
+export type DeliveryProofSource = (typeof DELIVERY_PROOF_SOURCES)[number];
+
+export interface RoutineDeliveryProofRow {
+  id: string;
+  routine_id: string;
+  repository: string;
+  bin_id: string;
+  /** PROBE: a disposable branch and PR. REAL_WORK: a real Factory bin's push, or its refusal. */
+  source: DeliveryProofSource;
+  state: DeliveryProofState;
+  branch: string;
+  probe_path: string;
+  head_sha: string | null;
+  pull_request: number | null;
+  failure_step: string | null;
+  detail: string | null;
+  requested_by: string;
+  created_at: string;
+  settled_at: string | null;
+}
+
+export interface RoutineDeliveryProof {
+  id: string;
+  routineId: string;
+  repository: string;
+  binId: string;
+  source: DeliveryProofSource;
+  state: DeliveryProofState;
+  branch: string;
+  probePath: string;
+  headSha: string | null;
+  pullRequest: number | null;
+  failureStep: DeliveryFailureStep | null;
+  detail: string | null;
+  requestedBy: string;
+  createdAt: string;
+  settledAt: string | null;
 }

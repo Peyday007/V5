@@ -1,0 +1,59 @@
+{
+  "objective": "Give the puzzle kernel an operator surface in the product. Every puzzle route already exists and is guarded (server/routes/cash.ts ~1391-1640): GET /api/projects/:projectId/cash/puzzles returns `puzzleView` (server/services/puzzle/view.ts ~35-103: rightNow, topFive, the whole ledger, beingMade, leverage, quality, economics, dollarBook, physical, maturity, lessons, recent, needsPerson, nextAction, capabilities); GET …/cash/puzzles/instances/:instanceId re-renders one puzzle from its specification and says whether it reproduces its recorded hash; POST …/cash/puzzles/formats seeds a format by name; PATCH …/cash/puzzles/formats/:formatId retires one with a reason; POST …/cash/puzzles/systems sets up a system; POST …/cash/puzzles/observations records an observation, including the HUMAN_EDIT_PASSED reading §48 of CLAUDE.md says SELLABLE requires. No client file calls any of them, so a person can do none of this except from a terminal. Labor (client/src/russell/Labor.tsx) and Machines (client/src/russell/Machines.tsx) closed this same gap for their kernels and are the pattern to follow. Inventory item #11 (puzzle first) in docs/factory-runs/2026-09-25-airyn-first.md.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A 'Puzzles' destination in the Russell shell (a PUZZLES route in client/src/lib/router.ts, a secondary nav entry and view switch in client/src/russell/RussellShell.tsx) renders the puzzle view for the current project in the order the server returns it, every sentence and verdict verbatim from the response, with the whole ledger present (the top five are a view, not a filter). A figure the server reports as unknown or withheld is rendered as not measured / withheld with its reason, never as 0. A puzzle instance can be opened and shows the re-rendered artifact with the server's reproduced / not-reproduced message. A person can seed a format, retire a format with a reason, and record an observation (including HUMAN_EDIT_PASSED) through forms that post only the fields the routes accept and render the server's refusal text on failure. Loading, empty (project with no sprint), forbidden-or-absent (404) and error are four distinct states. Client calls live in a new client/src/lib/puzzleApi.ts.",
+  "nonGoals": [
+    "Any server, repository, schema or kernel change.",
+    "Setting up a system from the browser in this objective (POST …/puzzles/systems needs a corpus chooser); it may be listed as not yet offered, but not half-built.",
+    "Any control that answers a Brain-owned research question, marks a capability held, or edits a puzzle instance — none of those routes exist and none may be invented.",
+    "Deleting or hiding any ledger entry, including rejected or long-horizon ones."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A test mounts the Puzzles view against a scripted puzzle view response and asserts the rightNow counts, every ledger entry (not only the top five), the dollarBook verdict, needsPerson and nextAction are rendered from the response.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A leverage or economics figure the response marks unknown or withheld renders as not measured or withheld with its reason and never as the digit 0.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Seeding a format, retiring a format, and recording a HUMAN_EDIT_PASSED observation each post exactly the fields their route reads (name/note; reason; kind/statement and the optional ids) and nothing else, and a refused request shows the server's message.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Opening an instance calls …/puzzles/instances/:instanceId and shows the reproduced or not-reproduced message verbatim; a 404 renders the same not-available state for absent and forbidden.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The router parses and formats the new PUZZLES route both ways, and the shell renders the view for it; existing router and shell tests still pass.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The client response types are held against the server's PuzzleView keys by a test, so a field the server adds or renames fails the suite rather than being silently dropped; the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/russell/Puzzles.tsx",
+    "client/src/lib/puzzleApi.ts",
+    "client/src/lib/router.ts",
+    "client/src/russell/RussellShell.tsx",
+    "client/src/russell/design.css",
+    "tests/puzzleSurface.test.tsx"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Client-only: no schema change and no server change; every write goes through a route that already exists and already enforces its own guards."
+}

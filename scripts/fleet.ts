@@ -283,6 +283,33 @@ async function main(): Promise<void> {
   }
 
   /*
+   * Put a Routine refused a push back to provisional.
+   *
+   * The answering transition for a FAILED delivery reading: somebody attached
+   * the repository to the Claude Routine. It proves nothing — the next real
+   * implementation proves it, or refuses it again — and it cannot erase a proof.
+   */
+  if (command === 'clear-delivery-refusal') {
+    const ref = option('ref');
+    const repository = option('repository');
+    const reason = option('reason');
+    if (!ref || !repository || !reason) {
+      return refuse('pass --ref <trig_…> --repository <owner/name> --reason <what was fixed>.');
+    }
+    const routine = await getRoutineByRef(ref);
+    if (!routine) return refuse(`no Routine registered as ${ref}.`);
+    const { clearDeliveryRefusal } = await import('../server/repos/deliveryProofs.ts');
+    const cleared = await clearDeliveryRefusal({
+      routineId: routine.id,
+      repository,
+      reason,
+      requestedBy: 'fleet-cli',
+    });
+    if (!cleared) return refuse(`${ref} has no recorded push refusal for ${repository}; nothing to clear.`);
+    return ok(`clear-delivery-refusal ${ref} ${repository} -> provisional; its next real implementation proves it`);
+  }
+
+  /*
    * Point a Routine at a different deployment secret.
    *
    * The companion to `set-capabilities`, and for the same reason: a row that is
@@ -1028,6 +1055,65 @@ async function probeBin(input: {
    * and it says so. That distinction is `evidence_class` at an operator's
    * command: a ceiling nobody has observed reads UNKNOWN and stays UNKNOWN.
    */
+  /*
+   * One commissioning journey for a Factory account, with one answer.
+   *
+   * Every step it asks is a row Brain wrote or the forge's own account — the
+   * registration, the token, the binding, the routing row, the declared
+   * capabilities, the connector identity, a completed bin, and a delivery
+   * probe the fired session actually performs against the repository. The
+   * first step that is not true is printed as the answer, with its remedy.
+   * `--probe` creates the delivery probe when every precondition holds; the
+   * probe merges nothing and cleans up after itself.
+   */
+  if (command === 'commission') {
+    const ref = option('ref') ?? arg(0);
+    const repositoryName = option('repository');
+    if (!ref || !repositoryName) {
+      return refuse('pass --ref trig_… and --repository owner/name');
+    }
+    const { readCommission } = await import('../server/services/fleet/commission.ts');
+    let reading = await readCommission({ routineRef: ref, repository: repositoryName });
+    if (flag('probe') && !reading.ready) {
+      if (!reading.mayProbe) {
+        console.log('  PROBE       not created: an earlier step must pass first, or a probe is already in flight.');
+      } else {
+        const routine = (await getRoutineByRef(ref))!;
+        const { parseRemote, defaultBranch } = await import('../server/services/factory/forge.ts');
+        const forgeRepo = parseRemote(`https://github.com/${reading.repository}`);
+        const base =
+          option('base') ??
+          (forgeRepo ? (await defaultBranch(forgeRepo)).body ?? null : null);
+        if (!base) return refuse(`could not read ${reading.repository}'s default branch; pass --base`);
+        const { createDeliveryProbe } = await import('../server/services/dispatch/deliveryProof.ts');
+        const created = await createDeliveryProbe({
+          routine: {
+            id: routine.id,
+            name: routine.name,
+            routineRef: routine.routineRef,
+            capabilities: routine.capabilities,
+            workerId: routine.workerId,
+          },
+          repository: reading.repository,
+          baseBranch: base,
+          requestedBy: ACTOR,
+        });
+        console.log(`  PROBE       created ${created.binId}, pinned to ${routine.name}, base ${base}`);
+        console.log(`              branch ${created.proof.branch} — closed unmerged and deleted by the worker`);
+        reading = await readCommission({ routineRef: ref, repository: repositoryName });
+      }
+    }
+    console.log(`COMMISSION ${reading.routineRef} on ${reading.repository}`);
+    console.log(`  tier        ${reading.tier}`);
+    for (const one of reading.steps) {
+      console.log(`  ${one.state.padEnd(8)} ${one.label} — ${one.detail}`);
+      if (one.remedy) console.log(`           remedy: ${one.remedy}`);
+    }
+    console.log('');
+    console.log(`  ${reading.verdict}`);
+    return ok(`commission ${ref} ${reading.ready ? 'READY' : 'NOT_READY'}`);
+  }
+
   if (command === 'verify-surface') {
     const ref = option('ref') ?? arg(0);
     if (!ref) return refuse('pass a Routine ref, e.g. --ref trig_...');
@@ -1238,9 +1324,30 @@ async function probeBin(input: {
 
     console.log('');
     if (problems.length === 0) {
-      console.log('  VERIFIED  a fire to this Routine produced a session that authenticated as');
+      /*
+       * EXECUTION_VERIFIED, not VERIFIED. This chain proves the Brain half of a
+       * surface — connector, identity, queue — and nothing about whether its
+       * session can push to a repository. That is a separate, per-repository
+       * reading (`fleet commission`), and until 2026-09-26 this line called the
+       * first one by the second one's name.
+       */
+      console.log('  EXECUTION_VERIFIED  a fire to this Routine produced a session that authenticated as');
       console.log(`            ${worker!.name}, was handed a bin and completed it.`);
-      return ok(`verify-surface ${ref} VERIFIED`);
+      if (routine.capabilities.includes('repository-write')) {
+        const { deliveryReadings } = await import('../server/repos/deliveryProofs.ts');
+        const readings = [...((await deliveryReadings()).get(routine.id) ?? [])];
+        const proven = readings.filter(([, state]) => state === 'PROVEN').map(([repo]) => repo);
+        const refused = readings.filter(([, state]) => state === 'FAILED').map(([repo]) => repo);
+        if (proven.length > 0) console.log(`  DELIVERY_VERIFIED   for ${proven.join(', ')}`);
+        if (refused.length > 0) {
+          console.log(`  PUSH REFUSED        for ${refused.join(', ')} — no implementation work there until the`);
+          console.log('            repository is attached to the Claude Routine.');
+        }
+        if (readings.length === 0) {
+          console.log('  PROVISIONAL         no real push recorded yet; its first real implementation proves it.');
+        }
+      }
+      return ok(`verify-surface ${ref} EXECUTION_VERIFIED`);
     }
     for (const problem of problems) console.log(`  PROBLEM   ${problem}`);
     return refuse(`verify-surface ${ref}: ${problems.length} problem(s) above.`);

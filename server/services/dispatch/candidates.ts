@@ -7,6 +7,7 @@
  * that account" answerable from a recorded input rather than from a re-run
  * against a database that has since moved.
  */
+import { deliveryReadings } from '../../repos/deliveryProofs.ts';
 import { getDb } from '../../db/database.ts';
 import {
   currentPolicy,
@@ -131,6 +132,7 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
     inFlightByRoutine(now.getTime()),
     latestAllowanceReports(),
   ]);
+  const readingsByRoutine = await deliveryReadings();
 
   const accountById = new Map<string, FleetAccount>(accounts.map((a) => [a.id, a]));
   const perAccount = new Map<string, number>();
@@ -195,6 +197,7 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
        * the binding rather than waiting to observe one, so a freshly registered
        * Routine is one command away from eligible.
        */
+      deliveryReadings: Object.fromEntries(readingsByRoutine.get(routine.id) ?? []),
       servesProjects: routine.workerId
         ? scopeByWorker.get(routine.workerId)?.projects ?? []
         : [],

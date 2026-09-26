@@ -93,6 +93,14 @@ export interface PoolSurfaceInput {
    * threshold — and never in the fact.
    */
   unansweredFires: number;
+  /**
+   * Whether this Routine's newest settled delivery probe for the pool's
+   * repository is PROVEN. A surface that declares `repository-write` without
+   * one is not PROVEN however well its Brain chain closed: that chain says the
+   * connector works, and nothing about whether the session can push. Absent on
+   * a hand-built input that predates the rule.
+   */
+  deliveryProven?: boolean;
   bins: ReadonlyMap<string, Bin | null>;
   dispatches: ReadonlyMap<string, readonly BinDispatch[]>;
   /**
@@ -393,9 +401,15 @@ function judgeSurface(
   const fault = proof.foreignWorkerIds.length > 0 || standing.length > 0;
   const contradiction = proof.chain ? contradicts(input, proof.chain) : null;
 
+  const undelivered =
+    input.deliveryProven === false && input.routine.capabilities.includes('repository-write')
+      ? `a real session from this Routine was refused a push to ${repository}, so it is given no ` +
+        'implementation work until the repository is attached to its Claude Routine. ' +
+        'Then: fleet commission --ref <trig> --repository ' + repository
+      : null;
   const verdict: PoolVerdict = fault
     ? 'FAULT'
-    : !proof.chain
+    : !proof.chain || undelivered
       ? 'UNPROVEN'
       : contradiction
         ? 'STALE'
@@ -421,6 +435,7 @@ function judgeSurface(
     ...standing,
     ...(answered ? [] : proof.problems),
     ...(contradiction ? [contradiction] : []),
+    ...(undelivered ? [undelivered] : []),
   ].filter((problem, index, all) => all.indexOf(problem) === index);
 
   return {
@@ -598,6 +613,8 @@ export async function readFactoryPool(input: {
   const { bestEligibility, repositoryProbeWork, surfaceEligibility } = await import(
     './surfaceEligibility.ts'
   );
+  const { deliveryReadings, normalizeRepository } = await import('../../repos/deliveryProofs.ts');
+  const readingsByRoutine = await deliveryReadings();
 
   const expectedWorker = await getWorkerByName(input.workerName);
   if (!expectedWorker) {
@@ -708,6 +725,8 @@ export async function readFactoryPool(input: {
       accountTarget: accountPolicy ? effectiveTarget(accountPolicy, nowIso).target : null,
       sessions,
       unansweredFires,
+      // Only a recorded refusal is `false`; no reading is provisional, not undelivered.
+      deliveryProven: readingsByRoutine.get(routine.id)?.get(normalizeRepository(input.repository)) !== 'FAILED',
       bins,
       dispatches,
       routerSays: routerAnswer

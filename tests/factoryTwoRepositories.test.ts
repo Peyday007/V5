@@ -27,6 +27,7 @@
  * permanently still refuses. A repository outside the envelope, a worker outside
  * its routing row, a caller outside its role — none of those is a wait.
  */
+import { recordDeliveryProven, recordDeliveryProvenForWorker } from './helpers/deliveryProven.ts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import {
@@ -266,6 +267,7 @@ async function surface(workerId: string, secret: string, name: string): Promise<
     capabilities: [...FACTORY_ROUTING_CAPABILITIES],
   });
   await bindRoutineWorker(routine.id, workerId);
+  await recordDeliveryProvenForWorker(routine.id, workerId, routine.capabilities);
   process.env[secret] = 'not-a-real-token';
   return routine.id;
 }

@@ -1,0 +1,62 @@
+{
+  "objective": "Give a person on the Cash page a way to commit spend under their standing commercial authority and to settle a held commitment with what it actually cost. Both routes are finished and nothing in the client calls them: POST /api/projects/:projectId/cash/commitments (server/routes/cash.ts ~955-988, `commitSpend` with required action, amountCents >= 1, purpose, expectedResult, stopCondition and idempotencyKey) and POST /api/cash/commitments/:commitmentId/settle (server/routes/cash.ts ~992-1030, `settleSpend`, which requires spentCents >= 0 and refuses its absence with a sentence saying so). client/src/lib/cashApi.ts (CashApi object ~449-794) has `releaseCommitment` (~778-785) and no commit or settle function; client/src/russell/Cash.tsx renders held commitments only inside the RELEASE_COMMITMENT decision answer (`DecisionAnswer`, ~772-832) and shows held/unpaid totals in `MyCash` (~1384-1440) with no control to create or settle one. So the ceiling a person grants in the Authority card is spent by nothing a person can press, and a hold that was actually spent can only be released (which records nothing spent) rather than settled — §30's rule that deployable cash must fall when money leaves the account has no client path.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "CashApi gains `commitSpend(projectId, body)` and `settleCommitment(commitmentId, spentCents, note?)` posting exactly the fields the two routes read and nothing else. The private money block of Cash.tsx (FULL scope only) lists the project's commitments from `view.myCash.commitments` with state, amount, purpose and stop condition, offers **Settle** on each HELD one (asking for what was actually spent, in the sprint's currency, via the existing `centsFromAmount` helper) beside the existing release path, and offers a **Commit spend** form whose action choices are exactly `view.authority.allowedActions`. The idempotency key is derived from what the commitment records (for example the action, purpose and amount), never from a clock or a random value, so a retry after a lost response is one commitment. Every server refusal (no grant, action not permitted, per-action or total ceiling, shortfall) is rendered in the server's own words and nothing is shown as done until the server answered. After either call the section re-reads the view so the position figures move from the ledger rather than from the client.",
+  "nonGoals": [
+    "Changing commitSpend, settleSpend, releaseCommitment, the authority check or any ceiling arithmetic in server/services/cash/**.",
+    "Adding a route, a column or a migration.",
+    "Any timer or automatic release of a hold: a commitment is released or settled only by a person (§30).",
+    "Computing a money figure in the client: every figure shown comes from the server's view.",
+    "Showing any commitment control to a SHARED-scope reader."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A test drives the Cash section over the real routes and database: a person with a live grant commits spend through the new form, a cash_commitments row exists in state HELD with the chosen action, amount, purpose, expectedResult and stopCondition, and the page shows it.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Settling that commitment through the new control with a spent amount moves it out of HELD and a test asserts the ledger position (held commitments and deployable) was re-read from the server rather than computed in the browser.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Submitting the commit form twice for the same decision (same action, purpose and amount) produces exactly one cash_commitments row, because the idempotency key is derived from the decision and not from a clock.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The commit form's action choices are exactly the grant's allowedActions; with no live grant the form is not usable and shows a sentence explaining that no standing authority exists, and a test asserts no POST to /cash/commitments is made.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A SHARED-scope member's Cash page renders no commit or settle control and no commitment amounts, asserted as absences in the rendered document.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A WORKER principal posting to /api/projects/:projectId/cash/commitments or /api/cash/commitments/:id/settle is refused and no row changes, and a test asserts it; the settle request body contains only spentCents and note, and the commit body only the fields the route reads.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing tests/cashSection.test.tsx and tests/cashBrowserToDatabase.test.ts still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/lib/cashApi.ts",
+    "client/src/russell/Cash.tsx",
+    "tests/cashCommitmentControls.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Client and test changes only; no schema, route or service change, and every commitment written through the new controls is an ordinary row the existing release path can answer."
+}

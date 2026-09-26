@@ -11,6 +11,7 @@
  * Each test below is one of those joins, and every one of them is checked in both
  * directions: what onboarding makes possible, and what it still refuses.
  */
+import { recordDeliveryProven } from './helpers/deliveryProven.ts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { createUser, createWorker, getWorkerByName, getWorkerRouting, grantMembership, listMembershipsForPrincipal, setWorkerRouting } from '../server/repos/identity.ts';
@@ -357,6 +358,15 @@ describe('readiness is derived, and says what is left', () => {
     expect(configured.remaining.join(' ')).toContain('A_SECRET_NAME');
 
     process.env['A_SECRET_NAME'] = 'placeholder-not-a-token';
+    /*
+     * Deployed, enabled and bound is ready with no delivery reading: a surface
+     * nothing has contradicted is provisional, and its first real implementation
+     * proves or refuses it. Only a recorded refusal would make it unusable.
+     */
+    // No reading yet is provisional, not unusable: its first real implementation proves it.
+    const provisional = (await repositoryOnboarding(fixture.project.id))[0]!;
+    expect(provisional.readiness).toBe('READY');
+    await recordDeliveryProven(routine.id, GRANT().remote);
     const ready = (await repositoryOnboarding(fixture.project.id))[0]!;
     delete process.env['A_SECRET_NAME'];
     expect(ready.readiness).toBe('READY');
@@ -623,6 +633,8 @@ async function surfaceFor(workerId: string, secret: string): Promise<void> {
     capabilities: [...FACTORY_ROUTING_CAPABILITIES],
   });
   await bindRoutineWorker(routine.id, workerId);
+  // A working Factory surface has delivered to its repository once; see deliveryProof.test.ts.
+  await recordDeliveryProven(routine.id, GRANT().remote);
   process.env[secret] = 'not-a-real-token';
 }
 
@@ -866,6 +878,7 @@ describe('surfaces are counted by account, and proof is not assumed', () => {
         capabilities: [...FACTORY_ROUTING_CAPABILITIES],
       });
       await bindRoutineWorker(routine.id, worker.id);
+      await recordDeliveryProven(routine.id, GRANT().remote);
       // Deployed, because a surface whose token is not deployed is not routed
       // and would not be READY — which is a different test's subject.
       process.env[`SECRET_${label}`] = 'placeholder-not-a-token';
@@ -924,6 +937,7 @@ describe('surfaces are counted by account, and proof is not assumed', () => {
       capabilities: [...FACTORY_ROUTING_CAPABILITIES],
     });
     await bindRoutineWorker(routine.id, worker.id);
+    await recordDeliveryProven(routine.id, GRANT().remote);
     process.env['SECRET_C'] = 'placeholder-not-a-token';
 
     const repo = (await repositoryOnboarding(fixture.project.id))[0]!;

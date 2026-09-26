@@ -40,6 +40,7 @@ import {
 } from '../server/repos/factory.ts';
 import { getBin, getDispatch, listBins, listDispatchesForBin } from '../server/repos/bins.ts';
 import { bindRoutineWorker, createAccount, createRoutine } from '../server/repos/fleet.ts';
+import { recordDeliveryProven } from './helpers/deliveryProven.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import { tickRemoteCampaign } from '../server/services/factory/remoteLoop.ts';
 import { listRepositoryGrants } from '../server/services/factory/repositoryEnvelope.ts';
@@ -260,6 +261,11 @@ describe('an authorized objective survives its setup being missing', () => {
     });
     await bindRoutineWorker(routine.id, factoryWorkerId);
     process.env[FIRE_SECRET] = 'not-a-real-token';
+
+    // No reading yet is provisional, not unusable: its first real implementation proves it.
+    const provisional = (await repositoryOnboarding(fixture.project.id))[0]!;
+    expect(provisional.readiness).toBe('READY');
+    await recordDeliveryProven(routine.id, GRANT().remote);
 
     const ready = (await repositoryOnboarding(fixture.project.id))[0]!;
     expect(ready.readiness).toBe('READY');

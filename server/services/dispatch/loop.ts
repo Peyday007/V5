@@ -196,6 +196,22 @@ export async function dispatchTick(
   result.superseded = await supersedeStaleIntents();
 
   /*
+   * Settle any finished delivery probe before the snapshot, so a surface that
+   * has just proven it can push is routable in this same tick — and one that
+   * has just failed is not. A failure here never stops dispatch: a probe that
+   * cannot be settled now is asked again next tick.
+   */
+  try {
+    const { settleDeliveryProofs } = await import('./deliveryProof.ts');
+    await settleDeliveryProofs();
+    // Real deliveries already in the ledger prove their surfaces, once per process.
+    const { backfillDeliveryEvidenceOnce } = await import('./deliveryEvidence.ts');
+    await backfillDeliveryEvidenceOnce();
+  } catch (error) {
+    console.warn('[dispatch] delivery proof settlement failed:', (error as Error).message);
+  }
+
+  /*
    * The fleet, read once. Above the re-arm rather than below it, because the
    * re-arm now asks a routing question and must ask it against the same numbers
    * the fire will be decided on.

@@ -132,9 +132,18 @@ the Routine's **sources**, not of the connector:
    above through your own execution surface"* — so if the target is not attached,
    the worker reaches the push and honestly reports `BLOCKED`.
 
-Nothing in Brain reads or records which repository a Routine attaches; it is not
-a Brain field, and Brain could not enforce it if it were. That is why the target
-must be attached rather than merely authorized.
+Nothing in Brain can *read* which repository a Routine attaches; it is a setting
+in the Claude account that owns the Routine. What Brain can do is **measure it**,
+and since 2026-09-26 it does, from real work: a surface's first real
+implementation proves it (the forge confirming the push records PROVEN), and a
+real push the git proxy refuses records FAILED, which takes the surface out of
+implementation routing without charging the unit. Until either happens the
+surface is provisional and takes one implementation at a time. After attaching
+the repository to a refused Routine, run `command: clear-delivery-refusal`,
+`ref: trig_…`, `extra: --repository Peyday007/V5 --reason attached`. A GitHub collaborator grant is not enough on
+its own — without the target attached, Claude's git proxy answers *"… is not in
+this session's authorized repository set, so the proxy will not inject a
+credential for it"* however much access the account holder has.
 
 ---
 
@@ -669,7 +678,39 @@ surface is bound to"*. That is a research connector selected in the factory
 Routine, and it is the one mistake a second connector *name* would have hidden.
 Fix it by editing the Routine's connector selection in Cowork and probing again.
 
-**Repeat steps 3 to 7 for the next account, or stop here.** One verified surface
+`EXECUTION_VERIFIED` (the line above used to say `VERIFIED`) proves the Brain
+half of the surface — the connector, the identity, the queue — and nothing about
+whether the session can push. That is step 7b.
+
+## 7b. Commission it — one command, one answer
+
+`command: commission`, `ref: trig_…`, `extra: --repository Peyday007/V5`.
+Add `--probe` only for a surface with no real work to prove itself on.
+
+It asks every step in the order it has to be true — Routine registered and
+enabled, trigger token deployed, bound to the Factory worker, worker authorized
+for the repository and a member of its project, `repository` and
+`repository-write` declared, connector authenticating as the Factory worker, a
+bin executed — and then the part nothing else can check: **the session Brain
+fires at this Routine clones the repository, pushes a disposable
+`factory-verify/…` branch with one file under `.factory-verify/`, opens a pull
+request, closes it without merging and deletes the branch.** Brain reads the
+forge and records the result. `--probe` creates that bin when every earlier step
+passes; run the command again (without `--probe`) once the probe has run.
+
+The last line is the answer:
+
+```
+  READY FOR peyday007/v5 IMPLEMENTATION — this account can complete Factory work end to end
+```
+
+or `NOT READY — <the first missing step>: <what to do>`. A probe that stopped
+names where, from a closed vocabulary — `REPOSITORY_NOT_IN_SESSION` means the
+Routine's **Repository** setting is not `Peyday007/V5`; fix it in the owner's
+Claude account and probe again. Until the answer is READY the surface can still
+plan and review, and is given no bin that pushes.
+
+**Repeat steps 3 to 7b for the next account, or stop here.** One verified surface
 is a working Factory. Go on to step 8 either way — with one account it reads the
 same as step 7, and with several it is the only thing that reads them together.
 

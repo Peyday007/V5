@@ -295,14 +295,35 @@ export async function binAdmission(input: {
       if (refs.length > 0) {
         const routines = await Promise.all(refs.map((ref) => getRoutineByRef(ref)));
         const known = routines.filter((routine): routine is NonNullable<typeof routine> => routine !== null);
-        const able = known.some((routine) => needed.every((cap) => routine.capabilities.includes(cap)));
+        const { DELIVERY_PROBE_CLASS, WRITE_CAPABILITY } = await import('../dispatch/router.ts');
+        const { repositoryIdOf } = await import('./routing.ts');
+        /*
+         * A declared `repository-write` counts unless the Routine's own session
+         * was recorded refused a push to this bin's repository — the router's
+         * rule, asked again for the session that finished one bin and asks for the
+         * next. No reading at all is provisional, and is admitted.
+         */
+        const writeRepository =
+          needed.includes(WRITE_CAPABILITY) && bin.workloadClass !== DELIVERY_PROBE_CLASS
+            ? repositoryIdOf(bin)
+            : null;
+        const readings = writeRepository
+          ? await (await import('../../repos/deliveryProofs.ts')).deliveryReadings()
+          : null;
+        const able = known.some(
+          (routine) =>
+            needed.every((cap) => routine.capabilities.includes(cap)) &&
+            (!readings || !writeRepository || readings.get(routine.id)?.get(writeRepository) !== 'FAILED'),
+        );
         if (known.length === refs.length && !able) {
           return {
             ok: false,
             quiet: true,
             reason:
               `This session was started by ${known.map((routine) => routine.name).join(', ')}, which does not ` +
-              `declare ${needed.join(' and ')}; the bin is left for a surface that does.`,
+              `declare ${needed.join(' and ')}` +
+              (readings ? ` without a recorded push refusal for ${writeRepository}` : '') +
+              '; the bin is left for a surface that does.',
           };
         }
       }

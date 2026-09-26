@@ -1,0 +1,76 @@
+{
+  "objective": "Give the cross-border dealflow kernel (§45) an operator surface. Five finished routes have no client caller: GET /api/projects/:projectId/cash/dealflow (server/routes/cash.ts ~1242-1249, `dealflowView` in server/services/dealflow/view.ts ~202, shape `DealflowView` ~164-194: gate, categories, markets, buyers, suppliers, deals, live questions, next, declined, lessons, counts), GET /api/projects/:projectId/cash/dealflow/:dealId (~1251-1263, `dealDetail` ~452), POST /api/projects/:projectId/cash/dealflow/parties (~1265-1303, seed a party: kind from DEAL_PARTY_KINDS in server/domain/types.ts ~8736, name, equipmentClass required, country and note optional), PATCH /api/projects/:projectId/cash/dealflow/parties/:partyId (~1305-1329, retire with a required reason) and POST /api/projects/:projectId/cash/dealflow/observations (~1331-1389, kind from DEAL_OBSERVATION_KINDS ~9028, statement required, optional dealId, jurisdiction, equipmentClass). services/identity/policy.ts (~455-456) makes the writes ADMIN and the reads READ. Labor and Machines closed this same gap; this follows them.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A new route DEALFLOW at /dealflow in client/src/lib/router.ts, a secondary nav entry and a view switch in client/src/russell/RussellShell.tsx beside MACHINES and LABOR, a new client/src/lib/dealflowApi.ts for the five calls and a new client/src/russell/Dealflow.tsx rendering the view: the gate sentence when nothing is being asked, both sides of the map (buyers and suppliers with their source claim or SEED origin), every deal with its stage, the server's `because`, established and outstanding facts, blocker and next action, and the opportunity id or an explicit 'nothing has been created'; live questions with their round id, what would be asked next with the allocator's reason, declined items, and lessons with their sample size. A deal opens its detail from the detail route. Where transactionValueCents is null the screen shows the reason and no figure; `ourRevenueCents` is always shown as not computed with `ourRevenueNote`, never as a number; paidWhen is words or absent, never a day count. The GET response additionally carries `capabilities` and `vocabulary` (DEAL_PARTY_KINDS, DEAL_OBSERVATION_KINDS) composed at the route via a new server/services/dealflow/access.ts using decideProjectAccess only; seed-party, retire-party and record-observation controls are disabled with the server's reason for a reader who may not use them.",
+  "nonGoals": [
+    "Changing dealflowView, dealDetail, seedParty, retire, observe, the allocator, the kernel tick or any policy entry (server/services/identity/** is out of scope).",
+    "Any control that contacts, quotes or commits anything, or records a commercial action — those remain Cash Mode's existing routes.",
+    "Any revenue, margin, probability or day-count figure the server did not send.",
+    "A delete for a party or an observation, or hiding a retired party.",
+    "Any new migration or table."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A browser-to-database test mounts the Dealflow view over the real routes and database: a project ADMIN seeds a BUYER through the form, a deal_parties row with origin SEED exists with that name and equipment class, and it is listed on the re-read.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Retiring that party with a reason sets its retirement and reason, and it remains visible with the reason rather than disappearing.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Recording an observation through the form writes one deal_observations row with the chosen kind and statement, and the lessons section on the re-read reports it with its sample size.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A deal whose transactionValueCents is null renders its reason and no currency figure, and no rendered deal shows a figure for our revenue; asserted against the rendered document.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "For a project MEMBER who is not ADMIN every write control is rendered disabled with the server's reason from `capabilities`, and a POST as that member is refused 404 with no row written.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Form kind options are exactly the `vocabulary` the server sent, and request bodies contain only the fields each route reads.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A WORKER principal is refused at both reads and all three writes, and the GET routes perform no write.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The /dealflow path parses to DEALFLOW and DEALFLOW formats back to /dealflow, and the shell renders the Dealflow view for it.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing Labor, Machines, Cash and dealflow suites still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/lib/router.ts",
+    "client/src/russell/RussellShell.tsx",
+    "client/src/lib/dealflowApi.ts",
+    "client/src/russell/Dealflow.tsx",
+    "server/routes/cash.ts",
+    "server/services/dealflow/access.ts",
+    "tests/dealflowSurface.test.tsx"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. A new screen, a new client module and an additive capabilities/vocabulary field on one read route; no schema change and no change to what any write does."
+}
