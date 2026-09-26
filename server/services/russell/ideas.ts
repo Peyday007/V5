@@ -37,11 +37,13 @@ import { listDependenciesForProject } from '../../repos/dependencies.ts';
 import { countVisibleConversationsForProject } from '../../repos/russellConversations.ts';
 import { knowsForProject } from './knows.ts';
 import { plainLayerName } from './dealDispatch.ts';
+import { conversationIsReadable, ownerPrincipal } from './turn.ts';
 import { ideaProgress, milestoneStateOfLayer, progressOf, type Progress } from './progress.ts';
 import { CANDIDATE_PRIORITY_LABELS } from '../../domain/types.ts';
 import type {
   CandidatePriority,
   LayerStatus,
+  Principal,
   RussellCandidate,
   RussellMission,
 } from '../../domain/types.ts';
@@ -219,6 +221,26 @@ function layerOfCandidate(candidateId: string, missions: RussellMission[]): stri
 }
 
 /**
+ * The same visibility rule `requireCandidate` applies to one idea at a time,
+ * reproduced here rather than re-derived.
+ *
+ * A SHARED candidate is always visible: the caller already gated project READ
+ * access before this projection ran. A PRIVATE one belongs to the thread it
+ * came from, so it is visible only to a viewer who can read that conversation
+ * — the owner, or anybody who may READ the project when the thread is itself
+ * SHARED. A viewer this Brain cannot resolve to a live principal reads no
+ * private candidate at all, since there is nobody to check readability for.
+ */
+async function candidateIsVisibleTo(
+  candidate: RussellCandidate,
+  viewerPrincipal: Principal | null,
+): Promise<boolean> {
+  if (candidate.visibility !== 'PRIVATE') return true;
+  if (!viewerPrincipal || !candidate.conversationId) return false;
+  return conversationIsReadable(viewerPrincipal, candidate.conversationId);
+}
+
+/**
  * The whole shape of one project.
  *
  * Reads eight authoritative sources once each and joins them in memory rather
@@ -252,6 +274,17 @@ export async function ideaMapForProject(input: {
       countVisibleConversationsForProject(project.id, input.viewerUserId),
     ]);
 
+  const viewerPrincipal = await ownerPrincipal(input.viewerUserId);
+  const visibility = new Map(
+    await Promise.all(
+      candidates.map(
+        async (candidate) =>
+          [candidate.id, await candidateIsVisibleTo(candidate, viewerPrincipal)] as const,
+      ),
+    ),
+  );
+  const isVisible = (candidateId: string) => visibility.get(candidateId) ?? false;
+
   const probedCandidates = new Set(probes.map((probe) => probe.candidateId));
   const nodes: IdeaNode[] = [];
   const edges: IdeaEdge[] = [];
@@ -273,7 +306,12 @@ export async function ideaMapForProject(input: {
    */
   const mergedInto = new Map<string, number>();
   for (const candidate of candidates) {
+    if (!isVisible(candidate.id)) continue;
     if (candidate.state !== 'MERGED' || !candidate.canonicalCandidateId) continue;
+    // A visible candidate folded into a canonical the viewer cannot read is not
+    // countable as folded here either — the canonical itself contributes no
+    // node for it to be folded into.
+    if (!isVisible(candidate.canonicalCandidateId)) continue;
     mergedInto.set(
       candidate.canonicalCandidateId,
       (mergedInto.get(candidate.canonicalCandidateId) ?? 0) + 1,
@@ -281,9 +319,13 @@ export async function ideaMapForProject(input: {
   }
 
   for (const candidate of candidates) {
+    if (!isVisible(candidate.id)) continue;
     const own = missions.filter((mission) => mission.candidateId === candidate.id);
     const layerId = layerOfCandidate(candidate.id, missions);
-    const folded = candidate.state === 'MERGED' && candidate.canonicalCandidateId !== null;
+    const folded =
+      candidate.state === 'MERGED' &&
+      candidate.canonicalCandidateId !== null &&
+      isVisible(candidate.canonicalCandidateId);
     // A folded idea is filed under the one it folded into, and is not a second
     // child of the layer. Counting it there would inflate every major idea by
     // however many times a person happened to ask the same question.
