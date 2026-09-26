@@ -46,6 +46,7 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
 import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { cashRouter } from '../server/routes/cash.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
@@ -527,12 +528,7 @@ describe('the Puzzles screen, over the real route', () => {
 
     /*
      * The exact sentence the route composes, rendered whole. The generator
-     * has not changed underneath this row inside one test, so `reproduced`
-     * is true here — the not-reproduced sentence is the same rendering path
-     * (`reading.message`, passed straight through) taking the other string
-     * the route can return, which `puzzleKernel.test.ts` already exercises
-     * directly against the generator; what this screen adds is that whatever
-     * string comes back is shown whole, and that is proven by this one.
+     * has not changed underneath this row yet, so `reproduced` is true here.
      */
     await waitFor(() =>
       expect(
@@ -544,6 +540,41 @@ describe('the Puzzles screen, over the real route', () => {
     );
     expect(document.querySelector('.rs-puzzles-ok')).toBeTruthy();
     expect(document.querySelector('.rs-puzzles-mismatch')).toBeNull();
+
+    /*
+     * The not-reproduced sentence, forced from a real row rather than
+     * asserted only in a comment. "The generator has changed underneath this
+     * row" is not something this test can make actually happen — nothing
+     * here is going to ship a second generator version — but the row it
+     * would leave behind is exactly one whose stored `content_hash` no
+     * longer matches what rendering the specification produces, and that is
+     * a real, reachable database state rather than a fixture standing in for
+     * one. `tests/attemptIndexPopulated.test.ts` already reaches for
+     * `getDb()` directly for the identical reason: forcing a row into a
+     * state the ordinary write path does not produce, without inventing a
+     * second copy of what the route does with it.
+     */
+    await getDb().run('UPDATE puzzle_instances SET content_hash = ? WHERE id = ?', [
+      'corrupted-for-this-test',
+      instance!.id,
+    ]);
+    await act(async () => {
+      fireEvent.click(button(/Open it/));
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'Rendered from its specification, and it does NOT hash to what was recorded. The ' +
+            'generator has changed underneath this row, so what is shown is not what was ' +
+            'checked. A repair is a new generator version and a new system, never an edit here.',
+        ),
+      ).toBeTruthy(),
+    );
+    expect(document.querySelector('.rs-puzzles-mismatch')).toBeTruthy();
+    expect(document.querySelector('.rs-puzzles-ok')).toBeNull();
+    // The artifact itself is still shown — a mismatch is a warning about
+    // provenance, not a reason to withhold what was actually generated.
+    expect(document.querySelector('.rs-puzzles-artifact')).toBeTruthy();
 
     /* --- a puzzle nobody wrote is the same not-available state a project
        nobody may read gets -------------------------------------------------- */
