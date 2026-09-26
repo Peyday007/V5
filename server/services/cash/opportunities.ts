@@ -54,6 +54,7 @@ import { cashTier } from './tier.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition, checkMoneyEntry } from './money.ts';
 import { toJson } from '../../repos/util.ts';
+import { createHash } from 'node:crypto';
 import type {
   CashActionPerformer,
   CashCommitment,
@@ -624,6 +625,34 @@ export async function beginExecution(input: {
  */
 export function actionKey(opportunityId: string, action: string, occurrence: string): string {
   return `action:${opportunityId}:${action}:${occurrence}`;
+}
+
+/**
+ * The occurrence a person's own submission identifies, derived rather than
+ * asked for.
+ *
+ * A reviewer found that the record-action control on the Cash page sent the
+ * literal string `'first'` on every confirm, so a second real occurrence of
+ * the same action on the same opportunity — a second invoice, a second
+ * installment — collided with `actionKey`'s own first row and was silently
+ * dropped: the server correctly deduped what looked, by its key alone, like
+ * the identical request come round again.
+ *
+ * A person cannot be handed a counter to fill in reliably; asking them to
+ * would only move the same mistake into a text box. What they already typed
+ * is what tells the two apart — the detail describes what happened and the
+ * reference is often the one thing that proves it happened again — so that is
+ * what this hashes, rather than a caller-supplied number or the raw text
+ * itself, which could carry characters `actionKey`'s format does not allow.
+ * An exact resubmission of the same detail and reference — a retry after a
+ * lost response, a duplicate click — hashes to the same label and reaches the
+ * row `actionKey` already wrote for it, which is `recordAction`'s own
+ * idempotency working as intended rather than a second submission going
+ * unrecorded.
+ */
+export function contentOccurrence(detail: string, reference?: string | null): string {
+  const canonical = `${detail.trim()}\u0000${(reference ?? '').trim()}`;
+  return createHash('sha256').update(canonical, 'utf8').digest('hex').slice(0, 16);
 }
 
 /** Delivery has begun, or the money is in. Neither costs anything to record. */

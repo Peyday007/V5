@@ -92,6 +92,7 @@ import {
   beginExecution,
   capture,
   commitSpend,
+  contentOccurrence,
   decline,
   exhaust,
   fillCard,
@@ -800,6 +801,7 @@ cashRouter.post(
          */
         const performed = optionalString(body['action'], 'action');
         const detail = optionalString(body['detail'], 'detail');
+        const reference = optionalString(body['reference'], 'reference') ?? null;
         const { value, message } = taken(
           await beginExecution({
             opportunityId: opportunity.id,
@@ -810,11 +812,18 @@ cashRouter.post(
                     action: performed,
                     performedBy: 'PERSON' as const,
                     detail,
-                    reference: optionalString(body['reference'], 'reference') ?? null,
+                    reference,
+                    /*
+                     * Derived from what was actually typed, never from a
+                     * caller-supplied counter. See `contentOccurrence`: a
+                     * confirm that sends the same detail and reference again
+                     * reaches this same row, and one that describes something
+                     * different does not.
+                     */
                     requestKey: actionKey(
                       opportunity.id,
                       performed,
-                      optionalString(body['occurrence'], 'occurrence') ?? 'first',
+                      contentOccurrence(detail, reference),
                     ),
                   },
                 }
@@ -833,6 +842,7 @@ cashRouter.post(
          */
         const performed = requiredString(body['action'], 'action');
         const detail = requiredString(body['detail'], 'detail');
+        const reference = optionalString(body['reference'], 'reference') ?? null;
         const { value, message } = taken(
           await recordFurtherAction({
             opportunityId: opportunity.id,
@@ -840,12 +850,18 @@ cashRouter.post(
             action: performed,
             performedBy: 'PERSON' as const,
             detail,
-            reference: optionalString(body['reference'], 'reference') ?? null,
-            requestKey: actionKey(
-              opportunity.id,
-              performed,
-              optionalString(body['occurrence'], 'occurrence') ?? 'first',
-            ),
+            reference,
+            /*
+             * Derived from what was actually typed rather than a caller-
+             * supplied counter — see `contentOccurrence`. This is the fix for
+             * the finding that the record-action control hardcoded a literal
+             * `'first'` on every confirm: a genuine second occurrence (a
+             * second invoice, a different reference) now produces a different
+             * key instead of silently deduping against the first one, while an
+             * exact resubmission of the same detail and reference still
+             * reaches the same row.
+             */
+            requestKey: actionKey(opportunity.id, performed, contentOccurrence(detail, reference)),
           }),
         );
         return { opportunity: value, message };

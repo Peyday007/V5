@@ -374,6 +374,68 @@ describe('recording a further commercial action', () => {
     expect(after.body.history.filter((event) => event.kind === 'CASH_ACTION_RECORDED')).toHaveLength(2);
   });
 
+  it('records a genuine second occurrence of the same action, rather than deduping it against the first', async () => {
+    // This is the finding itself: the Cash page sent the literal string
+    // 'first' as `occurrence` on every confirm, so a second real invoice on
+    // this same opportunity — different wording, a different reference —
+    // built the identical request key as the first one and vanished behind a
+    // silent "Already recorded". The key must now depend on what actually
+    // happened rather than on a caller-supplied counter that never varied.
+    const second = await call<{ opportunity: { state: string }; message: string }>(
+      'POST',
+      `/api/cash/opportunities/${opportunityId}/record-action`,
+      {
+        cookie: adminCookie,
+        body: {
+          action: 'QUOTE_AND_INVOICE',
+          detail: 'Sent a corrected invoice after the client asked for a split payment.',
+          reference: 'inv-0002',
+        },
+      },
+    );
+    expect(second.status).toBe(200);
+    expect(second.body.message).not.toContain('Already recorded');
+
+    const after = await call<{ history: { kind: string; summary: string }[] }>(
+      'GET',
+      `/api/cash/opportunities/${opportunityId}`,
+      { cookie: adminCookie },
+    );
+    // CONTACT_BUYER from `execute`, the first QUOTE_AND_INVOICE, and this one.
+    const recordedEvents = after.body.history.filter((event) => event.kind === 'CASH_ACTION_RECORDED');
+    expect(recordedEvents).toHaveLength(3);
+    expect(
+      recordedEvents.filter((event) => event.summary.includes('QUOTE_AND_INVOICE')),
+    ).toHaveLength(2);
+  });
+
+  it('still dedupes an exact resubmission of that second occurrence', async () => {
+    // Content-derived does not mean unprotected: a retry of the identical
+    // detail and reference must still reach the row it already wrote rather
+    // than adding a third QUOTE_AND_INVOICE nobody actually sent.
+    const again = await call<{ message: string }>(
+      'POST',
+      `/api/cash/opportunities/${opportunityId}/record-action`,
+      {
+        cookie: adminCookie,
+        body: {
+          action: 'QUOTE_AND_INVOICE',
+          detail: 'Sent a corrected invoice after the client asked for a split payment.',
+          reference: 'inv-0002',
+        },
+      },
+    );
+    expect(again.status).toBe(200);
+    expect(again.body.message).toContain('Already recorded');
+
+    const after = await call<{ history: { kind: string }[] }>(
+      'GET',
+      `/api/cash/opportunities/${opportunityId}`,
+      { cookie: adminCookie },
+    );
+    expect(after.body.history.filter((event) => event.kind === 'CASH_ACTION_RECORDED')).toHaveLength(3);
+  });
+
   it('refuses a piece that has not started executing', async () => {
     const untouched = await call<{ opportunity: { id: string } }>(
       'POST',

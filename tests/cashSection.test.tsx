@@ -1745,10 +1745,14 @@ describe('a further commercial action, once execution has begun', () => {
     await act(async () => {
       fireEvent.click(yourWork().getByRole('button', { name: 'Confirm' }));
     });
+    /*
+     * No `occurrence` field: the server derives it from `detail` and
+     * `reference` (`contentOccurrence`), rather than the client inventing a
+     * literal that collided with every later occurrence of the same action.
+     */
     expect(bodies['POST /api/cash/opportunities/cop_2/record-action']).toEqual({
       action: 'QUOTE_AND_INVOICE',
       detail: 'Sent the quote and invoice.',
-      occurrence: 'first',
     });
   });
 
