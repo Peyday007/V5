@@ -312,10 +312,24 @@ describe('puzzle: openPuzzleAsks commits a candidate and its round together', ()
   // Every other purpose *forbids* one, which matters here because the round's
   // own unique index — (project, purpose, format_key, product_class, round) —
   // has no COALESCE, unlike the other kernels'. SQLite treats each NULL in a
-  // unique index as distinct from every other NULL, so at any purpose whose
-  // product_class is always NULL the index never actually collides and the
-  // atomicity this file is proving could not be exercised at all. ECONOMICS
-  // is the only purpose where both columns are real values.
+  // unique index as distinct from every other NULL, so the index alone cannot
+  // detect a duplicate at any purpose whose product_class is always NULL.
+  // ECONOMICS is the only purpose where both columns are real values, so A01
+  // and A02 below use it to pin the transaction-rollback property against a
+  // unique index that actually works.
+  //
+  // `lockPuzzleRoundKey` (server/services/puzzle/expand.ts) is what makes the
+  // same property hold for every other purpose too, on the backend where the
+  // gap is live: a Postgres transaction-scoped advisory lock on the round's
+  // own natural key, taken before the candidate or the round is written, so a
+  // second concurrent caller for the identical key blocks until the first
+  // commits or rolls back rather than racing it. `demandAsk`'s A02 below
+  // exercises that for a purpose whose productClass is always NULL. It cannot
+  // fail *here* — this suite runs on SQLite, whose adapter already serialises
+  // every transaction on one connection, and the lock is a deliberate no-op
+  // there — but it is what this project's Postgres suite exercises for real,
+  // and it is the reason this test is worth having at all: losing the lock
+  // would not turn it red on this backend.
   function economicsAsk() {
     return {
       purpose: 'ECONOMICS' as const,
@@ -370,6 +384,40 @@ describe('puzzle: openPuzzleAsks commits a candidate and its round together', ()
 
     expect([...a, ...b]).toHaveLength(1);
     const rounds = (await listPuzzleRounds(projectId)).filter((one) => one.formatKey === 'sudoku');
+    expect(rounds).toHaveLength(1);
+    expect(await candidateCount()).toBe(before + 1);
+  });
+
+  // productClass is always null here (DEMAND forbids one), which is exactly
+  // the shape `puzzle_rounds_unique` cannot constrain on its own.
+  function demandAsk() {
+    return {
+      purpose: 'DEMAND' as const,
+      formatKey: 'maze',
+      formatName: 'Maze',
+      productClass: null,
+      round: 1,
+      rank: 0,
+      why: 'test',
+    };
+  }
+
+  it('A02 (productClass always null): two concurrent calls for the same ask still produce one round and one candidate', async () => {
+    await activated();
+    const { puzzleSnapshot } = await import('../server/services/puzzle/graph.ts');
+    const { openPuzzleAsks } = await import('../server/services/puzzle/expand.ts');
+    const { listPuzzleRounds } = await import('../server/repos/puzzle.ts');
+
+    const ask = demandAsk();
+    const before = await candidateCount();
+    const snapshot = await puzzleSnapshot(projectId);
+    const [a, b] = await Promise.all([
+      openPuzzleAsks({ projectId, asks: [ask], snapshot }),
+      openPuzzleAsks({ projectId, asks: [ask], snapshot }),
+    ]);
+
+    expect([...a, ...b]).toHaveLength(1);
+    const rounds = (await listPuzzleRounds(projectId)).filter((one) => one.formatKey === 'maze');
     expect(rounds).toHaveLength(1);
     expect(await candidateCount()).toBe(before + 1);
   });
