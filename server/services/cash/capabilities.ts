@@ -36,15 +36,20 @@
  * so is a label. `RESEARCH_A_QUESTION` is `PRESENT` only when the fleet
  * actually has a healthy execution surface, read from `fleet_routines` — the
  * same reading `auditAdmission` uses, so the two cannot disagree about whether
- * this Brain can do research today.
+ * this Brain can do research today. `SEND_A_MESSAGE` is `PRESENT` only when a
+ * real effect adapter is registered for it (`effects.ts`'s
+ * `contactBuyerAdapter`), so the moment a messaging integration exists is the
+ * moment it can be checked rather than assumed — and on this Brain, with none
+ * registered, it reads exactly as it did when this was `read: null`.
  *
  * Everything else in the vocabulary is declared `MISSING` with the integration
  * it needs named, which is the honest state of this version: §30 says plainly
- * that it records the authorization and the money and does not itself contact a
- * buyer, issue an invoice or move funds. Making any of those report `PRESENT`
- * would be the invented measurement this file exists to refuse.
+ * that it records the authorization and the money and does not itself issue an
+ * invoice or move funds. Making any of those report `PRESENT` would be the
+ * invented measurement this file exists to refuse.
  */
 import { separationCapacity } from '../research/auditAdmission.ts';
+import { contactBuyerAdapter } from './effects.ts';
 
 export type CapabilityState = 'PRESENT' | 'MISSING' | 'UNKNOWN';
 
@@ -95,7 +100,11 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
     nextStep:
       'Until one exists, the message is sent by a person and the send is recorded as a confirmed ' +
       'action on the opportunity.',
-    read: null,
+    // `PRESENT` means a real effect adapter is registered for this operation —
+    // never a boolean somebody flipped. With none registered, which is every
+    // deployment of this Brain today, this reads MISSING exactly as it did
+    // when `read` was `null`.
+    read: async () => contactBuyerAdapter() !== null,
   },
   {
     id: 'ISSUE_AN_INVOICE',
