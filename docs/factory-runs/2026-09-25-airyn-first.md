@@ -93,6 +93,22 @@ and #19.
 | 09-26 03:39 | Line: #1 EXECUTING (the test unit on surface 1), #2 REVIEWING on Airyn (read-only, which is its role now), #3 queued. Not idle |
 | 09-26 03:4x | `58d7763` (Build panel, parked-stage slot rule, surface names instead of trigger refs) went to production; Deploy dispatched |
 
+| 09-26 03:47 | Campaign #2 delivered **PR #40** (review PASS, 0 findings) and went COMPLETE |
+| 09-26 03:51 | **Brain started #3 by itself** as campaign `fcp_57fc1d9fc6de4d799c77`: #2 stopped holding its slot and the queue entry was admitted on the next tick. Its plan bin was fired 3 s after it was ready. This is Phase 1 proven in production |
+| 09-26 04:22 | `f93a90c` released (Deploy 354). The Build panel is live; its first deploy failed its own test gate on a literal colour in the new CSS, and nothing was released that time |
+| 09-26 04:3x | Four more objectives submitted: #5 `fcr_1ae377b67039444f952b` (queued, p10), #9 `fcr_5c867ae923614e17ac4d` (queued, p20), #6 `fcr_12c1252cc75a49b0acb0`, #16 `fcr_2fe47a1e87864ac6a08d`. #6 and #16 are queued once the overlap gate is live |
+| 09-26 05:1x | `6137a8b` went to production: admission holds an objective whose mutation scope overlaps a live campaign, and starts non-overlapping work meanwhile |
+
+**Burn-in, 00:25–04:25** (`factory burnin --hours 4`): 12 stages and 15 fires; 3 retries, all on the units bin Airyn could not push; 0 no-shows and 0 deferrals. Median ready→fire **3 s**, fire→arrival **6 s**, transition idle **1 s**. **Unexplained idle 0 s.** Utilization reads 1.06, which means stage-time over window with two campaigns running at once, so it exceeds 1.
+
+**Hosted verification on the last three deploys (352, 354, 355).** Each one *released*. Each time the pre-restart pass failed at the same step, `brain_submit_synthesis`, for three different reasons:
+
+- 352: Supabase Storage answered HTTP 429 to the upload.
+- 354: Storage answered 429 `too_many_connections` on its own check.
+- 355: Fly sent SIGINT to the machine at 04:55:54, 180 s after boot. No Actions workflow restarted it; the workflow's own restart step began at 04:56:00.
+
+The post-restart pass was 258/259 on 352 and 355. Its only failure was the missing beacon, which the interrupted first pass never left. On 354 the post-restart pass never ran: storage refused the harness's own boot check. The database backend count jumps from 18 to about 40 during the restart window each time. That is an environmental condition around the restart, not the line, and it is not yet fixed.
+
 **Stage timings measured so far** (Brain's own rows):
 
 | Campaign | Stage | ready→fire | stage duration | transition idle |
