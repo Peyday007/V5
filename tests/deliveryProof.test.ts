@@ -218,6 +218,45 @@ describe('a declared repository-write is not a capability until a delivery probe
     expect(delivery.detail).toMatch(/provisional/);
   });
 
+  it('gives a provisional surface its one proving bin even while a proven surface has headroom', async () => {
+    const proven = await createRoutine({
+      accountId: routine.accountId,
+      routineRef: 'trig_proven',
+      name: 'Proven',
+      tokenSecretName: SECRET,
+      capabilities: ['repository', 'repository-write'],
+      workerId: routine.workerId,
+    });
+    const earlier = await writeBin(['repository']);
+    await dispatched(earlier.id, proven.routineRef, 'cse_PROVENSESSION1');
+    expect(
+      await recordDeliveryEvidence({ sessionRef: 'cse_PROVENSESSION1', repository: REMOTE, evidenceKey: earlier.id, state: 'PROVEN' }),
+    ).toBe(proven.id);
+
+    const bin = await writeBin(['repository', 'repository-write']);
+    const snapshot = await fleetSnapshot();
+    const idle = routeBin({
+      bin,
+      candidates: snapshot.candidates.map((c) => ({ ...c, routineInFlight: 0 })),
+      fleetPolicy: snapshot.fleetPolicy,
+      fleetInFlight: 0,
+      now: new Date().toISOString(),
+    });
+    expect(idle.ok).toBe(true);
+    if (idle.ok) expect(idle.routine.id).toBe(routine.id);
+
+    // Once its one proving bin is in flight, write work goes to the proven surface.
+    const busy = routeBin({
+      bin,
+      candidates: snapshot.candidates.map((c) => ({ ...c, routineInFlight: c.routine.id === routine.id ? 1 : 0 })),
+      fleetPolicy: snapshot.fleetPolicy,
+      fleetInFlight: 1,
+      now: new Date().toISOString(),
+    });
+    expect(busy.ok).toBe(true);
+    if (busy.ok) expect(busy.routine.id).toBe(proven.id);
+  });
+
   it('takes a surface out the moment its real session is refused a push, and puts it back on a person\'s word', async () => {
     const refusal =
       "remote: Peyday007/V5 is not in this session's authorized repository set. " +

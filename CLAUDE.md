@@ -2749,7 +2749,10 @@ remote.
   resolves that session to the one Routine Brain fired it at — so a confirmed
   push records PROVEN, and the history already in the ledger is backfilled once
   per process. A surface with no reading is **provisional**: routed, one write
-  bin at a time, and its first real implementation proves it. Only a **FAILED**
+  bin at a time, and its first real implementation proves it — and it ranks
+  *ahead* of a proven surface for that one bin, because ranking proven first
+  meant a provisional surface was never fired while the proven one had
+  headroom, so the proof could not happen. Only a **FAILED**
   reading — written the moment a real unit, integration or delivery report says
   the git proxy refused the repository, with the unit's attempt *not* charged —
   takes a surface out of push routing, and `fleet clear-delivery-refusal` is its

@@ -790,9 +790,20 @@ export function routeBin(input: RoutingInput): RoutingResult {
     freshAllowancePercent(one.allowanceReport, now) !== null,
   );
   eligible.sort((a, b) => {
-    // A surface that has already delivered this push goes before one that has not.
-    const proven = Number(deliveryStandingFor(b, bin) === 'PROVEN') - Number(deliveryStandingFor(a, bin) === 'PROVEN');
-    if (proven !== 0) return proven;
+    /*
+     * A provisional surface goes first, then a proven one. Provisional is only
+     * eligible with nothing in flight (above), so this hands it exactly one real
+     * write bin — the push that proves it, or the refusal that takes it out
+     * without charging the unit. Ranking proven first instead starved it: while
+     * a proven surface had headroom the provisional one was never fired, so the
+     * one real implementation that proves it could never happen.
+     */
+    const rank = (candidate: RoutingCandidate): number => {
+      const standing = deliveryStandingFor(candidate, bin);
+      return standing === 'PROVISIONAL' ? 2 : standing === 'PROVEN' ? 1 : 0;
+    };
+    const standing = rank(b) - rank(a);
+    if (standing !== 0) return standing;
     if (comparableAllowance) {
       const remaining = freshAllowancePercent(b.allowanceReport, now)! -
         freshAllowancePercent(a.allowanceReport, now)!;
