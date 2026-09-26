@@ -1708,7 +1708,7 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
             {page.capabilities.mayActOnJob ? (
               <Actions
                 placement={placement}
-                allowedActions={view.authority.allowedActions}
+                authority={view.authority}
                 onChanged={onChanged}
               />
             ) : null}
@@ -1826,7 +1826,7 @@ function BestOpportunities({
                   {view && placement && page.capabilities.mayActOnJob ? (
                     <Actions
                       placement={placement}
-                      allowedActions={view.authority.allowedActions}
+                      authority={view.authority}
                       onChanged={onChanged}
                     />
                   ) : null}
@@ -2134,7 +2134,7 @@ function Portfolio({
                   {view && placement && page.capabilities.mayActOnJob ? (
                     <Actions
                       placement={placement}
-                      allowedActions={view.authority.allowedActions}
+                      authority={view.authority}
                       onChanged={onChanged}
                     />
                   ) : null}
@@ -2336,17 +2336,32 @@ function EngineCard({
  */
 function Actions({
   placement,
-  allowedActions,
+  authority,
   onChanged,
 }: {
   placement: Placement;
-  allowedActions: string[];
+  authority: CashView['authority'];
   onChanged(): void;
 }): JSX.Element | null {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  /*
+   * A reviewer found that this panel's single box promised "any reference it
+   * has outside Brain" and then folded whatever was typed into `detail`
+   * alone, so `contentOccurrence` (server/services/cash/opportunities.ts)
+   * never actually received one: every confirm from this screen sent
+   * `reference: undefined`, and two genuinely distinct occurrences typed with
+   * similar wording had nothing to tell them apart with. This is its own
+   * field now, wired through separately, so a person has somewhere to put the
+   * invoice number or confirmation code that actually distinguishes one
+   * occurrence from the next — and leaving it blank on two that read
+   * identically is still, correctly, the same claim: nobody has said they
+   * differ.
+   */
+  const [reference, setReference] = useState('');
+  const allowedActions = authority.allowedActions;
   const [performed, setPerformed] = useState(allowedActions[0] ?? 'CONTACT_BUYER');
   const state = placement.opportunity.state;
 
@@ -2357,8 +2372,25 @@ function Actions({
    * asked for: executing means the transaction is being pursued, so the call
    * has to say what was actually done, and the control asks rather than
    * pressing a button that writes the state anyway.
+   *
+   * A control the grant cannot cover is disabled rather than offered, naming
+   * the server's own reason — §35's rule: a refusal somebody could not have
+   * predicted teaches them the refusal is arbitrary. `authority.lines` is
+   * `describeAuthority`'s own account of the grant, composed server-side, and
+   * `authority.exists` is the fact a grant exists at all; nothing here
+   * composes a sentence of its own about why.
    */
-  const available: { action: string; label: string; asks?: 'REASON' | 'ACTION' }[] = [];
+  const noAuthorityReason = authority.exists
+    ? authority.lines.join(' ')
+    : 'No commercial authority exists for this project yet, so nothing here can be recorded ' +
+      'as authorized.';
+  const available: {
+    action: string;
+    label: string;
+    asks?: 'REASON' | 'ACTION';
+    disabled?: boolean;
+    disabledReason?: string;
+  }[] = [];
   if (state === 'DISCOVERED' || state === 'EVIDENCE_CARD') {
     /*
      * *Mark ready to test* is offered only where it could succeed.
@@ -2384,6 +2416,22 @@ function Actions({
   if (state === 'READY') {
     available.push({ action: 'execute', label: 'Record the first move', asks: 'ACTION' });
   }
+  if (state === 'EXECUTING' || state === 'DELIVERING') {
+    /*
+     * Everything a person does after execution has begun and before the
+     * money is collected: a quote, an invoice, a payment accepted.
+     * `recordFurtherAction` records it without moving the piece anywhere, so
+     * this shares the same `asks: 'ACTION'` panel `execute` already has.
+     */
+    const blocked = allowedActions.length === 0;
+    available.push({
+      action: 'record-action',
+      label: 'Record a further action',
+      asks: 'ACTION',
+      disabled: blocked,
+      disabledReason: blocked ? noAuthorityReason : undefined,
+    });
+  }
   if (state === 'EXECUTING') available.push({ action: 'deliver', label: 'Delivering' });
   if (state === 'EXECUTING' || state === 'DELIVERING') {
     available.push({ action: 'collect', label: 'Money is in' });
@@ -2399,6 +2447,7 @@ function Actions({
       await CashApi.act(placement.opportunity.id, action, body);
       setAsking(null);
       setReason('');
+      setReference('');
       onChanged();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
@@ -2414,12 +2463,19 @@ function Actions({
           key={entry.action}
           type="button"
           className="rs-button-quiet"
-          disabled={busy}
+          disabled={busy || entry.disabled}
           onClick={() => (entry.asks ? setAsking(entry.action) : void run(entry.action))}
         >
           {entry.label}
         </button>
       ))}
+      {available
+        .filter((entry) => entry.disabled && entry.disabledReason)
+        .map((entry) => (
+          <p key={`${entry.action}-disabled`} className="rs-hint">
+            {entry.disabledReason}
+          </p>
+        ))}
       {asks === 'REASON' && asking ? (
         <>
           <label className="rs-field-label" htmlFor={`cash-reason-${placement.opportunity.id}`}>
@@ -2457,9 +2513,13 @@ function Actions({
             * one was the one that should never have existed.
             */}
           <p className="rs-hint">
-            You are recording an action you have already taken, under the spending limits you
-            granted. Brain performs nothing here: this writes the action to the record and moves
-            this piece to executing, so the plan stops counting it as waiting.
+            {asking === 'execute'
+              ? 'You are recording an action you have already taken, under the spending limits ' +
+                'you granted. Brain performs nothing here: this writes the action to the record ' +
+                'and moves this piece to executing, so the plan stops counting it as waiting.'
+              : 'You are recording a further action you have already taken, under the spending ' +
+                'limits you granted. Brain performs nothing here: this writes the action to the ' +
+                'record. Nothing about this piece moves — only its history does.'}
           </p>
           <label className="rs-field-label" htmlFor={`cash-did-${placement.opportunity.id}`}>
             Which action did you take? Only what your standing authority permits is listed.
@@ -2476,19 +2536,35 @@ function Actions({
             ))}
           </select>
           <label className="rs-field-label" htmlFor={`cash-detail-${placement.opportunity.id}`}>
-            Who you contacted or what you sent, and any reference it has outside Brain. This is
-            the record of the action, not a description of work Brain should do.
+            Who you contacted or what you sent. This is the record of the action, not a
+            description of work Brain should do.
           </label>
           <input
             id={`cash-detail-${placement.opportunity.id}`}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
           />
+          <label className="rs-field-label" htmlFor={`cash-reference-${placement.opportunity.id}`}>
+            Any reference it has outside Brain, if it has one &mdash; an invoice number, a
+            confirmation code, a message id. This is what tells two similar-sounding actions apart;
+            leaving it blank on two that read identically is still the same claim.
+          </label>
+          <input
+            id={`cash-reference-${placement.opportunity.id}`}
+            value={reference}
+            onChange={(event) => setReference(event.target.value)}
+          />
           <button
             type="button"
             className="rs-button-quiet"
             disabled={busy || reason.trim().length === 0}
-            onClick={() => void run(asking, { action: performed, detail: reason })}
+            onClick={() =>
+              void run(asking, {
+                action: performed,
+                detail: reason,
+                ...(reference.trim().length > 0 ? { reference: reference.trim() } : {}),
+              })
+            }
           >
             Confirm
           </button>

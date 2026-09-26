@@ -1653,6 +1653,197 @@ describe('the money, and the work', () => {
   });
 });
 
+/**
+ * `recordFurtherAction` (server/services/cash/actions.ts) has somewhere to be
+ * recorded on the Cash page: a quote, an invoice, a payment accepted, on a
+ * piece already executing or delivering. Before this the only offered move on
+ * such a piece was `execute`'s own "Record the first move" — which cannot be
+ * pressed twice, so dealflow's QUOTING stage (§45, ACTION_STAGE) had nowhere
+ * to come from on this screen.
+ */
+describe('a further commercial action, once execution has begun', () => {
+  function executingView(authorityOver: Record<string, unknown> = {}): Record<string, unknown> {
+    return view({
+      authority: {
+        exists: false,
+        id: null,
+        lines: [],
+        maxConcurrent: 3,
+        heldCents: 0,
+        maxCommittedCents: 0,
+        maxPerActionCents: 0,
+        committedCents: 0,
+        spentCents: 0,
+        allowedActions: [],
+        ...authorityOver,
+      },
+      myCurrentWork: {
+        ...(view().myCurrentWork as Record<string, unknown>),
+        executeNow: [
+          {
+            opportunity: opportunity({
+              id: 'cop_2',
+              title: 'A published fleet expansion, underway',
+              state: 'EXECUTING',
+            }),
+            disposition: 'EXECUTE_NOW',
+            because: 'It is being executed.',
+            missing: [],
+            tier: tier(),
+          },
+        ],
+        waiting: [],
+      },
+    });
+  }
+
+  /*
+   * Scoped to `.rs-cash-work`, because the same sentence can legitimately
+   * appear twice on this page: `authority.lines` is also what the spending
+   * limits card under *Money detail* renders verbatim. A bare `screen.getBy*`
+   * here would be asserting there is only one reader of that array, which was
+   * never the claim.
+   */
+  function yourWork(): ReturnType<typeof within> {
+    return within(document.querySelector('.rs-cash-work') as HTMLElement);
+  }
+
+  it('offers the control on an executing opportunity, and posts what was chosen on confirm', async () => {
+    base({
+      [VIEW]: {
+        body: executingView({
+          exists: true,
+          lines: ['It authorizes: CONTACT_BUYER, QUOTE_AND_INVOICE.'],
+          allowedActions: ['CONTACT_BUYER', 'QUOTE_AND_INVOICE'],
+        }),
+      },
+      'POST /api/cash/opportunities/cop_2/record-action': {
+        body: { opportunity: {}, message: 'Recorded.' },
+      },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /record a further action/i })).toBeTruthy(),
+    );
+    const button = yourWork().getByRole('button', {
+      name: /record a further action/i,
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+
+    fireEvent.click(button);
+    // Recording it, unlike executing, never says the piece is moving anywhere
+    // — asserted while the panel it is written on is still open.
+    expect(
+      yourWork().getByText(/Nothing about this piece moves — only its history does/i),
+    ).toBeTruthy();
+    fireEvent.change(yourWork().getByLabelText(/which action did you take/i), {
+      target: { value: 'QUOTE_AND_INVOICE' },
+    });
+    fireEvent.change(yourWork().getByLabelText(/who you contacted or what you sent/i), {
+      target: { value: 'Sent the quote and invoice.' },
+    });
+    await act(async () => {
+      fireEvent.click(yourWork().getByRole('button', { name: 'Confirm' }));
+    });
+    /*
+     * No `occurrence` field: the server derives it from `detail` and
+     * `reference` (`contentOccurrence`), rather than the client inventing a
+     * literal that collided with every later occurrence of the same action.
+     */
+    expect(bodies['POST /api/cash/opportunities/cop_2/record-action']).toEqual({
+      action: 'QUOTE_AND_INVOICE',
+      detail: 'Sent the quote and invoice.',
+    });
+  });
+
+  it('carries a reference in its own field, so two similar-sounding occurrences can be told apart', async () => {
+    // A reviewer found that this panel had no separate reference field at
+    // all: the label promised "any reference it has outside Brain" and then
+    // folded whatever was typed into `detail` alone, so `reference` was
+    // always sent as nothing. Two genuinely distinct occurrences typed with
+    // near-identical wording had no way to tell the server they differed.
+    // This is the fix, asserted as what actually reaches the wire.
+    base({
+      [VIEW]: {
+        body: executingView({
+          exists: true,
+          lines: ['It authorizes: CONTACT_BUYER, QUOTE_AND_INVOICE.'],
+          allowedActions: ['CONTACT_BUYER', 'QUOTE_AND_INVOICE'],
+        }),
+      },
+      'POST /api/cash/opportunities/cop_2/record-action': {
+        body: { opportunity: {}, message: 'Recorded.' },
+      },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /record a further action/i })).toBeTruthy(),
+    );
+    fireEvent.click(
+      yourWork().getByRole('button', { name: /record a further action/i }),
+    );
+    fireEvent.change(yourWork().getByLabelText(/which action did you take/i), {
+      target: { value: 'QUOTE_AND_INVOICE' },
+    });
+    fireEvent.change(yourWork().getByLabelText(/who you contacted or what you sent/i), {
+      target: { value: 'Sent the invoice.' },
+    });
+    /*
+     * The reference is a field of its own — not a suffix appended to
+     * `detail` — so filling it must not change what `detail` reads.
+     */
+    fireEvent.change(yourWork().getByLabelText(/any reference it has outside brain/i), {
+      target: { value: 'inv-0042' },
+    });
+    await act(async () => {
+      fireEvent.click(yourWork().getByRole('button', { name: 'Confirm' }));
+    });
+    expect(bodies['POST /api/cash/opportunities/cop_2/record-action']).toEqual({
+      action: 'QUOTE_AND_INVOICE',
+      detail: 'Sent the invoice.',
+      reference: 'inv-0042',
+    });
+  });
+
+  it('renders disabled with the server’s own reason when the grant covers no action', async () => {
+    base({
+      [VIEW]: {
+        body: executingView({
+          exists: true,
+          lines: ['It authorizes no commercial action at all, so nothing can be committed under it.'],
+          allowedActions: [],
+        }),
+      },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /record a further action/i })).toBeTruthy(),
+    );
+    const button = yourWork().getByRole('button', {
+      name: /record a further action/i,
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(
+      yourWork().getByText(
+        'It authorizes no commercial action at all, so nothing can be committed under it.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('names the plain fact when no grant exists at all, without composing a reason for it', async () => {
+    base({ [VIEW]: { body: executingView() } });
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /record a further action/i })).toBeTruthy(),
+    );
+    const button = yourWork().getByRole('button', {
+      name: /record a further action/i,
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(yourWork().getByText(/No commercial authority exists for this project/i)).toBeTruthy();
+  });
+});
+
 describe('winding down', () => {
   it('will not move the lifecycle without a reason, and shows the server’s consequence', async () => {
     base({

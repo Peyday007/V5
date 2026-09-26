@@ -51,9 +51,13 @@ import {
   listParties,
   listRequirements,
   listStructureEvidence,
+  linkOpportunity,
   recordObservation,
 } from '../server/repos/dealflow.ts';
+import { getCashMode } from '../server/repos/cashMode.ts';
 import { getOpportunity } from '../server/repos/cashPortfolio.ts';
+import { createAuthority } from '../server/repos/cashAuthority.ts';
+import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { validateDealFinding, equipmentKey } from '../server/domain/dealflow.ts';
 import { envelopeFor, layerReading, nextLayerToResearch } from '../server/services/dealflow/compliance.ts';
 import { landedEconomics } from '../server/services/dealflow/economics.ts';
@@ -65,8 +69,11 @@ import { seedParty, observe } from '../server/services/dealflow/seed.ts';
 import { dealflowView } from '../server/services/dealflow/view.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
 import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
+import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
+import { actionKey, beginExecution, capture, fillCard, markReady } from '../server/services/cash/opportunities.ts';
+import { recordFurtherAction } from '../server/services/cash/actions.ts';
 import { COMMERCIAL_STRUCTURES, COMPLIANCE_LAYERS, DEAL_STAGES } from '../server/domain/types.ts';
-import { COMMERCIAL_ACTIONS } from '../server/services/cash/authority.ts';
+import { ALWAYS_PROHIBITED_COMMERCIAL, COMMERCIAL_ACTIONS } from '../server/services/cash/authority.ts';
 import type { DealFinding, DealRequirement, Layer } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -1160,6 +1167,129 @@ describe('a stage is read from a row, or it is not reported', () => {
     // And it is still a stage, so a reader can see it is a gap in what Brain
     // can observe rather than one somebody forgot.
     expect(DEAL_STAGES).toContain('NEGOTIATING');
+  });
+
+  /**
+   * `readFurtherAction` (server/services/cash/actions.ts) is what lets a
+   * QUOTE_AND_INVOICE be recorded on a piece already EXECUTING, and this
+   * proves the stage that action feeds actually reads the row it produced —
+   * over a real deal, its opportunity and the actions on it, rather than the
+   * source-text properties above.
+   */
+  it('reads a deal as QUOTING once its opportunity records QUOTE_AND_INVOICE', async () => {
+    await activated();
+    await runDealflowKernel(projectId);
+    await finishedRound({
+      candidateId: (await candidateFor('SEED_EQUIPMENT'))!,
+      claims: [
+        {
+          claim: 'A published fleet expansion.',
+          finding: 'BUYER_NEED',
+          subject: 'Kabwe Mining',
+          equipment: 'fuel tank trailers',
+          jurisdiction: 'Zambia',
+        },
+        {
+          claim: 'A published export capability.',
+          finding: 'SUPPLIER_CAPABILITY',
+          subject: 'Shandong Heavy Vehicles',
+          equipment: 'fuel tank trailers',
+          jurisdiction: 'China',
+        },
+      ],
+    });
+    await runDealflowKernel(projectId);
+    const deals = await listDeals(projectId);
+    expect(deals.length).toBe(1);
+    const deal = deals[0]!;
+
+    // A qualified opportunity, built and linked to the deal exactly as
+    // `promoteReadyDeals` would, without waiting for the deal to reach
+    // OUTREACH_READY on its own — the thing under test is whether the stage
+    // reads the recorded actions, not how the deal got its opportunity.
+    const mode = await getCashMode(projectId);
+    const captured = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: `${deal.equipmentClass} for Kabwe Mining`,
+      mechanism: 'SUPPLY_DEMAND_MISMATCH',
+      currency: mode!.currency,
+    });
+    expect(captured.ok).toBe(true);
+    if (!captured.ok) throw new Error('unreachable');
+    const opportunityId = captured.value.id;
+    expect(await linkOpportunity({ dealId: deal.id, opportunityId })).toBe(true);
+
+    const filled = await fillCard({
+      opportunityId,
+      actorRef: userId,
+      patch: {
+        payer: 'Kabwe Mining, which published the fleet expansion',
+        reachableChannel: 'The procurement office replied on Tuesday',
+        buyingSignal: 'Published a fleet expansion',
+        signalObservedAt: '2026-09-15T09:00:00.000Z',
+        offerScope: 'One shipment of fuel tank trailers',
+        acceptanceCondition: 'A signed purchase order arrives',
+        priceCents: 250_000_00,
+        deliveryMethod: 'Freight from the supplier to the buyer',
+        fulfillmentOwner: 'Shandong Heavy Vehicles',
+        peakFundingCents: 0,
+      },
+    });
+    expect(filled.ok).toBe(true);
+    for (const field of [CAPTURE_KEY, ...qualificationKeys(null)]) {
+      await recordCardFact({
+        projectId,
+        opportunityId,
+        field,
+        kind: 'PERSON',
+        value: `The owner's own answer to ${field}.`,
+        decidedBy: userId,
+      });
+    }
+    expect((await markReady({ opportunityId, actorRef: userId })).ok).toBe(true);
+
+    await createAuthority({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'Cash Mode commercial authority',
+      allowedActions: [...COMMERCIAL_ACTIONS],
+      prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+      maxCommittedCents: 10_000_000,
+      maxPerActionCents: 5_000_000,
+      maxConcurrent: 3,
+      currency: mode!.currency,
+    });
+
+    const started = await beginExecution({
+      opportunityId,
+      actorRef: userId,
+      firstAction: {
+        action: 'CONTACT_BUYER',
+        performedBy: 'PERSON',
+        detail: 'Reached the procurement office.',
+        requestKey: actionKey(opportunityId, 'CONTACT_BUYER', 'first'),
+      },
+    });
+    expect(started.ok).toBe(true);
+
+    const quoted = await recordFurtherAction({
+      opportunityId,
+      actorRef: userId,
+      action: 'QUOTE_AND_INVOICE',
+      performedBy: 'PERSON',
+      detail: 'Sent the quote and invoice.',
+      requestKey: actionKey(opportunityId, 'QUOTE_AND_INVOICE', 'first'),
+    });
+    expect(quoted.ok).toBe(true);
+
+    const snapshot = await dealflowSnapshot(projectId);
+    const readings = await readAll(snapshot);
+    const reading = readings.find((one) => one.deal.id === deal.id);
+    expect(reading?.stage).toBe('QUOTING');
+    expect(reading?.because).toContain('QUOTE_AND_INVOICE');
   });
 });
 
