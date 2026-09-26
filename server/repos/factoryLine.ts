@@ -203,3 +203,29 @@ export async function listFactoryBinsSince(sinceIso: string): Promise<Bin[]> {
   );
   return rows.map(mapBin);
 }
+
+/**
+ * Whether a campaign's stage is parked on a person: it has no bin a worker could
+ * be given (READY or LEASED), and its newest bin is NEEDS_HUMAN.
+ *
+ * A campaign in a working state whose only stage bin ran out of attempts reads
+ * EXECUTING for as long as nobody answers the bin — and counting it as working
+ * holds an admission slot while nothing moves, which is the idle line this
+ * module exists to prevent. Read from rows, never stored.
+ */
+export async function parkedStageBin(campaignId: string): Promise<Bin | null> {
+  const db = getDb();
+  const live = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM bins
+      WHERE factory_campaign_id = ? AND state IN ('READY', 'LEASED')`,
+    [campaignId],
+  );
+  if (Number(live?.n ?? 0) > 0) return null;
+  const newest = await db.get<BinRow>(
+    `SELECT * FROM bins WHERE factory_campaign_id = ?
+      ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+    [campaignId],
+  );
+  if (!newest || newest.state !== 'NEEDS_HUMAN') return null;
+  return mapBin(newest);
+}

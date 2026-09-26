@@ -26,6 +26,7 @@ import type {
   FactoryInvitationView,
   FactoryRelease,
   FactoryAllocation,
+  FactoryLine,
   IssuedFactoryInvitation,
   OnboardResult,
   RepositoryOnboarding,
@@ -87,6 +88,8 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
         review finds, and stops at a pull request for you to read. It never merges and it never
         deploys.
       </p>
+
+      {projectId ? <Line key={`line-${projectId}`} projectId={projectId} /> : null}
 
       {state.phase !== 'READY' ? (
         <p className={`rs-state rs-state-${state.phase.toLowerCase()}`}>
@@ -150,6 +153,136 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
           requests.reload();
         }}
       />
+    </section>
+  );
+}
+
+/** How long, in words a person reads at a glance. */
+function duration(ms: number | null): string {
+  if (ms === null) return '—';
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return 'under a minute';
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
+/**
+ * The production line: whether the factory is moving, and if not, why.
+ *
+ * Read again every twenty seconds, which is the remote loop's own tick, so the
+ * panel is never staler than the thing it describes by more than one pass. A
+ * re-read leaves the previous answer up until the new one arrives, for the same
+ * reason the repository list does. Nothing here is a control: admission is set
+ * on a terminal and approving stays on the objective's own card.
+ */
+function Line({ projectId }: { projectId: string }): JSX.Element {
+  const line = useAsync(() => FactoryApi.line(projectId), [projectId]);
+  const { reload } = line;
+  useEffect(() => {
+    const timer = setInterval(reload, 20_000);
+    return () => clearInterval(timer);
+  }, [reload]);
+  const data: FactoryLine | null = line.data ?? null;
+
+  if (!data) {
+    return (
+      <section className="rs-card rs-factory-line">
+        <h3>Production line</h3>
+        <p className="rs-hint">{line.error ? `Could not read the line: ${line.error.message}` : 'Reading the line…'}</p>
+      </section>
+    );
+  }
+
+  const active = data.campaigns.filter((row) => row.working && !row.blocked);
+  const blocked = data.campaigns.filter((row) => row.blocked);
+  const waiting = data.campaigns.filter((row) => !row.working && !row.blocked);
+  return (
+    <section className="rs-card rs-factory-line">
+      <h3>Production line</h3>
+      <dl className="rs-line-headline">
+        <div><dt>Auto</dt><dd>{data.auto ? `ON — up to ${data.policy.maxActive} at once` : 'OFF'}</dd></div>
+        <div><dt>Executable backlog</dt><dd>{data.executable.total}</dd></div>
+        <div><dt>Active</dt><dd>{data.active.leasedBins} running, {data.active.arriving} arriving</dd></div>
+        <div><dt>Available capacity</dt><dd>{data.capacity.freeSurfaces} free surface(s)</dd></div>
+        <div>
+          <dt>Unexplained idle</dt>
+          <dd className={data.unexplainedIdle ? 'rs-line-fault' : undefined}>{data.unexplainedIdle ? 'YES — a fault' : 'no'}</dd>
+        </div>
+      </dl>
+      <p className="rs-hint">{data.because}</p>
+
+      <h4>Active builds</h4>
+      {active.length === 0 ? <p className="rs-hint">None.</p> : (
+        <ul className="rs-line-list">
+          {active.map((row) => {
+            const bin = row.bins.find((one) => one.state === 'LEASED') ?? row.bins[0] ?? null;
+            return (
+              <li key={row.campaign.id}>
+                <strong>{row.objective.slice(0, 140)}</strong>
+                <p className="rs-item-meta">
+                  {row.campaign.state.toLowerCase()} · {bin ? `${bin.kind.toLowerCase()} ${bin.state.toLowerCase()}` : 'no stage bin yet'}
+                  {bin?.lastRoutine ? ` · on ${bin.lastRoutine}` : ''}
+                  {bin?.sessionRef ? ` · session ${bin.sessionRef}` : ''}
+                  {` · ${duration(row.elapsedMs)}`}
+                </p>
+                <p className="rs-item-meta">Next: {row.next}</p>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <h4>Queued builds</h4>
+      {data.queue.length === 0 ? <p className="rs-hint">Nothing is queued.</p> : (
+        <ol className="rs-line-list">
+          {data.queue.map((row) => (
+            <li key={row.entry.id}>
+              <strong>{row.objective.slice(0, 140)}</strong>
+              <p className="rs-item-meta">
+                {row.executableNow ? 'Starts on the next pass. ' : 'Waiting. '}
+                {row.why}
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <h4>Blocked builds</h4>
+      {blocked.length === 0 ? <p className="rs-hint">None.</p> : (
+        <ul className="rs-line-list">
+          {blocked.map((row) => (
+            <li key={row.campaign.id}>
+              <strong>{row.objective.slice(0, 140)}</strong>
+              <p className="rs-item-meta">
+                {row.blocked!.wait === 'PERSON' ? 'Needs you' : 'Waiting automatically'} · {row.blocked!.kind}
+                {row.blocked!.detail ? ` — ${row.blocked!.detail}` : ''}
+              </p>
+              <p className="rs-item-meta">{row.blocked!.remedy}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {waiting.length > 0 ? (
+        <p className="rs-hint">
+          {waiting.length} other campaign(s) are live and hold no slot.
+        </p>
+      ) : null}
+
+      <h4>Capacity</h4>
+      {data.capacity.surfaces.length === 0 ? <p className="rs-hint">No Factory surface is registered.</p> : (
+        <ul className="rs-line-list">
+          {data.capacity.surfaces.map((surface) => (
+            <li key={`${surface.accountName}-${surface.routineName}`}>
+              <strong>{surface.routineName}</strong> ({surface.accountName})
+              <p className="rs-item-meta">
+                {surface.inFlight} of {surface.target ?? 'no target'} in flight
+                {surface.capabilities.includes('repository-write') ? ' · can push' : ' · read only'}
+                {' · '}{surface.free ? 'free' : surface.refusal ?? 'at its target'}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

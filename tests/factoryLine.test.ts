@@ -38,6 +38,9 @@ import {
   type LineReading,
 } from '../server/services/factory/line.ts';
 import { listFactoryEvents } from '../server/repos/factoryFleet.ts';
+import { createBin } from '../server/repos/bins.ts';
+import { getDb } from '../server/db/database.ts';
+import { createProject } from '../server/repos/projects.ts';
 
 let fixture: TestProject;
 let adminId = '';
@@ -237,5 +240,99 @@ describe('unexplained idle is a fault with a start and an end', () => {
     expect(line.capacity.freeSurfaces).toBe(0);
     expect(line.unexplainedIdle).toBe(false);
     expect(line.because).toMatch(/no Factory surface is free/);
+  });
+});
+
+/** A factory stage bin for a campaign, in a chosen state. */
+async function stageBin(campaignId: string, state: 'READY' | 'NEEDS_HUMAN') {
+  const bin = await createBin({
+    projectId: fixture.project.id,
+    kind: 'FACTORY_UNITS',
+    title: 'units',
+    objective: 'Do the stage.',
+    manifest: {
+      objective: 'Do the stage.',
+      why: 'line test',
+      lineage: { projectId: fixture.project.id, layerId: null, goal: null, orchestrationId: null },
+      units: [{ key: 'u1', establishes: 'a result', input: '{}', transform: 'FACTORY_UNITS', dependsOn: [] }],
+      acceptableSources: [],
+      excludedSources: [],
+      evidence: ['a result'],
+      outputs: ['one result'],
+      authorizedActions: ['do the stage'],
+      prohibitedActions: ['anything else'],
+      budgetUnits: null,
+      retry: { maxAttempts: 2, backoffSeconds: 60 },
+      stoppingConditions: ['a result per unit'],
+    },
+    completionContract: 'FACTORY_UNITS_V1',
+    createdByType: 'SYSTEM',
+    createdById: 'test',
+    ready: true,
+    factoryCampaignId: campaignId,
+  });
+  if (state === 'NEEDS_HUMAN') {
+    await getDb().run(`UPDATE bins SET state = 'NEEDS_HUMAN' WHERE id = ?`, [bin.id]);
+  }
+  return bin.id;
+}
+
+describe('a stage parked on a person holds no slot', () => {
+  it('frees the slot when the campaign still reads EXECUTING but its only stage bin needs a person', async () => {
+    const a = await objective('parked');
+    const b = await objective('behind-parked');
+    await queueObjective({ changeRequestId: a.id, userId: adminId, priority: 1 });
+    await queueObjective({ changeRequestId: b.id, userId: adminId, priority: 2 });
+    const first = await admitQueued();
+    const campaignId = first.admitted[0]!.campaignId;
+    await patchCampaign(campaignId, { state: 'EXECUTING' });
+    await stageBin(campaignId, 'READY');
+    expect((await admitQueued()).admitted).toHaveLength(0);
+
+    await getDb().run(`UPDATE bins SET state = 'NEEDS_HUMAN' WHERE factory_campaign_id = ?`, [campaignId]);
+    const second = await admitQueued();
+    expect(second.admitted.map((one) => one.changeRequestId)).toEqual([b.id]);
+
+    const line = await readLine();
+    const parked = line.campaigns.find((row) => row.campaign.id === campaignId)!;
+    expect(parked.working).toBe(false);
+    expect(parked.blocked?.wait).toBe('PERSON');
+    expect(parked.blocked?.kind).toBe('STAGE_BIN_NEEDS_HUMAN');
+  });
+
+  it('classifies a surface wait as automatic and an exhausted unit as needing a person', async () => {
+    const a = await objective('surface-wait');
+    const b = await objective('exhausted');
+    await queueObjective({ changeRequestId: a.id, userId: adminId, priority: 1 });
+    await queueObjective({ changeRequestId: b.id, userId: adminId, priority: 2 });
+    await setAdmissionPolicy({ maxActive: 2, actor: 'test', reason: 'two' });
+    const started = (await admitQueued()).admitted;
+    await patchCampaign(started[0]!.campaignId, {
+      state: 'BLOCKED',
+      blockerKind: 'NO_HEALTHY_EXECUTION_SURFACE',
+      blockerDetail: 'no surface',
+    });
+    await patchCampaign(started[1]!.campaignId, {
+      state: 'BLOCKED',
+      blockerKind: 'UNIT_EXHAUSTED_ATTEMPTS',
+      blockerDetail: 'out of attempts',
+    });
+    const line = await readLine();
+    const byId = new Map(line.campaigns.map((row) => [row.campaign.id, row]));
+    expect(byId.get(started[0]!.campaignId)!.blocked?.wait).toBe('AUTOMATIC');
+    expect(byId.get(started[1]!.campaignId)!.blocked?.wait).toBe('PERSON');
+  });
+});
+
+describe('a project reads its own line and nobody else\'s', () => {
+  it('leaves another project\'s campaigns and queue out of a project-scoped reading', async () => {
+    const mine = await objective('mine');
+    await queueObjective({ changeRequestId: mine.id, userId: adminId, priority: 1 });
+    const other = await createProject({ slug: `other-${Math.random().toString(36).slice(2, 8)}`, name: 'Other' });
+    const line = await readLine(new Date(), { projectId: other.id });
+    expect(line.queue).toHaveLength(0);
+    expect(line.campaigns).toHaveLength(0);
+    const own = await readLine(new Date(), { projectId: fixture.project.id });
+    expect(own.queue.map((row) => row.entry.changeRequestId)).toEqual([mine.id]);
   });
 });

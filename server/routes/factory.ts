@@ -541,6 +541,35 @@ factoryRouter.get(
 );
 
 /**
+ * The factory as a production line, for this project: AUTO, the executable
+ * backlog, what is running, what could run, and whether the line is idle for no
+ * reason. Derived on every read by `readLine`, the same reading the loop's own
+ * idle observation and `npm run factory line` use, so the panel cannot disagree
+ * with the fault the ledger records.
+ *
+ * Campaigns, bins and the queue are this project's alone. Capacity is the
+ * fleet's, because a surface serves every project; the surface's row id is the
+ * operator's and is left out, exactly as the Fleet page keeps identifiers at
+ * operator depth.
+ */
+factoryRouter.get(
+  '/projects/:projectId/factory/line',
+  handler(async (req, res) => {
+    const projectId = pathId(req, 'projectId');
+    await projectForFactory(projectId, 'read');
+    const { readLine } = await import('../services/factory/line.ts');
+    const reading = await readLine(new Date(), { projectId });
+    res.json({
+      ...reading,
+      capacity: {
+        freeSurfaces: reading.capacity.freeSurfaces,
+        surfaces: reading.capacity.surfaces.map(({ routineId: _omit, ...surface }) => surface),
+      },
+    });
+  }),
+);
+
+/**
  * One campaign, in the terms a person cares about — derived from
  * `campaignBriefing` rather than re-derived inline, so this route and the
  * dedicated briefing route below can never disagree about the same campaign.

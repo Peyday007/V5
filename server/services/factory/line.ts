@@ -25,7 +25,7 @@
  *    capacity and nothing running at once is reported as exactly that, with a
  *    start and an end on the ledger, rather than inferred from a quiet screen.
  */
-import type { FactoryCampaign } from '../../domain/factory.ts';
+import type { FactoryBlockerKind, FactoryCampaign } from '../../domain/factory.ts';
 import type { Bin } from '../../domain/types.ts';
 import {
   ensureCampaign,
@@ -40,6 +40,7 @@ import {
   enqueueChangeRequest,
   listQueueEntries,
   markQueueEntryStarted,
+  parkedStageBin,
   type AdmissionPolicy,
   type FactoryQueueEntry,
 } from '../../repos/factoryLine.ts';
@@ -154,8 +155,26 @@ export interface AdmissionReport {
   skipped: Array<{ entryId: string; reason: string }>;
 }
 
-function isWorking(campaign: FactoryCampaign): boolean {
+function inWorkingState(campaign: FactoryCampaign): boolean {
   return campaign.executionMode === 'REMOTE' && WORKING_STATES.has(campaign.state);
+}
+
+/**
+ * Whether a campaign holds a slot: it is in a working state *and* its stage is
+ * not parked on a person. A stage bin that ran out of attempts leaves the
+ * campaign reading EXECUTING until somebody answers the bin, and counting that
+ * as working is one parked objective idling the whole line — rule 2 above, for
+ * the state the campaign column does not show.
+ */
+async function holdsSlot(campaign: FactoryCampaign): Promise<boolean> {
+  if (!inWorkingState(campaign)) return false;
+  return (await parkedStageBin(campaign.id)) === null;
+}
+
+async function countWorking(campaigns: FactoryCampaign[]): Promise<number> {
+  let n = 0;
+  for (const campaign of campaigns) if (await holdsSlot(campaign)) n += 1;
+  return n;
 }
 
 /**
@@ -168,7 +187,7 @@ function isWorking(campaign: FactoryCampaign): boolean {
 export async function admitQueued(): Promise<AdmissionReport> {
   const policy = await currentAdmissionPolicy();
   const live = await listLiveCampaigns();
-  let working = live.filter(isWorking).length;
+  let working = await countWorking(live);
   const report: AdmissionReport = { policy, working, admitted: [], skipped: [] };
   if (working >= policy.maxActive) return report;
 
@@ -217,7 +236,7 @@ export async function admitQueued(): Promise<AdmissionReport> {
       },
     });
     report.admitted.push({ entryId: entry.id, changeRequestId: changeRequest.id, campaignId: campaign.id });
-    if (isWorking(campaign)) working += 1;
+    if (await holdsSlot(campaign)) working += 1;
   }
   report.working = working;
   return report;
@@ -252,6 +271,64 @@ export interface LineBin {
   lastRoutine: string | null;
 }
 
+/**
+ * What a blocked campaign is waiting for. `AUTOMATIC` resolves by itself — the
+ * tick re-examines it and nothing a person does would be faster; `PERSON` needs
+ * somebody to act, and names what. A `Record` over the whole union, so a blocker
+ * kind added later is a compile error until somebody says which it is.
+ */
+export const BLOCKER_WAIT: Record<FactoryBlockerKind, { wait: 'AUTOMATIC' | 'PERSON'; remedy: string }> = {
+  NO_HEALTHY_EXECUTION_SURFACE: {
+    wait: 'AUTOMATIC',
+    remedy: 'Resumes on the next tick once a surface that can take the stage is eligible.',
+  },
+  NO_ELIGIBLE_REVIEWER: {
+    wait: 'AUTOMATIC',
+    remedy: 'Resumes once a session independent of the implementers is available.',
+  },
+  STALE_BASE: { wait: 'AUTOMATIC', remedy: 'Re-examined on every tick.' },
+  UNIT_EXHAUSTED_ATTEMPTS: {
+    wait: 'PERSON',
+    remedy: 'A unit ran out of attempts: regrant it, amend the contract, or retire the campaign.',
+  },
+  DEPENDENCY_CYCLE: { wait: 'PERSON', remedy: 'The plan has a cycle; the contract has to be amended.' },
+  CONTRADICTORY_CONTRACT: { wait: 'PERSON', remedy: 'The contract contradicts itself; amend it.' },
+  AWAITING_HUMAN_RELEASE: { wait: 'PERSON', remedy: 'Approve or refuse the release on Build.' },
+  EXTERNAL_CREDENTIAL_REQUIRED: {
+    wait: 'PERSON',
+    remedy: 'Access has to be granted where the worker runs; Brain holds no repository credential.',
+  },
+};
+
+export interface LineCampaign {
+  campaign: FactoryCampaign;
+  objective: string;
+  /** Holds an admission slot: in a working state and not parked on a person. */
+  working: boolean;
+  bins: LineBin[];
+  /** Null while it is moving. */
+  blocked: null | {
+    wait: 'AUTOMATIC' | 'PERSON';
+    kind: string;
+    detail: string;
+    remedy: string;
+    since: string | null;
+  };
+  /** The next thing that has to happen, in words derived from its rows. */
+  next: string;
+  /** How long the current stage bin has been with a worker, when one has it. */
+  elapsedMs: number | null;
+}
+
+export interface LineQueued {
+  entry: FactoryQueueEntry;
+  objective: string;
+  position: number;
+  /** Whether admission would start it on the next pass. */
+  executableNow: boolean;
+  why: string;
+}
+
 export interface LineReading {
   at: string;
   policy: AdmissionPolicy;
@@ -275,12 +352,8 @@ export interface LineReading {
   unexplainedIdle: boolean;
   /** The sentence that says why the line is or is not moving. */
   because: string;
-  campaigns: Array<{
-    campaign: FactoryCampaign;
-    working: boolean;
-    bins: LineBin[];
-  }>;
-  queue: FactoryQueueEntry[];
+  campaigns: LineCampaign[];
+  queue: LineQueued[];
 }
 
 function newestSent(dispatches: Awaited<ReturnType<typeof listDispatchesForBin>>) {
@@ -292,26 +365,51 @@ function newestSent(dispatches: Awaited<ReturnType<typeof listDispatchesForBin>>
   return best;
 }
 
+function nextFor(campaign: FactoryCampaign, bins: LineBin[], blocked: LineCampaign['blocked']): string {
+  if (blocked) return blocked.remedy;
+  if (campaign.state === 'COMPLETE') return 'A person merges the pull request.';
+  const leased = bins.find((bin) => bin.state === 'LEASED');
+  if (leased) return `The ${leased.kind.toLowerCase()} stage finishes, and the next stage is made on completion.`;
+  const ready = bins.find((bin) => bin.state === 'READY' || bin.state === 'LEASE_EXPIRED');
+  if (ready) {
+    return ready.lastSentAt
+      ? `A worker arrives for the ${ready.kind.toLowerCase()} stage it was fired for.`
+      : `The ${ready.kind.toLowerCase()} stage is fired at the next free surface.`;
+  }
+  return 'The next tick derives the next stage from what the last one recorded.';
+}
+
 /**
- * The whole line, read once.
+ * The line, read once.
  *
  * Capacity is read from the router's own snapshot and its own refusal function,
  * restricted to surfaces declaring `repository` — a factory bin can be fired at
  * nothing else — and to those with headroom under their Routine and account
  * targets. A second definition of "available" here would be the two readers of
  * one fact this repository keeps having to correct.
+ *
+ * With `projectId`, the campaigns, bins and queue are that project's alone, so a
+ * project member reads nothing about another project's work; capacity stays the
+ * fleet's, because a surface serves every project and a member is owed what is
+ * free. Surface identifiers are for the operator and are left out by the route.
  */
-export async function readLine(now: Date = new Date()): Promise<LineReading> {
+export async function readLine(now: Date = new Date(), options: { projectId?: string } = {}): Promise<LineReading> {
   const nowIso = now.toISOString();
   const policy = await currentAdmissionPolicy();
-  const [live, queue, bins, snapshot] = await Promise.all([
+  const [allLive, allQueued, bins, snapshot] = await Promise.all([
     listLiveCampaigns(),
     listQueueEntries(['QUEUED']),
     listBins({ states: ['READY', 'LEASED'], limit: 500 }),
     fleetSnapshot(now),
   ]);
+  const inScope = (projectId: string) => !options.projectId || projectId === options.projectId;
+  const live = allLive.filter((campaign) => inScope(campaign.projectId));
+  const queue = allQueued.filter((entry) => inScope(entry.projectId));
+  const liveIds = new Set(live.map((campaign) => campaign.id));
 
-  const factoryBins = bins.filter((bin: Bin) => bin.factoryCampaignId);
+  const factoryBins = bins.filter(
+    (bin: Bin) => bin.factoryCampaignId && (!options.projectId || liveIds.has(bin.factoryCampaignId)),
+  );
   const lineBins: LineBin[] = [];
   let readyBins = 0;
   let leasedBins = 0;
@@ -356,9 +454,61 @@ export async function readLine(now: Date = new Date()): Promise<LineReading> {
       };
     });
   const freeSurfaces = surfaces.filter((surface) => surface.free).length;
+  const routineNames = new Map(surfaces.map((surface) => [surface.routineId, surface.routineName]));
 
-  const workingCampaigns = live.filter(isWorking).length;
-  const admissibleQueued = policy.maxActive > workingCampaigns ? queue.length : 0;
+  const campaigns: LineCampaign[] = [];
+  for (const campaign of live) {
+    const parked = inWorkingState(campaign) ? await parkedStageBin(campaign.id) : null;
+    const campaignBins = lineBins.filter((bin) => bin.campaignId === campaign.id);
+    let blocked: LineCampaign['blocked'] = null;
+    if (campaign.state === 'BLOCKED' || campaign.state === 'AWAITING_RELEASE') {
+      const kind: FactoryBlockerKind =
+        campaign.blockerKind ?? (campaign.state === 'AWAITING_RELEASE' ? 'AWAITING_HUMAN_RELEASE' : 'UNIT_EXHAUSTED_ATTEMPTS');
+      blocked = {
+        wait: BLOCKER_WAIT[kind].wait,
+        kind,
+        detail: campaign.blockerDetail ?? '',
+        remedy: BLOCKER_WAIT[kind].remedy,
+        since: campaign.updatedAt ?? null,
+      };
+    } else if (parked) {
+      blocked = {
+        wait: 'PERSON',
+        kind: 'STAGE_BIN_NEEDS_HUMAN',
+        detail: `The ${parked.kind.toLowerCase()} stage bin ${parked.id} ran out of attempts.`,
+        remedy: 'Answer the bin (factory answer-bin) once the condition that stopped it is fixed.',
+        since: parked.completedAt ?? parked.updatedAt ?? null,
+      };
+    } else if (campaign.blockerKind) {
+      // A derived annotation beside a truthful working state (§27): the stage is
+      // waiting for a surface, and the tick takes the sentence away when it can move.
+      blocked = {
+        wait: BLOCKER_WAIT[campaign.blockerKind].wait,
+        kind: campaign.blockerKind,
+        detail: campaign.blockerDetail ?? '',
+        remedy: BLOCKER_WAIT[campaign.blockerKind].remedy,
+        since: campaign.updatedAt ?? null,
+      };
+    }
+    const leased = campaignBins.find((bin) => bin.state === 'LEASED');
+    const request = await getChangeRequest(campaign.changeRequestId);
+    campaigns.push({
+      campaign,
+      objective: request?.objective ?? '',
+      working: inWorkingState(campaign) && parked === null,
+      bins: campaignBins.map((bin) => ({
+        ...bin,
+        lastRoutine: bin.lastRoutine ? routineNames.get(bin.lastRoutine) ?? bin.lastRoutine : null,
+      })),
+      blocked,
+      next: nextFor(campaign, campaignBins, blocked),
+      elapsedMs: leased?.leasedAt ? now.getTime() - new Date(leased.leasedAt).getTime() : null,
+    });
+  }
+
+  const workingCampaigns = campaigns.filter((one) => one.working).length;
+  const room = Math.max(0, policy.maxActive - workingCampaigns);
+  const admissibleQueued = Math.min(room, queue.length);
   const executableTotal = readyBins + admissibleQueued;
   const unexplainedIdle =
     executableTotal > 0 && freeSurfaces > 0 && leasedBins === 0 && arriving === 0;
@@ -377,6 +527,24 @@ export async function readLine(now: Date = new Date()): Promise<LineReading> {
     because = `${queue.length} objective(s) queued behind ${workingCampaigns} working campaign(s), the limit being ${policy.maxActive}.`;
   else because = 'Nothing is queued and no campaign has a stage waiting.';
 
+  const queued: LineQueued[] = [];
+  for (const [index, entry] of queue.entries()) {
+    const request = await getChangeRequest(entry.changeRequestId);
+    const executableNow = policy.maxActive > 0 && index < room;
+    queued.push({
+      entry,
+      objective: request?.objective ?? '',
+      position: index + 1,
+      executableNow,
+      why:
+        policy.maxActive === 0
+          ? 'AUTO is off.'
+          : executableNow
+            ? `Priority ${entry.priority}; a slot is free, so the next pass starts it.`
+            : `Priority ${entry.priority}; waits for one of ${policy.maxActive} slot(s) to free.`,
+    });
+  }
+
   return {
     at: nowIso,
     policy,
@@ -386,12 +554,8 @@ export async function readLine(now: Date = new Date()): Promise<LineReading> {
     capacity: { freeSurfaces, surfaces },
     unexplainedIdle,
     because,
-    campaigns: live.map((campaign) => ({
-      campaign,
-      working: isWorking(campaign),
-      bins: lineBins.filter((bin) => bin.campaignId === campaign.id),
-    })),
-    queue,
+    campaigns,
+    queue: queued,
   };
 }
 

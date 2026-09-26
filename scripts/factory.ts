@@ -1220,7 +1220,13 @@ async function main(): Promise<void> {
       }
       for (const row of reading.campaigns) {
         process.stdout.write(`  campaign ${row.campaign.id} ${row.campaign.state}${row.working ? '' : ' (holds no slot)'}\n`);
-        if (row.campaign.blockerDetail) process.stdout.write(`      blocker ${row.campaign.blockerKind}: ${row.campaign.blockerDetail.slice(0, 200)}\n`);
+        if (row.blocked) {
+          process.stdout.write(
+            `      blocked (${row.blocked.wait === 'PERSON' ? 'NEEDS YOU' : 'automatic wait'}) ${row.blocked.kind}: ` +
+              `${row.blocked.detail.slice(0, 200)}\n      remedy ${row.blocked.remedy}\n`,
+          );
+        }
+        process.stdout.write(`      next ${row.next}\n`);
         for (const bin of row.bins) {
           process.stdout.write(
             `      ${bin.binId} ${bin.kind} ${bin.state} ready=${bin.readyAt ?? '—'} sent=${bin.lastSentAt ?? '—'} ` +
@@ -1228,8 +1234,11 @@ async function main(): Promise<void> {
           );
         }
       }
-      for (const entry of reading.queue) {
-        process.stdout.write(`  queued ${entry.id} ${entry.changeRequestId} priority=${entry.priority} since ${entry.queuedAt}\n`);
+      for (const row of reading.queue) {
+        process.stdout.write(
+          `  queued #${row.position} ${row.entry.changeRequestId} priority=${row.entry.priority} since ${row.entry.queuedAt} ` +
+            `${row.executableNow ? 'EXECUTABLE NOW' : 'waiting'} — ${row.why}\n`,
+        );
       }
       break;
     }
