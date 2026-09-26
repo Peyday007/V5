@@ -16,6 +16,7 @@ import { DecisionCard, Goals } from './Goals.tsx';
 import { GoalsApi } from '../lib/goalsApi.ts';
 import { Frontier } from './Frontier.tsx';
 import { Maps } from './Maps.tsx';
+import { ResearchIntelligence } from './ResearchIntelligence.tsx';
 import { freshnessLabel, humanWhen, listState, priorityTone, readingState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { RussellApi } from '../lib/russellApi.ts';
@@ -264,6 +265,15 @@ export function WorkView({ projectId }: { projectId: string | null }): JSX.Eleme
  */
 function MissionCard({ entry }: { entry: WorkEntry }): JSX.Element {
   const when = humanWhen(entry.updatedAt);
+  const orchestrationId = entry.links.orchestrationId;
+  /**
+   * Closed by default, and unopened it makes no request.
+   *
+   * `ResearchIntelligence` fetches on mount, so the only thing that must not
+   * happen before somebody opens this is mounting it — a `<details>` whose
+   * summary is always in the DOM does not, by itself, avoid that.
+   */
+  const [intelligenceOpen, setIntelligenceOpen] = useState(false);
   return (
     <article className={`rs-mission rs-mission-${priorityTone(entry.priority ?? '')}`}>
       <div className="rs-mission-head">
@@ -307,6 +317,16 @@ function MissionCard({ entry }: { entry: WorkEntry }): JSX.Element {
               </Fragment>
             ))}
           </dl>
+        </details>
+      ) : null}
+
+      {orchestrationId ? (
+        <details
+          className="rs-mission-intelligence rs-at-interested"
+          onToggle={(event) => setIntelligenceOpen(event.currentTarget.open)}
+        >
+          <summary>What Brain is working out</summary>
+          {intelligenceOpen ? <ResearchIntelligence orchestrationId={orchestrationId} /> : null}
         </details>
       ) : null}
     </article>
