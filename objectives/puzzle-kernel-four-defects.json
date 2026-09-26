@@ -1,0 +1,56 @@
+{
+  "objective": "Land on current production the four puzzle-kernel repairs that pull request #35 (branch claude/puzzle-products-kernel-xu5tgz, commit 6c46d2e) made and that never reached production, which has since moved 150+ commits on. Its commit message is the specification and its diff is a reference implementation to port, not to cherry-pick blindly. (1) `puzzle_rounds_unique` in 089 / pg 080 keys on format_key and product_class directly, and the SEED_FORMATS bootstrap round carries NULL in both, so the index cannot refuse a duplicate: production opened pzq_b04df7d4c4574c59ad1d and pzq_6e4bc50e9a2046b28c52, both round 1. Rebuild the index with COALESCE(…, '-') exactly as industry_rounds and manufacturing_rounds already do, in a NEW migration on each chain (the next free numbers — 098 / pg 089 at the time of writing, since 097 / pg 088 is factory_line and 090 / pg 081 from the PR are taken; re-check both chains before writing, and take whatever is next), renumbering existing duplicates by (created_at, id) rather than deleting them. (2) The VALIDATED_OUTPUT remedy in server/services/puzzle/ledger.ts is one hardcoded sentence ('That is a generator, which is a code change somebody reviews') printed over formats Brain can already generate; derive it from rows and the format registry for its three real conditions. (3) nextAction in server/services/puzzle/view.ts prints 'no slot is free' when what stopped the pass is on plan.declined; print the recorded refusal instead of composing one. (4) Boot phases before listen() report only after returning, so a phase that never returns is invisible; name each phase before it runs (a `boot:` line), and name each project in the recompute loop.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A duplicate bootstrap puzzle round is refused by the database on both backends and the existing duplicate is renumbered with every row kept; the puzzle report names the true remedy and the true refusal; a boot that hangs names the phase it hung in. Pull request #35 is then superseded and can be closed by a person.",
+  "nonGoals": [
+    "Changing what the puzzle allocator decides, the formats, the generators or the validators.",
+    "Changing anything boot does or its order, moving a phase across listen(), or widening the health-check grace period. The boot change is instrumentation only.",
+    "Deleting any puzzle_rounds row. A duplicate is renumbered, never removed.",
+    "Merging, closing or editing pull request #35 itself."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A new SQLite migration and a new Postgres migration (next free numbers on each chain) rebuild puzzle_rounds_unique over COALESCE(format_key,'-') and COALESCE(product_class,'-'), renumbering any existing duplicate group by (created_at, id) so every id, state and candidate survives; a test inserts two bootstrap rounds with NULL format and class and asserts the second is refused, and asserts the row count rather than only openPuzzleRound's `created` flag.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The VALIDATED_OUTPUT requirement's remedy distinguishes nothing on the map, formats this repository implements none of, and a format Brain can make with nothing validated yet, deciding generation capability from the format registry rather than ladder position; a test asserts the sentence production printed ('That is a generator, which is a code change somebody reviews') no longer appears over a Brain holding working generators.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The puzzle view's next action prints the allocator's recorded refusal from plan.declined rather than 'no slot is free', and a test asserts the old sentence is absent when the pass was declined for an already-open round.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Every pre-listen boot phase in server/index.ts logs a `boot:` line naming itself before it runs, the recompute loop names each project, and a behavioural test asserts the lines are printed in order.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks and the whole existing suite passes.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/db/migrations/**",
+    "server/db/pg-migrations/**",
+    "server/index.ts",
+    "server/services/puzzle/**",
+    "server/repos/puzzle.ts",
+    "scripts/puzzle-report.ts",
+    "tests/**"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test",
+    "npm run build"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Discard the branch before merge. After merge, the migration only rebuilds an index and renumbers rounds, keeping every row; a forward migration restores the old index if ever needed."
+}

@@ -1,0 +1,58 @@
+{
+  "objective": "Let a person record the commercial actions that happen after execution has begun, so a deal can move past its first move. `recordAction` (server/repos/cashActions.ts:61) has exactly one caller: the first action inside `beginExecution` (server/services/cash/opportunities.ts ~558), which only moves READY -> EXECUTING. There is no way to record QUOTE_AND_INVOICE, ACCEPT_PAYMENT or any later action on an EXECUTING or DELIVERING opportunity, so dealflow's QUOTING stage (server/services/dealflow/maturity.ts ACTION_STAGE ~98-101, fed by actionsFor in dealflow/kernel.ts ~220) is unreachable in practice, and the Cash page only offers 'Record the first move' (client/src/russell/Cash.tsx ~2385, client/src/lib/cashApi.ts ~790).",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A new service function records a further PERSON-performed commercial action on an opportunity that is EXECUTING or DELIVERING: it checks the action is one of COMMERCIAL_ACTIONS, checks the standing commercial authority for that action with checkCommercialAuthority exactly as beginExecution does, is idempotent by a request key built from the opportunity, the action and an occurrence, records a CASH_ACTION_RECORDED event, and moves no state. It is served by a route behind requirePerson and project WRITE (a worker principal refused by type, a project the caller cannot see answered with the same 404 as a missing one), and the Cash page offers the control on an executing or delivering opportunity, disabled with the server's reason when the grant does not cover the action. Recording QUOTE_AND_INVOICE on a deal's opportunity makes the dealflow stage read QUOTING.",
+  "nonGoals": [
+    "Brain recording any action by itself; this is a person's record only.",
+    "Performing any external effect, issuing an invoice, or moving money.",
+    "Changing beginExecution's first-action path, the ceilings, or the ledger.",
+    "Adding NEGOTIATING, which stays unobservable because no commercial action means it."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A test records QUOTE_AND_INVOICE on an EXECUTING opportunity through the HTTP route and asserts one cash_actions row, one CASH_ACTION_RECORDED event, unchanged opportunity state, and that repeating the request with the same occurrence records nothing new.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The route refuses an action the standing grant does not cover, an opportunity that is READY or terminal, an action outside COMMERCIAL_ACTIONS, and a worker principal; a caller without access gets a 404 byte-identical to a non-existent opportunity.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A dealflow test asserts a deal whose opportunity has a recorded QUOTE_AND_INVOICE after CONTACT_BUYER reads stage QUOTING.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A component test drives the Cash page control and asserts the request it posts and the disabled reason it shows when the server offers none.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks and the existing cash and dealflow suites pass.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/cash/opportunities.ts",
+    "server/services/cash/actions.ts",
+    "server/services/cash/view.ts",
+    "server/routes/cash.ts",
+    "client/src/lib/cashApi.ts",
+    "client/src/russell/Cash.tsx",
+    "tests/cashFurtherActions.test.ts",
+    "tests/cashSection.test.tsx",
+    "tests/dealflowKernel.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test",
+    "npm run build"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. No schema change; the new path only appends to cash_actions and cash_events."
+}

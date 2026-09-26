@@ -1,0 +1,50 @@
+{
+  "objective": "Give an idea parked for want of a standing research authority a way back once a person grants one, on every project rather than only Cash Mode. `judgeCandidate` (server/services/russell/planning.ts, standingAuthority at ~284-309, park at ~522-537) parks a candidate with state PARKED and priority PARKED and a judgment whose blockedBy is one of 'no standing authority exists for this project', 'no live standing authority covers RESEARCH in this project' or 'a standing authority for research on this project'. `unjudged()` in server/services/russell/loop.ts (~2770) selects only `priority IS NULL`, so such a candidate is never judged again. Granting authority through POST /api/russell/projects/:projectId/authority (server/routes/russell.ts ~1612-1702) re-judges nothing. The only resume is `resumeAuthorityParkedCandidates` in server/services/cash/discoveryAuthority.ts (~268-331), called only from Cash discovery and only when a goal named 'Cash Mode internal discovery' exists, so on any other project the park is permanent — recorded as a defect in docs/STEP-12B-BACKLOG.md:311-327.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "On the durable Russell tick, for every project that holds a live standing authority covering RESEARCH, candidates parked with exactly one of those three blockedBy values are put back to CAPTURED with priority NULL (guarded on still being PARKED, so two ticks produce one resume), the previous reason is kept on an append-only project event, and the next pass judges them again. Derived from rows on the tick, not hooked to the grant, so parks created before the fix are reached too. The Cash Mode function either becomes a caller of the shared one or is replaced by it, so there is one rule, not two.",
+  "nonGoals": [
+    "Resuming a candidate parked for any other reason (a prohibition, a missing layer, a jurisdiction, a person's decision).",
+    "Changing judgeCandidate, the authority check, the grant route's guards or who may grant.",
+    "Launching anything directly: a resumed candidate goes through the ordinary judgment and launch path.",
+    "Deleting any candidate, judgment or event."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "On a project that is not in Cash Mode, a candidate parked for missing authority is judged again after a person grants authority through the HTTP route and the tick runs, and a test asserts its priority is no longer PARKED.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A candidate parked for a different reason (for example a prohibition or 'this project having a layer to file the work under') is left exactly as it was.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Without a live grant nothing is resumed, and two concurrent passes resume a parked candidate once and record one event.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing tests/cashPipelineRepair.test.ts resume cases and tests/russellConnectedPath.test.ts still pass, and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/loop.ts",
+    "server/services/russell/resumeParked.ts",
+    "server/services/cash/discoveryAuthority.ts",
+    "server/services/cash/discovery.ts",
+    "docs/STEP-12B-BACKLOG.md",
+    "tests/russellAuthorityResume.test.ts",
+    "tests/cashPipelineRepair.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. No schema change; a resume only clears a park whose stated reason no longer holds, through a guarded update."
+}
