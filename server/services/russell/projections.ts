@@ -22,6 +22,7 @@
  * person is needed. `briefing()` composes exactly those four and nothing else,
  * because a briefing that leads with an orchestration id has already lost.
  */
+import { humanWorkView } from '../humanwork/view.ts';
 import { listLayers } from '../../repos/layers.ts';
 import { groupOf, listMissions, listCurrentKnowledge } from '../../repos/russellMissions.ts';
 import { authorityFor } from './authority.ts';
@@ -68,6 +69,12 @@ export interface Briefing {
    * having none.
    */
   openGaps: string[];
+  /**
+   * Work being done by people for this project, one sentence each: who is
+   * doing what, what it costs, and whether the result meets the need. From the
+   * same derivation the human-work surface renders, so the two cannot differ.
+   */
+  peopleWorking: string[];
   /** Whether a person is actually needed, and for what. */
   needsYou: string;
   /**
@@ -210,8 +217,33 @@ export async function briefing(input: {
    * What is left is the refusal that is real: `AT_ONCE`, which is an ordinary
    * wait for the one investigation ahead of it and needs nobody.
    */
+  /*
+   * People doing work for this project, and what *you* owe them.
+   *
+   * The engagement decision itself is a `russell_human_requests` row and is
+   * already counted above. What is counted here is the rest of what only a
+   * person can do: a result that meets every condition and waits to be
+   * accepted, and a way in that a team member needs before the assignment can
+   * reach them. Swallowed on failure — a reading about people is never a
+   * precondition of the briefing.
+   */
+  let peopleWorking: string[] = [];
+  let peopleDecisions = 0;
+  try {
+    const human = await humanWorkView(input.projectId);
+    const open = human.orders.filter((one) => one.order.state === 'OPEN');
+    peopleWorking = open.map((one) => one.headline);
+    peopleDecisions = open.filter(
+      (one) =>
+        (one.nextAction?.who === 'PROJECT_ADMINISTRATOR' && one.stage !== 'AWAITING_AUTHORIZATION') ||
+        one.blockers.some((blocker) => blocker.who === 'BRAIN_ADMINISTRATOR'),
+    ).length;
+  } catch {
+    /* the briefing stands without it */
+  }
+
   const blocking = requests.filter((request) => request.urgency !== 'WHENEVER');
-  const decisions = requests.length + software.length + (needsApproval ? 1 : 0);
+  const decisions = requests.length + software.length + peopleDecisions + (needsApproval ? 1 : 0);
 
   return {
     focus: focusOf(input.projectName, missions),
@@ -219,17 +251,18 @@ export async function briefing(input: {
     latest: knowledge[0]?.statement ?? null,
     next: nextOf(missions),
     openGaps: gaps.map((gap) => gap.statement),
+    peopleWorking,
     // The honest default is that a person is *not* needed. Saying otherwise
     // when nothing is blocked trains people to ignore the one time it matters
     // — and so does saying it when something *is* blocked, which is why the
     // approval is counted here rather than only rendered underneath.
     needsYou: needsYouSentence({
       needsApproval,
-      others: requests.length + software.length,
+      others: requests.length + software.length + peopleDecisions,
       // A software change nobody has authorized is holding its own work up by
       // definition — nothing about it proceeds — so it counts as blocking
       // rather than as something to get to whenever.
-      blocking: blocking.length + software.length,
+      blocking: blocking.length + software.length + peopleDecisions,
     }),
     openRequests: decisions,
   };

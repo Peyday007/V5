@@ -23,6 +23,7 @@ import type { Milestone } from '../../../server/services/russell/progress.ts';
 import { useAsync } from './useAsync.ts';
 import { foundationTone, humanWhen, listState } from './present.ts';
 import { ClaudeConnectionCard } from './ClaudeConnection.tsx';
+import { MyAssignments } from './HumanWork.tsx';
 
 export function RussellHome({
   projectId,
@@ -60,7 +61,14 @@ export function RussellHome({
    * It is an entry point and not a second copy: pressing it opens the one
    * canonical panel on People & capacity. See `ClaudeConnection.tsx`.
    */
-  const connection = <ClaudeConnectionCard />;
+  const connection = (
+    <>
+      <ClaudeConnectionCard />
+      {/* Above every early return for the same reason: somebody engaged for
+          one task holds no project, and this is where the ask reaches them. */}
+      <MyAssignments />
+    </>
+  );
 
   if (home.loading) {
     return (
@@ -275,12 +283,21 @@ function Changes({ view }: { view: HomeView }): JSX.Element | null {
   // briefing without it. Absent is not empty and neither is a crash: the field
   // is checked rather than assumed, the same way `progress` is above.
   const openGaps = Array.isArray(view.briefing.openGaps) ? view.briefing.openGaps : [];
-  if (!latest && !next && openGaps.length === 0) return null;
+  // The same care for a field an older server does not send.
+  const people = Array.isArray(view.briefing.peopleWorking) ? view.briefing.peopleWorking : [];
+  if (!latest && !next && openGaps.length === 0 && people.length === 0) return null;
   return (
     <section className="rs-group" aria-label="What changed and what is next">
       <h3 className="rs-group-title">Where things stand</h3>
       {latest ? <p className="rs-mission-why">{latest}</p> : null}
       <p className="rs-mission-next">{next}</p>
+      {people.length > 0 ? (
+        <ul className="rs-milestones" aria-label="Work done by people">
+          {people.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      ) : null}
       {openGaps.length > 0 ? (
         <ul className="rs-milestones rs-at-interested">
           {openGaps.map((gap) => (

@@ -151,6 +151,7 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 export const RUSSELL_TICK_MS = 30_000;
 
 import { advanceSources } from '../capability/extraction.ts';
+import { runHumanWorkTick } from '../humanwork/kernel.ts';
 import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { advanceGoals, type GoalTickReport } from '../goals/tick.ts';
@@ -188,6 +189,8 @@ export interface TickReport {
    * about. Never the same outcome, because they do not mean the same thing.
    */
   integrityReopens: { resolved: string[]; superseded: string[] };
+  /** What the human-work tick did: assignments delivered in Brain, results accepted, deadlines passed. */
+  humanWork: { delivered: string[]; accepted: string[]; overdue: string[] };
   /**
    * The self-expansion kernel's own advance, fleet-wide.
    *
@@ -588,6 +591,7 @@ const EMPTY: TickReport = {
   wroteBack: [],
   recovered: [],
   integrityReopens: { resolved: [], superseded: [] },
+  humanWork: { delivered: [], accepted: [], overdue: [] },
   capability: {
     dispatched: 0,
     settled: 0,
@@ -995,6 +999,20 @@ export async function tick(owner: string): Promise<TickReport> {
       report.capability.recovered = advanced.recovered;
     } catch {
       /* a kernel that could not advance is left exactly as it was */
+    }
+
+    /*
+     * Work done through people: an approved assignment that has not reached
+     * its team member yet, a no-charge result every condition of which Brain
+     * reads MET from rows, and a due date that passed. Fleet-wide, derived,
+     * and swallowed for `advanceSources`' reason. It approves nothing, contacts
+     * nobody outside Brain and pays nobody.
+     */
+    try {
+      const human = await runHumanWorkTick({ limit: cycle.maxEventsPerCycle });
+      report.humanWork = human;
+    } catch {
+      /* a piece of human work that could not be advanced is left as it was */
     }
 
     /*

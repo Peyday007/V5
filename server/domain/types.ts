@@ -440,6 +440,11 @@ export const EVENT_TYPES = [
    * changed without saying what it changed from.
    */
   'LABOR_ALLOCATION_DECIDED',
+  'HUMAN_WORK_ORDER_OPENED',
+  'HUMAN_WORK_ENGAGEMENT_DECIDED',
+  'HUMAN_WORK_ENGAGED',
+  'HUMAN_WORK_RESULT_ACCEPTED',
+  'HUMAN_WORK_CANCELLED',
   /* ----------------------------------------------------------------------- */
   /* The manufacturing empire kernel                                          */
   /* ----------------------------------------------------------------------- */
@@ -10353,5 +10358,377 @@ export interface PuzzleObservation {
   statement: string;
   /** A person, or BRAIN reading its own rows. `lessons` counts them apart. */
   recordedBy: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Getting work done through people (§51, `services/humanwork/`)
+// ---------------------------------------------------------------------------
+
+/**
+ * How Brain knows of somebody, which is never the same fact as their having
+ * agreed to anything. A team member holds a Brain account; an existing
+ * relationship is one a person attests to; a researched possibility came from
+ * a gated claim and has, by construction, agreed to nothing.
+ */
+export const HUMAN_WORK_RELATIONSHIPS = ['TEAM_MEMBER', 'EXISTING_RELATIONSHIP', 'RESEARCHED'] as const;
+export type HumanWorkRelationship = (typeof HUMAN_WORK_RELATIONSHIPS)[number];
+
+/**
+ * What stands behind a statement about somebody's competence.
+ *
+ * `CLAIMED_BY_CANDIDATE` exists so a person's own claim can be written down
+ * *as* a claim — and `qualification.ts` never counts it as evidence, which is
+ * the whole reason it is its own value rather than folded into an attestation.
+ */
+export const COMPETENCE_BASES = [
+  'GATED_CLAIM',
+  'BRAIN_RECORD',
+  'OBSERVED_DELIVERY',
+  'PERSON_ATTESTED',
+  'CLAIMED_BY_CANDIDATE',
+] as const;
+export type CompetenceBasis = (typeof COMPETENCE_BASES)[number];
+
+export interface CompetenceEvidence {
+  statement: string;
+  basis: CompetenceBasis;
+  /** A claim id, a row id, a document id — whatever lets a reader check it. */
+  ref: string | null;
+}
+
+/**
+ * How an acceptance condition is judged.
+ *
+ * `PERSON_REVIEW` is judged by somebody other than the assignee against the
+ * latest deliverable. The other two are read by Brain from rows on every pass,
+ * so a condition that stops holding stops reading MET — a check Brain can make
+ * is never delegated to anybody's say-so.
+ */
+export const ACCEPTANCE_CHECKS = ['PERSON_REVIEW', 'DOCUMENT_READY', 'ACCOUNT_FOUNDATION'] as const;
+export type AcceptanceCheck = (typeof ACCEPTANCE_CHECKS)[number];
+
+export interface AcceptanceCondition {
+  key: string;
+  statement: string;
+  check: AcceptanceCheck;
+  /** ACCOUNT_FOUNDATION: the user whose foundation dimension must PASS. */
+  userId?: string | null;
+  /** ACCOUNT_FOUNDATION: which of the six dimensions. */
+  dimension?: string | null;
+}
+
+export type HumanWorkOrderState = 'OPEN' | 'ACCEPTED' | 'CANCELLED';
+
+export interface HumanWorkOrderRow {
+  id: string;
+  project_id: string;
+  task_id: string;
+  allocation_id: string;
+  necessity_reason: string;
+  title: string;
+  work: string;
+  why_person: string;
+  brain_prepares: string;
+  deliverables: string;
+  acceptance: string;
+  shared_context: string;
+  access_required: string;
+  due_by: string | null;
+  budget_cents: number | null;
+  currency: string;
+  coordinator_user_id: string | null;
+  opened_by: string;
+  state: string;
+  closed_at: string | null;
+  close_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HumanWorkOrder {
+  id: string;
+  projectId: string;
+  taskId: string;
+  allocationId: string;
+  necessityReason: HumanNecessityReason;
+  title: string;
+  work: string;
+  whyPerson: string;
+  brainPrepares: string[];
+  deliverables: string[];
+  acceptance: AcceptanceCondition[];
+  sharedContext: string[];
+  accessRequired: string[];
+  dueBy: string | null;
+  budgetCents: number | null;
+  currency: string;
+  coordinatorUserId: string | null;
+  openedBy: string;
+  state: HumanWorkOrderState;
+  closedAt: string | null;
+  closeReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HumanWorkCandidateRow {
+  id: string;
+  project_id: string;
+  order_id: string;
+  display_name: string;
+  kind: string;
+  relationship: string;
+  user_id: string | null;
+  source_claim_id: string | null;
+  attested_by: string | null;
+  competence: string;
+  location: string | null;
+  availability: string | null;
+  quote_cents: number | null;
+  quote_basis: string | null;
+  quote_currency: string | null;
+  quote_source: string | null;
+  uncertainties: string;
+  contact_channel: string | null;
+  set_aside_at: string | null;
+  set_aside_reason: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export type QuoteSource = 'CANDIDATE_QUOTED' | 'PUBLISHED_RATE' | 'INTERNAL_NO_CHARGE';
+
+export interface HumanWorkCandidate {
+  id: string;
+  projectId: string;
+  orderId: string;
+  displayName: string;
+  kind: 'PERSON' | 'ORGANIZATION';
+  relationship: HumanWorkRelationship;
+  userId: string | null;
+  sourceClaimId: string | null;
+  attestedBy: string | null;
+  competence: CompetenceEvidence[];
+  location: string | null;
+  availability: string | null;
+  quoteCents: number | null;
+  quoteBasis: RateBasis | null;
+  quoteCurrency: string | null;
+  quoteSource: QuoteSource | null;
+  uncertainties: string[];
+  contactChannel: string | null;
+  setAsideAt: string | null;
+  setAsideReason: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export const ENGAGEMENT_STATES = [
+  'PROPOSED',
+  'APPROVED',
+  'INVITED',
+  'ENGAGED',
+  'COMPLETED',
+  'REFUSED_BY_OWNER',
+  'DECLINED_BY_WORKER',
+  'CANCELLED',
+] as const;
+export type EngagementState = (typeof ENGAGEMENT_STATES)[number];
+export const LIVE_ENGAGEMENT_STATES: readonly EngagementState[] = [
+  'PROPOSED',
+  'APPROVED',
+  'INVITED',
+  'ENGAGED',
+];
+
+export interface EngagementTerms {
+  scope: string;
+  deliverables: string[];
+  schedule: { milestone: string; due: string | null }[];
+  compensationCents: number;
+  currency: string;
+  rateBasis: RateBasis | null;
+  /** Why the figure is what it is: a quote, a published rate, or no charge. */
+  compensationBasis: string;
+  access: string[];
+  confidentiality: string;
+  ownership: string;
+}
+
+export interface HumanWorkEngagementRow {
+  id: string;
+  project_id: string;
+  order_id: string;
+  candidate_id: string;
+  terms: string;
+  terms_hash: string;
+  compensation_cents: number;
+  currency: string;
+  state: string;
+  decision_request_id: string | null;
+  approved_by_user_id: string | null;
+  approved_at: string | null;
+  approved_max_cents: number | null;
+  funding: string | null;
+  commitment_id: string | null;
+  assignee_user_id: string | null;
+  invited_at: string | null;
+  invited_by: string | null;
+  invitation_channel: string | null;
+  invitation_reference: string | null;
+  engaged_at: string | null;
+  engaged_evidence: string | null;
+  engaged_attested_by: string | null;
+  completed_at: string | null;
+  ended_reason: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EngagementFunding = 'COMMERCIAL_AUTHORITY' | 'DIRECT_APPROVAL' | 'NO_CHARGE';
+export type EngagedEvidence = 'ACCEPTED_IN_BRAIN' | 'ATTESTED_BY_COORDINATOR';
+
+export interface HumanWorkEngagement {
+  id: string;
+  projectId: string;
+  orderId: string;
+  candidateId: string;
+  terms: EngagementTerms;
+  termsHash: string;
+  compensationCents: number;
+  currency: string;
+  state: EngagementState;
+  decisionRequestId: string | null;
+  approvedByUserId: string | null;
+  approvedAt: string | null;
+  approvedMaxCents: number | null;
+  funding: EngagementFunding | null;
+  commitmentId: string | null;
+  assigneeUserId: string | null;
+  invitedAt: string | null;
+  invitedBy: string | null;
+  invitationChannel: string | null;
+  invitationReference: string | null;
+  engagedAt: string | null;
+  engagedEvidence: EngagedEvidence | null;
+  engagedAttestedBy: string | null;
+  completedAt: string | null;
+  endedReason: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HumanWorkEventRow {
+  id: string;
+  project_id: string;
+  order_id: string;
+  engagement_id: string | null;
+  kind: string;
+  summary: string;
+  detail: string;
+  actor: string;
+  actor_user_id: string | null;
+  created_at: string;
+}
+
+export type HumanWorkActor = 'BRAIN' | 'PERSON' | 'ASSIGNEE';
+
+export interface HumanWorkEvent {
+  id: string;
+  projectId: string;
+  orderId: string;
+  engagementId: string | null;
+  kind: string;
+  summary: string;
+  detail: Record<string, unknown>;
+  actor: HumanWorkActor;
+  actorUserId: string | null;
+  createdAt: string;
+}
+
+export interface HumanWorkDeliverableRow {
+  id: string;
+  project_id: string;
+  engagement_id: string;
+  round: number;
+  description: string;
+  document_id: string | null;
+  reference: string | null;
+  submitted_by_user_id: string;
+  submitted_as: string;
+  created_at: string;
+}
+
+export interface HumanWorkDeliverable {
+  id: string;
+  projectId: string;
+  engagementId: string;
+  round: number;
+  description: string;
+  documentId: string | null;
+  reference: string | null;
+  submittedByUserId: string;
+  submittedAs: 'ASSIGNEE' | 'COORDINATOR';
+  createdAt: string;
+}
+
+export type ReviewVerdict = 'MET' | 'NOT_MET' | 'CANNOT_VERIFY';
+
+export interface HumanWorkReviewRow {
+  id: string;
+  project_id: string;
+  engagement_id: string;
+  deliverable_id: string;
+  criterion_key: string;
+  verdict: string;
+  note: string;
+  repair: string | null;
+  reviewer_user_id: string;
+  created_at: string;
+}
+
+export interface HumanWorkReview {
+  id: string;
+  projectId: string;
+  engagementId: string;
+  deliverableId: string;
+  criterionKey: string;
+  verdict: ReviewVerdict;
+  note: string;
+  repair: string | null;
+  reviewerUserId: string;
+  createdAt: string;
+}
+
+export interface HumanWorkCostRow {
+  id: string;
+  project_id: string;
+  engagement_id: string;
+  kind: string;
+  amount_cents: number;
+  currency: string;
+  hours: number | null;
+  reference: string | null;
+  note: string | null;
+  recorded_by: string;
+  idempotency_key: string;
+  created_at: string;
+}
+
+export interface HumanWorkCost {
+  id: string;
+  projectId: string;
+  engagementId: string;
+  kind: 'INCURRED' | 'PAID';
+  amountCents: number;
+  currency: string;
+  hours: number | null;
+  reference: string | null;
+  note: string | null;
+  recordedBy: string;
+  idempotencyKey: string;
   createdAt: string;
 }
