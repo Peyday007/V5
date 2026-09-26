@@ -1381,7 +1381,15 @@ function MoneyPicture({ view }: { view: CashView }): JSX.Element {
 }
 
 /** My cash: the six figures, kept apart, each labelled with what it means. */
-function MyCash({ view }: { view: CashView }): JSX.Element {
+function MyCash({
+  page,
+  view,
+  onChanged,
+}: {
+  page: CashPage;
+  view: CashView;
+  onChanged(): void;
+}): JSX.Element {
   const p = view.myCash.position;
   const rows: { label: string; value: number; note: string }[] = [
     { label: 'Pipeline', value: p.pipelineCents, note: 'Agreed work. No cash received.' },
@@ -1466,7 +1474,248 @@ function MyCash({ view }: { view: CashView }): JSX.Element {
           ))}
         </ul>
       )}
+
+      <h4>Commitments</h4>
+      {view.myCash.commitments.length === 0 ? (
+        <p className="rs-hint">Nothing has been committed yet.</p>
+      ) : (
+        <ul className="rs-list">
+          {view.myCash.commitments.map((commitment) => (
+            <li key={commitment.id} className="rs-row">
+              <span className="rs-item-title">
+                {money(commitment.amountCents, commitment.currency)} &mdash; {commitment.purpose}
+              </span>
+              <span className="rs-item-meta">
+                {commitment.state} &middot; stops at: {commitment.stopCondition}
+              </span>
+              {commitment.state === 'HELD' && page.capabilities.mayActOnJob ? (
+                <SettleCommitment commitment={commitment} onChanged={onChanged} />
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {page.capabilities.mayActOnJob ? (
+        <CommitSpendForm
+          projectId={view.mode!.projectId}
+          currency={p.currency}
+          allowedActions={view.authority.allowedActions}
+          hasGrant={view.authority.exists}
+          onChanged={onChanged}
+        />
+      ) : null}
     </section>
+  );
+}
+
+/**
+ * Commit part of the ceiling to a named obstacle.
+ *
+ * Offered only from the grant's own `allowedActions`, because a value outside
+ * it would ask the server a question whose answer is already known. With no
+ * live grant, or one that authorizes no action, this renders one sentence
+ * rather than a form that would be refused on submit — the same shape
+ * Authority's own no-grant branch uses, one card up.
+ */
+function CommitSpendForm({
+  projectId,
+  currency,
+  allowedActions,
+  hasGrant,
+  onChanged,
+}: {
+  projectId: string;
+  currency: string;
+  allowedActions: string[];
+  hasGrant: boolean;
+  onChanged(): void;
+}): JSX.Element {
+  const [action, setAction] = useState(allowedActions[0] ?? '');
+  const [amount, setAmount] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [expectedResult, setExpectedResult] = useState('');
+  const [stopCondition, setStopCondition] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  if (!hasGrant || allowedActions.length === 0) {
+    return (
+      <p className="rs-hint">
+        Nothing may be committed here. No standing commercial authority authorizes any action yet.
+      </p>
+    );
+  }
+
+  const amountCents = centsFromAmount(amount);
+  const complete =
+    action.trim().length > 0 &&
+    amountCents !== null &&
+    purpose.trim().length > 0 &&
+    expectedResult.trim().length > 0 &&
+    stopCondition.trim().length > 0;
+
+  async function run(): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await CashApi.commitSpend(projectId, {
+        action,
+        amountCents: amountCents!,
+        purpose: purpose.trim(),
+        expectedResult: expectedResult.trim(),
+        stopCondition: stopCondition.trim(),
+        // Built from what is being decided rather than from a clock, a
+        // random value or a request id, so submitting the identical decision
+        // twice sends the identical key both times.
+        idempotencyKey: `commit:${action}:${purpose.trim()}:${amountCents}`,
+      });
+      setDone('Committed. It counts against your ceiling until it is settled or released.');
+      setAmount('');
+      setPurpose('');
+      setExpectedResult('');
+      setStopCondition('');
+      onChanged();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rs-cash-actions">
+      <label className="rs-field-label" htmlFor="cash-commit-action">
+        What this commits to
+      </label>
+      <select id="cash-commit-action" value={action} onChange={(event) => setAction(event.target.value)}>
+        {allowedActions.map((one) => (
+          <option key={one} value={one}>
+            {one.toLowerCase().replace(/_/g, ' ')}
+          </option>
+        ))}
+      </select>
+      <label className="rs-field-label" htmlFor="cash-commit-amount">
+        How much, in {currency}
+      </label>
+      <input
+        id="cash-commit-amount"
+        inputMode="decimal"
+        value={amount}
+        onChange={(event) => setAmount(event.target.value)}
+      />
+      <label className="rs-field-label" htmlFor="cash-commit-purpose">
+        Purpose
+      </label>
+      <input
+        id="cash-commit-purpose"
+        value={purpose}
+        onChange={(event) => setPurpose(event.target.value)}
+      />
+      <label className="rs-field-label" htmlFor="cash-commit-expected">
+        What this is expected to produce
+      </label>
+      <input
+        id="cash-commit-expected"
+        value={expectedResult}
+        onChange={(event) => setExpectedResult(event.target.value)}
+      />
+      <label className="rs-field-label" htmlFor="cash-commit-stop">
+        Where it stops
+      </label>
+      <input
+        id="cash-commit-stop"
+        value={stopCondition}
+        onChange={(event) => setStopCondition(event.target.value)}
+      />
+      <button type="button" className="rs-button-quiet" disabled={busy || !complete} onClick={() => void run()}>
+        {busy ? 'Committing…' : 'Commit'}
+      </button>
+      {done ? <p className="rs-state rs-state-ok">{done}</p> : null}
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * The spend happened, so this records what it actually cost.
+ *
+ * Never released by a clock: settling is somebody saying the money was
+ * spent, which is what makes deployable cash actually fall.
+ */
+function SettleCommitment({
+  commitment,
+  onChanged,
+}: {
+  commitment: CashView['myCash']['commitments'][number];
+  onChanged(): void;
+}): JSX.Element {
+  const [asking, setAsking] = useState(false);
+  const [spent, setSpent] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  if (done) return <p className="rs-state rs-state-ok">{done}</p>;
+
+  if (!asking) {
+    return (
+      <button type="button" className="rs-button-quiet" onClick={() => setAsking(true)}>
+        Settle
+      </button>
+    );
+  }
+
+  const spentCents = centsFromAmount(spent);
+
+  async function run(): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await CashApi.settleCommitment(commitment.id, spentCents!, note.trim() || undefined);
+      setDone('Settled. Deployable cash is recomputed from the ledger.');
+      onChanged();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <label className="rs-field-label" htmlFor={`cash-settle-${commitment.id}`}>
+        What it actually cost, in {commitment.currency}
+      </label>
+      <input
+        id={`cash-settle-${commitment.id}`}
+        inputMode="decimal"
+        value={spent}
+        onChange={(event) => setSpent(event.target.value)}
+      />
+      <label className="rs-field-label" htmlFor={`cash-settle-note-${commitment.id}`}>
+        Note (optional)
+      </label>
+      <input
+        id={`cash-settle-note-${commitment.id}`}
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+      />
+      <button
+        type="button"
+        className="rs-button-quiet"
+        disabled={busy || spentCents === null}
+        onClick={() => void run()}
+      >
+        {busy ? 'Settling…' : 'Confirm'}
+      </button>
+      <button type="button" className="rs-linklike" onClick={() => setAsking(false)}>
+        Cancel
+      </button>
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+    </>
   );
 }
 
@@ -1983,7 +2232,7 @@ function Details({ page, onChanged }: { page: CashPage; onChanged(): void }): JS
         {view ? (
           <>
             <MoneyPicture view={view} />
-            <MyCash view={view} />
+            <MyCash page={page} view={view} onChanged={onChanged} />
           </>
         ) : (
           <p className="rs-hint">
