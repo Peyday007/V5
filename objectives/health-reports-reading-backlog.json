@@ -1,0 +1,52 @@
+{
+  "objective": "Let an administrator see, on the health surface they already have, whether this Brain is keeping up with reading what it holds and which effect classes it can perform — two readings Brain already computes and nothing reports. §9 makes an unread document something the auditor does not have and blocks its layer, yet nothing Brain-wide says how many documents are waiting to be read, stuck mid-read or unreadable: server/services/documents/queue.ts `extractionQueueDepth` (~94; `pending.length + inFlight.size`) has no caller anywhere, and `documents.extraction_status` (EXTRACTION_STATUSES in server/domain/types.ts ~517) is only read per document. Likewise server/services/effects/adapter.ts `listAdapters` (~183) has no caller, so which effect adapters are registered — and therefore which of §20's per-class guarantees this process can actually keep — is not answerable. GET /api/health (server/routes/health.ts ~23) already has an administrator-only branch carrying operator facts (revision, persistence, migrations, OCR, storage), which is exactly where these belong; the non-administrator branch must stay as it is.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A new server/services/documents/backlog.ts exports `readingBacklog()` returning `{ inProcess: number, byStatus: Record<ExtractionStatus, number>, missingFiles: number }`, where `inProcess` is `extractionQueueDepth()` (explicitly labelled as this process's in-memory queue, not the Brain's), `byStatus` counts registered documents by extraction_status over every value in EXTRACTION_STATUSES (zero where there are none, never omitted), and `missingFiles` counts rows with file_missing = 1 — one grouped query plus one count, in SQL sayable in both dialects. The administrator branch of GET /api/health gains `reading: await readingBacklog()` and `effects: listAdapters().map(({ name, effectClass, namespace }) => ({ name, effectClass, namespace }))` (names and classes only; no adapter function or configuration crosses). The non-administrator response is byte-for-byte the set of keys it is today.",
+  "nonGoals": [
+    "Any threshold, alert or refusal driven by the backlog: §25's rule that storage and health are reported and stop no work applies.",
+    "Enqueueing, retrying or reprocessing anything from the health route; it performs no write.",
+    "Exposing document ids, filenames, paths or project names in the reading.",
+    "Changing the extraction queue, the effects engine or adapter registration.",
+    "Anything under server/services/identity/**, any policy entry, migration or schema change."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "readingBacklog() over a database with documents in QUEUED, READY, BLOCKED and FAILED states returns those counts, returns 0 for every other value of EXTRACTION_STATUSES (every key present), counts file_missing rows in missingFiles, and passes on both backends.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "As a Brain administrator GET /api/health includes `reading` and `effects`; each effects entry has exactly the keys name, effectClass and namespace.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "As an ordinary project member GET /api/health returns exactly the keys it returns today (ok, schemaVersion, providers, ocr) and no `reading` or `effects`.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Two consecutive administrator reads of GET /api/health change no row count in documents, extraction_runs or work_items and enqueue no extraction (extractionQueueDepth unchanged).",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing health and API suites (tests/api.test.ts, tests/access.test.ts) still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/documents/backlog.ts",
+    "server/routes/health.ts",
+    "tests/healthReadingBacklog.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. One new read-only module and two additive keys on the administrator branch of an existing read route; no schema, policy or write-path change."
+}

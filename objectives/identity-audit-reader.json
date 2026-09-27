@@ -1,0 +1,52 @@
+{
+  "objective": "Make the identity audit (§17: `identity_events`, append-only, recording denial categories) readable without a crafted request, and stop its one read route failing on an ordinary malformed query. GET /api/admin/identity-events (server/routes/admin.ts ~787, behind `brainAdminOnly()` ~87) passes `Number(query['limit'] ?? 200)` straight to `listIdentityEvents` (server/repos/identity.ts ~1382), whose clamp `Math.min(Math.max(filter.limit ?? 200, 1), 1000)` returns NaN for a non-numeric limit, so `?limit=abc` binds `LIMIT NaN` and the request fails as a server error instead of a 400; the route also ignores the `result` filter the repository supports (IdentityEventFilter ~1374, IDENTITY_RESULTS in server/domain/types.ts ~4091). And there is no terminal reader at all: `npm run admin` (scripts/admin.ts) lists people, workers and routing but cannot print the audit that records what was done to them, so §26's recovery surface — reaching the shell is the authentication — cannot answer 'who changed this identity, and when'.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "The route reads `limit` with the existing `optionalInteger` helper bounded 1..1000 (default 200) and `result` with `optionalEnum` over IDENTITY_RESULTS, refusing a malformed value with 400 and the helper's sentence; actorId, projectId and action keep their current behaviour. `listIdentityEvents` treats a non-finite limit as the default so no caller can bind NaN. scripts/admin.ts gains `identity events [--actor <id>] [--project <id>] [--action <ACTION>] [--result SUCCESS|DENIED|FAILED] [--limit <n>]`, which calls `listIdentityEvents` and prints one line per event, newest first: timestamp, actor type and id, action, result, denial category when present, target and project ids — and never the payload's raw values beyond the keys the repository already stores (no credential ever appears in that table, and the command prints nothing that could be one). A bad --result or --limit is refused by name with a non-zero exit. It is read-only.",
+  "nonGoals": [
+    "A browser surface for the audit; this is a terminal reader and a route correctness fix.",
+    "Any write to identity_events, any change to what records an event, or to brainAdminOnly.",
+    "Anything under server/services/identity/**, any policy entry, migration or schema change.",
+    "Printing session ids, credential prefixes, verifiers, digests or any other secret-shaped value."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "As a Brain administrator, GET /api/admin/identity-events?limit=abc and ?limit=0 and ?limit=5000 each answer 400 (not 5xx), ?result=MAYBE answers 400, and ?limit=2&result=DENIED returns at most two events all with result DENIED.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "listIdentityEvents({ limit: Number.NaN }) returns rows (the default bound) rather than throwing, on both backends.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A non-administrator person and a WORKER principal are still refused at the route exactly as before (same status and same body as today).",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Spawning `tsx scripts/admin.ts identity events --limit 3` against a test database seeded with identity events prints at most three lines, newest first, each containing the action and result, and exits 0; `--result MAYBE` exits non-zero naming the allowed values; no printed line contains a `brnw_`, `brnt_`, `brnc_` or `brnv_` token or a sha-256-length hex string.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/authorization.test.ts, tests/operatorConsoleRemoved.test.ts and tests/deploymentOwnership.test.ts still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/routes/admin.ts",
+    "server/repos/identity.ts",
+    "scripts/admin.ts",
+    "tests/identityAuditReader.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Input validation on one read route, a NaN guard in one repository read, and one read-only terminal command; no schema, policy or write-path change."
+}

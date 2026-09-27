@@ -1,0 +1,47 @@
+{
+  "objective": "Make the redaction applied to provider text before it becomes a row cover every credential this Brain issues, and apply it at the dispatch fire, which stores a provider's body without it. server/services/effects/failureDetail.ts `sanitizeProviderDetail` (~57) strips bearer tokens, key=value secrets, JWTs, signed-URL queries and `brnw_` worker credentials — but not the other three Brain-issued markers defined in server/services/identity/secrets.ts: `brnt_` (OAuth tokens, OAUTH_TOKEN_MARKER ~243), `brnv_` (invitations, INVITATION_MARKER ~252) and `brnc_` (bridge credentials, BRIDGE_CREDENTIAL_MARKER ~270). And `failureDetail` (~74) passes the error's own message through unmodified, so a credential inside the message half reaches `idempotency_attempts` untouched. Separately, server/services/dispatch/fire.ts stores `${response.status} ${detail.slice(0, 400)}` (~262-280) and a raw `error.message.slice(0, 400)` (~288-294) as the fire's message — which becomes `fleet_routines.state_reason` and bin events — with no redaction at all, relying on a comment's argument that the provider cannot echo the token. §17 and invariant 22 are unconditional: no credential in a log, an audit row, a response or an error. Neither module has a direct test (no file under tests/ imports failureDetail.ts or fire.ts's message path).",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "failureDetail.ts builds its marker patterns from the four markers imported (read-only) from server/services/identity/secrets.ts, so a marker added there is covered here without a second list; a separate exported `redactCredentials(text)` removes only credential-shaped substrings (every pattern in SECRETS) without collapsing whitespace or truncating, and `failureDetail` applies it to the message half as well, keeping the message otherwise byte-identical so every reader that matches on its words keeps working. fire.ts passes the provider body and the network error message through `sanitizeProviderDetail` before bounding, keeping the leading HTTP status and the existing 400-character bound, so a state reason such as `AUTH: 403 {\"message\":\"routines are not available for this organization\"…}` reads as it does today.",
+  "nonGoals": [
+    "Editing anything under server/services/identity/**: the markers are imported, not changed.",
+    "Changing FireErrorKind classification, retry/backoff, quarantine rules or which rows the fire message is written to.",
+    "Changing the effects engine's control flow or what an attempt row records beyond redaction.",
+    "Redacting non-credential text: a message with no credential shape must be unchanged.",
+    "Any migration, schema or policy change."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "sanitizeProviderDetail and redactCredentials remove a `brnw_`, `brnt_`, `brnc_` and `brnv_` credential of the shape each generator in server/services/identity/secrets.ts produces (generated in the test by calling those generators), leaving the surrounding words intact.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "failureDetail(new Error('upload failed for brnc_<prefix>.<secret>')) contains neither the prefix-and-secret nor the secret, and failureDetail(new Error('The document store refused an upload (HTTP 400).')) with a detail carrying no secret returns the message byte-identical followed by the sanitized detail, as today.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A fire against a stubbed endpoint answering 403 with a body that echoes `Authorization: Bearer <token>` and a `brnt_` token returns a message that starts with `403`, contains neither token, and is at most 401 characters; a 403 body `{\"message\":\"routines are not available for this organization\"}` is preserved verbatim after the status.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing effects and dispatch suites (including tests/fleet.test.ts and any test asserting on a fire's AUTH state reason) still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/effects/failureDetail.ts",
+    "server/services/dispatch/fire.ts",
+    "tests/providerTextRedaction.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Wider redaction of provider text before it is stored; no schema, route, policy or control-flow change."
+}

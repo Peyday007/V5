@@ -1,0 +1,53 @@
+{
+  "objective": "Close two gaps docs/STEP-12B-BACKLOG.md recorded during the connected integration pass (\"The proposal validator's unknown-field rule stops at the top level\" and \"`failProbe` still has no caller\") and deferred only because an acceptance run was live. (1) `validateProposal` in server/services/russell/proposal.ts (~259) refuses a whole proposal for an unknown top-level field (KNOWN_FIELDS ~122, loop ~272) — the rule §24 states — but inside the `candidate` (~329-355), `probe` (~360-386) and `software` (~389-424) objects an unrecognised key is silently ignored, so §24's claim is broader than the code: a worker that believed an extra instruction nested in one of those objects would take effect has it dropped and the rest acted on. The turn manifest in server/services/russell/turn.ts already tells workers exactly `title`/`statement`/`duplicateOf` for a candidate (~420, ~500) and `title`/`objective`/`expectedOutcome` for software (~438), so compliant workers are unaffected. (2) `failProbe` (server/repos/russellProbes.ts ~293) has no caller: `runProbe` (server/services/russell/probe.ts ~169) catches network failures inside `fetchOnce`, but any other exception thrown after `startProbe` (for example a failed `permitLookup` or `recordObservation` write) escapes, leaves the probe RUNNING, and is resolved only when `listExpiredProbes` ends it at UNKNOWN on a later tick — so \"the probe crashed\" and \"the probe ran out of time\" are recorded identically and the candidate waits out the deadline.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "proposal.ts exports the allowed key sets for each part (candidate: title, statement, duplicateOf; probe: question, maxLookups; software: title, objective, expectedOutcome) and `validateProposal` refuses the whole proposal with a new refusal code `UNKNOWN_PART_FIELD` (added to the refusal union) when any of those objects carries a key outside its set, before anything else about that part is used; the refusal sentence names the part but not the offending key's value. probe.ts wraps the body of `runProbe` after `startProbe` so that an exception calls `failProbe` with a fixed explanation naming the failure category (the error's class name, never its message, since a message can carry row values) and returns `{ ok: false, reason: 'failed', outcome: null, lookups }` instead of throwing; a probe already COMPLETE is not overwritten (failProbe is guarded on PENDING/RUNNING). A FAILED probe is already picked up by the post-probe re-judgement (`probedAwaitingDecision` in server/services/russell/loop.ts reads state IN ('COMPLETE','FAILED')), so no loop change is needed.",
+  "nonGoals": [
+    "Changing the turn manifest in server/services/russell/turn.ts, the action set, REQUIRED_PART, FIELD_LIMITS or any refusal that exists today.",
+    "Stripping unknown keys instead of refusing: the rule is refusal of the whole proposal.",
+    "Changing the probe envelope, the lookup budget, the verdict rules, listExpiredProbes or the loop.",
+    "Recording an exception's message or stack in russell_probes.",
+    "Editing docs/STEP-12B-BACKLOG.md (it belongs to another objective's scope).",
+    "Any migration, schema or policy change."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "validateProposal refuses with UNKNOWN_PART_FIELD a CAPTURE_CANDIDATE proposal whose candidate carries an extra key (e.g. \"projectId\" or \"priority\" nested inside it), a proposal whose probe carries an extra key, and a REQUEST_SOFTWARE_CHANGE proposal whose software carries \"repository\"; each otherwise-identical proposal without the extra key validates exactly as before.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Every key in each exported part key set appears as a quoted field name in server/services/russell/turn.ts's manifest instructions for the parts the manifest describes (candidate and software), asserted by reading that file, so the validator cannot refuse a key workers are told to send.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "When a step inside runProbe after startProbe throws (the test forces this by making the observation write reject), the probe row ends FAILED with completed_at set and an explanation that names the error class and does not contain the thrown message, and runProbe resolves rather than rejects.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A probe that ran to completion is still COMPLETE with its verdict after the change, and calling runProbe again on a FAILED probe does not change it.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/russellNervousSystem.test.ts, tests/russellRecovery.test.ts, tests/russellSoftwareJourney.test.ts and tests/intakeToResult.test.ts still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/proposal.ts",
+    "server/services/russell/probe.ts",
+    "tests/russellTurnBoundary.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Discard the branch. A stricter validator refusal for nested unknown keys and a recorded failure path for a probe; no schema, route or policy change."
+}
