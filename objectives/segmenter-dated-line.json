@@ -1,0 +1,38 @@
+{
+  "objective": "The transcript segmenter discards short lines that contain a date. server/services/sources/segmenter.ts ~L291 `const bareTimestamp = TIMESTAMP_RE.test(firstLine) && text.trim().length <= 40;` and ~L298 treat any block of 40 characters or fewer containing a date as a pure timestamp marker and `continue`, so its text never reaches a segment. Reproduced: blocks 'You: when do we launch?', 'Assistant: We settled it.', 'Launch is 2026-10-01, final.', 'Anything else?' lose the launch sentence entirely and split 'Anything else?' from the assistant turn. CLAUDE.md §11: every claim about a transcript resolves to a passage in it. Fix: treat a block as a bare timestamp only when, after removing the matched timestamp, nothing remains but punctuation, AM/PM, weekday or month names; otherwise it is ordinary content that still records its timestamp on the current segment.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Dated sentences stay in their segment; genuine timestamp-only blocks are still consumed as markers.",
+  "nonGoals": [
+    "Changing speaker detection or classification",
+    "Any schema change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/segmenterDatedLine.test.ts: the reproduction keeps 'Launch is 2026-10-01, final.' inside the Assistant segment's text.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A block that is exactly '2026-10-01' or '[10:32 AM]' is still consumed as a marker and sets timestampText on the next segment.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing source-ingestion tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/sources/segmenter.ts",
+    "tests/segmenterDatedLine.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; affects newly ingested sources only."
+}

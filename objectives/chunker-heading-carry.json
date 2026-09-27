@@ -1,0 +1,38 @@
+{
+  "objective": "Document chunks carry the wrong heading after a heading that arrives mid-chunk. server/services/documents/chunker.ts ~L110 `pendingHeadingPath = headingPath;` on a size-triggered flush overwrites the heading that arrived inside the chunk with the chunk's older heading. Reproduced: blocks [HEADING 'A', PARAGRAPH 1000 chars, HEADING 'B', PARAGRAPH 2500, PARAGRAPH 500] with maxChars 3000 yield a second chunk labelled ['A'] although its block sits under B, so retrieval's heading bonus and citations name the wrong section (CLAUDE.md §10). Fix: track the last HEADING block seen and on a size flush set the pending heading path from it; keep the rule that a heading only starts a new chunk once the current one has substance.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A chunk flushed for size is labelled with the most recent heading preceding its first block.",
+  "nonGoals": [
+    "Changing chunk size limits or block ordering",
+    "Any schema change or re-chunking of stored documents"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/chunkerHeadingCarry.test.ts: the reproduction above yields ['B'] as the second chunk's heading path.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/documents.test.ts 'starts a chunk at a heading once the current one has substance' still passes.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/documents/chunker.ts",
+    "tests/chunkerHeadingCarry.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; affects newly chunked documents only."
+}

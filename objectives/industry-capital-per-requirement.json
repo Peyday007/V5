@@ -1,0 +1,38 @@
+{
+  "objective": "Industry capital sums one requirement once per source that priced it. server/services/industry/capital.ts builds one reading per REQUIREMENT row (~L116 `const gross = entry.amountCents`) and sums them (~L152-153), while the unique index is only (opportunity_id, source_claim_id) — so two claims both pricing EQUIPMENT double the minimum owner capital; and ~L141 `readings.some((one) => one.netCents === null)` withholds the minimum for ever if any one row for a requirement lacked a figure even after another row priced it. CLAUDE.md §39 records the identical correction in the manufacturing kernel: a requirement is unpriced only where no row for it carries a figure, and two figures for one requirement widen a range rather than sum. Fix: group REQUIREMENT rows by `requirement`; a group's gross is its highest published figure (an understated minimum is the dangerous direction); a group is unknown only if no row in it has a figure; collect restructurings answering any row id in the group; sum one figure per group.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Minimum owner capital counts each requirement once, and a later priced row clears an earlier unpriced one.",
+  "nonGoals": [
+    "Any schema, route or expand.ts change",
+    "Converting currencies or averaging figures"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/industryCapitalPerRequirement.test.ts: two EQUIPMENT rows of 500000 and 700000 cents give minimumOwnerCents 700000.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "An EQUIPMENT row with a null amount beside one with 500000 gives 500000 with unknown null; a residual answering the second EQUIPMENT row still reduces the net.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/industryKernel.test.ts still passes and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/industry/capital.ts",
+    "tests/industryCapitalPerRequirement.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; pure read-path change plus one new test."
+}

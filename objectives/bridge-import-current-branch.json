@@ -1,0 +1,38 @@
+{
+  "objective": "Make the conversation import read the branch a person actually read. server/services/bridge/import.ts: ~L110 finds the root and ~L156 walks `children[children.length - 1]`, so a ChatGPT export whose `current_node` sits on an earlier sibling (an edited question) imports a branch the person never used; ~L91 `Array.isArray(parsed) ? parsed[0] : parsed` silently reads only the first of several conversations; and in parseMarkedText ~L211 `if (role !== null) buffer.push(line)` discards every line before the first speaker marker while returning `notes: []`. Fix: when the record's `current_node` names a node in `mapping`, walk parent links from it to the root and reverse that path (keep the last-child walk only as the fallback, keeping existing branch notes); when the array holds more than one conversation add a note naming how many were not read; keep any preamble before the first marker as one message with role UNKNOWN at ordinal 0 (never guess a speaker) and add a note saying so. CLAUDE.md §43: a fork is kept as a fork and a hole is reported as a hole.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Imports follow current_node, report unread conversations, and keep preamble text as an UNKNOWN message with a note.",
+  "nonGoals": [
+    "Any change to bridge routes, credentials, sync or schema",
+    "Guessing a speaker for preamble text"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/bridgeImportChain.test.ts: an export whose current_node points into a non-last child sibling imports that sibling's chain.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A three-conversation array yields a note mentioning the 2 conversations not read; 'Context line\\nYou: hi' yields 2 messages, the first with role UNKNOWN, and a note.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/conversationBridge.test.ts still passes and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/bridge/import.ts",
+    "tests/bridgeImportChain.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; parser-only change plus one new test."
+}

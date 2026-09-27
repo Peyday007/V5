@@ -1,0 +1,38 @@
+{
+  "objective": "Evidence retrieval matches query terms inside other words and silently drops missing documents. server/services/documents/retrieval.ts ~L67 `haystack.split(term).length - 1` counts substrings, so 'rent' matches 'current' and 'parent', inflating coverage and ranking; ~L95 `lower.indexOf(term)` centres the quote on that false match; and ~L136 `if (!document) continue;` drops a requested id from both `searched` and `unreadable`, contradicting CLAUDE.md §10 (an unread document must be distinguishable from an absent answer). Fix: count whole-token occurrences (via the module's tokenizer or an escaped \\b-bounded regex), anchor the quote with the same word-boundary match, push a missing document into `unreadable` with reason 'No document with that id is registered.', and export scoreChunk for testing.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Terms match as whole words, quotes anchor on real matches, and unknown document ids are reported as unreadable.",
+  "nonGoals": [
+    "Changing the retrieval result shape beyond the unreadable entry",
+    "Any schema or route change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/retrievalWholeWord.test.ts: scoreChunk for query 'rent' over a chunk reading 'the current parent' is 0, and over a chunk containing 'rent' is above 0.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "retrieveEvidence with an unknown document id lists that id in unreadable.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/documents.test.ts still passes and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/documents/retrieval.ts",
+    "tests/retrievalWholeWord.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; read-path only."
+}

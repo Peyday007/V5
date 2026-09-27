@@ -1,0 +1,38 @@
+{
+  "objective": "Stop the register's unfiled list offering one change request twice or offering withdrawn ones. server/services/register/unfiled.ts: `push` (~L53-56) only checks `filed` (links already filed), not items already pushed; the change-request loop (~L75) pushes each CHANGE_REQUEST and the software-request loop (~L104-110) pushes the same `request.changeRequestId` again; and the WITHDRAWN skip at ~L76 is not applied on the software-request path. Fix: add a `seen` set so push refuses a repeated `kind:ref`; build a map of change-request id -> state from listChangeRequests and skip a software request whose change request is WITHDRAWN; when both paths name one change request keep the software request's title (the richer one), e.g. by running the software-request loop first. CLAUDE.md §43: unfiled is derived, offered, never filed.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Each change request appears at most once in unfiled work, and withdrawn ones never appear.",
+  "nonGoals": [
+    "Filing anything automatically",
+    "Any route, schema or client change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/registerUnfiledDedup.test.ts: a software request linked to a live change request produces exactly one CHANGE_REQUEST unfiled item.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A software request linked to a WITHDRAWN change request produces no CHANGE_REQUEST item.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/workRegister.test.ts still passes and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/register/unfiled.ts",
+    "tests/registerUnfiledDedup.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; one service function plus one new test."
+}
