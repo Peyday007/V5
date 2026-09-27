@@ -38,6 +38,7 @@ import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
 import { MachinesView } from './Machines.tsx';
 import { LaborView } from './Labor.tsx';
+import { DesignKernel } from './DesignKernel.tsx';
 import {
   FleetView,
   ProjectView,
@@ -100,6 +101,14 @@ const SECTIONS = [
    * here.
    */
   { name: 'LABOR' as const, label: 'Labor', primary: false },
+  /*
+   * The design kernel's own operator surface, secondary for `PEOPLE`'s
+   * reason rather than Cash's or Machines': §42's tables carry no project, so
+   * this is Brain-wide administrative reading rather than a destination
+   * anybody steers a project from — a person opens it when they want to know
+   * what the kernel has found or learned, not on every visit.
+   */
+  { name: 'DESIGN' as const, label: 'Design', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -563,6 +572,7 @@ export function RussellShell({
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
         {route.name === 'MACHINES' ? <MachinesView projectId={projectId} /> : null}
         {route.name === 'LABOR' ? <LaborView projectId={projectId} /> : null}
+        {route.name === 'DESIGN' ? <DesignKernel /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (
