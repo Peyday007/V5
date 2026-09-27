@@ -184,6 +184,22 @@ async function connectedToken(worker = workerId): Promise<string> {
 }
 
 /** One MCP tool call, using whatever bearer is given. */
+/** Identity events of one action, read from the shared file between requests. */
+async function eventsOf(
+  action: string,
+): Promise<{ target_id: string | null; result: string; metadata: Record<string, unknown> }[]> {
+  await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+  try {
+    const rows = await getDb().all<{ target_id: string | null; result: string; metadata: string }>(
+      'SELECT target_id, result, metadata FROM identity_events WHERE action = ?',
+      [action],
+    );
+    return rows.map((row) => ({ ...row, metadata: JSON.parse(row.metadata) as Record<string, unknown> }));
+  } finally {
+    await closeDatabase();
+  }
+}
+
 async function callTool(
   bearer: string,
   name: string,
@@ -565,6 +581,9 @@ describe('the consent screen', () => {
     const html = await response.text();
     expect(response.status).toBe(200);
     expect(html).toContain('Sign in to connect a worker');
+    // Where a reconnect ended is recorded, so a failed one is not silent.
+    const shown = (await eventsOf('OAUTH_AUTHORIZE_PAGE')).filter((row) => row.target_id === clientId);
+    expect(shown.map((row) => row.metadata['shown'])).toContain('SIGN_IN');
     /*
      * And it names the credential the served screen actually asks for.
      *
@@ -830,6 +849,16 @@ describe('the token exchange', () => {
     // A stolen copy is usable at most once, and its reuse is visible.
     const reused = await exchange({ grant_type: 'refresh_token', refresh_token: refresh, client_id: clientId });
     expect(reused.status).toBe(400);
+
+    // Visible means recorded: a refused refresh is the step after which a
+    // connector reports it "stopped working", and it used to leave no row.
+    const refusals = await eventsOf('OAUTH_TOKEN');
+    expect(
+      refusals.some(
+        (row) =>
+          row.result === 'DENIED' && row.metadata['clientId'] === clientId && row.metadata['reason'] === 'NOT_LIVE',
+      ),
+    ).toBe(true);
   });
 
   it('never lets an access token be used as a refresh token', async () => {

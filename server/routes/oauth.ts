@@ -322,6 +322,33 @@ async function audit(input: {
   }
 }
 
+/**
+ * Which screen a consent request was shown, by category.
+ *
+ * Rendering the sign-in page is where a connector reconnect that "stopped
+ * working" ends when the browser holds neither an administrator's session nor
+ * a live invitation — and before this nothing recorded that it happened, so a
+ * failed reconnect left only a client registration behind it.
+ */
+async function auditAuthorizePage(
+  req: Request,
+  clientId: string,
+  shown: 'ADMIN_CHOOSER' | 'INVITED_CONSENT' | 'SIGN_IN',
+): Promise<void> {
+  const session = req.header('authorization') ? null : await authenticateRequest(req);
+  await audit({
+    action: 'OAUTH_AUTHORIZE_PAGE',
+    actor: null,
+    targetId: clientId,
+    result: shown === 'SIGN_IN' ? 'DENIED' : 'SUCCESS',
+    metadata: {
+      shown,
+      signedInPerson: session?.ok === true && session.principal.type === 'HUMAN',
+      invitationCookie: parseCookies(req.header('cookie'))[INVITE_COOKIE] !== undefined,
+    },
+  });
+}
+
 /* ------------------------------------------------------------------------ */
 /* The router                                                                */
 /* ------------------------------------------------------------------------ */
@@ -544,6 +571,7 @@ export function oauthRouter(): Router {
          * the one that counts.
          */
         const held = await invitedApproval(req);
+        await auditAuthorizePage(req, params.clientId, 'ADMIN_CHOOSER');
         res.type('html').send(
           await consentPage(req, params, client.clientName, person, null, held?.worker ?? null),
         );
@@ -555,6 +583,7 @@ export function oauthRouter(): Router {
       // no choice, rather than a list.
       const invited = await invitedApproval(req);
       if (invited) {
+        await auditAuthorizePage(req, params.clientId, 'INVITED_CONSENT');
         res.type('html').send(invitedConsentPage(req, params, client.clientName, invited.worker));
         return;
       }
@@ -564,7 +593,7 @@ export function oauthRouter(): Router {
         await audit({
           action: 'OAUTH_AUTHORIZE',
           actor: null,
-          targetId: null,
+          targetId: params.clientId,
           result: 'DENIED',
           metadata: { reason: problem === BOUND_SIGN_IN ? 'INVITATION_MEMBER_NOT_SIGNED_IN' : 'INVITATION_WRONG_MEMBER' },
         });
@@ -572,6 +601,7 @@ export function oauthRouter(): Router {
         return;
       }
 
+      await auditAuthorizePage(req, params.clientId, 'SIGN_IN');
       res.type('html').send(signInPage(req, params, client.clientName, null));
     })().catch(answerEscapedFailure(res, 'oauth'));
   });
@@ -879,19 +909,32 @@ export function oauthRouter(): Router {
 
       if (grantType === 'refresh_token') {
         const presented = str('refresh_token');
+        // A refused refresh is audited by category, because it is the one step
+        // after which a connector says "stopped working" and nothing on this
+        // side recorded why.
+        const refuseRefresh = async (reason: string, workerId: string | null): Promise<void> => {
+          await audit({
+            action: 'OAUTH_TOKEN',
+            actor: null,
+            targetId: workerId,
+            result: 'DENIED',
+            metadata: { clientId, grant: 'refresh_token', reason },
+          });
+          res.status(400).json({ error: 'invalid_grant' });
+        };
         const parsed = presented ? parseOAuthToken(presented) : null;
         if (!parsed) {
-          res.status(400).json({ error: 'invalid_grant' });
+          await refuseRefresh('MALFORMED', null);
           return;
         }
         const existing = await findLiveToken(parsed.prefix, parsed.secret, 'REFRESH');
         if (!existing || existing.clientId !== clientId) {
-          res.status(400).json({ error: 'invalid_grant' });
+          await refuseRefresh(existing ? 'CLIENT_MISMATCH' : 'NOT_LIVE', existing?.workerId ?? null);
           return;
         }
         const worker = await getWorker(existing.workerId);
         if (!worker || worker.disabled) {
-          res.status(400).json({ error: 'invalid_grant' });
+          await refuseRefresh('WORKER_UNAVAILABLE', existing.workerId);
           return;
         }
         // Rotation: the presented refresh token and anything minted from it are
