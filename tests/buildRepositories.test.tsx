@@ -851,3 +851,102 @@ describe('onboarding, pressed by a person', () => {
     expect(document.body.textContent ?? '').not.toMatch(/brnv_/);
   });
 });
+
+/*
+ * The Peyday007/V5 card as production shaped it on 2026-09-27.
+ *
+ * Observed on the live Build page: "Registered as factory-brain, running on
+ * [object Object], [object Object], [object Object]." and no way to invite a
+ * second account. The served bundle was byte-identical to a build of
+ * `production` and rendered neither, so what was on that screen was a tab
+ * still running the pre-3ccb623 bundle — which joined `surfaces` as strings —
+ * against an API that has since sent them as objects. This pins the current
+ * screen against the exact payload shape that produced it: three surfaces as
+ * objects, grant `brain`, and the invite control in both authorization states.
+ */
+describe('the V5 repository card, from the payload production sends', () => {
+  const V5_GRANT = 'brain';
+  const V5_REPOSITORIES = `GET /api/projects/${PROJECT}/factory/repositories`;
+  const V5_INVITATIONS = `GET /api/projects/${PROJECT}/factory/repositories/${V5_GRANT}/invitations`;
+  const surface = (letter: string, account: string): RepositoryOnboarding['surfaces'][number] => ({
+    routineName: `Factory Brain ${letter}`,
+    accountName: account,
+    state: 'ENABLED',
+    dispatch: 'ELIGIBLE',
+    dispatchReason: 'Brain would fire this surface for this work now.',
+    proven: true,
+  });
+  const V5: RepositoryOnboarding = grant({
+    grantId: V5_GRANT,
+    remote: 'https://github.com/Peyday007/V5',
+    repositoryId: 'Peyday007/V5',
+    description: 'Brain itself.',
+    workerName: 'factory-brain',
+    workerId: 'wkr_factory_brain',
+    scopesCorrect: true,
+    routedFamilies: ['FACTORY'],
+    routedRepositories: ['Peyday007/V5'],
+    surfaces: [surface('A', 'primary'), surface('B', 'friend-2'), surface('C', 'friend-3')],
+    accountsServing: 3,
+    eligibleSurfaces: 3,
+    provenSurfaces: 3,
+    summary: 'The dispatcher would fire 3 of 3 configured Factory surfaces for this repository now.',
+    readiness: 'READY',
+    remaining: [],
+    waiting: 0,
+    boundary: { scopeKind: 'WHOLE_REPOSITORY', directories: [], sentence: 'the whole repository' },
+  });
+
+  function v5Routes(mayConnectAccounts: boolean, refusal: string | null): void {
+    base({
+      [V5_REPOSITORIES]: {
+        body: { repositories: [V5], mayConnectAccounts, connectAccountsRefusal: refusal },
+      },
+      [V5_INVITATIONS]: {
+        body: {
+          grantId: V5_GRANT,
+          workerName: 'factory-brain',
+          mayIssue: true,
+          refusal: null,
+          members: MEMBERS,
+          invitations: [],
+        },
+      },
+    });
+  }
+
+  it('names every surface and never stringifies one', async () => {
+    v5Routes(true, null);
+    await mount();
+    await waitFor(() => expect(card()).toBeTruthy());
+    const text = card().textContent ?? '';
+    expect(text).not.toContain('[object Object]');
+    expect(text).toContain('Registered as factory-brain.');
+    const listed = [...card().querySelectorAll('.rs-repo-surfaces li')].map((li) => li.textContent ?? '');
+    expect(listed).toHaveLength(3);
+    expect(listed[0]).toContain('Factory Brain A — primary');
+    expect(listed[1]).toContain('Factory Brain B — friend-2');
+    expect(listed[2]).toContain('Factory Brain C — friend-3');
+  });
+
+  it('offers the invite control to somebody who may issue one', async () => {
+    v5Routes(true, null);
+    await mount();
+    await waitFor(() => expect(within(card()).getByText('Invite another Factory account')).toBeTruthy());
+    await chooseMember('Friend A');
+    const button = within(card()).getByRole('button', { name: 'Issue a link' }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    expect(calls).toContain(V5_INVITATIONS);
+  });
+
+  it('shows the same control disabled, with the server’s reason, to anybody else', async () => {
+    v5Routes(false, 'Only an administrator of this project can issue a link.');
+    await mount();
+    await waitFor(() => expect(within(card()).getByText('Invite another Factory account')).toBeTruthy());
+    const button = within(card()).getByRole('button', { name: 'Issue a link' }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(card().textContent).toContain('Only an administrator of this project can issue a link.');
+    expect(card().textContent).not.toContain('[object Object]');
+    expect(calls).not.toContain(V5_INVITATIONS);
+  });
+});
