@@ -1,0 +1,52 @@
+{
+  "objective": "Make declaring a goal dependency have one writer with one cycle rule, and give the terminal the two goal decisions it is missing. POST /api/goals/:goalId/depends-on (server/routes/goals.ts ~181-221) walks the other goal's DEPENDS_ON links transitively and refuses when it reaches this goal. The terminal door `npm run goals -- depends` (scripts/goals.ts ~246-258) is a second writer that checks only the DIRECT reverse link (~249-253), so A->B, B->C, then `depends C A` is accepted and closes a three-goal cycle whose goals hold each other's bins for ever; it also writes no label and no {dependsOn, linkId} detail on GOAL_DEPENDENCY_SET, unlike the route. §46/§50 require one writer per decision. Move the whole declaration (self-reference refusal, transitive cycle walk over live DEPENDS_ON links via listLinks, linkWorkstream with label = other goal's title, recordedBy PERSON, the GOAL_DEPENDENCY_SET event with detail {dependsOn, linkId}) into a new exported `setDependency(goalId, otherGoalId, { actorRef, userId })` in server/services/goals/decide.ts returning DecisionResult (ok:false with the existing sentences for self and cycle; nothing written). The route keeps its own authorization (requireGoal WRITE on this goal, READ on the other) and then calls setDependency, mapping ok:false to the same 400 badRequest sentences it returns today; the CLI `depends` calls setDependency and no longer calls linkWorkstream or recordWorkstreamEvent for dependencies. Add two CLI commands to scripts/goals.ts: `objective <wst_> [--intent ...] [--outcome ...] --admin a@b` calling the existing changeObjective (decide.ts ~155), and `undepend <wst_> <wst_other> --reason ... --admin a@b` which finds the live WORKSTREAM/DEPENDS_ON link to the other goal, supersedes it with supersedeLink (server/repos/register.ts ~235) and records LINK_SUPERSEDED {linkId} exactly as the register supersede route does (server/routes/register.ts ~288-296); refuse a missing reason or a missing live link and exit non-zero without printing GOALS: OK. Update the usage block and the unknown-command list.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "server/services/goals/decide.ts exports setDependency, the single writer of a goal dependency, with a transitive cycle check. server/routes/goals.ts depends-on and scripts/goals.ts depends both call it; the CLI can no longer create a multi-goal cycle. scripts/goals.ts gains `objective` and `undepend` commands over existing functions.",
+  "nonGoals": [
+    "Any change to server/repos/register.ts, server/routes/register.ts, server/services/goals/model.ts or the client.",
+    "Changing who may declare a dependency (route authorization stays exactly as it is).",
+    "Deleting a dependency link: undepend supersedes it and the row stays.",
+    "Any schema, migration or identity change."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "setDependency refuses A depends on A, and refuses C depends on A when A->B and B->C already exist (transitive cycle), writing no workstream_links row and no event in either case.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A successful setDependency writes one live WORKSTREAM/DEPENDS_ON link labelled with the other goal's title and one GOAL_DEPENDENCY_SET event whose detail carries dependsOn and linkId.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A source-reading test asserts scripts/goals.ts and server/routes/goals.ts both call setDependency and that neither calls linkWorkstream with relation 'DEPENDS_ON' directly.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The HTTP depends-on route still returns 400 with 'That would make the two goals wait on each other for ever.' for a cycle, now including a three-goal cycle, and the existing goals suites still pass.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "scripts/goals.ts accepts `objective` and `undepend`; undepend supersedes the live link (superseded_at set, row kept) and records LINK_SUPERSEDED with the linkId; the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/goals/decide.ts",
+    "server/routes/goals.ts",
+    "scripts/goals.ts",
+    "tests/goalDependencyWriter.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. One service function extracted from an existing route, two CLI commands over existing functions; no schema, policy or route-shape change."
+}

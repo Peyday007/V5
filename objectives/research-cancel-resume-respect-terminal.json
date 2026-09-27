@@ -1,0 +1,45 @@
+{
+  "objective": "Stop the browser's research cancel and resume controls from rewriting finished packets, and stop resume from failing silently. (1) cancelResearch (server/services/research/queue.ts ~145-148) treats only ['COMPLETE','CANCELLED','FAILED'] as finished. COMPLETE_WITH_GAPS — filed, audited and honestly short (server/domain/types.ts ~669-678) — is missing, so cancelling one overwrites its status with CANCELLED, stamps cancelled_at and rewrites its history. The canonical set is TERMINAL_ORCHESTRATION in server/services/research/outcome.ts ~70; use it (a hard-coded copy is the 'two readers of one fact' defect CLAUDE.md records repeatedly). (2) resumeResearch (~311-333) refuses only status 'COMPLETE'; a COMPLETE_WITH_GAPS packet is rewritten to QUEUED with failureReason cleared and re-run. It must refuse COMPLETE and COMPLETE_WITH_GAPS, and must refuse a worker-driven packet (provider 'WORKER', the WORKER_PROVIDER constant in the same file ~200), whose recovery is resumePulledPackets and which an in-process run would duplicate (see the recoverInterruptedResearch comment ~225-245). CANCELLED, FAILED, INTERRUPTED, AWAITING_REPAIR, NEEDS_HUMAN and PAUSED_QUOTA stay resumable as today. Export a pure `resumeRefusal(orchestration): string | null` giving the sentence. (3) POST /research/:orchestrationId/resume (server/routes/research.ts ~388-395) does `void resumeResearch(orchestrationId)`: a refusal becomes an unhandled rejection and the caller gets 200 as if it resumed. The route must ask resumeRefusal first and answer 409 conflict with that sentence (nothing written), and attach a .catch that logs rather than leaving the background run's rejection unhandled.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Cancel is a no-op on any TERMINAL_ORCHESTRATION packet; resume refuses COMPLETE, COMPLETE_WITH_GAPS and worker-driven packets with a sentence the route returns as 409; no resume refusal escapes as an unhandled rejection.",
+  "nonGoals": [
+    "Changing which non-terminal statuses are resumable or cancellable.",
+    "Changing the worker-driven packet runner, resumePulledPackets, or the tick reconciliations.",
+    "Any client change, schema or migration change."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "cancelResearch on a COMPLETE_WITH_GAPS orchestration returns it unchanged: status still COMPLETE_WITH_GAPS, cancelled_at null, no RESEARCH_CANCELLED event, no fragment status changed.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "resumeResearch rejects for COMPLETE, COMPLETE_WITH_GAPS and for a packet whose provider is 'WORKER', leaving status and failure_reason untouched; resumeRefusal returns null for CANCELLED and INTERRUPTED.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Over HTTP, POST /api/research/:id/resume on a COMPLETE_WITH_GAPS packet answers 409 with the refusal sentence and the row is unchanged; a source-reading test asserts server/routes/research.ts contains no bare `void resumeResearch(` without a .catch.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A test asserts queue.ts reads TERMINAL_ORCHESTRATION rather than a literal status list; tests/research.test.ts still passes and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/research/queue.ts",
+    "server/routes/research.ts",
+    "tests/researchCancelResumeTerminal.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Guard changes in two functions and one route; no schema, policy or client change."
+}

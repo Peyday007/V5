@@ -1,0 +1,46 @@
+{
+  "objective": "Fix three defects that stop a reconcilable external effect (Step 6, §20, invariants 25-26) from ever being reconciled after its first pass, and that let a crashed one be SENT TWICE. (1) server/repos/idempotency.ts `latestSentAttempt` (~565) selects `provider_key IS NOT NULL`, but deriveProviderKey (server/services/effects/adapter.ts ~155-160) returns null for every class except EXTERNAL_IDEMPOTENT. So for EXTERNAL_RECONCILABLE the function never finds the attempt: resumeAfterCrash (server/services/effects/external.ts ~345-360) hits `if (!attempt) return null; // nothing was ever sent` and runExternalEffect performs a fresh send after a crash where the first send reached SENT — a duplicate effect; resumeUncertain (~308-335) skips reconciling entirely; tryReconcile (~275) never closes the attempt. It should mean what its name says: the latest attempt that reached SENT or later (phase <> 'INTENT'), whatever its provider key. (2) The business id handed to adapter.reconcile is wrong on both resume paths: resumeUncertain passes `operation.resultRef ?? operation.id` (~315) and resumeAfterCrash passes `attempt.providerKey ?? operation.id` (~359), while the first pass passes input.businessId (the only identity a reconcilable provider knows; see reconcilableAdapter in server/services/effects/synthetic.ts ~170-198). Thread input.businessId into both. (3) resumeUncertain on FOUND closes the attempt and returns status RECONCILED but never moves the operation out of UNCERTAIN: succeedOperation is guarded `state = 'RESERVED'` (idempotency.ts ~372), so it must call resolveUncertain(operation.id, { as: 'SUCCEEDED', resultRef, summary }) (~443), store adapter-redacted receiptMeta like tryReconcile does, and return the re-read operation. An ABSENT or INCONCLUSIVE answer, or a throwing reconcile, still leaves it UNCERTAIN and sends nothing.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A reconcilable effect whose outcome was unknown is reconciled on its next retry (operation SUCCEEDED, attempt CONFIRMED, send count unchanged); a reconcilable effect whose executor died after marking the attempt SENT is asked rather than resent; the provider is always asked about the caller's business id.",
+  "nonGoals": [
+    "Changing the opaque class: an EXTERNAL_OPAQUE operation still stops at UNCERTAIN and is never resent.",
+    "Auto-failing an UNCERTAIN operation when the provider answers ABSENT on a later retry.",
+    "Any change to the operations resolve route, to failOperation's failure_category behaviour, or to server/services/effects/failureDetail.ts.",
+    "Any schema or migration change."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "With the synthetic reconcilable adapter: a first send whose reconcile throws leaves the operation UNCERTAIN; a retry with the same key after reconcile works returns RECONCILED, the idempotency_operations row is SUCCEEDED with the receipt as result_ref, and the adapter's send count is still 1.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Simulating an executor that died after markAttemptSent (operation RESERVED and recoverable, attempt phase SENT with ended_at NULL, provider already holding the business id): a retry returns RECONCILED and the send count stays 1 — no second send.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "An attempt left at phase INTENT (never sent) is not returned by latestSentAttempt, so a recovered operation with only an INTENT attempt is sent once.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The opaque-adapter tests in tests/idempotency.test.ts still pass unchanged (UNCERTAIN, never resent) and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/effects/external.ts",
+    "server/repos/idempotency.ts",
+    "tests/effectsReconcileResume.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Query and control-flow changes inside the effect runner; no schema, route or policy change."
+}

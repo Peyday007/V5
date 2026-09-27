@@ -1,0 +1,44 @@
+{
+  "objective": "Make the local storage provider keep the promise both providers state — 'Storage never overwrites silently — a superseded document keeps its bytes' — on the two paths where it does not. (1) LocalStorageProvider.move (server/services/storage/local.ts ~151-167) calls fsp.rename(from, to) (~160), and POSIX rename REPLACES an existing destination, so moving a document onto a key that already holds another document destroys the second document's bytes and its .brainmeta.json sidecar with no error. The Supabase provider's move refuses (server/services/storage/supabase.ts ~260-286), so the two backends disagree about the one property storage exists to keep. relocateFile (server/services/storage.ts ~370-390) chooses the target with uniqueKey, which is a check-then-act, so a concurrent writer can land in between. Make move refuse an existing destination without touching either object: e.g. fsp.link(from, to) (fails EEXIST) then unlink(from), falling back to copyFile with fs.constants.COPYFILE_EXCL + unlink on EXDEV; move the sidecar the same exclusive way; the from===to path is unchanged; a missing source still throws ObjectNotFoundError. (2) put without overwrite (~75-90) is also check-then-act (fs.existsSync then writeFile), so two concurrent puts to one key can both succeed and the first document's bytes are gone. Write the object with the exclusive flag ('wx') when overwrite is not set, mapping EEXIST to the existing 'An object already exists at <key>. Storage never overwrites silently' error; overwrite:true keeps replacing as today.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "LocalStorageProvider.move refuses to replace an existing object and leaves both objects and their metadata intact; put without overwrite is atomic, so of two concurrent puts to one key exactly one succeeds and the stored bytes are the winner's.",
+  "nonGoals": [
+    "Any change to the Supabase provider, storage keys, uniqueKey or relocateFile.",
+    "Changing head/exists semantics or error handling for other errno codes.",
+    "Any schema, migration or document-row change."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "Against a LocalStorageProvider rooted in a temp directory: put A at k1, put B at k2, move(k1, k2) rejects; get(k2) still returns B's bytes, get(k1) still returns A's, and both sidecar metadata (originalFilename) are unchanged.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "move(k1, k3) to a free key succeeds, returns meta for k3 with A's checksum and originalFilename, and k1 no longer exists; move of a missing key throws ObjectNotFoundError; move(k, k) returns the existing meta.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Two concurrent put calls (Promise.allSettled) to one key without overwrite produce exactly one fulfilled and one rejected with the 'already exists' message, and the stored bytes equal the fulfilled call's body; put with overwrite:true still replaces.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing tests/storage.test.ts and tests/migration.test.ts still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/storage/local.ts",
+    "tests/localStorageNoOverwrite.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Filesystem call changes inside one provider class; no schema, key or interface change."
+}
