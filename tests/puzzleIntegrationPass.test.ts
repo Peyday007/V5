@@ -67,12 +67,14 @@ import {
   listPuzzleProducts,
   listPuzzleRounds,
   listPuzzleRoutes,
+  openPuzzleRound,
 } from '../server/repos/puzzle.ts';
 import { runPuzzleKernel } from '../server/services/puzzle/kernel.ts';
 import { puzzleView } from '../server/services/puzzle/view.ts';
 import { observe, seedFormat } from '../server/services/puzzle/seed.ts';
 import { renderInstance } from '../server/services/puzzle/generate.ts';
 import { getOpportunity } from '../server/repos/cashPortfolio.ts';
+import { getCashMode } from '../server/repos/cashMode.ts';
 import type {
   ClaimedWork,
   Layer,
@@ -667,6 +669,72 @@ describe('what happens next, when nothing can answer a question', () => {
     // ... and it must name the condition and whose it is to fix.
     expect(view.nextAction).toMatch(/nothing can answer them|could answer it/i);
     expect(view.nextAction).toMatch(/execution surface/i);
+  });
+});
+
+/**
+ * `089_puzzle_kernel.sql` keyed `puzzle_rounds_unique` directly on
+ * `format_key` and `product_class`, and the bootstrap purpose — the one
+ * question that reaches outside everything already on the map — carries NULL
+ * for both by design. A NULL is distinct from every other NULL in a unique
+ * index on both backends, so the index could not refuse the second copy of
+ * the one row it most needed to refuse. Production opened
+ * `pzq_b04df7d4c4574c59ad1d` and `pzq_6e4bc50e9a2046b28c52`, both round 1.
+ *
+ * `openPuzzleRound` answers `created: rows[0].id === id` from a natural-key
+ * read-back, so with two live rows the read matches both and `rows[0]` is
+ * whichever came first — the loser is told it lost rather than failing.
+ * Which is why production ran one question twice with its own append-only
+ * history recording a single opening. The row count is therefore the assertion
+ * that binds, and `created` is kept beside it as the ordinary-outcome contract
+ * rather than as the proof.
+ */
+describe('the bootstrap question opens once, because NULL is not a key', () => {
+  it('refuses a second live round for the question that carries no format', async () => {
+    expect(
+      (
+        await activate({
+          projectId,
+          ownerUserId: userId,
+          actorUserId: userId,
+          objective: 'Maximize additional usable cash over the next few weeks.',
+        })
+      ).ok,
+    ).toBe(true);
+
+    const mode = await getCashMode(projectId);
+    expect(mode).not.toBeNull();
+
+    const ask = {
+      projectId,
+      cashModeId: mode!.id,
+      purpose: 'SEED_FORMATS' as const,
+      formatKey: null,
+      productClass: null,
+      round: 1,
+    };
+
+    // Two passes that each read a snapshot with no open round and each decided
+    // correctly. Different candidates, because each pass captured its own.
+    const first = await openPuzzleRound({ ...ask, candidateId: 'rcn_first_pass' });
+    const second = await openPuzzleRound({ ...ask, candidateId: 'rcn_second_pass' });
+
+    // The assertion that binds: one row, whichever pass got there first, and
+    // it is the first pass's candidate that the surviving round points at —
+    // so the second pass's candidate is the orphan `openPuzzleAsks` describes
+    // rather than a second live question.
+    const opened = (await listPuzzleRounds(projectId)).filter(
+      (one) => one.purpose === 'SEED_FORMATS',
+    );
+    expect(opened).toHaveLength(1);
+    expect(opened[0]!.candidateId).toBe('rcn_first_pass');
+
+    // And the ordinary-outcome contract beside it: a loser reads back the round
+    // that won rather than reporting a failure, which is what the natural-key
+    // read-back exists for. Passes against the defect too — see the note above.
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.round.id).toBe(first.round.id);
   });
 });
 
