@@ -64,7 +64,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import {
   requestIntegrityReaudit,
   scanAuthorReviewerOverlap,
@@ -278,6 +278,92 @@ async function main(): Promise<void> {
   }
 
   switch (`${area} ${command}`) {
+    /*
+     * What a connector's OAuth journey actually did, read from rows.
+     *
+     * A connector that "stopped working" is a statement by the client; the
+     * authorization server wrote down every step it took — the registration,
+     * the consent, the code, the token exchange, the refresh, and every
+     * refused bearer at /mcp — in `identity_events` and the three oauth tables.
+     * This prints them for a window, oldest first, so the first failed
+     * operation is findable by following the client and worker ids. Read-only.
+     * Ids, times and categories only: no digest, no prefix, no address.
+     */
+    case 'oauth trace': {
+      const hours = Math.min(Math.max(Number(rest[0] ?? '24') || 24, 1), 168);
+      const since = new Date(Date.now() - hours * 3_600_000).toISOString();
+      const db = getDb();
+      const names = new Map((await listWorkers({ includeArchived: true })).map((w) => [w.id, workerIdentity(w)]));
+      const who = (id: unknown): string => (typeof id === 'string' ? `${names.get(id) ?? '?'}(${id})` : '—');
+      console.log(`OAUTH TRACE since ${since}`);
+      console.log('');
+      console.log('  clients registered');
+      for (const row of await db.all<Record<string, unknown>>(
+        `SELECT client_id, client_name, redirect_uris, token_auth_method, created_at, disabled_at
+           FROM oauth_clients WHERE created_at >= ? ORDER BY created_at`,
+        [since],
+      )) {
+        console.log(
+          `    ${row['created_at']}  ${row['client_id']}  "${row['client_name']}"  ${row['token_auth_method']}  ` +
+            `redirect=${row['redirect_uris']}${row['disabled_at'] ? `  disabled ${row['disabled_at']}` : ''}`,
+        );
+      }
+      console.log('  worker invitations');
+      for (const row of await db.all<Record<string, unknown>>(
+        `SELECT id, worker_id, kind, intended_user_id, created_at, expires_at, redeemed_at, revoked_at
+           FROM worker_invitations
+          WHERE created_at >= ? OR redeemed_at >= ? OR revoked_at >= ? OR expires_at >= ?
+          ORDER BY created_at`,
+        [since, since, since, since],
+      )) {
+        console.log(
+          `    ${row['created_at']}  ${row['id']}  ${who(row['worker_id'])}  ${row['kind']}  ` +
+            `member=${row['intended_user_id'] ?? '—'}  expires=${row['expires_at']}  ` +
+            `redeemed=${row['redeemed_at'] ?? '—'}  revoked=${row['revoked_at'] ?? '—'}`,
+        );
+      }
+      console.log('  authorization codes');
+      for (const row of await db.all<Record<string, unknown>>(
+        `SELECT id, client_id, worker_id, approved_by_user_id, resource, created_at, expires_at, redeemed_at
+           FROM oauth_authorization_codes WHERE created_at >= ? ORDER BY created_at`,
+        [since],
+      )) {
+        console.log(
+          `    ${row['created_at']}  ${row['id']}  client=${row['client_id']}  ${who(row['worker_id'])}  ` +
+            `approver=${row['approved_by_user_id']}  resource=${row['resource'] ?? '—'}  ` +
+            `redeemed=${row['redeemed_at'] ?? '—'}`,
+        );
+      }
+      console.log('  tokens created or used');
+      for (const row of await db.all<Record<string, unknown>>(
+        `SELECT id, kind, client_id, worker_id, resource, created_at, expires_at, last_used_at, revoked_at, parent_token_id
+           FROM oauth_tokens WHERE created_at >= ? OR last_used_at >= ? OR revoked_at >= ?
+          ORDER BY created_at LIMIT 400`,
+        [since, since, since],
+      )) {
+        console.log(
+          `    ${row['created_at']}  ${row['id']}  ${row['kind']}  client=${row['client_id']}  ${who(row['worker_id'])}  ` +
+            `resource=${row['resource'] ?? '—'}  expires=${row['expires_at']}  used=${row['last_used_at'] ?? '—'}  ` +
+            `revoked=${row['revoked_at'] ?? '—'}  parent=${row['parent_token_id'] ?? '—'}`,
+        );
+      }
+      console.log('  events');
+      for (const row of await db.all<Record<string, unknown>>(
+        `SELECT created_at, action, result, reason, actor_type, actor_id, target_id, metadata, user_agent
+           FROM identity_events
+          WHERE created_at >= ?
+            AND (action LIKE 'OAUTH%' OR action = 'MCP_AUTHENTICATE' OR action LIKE '%INVITATION%')
+          ORDER BY created_at LIMIT 400`,
+        [since],
+      )) {
+        console.log(
+          `    ${row['created_at']}  ${row['action']} ${row['result']}${row['reason'] ? ` ${row['reason']}` : ''}  ` +
+            `actor=${row['actor_type']}:${row['actor_id'] ?? '—'}  target=${row['target_id'] ?? '—'}  ` +
+            `meta=${row['metadata']}  ua=${String(row['user_agent'] ?? '—').slice(0, 60)}`,
+        );
+      }
+      break;
+    }
     case 'workers list': {
       for (const worker of await listWorkers({ includeArchived: true })) {
         const memberships = await listMembershipsForPrincipal('WORKER', worker.id);
