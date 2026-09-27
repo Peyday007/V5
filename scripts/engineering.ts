@@ -35,7 +35,9 @@ import {
   type EvidenceStatus,
   type OutcomeLevel,
 } from '../server/domain/engineering.ts';
+import { ENGINEERING_TOOLS } from '../server/mcp/engineeringTools.ts';
 import {
+  connectorCalls,
   interventionMetrics,
   invalidateScope,
   listInterventions,
@@ -219,7 +221,12 @@ async function main(): Promise<void> {
       out(await watchIdle({ continueWork: has(argv, 'continue') }));
       break;
     case 'report':
-      out({ metrics: await interventionMetrics(), recent: await listInterventions(20) });
+      out({
+        servingRevision: process.env.BRAIN_REVISION ?? null,
+        metrics: await interventionMetrics(),
+        recent: await listInterventions(20),
+        connectorCalls: await connectorCalls(ENGINEERING_TOOLS.map((tool) => tool.name)),
+      });
       break;
     default:
       process.exitCode = 2;

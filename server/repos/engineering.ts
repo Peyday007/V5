@@ -252,6 +252,46 @@ export async function interventionMetrics(): Promise<{
   };
 }
 
+/**
+ * Who has actually called the connector, read from the MCP audit every call
+ * already writes (`identity_events`, `MCP_TOOL_CALL`). No new record: a worker
+ * told to consult these tools either did or did not, and the audit says which.
+ */
+export async function connectorCalls(toolNames: readonly string[], limit = 200): Promise<Array<{
+  actorType: string;
+  actorId: string | null;
+  tool: string;
+  result: string;
+  calls: number;
+  lastAt: string;
+}>> {
+  if (toolNames.length === 0) return [];
+  const rows = await getDb().all<{
+    actor_type: string;
+    actor_id: string | null;
+    target_id: string;
+    result: string;
+    n: number | string;
+    last_at: string;
+  }>(
+    `SELECT actor_type, actor_id, target_id, result, COUNT(*) AS n, MAX(created_at) AS last_at
+       FROM identity_events
+      WHERE action = 'MCP_TOOL_CALL' AND target_id IN (${toolNames.map(() => '?').join(', ')})
+      GROUP BY actor_type, actor_id, target_id, result
+      ORDER BY last_at DESC
+      LIMIT ?`,
+    [...toolNames, limit],
+  );
+  return rows.map((row) => ({
+    actorType: row.actor_type,
+    actorId: row.actor_id,
+    tool: row.target_id,
+    result: row.result,
+    calls: Number(row.n),
+    lastAt: row.last_at,
+  }));
+}
+
 export async function recordBlocker(input: {
   projectId?: string | null;
   taskRef?: string | null;
