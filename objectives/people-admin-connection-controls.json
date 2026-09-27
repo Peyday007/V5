@@ -1,0 +1,24 @@
+{
+  "objective": "Give a Brain administrator the two People-page decisions that server/routes/people.ts built routes for and no browser can reach. POST /api/people/:userId/claude/revoke (server/routes/people.ts ~399-421, requireBrainAdmin, optional `reason`, calls revokeOwnConnection for another member — its own doc says it exists because somebody who lost their device cannot revoke a connector still authorized in their name) and POST /api/people/:userId/claude/adopt (~366-386, requireBrainAdmin, required `routineRef` trig_…, calls adoptSurface in server/services/capacity/adopt.ts ~86, returns {connection, alreadyAdopted}; CLAUDE.md §47 says it exists because four production Routines were attributable to nobody). client/src/lib/peopleApi.ts exposes only the member's own revoke (~192) and the admin invitation (~201) and connections list (~205); nothing calls /claude/revoke for another user or /claude/adopt. client/src/russell/People.tsx `Connections` (~737-813) lists each member's connection read-only. Add `PeopleApi.revokeFor(userId, reason)` and `PeopleApi.adopt(userId, routineRef)`. In the Connections list (inside the existing admin-only section, rendered only when page.you.isBrainAdmin as today at ~872), give each row a 'Take this connection back' control requiring a non-empty reason, and add one 'Record an existing Routine as somebody's' form: a member select built from the connections/people already on the page and a trig_… text field. On success re-read the connections list and the page; on refusal render the server's sentence verbatim (e.g. adoptSurface's unknown-Routine refusal). No optimistic state: the row changes only after the re-read.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "peopleApi.ts gains revokeFor and adopt calling the existing routes; People.tsx's administrator Connections section offers a per-member revoke (reason required) and an adopt form; both re-read and show server refusals verbatim; a new component test covers both.",
+  "nonGoals": [
+    "Any new server route or change to revokeOwnConnection, adoptSurface, or the people routes",
+    "Anything under server/services/identity/**, migrations or schema",
+    "Showing these controls to a non-administrator (the section stays admin-only as today)",
+    "Changing the member's own ClaudeConnection panel"
+  ],
+  "acceptanceConditions": [
+    {"statement": "tests/peopleAdminConnectionControls.test.tsx renders PeopleAndCapacityView as an administrator with a scripted fetch: submitting 'Take this connection back' with a reason POSTs /api/people/<userId>/claude/revoke with body {reason}, and the button is disabled while the reason is empty.", "verification": "npm test", "mandatory": true},
+    {"statement": "Submitting the adopt form POSTs /api/people/<userId>/claude/adopt with body {routineRef} for the chosen member, and after success the connections list is fetched again.", "verification": "npm test", "mandatory": true},
+    {"statement": "A 422 from either route renders the server's error sentence verbatim on the page.", "verification": "npm test", "mandatory": true},
+    {"statement": "A non-administrator page (you.isBrainAdmin false) renders neither control and makes no request to /api/people/connections.", "verification": "npm test", "mandatory": true},
+    {"statement": "tests/peopleSection.test.tsx and tests/peopleAndCapacity.test.ts still pass and the repository typechecks.", "verification": "npm run typecheck", "mandatory": true}
+  ],
+  "mutationScope": ["client/src/lib/peopleApi.ts", "client/src/russell/People.tsx", "tests/peopleAdminConnectionControls.test.tsx"],
+  "verificationCommands": ["npm run typecheck", "npm test"],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; client-only change plus one new test, no data or schema touched."
+}

@@ -1,0 +1,23 @@
+{
+  "objective": "Give the Machines screen the three manufacturing decisions whose routes exist and which no browser code calls. server/routes/manufacturing.ts has POST /api/projects/:projectId/manufacturing/categories (~179-203, name required, optional description/parentId/reason/kind, seedCategory, returns {category, created}), PATCH .../manufacturing/categories/:categoryId (~205-219, reason required, retireCategoryDecision — retiring destroys nothing) and PATCH .../manufacturing/capabilities/:capabilityId (~266-281, reason required, withdrawHeld). client/src/russell/Machines.tsx calls only GET/POST/PATCH on the programme (~294, ~403, ~1405), POST capabilities (DeclareHeld ~626-696), decisions (~1050) and acquisitions (~1233). So a person can record a capability held but can never withdraw it (CLAUDE.md §39 describes the verdict 'moving back when the holding is withdrawn'), cannot name a category (one of §39's four person-only writes) and cannot retire one. Add: in `Ledger` (~864-906), beside each capability whose heldAt is non-null, a 'Withdraw this holding' control requiring a non-empty reason; in `Ladder` (~776), beside each category a 'Retire this category' control requiring a reason, and above the list a 'Name a category' form (name required, optional description) that POSTs categories without a kind (the server default applies). After each success call the view's existing reload; a refusal renders the server's sentence verbatim via the existing describe(). Controls render for every reader; the server decides (§35). Do not add any control that marks a capability held from research.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Machines.tsx can withdraw a held capability, retire a category and name a new category through the existing routes, re-reading the programme after each and showing server refusals verbatim.",
+  "nonGoals": [
+    "Any server, service, schema or migration change",
+    "Choosing a category kind or parent from the screen",
+    "Any control that records a capability as held other than the existing DeclareHeld",
+    "Deleting a category or capability"
+  ],
+  "acceptanceConditions": [
+    {"statement": "tests/machinesLadderControls.test.tsx: withdrawing a held capability with a reason sends PATCH /api/projects/<id>/manufacturing/capabilities/<capabilityId> with {reason}; the control is absent for a capability whose heldAt is null and its submit is disabled with an empty reason.", "verification": "npm test", "mandatory": true},
+    {"statement": "Retiring a category sends PATCH .../manufacturing/categories/<categoryId> with {reason}, and naming a category sends POST .../manufacturing/categories with {name} (and description when given) and no kind field.", "verification": "npm test", "mandatory": true},
+    {"statement": "After each successful call the programme GET is requested again; a 422 response's error sentence is rendered verbatim.", "verification": "npm test", "mandatory": true},
+    {"statement": "tests/machinesBrowserToDatabase.test.ts still passes and the repository typechecks.", "verification": "npm run typecheck", "mandatory": true}
+  ],
+  "mutationScope": ["client/src/russell/Machines.tsx", "tests/machinesLadderControls.test.tsx"],
+  "verificationCommands": ["npm run typecheck", "npm test"],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; client-only change plus one new test."
+}

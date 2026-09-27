@@ -1,0 +1,23 @@
+{
+  "objective": "Make a workstream on the Register screen correctable. server/routes/register.ts exposes PATCH /api/register/workstreams/:workstreamId (~199-233: title, intent, purpose from WORKSTREAM_PURPOSES, records WORKSTREAM_AMENDED), GET .../workstreams/:id (corrections and events), POST .../links/:linkId/supersede (reason) and POST .../archive (reason). client/src/lib/registerApi.ts (~51-93) has workstream(), supersede() and archive() but no amend, and no screen calls workstream(), supersede() or archive() at all (grep client/src). client/src/russell/Register.tsx `WorkstreamCard` (~218-262) is read-only: a person who filed the wrong intent or purpose, or whose link points at the wrong row, has no way to say so from the product (CLAUDE.md §43: 'A correction keeps what it corrects'; 'Archiving keeps the links'). Add `RegisterApi.amend(workstreamId, {title?, intent?, purpose?})` (PATCH). In WorkstreamCard add: an 'Edit what this is' form prefilled with title and intent and a purpose radio offering the same choices FileOne (~291-360) offers; beside each reading in the existing disclosure a 'This link is wrong' control requiring a reason that calls supersede with reading.linkId; an 'Archive' control requiring a reason; and a 'History' disclosure that fetches workstream(id) only when opened and lists events (kind, summary, time) and corrections. After any write, reload the register view (pass Register's query.reload into WorkstreamCard); refusals render the server's sentence verbatim. No state is computed in the client.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "registerApi gains amend; each workstream card can amend its title/intent/purpose, supersede a wrong link with a reason, archive with a reason, and show its history, all through existing routes.",
+  "nonGoals": [
+    "Any server route, service, schema or migration change (server/routes/register.ts is off limits)",
+    "Deleting a workstream or link",
+    "Changing a workstream's project from the screen",
+    "Any bridge/transcript UI"
+  ],
+  "acceptanceConditions": [
+    {"statement": "tests/registerWorkstreamControls.test.tsx: submitting the edit form sends PATCH /api/register/workstreams/<id> with the edited title, intent and purpose, then re-requests /api/register.", "verification": "npm test", "mandatory": true},
+    {"statement": "'This link is wrong' with a reason POSTs .../links/<linkId>/supersede with {reason}; 'Archive' with a reason POSTs .../archive with {reason}; both submits are disabled while the reason is empty.", "verification": "npm test", "mandatory": true},
+    {"statement": "The History disclosure makes no request until opened, then GETs /api/register/workstreams/<id> and lists its events' summaries.", "verification": "npm test", "mandatory": true},
+    {"statement": "A refused write renders the server's error sentence verbatim; tests/workRegister.test.ts still passes and the repository typechecks.", "verification": "npm run typecheck", "mandatory": true}
+  ],
+  "mutationScope": ["client/src/lib/registerApi.ts", "client/src/russell/Register.tsx", "tests/registerWorkstreamControls.test.tsx"],
+  "verificationCommands": ["npm run typecheck", "npm test"],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; client-only change plus one new test; existing links and workstreams are untouched."
+}

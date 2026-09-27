@@ -1,0 +1,23 @@
+{
+  "objective": "Put the factory's two campaign readers that have routes and no browser caller on the Build screen. GET /api/factory/campaigns/:campaignId/pull-request (server/routes/factory.ts ~636-643, returns pullRequestFor's {title, body} from server/services/factory/pullRequest.ts ~182, or {title:null, body:null}) and GET /api/factory/campaigns/:campaignId/throughput (~626-633, returns ThroughputReport from server/services/factory/throughput.ts ~77, every number an EvidenceNumber {value, evidence, basis}). client/src/lib/factoryApi.ts (~311-314) has campaign() and briefing() only. CLAUDE.md §27 records that on the local plane the rendered pull-request body is the campaign's whole deliverable and 'the one person who has to act on it had nowhere to read what they were about to open'; client/src/russell/Build.tsx `CampaignRow` (~1045-1120) still says for a campaign with prRef and no prUrl that 'opening the pull request is a person's step' (~1100-1112) without showing the title or body. Add `FactoryApi.pullRequest(campaignId)` and `FactoryApi.throughput(campaignId)` (typing throughput with `import type { ThroughputReport }`). In CampaignRow add a 'Read the pull request it would open' disclosure, fetched only when opened, that renders the title and the body in a <pre> (or says plainly that none has been rendered when title is null), and a 'How fast it ran' disclosure, fetched only when opened, listing unitsPerHour, maxObservedConcurrency, concurrency.observed and concurrency.declared with each number's evidence class; a null value renders the words 'not measured' with its basis, never 0 or a dash.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Build's campaign rows can show the pull-request title/body and the throughput report on demand, using the existing routes, with UNKNOWN figures labelled as not measured.",
+  "nonGoals": [
+    "Opening, publishing or merging a pull request from Brain",
+    "Any server route or service change",
+    "Changing ReleaseDecision, Submit, Repositories or allocation behaviour",
+    "Fetching either reader before its disclosure is opened"
+  ],
+  "acceptanceConditions": [
+    {"statement": "tests/buildPullRequestPreview.test.tsx: opening the pull-request disclosure on a campaign row requests /api/factory/campaigns/<id>/pull-request exactly once and renders the returned title and body text; no such request is made before it is opened.", "verification": "npm test", "mandatory": true},
+    {"statement": "When the route returns {title:null, body:null} the disclosure says no pull request has been rendered and renders no empty <pre>.", "verification": "npm test", "mandatory": true},
+    {"statement": "Opening the throughput disclosure renders each listed figure with its evidence class, and a figure whose value is null renders 'not measured' and its basis, never '0'.", "verification": "npm test", "mandatory": true},
+    {"statement": "tests/buildRepositories.test.tsx and tests/factoryHttp.test.ts still pass and the repository typechecks.", "verification": "npm run typecheck", "mandatory": true}
+  ],
+  "mutationScope": ["client/src/lib/factoryApi.ts", "client/src/russell/Build.tsx", "tests/buildPullRequestPreview.test.tsx"],
+  "verificationCommands": ["npm run typecheck", "npm test"],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; read-only client additions and one new test."
+}
