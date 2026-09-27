@@ -1,0 +1,63 @@
+{
+  "objective": "Give the Goals screen the three person decisions §50 built routes for and no browser can reach, plus the way back out of the one that has no answering transition. server/routes/goals.ts has PATCH /api/goals/:goalId/terms (~133, outcome, ownerUserId, dueAt, commitment from GOAL_COMMITMENTS in server/domain/goals.ts ~24, calling setTerms in server/services/goals/decide.ts ~123), POST /api/goals/:goalId/objective (~159, intent and outcome, calling changeObjective ~155) and POST /api/goals/:goalId/depends-on (~181, goalId of another goal, refused when it would close a cycle). client/src/lib/goalsApi.ts `GoalsApi` (~23-31) exposes only briefing, goal, pause, resume, cancel and reinstate, and client/src/russell/Goals.tsx renders dependencies (~190-196) read-only. So a person can see that a goal waits on another and can neither declare that nor undo it, cannot say what counts as finished or when it is due, and cannot restate a goal's intent — §24's escalation with no answering transition, at the surface §50 says a person's decision reaches the work through. Undoing a dependency needs no new route: a goal is a workstream and a dependency is a live WORKSTREAM/DEPENDS_ON link (server/services/goals/model.ts `dependsOn` ~711 reads only live links via listLinks in server/repos/register.ts ~245), and POST /api/register/workstreams/:workstreamId/links/:linkId/supersede (server/routes/register.ts ~276) already supersedes one with a reason; what is missing is that `GoalDependency` (server/services/goals/model.ts ~123) does not carry the link id the client would need.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "`GoalDependency` gains `linkId` (the id of the live DEPENDS_ON link it was read from; present for every dependency, including one whose target the caller may not read, since the link belongs to the caller's own goal). client/src/lib/goalsApi.ts gains `terms(id, { outcome, dueAt, commitment })`, `objective(id, { intent, outcome })`, `dependsOn(id, otherGoalId)` and `removeDependency(goalId, linkId, reason)`, the last calling the existing register supersede route. Each open goal in client/src/russell/Goals.tsx gains: an edit-terms form prefilled from the goal (outcome, due date, and commitment offered as exactly GOAL_COMMITMENTS with COMMITMENT_LABELS); a restate-objective form prefilled with the current intent and outcome; a 'waits on' control offering only the other goals present in the caller's own briefing (never the goal itself); and beside each listed dependency a 'stop waiting on this' control that requires a reason. After any of them succeeds the screen re-reads the goal and shows the server's `consequence` sentence; a refusal (including the cycle refusal) shows the server's sentence verbatim. Controls render for every reader and the server decides, as the existing pause/resume controls do (§35).",
+  "nonGoals": [
+    "Changing a goal's owner from the screen: `ownerUserId` is not sent by these forms, because offering it needs a project member list this screen does not have.",
+    "Any new server route, and any change to what setTerms, changeObjective, the depends-on route, the supersede route or the goal tick does.",
+    "Deleting a dependency link: removal is a supersede with a reason, and the superseded row stays.",
+    "Anything under server/services/identity/**, any policy entry, migration or schema change.",
+    "Hiding a control from a reader who may not use it."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "GoalView.dependencies[].linkId equals the id of the live workstream_links row (kind WORKSTREAM, relation DEPENDS_ON) the dependency was read from, including for a dependency on a goal the caller cannot read, whose title stays null.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A browser-to-database test mounts Goals over the real routes and database: submitting the edit-terms form with an outcome, a due date and commitment CUSTOMER writes those values to the workstream row and the re-read goal shows them; the commitment options offered are exactly GOAL_COMMITMENTS and the request body carries no ownerUserId.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Restating the objective through the form changes the goal's intent and outcome and the re-read shows the server's consequence sentence.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Declaring that goal A waits on goal B through the control creates a live DEPENDS_ON link and a GOAL_DEPENDENCY_SET event; then declaring B waits on A is refused and the server's cycle sentence is rendered verbatim with no second link written.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Stopping A waiting on B with a reason supersedes that link (superseded_at set, row kept, LINK_SUPERSEDED event with the reason) and the re-read goal lists no dependency; submitting with an empty reason is refused and nothing changes.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The 'waits on' control never offers the goal itself and offers only goals present in the caller's own briefing.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing goals suites (tests/goalsSurface.test.tsx, tests/goalsHttp.test.ts, tests/goalOwnership.test.ts) still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/lib/goalsApi.ts",
+    "client/src/russell/Goals.tsx",
+    "server/services/goals/model.ts",
+    "tests/goalDecisionControls.test.tsx"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Client controls over existing guarded routes and one additive read-only field on GoalDependency; no schema, route or policy change."
+}

@@ -156,6 +156,7 @@ import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { advanceGoals, type GoalTickReport } from '../goals/tick.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
+import { watchIdleOnTick } from '../engineering/watchdog.ts';
 
 export interface TickReport {
   /**
@@ -1052,6 +1053,18 @@ export async function tick(owner: string): Promise<TickReport> {
       report.goals = await advanceGoals();
     } catch {
       /* goals that could not be read are left exactly as they were */
+    }
+
+    /*
+     * Rule 9 of the engineering policy: executable work beside idle capacity is
+     * a defect, recorded as one. Record-only here — the dispatch tick beside
+     * this loop is the continuation path and is already running — and read at
+     * most every few minutes, because the capacity reading is not free.
+     */
+    try {
+      await watchIdleOnTick();
+    } catch {
+      /* a reading that could not be taken records nothing */
     }
 
     /*

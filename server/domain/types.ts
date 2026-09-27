@@ -5441,6 +5441,11 @@ export interface BinManifest {
   budgetUnits: number | null;
   retry: { maxAttempts: number; backoffSeconds: number };
   stoppingConditions: string[];
+  /**
+   * The engineering policy for a repository bin (`domain/engineering.ts`), so
+   * every worker handed one inherits the same rigor rather than choosing its own.
+   */
+  engineering?: import('./engineering.ts').BinEngineeringEnvelope;
 }
 
 export interface BinRow {
@@ -10504,4 +10509,55 @@ export interface RoutineDeliveryProof {
   requestedBy: string;
   createdAt: string;
   settledAt: string | null;
+}
+
+/* ------------------------------------------------------------------------- */
+/* The engineering connector (099_engineering_evidence.sql)                   */
+/* ------------------------------------------------------------------------- */
+
+export interface EngineeringEvidenceRow {
+  id: string;
+  project_id: string | null;
+  repository: string;
+  property_key: string;
+  status: string;
+  source_kind: string;
+  evidence_ref: string;
+  code_sha: string | null;
+  config_fingerprint: string | null;
+  proven_at: string;
+  valid_until: string | null;
+  invalidation_scope: string;
+  recorded_by_type: string;
+  recorded_by_id: string;
+  metadata: string;
+  created_at: string;
+}
+
+export interface EngineeringInterventionRow {
+  id: string;
+  project_id: string | null;
+  task_ref: string | null;
+  kind: string;
+  rule: string;
+  attempted_action: string;
+  replacement_action: string;
+  minutes_avoided: number | null;
+  actor_type: string;
+  actor_id: string;
+  created_at: string;
+}
+
+export interface EngineeringBlockerRow {
+  id: string;
+  project_id: string | null;
+  task_ref: string | null;
+  kind: string;
+  statement: string;
+  remedy: string;
+  needs_human: number;
+  checked: string;
+  actor_type: string;
+  actor_id: string;
+  created_at: string;
 }

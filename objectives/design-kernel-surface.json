@@ -1,0 +1,84 @@
+{
+  "objective": "Give the design kernel (§42) a read-only operator surface. docs/factory-runs/2026-09-25-airyn-first.md inventory item #11: server/services/design/ has no HTTP route and no client screen, so everything it derives every tick — which screens it would look at first and why, how weak each of its own abilities is, what it found, what the owner told it, what it learned and what it is trying to become able to do — is readable only from a terminal. Labor (client/src/russell/Labor.tsx, server/routes/labor.ts ~60-75, server/services/labor/access.ts) and Machines closed the same gap; this follows them. The kernel's tables carry no project_id (server/db/migrations/080_design_kernel.sql: design_surfaces ~81, design_cycles ~149, design_findings ~320, design_corrections ~415, design_patterns ~486, design_capabilities ~548, design_expansions ~628), so its state is Brain-wide rather than project-scoped; server/services/design/scope.ts `designProject` (~36, `ARCHITECTURE_SLUG` from server/services/capability/ingest.ts) only chooses where the kernel files its own bins and may return null, so it is not a readership boundary. The route is therefore guarded like the other Brain-wide readers: `requirePerson()` then `await requireBrainAdmin()` (server/routes/helpers.ts ~93 and ~426), exactly as server/routes/people.ts ~369 does. A new server/routes/design.ts mounts `GET /api/design/kernel` (not `/api/design`, because server/routes/russell.ts ~1925 already owns `/design/decisions`), composed ONLY from existing functions: `liveSurfaces` (server/services/design/surfaces.ts ~239) passed to `rankSurfaces` (server/services/design/priority.ts ~171, each entry carrying rank, inputs and `because`); `runtimeAvailability` (priority.ts ~274, canRender/canJudge/reasons); `listCapabilities` (server/repos/design.ts ~1391) ordered by `weakestFirst` (server/services/design/capabilities.ts ~522) with `describeCapability` (~497) beside each, and `rankCapabilities` (priority.ts ~355) for demand/demandKnown; `listFindings({ state: 'OPEN' })` (server/repos/design.ts ~879); `listCycles` (~291, carrying state and stopReason); `listPatterns` (~1222, origin, scope, scopeRef, confidence, state); `listCorrections` (~1049, the stored `correction` text verbatim, lesson kept separate, scope, scopeRef, confidence, promotedPatternId); and `listExpansions` (~1643) with IDENTIFIED/ROUTED reported as live (the pair server/repos/design.ts `liveExpansionFor` ~1633 uses), all others shown with their state. No policy entry is needed: a GET takes the default READ in server/services/identity/policy.ts ~160, and that file is out of scope.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A new route DESIGN at /design in client/src/lib/router.ts (parse and format), a secondary nav entry and a view switch in client/src/russell/RussellShell.tsx beside MACHINES and LABOR, a new client/src/lib/designKernelApi.ts for the one call, a new client/src/russell/DesignKernel.tsx, a new server/routes/design.ts mounted in server/routes/index.ts beside laborRouter and manufacturingRouter (before apiNotFound), and a new server/services/design/view.ts that composes the reading from the functions named in the objective and adds no decision of its own. The screen renders, in this order: whether this machine can render and judge, with the server's reasons; registered surfaces in rank order, each with its `because` sentence; capabilities weakest-first, each showing both dimensions (abilityState and evidenceState) as their words, its describeCapability sentence and every limitation; open findings; recent cycles, each closed one with its stopReason as a word; patterns with origin, scope and confidence; owner corrections with their stored text verbatim beside what Brain took from them (lesson) and the scope they were recorded at; and live expansions with their statement and why. An UNTESTED, ABSENT or UNKNOWN reading, and a demand whose demandKnown is false, renders as its words and never as a number, a percentage, a progress bar or a success colour. Every list that is empty renders a sentence saying it is empty rather than disappearing, so the page has the same sections for every reader. The screen offers no control that writes anything.",
+  "nonGoals": [
+    "Any write: no route, button or form that records a correction, promotes or retires a pattern, opens or closes a cycle, opens an expansion, moves a capability dimension, refreshes capabilities or renders a surface. The only new HTTP method is GET.",
+    "Changing what any function in server/services/design/ or server/repos/design.ts does, including rankSurfaces, rankCapabilities, weakestFirst, refreshCapabilities, previewExpansion and runDesignKernel. The view calls them; it does not re-derive or re-rank anything.",
+    "Calling refreshCapabilities, runDesignKernel, previewExpansion or any function that reads the filesystem or the render runtime in order to write, from the GET.",
+    "Anything under server/services/identity/** (forbidden to the factory), including a policy entry, a new principal check or a design policy module.",
+    "Opening the surface to project members, or scoping it through designProject(): the kernel's rows are Brain-wide and designProject() may be null.",
+    "Any new migration, table or column.",
+    "Rendering a composite score, a percentage or an aggregate readiness for a capability — §37's six-dimension rule, which §42 applies to this registry."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A browser-to-database test in the style of tests/laborSurface.test.tsx mounts the DesignKernel view over the real route and a real database seeded with seedDesignKernel (server/services/design/kernel.ts ~110), signed in as a Brain administrator, and asserts against the rendered document that every registered surface, every capability, every pattern and every recorded correction appears, with the correction's stored text rendered verbatim and its scope shown.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A capability whose abilityState or evidenceState is UNTESTED, ABSENT or otherwise unmeasured, and a ranking whose demandKnown is false, renders the state's word and no digit, percentage or success styling for that line, asserted against the rendered document.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "On a database with no open findings, no cycles, no corrections and no live expansions, each of those sections is still rendered with a sentence saying it is empty; the set of section identifiers is identical to the set rendered on a populated database.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A closed cycle renders its stopReason as its word, and an open finding renders its severity and surface, asserted against the rendered document after rows are written through the existing repository functions (openCycle, closeCycle, recordFinding).",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A WORKER principal is refused at GET /api/design/kernel with 404, whatever its memberships.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "An authenticated person who is not a Brain administrator (including one who is ADMIN of the architecture project) is refused with 404 and a response body byte-identical to the worker's refusal and to the refusal the same person receives from an existing requireBrainAdmin route (POST /api/people/:userId/claude/adopt), so the refusal does not distinguish forbidden from absent; an unauthenticated request is refused as well.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The GET performs no write: row counts of design_surfaces, design_cycles, design_findings, design_captures, design_corrections, design_patterns, design_capabilities, design_capability_events, design_expansions and bins are unchanged across two consecutive reads, and every updated_at column in those tables is unchanged.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The rendered screen contains no form and no button that issues a non-GET request, asserted by recording every request the view makes during the test and by reading client/src/lib/designKernelApi.ts, which calls only GET /api/design/kernel.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The /design path parses to DESIGN and DESIGN formats back to /design, and the shell renders the DesignKernel view for it; /design/decisions on the server is unaffected.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The existing design, labor and machines suites (tests/designKernel.test.ts, tests/designJudgedWalk.test.ts, tests/laborSurface.test.tsx, tests/machinesBrowserToDatabase.test.ts) still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/lib/router.ts",
+    "client/src/russell/RussellShell.tsx",
+    "client/src/lib/designKernelApi.ts",
+    "client/src/russell/DesignKernel.tsx",
+    "server/routes/design.ts",
+    "server/routes/index.ts",
+    "server/services/design/view.ts",
+    "tests/designKernelSurface.test.tsx"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. One new read-only GET route guarded by requirePerson and requireBrainAdmin, a new composition module that only calls existing design functions, and a new screen; no schema change, no policy change and no change to what any design service or repository function does."
+}
