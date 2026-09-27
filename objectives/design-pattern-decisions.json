@@ -1,0 +1,56 @@
+{
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "objective": "Give the design kernel (\u00a742) the person decision that lets a learned pattern take effect. Every pattern the kernel writes for itself starts PROPOSED \u2014 research absorption (server/services/design/absorb.ts ~176), recurrences (server/services/design/learn.ts ~261) and owner corrections (server/services/design/patterns.ts ~401) \u2014 and `patternsInScope` (patterns.ts ~285) reads only ACTIVE patterns. The only function that moves a pattern PROPOSED\u2192ACTIVE is `activatePattern` (server/repos/design.ts ~1252), and it has no caller anywhere in the repository; `retirePattern` (~1260) and `retireSurface` (~215) have none either. So the kernel's learning and expansion loops write patterns nothing can ever apply, and the comment at patterns.ts ~354 names activation as 'a separate decision' that nothing implements. Add that decision as a service function in server/services/design/patterns.ts and reach it from the existing terminal surface scripts/design.ts, attributed exactly the way its `correction` command already resolves `--admin` (scripts/design.ts ~476-497: getUserByEmail, refuse an unknown address).",
+  "expectedOutcome": "server/services/design/patterns.ts exports `decidePattern({ patternId, action: 'ACTIVATE' | 'RETIRE', reason, actorUserId })` returning `{ ok: true, changed: boolean } | { ok: false, reason: string }`. ACTIVATE refuses a pattern whose scope is ONE_OFF (a one-off correction can never become a pattern, \u00a742), refuses a RETIRED pattern, and is idempotent through the repository's guarded update (a second activation returns changed=false). RETIRE requires a non-empty reason and stores it as retired_reason. A matching `decideSurfaceRetirement({ surfaceKey, reason, actorUserId })` wraps `retireSurface`. scripts/design.ts gains `patterns [--state PROPOSED|ACTIVE|RETIRED]` (read-only listing: id, state, scope, primitive, branch, statement), `pattern activate <id> --admin <email>`, `pattern retire <id> --reason \"\u2026\" --admin <email>` and `surface retire <key> --reason \"\u2026\" --admin <email>`, each refusing an --admin address that resolves to no account and printing the outcome in one line.",
+  "nonGoals": [
+    "Any HTTP route or client UI (server/routes/design.ts and server/services/design/view.ts are owned by another campaign).",
+    "Automatic activation of any pattern, or any change to how patterns are proposed, absorbed or scoped.",
+    "A migration or a change to server/repos/design.ts beyond what the service needs to call (prefer no change there).",
+    "Changing measured-lane evaluation or the repair loop."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A PROPOSED pattern created through the existing correction path is absent from patternsInScope; after decidePattern ACTIVATE it is present; a second ACTIVATE returns ok with changed=false.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "ACTIVATE on a ONE_OFF-scoped or RETIRED pattern is refused with a reason and changes no row.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "RETIRE with an empty reason is refused; with a reason it sets state RETIRED and retired_reason, and the pattern leaves patternsInScope.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "decideSurfaceRetirement removes the surface from listSurfaces() while listSurfaces({ includeRetired: true }) still returns it with its reason.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "scripts/design.ts contains the four new commands and each mutating one refuses an --admin address with no account (asserted by a test that reads or runs the script).",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/design/patterns.ts",
+    "scripts/design.ts",
+    "tests/designPatternDecisions.test.ts"
+  ],
+  "rollbackRequirement": "Discard the branch. One service function pair and four terminal commands over existing guarded repository updates; no schema, route or policy change."
+}

@@ -1,0 +1,52 @@
+{
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "objective": "Let a Brain administrator see and act on Claude capacity nobody owns, from the People page instead of a terminal. GET /api/people already sends administrators `foundation.unattributed` (server/routes/people.ts ~189, built in server/services/identity/foundation.ts ~291: surfaces the dispatcher fires that no member's connection covers) and client/src/lib/peopleApi.ts (~117) types it, but client/src/russell/People.tsx never renders it \u2014 so the foundation reading names a remedy nobody can apply from a browser. The remedy exists server-side: POST /api/people/:userId/claude/adopt (people.ts ~366, `adoptSurface` in server/services/capacity/adopt.ts) and the administrator's POST /api/people/:userId/claude/revoke (people.ts ~400) have no client caller, and PeopleApi (peopleApi.ts ~153-205) has neither. Adopt takes a `routineRef` (trig_\u2026) while an unattributed row carries the Routine's id, so the route must also accept `routineId`.",
+  "expectedOutcome": "The adopt route accepts exactly one of `routineRef` or `routineId` (a `routineId` resolved with `getRoutine` from server/repos/fleet.ts to its routine ref before calling adoptSurface; supplying both, or neither, is a 422 naming the rule). PeopleApi gains `adoptSurface(userId, { routineId })` and `revokeMemberConnection(userId, reason)`. In People.tsx's administrator Diagnostics section each unattributed surface renders its name and its `because` sentence, with an Adopt control that lets the administrator choose a member (from people already listed on the page) and posts. Each member row in the administrator's connections list gains a Revoke control that requires a reason before it posts. After either action the page re-reads without unmounting the section (the loading-unmount defect \u00a729/\u00a739 record). A server refusal is rendered verbatim.",
+  "nonGoals": [
+    "Anything under server/services/identity/** (foundation.ts is read, never edited), scripts/admin.ts, or any policy entry.",
+    "Changing what adoptSurface or revokeOwnConnection do, or what counts as unattributed.",
+    "Showing the unattributed list, or the controls, to a non-administrator.",
+    "Any change to the member's own connection screen (ClaudeConnection.tsx)."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "Route test over the real database: adopt with routineRef still works; adopt with routineId adopts the same surface; both supplied or neither supplied is 422; an unknown routineId is 422 with the service's reason; a non-administrator gets 404.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Component test: an administrator payload with one unattributed surface renders its name and because sentence and an Adopt control; a member payload renders neither.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Pressing Adopt with a chosen member posts { routineId } to that member's adopt route, and after the re-read the surface is no longer listed as unattributed.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The administrator Revoke control is disabled until a non-empty reason is entered and posts that reason to /api/people/:userId/claude/revoke.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks and existing tests/peopleSection.test.tsx and tests/peopleAndCapacity.test.ts still pass.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/routes/people.ts",
+    "client/src/lib/peopleApi.ts",
+    "client/src/russell/People.tsx",
+    "tests/peopleUnattributedCapacity.test.tsx"
+  ],
+  "rollbackRequirement": "Discard the branch. One optional request field on an existing guarded route and client controls over existing routes; no schema or policy change."
+}

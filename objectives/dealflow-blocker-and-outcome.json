@@ -1,0 +1,51 @@
+{
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "objective": "Make the dealflow kernel's (\u00a745) BLOCKED stage and a deal's final outcome reachable. `derive` in server/services/dealflow/maturity.ts (~160-168) reports stage BLOCKED from a deal's blocked reason, but `setDealBlocker` (server/repos/dealflow.ts ~494) has no caller, so the stage is unreachable; `recordDealOutcome` (~512) has no caller either, so deals.outcome has no writer and server/services/dealflow/view.ts never reads it. Add a small service server/services/dealflow/decide.ts and two routes in server/routes/cash.ts beside the existing dealflow observation route (~1332). Every POST under /cash/dealflow is already project ADMIN in the policy module, so no policy change is needed.",
+  "expectedOutcome": "POST /api/projects/:projectId/cash/dealflow/:dealId/blocker with { reason: string | null } sets or clears the deal's blocker (a blank string is refused; null clears). POST \u2026/:dealId/outcome with { outcome, note } records the outcome exactly once \u2014 a second call answers 409 and leaves the first untouched \u2014 with the outcome validated against a closed set declared in decide.ts (WON, LOST, WITHDRAWN) and anything else refused as 422. decide.ts resolves the deal within the addressed project and answers the same 404 body for a deal in another project as for an invented id. The deal view in view.ts gains outcome, outcomeNote and outcomeAt (null when unrecorded), and a blocked deal's `because` includes the blocker reason.",
+  "nonGoals": [
+    "Any client change (client/src/lib/cashApi.ts and client/src/russell/Cash.tsx are owned elsewhere).",
+    "A migration, a policy entry, or automatic derivation of blockers.",
+    "Changing how the stage ladder is derived other than reading the blocker it already reads."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "After the blocker POST, the dealflow view reports the deal at stage BLOCKED with the reason in its because; clearing with null restores the previously derived stage.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The outcome is written once; a second POST is 409 and the stored outcome, note and time are unchanged; the view returns them.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A deal belonging to another project and an invented deal id both answer 404 with byte-identical bodies, and neither changes a row.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A project member below ADMIN is refused at both routes and a WORKER principal is refused.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks and tests/dealflowKernel.test.ts still passes.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/dealflow/decide.ts",
+    "server/services/dealflow/view.ts",
+    "server/routes/cash.ts",
+    "tests/dealflowBlockerOutcome.test.ts"
+  ],
+  "rollbackRequirement": "Discard the branch. Two guarded routes over existing repository writers and three additive view fields; no schema or policy change."
+}
