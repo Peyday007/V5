@@ -1,0 +1,58 @@
+{
+  "objective": "Give the Brain-wide shared finding pool (§31) a reader and its two person decisions a control. server/routes/russell.ts has GET /api/russell/shared-findings (~2007, `sharedPoolForReader` from server/services/knowledge/shared.ts ~271, returning findings plus `total` and `reusable`), POST /api/russell/shared-findings/:findingId/revoke (~2052, reason required) and POST /api/russell/shared-findings/:findingId/horizon (~2077, validUntil ISO-8601 or null); server/services/identity/policy.ts (~258) makes both writes ADMIN on the originating project. No client module calls any of the three (client/src/lib/russellApi.ts has no shared-findings function), so what one private operation established and another is now reusing — and the one control §31 gives the producing project, withdrawing a finding from reuse — is reachable only by a raw request. The Discovery Frontier (client/src/russell/Frontier.tsx, `FrontierView_` ~55) is where a person reads what is understood well enough to build on, so the pool is shown there as its own section rather than on a new page (no new top-level route). `SharedFindingView` (server/services/knowledge/shared.ts ~165) does not say whether the reader may withdraw or set a horizon, so the client could only guess.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "`describeForReader` (server/services/knowledge/shared.ts ~226) adds `mayDecide: boolean` and `decideRefusal: string | null`, computed with `decideProjectAccess(principal, finding.originProjectId, 'ADMIN')` and nothing else; the refusal sentence names no project (a reader whose `originVisible` is false learns nothing new from it). client/src/lib/russellApi.ts gains `sharedFindings()`, `withdrawSharedFinding(id, reason)` and `setSharedFindingHorizon(id, validUntil | null)`. Frontier.tsx renders a 'Shared across this Brain' section below the regions, showing the two counts as two labelled numbers (total, and how many Brain would reuse), and for each finding its statement, claim type, source (URL, publisher, date, excerpt and locator), scope fields, its state, its `withheldReason` verbatim when it is not reusable (a revoked or expired finding is listed with its reason, never hidden), and the origin project only when `originVisible` is true — otherwise the words saying the origin is not shown to this reader. Withdraw (requires a reason) and set/clear horizon controls render for every finding and are disabled with `decideRefusal` when `mayDecide` is false (§35). An empty pool renders a sentence saying it is empty.",
+  "nonGoals": [
+    "Changing the promotion rule, eligibility, retrieval, revokeFinding or setFindingHorizon, or any route's guard.",
+    "A delete for a finding, or hiding a revoked or expired one.",
+    "Showing the name or id of an origin project the reader may not read.",
+    "Composing any sentence about a finding client-side beyond labels; withheldReason and the refusal are the server's.",
+    "Anything under server/services/identity/**, any policy entry, migration or new top-level route."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "For a person who is ADMIN of a finding's origin project `mayDecide` is true and `decideRefusal` null; for a member of that project below ADMIN, and for a person with no membership there, `mayDecide` is false with a refusal sentence that does not contain the origin project's id or name.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A browser-to-database test mounts the Frontier over the real routes and a database holding shared findings written through the existing repository functions, and asserts every finding's statement and source URL render, the total and reusable counts render as two labelled figures, and a finding from a project the reader cannot read shows no origin project id or name.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "An ADMIN of the origin withdraws a finding through the control with a reason: the shared_findings row reads REVOKED with that reason, and on the re-read the finding is still listed with its withheldReason rather than removed.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Setting a horizon through the control stores validUntil, and clearing it sends null and removes it; for a reader whose mayDecide is false both controls are rendered disabled with the server's refusal, and a POST as that reader is refused 404 with no row changed.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "With no shared findings the section still renders with a sentence saying the pool is empty, and a WORKER principal is refused at GET /api/russell/shared-findings.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/sharedKnowledge.test.ts and tests/step12bProduct.test.ts still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/knowledge/shared.ts",
+    "client/src/lib/russellApi.ts",
+    "client/src/russell/Frontier.tsx",
+    "tests/sharedFindingsSurface.test.tsx"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. A new Frontier section, three client calls to existing guarded routes and two additive read-only fields on SharedFindingView; no schema, route or policy change."
+}
