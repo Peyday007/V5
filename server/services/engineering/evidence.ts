@@ -47,9 +47,22 @@ async function resolveRoutineId(reference: string): Promise<string | null> {
   return byName?.id ?? null;
 }
 
+/**
+ * Read from `routine_delivery_proofs`, the state the dispatcher already routes
+ * on. Two properties, and they are not the same fact:
+ *
+ *   :push      any settled row — a confirmed push is PROVEN, a refused one is
+ *              FAILED, CLEARED says the cause was fixed and proves nothing.
+ *   :delivery  a PROVEN row counts only if it carries a pull request. A push
+ *              the forge confirmed with no pull request proves the surface can
+ *              push; it says nothing about opening one. FAILED and CLEARED
+ *              count for both, because a surface that cannot push cannot
+ *              deliver and a repaired attachment is unproven for both.
+ */
 async function surfaceObservations(
   routineReference: string,
   repository: string,
+  property: 'push' | 'delivery',
 ): Promise<EvidenceObservation[]> {
   const routineId = await resolveRoutineId(routineReference);
   if (!routineId) return [];
@@ -57,6 +70,7 @@ async function surfaceObservations(
   const proofs = await listDeliveryProofs(routineId);
   return proofs
     .filter((proof) => proof.repository === repo && proof.state !== 'PENDING')
+    .filter((proof) => property === 'push' || proof.state !== 'PROVEN' || proof.pullRequest !== null)
     .map((proof) => ({
       status: proof.state === 'PROVEN' ? 'PROVEN' : proof.state === 'FAILED' ? 'FAILED' : 'STALE',
       source: proof.source === 'REAL_WORK' ? 'REAL_PRODUCTION' : 'SYNTHETIC',
@@ -139,7 +153,7 @@ export async function lookupEvidence(input: {
 
   const surface = SURFACE_KEY.exec(input.propertyKey);
   if (surface) {
-    const derived = await surfaceObservations(surface[1]!, surface[2]!);
+    const derived = await surfaceObservations(surface[1]!, surface[2]!, surface[3] as 'push' | 'delivery');
     if (derived.length > 0) derivedFrom = 'DELIVERY_PROOFS';
     observations.push(...derived);
   }
@@ -153,6 +167,11 @@ export async function lookupEvidence(input: {
     }
   }
 
-  const reading = readEvidence(observations, new Date().toISOString(), input.currentFingerprint);
+  // A surface key reads the way `deliveryReadings` does: the newest settled
+  // row decides, whatever produced it — including an operator's invalidation
+  // of the repository attachment recorded in engineering_evidence.
+  const reading = readEvidence(observations, new Date().toISOString(), input.currentFingerprint, {
+    newestWins: surface !== null,
+  });
   return { ...reading, repository, propertyKey: input.propertyKey, derivedFrom };
 }

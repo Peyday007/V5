@@ -702,6 +702,7 @@ export function readEvidence(
   observations: readonly EvidenceObservation[],
   now: string,
   currentFingerprint?: string | null,
+  options: { newestWins?: boolean } = {},
 ): EvidenceReading {
   if (observations.length === 0) {
     return {
@@ -716,10 +717,28 @@ export function readEvidence(
       observations: 0,
     };
   }
+  const newestFirst = [...observations].sort((a, b) =>
+    a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
+  );
+  /*
+   * Source rank decides which *proof* counts — a real PROVEN outranks a
+   * synthetic one — and never lets an older proof hide a newer failure. A
+   * surface that proved it could push last week and was refused this morning
+   * cannot push; reading the week-old proof would send a worker straight into
+   * the refusal. So a FAILED or STALE observation newer than the chosen proof
+   * wins whatever its source, and a caller whose state machine is already
+   * "newest settled row decides" (delivery proofs) asks for exactly that.
+   */
   const best = Math.max(...observations.map((o) => sourceRank(o.source)));
-  const top = observations
-    .filter((o) => sourceRank(o.source) === best)
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))[0]!;
+  let top = options.newestWins
+    ? newestFirst[0]!
+    : newestFirst.filter((o) => sourceRank(o.source) === best)[0]!;
+  if (top.status === 'PROVEN') {
+    const newerNegative = newestFirst.find(
+      (o) => o.createdAt > top.createdAt && (o.status === 'FAILED' || o.status === 'STALE'),
+    );
+    if (newerNegative) top = newerNegative;
+  }
   let status = top.status;
   let because = `Newest ${top.source} observation (${top.evidenceRef}).`;
   if (status === 'PROVEN' && top.validUntil && top.validUntil <= now) {

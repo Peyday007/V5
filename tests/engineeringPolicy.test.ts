@@ -246,16 +246,18 @@ describe('CASE D — real work already proved a surface delivers', () => {
     expect(await interventions('REAL_EVIDENCE_REUSED')).toBe(1);
   });
 
-  it('ranks real production above a later synthetic failure', () => {
+  it('never lets an older proof hide a newer failure, whatever its source', () => {
     const at = (t: string) => `2026-09-26T0${t}:00:00.000Z`;
-    const reading = readEvidence(
-      [
-        { status: 'PROVEN', source: 'REAL_PRODUCTION', evidenceRef: 'pr', codeSha: null, configFingerprint: null, provenAt: at('1'), validUntil: null, invalidationScope: [], createdAt: at('1') },
-        { status: 'FAILED', source: 'SYNTHETIC', evidenceRef: 'probe', codeSha: null, configFingerprint: null, provenAt: at('2'), validUntil: null, invalidationScope: [], createdAt: at('2') },
-      ],
-      at('3'),
-    );
-    expect(reading.status).toBe('PROVEN');
+    const obs = (status: 'PROVEN' | 'FAILED', source: 'REAL_PRODUCTION' | 'SYNTHETIC', t: string) => ({
+      status, source, evidenceRef: `${source}-${t}`, codeSha: null, configFingerprint: null,
+      provenAt: at(t), validUntil: null, invalidationScope: [], createdAt: at(t),
+    });
+    // A newer synthetic failure after a real proof: the surface is refused now.
+    expect(readEvidence([obs('PROVEN', 'REAL_PRODUCTION', '1'), obs('FAILED', 'SYNTHETIC', '2')], at('3')).status).toBe('FAILED');
+    // An older synthetic failure before a real proof does not undo the proof.
+    expect(readEvidence([obs('FAILED', 'SYNTHETIC', '1'), obs('PROVEN', 'REAL_PRODUCTION', '2')], at('3')).status).toBe('PROVEN');
+    // Among proofs, real still outranks synthetic.
+    expect(readEvidence([obs('PROVEN', 'REAL_PRODUCTION', '1'), obs('PROVEN', 'SYNTHETIC', '2')], at('3')).sourceKind).toBe('REAL_PRODUCTION');
   });
 
   it('a worker cannot fabricate a production fact', async () => {
@@ -289,6 +291,93 @@ describe('CASE D — real work already proved a surface delivers', () => {
     });
     expect(first.recorded).toBe(true);
     expect(again.recorded).toBe(false);
+  });
+});
+
+describe('surface evidence reads the delivery-proof state the dispatcher routes on', () => {
+  let routineId: string;
+  const KEY = (property: 'push' | 'delivery') => `FACTORY_SURFACE:trig_airyn:repo:peyday007/v5:${property}`;
+  const read = (property: 'push' | 'delivery') =>
+    lookupEvidence({ repository: REPO, propertyKey: KEY(property), offline: true });
+
+  /** One settled row at an explicit instant, so ordering is never a same-millisecond tie. */
+  async function proof(input: {
+    state: 'PROVEN' | 'FAILED' | 'CLEARED';
+    at: string;
+    pullRequest?: number | null;
+    source?: 'REAL_WORK' | 'PROBE';
+  }): Promise<void> {
+    const id = `rdp_${Math.random().toString(36).slice(2, 12)}`;
+    await getDb().run(
+      `INSERT INTO routine_delivery_proofs
+         (id, routine_id, repository, bin_id, source, state, branch, probe_path, head_sha,
+          pull_request, requested_by, created_at, settled_at)
+       VALUES (?, ?, 'peyday007/v5', ?, ?, ?, 'b', '', ?, ?, 'test', ?, ?)`,
+      [id, routineId, `bin_${id}`, input.source ?? 'REAL_WORK', input.state, 'c'.repeat(40),
+        input.pullRequest ?? null, input.at, input.at],
+    );
+  }
+
+  beforeEach(async () => {
+    const account = await createAccount({ name: 'Airyn' });
+    const routine = await createRoutine({
+      accountId: account.id,
+      routineRef: 'trig_airyn',
+      name: 'Factory surface 2',
+      tokenSecretName: 'BRAIN_TEST_SECRET',
+      capabilities: ['repository', 'repository-write'],
+    });
+    routineId = routine.id;
+  });
+
+  it('a confirmed push with no pull request proves :push and never :delivery', async () => {
+    await proof({ state: 'PROVEN', at: '2026-09-26T01:00:00.000Z', pullRequest: null });
+    const push = await read('push');
+    expect(push.status).toBe('PROVEN');
+    expect(push.sourceKind).toBe('REAL_PRODUCTION');
+    expect((await read('delivery')).status).toBe('UNKNOWN');
+
+    // A later push that did open a pull request proves delivery too.
+    await proof({ state: 'PROVEN', at: '2026-09-26T02:00:00.000Z', pullRequest: 31 });
+    const delivery = await read('delivery');
+    expect(delivery.status).toBe('PROVEN');
+    expect(delivery.evidenceRef).toContain('PR #31');
+  });
+
+  it('a newer refused push is not hidden by an older successful delivery', async () => {
+    await proof({ state: 'PROVEN', at: '2026-09-26T01:00:00.000Z', pullRequest: 27 });
+    await proof({ state: 'FAILED', at: '2026-09-26T02:00:00.000Z' });
+    expect((await read('push')).status).toBe('FAILED');
+    expect((await read('delivery')).status).toBe('FAILED');
+  });
+
+  it('a newer failed probe is not hidden by an older real proof', async () => {
+    await proof({ state: 'PROVEN', at: '2026-09-26T01:00:00.000Z', pullRequest: 27 });
+    await proof({ state: 'FAILED', at: '2026-09-26T02:00:00.000Z', source: 'PROBE' });
+    expect((await read('delivery')).status).toBe('FAILED');
+  });
+
+  it('a changed repository attachment makes an older proof STALE, not PROVEN', async () => {
+    await proof({ state: 'PROVEN', at: '2026-09-26T01:00:00.000Z', pullRequest: 27 });
+    // The operator's answering transition after re-attaching the repository.
+    await proof({ state: 'CLEARED', at: '2026-09-26T02:00:00.000Z' });
+    expect((await read('push')).status).toBe('STALE');
+    expect((await read('delivery')).status).toBe('STALE');
+  });
+
+  it('an explicit attachment invalidation outranks an older proof, and a newer real push proves it again', async () => {
+    await proof({ state: 'PROVEN', at: '2026-09-26T01:00:00.000Z', pullRequest: 27 });
+    await getDb().run(
+      `INSERT INTO engineering_evidence
+         (id, repository, property_key, status, source_kind, evidence_ref, proven_at,
+          invalidation_scope, recorded_by_type, recorded_by_id, metadata, created_at)
+       VALUES ('eev_inv', 'peyday007/v5', ?, 'STALE', 'OPERATOR', 'invalidated:routine_repository_attachment',
+               '2026-09-26T02:00:00.000Z', '[]', 'OPERATOR', 'test', '{}', '2026-09-26T02:00:00.000Z')`,
+      [KEY('push')],
+    );
+    expect((await read('push')).status).toBe('STALE');
+    await proof({ state: 'PROVEN', at: '2026-09-26T03:00:00.000Z', pullRequest: null });
+    expect((await read('push')).status).toBe('PROVEN');
   });
 });
 
