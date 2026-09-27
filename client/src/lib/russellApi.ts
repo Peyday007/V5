@@ -38,6 +38,7 @@ import type {
 import type { HomeView } from '../../../server/services/russell/home.ts';
 import type { CollectionView, RankedThread, Starter } from '../../../server/services/russell/collections.ts';
 import type { FrontierView, FrontierRegionView } from '../../../server/services/russell/frontier.ts';
+import type { SharedFindingView } from '../../../server/services/knowledge/shared.ts';
 import type { SearchHit, SearchKind, SearchResult } from '../../../server/services/russell/search.ts';
 import type { FleetView as FleetReading, SlownessExplanation } from '../../../server/services/fleet/view.ts';
 import type { LabExperiment, LabMode, TestEnvelope } from '../../../server/services/fleet/lab.ts';
@@ -703,4 +704,37 @@ export const RussellApi = {
     }),
 
   dealDispatch: (): Promise<ConnectedSystemView> => api('/api/russell/deal-dispatch'),
+
+  /**
+   * The whole shared finding pool, as this reader sees it (§31).
+   *
+   * `total` and `reusable` are two counts rather than one, because a single
+   * number covering both is the "0 of 8 settled" defect — accurate and read as
+   * the opposite of the truth.
+   */
+  sharedFindings: (): Promise<{
+    findings: SharedFindingView[];
+    total: number;
+    reusable: number;
+  }> => api('/api/russell/shared-findings'),
+
+  /** Take a finding out of the shared pool. A reason is required, and is kept. */
+  withdrawSharedFinding: (
+    findingId: string,
+    reason: string,
+  ): Promise<{ finding: SharedFindingView }> =>
+    api(`/api/russell/shared-findings/${encodeURIComponent(findingId)}/revoke`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  /** Declare how long a finding is good for, or clear it by sending null. */
+  setSharedFindingHorizon: (
+    findingId: string,
+    validUntil: string | null,
+  ): Promise<{ finding: SharedFindingView }> =>
+    api(`/api/russell/shared-findings/${encodeURIComponent(findingId)}/horizon`, {
+      method: 'POST',
+      body: JSON.stringify({ validUntil }),
+    }),
 };
