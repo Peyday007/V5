@@ -325,7 +325,13 @@ beforeEach(async () => {
   });
   app.use('/api', designRouter);
   app.use('/api', peopleRouter);
-  app.use('/api', russellRouter);
+  // `createApiRouter()` mounts `russellRouter` at `/russell`
+  // (`router.use('/russell', russellRouter)`, server/routes/index.ts), so its
+  // own `/design/decisions` route really answers at
+  // `/api/russell/design/decisions` — never at `/api/design/decisions`. This
+  // mount mirrors that exactly, so "the address" test below is asking about
+  // the path production can actually produce rather than a fictional one.
+  app.use('/api/russell', russellRouter);
   app.use((error: any, _req: any, res: any, _next: any) => {
     res
       .status(typeof error?.status === 'number' ? error.status : 500)
@@ -688,7 +694,7 @@ describe('reading the design kernel performs no write', () => {
 });
 
 describe('the address', () => {
-  it("parses and formats '/design', and leaves '/design/decisions' to its own route", async () => {
+  it("parses and formats '/design', and leaves russell.ts's own /design/decisions route untouched", async () => {
     expect(parseRoute('/design')).toEqual({ name: 'DESIGN' });
     expect(pathFor({ name: 'DESIGN' })).toBe('/design');
 
@@ -696,14 +702,24 @@ describe('the address', () => {
     await mount();
     expect(screen.getByText('Design kernel')).toBeTruthy();
 
-    // And `russell.ts`'s pre-existing `/design/decisions` door is untouched by
-    // mounting this one at the same prefix — a different exact path, guarded
-    // by `requirePerson` alone, so a non-admin project member (refused at the
-    // kernel above) reaches it without needing to be a Brain administrator.
+    // `russell.ts`'s pre-existing `/design/decisions` route is mounted under
+    // `russellRouter`, which `createApiRouter()` mounts at `/russell`
+    // (server/routes/index.ts: `router.use('/russell', russellRouter)`), so
+    // its real address is `/api/russell/design/decisions` rather than
+    // `/api/design/decisions` — the two routers never share a prefix, so
+    // mounting `designRouter` at `/design/kernel` could not have touched it
+    // regardless. It is untouched, guarded by `requirePerson` alone, so a
+    // non-admin project member (refused at the kernel above) reaches it
+    // without needing to be a Brain administrator.
     mode = 'MEMBER';
-    const decisions = await fetch('/api/design/decisions?revision=rev-test');
+    const decisions = await fetch('/api/russell/design/decisions?revision=rev-test');
     expect(decisions.status).toBe(200);
     expect(await decisions.json()).toEqual({ revision: 'rev-test', decisions: [] });
+
+    // The fictional, unprefixed path answers nothing — confirming there was
+    // never a collision for `/design/kernel` to avoid.
+    const unprefixed = await fetch('/api/design/decisions?revision=rev-test');
+    expect(unprefixed.status).toBe(404);
 
     const kernelAsMember = await fetch('/api/design/kernel');
     expect(kernelAsMember.status).toBe(404);
