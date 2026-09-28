@@ -22,7 +22,15 @@ Read from `npm run admin -- oauth trace` (identity_events and the oauth tables).
   request was shown wrote no row. Both are audited now
   (`OAUTH_TOKEN DENIED {reason}`, `OAUTH_AUTHORIZE_PAGE {shown}`).
 
-Owed, not done here: refresh rotation revokes before the response is
-delivered, so a response lost to a slow commit ends the connector. A bounded
-retry grace for an unused successor would fix it and relaxes "a refresh token
-is usable at most once" (`tests/oauth.test.ts`), which is an owner decision.
+Repaired (owner authorized a narrowly bounded retry): rotation is one
+transaction in `rotateRefreshToken` (`server/repos/oauth.ts`) — a failed write
+changes nothing — and a rotated refresh token names the one it replaced. A
+revoked refresh token is honoured once more only when it was revoked by a
+rotation no more than five minutes earlier and the pair minted in its place has
+never been used; the unused pair is revoked and a new one issued. A replay after
+the replacement was used, a second replay, a replay after the window and any
+explicitly revoked token are refused (`REUSED`, `RECOVERY_SPENT`,
+`OUTSIDE_RETRY_WINDOW`, `NOT_LIVE`). Tests: `tests/oauth.test.ts` (the incident,
+reproduced first against the old handler; replay after use; two racing
+refreshes) and `tests/oauthRefreshRecovery.test.ts` (rollback, window, explicit
+revocation, racing retries), on SQLite and Postgres.

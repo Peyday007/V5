@@ -830,7 +830,8 @@ describe('the token exchange', () => {
     expect(token.body['error']).toBe('unsupported_grant_type');
   });
 
-  it('rotates a refresh token and revokes the one it replaced', async () => {
+  /** A connected client's first token response, from a fresh authorization. */
+  async function firstPair(): Promise<Record<string, string>> {
     const { verifier, challenge } = pkce();
     const approved = await approve(challenge);
     const first = await exchange({
@@ -840,15 +841,23 @@ describe('the token exchange', () => {
       client_id: clientId,
       code_verifier: verifier,
     });
-    const refresh = first.body['refresh_token']!;
+    return first.body;
+  }
 
-    const second = await exchange({ grant_type: 'refresh_token', refresh_token: refresh, client_id: clientId });
+  const refresh = (token: string): Promise<Reply<Record<string, string>>> =>
+    exchange({ grant_type: 'refresh_token', refresh_token: token, client_id: clientId });
+
+  it('rotates a refresh token, and refuses its replay once the replacement has been used', async () => {
+    const original = (await firstPair())['refresh_token']!;
+    const second = await refresh(original);
     expect(second.status).toBe(200);
-    expect(second.body['access_token']).toBeTruthy();
+    // The client carried on with what it was given.
+    expect((await callTool(second.body['access_token']!, 'brain_whoami')).isError).toBe(false);
 
     // A stolen copy is usable at most once, and its reuse is visible.
-    const reused = await exchange({ grant_type: 'refresh_token', refresh_token: refresh, client_id: clientId });
+    const reused = await refresh(original);
     expect(reused.status).toBe(400);
+    expect((await callTool(second.body['access_token']!, 'brain_whoami')).isError).toBe(false);
 
     // Visible means recorded: a refused refresh is the step after which a
     // connector reports it "stopped working", and it used to leave no row.
@@ -856,9 +865,47 @@ describe('the token exchange', () => {
     expect(
       refusals.some(
         (row) =>
-          row.result === 'DENIED' && row.metadata['clientId'] === clientId && row.metadata['reason'] === 'NOT_LIVE',
+          row.result === 'DENIED' && row.metadata['clientId'] === clientId && row.metadata['reason'] === 'REUSED',
       ),
     ).toBe(true);
+  });
+
+  /*
+   * The 2026-09-27 incident. A refresh committed on the server and its response
+   * never reached the client, so the client retried with the token it still
+   * held — which the rotation had already revoked — and the connector was dead
+   * for good. The retry is honoured once, inside a short window, and only while
+   * the pair it replaces has never been used.
+   */
+  it('honours one retry of a refresh whose response was lost, and nothing past it', async () => {
+    const original = (await firstPair())['refresh_token']!;
+    const lost = await refresh(original); // committed; the client never saw it
+    expect(lost.status).toBe(200);
+
+    const retried = await refresh(original);
+    expect(retried.status).toBe(200);
+    expect((await callTool(retried.body['access_token']!, 'brain_whoami')).isError).toBe(false);
+    // The pair the client never received is dead, so there is one live chain.
+    expect((await callTool(lost.body['access_token']!, 'brain_whoami')).isError).toBe(true);
+    expect((await refresh(lost.body['refresh_token']!)).status).toBe(400);
+
+    // Once, not again: a second replay of the same token is refused.
+    expect((await refresh(original)).status).toBe(400);
+    // And the recovered chain carries on normally.
+    const next = await refresh(retried.body['refresh_token']!);
+    expect(next.status).toBe(200);
+  });
+
+  it('leaves exactly one live chain when two refreshes race with one token', async () => {
+    const original = (await firstPair())['refresh_token']!;
+    const [a, b] = await Promise.all([refresh(original), refresh(original)]);
+    const answered = [a, b].filter((reply) => reply.status === 200);
+    expect(answered.length).toBeGreaterThanOrEqual(1);
+    let live = 0;
+    for (const reply of answered) {
+      if (!(await callTool(reply.body['access_token']!, 'brain_whoami')).isError) live += 1;
+    }
+    expect(live).toBe(1);
   });
 
   it('never lets an access token be used as a refresh token', async () => {

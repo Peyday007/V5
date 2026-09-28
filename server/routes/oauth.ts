@@ -51,7 +51,8 @@ import {
   issueToken,
   redeemAuthorizationCode,
   registerClient,
-  revokeTokenChain,
+  findPresentedToken,
+  rotateRefreshToken,
 } from '../repos/oauth.ts';
 import { getWorker, listWorkers, listMembershipsForPrincipal, recordIdentityEvent } from '../repos/identity.ts';
 import { getProject } from '../repos/projects.ts';
@@ -927,9 +928,15 @@ export function oauthRouter(): Router {
           await refuseRefresh('MALFORMED', null);
           return;
         }
-        const existing = await findLiveToken(parsed.prefix, parsed.secret, 'REFRESH');
-        if (!existing || existing.clientId !== clientId) {
-          await refuseRefresh(existing ? 'CLIENT_MISMATCH' : 'NOT_LIVE', existing?.workerId ?? null);
+        // Revoked or not: whether a revoked token is a rotation being retried
+        // is `rotateRefreshToken`'s decision, made inside its transaction.
+        const existing = await findPresentedToken(parsed.prefix, parsed.secret, 'REFRESH');
+        if (!existing) {
+          await refuseRefresh('NOT_LIVE', null);
+          return;
+        }
+        if (existing.clientId !== clientId) {
+          await refuseRefresh('CLIENT_MISMATCH', existing.workerId);
           return;
         }
         const worker = await getWorker(existing.workerId);
@@ -938,21 +945,35 @@ export function oauthRouter(): Router {
           return;
         }
         // Rotation: the presented refresh token and anything minted from it are
-        // revoked, so a stolen copy is usable at most once and its use is
-        // visible the next time the real client tries.
-        await revokeTokenChain(existing.id);
-        await issueTokenPair(res, {
-          clientId,
-          workerId: existing.workerId,
-          scope: existing.scope,
-          resource: existing.resource,
+        // revoked and the replacement issued in one transaction, so a stolen
+        // copy is usable at most once and a failed write changes nothing. The
+        // one bounded exception is a retry of a response that never arrived.
+        const rotation = await rotateRefreshToken({
+          tokenId: existing.id,
+          mint: (parentTokenId) =>
+            mintTokenPair({
+              clientId,
+              workerId: existing.workerId,
+              scope: existing.scope,
+              resource: existing.resource,
+              refreshParentId: parentTokenId,
+            }),
         });
+        if (!rotation.ok) {
+          await refuseRefresh(rotation.reason, existing.workerId);
+          return;
+        }
+        sendTokenPair(res, rotation.minted);
         await audit({
           action: 'OAUTH_TOKEN',
           actor: null,
           targetId: existing.workerId,
           result: 'SUCCESS',
-          metadata: { clientId, grant: 'refresh_token' },
+          metadata: {
+            clientId,
+            grant: 'refresh_token',
+            ...(rotation.recovered ? { recovered: 'LOST_RESPONSE_RETRY' } : {}),
+          },
         });
         return;
       }
@@ -972,6 +993,29 @@ async function issueTokenPair(
   res: Response,
   input: { clientId: string; workerId: string; scope: string; resource: string | null },
 ): Promise<void> {
+  sendTokenPair(res, await mintTokenPair({ ...input, refreshParentId: null }));
+}
+
+interface MintedPair {
+  access: string;
+  refresh: string;
+  scope: string;
+}
+
+/**
+ * Write a refresh token and an access token minted from it, and return their
+ * values. Sending is separate so a rotation can mint inside its transaction
+ * and answer only after it commits. A rotated refresh token names the one it
+ * replaced as its parent, which is what lets a lost response be told apart
+ * from a replay.
+ */
+async function mintTokenPair(input: {
+  clientId: string;
+  workerId: string;
+  scope: string;
+  resource: string | null;
+  refreshParentId: string | null;
+}): Promise<MintedPair> {
   const access = generateOAuthToken();
   const refresh = generateOAuthToken();
 
@@ -984,6 +1028,7 @@ async function issueTokenPair(
     scope: input.scope,
     resource: input.resource,
     ttlMs: REFRESH_TOKEN_TTL_MS,
+    parentTokenId: input.refreshParentId,
   });
 
   await issueToken({
@@ -998,13 +1043,17 @@ async function issueTokenPair(
     parentTokenId: refreshRow.id,
   });
 
+  return { access: access.plaintext, refresh: refresh.plaintext, scope: input.scope };
+}
+
+function sendTokenPair(res: Response, pair: MintedPair): void {
   res.setHeader('Cache-Control', 'no-store');
   res.status(200).json({
-    access_token: access.plaintext,
+    access_token: pair.access,
     token_type: 'Bearer',
     expires_in: Math.floor(ACCESS_TOKEN_TTL_MS / 1000),
-    refresh_token: refresh.plaintext,
-    scope: input.scope,
+    refresh_token: pair.refresh,
+    scope: pair.scope,
   });
 }
 

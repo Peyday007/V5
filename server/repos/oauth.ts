@@ -323,6 +323,126 @@ export async function findLiveToken(
 }
 
 /**
+ * The token a presented secret names, revoked or not, or null.
+ *
+ * `findLiveToken` is what decides whether a bearer may act, and it must keep
+ * collapsing unknown, revoked and expired into one refusal. This exists for the
+ * one caller that has to tell a rotated refresh token from a revoked one —
+ * `rotateRefreshToken` — and it still needs the secret, so it discloses
+ * nothing the caller did not present. Expired is still null.
+ */
+export async function findPresentedToken(
+  prefix: string,
+  secret: string,
+  kind: OAuthTokenKind,
+): Promise<OAuthToken | null> {
+  const row = await getDb().get<OAuthTokenRow>(
+    'SELECT * FROM oauth_tokens WHERE token_prefix = ? AND kind = ?',
+    [prefix, kind],
+  );
+  if (!row) return null;
+  if (!constantTimeEquals(digestSecret(secret), row.token_digest)) return null;
+  if (row.expires_at <= nowIso()) return null;
+  return mapToken(row);
+}
+
+/**
+ * How long after a rotation its presented refresh token may be retried.
+ *
+ * Production, 2026-09-27 07:27Z: a refresh took about thirty seconds to commit,
+ * the client never received the response, and it retried with the token the
+ * rotation had just revoked — so a connector that had refreshed hourly for
+ * three days was dead until a person reconnected it. A retry of a lost response
+ * arrives within seconds of the rotation it repeats; five minutes bounds it
+ * without leaving a replay window anybody could live in.
+ */
+export const LOST_RESPONSE_RETRY_MS = 5 * 60_000;
+
+export type RefreshRotation<T> =
+  | { ok: true; recovered: boolean; minted: T }
+  | { ok: false; reason: 'NOT_LIVE' | 'REUSED' | 'RECOVERY_SPENT' | 'OUTSIDE_RETRY_WINDOW' };
+
+/**
+ * Rotate a refresh token — atomically, and survivably when the answer is lost.
+ *
+ * One transaction: the presented token and its access tokens are revoked by a
+ * guarded write, and `mint` issues the replacement pair (its refresh token
+ * carrying the presented one as its parent). A failure anywhere rolls all of
+ * it back, so a rotation never leaves the client's token revoked with nothing
+ * issued in its place.
+ *
+ * A presented token that is already revoked is refused, with one exception
+ * that exists for the lost-response case and nothing else. It is honoured, once,
+ * when every one of these holds: the token was revoked no more than
+ * `LOST_RESPONSE_RETRY_MS` ago; exactly one refresh token has been minted from
+ * it, so the revocation was a rotation and this is its first repeat; that
+ * successor is still live, so nothing explicitly revoked it; and neither it nor
+ * any access token minted from it has ever been used, so the client never
+ * received it. The unused successor is then revoked and a new pair issued in
+ * its place. Anything else — a replay after the replacement was used, a second
+ * replay, an explicit revocation, a replay after the window — is refused, which
+ * is the replay detection this keeps.
+ */
+export async function rotateRefreshToken<T>(input: {
+  tokenId: string;
+  now?: number;
+  mint: (parentTokenId: string) => Promise<T>;
+}): Promise<RefreshRotation<T>> {
+  const db = getDb();
+  return db.transaction(async () => {
+    const now = input.now ?? Date.now();
+    const at = new Date(now).toISOString();
+    const rotated = await db.run(
+      `UPDATE oauth_tokens SET revoked_at = ?
+        WHERE id = ? AND kind = 'REFRESH' AND revoked_at IS NULL AND expires_at > ?`,
+      [at, input.tokenId, at],
+    );
+    if (rotated.changes === 1) {
+      await revokeAccessMintedFrom(input.tokenId, at);
+      return { ok: true as const, recovered: false, minted: await input.mint(input.tokenId) };
+    }
+
+    const presented = await db.get<OAuthTokenRow>('SELECT * FROM oauth_tokens WHERE id = ?', [input.tokenId]);
+    if (!presented || presented.kind !== 'REFRESH' || presented.revoked_at === null || presented.expires_at <= at) {
+      return { ok: false as const, reason: 'NOT_LIVE' as const };
+    }
+    const successors = await db.all<OAuthTokenRow>(
+      `SELECT * FROM oauth_tokens WHERE parent_token_id = ? AND kind = 'REFRESH' ORDER BY created_at`,
+      [input.tokenId],
+    );
+    if (successors.length === 0) return { ok: false as const, reason: 'NOT_LIVE' as const };
+    if (now - Date.parse(presented.revoked_at) > LOST_RESPONSE_RETRY_MS) {
+      return { ok: false as const, reason: 'OUTSIDE_RETRY_WINDOW' as const };
+    }
+    if (successors.length > 1) return { ok: false as const, reason: 'RECOVERY_SPENT' as const };
+    const successor = successors[0]!;
+    if (successor.revoked_at !== null || successor.last_used_at !== null) {
+      return { ok: false as const, reason: 'REUSED' as const };
+    }
+    const used = await db.get<{ id: string }>(
+      `SELECT id FROM oauth_tokens WHERE parent_token_id = ? AND kind = 'ACCESS' AND last_used_at IS NOT NULL LIMIT 1`,
+      [successor.id],
+    );
+    if (used) return { ok: false as const, reason: 'REUSED' as const };
+
+    const retired = await db.run(
+      'UPDATE oauth_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL AND last_used_at IS NULL',
+      [at, successor.id],
+    );
+    if (retired.changes !== 1) return { ok: false as const, reason: 'REUSED' as const };
+    await revokeAccessMintedFrom(successor.id, at);
+    return { ok: true as const, recovered: true, minted: await input.mint(input.tokenId) };
+  });
+}
+
+async function revokeAccessMintedFrom(refreshId: string, at: string): Promise<void> {
+  await getDb().run(
+    `UPDATE oauth_tokens SET revoked_at = ? WHERE parent_token_id = ? AND kind = 'ACCESS' AND revoked_at IS NULL`,
+    [at, refreshId],
+  );
+}
+
+/**
  * One token by its row id, whatever state it is in.
  *
  * Deliberately *not* `findLiveToken`'s sibling: that one answers "may this
