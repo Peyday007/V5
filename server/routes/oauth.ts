@@ -60,6 +60,7 @@ import {
   createInvitation,
   findLiveInvitation,
   redeemInvitation,
+  liveInvitationsForMember,
   INVITATION_TTL_MS,
 } from '../repos/invitations.ts';
 import type { Principal, Worker, WorkerInvitation } from '../domain/types.ts';
@@ -209,7 +210,7 @@ async function heldInvitation(
   // `req.cookies` is always undefined here — reaching for it silently disables
   // this whole path, which is exactly what it did until the tests said so.
   const raw = parseCookies(req.header('cookie'))[INVITE_COOKIE];
-  if (typeof raw !== 'string') return null;
+  if (typeof raw !== 'string') return boundToSignedInMember(req);
   const parsed = parseInvitationToken(raw);
   if (!parsed) return null;
 
@@ -219,6 +220,30 @@ async function heldInvitation(
   const worker = await getWorker(invitation.workerId);
   // An invitation for a worker that has since been disabled or removed connects
   // nothing. The worker's current state decides, not the invitation's.
+  if (!worker || worker.disabled) return null;
+  return { invitation, worker };
+}
+
+/**
+ * The one live invitation bound to the member this browser is signed in as.
+ *
+ * Production, 2026-09-27 23:56Z: Airyn reached this screen signed in as
+ * himself, holding a live invitation bound to him, and was shown the sign-in
+ * page — because he had opened the link in a different browser from the one
+ * Claude used for consent, and the link's cookie is the only thing this path
+ * read. The invitation already says who may connect which worker; an
+ * authenticated session as that member is the same proof the cookie carries.
+ * Exactly one is required: two would leave the worker a guess.
+ */
+async function boundToSignedInMember(
+  req: Request,
+): Promise<{ invitation: WorkerInvitation; worker: Worker } | null> {
+  const outcome = await authenticateRequest(req);
+  if (!outcome.ok || outcome.principal.type !== 'HUMAN') return null;
+  const live = await liveInvitationsForMember(outcome.principal.id);
+  if (live.length !== 1) return null;
+  const invitation = live[0]!;
+  const worker = await getWorker(invitation.workerId);
   if (!worker || worker.disabled) return null;
   return { invitation, worker };
 }

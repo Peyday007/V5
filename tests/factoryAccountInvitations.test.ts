@@ -446,6 +446,61 @@ describe('a link bound to a member', () => {
 });
 
 describe('expiry and withdrawal', () => {
+  /*
+   * Production, 2026-09-27: the link was opened in one browser and Claude ran
+   * consent in another, so the link's cookie never reached the consent screen
+   * and a member signed in as himself was shown the sign-in page. A bound link
+   * already names the member, so their own session is enough — with no cookie
+   * at all — and nobody else's session is.
+   */
+  it('connects a signed-in member through their own bound link without the link cookie', async () => {
+    const email = 'friend-d@example.invalid';
+    const created = await call('POST', '/api/admin/users', {
+      cookie: adminCookie,
+      body: { email, displayName: 'Friend D', password: 'friend-d-password-0001' },
+    });
+    expect(created.status).toBe(200);
+    const memberId = created.body.user.id as string;
+    const first = await signIn(email, 'friend-d-password-0001');
+    await call('POST', '/api/auth/password', {
+      cookie: first,
+      body: { currentPassword: 'friend-d-password-0001', newPassword: 'friend-d-password-0002' },
+    });
+    const session = await signIn(email, 'friend-d-password-0002');
+
+    const issued = await call('POST', invitationsRoute(), { cookie: adminCookie, body: { intendedUserId: memberId } });
+    expect(issued.status).toBe(200);
+    issuedTokens.push((issued.body.invitationUrl as string).split('/oauth/invite/')[1]!);
+    const linkId = issued.body.invitation.id as string;
+
+    // Somebody else's session, with no cookie, gets nothing from D's link.
+    const { challenge: other } = pkce();
+    const stranger = await approve(other, friends.B.cookie, factoryWorkerId);
+    expect(stranger.code).toBeNull();
+    expect(await statusOf(linkId)).toBe('WAITING');
+
+    // D's own session, never having opened the link in this browser, connects.
+    const page = await fetch(
+      `${BASE}/oauth/authorize?${new URLSearchParams({
+        response_type: 'code',
+        client_id: clientId,
+        redirect_uri: REDIRECT,
+        code_challenge: pkce().challenge,
+        code_challenge_method: 'S256',
+      }).toString()}`,
+      { headers: { cookie: session } },
+    );
+    const shown = await page.text();
+    expect(shown).not.toContain('Sign in to connect a worker');
+    expect(shown).toContain(factoryHandle);
+    const { verifier, challenge } = pkce();
+    const approved = await approve(challenge, session, factoryWorkerId);
+    expect(approved.code).not.toBeNull();
+    const bearer = await exchange(approved.code!, verifier);
+    expect((await whoami(bearer))['handle']).toBe(factoryHandle);
+    expect(await statusOf(linkId)).toBe('CONNECTED');
+  });
+
   it('a withdrawn link connects nothing, and withdrawing it touches no other link', async () => {
     const keep = await issue('A');
     const drop = await issue('B');

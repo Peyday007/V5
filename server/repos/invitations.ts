@@ -133,6 +133,26 @@ export async function revokeInvitation(id: string): Promise<boolean> {
   return result.changes > 0;
 }
 
+/**
+ * The live invitations bound to one member — unspent, unwithdrawn, unexpired.
+ *
+ * A bound invitation already names both halves of the approval: the worker, and
+ * the member allowed to connect it. So a browser signed in as that member does
+ * not also need the link's cookie to prove it holds the link — which matters,
+ * because Claude opens its consent screen in whichever browser it runs in, and
+ * that is routinely not the one somebody opened the link in.
+ */
+export async function liveInvitationsForMember(userId: string): Promise<WorkerInvitation[]> {
+  const at = nowIso();
+  const rows = await getDb().all<WorkerInvitationRow>(
+    `SELECT * FROM worker_invitations
+      WHERE intended_user_id = ? AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > ?
+      ORDER BY created_at DESC`,
+    [userId, at],
+  );
+  return rows.map(mapInvitation);
+}
+
 /** Every invitation for a worker, newest first, whatever state it is in. */
 export async function listInvitationsForWorker(workerId: string): Promise<WorkerInvitation[]> {
   const rows = await getDb().all<WorkerInvitationRow>(

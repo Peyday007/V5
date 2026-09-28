@@ -34,3 +34,12 @@ explicitly revoked token are refused (`REUSED`, `RECOVERY_SPENT`,
 reproduced first against the old handler; replay after use; two racing
 refreshes) and `tests/oauthRefreshRecovery.test.ts` (rollback, window, explicit
 revocation, racing retries), on SQLite and Postgres.
+
+Reconnect, 23:56Z, read from the new audit: `OAUTH_AUTHORIZE_PAGE SIGN_IN
+{signedInPerson: true, invitationCookie: false}`. Airyn was signed in as
+himself with a live invitation bound to him, but had opened the link in a
+different browser from the one Claude used for consent, so the cookie never
+arrived. A signed-in member with exactly one live invitation bound to them now
+connects through it without the cookie (`liveInvitationsForMember`); nobody
+else's session can use it, and two live links for one member still need the
+cookie. Test: `tests/factoryAccountInvitations.test.ts`.
