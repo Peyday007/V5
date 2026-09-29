@@ -150,7 +150,7 @@ export function Register({ projectId }: { projectId: string | null }): JSX.Eleme
             <ul className="rs-list">
               {shown.map((one) => (
                 <li key={one.id}>
-                  <WorkstreamCard workstream={one} />
+                  <WorkstreamCard workstream={one} onChanged={reload} />
                 </li>
               ))}
             </ul>
@@ -215,8 +215,17 @@ export function Register({ projectId }: { projectId: string | null }): JSX.Eleme
  * have to take on trust — and this register's whole claim is that they do not
  * have to.
  */
-function WorkstreamCard({ workstream }: { workstream: WorkstreamView }): JSX.Element {
+function WorkstreamCard({
+  workstream,
+  onChanged,
+}: {
+  workstream: WorkstreamView;
+  onChanged: () => void;
+}): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [history, setHistory] = useState(false);
   return (
     <div className={`rs-card rs-workstream rs-workstream-${workstream.state.toLowerCase()}`}>
       <p className="rs-card-title">{workstream.title}</p>
@@ -254,9 +263,227 @@ function WorkstreamCard({ workstream }: { workstream: WorkstreamView }): JSX.Ele
               <span className="rs-reading-kind">{reading.kind.toLowerCase().replace(/_/g, ' ')}</span>{' '}
               {reading.status}
               <span className="rs-quiet"> — {reading.evidence}</span>
+              <ReasonControl
+                label="This link is wrong"
+                submitLabel="Mark it wrong"
+                onSubmit={async (reason) => {
+                  await RegisterApi.supersede(workstream.id, reading.linkId, reason);
+                  onChanged();
+                }}
+              />
             </li>
           ))}
         </ul>
+      ) : null}
+
+      <div className="rs-actions">
+        <button type="button" className="rs-action rs-action-quiet" onClick={() => setEditing(!editing)}>
+          Edit what this is
+        </button>
+        <button type="button" className="rs-action rs-action-quiet" onClick={() => setArchiving(!archiving)}>
+          Archive
+        </button>
+      </div>
+
+      {editing ? (
+        <EditWorkstream
+          workstream={workstream}
+          onDone={() => {
+            setEditing(false);
+            onChanged();
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : null}
+
+      {archiving ? (
+        <ReasonControl
+          label="Archive"
+          submitLabel="Archive it"
+          startOpen
+          onSubmit={async (reason) => {
+            await RegisterApi.archive(workstream.id, reason);
+            setArchiving(false);
+            onChanged();
+          }}
+        />
+      ) : null}
+
+      <button type="button" className="rs-disclosure" onClick={() => setHistory(!history)}>
+        {history ? 'Hide' : 'Show'} history
+      </button>
+      {history ? <WorkstreamHistory workstreamId={workstream.id} /> : null}
+    </div>
+  );
+}
+
+/** A write that needs a reason: nothing is sent while the reason is empty. */
+function ReasonControl(props: {
+  label: string;
+  submitLabel: string;
+  startOpen?: boolean;
+  onSubmit: (reason: string) => Promise<void>;
+}): JSX.Element {
+  const [open, setOpen] = useState(props.startOpen ?? false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await props.onSubmit(reason.trim());
+      setReason('');
+      setOpen(false);
+    } catch (cause) {
+      // The server's sentence, verbatim; the reason stays in the box.
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+    setBusy(false);
+  };
+
+  if (!open) {
+    return (
+      <button type="button" className="rs-action rs-action-quiet" onClick={() => setOpen(true)}>
+        {props.label}
+      </button>
+    );
+  }
+  return (
+    <div className="rs-reason">
+      <label className="rs-field">
+        <span>{props.label}: why?</span>
+        <input value={reason} onChange={(event) => setReason(event.target.value)} />
+      </label>
+      {error ? (
+        <p className="rs-state rs-state-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className="rs-action"
+        disabled={busy || reason.trim().length === 0}
+        onClick={() => void submit()}
+      >
+        {props.submitLabel}
+      </button>
+      <button type="button" className="rs-action rs-action-quiet" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+    </div>
+  );
+}
+
+function EditWorkstream(props: {
+  workstream: WorkstreamView;
+  onDone: () => void;
+  onCancel: () => void;
+}): JSX.Element {
+  const { workstream, onDone, onCancel } = props;
+  const [title, setTitle] = useState(workstream.title);
+  const [intent, setIntent] = useState(workstream.intent);
+  const [purpose, setPurpose] = useState<WorkstreamPurpose>(workstream.purpose);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await RegisterApi.amend(workstream.id, { title, intent, purpose });
+      onDone();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rs-card rs-edit-workstream">
+      <label className="rs-field">
+        <span>What to call it</span>
+        <input value={title} onChange={(event) => setTitle(event.target.value)} />
+      </label>
+      <label className="rs-field">
+        <span>What outcome is this for?</span>
+        <textarea value={intent} rows={3} onChange={(event) => setIntent(event.target.value)} />
+      </label>
+      <fieldset className="rs-field">
+        <legend>Why is it worth doing?</legend>
+        {PURPOSE_CHOICES.map((choice) => (
+          <label key={choice.key} className="rs-choice">
+            <input
+              type="radio"
+              name={`purpose-${workstream.id}`}
+              checked={purpose === choice.key}
+              onChange={() => setPurpose(choice.key)}
+            />
+            <span>
+              <strong>{choice.label}</strong> — {choice.meaning}
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      {error ? (
+        <p className="rs-state rs-state-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className="rs-actions">
+        <button
+          type="button"
+          className="rs-action"
+          disabled={busy || intent.trim().length === 0 || title.trim().length === 0}
+          onClick={() => void submit()}
+        >
+          {busy ? 'Saving…' : 'Save changes'}
+        </button>
+        <button type="button" className="rs-action rs-action-quiet" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Fetched only when opened: the component mounts when the disclosure does. */
+function WorkstreamHistory({ workstreamId }: { workstreamId: string }): JSX.Element {
+  const query = useAsync(() => RegisterApi.workstream(workstreamId), [workstreamId]);
+  if (query.error) {
+    return (
+      <p className="rs-state rs-state-error" role="alert">
+        {String(query.error instanceof Error ? query.error.message : query.error)}
+      </p>
+    );
+  }
+  if (!query.data) return <p className="rs-quiet">Loading…</p>;
+  const { events, corrections } = query.data;
+  return (
+    <div className="rs-history">
+      {events.length === 0 ? <p className="rs-quiet">Nothing has been recorded yet.</p> : null}
+      <ul className="rs-list">
+        {events.map((event) => (
+          <li key={event.id}>
+            <span className="rs-reading-kind">{event.kind.toLowerCase().replace(/_/g, ' ')}</span>{' '}
+            {event.summary}
+            <span className="rs-quiet"> — {event.createdAt}</span>
+          </li>
+        ))}
+      </ul>
+      {corrections.length > 0 ? (
+        <>
+          <p className="rs-quiet">Links marked wrong (kept, with their reasons):</p>
+          <ul className="rs-list">
+            {corrections.map((link) => (
+              <li key={link.id}>
+                {link.kind.toLowerCase().replace(/_/g, ' ')} {link.ref}
+                <span className="rs-quiet"> — {link.supersededReason ?? 'no reason recorded'}</span>
+              </li>
+            ))}
+          </ul>
+        </>
       ) : null}
     </div>
   );
