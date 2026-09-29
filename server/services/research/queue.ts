@@ -17,6 +17,7 @@
  * costs the user quota.
  */
 import type { ResearchOrchestration } from '../../domain/types.ts';
+import { TERMINAL_ORCHESTRATION } from './outcome.ts';
 import {
   abandonRunningPasses,
   currentFragments,
@@ -145,7 +146,7 @@ export async function enqueueResearch(
 export async function cancelResearch(orchestrationId: string, reason: string): Promise<ResearchOrchestration | null> {
   const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) return null;
-  if (['COMPLETE', 'CANCELLED', 'FAILED'].includes(orchestration.status)) return orchestration;
+  if (TERMINAL_ORCHESTRATION.has(orchestration.status)) return orchestration;
 
   await updateOrchestration(orchestrationId, {
     status: 'CANCELLED',
@@ -303,6 +304,26 @@ export async function recoverInterruptedResearch(): Promise<number> {
 }
 
 /**
+ * Why a run may not be resumed by hand, or null when it may.
+ *
+ * A finished packet (COMPLETE, or COMPLETE_WITH_GAPS — filed, audited and
+ * honestly short) must not be rewritten to QUEUED and re-run, and a
+ * worker-driven packet is recovered by `resumePulledPackets`; an in-process run
+ * would duplicate work a worker may hold a lease on.
+ */
+export function resumeRefusal(
+  orchestration: Pick<ResearchOrchestration, 'status' | 'provider'>,
+): string | null {
+  if (orchestration.status === 'COMPLETE' || orchestration.status === 'COMPLETE_WITH_GAPS') {
+    return 'That research run already finished.';
+  }
+  if (orchestration.provider === WORKER_PROVIDER) {
+    return 'That research run is carried by a worker, which recovers it by itself; resuming it here would duplicate its work.';
+  }
+  return null;
+}
+
+/**
  * Continue an interrupted or awaiting-repair job.
  *
  * Completed passes are not re-run and accepted fragments are not re-researched,
@@ -314,9 +335,8 @@ export async function resumeResearch(
 ): Promise<OrchestrationOutcome> {
   const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) throw new Error(`Unknown research run ${orchestrationId}`);
-  if (orchestration.status === 'COMPLETE') {
-    throw new Error('That research run already finished.');
-  }
+  const refusal = resumeRefusal(orchestration);
+  if (refusal) throw new Error(refusal);
   // A run picked up by hand closes any quota pause it was holding: the pause
   // recorded why it stopped, and leaving it open would report a run as paused
   // while it is running.
