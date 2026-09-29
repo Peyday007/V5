@@ -27,6 +27,7 @@ import {
   markAttemptSent,
   markUncertain,
   openAttempt,
+  resolveUncertain,
   reserveOperation,
   succeedOperation,
   takeOverOperation,
@@ -144,7 +145,7 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
       throw new OperationInProgress(reserved.operation);
     case 'UNCERTAIN':
       // The one path that must never quietly become another send.
-      return await resumeUncertain(input.adapter, reserved.operation);
+      return await resumeUncertain(input.adapter, reserved.operation, input.businessId);
     case 'RECOVERABLE': {
       const taken = await takeOverOperation(
         reserved.operation.id,
@@ -153,7 +154,7 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
       if (!taken) throw new OperationInProgress(reserved.operation);
       // An executor died. Whether it had already sent is exactly what the
       // attempt rows are for.
-      const resumed = await resumeAfterCrash(input.adapter, reserved.operation);
+      const resumed = await resumeAfterCrash(input.adapter, reserved.operation, input.businessId);
       if (resumed) return resumed;
       break;
     }
@@ -257,6 +258,7 @@ async function tryReconcile(
   adapter: EffectAdapter,
   operation: IdempotencyOperation,
   businessId: string,
+  absentMeansNothingSent = true,
 ): Promise<ExternalOutcome | null> {
   if (!adapter.reconcile) return null;
 
@@ -290,7 +292,7 @@ async function tryReconcile(
     };
   }
 
-  if (answer.kind === 'ABSENT') {
+  if (answer.kind === 'ABSENT' && absentMeansNothingSent) {
     // The provider is authoritative and says it never saw it, so nothing
     // happened and this may be executed again.
     await failOperation(operation.id, {
@@ -308,17 +310,27 @@ async function tryReconcile(
 async function resumeUncertain(
   adapter: EffectAdapter,
   operation: IdempotencyOperation,
+  businessId: string,
 ): Promise<ExternalOutcome> {
   // One more attempt to reconcile is safe — asking is not sending.
   const attempt = await latestSentAttempt(operation.id);
   if (adapter.reconcile && attempt) {
-    const answer = await adapter.reconcile(operation.resultRef ?? operation.id).catch(() => null);
+    const answer = await adapter.reconcile(businessId).catch(() => null);
     if (answer && answer.kind === 'FOUND') {
+      const safe = adapter.redactReceipt
+        ? adapter.redactReceipt(answer.receiptMeta ?? {})
+        : (answer.receiptMeta ?? {});
       await closeAttempt(attempt.id, {
         phase: 'CONFIRMED',
         outcome: 'SUCCEEDED',
         receiptRef: answer.receiptRef,
+        receiptMeta: safe,
         detail: 'reconciled on a later attempt',
+      });
+      await resolveUncertain(operation.id, {
+        as: 'SUCCEEDED',
+        resultRef: answer.receiptRef,
+        summary: 'reconciled with the provider on a later attempt',
       });
       return {
         status: 'RECONCILED',
@@ -345,6 +357,7 @@ async function resumeUncertain(
 async function resumeAfterCrash(
   adapter: EffectAdapter,
   operation: IdempotencyOperation,
+  businessId: string,
 ): Promise<ExternalOutcome | null> {
   const attempt = await latestSentAttempt(operation.id);
   if (!attempt) return null; // nothing was ever sent; a fresh attempt is safe
@@ -356,11 +369,12 @@ async function resumeAfterCrash(
     return null;
   }
 
-  const reconciled = await tryReconcile(adapter, operation, attempt.providerKey ?? operation.id);
+  const reconciled = await tryReconcile(adapter, operation, businessId, false);
   if (reconciled) return reconciled;
 
-  const reason =
-    'an earlier attempt sent this and did not record an outcome, and the provider cannot be asked';
+  const reason = adapter.reconcile
+    ? 'an earlier attempt sent this and did not record an outcome, and the provider could not confirm it'
+    : 'an earlier attempt sent this and did not record an outcome, and the provider cannot be asked';
   await markUncertain(operation.id, reason);
   return {
     status: 'UNCERTAIN',
