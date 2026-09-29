@@ -20,12 +20,14 @@
  *   npm run goals -- cancel <wst_…> --reason "…" --admin a@b
  *   npm run goals -- reinstate <wst_…> --admin a@b
  *   npm run goals -- depends <wst_…> <wst_…> --admin a@b
+ *   npm run goals -- undepend <wst_…> <wst_other> --reason "…" --admin a@b
+ *   npm run goals -- objective <wst_…> [--intent "…"] [--outcome "…"] --admin a@b
  *   npm run goals -- terms <wst_…> [--outcome "…"] [--due 2026-10-01] [--commitment CUSTOMER] --admin a@b
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { getUserByEmail } from '../server/repos/identity.ts';
-import { createWorkstream, getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../server/repos/register.ts';
+import { createWorkstream, getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, supersedeLink } from '../server/repos/register.ts';
 import { getCampaign, getChangeRequest } from '../server/repos/factory.ts';
 import { getMission } from '../server/repos/russellMissions.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
@@ -36,7 +38,7 @@ import { GOAL_COMMITMENTS, type GoalCommitment } from '../server/domain/goals.ts
 import { assembleGoals, type GoalView } from '../server/services/goals/model.ts';
 import { briefFrom } from '../server/services/goals/briefing.ts';
 import { unfiledWork } from '../server/services/register/unfiled.ts';
-import { cancel, pause, reinstate, resume, setTerms } from '../server/services/goals/decide.ts';
+import { cancel, changeObjective, pause, reinstate, resume, setDependency, setTerms } from '../server/services/goals/decide.ts';
 
 class Halt extends Error {}
 
@@ -245,15 +247,26 @@ async function decide(command: string): Promise<void> {
     }
     case 'depends': {
       if (!otherId || !(await getWorkstream(otherId))) fail(`No goal ${otherId ?? '(none named)'} to depend on.`);
-      if (otherId === goalId) fail('A goal cannot depend on itself.');
-      for (const link of await listLinks(otherId)) {
-        if (link.kind === 'WORKSTREAM' && link.relation === 'DEPENDS_ON' && link.ref === goalId) {
-          fail('That would make the two goals wait on each other for ever.');
-        }
+      result = await setDependency(goalId, otherId, { actorRef, userId: adminId });
+      break;
+    }
+    case 'undepend': {
+      if (!otherId || !(await getWorkstream(otherId))) fail(`No goal ${otherId ?? '(none named)'} to stop depending on.`);
+      const reason = flag('reason') ?? fail('undepend needs --reason.');
+      const live = (await listLinks(goalId)).find((one) => one.kind === 'WORKSTREAM' && one.relation === 'DEPENDS_ON' && one.ref === otherId);
+      if (!live) fail(`${goalId} has no live dependency on ${otherId}.`);
+      if (await supersedeLink(live.id, reason)) {
+        await recordWorkstreamEvent({ workstreamId: goalId, kind: 'LINK_SUPERSEDED', summary: reason, detail: { linkId: live.id }, actorRef });
+        result = { ok: true, reason: null, consequence: 'The link keeps its row and its reason; the goal no longer waits on that one.' };
+      } else {
+        result = { ok: false, reason: 'That link was already superseded.', consequence: 'Nothing changed.' };
       }
-      await linkWorkstream({ workstreamId: goalId, kind: 'WORKSTREAM', ref: otherId, relation: 'DEPENDS_ON', recordedBy: 'PERSON', recordedByUserId: adminId });
-      await recordWorkstreamEvent({ workstreamId: goalId, kind: 'GOAL_DEPENDENCY_SET', summary: `Waits on ${otherId} until it completes.`, actorRef });
-      result = { ok: true, reason: null, consequence: 'Its live bins are held until that goal completes, then released on the next tick.' };
+      break;
+    }
+    case 'objective': {
+      const intent = flag('intent');
+      const outcome = flag('outcome');
+      result = await changeObjective(goalId, { intent, outcome }, actorRef);
       break;
     }
     default:
@@ -280,9 +293,11 @@ async function main(): Promise<void> {
     case 'reinstate':
     case 'terms':
     case 'depends':
+    case 'undepend':
+    case 'objective':
       return await decide(command);
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, undepend, objective');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }
