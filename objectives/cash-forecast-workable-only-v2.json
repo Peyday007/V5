@@ -1,0 +1,40 @@
+{
+  "objective": "The Cash forecast counts evidence-only signals as qualified and totals other people's published prices as revenue. server/services/cash/forecast.ts ~L108 defines LIVE states, ~L208 filters only by currency, ~L281 reports qualified: opportunities.length, and revenue/upfront/contribution sum over that set. CLAUDE.md §47 made isWorkable in services/cash/portfolio.ts the one predicate for work, and cash/view.ts ~L268 already computes cashTier per opportunity before calling cashForecast ~L399. Fix: give cashForecast a tiers map (or workable predicate) input and filter with isWorkable; report considered separately and keep qualified for workable pieces only; have view.ts pass the tiers it already computed; with no tiers supplied, count nothing as workable. tests/cashDashboard.test.ts builds opportunities with no tier and expects them counted; the earlier attempt regressed it (2 tests). Update that fixture so its opportunities are workable (qualified or taken) rather than weakening the rule.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "The forecast counts and sums only workable pieces, never evidence-only signals.",
+  "nonGoals": [
+    "Changing the tier derivation",
+    "Any schema or route change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/cashForecastWorkable.test.ts: with only SIGNAL-tier EVIDENCE_CARD opportunities carrying priceCents, qualified is 0 and revenue.valueCents is null.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A READY opportunity is still counted and its price contributes.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/cashPortfolio.test.ts and tests/cashSection.test.tsx still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/cash/forecast.ts",
+    "server/services/cash/view.ts",
+    "tests/cashDashboard.test.ts",
+    "tests/cashForecastWorkable.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}
