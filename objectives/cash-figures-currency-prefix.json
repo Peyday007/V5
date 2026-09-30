@@ -1,0 +1,38 @@
+{
+  "objective": "A price written in Canadian, Australian or NZ dollars is read as a US-dollar price. server/services/cash/figures.ts ~L26 maps USD to ['$','US$'] and ~L95 builds the pattern with no boundary before a one-character symbol, so readMoneyFigures('Pays C$1,200 per job','USD') returns 120000 USD cents, 'Budget A$500 and NZ$300' returns two USD figures, and '$12 000' returns $12 — a silently truncated amount. CLAUDE.md §30: a price is read, never produced, and the failure mode is missing a figure, never inventing one. Fix: a single-character symbol must not be preceded by a letter (so C$, A$, NZ$ stop matching bare $), and a match immediately followed by a space and three digits is refused rather than returned partially.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "C$/A$/NZ$ figures are no longer read as USD, and a space-grouped number is refused rather than truncated.",
+  "nonGoals": [
+    "Converting currencies",
+    "Any schema or route change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/cashFiguresCurrencyPrefix.test.ts: readMoneyFigures('C$1,200','USD') and readMoneyFigures('A$500 NZ$300','USD') return [], while readMoneyFigures('C$1,200','CAD') still returns 120000 cents.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "readMoneyFigures('$12 000','USD') returns [] rather than 1200.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing cash tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/cash/figures.ts",
+    "tests/cashFiguresCurrencyPrefix.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

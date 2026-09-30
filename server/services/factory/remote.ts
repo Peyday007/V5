@@ -57,7 +57,7 @@ import type {
   FactoryChangeRequest,
   FactoryWorkUnit,
 } from '../../domain/factory.ts';
-import { createBin, getBin, leaseCredentialFor, listBinUnitResults } from '../../repos/bins.ts';
+import { createBin, getBin, leaseCredentialFor, leaseWorkerFor, listBinUnitResults } from '../../repos/bins.ts';
 import type { CreateBinInput } from '../../repos/bins.ts';
 import { manifestProblems } from '../bins/contracts.ts';
 import { FactoryError } from './errors.ts';
@@ -1761,7 +1761,7 @@ export async function binIdentity(
     sessionId: bin.leaseSessionRef,
     // These two are Brain's own: written from the dispatch row it sent, never
     // from anything the worker said about itself.
-    workerId: observed?.workerId ?? bin.workerId,
+    workerId: observed?.workerId ?? bin.workerId ?? (await leaseWorkerFor(bin.id, bin.leaseGeneration)),
     accountId: observed?.accountId ?? null,
     // The connector that held the lease, from the assignment event.
     credentialId: await leaseCredentialFor(bin.id, bin.leaseGeneration),

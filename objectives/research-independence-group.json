@@ -1,0 +1,38 @@
+{
+  "objective": "independenceGroup miscounts independent sources in three ways. server/services/research/standards.ts ~L191 matches syndicators with host.includes(wire), so openprocurement.org and msnbc.com are classed as wire services; ~L199's upstream-attribution regex is case-sensitive, so 'According to Gartner, ...' yields host:a.com while '..., according to Gartner.' yields upstream:gartner — one upstream estimate counted as two independent sources; and bare 'per' makes 'Costs $10 per Unit shipped' yield upstream:unit shipped. CLAUDE.md §14: three publishers restating one upstream estimate count as one. Fix: case-insensitive attribution keywords while keeping the capitalised-name capture; syndicators matched by domain equality or suffix against full domains; drop bare 'per' (or require a proper-noun organisation after it).",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Upstream attribution is found regardless of keyword case, syndicators match by domain, and 'per' no longer invents an upstream.",
+  "nonGoals": [
+    "Changing the evidence standards per claim type",
+    "Any schema change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/researchIndependenceGroup.test.ts: both Gartner phrasings return upstream:gartner.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "openprocurement.org and msnbc.com return host:…, www.prnewswire.com is still treated as a wire/release, and the 'per Unit shipped' excerpt returns its host.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing research gate tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/research/standards.ts",
+    "tests/researchIndependenceGroup.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

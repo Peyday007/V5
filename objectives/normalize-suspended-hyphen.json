@@ -1,0 +1,38 @@
+{
+  "objective": "Text normalisation removes real hyphens that are not line breaks. server/services/documents/normalize.ts ~L12 SOFT_HYPHEN_BREAK = /([A-Za-z])[-\\u00ad]\\s+([a-z])/g matches ordinary spaces, so normalizeBlockText('pre- and post-closing inspections; short- or long-term leases') returns 'preand post-closing …; shortor long-term leases' with the note 'rejoined hyphenated line breaks'. CLAUDE.md §9: normalisation may only remove extraction artifacts, and normalized_text is what retrieval and audits read. Fix: a hard hyphen rejoins only across a newline (/([A-Za-z])-[ \\t]*\\r?\\n[ \\t]*([a-z])/g); a soft hyphen (\\u00ad) may still join across any whitespace.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Suspended hyphens survive normalisation; genuine line-break hyphenation is still rejoined.",
+  "nonGoals": [
+    "Changing other normalisation rules",
+    "Re-normalising stored documents"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/normalizeSuspendedHyphen.test.ts: 'pre- and post-closing' is unchanged and produces no rejoin note.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "'recog-\\nnition' becomes 'recognition' and a soft hyphen before a space still joins.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing document extraction/quality tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/documents/normalize.ts",
+    "tests/normalizeSuspendedHyphen.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

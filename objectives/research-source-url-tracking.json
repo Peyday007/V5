@@ -1,0 +1,38 @@
+{
+  "objective": "Tracking parameters are never stripped from source URLs. server/services/research/sources.ts ~L108 tests keys with /^(utm_|fbclid|gclid|mc_cid|mc_eid|ref)$/i, whose $ anchor makes utm_ match only a key literally named 'utm_'; normalizeUrl on '...?utm_source=x&utm_medium=y&id=3&fbclid=z' keeps utm_source and utm_medium. That normalized URL is the stored sourceUrl and is what summarize/countIndependentSources count, so one page cited twice with different campaign tags reads as two sources (CLAUDE.md §14: sources that are really one source are counted as one). Fix the rule to strip every utm_* key and keep content parameters.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "utm_* and click-id parameters are stripped; content parameters are kept.",
+  "nonGoals": [
+    "Changing which hosts count as independent",
+    "Any schema change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/researchSourceUrlNormalize.test.ts: utm_source, utm_medium, utm_campaign and fbclid are removed from a normalized URL.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A content parameter such as id=3 is kept, and the fragment is still dropped.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing research gate/submission tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/research/sources.ts",
+    "tests/researchSourceUrlNormalize.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

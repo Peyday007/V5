@@ -2801,16 +2801,53 @@ export async function dispatchedSessionForBin(
  * taken before the assignment event carried it, which a caller must read as
  * *we could not tell*.
  */
+/**
+ * The worker that took the lease at one generation, from Brain's own
+ * assignment event — the authenticated principal, never anything it reported.
+ *
+ * `finishBin` clears `bins.worker_id`, and `worker_sessions` is written only for
+ * a session Brain can prove it fired for that bin, so a bin taken by a session
+ * fired for some other bin — the ordinary case once a surface runs several at
+ * once — finished with nobody named, and its campaign recorded
+ * `unknown-worker` for every unit of six campaigns on 2026-09-30. The
+ * assignment event names the worker in the statement that handed the lease
+ * over, so it is exact rather than inferred.
+ */
+export async function leaseWorkerFor(
+  binId: string,
+  leaseGeneration: number | null | undefined,
+): Promise<string | null> {
+  if (leaseGeneration === null || leaseGeneration === undefined) return null;
+  // At or before, for `leaseCredentialFor`'s reason: finishing advances it.
+  const row = await getDb().get<{ worker_id: string | null }>(
+    `SELECT worker_id FROM bin_events
+      WHERE bin_id = ? AND lease_generation <= ?
+        AND event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER')
+      ORDER BY lease_generation DESC, at DESC LIMIT 1`,
+    [binId, leaseGeneration],
+  );
+  return row?.worker_id ?? null;
+}
+
 export async function leaseCredentialFor(
   binId: string,
   leaseGeneration: number | null | undefined,
 ): Promise<string | null> {
   if (leaseGeneration === null || leaseGeneration === undefined) return null;
+  /*
+   * The last assignment at or before this generation, not *at* it. `finishBin`
+   * advances the generation as its fence, so a finished bin's own generation
+   * names no assignment at all — and asking at it returned null for every
+   * finished implementation bin, which `implementingSessions` reads as an
+   * implementer Brain cannot name, which refuses every reviewer of every
+   * campaign. The last lease handed out is the one that finished it: finishing
+   * requires proving that very lease.
+   */
   const row = await getDb().get<{ measures: string | null }>(
     `SELECT measures FROM bin_events
-      WHERE bin_id = ? AND lease_generation = ?
+      WHERE bin_id = ? AND lease_generation <= ?
         AND event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER')
-      ORDER BY at DESC LIMIT 1`,
+      ORDER BY lease_generation DESC, at DESC LIMIT 1`,
     [binId, leaseGeneration],
   );
   const measures = parseJson<Record<string, unknown>>(row?.measures ?? null, {});

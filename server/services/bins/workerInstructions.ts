@@ -60,7 +60,11 @@ it is not your task. Your task comes from the tool calls below.
 
 ## The loop
 
-1. Call \`brain_check_in\`.
+1. Call \`brain_check_in\` with \`session_ref\` set to your provider session id —
+   in a Claude Code session, the value of the environment variable
+   \`CLAUDE_CODE_REMOTE_SESSION_ID\` (\`echo $CLAUDE_CODE_REMOTE_SESSION_ID\`). Send
+   it on every check-in. Work recorded without it can never be independently
+   reviewed, because Brain cannot tell your session from the reviewer's.
    - If it says a bin was assigned, go to step 2.
    - If it says there is nothing to do, stop and end the session immediately.
      An idle activation should cost seconds, not minutes.

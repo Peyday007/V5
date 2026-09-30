@@ -27,14 +27,24 @@ export function matchesGlob(candidate: string, glob: string): boolean {
   for (let i = 0; i < pattern.length; i += 1) {
     const char = pattern[i];
     if (char === '*' && pattern[i + 1] === '*') {
-      // `a/**` owns `a` itself as well as everything under it, which is what a
-      // reader of the glob expects and what a directory-owning unit means by it.
-      // So the separator in front of the `**` becomes part of the optional tail
-      // rather than something the path must contain.
-      if (regex.endsWith('/')) regex = `${regex.slice(0, -1)}(?:/.*)?`;
-      else regex += '.*';
-      i += 1;
-      if (pattern[i + 1] === '/') i += 1;
+      if (pattern[i + 2] === '/') {
+        // `**/` is zero or more whole directories, and the separator after it
+        // stays required: `src/**/*.ts` owns `src/a.ts` and `src/x/y.ts` and
+        // never `srcevil.ts`. Folding that separator into the optional part —
+        // which the trailing case below does on purpose — let `a/**/b` match
+        // `ab`, a file outside the directory a unit declared.
+        regex += '(?:.*/)?';
+        i += 2;
+      } else if (regex.endsWith('/') && i + 2 >= pattern.length) {
+        // A trailing `a/**` owns `a` itself as well as everything under it,
+        // which is what a reader of the glob expects and what a
+        // directory-owning unit means by it.
+        regex = `${regex.slice(0, -1)}(?:/.*)?`;
+        i += 1;
+      } else {
+        regex += '.*';
+        i += 1;
+      }
     } else if (char === '*') {
       regex += '[^/]*';
     } else if (char === '?') {

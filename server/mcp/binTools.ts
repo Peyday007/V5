@@ -104,9 +104,12 @@ const checkInTool: McpTool = {
       session_ref: {
         type: 'string',
         description:
-          'Your provider session id. Always send it. It is how Brain tells one session from ' +
-          'another, and a review cannot be handed to a session it cannot identify — the factory ' +
-          'refuses a verdict from whoever wrote the code being judged.',
+          'Your provider session id. Always send it. In a Claude Code session it is the value of ' +
+          'the environment variable CLAUDE_CODE_REMOTE_SESSION_ID (run `echo ' +
+          '$CLAUDE_CODE_REMOTE_SESSION_ID`; it looks like cse_…). It is how Brain tells one session ' +
+          'from another, and a review cannot be handed to a session it cannot identify — the ' +
+          'factory refuses a verdict from whoever wrote the code being judged, so work done ' +
+          'without it can never be independently reviewed.',
       },
       lease_ms: { type: 'integer', minimum: 0, description: 'Requested lease; the server clamps it.' },
     },
@@ -134,7 +137,28 @@ const checkInTool: McpTool = {
         projectId: null,
       };
     }
-    return { value: { assigned: true, ...result.assignment }, projectId: result.assignment.projectId };
+    return {
+      value: {
+        assigned: true,
+        ...result.assignment,
+        /*
+         * Said on the response, because a worker reads what comes back and not
+         * the schema it already called. Production, 2026-09-30: every unit of
+         * six campaigns was taken by a session that sent no session_ref, so its
+         * implementer is unknown and its review is refused to every session on
+         * the same connector. Sending it on the next check-in fixes the next bin.
+         */
+        ...(optionalString(args, 'session_ref')
+          ? {}
+          : {
+              sessionRefMissing:
+                'You checked in without session_ref. Send it on every later check-in: the value ' +
+                'of CLAUDE_CODE_REMOTE_SESSION_ID. Without it the work you do here cannot be ' +
+                'independently reviewed.',
+            }),
+      },
+      projectId: result.assignment.projectId,
+    };
   },
 };
 

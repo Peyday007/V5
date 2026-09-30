@@ -1,0 +1,38 @@
+{
+  "objective": "The semantic-merge floor cannot tell a question from its negation. server/services/russell/similarity.ts ~L38 says negations are kept for that reason, but ~L109 scores shared/min(size), so an extra 'not' on one side never lowers the score (overlap('Should we publish the fees report','Should we not publish the fees report') is 1), and ~L78 replace(/[^a-z0-9\\s]/g,' ') turns can't into 'can t' and mangles non-ASCII (Zürich -> rich, café -> caf). clearsFloor gates semantic merges in judgment.ts, so a model can fold an idea into its opposite (CLAUDE.md §24). Fix: tokenise with \\p{L}\\p{N} and the u flag, map n't to not, and have clearsFloor refuse with a reason naming negation when a negation word (not/no/never/without) appears on exactly one side.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A negated rewording no longer clears the merge floor, and non-ASCII words survive tokenisation.",
+  "nonGoals": [
+    "Changing SEMANTIC_MERGE_FLOOR",
+    "Any change to judgment.ts"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/russellMergeFloorNegation.test.ts: clearsFloor refuses the 'not' pair and the can/can't pair with a reason naming negation.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "contentTokens('Zürich café') contains zürich and café.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/russellIntegrationPass.test.ts still passes and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/similarity.ts",
+    "tests/russellMergeFloorNegation.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

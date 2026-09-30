@@ -1,0 +1,38 @@
+{
+  "objective": "statesNamedIn reports 'West Virginia' as two states, so every West Virginia or Washington DC question is refused as naming two jurisdictions. server/domain/jurisdiction.ts ~L130 tests each state name independently with \\b boundaries, so 'Coal permits in West Virginia counties' returns ['virginia','west virginia'] and 'Recording fees in Washington, DC' returns ['washington','district of columbia']; russell/compiler.ts refuses on two results (CLAUDE.md §25). Fix: scan names longest-first and blank out each matched span before testing shorter names; treat 'Washington, DC' and 'Washington D.C.' as the district only; leave the ', OH' capitals rule untouched.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Overlapping state names resolve to the one jurisdiction the text names.",
+  "nonGoals": [
+    "Inferring intent from surrounding words",
+    "Adding any state list beyond what exists"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/jurisdictionOverlappingNames.test.ts: 'Coal permits in West Virginia counties' returns ['west virginia'], while 'Virginia and West Virginia' returns both.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "'Recording fees in Washington, DC' returns ['district of columbia'] and 'Washington state' still returns washington.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing jurisdiction and compiler tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/domain/jurisdiction.ts",
+    "tests/jurisdictionOverlappingNames.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}
