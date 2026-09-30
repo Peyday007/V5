@@ -369,6 +369,13 @@ async function resumeAfterCrash(
     return null;
   }
 
+  // `absentMeansNothingSent` is false here on purpose, and it is the stated
+  // rule rather than an oversight: on the first pass the send itself returned
+  // and a provider's ABSENT is its answer about that send, but here an
+  // executor died mid-send, so an ABSENT may be a provider that has not yet
+  // made the request visible. Invariant 26: an unknown outcome is recorded as
+  // unknown and never auto-retried. Only FOUND resolves this path; anything
+  // else stays UNCERTAIN for a person.
   const reconciled = await tryReconcile(adapter, operation, businessId, false);
   if (reconciled) return reconciled;
 

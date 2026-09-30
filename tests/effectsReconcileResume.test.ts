@@ -195,6 +195,11 @@ describe('resumeAfterCrash', () => {
     expect(retry.status).toBe('UNCERTAIN');
     expect((await getOperation(operation.id))?.state).toBe('UNCERTAIN');
     expect(sendCount(RECONCILABLE)).toBe(1);
+    // Stated rule, not an accident: after a crash only FOUND resolves it, and
+    // the operation records why it is stopped.
+    expect((await getOperation(operation.id))?.uncertaintyReason).toMatch(
+      /did not record an outcome/,
+    );
   });
 
   it('treats an attempt still at INTENT as never sent, and sends exactly once', async () => {
