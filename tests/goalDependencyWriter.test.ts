@@ -11,7 +11,7 @@ import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
 import { goalsRouter } from '../server/routes/goals.ts';
 import { createWorkstream, listLinks, listWorkstreamEvents } from '../server/repos/register.ts';
-import { setDependency } from '../server/services/goals/decide.ts';
+import { changeObjective, clearDependency, setDependency } from '../server/services/goals/decide.ts';
 import type { Principal } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -101,11 +101,43 @@ describe('setDependency', () => {
     expect(await res.text()).toContain('That would make the two goals wait on each other for ever.');
   });
 
-  it('the terminal accepts objective and undepend', () => {
+  it('clearDependency supersedes the live link and records LINK_SUPERSEDED, keeping the row', async () => {
+    const a = await goal('A'), b = await goal('B');
+    await setDependency(a.id, b.id, who());
+    const live = (await listLinks(a.id)).find((l) => l.relation === 'DEPENDS_ON')!;
+    const result = await clearDependency(a.id, b.id, 'no longer needed', `person:${userId}`);
+    expect(result.ok).toBe(true);
+    expect((await listLinks(a.id)).filter((l) => l.relation === 'DEPENDS_ON')).toHaveLength(0);
+    expect((await listLinks(a.id, { includeSuperseded: true })).some((l) => l.id === live.id)).toBe(true);
+    const ev = (await listWorkstreamEvents(a.id)).filter((e) => e.kind === 'LINK_SUPERSEDED');
+    expect(ev).toHaveLength(1);
+    expect(ev[0]!.detail).toMatchObject({ linkId: live.id });
+    // A second attempt finds no live link and writes nothing.
+    const again = await clearDependency(a.id, b.id, 'again', `person:${userId}`);
+    expect(again.ok).toBe(false);
+    expect((await listWorkstreamEvents(a.id)).filter((e) => e.kind === 'LINK_SUPERSEDED')).toHaveLength(1);
+  });
+
+  it('clearDependency refuses a missing reason or a missing link, writing nothing', async () => {
+    const a = await goal('A'), b = await goal('B');
+    expect((await clearDependency(a.id, b.id, 'why', `person:${userId}`)).ok).toBe(false);
+    await setDependency(a.id, b.id, who());
+    expect((await clearDependency(a.id, b.id, '  ', `person:${userId}`)).ok).toBe(false);
+    expect((await listLinks(a.id)).filter((l) => l.relation === 'DEPENDS_ON')).toHaveLength(1);
+    expect((await listWorkstreamEvents(a.id)).filter((e) => e.kind === 'LINK_SUPERSEDED')).toHaveLength(0);
+  });
+
+  it('changeObjective records the change and refuses an empty one', async () => {
+    const a = await goal('A');
+    expect((await changeObjective(a.id, {}, `person:${userId}`)).ok).toBe(false);
+    expect((await changeObjective(a.id, { intent: 'A new outcome.' }, `person:${userId}`)).ok).toBe(true);
+    expect((await listWorkstreamEvents(a.id)).filter((e) => e.kind === 'GOAL_OBJECTIVE_CHANGED')).toHaveLength(1);
+  });
+
+  it('the terminal routes undepend through clearDependency and objective through changeObjective', () => {
     const src = readFileSync('scripts/goals.ts', 'utf8');
-    expect(src).toContain("case 'undepend'");
-    expect(src).toContain("case 'objective'");
-    expect(src).toContain('supersedeLink(');
-    expect(src).toContain("kind: 'LINK_SUPERSEDED'");
+    expect(src).toContain('clearDependency(');
+    expect(src).toContain('changeObjective(');
+    expect(src).not.toContain('supersedeLink(');
   });
 });

@@ -29,7 +29,7 @@
  */
 import { getDb } from '../../db/database.ts';
 import type { GoalCommitment } from '../../domain/goals.ts';
-import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, updateWorkstream } from '../../repos/register.ts';
+import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, supersedeLink, updateWorkstream } from '../../repos/register.ts';
 import { binsHeldBy, cancelGoal, pauseGoal, reinstateGoal, resumeGoal, setGoalTerms } from '../../repos/goals.ts';
 
 export interface DecisionResult {
@@ -238,4 +238,27 @@ export async function setDependency(
     consequence:
       'Until that goal completes, Brain holds this goal’s live bins so capacity goes to work that can move; it releases them on the first tick after the other goal completes.',
   };
+}
+
+/**
+ * Stop a goal waiting on another — the one writer of that decision for the
+ * terminal. Supersedes the live dependency link, keeping its row and its reason,
+ * and records LINK_SUPERSEDED beside it exactly as the register's supersede
+ * route does. Nothing is written when there is no live link or no reason.
+ */
+export async function clearDependency(
+  goalId: string,
+  otherGoalId: string,
+  reason: string,
+  actorRef: string,
+): Promise<DecisionResult> {
+  const refuse = (why: string): DecisionResult => ({ ok: false, reason: why, consequence: 'Nothing changed.' });
+  if (!reason.trim()) return refuse('A reason is required.');
+  const live = (await listLinks(goalId)).find(
+    (one) => one.kind === 'WORKSTREAM' && one.relation === 'DEPENDS_ON' && one.ref === otherGoalId,
+  );
+  if (!live) return refuse(`${goalId} has no live dependency on ${otherGoalId}.`);
+  if (!(await supersedeLink(live.id, reason))) return refuse('That link was already superseded.');
+  await recordWorkstreamEvent({ workstreamId: goalId, kind: 'LINK_SUPERSEDED', summary: reason, detail: { linkId: live.id }, actorRef });
+  return { ok: true, reason: null, consequence: 'The link keeps its row and its reason; the goal no longer waits on that one.' };
 }

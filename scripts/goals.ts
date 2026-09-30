@@ -38,7 +38,7 @@ import { GOAL_COMMITMENTS, type GoalCommitment } from '../server/domain/goals.ts
 import { assembleGoals, type GoalView } from '../server/services/goals/model.ts';
 import { briefFrom } from '../server/services/goals/briefing.ts';
 import { unfiledWork } from '../server/services/register/unfiled.ts';
-import { cancel, changeObjective, pause, reinstate, resume, setDependency, setTerms } from '../server/services/goals/decide.ts';
+import { cancel, changeObjective, clearDependency, pause, reinstate, resume, setDependency, setTerms } from '../server/services/goals/decide.ts';
 
 class Halt extends Error {}
 
@@ -253,14 +253,7 @@ async function decide(command: string): Promise<void> {
     case 'undepend': {
       if (!otherId || !(await getWorkstream(otherId))) fail(`No goal ${otherId ?? '(none named)'} to stop depending on.`);
       const reason = flag('reason') ?? fail('undepend needs --reason.');
-      const live = (await listLinks(goalId)).find((one) => one.kind === 'WORKSTREAM' && one.relation === 'DEPENDS_ON' && one.ref === otherId);
-      if (!live) fail(`${goalId} has no live dependency on ${otherId}.`);
-      if (await supersedeLink(live.id, reason)) {
-        await recordWorkstreamEvent({ workstreamId: goalId, kind: 'LINK_SUPERSEDED', summary: reason, detail: { linkId: live.id }, actorRef });
-        result = { ok: true, reason: null, consequence: 'The link keeps its row and its reason; the goal no longer waits on that one.' };
-      } else {
-        result = { ok: false, reason: 'That link was already superseded.', consequence: 'Nothing changed.' };
-      }
+      result = await clearDependency(goalId, otherId, reason, actorRef);
       break;
     }
     case 'objective': {
