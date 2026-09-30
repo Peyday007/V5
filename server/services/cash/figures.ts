@@ -90,9 +90,13 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
   const patterns = markers.flatMap((marker) => {
     const mark = escape(marker);
     // Symbols bind tight; a code needs a word boundary so `USDT` is not `USD`.
-    const boundary = /^[A-Z]{3}$/.test(marker) ? '\\b' : '';
+    const isCode = /^[A-Z]{3}$/.test(marker);
+    const boundary = isCode ? '\\b' : '';
+    // A symbol is not preceded by a letter, so `C$`, `A$` and `NZ$` are never
+    // read as a bare `$`.
+    const behind = isCode ? '' : '(?<![A-Za-z])';
     return [
-      new RegExp(`${boundary}${mark}${boundary}\\s?(${number})`, 'gi'),
+      new RegExp(`${behind}${boundary}${mark}${boundary}\\s?(${number})`, 'gi'),
       new RegExp(`(${number})\\s?${boundary}${mark}${boundary}`, 'gi'),
     ];
   });
@@ -106,6 +110,8 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
       // A percentage is not a price.
       const after = text.slice(match.index + match[0].length, match.index + match[0].length + 1);
       if (after === '%') continue;
+      // A space-grouped number (`$12 000`) would be returned truncated: refuse it.
+      if (/^ \d{3}(?!\d)/.test(text.slice(match.index + match[0].length))) continue;
       // Shorthand is refused rather than expanded.
       if (/^[kKmMbB]/.test(after) && !/\s/.test(after)) continue;
       const cents = amountOf(raw);
