@@ -340,9 +340,9 @@ export function MachinesView({ projectId }: { projectId: string | null }): JSX.E
       <OpenQuestions view={view} projectId={projectId} reload={query.reload} />
       <Frontier view={view} />
       <NowResearching view={view} />
-      <Ladder view={view} />
+      <Ladder view={view} projectId={projectId} reload={query.reload} />
       <Acquisitions view={view} projectId={projectId} reload={query.reload} />
-      <Ledger view={view} />
+      <Ledger view={view} projectId={projectId} reload={query.reload} />
       <History view={view} />
     </div>
   );
@@ -773,10 +773,19 @@ function NowResearching({ view }: { view: ProgrammeView }): JSX.Element {
   );
 }
 
-function Ladder({ view }: { view: ProgrammeView }): JSX.Element {
+function Ladder({
+  view,
+  projectId,
+  reload,
+}: {
+  view: ProgrammeView;
+  projectId: string;
+  reload: () => void;
+}): JSX.Element {
   return (
     <section className="rs-card rs-machines-ladder">
       <h3>Categories</h3>
+      <NameCategory projectId={projectId} reload={reload} />
       {view.ladder.length === 0 ? (
         <p className="rs-hint">Nothing is on the ladder yet.</p>
       ) : null}
@@ -848,9 +857,140 @@ function Ladder({ view }: { view: ProgrammeView }): JSX.Element {
           ) : null}
           <Capital reading={reading.capital} />
           <Evidence reading={reading} />
+          {reading.verdict !== 'RETIRED' ? (
+            <RetireCategory
+              projectId={projectId}
+              categoryId={reading.categoryId}
+              reload={reload}
+            />
+          ) : null}
         </article>
       ))}
     </section>
+  );
+}
+
+/**
+ * A person naming a category onto the ladder.
+ *
+ * `SEED` is the one category origin Brain itself may never write (§39,
+ * `services/manufacturing/declare.ts`), and this form never sends a `kind` —
+ * the server's own default, a class of machine, decides unless a person says
+ * otherwise. Idempotent by the server's own unique index, so pressing it twice
+ * on the same name produces one category.
+ */
+function NameCategory({
+  projectId,
+  reload,
+}: {
+  projectId: string;
+  reload: () => void;
+}): JSX.Element {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const send = useCallback(async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const body: Record<string, string> = { name };
+      if (description.trim()) body.description = description;
+      await api(`/api/projects/${projectId}/manufacturing/categories`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      setName('');
+      setDescription('');
+      reload();
+    } catch (error) {
+      setProblem(describe(error));
+    } finally {
+      setBusy(false);
+    }
+  }, [description, name, projectId, reload]);
+
+  return (
+    <div className="rs-machines-setaside rs-machines-namecategory">
+      <label>
+        Name a category
+        <input
+          type="text"
+          value={name}
+          placeholder="A class of machine worth Brain's attention."
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <label>
+        Description, if it helps
+        <input
+          type="text"
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </label>
+      <button type="button" disabled={busy || name.trim().length === 0} onClick={send}>
+        Name a category
+      </button>
+      {problem ? <p className="rs-machines-warn">{problem}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * A person deciding a category is not worth pursuing.
+ *
+ * Destroys nothing (`retireCategoryDecision`): the category keeps its id, its
+ * evidence and every round ever run against it, and only its reading moves to
+ * `RETIRED` with the reason recorded here.
+ */
+function RetireCategory({
+  projectId,
+  categoryId,
+  reload,
+}: {
+  projectId: string;
+  categoryId: string;
+  reload: () => void;
+}): JSX.Element {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const send = useCallback(async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await api(`/api/projects/${projectId}/manufacturing/categories/${categoryId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reason }),
+      });
+      setReason('');
+      reload();
+    } catch (error) {
+      setProblem(describe(error));
+    } finally {
+      setBusy(false);
+    }
+  }, [categoryId, projectId, reason, reload]);
+
+  return (
+    <div className="rs-machines-setaside rs-machines-retire">
+      <label>
+        Retire this category, and why
+        <input
+          type="text"
+          value={reason}
+          placeholder="It stays on the record rather than being deleted."
+          onChange={(event) => setReason(event.target.value)}
+        />
+      </label>
+      <button type="button" disabled={busy || reason.trim().length === 0} onClick={send}>
+        Retire this category
+      </button>
+      {problem ? <p className="rs-machines-warn">{problem}</p> : null}
+    </div>
   );
 }
 
@@ -861,7 +1001,15 @@ function Ladder({ view }: { view: ProgrammeView }): JSX.Element {
  * the same edges the chain is, so it moves the moment a category establishes
  * that it needs something.
  */
-function Ledger({ view }: { view: ProgrammeView }): JSX.Element {
+function Ledger({
+  view,
+  projectId,
+  reload,
+}: {
+  view: ProgrammeView;
+  projectId: string;
+  reload: () => void;
+}): JSX.Element {
   return (
     <section className="rs-card rs-machines-ledger">
       <h3>Capabilities</h3>
@@ -896,11 +1044,75 @@ function Ledger({ view }: { view: ProgrammeView }): JSX.Element {
                   Developed by: {taughtBy.map((one) => one.name).join(', ')}
                 </p>
               ) : null}
+              {capability.heldAt ? (
+                <WithdrawHeld
+                  projectId={projectId}
+                  capabilityId={capability.id}
+                  reload={reload}
+                />
+              ) : null}
             </li>
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * A person withdrawing a capability they had recorded as held.
+ *
+ * §39's own words: "moving back when the holding is withdrawn." Guarded on
+ * `held_evidence = 'DECLARED'` in the service, so it only ever un-says a
+ * person's own declaration; it destroys nothing — the row keeps its name,
+ * its history and every round it ever unlocked.
+ */
+function WithdrawHeld({
+  projectId,
+  capabilityId,
+  reload,
+}: {
+  projectId: string;
+  capabilityId: string;
+  reload: () => void;
+}): JSX.Element {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const send = useCallback(async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await api(`/api/projects/${projectId}/manufacturing/capabilities/${capabilityId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reason }),
+      });
+      setReason('');
+      reload();
+    } catch (error) {
+      setProblem(describe(error));
+    } finally {
+      setBusy(false);
+    }
+  }, [capabilityId, projectId, reason, reload]);
+
+  return (
+    <div className="rs-machines-setaside rs-machines-withdraw">
+      <label>
+        Withdraw this holding, and why
+        <input
+          type="text"
+          value={reason}
+          placeholder="It stays on the record rather than being deleted."
+          onChange={(event) => setReason(event.target.value)}
+        />
+      </label>
+      <button type="button" disabled={busy || reason.trim().length === 0} onClick={send}>
+        Withdraw this holding
+      </button>
+      {problem ? <p className="rs-machines-warn">{problem}</p> : null}
+    </div>
   );
 }
 
