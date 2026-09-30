@@ -26,7 +26,12 @@
  * it can do is make Brain ask.
  */
 export const NEGATORS =
-  /\b(?:do not|don'?t|does not|doesn'?t|did not|didn'?t|no need to|never|rather than|instead of|without|avoid|refrain from|stop)\b/i;
+  /\b(?:do not|don['’]?t|does not|doesn['’]?t|did not|didn['’]?t|can['’]?t|cannot|won['’]?t|no need to|never|rather than|instead of|without|avoid|refrain from|stop)\b/i;
+
+/** Phones type U+2019; fold it to the ASCII apostrophe so both spell one word. */
+export function foldApostrophes(text: string): string {
+  return text.replace(/\u2019/g, "'");
+}
 
 /**
  * The clause a position sits in: back to the start of its sentence, then
