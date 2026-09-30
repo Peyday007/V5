@@ -371,6 +371,22 @@ describe('retiring a category', () => {
     ).toStrictEqual({ reason: 'No demand was ever found for it.' });
   });
 
+  it('is not offered beside a category that is already retired', async () => {
+    base({
+      [VIEW]: {
+        body: {
+          programme: programmeView({
+            ladder: [category({ verdict: 'RETIRED' }), category({ categoryId: 'mcat_2' })],
+          }),
+        },
+      },
+    });
+    await mount();
+
+    // Only the live category offers it; the retired one has nothing left to say.
+    expect(screen.getAllByRole('button', { name: /retire this category/i })).toHaveLength(1);
+  });
+
   it('renders the server refusal verbatim', async () => {
     base({
       [`PATCH /api/projects/${PROJECT}/manufacturing/categories/mcat_1`]: {

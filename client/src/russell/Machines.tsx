@@ -857,11 +857,13 @@ function Ladder({
           ) : null}
           <Capital reading={reading.capital} />
           <Evidence reading={reading} />
-          <RetireCategory
-            projectId={projectId}
-            categoryId={reading.categoryId}
-            reload={reload}
-          />
+          {reading.verdict !== 'RETIRED' ? (
+            <RetireCategory
+              projectId={projectId}
+              categoryId={reading.categoryId}
+              reload={reload}
+            />
+          ) : null}
         </article>
       ))}
     </section>
