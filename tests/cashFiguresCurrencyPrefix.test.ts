@@ -17,4 +17,10 @@ describe('currency symbol boundary', () => {
     expect(readMoneyFigures('$12 000', 'USD')).toEqual([]);
     expect(readMoneyFigures('$12 per hour', 'USD').map((f) => f.cents)).toEqual([1200]);
   });
+
+  it('does not let a foreign amount borrow the symbol that follows it', () => {
+    expect(readMoneyFigures('C$5 $6', 'USD').map((f) => f.cents)).toEqual([600]);
+    expect(readMoneyFigures('A$500 $', 'USD')).toEqual([]);
+    expect(readMoneyFigures('It costs 40 $', 'USD').map((f) => f.cents)).toEqual([4000]);
+  });
 });
