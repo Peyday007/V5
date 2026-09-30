@@ -263,7 +263,15 @@ describe('the throughput report', () => {
       .closest('li') as HTMLElement;
     expect(within(declaredRow).getByText(/not measured/)).toBeTruthy();
     expect(within(declaredRow).getByText(/no factory_campaigns row was supplied/)).toBeTruthy();
-    expect(declaredRow.textContent).not.toMatch(/[^a-zA-Z]0[^.\d]/);
+    // Exactly the words, the evidence class and the basis: nothing else, so no
+    // zero and no dash can be present in place of the missing figure.
+    expect(declaredRow.textContent).toBe(
+      'Concurrency declared' +
+        'not measured · UNKNOWN' +
+        'no factory_campaigns row was supplied',
+    );
+    const value = declaredRow.querySelector('.rs-ready-state') as HTMLElement;
+    expect(value.firstChild?.textContent).toBe('not measured');
   });
 
   it('opening the throughput disclosure does not fetch the pull request, and vice versa', async () => {
