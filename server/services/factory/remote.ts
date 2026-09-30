@@ -755,7 +755,10 @@ export async function verifyUnitReport(
       ok: false,
       problems: [
         `The forge could not confirm ${expected.branch}: ${head.reason ?? 'no answer'}. ` +
-          'Push the branch before reporting it.',
+          // A forge that answered with a reason did not say the branch is
+          // missing; telling a worker to push it would misread a rate limit or
+          // an outage as a fault in the work.
+          (head.reason ? '' : 'Push the branch before reporting it.'),
       ],
       files: [],
       verified: false,
@@ -1031,7 +1034,7 @@ export async function verifyIntegrationReport(
       ok: false,
       problems: [
         `The forge could not confirm ${expected.integrationBranch}: ${head.reason ?? 'no answer'}. ` +
-          'Push the integration branch before reporting it.',
+          (head.reason ? '' : 'Push the integration branch before reporting it.'),
       ],
       files: [],
       carried: [],

@@ -93,6 +93,34 @@ function apiBase(): string {
 }
 
 /**
+ * A forge refusal that is Brain's read budget running out, named as that.
+ *
+ * Production, 2026-09-30: with no forge token, every read shares GitHub's
+ * unauthenticated budget of 60 an hour per address, and fifteen live campaigns
+ * spend it. An integration whose branch was pushed and whose tests passed was
+ * then refused with "The forge answered 403." — which read to the worker as a
+ * failed verification, so it released and the bin spent its last attempt on a
+ * condition that was never about the work. Saying what it is, and when it ends,
+ * is what lets a worker keep its lease and ask again instead.
+ */
+export function rateLimitReason(
+  response: { status: number; headers: { get(name: string): string | null } },
+  authenticated: boolean,
+): string | null {
+  if (response.status !== 403 && response.status !== 429) return null;
+  const remaining = response.headers.get('x-ratelimit-remaining');
+  const retryAfter = response.headers.get('retry-after');
+  if (response.status === 403 && remaining !== '0' && retryAfter === null) return null;
+  const reset = Number(response.headers.get('x-ratelimit-reset'));
+  const until = Number.isFinite(reset) && reset > 0 ? new Date(reset * 1000).toISOString() : null;
+  return (
+    `The forge's read rate limit is spent${until ? ` until ${until}` : ''}` +
+    (authenticated ? '' : ' (Brain reads it without a token, so the budget is 60 an hour)') +
+    '. This is not a fault in the work: keep the lease, heartbeat, and report again once it resets.'
+  );
+}
+
+/**
  * One GET against the forge.
  *
  * The token — when there is one — is built into the header here and read from
@@ -134,7 +162,7 @@ async function get<T>(path: string): Promise<ForgeReply<T>> {
           response.status === 404
             ? 'The forge reports no such repository, ref or pull request. For a private ' +
               'repository that is also what "Brain may not read it" looks like.'
-            : `The forge answered ${response.status}.`,
+            : rateLimitReason(response, token.length > 0) ?? `The forge answered ${response.status}.`,
         authenticated: token.length > 0,
       };
     }
