@@ -29,6 +29,8 @@
  */
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { evidenceCard, type CardFieldKey } from './card.ts';
+import { isWorkable } from './portfolio.ts';
+import type { TierReading } from './tier.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 
 /** How sure Brain is, expressed as what it counted rather than as a percentage. */
@@ -196,6 +198,13 @@ function sumField(input: {
 export async function cashForecast(input: {
   projectId: string;
   currency: string;
+  /**
+   * The tier of each opportunity, as `cashTier` composed it. Only a piece
+   * `isWorkable` counts as qualified (§47): evidence is not work, and other
+   * people's published prices are not this operation's revenue. With none
+   * supplied nothing is workable — deny by default, at a projection.
+   */
+  tiers?: Record<string, TierReading>;
 }): Promise<CashForecast> {
   const all = await listOpportunities({ projectId: input.projectId });
   const live = all.filter((one) => LIVE.includes(one.state));
@@ -205,7 +214,12 @@ export async function cashForecast(input: {
    * conversion at a rate nobody chose, and a forecast that silently added two
    * currencies would be doing exactly that one layer up.
    */
-  const opportunities = live.filter((one) => one.currency === input.currency);
+  const inCurrency = live.filter((one) => one.currency === input.currency);
+  const tiers = input.tiers ?? {};
+  const opportunities = inCurrency.filter((one) => {
+    const reading = tiers[one.id];
+    return reading !== undefined && isWorkable({ tier: reading.tier, state: one.state });
+  });
 
   const revenue = sumField({
     opportunities,
@@ -279,7 +293,7 @@ export async function cashForecast(input: {
   return {
     currency: input.currency,
     qualified: opportunities.length,
-    considered: all.length,
+    considered: inCurrency.length,
     upfrontCash,
     ongoingCosts: withheld({
       basis: 'Recurring cost of running a qualified opportunity.',
