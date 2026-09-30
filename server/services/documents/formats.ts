@@ -42,12 +42,25 @@ function isZip(buffer: Buffer): boolean {
   return buffer[0] === ZIP_MAGIC[0] && buffer[1] === ZIP_MAGIC[1];
 }
 
-/** OOXML word processing documents declare themselves in the archive. */
-function looksLikeDocx(buffer: Buffer): boolean {
-  // The local file header of the first entry names it; `word/` appears early in
-  // every DOCX, and `[Content_Types].xml` is always the first entry.
+type OoxmlKind = 'docx' | 'xlsx' | 'pptx' | 'other';
+
+/**
+ * Which OOXML package this ZIP is.
+ *
+ * `[Content_Types].xml` is in every OOXML package — workbooks and presentations
+ * included — so it says nothing about Word. The part folders do: `word/`,
+ * `xl/`, `ppt/`. Entry order is not guaranteed, so the names are looked for in
+ * the first 4 KB (local headers) and in the last 64 KB, where the central
+ * directory lists every entry however large the parts before it are.
+ */
+function ooxmlKind(buffer: Buffer): OoxmlKind {
   const head = buffer.subarray(0, Math.min(buffer.byteLength, 4_096)).toString('latin1');
-  return head.includes('[Content_Types].xml') || head.includes('word/');
+  const tail = buffer.subarray(Math.max(0, buffer.byteLength - 65_536)).toString('latin1');
+  const names = `${head}\n${tail}`;
+  if (names.includes('xl/')) return 'xlsx';
+  if (names.includes('ppt/')) return 'pptx';
+  if (names.includes('word/')) return 'docx';
+  return 'other';
 }
 
 export function detectFormat(filename: string, buffer: Buffer): FormatDetection {
@@ -64,12 +77,26 @@ export function detectFormat(filename: string, buffer: Buffer): FormatDetection 
   }
 
   if (isZip(buffer)) {
-    if (looksLikeDocx(buffer)) {
+    const kind = ooxmlKind(buffer);
+    if (kind === 'docx') {
       return {
         format: 'DOCX',
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         reason: 'The file is an OOXML package containing a word/ part.',
         extensionMismatch: extension !== 'docx',
+      };
+    }
+    if (kind === 'xlsx' || kind === 'pptx') {
+      const spreadsheet = kind === 'xlsx';
+      return {
+        format: 'UNSUPPORTED',
+        mimeType: spreadsheet
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        reason:
+          `The file is an OOXML ${kind} package (${spreadsheet ? 'a spreadsheet' : 'a presentation'}). ` +
+          'Brain reads PDF, DOCX, TXT and Markdown, not this; the original is preserved unchanged.',
+        extensionMismatch: false,
       };
     }
     return {
