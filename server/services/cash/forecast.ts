@@ -29,6 +29,8 @@
  */
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { evidenceCard, type CardFieldKey } from './card.ts';
+import { isWorkable } from './portfolio.ts';
+import type { TierReading } from './tier.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 
 /** How sure Brain is, expressed as what it counted rather than as a percentage. */
@@ -70,7 +72,7 @@ export interface DurationEstimate {
 
 export interface CashForecast {
   currency: string;
-  /** How many opportunities are qualified enough to forecast from, and of how many. */
+  /** Workable opportunities forecast from, out of `considered` live ones in this currency. */
   qualified: number;
   considered: number;
   upfrontCash: Estimate;
@@ -196,6 +198,12 @@ function sumField(input: {
 export async function cashForecast(input: {
   projectId: string;
   currency: string;
+  /**
+   * Each opportunity's tier, from the same derivation the page uses. §47: only
+   * `isWorkable` pieces are work, so evidence — other people's published prices —
+   * is never totalled as revenue. With none supplied nothing is workable.
+   */
+  tiers?: Record<string, TierReading>;
 }): Promise<CashForecast> {
   const all = await listOpportunities({ projectId: input.projectId });
   const live = all.filter((one) => LIVE.includes(one.state));
@@ -205,7 +213,12 @@ export async function cashForecast(input: {
    * conversion at a rate nobody chose, and a forecast that silently added two
    * currencies would be doing exactly that one layer up.
    */
-  const opportunities = live.filter((one) => one.currency === input.currency);
+  const inCurrency = live.filter((one) => one.currency === input.currency);
+  const tiers = input.tiers ?? {};
+  const opportunities = inCurrency.filter((one) => {
+    const reading = tiers[one.id];
+    return reading !== undefined && isWorkable({ tier: reading.tier, state: one.state });
+  });
 
   const revenue = sumField({
     opportunities,
@@ -279,7 +292,7 @@ export async function cashForecast(input: {
   return {
     currency: input.currency,
     qualified: opportunities.length,
-    considered: all.length,
+    considered: inCurrency.length,
     upfrontCash,
     ongoingCosts: withheld({
       basis: 'Recurring cost of running a qualified opportunity.',
