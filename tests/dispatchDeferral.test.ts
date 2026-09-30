@@ -35,12 +35,14 @@ import {
   markDispatchRoutine,
   markDispatchSent,
   reopenNoShowDispatches,
+  recordSessionRefusal,
   releaseBin,
   assignNextBin,
 } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
 import { inFlightByRoutine, IN_FLIGHT_WINDOW_MS } from '../server/services/dispatch/candidates.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
+import { unansweredFiresByRoutine } from '../server/repos/fleet.ts';
 import type { BinManifest } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -434,6 +436,47 @@ describe('a fire nobody answered', () => {
     expect(intent!.attemptCount).toBe(1);
     // And it is claimable again, which is the entire point.
     expect((await claimDispatchIntent())?.id).toBe(intentId);
+  });
+
+  /*
+   * Production, 2026-09-29: a fired session started, checked in and was refused
+   * the bin by review admission. That is Brain's refusal, not a surface that
+   * never answered — three of them quarantined a healthy Routine as "cannot
+   * authorize".
+   */
+  it('does not charge a no-show when the fired session arrived and was refused', async () => {
+    const binId = await aReadyBin();
+    await aFleet();
+    const intentId = await aFireThatWentUnanswered(binId);
+    await getDb().run(`UPDATE bin_dispatch SET session_ref = ? WHERE id = ?`, ['cse_01ArrivedAndRefused', intentId]);
+    // Brain's check-in reports the provider session as session_<id>.
+    await getDb().run(`UPDATE bin_dispatch SET sent_at = ? WHERE id = ?`, [
+      new Date(Date.now() - IN_FLIGHT_WINDOW_MS - 60_000).toISOString(),
+      intentId,
+    ]);
+    await recordSessionRefusal({
+      binId,
+      sessionRef: 'session_01ArrivedAndRefused',
+      reason: 'refused by admission',
+      projectId,
+    });
+
+    const [reopened] = await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10);
+    // Still put back: the bin still needs a session that may take it.
+    expect(reopened).toEqual({ dispatchId: intentId, binId, outcome: 'REOPENED' });
+    const events = await listBinEvents(binId);
+    expect(events.some((e) => e.eventType === 'DISPATCH_NO_SHOW')).toBe(false);
+    const routine = (await routineId())!;
+    expect((await unansweredFiresByRoutine()).get(routine) ?? 0).toBe(0);
+  });
+
+  it('still charges a no-show when nothing arrived', async () => {
+    const binId = await aReadyBin();
+    await aFleet();
+    await aFireThatWentUnanswered(binId);
+    await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10);
+    const routine = (await routineId())!;
+    expect((await unansweredFiresByRoutine()).get(routine)).toBe(1);
   });
 
   it('never races a fire Brain still believes is running', async () => {

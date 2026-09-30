@@ -2574,6 +2574,8 @@ export async function reopenNoShowDispatches(
     routine_id: string | null;
     routine_ref: string | null;
     workload_class: string | null;
+    sent_at: string;
+    session_ref: string | null;
   }>(
     `SELECT d.id AS id,
             d.bin_id AS bin_id,
@@ -2585,7 +2587,9 @@ export async function reopenNoShowDispatches(
             d.attempt_count AS attempt_count,
             d.max_attempts AS max_attempts,
             b.attempt_count AS bin_attempt_count,
-            b.max_attempts AS bin_max_attempts
+            b.max_attempts AS bin_max_attempts,
+            d.sent_at AS sent_at,
+            d.session_ref AS session_ref
        FROM bin_dispatch d
        JOIN bins b ON b.id = d.bin_id
       WHERE d.state = 'SENT'
@@ -2627,6 +2631,33 @@ export async function reopenNoShowDispatches(
     const dispatchSpent = row.attempt_count >= row.max_attempts;
     const binSpent = row.bin_attempt_count >= row.bin_max_attempts;
     const exhausted = dispatchSpent || binSpent;
+    /*
+     * The session arrived and Brain refused it the bin — that is not a no-show.
+     *
+     * Production, 2026-09-29: Airyn's new Factory surface was fired for review
+     * bins, and each fired session started, checked in and was refused by the
+     * review-independence admission (`BIN_ASSIGNMENT_REFUSED`, same session id
+     * as the fire). The bin stayed claimable at the fire's generation, so this
+     * pass read each one as a surface that never answered, wrote
+     * `DISPATCH_NO_SHOW`, and three of them quarantined a surface that was
+     * starting sessions perfectly well — "cannot authorize", about a connector
+     * that had authorized every one of them. The intent is still put back,
+     * because the bin still needs a session that may take it; what is withheld
+     * is the charge against the surface, since the refusal was Brain's.
+     */
+    const refusedOnArrival = await getDb().get<{ hit: number }>(
+      `SELECT 1 AS hit FROM bin_events e
+        WHERE e.bin_id = ? AND e.event_type = 'BIN_ASSIGNMENT_REFUSED' AND e.at >= ?
+          AND e.session_ref IS NOT NULL
+          AND (e.session_ref = ? OR e.session_ref = ?)
+        LIMIT 1`,
+      [
+        row.bin_id,
+        row.sent_at,
+        row.session_ref ?? '',
+        row.session_ref?.startsWith('cse_') ? `session_${row.session_ref.slice(4)}` : (row.session_ref ?? ''),
+      ] as never[],
+    );
     const result = await getDb().run(
       exhausted
         ? `UPDATE bin_dispatch SET state = 'ABANDONED', updated_at = ?,
@@ -2672,7 +2703,7 @@ export async function reopenNoShowDispatches(
      * in two dialects — and *why did this surface stop being chosen* is a
      * different question from *why is this intent pending again*.
      */
-    if (row.routine_id) {
+    if (row.routine_id && !refusedOnArrival) {
       await recordBinEvent({
         eventType: 'DISPATCH_NO_SHOW',
         binId: row.bin_id,
@@ -2697,7 +2728,8 @@ export async function reopenNoShowDispatches(
       routineId: row.routine_id,
       outcome: exhausted ? 'ABANDONED' : 'PENDING',
       measures: {
-        noShow: true,
+        noShow: !refusedOnArrival,
+        ...(refusedOnArrival ? { refusedOnArrival: true } : {}),
         attempt: row.attempt_count,
         maxAttempts: row.max_attempts,
         binAttempt: row.bin_attempt_count,
