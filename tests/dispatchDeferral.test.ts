@@ -29,6 +29,7 @@ import {
   ensureDispatchIntent,
   getBin,
   listBinEvents,
+  recordBinEvent,
   listDispatchesForBin,
   markDispatchDeferred,
   markDispatchFailed,
@@ -468,6 +469,29 @@ describe('a fire nobody answered', () => {
     expect(events.some((e) => e.eventType === 'DISPATCH_NO_SHOW')).toBe(false);
     const routine = (await routineId())!;
     expect((await unansweredFiresByRoutine()).get(routine) ?? 0).toBe(0);
+  });
+
+  /*
+   * Production, 2026-09-30: fired for a review bin, the session checked in and
+   * was handed an implementation bin instead, which it implemented and pushed.
+   * The surface answered; the fire it answered with was spent elsewhere.
+   */
+  it('does not charge a no-show when the fired session arrived and took other work', async () => {
+    const binId = await aReadyBin();
+    await aFleet();
+    const intentId = await aFireThatWentUnanswered(binId);
+    await getDb().run(`UPDATE bin_dispatch SET session_ref = ? WHERE id = ?`, ['cse_01TookOtherWork', intentId]);
+    await recordBinEvent({
+      eventType: 'BIN_ASSIGNED',
+      binId: 'bin_some_other_bin',
+      projectId,
+      sessionRef: 'session_01TookOtherWork',
+    });
+
+    const [reopened] = await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10);
+    expect(reopened).toEqual({ dispatchId: intentId, binId, outcome: 'REOPENED' });
+    expect((await listBinEvents(binId)).some((e) => e.eventType === 'DISPATCH_NO_SHOW')).toBe(false);
+    expect((await unansweredFiresByRoutine()).get((await routineId())!) ?? 0).toBe(0);
   });
 
   it('still charges a no-show when nothing arrived', async () => {

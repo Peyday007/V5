@@ -2645,14 +2645,26 @@ export async function reopenNoShowDispatches(
      * because the bin still needs a session that may take it; what is withheld
      * is the charge against the surface, since the refusal was Brain's.
      */
+    /*
+     * And the session arrived and took *other* work — not a no-show either.
+     *
+     * Production, 2026-09-30: the same surface was fired at 04:17 for three
+     * review bins; each fired session checked in, was handed an implementation
+     * bin instead (the assigner offers the oldest ready bin in scope, §27), and
+     * implemented and pushed a unit two minutes later. The review bins stayed
+     * claimable at the fire's generation, so all three read as unanswered and
+     * the surface was quarantined at 04:47 for sessions that had just written
+     * code. Brain has the fired session's id on the dispatch row, so an
+     * arrival under that id on any bin, after the fire, is the answer.
+     */
     const refusedOnArrival = await getDb().get<{ hit: number }>(
       `SELECT 1 AS hit FROM bin_events e
-        WHERE e.bin_id = ? AND e.event_type = 'BIN_ASSIGNMENT_REFUSED' AND e.at >= ?
+        WHERE e.event_type IN ('BIN_ASSIGNMENT_REFUSED', 'BIN_ASSIGNED', 'BIN_TAKEOVER')
+          AND e.at >= ?
           AND e.session_ref IS NOT NULL
           AND (e.session_ref = ? OR e.session_ref = ?)
         LIMIT 1`,
       [
-        row.bin_id,
         row.sent_at,
         row.session_ref ?? '',
         row.session_ref?.startsWith('cse_') ? `session_${row.session_ref.slice(4)}` : (row.session_ref ?? ''),
