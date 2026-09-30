@@ -1,0 +1,32 @@
+{
+  "objective": "server/services/russell/pending.ts: the conditions() query does not select b.lease_expires_at and explain (~L161) returns 'A worker is working on this now.' for any LEASED bin; under CLAUDE.md section 19 an expired lease means nobody is working and the work is claimable again (section 24: a pending state must be able to become wrong). Fix: select b.lease_expires_at, add leaseExpiresAt to TurnCondition, and when it has passed say the worker stopped and the turn will be offered to another worker; null/unparseable expiry reads as live. tests/pendingTurnState.test.ts (expiry 2099, expects /working on this now/) must keep passing.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A pending turn never claims a worker is on it after its lease has expired.",
+  "nonGoals": [
+    "Changing turn state or any write path"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "an expired-lease pending turn says the worker stopped, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/pending.ts",
+    "tests/pendingExpiredLease.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

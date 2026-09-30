@@ -1,0 +1,32 @@
+{
+  "objective": "server/services/russell/whyThisMatters.ts (~L99) returns 'Two foundations are settled now — A and B.' whenever settled.length >= 2, so four settled foundations are reported as two (section 29: every number shown is a row). Fix: keep the sentence for exactly 2; for more say '${n} foundations are settled now, most recently A and B.' Check the filed and closed branches use their own counts too. tests/step12bProduct.test.ts (two-item case and the anti-gamification regex) must keep passing.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "The note states the real number of settled foundations.",
+  "nonGoals": [
+    "Changing when the note appears"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "four settled foundations read as four, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/whyThisMatters.ts",
+    "tests/whyThisMattersCounts.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

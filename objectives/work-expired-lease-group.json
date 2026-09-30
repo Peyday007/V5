@@ -1,0 +1,32 @@
+{
+  "objective": "server/services/russell/work.ts groupOfBin (~L174) returns 'WORKING_NOW' for any LEASED bin regardless of leaseExpiresAt; an expired lease is claimable work with nobody on it and belongs in 'UP_NEXT'. Fix: groupOfBin(bin, now = Date.now()); LEASED with a parseable leaseExpiresAt <= now returns 'UP_NEXT'; missing/null expiry stays 'WORKING_NOW' (tests/readLayer.test.ts calls it with no leaseExpiresAt and expects WORKING_NOW).",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A bin whose lease has expired is not shown as being worked on.",
+  "nonGoals": [
+    "Changing other groups"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "an expired-lease bin groups as UP_NEXT, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/work.ts",
+    "tests/workExpiredLeaseGroup.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

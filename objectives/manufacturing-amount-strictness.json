@@ -1,0 +1,33 @@
+{
+  "objective": "server/domain/manufacturing.ts asMinor (~L717) does Number(value) for strings, so a CAPITAL_REQUIREMENT finding accepts amountLowMinor '  ' (blank -> 0, understating capital), '0x10' (16), '12500.00' (12500 minor units = $125) and '1e6'. Sibling validators in domain/industry.ts and domain/labor.ts already require numbers. Fix: accept only a finite non-negative safe integer number or a string matching /^\\d+$/; refuse everything else with a reason. tests/manufacturingCapital.test.ts (expects '12,500' refused) and tests/manufacturingKernel.test.ts must keep passing.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A capital amount is a whole number of minor units or it is refused.",
+  "nonGoals": [
+    "Changing currency handling",
+    "Any schema change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "blank, hex, decimal and exponent amount strings are refused, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/domain/manufacturing.ts",
+    "tests/manufacturingAmountStrictness.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

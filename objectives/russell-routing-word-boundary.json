@@ -1,0 +1,32 @@
+{
+  "objective": "server/services/russell/routing.ts (~L109 project name +60, ~L125 layer name +30) uses lower.includes(name), so a project named 'Brain' scores on 'let's brainstorm pricing for Deal Dispatch', 'Cash' on 'cashflow', 'V4' on 'V45', making routing ambiguous or wrong. Fix: replace both includes with a word-boundary test on the escaped name, boundaries being non letter/digit: (?<![\\p{L}\\p{N}])name(?![\\p{L}\\p{N}]) with flags 'iu'. tests/russellNervousSystem.test.ts routes 'Hidden Venture' and 'Deal Dispatch' verbatim and must keep passing.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A project or layer is named only as a whole word.",
+  "nonGoals": [
+    "Changing scores or the ambiguity rule"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "a name inside another word no longer scores, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/routing.ts",
+    "tests/russellRoutingWordBoundary.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

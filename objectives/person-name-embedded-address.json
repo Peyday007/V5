@@ -1,0 +1,32 @@
+{
+  "objective": "server/domain/personName.ts: looksLikeAddress requires a single bare address, so personName({displayName:'Rosser Peyton <rosserpeyton@gmail.com>'}) shows the whole string to every member (section 47: a person is not an address), refuseAddressAsName lets it through, and 'mailto:a@b.com' renders as 'mailto:a'. Fix: add containsAddress(value) that splits on whitespace, strips <>, mailto: and trailing punctuation, and tests each token with looksLikeAddress; personName drops address tokens and returns the rest, falling back to the local part; refuseAddressAsName refuses when containsAddress. Keep looksLikeAddress unchanged and keep both exported names (tests/signInIdentity.test.ts checks them). tests/russellFoundationCloseout.test.ts cases ('DJ @ Night' unchanged, '@handle', 'a@b', 'a@@b.com' false) must keep passing.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "No displayed name carries an email address.",
+  "nonGoals": [
+    "Changing sign-in resolution"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "names containing an address are stripped and refused, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/domain/personName.ts",
+    "tests/personNameEmbeddedAddress.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

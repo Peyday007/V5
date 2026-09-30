@@ -1,0 +1,33 @@
+{
+  "objective": "server/services/factory/contract.ts narrowsOrEqual (~L779) compares a wildcard-free allowed entry as a bare string prefix: narrowsOrEqual(['client/src/Home.tsx.bak'],['client/src/Home.tsx']) and narrowsOrEqual(['sites/v4-private/**'],['sites/v4']) both return true, so a plan unit can own paths the approved mutation scope never named. Fix: when an allowed entry has no wildcard, require n === a or n.startsWith(a + '/'); keep plain startsWith only for stems cut at a wildcard (e.g. 'src/' from 'src/**'). Keep the '**' shortcut and the absolute/.. refusal. Existing tests (tests/factory.test.ts, tests/factoryExecutionPlane.test.ts, tests/russellSoftwareJourney.test.ts, factoryFindingsClosed, factoryBulkTick using exact 'src.txt') use glob stems or exact files and must keep passing.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "An owned path is inside the approved scope only across a path boundary.",
+  "nonGoals": [
+    "Changing matchesGlob or pathsOverlap",
+    "Changing forbidden-path handling"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "narrowsOrEqual refuses sibling-prefix paths, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/factory/contract.ts",
+    "tests/factoryScopeBoundary.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

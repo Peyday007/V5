@@ -1,0 +1,32 @@
+{
+  "objective": "server/services/russell/search.ts like() (~L112) backslash-escapes \\, % and _ but none of the six LIKE ? statements says ESCAPE '\\', and SQLite has no default escape character, so on SQLite searching 'county_fees' or '10%' finds nothing even when present (Postgres defaults to backslash). Fix: append ESCAPE '\\' to every LIKE ? in search.ts; valid on both dialects. tests/step12bProduct.test.ts search cases use plain words and must keep passing. The new test should run against the configured test database.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A search for text containing % or _ finds it on both backends.",
+  "nonGoals": [
+    "Changing search scope or authorization"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "underscore and percent searches match on SQLite, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/search.ts",
+    "tests/searchLikeEscape.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}
