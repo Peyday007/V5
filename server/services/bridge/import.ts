@@ -90,15 +90,17 @@ function tryChatGptExport(body: string): ParsedTranscript | null {
   // of it is the same object on its own. Both are accepted.
   const conversation = Array.isArray(parsed) ? parsed[0] : parsed;
   const notes: string[] = [];
+  if (!conversation || typeof conversation !== 'object') return null;
+  const record = conversation as Record<string, unknown>;
+  const mapping = record.mapping;
+  if (!mapping || typeof mapping !== 'object') return null;
+  // Said only once the first conversation is known to be readable: a note about
+  // what was left behind is meaningless when nothing was read at all.
   if (Array.isArray(parsed) && parsed.length > 1) {
     notes.push(
       `The export held ${parsed.length} conversations; only the first was read and ${parsed.length - 1} were not.`,
     );
   }
-  if (!conversation || typeof conversation !== 'object') return null;
-  const record = conversation as Record<string, unknown>;
-  const mapping = record.mapping;
-  if (!mapping || typeof mapping !== 'object') return null;
 
   const nodes = mapping as Record<string, ExportNode>;
 

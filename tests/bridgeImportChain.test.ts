@@ -46,6 +46,13 @@ describe('conversation import fidelity', () => {
     expect(parsed.notes.join(' ')).toMatch(/2 were not/);
   });
 
+  it('does not report unread conversations when the first one is unreadable', () => {
+    const good = { mapping: { root: node('root', null, ['q']), q: node('q', 'root', [], 'user', 'a') } };
+    const parsed = parseTranscript({ body: JSON.stringify([{ title: 'no mapping' }, good, good]) });
+    expect(parsed.notes.join(' ')).not.toMatch(/were not|only the first was read/);
+    expect(parsed.messages.map((m) => m.content)).not.toEqual(['a']);
+  });
+
   it('keeps a preamble as an UNKNOWN message at ordinal 0', () => {
     const parsed = parseTranscript({ body: 'Context line\nYou: hi' });
     expect(parsed.messages).toHaveLength(2);
