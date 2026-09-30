@@ -9,7 +9,9 @@
  */
 
 /** Words split across a line break by a hyphen, e.g. "intermedi- ation". */
-const SOFT_HYPHEN_BREAK = /([A-Za-z])[-\u00ad]\s+([a-z])/g;
+const HARD_HYPHEN_BREAK = /([A-Za-z])-[ \t]*\r?\n[ \t]*([a-z])/g;
+/** A soft hyphen marks a break opportunity, so it may join across any whitespace. */
+const SOFT_HYPHEN_BREAK = /([A-Za-z])\u00ad\s+([a-z])/g;
 /** Control characters that carry no meaning in extracted prose. */
 const CONTROL_CHARS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
 /** Zero-width and formatting characters some PDF producers emit between glyphs. */
@@ -48,7 +50,7 @@ export function normalizeBlockText(raw: string): NormalizationResult {
     notes.push('removed zero-width characters');
   }
 
-  const dehyphenated = text.replace(SOFT_HYPHEN_BREAK, '$1$2');
+  const dehyphenated = text.replace(HARD_HYPHEN_BREAK, '$1$2').replace(SOFT_HYPHEN_BREAK, '$1$2');
   if (dehyphenated !== text) {
     text = dehyphenated;
     notes.push('rejoined hyphenated line breaks');
