@@ -1,0 +1,38 @@
+{
+  "objective": "Stored execution priority is re-read as planner necessity, demoting mandatory fragments. server/services/research/quota.ts ~L127 assignExecutionPriority overwrites brief.priority (planner necessity 1/5/8) with a tier rank (1-7), and tierOf ~L109 reads fragment.priority as necessity for stored fragments in executionOrder (orchestrator.ts ~L1105, review.ts ~L210). After assignment a necessity-1 brief holds priority 5 and re-derives as SUPPORTING_CONTEXT. Fix: add storedTier(fragment) reading PRIORITY_TIERS by stored rank with the structural overrides still applied; use it in executionOrder and export it for review.ts; keep tierOf's necessity branch for planner briefs only; assignExecutionPriority must be idempotent.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A mandatory fragment stays mandatory after its priority is stored, and assignment is idempotent.",
+  "nonGoals": [
+    "Changing tier definitions",
+    "Any schema change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/researchTierIdempotent.test.ts: after assignExecutionPriority, a necessity-1 brief still reads MANDATORY_SYNTHESIS_INPUT via the stored-tier reader.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Two calls to assignExecutionPriority produce identical priorities, and executionOrder orders mandatory before supporting.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing research suites pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/research/quota.ts",
+    "tests/researchTierIdempotent.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

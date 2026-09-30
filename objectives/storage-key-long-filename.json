@@ -1,0 +1,38 @@
+{
+  "objective": "A long filename loses its extension in the storage key and its content type. server/services/storage/keys.ts ~L63 safeSegment returns cleaned.slice(0, 180), so a 193-character '... 2026 edition.pdf' ends 'records sources 202' and contentTypeFor gives application/octet-stream; server/services/storage.ts ~L340 claims the extension survives. Fix in safeSegment: when truncating, keep path.extname (up to 8 characters) and truncate only the stem so the result is at most 180 characters, re-stripping trailing dots/spaces from the stem. Short names must be byte-identical to before.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Truncated storage segments keep their extension.",
+  "nonGoals": [
+    "Changing keys of already-stored documents",
+    "Any schema change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/storageKeyLongFilename.test.ts: a 250-character '.pdf' name yields a segment of at most 180 characters ending '.pdf', and contentTypeFor on it returns application/pdf.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Names under the limit are returned byte-identical to the previous behaviour.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing storage key tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/storage/keys.ts",
+    "tests/storageKeyLongFilename.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

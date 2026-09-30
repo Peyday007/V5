@@ -1,0 +1,38 @@
+{
+  "objective": "XLSX and PPTX files are detected as Word documents. server/services/documents/formats.ts ~L50 returns DOCX when the head includes '[Content_Types].xml' or 'word/', and every OOXML package starts with [Content_Types].xml, so a workbook or presentation is sent to mammoth and fails instead of being honestly UNSUPPORTED (CLAUDE.md §9). Fix: require a word/ part (search the first 4 KB and the ZIP central directory in the last ~64 KB, since entry order is not guaranteed); return UNSUPPORTED with an xlsx/pptx reason when xl/ or ppt/ is present.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Only real Word packages are detected as DOCX; spreadsheets and presentations are UNSUPPORTED with a reason.",
+  "nonGoals": [
+    "Adding XLSX or PPTX extraction",
+    "Any schema change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/documentFormatOoxml.test.ts (fixtures built with jszip): a package with xl/workbook.xml and one with ppt/presentation.xml both return UNSUPPORTED.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "An existing DOCX fixture from tests/fixtures still returns DOCX.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing document extraction tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/documents/formats.ts",
+    "tests/documentFormatOoxml.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

@@ -1,0 +1,38 @@
+{
+  "objective": "The contradiction classifier compares only the first number, so years and percentages hide real conflicts. server/services/research/contradictions.ts ~L139 takes leftNumbers[0] and rightNumbers[0], and the unit regex ~L52 has no word boundary after the unit. 'In 2024 the market was $5 billion' vs '... $8 billion' is RESOLVED_BY_CONTEXT, 'grew 12% to $5 billion' vs '12% to $9 billion' likewise, and '5 months' is read as 5 million. CLAUDE.md §14: incompatible figures are never averaged and a real disagreement must be classified. Fix: \\b after the unit; drop year-like 4-digit tokens (1900-2100, no unit); tag quantities by kind (percent vs magnitude); compare same-kind quantities pairwise and return RESOLVED_BY_CONTEXT only when every comparable pair agrees.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Numeric contradictions are detected across all comparable quantities, not just the first number.",
+  "nonGoals": [
+    "Changing the contradiction category vocabulary",
+    "Any schema change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/contradictionQuantities.test.ts: the $5bn vs $8bn pair sharing a year returns DIRECT_FACTUAL_CONFLICT.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "'5 months' is not scaled to millions, and identical figures with the same year still return RESOLVED_BY_CONTEXT.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing contradiction and replan tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/research/contradictions.ts",
+    "tests/contradictionQuantities.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

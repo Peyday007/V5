@@ -1,0 +1,39 @@
+{
+  "objective": "Held commitments in another currency are subtracted from this sprint's deployable cash. server/repos/cashAuthority.ts ~L580 heldCentsForProject sums amount_cents over every HELD commitment with no currency filter, and server/services/cash/money.ts ~L125 subtracts it from deployableCents while every other term is filtered by input.currency. A hold outlives its grant, so a withdrawn USD grant's hold reduces a later EUR sprint's deployable cash (CLAUDE.md §30/invariant 37). Fix: give heldCentsForProject an optional currency filter; cashPosition passes input.currency; holds in other currencies are reported in otherCurrencies, not subtracted. Check whether commit()'s running sum needs the same filter and state the answer in the test file's header rather than changing it silently.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Deployable cash subtracts only holds in its own currency.",
+  "nonGoals": [
+    "Converting currencies",
+    "Any schema change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/cashHeldCurrency.test.ts: a USD HELD commitment does not change a EUR cashPosition.deployableCents, and EUR otherCurrencies includes USD.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The same USD hold still reduces a USD position.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing cashMoney and cashAuthority tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/repos/cashAuthority.ts",
+    "server/services/cash/money.ts",
+    "tests/cashHeldCurrency.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

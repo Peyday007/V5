@@ -1,0 +1,38 @@
+{
+  "objective": "Engineering risk under-rates changes whose paths are not exactly repo-relative. server/domain/engineering.ts ~L154-158 does path.startsWith(prefix) on the raw string, so riskForPaths(['./server/db/migrations/x.sql']), ['/home/user/V5/server/repos/x.ts'] and ['server\\\\repos\\\\x.ts'] all return TIER_1 instead of TIER_3, and testPolicy (mcp/engineeringTools.ts, scripts/engineering.ts) then skips the focused-Postgres requirement for a persistence change. Fix: normalise each path first (backslashes to /, strip leading ./, strip everything through the repository root); an absolute path outside the repo or one climbing with .. is at least TIER_2, never TIER_1; report the normalised path in the reasons.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Risk tiers are computed on normalised repository paths and never under-rate an unrecognised path.",
+  "nonGoals": [
+    "Changing tier thresholds or path lists",
+    "Any schema change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/engineeringRiskPaths.test.ts: the three spellings above all return TIER_3.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "'../x.ts' returns at least TIER_2 and 'docs/a.md' stays TIER_0.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing engineering tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/domain/engineering.ts",
+    "tests/engineeringRiskPaths.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

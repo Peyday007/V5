@@ -1,0 +1,38 @@
+{
+  "objective": "Lane-based fragment split re-researches lanes that were already complete. server/services/research/splitting.ts ~L54-63 builds one question per empty lane, but splitFragment (~L109, ~L122) maps lanes to children only when signal.questions.length === fragment.requiredEvidence.length, which never holds for a lane split, so each child inherits every lane including completed ones; a two-question '?' split on a two-lane fragment assigns lanes by index arbitrarily; and slice(0, 4) silently drops a fifth question. CLAUDE.md §15: splitting must not re-research the half that worked. Fix: add laneIds to SplitSignal from the lane branch; splitFragment gives child i exactly the lane named laneIds[i]; a '?' split keeps all lanes; more than four questions is refused/reported rather than truncated.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Children of a lane split carry exactly their own lane, and no question is silently dropped.",
+  "nonGoals": [
+    "Changing repair strategy ladders",
+    "Any schema change"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/researchLaneSplit.test.ts: a 3-lane fragment with fees filled and vendors/dates empty splits into children whose requiredEvidence is exactly [vendors] and [dates].",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A two-question '?' split keeps both lanes on each child, and five questions are not silently truncated.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Existing splitting and repair tests pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/research/splitting.ts",
+    "tests/researchLaneSplit.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}
