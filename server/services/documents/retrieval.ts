@@ -51,6 +51,12 @@ export function tokenize(text: string): string[] {
     .filter((token) => token.length > 2 && !STOP_WORDS.has(token));
 }
 
+/** A term as a whole token: not preceded or followed by a letter or digit. */
+function wholeTermRegex(term: string, flags: string): RegExp {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, flags);
+}
+
 /**
  * Score a chunk against a query.
  *
@@ -58,12 +64,6 @@ export function tokenize(text: string): string[] {
  * beats one repeating a single term twenty times, which is what you want when
  * the question is "does this document address custody and claim priority?".
  */
-/** A term as a whole token: not preceded or followed by a letter or digit. */
-function wholeTermRegex(term: string, flags: string): RegExp {
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, flags);
-}
-
 export function scoreChunk(chunk: DocumentChunk, terms: string[]): number {
   if (terms.length === 0) return 0;
   const haystack = chunk.text.toLowerCase();
