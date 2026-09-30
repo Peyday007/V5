@@ -45,4 +45,20 @@ describe('quantity-aware contradiction classification', () => {
     );
     expect(r.kind).toBe('RESOLVED_BY_CONTEXT');
   });
+
+  it('does not read the same figures stated in a different order as a conflict', () => {
+    const r = classifyContradiction(
+      scoped('Revenue was $5 billion and costs were $2 billion'),
+      scoped('Costs were $2 billion and revenue was $5 billion'),
+    );
+    expect(r.kind).toBe('RESOLVED_BY_CONTEXT');
+  });
+
+  it('still reports a conflict when a figure genuinely differs, in any order', () => {
+    const r = classifyContradiction(
+      scoped('Revenue was $5 billion and costs were $2 billion'),
+      scoped('Costs were $2 billion and revenue was $9 billion'),
+    );
+    expect(r.kind).toBe('DIRECT_FACTUAL_CONFLICT');
+  });
 });

@@ -83,16 +83,26 @@ function quantities(text: string): Quantity[] {
   return out;
 }
 
-/** Spreads between same-kind figures, in order within each kind; empty when nothing is comparable. */
+/**
+ * Spreads between same-kind figures. Each figure on the shorter side is matched
+ * to the closest unused figure on the other, so the order a claim states its
+ * figures in does not decide the comparison. Empty when nothing is comparable.
+ */
 function comparableSpreads(left: Quantity[], right: Quantity[]): number[] {
   const spreads: number[] = [];
+  const spread = (x: number, y: number) => Math.abs(x - y) / Math.max(Math.abs(x), Math.abs(y), 1);
   for (const kind of ['percent', 'magnitude'] as const) {
-    const a = left.filter((q) => q.kind === kind);
-    const b = right.filter((q) => q.kind === kind);
-    for (let i = 0; i < Math.min(a.length, b.length); i += 1) {
-      const x = a[i]!.value;
-      const y = b[i]!.value;
-      spreads.push(Math.abs(x - y) / Math.max(Math.abs(x), Math.abs(y), 1));
+    let a = left.filter((q) => q.kind === kind).map((q) => q.value);
+    let b = right.filter((q) => q.kind === kind).map((q) => q.value);
+    if (a.length > b.length) [a, b] = [b, a];
+    const unused = [...b];
+    for (const x of a) {
+      let best = 0;
+      for (let j = 1; j < unused.length; j += 1) {
+        if (spread(x, unused[j]!) < spread(x, unused[best]!)) best = j;
+      }
+      spreads.push(spread(x, unused[best]!));
+      unused.splice(best, 1);
     }
   }
   return spreads;
