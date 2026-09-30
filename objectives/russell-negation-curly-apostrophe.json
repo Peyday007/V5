@@ -1,0 +1,33 @@
+{
+  "objective": "server/services/russell/negation.ts NEGATORS matches only the ASCII apostrophe (don'?t, doesn'?t, didn'?t ...). Phones type U+2019, so NEGATORS.test('Don’t fix the footer') is false and a software request like 'Don’t change Brain, fix V4' reads the exclusion as a mention (CLAUDE.md §27). Fix: accept ['’]? in every apostrophe position (and add can't / won't forms), and export a small foldApostrophes helper.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Negation is detected whichever apostrophe the person typed.",
+  "nonGoals": [
+    "Changing which words count as negators beyond the apostrophe forms",
+    "Changing software.ts or softwareTarget.ts"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "curly-apostrophe negators are detected exactly like ASCII ones, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/negation.ts",
+    "tests/russellNegationCurlyApostrophe.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

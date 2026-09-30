@@ -1,0 +1,33 @@
+{
+  "objective": "pathsOverlap in server/repos/factory.ts (~L1009) ends a glob's literal stem only at '*', while matchesGlob treats '?' as a wildcard. So pathsOverlap(['src/?.ts'],['src/a.ts']) is false although both cover src/a.ts, letting two units that own one file be leased concurrently, and a leading './' defeats the comparison (pathsOverlap(['./src/a.ts'],['src/**']) is false). Fix: cut the stem at the first of * ? [ {, and normalise a leading './' and backslash separators before comparing; an empty stem stays maximally overlapping. Also confirm ownershipReachesForbidden('.git?ub/**',['.github/**']) is now refused, if that function builds on the same stem.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Two globs that can cover the same path always overlap.",
+  "nonGoals": [
+    "Changing matchesGlob",
+    "Changing any factory state transition"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "pathsOverlap reports an overlap for '?' wildcards and for a leading './', with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/repos/factory.ts",
+    "tests/factoryPathsOverlapWildcards.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

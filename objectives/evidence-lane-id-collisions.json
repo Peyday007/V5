@@ -1,0 +1,33 @@
+{
+  "objective": "server/domain/evidenceLanes.ts laneIdFrom keeps the first 4 meaningful words and falls back to 'evidence' for digit-leading ids, and dedupe keeps the first lane per id. So parseLanes(['Official county fee schedules for recording deeds','Official county fee schedules for recording mortgages']) returns one lane and the REQUIRED mortgages lane silently disappears, letting the gate pass without it; parseLanes(['2024 annual filings','2025 quarterly filings']) collapses to ['evidence']. Fix: when a derived (not declared) id collides, suffix deterministically (_2, _3) in input order; prefix digit-leading derivations (lane_2024_annual_filings) rather than falling back; keep first-wins only for genuinely duplicated declared ids.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Every distinct prose lane keeps its own id.",
+  "nonGoals": [
+    "Changing declared-lane ids",
+    "Changing the gate"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "distinct prose lanes never collapse into one id, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/domain/evidenceLanes.ts",
+    "tests/evidenceLaneIdCollisions.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

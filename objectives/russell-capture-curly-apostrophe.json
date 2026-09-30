@@ -1,0 +1,32 @@
+{
+  "objective": "server/services/russell/judgment.ts shouldCapture matches markers containing an ASCII apostrophe only (let'?s ~L48, how's ~L98). With U+2019: shouldCapture('How’s it going, are you well?') captures an idea from small talk, and shouldCapture('Let’s map the county fees') declines. Fix: normalise ‘ and ’ to ' at the top of shouldCapture before any marker test.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A message is judged the same whichever apostrophe was typed.",
+  "nonGoals": [
+    "Widening or narrowing any capture marker list"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "shouldCapture gives identical answers for curly and ASCII apostrophes on every apostrophe-bearing marker, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/judgment.ts",
+    "tests/russellCaptureCurlyApostrophe.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

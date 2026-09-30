@@ -1,0 +1,33 @@
+{
+  "objective": "server/services/documents/text.ts markdown extraction: the setext-heading branch only fires when the paragraph buffer is empty, so textToBlocks('Line A\\nLine B\\n---\\n\\nBody', true) yields PARAGRAPH 'Line A Line B ---' instead of a HEADING 'Line A Line B'; and a standalone '---' / '***' / '___' after a blank line becomes a PARAGRAPH block. HEADING blocks drive capability-kernel section units (CLAUDE.md §37). Fix: when an underline follows a non-empty paragraph, emit the buffered text as a HEADING ('=' any length, '-' at least 2); treat a standalone thematic break as a flush and drop it.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Multi-line setext headings become HEADING blocks and thematic breaks produce no text.",
+  "nonGoals": [
+    "A full CommonMark parser",
+    "Changing plain-text (non-markdown) extraction"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "setext headings after multi-line paragraphs are headings and thematic breaks produce no blocks, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/documents/text.ts",
+    "tests/markdownSetextAndBreaks.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

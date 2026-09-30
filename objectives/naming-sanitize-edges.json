@@ -1,0 +1,33 @@
+{
+  "objective": "server/domain/naming.ts sanitizeFilename trims dots/whitespace and then slices to 180, so sanitizeFilename('a'.repeat(179)+' b') ends with a trailing space and buildNames produces '...aa .pdf'; and RESERVED_WINDOWS_NAMES is tested against the whole name, so 'CON.txt', 'LPT1.pdf' and 'nul.tar.gz' pass although Windows treats CON.* as the device. Fix: slice first, then trim both ends; test the reserved rule against the part before the first '.'. Keep buildNames' output unchanged for ordinary names.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A sanitized filename never ends in a space or dot and never names a Windows device.",
+  "nonGoals": [
+    "Changing canonical_name or conversation_title",
+    "Changing storage keys"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "truncation leaves no trailing space/dot and reserved device names with extensions are rewritten, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/domain/naming.ts",
+    "tests/namingSanitizeEdges.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}

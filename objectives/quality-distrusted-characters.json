@@ -1,0 +1,32 @@
+{
+  "objective": "server/services/documents/quality.ts (~L131) adds page.characterCount for every page, including pages distrusted for OCR confidence below the floor, and that total drives the minDocumentCharacters check. Four readable 45-character pages are BLOCKED; add a 3000-character page at confidence 0.1 and the document becomes READY_WITH_WARNINGS. CLAUDE.md §9: a page below ocrConfidenceFloor counts as unread. Fix: use characters from readable pages only for the minimum-document check, keeping any raw total that is reported elsewhere.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Unreadable pages never make a document auditable.",
+  "nonGoals": [
+    "Changing the confidence floor or thresholds"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "a distrusted OCR page contributes nothing to the minimum-text check, with a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/documents/quality.ts",
+    "tests/extractionQualityDistrustedChars.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change."
+}
