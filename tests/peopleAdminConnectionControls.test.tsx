@@ -103,6 +103,31 @@ describe('administrator connection controls', () => {
     expect(await screen.findByText('Brain has no Routine with that reference.')).toBeTruthy();
   });
 
+  it('renders the server sentence verbatim when a revoke is refused', async () => {
+    await mountAdmin();
+    routes['POST /api/people/usr_airyn/claude/revoke'] = { status: 422, body: { error: 'That connection cannot be taken back.' } };
+    fireEvent.click(screen.getByRole('button', { name: 'Take this connection back' }));
+    fireEvent.change(screen.getByLabelText(/Why are you taking it back/), { target: { value: 'lost device' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm taking it back' }));
+    });
+    expect(bodies['POST /api/people/usr_airyn/claude/revoke']).toEqual({ reason: 'lost device' });
+    expect(await screen.findByText('That connection cannot be taken back.')).toBeTruthy();
+  });
+
+  it('re-reads the connections list after a successful adopt', async () => {
+    await mountAdmin();
+    routes['POST /api/people/usr_airyn/claude/adopt'] = { body: { connection: SUMMARY, alreadyAdopted: false } };
+    fireEvent.change(screen.getByLabelText('Member'), { target: { value: 'usr_airyn' } });
+    fireEvent.change(screen.getByLabelText('Routine reference'), { target: { value: 'trig_airyn' } });
+    const before = calls.filter((c) => c === 'GET /api/people/connections').length;
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Record this Routine' }));
+    });
+    expect(bodies['POST /api/people/usr_airyn/claude/adopt']).toEqual({ routineRef: 'trig_airyn' });
+    await waitFor(() => expect(calls.filter((c) => c === 'GET /api/people/connections').length).toBeGreaterThan(before));
+  });
+
   it('shows neither control to a non-administrator', async () => {
     routes['GET /api/people'] = { body: page(false) };
     await act(async () => {
