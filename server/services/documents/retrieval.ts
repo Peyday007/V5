@@ -58,13 +58,19 @@ export function tokenize(text: string): string[] {
  * beats one repeating a single term twenty times, which is what you want when
  * the question is "does this document address custody and claim priority?".
  */
-function scoreChunk(chunk: DocumentChunk, terms: string[]): number {
+/** A term as a whole token: not preceded or followed by a letter or digit. */
+function wholeTermRegex(term: string, flags: string): RegExp {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, flags);
+}
+
+export function scoreChunk(chunk: DocumentChunk, terms: string[]): number {
   if (terms.length === 0) return 0;
   const haystack = chunk.text.toLowerCase();
   let matched = 0;
   let occurrences = 0;
   for (const term of terms) {
-    const count = haystack.split(term).length - 1;
+    const count = haystack.match(wholeTermRegex(term, 'g'))?.length ?? 0;
     if (count > 0) {
       matched += 1;
       occurrences += Math.min(count, 5);
@@ -75,7 +81,7 @@ function scoreChunk(chunk: DocumentChunk, terms: string[]): number {
   const density = occurrences / Math.max(1, terms.length * 5);
   // Heading matches are a strong signal that the passage is about the question.
   const headingText = chunk.headingPath.join(' ').toLowerCase();
-  const headingBonus = terms.some((term) => headingText.includes(term)) ? 0.15 : 0;
+  const headingBonus = terms.some((term) => wholeTermRegex(term, '').test(headingText)) ? 0.15 : 0;
   return Number((coverage * 0.7 + density * 0.3 + headingBonus).toFixed(4));
 }
 
@@ -92,7 +98,7 @@ function quoteFrom(chunk: DocumentChunk, terms: string[], maxChars: number): str
   const lower = text.toLowerCase();
   let anchor = -1;
   for (const term of terms) {
-    const index = lower.indexOf(term);
+    const index = lower.search(wholeTermRegex(term, ''));
     if (index !== -1 && (anchor === -1 || index < anchor)) anchor = index;
   }
   if (anchor === -1) return `${text.slice(0, maxChars)}…`;
@@ -133,7 +139,14 @@ export async function retrieveEvidence(input: RetrieveInput): Promise<RetrievalR
 
   for (const documentId of input.documentIds) {
     const document = await getDocument(documentId);
-    if (!document) continue;
+    if (!document) {
+      unreadable.push({
+        documentId,
+        documentLabel: documentId,
+        reason: 'No document with that id is registered.',
+      });
+      continue;
+    }
     const run = await getCurrentExtractionRun(documentId);
 
     if (!run || !isAuditable(run.status)) {
