@@ -222,7 +222,9 @@ function WorkstreamCard({
   workstream: WorkstreamView;
   onChanged: () => void;
 }): JSX.Element {
-  const [open, setOpen] = useState(false);
+  // Open by default: the per-link correction lives in this list, and a control
+  // that appears only after a reader thinks to open a disclosure is not offered.
+  const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [history, setHistory] = useState(false);

@@ -103,8 +103,8 @@ describe('Register workstream controls', () => {
     routes['POST /api/register/workstreams/wks_1/links/lnk_1/supersede'] = { body: { superseded: true } };
     routes['POST /api/register/workstreams/wks_1/archive'] = { body: { workstream: WS } };
     await shown();
-    fireEvent.click(screen.getByRole('button', { name: /what it is made of/ }));
-
+    // The link control is offered without opening anything first.
+    expect(screen.getByRole('button', { name: /Hide what it is made of/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'This link is wrong' }));
     const mark = screen.getByRole('button', { name: 'Mark it wrong' }) as HTMLButtonElement;
     expect(mark.disabled).toBe(true);
