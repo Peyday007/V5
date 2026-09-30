@@ -71,13 +71,10 @@ function dependents(fragment: TierInput, all: TierInput[]): number {
 }
 
 /**
- * Which tier a fragment belongs to.
- *
- * Deliberately reads the fragment rather than a stored label: a fragment that
- * was split, repaired or re-planned can change tier, and a stale label would
- * quietly spend quota in the wrong order.
+ * The structural tiers: the ones decided by what the fragment is about and what
+ * rests on it, never by the planner's necessity. Null means none applies.
  */
-export function tierOf(fragment: TierInput, all: TierInput[]): TierAssignment {
+function structuralTier(fragment: TierInput, all: TierInput[]): TierAssignment | null {
   // A boundary question is planned with no requirement behind it, because it is
   // what decides which requirements are even in scope.
   if ((fragment.requirementIds ?? []).length === 0) {
@@ -104,8 +101,23 @@ export function tierOf(fragment: TierInput, all: TierInput[]): TierAssignment {
   if (dependents(fragment, all) > 0) {
     return assign('FOUNDATIONAL_EVIDENCE', 'Other fragments rest on this one and would be researched blind.');
   }
-  // Necessity comes through as the planner's priority: 1 mandatory, 5
-  // supporting, 8 optional.
+  return null;
+}
+
+/**
+ * Which tier a planner brief belongs to.
+ *
+ * Deliberately reads the fragment rather than a stored label: a fragment that
+ * was split, repaired or re-planned can change tier, and a stale label would
+ * quietly spend quota in the wrong order. `priority` here is the planner's
+ * necessity (1 mandatory, 5 supporting, 8 optional) — so this is for briefs
+ * that have not had a tier stamped on them. A stored fragment carries a tier
+ * rank in that field instead; read it with {@link storedTier}.
+ */
+export function tierOf(fragment: TierInput, all: TierInput[]): TierAssignment {
+  const structural = structuralTier(fragment, all);
+  if (structural) return structural;
+  // Necessity comes through as the planner's priority.
   const necessity = fragment.priority ?? 5;
   if (necessity <= 1) {
     return assign('MANDATORY_SYNTHESIS_INPUT', 'The synthesis cannot be written without it.');
@@ -117,15 +129,49 @@ export function tierOf(fragment: TierInput, all: TierInput[]): TierAssignment {
 }
 
 /**
+ * Which tier a stored fragment belongs to.
+ *
+ * `assignExecutionPriority` overwrites the planner's necessity with the tier
+ * rank (1-7), so re-reading that number as necessity would demote a mandatory
+ * fragment (rank 5) to supporting context. The structural overrides still
+ * apply, because they are derived from the fragment's shape and may change when
+ * it is split or repaired; only the necessity part is read from the stored rank.
+ * A stored structural rank that no longer applies is treated as mandatory —
+ * the safe direction, since it was once load-bearing.
+ */
+export function storedTier(fragment: TierInput, all: TierInput[]): TierAssignment {
+  const structural = structuralTier(fragment, all);
+  if (structural) return structural;
+  const rank = fragment.priority ?? assign('SUPPORTING_CONTEXT', '').rank;
+  if (rank >= assign('OPTIONAL_ENRICHMENT', '').rank) {
+    return assign('OPTIONAL_ENRICHMENT', 'Worth having if the allowance stretches to it.');
+  }
+  if (rank >= assign('SUPPORTING_CONTEXT', '').rank) {
+    return assign('SUPPORTING_CONTEXT', 'It strengthens the report without being load-bearing.');
+  }
+  return assign('MANDATORY_SYNTHESIS_INPUT', 'The synthesis cannot be written without it.');
+}
+
+/** Briefs whose priority already holds a tier rank rather than a necessity. */
+const stamped = new WeakSet<object>();
+
+/**
  * Stamp the execution tier onto a set of planned fragment briefs.
  *
  * Priority is the tier, so every later decision — which job runs next, which
  * bundle inherits which urgency — sorts on the same number.
  */
 export function assignExecutionPriority<T extends TierInput>(briefs: T[]): T[] {
-  for (const brief of briefs) {
-    brief.priority = tierOf(brief, briefs).rank;
-  }
+  // Decide every tier before writing any, so one brief's stamp cannot change
+  // another's answer; and read an already-stamped brief as stored, so a second
+  // call yields the same priorities instead of re-reading a rank as necessity.
+  const ranks = briefs.map((brief) =>
+    (stamped.has(brief) ? storedTier(brief, briefs) : tierOf(brief, briefs)).rank,
+  );
+  briefs.forEach((brief, index) => {
+    brief.priority = ranks[index]!;
+    stamped.add(brief);
+  });
   return briefs;
 }
 
@@ -141,7 +187,7 @@ const EFFORT_ORDER: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
 export function executionOrder(ready: ResearchFragment[], all: ResearchFragment[]): ResearchFragment[] {
   const ranked = ready.map((fragment) => ({
     fragment,
-    rank: tierOf(fragment, all).rank,
+    rank: storedTier(fragment, all).rank,
     unblocks: dependents(fragment, all),
     effort: EFFORT_ORDER[fragment.estimatedEffort ?? 'MEDIUM'] ?? 1,
   }));
