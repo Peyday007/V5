@@ -64,7 +64,30 @@ is registered, so `SEND_A_MESSAGE` and invoicing read `MISSING`.
    the Brain held its own pooler clients. So *why the 100 ideas are QUEUED* is
    **not established** tonight. `closeout-report.yml` now passes
    `BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000` at the call site, which reaches the
-   already-deployed image; the first read after merge answers the question.
+   already-deployed image.
+   **Then it answered** (run 36890242369, 16:14Z, serving `0041975`): 40
+   openings, `NEEDS_PERSON=8 BLOCKED=32`, 0 of 2 slots in flight. All 32 BLOCKED
+   are round 2 with `candidate=QUEUED mission=— passes 0/0`: the deep dive's idea
+   never launched, and the six-hour stall backstop closed it. The report then
+   calls them `ROUNDS_SPENT … the sources do not publish the rest`, which is not
+   what happened — nothing was ever researched.
+   **Cause, from the code:** `nextLaunchable` (`russell/loop.ts`) took
+   `LIMIT 50` over *every* QUEUED candidate in the Brain and only afterwards
+   dropped the ones it could not launch. A launched idea stays QUEUED by
+   design, and one with no compiled spec is skipped silently, so ideas that
+   already had a live/parked/DONE mission (re-launch is a no-op replay) filled
+   the window and nothing behind them was ever looked at. Fixed on this branch
+   (`nextLaunchable` filters on spec and on having no non-terminal mission in
+   SQL; `repairLaunches` still repairs live missions on its own). Regression
+   `tests/russellLaunchWindow.test.ts` fails on the old query, passes on both
+   backends.
+   **Not yet fixed, deliberately:** the 32 dives spent both rounds on stalls that
+   researched nothing. Refunding the round before the launch fix is deployed
+   would re-open a dive every six hours that still could not launch. Once the
+   fix is live and dives are seen launching, the round budget for those 32 is a
+   follow-up (count only rounds whose mission existed).
+   **Also unestablished:** an idea refused for a whole-project reason (no grant,
+   concurrency full) still occupies the window; not observed as the cause here.
 
 ## Not taken, deliberately
 

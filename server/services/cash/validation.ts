@@ -160,7 +160,7 @@ export type DiveRefusal =
    * another would buy the same answer twice.
    */
   | { kind: 'AWAITING_PERSON' }
-  /** Both bounded dives are spent. The honest answer is that the sources do not publish it. */
+  /** Both bounded dives are spent. A stalled round counts too, so this says nothing about the sources. */
   | { kind: 'ROUNDS_SPENT'; rounds: number; cap: number }
   /** It got there. A qualified piece has nothing left for a dive to ask. */
   | { kind: 'ALREADY_QUALIFIED'; tier: string }
@@ -179,7 +179,10 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
     case 'AWAITING_PERSON':
       return 'waiting on a person: its mission stopped at a decision only they can make';
     case 'ROUNDS_SPENT':
-      return `both dives are spent (${refusal.rounds}/${refusal.cap}); the sources do not publish the rest`;
+      // Not "the sources do not publish the rest": a round closed by the stall
+      // backstop researched nothing, and production held 32 such rounds. What
+      // each dive established is in its own reason, not in this count.
+      return `both dives are spent (${refusal.rounds}/${refusal.cap}); each dive's own reason says what it established`;
     case 'ALREADY_QUALIFIED':
       return `already ${refusal.tier} — a dive has nothing left to ask`;
     case 'NOT_A_QUALIFYING_STATE':

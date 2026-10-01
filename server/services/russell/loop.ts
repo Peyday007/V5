@@ -2088,7 +2088,7 @@ async function missionsAwaitingWriteback(limit: number): Promise<RussellMission[
  * So an unjudged candidate simply is not eligible here, and stays queued until
  * the judgment pass compiles one.
  */
-async function nextLaunchable(limit: number): Promise<
+export async function nextLaunchable(limit: number): Promise<
   {
     candidateId: string;
     /** The mission this idea follows on from, when it is a follow-on. */
@@ -2102,8 +2102,37 @@ async function nextLaunchable(limit: number): Promise<
     project_id: string | null;
     follow_on_of_mission_id: string | null;
   }>(
-    `SELECT id, judgment, project_id, follow_on_of_mission_id FROM russell_candidates
-      WHERE state = 'QUEUED' AND project_id IS NOT NULL
+    /*
+     * Only rows that could launch, filtered before the window rather than after.
+     *
+     * `LIMIT` used to apply to every QUEUED candidate in the Brain, and the
+     * loop below then dropped the ones it could not act on. Two kinds stay
+     * QUEUED for ever and can never launch from here, so once fifty of them sat
+     * at the front of the order nothing behind them was ever looked at:
+     *
+     *   - one with no compiled `missionSpec`, skipped below without a word;
+     *   - one whose idea already has a mission that is live, parked or DONE —
+     *     a launch only replays that row (or refuses a DONE one with no state
+     *     change), and a launched candidate stays QUEUED by design. Live
+     *     missions are repaired by `repairLaunches`, which selects on the
+     *     mission rather than on this window, so nothing that pass needs is
+     *     taken away.
+     *
+     * Production, 2026-10-01: a hundred QUEUED ideas in one sprint, and every
+     * deep dive's candidate sat QUEUED with no mission until the six-hour stall
+     * backstop closed it — thirty-two of forty openings were BLOCKED that way,
+     * each reading `passes 0/0`. A FAILED or CANCELLED mission still leaves the
+     * idea eligible, because a new specification may launch and an old one is
+     * answered by the `ALREADY_RESEARCHED` transition below.
+     */
+    `SELECT id, judgment, project_id, follow_on_of_mission_id FROM russell_candidates c
+      WHERE c.state = 'QUEUED' AND c.project_id IS NOT NULL
+        AND c.judgment LIKE '%"missionSpec"%'
+        AND NOT EXISTS (
+          SELECT 1 FROM russell_missions m
+           WHERE m.candidate_id = c.id
+             AND m.state NOT IN ('FAILED','CANCELLED')
+        )
       ORDER BY
         CASE priority
           WHEN 'MUST_DO' THEN 0 WHEN 'BIG_MOVE' THEN 1 WHEN 'WORTH_DOING' THEN 2
