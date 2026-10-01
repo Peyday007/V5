@@ -398,6 +398,31 @@ export async function updateOpportunity(
 }
 
 /**
+ * Put a deep dive whose idea never launched back to waiting, in one guarded
+ * statement.
+ *
+ * A compare-and-swap on the state and the round count the caller read, so two
+ * ticks resuming one opening produce one resume and the loser is an ordinary
+ * `false`. The candidate is untouched: the resumed dive is the same question,
+ * still owned by the same idea.
+ */
+export async function resumeBlockedValidation(input: {
+  id: string;
+  fromRounds: number;
+  toRounds: number;
+  startedAt: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE cash_opportunities
+        SET validation_state = 'PENDING', validation_started_at = ?,
+            validation_settled_at = NULL, validation_rounds = ?, updated_at = ?
+      WHERE id = ? AND validation_state = 'BLOCKED' AND validation_rounds = ?`,
+    [input.startedAt, input.toRounds, portfolioNow(), input.id, input.fromRounds],
+  );
+  return (result.changes ?? 0) > 0;
+}
+
+/**
  * Record what kind of opening a piece rests on, and only where nothing does.
  *
  * Guarded on the column still being null in the statement that writes it, so
