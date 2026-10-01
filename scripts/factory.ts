@@ -38,6 +38,8 @@ import {
   listWorkers,
 } from '../server/repos/factoryFleet.ts';
 import { amendContract, approveObjective, submitObjective } from '../server/services/factory/contract.ts';
+import { pathsNamedIn } from '../server/services/factory/repair.ts';
+import { matchesGlob } from '../server/services/factory/integrate.ts';
 import {
   capacity,
   probeFleet,
@@ -269,6 +271,32 @@ async function main(): Promise<void> {
           `checkout ${result.changeRequest.repositoryRoot ?? '(the factory default)'}\n` +
           `verification ${result.changeRequest.verificationCommands.join(', ')}\n`,
       );
+      /*
+       * A file the objective names that its scope does not cover.
+       *
+       * The planner may only give units paths inside the approved scope, so a
+       * file the objective says to change and the scope leaves out is a file no
+       * unit will ever own — and the review that later finds it unchanged starts
+       * a repair that cannot reach it either. research-tier-idempotent said
+       * "export it for review.ts" over a scope of quota.ts and one test. Said
+       * here, before approval, because a name in prose may be context rather
+       * than a target and only the person submitting can tell which.
+       */
+      const scope = result.changeRequest.mutationScope;
+      const outside = [
+        ...pathsNamedIn(result.changeRequest.objective).filter(
+          (named) => !scope.some((glob) => matchesGlob(named, glob)),
+        ),
+        ...[...result.changeRequest.objective.matchAll(/(?<![\w./-])([\w-]+\.(?:tsx?|jsx?|sql|mjs|json))\b/g)]
+          .map((match) => match[1]!)
+          .filter((name) => !scope.some((glob) => glob === '**' || glob.endsWith(`/${name}`) || glob === name)),
+      ];
+      if (outside.length > 0) {
+        process.stdout.write(
+          `note: the objective names ${[...new Set(outside)].join(', ')}, which the mutation scope ` +
+            'does not cover. If any of them must change, widen the scope before approving.\n',
+        );
+      }
       break;
     }
 

@@ -78,6 +78,7 @@ import {
   queueRepairs,
   queueVerificationRepair,
   reconcileRepairs,
+  amendmentNeededDetail,
 } from './repair.ts';
 import { assembleDeliverable } from './assemble.ts';
 import { planCampaign } from './architect.ts';
@@ -1127,6 +1128,18 @@ async function actOnVerdict(
     `${repairs.queued.length} repair unit(s) queued from ${gating.length} gating finding(s)`,
   );
 
+  const stranded = repairs.needsAmendment.filter((need) =>
+    gating.some((finding) => finding.id === need.findingId),
+  );
+  if (repairs.queued.length === 0 && stranded.length > 0) {
+    // A repair for a file the contract does not cover would be a unit that can
+    // only BLOCK. Say which file, and let a person's amendment answer it: the
+    // next pass re-asks `queueRepairs`, which only looks at unqueued findings.
+    return await block(report, campaign, 'SCOPE_AMENDMENT_REQUIRED', {
+      detail: amendmentNeededDetail(stranded, changeRequest.id),
+    });
+  }
+
   if (repairs.queued.length === 0 && gating.length > 0) {
     // Every gating finding already has a repair, and they are not landing.
     const exhausted = await reconcileRepairs(campaign.id);
@@ -1359,6 +1372,21 @@ async function unblockStage(
         return report;
       }
       return await advance(report, campaign, 'EXECUTING', 'a unit became movable again');
+    }
+    case 'SCOPE_AMENDMENT_REQUIRED': {
+      // Answered by an amendment, re-read here: `queueRepairs` looks only at
+      // findings with no repair yet, so this queues exactly what was waiting.
+      const repairs = await queueRepairs(campaign, changeRequest);
+      const gating = await gatingFindings(campaign.id);
+      const stranded = repairs.needsAmendment.filter((need) =>
+        gating.some((finding) => finding.id === need.findingId),
+      );
+      if (stranded.length > 0) {
+        report.blocker = { kind: campaign.blockerKind, detail: amendmentNeededDetail(stranded, changeRequest.id) };
+        return report;
+      }
+      report.repairsQueued = repairs.queued.length;
+      return await advance(report, campaign, 'REPAIRING', 'the scope now covers every required file');
     }
     default:
       report.blocker = campaign.blockerKind

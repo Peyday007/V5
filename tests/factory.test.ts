@@ -60,7 +60,13 @@ import { createUser } from '../server/repos/identity.ts';
 import { submitObjective, approveObjective, amendContract } from '../server/services/factory/contract.ts';
 import { validatePlan, installPlan } from '../server/services/factory/planner.ts';
 import { checkOwnership, matchesGlob, integrateUnit } from '../server/services/factory/integrate.ts';
-import { gatingFindings, queueRepairs, reconcileRepairs } from '../server/services/factory/repair.ts';
+import {
+  amendmentNeededDetail,
+  gatingFindings,
+  pathsNamedIn,
+  queueRepairs,
+  reconcileRepairs,
+} from '../server/services/factory/repair.ts';
 import { decideIndependence, parseReview } from '../server/services/factory/review.ts';
 import { maxOverlap, computeMetrics } from '../server/services/factory/metrics.ts';
 import { decide, tuneLaneTarget, chooseWorker } from '../server/services/factory/scheduler.ts';
@@ -1243,6 +1249,135 @@ describe('repairs', () => {
     // A defect nobody fixed is not a defect that went away.
     expect(findings.find((f) => f.findingKey === 'stuck-one')?.state).toBe('REPAIR_QUEUED');
     expect((await gatingFindings(campaign.id)).map((f) => f.findingKey)).toEqual(['stuck-one']);
+  });
+});
+
+describe('a repair owns exactly the files its finding requires', () => {
+  async function campaignFor(changeRequest: FactoryChangeRequest) {
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: changeRequest.baseSha,
+      laneTarget: 2,
+      laneTargetReason: 'initial',
+    });
+    return campaign;
+  }
+
+  async function finding(campaignId: string, key: string, statement: string, evidence: string) {
+    await recordReview({
+      campaignId,
+      round: 1,
+      scope: 'CAMPAIGN',
+      reviewerSessionId: null,
+      reviewedSha: 'a'.repeat(40),
+      verdict: 'CHANGES_REQUIRED',
+      summary: 'one defect',
+      independence: 'WORKER_SEPARATED',
+      findings: [{ key, severity: 'MAJOR', category: 'correctness', statement, evidence }],
+    });
+  }
+
+  it('reads the file a finding names, line number and all', () => {
+    expect(
+      pathsNamedIn('server/services/research/review.ts:224 calls tierOf on stored fragments, see `quota.ts`'),
+    ).toEqual(['server/services/research/review.ts']);
+    expect(pathsNamedIn('the tier is read wrongly')).toEqual([]);
+  });
+
+  it('widens a repair to an approved file no unit owned, and to nothing else', async () => {
+    const changeRequest = await approvedChangeRequest({ mutationScope: ['src/**'] });
+    const campaign = await campaignFor(changeRequest);
+    await ensureUnit({
+      campaignId: campaign.id,
+      unitKey: 'first',
+      kind: 'IMPLEMENTATION',
+      role: 'IMPLEMENTER',
+      title: 'first',
+      objective: 'first',
+      acceptance: [],
+      ownedPaths: ['src/one.txt'],
+      requiredContext: [],
+      verification: [],
+      expectedArtifact: 'a commit',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+      maxAttempts: 3,
+      state: 'INTEGRATED',
+    });
+    await finding(campaign.id, 'two-still-wrong', 'src/two.txt:1 still reads the old value', 'see src/one.txt for context');
+
+    const result = await queueRepairs(campaign, changeRequest);
+    expect(result.needsAmendment).toEqual([]);
+    expect(result.queued.length).toBe(1);
+    const repair = (await listUnits(campaign.id)).find((unit) => unit.kind === 'REPAIR');
+    // Exactly the required file: not the unit's src/one.txt, not the whole src/**.
+    expect(repair?.ownedPaths).toEqual(['src/two.txt']);
+  });
+
+  it('creates no repair for a file outside the approved scope, and names it', async () => {
+    const changeRequest = await approvedChangeRequest({ mutationScope: ['src/one.txt'] });
+    const campaign = await campaignFor(changeRequest);
+    await finding(
+      campaign.id,
+      'review-still-wrong',
+      'the displayed tier is still wrong',
+      'it is computed in the reviewer\nSuggested paths: src/one.txt, lib/review.ts',
+    );
+
+    const result = await queueRepairs(campaign, changeRequest);
+    expect(result.queued).toEqual([]);
+    expect(result.needsAmendment).toEqual([
+      expect.objectContaining({ findingKey: 'review-still-wrong', outsideScope: ['lib/review.ts'] }),
+    ]);
+    expect((await listUnits(campaign.id)).filter((unit) => unit.kind === 'REPAIR')).toEqual([]);
+    expect(amendmentNeededDetail(result.needsAmendment, changeRequest.id)).toContain('lib/review.ts');
+
+    // The factory may not grant itself the file; a person may.
+    const byFactory = await amendContract({
+      changeRequestId: changeRequest.id,
+      campaignId: campaign.id,
+      field: 'mutation_scope',
+      newValue: ['src/one.txt', 'lib/review.ts'],
+      reason: 'the repair needs it',
+      actorType: 'FACTORY',
+      actorId: null,
+      affectedWork: [],
+    });
+    expect(byFactory.ok).toBe(false);
+    const byPerson = await amendContract({
+      changeRequestId: changeRequest.id,
+      campaignId: campaign.id,
+      field: 'mutation_scope',
+      newValue: ['src/one.txt', 'lib/review.ts'],
+      reason: 'the accepted finding is in lib/review.ts',
+      actorType: 'PERSON',
+      actorId: approverId,
+      affectedWork: [],
+    });
+    expect(byPerson.ok).toBe(true);
+    const climbing = await amendContract({
+      changeRequestId: changeRequest.id,
+      campaignId: campaign.id,
+      field: 'mutation_scope',
+      newValue: ['../outside/**'],
+      reason: 'no',
+      actorType: 'PERSON',
+      actorId: approverId,
+      affectedWork: [],
+    });
+    expect(climbing.ok).toBe(false);
+
+    // The next pass queues exactly what was waiting, owning exactly the two files.
+    const { getChangeRequest } = await import('../server/repos/factory.ts');
+    const amended = (await getChangeRequest(changeRequest.id))!;
+    const after = await queueRepairs(campaign, amended);
+    expect(after.needsAmendment).toEqual([]);
+    expect(after.queued.length).toBe(1);
+    const repair = (await listUnits(campaign.id)).find((unit) => unit.kind === 'REPAIR');
+    expect(repair?.ownedPaths).toEqual(['src/one.txt', 'lib/review.ts']);
   });
 });
 

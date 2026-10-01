@@ -61,6 +61,9 @@ const BLOCKER_REMEDIES: Record<FactoryBlockerKind, string> = {
   EXTERNAL_CREDENTIAL_REQUIRED:
     'Grant the repository where the workers run — attach it to a worker surface. ' +
     'Brain holds no repository credential and must not.',
+  SCOPE_AMENDMENT_REQUIRED:
+    'A repair needs files outside the approved mutation scope. Amend the scope to add exactly ' +
+    'the files named, or retire the finding; nothing is repaired outside what a person approved.',
 };
 
 /** A unit somebody is actually working on right now, as opposed to waiting or done. */

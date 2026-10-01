@@ -57,7 +57,7 @@ import {
 import { listDispatchesForBin } from '../../repos/bins.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { installPlan, validatePlan } from './planner.ts';
-import { gatingFindings, queueRepairs, reconcileRepairs } from './repair.ts';
+import { amendmentNeededDetail, gatingFindings, queueRepairs, reconcileRepairs } from './repair.ts';
 import { listCampaignsPendingOutcome, recordCampaignOutcome } from './writeback.ts';
 import {
   acceptIntegration,
@@ -1802,10 +1802,47 @@ async function runRemoteTick(
     const reviewedSha = fresh.integrationSha ?? fresh.baseSha;
     const alreadyReviewed = reviews.some((row) => row.reviewedSha === reviewedSha);
     if (gating.length > 0) {
+      /*
+       * Asked again on every pass, not only when the review is read: a finding
+       * that needed a file outside the approved scope has no repair yet, and an
+       * amendment a person makes afterwards is answered here, on the next tick,
+       * with nobody re-running anything. Idempotent — only unqueued findings.
+       */
+      const repairs = await queueRepairs(fresh, changeRequest);
+      for (const queued of repairs.queued) {
+        await recordFactoryEvent({
+          campaignId: fresh.id,
+          kind: FACTORY_EVENT_KINDS.repairQueued,
+          evidenceClass: 'DERIVED',
+          detail: queued as unknown as Record<string, unknown>,
+        });
+        report.progress = true;
+      }
+      const stranded = repairs.needsAmendment.filter((need) =>
+        gating.some((finding) => finding.id === need.findingId),
+      );
+      const repairing = (await listUnits(fresh.id)).some(
+        (unit) =>
+          unit.kind === 'REPAIR' &&
+          ['BLOCKED', 'READY', 'LEASED', 'IMPLEMENTED'].includes(unit.state),
+      );
+      if (stranded.length > 0 && !repairing) {
+        await patchCampaign(fresh.id, {
+          state: 'BLOCKED',
+          blockerKind: 'SCOPE_AMENDMENT_REQUIRED',
+          blockerDetail: amendmentNeededDetail(stranded, changeRequest.id),
+          stageDetail: 'a repair needs a file outside the approved scope',
+        });
+        report.notes.push(`${stranded.length} finding(s) need a scope amendment before a repair exists`);
+        report.state = 'BLOCKED';
+        report.stage = 'a repair needs a file outside the approved scope';
+        return report;
+      }
       report.notes.push(`${gating.length} gating finding(s) still open`);
       await patchCampaign(fresh.id, {
         state: 'REPAIRING',
         stageDetail: 'repairing review findings',
+        ...cleared,
       });
       return report;
     }

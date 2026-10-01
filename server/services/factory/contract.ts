@@ -664,13 +664,35 @@ export async function amendContract(
   if (request.field === 'mutation_scope') {
     const next = request.newValue as string[];
     if (!Array.isArray(next)) return { ok: false, reason: 'A mutation scope is a list of globs.' };
-    if (!narrowsOrEqual(next, changeRequest.mutationScope)) {
+    if (next.some((glob) => typeof glob !== 'string' || glob.startsWith('/') || glob.split('/').includes('..'))) {
+      return { ok: false, reason: 'A scope entry may not be absolute or climb out of the repository.' };
+    }
+    if (request.actorType !== 'PERSON' && !narrowsOrEqual(next, changeRequest.mutationScope)) {
       return {
         ok: false,
         reason:
           'A mutation scope may only narrow. Reaching further than the approved scope is the ' +
           'factory granting itself authority.',
       };
+    }
+    /*
+     * A person may widen it — that is the answer a SCOPE_AMENDMENT_REQUIRED
+     * blocker asks for, and without it the blocker would have no way out. It is
+     * still held to the boundary the project was onboarded with, exactly as a
+     * submission is, so an amendment cannot reach further than a submission
+     * could have. Forbidden paths stay refused at the plan and on the diff.
+     */
+    if (request.actorType === 'PERSON' && !changeRequest.repositoryRoot) {
+      try {
+        await resolveProjectScope({
+          projectId: changeRequest.projectId,
+          repository: changeRequest.repository,
+          requested: next,
+        });
+      } catch (error) {
+        if (error instanceof ScopeError) return { ok: false, reason: error.message };
+        throw error;
+      }
     }
   }
 

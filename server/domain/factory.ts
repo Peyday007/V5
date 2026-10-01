@@ -60,6 +60,8 @@ export const FACTORY_BLOCKER_KINDS = [
   'CONTRADICTORY_CONTRACT',
   'AWAITING_HUMAN_RELEASE',
   'EXTERNAL_CREDENTIAL_REQUIRED',
+  /** A repair needs a file the approved mutation scope does not cover. */
+  'SCOPE_AMENDMENT_REQUIRED',
 ] as const;
 export type FactoryBlockerKind = (typeof FACTORY_BLOCKER_KINDS)[number];
 

@@ -345,6 +345,12 @@ export const BLOCKER_WAIT: Record<FactoryBlockerKind, { wait: 'AUTOMATIC' | 'PER
     wait: 'PERSON',
     remedy: 'Access has to be granted where the worker runs; Brain holds no repository credential.',
   },
+  SCOPE_AMENDMENT_REQUIRED: {
+    wait: 'PERSON',
+    remedy:
+      'A repair needs a file the approved scope does not cover. Amend mutation_scope to add ' +
+      'exactly the files named; the next tick queues the repair.',
+  },
 };
 
 export interface LineCampaign {

@@ -38,6 +38,7 @@ import {
 } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { matchesGlob } from './integrate.ts';
+import { forbiddenIn, forbiddenPathsFor } from './forbidden.ts';
 
 /** A finding severity that has to be repaired before the campaign can finish. */
 export const GATING_SEVERITIES = new Set(['BLOCKER', 'MAJOR']);
@@ -60,29 +61,120 @@ export function suggestedPathsFrom(finding: FactoryFinding): string[] {
 }
 
 /**
+ * Repository-relative files a finding's own statement names, `path:line` included.
+ *
+ * Read only when the reviewer suggested no paths. The statement is the defect
+ * in the reviewer's words, so a file it names is where the defect is; the
+ * evidence is not read, because evidence routinely cites files for context
+ * that nobody has to change.
+ */
+export function pathsNamedIn(text: string): string[] {
+  const out = new Set<string>();
+  const pattern = /(?:^|[\s`'"(\[])((?:[\w.-]+\/)+[\w.-]+\.[A-Za-z0-9]+)(?::\d+)?/g;
+  for (const match of text.matchAll(pattern)) {
+    const path = match[1]!;
+    if (path.startsWith('/') || path.split('/').includes('..') || path.includes('://')) continue;
+    out.add(path);
+  }
+  return [...out];
+}
+
+/**
+ * The exact files an accepted finding requires changing: the reviewer's
+ * suggested paths, or — when it suggested none — the files its statement
+ * names. Empty when neither names anything, which is a finding about the
+ * work in general rather than about a place.
+ */
+export function requiredPathsFor(finding: FactoryFinding): string[] {
+  const suggested = suggestedPathsFrom(finding);
+  return suggested.length > 0 ? suggested : pathsNamedIn(finding.statement);
+}
+
+export type RepairOwnership =
+  | {
+      ok: true;
+      ownedPaths: string[];
+      derivedFrom: 'REQUIRED_FILES' | 'UNIT_OWNERSHIP' | 'CAMPAIGN_SCOPE';
+      /** Required files no unit of this campaign owned — the widening, named. */
+      beyondUnits: string[];
+    }
+  | {
+      ok: false;
+      required: string[];
+      /** Required files the approved mutation scope does not cover. */
+      outsideScope: string[];
+      /** Required files no contract may grant, because the repository forbids them. */
+      forbidden: string[];
+    };
+
+/**
  * What a repair unit is allowed to touch.
  *
- * The hint, held against the approved scope. When the hint survives nothing, the
- * repair owns the units' own paths instead — which serialises it against those
- * units rather than letting it roam, and is the conservative answer.
+ * Exactly the files the finding requires, when the approved scope covers every
+ * one of them — including files no unit of the campaign owned, because a
+ * repair that cannot reach the file the defect is in is a bin that can only
+ * BLOCK, attempt after attempt. Nothing broader: never the campaign's whole
+ * scope, never the units' union on top.
+ *
+ * When any required file is outside the approved scope the answer is a refusal
+ * naming it. Dropping it and repairing with what is left was the old behaviour,
+ * and it produced exactly that impossible bin. Widening a scope is a person's
+ * amendment; the factory may not grant itself authority (§27).
+ *
+ * A finding that names no file falls back to the units' own paths, which
+ * serialises the repair against those units rather than letting it roam.
  */
 export function ownershipForRepair(
   finding: FactoryFinding,
   changeRequest: FactoryChangeRequest,
   units: FactoryWorkUnit[],
-): { ownedPaths: string[]; derivedFrom: 'SUGGESTION' | 'UNIT_OWNERSHIP' | 'CAMPAIGN_SCOPE' } {
-  const suggested = suggestedPathsFrom(finding);
-  const inScope = suggested.filter((candidate) =>
-    changeRequest.mutationScope.some((glob) => matchesGlob(candidate, glob)),
-  );
-  if (inScope.length > 0) return { ownedPaths: inScope, derivedFrom: 'SUGGESTION' };
+  forbiddenPaths: string[] = [],
+): RepairOwnership {
+  const required = requiredPathsFor(finding);
+  if (required.length > 0) {
+    const forbidden = forbiddenIn(required, forbiddenPaths);
+    const outsideScope = required.filter(
+      (path) =>
+        !forbidden.includes(path) &&
+        !changeRequest.mutationScope.some((glob) => matchesGlob(path, glob)),
+    );
+    if (outsideScope.length > 0 || forbidden.length > 0) {
+      return { ok: false, required, outsideScope, forbidden };
+    }
+    const owned = new Set(units.flatMap((unit) => unit.ownedPaths));
+    const beyondUnits = required.filter(
+      (path) => !owned.has(path) && !units.some((unit) => unit.ownedPaths.some((g) => matchesGlob(path, g))),
+    );
+    return { ok: true, ownedPaths: required, derivedFrom: 'REQUIRED_FILES', beyondUnits };
+  }
 
-  // Nothing usable was suggested. Own what the campaign's own units own, which is
-  // narrower than the campaign scope and still certainly enough to fix anything
-  // the campaign produced.
   const unionOfUnits = [...new Set(units.flatMap((unit) => unit.ownedPaths))];
-  if (unionOfUnits.length > 0) return { ownedPaths: unionOfUnits, derivedFrom: 'UNIT_OWNERSHIP' };
-  return { ownedPaths: changeRequest.mutationScope, derivedFrom: 'CAMPAIGN_SCOPE' };
+  if (unionOfUnits.length > 0) {
+    return { ok: true, ownedPaths: unionOfUnits, derivedFrom: 'UNIT_OWNERSHIP', beyondUnits: [] };
+  }
+  return { ok: true, ownedPaths: changeRequest.mutationScope, derivedFrom: 'CAMPAIGN_SCOPE', beyondUnits: [] };
+}
+
+/** The blocker sentence for findings whose repair needs a person's amendment first. */
+export function amendmentNeededDetail(
+  needs: RepairResult['needsAmendment'],
+  changeRequestId: string,
+): string {
+  const lines = needs.map((need) => {
+    const parts = [];
+    if (need.outsideScope.length > 0) parts.push(`outside the approved scope: ${need.outsideScope.join(', ')}`);
+    if (need.forbidden.length > 0) parts.push(`forbidden in this repository: ${need.forbidden.join(', ')}`);
+    return `${need.findingKey} requires ${parts.join('; ')}`;
+  });
+  const missing = [...new Set(needs.flatMap((need) => need.outsideScope))];
+  return (
+    `${lines.join(' — ')}. A repair is not created for a file it may not change. ` +
+    (missing.length > 0
+      ? `Amend the scope to add exactly ${missing.join(', ')} ` +
+        `(factory amend --change-request ${changeRequestId} --field mutation_scope); ` +
+        'the next tick queues the repair by itself.'
+      : 'A forbidden file cannot be granted by an amendment; retire the finding or the campaign.')
+  );
 }
 
 function riskForSeverity(severity: FactoryFinding['severity']): FactoryRiskClass {
@@ -94,6 +186,8 @@ function riskForSeverity(severity: FactoryFinding['severity']): FactoryRiskClass
 export interface RepairResult {
   queued: { findingId: string; unitId: string; unitKey: string }[];
   skipped: { findingId: string; reason: string }[];
+  /** Findings left unqueued because a file they require is outside the approved scope. */
+  needsAmendment: { findingId: string; findingKey: string; outsideScope: string[]; forbidden: string[] }[];
 }
 
 /**
@@ -112,10 +206,20 @@ export async function queueRepairs(
   // second repair unit, and `attachRepair` would refuse one anyway.
   const findings = await listUnqueuedFindings(campaign.id);
   const units = await listUnits(campaign.id);
-  const result: RepairResult = { queued: [], skipped: [] };
+  const result: RepairResult = { queued: [], skipped: [], needsAmendment: [] };
+  const forbiddenPaths = changeRequest.repository ? forbiddenPathsFor(changeRequest.repository) : [];
 
   for (const finding of findings) {
-    const ownership = ownershipForRepair(finding, changeRequest, units);
+    const ownership = ownershipForRepair(finding, changeRequest, units, forbiddenPaths);
+    if (!ownership.ok) {
+      result.needsAmendment.push({
+        findingId: finding.id,
+        findingKey: finding.findingKey,
+        outsideScope: ownership.outsideScope,
+        forbidden: ownership.forbidden,
+      });
+      continue;
+    }
     const unitKey = `repair-${finding.findingKey}`.slice(0, 60);
 
     const { unit } = await ensureUnit({
@@ -173,6 +277,7 @@ export async function queueRepairs(
         unitKey,
         ownedPaths: ownership.ownedPaths.slice(0, 20),
         ownershipDerivedFrom: ownership.derivedFrom,
+        widenedBeyondUnits: ownership.beyondUnits,
         gating: GATING_SEVERITIES.has(finding.severity),
       },
     });
