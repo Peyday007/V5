@@ -2076,6 +2076,7 @@ describe('view parity between an administrator and an ordinary member', () => {
       'decisionsForMe',
       'engineCards',
       'executionPaths',
+      'offers',
       'provenance',
       'forecast',
       'priceCents',
@@ -2506,5 +2507,103 @@ describe('no Cash card asks a person to narrate Brain-owned work', () => {
     expect(
       screen.getAllByText(/a fact about the world rather than a decision of yours/i).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('the offer a person could send', () => {
+  const placement = {
+    opportunity: opportunity(),
+    disposition: 'EXECUTE_NOW',
+    because: 'Ready, and a slot is free.',
+    missing: [],
+  };
+
+  it('renders the server-composed offer read-only, with a copy control', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const text = 'To: Marguerite Vance\nVia: email\nRe: A paid intake repair\n\nPrice: USD 750.00';
+    base({
+      [VIEW]: {
+        body: view({
+          myCurrentWork: {
+            ...(view().myCurrentWork as Record<string, unknown>),
+            executeNow: [placement],
+            offers: {
+              cop_1: {
+                opportunityId: 'cop_1',
+                sendable: true,
+                recipient: {
+                  payer: {
+                    key: 'payer',
+                    label: 'Payer',
+                    value: 'Marguerite Vance',
+                    source: 'PERSON',
+                    claimId: null,
+                  },
+                  channel: {
+                    key: 'access',
+                    label: 'Contact channel',
+                    value: 'email',
+                    source: 'RECORDED',
+                    claimId: null,
+                  },
+                },
+                lines: [
+                  {
+                    key: 'price',
+                    label: 'Price',
+                    value: 'USD 750.00',
+                    source: 'EVIDENCE',
+                    claimId: 'rcl_1',
+                  },
+                ],
+                missing: [],
+                unstated: [{ key: 'paymentTerms', label: 'Payment terms' }],
+                text,
+              },
+            },
+          },
+        }),
+      },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(document.querySelector('.rs-cash-work .rs-cash-offer')).toBeTruthy(),
+    );
+    const offer = within(document.querySelector('.rs-cash-work .rs-cash-offer') as HTMLElement);
+    expect(offer.getByText(/Send to Marguerite Vance via email/)).toBeTruthy();
+    expect(offer.getByText('from a source')).toBeTruthy();
+    expect(offer.getByText(/Not stated on the card/)).toBeTruthy();
+    fireEvent.click(offer.getByRole('button', { name: /copy offer/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(text));
+    await waitFor(() => expect(offer.getByText(/Nothing has been sent/)).toBeTruthy());
+  });
+
+  it('shows what is missing and no text when the draft is refused', async () => {
+    base({
+      [VIEW]: {
+        body: view({
+          myCurrentWork: {
+            ...(view().myCurrentWork as Record<string, unknown>),
+            executeNow: [placement],
+            offers: {
+              cop_1: {
+                opportunityId: 'cop_1',
+                sendable: false,
+                recipient: null,
+                lines: [],
+                missing: [{ key: 'access', label: 'Contact channel' }],
+                unstated: [],
+                text: null,
+              },
+            },
+          },
+        }),
+      },
+    });
+    await mount();
+    await waitFor(() => expect(screen.getByText(/not composed yet/i)).toBeTruthy());
+    expect(screen.getByText(/contact channel/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /copy offer/i })).toBeNull();
   });
 });

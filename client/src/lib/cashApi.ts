@@ -20,6 +20,7 @@ import type { CashReadiness } from '../../../server/services/cash/readiness.ts';
 import type { CashRoadmap } from '../../../server/services/cash/roadmap.ts';
 import type { CashForecast } from '../../../server/services/cash/forecast.ts';
 import type { SharedCashView } from '../../../server/services/cash/shared.ts';
+import type { OfferDraft } from '../../../server/services/cash/offer.ts';
 import type { CommissionView } from '../../../server/services/cash/monetization/inFlight.ts';
 import type {
   MonetizationSurface,
@@ -33,6 +34,7 @@ export type {
   CashRoadmap,
   CashForecast,
   SharedCashView,
+  OfferDraft,
   MonetizationSurface,
   LedgerEntry,
   TopEntry,
@@ -353,6 +355,12 @@ export interface CashView {
     engineCards: Record<string, EngineCardView>;
     /** The arithmetic, with its inputs named and its refusals stated. */
     economics: Record<string, DerivedFigureView[]>;
+    /**
+     * The sendable offer per READY or EXECUTING piece, composed by the server
+     * from the card alone. Optional for the deploy reason above: a payload
+     * fetched before it existed renders as no draft rather than throwing.
+     */
+    offers?: Record<string, OfferDraft>;
   };
   whatBrainHasDone: CashEvent[];
   whatBrainNeeds: (CashNeed & { researchStatus: string | null })[];
