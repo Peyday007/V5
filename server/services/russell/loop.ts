@@ -2129,9 +2129,17 @@ export async function nextLaunchable(limit: number): Promise<
       WHERE c.state = 'QUEUED' AND c.project_id IS NOT NULL
         AND c.judgment LIKE '%"missionSpec"%'
         AND NOT EXISTS (
+          -- The idea's latest mission, as launch() itself reads it
+          -- (latestMissionForCandidate: highest attempt, then newest).
           SELECT 1 FROM russell_missions m
            WHERE m.candidate_id = c.id
              AND m.state NOT IN ('FAILED','CANCELLED')
+             AND NOT EXISTS (
+               SELECT 1 FROM russell_missions n
+                WHERE n.candidate_id = c.id
+                  AND (n.attempt > m.attempt
+                       OR (n.attempt = m.attempt AND n.created_at > m.created_at))
+             )
         )
       ORDER BY
         CASE priority
