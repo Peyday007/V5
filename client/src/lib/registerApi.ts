@@ -78,6 +78,16 @@ export const RegisterApi = {
       body: JSON.stringify(link),
     }),
 
+  /** Change what a workstream says it is. Only the fields sent are changed. */
+  amend: (
+    workstreamId: string,
+    patch: { title?: string; intent?: string; purpose?: WorkstreamPurpose },
+  ): Promise<{ workstream: Workstream }> =>
+    api(`/api/register/workstreams/${encodeURIComponent(workstreamId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
   /** A correction, never a delete: the row stays with its reason. */
   supersede: (workstreamId: string, linkId: string, reason: string): Promise<{ superseded: boolean }> =>
     api(
