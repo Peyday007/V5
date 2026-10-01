@@ -352,11 +352,26 @@ export async function findPresentedToken(
  * Production, 2026-09-27 07:27Z: a refresh took about thirty seconds to commit,
  * the client never received the response, and it retried with the token the
  * rotation had just revoked — so a connector that had refreshed hourly for
- * three days was dead until a person reconnected it. A retry of a lost response
- * arrives within seconds of the rotation it repeats; five minutes bounds it
- * without leaving a replay window anybody could live in.
+ * three days was dead until a person reconnected it.
+ *
+ * Five minutes was the first bound, on the assumption that a retry of a lost
+ * response arrives within seconds. Production, 2026-09-30, measured otherwise:
+ * the `/mcp/factory` connector's rotation at 14:32:18 took about 84 s to commit
+ * on a degraded database, the client gave up, and the retry came from the *next
+ * session the Routine started* — at 15:40:41, 68 minutes later — and was refused
+ * OUTSIDE_RETRY_WINDOW. The successor and its access token had never been used.
+ * Claude then marked the connector as needing interactive authorization, which
+ * a Routine cannot do. A Routine client retries when it next runs, so the bound
+ * has to cover the gap between runs, not the gap between packets.
+ *
+ * What keeps this safe is unchanged and is not the clock: recovery requires that
+ * the single successor and every access token minted from it were never used, and
+ * it is spent the first time it is honoured. The window only bounds how long a
+ * stolen pre-rotation token stays worth anything when the legitimate client has
+ * also gone quiet. Twenty-four hours covers a Routine that fires daily and is
+ * still a small fraction of the thirty-day refresh lifetime.
  */
-export const LOST_RESPONSE_RETRY_MS = 5 * 60_000;
+export const LOST_RESPONSE_RETRY_MS = 24 * 60 * 60_000;
 
 export type RefreshRotation<T> =
   | { ok: true; recovered: boolean; minted: T }

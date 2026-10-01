@@ -117,6 +117,24 @@ describe('refresh rotation', () => {
     expect(late).toEqual({ ok: false, reason: 'OUTSIDE_RETRY_WINDOW' });
   });
 
+  /*
+   * Production, 2026-09-30: the rotation's response was lost at 14:32 and the
+   * Routine's next session retried with the old token at 15:40, 68 minutes
+   * later, with the successor never used. That is the lost-response case, and a
+   * five-minute window turned it into a connector needing interactive sign-in.
+   */
+  it('recovers a lost response retried by the next session, an hour later', async () => {
+    const { workerId, refreshId } = await chain();
+    const first = await rotateRefreshToken({ tokenId: refreshId, mint: minter(workerId) });
+    expect(first.ok && !first.recovered).toBe(true);
+    const nextSession = await rotateRefreshToken({
+      tokenId: refreshId,
+      now: Date.now() + 68 * 60_000,
+      mint: minter(workerId),
+    });
+    expect(nextSession.ok && nextSession.recovered).toBe(true);
+  });
+
   it('refuses the retry when the successor has been used', async () => {
     const { workerId, refreshId } = await chain();
     const first = await rotateRefreshToken({ tokenId: refreshId, mint: minter(workerId) });
