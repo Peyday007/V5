@@ -23,7 +23,16 @@ export interface SplitSignal {
   reason: string;
   /** The questions the split would produce, in order. */
   questions: string[];
+  /**
+   * For a split by evidence lane: the lane each question exists to fill,
+   * aligned with `questions`. Absent for every other kind of split, where each
+   * child keeps every lane the parent had.
+   */
+  laneIds?: string[];
 }
+
+/** The most children one split may produce. More is refused, never truncated. */
+export const MAX_SPLIT_PARTS = 4;
 
 const CONJUNCTIONS = /\s+(?:and also|as well as|in addition to|,\s*and)\s+/i;
 
@@ -41,6 +50,7 @@ export function shouldSplit(
   // Two questions in one. The plan is supposed to catch this; a fragment that
   // slipped through asks for an answer nobody can give in one place.
   const questionMarks = fragment.question.split('?').filter((part) => part.trim().length > 0);
+  if (questionMarks.length > MAX_SPLIT_PARTS) return null;
   if (questionMarks.length > 1) {
     return {
       reason: 'The fragment asks more than one question, so no single answer can complete it.',
@@ -53,7 +63,7 @@ export function shouldSplit(
   if (gate && fragment.requiredEvidence.length > 1) {
     const empty = gate.coverage.filter((lane) => !lane.meetsThreshold);
     const filled = gate.coverage.filter((lane) => lane.meetsThreshold);
-    if (empty.length > 0 && filled.length > 0) {
+    if (empty.length > 0 && filled.length > 0 && empty.length <= MAX_SPLIT_PARTS) {
       return {
         reason:
           `${filled.length} evidence lane(s) are complete and ${empty.length} are empty, so the ` +
@@ -61,6 +71,7 @@ export function shouldSplit(
         questions: empty.map(
           (lane) => `${fragment.question.replace(/\?$/, '')}, specifically the ${lane.lane}?`,
         ),
+        laneIds: empty.map((lane) => lane.lane),
       };
     }
   }
@@ -68,7 +79,7 @@ export function shouldSplit(
   // A question joined by "and also" is usually two questions wearing one hat.
   if (CONJUNCTIONS.test(fragment.question) && fragment.question.length > 120) {
     const parts = fragment.question.split(CONJUNCTIONS).filter((part) => part.trim().length > 20);
-    if (parts.length > 1) {
+    if (parts.length > 1 && parts.length <= MAX_SPLIT_PARTS) {
       return {
         reason: 'The question joins separate investigations that have different sources.',
         questions: parts.map((part) => (part.trim().endsWith('?') ? part.trim() : `${part.trim()}?`)),
@@ -93,7 +104,19 @@ export async function splitFragment(input: {
   startIndex: number;
 }): Promise<ResearchFragment[]> {
   const { fragment, signal } = input;
-  const briefs: CreateFragmentInput[] = signal.questions.slice(0, 4).map((question, offset) => ({
+  if (signal.questions.length > MAX_SPLIT_PARTS) {
+    throw new RangeError(
+      `A split may produce at most ${MAX_SPLIT_PARTS} fragments and this one names ` +
+        `${signal.questions.length}; refusing rather than dropping the rest.`,
+    );
+  }
+  // The lane a child exists to fill, when the split was by lane. A lane the
+  // parent does not declare falls back to every lane rather than to a guess.
+  const laneFor = (offset: number) => {
+    const id = signal.laneIds?.[offset];
+    return id === undefined ? undefined : fragment.requiredEvidence.find((lane) => lane.id === id);
+  };
+  const briefs: CreateFragmentInput[] = signal.questions.map((question, offset) => ({
     orchestrationId: fragment.orchestrationId,
     projectId: fragment.projectId,
     layerId: fragment.layerId,
@@ -105,10 +128,7 @@ export async function splitFragment(input: {
     population: fragment.population,
     definitions: fragment.definitions,
     // Each part carries the lane it exists to fill, where the split was by lane.
-    requiredEvidence:
-      signal.questions.length === fragment.requiredEvidence.length
-        ? [fragment.requiredEvidence[offset] ?? fragment.requiredEvidence[0]!]
-        : fragment.requiredEvidence,
+    requiredEvidence: laneFor(offset) ? [laneFor(offset)!] : fragment.requiredEvidence,
     acceptableSourceTypes: fragment.acceptableSourceTypes,
     excludedSourceTypes: fragment.excludedSourceTypes,
     completionCriteria: fragment.completionCriteria,
@@ -118,10 +138,7 @@ export async function splitFragment(input: {
     attempt: 1,
     splitFromId: fragment.id,
     requirementIds: fragment.requirementIds,
-    evidenceLane:
-      signal.questions.length === fragment.requiredEvidence.length
-        ? (fragment.requiredEvidence[offset]?.id ?? fragment.evidenceLane)
-        : fragment.evidenceLane,
+    evidenceLane: laneFor(offset)?.id ?? fragment.evidenceLane,
     whyItMatters: fragment.whyItMatters,
     missingEvidence: fragment.missingEvidence,
     whyExistingInsufficient: signal.reason,
