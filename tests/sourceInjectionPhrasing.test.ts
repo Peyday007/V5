@@ -15,6 +15,10 @@ describe('injection phrasing', () => {
   it.each([
     'We can ignore the noise in the previous quarter.',
     'Please follow the instructions on the form.',
+    'We should ignore the rules of thumb.',
+    'The board may override the rules of the HOA.',
+    'Forget the guidance below the table.',
+    'Ignore the instruction manual.',
   ])('does not flag %s', (text) => {
     expect(detectInjection(text)).toEqual([]);
   });
