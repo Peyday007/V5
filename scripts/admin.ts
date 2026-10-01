@@ -119,6 +119,7 @@ import { workerIdentity } from '../server/services/identity/authenticate.ts';
 import { resolveWorkerRef } from '../server/services/identity/workerRef.ts';
 import { refuseAddressAsName } from '../server/domain/personName.ts';
 import { adoptSurface } from '../server/services/capacity/adopt.ts';
+import { issueFactoryInvitation, repositoryOnboarding } from '../server/services/factory/onboard.ts';
 import { listConnections } from '../server/repos/capacityConnections.ts';
 
 function flag(name: string): string | null {
@@ -249,6 +250,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
 
   people    list | foundation | rename <user|email> "<name>"
   capacity  show | adopt <user|email> <trig_…>
+  factory   invite <project> <user|email>
   workers   list | disable <name> | enable <name> | archive <name>
   routing   show | check <worker> <bin>
             set <worker> --families A,B [--repositories o/r,...]
@@ -779,6 +781,52 @@ async function main(): Promise<void> {
           `${outcome.alreadyAdopted ? ' — already recorded, nothing changed' : ''}`,
       );
       console.log(`  state ${outcome.connection.state}. Healthy is the four-row chain, read on the next view.`);
+      break;
+    }
+    /*
+     * One more Claude account for a Factory worker, bound to the member who
+     * will connect it — the same `issueFactoryInvitation` Build calls.
+     *
+     * The link is deliberately **not printed**. This output lands in a
+     * workflow log, and an invitation token there is a credential in a log
+     * (§17). It is not needed either: `/oauth/authorize` honours exactly one
+     * live invitation bound to the member the browser is signed in as
+     * (`boundToSignedInMember`), so the member reconnects from Claude while
+     * signed in to this Brain and the consent screen finds it. Every guard is
+     * the service's: a member who cannot sign in is refused, nothing else is
+     * written, and every other link stays as it was.
+     */
+    case 'factory invite': {
+      const actor = await administrator();
+      const project = await projectFrom(rest[0] ?? fail('Name the project.'));
+      const who = rest[1] ?? fail('Name the user id or address the link is for.');
+      // The grant is whichever repository this project onboarded a worker for;
+      // more than one is a choice this command will not make for anybody.
+      const onboarded = (await repositoryOnboarding(project.id)).filter((one) => one.workerId);
+      if (onboarded.length !== 1) {
+        fail(
+          onboarded.length === 0
+            ? 'This project has no onboarded repository to invite an account to.'
+            : `This project has ${onboarded.length} onboarded repositories ` +
+                `(${onboarded.map((one) => one.grantId).join(', ')}); use Build to choose one.`,
+        );
+      }
+      const grantId = onboarded[0]!.grantId;
+      const person = (await listUsers()).find((one) => one.id === who || one.email === who);
+      if (!person) fail(`No user with id or address ${who}.`);
+      const outcome = await issueFactoryInvitation({
+        projectId: project.id,
+        grantId,
+        intendedUserId: person.id,
+        actor,
+        origin: 'https://invalid.local',
+      });
+      if (!outcome.ok) fail(outcome.reason);
+      const view = outcome.result.invitation;
+      console.log(`  issued ${view.id} for ${person.displayName} (${person.id})`);
+      console.log(`  expires ${view.expiresAt}. The link itself is not printed.`);
+      console.log('  To spend it: sign in to this Brain in the browser Claude uses, then');
+      console.log('  reconnect the connector from Claude. Consent finds this invitation.');
       break;
     }
     case 'capacity show': {
