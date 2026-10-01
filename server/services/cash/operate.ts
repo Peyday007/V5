@@ -75,6 +75,8 @@ import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { countActions } from '../../repos/cashActions.ts';
+import { contactBuyerKey, sendContactBuyer } from './effects.ts';
+import type { ExternalOutcome } from '../effects/external.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
 
@@ -634,18 +636,98 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
     }
 
     /*
-     * And here is where Brain would act.
+     * And here is where Brain actually acts — through the machinery
+     * invariants 25 and 26 require, never by writing the claim itself.
      *
-     * Unreachable on this Brain and deliberately left standing: every
-     * capability but `RESEARCH_A_QUESTION` reads MISSING because no
-     * integration of that kind exists (§30 says so in code rather than only
-     * in prose), so the branch above is what actually happens today. It is
-     * not dead code — it is the half that runs the moment a messaging
-     * integration is registered, and the alternative to leaving it here is a
-     * Brain that has the authorization and still needs somebody to press a
-     * button. No run of this has contacted anybody, and nothing here says one
-     * has.
+     * `PRESENT` now means a real effect adapter is registered, so this is the
+     * moment a messaging integration exists. What is recorded afterwards is
+     * the provider's own answer: a receipt, or nothing. Unreachable on this
+     * Brain today, because no adapter is registered — that is what the branch
+     * above continues to report — but it is not dead code, and the
+     * alternative to writing it here is a Brain that has the authorization
+     * and still needs somebody to press a button the moment an integration
+     * arrives.
      */
+    const occurrence = String((await countActions(opportunity.id)) + 1);
+    // The idempotency key this attempt is reserved under, and the
+    // (differently shaped) key `cash_actions` dedupes on — see
+    // `contactBuyerKey`'s own comment for why they are not one key.
+    const effectKey = contactBuyerKey(opportunity.id, occurrence);
+
+    let outcome: ExternalOutcome;
+    try {
+      outcome = await sendContactBuyer({
+        key: effectKey,
+        projectId: opportunity.projectId,
+        opportunityId: opportunity.id,
+        payer: opportunity.payer ?? 'the payer',
+        channel: opportunity.reachableChannel ?? 'the recorded channel',
+      });
+    } catch (error) {
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because:
+          `Trying to reach ${opportunity.payer ?? 'the payer'} through ${CONTACT_CAPABILITY} ` +
+          `failed: ${error instanceof Error ? error.message : String(error)}. Nothing here says ` +
+          'anybody was contacted.',
+      });
+      continue;
+    }
+
+    if (outcome.status === 'UNCERTAIN') {
+      /*
+       * The send left and what happened to it is unknown. Recording a
+       * performed action here, or beginning execution, would be the exact
+       * defect invariants 25 and 26 exist to refuse. An open need names the
+       * unknown outcome instead — and a second pass asks the identical
+       * question under the identical key, which `runExternalEffect` answers
+       * by trying to reconcile rather than by sending again.
+       */
+      await raiseNeed({
+        projectId: opportunity.projectId,
+        opportunityId: opportunity.id,
+        actorRef: BRAIN,
+        blockedAction: `Confirm whether ${opportunity.payer ?? 'the payer'} was actually reached ` +
+          `for "${opportunity.title}"`,
+        whyItMatters:
+          'A message may or may not have reached them. The send left and what happened to it is ' +
+          'unknown, and recording it as done or as failed would both be a guess Brain is not ' +
+          `permitted to make. ${outcome.operation.uncertaintyReason ?? ''}`.trim(),
+        recommendedPath:
+          'Check the messaging provider directly, or reach the buyer yourself and record what ' +
+          'happened.',
+        setupEffort: 'A few minutes of checking.',
+        nextStep: 'Confirm the outcome of this attempt and record it.',
+        completionCondition: 'The outcome of this attempt is known, one way or the other.',
+        blocksState: 'EXECUTING',
+        requestKey: `contact-uncertain:${opportunity.id}:${effectKey}`,
+      });
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because:
+          'Reaching the buyer left the outcome unknown, so nothing here says anybody was ' +
+          'contacted and this stays ready rather than executing. An open need names it.',
+      });
+      continue;
+    }
+
+    if (outcome.status === 'FAILED') {
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because:
+          `Reaching ${opportunity.payer ?? 'the payer'} through ${CONTACT_CAPABILITY} was ` +
+          'refused, so nobody has been contacted.',
+      });
+      continue;
+    }
+
+    // CONFIRMED, RECONCILED or REPLAYED: the provider's own receipt is what
+    // makes this true, carried as the action's reference rather than composed
+    // as a sentence about what Brain assumes happened.
+    const receiptRef =
+      outcome.status === 'REPLAYED'
+        ? (outcome.operation.resultRef ?? outcome.operation.id)
+        : outcome.receiptRef;
 
     const began = await beginExecution({
       opportunityId: opportunity.id,
@@ -657,14 +739,8 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
           `Reached ${opportunity.payer ?? 'the payer'} through ${
             opportunity.reachableChannel ?? 'the recorded channel'
           } with the offer on this card.`,
-        // Server-built, from the opportunity and how many actions it already
-        // holds. Nothing the caller sent contributes, because nothing here has
-        // a caller.
-        requestKey: actionKey(
-          opportunity.id,
-          CONTACT_ACTION,
-          String((await countActions(opportunity.id)) + 1),
-        ),
+        reference: receiptRef,
+        requestKey: actionKey(opportunity.id, CONTACT_ACTION, occurrence),
       },
     });
     if (began.ok) {
