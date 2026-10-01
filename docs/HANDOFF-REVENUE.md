@@ -52,8 +52,13 @@ is registered, so `SEND_A_MESSAGE` and invoicing read `MISSING`.
    on the Cash page.
 4. **Provider choice** for Brain-performed messaging / invoicing (not established
    in the repo). Until chosen, the person sends the offer and Brain records it.
-5. Production cash report at 15:43Z failed: Supabase pooler gave no connection in
-   time (documented in §27). Re-dispatch `Cash report` when the pooler is idle.
+5. Production reading, 2026-10-01 15:44Z (`Cash report` run 36886582426, serving
+   `0041975`): Cash Mode 1 (`prj_22fb4fec295f403a8a22`) ACTIVE, USD; research
+   grant ACTIVE; **commercial authority ABSENT**; 100 ideas, all QUEUED. The report
+   then died inside `cashRoadmap` on its own one-client pool's ten-second wait —
+   fixed on this branch in `scripts/cash-report.sh` (the `factory.sh` remedy:
+   sixty seconds of patience, not more clients). Opportunity/tier counts were not
+   reached, so "0 qualified" is still the §47 reading, not tonight's.
 
 ## Not taken, deliberately
 
