@@ -105,6 +105,13 @@ export interface CashPosition {
 
 export interface CashOpportunity {
   id: string;
+  /**
+   * Whose operation this opening belongs to.
+   *
+   * Already on every opportunity the server sends — `reoffer` needs it to keep
+   * a destination picker from offering the operation an opening is already in.
+   */
+  projectId: string;
   title: string;
   mechanism: string;
   state: string;

@@ -27,6 +27,8 @@
 import { useState } from 'react';
 import { useAsync } from './useAsync.ts';
 import { cashPage, modeState, type CashPage } from './cashPage.ts';
+import { Api } from '../lib/api.ts';
+import type { Project } from '../../../server/domain/types.ts';
 import {
   CashApi,
   type CashModeState,
@@ -2363,6 +2365,15 @@ function Actions({
   const [reference, setReference] = useState('');
   const allowedActions = authority.allowedActions;
   const [performed, setPerformed] = useState(allowedActions[0] ?? 'CONTACT_BUYER');
+  /*
+   * The destination list for `reoffer`, fetched only once somebody actually
+   * opens that control — the other two transitions never need it, and most
+   * opportunities are never DECLINED, so fetching it for every row in the
+   * portfolio would be a request nobody asked for.
+   */
+  const [destinations, setDestinations] = useState<Project[] | null>(null);
+  const [destinationsError, setDestinationsError] = useState<string | null>(null);
+  const [toProjectId, setToProjectId] = useState('');
   const state = placement.opportunity.state;
 
   /*
@@ -2371,7 +2382,10 @@ function Actions({
    * `REASON` is a sentence kept on the record. `ACTION` is the correction §3
    * asked for: executing means the transaction is being pursued, so the call
    * has to say what was actually done, and the control asks rather than
-   * pressing a button that writes the state anyway.
+   * pressing a button that writes the state anyway. `REASON_AND_PROJECT` is
+   * the same reason, plus which private operation the opening moves to —
+   * `reoffer` is a copy into another project, never a move, so the server
+   * still needs to know which one.
    *
    * A control the grant cannot cover is disabled rather than offered, naming
    * the server's own reason — §35's rule: a refusal somebody could not have
@@ -2387,7 +2401,7 @@ function Actions({
   const available: {
     action: string;
     label: string;
-    asks?: 'REASON' | 'ACTION';
+    asks?: 'REASON' | 'ACTION' | 'REASON_AND_PROJECT';
     disabled?: boolean;
     disabledReason?: string;
   }[] = [];
@@ -2436,6 +2450,27 @@ function Actions({
   if (state === 'EXECUTING' || state === 'DELIVERING') {
     available.push({ action: 'collect', label: 'Money is in' });
   }
+  /*
+   * Three transitions the server has always had and nothing here offered:
+   * offering a declined opening to another operation, marking a finished one
+   * exhausted, and archiving. Each reaches every state its own service
+   * function allows rather than being folded into the blocks above, because
+   * the server already refuses the wrong state or a second attempt in its own
+   * words — nothing here has to re-derive that.
+   */
+  if (state === 'DECLINED') {
+    available.push({
+      action: 'reoffer',
+      label: 'Offer to another operation',
+      asks: 'REASON_AND_PROJECT',
+    });
+  }
+  if (!placement.opportunity.exhaustedAt) {
+    available.push({ action: 'exhaust', label: 'Mark exhausted', asks: 'REASON' });
+  }
+  if (state !== 'ARCHIVED') {
+    available.push({ action: 'archive', label: 'Archive', asks: 'REASON' });
+  }
   if (available.length === 0) return null;
 
   const asks = available.find((entry) => entry.action === asking)?.asks ?? null;
@@ -2448,11 +2483,25 @@ function Actions({
       setAsking(null);
       setReason('');
       setReference('');
+      setToProjectId('');
       onChanged();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
+    }
+  }
+
+  function startAsking(action: string, mode: 'REASON' | 'ACTION' | 'REASON_AND_PROJECT' | undefined): void {
+    setProblem(null);
+    setAsking(action);
+    if (mode === 'REASON_AND_PROJECT' && destinations === null && !destinationsError) {
+      Api.projects().then(
+        ({ projects }) => setDestinations(projects),
+        (error: unknown) => {
+          setDestinationsError(error instanceof Error ? error.message : String(error));
+        },
+      );
     }
   }
 
@@ -2464,7 +2513,7 @@ function Actions({
           type="button"
           className="rs-button-quiet"
           disabled={busy || entry.disabled}
-          onClick={() => (entry.asks ? setAsking(entry.action) : void run(entry.action))}
+          onClick={() => (entry.asks ? startAsking(entry.action, entry.asks) : void run(entry.action))}
         >
           {entry.label}
         </button>
@@ -2565,6 +2614,60 @@ function Actions({
                 ...(reference.trim().length > 0 ? { reference: reference.trim() } : {}),
               })
             }
+          >
+            Confirm
+          </button>
+          <button type="button" className="rs-linklike" onClick={() => setAsking(null)}>
+            Cancel
+          </button>
+        </>
+      ) : null}
+      {asks === 'REASON_AND_PROJECT' && asking ? (
+        <>
+          {/*
+            * A copy, never a move: the original keeps its row and its reason,
+            * and only the opening itself carries over — never this owner's
+            * card. That is the server's own rule (`reoffer` in
+            * server/services/cash/opportunities.ts), stated here so the
+            * person choosing a destination knows what they are and are not
+            * handing over.
+            */}
+          <p className="rs-hint">
+            This is a copy into another operation, not a move: your card, your payer notes and your
+            quoted price stay yours. Only the opening itself — its title, the mechanism, the source
+            and the expiry — goes with it.
+          </p>
+          <label className="rs-field-label" htmlFor={`cash-dest-${placement.opportunity.id}`}>
+            Which operation?
+          </label>
+          <select
+            id={`cash-dest-${placement.opportunity.id}`}
+            value={toProjectId}
+            onChange={(event) => setToProjectId(event.target.value)}
+          >
+            <option value="">Choose an operation</option>
+            {(destinations ?? [])
+              .filter((project) => project.id !== placement.opportunity.projectId)
+              .map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+          </select>
+          {destinationsError ? <p className="rs-state rs-state-error">{destinationsError}</p> : null}
+          <label className="rs-field-label" htmlFor={`cash-reoffer-reason-${placement.opportunity.id}`}>
+            Why? It is kept on the record, and it is what the offer says.
+          </label>
+          <input
+            id={`cash-reoffer-reason-${placement.opportunity.id}`}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+          <button
+            type="button"
+            className="rs-button-quiet"
+            disabled={busy || reason.trim().length === 0 || toProjectId.length === 0}
+            onClick={() => void run(asking, { toProjectId, reason })}
           >
             Confirm
           </button>
