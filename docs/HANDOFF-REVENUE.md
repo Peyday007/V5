@@ -103,3 +103,49 @@ is registered, so `SEND_A_MESSAGE` and invoicing read `MISSING`.
 
 Merge this branch's PR, deploy, read `Cash report`, then grant commercial authority
 and take the top qualified piece through the offer card.
+
+## Post-#88 recovery run (2026-10-01, 19:40Z onward)
+
+**#88 is not merged.** `production` is still `0041975`; the deployed Brain serves
+`00419753…` (Cash report run 36916110318). Nothing below is live until a person
+merges #88 and `Deploy` runs from `production`.
+
+### Production, read 19:45Z (Cash Mode 1, `prj_22fb4fec295f403a8a22`)
+- 40 opportunities: **40 SIGNAL, 0 CANDIDATE, 0 QUALIFIED, 0 READY_TO_TEST**.
+- Deep dives: 32 `BLOCKED` with `candidate=QUEUED spec=yes mission=none yet`
+  (the launch-window defect, confirmed per row), 8 `NEEDS_PERSON` with
+  `mission=NEEDS_HUMAN`.
+- Ideas: 100, all QUEUED. Research grant ACTIVE (concurrency 6); commercial
+  grant ABSENT.
+- 199 packets, **122 NEEDS_HUMAN**. 19 failed work items, ~14 of them
+  `RESEARCH_SYNTHESIZE` exhausted on 2026-09-17..20 with
+  `brain_submit_synthesis 'That call could not be completed'` — the storage-key
+  defect §33 records as fixed and proven 2026-09-21. All ten discovery rounds
+  are PARKED or RESEARCHING with `found=not counted yet`; the parked ones say a
+  synthesis recorded nothing.
+
+### Engineering on #88 since
+- `49020fb` — `resumeUnlaunchedDives` (on the tick): a BLOCKED dive whose
+  current idea is QUEUED with no mission is resumed in place; only rounds whose
+  idea has no mission are given back (read from each
+  `CASH_VALIDATION_STARTED`); earlier never-launched ideas are parked so they
+  cannot launch orphan missions; one resume per idea; takes only free slots;
+  `CASH_VALIDATION_RESUMED` records it. `tests/cashDiveResume.test.ts`, green on
+  SQLite and Postgres. Repairs the 32 after deploy with no manual edits.
+
+### Recovery in production that does not need #88
+- `packets syntheses cash-mode-1` (read) then `packets recover-synthesis
+  <workItem> --admin <owner>` for each eligible item: the existing, guarded
+  transition for exactly this failure (reissues only an item that recorded
+  nothing, checks the store for a stray upload, resets nothing, idempotent).
+
+### Commercial authority — proposed, NOT granted (person decision)
+Nothing is QUALIFIED yet, so the smallest grant that lets the first real test
+run once one is:
+- actions: `CONTACT_BUYER`, `QUOTE_AND_INVOICE`, `ACCEPT_PAYMENT`;
+- `maxCommittedCents` 0, `maxPerActionCents` 0 — no owner capital moves;
+- `maxConcurrent` 1–2 opportunities; expiry 30 days;
+- deliberately excluded: `SPEND_FROM_ALLOWANCE`, `PURCHASE_TOOL_OR_DATA`,
+  `ENGAGE_CONTRACTOR`, `RUN_PAID_TEST` — no planned test needs them.
+`SEND_A_MESSAGE` / invoicing read MISSING (no provider), so even with the grant
+a person sends and Brain records it with references.
