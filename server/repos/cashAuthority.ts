@@ -462,7 +462,7 @@ export async function commit(input: {
         );
       }
 
-      const held = await heldThroughMine(input.projectId, id);
+      const held = await heldThroughMine(input.projectId, id, input.currency);
       if (held > authority.maxCommittedCents) {
         throw new CommitRefused(
           `the commercial authority allows ${authority.maxCommittedCents} cents committed at once, ` +
@@ -527,13 +527,14 @@ export async function commit(input: {
  * `seq BIGSERIAL` on Postgres for exactly this — a rank that exists in one
  * dialect only is the defect this repository has now written down four times.
  */
-async function heldThroughMine(projectId: string, mineId: string): Promise<number> {
+async function heldThroughMine(projectId: string, mineId: string, currency: string): Promise<number> {
   const rows = await getDb().all<{ total: number }>(
     `SELECT COALESCE(SUM(CASE WHEN state = 'HELD' THEN amount_cents ELSE 0 END), 0) AS total
        FROM cash_commitments
       WHERE project_id = ?
+        AND currency = ?
         AND rowid <= (SELECT rowid FROM cash_commitments WHERE id = ?)`,
-    [projectId, mineId],
+    [projectId, currency, mineId],
   );
   return Number(rows[0]?.total ?? 0);
 }
@@ -576,14 +577,29 @@ export async function heldCents(authorityId: string): Promise<number> {
   return Number(rows[0]?.total ?? 0);
 }
 
-/** How much a project currently holds, across every grant it has ever had. */
-export async function heldCentsForProject(projectId: string): Promise<number> {
+/**
+ * How much a project currently holds, across every grant it has ever had.
+ *
+ * With a currency, only holds in that currency: an amount in one currency is not
+ * a claim on money in another, and no rate is chosen here to make it one.
+ */
+export async function heldCentsForProject(projectId: string, currency?: string): Promise<number> {
   const rows = await getDb().all<{ total: number }>(
     `SELECT COALESCE(SUM(amount_cents), 0) AS total
-       FROM cash_commitments WHERE project_id = ? AND state = 'HELD'`,
-    [projectId],
+       FROM cash_commitments WHERE project_id = ? AND state = 'HELD'${currency ? ' AND currency = ?' : ''}`,
+    currency ? [projectId, currency] : [projectId],
   );
   return Number(rows[0]?.total ?? 0);
+}
+
+/** The distinct currencies in which this project holds commitments right now. */
+export async function heldCurrenciesForProject(projectId: string): Promise<string[]> {
+  const rows = await getDb().all<{ currency: string }>(
+    `SELECT DISTINCT currency FROM cash_commitments
+      WHERE project_id = ? AND state = 'HELD' ORDER BY currency`,
+    [projectId],
+  );
+  return rows.map((row) => row.currency);
 }
 
 /**

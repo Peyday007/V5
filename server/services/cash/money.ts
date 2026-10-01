@@ -28,7 +28,7 @@
  * later payouts follow the account's schedule — so treating a payment as cash
  * would put money in a plan a fortnight before it exists.
  */
-import { heldCentsForProject } from '../../repos/cashAuthority.ts';
+import { heldCentsForProject, heldCurrenciesForProject } from '../../repos/cashAuthority.ts';
 import { currenciesInLedger, listMoneyEntries, totalsByKind } from '../../repos/cashLedger.ts';
 import type { CashMoneyEntry, CashMoneyKind } from '../../domain/types.ts';
 
@@ -122,7 +122,7 @@ export async function cashPosition(input: {
   // dollar is never counted in both at once.
   const unpaidCommitments = Math.max(0, unpaid - paidOff);
 
-  const held = input.opportunityId ? 0 : await heldCentsForProject(input.projectId);
+  const held = input.opportunityId ? 0 : await heldCentsForProject(input.projectId, input.currency ?? 'USD');
   const reserves = Math.max(0, reserved - released);
 
   const deployable = availableFunds - unpaidCommitments - held - reserves;
@@ -143,9 +143,14 @@ export async function cashPosition(input: {
     deployableCents: deployable,
     completedContributionCents: completedContribution,
     shortfall: deployable < 0,
-    otherCurrencies: (await currenciesInLedger(input.projectId)).filter(
-      (one) => one !== (input.currency ?? 'USD'),
-    ),
+    otherCurrencies: [
+      ...new Set([
+        ...(await currenciesInLedger(input.projectId)),
+        ...(await heldCurrenciesForProject(input.projectId)),
+      ]),
+    ]
+      .filter((one) => one !== (input.currency ?? 'USD'))
+      .sort(),
   };
 }
 
