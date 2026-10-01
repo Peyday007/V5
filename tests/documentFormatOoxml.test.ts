@@ -55,4 +55,34 @@ describe('OOXML packages are told apart by their part folders', () => {
     expect(found.format).toBe('UNSUPPORTED');
     expect(found.reason).toMatch(/not a Word document/);
   });
+
+  it('is not fooled by payload bytes that spell a part folder', () => {
+    // The stored contents of the DOCX contain "xl/" and "ppt/"; no entry is named that.
+    const zip = buildZip([
+      { name: '[Content_Types].xml', contents: CONTENT_TYPES },
+      { name: 'word/document.xml', contents: '<w:p>see xl/workbook.xml and ppt/presentation.xml</w:p>' },
+    ]);
+    expect(zip.toString('latin1')).toContain('xl/workbook.xml');
+    expect(detectFormat('note.docx', zip).format).toBe('DOCX');
+  });
+
+  it('asks for word/ before the other families, whatever the entry order', () => {
+    const zip = buildZip([
+      { name: 'xl/stray.xml', contents: '<x/>' },
+      { name: '[Content_Types].xml', contents: CONTENT_TYPES },
+      { name: 'word/document.xml', contents: '<w/>' },
+    ]);
+    expect(detectFormat('note.docx', zip).format).toBe('DOCX');
+  });
+
+  it('refuses a zip whose central directory cannot be read rather than guessing', () => {
+    const zip = buildZip([
+      { name: '[Content_Types].xml', contents: CONTENT_TYPES },
+      { name: 'xl/workbook.xml', contents: '<workbook/>' },
+    ]);
+    const damaged = zip.subarray(0, zip.byteLength - 30);
+    const found = detectFormat('book.xlsx', damaged);
+    expect(found.format).toBe('UNSUPPORTED');
+    expect(found.reason).toMatch(/not a Word document/);
+  });
 });
