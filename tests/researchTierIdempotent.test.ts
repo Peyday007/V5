@@ -59,4 +59,25 @@ describe('stored execution priority', () => {
     })) as unknown as ResearchFragment[];
     expect(executionOrder(fragments, fragments).map((f) => f.fragmentKey)).toEqual(['man', 'sup', 'opt']);
   });
+
+  it('reads a stored fragment by its stored rank through tierOf, as review.ts does', () => {
+    const briefs = [brief('a', 1), brief('b', 5), brief('c', 8)];
+    assignExecutionPriority(briefs);
+    // A reload from the database: fresh objects with a row id, no in-memory stamp.
+    const fragments = briefs.map((b, i) => ({ ...b, id: `f${i}` })) as TierInput[];
+    expect(fragments.map((f) => tierOf(f, fragments).tier)).toEqual([
+      'MANDATORY_SYNTHESIS_INPUT',
+      'SUPPORTING_CONTEXT',
+      'OPTIONAL_ENRICHMENT',
+    ]);
+  });
+
+  it('is idempotent across a reload, not only for the same in-memory objects', () => {
+    const briefs = [brief('a', 1), brief('b', 5), brief('c', 8)];
+    assignExecutionPriority(briefs);
+    const first = briefs.map((b) => b.priority);
+    const reloaded = briefs.map((b, i) => ({ ...b, id: `f${i}` })) as TierInput[];
+    assignExecutionPriority(reloaded);
+    expect(reloaded.map((b) => b.priority)).toEqual(first);
+  });
 });

@@ -55,6 +55,8 @@ function assign(tier: PriorityTier, reason: string): TierAssignment {
  * the fragments are stored with in the first place.
  */
 export interface TierInput {
+  /** Present only on a stored fragment; a planned brief has no row yet. */
+  id?: string;
   fragmentKey: string;
   dependsOn?: readonly (string | FragmentDependency)[];
   requirementIds?: string[];
@@ -112,9 +114,12 @@ function structuralTier(fragment: TierInput, all: TierInput[]): TierAssignment |
  * quietly spend quota in the wrong order. `priority` here is the planner's
  * necessity (1 mandatory, 5 supporting, 8 optional) — so this is for briefs
  * that have not had a tier stamped on them. A stored fragment carries a tier
- * rank in that field instead; read it with {@link storedTier}.
+ * rank in that field instead, so one that has a row (an `id`) is read with
+ * {@link storedTier}: that holds for every caller, including the review's
+ * displayed tier, and survives reloading fragments from the database.
  */
 export function tierOf(fragment: TierInput, all: TierInput[]): TierAssignment {
+  if (fragment.id !== undefined) return storedTier(fragment, all);
   const structural = structuralTier(fragment, all);
   if (structural) return structural;
   // Necessity comes through as the planner's priority.
