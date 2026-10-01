@@ -149,3 +149,30 @@ run once one is:
   `ENGAGE_CONTRACTOR`, `RUN_PAID_TEST` — no planned test needs them.
 `SEND_A_MESSAGE` / invoicing read MISSING (no provider), so even with the grant
 a person sends and Brain records it with references.
+
+### Synthesis recovery, done 20:07–23:21Z (no #88 needed)
+`packets syntheses cash-mode-1` found 38 stopped syntheses:
+- **13 ELIGIBLE → recovered** (`packets recover-synthesis`), each re-read as
+  `ALREADY_RECOVERED`: packet SYNTHESIZING, bin READY, mission RUNNING, a
+  replacement item QUEUED (e.g. `orc_2e3f04b7ae4042498ebd` →
+  `wki_aa82d85f30bf406593e1` on `bin_b8cfb741825a4671bc31`).
+- **12 BIN_EXHAUSTED** — need `step10 regrant <bin> --reason filing-defect`,
+  a reason code this branch adds (`83993fd`), so after deploy.
+- **13 ALREADY_FILED** — NEEDS_HUMAN for reasons other than the filing defect.
+
+### Why the recovered work is not running (Fleet run 36941457265, 23:33Z)
+`fleet explain-route bin_b8cfb741825a4671bc31` →
+**`NO_SURFACE_SERVES_THIS_PROJECT`**. Of 19 Routines: 11 QUARANTINED (every
+research surface on `wkr_1cdd82cfb2a54faf8edd` — Brain Research A, 1-B/C/D,
+Airyn 2-A..D, V2 — plus Factory surface 1), 4 RETIRED, and the 4 Caleb 3-A..D
+surfaces enabled but bound to `wkr_1db1193323454ee69bb1`, which holds no
+membership on Cash Mode 1. In flight: 0.
+**Not taken, deliberately:** granting Caleb's worker Cash Mode 1 would widen a
+worker's reach into another person's private operation, and `fleet set-state
+--to ENABLED` on eight rows would put each back three unanswered fires from
+re-quarantine: the quarantine reads as *the worker identity stopped
+answering* (§23), which is a Claude-side connector/Routine fix.
+**Person action:** in the owner's Claude account, check the Routines behind
+Brain Research A / 1-B..D (connector selected, repository attached, sessions
+arriving), then `fleet set-state --kind routine --to ENABLED` one surface and
+watch one fire arrive before the rest. The recovered bins resume by themselves.
