@@ -701,7 +701,12 @@ export async function runDiscovery(projectId: string): Promise<{
    * ordinary judgment path rather than through a second Start action.
    *
    * Both are idempotent: the grant by a unique index, the resumption by being
-   * guarded on the exact state it is answering.
+   * guarded on the exact state it is answering. `resumeAuthorityParkedCandidates`
+   * is a Cash-Mode-specific caller of the one rule now — `../russell/
+   * resumeParked.ts` resumes the identical kind of park for every project, on
+   * the durable tick, so this call site is what keeps this project's own
+   * `CASH_DISCOVERY_RESUMED` reporting exactly what it was rather than leaving
+   * this project to the general sweep.
    */
   const authorized = await ensureDiscoveryAuthority(projectId);
   const resumed = authorized ? await resumeAuthorityParkedCandidates({ projectId }) : [];

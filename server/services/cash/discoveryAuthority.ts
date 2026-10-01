@@ -51,8 +51,7 @@ import {
   setGoalConcurrency,
 } from '../../repos/russellAuthority.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
-import { getDb } from '../../db/database.ts';
-import { nowIso } from '../../repos/util.ts';
+import { resumeParkedForProject } from '../russell/resumeParked.ts';
 import type { RussellGoal } from '../../domain/types.ts';
 
 /**
@@ -243,27 +242,20 @@ export interface ResumedCandidate {
 /**
  * Put back the ideas that parked for want of the grant that now exists.
  *
- * Derived from rows rather than hooked to the moment the grant was written,
- * which is what reaches the ten candidates production already parked. The
- * condition is narrow on purpose and every part of it is a fact Brain wrote:
- *
- *   * the candidate is `PARKED` with `priority = 'PARKED'`, which is the state
- *     `judgeCandidate` records and nothing else writes;
- *   * its `judgment.blockedBy` names the missing authority, and that sentence
- *     is composed by `standingAuthority()` in Brain's own code rather than by
- *     any model — so this is reading a row, not parsing prose;
- *   * and a live grant now covers research on this project.
- *
- * What it does is the minimum that lets the ordinary path take over: it clears
- * `priority`, which is precisely what `unjudged()` selects on, and returns the
- * candidate to `CAPTURED`. The next tick re-judges it through the archive
- * check, the compiler, the envelope and the gate exactly as a new idea would
- * be. It creates no candidate, no round, no mission and no duplicate of
- * anything, and it never runs for a candidate parked for some other reason.
+ * A caller of `resumeParkedForProject` (`../russell/resumeParked.ts`) rather
+ * than a second implementation, so there is one rule for what counts as a park
+ * on missing authority and one rule for what resumes it — asked here through
+ * `discoveryAuthority()` so this stays exactly what it always was: a Cash Mode
+ * pass, gated on Cash Mode's own named grant. `resumeParkedForProject` decides
+ * eligibility generically (any live grant covering research, not only one with
+ * this name), which is a strictly wider condition than "this goal exists" and
+ * is therefore already satisfied whenever it does.
  *
  * The previous reason is carried onto a `CASH_DISCOVERY_RESUMED` event before
  * the re-judgment overwrites it, because a park that was real is history worth
- * keeping even once it has been answered.
+ * keeping even once it has been answered — Cash Mode's own activity feed reads
+ * this event, so it keeps reporting exactly what it reported before this
+ * became a caller of the shared rule rather than a second copy of it.
  */
 export async function resumeAuthorityParkedCandidates(input: {
   projectId: string;
@@ -272,25 +264,13 @@ export async function resumeAuthorityParkedCandidates(input: {
   const goal = await discoveryAuthority(input.projectId);
   if (!goal) return [];
 
-  const rows = await getDb().all<{ id: string; reason: string | null; judgment: string }>(
-    `SELECT id, reason, judgment FROM russell_candidates
-      WHERE project_id = ? AND state = 'PARKED' AND priority = 'PARKED'
-      ORDER BY created_at, rowid
-      LIMIT ?`,
-    [input.projectId, Math.max(1, input.limit ?? 25)],
-  );
+  const resumed = await resumeParkedForProject({
+    projectId: input.projectId,
+    limit: input.limit,
+  });
 
   const out: ResumedCandidate[] = [];
-  for (const row of rows) {
-    if (!blockedOnStandingAuthority(row.judgment)) continue;
-    const at = nowIso();
-    const moved = await getDb().run(
-      `UPDATE russell_candidates
-          SET state = 'CAPTURED', priority = NULL, ordinal = NULL, reason = NULL, updated_at = ?
-        WHERE id = ? AND state = 'PARKED' AND priority = 'PARKED'`,
-      [at, row.id],
-    );
-    if (moved.changes !== 1) continue;
+  for (const one of resumed) {
     await recordCashEvent({
       projectId: input.projectId,
       kind: 'CASH_DISCOVERY_RESUMED',
@@ -298,34 +278,9 @@ export async function resumeAuthorityParkedCandidates(input: {
       summary:
         'An idea that had nothing to run under is back in the queue now that starting Cash ' +
         'Mode has authorized internal discovery.',
-      detail: { candidateId: row.id, previousReason: row.reason, goalId: goal.id },
+      detail: { candidateId: one.candidateId, previousReason: one.previousReason, goalId: goal.id },
     });
-    out.push({ candidateId: row.id, previousReason: row.reason });
+    out.push({ candidateId: one.candidateId, previousReason: one.previousReason });
   }
   return out;
-}
-
-/**
- * Was this idea parked because no grant existed?
- *
- * Reads the one key `standingAuthority()` writes, and compares it against the
- * two sentences `checkAuthority` itself produces. It deliberately does not
- * match on "authority" appearing anywhere in the reason: a candidate parked
- * because the commercial grant prohibits an action is a different fact, and
- * resuming it would be Brain answering a question a person had already
- * answered.
- */
-function blockedOnStandingAuthority(judgment: string): boolean {
-  let blockedBy: unknown;
-  try {
-    blockedBy = (JSON.parse(judgment) as Record<string, unknown>)['blockedBy'];
-  } catch {
-    return false;
-  }
-  if (typeof blockedBy !== 'string') return false;
-  return (
-    blockedBy === 'no standing authority exists for this project' ||
-    blockedBy === `no live standing authority covers ${RESEARCH_WORK} in this project` ||
-    blockedBy === 'a standing authority for research on this project'
-  );
 }
