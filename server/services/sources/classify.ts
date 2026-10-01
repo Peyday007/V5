@@ -217,7 +217,7 @@ function linkTypeFor(segmentType: string | undefined): LinkType {
  * visible to the person reviewing the import.
  */
 const INJECTION_PATTERNS: RegExp[] = [
-  /\bignore (?:all |any )?(?:previous|prior|above) instructions\b/i,
+  /\b(?:ignore|disregard|forget|override)\s+(?:(?:all|any|of|the|your|these|those|my|our)\s+)*(?:(?:previous|prior|above|earlier|preceding|system)\s+)*(?:instructions?|directions|rules|guidance)\b/i,
   /\bdisregard (?:the )?(?:previous|prior|above|system)\b/i,
   /\byou are now\b/i,
   /\bsystem prompt\b/i,
