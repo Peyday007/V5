@@ -1963,10 +1963,151 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
                 onChanged={onChanged}
               />
             ) : null}
+            {page.capabilities.mayActOnJob &&
+            view.mode &&
+            (placement.opportunity.state === 'EXECUTING' ||
+              placement.opportunity.state === 'DELIVERING') ? (
+              <OpportunityMoney
+                projectId={view.mode.projectId}
+                opportunityId={placement.opportunity.id}
+                currency={view.myCash.position.currency}
+                onChanged={onChanged}
+              />
+            ) : null}
           </li>
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * The money a customer actually paid for this piece, recorded against it.
+ *
+ * *Money is in* refuses until a settlement is on the ledger for this very
+ * opportunity (invariant 37), so the page has to offer the two entries that
+ * make it true — otherwise that control would be a refusal nobody could
+ * answer from here. Both are the existing `/cash/money` route with the
+ * opportunity named; nothing about the ledger's own checks moved: the
+ * reference is still required for each, accepting a payment is still asked
+ * of the grant, and the currency is the sprint's. The key is built from the
+ * kind, the opportunity and the reference rather than from a clock, so a
+ * retry after a lost response is the same entry once.
+ */
+function OpportunityMoney({
+  projectId,
+  opportunityId,
+  currency,
+  onChanged,
+}: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+  onChanged(): void;
+}): JSX.Element {
+  const [kind, setKind] = useState<'CUSTOMER_PAYMENT' | 'SETTLEMENT' | null>(null);
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  const amountCents = centsFromAmount(amount);
+
+  async function run(): Promise<void> {
+    if (!kind || amountCents === null || !reference.trim()) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await CashApi.recordMoney(projectId, {
+        kind,
+        amountCents,
+        currency,
+        verifiedReference: reference.trim(),
+        opportunityId,
+        idempotencyKey: `${kind === 'SETTLEMENT' ? 'settlement' : 'payment'}:${opportunityId}:${reference.trim()}`,
+      });
+      setDone(
+        kind === 'SETTLEMENT'
+          ? 'Settlement recorded. It now counts as available funds, and “Money is in” can be recorded.'
+          : 'Payment recorded. It is not available funds until it settles.',
+      );
+      setKind(null);
+      setAmount('');
+      setReference('');
+      onChanged();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rs-cash-opportunity-money">
+      {done ? <p className="rs-state rs-state-ok">{done}</p> : null}
+      {kind === null ? (
+        <>
+          <button
+            type="button"
+            className="rs-button-quiet"
+            onClick={() => {
+              setKind('CUSTOMER_PAYMENT');
+              setDone(null);
+            }}
+          >
+            Record a payment received
+          </button>
+          <button
+            type="button"
+            className="rs-button-quiet"
+            onClick={() => {
+              setKind('SETTLEMENT');
+              setDone(null);
+            }}
+          >
+            Record that it settled
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="rs-hint">
+            {kind === 'SETTLEMENT'
+              ? 'The money reached the account and is usable. Use the payout or bank reference.'
+              : 'The customer paid. Use the payment provider’s or bank’s reference — a payment nobody can trace is pipeline, not cash.'}
+          </p>
+          <label className="rs-field-label" htmlFor={`cash-om-amount-${opportunityId}`}>
+            Amount, in {currency}
+          </label>
+          <input
+            id={`cash-om-amount-${opportunityId}`}
+            inputMode="decimal"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+          />
+          <label className="rs-field-label" htmlFor={`cash-om-ref-${opportunityId}`}>
+            Reference
+          </label>
+          <input
+            id={`cash-om-ref-${opportunityId}`}
+            value={reference}
+            onChange={(event) => setReference(event.target.value)}
+          />
+          <button
+            type="button"
+            className="rs-button-quiet"
+            disabled={busy || amountCents === null || reference.trim().length === 0}
+            onClick={() => void run()}
+          >
+            {busy ? 'Recording…' : 'Confirm'}
+          </button>
+          <button type="button" className="rs-linklike" onClick={() => setKind(null)}>
+            Cancel
+          </button>
+        </>
+      )}
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+    </div>
   );
 }
 

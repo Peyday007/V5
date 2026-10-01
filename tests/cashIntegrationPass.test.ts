@@ -942,6 +942,7 @@ describe('one sprint, from activation to money in and winding down', () => {
       expect(
         (
           await call('POST', `/projects/${projectId}/cash/money`, {
+            opportunityId: piece.id,
             kind: 'CUSTOMER_PAYMENT',
             amountCents: 120_000,
             currency: 'USD',
@@ -962,6 +963,7 @@ describe('one sprint, from activation to money in and winding down', () => {
       expect(
         (
           await call('POST', `/projects/${projectId}/cash/money`, {
+            opportunityId: piece.id,
             kind: 'SETTLEMENT',
             amountCents: 120_000,
             currency: 'USD',

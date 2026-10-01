@@ -5811,6 +5811,17 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   test that arranges its own starting state cannot tell a mechanism from a
   function nothing calls.
 
+- **"The money is in" is the ledger's to say, and for a while it was a
+  button.** `advance(COLLECTED)` moved an opportunity with nothing recorded
+  against it, so the plan, the roadmap and the shared frontier reported a sale
+  no row established — invariant 37 at a state column. It now refuses until a
+  `SETTLEMENT`, attributed to *that* opportunity and net of refunds, is on the
+  ledger, and the page offers the two entries that make it true (*Record a
+  payment received*, *Record that it settled*) on the piece itself, because a
+  refusal with no control beside it is §24's escalation with no answer. Three
+  test journeys had recorded the money unattributed, or after collecting; they
+  were wrong about the order and are corrected rather than the guard loosened.
+
 **What this version does not do, and says so.** It records the authorization and
 the money; it does not itself contact a buyer, issue an invoice or move funds. A
 missing integration is a `cash_needs` row with a recommended way forward, which

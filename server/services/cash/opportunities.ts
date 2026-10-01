@@ -41,7 +41,7 @@ import { countActions, recordAction } from '../../repos/cashActions.ts';
 import { cardFact, cardFactsFor, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { recordMoney } from '../../repos/cashLedger.ts';
+import { recordMoney, totalsByKind } from '../../repos/cashLedger.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
   COMMERCIAL_ACTIONS,
@@ -714,6 +714,32 @@ export async function advance(input: {
 }): Promise<Outcome<CashOpportunity>> {
   const opportunity = await getOpportunity(input.opportunityId);
   if (!opportunity) return refuse('No opportunity with that id.');
+  /*
+   * "The money is in" is a statement about the ledger, so the ledger has to
+   * say it first (invariant 37). It used to be a button: `COLLECTED` could be
+   * written over an opportunity with no payment recorded against it at all,
+   * and every reader downstream — the plan, the roadmap, the shared frontier —
+   * then reported a sale that no row establishes. A `SETTLEMENT` is the one
+   * entry that is cash (`money.ts`: a payment is not funds), so it is what is
+   * asked for, attributed to *this* opportunity and net of refunds. Nothing is
+   * written on a refusal, and the remedy is named.
+   */
+  if (input.to === 'COLLECTED') {
+    const mode = await getCashMode(opportunity.projectId);
+    const totals = await totalsByKind({
+      projectId: opportunity.projectId,
+      opportunityId: opportunity.id,
+      currency: mode?.currency,
+    });
+    const settled = Number(totals.SETTLEMENT ?? 0) - Number(totals.REFUND ?? 0);
+    if (settled <= 0) {
+      return refuse(
+        'Nothing has settled against this opportunity yet, so Brain cannot record that the money ' +
+          'is in. Record the customer payment and its settlement on this opportunity first — ' +
+          'each with the provider or bank reference that makes it verifiable.',
+      );
+    }
+  }
   const from = input.to === 'DELIVERING' ? (['EXECUTING'] as const) : (['EXECUTING', 'DELIVERING'] as const);
   const moved = await transitionOpportunity({
     id: opportunity.id,

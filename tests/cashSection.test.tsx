@@ -1842,6 +1842,37 @@ describe('a further commercial action, once execution has begun', () => {
     expect(button.disabled).toBe(true);
     expect(yourWork().getByText(/No commercial authority exists for this project/i)).toBeTruthy();
   });
+
+  it('records a payment and a settlement against this opportunity, so “Money is in” can be answered', async () => {
+    const MONEY = `POST /api/projects/${PROJECT}/cash/money`;
+    base({
+      [VIEW]: { body: executingView() },
+      [MONEY]: { body: { entry: { id: 'cme_1' }, message: 'Recorded.' } },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(yourWork().getByRole('button', { name: /record that it settled/i })).toBeTruthy(),
+    );
+    fireEvent.click(yourWork().getByRole('button', { name: /record that it settled/i }));
+    const confirm = yourWork().getByRole('button', { name: 'Confirm' }) as HTMLButtonElement;
+    // No reference, no entry: a settlement nobody can trace is not cash.
+    fireEvent.change(yourWork().getByLabelText(/amount, in usd/i), { target: { value: '750' } });
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(yourWork().getByLabelText(/^reference$/i), {
+      target: { value: 'po_123' },
+    });
+    await act(async () => {
+      fireEvent.click(yourWork().getByRole('button', { name: 'Confirm' }));
+    });
+    expect(bodies[MONEY]).toEqual({
+      kind: 'SETTLEMENT',
+      amountCents: 75_000,
+      currency: 'USD',
+      verifiedReference: 'po_123',
+      opportunityId: 'cop_2',
+      idempotencyKey: 'settlement:cop_2:po_123',
+    });
+  });
 });
 
 describe('winding down', () => {

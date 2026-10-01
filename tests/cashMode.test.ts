@@ -431,7 +431,24 @@ describe('winding down stops new discovery and nothing else', () => {
 
     // And it stays true once the money is in but the record is still open.
     await advance({ opportunityId: captured.value.id, to: 'DELIVERING', actorRef: userId });
-    await advance({ opportunityId: captured.value.id, to: 'COLLECTED', actorRef: userId });
+    // "The money is in" is something the ledger has to say first.
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId,
+          opportunityId: captured.value.id,
+          kind: 'SETTLEMENT',
+          amountCents: 40_000,
+          currency: 'USD',
+          verifiedReference: 'bank-ref-1',
+          idempotencyKey: 'settled-1',
+          actorRef: userId,
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (await advance({ opportunityId: captured.value.id, to: 'COLLECTED', actorRef: userId })).ok,
+    ).toBe(true);
     expect(
       await launchableUnderCashMode({ candidateId: support.id, mode: await getCashMode(projectId) }),
     ).toBe(true);
@@ -754,5 +771,112 @@ describe('an opening one person passes on', () => {
       reason: 'Taking it off them.',
     });
     expect(offered.ok).toBe(false);
+  });
+});
+
+describe('the money is in only when the ledger says so', () => {
+  /*
+   * `COLLECTED` used to be a button: it could be written over an opportunity
+   * with nothing recorded against it, and every reader then reported a sale no
+   * row establishes (invariant 37). A settlement attributed to this very
+   * opportunity, net of refunds, is what moves it now.
+   */
+  async function executing(title: string): Promise<string> {
+    const captured = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title,
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!captured.ok) throw new Error('capture failed');
+    await completeCard(captured.value.id);
+    expect((await markReady({ opportunityId: captured.value.id, actorRef: userId })).ok).toBe(true);
+    expect(
+      (
+        await beginExecution({
+          opportunityId: captured.value.id,
+          actorRef: userId,
+          firstAction: {
+            action: 'CONTACT_BUYER',
+            performedBy: 'PERSON',
+            detail: 'Called the owner.',
+            requestKey: actionKey(captured.value.id, 'CONTACT_BUYER', 'first'),
+          },
+        })
+      ).ok,
+    ).toBe(true);
+    return captured.value.id;
+  }
+
+  async function money(
+    opportunityId: string | null,
+    kind: 'CUSTOMER_PAYMENT' | 'SETTLEMENT' | 'REFUND',
+    key: string,
+  ): Promise<void> {
+    const outcome = await recordMoneyEvent({
+      projectId,
+      opportunityId,
+      kind,
+      amountCents: 50_000,
+      currency: 'USD',
+      verifiedReference: `ref-${key}`,
+      idempotencyKey: key,
+      actorRef: userId,
+    });
+    expect(outcome.ok).toBe(true);
+  }
+
+  beforeEach(async () => {
+    await activated();
+    await createAuthority({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'Cash Mode commercial authority',
+      allowedActions: [...COMMERCIAL_ACTIONS],
+      prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+      maxCommittedCents: 100_000,
+      maxPerActionCents: 40_000,
+      maxConcurrent: 3,
+      currency: 'USD',
+    });
+  });
+
+  it('refuses with nothing recorded, and with only a payment that has not settled', async () => {
+    const id = await executing('Paid but not settled');
+    const bare = await advance({ opportunityId: id, to: 'COLLECTED', actorRef: userId });
+    expect(bare.ok).toBe(false);
+    if (!bare.ok) expect(bare.reason).toMatch(/settlement/i);
+
+    await money(id, 'CUSTOMER_PAYMENT', 'paid-only');
+    expect((await advance({ opportunityId: id, to: 'COLLECTED', actorRef: userId })).ok).toBe(false);
+    expect((await getOpportunity(id))!.state).toBe('EXECUTING');
+  });
+
+  it('does not count a settlement recorded against nothing, or against another opportunity', async () => {
+    const id = await executing('Owed the money');
+    const other = await executing('Somebody else’s sale');
+    await money(null, 'SETTLEMENT', 'unattributed');
+    await money(other, 'SETTLEMENT', 'other');
+    expect((await advance({ opportunityId: id, to: 'COLLECTED', actorRef: userId })).ok).toBe(false);
+    expect((await advance({ opportunityId: other, to: 'COLLECTED', actorRef: userId })).ok).toBe(true);
+  });
+
+  it('does not count a settlement that was refunded in full', async () => {
+    const id = await executing('Refunded');
+    await money(id, 'SETTLEMENT', 'settled');
+    await money(id, 'REFUND', 'refunded');
+    expect((await advance({ opportunityId: id, to: 'COLLECTED', actorRef: userId })).ok).toBe(false);
+  });
+
+  it('records it once the settlement is on this opportunity', async () => {
+    const id = await executing('Settled');
+    await money(id, 'CUSTOMER_PAYMENT', 'paid');
+    await money(id, 'SETTLEMENT', 'settled-here');
+    const moved = await advance({ opportunityId: id, to: 'COLLECTED', actorRef: userId });
+    expect(moved.ok).toBe(true);
+    expect((await getOpportunity(id))!.state).toBe('COLLECTED');
   });
 });
