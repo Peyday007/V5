@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NEGATORS, foldApostrophes } from '../server/services/russell/negation.ts';
+import { NEGATORS, clauseBefore, foldApostrophes } from '../server/services/russell/negation.ts';
 
 describe('NEGATORS apostrophes', () => {
   for (const word of ['don', 'doesn', 'didn', 'can', 'won']) {
@@ -17,5 +17,12 @@ describe('NEGATORS apostrophes', () => {
   it('foldApostrophes maps U+2019 to ASCII', () => {
     expect(foldApostrophes('Don’t')).toBe("Don't");
     expect(foldApostrophes("Don't")).toBe("Don't");
+  });
+  it('clauseBefore returns the folded clause, so every reader sees one spelling', () => {
+    const text = 'Don’t touch it. Please fix the footer';
+    const clause = clauseBefore(text, text.indexOf('touch'));
+    expect(clause).toBe("Don't ");
+    expect(NEGATORS.test(clause)).toBe(true);
+    expect(text.length).toBe(foldApostrophes(text).length);
   });
 });
