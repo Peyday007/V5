@@ -31,6 +31,10 @@ reoffer project picker), `cashApi.ts` (#48 `settleCommitment` + #45 `act` docs).
   `russellNervousSystem`, `step12bProduct`, `cashSection`, `cashOffer`,
   `sharedCashAccess` all green.
 - Postgres impacted run: see the PR description for the result.
+- After the launch-window fix (`5097b47`): typecheck clean; `test:impacted`
+  (SQLite) 47 files, 1106 passed, 1 skipped; on Postgres the launch suites
+  (`russellLaunchWindow`, `russellConnectedPath`, `russellIntegrationPass`,
+  `russellState`, `cashPipelineRepair`) green.
 - The full gate runs once on `production` after merge (`Postgres suite`, `Deploy`).
 
 ## The journey, as it now stands on this branch
