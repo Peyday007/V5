@@ -52,5 +52,6 @@ export function clauseBefore(text: string, index: number): string {
     const at = clause.toLowerCase().lastIndexOf(contrast);
     if (at >= 0) clause = clause.slice(at + contrast.length);
   }
-  return clause;
+  // One code unit in, one out: folding cannot move an index the caller holds.
+  return foldApostrophes(clause);
 }
