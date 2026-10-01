@@ -26,6 +26,7 @@ import type {
   CampaignBriefing,
 } from '../../../server/services/factory/projections.ts';
 import type { CampaignMetrics } from '../../../server/services/factory/metrics.ts';
+import type { EvidenceNumber, ThroughputReport } from '../../../server/services/factory/throughput.ts';
 import type { RepositoryGrant } from '../../../server/services/factory/repositoryEnvelope.ts';
 import type {
   FactoryInvitations,
@@ -39,6 +40,8 @@ export type {
   ActiveWorkItem,
   CampaignBriefing,
   CampaignMetrics,
+  EvidenceNumber,
+  ThroughputReport,
   FactoryCampaign,
   FactoryChangeRequest,
   FactoryFinding,
@@ -312,6 +315,17 @@ export const FactoryApi = {
 
   briefing: (campaignId: string): Promise<CampaignBriefing | null> =>
     api(`/api/factory/campaigns/${encodeURIComponent(campaignId)}/briefing`),
+
+  /**
+   * The reviewable artifact's title and body, from rows — never published from
+   * here. `{title: null, body: null}` means nothing has been rendered yet.
+   */
+  pullRequest: (campaignId: string): Promise<{ title: string | null; body: string | null }> =>
+    api(`/api/factory/campaigns/${encodeURIComponent(campaignId)}/pull-request`),
+
+  /** The factory's own throughput, with an evidence class on every number. */
+  throughput: (campaignId: string): Promise<ThroughputReport> =>
+    api(`/api/factory/campaigns/${encodeURIComponent(campaignId)}/throughput`),
 
   submit: (projectId: string, input: SubmitObjectiveInput): Promise<SubmitResponse> =>
     api(`/api/projects/${encodeURIComponent(projectId)}/factory/change-requests`, {
