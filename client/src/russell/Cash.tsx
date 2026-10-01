@@ -37,6 +37,7 @@ import {
   type CashViewReading,
   type DerivedFigureView,
   type EngineCardView,
+  type OfferDraft,
   type Placement,
   type ReviewItem,
 } from '../lib/cashApi.ts';
@@ -1956,6 +1957,9 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
             {placement.opportunity.nextAction ? (
               <p className="rs-item-meta">{placement.opportunity.nextAction}</p>
             ) : null}
+            {page.capabilities.mayViewPrivateJob ? (
+              <SendableOffer offer={work.offers?.[placement.opportunity.id]} />
+            ) : null}
             {page.capabilities.mayActOnJob ? (
               <Actions
                 placement={placement}
@@ -2585,6 +2589,82 @@ function EngineCard({
  * choice does, cannot be styled to the 44px target the rest of the shell keeps,
  * and on a phone covers the thing it is asking about.
  */
+/**
+ * The offer a person could send, exactly as the server composed it.
+ *
+ * Read-only, and it composes nothing: every line is the card's own answer and
+ * the text is the server's. A draft with anything required missing has no
+ * text, so the only thing on the screen is what is missing — there is no
+ * placeholder here that could be copied and sent by accident. Copying sends
+ * nothing; contacting a buyer is still an action recorded under a grant.
+ */
+const OFFER_SOURCE_LABEL: Record<string, string> = {
+  EVIDENCE: 'from a source',
+  RECOMMENDATION: "Brain's proposal",
+  PERSON: 'decided by a person',
+  RECORDED: 'recorded on the card',
+};
+
+function SendableOffer({ offer }: { offer: OfferDraft | undefined }): JSX.Element | null {
+  const [copied, setCopied] = useState<'yes' | 'failed' | null>(null);
+  if (!offer) return null;
+
+  if (!offer.sendable || offer.text === null) {
+    return (
+      <div className="rs-cash-offer">
+        <p className="rs-item-meta">
+          <strong>Offer to send:</strong> not composed yet. The card does not yet state{' '}
+          {offer.missing.map((gap) => gap.label.toLowerCase()).join(', ')}, and Brain will not
+          fill a blank in an offer.
+        </p>
+      </div>
+    );
+  }
+
+  const text = offer.text;
+  const copy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied('yes');
+    } catch {
+      setCopied('failed');
+    }
+  };
+
+  return (
+    <div className="rs-cash-offer">
+      <p className="rs-item-meta">
+        <strong>Offer to send</strong>, composed only from this card.
+        {offer.recipient
+          ? ` Send to ${offer.recipient.payer.value} via ${offer.recipient.channel.value}.`
+          : ''}
+      </p>
+      <ul className="rs-list">
+        {offer.lines.map((line) => (
+          <li key={line.key}>
+            <span className="rs-item-meta">{line.label}</span> {line.value}{' '}
+            <span className="rs-badge">{OFFER_SOURCE_LABEL[line.source] ?? line.source}</span>
+          </li>
+        ))}
+      </ul>
+      {offer.unstated.length > 0 ? (
+        <p className="rs-hint">
+          Not stated on the card, so not in the offer:{' '}
+          {offer.unstated.map((gap) => gap.label.toLowerCase()).join(', ')}.
+        </p>
+      ) : null}
+      <button type="button" onClick={() => void copy()}>
+        Copy offer
+      </button>
+      {copied === 'yes' ? <span className="rs-hint"> Copied. Nothing has been sent.</span> : null}
+      {copied === 'failed' ? (
+        <span className="rs-hint"> This browser refused the clipboard; select the text instead.</span>
+      ) : null}
+      <pre className="rs-cash-offer-text">{text}</pre>
+    </div>
+  );
+}
+
 function Actions({
   placement,
   authority,

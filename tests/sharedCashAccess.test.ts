@@ -476,6 +476,27 @@ describe('what a shared reader may never be handed', () => {
     expect(text).not.toMatch(/priceCents/);
   });
 
+  it('carries no sendable offer, which the owner is handed composed', async () => {
+    /*
+     * The offer is every private commercial term in one paragraph, so it is the
+     * single most valuable thing that could leak. Asserted both ways: the owner
+     * really is handed it — otherwise "the member was not" proves nothing — and
+     * the member's payload has no such key and none of its words.
+     */
+    const owner = await call<{
+      myCurrentWork: { offers: Record<string, { sendable: boolean; text: string | null }> };
+    }>('GET', CASH(), { cookie: adminCookie });
+    const offer = owner.body.myCurrentWork.offers[opportunityId];
+    expect(offer?.sendable).toBe(true);
+    expect(offer?.text).toContain('Marguerite Vance, who signs');
+    expect(offer?.text).toContain('USD 750.00');
+
+    const text = await shared();
+    expect(text).not.toContain('"offers":');
+    expect(text).not.toMatch(/Accepted when/);
+    expect(text).not.toMatch(/USD 750\.00/);
+  });
+
   it('carries a tier reading, and the reading carries no value', async () => {
     /*
      * The tier is what separates *evidence Brain found* from *work somebody
