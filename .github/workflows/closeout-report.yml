@@ -227,9 +227,15 @@ jobs:
           # Measured: read beside a deploy's own verification, `cash-report`
           # printed a whole sprint and died on its last query with
           # `EMAXCONNSESSION ... pool_size: 15`.
+          #
+          # And sixty seconds of patience for that one client, at the call site
+          # for the same reason. Measured 2026-10-01 16:05Z: the refinement read
+          # died in `initDatabase` on the default ten-second connect wait while
+          # the running Brain held its own clients; the remedy is waiting, not
+          # more clients (config.ts `readConnectTimeoutMs`).
           set +e
           flyctl ssh console --app "$app" \
-            -C "sh -c 'BRAIN_DATABASE_POOL_SIZE=1 $cmd'" 2>&1 | tee closeout-report.txt
+            -C "sh -c 'BRAIN_DATABASE_POOL_SIZE=1 BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000 $cmd'" 2>&1 | tee closeout-report.txt
           set -e
           grep -q "$marker" closeout-report.txt
 

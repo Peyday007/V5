@@ -59,6 +59,12 @@ is registered, so `SEND_A_MESSAGE` and invoicing read `MISSING`.
    fixed on this branch in `scripts/cash-report.sh` (the `factory.sh` remedy:
    sixty seconds of patience, not more clients). Opportunity/tier counts were not
    reached, so "0 qualified" is still the §47 reading, not tonight's.
+   The refinement read (`Closeout report` run 36889235009, 16:05Z) never got a
+   connection at all: `initDatabase` timed out on the ten-second default while
+   the Brain held its own pooler clients. So *why the 100 ideas are QUEUED* is
+   **not established** tonight. `closeout-report.yml` now passes
+   `BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000` at the call site, which reaches the
+   already-deployed image; the first read after merge answers the question.
 
 ## Not taken, deliberately
 
