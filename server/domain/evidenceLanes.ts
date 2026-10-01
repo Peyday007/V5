@@ -67,7 +67,12 @@ export function laneIdFrom(description: string, fallback = 'evidence'): string {
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter((word) => word.length > 0 && !STOP_WORDS.has(word));
-  const id = words.slice(0, 4).join('_').slice(0, 40).replace(/_+$/, '');
+  let id = words.slice(0, 4).join('_');
+  // An id must start with a letter. A digit-leading derivation ("2024 annual
+  // filings") is still the most specific name the description has, so it is
+  // prefixed rather than thrown away for the shared fallback.
+  if (/^[0-9]/.test(id)) id = `lane_${id}`;
+  id = id.slice(0, 40).replace(/_+$/, '');
   return isLaneId(id) ? id : fallback;
 }
 
@@ -88,11 +93,14 @@ const STOP_WORDS = new Set([
 export function parseLanes(raw: unknown): EvidenceLane[] {
   const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? safeJson(raw) : [];
   const lanes: EvidenceLane[] = [];
+  const derived = new Set<EvidenceLane>();
   for (const entry of list) {
     if (typeof entry === 'string') {
       const description = entry.trim();
       if (description.length === 0) continue;
-      lanes.push({ id: laneIdFrom(description), description, necessity: 'REQUIRED' });
+      const lane: EvidenceLane = { id: laneIdFrom(description), description, necessity: 'REQUIRED' };
+      derived.add(lane);
+      lanes.push(lane);
       continue;
     }
     if (!entry || typeof entry !== 'object') continue;
@@ -104,9 +112,11 @@ export function parseLanes(raw: unknown): EvidenceLane[] {
       ? (row['necessity'] as LaneNecessity)
       : 'REQUIRED';
     if (!description && !declared) continue;
-    lanes.push({ id, description: description || declared, necessity });
+    const lane: EvidenceLane = { id, description: description || declared, necessity };
+    if (id !== declared) derived.add(lane);
+    lanes.push(lane);
   }
-  return dedupe(lanes);
+  return dedupe(lanes, derived);
 }
 
 function safeJson(raw: string): unknown[] {
@@ -127,9 +137,33 @@ function safeJson(raw: string): unknown[] {
  * alternative and it is worse: a duplicate id is a naming slip, not a reason
  * to throw away a plan somebody waited for.
  */
-function dedupe(lanes: EvidenceLane[]): EvidenceLane[] {
+function dedupe(lanes: EvidenceLane[], derived: Set<EvidenceLane>): EvidenceLane[] {
+  /*
+   * A derived id is only a guess at a name, so a collision between two derived
+   * lanes means two different questions that happened to open with the same
+   * words — dropping one would silently remove a REQUIRED lane and let the gate
+   * pass without it. Derived ids are therefore suffixed (_2, _3) in input
+   * order. Declared ids are reserved first, so a derivation never takes one
+   * that a declared lane names, wherever it appears.
+   */
+  const taken = new Set<string>();
+  for (const lane of lanes) if (!derived.has(lane)) taken.add(lane.id);
   const seen = new Map<string, EvidenceLane>();
-  for (const lane of lanes) if (!seen.has(lane.id)) seen.set(lane.id, lane);
+  const used = new Set<string>();
+  for (const lane of lanes) {
+    if (!derived.has(lane)) {
+      if (!seen.has(lane.id)) seen.set(lane.id, lane);
+      used.add(lane.id);
+      continue;
+    }
+    let id = lane.id;
+    for (let n = 2; used.has(id) || taken.has(id); n++) {
+      const suffix = `_${n}`;
+      id = `${lane.id.slice(0, 40 - suffix.length).replace(/_+$/, '')}${suffix}`;
+    }
+    used.add(id);
+    seen.set(id, id === lane.id ? lane : { ...lane, id });
+  }
   return [...seen.values()];
 }
 
