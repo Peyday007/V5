@@ -305,6 +305,12 @@ function print(projectId: string, name: string, view: Awaited<ReturnType<typeof 
 
   console.log('');
   console.log('MATURITY, PER FORMAT');
+  // Every other empty section here says why it is empty; this one printed a
+  // heading and nothing, so a reader could not tell "no formats are on the map"
+  // from "this section failed to render".
+  if (view.maturity.length === 0) {
+    console.log('  No kind of puzzle is on the map yet, so there is nothing to be mature about.');
+  }
   for (const one of view.maturity) {
     console.log(`  ${one.rung.padEnd(18)} ${one.name}`);
     console.log(`     waiting on [${one.remedy}]: ${one.waitingOn}`);

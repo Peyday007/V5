@@ -217,7 +217,34 @@ export function allocate(input: AllocationInput): Allocation {
       }
       const settled = coverage.roundsByPurpose[purpose];
       const found = coverage.foundByPurpose[purpose];
-      if (settled >= BARREN_ROUNDS && found === 0) {
+      /*
+       * Barrenness is counted in rounds that actually *ran*, and this read
+       * `roundsByPurpose` — the correction is recorded rather than quietly
+       * applied.
+       *
+       * A round settles on any terminal mission, a failed or cancelled one
+       * included, which is right: a round left OPEN for ever is the state
+       * nothing can leave. But `roundsByPurpose` then counts a mission that
+       * crashed exactly as it counts one that read the sources and found
+       * nothing — so three abandoned missions retired the question permanently,
+       * and the sentence written on the decline said "nothing published has
+       * answered it. Brain has documented that there is nothing there" about a
+       * question Brain had never once looked at. **A wrong answer confidently
+       * derived is worse than no answer**, and this one was recorded as the
+       * reason work stopped.
+       *
+       * Three abandonments in a row is not exotic on a fleet whose dispatch is
+       * failing: §23 records eighteen consecutive `AUTH 401`s against one
+       * Routine. The remedy for that is to fix the surface, and this would have
+       * retired the questions before anybody did.
+       *
+       * `roundsByPurpose` still numbers the next round, and has to: numbering
+       * from the harvested count alone would reuse a round number an abandoned
+       * round already holds, collide on the unique index, and re-ask nothing
+       * for ever — which is the same stranding by the other route.
+       */
+      const looked = coverage.harvestedByPurpose[purpose];
+      if (looked >= BARREN_ROUNDS && found === 0) {
         /*
          * Not because looking is forbidden — because Brain has now documented
          * that there is nothing published there, and §13's rule about the
@@ -227,8 +254,8 @@ export function allocate(input: AllocationInput): Allocation {
         declined.push({
           subject: coverage.path,
           why:
-            `Its ${purpose.toLowerCase()} question has been asked ${settled} times and nothing ` +
-            'published has answered it. Brain has documented that there is nothing there.',
+            `Its ${purpose.toLowerCase()} question has been answered ${looked} times and nothing ` +
+            'published has settled it. Brain has documented that there is nothing there.',
         });
         continue;
       }

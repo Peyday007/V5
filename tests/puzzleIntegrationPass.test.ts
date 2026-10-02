@@ -66,6 +66,7 @@ import {
   listPuzzleMasters,
   listPuzzleProducts,
   listPuzzleRounds,
+  openPuzzleRound,
   listPuzzleRoutes,
 } from '../server/repos/puzzle.ts';
 import { runPuzzleKernel } from '../server/services/puzzle/kernel.ts';
@@ -73,6 +74,9 @@ import { puzzleView } from '../server/services/puzzle/view.ts';
 import { observe, seedFormat } from '../server/services/puzzle/seed.ts';
 import { renderInstance } from '../server/services/puzzle/generate.ts';
 import { getOpportunity } from '../server/repos/cashPortfolio.ts';
+import { getCashMode } from '../server/repos/cashMode.ts';
+import { createAccount, createRoutine } from '../server/repos/fleet.ts';
+import { MAX_OPEN_PUZZLE_ROUNDS } from '../server/services/puzzle/allocate.ts';
 import type {
   ClaimedWork,
   Layer,
@@ -667,6 +671,154 @@ describe('what happens next, when nothing can answer a question', () => {
     // ... and it must name the condition and whose it is to fix.
     expect(view.nextAction).toMatch(/nothing can answer them|could answer it/i);
     expect(view.nextAction).toMatch(/execution surface/i);
+  });
+
+  /*
+   * And with a surface that *can* answer, it names the refusal that actually
+   * happened rather than a second opinion about it.
+   *
+   * The first production reading printed *"2 question(s) are already being
+   * researched and no slot is free"* against a `MAX_OPEN_PUZZLE_ROUNDS` of
+   * three. A slot was free; the slot was never the bound. What had actually
+   * stopped the pass is on `plan.declined`, in the allocator's own words and
+   * naming the row — with nothing on the map, the one question this kernel can
+   * ask already had a live round.
+   *
+   * An operator reading the old sentence would raise the slot ceiling, and a
+   * third slot would have changed nothing. §47 settled the same question the
+   * same way one kernel along: the report prints the refusal the producer
+   * recorded, because a report with its own copy of the rule is the copy that
+   * drifts.
+   */
+  it('names the refusal the allocator recorded, not a slot that was never the bound', async () => {
+    await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+
+    // One enabled Routine with a secret and a bound worker, which is exactly
+    // what `RESEARCH_A_QUESTION` reads — so this reaches the branch the
+    // no-surface test above deliberately cannot.
+    const account = await createAccount({ name: 'puzzle-capacity' });
+    await createRoutine({
+      accountId: account.id,
+      routineRef: 'trig_puzzle_capacity',
+      name: 'puzzle-capacity',
+      tokenSecretName: 'SECRET_PUZZLE_CAPACITY',
+      tokenDigest: 'digest_puzzle_capacity',
+      workerId,
+    });
+    expect(
+      (await puzzleView(projectId)).capabilities.commercial.find(
+        (one) => one.id === 'RESEARCH_A_QUESTION',
+      )?.state,
+    ).toBe('PRESENT');
+
+    // The first pass opens the one question a bare map can ask; the second
+    // finds it live and declines. Two passes rather than one, because what is
+    // being pinned is the *decline*.
+    await runPuzzleKernel(projectId);
+    await runPuzzleKernel(projectId);
+
+    const view = await puzzleView(projectId);
+    const open = view.beingMade.openQuestions;
+    expect(open.length).toBeGreaterThan(0);
+    expect(open.length).toBeLessThan(MAX_OPEN_PUZZLE_ROUNDS);
+
+    // The bound it must not claim, and the one it must: the allocator's own
+    // sentence, naming the round that is already open.
+    expect(view.nextAction).not.toMatch(/no slot is free/i);
+    expect(view.nextAction).toMatch(/already being asked/i);
+    expect(view.nextAction).toContain(open[0]!.roundId);
+  });
+});
+
+/*
+ * The one question that carries no format, asked once rather than once a tick.
+ *
+ * This is a production reading rather than a hypothesis. On the first tick
+ * after the kernel was released, `pzq_b04df7d4c4574c59ad1d` and
+ * `pzq_6e4bc50e9a2046b28c52` were both open on one project, both SEED_FORMATS,
+ * both round 1 — two of the three concurrent research slots spent asking one
+ * question twice.
+ *
+ * The allocator is not what was wrong: within one pass it finds the live round
+ * and declines, because `null === null` holds in JavaScript. §38 states what is
+ * supposed to catch the race between two passes — "being pure makes it useless
+ * as a safety mechanism… the exclusion is the unique index" — and the index
+ * `089` wrote keyed on `format_key` and `product_class` directly, which are
+ * NULL for exactly this question and therefore distinct from each other on both
+ * backends.
+ *
+ * So the test drives the repository rather than the kernel: what has to be
+ * proved is that the **second insert loses**, and a test that ran two ticks
+ * would prove the allocator's filter instead and pass either way.
+ *
+ * ---------------------------------------------------------------------------
+ * Why nothing reported it, which writing this guard is what established
+ * ---------------------------------------------------------------------------
+ *
+ * `created` is not the discriminator, and asserting it alone would have been a
+ * guard that passes against the very defect it names. `openPuzzleRound` reads
+ * back by the natural key and answers `created: rows[0].id === id` — so with
+ * two rows present the read matches **both**, `rows[0]` is the earlier one, and
+ * the pass that genuinely *did* write a duplicate is told it lost. Its caller
+ * then does exactly what a loser should: `if (!opened.created) continue`, with
+ * no `cash_events` row written.
+ *
+ * Which is why production ran one question twice with its own append-only
+ * history recording a single opening. The row count is therefore the assertion
+ * that binds, and `created` is kept beside it as the ordinary-outcome contract
+ * rather than as the proof.
+ */
+describe('the bootstrap question opens once, because NULL is not a key', () => {
+  it('refuses a second live round for the question that carries no format', async () => {
+    expect(
+      (
+        await activate({
+          projectId,
+          ownerUserId: userId,
+          actorUserId: userId,
+          objective: 'Maximize additional usable cash over the next few weeks.',
+        })
+      ).ok,
+    ).toBe(true);
+
+    const mode = await getCashMode(projectId);
+    expect(mode).not.toBeNull();
+
+    const ask = {
+      projectId,
+      cashModeId: mode!.id,
+      purpose: 'SEED_FORMATS' as const,
+      formatKey: null,
+      productClass: null,
+      round: 1,
+    };
+
+    // Two passes that each read a snapshot with no open round and each decided
+    // correctly. Different candidates, because each pass captured its own.
+    const first = await openPuzzleRound({ ...ask, candidateId: 'rcn_first_pass' });
+    const second = await openPuzzleRound({ ...ask, candidateId: 'rcn_second_pass' });
+
+    // The assertion that binds: one row, whichever pass got there first, and
+    // it is the first pass's candidate that the surviving round points at —
+    // so the second pass's candidate is the orphan `openPuzzleAsks` describes
+    // rather than a second live question.
+    const opened = (await listPuzzleRounds(projectId)).filter(
+      (one) => one.purpose === 'SEED_FORMATS',
+    );
+    expect(opened).toHaveLength(1);
+    expect(opened[0]!.candidateId).toBe('rcn_first_pass');
+
+    // And the ordinary-outcome contract beside it: a loser reads back the round
+    // that won rather than reporting a failure, which is what the natural-key
+    // read-back exists for. Passes against the defect too — see the note above.
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.round.id).toBe(first.round.id);
   });
 });
 

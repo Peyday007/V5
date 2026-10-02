@@ -30,6 +30,7 @@ import {
   MAZE,
   SUDOKU,
   WORD_SEARCH,
+  canGenerate,
   formatFor,
   implementedFormats,
   type PuzzleArtifact,
@@ -902,6 +903,75 @@ describe('the monetization ledger keeps everything and ranks without a score', (
     expect(licensing?.met).toContain('VALIDATED_OUTPUT');
     expect(licensing?.next).not.toContain('pass their own checks');
     expect(licensing?.next).toContain('who actually pays');
+  });
+
+  it('and names which of three things is missing, rather than always a generator', () => {
+    /*
+     * The same defect one line along, printed by the same live report. The
+     * verdict above was corrected and its *remedy* was not: `VALIDATED_OUTPUT`
+     * answered all three conditions with "That is a generator, which is a code
+     * change somebody reviews", and production printed that five times over a
+     * Brain holding four working generators — with the SEED_FORMATS round that
+     * would have supplied the missing format open at that very moment.
+     *
+     * A correct verdict with a false instruction under it is not an
+     * improvement: it sends somebody to write code that exists, for a
+     * condition already being answered.
+     */
+    const ledgerFor = (maturity: Parameters<typeof readLedger>[0]['maturity']) =>
+      readLedger({
+        maturity,
+        demand: [],
+        routes: [],
+        economics: [],
+        constraints: [],
+        observations: [],
+        heldCapabilities: [],
+      }).find((one) => one.route.id === 'licensing-catalog');
+
+    const reading = (formatKey: string, validPuzzles: number) => [
+      {
+        formatKey,
+        name: formatKey,
+        rung: 'DISCOVERED' as const,
+        waitingOn: '',
+        remedy: 'CODE' as const,
+        reached: ['DISCOVERED' as const],
+        evidence: { validPuzzles, products: 0, buyers: 0, channels: 0 },
+        limitation: null,
+      },
+    ];
+
+    // Production's own condition: nothing on the map at all. The remedy is a
+    // format, and it must not be a code change.
+    const empty = ledgerFor([]);
+    expect(empty?.unmet).toContain('VALIDATED_OUTPUT');
+    expect(empty?.next).toContain('No kind of puzzle is on the map');
+    expect(empty?.next).not.toContain('code change');
+
+    // A format this repository genuinely does not implement. Here it is a code
+    // change, and saying so is right.
+    const unimplemented = ledgerFor(reading('quipu lattice', 0));
+    expect(unimplemented?.next).toContain('implements none of them');
+    expect(unimplemented?.next).toContain('code change');
+
+    /*
+     * And a format Brain can make, with nothing made yet. Nobody has to do
+     * anything — which is the answer no version of the old sentence could
+     * give. `sudoku` is asserted to be generatable rather than assumed, so
+     * this cannot quietly become the NO_GENERATOR case if the registry moves.
+     */
+    expect(canGenerate('sudoku')).toBe(true);
+    const notYet = ledgerFor(reading('sudoku', 0));
+    expect(notYet?.next).not.toContain('code change');
+    /*
+     * And it stops short of naming a remedy, because this condition splits
+     * again — no system set up yet, or a system whose every seed is refused —
+     * and only the per-format maturity reading can tell those apart. Claiming
+     * "nobody has to do anything" here would be this repair's own defect one
+     * condition along.
+     */
+    expect(notYet?.next).toContain('maturity reading says which');
   });
 
   it('a route short only of things no question can answer reads BLOCKED', () => {
