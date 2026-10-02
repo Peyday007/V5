@@ -10568,7 +10568,7 @@ export interface EngineeringBlockerRow {
 }
 
 // ---------------------------------------------------------------------------
-// Getting work done through people (§51, `services/humanwork/`)
+// Getting work done through people (§52, `services/humanwork/`)
 // ---------------------------------------------------------------------------
 
 /**

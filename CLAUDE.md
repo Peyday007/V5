@@ -11910,7 +11910,7 @@ backends; `docs/SOFTWARE-SERVICE-EVIDENCE.md` records the live journey, and
 until a real request has travelled it this section is a design with tests, not
 a production reading — the separation Step 3 drew.
 
-## 51. A decision that a person is needed is not the person doing it.
+## 52. A decision that a person is needed is not the person doing it.
 
 §41 decides *whether* a task needs a person and why. `server/services/humanwork/`
 (`docs/HUMAN-WORK.md`, migrations `101_human_work.sql` / pg `092_human_work.sql`)
