@@ -57,6 +57,7 @@ import { listAdapters, type EffectAdapter } from '../effects/adapter.ts';
 import { runExternalEffect, type ExternalOutcome } from '../effects/external.ts';
 import type { OperationNamespace } from '../effects/engine.ts';
 import { operationsByCorrelation } from '../../repos/idempotency.ts';
+import { cashEventsOfKind, recordCashEvent } from '../../repos/cashMode.ts';
 import type { IdempotencyOperation } from '../../domain/types.ts';
 
 /** The commercial actions Brain can be connected to perform itself. */
@@ -220,18 +221,90 @@ export async function commercialOperationsFor(
   projectId: string,
   opportunityId: string,
 ): Promise<CommercialOperation[]> {
+  return await commercialOperations(projectId, `cash:${opportunityId}:`, opportunityId);
+}
+
+/** Every commercial operation in one project, newest first. */
+export async function commercialOperationsInProject(projectId: string): Promise<CommercialOperation[]> {
+  return await commercialOperations(projectId, 'cash:', null);
+}
+
+async function commercialOperations(
+  projectId: string,
+  correlationPrefix: string,
+  opportunityId: string | null,
+): Promise<CommercialOperation[]> {
   const rows = await operationsByCorrelation({
     projectId,
     namespaces: NAMESPACES,
-    correlationPrefix: `cash:${opportunityId}:`,
+    correlationPrefix,
+    limit: 500,
   });
   const out: CommercialOperation[] = [];
   for (const operation of rows) {
     const parsed = parseCorrelation(operation.correlationId);
-    if (!parsed || parsed.opportunityId !== opportunityId) continue;
+    if (!parsed) continue;
+    if (opportunityId !== null && parsed.opportunityId !== opportunityId) continue;
     out.push({ operation, ...parsed });
   }
   return out;
+}
+
+/* ------------------------------------------------------------------------- */
+/* What was true when it was sent                                             */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The event a send's context is kept under, written before the provider is
+ * called.
+ *
+ * An operation stores a digest of its payload and nothing else, so once a
+ * provider has confirmed an effect the operation alone cannot say which grant
+ * authorized it or what amount it moved. Both are needed to record it later —
+ * after a crash, a refused write, or a revocation that landed between the
+ * send and the record — and neither may be re-derived then, because the grant
+ * may since have been withdrawn and the outstanding amount may since have
+ * changed. So they are written down first, in the append-only history the
+ * piece already has, keyed by the correlation the operation carries.
+ */
+export const EFFECT_INTENT_KIND = 'CASH_EFFECT_INTENT';
+
+export interface EffectIntent {
+  correlationId: string;
+  action: PerformableAction;
+  occurrence: string;
+  retry: number;
+  /** The standing grant checked for this action immediately before the send. */
+  authorityId: string;
+  /** What the send asked to move, when it moves money; never recomputed. */
+  amountCents: number | null;
+  /** The piece's state when it was sent, so a later mismatch can be named. */
+  stateAtSend: string;
+  at: string;
+}
+
+/** The first intent recorded for this correlation, or none. */
+export async function intentFor(
+  opportunityId: string,
+  correlationId: string,
+): Promise<EffectIntent | null> {
+  for (const event of await cashEventsOfKind(opportunityId, EFFECT_INTENT_KIND)) {
+    const detail = event.detail as Record<string, unknown>;
+    if (detail.correlationId !== correlationId) continue;
+    const action = String(detail.action ?? '');
+    if (!isPerformable(action) || typeof detail.authorityId !== 'string') continue;
+    return {
+      correlationId,
+      action,
+      occurrence: String(detail.occurrence ?? ''),
+      retry: Number(detail.retry ?? 0),
+      authorityId: detail.authorityId,
+      amountCents: typeof detail.amountCents === 'number' ? detail.amountCents : null,
+      stateAtSend: String(detail.stateAtSend ?? ''),
+      at: event.createdAt,
+    };
+  }
+  return null;
 }
 
 export interface CommercialEffectRequest {
@@ -244,6 +317,16 @@ export interface CommercialEffectRequest {
   retry?: number;
   /** What the adapter is handed. Its own `validate` decides what is a request. */
   payload: Record<string, unknown>;
+  /**
+   * The grant the caller checked for this exact action just now. Required:
+   * there is no way to send without naming the authority it was sent under,
+   * and it is what a later recording is attributed to (`EffectIntent`).
+   */
+  authorityId: string;
+  /** What the send moves, when it moves money. */
+  amountCents: number | null;
+  /** The piece's state at the moment of sending. */
+  stateAtSend: string;
 }
 
 /**
@@ -263,6 +346,33 @@ export async function sendCommercialEffect(input: CommercialEffectRequest): Prom
         `${effect.capability} should not have read PRESENT.`,
     );
   }
+  const correlationId = effectCorrelation(
+    input.opportunityId,
+    input.action,
+    input.occurrence,
+    input.retry ?? 0,
+  );
+  // Written before the provider is called, once per correlation: the first
+  // intent is the one the actual send happened under, and a later press that
+  // only replays the same operation adds nothing to the history.
+  if (!(await intentFor(input.opportunityId, correlationId))) {
+    await recordCashEvent({
+      projectId: input.projectId,
+      opportunityId: input.opportunityId,
+      kind: EFFECT_INTENT_KIND,
+      actorRef: 'BRAIN',
+      summary: `Brain is about to attempt ${effect.doing}.`,
+      detail: {
+        correlationId,
+        action: input.action,
+        occurrence: input.occurrence,
+        retry: input.retry ?? 0,
+        authorityId: input.authorityId,
+        amountCents: input.amountCents,
+        stateAtSend: input.stateAtSend,
+      },
+    });
+  }
   return await runExternalEffect({
     adapter,
     namespace: effect.namespace,
@@ -272,12 +382,7 @@ export async function sendCommercialEffect(input: CommercialEffectRequest): Prom
     payload: input.payload,
     principalType: 'SYSTEM',
     principalId: principalIdFor(input.action),
-    correlationId: effectCorrelation(
-      input.opportunityId,
-      input.action,
-      input.occurrence,
-      input.retry ?? 0,
-    ),
+    correlationId,
   });
 }
 
@@ -301,6 +406,8 @@ export interface ContactBuyerRequest {
   opportunityId: string;
   payer: string;
   channel: string;
+  authorityId: string;
+  stateAtSend: string;
 }
 
 /** Reaching the buyer, kept as its own entry point for the tick. */
@@ -311,5 +418,8 @@ export async function sendContactBuyer(input: ContactBuyerRequest): Promise<Exte
     opportunityId: input.opportunityId,
     occurrence: input.occurrence,
     payload: { payer: input.payer, channel: input.channel },
+    authorityId: input.authorityId,
+    amountCents: null,
+    stateAtSend: input.stateAtSend,
   });
 }

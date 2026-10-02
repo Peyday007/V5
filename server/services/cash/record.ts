@@ -88,7 +88,9 @@ export async function executionRecord(input: {
     const reading = await readCapability(effect.capability);
     const decision = await checkCommercialAuthority({ projectId: opportunity.projectId, action });
     let reason: string | null = null;
-    if (reading.state !== 'PRESENT') {
+    if (action === 'CONTACT_BUYER' && opportunity.state === 'READY' && actions.some((one) => one.action === action)) {
+      reason = 'The buyer has already been reached; this waits to begin execution from that contact.';
+    } else if (reading.state !== 'PRESENT') {
       reason =
         `${effect.capability} reads ${reading.state}: no integration for it is registered, so ` +
         'Brain cannot do this itself. Do it yourself and record it here.';

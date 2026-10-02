@@ -278,11 +278,8 @@ under the same `actionKey`, so a race between them writes one row.
 ### What remains
 
 **Code gap**
-- An attempt that succeeded but whose recording was refused (for example, the
-  grant was revoked in between) shows as UNRECORDED. It is recorded on the next
-  press at the same occurrence. If a person instead records a different action
-  first, it stays UNRECORDED on the page with its receipt; nothing reconciles
-  it automatically.
+- ~~An attempt that succeeded but whose recording was refused shows as
+  UNRECORDED until a person presses again.~~ Closed in the follow-up below.
 - Brain never invoices or takes payment on its own initiative. Only a person's
   press triggers either. That is deliberate (no signal establishes "the work is
   agreed and done"), not an omission.
@@ -304,3 +301,61 @@ under the same `actionKey`, so a race between them writes one row.
 **Production integration**
 - Merge #88, then this branch, into `production`; `Deploy` ships it.
   Production still serves `0041975`.
+
+## Follow-up (2026-10-02): a confirmed effect always reaches the record
+
+The last provider-independent gap: a provider confirmed an effect and Brain's
+own record of it did not land. Before this, `applyEffectOutcome` returned
+`PERFORMED_NOT_RECORDED` and kept nothing, so the receipt sat on a SUCCEEDED
+operation and the page read UNRECORDED until somebody pressed again.
+
+### The mechanism
+
+- **Durable truth is the existing operation.** `idempotency_operations` already
+  holds `state = SUCCEEDED`, the receipt in `result_ref`, and the correlation
+  `cash:<opportunity>:<action>:<occurrence>[:<retry>]`. "Confirmed but not
+  recorded" is derived: such an operation with no `cash_actions` row under
+  `actionKey(opportunity, action, occurrence)` — or, for a payment, no ledger
+  entry under `payment:<opportunity>:<receipt>`. No new table, no migration.
+- **Send-time context is written before the send.** An operation keeps only a
+  payload digest, so `sendCommercialEffect` now requires the authority it was
+  sent under, the amount it moves and the piece's state, and appends one
+  `CASH_EFFECT_INTENT` row to `cash_events` (append-only) before calling the
+  provider, once per correlation.
+- **Entry point: the durable tick.** `operate()` runs
+  `reconcileConfirmedEffects(projectId)` immediately before
+  `advanceWithinAuthority`, in every sprint state. It calls
+  `recordConfirmedEffect`, the same function a send, a person's resolution and
+  a replay use, so there is one meaning of a receipt.
+- **No resend.** The reconciliation path calls no adapter at all. The tick
+  also no longer reaches a READY piece that already has a contact on record
+  (it retries only the transition), and a person's "reach the buyer" on such a
+  piece is refused. A mutation that drops that guard sends a second message.
+- **No duplicates.** The action is `ON CONFLICT DO NOTHING` on its request key
+  and the payment on its idempotency key; the pass skips anything already
+  complete, and writes `CASH_EFFECT_RECONCILED` only when it created a row.
+  A second pass writes nothing (asserted by counting rows and events).
+- **Authority after send.** The action is attributed to the grant in the
+  intent, not to whatever is live now. `recordMoneyEvent` skips its second
+  ACCEPT_PAYMENT check only when a SUCCEEDED take-payment operation in the same
+  project carries exactly that receipt; anything else still meets the grant.
+  A revoked grant still refuses every *new* effect — asserted.
+- **State that no longer fits.** A contact on a piece that is still READY
+  begins execution if that is allowed now; otherwise, and for any effect on a
+  piece that is no longer executing or delivering, the action is recorded with
+  no transition and an `effect-unapplied:` need says why. The contact need
+  settles from the row once execution begins (the tick does it from the
+  recorded contact when the grant allows); the others are a person's.
+- **Operations from before intents existed** are attributed to a grant that
+  covers the action now; with none, an `effect-unattributed:` need keeps the
+  receipt visible rather than writing it against an authority nobody can name.
+
+### Proof
+
+`tests/cashEffectReconciliation.test.ts` (real routes, real tick, real DB;
+synthetic adapter at the provider, one injected write failure for A and E):
+A confirm-then-local-fail, B crash after confirmation (restarted adapter, no
+send), C revocation in flight (invoice and contact), D archived in flight,
+E payment once with no settlement plus a partial (action without ledger
+entry) record, F second pass writes nothing. All seven fail against the
+previous server code; unwiring the pass from the tick fails A, B and both E.

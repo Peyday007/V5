@@ -5838,6 +5838,18 @@ the amount recorded as agreed, and a payment for what is outstanding. Neither
 amount is ever composed. Each capability reads PRESENT only when an adapter is
 registered for its namespace.
 
+**A receipt reaches the record even when the write after it did not.** The
+grant, amount and state a send was made under are appended to `cash_events` as
+`CASH_EFFECT_INTENT` before the provider is called, because an operation keeps
+only a digest. `reconcileConfirmedEffects` on the durable tick finds a
+SUCCEEDED commercial operation with no action under its key (or no payment
+entry under its receipt) and records it once through `recordConfirmedEffect`,
+which calls no adapter. The action is attributed to the grant it was sent
+under: a revocation stops the next effect and never unsays one that happened.
+A piece that no longer fits gets the action with no transition and an open
+`effect-unapplied:` need, and a READY piece already contacted is never
+contacted again.
+
 **What this version does not do, and says so.** It records the authorization and
 the money; it does not itself contact a buyer, issue an invoice or move funds. A
 missing integration is a `cash_needs` row with a recommended way forward, which
@@ -12402,6 +12414,7 @@ tests/                  Vitest suites
   cashHttp.test.ts           Cash Mode's door, driven as an attack
   cashSection.test.tsx       the Cash section in a browser: four states, one control
   cashCommercialJourney.test.ts  READY to settled through the real routes, and every unknown
+  cashEffectReconciliation.test.ts  a receipt whose record failed, finished once by the tick
   connectorIsolation.test.ts one site, two private operations, two identities
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible

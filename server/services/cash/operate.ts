@@ -76,7 +76,12 @@ import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { countActions } from '../../repos/cashActions.ts';
 import { sendContactBuyer } from './effects.ts';
-import { applyEffectOutcome } from './perform.ts';
+import {
+  alreadyContacted,
+  applyEffectOutcome,
+  reconcileConfirmedEffects,
+  type ReconciledEffect,
+} from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
@@ -649,6 +654,32 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
      * and still needs somebody to press a button the moment an integration
      * arrives.
      */
+    /*
+     * A buyer already reached is never reached again by the tick. This is
+     * where a contact the provider confirmed lands when beginning execution
+     * was refused at the moment it was recorded (`recordConfirmedEffect`):
+     * the contact is history and the piece stayed READY. What is left is the
+     * transition alone, retried from the action already on the record — never
+     * a second send, which a fresh occurrence would otherwise be.
+     */
+    const contacted = await alreadyContacted(opportunity.id);
+    if (contacted) {
+      const began = await beginExecution({ opportunityId: opportunity.id, actorRef: BRAIN });
+      if (began.ok) {
+        out.took.push({
+          opportunityId: opportunity.id,
+          did: 'BEGAN_EXECUTION',
+          detail: 'The buyer was already reached; execution began from that recorded contact.',
+        });
+      } else {
+        out.withheld.push({
+          opportunityId: opportunity.id,
+          because: `The buyer was already reached, and beginning execution is refused: ${began.reason}`,
+        });
+      }
+      continue;
+    }
+
     const occurrence = String((await countActions(opportunity.id)) + 1);
 
     let outcome: ExternalOutcome;
@@ -659,6 +690,8 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
         opportunityId: opportunity.id,
         payer: opportunity.payer ?? 'the payer',
         channel: opportunity.reachableChannel ?? 'the recorded channel',
+        authorityId: decision.authority!.id,
+        stateAtSend: opportunity.state,
       });
     } catch (error) {
       out.withheld.push({
@@ -762,6 +795,8 @@ export async function operate(
   continuations: Continuation[];
   dependentWork: DependentWork[];
   validations: ValidationProgress;
+  /** Confirmed effects whose record this pass finished. Empty when there were none. */
+  effects: ReconciledEffect[];
   authority: AuthorityAdvance;
   monetization: MonetizationPass;
 }> {
@@ -775,6 +810,7 @@ export async function operate(
       continuations: [],
       dependentWork: [],
       validations: { started: [], settled: [] },
+      effects: [],
       authority: { took: [], withheld: [] },
       monetization: {
         pathsAdded: [],
@@ -826,6 +862,17 @@ export async function operate(
    * not, both of which happened above. Asking first would ask about last tick's
    * card and defer every decision by one pass.
    */
+  /*
+   * Before Brain acts, it finishes writing down what it already did.
+   *
+   * A provider that confirmed an effect whose record never landed — a crash,
+   * a write that failed, a grant revoked between the receipt and the record —
+   * leaves a SUCCEEDED operation and no action. Recording it first is what
+   * stops the pass below mistaking an unrecorded contact for an uncontacted
+   * buyer. It sends nothing, and it runs in every sprint state, because
+   * writing down history is not new discovery.
+   */
+  const effects = await reconcileConfirmedEffects(projectId);
   const authority = await advanceWithinAuthority(projectId);
   /*
    * And the possibility ledger, last, reading everything the passes above
@@ -853,6 +900,7 @@ export async function operate(
     continuations,
     dependentWork,
     validations,
+    effects,
     authority,
     monetization,
   };

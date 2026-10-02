@@ -140,5 +140,41 @@ export async function readNeedCondition(need: CashNeed): Promise<NeedVerificatio
     };
   }
 
+  /*
+   * A confirmed effect recorded against a piece it no longer fitted
+   * (`recordConfirmedEffect`). A contact on a piece that stayed READY is
+   * answered once execution has begun — by Brain from the recorded contact,
+   * or by anybody. What an invoice or a payment means for a piece that has
+   * since been archived is a person's judgement, so that one has no reading.
+   */
+  if (need.requestKey.startsWith('effect-unapplied:') && need.opportunityId) {
+    const [, , action] = need.requestKey.split(':');
+    if (action !== 'CONTACT_BUYER') return null;
+    const opportunity = await getOpportunity(need.opportunityId);
+    if (!opportunity) return null;
+    const begun = ['EXECUTING', 'DELIVERING', 'COLLECTED'].includes(opportunity.state);
+    return {
+      holds: begun,
+      reading: begun
+        ? `Execution has begun: this is ${opportunity.state.toLowerCase()}.`
+        : `This is still ${opportunity.state.toLowerCase()}.`,
+    };
+  }
+
+  /* A confirmed effect no grant could be named for: settled once its receipt is recorded. */
+  if (need.requestKey.startsWith('effect-unattributed:') && need.opportunityId) {
+    const operationId = need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1);
+    const operation = await getOperation(operationId);
+    if (!operation?.resultRef) return null;
+    const receipt = operation.resultRef;
+    const recorded = (await actionsFor(need.opportunityId)).some((one) => one.reference === receipt);
+    return {
+      holds: recorded,
+      reading: recorded
+        ? `An action carrying ${receipt} is on the record.`
+        : `Nothing carrying ${receipt} is on the record yet.`,
+    };
+  }
+
   return null;
 }

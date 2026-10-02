@@ -230,6 +230,8 @@ describe('A02: a CONFIRMED adapter', () => {
       opportunityId: 'opp_fixed',
       payer: 'Somebody',
       channel: 'Their address',
+      authorityId: 'cau_fixed',
+      stateAtSend: 'READY',
     };
 
     const first = await sendContactBuyer(request);
