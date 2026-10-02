@@ -41,6 +41,7 @@ import { LaborView } from './Labor.tsx';
 import { PuzzlesView } from './Puzzles.tsx';
 import { IndustryView } from './Industry.tsx';
 import { DealflowScreen } from './Dealflow.tsx';
+import { DesignKernel } from './DesignKernel.tsx';
 import {
   FleetView,
   ProjectView,
@@ -110,6 +111,7 @@ const SECTIONS = [
    * does.
    */
   { name: 'PUZZLES' as const, label: 'Puzzles', primary: false },
+  /*
    * Industries is secondary for the same reason as its two neighbours: what
    * the economy looks like is a question about where to look rather than a
    * destination somebody steers from hourly, and its horizon outlives any one
@@ -117,12 +119,21 @@ const SECTIONS = [
    * Brain that does research, software and everything else.
    */
   { name: 'INDUSTRIES' as const, label: 'Industries', primary: false },
+  /*
    * Dealflow is secondary for the same reason as its three neighbours: it is a
    * standing kernel a person examines rather than a destination steered
    * hourly, and promoting it would rebuild the thumb bar around one reading in
    * a Brain that does research, software and everything else.
    */
   { name: 'DEALFLOW' as const, label: 'Dealflow', primary: false },
+  /*
+   * The design kernel's own operator surface, secondary for `PEOPLE`'s
+   * reason rather than Cash's or Machines': §42's tables carry no project, so
+   * this is Brain-wide administrative reading rather than a destination
+   * anybody steers a project from — a person opens it when they want to know
+   * what the kernel has found or learned, not on every visit.
+   */
+  { name: 'DESIGN' as const, label: 'Design', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -589,6 +600,7 @@ export function RussellShell({
         {route.name === 'PUZZLES' ? <PuzzlesView projectId={projectId} /> : null}
         {route.name === 'INDUSTRIES' ? <IndustryView projectId={projectId} /> : null}
         {route.name === 'DEALFLOW' ? <DealflowScreen projectId={projectId} /> : null}
+        {route.name === 'DESIGN' ? <DesignKernel /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (
