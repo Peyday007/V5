@@ -408,6 +408,26 @@ const OVERRIDES: Override[] = [
   // of the project can see who does the work here and why.
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'PATCH', level: 'ADMIN' },
+  // ---------------------------------------------------------------------
+  // Work done through people (§51)
+  // ---------------------------------------------------------------------
+  //
+  // Opening work for a person, designating a coordinator, recording money,
+  // withdrawing an engagement, accepting a result and stopping the work are
+  // ADMIN: each is a decision *about* whose time and whose money the project
+  // commits. Everything else a coordinator does — finding candidates,
+  // preparing terms, saying an ask went out, posting updates, handing in and
+  // reviewing — takes the default WRITE. The engagement decision itself is a
+  // Needs You card whose answer `resolveEngagementDecision` refuses to carry
+  // out unless the answerer is an administrator of the project, re-read from
+  // rows at that moment.
+  //
+  // No entry names a worker scope, and every handler calls `requirePerson`.
+  // The assignee's own door (`/api/assignments`) is not project-scoped: it is
+  // decided by the engagement's assignee against the principal.
+  { pattern: /^\/api\/projects\/[^/]+\/human-work\/orders$/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/human-work\/orders\/[^/]+\/(coordinator|accept|cancel)$/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/human-work\/engagements\/[^/]+\/(costs|withdraw)$/, method: 'POST', level: 'ADMIN' },
   // The manufacturing kernel's programme (§39)
   // ---------------------------------------------------------------------
   //
