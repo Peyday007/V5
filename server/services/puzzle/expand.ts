@@ -34,6 +34,7 @@
  * plausible thing. Attaching it would be Brain deciding what a fact was about,
  * which is the confidently wrong answer §25 records.
  */
+import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { listMissions } from '../../repos/russellMissions.ts';
@@ -84,6 +85,66 @@ import type {
 const OPENED = 'PUZZLE_ROUND_OPENED';
 const FILED = 'PUZZLE_FINDINGS_FILED';
 
+/*
+ * `puzzle_rounds_unique` cannot constrain a round key on its own.
+ *
+ * The index is `(project_id, purpose, format_key, product_class, round)`, and
+ * `product_class` is NULL for every purpose but `ECONOMICS` (the schema's own
+ * `CHECK ((purpose = 'ECONOMICS') = (product_class IS NOT NULL))`). A unique
+ * index over a NULL column does not constrain — two rows that agree on every
+ * other column and both carry NULL there are not equal to a unique index,
+ * whatever the backend. `idx_industry_rounds_ask`, `idx_deal_rounds_ask` and
+ * `idx_manufacturing_rounds_ask` all guard exactly this with `COALESCE`;
+ * `puzzle_rounds_unique` does not, and this file cannot add it — a migration
+ * is out of scope for what fixes here.
+ *
+ * On SQLite this is latent rather than live: the adapter holds one connection
+ * behind a mutex for a transaction's whole duration (`sqlite.ts`), so two
+ * calls to `openPuzzleAsks` are fully serialised and the second one's
+ * `openPuzzleRound` always reads the first one's already-committed row before
+ * deciding whether it created anything. On Postgres, where every transaction
+ * runs on its own pooled client under READ COMMITTED, two genuinely
+ * concurrent calls for the identical non-ECONOMICS key can each insert
+ * successfully and each read back only their own uncommitted row before the
+ * other commits — so both compute `created: true` and both commit a distinct
+ * round and a distinct candidate for one question.
+ *
+ * `serializeCash` (`repos/cashLock.ts`) already answers the identical shape of
+ * problem for money — "a ranked sum cannot count a row it cannot see" — with
+ * a guarded `UPDATE` on a row every caller takes in turn. That primitive is
+ * scoped to a project and a currency, which is not this key, and it lives in a
+ * repo file this fix may not touch. A Postgres transaction-scoped advisory
+ * lock is the same idea with no supporting table: taken first, inside the
+ * same transaction the candidate and the round already share, so the second
+ * caller for one key blocks until the first commits or rolls back and only
+ * then does its own read of `openPuzzleRound`'s conflict check — which, with
+ * the first caller's row now visible, correctly reports `created: false`.
+ * SQLite needs none of this, because it never had the problem: the lock is a
+ * no-op there.
+ */
+async function lockPuzzleRoundKey(key: {
+  projectId: string;
+  purpose: string;
+  formatKey: string | null;
+  productClass: string | null;
+  round: number;
+}): Promise<void> {
+  const db = getDb();
+  if (db.dialect !== 'postgres') return;
+  // A fixed namespace keeps this class of lock apart from any other advisory
+  // lock this Brain ever takes, and the second key is a 32-bit hash of the
+  // round's own natural key — every column the unique index names, matched
+  // exactly, so two asks that differ in any of them take different locks.
+  const NAMESPACE = 0x50_5a_51_4c; // 'PZQL', arbitrary and stable
+  const material = `${key.projectId}:${key.purpose}:${key.formatKey ?? '-'}:${key.productClass ?? '-'}:${key.round}`;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < material.length; i++) {
+    hash ^= material.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  await db.run('SELECT pg_advisory_xact_lock($1, $2)', [NAMESPACE, hash | 0]);
+}
+
 export interface OpenedPuzzleRound {
   roundId: string;
   purpose: Ask['purpose'];
@@ -96,12 +157,26 @@ export interface OpenedPuzzleRound {
 }
 
 /**
+ * A round insert lost its `ON CONFLICT DO NOTHING` race.
+ *
+ * Thrown to roll back the candidate created in the same transaction, never
+ * caught outside `openPuzzleAsks`'s own loop.
+ */
+class RoundNotOpened extends Error {}
+
+/**
  * Turn allocated asks into Russell candidates and rounds.
  *
- * The round is written *after* the candidate and the insert is
- * `ON CONFLICT DO NOTHING`, so a tick that dies between the two leaves a
- * candidate nothing points at — harmless, because the next tick's insert
- * collides on the same key and the orphan is never asked anything.
+ * The candidate and its round commit together, in one transaction. A round
+ * insert that loses its `ON CONFLICT DO NOTHING` race means another pass
+ * already opened this exact question, and the candidate this call just
+ * created would otherwise be left committed with nothing pointing at it —
+ * **not** harmless: the candidate is created `SHARED` with a project, and
+ * Russell's tick judges and can launch any unjudged `SHARED` candidate,
+ * orphan or not. So a crash between the two writes, or two passes racing on
+ * the same round key, could produce a research mission Brain pays for while
+ * no round points at it and its answer is never absorbed. Rolling both writes
+ * back together makes a lost race exactly as if this call had never happened.
  */
 export async function openPuzzleAsks(input: {
   projectId: string;
@@ -116,37 +191,57 @@ export async function openPuzzleAsks(input: {
     const composed = compose({ ask, objective: mode.objective, snapshot: input.snapshot });
     if (!composed) continue;
 
-    const candidate = await createCandidate({
-      projectId: input.projectId,
-      visibility: 'SHARED',
-      conversationId: null,
-      sourceMessageId: null,
-      title: ask.round === 1 ? composed.title : `${composed.title} (round ${ask.round})`,
-      statement: composed.question,
-    });
+    let round: PuzzleRound;
+    try {
+      round = await getDb().transaction(async (): Promise<PuzzleRound> => {
+        // First, so nothing below it reads a value this lock is meant to
+        // protect before the lock is actually held.
+        await lockPuzzleRoundKey({
+          projectId: input.projectId,
+          purpose: ask.purpose,
+          formatKey: ask.formatKey,
+          productClass: ask.productClass,
+          round: ask.round,
+        });
 
-    const opened = await openPuzzleRound({
-      projectId: input.projectId,
-      cashModeId: mode.id,
-      purpose: ask.purpose,
-      formatKey: ask.formatKey,
-      productClass: ask.productClass,
-      candidateId: candidate.id,
-      round: ask.round,
-    });
-    if (!opened.created) continue;
+        const candidate = await createCandidate({
+          projectId: input.projectId,
+          visibility: 'SHARED',
+          conversationId: null,
+          sourceMessageId: null,
+          title: ask.round === 1 ? composed.title : `${composed.title} (round ${ask.round})`,
+          statement: composed.question,
+        });
 
+        const result = await openPuzzleRound({
+          projectId: input.projectId,
+          cashModeId: mode.id,
+          purpose: ask.purpose,
+          formatKey: ask.formatKey,
+          productClass: ask.productClass,
+          candidateId: candidate.id,
+          round: ask.round,
+        });
+        if (!result.created) throw new RoundNotOpened();
+        return result.round;
+      });
+    } catch (error) {
+      if (error instanceof RoundNotOpened) continue;
+      throw error;
+    }
+
+    const candidateId = round.candidateId;
     await recordCashEvent({
       projectId: input.projectId,
       kind: OPENED,
       actorRef: 'BRAIN',
       summary: `${ask.purpose} round ${ask.round} opened: ${composed.title}.`,
       detail: {
-        roundId: opened.round.id,
+        roundId: round.id,
         purpose: ask.purpose,
         formatKey: ask.formatKey,
         productClass: ask.productClass,
-        candidateId: candidate.id,
+        candidateId,
         round: ask.round,
         /*
          * The allocator's own reason, recorded beside the work it produced —
@@ -159,11 +254,11 @@ export async function openPuzzleAsks(input: {
     });
 
     out.push({
-      roundId: opened.round.id,
+      roundId: round.id,
       purpose: ask.purpose,
       formatKey: ask.formatKey,
       productClass: ask.productClass,
-      candidateId: candidate.id,
+      candidateId,
       round: ask.round,
       question: composed.question,
       why: ask.why,

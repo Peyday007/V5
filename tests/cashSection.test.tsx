@@ -1653,6 +1653,228 @@ describe('the money, and the work', () => {
   });
 });
 
+/**
+ * `recordFurtherAction` (server/services/cash/actions.ts) has somewhere to be
+ * recorded on the Cash page: a quote, an invoice, a payment accepted, on a
+ * piece already executing or delivering. Before this the only offered move on
+ * such a piece was `execute`'s own "Record the first move" — which cannot be
+ * pressed twice, so dealflow's QUOTING stage (§45, ACTION_STAGE) had nowhere
+ * to come from on this screen.
+ */
+describe('a further commercial action, once execution has begun', () => {
+  function executingView(authorityOver: Record<string, unknown> = {}): Record<string, unknown> {
+    return view({
+      authority: {
+        exists: false,
+        id: null,
+        lines: [],
+        maxConcurrent: 3,
+        heldCents: 0,
+        maxCommittedCents: 0,
+        maxPerActionCents: 0,
+        committedCents: 0,
+        spentCents: 0,
+        allowedActions: [],
+        ...authorityOver,
+      },
+      myCurrentWork: {
+        ...(view().myCurrentWork as Record<string, unknown>),
+        executeNow: [
+          {
+            opportunity: opportunity({
+              id: 'cop_2',
+              title: 'A published fleet expansion, underway',
+              state: 'EXECUTING',
+            }),
+            disposition: 'EXECUTE_NOW',
+            because: 'It is being executed.',
+            missing: [],
+            tier: tier(),
+          },
+        ],
+        waiting: [],
+      },
+    });
+  }
+
+  /*
+   * Scoped to `.rs-cash-work`, because the same sentence can legitimately
+   * appear twice on this page: `authority.lines` is also what the spending
+   * limits card under *Money detail* renders verbatim. A bare `screen.getBy*`
+   * here would be asserting there is only one reader of that array, which was
+   * never the claim.
+   */
+  function yourWork(): ReturnType<typeof within> {
+    return within(document.querySelector('.rs-cash-work') as HTMLElement);
+  }
+
+  it('offers the control on an executing opportunity, and posts what was chosen on confirm', async () => {
+    base({
+      [VIEW]: {
+        body: executingView({
+          exists: true,
+          lines: ['It authorizes: CONTACT_BUYER, QUOTE_AND_INVOICE.'],
+          allowedActions: ['CONTACT_BUYER', 'QUOTE_AND_INVOICE'],
+        }),
+      },
+      'POST /api/cash/opportunities/cop_2/record-action': {
+        body: { opportunity: {}, message: 'Recorded.' },
+      },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /record a further action/i })).toBeTruthy(),
+    );
+    const button = yourWork().getByRole('button', {
+      name: /record a further action/i,
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+
+    fireEvent.click(button);
+    // Recording it, unlike executing, never says the piece is moving anywhere
+    // — asserted while the panel it is written on is still open.
+    expect(
+      yourWork().getByText(/Nothing about this piece moves — only its history does/i),
+    ).toBeTruthy();
+    fireEvent.change(yourWork().getByLabelText(/which action did you take/i), {
+      target: { value: 'QUOTE_AND_INVOICE' },
+    });
+    fireEvent.change(yourWork().getByLabelText(/who you contacted or what you sent/i), {
+      target: { value: 'Sent the quote and invoice.' },
+    });
+    await act(async () => {
+      fireEvent.click(yourWork().getByRole('button', { name: 'Confirm' }));
+    });
+    /*
+     * No `occurrence` field: the server derives it from `detail` and
+     * `reference` (`contentOccurrence`), rather than the client inventing a
+     * literal that collided with every later occurrence of the same action.
+     */
+    expect(bodies['POST /api/cash/opportunities/cop_2/record-action']).toEqual({
+      action: 'QUOTE_AND_INVOICE',
+      detail: 'Sent the quote and invoice.',
+    });
+  });
+
+  it('carries a reference in its own field, so two similar-sounding occurrences can be told apart', async () => {
+    // A reviewer found that this panel had no separate reference field at
+    // all: the label promised "any reference it has outside Brain" and then
+    // folded whatever was typed into `detail` alone, so `reference` was
+    // always sent as nothing. Two genuinely distinct occurrences typed with
+    // near-identical wording had no way to tell the server they differed.
+    // This is the fix, asserted as what actually reaches the wire.
+    base({
+      [VIEW]: {
+        body: executingView({
+          exists: true,
+          lines: ['It authorizes: CONTACT_BUYER, QUOTE_AND_INVOICE.'],
+          allowedActions: ['CONTACT_BUYER', 'QUOTE_AND_INVOICE'],
+        }),
+      },
+      'POST /api/cash/opportunities/cop_2/record-action': {
+        body: { opportunity: {}, message: 'Recorded.' },
+      },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /record a further action/i })).toBeTruthy(),
+    );
+    fireEvent.click(
+      yourWork().getByRole('button', { name: /record a further action/i }),
+    );
+    fireEvent.change(yourWork().getByLabelText(/which action did you take/i), {
+      target: { value: 'QUOTE_AND_INVOICE' },
+    });
+    fireEvent.change(yourWork().getByLabelText(/who you contacted or what you sent/i), {
+      target: { value: 'Sent the invoice.' },
+    });
+    /*
+     * The reference is a field of its own — not a suffix appended to
+     * `detail` — so filling it must not change what `detail` reads.
+     */
+    fireEvent.change(yourWork().getByLabelText(/any reference it has outside brain/i), {
+      target: { value: 'inv-0042' },
+    });
+    await act(async () => {
+      fireEvent.click(yourWork().getByRole('button', { name: 'Confirm' }));
+    });
+    expect(bodies['POST /api/cash/opportunities/cop_2/record-action']).toEqual({
+      action: 'QUOTE_AND_INVOICE',
+      detail: 'Sent the invoice.',
+      reference: 'inv-0042',
+    });
+  });
+
+  it('renders disabled with the server’s own reason when the grant covers no action', async () => {
+    base({
+      [VIEW]: {
+        body: executingView({
+          exists: true,
+          lines: ['It authorizes no commercial action at all, so nothing can be committed under it.'],
+          allowedActions: [],
+        }),
+      },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /record a further action/i })).toBeTruthy(),
+    );
+    const button = yourWork().getByRole('button', {
+      name: /record a further action/i,
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(
+      yourWork().getByText(
+        'It authorizes no commercial action at all, so nothing can be committed under it.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('names the plain fact when no grant exists at all, without composing a reason for it', async () => {
+    base({ [VIEW]: { body: executingView() } });
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /record a further action/i })).toBeTruthy(),
+    );
+    const button = yourWork().getByRole('button', {
+      name: /record a further action/i,
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(yourWork().getByText(/No commercial authority exists for this project/i)).toBeTruthy();
+  });
+
+  it('records a payment and a settlement against this opportunity, so “Money is in” can be answered', async () => {
+    const MONEY = `POST /api/projects/${PROJECT}/cash/money`;
+    base({
+      [VIEW]: { body: executingView() },
+      [MONEY]: { body: { entry: { id: 'cme_1' }, message: 'Recorded.' } },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(yourWork().getByRole('button', { name: /record that it settled/i })).toBeTruthy(),
+    );
+    fireEvent.click(yourWork().getByRole('button', { name: /record that it settled/i }));
+    const confirm = yourWork().getByRole('button', { name: 'Confirm' }) as HTMLButtonElement;
+    // No reference, no entry: a settlement nobody can trace is not cash.
+    fireEvent.change(yourWork().getByLabelText(/amount, in usd/i), { target: { value: '750' } });
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(yourWork().getByLabelText(/^reference$/i), {
+      target: { value: 'po_123' },
+    });
+    await act(async () => {
+      fireEvent.click(yourWork().getByRole('button', { name: 'Confirm' }));
+    });
+    expect(bodies[MONEY]).toEqual({
+      kind: 'SETTLEMENT',
+      amountCents: 75_000,
+      currency: 'USD',
+      verifiedReference: 'po_123',
+      opportunityId: 'cop_2',
+      idempotencyKey: 'settlement:cop_2:po_123',
+    });
+  });
+});
+
 describe('winding down', () => {
   it('will not move the lifecycle without a reason, and shows the server’s consequence', async () => {
     base({
@@ -1854,6 +2076,7 @@ describe('view parity between an administrator and an ordinary member', () => {
       'decisionsForMe',
       'engineCards',
       'executionPaths',
+      'offers',
       'provenance',
       'forecast',
       'priceCents',
@@ -2284,5 +2507,103 @@ describe('no Cash card asks a person to narrate Brain-owned work', () => {
     expect(
       screen.getAllByText(/a fact about the world rather than a decision of yours/i).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('the offer a person could send', () => {
+  const placement = {
+    opportunity: opportunity(),
+    disposition: 'EXECUTE_NOW',
+    because: 'Ready, and a slot is free.',
+    missing: [],
+  };
+
+  it('renders the server-composed offer read-only, with a copy control', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const text = 'To: Marguerite Vance\nVia: email\nRe: A paid intake repair\n\nPrice: USD 750.00';
+    base({
+      [VIEW]: {
+        body: view({
+          myCurrentWork: {
+            ...(view().myCurrentWork as Record<string, unknown>),
+            executeNow: [placement],
+            offers: {
+              cop_1: {
+                opportunityId: 'cop_1',
+                sendable: true,
+                recipient: {
+                  payer: {
+                    key: 'payer',
+                    label: 'Payer',
+                    value: 'Marguerite Vance',
+                    source: 'PERSON',
+                    claimId: null,
+                  },
+                  channel: {
+                    key: 'access',
+                    label: 'Contact channel',
+                    value: 'email',
+                    source: 'RECORDED',
+                    claimId: null,
+                  },
+                },
+                lines: [
+                  {
+                    key: 'price',
+                    label: 'Price',
+                    value: 'USD 750.00',
+                    source: 'EVIDENCE',
+                    claimId: 'rcl_1',
+                  },
+                ],
+                missing: [],
+                unstated: [{ key: 'paymentTerms', label: 'Payment terms' }],
+                text,
+              },
+            },
+          },
+        }),
+      },
+    });
+    await mount();
+    await waitFor(() =>
+      expect(document.querySelector('.rs-cash-work .rs-cash-offer')).toBeTruthy(),
+    );
+    const offer = within(document.querySelector('.rs-cash-work .rs-cash-offer') as HTMLElement);
+    expect(offer.getByText(/Send to Marguerite Vance via email/)).toBeTruthy();
+    expect(offer.getByText('from a source')).toBeTruthy();
+    expect(offer.getByText(/Not stated on the card/)).toBeTruthy();
+    fireEvent.click(offer.getByRole('button', { name: /copy offer/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(text));
+    await waitFor(() => expect(offer.getByText(/Nothing has been sent/)).toBeTruthy());
+  });
+
+  it('shows what is missing and no text when the draft is refused', async () => {
+    base({
+      [VIEW]: {
+        body: view({
+          myCurrentWork: {
+            ...(view().myCurrentWork as Record<string, unknown>),
+            executeNow: [placement],
+            offers: {
+              cop_1: {
+                opportunityId: 'cop_1',
+                sendable: false,
+                recipient: null,
+                lines: [],
+                missing: [{ key: 'access', label: 'Contact channel' }],
+                unstated: [],
+                text: null,
+              },
+            },
+          },
+        }),
+      },
+    });
+    await mount();
+    await waitFor(() => expect(screen.getByText(/not composed yet/i)).toBeTruthy());
+    expect(screen.getByText(/contact channel/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /copy offer/i })).toBeNull();
   });
 });

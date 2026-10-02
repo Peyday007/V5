@@ -211,7 +211,7 @@ jobs:
 
           echo "fleet $args"
           set +e
-          flyctl ssh console --app "$app" -C "sh /app/scripts/fleet.sh $args" 2>&1 | tee fleet.txt
+          flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000 sh /app/scripts/fleet.sh $args" 2>&1 | tee fleet.txt
           set -e
           # The verdict comes from a line the command printed, not from an exit
           # code that had to survive an SSH session, a shell and a CLI.

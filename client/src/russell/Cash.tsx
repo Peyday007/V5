@@ -27,6 +27,8 @@
 import { useState } from 'react';
 import { useAsync } from './useAsync.ts';
 import { cashPage, modeState, type CashPage } from './cashPage.ts';
+import { Api } from '../lib/api.ts';
+import type { Project } from '../../../server/domain/types.ts';
 import {
   CashApi,
   type CashModeState,
@@ -35,6 +37,7 @@ import {
   type CashViewReading,
   type DerivedFigureView,
   type EngineCardView,
+  type OfferDraft,
   type Placement,
   type ReviewItem,
 } from '../lib/cashApi.ts';
@@ -1381,7 +1384,15 @@ function MoneyPicture({ view }: { view: CashView }): JSX.Element {
 }
 
 /** My cash: the six figures, kept apart, each labelled with what it means. */
-function MyCash({ view }: { view: CashView }): JSX.Element {
+function MyCash({
+  page,
+  view,
+  onChanged,
+}: {
+  page: CashPage;
+  view: CashView;
+  onChanged(): void;
+}): JSX.Element {
   const p = view.myCash.position;
   const rows: { label: string; value: number; note: string }[] = [
     { label: 'Pipeline', value: p.pipelineCents, note: 'Agreed work. No cash received.' },
@@ -1466,7 +1477,248 @@ function MyCash({ view }: { view: CashView }): JSX.Element {
           ))}
         </ul>
       )}
+
+      <h4>Commitments</h4>
+      {view.myCash.commitments.length === 0 ? (
+        <p className="rs-hint">Nothing has been committed yet.</p>
+      ) : (
+        <ul className="rs-list">
+          {view.myCash.commitments.map((commitment) => (
+            <li key={commitment.id} className="rs-row">
+              <span className="rs-item-title">
+                {money(commitment.amountCents, commitment.currency)} &mdash; {commitment.purpose}
+              </span>
+              <span className="rs-item-meta">
+                {commitment.state} &middot; stops at: {commitment.stopCondition}
+              </span>
+              {commitment.state === 'HELD' && page.capabilities.mayActOnJob ? (
+                <SettleCommitment commitment={commitment} onChanged={onChanged} />
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {page.capabilities.mayActOnJob ? (
+        <CommitSpendForm
+          projectId={view.mode!.projectId}
+          currency={p.currency}
+          allowedActions={view.authority.allowedActions}
+          hasGrant={view.authority.exists}
+          onChanged={onChanged}
+        />
+      ) : null}
     </section>
+  );
+}
+
+/**
+ * Commit part of the ceiling to a named obstacle.
+ *
+ * Offered only from the grant's own `allowedActions`, because a value outside
+ * it would ask the server a question whose answer is already known. With no
+ * live grant, or one that authorizes no action, this renders one sentence
+ * rather than a form that would be refused on submit — the same shape
+ * Authority's own no-grant branch uses, one card up.
+ */
+function CommitSpendForm({
+  projectId,
+  currency,
+  allowedActions,
+  hasGrant,
+  onChanged,
+}: {
+  projectId: string;
+  currency: string;
+  allowedActions: string[];
+  hasGrant: boolean;
+  onChanged(): void;
+}): JSX.Element {
+  const [action, setAction] = useState(allowedActions[0] ?? '');
+  const [amount, setAmount] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [expectedResult, setExpectedResult] = useState('');
+  const [stopCondition, setStopCondition] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  if (!hasGrant || allowedActions.length === 0) {
+    return (
+      <p className="rs-hint">
+        Nothing may be committed here. No standing commercial authority authorizes any action yet.
+      </p>
+    );
+  }
+
+  const amountCents = centsFromAmount(amount);
+  const complete =
+    action.trim().length > 0 &&
+    amountCents !== null &&
+    purpose.trim().length > 0 &&
+    expectedResult.trim().length > 0 &&
+    stopCondition.trim().length > 0;
+
+  async function run(): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await CashApi.commitSpend(projectId, {
+        action,
+        amountCents: amountCents!,
+        purpose: purpose.trim(),
+        expectedResult: expectedResult.trim(),
+        stopCondition: stopCondition.trim(),
+        // Built from what is being decided rather than from a clock, a
+        // random value or a request id, so submitting the identical decision
+        // twice sends the identical key both times.
+        idempotencyKey: `commit:${action}:${purpose.trim()}:${amountCents}`,
+      });
+      setDone('Committed. It counts against your ceiling until it is settled or released.');
+      setAmount('');
+      setPurpose('');
+      setExpectedResult('');
+      setStopCondition('');
+      onChanged();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rs-cash-actions">
+      <label className="rs-field-label" htmlFor="cash-commit-action">
+        What this commits to
+      </label>
+      <select id="cash-commit-action" value={action} onChange={(event) => setAction(event.target.value)}>
+        {allowedActions.map((one) => (
+          <option key={one} value={one}>
+            {one.toLowerCase().replace(/_/g, ' ')}
+          </option>
+        ))}
+      </select>
+      <label className="rs-field-label" htmlFor="cash-commit-amount">
+        How much, in {currency}
+      </label>
+      <input
+        id="cash-commit-amount"
+        inputMode="decimal"
+        value={amount}
+        onChange={(event) => setAmount(event.target.value)}
+      />
+      <label className="rs-field-label" htmlFor="cash-commit-purpose">
+        Purpose
+      </label>
+      <input
+        id="cash-commit-purpose"
+        value={purpose}
+        onChange={(event) => setPurpose(event.target.value)}
+      />
+      <label className="rs-field-label" htmlFor="cash-commit-expected">
+        What this is expected to produce
+      </label>
+      <input
+        id="cash-commit-expected"
+        value={expectedResult}
+        onChange={(event) => setExpectedResult(event.target.value)}
+      />
+      <label className="rs-field-label" htmlFor="cash-commit-stop">
+        Where it stops
+      </label>
+      <input
+        id="cash-commit-stop"
+        value={stopCondition}
+        onChange={(event) => setStopCondition(event.target.value)}
+      />
+      <button type="button" className="rs-button-quiet" disabled={busy || !complete} onClick={() => void run()}>
+        {busy ? 'Committing…' : 'Commit'}
+      </button>
+      {done ? <p className="rs-state rs-state-ok">{done}</p> : null}
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * The spend happened, so this records what it actually cost.
+ *
+ * Never released by a clock: settling is somebody saying the money was
+ * spent, which is what makes deployable cash actually fall.
+ */
+function SettleCommitment({
+  commitment,
+  onChanged,
+}: {
+  commitment: CashView['myCash']['commitments'][number];
+  onChanged(): void;
+}): JSX.Element {
+  const [asking, setAsking] = useState(false);
+  const [spent, setSpent] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  if (done) return <p className="rs-state rs-state-ok">{done}</p>;
+
+  if (!asking) {
+    return (
+      <button type="button" className="rs-button-quiet" onClick={() => setAsking(true)}>
+        Settle
+      </button>
+    );
+  }
+
+  const spentCents = centsFromAmount(spent);
+
+  async function run(): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await CashApi.settleCommitment(commitment.id, spentCents!, note.trim() || undefined);
+      setDone('Settled. Deployable cash is recomputed from the ledger.');
+      onChanged();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <label className="rs-field-label" htmlFor={`cash-settle-${commitment.id}`}>
+        What it actually cost, in {commitment.currency}
+      </label>
+      <input
+        id={`cash-settle-${commitment.id}`}
+        inputMode="decimal"
+        value={spent}
+        onChange={(event) => setSpent(event.target.value)}
+      />
+      <label className="rs-field-label" htmlFor={`cash-settle-note-${commitment.id}`}>
+        Note (optional)
+      </label>
+      <input
+        id={`cash-settle-note-${commitment.id}`}
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+      />
+      <button
+        type="button"
+        className="rs-button-quiet"
+        disabled={busy || spentCents === null}
+        onClick={() => void run()}
+      >
+        {busy ? 'Settling…' : 'Confirm'}
+      </button>
+      <button type="button" className="rs-linklike" onClick={() => setAsking(false)}>
+        Cancel
+      </button>
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+    </>
   );
 }
 
@@ -1705,10 +1957,24 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
             {placement.opportunity.nextAction ? (
               <p className="rs-item-meta">{placement.opportunity.nextAction}</p>
             ) : null}
+            {page.capabilities.mayViewPrivateJob ? (
+              <SendableOffer offer={work.offers?.[placement.opportunity.id]} />
+            ) : null}
             {page.capabilities.mayActOnJob ? (
               <Actions
                 placement={placement}
-                allowedActions={view.authority.allowedActions}
+                authority={view.authority}
+                onChanged={onChanged}
+              />
+            ) : null}
+            {page.capabilities.mayActOnJob &&
+            view.mode &&
+            (placement.opportunity.state === 'EXECUTING' ||
+              placement.opportunity.state === 'DELIVERING') ? (
+              <OpportunityMoney
+                projectId={view.mode.projectId}
+                opportunityId={placement.opportunity.id}
+                currency={view.myCash.position.currency}
                 onChanged={onChanged}
               />
             ) : null}
@@ -1716,6 +1982,136 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * The money a customer actually paid for this piece, recorded against it.
+ *
+ * *Money is in* refuses until a settlement is on the ledger for this very
+ * opportunity (invariant 37), so the page has to offer the two entries that
+ * make it true — otherwise that control would be a refusal nobody could
+ * answer from here. Both are the existing `/cash/money` route with the
+ * opportunity named; nothing about the ledger's own checks moved: the
+ * reference is still required for each, accepting a payment is still asked
+ * of the grant, and the currency is the sprint's. The key is built from the
+ * kind, the opportunity and the reference rather than from a clock, so a
+ * retry after a lost response is the same entry once.
+ */
+function OpportunityMoney({
+  projectId,
+  opportunityId,
+  currency,
+  onChanged,
+}: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+  onChanged(): void;
+}): JSX.Element {
+  const [kind, setKind] = useState<'CUSTOMER_PAYMENT' | 'SETTLEMENT' | null>(null);
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  const amountCents = centsFromAmount(amount);
+
+  async function run(): Promise<void> {
+    if (!kind || amountCents === null || !reference.trim()) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await CashApi.recordMoney(projectId, {
+        kind,
+        amountCents,
+        currency,
+        verifiedReference: reference.trim(),
+        opportunityId,
+        idempotencyKey: `${kind === 'SETTLEMENT' ? 'settlement' : 'payment'}:${opportunityId}:${reference.trim()}`,
+      });
+      setDone(
+        kind === 'SETTLEMENT'
+          ? 'Settlement recorded. It now counts as available funds, and “Money is in” can be recorded.'
+          : 'Payment recorded. It is not available funds until it settles.',
+      );
+      setKind(null);
+      setAmount('');
+      setReference('');
+      onChanged();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rs-cash-opportunity-money">
+      {done ? <p className="rs-state rs-state-ok">{done}</p> : null}
+      {kind === null ? (
+        <>
+          <button
+            type="button"
+            className="rs-button-quiet"
+            onClick={() => {
+              setKind('CUSTOMER_PAYMENT');
+              setDone(null);
+            }}
+          >
+            Record a payment received
+          </button>
+          <button
+            type="button"
+            className="rs-button-quiet"
+            onClick={() => {
+              setKind('SETTLEMENT');
+              setDone(null);
+            }}
+          >
+            Record that it settled
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="rs-hint">
+            {kind === 'SETTLEMENT'
+              ? 'The money reached the account and is usable. Use the payout or bank reference.'
+              : 'The customer paid. Use the payment provider’s or bank’s reference — a payment nobody can trace is pipeline, not cash.'}
+          </p>
+          <label className="rs-field-label" htmlFor={`cash-om-amount-${opportunityId}`}>
+            Amount, in {currency}
+          </label>
+          <input
+            id={`cash-om-amount-${opportunityId}`}
+            inputMode="decimal"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+          />
+          <label className="rs-field-label" htmlFor={`cash-om-ref-${opportunityId}`}>
+            Reference
+          </label>
+          <input
+            id={`cash-om-ref-${opportunityId}`}
+            value={reference}
+            onChange={(event) => setReference(event.target.value)}
+          />
+          <button
+            type="button"
+            className="rs-button-quiet"
+            disabled={busy || amountCents === null || reference.trim().length === 0}
+            onClick={() => void run()}
+          >
+            {busy ? 'Recording…' : 'Confirm'}
+          </button>
+          <button type="button" className="rs-linklike" onClick={() => setKind(null)}>
+            Cancel
+          </button>
+        </>
+      )}
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+    </div>
   );
 }
 
@@ -1826,7 +2222,7 @@ function BestOpportunities({
                   {view && placement && page.capabilities.mayActOnJob ? (
                     <Actions
                       placement={placement}
-                      allowedActions={view.authority.allowedActions}
+                      authority={view.authority}
                       onChanged={onChanged}
                     />
                   ) : null}
@@ -1983,7 +2379,7 @@ function Details({ page, onChanged }: { page: CashPage; onChanged(): void }): JS
         {view ? (
           <>
             <MoneyPicture view={view} />
-            <MyCash view={view} />
+            <MyCash page={page} view={view} onChanged={onChanged} />
           </>
         ) : (
           <p className="rs-hint">
@@ -2134,7 +2530,7 @@ function Portfolio({
                   {view && placement && page.capabilities.mayActOnJob ? (
                     <Actions
                       placement={placement}
-                      allowedActions={view.authority.allowedActions}
+                      authority={view.authority}
                       onChanged={onChanged}
                     />
                   ) : null}
@@ -2334,20 +2730,120 @@ function EngineCard({
  * choice does, cannot be styled to the 44px target the rest of the shell keeps,
  * and on a phone covers the thing it is asking about.
  */
+/**
+ * The offer a person could send, exactly as the server composed it.
+ *
+ * Read-only, and it composes nothing: every line is the card's own answer and
+ * the text is the server's. A draft with anything required missing has no
+ * text, so the only thing on the screen is what is missing — there is no
+ * placeholder here that could be copied and sent by accident. Copying sends
+ * nothing; contacting a buyer is still an action recorded under a grant.
+ */
+const OFFER_SOURCE_LABEL: Record<string, string> = {
+  EVIDENCE: 'from a source',
+  RECOMMENDATION: "Brain's proposal",
+  PERSON: 'decided by a person',
+  RECORDED: 'recorded on the card',
+};
+
+function SendableOffer({ offer }: { offer: OfferDraft | undefined }): JSX.Element | null {
+  const [copied, setCopied] = useState<'yes' | 'failed' | null>(null);
+  if (!offer) return null;
+
+  if (!offer.sendable || offer.text === null) {
+    return (
+      <div className="rs-cash-offer">
+        <p className="rs-item-meta">
+          <strong>Offer to send:</strong> not composed yet. The card does not yet state{' '}
+          {offer.missing.map((gap) => gap.label.toLowerCase()).join(', ')}, and Brain will not
+          fill a blank in an offer.
+        </p>
+      </div>
+    );
+  }
+
+  const text = offer.text;
+  const copy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied('yes');
+    } catch {
+      setCopied('failed');
+    }
+  };
+
+  return (
+    <div className="rs-cash-offer">
+      <p className="rs-item-meta">
+        <strong>Offer to send</strong>, composed only from this card.
+        {offer.recipient
+          ? ` Send to ${offer.recipient.payer.value} via ${offer.recipient.channel.value}.`
+          : ''}
+      </p>
+      <ul className="rs-list">
+        {offer.lines.map((line) => (
+          <li key={line.key}>
+            <span className="rs-item-meta">{line.label}</span> {line.value}{' '}
+            <span className="rs-badge">{OFFER_SOURCE_LABEL[line.source] ?? line.source}</span>
+          </li>
+        ))}
+      </ul>
+      {offer.unstated.length > 0 ? (
+        <p className="rs-hint">
+          Not stated on the card, so not in the offer:{' '}
+          {offer.unstated.map((gap) => gap.label.toLowerCase()).join(', ')}.
+        </p>
+      ) : null}
+      <button type="button" onClick={() => void copy()}>
+        Copy offer
+      </button>
+      {copied === 'yes' ? <span className="rs-hint"> Copied. Nothing has been sent.</span> : null}
+      {copied === 'failed' ? (
+        <span className="rs-hint"> This browser refused the clipboard; select the text instead.</span>
+      ) : null}
+      <pre className="rs-cash-offer-text">{text}</pre>
+    </div>
+  );
+}
+
 function Actions({
   placement,
-  allowedActions,
+  authority,
   onChanged,
 }: {
   placement: Placement;
-  allowedActions: string[];
+  authority: CashView['authority'];
   onChanged(): void;
 }): JSX.Element | null {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  /*
+   * A reviewer found that this panel's single box promised "any reference it
+   * has outside Brain" and then folded whatever was typed into `detail`
+   * alone, so `contentOccurrence` (server/services/cash/opportunities.ts)
+   * never actually received one: every confirm from this screen sent
+   * `reference: undefined`, and two genuinely distinct occurrences typed with
+   * similar wording had nothing to tell them apart with. This is its own
+   * field now, wired through separately, so a person has somewhere to put the
+   * invoice number or confirmation code that actually distinguishes one
+   * occurrence from the next — and leaving it blank on two that read
+   * identically is still, correctly, the same claim: nobody has said they
+   * differ.
+   */
+  const [reference, setReference] = useState('');
+  const allowedActions = authority.allowedActions;
   const [performed, setPerformed] = useState(allowedActions[0] ?? 'CONTACT_BUYER');
+  /*
+   * The destination list for `reoffer`, fetched only once somebody actually
+   * opens that control — the other two transitions never need it, and most
+   * opportunities are never DECLINED, so fetching it for every row in the
+   * portfolio would be a request nobody asked for.
+   */
+  const [destinations, setDestinations] = useState<Project[] | null>(null);
+  const [destinationsError, setDestinationsError] = useState<string | null>(null);
+  const [toProjectId, setToProjectId] = useState('');
   const state = placement.opportunity.state;
 
   /*
@@ -2356,9 +2852,29 @@ function Actions({
    * `REASON` is a sentence kept on the record. `ACTION` is the correction §3
    * asked for: executing means the transaction is being pursued, so the call
    * has to say what was actually done, and the control asks rather than
-   * pressing a button that writes the state anyway.
+   * pressing a button that writes the state anyway. `REASON_AND_PROJECT` is
+   * the same reason, plus which private operation the opening moves to —
+   * `reoffer` is a copy into another project, never a move, so the server
+   * still needs to know which one.
+   *
+   * A control the grant cannot cover is disabled rather than offered, naming
+   * the server's own reason — §35's rule: a refusal somebody could not have
+   * predicted teaches them the refusal is arbitrary. `authority.lines` is
+   * `describeAuthority`'s own account of the grant, composed server-side, and
+   * `authority.exists` is the fact a grant exists at all; nothing here
+   * composes a sentence of its own about why.
    */
-  const available: { action: string; label: string; asks?: 'REASON' | 'ACTION' }[] = [];
+  const noAuthorityReason = authority.exists
+    ? authority.lines.join(' ')
+    : 'No commercial authority exists for this project yet, so nothing here can be recorded ' +
+      'as authorized.';
+  const available: {
+    action: string;
+    label: string;
+    asks?: 'REASON' | 'ACTION' | 'REASON_AND_PROJECT';
+    disabled?: boolean;
+    disabledReason?: string;
+  }[] = [];
   if (state === 'DISCOVERED' || state === 'EVIDENCE_CARD') {
     /*
      * *Mark ready to test* is offered only where it could succeed.
@@ -2384,9 +2900,46 @@ function Actions({
   if (state === 'READY') {
     available.push({ action: 'execute', label: 'Record the first move', asks: 'ACTION' });
   }
+  if (state === 'EXECUTING' || state === 'DELIVERING') {
+    /*
+     * Everything a person does after execution has begun and before the
+     * money is collected: a quote, an invoice, a payment accepted.
+     * `recordFurtherAction` records it without moving the piece anywhere, so
+     * this shares the same `asks: 'ACTION'` panel `execute` already has.
+     */
+    const blocked = allowedActions.length === 0;
+    available.push({
+      action: 'record-action',
+      label: 'Record a further action',
+      asks: 'ACTION',
+      disabled: blocked,
+      disabledReason: blocked ? noAuthorityReason : undefined,
+    });
+  }
   if (state === 'EXECUTING') available.push({ action: 'deliver', label: 'Delivering' });
   if (state === 'EXECUTING' || state === 'DELIVERING') {
     available.push({ action: 'collect', label: 'Money is in' });
+  }
+  /*
+   * Three transitions the server has always had and nothing here offered:
+   * offering a declined opening to another operation, marking a finished one
+   * exhausted, and archiving. Each reaches every state its own service
+   * function allows rather than being folded into the blocks above, because
+   * the server already refuses the wrong state or a second attempt in its own
+   * words — nothing here has to re-derive that.
+   */
+  if (state === 'DECLINED') {
+    available.push({
+      action: 'reoffer',
+      label: 'Offer to another operation',
+      asks: 'REASON_AND_PROJECT',
+    });
+  }
+  if (!placement.opportunity.exhaustedAt) {
+    available.push({ action: 'exhaust', label: 'Mark exhausted', asks: 'REASON' });
+  }
+  if (state !== 'ARCHIVED') {
+    available.push({ action: 'archive', label: 'Archive', asks: 'REASON' });
   }
   if (available.length === 0) return null;
 
@@ -2399,11 +2952,26 @@ function Actions({
       await CashApi.act(placement.opportunity.id, action, body);
       setAsking(null);
       setReason('');
+      setReference('');
+      setToProjectId('');
       onChanged();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
+    }
+  }
+
+  function startAsking(action: string, mode: 'REASON' | 'ACTION' | 'REASON_AND_PROJECT' | undefined): void {
+    setProblem(null);
+    setAsking(action);
+    if (mode === 'REASON_AND_PROJECT' && destinations === null && !destinationsError) {
+      Api.projects().then(
+        ({ projects }) => setDestinations(projects),
+        (error: unknown) => {
+          setDestinationsError(error instanceof Error ? error.message : String(error));
+        },
+      );
     }
   }
 
@@ -2414,12 +2982,19 @@ function Actions({
           key={entry.action}
           type="button"
           className="rs-button-quiet"
-          disabled={busy}
-          onClick={() => (entry.asks ? setAsking(entry.action) : void run(entry.action))}
+          disabled={busy || entry.disabled}
+          onClick={() => (entry.asks ? startAsking(entry.action, entry.asks) : void run(entry.action))}
         >
           {entry.label}
         </button>
       ))}
+      {available
+        .filter((entry) => entry.disabled && entry.disabledReason)
+        .map((entry) => (
+          <p key={`${entry.action}-disabled`} className="rs-hint">
+            {entry.disabledReason}
+          </p>
+        ))}
       {asks === 'REASON' && asking ? (
         <>
           <label className="rs-field-label" htmlFor={`cash-reason-${placement.opportunity.id}`}>
@@ -2457,9 +3032,13 @@ function Actions({
             * one was the one that should never have existed.
             */}
           <p className="rs-hint">
-            You are recording an action you have already taken, under the spending limits you
-            granted. Brain performs nothing here: this writes the action to the record and moves
-            this piece to executing, so the plan stops counting it as waiting.
+            {asking === 'execute'
+              ? 'You are recording an action you have already taken, under the spending limits ' +
+                'you granted. Brain performs nothing here: this writes the action to the record ' +
+                'and moves this piece to executing, so the plan stops counting it as waiting.'
+              : 'You are recording a further action you have already taken, under the spending ' +
+                'limits you granted. Brain performs nothing here: this writes the action to the ' +
+                'record. Nothing about this piece moves — only its history does.'}
           </p>
           <label className="rs-field-label" htmlFor={`cash-did-${placement.opportunity.id}`}>
             Which action did you take? Only what your standing authority permits is listed.
@@ -2476,19 +3055,89 @@ function Actions({
             ))}
           </select>
           <label className="rs-field-label" htmlFor={`cash-detail-${placement.opportunity.id}`}>
-            Who you contacted or what you sent, and any reference it has outside Brain. This is
-            the record of the action, not a description of work Brain should do.
+            Who you contacted or what you sent. This is the record of the action, not a
+            description of work Brain should do.
           </label>
           <input
             id={`cash-detail-${placement.opportunity.id}`}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
           />
+          <label className="rs-field-label" htmlFor={`cash-reference-${placement.opportunity.id}`}>
+            Any reference it has outside Brain, if it has one &mdash; an invoice number, a
+            confirmation code, a message id. This is what tells two similar-sounding actions apart;
+            leaving it blank on two that read identically is still the same claim.
+          </label>
+          <input
+            id={`cash-reference-${placement.opportunity.id}`}
+            value={reference}
+            onChange={(event) => setReference(event.target.value)}
+          />
           <button
             type="button"
             className="rs-button-quiet"
             disabled={busy || reason.trim().length === 0}
-            onClick={() => void run(asking, { action: performed, detail: reason })}
+            onClick={() =>
+              void run(asking, {
+                action: performed,
+                detail: reason,
+                ...(reference.trim().length > 0 ? { reference: reference.trim() } : {}),
+              })
+            }
+          >
+            Confirm
+          </button>
+          <button type="button" className="rs-linklike" onClick={() => setAsking(null)}>
+            Cancel
+          </button>
+        </>
+      ) : null}
+      {asks === 'REASON_AND_PROJECT' && asking ? (
+        <>
+          {/*
+            * A copy, never a move: the original keeps its row and its reason,
+            * and only the opening itself carries over — never this owner's
+            * card. That is the server's own rule (`reoffer` in
+            * server/services/cash/opportunities.ts), stated here so the
+            * person choosing a destination knows what they are and are not
+            * handing over.
+            */}
+          <p className="rs-hint">
+            This is a copy into another operation, not a move: your card, your payer notes and your
+            quoted price stay yours. Only the opening itself — its title, the mechanism, the source
+            and the expiry — goes with it.
+          </p>
+          <label className="rs-field-label" htmlFor={`cash-dest-${placement.opportunity.id}`}>
+            Which operation?
+          </label>
+          <select
+            id={`cash-dest-${placement.opportunity.id}`}
+            value={toProjectId}
+            onChange={(event) => setToProjectId(event.target.value)}
+          >
+            <option value="">Choose an operation</option>
+            {(destinations ?? [])
+              .filter((project) => project.id !== placement.opportunity.projectId)
+              .map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+          </select>
+          {destinationsError ? <p className="rs-state rs-state-error">{destinationsError}</p> : null}
+          <label className="rs-field-label" htmlFor={`cash-reoffer-reason-${placement.opportunity.id}`}>
+            Why? It is kept on the record, and it is what the offer says.
+          </label>
+          <input
+            id={`cash-reoffer-reason-${placement.opportunity.id}`}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+          <button
+            type="button"
+            className="rs-button-quiet"
+            disabled={busy || reason.trim().length === 0 || toProjectId.length === 0}
+            onClick={() => void run(asking, { toProjectId, reason })}
           >
             Confirm
           </button>

@@ -41,7 +41,7 @@ import { countActions, recordAction } from '../../repos/cashActions.ts';
 import { cardFact, cardFactsFor, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { recordMoney } from '../../repos/cashLedger.ts';
+import { recordMoney, totalsByKind } from '../../repos/cashLedger.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
   COMMERCIAL_ACTIONS,
@@ -54,6 +54,7 @@ import { cashTier } from './tier.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition, checkMoneyEntry } from './money.ts';
 import { toJson } from '../../repos/util.ts';
+import { createHash } from 'node:crypto';
 import type {
   CashActionPerformer,
   CashCommitment,
@@ -68,7 +69,7 @@ export type Refusal = { ok: false; reason: string };
 export type Accepted<T> = { ok: true; value: T; message: string };
 export type Outcome<T> = Accepted<T> | Refusal;
 
-function refuse(reason: string): Refusal {
+export function refuse(reason: string): Refusal {
   return { ok: false, reason };
 }
 
@@ -526,6 +527,9 @@ export async function beginExecution(input: {
         'the person whose account this is; nothing else is blocked by it.',
     );
   }
+  // Narrowed into its own binding: a property access on `decision` does not
+  // stay narrowed once it is read from inside the closure below.
+  const authority = decision.authority;
 
   const inFlight = (
     await listOpportunities({ projectId: opportunity.projectId, states: ['EXECUTING', 'DELIVERING'] })
@@ -547,73 +551,120 @@ export async function beginExecution(input: {
   }
 
   /*
-   * Something has to have happened.
+   * Something has to have happened, and the record of it commits only when
+   * the transition it is meant to justify actually lands.
    *
-   * Recorded before the transition, so a crash between the two leaves an action
-   * on the record and a piece still READY — visible and retryable. The other
-   * order leaves a piece EXECUTING with nothing behind it, which is exactly the
-   * state this correction exists to make impossible.
+   * The two used to be sequential: record the action, then attempt the
+   * transition. A crash between them was survivable — an action on the record
+   * and a piece still READY is visible and retryable — but a call against an
+   * opportunity that was never READY (already EXECUTING, DISCOVERED, CLOSED,
+   * anything) still wrote the action and only *then* discovered the
+   * transition could not happen, leaving an action on the record for a
+   * transition that was refused. So both are inside one transaction now:
+   * either the action and the transition commit together, or the action never
+   * happened at all.
+   *
+   * The one case that must still succeed without a fresh transition is a
+   * retry that lands after the opportunity is already `EXECUTING` — the
+   * existing idempotent "already executing, the action is on the record"
+   * outcome. It is returned rather than thrown: the transaction still commits
+   * the action recorded above (real history against a piece already under
+   * way, whether newly written or an idempotent replay of one already there)
+   * and only a genuine refusal needs to roll anything back.
    */
-  if (input.firstAction) {
-    const performed = await recordAction({
-      projectId: opportunity.projectId,
-      opportunityId: opportunity.id,
-      authorityId: decision.authority.id,
-      action: input.firstAction.action,
-      performedBy: input.firstAction.performedBy,
-      reference: input.firstAction.reference ?? null,
-      detail: input.firstAction.detail,
-      confirmedBy: input.actorRef,
-      requestKey: input.firstAction.requestKey,
-    });
-    if (performed.created) {
+  let outcome: BeginOutcome;
+  try {
+    outcome = await getDb().transaction(async (): Promise<BeginOutcome> => {
+      if (input.firstAction) {
+        const performed = await recordAction({
+          projectId: opportunity.projectId,
+          opportunityId: opportunity.id,
+          authorityId: authority.id,
+          action: input.firstAction.action,
+          performedBy: input.firstAction.performedBy,
+          reference: input.firstAction.reference ?? null,
+          detail: input.firstAction.detail,
+          confirmedBy: input.actorRef,
+          requestKey: input.firstAction.requestKey,
+        });
+        if (performed.created) {
+          await recordCashEvent({
+            projectId: opportunity.projectId,
+            opportunityId: opportunity.id,
+            kind: 'CASH_ACTION_RECORDED',
+            actorRef: input.actorRef,
+            summary:
+              `${input.firstAction.action} was performed by ` +
+              `${input.firstAction.performedBy.toLowerCase()}.`,
+            detail: {
+              actionId: performed.action.id,
+              reference: performed.action.reference,
+              authorityId: authority.id,
+            },
+          });
+        }
+      } else if ((await countActions(opportunity.id)) === 0) {
+        throw new Refused(
+          'Nothing has happened on this yet, so it is not executing. Record the first action — ' +
+            'who was contacted and how, or what Brain did — and this advances with it. Executing ' +
+            'means the transaction is being pursued, and a state that says so with nothing behind ' +
+            'it is the piece that sits in the plan for a week looking like it is in flight.',
+        );
+      }
+
+      const moved = await transitionOpportunity({
+        id: opportunity.id,
+        from: ['READY'],
+        to: 'EXECUTING',
+      });
+      if (!moved) {
+        // Read inside the same transaction, so this sees exactly the state
+        // the failed transition just compared against.
+        const now = await getOpportunity(opportunity.id);
+        if (now?.state === 'EXECUTING') return { kind: 'ALREADY_EXECUTING', opportunity: now };
+        throw new Refused(`This is ${opportunity.state.toLowerCase()} rather than ready to execute.`);
+      }
       await recordCashEvent({
         projectId: opportunity.projectId,
         opportunityId: opportunity.id,
-        kind: 'CASH_ACTION_RECORDED',
+        kind: 'CASH_EXECUTION_STARTED',
         actorRef: input.actorRef,
-        summary: `${input.firstAction.action} was performed by ${input.firstAction.performedBy.toLowerCase()}.`,
-        detail: {
-          actionId: performed.action.id,
-          reference: performed.action.reference,
-          authorityId: decision.authority.id,
-        },
+        summary: 'Execution started under the standing commercial authority.',
+        detail: { policyVersion: decision.policyVersion, peakFundingCents: needed },
       });
-    }
-  } else if ((await countActions(opportunity.id)) === 0) {
-    return refuse(
-      'Nothing has happened on this yet, so it is not executing. Record the first action — who ' +
-        'was contacted and how, or what Brain did — and this advances with it. Executing means ' +
-        'the transaction is being pursued, and a state that says so with nothing behind it is ' +
-        'the piece that sits in the plan for a week looking like it is in flight.',
-    );
+      return { kind: 'STARTED' };
+    });
+  } catch (error) {
+    if (error instanceof Refused) return refuse(error.reason);
+    throw error;
   }
 
-  const moved = await transitionOpportunity({
-    id: opportunity.id,
-    from: ['READY'],
-    to: 'EXECUTING',
-  });
-  if (!moved) {
-    // The action stands whatever the state does. It happened; a transition
-    // that could not be made does not un-happen it, and §5 keeps history.
-    const now = await getOpportunity(opportunity.id);
-    if (now?.state === 'EXECUTING') {
-      return { ok: true, value: now, message: 'Already executing. The action is on the record.' };
-    }
-    return refuse(`This is ${opportunity.state.toLowerCase()} rather than ready to execute.`);
+  if (outcome.kind === 'ALREADY_EXECUTING') {
+    return {
+      ok: true,
+      value: outcome.opportunity,
+      message: 'Already executing. The action is on the record.',
+    };
   }
-  await recordCashEvent({
-    projectId: opportunity.projectId,
-    opportunityId: opportunity.id,
-    kind: 'CASH_EXECUTION_STARTED',
-    actorRef: input.actorRef,
-    summary: 'Execution started under the standing commercial authority.',
-    detail: { policyVersion: decision.policyVersion, peakFundingCents: needed },
-  });
   const after = await getOpportunity(opportunity.id);
   return { ok: true, value: after!, message: 'Executing.' };
 }
+
+/**
+ * A refusal composed inside `beginExecution`'s transaction.
+ *
+ * Thrown rather than returned, because a `return` there would commit
+ * everything the transaction has done so far — the whole reason `refuse` is
+ * not called directly from inside it.
+ */
+class Refused extends Error {
+  constructor(readonly reason: string) {
+    super(reason);
+  }
+}
+
+/** What `beginExecution`'s transaction actually settled, once it commits. */
+type BeginOutcome = { kind: 'STARTED' } | { kind: 'ALREADY_EXECUTING'; opportunity: CashOpportunity };
 
 /**
  * The key one action is recorded under, built from server facts only.
@@ -626,6 +677,34 @@ export function actionKey(opportunityId: string, action: string, occurrence: str
   return `action:${opportunityId}:${action}:${occurrence}`;
 }
 
+/**
+ * The occurrence a person's own submission identifies, derived rather than
+ * asked for.
+ *
+ * A reviewer found that the record-action control on the Cash page sent the
+ * literal string `'first'` on every confirm, so a second real occurrence of
+ * the same action on the same opportunity — a second invoice, a second
+ * installment — collided with `actionKey`'s own first row and was silently
+ * dropped: the server correctly deduped what looked, by its key alone, like
+ * the identical request come round again.
+ *
+ * A person cannot be handed a counter to fill in reliably; asking them to
+ * would only move the same mistake into a text box. What they already typed
+ * is what tells the two apart — the detail describes what happened and the
+ * reference is often the one thing that proves it happened again — so that is
+ * what this hashes, rather than a caller-supplied number or the raw text
+ * itself, which could carry characters `actionKey`'s format does not allow.
+ * An exact resubmission of the same detail and reference — a retry after a
+ * lost response, a duplicate click — hashes to the same label and reaches the
+ * row `actionKey` already wrote for it, which is `recordAction`'s own
+ * idempotency working as intended rather than a second submission going
+ * unrecorded.
+ */
+export function contentOccurrence(detail: string, reference?: string | null): string {
+  const canonical = `${detail.trim()}\u0000${(reference ?? '').trim()}`;
+  return createHash('sha256').update(canonical, 'utf8').digest('hex').slice(0, 16);
+}
+
 /** Delivery has begun, or the money is in. Neither costs anything to record. */
 export async function advance(input: {
   opportunityId: string;
@@ -635,6 +714,32 @@ export async function advance(input: {
 }): Promise<Outcome<CashOpportunity>> {
   const opportunity = await getOpportunity(input.opportunityId);
   if (!opportunity) return refuse('No opportunity with that id.');
+  /*
+   * "The money is in" is a statement about the ledger, so the ledger has to
+   * say it first (invariant 37). It used to be a button: `COLLECTED` could be
+   * written over an opportunity with no payment recorded against it at all,
+   * and every reader downstream — the plan, the roadmap, the shared frontier —
+   * then reported a sale that no row establishes. A `SETTLEMENT` is the one
+   * entry that is cash (`money.ts`: a payment is not funds), so it is what is
+   * asked for, attributed to *this* opportunity and net of refunds. Nothing is
+   * written on a refusal, and the remedy is named.
+   */
+  if (input.to === 'COLLECTED') {
+    const mode = await getCashMode(opportunity.projectId);
+    const totals = await totalsByKind({
+      projectId: opportunity.projectId,
+      opportunityId: opportunity.id,
+      currency: mode?.currency,
+    });
+    const settled = Number(totals.SETTLEMENT ?? 0) - Number(totals.REFUND ?? 0);
+    if (settled <= 0) {
+      return refuse(
+        'Nothing has settled against this opportunity yet, so Brain cannot record that the money ' +
+          'is in. Record the customer payment and its settlement on this opportunity first — ' +
+          'each with the provider or bank reference that makes it verifiable.',
+      );
+    }
+  }
   const from = input.to === 'DELIVERING' ? (['EXECUTING'] as const) : (['EXECUTING', 'DELIVERING'] as const);
   const moved = await transitionOpportunity({
     id: opportunity.id,

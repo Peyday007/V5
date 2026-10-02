@@ -29,6 +29,7 @@ import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { cashPosition, explainEntries } from './money.ts';
 import { assemble } from './portfolio.ts';
 import { executionPath, type ExecutionPath } from './execution.ts';
+import { composeOffer, OFFER_STATES, type OfferDraft } from './offer.ts';
 import { compressedReview } from './review.ts';
 import { authorityFor } from './opportunities.ts';
 import { sharedFrontier, type SharedFrontier } from './shared.ts';
@@ -109,6 +110,14 @@ export interface CashView {
      * that may already have moved.
      */
     executionPaths: ExecutionPath[];
+    /**
+     * The sendable offer per READY or EXECUTING piece, composed only from the
+     * card — or the named list of what is missing and no text at all.
+     *
+     * Here and never in the shared projection: every line is a private
+     * commercial term (§34).
+     */
+    offers: Record<string, OfferDraft>;
     /** The load-bearing blanks per opportunity, so a card renders without a second call. */
     cards: Record<string, { ready: boolean; missing: string[]; summary: string }>;
     /**
@@ -353,6 +362,20 @@ export async function cashView(input: {
   );
 
   /*
+   * The offer a person could send, for the pieces somebody has decided to test.
+   * Composed from the same facts `provenance` holds, so it costs no query and
+   * cannot disagree with the card about where an answer came from.
+   */
+  const offers: Record<string, OfferDraft> = {};
+  for (const opportunity of opportunities) {
+    if (!(OFFER_STATES as readonly string[]).includes(opportunity.state)) continue;
+    offers[opportunity.id] = composeOffer({
+      opportunity,
+      facts: provenance[opportunity.id] ?? [],
+    });
+  }
+
+  /*
    * Read once and used twice: the authority block totals them and `myCash`
    * sends them. Two reads of one table is how two figures on one screen come to
    * disagree about the same commitment.
@@ -384,7 +407,7 @@ export async function cashView(input: {
       ),
       commitments,
     },
-    myCurrentWork: { ...plan, cards, provenance, engineCards, economics, executionPaths },
+    myCurrentWork: { ...plan, cards, provenance, engineCards, economics, executionPaths, offers },
     whatBrainHasDone: await listCashEvents(input.projectId, 40),
     whatBrainNeeds: needs.map((one) => ({
       ...one,

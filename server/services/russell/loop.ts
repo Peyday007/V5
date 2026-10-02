@@ -123,6 +123,7 @@ import {
   judgeCandidate,
   specifyOverriddenCandidate,
 } from './planning.ts';
+import { resumeParkedAcrossProjects } from './resumeParked.ts';
 import { promoteEligibleClaims } from '../../repos/sharedFindings.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
@@ -169,7 +170,18 @@ export interface TickReport {
   skipped: string | null;
   generation: number | null;
   wroteBack: string[];
+  /** A Needs You request a person answered, put back into play. */
   resumed: string[];
+  /**
+   * Ideas parked for want of a standing authority, put back now that one
+   * covers RESEARCH on their project — every project except one running Cash
+   * Mode, whose own `cashDiscovery` entry already reports this for its own
+   * sprint (`resumeAuthorityParkedCandidates`, called from `runDiscovery`).
+   * Not the same fact as `resumed` above: that is a Needs You request
+   * answered; this is a park `judgeCandidate` recorded coming back into the
+   * ordinary judgment queue. See docs/STEP-12B-BACKLOG.md.
+   */
+  authorityResumed: { candidateId: string; projectId: string; previousReason: string | null }[];
   expiredProbes: string[];
   /** Probes opened and run to a verdict this tick. */
   probed: string[];
@@ -609,6 +621,7 @@ const EMPTY: TickReport = {
   answeredByArchive: [],
   planning: [],
   resumed: [],
+  authorityResumed: [],
   expiredProbes: [],
   probed: [],
   answered: [],
@@ -669,6 +682,7 @@ export async function tick(owner: string): Promise<TickReport> {
     answeredByArchive: [],
     planning: [],
     resumed: [],
+    authorityResumed: [],
     expiredProbes: [],
     probed: [],
     answered: [],
@@ -1216,6 +1230,31 @@ export async function tick(owner: string): Promise<TickReport> {
       });
       const stuck = await reopenAuditRound(routed);
       if (stuck) report.binReopenRefused.push(stuck);
+    }
+
+    /*
+     * 1c-iii. Give a park for missing authority a way back, on every project.
+     *
+     * `judgeCandidate` correctly parks an idea with no standing authority
+     * covering RESEARCH, and until now nothing reconsidered it once a person
+     * granted one: `unjudged()` below selects `priority IS NULL` and a park
+     * carries `priority = 'PARKED'`, so the park was permanent everywhere
+     * except inside Cash Mode's own discovery pass, which only ever asked
+     * about its own project. Recorded as a defect in
+     * docs/STEP-12B-BACKLOG.md.
+     *
+     * `resumeParkedAcrossProjects` (`./resumeParked.ts`) is the same rule Cash
+     * Mode's `resumeAuthorityParkedCandidates` now calls for its own project,
+     * asked here generically for every other project `checkAuthority` says may
+     * run RESEARCH. It skips a project currently running Cash Mode on purpose:
+     * that project's own pass, later in this tick, already resumes it and
+     * records its own event for it.
+     *
+     * Ahead of `unjudged()` rather than after it, so a candidate this step
+     * resumes is judged again in this same tick rather than the next one.
+     */
+    for (const one of await resumeParkedAcrossProjects(cycle.maxLaunchesPerCycle)) {
+      report.authorityResumed.push(one);
     }
 
     /*
@@ -2049,7 +2088,7 @@ async function missionsAwaitingWriteback(limit: number): Promise<RussellMission[
  * So an unjudged candidate simply is not eligible here, and stays queued until
  * the judgment pass compiles one.
  */
-async function nextLaunchable(limit: number): Promise<
+export async function nextLaunchable(limit: number): Promise<
   {
     candidateId: string;
     /** The mission this idea follows on from, when it is a follow-on. */
@@ -2063,8 +2102,45 @@ async function nextLaunchable(limit: number): Promise<
     project_id: string | null;
     follow_on_of_mission_id: string | null;
   }>(
-    `SELECT id, judgment, project_id, follow_on_of_mission_id FROM russell_candidates
-      WHERE state = 'QUEUED' AND project_id IS NOT NULL
+    /*
+     * Only rows that could launch, filtered before the window rather than after.
+     *
+     * `LIMIT` used to apply to every QUEUED candidate in the Brain, and the
+     * loop below then dropped the ones it could not act on. Two kinds stay
+     * QUEUED for ever and can never launch from here, so once fifty of them sat
+     * at the front of the order nothing behind them was ever looked at:
+     *
+     *   - one with no compiled `missionSpec`, skipped below without a word;
+     *   - one whose idea already has a mission that is live, parked or DONE —
+     *     a launch only replays that row (or refuses a DONE one with no state
+     *     change), and a launched candidate stays QUEUED by design. Live
+     *     missions are repaired by `repairLaunches`, which selects on the
+     *     mission rather than on this window, so nothing that pass needs is
+     *     taken away.
+     *
+     * Production, 2026-10-01: a hundred QUEUED ideas in one sprint, and every
+     * deep dive's candidate sat QUEUED with no mission until the six-hour stall
+     * backstop closed it — thirty-two of forty openings were BLOCKED that way,
+     * each reading `passes 0/0`. A FAILED or CANCELLED mission still leaves the
+     * idea eligible, because a new specification may launch and an old one is
+     * answered by the `ALREADY_RESEARCHED` transition below.
+     */
+    `SELECT id, judgment, project_id, follow_on_of_mission_id FROM russell_candidates c
+      WHERE c.state = 'QUEUED' AND c.project_id IS NOT NULL
+        AND c.judgment LIKE '%"missionSpec"%'
+        AND NOT EXISTS (
+          -- The idea's latest mission, as launch() itself reads it
+          -- (latestMissionForCandidate: highest attempt, then newest).
+          SELECT 1 FROM russell_missions m
+           WHERE m.candidate_id = c.id
+             AND m.state NOT IN ('FAILED','CANCELLED')
+             AND NOT EXISTS (
+               SELECT 1 FROM russell_missions n
+                WHERE n.candidate_id = c.id
+                  AND (n.attempt > m.attempt
+                       OR (n.attempt = m.attempt AND n.created_at > m.created_at))
+             )
+        )
       ORDER BY
         CASE priority
           WHEN 'MUST_DO' THEN 0 WHEN 'BIG_MOVE' THEN 1 WHEN 'WORTH_DOING' THEN 2

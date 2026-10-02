@@ -561,11 +561,17 @@ export async function closeAttempt(
   );
 }
 
-/** The last attempt that reached a provider, for reconciliation. */
+/**
+ * The last attempt that reached SENT or later, for reconciliation.
+ *
+ * Deliberately not keyed on `provider_key`: only a natively idempotent adapter
+ * has one, and a reconcilable or opaque effect that was sent is exactly the
+ * case that needs finding. An attempt still at INTENT was never sent.
+ */
 export async function latestSentAttempt(operationId: string): Promise<EffectAttempt | null> {
   const row = await getDb().get<EffectAttemptRow>(
     `SELECT * FROM effect_attempts
-      WHERE operation_id = ? AND provider_key IS NOT NULL
+      WHERE operation_id = ? AND phase <> 'INTENT'
       ORDER BY attempt_number DESC LIMIT 1`,
     [operationId],
   );

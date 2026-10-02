@@ -955,13 +955,8 @@ describe('one account’s whole journey', () => {
     });
     expect(captured.status).toBe(422);
 
-    // And the piece already running still collects and still settles.
-    const collected = await call('POST', `/api/cash/opportunities/${opportunityId}/collect`, {
-      cookie: adminCookie,
-      body: { outcome: 'Delivered and paid.' },
-    });
-    expect(collected.status).toBe(200);
-
+    // And the piece already running still settles and still collects — the
+    // settlement first, because "the money is in" is the ledger's to say.
     const settled = await call('POST', `${CASH()}/money`, {
       cookie: adminCookie,
       body: {
@@ -973,6 +968,13 @@ describe('one account’s whole journey', () => {
       },
     });
     expect(settled.status).toBe(200);
+
+    const collected = await call('POST', `/api/cash/opportunities/${opportunityId}/collect`, {
+      cookie: adminCookie,
+      body: { outcome: 'Delivered and paid.' },
+    });
+    expect(collected.status).toBe(200);
+
 
     const view = await call<{ myCash: { position: { availableFundsCents: number } } }>(
       'GET',

@@ -36,13 +36,14 @@
  * refused, because that is a `COMMERCIAL_ACTION` under a grant a person makes
  * separately.
  */
-import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
+import { getCashMode, listCashEventsFor, recordCashEvent } from '../../repos/cashMode.ts';
 import {
   getOpportunity,
   listOpportunities,
+  resumeBlockedValidation,
   updateOpportunity,
 } from '../../repos/cashPortfolio.ts';
-import { createCandidate, getCandidate } from '../../repos/russellCandidates.ts';
+import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import { citableClaims, getOrchestration, listPasses } from '../../repos/research.ts';
 import {
@@ -160,7 +161,7 @@ export type DiveRefusal =
    * another would buy the same answer twice.
    */
   | { kind: 'AWAITING_PERSON' }
-  /** Both bounded dives are spent. The honest answer is that the sources do not publish it. */
+  /** Both bounded dives are spent. A stalled round counts too, so this says nothing about the sources. */
   | { kind: 'ROUNDS_SPENT'; rounds: number; cap: number }
   /** It got there. A qualified piece has nothing left for a dive to ask. */
   | { kind: 'ALREADY_QUALIFIED'; tier: string }
@@ -179,7 +180,10 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
     case 'AWAITING_PERSON':
       return 'waiting on a person: its mission stopped at a decision only they can make';
     case 'ROUNDS_SPENT':
-      return `both dives are spent (${refusal.rounds}/${refusal.cap}); the sources do not publish the rest`;
+      // Not "the sources do not publish the rest": a round closed by the stall
+      // backstop researched nothing, and production held 32 such rounds. What
+      // each dive established is in its own reason, not in this count.
+      return `both dives are spent (${refusal.rounds}/${refusal.cap}); each dive's own reason says what it established`;
     case 'ALREADY_QUALIFIED':
       return `already ${refusal.tier} — a dive has nothing left to ask`;
     case 'NOT_A_QUALIFYING_STATE':
@@ -734,6 +738,128 @@ async function settle(
   });
 }
 
+/**
+ * Give back a round that researched nothing, by resuming the dive that spent it.
+ *
+ * Production, 2026-10-01: 32 of 40 openings sat `BLOCKED` at round 2 of 2 with
+ * `candidate=QUEUED mission=— passes 0/0`. The idea behind each dive never
+ * launched — `nextLaunchable` took `LIMIT 50` over ideas that could never
+ * launch and nothing behind them was looked at — and the six-hour backstop in
+ * `settleValidations` closed each one. Both of each opening's rounds were spent
+ * on stalls, so `whyNotDiving` read `ROUNDS_SPENT` and nothing would ask again.
+ *
+ * Derived from rows on every tick, so it reaches the openings already stranded
+ * as well as any future one. What makes a round restorable is read, never
+ * assumed:
+ *
+ *   - the opening is `BLOCKED` and its current idea is still `QUEUED` with no
+ *     mission at all — research never started, so nothing it found can exist;
+ *   - each earlier round is read from its own `CASH_VALIDATION_STARTED` event,
+ *     and only a round whose idea has no mission is given back. A round whose
+ *     idea launched counts, whatever came of it;
+ *   - an opening with no started events keeps every round it has — a history
+ *     Brain cannot read is never read as "nothing ran".
+ *
+ * It resumes rather than restarts: the same idea, the same question, the
+ * opening back to `PENDING` with the clock reset, so `settleValidations`
+ * follows its mission when it launches. An earlier round's idea that never
+ * launched is parked, because once the launch window is open it would
+ * otherwise launch a mission no opening owns. Nothing is deleted: the block,
+ * the stalled ideas and their events all stay, and `CASH_VALIDATION_RESUMED`
+ * records what was given back and why.
+ *
+ * Bounded twice: one resume per idea, ever, so an idea that cannot launch for
+ * some other reason stalls once more and stays `BLOCKED`; and it takes only
+ * free slots, ahead of new dives, because finishing a question already asked
+ * comes before asking a new one.
+ */
+export async function resumeUnlaunchedDives(projectId: string): Promise<string[]> {
+  const gate = await discoveryAllowed(projectId);
+  if (!gate.allowed) return [];
+  if (!(await discoveryAuthority(projectId))) return [];
+
+  const all = await listOpportunities({ projectId });
+  const inFlight = all.filter((one) => HOLDS_A_SLOT.has(one.validationState ?? '')).length;
+  let room = Math.max(0, MAX_VALIDATIONS_IN_FLIGHT - inFlight);
+  const out: string[] = [];
+
+  for (const opportunity of all) {
+    if (room <= 0) break;
+    if (opportunity.validationState !== 'BLOCKED' || !opportunity.candidateId) continue;
+    const current = await getCandidate(opportunity.candidateId);
+    if (!current || current.state !== 'QUEUED') continue;
+    if (await latestMissionForCandidate(current.id)) continue;
+
+    const events = await listCashEventsFor(opportunity.id, 500);
+    const candidateOf = (detail: Record<string, unknown> | null | undefined) =>
+      typeof detail?.['candidateId'] === 'string' ? (detail['candidateId'] as string) : null;
+    if (
+      events.some(
+        (event) => event.kind === 'CASH_VALIDATION_RESUMED' && candidateOf(event.detail) === current.id,
+      )
+    ) {
+      continue;
+    }
+    const started = [
+      ...new Set(
+        events
+          .filter((event) => event.kind === 'CASH_VALIDATION_STARTED')
+          .map((event) => candidateOf(event.detail))
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+
+    const parked: string[] = [];
+    let launched = 0;
+    for (const candidateId of started) {
+      if (candidateId === current.id) continue;
+      if (await latestMissionForCandidate(candidateId)) {
+        launched += 1;
+        continue;
+      }
+      const earlier = await getCandidate(candidateId);
+      if (earlier?.state === 'QUEUED') {
+        await transitionCandidate({ candidateId, from: 'QUEUED', to: 'PARKED' });
+      }
+      parked.push(candidateId);
+    }
+    // No readable history: keep what is there. The resume still happens, so
+    // the dive is not lost, but nothing is given back on a guess.
+    const toRounds =
+      started.length === 0
+        ? opportunity.validationRounds
+        : Math.min(opportunity.validationRounds, launched + 1);
+
+    const resumed = await resumeBlockedValidation({
+      id: opportunity.id,
+      fromRounds: opportunity.validationRounds,
+      toRounds,
+      startedAt: new Date().toISOString(),
+    });
+    if (!resumed) continue;
+    await recordCashEvent({
+      projectId,
+      opportunityId: opportunity.id,
+      kind: 'CASH_VALIDATION_RESUMED',
+      actorRef: 'BRAIN',
+      summary:
+        'This deep dive never started researching: its idea was never launched, so the six-hour ' +
+        'backstop closed it with nothing found. Brain has resumed the same question and given back ' +
+        `the ${opportunity.validationRounds - toRounds === 1 ? 'round' : 'rounds'} that researched nothing.`,
+      detail: {
+        candidateId: current.id,
+        fromRounds: opportunity.validationRounds,
+        toRounds,
+        restoredRounds: opportunity.validationRounds - toRounds,
+        parkedCandidates: parked,
+      },
+    });
+    out.push(opportunity.id);
+    room -= 1;
+  }
+  return out;
+}
+
 /** Both halves, for the tick. */
 export async function runValidations(projectId: string): Promise<ValidationProgress> {
   // Settling first, so a deep dive that finished this tick frees its slot for
@@ -745,6 +871,8 @@ export async function runValidations(projectId: string): Promise<ValidationProgr
   // made against last tick's card.
   await applyValidationAnswers(projectId);
   await proposeEngineTerms(projectId);
+  // A question already asked is resumed before a new one takes a slot.
+  await resumeUnlaunchedDives(projectId);
   const started = await startValidations({ projectId });
   return { started, settled };
 }

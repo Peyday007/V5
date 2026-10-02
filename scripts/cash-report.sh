@@ -23,6 +23,13 @@ cd "$(dirname "$0")/.."
 # the report somebody wants when the app is busy. A reading nobody can take
 # while the thing it reads is working is not a reading.
 export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-1}"
+# With one client, the roadmap's bounded fan-out queues its reads behind each
+# other, and the default ten-second wait turned that queue into a failure:
+# 2026-10-01 15:45Z, "1/1 connection(s) in use, 2 caller(s) waiting" inside
+# `cashRoadmap`, after the sprint and its authorization had already printed.
+# `factory.sh` met the same shape on 2026-09-30 and took the same remedy. A
+# longer wait is patience, not more load.
+export BRAIN_DATABASE_CONNECT_TIMEOUT_MS="${BRAIN_DATABASE_CONNECT_TIMEOUT_MS:-60000}"
 
 # Which container this came out of.
 #

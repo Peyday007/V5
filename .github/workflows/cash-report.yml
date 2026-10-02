@@ -62,7 +62,7 @@ jobs:
           fi
           set +e
           flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/cash-report.sh $args" \
+            -C "env BRAIN_DATABASE_POOL_SIZE=1 BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000 sh /app/scripts/cash-report.sh $args" \
             2>&1 | tee cash-report.txt
           set -e
           grep -q '^CASH-REPORT: OK' cash-report.txt

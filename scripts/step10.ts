@@ -1869,6 +1869,20 @@ async function main(): Promise<void> {
         'a worker that released without completing it, so no successor item existed yet. The ' +
         'reconciliation has since retired that item and queued what comes next. Not spent on ' +
         'the packet failing, and not spent completing anything either.',
+      /*
+       * The fifth code. Production, 2026-09-17..20: every cash synthesis whose
+       * canonical name carried an em dash was refused by the bucket with
+       * `400 InvalidKey`, the transaction rolled back, and each worker reported
+       * "That call could not be completed" until the bin's five assignments
+       * were gone. §33 records the defect and its fix (proven 2026-09-21). None
+       * of the codes above is true of those bins: no confinement, no surface,
+       * nothing unclaimable — the work was submitted and Brain could not store
+       * it. `packets syntheses` names these as BIN_EXHAUSTED.
+       */
+      'filing-defect':
+        'Attempts spent on a Brain-side storage defect: each worker submitted its synthesis and ' +
+        'the document store refused the object key (400 InvalidKey, since fixed), so the ' +
+        'transaction rolled back and nothing was filed. Not spent on the packet failing.',
     };
     const code = arg(2) ?? 'platform-defect';
     const reason = REASONS[code];

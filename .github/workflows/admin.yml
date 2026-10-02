@@ -137,7 +137,7 @@ jobs:
 
           echo "admin $args"
           set +e
-          flyctl ssh console --app "$app" -C "sh /app/scripts/admin.sh $args" 2>&1 | tee admin.txt
+          flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000 sh /app/scripts/admin.sh $args" 2>&1 | tee admin.txt
           set -e
           # The verdict comes from a line the command printed, not from an exit
           # code that had to survive an SSH session, a shell and a CLI.

@@ -659,15 +659,10 @@ describe('the deployable artifact', () => {
     });
     expect(delivering.status).toBe(200);
 
-    const collected = await call('POST', `/api/cash/opportunities/${other}/collect`, {
-      cookie: admin,
-      body: { outcome: 'Paid in full by bank transfer.' },
-    });
-    expect(collected.status).toBe(200);
-
     const settled = await call('POST', `/api/projects/${project}/cash/money`, {
       cookie: admin,
       body: {
+        opportunityId: other,
         kind: 'SETTLEMENT',
         amountCents: 60_000,
         currency: 'USD',
@@ -676,6 +671,13 @@ describe('the deployable artifact', () => {
       },
     });
     expect(settled.status).toBe(200);
+
+    const collected = await call('POST', `/api/cash/opportunities/${other}/collect`, {
+      cookie: admin,
+      body: { outcome: 'Paid in full by bank transfer.' },
+    });
+    expect(collected.status).toBe(200);
+
 
     const final = await call('GET', `/api/projects/${project}/cash`, { cookie: admin });
     expect(final.body.myCash.position.availableFundsCents).toBe(60_000);

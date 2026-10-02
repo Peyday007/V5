@@ -20,6 +20,7 @@ import type { CashReadiness } from '../../../server/services/cash/readiness.ts';
 import type { CashRoadmap } from '../../../server/services/cash/roadmap.ts';
 import type { CashForecast } from '../../../server/services/cash/forecast.ts';
 import type { SharedCashView } from '../../../server/services/cash/shared.ts';
+import type { OfferDraft } from '../../../server/services/cash/offer.ts';
 import type { CommissionView } from '../../../server/services/cash/monetization/inFlight.ts';
 import type {
   MonetizationSurface,
@@ -33,6 +34,7 @@ export type {
   CashRoadmap,
   CashForecast,
   SharedCashView,
+  OfferDraft,
   MonetizationSurface,
   LedgerEntry,
   TopEntry,
@@ -105,6 +107,13 @@ export interface CashPosition {
 
 export interface CashOpportunity {
   id: string;
+  /**
+   * Whose operation this opening belongs to.
+   *
+   * Already on every opportunity the server sends — `reoffer` needs it to keep
+   * a destination picker from offering the operation an opening is already in.
+   */
+  projectId: string;
   title: string;
   mechanism: string;
   state: string;
@@ -346,6 +355,12 @@ export interface CashView {
     engineCards: Record<string, EngineCardView>;
     /** The arithmetic, with its inputs named and its refusals stated. */
     economics: Record<string, DerivedFigureView[]>;
+    /**
+     * The sendable offer per READY or EXECUTING piece, composed by the server
+     * from the card alone. Optional for the deploy reason above: a payload
+     * fetched before it existed renders as no draft rather than throwing.
+     */
+    offers?: Record<string, OfferDraft>;
   };
   whatBrainHasDone: CashEvent[];
   whatBrainNeeds: (CashNeed & { researchStatus: string | null })[];
@@ -772,6 +787,31 @@ export const CashApi = {
       body: JSON.stringify(body),
     }),
 
+  /**
+   * Hold part of the ceiling for a named obstacle.
+   *
+   * Names the obstacle, the result to expect and where to stop, because a
+   * commitment that named none of those would be a budget line rather than a
+   * decision about this opening. The action is checked against the grant
+   * server-side and is never echoed back on the commitment row.
+   */
+  commitSpend: (
+    projectId: string,
+    body: {
+      action: string;
+      amountCents: number;
+      purpose: string;
+      expectedResult: string;
+      stopCondition: string;
+      idempotencyKey: string;
+      opportunityId?: string;
+    },
+  ): Promise<{ commitment: { id: string; state: string }; message: string }> =>
+    api(`/api/projects/${p(projectId)}/cash/commitments`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   /** Release a commitment that is not going to be spent. */
   releaseCommitment: (
     commitmentId: string,
@@ -782,6 +822,35 @@ export const CashApi = {
       body: JSON.stringify({ reason }),
     }),
 
+  /**
+   * The spend happened: the hold becomes history and what it actually cost is
+   * recorded. Never released by a clock — this is somebody saying what the
+   * money bought.
+   */
+  settleCommitment: (
+    commitmentId: string,
+    spentCents: number,
+    note?: string,
+  ): Promise<{ commitment: { id: string; state: string }; settled: boolean; message: string }> =>
+    api(`/api/cash/commitments/${p(commitmentId)}/settle`, {
+      method: 'POST',
+      body: JSON.stringify({ spentCents, note }),
+    }),
+
+  /**
+   * Every lifecycle move an opportunity has, behind one route on the server —
+   * this is that route, generic over which one. `record-action` (a quote, an
+   * invoice, a payment accepted, on a piece already executing or delivering)
+   * is one more case on it rather than a dedicated method: it takes the exact
+   * same `{ action, detail, reference? }` shape `execute` already sends, and a
+   * second method here would only restate that.
+   *
+   * There is deliberately no `occurrence` field here for a caller to set. The
+   * server derives it from `detail` and `reference` (see `contentOccurrence`
+   * on the cash opportunities service) so that a genuinely different action —
+   * a second invoice, a different reference — is never silently deduped
+   * against an earlier one just because nothing on this side numbered it.
+   */
   act: (
     opportunityId: string,
     action: string,
