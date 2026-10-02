@@ -26,6 +26,7 @@ export type Route =
   | { name: 'SITES' }
   | { name: 'CASH' }
   | { name: 'MACHINES' }
+  | { name: 'INDUSTRIES' }
   /**
    * Who does the work here.
    *
@@ -106,6 +107,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'CASH' };
     case 'machines':
       return { name: 'MACHINES' };
+    case 'industries':
+      return { name: 'INDUSTRIES' };
     case 'labor':
       return { name: 'LABOR' };
     case 'puzzles':
@@ -153,6 +156,8 @@ export function pathFor(route: Route): string {
       return '/cash';
     case 'MACHINES':
       return '/machines';
+    case 'INDUSTRIES':
+      return '/industries';
     case 'LABOR':
       return '/labor';
     case 'PUZZLES':
