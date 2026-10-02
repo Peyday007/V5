@@ -43,6 +43,8 @@ import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
 import { recordMoney, totalsByKind } from '../../repos/cashLedger.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
+import { getOperation } from '../../repos/idempotency.ts';
+import { COMMERCIAL_EFFECTS } from './effects.ts';
 import {
   COMMERCIAL_ACTIONS,
   checkCommercialAuthority,
@@ -1062,6 +1064,19 @@ export async function recordMoneyEvent(input: {
   note?: string | null;
   idempotencyKey: string;
   actorRef: string;
+  /**
+   * A payment a provider already confirmed taking, named by its operation.
+   *
+   * The ACCEPT_PAYMENT grant is asked before a payment is taken
+   * (`perform.ts`), and the money is then gone from the customer whatever
+   * happens to the grant afterwards. Asking again here would let a revocation
+   * that landed between the provider's receipt and this write erase the
+   * record of money that was really received — so a payment backed by a
+   * SUCCEEDED take-payment operation is recorded without the second ask. It
+   * opens nothing new: the operation is read from the database, never taken
+   * on the caller's word, and anything else still meets the grant.
+   */
+  confirmedEffectOperationId?: string | null;
 }): Promise<Outcome<CashMoneyEntry>> {
   const check = checkMoneyEntry({
     kind: input.kind,
@@ -1086,11 +1101,23 @@ export async function recordMoneyEvent(input: {
   }
 
   if (input.kind === 'CUSTOMER_PAYMENT') {
-    const decision = await checkCommercialAuthority({
-      projectId: input.projectId,
-      action: 'ACCEPT_PAYMENT',
-    });
-    if (!decision.ok) return refuse(decision.reason);
+    const backing = input.confirmedEffectOperationId
+      ? await getOperation(input.confirmedEffectOperationId)
+      : null;
+    const confirmed =
+      backing !== null &&
+      backing.state === 'SUCCEEDED' &&
+      backing.projectId === input.projectId &&
+      backing.namespace === COMMERCIAL_EFFECTS.ACCEPT_PAYMENT.namespace.name &&
+      backing.resultRef !== null &&
+      backing.resultRef === (input.verifiedReference ?? null);
+    if (!confirmed) {
+      const decision = await checkCommercialAuthority({
+        projectId: input.projectId,
+        action: 'ACCEPT_PAYMENT',
+      });
+      if (!decision.ok) return refuse(decision.reason);
+    }
   }
 
   if (input.opportunityId) {

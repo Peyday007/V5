@@ -196,3 +196,166 @@ watch one fire arrive before the rest. The recovered bins resume by themselves.
   https://claude.ai/customize/connectors (sign in to Brain on the consent
   screen and approve worker `wkr_1cdd82…`). One reconnect covers all four
   Routines. Then re-run this test on Brain Research A only.
+
+## Revenue execution run (2026-10-02) — stacked on #88
+
+Branch `claude/revenue-execution-integration-i52sxq`, cut from #88's head
+`a23884c`. Nothing here is deployed and nothing here needs #88 merged to be
+reviewed; it composes with #88 because it is built on it. Nobody was
+contacted, nothing was invoiced or charged, no grant was created, no provider
+was chosen.
+
+### Existing PRs, checked against #88's head
+- **#42, #45, #48, #69**: each PR's own head (`75b0aad`, `d8459f7`, `a4cee0a`,
+  `f8d0883`) is an ancestor of #88 (`git merge-base --is-ancestor`). Nothing of
+  theirs is missing. Each can be closed once #88 merges; this branch adds what
+  they did not cover (below).
+- **#36** (Russell software delivery back into the thread): not on the
+  commercial path. Not taken.
+
+### What was missing on #88, and is now built
+1. **An UNCERTAIN commercial effect could only be settled from a console
+   route.** `/operations/:id/resolve` has no client caller and needs an
+   operation id nobody can find, because keys are stored only as digests.
+   Commercial operations now carry a correlation Brain composes
+   (`cash:<opportunity>:<action>:<occurrence>[:<retry>]`). The Cash page lists
+   each piece's attempts and settles an unknown one with *Say what happened to
+   this attempt*. "It happened" needs the provider's reference (and, for a
+   payment, the amount). "It did not happen" closes it as FAILED. Route:
+   `POST /api/cash/opportunities/:id/resolve-effect`.
+2. **Crash after send was unreachable.** `runExternalEffect` never set
+   `recover_after`, so a process that died mid-send left the operation
+   `RESERVED`, and it read IN_PROGRESS for ever. `resumeAfterCrash` (#69) could
+   only run in a test that wrote the column by hand. Each external attempt now
+   arms a 15-minute lease (`armRecovery`); a later caller takes over and asks
+   the provider. It never resends, except for a natively idempotent adapter.
+3. **A provider refusal left no record.** It was a sentence in a tick report.
+   It is now an open need (`effect-failed:`) carrying the provider's category
+   and detail, and the piece does not move.
+4. **Only CONTACT_BUYER could ever be Brain-performed.** QUOTE_AND_INVOICE
+   (`cash.issue_invoice`, capability `ISSUE_AN_INVOICE`) and ACCEPT_PAYMENT
+   (`cash.take_payment`, `TAKE_A_PAYMENT`) now have the same contract. Both read
+   PRESENT only when a real adapter is registered for their namespace; none is
+   registered, so both read MISSING in every deployment. The payload comes from
+   the ledger, never from composition: an invoice is for the `PIPELINE_AGREED`
+   amount, a payment for what is still outstanding. A confirmed payment also
+   records a `CUSTOMER_PAYMENT` with the receipt as its verified reference.
+   Settlement stays a separate entry.
+5. **"Have Brain do it"** (`POST …/perform`, person-initiated). It asks the
+   grant about the exact action, requires the capability to be PRESENT, and
+   compares the page's `expectedOccurrence` (it never uses it to build the
+   key). So a second press after the first was recorded is refused rather than
+   becoming a second invoice. It also refuses while an earlier attempt at the
+   same action is unknown. After a person says an attempt did not happen, the
+   next press uses a new key (`…:<retry>`); a retryable refusal keeps its key.
+6. **The page could not show a piece's execution.** The owner view carries
+   `myCurrentWork.records[opportunityId]`, derived on read
+   (`cash/record.ts`): actions with who performed them, agreed / paid / settled
+   / outstanding from the ledger, Brain's attempts and their status, and what
+   Brain could perform, with the reason where it cannot. The page also gains
+   *Record the agreed amount* (`PIPELINE_AGREED`) beside payment and
+   settlement. The member projection is unchanged.
+
+The tick's contact path, the person's "have Brain do it" and a person settling
+an unknown all go through one handler, `applyEffectOutcome`. Each records
+under the same `actionKey`, so a race between them writes one row.
+
+### Test evidence
+- `npm run typecheck`: clean. `npm run build`: clean.
+- `tests/cashCommercialJourney.test.ts` (in-process real router, real
+  database, synthetic adapter only at the provider boundary): J01 READY → Brain
+  contacts → agreed → Brain invoices → second press refused → Brain takes the
+  payment → collect refused → settlement → COLLECTED, with every figure read
+  from the server. Also J02 uncertain → no resend → reconciled once; J03 crash
+  after send → taken over and reconciled, no resend; J04 person settles "it
+  happened"; J05 "did not happen" → explicit retry; J06 refusal kept on a need;
+  J07 no adapter → MISSING, nothing sent; J08 the page's own controls settle an
+  unknown. Green on SQLite and on Postgres 16.
+- Mutation checks: removing the recovery lease fails J03; removing the
+  occurrence comparison fails J01 (a second invoice is sent).
+- `test:impacted --base a23884c`: see the PR description for both backends.
+
+### What remains
+
+**Code gap**
+- ~~An attempt that succeeded but whose recording was refused shows as
+  UNRECORDED until a person presses again.~~ Closed in the follow-up below.
+- Brain never invoices or takes payment on its own initiative. Only a person's
+  press triggers either. That is deliberate (no signal establishes "the work is
+  agreed and done"), not an omission.
+
+**Provider / credential gap**
+- No adapter exists for `cash.contact_buyer`, `cash.issue_invoice` or
+  `cash.take_payment`. Choosing a messaging, invoicing or payment provider and
+  supplying its credentials is the owner's decision. An adapter must declare its
+  effect class (idempotent / reconcilable / opaque); `assertAdapterContract`
+  refuses one that lies about it.
+
+**Person-only authorization**
+- A commercial authority grant on the operating project, naming
+  `CONTACT_BUYER`, `QUOTE_AND_INVOICE` and `ACCEPT_PAYMENT`. The proposal above
+  stands.
+- Every external act until an adapter exists: the person sends, invoices and
+  takes payment, and records each with its reference.
+
+**Production integration**
+- Merge #88, then this branch, into `production`; `Deploy` ships it.
+  Production still serves `0041975`.
+
+## Follow-up (2026-10-02): a confirmed effect always reaches the record
+
+The last provider-independent gap: a provider confirmed an effect and Brain's
+own record of it did not land. Before this, `applyEffectOutcome` returned
+`PERFORMED_NOT_RECORDED` and kept nothing, so the receipt sat on a SUCCEEDED
+operation and the page read UNRECORDED until somebody pressed again.
+
+### The mechanism
+
+- **Durable truth is the existing operation.** `idempotency_operations` already
+  holds `state = SUCCEEDED`, the receipt in `result_ref`, and the correlation
+  `cash:<opportunity>:<action>:<occurrence>[:<retry>]`. "Confirmed but not
+  recorded" is derived: such an operation with no `cash_actions` row under
+  `actionKey(opportunity, action, occurrence)` — or, for a payment, no ledger
+  entry under `payment:<opportunity>:<receipt>`. No new table, no migration.
+- **Send-time context is written before the send.** An operation keeps only a
+  payload digest, so `sendCommercialEffect` now requires the authority it was
+  sent under, the amount it moves and the piece's state, and appends one
+  `CASH_EFFECT_INTENT` row to `cash_events` (append-only) before calling the
+  provider, once per correlation.
+- **Entry point: the durable tick.** `operate()` runs
+  `reconcileConfirmedEffects(projectId)` immediately before
+  `advanceWithinAuthority`, in every sprint state. It calls
+  `recordConfirmedEffect`, the same function a send, a person's resolution and
+  a replay use, so there is one meaning of a receipt.
+- **No resend.** The reconciliation path calls no adapter at all. The tick
+  also no longer reaches a READY piece that already has a contact on record
+  (it retries only the transition), and a person's "reach the buyer" on such a
+  piece is refused. A mutation that drops that guard sends a second message.
+- **No duplicates.** The action is `ON CONFLICT DO NOTHING` on its request key
+  and the payment on its idempotency key; the pass skips anything already
+  complete, and writes `CASH_EFFECT_RECONCILED` only when it created a row.
+  A second pass writes nothing (asserted by counting rows and events).
+- **Authority after send.** The action is attributed to the grant in the
+  intent, not to whatever is live now. `recordMoneyEvent` skips its second
+  ACCEPT_PAYMENT check only when a SUCCEEDED take-payment operation in the same
+  project carries exactly that receipt; anything else still meets the grant.
+  A revoked grant still refuses every *new* effect — asserted.
+- **State that no longer fits.** A contact on a piece that is still READY
+  begins execution if that is allowed now; otherwise, and for any effect on a
+  piece that is no longer executing or delivering, the action is recorded with
+  no transition and an `effect-unapplied:` need says why. The contact need
+  settles from the row once execution begins (the tick does it from the
+  recorded contact when the grant allows); the others are a person's.
+- **Operations from before intents existed** are attributed to a grant that
+  covers the action now; with none, an `effect-unattributed:` need keeps the
+  receipt visible rather than writing it against an authority nobody can name.
+
+### Proof
+
+`tests/cashEffectReconciliation.test.ts` (real routes, real tick, real DB;
+synthetic adapter at the provider, one injected write failure for A and E):
+A confirm-then-local-fail, B crash after confirmation (restarted adapter, no
+send), C revocation in flight (invoice and contact), D archived in flight,
+E payment once with no settlement plus a partial (action without ledger
+entry) record, F second pass writes nothing. All seven fail against the
+previous server code; unwiring the pass from the tick fails A, B and both E.

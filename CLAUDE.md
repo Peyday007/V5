@@ -656,6 +656,12 @@ never a process-local lock.
   this mechanism.
 - Deleting an operation record must never make a successful effect silently
   repeatable.
+- **An external attempt is leased, or a crash is permanent.** `runExternalEffect`
+  holds no transaction across the provider call, so an executor killed
+  mid-send leaves the operation `RESERVED`. With `recover_after` unset that read
+  as IN_PROGRESS for ever, and the crash reconciliation was reachable only from
+  a test that wrote the column by hand. `armRecovery` sets it when the attempt
+  begins. A take-over asks the provider and never resends blind.
 
 - **The caller's own timeout is part of the boundary, and it is shorter than
   Brain thinks.** A mutation that commits after the client has given up is
@@ -5821,6 +5827,28 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   refusal with no control beside it is §24's escalation with no answer. Three
   test journeys had recorded the money unattributed, or after collecting; they
   were wrong about the order and are corrected rather than the guard loosened.
+
+**Brain performs a commercial action only through `cash/perform.ts`.** The
+tick's contact, a person's *Have Brain do it* and a person settling an unknown
+outcome all reach `applyEffectOutcome`. A receipt records the action. An
+UNCERTAIN result raises a need naming the operation. A refusal is kept on a
+need with the provider's category. Each commercial operation carries a
+correlation Brain composes, so the page can find it again. An invoice is for
+the amount recorded as agreed, and a payment for what is outstanding. Neither
+amount is ever composed. Each capability reads PRESENT only when an adapter is
+registered for its namespace.
+
+**A receipt reaches the record even when the write after it did not.** The
+grant, amount and state a send was made under are appended to `cash_events` as
+`CASH_EFFECT_INTENT` before the provider is called, because an operation keeps
+only a digest. `reconcileConfirmedEffects` on the durable tick finds a
+SUCCEEDED commercial operation with no action under its key (or no payment
+entry under its receipt) and records it once through `recordConfirmedEffect`,
+which calls no adapter. The action is attributed to the grant it was sent
+under: a revocation stops the next effect and never unsays one that happened.
+A piece that no longer fits gets the action with no transition and an open
+`effect-unapplied:` need, and a READY piece already contacted is never
+contacted again.
 
 **What this version does not do, and says so.** It records the authorization and
 the money; it does not itself contact a buyer, issue an invoice or move funds. A
@@ -12045,6 +12073,9 @@ server/
       figures.ts        a money figure read from a source, and never produced
       tier.ts           signal, candidate, qualified, ready — derived, never stored
       conditions.ts     what settles a need, as a function rather than a wiring
+      effects.ts        the three commercial operations Brain can be connected to perform
+      perform.ts        a receipt becomes the record; an unknown waits for a person
+      record.ts         what happened on one piece: actions, ledger figures, attempts
       discoveryAuthority.ts  what pressing Start authorizes, and what it never will
       validation.ts     the bounded deep dive, and what it puts on the card
       engineCard.ts     fact, estimate, decision, unknown — and the margin withheld
@@ -12382,6 +12413,8 @@ tests/                  Vitest suites
   cashCurrencyHttp.test.ts   a sprint that is not in dollars, driven as a person does
   cashHttp.test.ts           Cash Mode's door, driven as an attack
   cashSection.test.tsx       the Cash section in a browser: four states, one control
+  cashCommercialJourney.test.ts  READY to settled through the real routes, and every unknown
+  cashEffectReconciliation.test.ts  a receipt whose record failed, finished once by the tick
   connectorIsolation.test.ts one site, two private operations, two identities
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
