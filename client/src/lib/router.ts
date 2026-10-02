@@ -35,6 +35,15 @@ export type Route =
    * in a month or two would take it down with one.
    */
   | { name: 'LABOR' }
+  /**
+   * The puzzle kernel's operator surface.
+   *
+   * Its own address for the same reason as `LABOR`: the puzzle products
+   * ledger, its maturity ladder and its lessons are true of the kernel's whole
+   * attempt rather than of any one sprint, so it gets a bookmarkable address
+   * rather than a panel hanging off Cash.
+   */
+  | { name: 'PUZZLES' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -99,6 +108,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'MACHINES' };
     case 'labor':
       return { name: 'LABOR' };
+    case 'puzzles':
+      return { name: 'PUZZLES' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
@@ -144,6 +155,8 @@ export function pathFor(route: Route): string {
       return '/machines';
     case 'LABOR':
       return '/labor';
+    case 'PUZZLES':
+      return '/puzzles';
     case 'SEARCH':
       return '/search';
     case 'INVITE':

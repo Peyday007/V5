@@ -38,6 +38,7 @@ import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
 import { MachinesView } from './Machines.tsx';
 import { LaborView } from './Labor.tsx';
+import { PuzzlesView } from './Puzzles.tsx';
 import {
   FleetView,
   ProjectView,
@@ -100,6 +101,13 @@ const SECTIONS = [
    * here.
    */
   { name: 'LABOR' as const, label: 'Labor', primary: false },
+  /*
+   * Puzzles is secondary for the same reason as its neighbours here: it is a
+   * kernel's whole ledger and maturity ladder rather than a destination
+   * somebody steers from hourly, and it outlives any one sprint the way Labor
+   * does.
+   */
+  { name: 'PUZZLES' as const, label: 'Puzzles', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -563,6 +571,7 @@ export function RussellShell({
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
         {route.name === 'MACHINES' ? <MachinesView projectId={projectId} /> : null}
         {route.name === 'LABOR' ? <LaborView projectId={projectId} /> : null}
+        {route.name === 'PUZZLES' ? <PuzzlesView projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (
