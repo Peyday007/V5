@@ -301,7 +301,10 @@ function needsPerson(
 }
 
 function nextAction(
-  plan: { asks: { purpose: string; formatName: string | null; why: string }[] },
+  plan: {
+    asks: { purpose: string; formatName: string | null; why: string }[];
+    declined: readonly { subject: string; why: string }[];
+  },
   maturity: readonly FormatMaturity[],
   snapshot: PuzzleSnapshot,
   commercial: readonly CapabilityReading[],
@@ -338,9 +341,30 @@ function nextAction(
       'fleet’s, not this project’s.'
     );
   }
+  /*
+   * The reason the allocator actually recorded, rather than a second opinion
+   * about it.
+   *
+   * This line used to say *"N question(s) are already being researched and no
+   * slot is free"* whenever a pass produced no ask, and the first production
+   * reading printed it with **two** rounds open against a
+   * `MAX_OPEN_PUZZLE_ROUNDS` of **three**. A slot was free; the slot was not
+   * the bound. What had actually happened is on `plan.declined`, in the
+   * allocator's own words and naming the row — *"Already being asked: round 1
+   * is open (pzq_…)"* — because with nothing on the map the one question this
+   * kernel can ask already had a live round.
+   *
+   * An operator reading the old sentence would raise the slot ceiling, and a
+   * third slot would have changed nothing. §47 settled the same question the
+   * same way one kernel along: the refusal a report prints is the refusal that
+   * actually happened, and a report with its own copy of an eligibility rule
+   * is the two-readers defect that always drifts in the copy nobody exercises.
+   */
+  const declined = plan.declined[0];
+  if (declined) return `${declined.subject}: ${declined.why}`;
   if (snapshot.openRounds > 0) {
     return (
-      `${snapshot.openRounds} question(s) are already being researched and no slot is free. ` +
+      `${snapshot.openRounds} question(s) are being researched and nothing else is a candidate. ` +
       'The next thing happens when one of them settles.'
     );
   }
