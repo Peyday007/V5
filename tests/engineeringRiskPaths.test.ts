@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { fileURLToPath } from 'node:url';
 import { riskForPaths, testPolicy } from '../server/domain/engineering.ts';
+
+// The checkout's own absolute root, rather than one machine's: a literal
+// `/home/user/V5` passes only in a checkout that happens to live there, and
+// CI's does not.
+const ROOT = fileURLToPath(new URL('../', import.meta.url)).replace(/\\/g, '/').replace(/\/+$/, '');
 
 describe('riskForPaths normalises before matching', () => {
   it.each([
     ['./server/db/migrations/x.sql'],
-    ['/home/user/V5/server/repos/x.ts'],
+    [`${ROOT}/server/repos/x.ts`],
     ['server\\repos\\x.ts'],
     ['././server/repos/x.ts'],
   ])('%s is TIER_3', (path) => {
