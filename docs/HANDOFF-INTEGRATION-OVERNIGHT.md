@@ -30,14 +30,14 @@ was closed, because closing them is a person's call.
 | #91 | `integration/research-2026-10-02` | `9f93304` | #59 #61 #67 #70 #72 #75 #77 #81 #84 #85 | — |
 | #92 | `integration/russell-2026-10-02` | `5742a38` | #40 #41 #53 #55 #58 #66 #78 #82 #83 | — |
 | #93 | `integration/surfaces-2026-10-02` | `7ca7a3b` | #47 #49 #50 #51 #52 #56 #63 #68 #73 #74 | — |
-| #94 | `integration/russell-delivery-2026-10-02` | `c50bffd` | #36 (migration 100 / pg 091) | — |
+| #94 | `integration/russell-delivery-2026-10-02` | see PR | #36 (migration 100 / pg 091) | #92 |
 | #95 | `integration/human-work-2026-10-02` | `1ad1b46` | #37 (101 / pg 092) | #94 |
 | #96 | `integration/commerce-kernel-2026-10-02` | `1c83dcf` | #23 (102 / pg 093) | #95 |
 | #97 | `integration/kernels-residue-2026-10-02` | `d27b04d` | #30, #35 residue (103 / pg 094) | #96 |
 | #98 | `integration/step12b-residue-2026-10-02` | `49494a3` | #3 residue | — |
 | #99 | `integration/pin-lockout-flake-2026-10-02` | `bf25706` | flake fix (no old PR) | — |
 
-#94 to #97 are a linear stack. Each PR's base is the branch below it, so each
+#92 → #94 → #95 → #96 → #97 is a linear stack (#94 was retargeted onto #92, see defect 12). Each PR's base is the branch below it, so each
 PR shows only its own diff.
 
 ## Integration defects fixed
@@ -73,6 +73,13 @@ PR shows only its own diff.
     production.** It raced a 5-second cooldown against a 4.7-second reboot. It
     now forces the hour-long lock deterministically: 10/10 passing, and it
     still catches an in-memory lockout (#99).
+12. **#53 (in #92) and #36 (in #94) disagreed on the software proposal part.**
+    #53 closed the set of keys at `title`, `objective` and `expectedOutcome`
+    and refused anything else. #36 added `acceptanceConditions` and
+    `liveCheck`, which are read and are named to the worker. Composed, every
+    proposal that said what done means was refused. Only the full suite over
+    every train together found this. The set now names both fields, and #94
+    stacks on #92 so the fix lives where both halves exist.
 11. **#3's shell took `projects[0]`** rather than the open thread's project.
     `shellProject` is ported (#98).
 
@@ -124,7 +131,8 @@ This order is derived from the code:
 1. #99, #91, #90, #92, #93, #98. Any order works. They have no migrations,
    compose cleanly with each other and with #89, and none needs #88.
 2. #88, then #89, the active revenue stack. It owns #42 to #48, #69 and #71.
-3. #94, #95, #96, #97, strictly in that order (migrations 100 to 103). They
+3. #92 (if not already merged in step 1), then #94, #95, #96, #97, strictly
+   in that order (migrations 100 to 103). They
    compose cleanly with #89 and may also go before step 2, but not out of
    order with each other. #97's labor change relies on #43 (inside #88) for
    the ask/round transaction. Before #88 lands, labor keeps production's
