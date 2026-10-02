@@ -118,6 +118,12 @@ import {
   validateStructural,
 } from '../domain/industry.ts';
 import {
+  COMMERCE_FINDINGS,
+  COMMERCE_GUIDE,
+  validateCommerce,
+} from '../domain/commerce.ts';
+import type { CommerceFinding } from '../domain/types.ts';
+import {
   LABOR_FINDINGS,
   LABOR_FINDING_GUIDE,
   LABOR_SUBJECT_GUIDE,
@@ -1352,6 +1358,50 @@ function puzzleOf(
   };
 }
 
+/**
+ * The commerce declaration on one submitted claim.
+ *
+ * `structuralOf`'s shape and `structuralOf`'s argument, one axis along:
+ * delegated whole to `validateCommerce`, which is also what the provider path
+ * in `services/research/schema.ts` calls. The wire names are snake_case and
+ * the parsed names are not, so this is a rename and nothing else. A second
+ * copy of the *rule* here is how two doors come to disagree about what a valid
+ * declaration is, which this repository has had to record five times.
+ */
+function commerceOf(
+  row: Record<string, unknown>,
+  where: string,
+): {
+  commerceFinding: CommerceFinding | null;
+  commerceSubject: string | null;
+  commerceQualifier: string | null;
+  commerceAmountMinor: number | null;
+  commerceRatePpm: number | null;
+  commerceDays: number | null;
+  commerceCount: number | null;
+} {
+  const parsed = validateCommerce({
+    where,
+    finding: row['commerce_finding'],
+    subject: row['commerce_subject'],
+    qualifier: row['commerce_qualifier'],
+    amountMinor: row['commerce_amount_minor'],
+    ratePpm: row['commerce_rate_ppm'],
+    days: row['commerce_days'],
+    count: row['commerce_count'],
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return {
+    commerceFinding: parsed.value.finding,
+    commerceSubject: parsed.value.subject,
+    commerceQualifier: parsed.value.qualifier,
+    commerceAmountMinor: parsed.value.amountMinor,
+    commerceRatePpm: parsed.value.ratePpm,
+    commerceDays: parsed.value.days,
+    commerceCount: parsed.value.count,
+  };
+}
+
 const submitClaimsTool: McpTool = {
   name: 'brain_submit_claims',
   title: 'Submit a fragment\'s claims',
@@ -1405,10 +1455,21 @@ const submitClaimsTool: McpTool = {
     PUZZLE_FINDINGS.map((one) => `${one} — ${PUZZLE_FINDING_GUIDE[one]}`).join('; ') +
     '. All but RIGHTS_CONSTRAINT also require puzzle_format, and the two figure kinds ' +
     'require puzzle_product_class, puzzle_value, puzzle_amount_cents and puzzle_currency. ' +
+    'Separately again, where a claim establishes something about selling a product to ' +
+    'somebody on a channel — what it costs, what it sells for, who supplies it, what the ' +
+    'platform charges or forbids, or whether anybody actually bought it — set ' +
+    'commerce_finding to the kind it is: ' +
+    COMMERCE_FINDINGS.map((finding) => `${finding} — ${COMMERCE_GUIDE[finding]}`).join('; ') +
+    '. Every commerce_finding requires commerce_subject. Money goes in ' +
+    'commerce_amount_minor, a rate in commerce_rate_ppm as parts per million, a duration in ' +
+    'commerce_days and a count in commerce_count; a figure in the wrong one is refused rather ' +
+    'than converted. PURCHASE_EVIDENCE and ATTENTION_EVIDENCE are deliberately different ' +
+    'kinds: views are not demand, and filing them as one is the single mistake that makes ' +
+    'this whole exercise produce a confident wrong answer. ' +
     'The axes are independent: a claim can carry an opportunity_signal, a ' +
-    'structural_finding, a deal_finding and a puzzle_finding at once, and most claims carry ' +
-    'none of them. ' +
-    'monetization_method is not a fifth axis, because it is the one field here that says ' +
+    'structural_finding, a deal_finding, a puzzle_finding and a commerce_finding at once, and most ' +
+    'claims carry none of them. ' +
+    'monetization_method is not another axis, because it is the one field here that says ' +
     'nothing on its own: where a source says how money would actually be made from an opening ' +
     'it establishes, set it alongside that claim\'s opportunity_signal — only alongside one, ' +
     'because a way of being paid has to say what it is a way of being paid for. Brain already ' +
@@ -1793,6 +1854,76 @@ const submitClaimsTool: McpTool = {
                 'published. Brain never converts, so a product class whose figures are in two ' +
                 'currencies has its contribution withheld and says why.',
             },
+            /*
+             * Declared, not only described.
+             *
+             * §33 records what the alternative cost: `opportunity_signal` was
+             * named in this tool's prose and left out of the schema beside
+             * `additionalProperties: false`, so a client honouring the schema
+             * dropped the one field that decided whether anything was ever
+             * created. Every one of these seven is declared here for that
+             * reason.
+             */
+            commerce_finding: {
+              type: 'string',
+              enum: [...COMMERCE_FINDINGS],
+              description:
+                'Optional, and absent for most claims. Set it when this claim establishes ' +
+                'something about selling a product to somebody on a channel: ' +
+                COMMERCE_FINDINGS.map((one) => `${one} — ${COMMERCE_GUIDE[one]}`).join('; ') +
+                '. Independent of opportunity_signal and structural_finding — a claim may ' +
+                'carry any combination of the three, and most carry none.',
+            },
+            commerce_subject: {
+              type: 'string',
+              description:
+                'Required whenever commerce_finding is set: what the finding is about, as the ' +
+                'source names it — the platform, the product, the supplier. On a round that ' +
+                'asks about several platforms at once it is what says which platform a figure ' +
+                'belongs to, and a figure Brain cannot attach to one is refused rather than ' +
+                'attached to whichever is nearest.',
+            },
+            commerce_qualifier: {
+              type: 'string',
+              description:
+                'Only for PRODUCT_CANDIDATE, where it is required: the channel the product is ' +
+                'sold on. The same product on two channels has two fee structures, two ' +
+                'audiences and two sets of eligibility rules, so one with no channel has ' +
+                'nothing to work out about it. Omitted for every other kind.',
+            },
+            commerce_amount_minor: {
+              type: 'integer',
+              description:
+                'Only for the money kinds (SELLING_PRICE, LANDED_UNIT_COST, SHIPPING_COST, ' +
+                'CONTENT_COST, ADVERTISING_COST, COMPETING_OFFER), and optional there: the ' +
+                'figure a source publishes, in minor units of the sprint currency. Leave it ' +
+                'out where no source publishes one — an unknown is recorded as unknown and ' +
+                'withholds the whole contribution, which is the correct outcome; a guess ' +
+                'would make the product look worth selling.',
+            },
+            commerce_rate_ppm: {
+              type: 'integer',
+              minimum: 0,
+              maximum: 1000000,
+              description:
+                'Only for the rate kinds (PLATFORM_FEE, PAYMENT_FEE, CREATOR_COMMISSION, ' +
+                'RETURN_RATE, REFUND_RATE, CHARGEBACK_RATE, SUPPLIER_RELIABILITY): parts per ' +
+                'million, so 1000000 is all of it and 8% is 80000. A percentage sent here is ' +
+                'refused rather than converted.',
+            },
+            commerce_days: {
+              type: 'integer',
+              description:
+                'Only for the duration kinds (DELIVERY_TIME, RETURN_TERMS, PAYOUT_DELAY, ' +
+                'TREND_DURABILITY, FULFILMENT_REQUIREMENT): whole days.',
+            },
+            commerce_count: {
+              type: 'integer',
+              description:
+                'Only for the count kinds (PURCHASE_EVIDENCE, ATTENTION_EVIDENCE, ' +
+                'CREATOR_ACTIVITY, SATURATION, SUPPLIER_AVAILABLE, MINIMUM_ORDER): units, ' +
+                'orders, views, sellers — whatever the kind counts.',
+            },
             retrieval_state: {
               type: 'string',
               enum: [...RETRIEVAL_STATES],
@@ -1886,6 +2017,13 @@ const submitClaimsTool: McpTool = {
          * answer can overwrite the other.
          */
         ...structuralOf(row, where),
+        /*
+         * And what it establishes about selling something to somebody on a
+         * channel. A third independent question about the same claim: a
+         * supplier's published lead time is a commerce finding and neither of
+         * the other two, and most claims answer none of the three.
+         */
+        ...commerceOf(row, where),
         /*
          * And what it establishes about who or what produces the work.
          *

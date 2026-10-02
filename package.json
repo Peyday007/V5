@@ -33,6 +33,7 @@
     "report:cash": "tsx scripts/cash-report.ts",
     "report:refinement": "tsx scripts/refinement-report.ts",
     "verify:closeout": "tsx scripts/closeout-verify.ts",
+    "commerce": "tsx --env-file-if-exists=.env scripts/commerce.ts",
     "report:labor": "tsx scripts/labor-report.ts",
     "humanwork": "tsx scripts/humanwork.ts",
     "report:puzzle": "tsx scripts/puzzle-report.ts",
