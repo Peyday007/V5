@@ -150,7 +150,8 @@ export interface ProposalRefusal {
     | 'UNRESOLVABLE_REFERENCE'
     | 'MISSING_REQUIRED_PART'
     | 'BAD_DUPLICATE_REFERENCE'
-    | 'PROBE_OUT_OF_BOUNDS';
+    | 'PROBE_OUT_OF_BOUNDS'
+    | 'UNKNOWN_PART_FIELD';
 }
 export type ProposalResult = { ok: true; proposal: ValidatedProposal } | ProposalRefusal;
 
@@ -166,6 +167,36 @@ const KNOWN_FIELDS = new Set([
   'priority',
   'software',
 ]);
+
+/**
+ * The keys each nested part of a proposal may carry.
+ *
+ * The top-level check above refuses the whole proposal for an unknown field,
+ * on the stated rule that "an unknown field or action fails the whole
+ * proposal rather than being dropped." That rule used to stop at the top
+ * level: `candidate`, `probe` and `software` were cast to
+ * `Record<string, unknown>` and read field by field, so an unrecognised key
+ * nested inside one of them was silently ignored rather than refused — a
+ * worker that believed an extra instruction nested there would take effect
+ * had it dropped and the rest of the proposal acted on anyway. Checked here,
+ * against the same closed sets `validateProposal` reads from, so a fourth
+ * surprise of this shape has to get past a test first.
+ *
+ * Exported so the turn manifest — and the test that holds the two together —
+ * read the one set the validator matches against, rather than a second copy
+ * of it that could drift.
+ */
+export const CANDIDATE_PART_FIELDS = new Set(['title', 'statement', 'duplicateOf']);
+export const PROBE_PART_FIELDS = new Set(['question', 'maxLookups']);
+export const SOFTWARE_PART_FIELDS = new Set(['title', 'objective', 'expectedOutcome']);
+
+/** An unknown key inside a nested part, checked before any known field of it is read. */
+function unknownPartField(value: Record<string, unknown>, allowed: Set<string>): string | null {
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) return key;
+  }
+  return null;
+}
 
 /**
  * Every length this validator enforces, in one place and exported.
@@ -368,6 +399,16 @@ export function validateProposal(input: {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return refuse('MISSING_REQUIRED_PART', 'the proposed idea was not readable');
     }
+    const unknownCandidateField = unknownPartField(
+      value as Record<string, unknown>,
+      CANDIDATE_PART_FIELDS,
+    );
+    if (unknownCandidateField) {
+      return refuse(
+        'UNKNOWN_PART_FIELD',
+        'the proposed idea carried a field this version does not accept',
+      );
+    }
     const title = text((value as Record<string, unknown>)['title'], FIELD_LIMITS.candidateTitle);
     const statement = text(
       (value as Record<string, unknown>)['statement'],
@@ -400,6 +441,13 @@ export function validateProposal(input: {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return refuse('MISSING_REQUIRED_PART', 'the proposed probe was not readable');
     }
+    const unknownProbeField = unknownPartField(value as Record<string, unknown>, PROBE_PART_FIELDS);
+    if (unknownProbeField) {
+      return refuse(
+        'UNKNOWN_PART_FIELD',
+        'the proposed probe carried a field this version does not accept',
+      );
+    }
     const question = text((value as Record<string, unknown>)['question'], FIELD_LIMITS.probeQuestion);
     const lookups = (value as Record<string, unknown>)['maxLookups'];
     if (!question) {
@@ -429,6 +477,13 @@ export function validateProposal(input: {
       return refuse('MISSING_REQUIRED_PART', 'the proposed software change was not readable');
     }
     const record = value as Record<string, unknown>;
+    const unknownSoftwareField = unknownPartField(record, SOFTWARE_PART_FIELDS);
+    if (unknownSoftwareField) {
+      return refuse(
+        'UNKNOWN_PART_FIELD',
+        'the proposed software change carried a field this version does not accept',
+      );
+    }
     const title = text(record['title'], FIELD_LIMITS.softwareTitle);
     const objective = text(record['objective'], FIELD_LIMITS.softwareObjective);
     const expectedOutcome = text(record['expectedOutcome'], FIELD_LIMITS.softwareOutcome);
