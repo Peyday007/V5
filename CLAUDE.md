@@ -230,6 +230,10 @@ There must be no workflow where the user has to remember "now go update the data
 47. No possibility discarded for ranking poorly — a rank is a view of the space
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
+48. No person treated as engaged who has not accepted, no result accepted that
+    was not judged against its conditions by something other than the person
+    who did it, and no one's time or money committed without a person's
+    decision on the concrete terms.
 
 ## 8. Model prose never mutates project state.
 
@@ -7099,7 +7103,6 @@ because `rank` orders on properties of the piece rather than of the account; and
 the owner's *disposition* is absent entirely, being a recommendation to whoever
 owns the job rather than a fact about the frontier.
 
-
 ## 35. The setup is one screen, and a screen two accounts cannot compare is two screens.
 
 §34 gave a member a resumable way to connect their Claude account and stopped
@@ -11834,6 +11837,227 @@ repair, and the shape is the register's (§43) carried one level up.
 `npm run goals` and the `Goals` workflow are the terminal and production doors;
 `file --from <row>` files real recorded work with that row's own words as the
 intent and composes nothing.
+## 51. A change asked for in a conversation is answered in that conversation, all the way to production.
+
+The Software Factory could be reached from Russell (§27) and stopped halfway
+back. A person asked for a change, a card appeared, and from there the journey
+was theirs to carry: the card's one button could never start a campaign, the
+conversation heard nothing while the work ran, the release decision lived on
+GitHub with nothing in Brain describing what it would release, and nothing
+anywhere observed the change reaching production or behaving there.
+`services/russell/softwareDelivery.ts` and `docs/SOFTWARE-SERVICE.md` are the
+other half, and they add an entrance and a ledger rather than a second set of
+rules.
+
+- **The Authorize button could never have worked, and two tests pinned it.**
+  `authorizeSoftwareRequest` refuses to invent acceptance conditions — correctly:
+  what success is is the person's, and a model supplying the conditions its own
+  work is judged against is §27's grading-its-own-exam — and the factory refuses
+  to approve a contract with none. Both cards posted `{ grantId }` and nothing
+  else, so every Authorize in Russell was refused, and
+  `softwareDecisionCard.test.tsx` asserted exactly that body. **A test that pins
+  the request a control sends is pinning whatever the control does, including
+  the defect.** The request now carries a *proposal* — the worker's conditions,
+  or the expected outcome itself when it proposed none — the card shows it
+  editable above the button, and Authorize sends what is on the screen. §24's
+  rule that a decision is a proposal to approve, at the one field the factory
+  will not start without. The server still refuses a request that sends none.
+- **Every fact is read, never reported.** A stage is the campaign row; a merge is
+  the forge's `merged` flag and merge commit; *released* is this process's own
+  `BRAIN_REVISION` containing that commit, answered by the forge's compare; the
+  live check is a GET the process makes against itself. No worker's summary
+  decides anything on this path.
+- **The release decision stays where the repository puts it.** For a hosted
+  campaign the release is merging the pull request, and §27 says the factory may
+  never merge one; Brain holds no forge credential and must not. So Russell
+  makes the decision *legible* — the files and line counts, the head commit and
+  whether it is the one Brain integrated and had reviewed, the verdict and its
+  independence tier, the checks, the conditions — links the place it is made,
+  and records a refusal. It observes the person's merge and performs none. A
+  refusal closes nothing on the forge, and the message says so.
+- **Brain can observe the deployment of one repository: its own.** The only
+  deployment it can read is the revision it was built from, so a merge anywhere
+  else is reported as a merge and its deployment as outside what Brain can see —
+  never guessed. `SELF_GRANT_ID` names the grant by the envelope's id rather than
+  by a remote, so a fork or a mirror is not mistaken for it.
+- **Each milestone once, in the conversation once.** `(request_id,
+  milestone_key)` is unique, only the inserting caller writes the message, and a
+  milestone whose message a crashed tick never wrote is finished by a later one
+  after a delay long enough never to race its inserter. Messages are `SYSTEM`
+  and render as **Brain**: they are facts Brain read, and attributing them to
+  Russell would make an observation read like an opinion.
+- **A resumed campaign says so.** The count of blockers seen is part of a stage
+  milestone's key, because otherwise a campaign blocked and resumed in the same
+  stage would leave "Blocked" as the conversation's last word over work that is
+  moving — §29's status contradicting the rows, in a thread.
+- **The forge is asked as little as the facts allow.** At most once per request
+  per `DELIVERY_POLL_MS`, claimed by a compare-and-swap on the last poll time; a
+  merge is permanent, so the pull request is never read again after one; and
+  whether a revision contains a merge can change only with a new process, so it
+  is asked once per revision and remembered in memory for exactly that reason.
+- **The live check is Brain's URL with the person's path.** A proposal supplies a
+  path and a piece of text, validated to start with `/`, never climb and never
+  name a host; the host is `127.0.0.1` and this process's own port. It follows
+  only same-origin script and style references, because a single-page
+  application's text is in its bundle, and a check that read only the HTML would
+  fail every interface change. It is on the card before anybody authorizes.
+
+**What it does not claim.** The acceptance conditions are verified on the
+integrated tree before release and are not re-run against production; the live
+check is one declared behaviour. The fixture suites prove the mechanism on both
+backends; `docs/SOFTWARE-SERVICE-EVIDENCE.md` records the live journey, and
+until a real request has travelled it this section is a design with tests, not
+a production reading — the separation Step 3 drew.
+
+## 52. A decision that a person is needed is not the person doing it.
+
+§41 decides *whether* a task needs a person and why. `server/services/humanwork/`
+(`docs/HUMAN-WORK.md`, migrations `101_human_work.sql` / pg `092_human_work.sql`)
+is everything after that decision, and it was found missing by reading
+production rather than by reading code: on 2026-09-23 `labor-report` answered
+`maps=0` across all thirteen projects, while `people foundation` showed a real
+task only a person can do sitting undone — three members whose Claude accounts
+Brain cannot connect for them.
+
+- **The gate is the existing judgment.** A work order is refused unless the
+  task's live labor allocation names a human layer and one of the six reasons.
+  What the order adds is what the judgment left unsaid: the exact work, why a
+  person, what Brain prepares first, and a non-empty acceptance standard.
+- **Three facts that are easy to collapse are kept apart by the schema.** A
+  candidate row holds no agreement (`TEAM_MEMBER` needs an account,
+  `RESEARCHED` a gated claim with a source, `EXISTING_RELATIONSHIP` a person
+  attesting); `INVITED` is not `ENGAGED`; and `ENGAGED` records *how* it is
+  known — the worker accepting in Brain, or a coordinator attesting with the
+  evidence named. Nobody accepts for a team member.
+- **The engagement decision is a Needs You card, and answering it is not
+  authority.** `resolveEngagementDecision` re-reads whether the answerer
+  administers the project at that moment and puts the card back otherwise —
+  §24's answering transition, and the capability card's placement in
+  `resumeAnsweredRequest` for the same reason. A standing commercial authority
+  covering `ENGAGE_CONTRACTOR` is never bypassed: the approval holds the amount
+  under its ceilings or is not carried out.
+- **Brain holds one channel to a person and says so.** A team member's own Home
+  page. For anybody else Brain composes the message and a person sends it and
+  records the channel; the missing outbound channel is reported as a blocker, not
+  papered over. A member who cannot sign in is a blocker naming People's control.
+- **A result is accepted only when every condition reads MET now**, judged three
+  ways and never by the worker: an account-foundation dimension re-read from rows,
+  a document Brain actually read, or a review of the latest round by somebody else.
+  A `NOT_MET` must name the repair. Brain accepts by itself only a no-charge result
+  whose every condition it reads from rows.
+- **The assignee holds no membership.** `/api/assignments` is one comparison
+  against the principal, and the brief is built field by field — the project is
+  not in it. Absent and not-yours are one body.
+- **Money and time are rows, and obligations outlive the work.** Payments need a
+  reference and cannot exceed what was approved; outstanding is derived and
+  survives acceptance and cancellation; reliability for the next staffing decision
+  is derived from earlier engagements and never stored.
+
+The screen acts on existing work and has no forms yet for opening an order,
+adding a candidate or preparing terms; those are the routes and
+`npm run humanwork -- connect-capacity`, the reviewed recipe for the task that
+exists today.
+
+**A member who holds a passkey and no PIN cannot receive the work, and that is
+the PIN migration's boundary rather than this kernel's defect.** The served
+sign-in screen asks for six digits only (`SignIn.tsx` records why), so such an
+account is `SIGN_IN BLOCKED`, the work order says so as a blocker for a Brain
+administrator, and the remedy is the existing recovery link, which ends in a
+PIN. `tests/humanWork.test.ts` walks that remedy on a passkey-only member and
+asserts the blocker clears and the assignment reaches them; nothing here
+re-opens device sign-in, which is a decision about the front door.
+
+---
+
+## 53. A view is not a sale, and the whole loop is built on that one distinction.
+
+The industry kernel gave the ten mechanism buckets an axis saying *where* in
+the economy to look, and it stops where a subject has produced an opening. An
+opening is a published fact about somebody else's transaction, and nothing in
+this Brain turned one into a thing **we** sell.
+
+The social commerce kernel (`server/services/commerce/`,
+`server/repos/commerce.ts`, `server/domain/commerce.ts`,
+`docs/COMMERCE-KERNEL.md`) is that loop, for one shape of transaction: bought
+from a supplier, discovered on a social channel, shipped without ever being
+held. Demand signal, product candidate, supplier validation, unit economics,
+offer, a bounded sales test, fulfilment, realized profit or loss, learning.
+Everything it adds is a new **entrance** to machinery Steps 4 to 12C already
+built, and none of it is a second set of rules.
+
+- **The channels are discovered, never declared, and TikTok is a seed.** There
+  is no list of platforms in this repository and a test reads the source of all
+  twelve modules to prove it. `CHECK (origin = 'SEED' OR source_claim_id IS NOT
+  NULL)` means a channel exists because a gated claim established it or because
+  a person said so, and there is no third way. That is the brief's *start with
+  TikTok, while letting evidence name a stronger channel* as a row rather than
+  as a constant — and on this subject a constant would be wrong within months,
+  because the platforms revise their commission, their eligibility and their
+  fulfilment obligations faster than anything else this Brain researches.
+- **Attention is never demand, and the separation is structural in four
+  places.** Two finding kinds, so a view count has somewhere to go that is not
+  where a purchase goes; two lanes, so a fragment cannot clear a demand bar on
+  view counts; the stage, so nine attention readings advance nothing; and the
+  rank, where *somebody is shown to have bought* is rule two and attention
+  never satisfies it. `ATTENTION_EVIDENCE` exists **so that** the honest
+  reading — many watched, nobody is shown to have paid — can be recorded
+  against a proposition rather than for it. A view filed as demand is the one
+  error that would make everything downstream confidently wrong, so it is
+  refused by construction rather than by a filter over prose.
+- **Eight inputs and one blank derives nothing.** §30 records this at the
+  opportunity card and here it is worse, because the number decides whether
+  somebody buys stock. Contradictory rates are withheld rather than clamped:
+  three published loss rates summing past the selling price cannot all be true,
+  and clamping would produce the most pessimistic figure the arithmetic allows
+  and report it as derived — a made-up number wearing a citation.
+- **A gated claim is an `ESTIMATE` and never a measurement**, however good its
+  source. A published platform fee is a fact about the platform and an estimate
+  about *our* economics, because nothing has charged us one. Only a settled
+  bounded test measures anything. The basis is **derived** from where a row came
+  from rather than stored beside it, and the **weakest input wins**: a margin
+  built from eight published fees and one guess is an assumption, because the
+  guess is load-bearing.
+- **The bounded test asks three gates in deny-by-default's own order** — may
+  this happen, could this happen, how much — and the first thing missing becomes
+  a named blocker on a row with its detail. Asking the capability first would
+  mean discovering that Brain *could* list something it was never authorized to
+  sell, which is a fact nobody should learn by nearly doing it. `NO_GRANT` and
+  `NO_CAPABILITY` are separate values because they have opposite remedies, and
+  one word for both sends somebody to fix the wrong one. **A blocked test does
+  not advance the stage**: the piece has not got further, and reporting an
+  obstacle as progress is the encouraging reading §29 removed.
+- **The self-expansion pass raises a capability need before the loop reaches
+  the step, and gates nothing.** A capability discovered when a piece needs it
+  is discovered too late. It refuses to raise a need for an `UNKNOWN`
+  capability, because a remedy nobody can carry out is the escalation-with-no-
+  transition defect manufactured by the pass that exists to name remedies.
+
+**Four envelopes rather than two, and running it is what found that.** The
+first version routed every non-economics round to one demand envelope, on the
+reasoning that channels, eligibility, products and supply are one question
+about one surface. `profileFor` is keyed by envelope and a profile carries the
+**required lane**, so an eligibility question compiled with `purchase` required
+— a lane a platform's terms page can never satisfy. A worker would have
+answered correctly and the fragment would have been blocked. §25's *wrong
+answer confidently derived*, arriving through a lane instead of through a
+scope, and invisible to every test of either half. The four share their
+permissions and their assignment template by reference, so none authorizes
+anything another does not; what differs is the completion standard, which is
+what the gate actually judges.
+
+**What is true today, said plainly.** The loop runs end to end against a real
+Brain: a sprint activated, TikTok Shop seeded, two rounds opened as ordinary
+Russell candidates, both compiling under their own envelopes. **No fleet worker
+has answered a commerce question**, because that needs a deploy and a fire —
+the separation Step 3 drew between an engine passing its tests and a real job
+having actually run. And **nothing has been measured**: every figure this
+kernel can hold is read from somebody else's published page, both
+`PUBLISH_A_LISTING` and `TAKE_A_PAYMENT` read `MISSING`, and every reading says
+so in those words. The loop is complete and its last two steps are blocked on
+connections a person has to make, which the kernel names on a row with the
+remedy.
+
+---
 
 ## Repository map
 
@@ -11858,6 +12082,7 @@ server/
   domain/
     types.ts            enums, row types, view types — the contract
     personName.ts       what a person is called; an address is never it
+    commerce.ts         what a commerce finding means, and which figure column it owns
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
@@ -11874,6 +12099,7 @@ server/
     dealflow.ts         what a claim establishes about a transaction, and where it lands
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
+    commerce.ts         channels, propositions, every reading, and the one test that spends
     design.ts           surfaces, captures, findings, patterns, corrections, gaps
     auditReopens.ts     the record behind a re-audit, and its one reservation
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
@@ -11901,6 +12127,7 @@ server/
     manufacturing.ts  the ladder, the capability ledger, and the one write research cannot reach
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
     labor.ts          workflows, tasks, who produces each, and what has been asked
+    humanWork.ts      orders, candidates, engagements, and the append-only record of delivery
     monetization.ts   the possibility ledger; nothing in it is ever deleted
     engineering.ts    evidence, interventions and blockers; append-only
   services/
@@ -12018,6 +12245,17 @@ server/
       probe.ts          the one bounded self-test that turns configured into proven
       commission.ts     every commissioning step in order, and one READY / NOT READY answer
       lab.ts            the eight test modes, and the five this version refuses to run
+    commerce/
+      allocate.ts       which question the loop asks next, and the six rules in order
+      audit.ts          what this loop needs and does not have, raised before it is needed
+      economics.ts      whether the money works, and the blanks that withhold it entirely
+      expand.ts         opening the questions, and absorbing what a declaration establishes
+      kernel.ts         one pass: learn what finished, operate what is next, expand what is missing
+      questions.ts      what each round asks, with "a view is not a sale" in every one
+      reading.ts        what one proposition currently is, derived entirely from rows
+      seed.ts           a person naming a channel — the one origin Brain may not write
+      test.ts           the bounded sales test, and the precise blocker where it stops
+      view.ts           the loop's maturity, with no single number standing for it
     cash/
       access.ts         where the shared frontier ends and a private job begins
       shared.ts         what every member may read, built from the columns it names
@@ -12085,6 +12323,14 @@ server/
       view.ts           §13's six readings, and the four figures nothing measures
       declare.ts        a person naming a workflow; the one origin Brain may not write
       kernel.ts         the tick, bounded by authority and concurrency and nothing else
+    humanwork/
+      order.ts          a person is necessary, gated on the labor allocation, and for exactly what
+      candidates.ts     who could do it, the evidence for it, and reliability from earlier work
+      engage.ts         terms, the Needs You decision, the ask, and the person's own acceptance
+      deliver.ts        updates, deliverables, conditions judged three ways, acceptance, money
+      view.ts           the stage, who acts next, and the sentence Russell says; the assignee's brief
+      kernel.ts         the tick: deliver in Brain, accept what rows prove, note a missed date
+      recipes.ts        reviewed shapes of work only a person can do
     manufacturing/
       program.ts        starting a programme, and what pressing Start authorizes
       ladder.ts         the classes of machine, and how far Brain has got with each
@@ -12176,6 +12422,7 @@ server/
       probeEnvelope.ts  where a probe may look — in code, named by id
       proposal.ts       zero-trust validation of what a model proposes
       writeback.ts      what happens when a mission finishes, exactly once
+      softwareDelivery.ts  a change asked for here, followed to production and back
       needsHuman.ts     the park a packet stops at, and the answer that finishes it
       planning.ts       the judgment pass, its post-probe repeat, and the mission spec
       loop.ts           the durable tick, beside the dispatcher
@@ -12250,6 +12497,7 @@ server/
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
     labor.ts            the labor kernel's door: workflows, tasks, who produces each
+    humanWork.ts        work done by people: the project's door and the assignee's own
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     register.ts         the work register's door: workstreams, links, corrections
     bridge.ts           the conversation entrance: credentials, sync, transcript, status
@@ -12298,17 +12546,20 @@ scripts/
   refinement-report.ts      where every deep dive spent its time, stage by stage
   labor-report.ts           §13's six readings, and the four figures nothing measures
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
+  humanwork.ts              work done by people: show it, or open the reviewed capacity recipe
   puzzle-report.ts          what was made, proved, sold and learned; one puzzle re-rendered
   puzzle-report.sh          the same, inside the deployed container, on one connection
                             (reached by .github/workflows/puzzle-report.yml, which
                             checks the marker it prints)
   admin.ts                  emergency administration, on a terminal rather than a page
   engineering.ts            the engineering connector on a terminal; the only door for CI/OPERATOR evidence
+  commerce.ts               naming the first channel, and one pass of the loop
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain, verify a pool
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
+  commerceKernel.test.ts     a view is not a sale, and one blank derives nothing
   designKernel.test.ts       what a design kernel may conclude, and what it may not
   designJudgedWalk.test.ts   one cycle, walked: a change lands, two bins, a closed cycle
   manufacturingKernel.test.ts  a gated round files everything and holds nothing
@@ -12374,6 +12625,8 @@ tests/                  Vitest suites
   connectorIsolation.test.ts one site, two private operations, two identities
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
+  humanWork.test.ts          four principals, one journey, and every boundary between them
+  humanWorkBrowserToDatabase.test.ts  the assignee's Home card and Russell's line, over the real route
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```

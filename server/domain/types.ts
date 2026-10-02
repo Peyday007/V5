@@ -440,6 +440,11 @@ export const EVENT_TYPES = [
    * changed without saying what it changed from.
    */
   'LABOR_ALLOCATION_DECIDED',
+  'HUMAN_WORK_ORDER_OPENED',
+  'HUMAN_WORK_ENGAGEMENT_DECIDED',
+  'HUMAN_WORK_ENGAGED',
+  'HUMAN_WORK_RESULT_ACCEPTED',
+  'HUMAN_WORK_CANCELLED',
   /* ----------------------------------------------------------------------- */
   /* The manufacturing empire kernel                                          */
   /* ----------------------------------------------------------------------- */
@@ -1470,6 +1475,364 @@ export interface LaborRound {
   updatedAt: string;
 }
 
+/* ---------------------------------------------------------------------------
+ * THE SOCIAL COMMERCE KERNEL
+ *
+ * `STRUCTURAL_FINDINGS`' argument, one axis along, and the third time this
+ * repository has needed it: `OPPORTUNITY_SIGNALS` says *this is a piece of
+ * work*, `STRUCTURAL_FINDINGS` says *this is how the industry is put
+ * together*, and these say *this is what it costs to sell this thing to these
+ * people on this channel*. A claim carries any combination of the three, and
+ * most claims carry none of them.
+ *
+ * Deciding which one a source establishes is a judgement only a reader of the
+ * source can make. Brain's part is to insist the declaration exists and to
+ * match it exactly — §8, at the table that decides whether money is being
+ * spent well.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * A distribution channel is discovered, never declared.
+ *
+ * TikTok is a *seed*, and that is the whole reason this is an origin column
+ * rather than a constant holding the word "TIKTOK". The brief says to start
+ * with TikTok while allowing evidence to identify stronger channels; a list of
+ * channels in this repository would answer the question the kernel exists to
+ * ask, and would be wrong about every platform that launched, changed its
+ * commerce terms or closed since somebody typed it. §38's rule 1, at a
+ * different axis of the same economy.
+ */
+export const COMMERCE_CHANNEL_ORIGINS = ['SEED', 'DISCOVERED'] as const;
+export type CommerceChannelOrigin = (typeof COMMERCE_CHANNEL_ORIGINS)[number];
+
+export const COMMERCE_FINDINGS = [
+  /*
+   * The two that create something named. Everything else is evidence about
+   * something already named, which is what keeps the perimeter small: a graph
+   * that accepted every kind as a subject becomes a place to put anything, and
+   * then "what are we actually selling" stops having an answer.
+   */
+  'CHANNEL',
+  'PRODUCT_CANDIDATE',
+
+  /*
+   * Demand, and the distinction this whole kernel turns on.
+   *
+   * `ATTENTION_EVIDENCE` exists so that a view count has somewhere to go that
+   * is *not* the place a purchase goes. Without it the honest reading — "many
+   * people watched and nobody is shown to have bought" — would either be filed
+   * as demand or dropped, and both of those make a proposition look better
+   * than the evidence says. It is admitted precisely so it can be counted
+   * against the proposition rather than for it.
+   */
+  'PURCHASE_EVIDENCE',
+  'ATTENTION_EVIDENCE',
+  'COMPETING_OFFER',
+  'CREATOR_ACTIVITY',
+  'TREND_DURABILITY',
+  'SATURATION',
+
+  /* Supply: whether the thing can actually be got, and got reliably. */
+  'SUPPLIER_AVAILABLE',
+  'SUPPLIER_RELIABILITY',
+  'DELIVERY_TIME',
+  'RETURN_TERMS',
+
+  /*
+   * The money, line by line, because a margin is not a fact until its inputs
+   * are. Every one of these is a figure a source published; none of them is a
+   * figure Brain computed.
+   */
+  'SELLING_PRICE',
+  'LANDED_UNIT_COST',
+  'SHIPPING_COST',
+  'PLATFORM_FEE',
+  'PAYMENT_FEE',
+  'CREATOR_COMMISSION',
+  'CONTENT_COST',
+  'ADVERTISING_COST',
+  'RETURN_RATE',
+  'REFUND_RATE',
+  'CHARGEBACK_RATE',
+  'MINIMUM_ORDER',
+  'PAYOUT_DELAY',
+
+  /* What the platform requires, and what it forbids outright. */
+  'PLATFORM_ELIGIBILITY',
+  'FULFILMENT_REQUIREMENT',
+  'PROHIBITED_PRODUCT',
+] as const;
+export type CommerceFinding = (typeof COMMERCE_FINDINGS)[number];
+
+/**
+ * What a finding's figure *is*, so that a number can never be read as the
+ * wrong kind of number.
+ *
+ * A platform fee of 8 and a selling price of 8 are not the same 8, and a
+ * schema that stored both in one nullable integer would eventually add them.
+ * So money is minor units, a rate is parts per million, a duration is whole
+ * days and a count is a count — and `validateCommerce` refuses a figure in the
+ * wrong field rather than converting it, because choosing a conversion is
+ * choosing what somebody meant.
+ */
+export const COMMERCE_FIGURES = ['MONEY', 'RATE', 'DAYS', 'COUNT', 'NONE'] as const;
+export type CommerceFigure = (typeof COMMERCE_FIGURES)[number];
+
+/**
+ * Where an evidence row came from, which is the one thing a derivation cannot
+ * recover.
+ *
+ * The brief asks for assumptions, estimates and measured results to stay
+ * apart. `basis` is *derived* from this column rather than stored beside it —
+ * §38's rule 3 — because a stored basis is two fields that must agree about
+ * one row, and this repository has recorded four times what happens to the one
+ * nobody reads.
+ */
+export const COMMERCE_EVIDENCE_ORIGINS = ['CLAIM', 'TEST', 'PERSON'] as const;
+export type CommerceEvidenceOrigin = (typeof COMMERCE_EVIDENCE_ORIGINS)[number];
+
+/** What kind of number a figure is once it is read. Never stored. */
+export const COMMERCE_BASES = ['ASSUMPTION', 'ESTIMATE', 'MEASURED'] as const;
+export type CommerceBasis = (typeof COMMERCE_BASES)[number];
+
+/**
+ * The stages of the loop, in the order the brief names them.
+ *
+ * Derived from rows on every read and stored nowhere. A proposition's stage is
+ * a fact about what evidence exists, and evidence arrives asynchronously from
+ * several missions — so a stored stage would be stale the moment a claim was
+ * accepted, which is `tier.ts`' argument and `placements`' before it.
+ */
+export const COMMERCE_STAGES = [
+  'DEMAND_SIGNAL',
+  'PRODUCT_CANDIDATE',
+  'SUPPLIER_VALIDATED',
+  'ECONOMICS_ESTABLISHED',
+  'OFFER_READY',
+  'TEST_RUNNING',
+  'FULFILLING',
+  'SETTLED',
+  'RETIRED',
+] as const;
+export type CommerceStage = (typeof COMMERCE_STAGES)[number];
+
+/** What a kernel round is asking. `industry_rounds`' shape, one axis along. */
+export const COMMERCE_ROUND_PURPOSES = [
+  /** Which channels exist at all. The bootstrap, asked once per sprint. */
+  'CHANNELS',
+  /** What is being sold on one channel, to whom, with published evidence. */
+  'PRODUCTS',
+  /** Whether one proposition can be supplied, and by whom, and how reliably. */
+  'SUPPLY',
+  /** What one proposition's money actually is, line by line. */
+  'ECONOMICS',
+  /** What the channel requires or forbids before anything may be sold on it. */
+  'ELIGIBILITY',
+] as const;
+export type CommerceRoundPurpose = (typeof COMMERCE_ROUND_PURPOSES)[number];
+
+/** A bounded sales test's state. Every one of them has a way out. */
+export const COMMERCE_TEST_STATES = [
+  /** Everything Brain could prepare is prepared; something outside it is not. */
+  'BLOCKED',
+  /** Authorized and within its ceiling, but nothing has been spent yet. */
+  'AUTHORIZED',
+  'RUNNING',
+  'SETTLED',
+  'ABANDONED',
+] as const;
+export type CommerceTestState = (typeof COMMERCE_TEST_STATES)[number];
+
+export interface CommerceChannelRow {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommerceChannel {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string | null;
+  origin: CommerceChannelOrigin;
+  sourceClaimId: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommercePropositionRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  channel_id: string;
+  product: string;
+  audience: string | null;
+  supplier: string | null;
+  opportunity_id: string | null;
+  industry_node_id: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommerceProposition {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  channelId: string;
+  product: string;
+  audience: string | null;
+  supplier: string | null;
+  opportunityId: string | null;
+  industryNodeId: string | null;
+  origin: CommerceChannelOrigin;
+  sourceClaimId: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommerceEvidenceRow {
+  id: string;
+  project_id: string;
+  proposition_id: string | null;
+  channel_id: string | null;
+  kind: string;
+  statement: string;
+  origin: string;
+  source_claim_id: string | null;
+  test_id: string | null;
+  actor_ref: string | null;
+  amount_minor: number | null;
+  rate_ppm: number | null;
+  days: number | null;
+  count_units: number | null;
+  observed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommerceEvidence {
+  id: string;
+  projectId: string;
+  propositionId: string | null;
+  channelId: string | null;
+  kind: CommerceFinding;
+  statement: string;
+  origin: CommerceEvidenceOrigin;
+  sourceClaimId: string | null;
+  testId: string | null;
+  actorRef: string | null;
+  amountMinor: number | null;
+  ratePpm: number | null;
+  days: number | null;
+  countUnits: number | null;
+  /**
+   * When the thing was true, as the source dated it. Null where undated.
+   *
+   * §30's rule that a buying signal with no observation date is not evidence,
+   * at a column: an undated reading cannot be told apart from one somebody
+   * remembers from March, so trend durability and saturation are read against
+   * this rather than against `created_at`, which only says when Brain filed it.
+   */
+  observedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommerceRoundRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  purpose: string;
+  channel_id: string | null;
+  proposition_id: string | null;
+  round: number;
+  candidate_id: string;
+  state: string;
+  opened_at: string;
+  harvested_at: string | null;
+  found: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommerceRound {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  purpose: CommerceRoundPurpose;
+  channelId: string | null;
+  propositionId: string | null;
+  round: number;
+  candidateId: string;
+  state: 'OPEN' | 'HARVESTED' | 'ABANDONED';
+  openedAt: string;
+  harvestedAt: string | null;
+  found: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommerceTestRow {
+  id: string;
+  project_id: string;
+  proposition_id: string;
+  state: string;
+  ceiling_minor: number;
+  authority_id: string | null;
+  commitment_id: string | null;
+  blocker_kind: string | null;
+  blocker_detail: string | null;
+  stop_rule: string;
+  authorized_by: string | null;
+  opened_at: string;
+  settled_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommerceTest {
+  id: string;
+  projectId: string;
+  propositionId: string;
+  state: CommerceTestState;
+  /** What a person said may be spent on it. Never a figure Brain chose. */
+  ceilingMinor: number;
+  authorityId: string | null;
+  commitmentId: string | null;
+  /**
+   * The precise thing that is missing, from a closed set, with the detail.
+   *
+   * The brief asks for the blocker to be *exposed* rather than for the work to
+   * stop silently. A test that could not run because no capability exists to
+   * publish a listing and one that could not run because nobody granted a
+   * ceiling are two different facts with two different remedies, and a single
+   * "blocked" would send somebody to fix the wrong one.
+   */
+  blockerKind: string | null;
+  blockerDetail: string | null;
+  stopRule: string;
+  authorizedBy: string | null;
+  openedAt: string;
+  settledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const CLAIM_TYPES = [
   'SOURCED_FACT',
   'SELF_REPORT',
@@ -2154,6 +2517,13 @@ export interface ResearchClaimRow {
   structural_subject: string | null;
   structural_qualifier: string | null;
   structural_amount_cents: number | null;
+  commerce_finding: string | null;
+  commerce_subject: string | null;
+  commerce_qualifier: string | null;
+  commerce_amount_minor: number | null;
+  commerce_rate_ppm: number | null;
+  commerce_days: number | null;
+  commerce_count: number | null;
   labor_finding: string | null;
   labor_subject: string | null;
   labor_qualifier: string | null;
@@ -3521,6 +3891,50 @@ export interface ResearchClaim {
   puzzleAmountCents: number | null;
   /** The currency that figure is published in. Brain never converts one. */
   puzzleCurrency: string | null;
+  /**
+   * What this claim establishes about selling something to somebody on a
+   * channel, if anything.
+   *
+   * The third declaration a claim may carry, beside `opportunitySignal` and
+   * `structuralFinding`, and independent of both: a source that names a
+   * supplier's published lead time is a commerce finding and neither of the
+   * others. Most claims carry none.
+   */
+  commerceFinding: CommerceFinding | null;
+  /**
+   * What the finding is about: the channel's name, the product's name, the
+   * supplier's name — whatever the source calls the thing.
+   *
+   * Required of every commerce finding, because a figure with nothing to
+   * attach it to is a figure nothing reads, and reading the subject out of the
+   * claim sentence would be the prose-parsing §25's Westbrook defect records.
+   */
+  commerceSubject: string | null;
+  /**
+   * The channel a `PRODUCT_CANDIDATE` is being sold on. Null for the rest.
+   *
+   * A product is not a proposition until somebody says where it is sold: the
+   * same product on two channels has two sets of fees, two audiences and two
+   * sets of eligibility rules, and merging them would average away the only
+   * thing the brief asks to compare.
+   */
+  commerceQualifier: string | null;
+  /**
+   * The four shapes a commerce figure can take, in four columns rather than
+   * one.
+   *
+   * A platform fee of 8 and a selling price of 8 are not the same 8. One
+   * nullable number would eventually be added to the other, and the error
+   * would be invisible because the result is still a number.
+   *
+   * All four are nullable and the nullability is the feature: an unknown input
+   * withholds the derived margin entirely rather than being treated as zero.
+   * §30's rule at the figure that decides whether to buy inventory.
+   */
+  commerceAmountMinor: number | null;
+  commerceRatePpm: number | null;
+  commerceDays: number | null;
+  commerceCount: number | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
@@ -6784,8 +7198,83 @@ export interface RussellSoftwareRequest {
   campaignId: string | null;
   authorizedByUserId: string | null;
   declineReason: string | null;
+  /**
+   * What "done" means, shown before anybody authorizes and passed to the
+   * contract when they do. Proposed by the worker that read the conversation,
+   * or derived from the expected outcome when it proposed none — never empty,
+   * because the factory refuses to approve a contract with no conditions.
+   */
+  acceptanceConditions: SoftwareAcceptanceCondition[];
+  /** The one behaviour Brain confirms in production after a release, if any. */
+  liveCheck: SoftwareLiveCheck | null;
+  /** When the forge was last asked about this request's release. */
+  deliveryPolledAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SoftwareAcceptanceCondition {
+  statement: string;
+  verification: string;
+}
+
+/**
+ * A path on this Brain's own origin and text it must serve once the change is
+ * live. Brain supplies the host — its own — and never a caller.
+ */
+export interface SoftwareLiveCheck {
+  path: string;
+  contains: string;
+}
+
+/**
+ * What happened to a software request after it was authorized, once each.
+ *
+ * A closed set, and each kind is written by exactly one transition in
+ * `services/russell/softwareDelivery.ts`.
+ */
+export const SOFTWARE_DELIVERY_KINDS = [
+  'STARTED',
+  'STAGE',
+  'BLOCKED',
+  'CANCELLED',
+  'RELEASE_READY',
+  'CHECKS',
+  'RELEASE_REFUSED',
+  'CLOSED_UNMERGED',
+  'MERGED',
+  'DEPLOYED',
+  'DEPLOY_UNOBSERVABLE',
+  'LIVE_VERIFIED',
+  'LIVE_CHECK_FAILED',
+  'RELEASED',
+] as const;
+export type SoftwareDeliveryKind = (typeof SOFTWARE_DELIVERY_KINDS)[number];
+
+export interface SoftwareDeliveryMilestone {
+  id: string;
+  requestId: string;
+  conversationId: string;
+  milestoneKey: string;
+  kind: SoftwareDeliveryKind;
+  detail: Record<string, unknown>;
+  messageId: string | null;
+  actorType: 'BRAIN' | 'PERSON';
+  actorId: string | null;
+  observedAt: string;
+}
+
+export interface SoftwareDeliveryMilestoneRow {
+  id: string;
+  request_id: string;
+  conversation_id: string;
+  milestone_key: string;
+  kind: string;
+  detail: string;
+  message_id: string | null;
+  actor_type: string;
+  actor_id: string | null;
+  observed_at: string;
 }
 
 export interface RussellSoftwareRequestRow {
@@ -6806,6 +7295,9 @@ export interface RussellSoftwareRequestRow {
   campaign_id: string | null;
   authorized_by_user_id: string | null;
   decline_reason: string | null;
+  acceptance_conditions: string | null;
+  live_check: string | null;
+  delivery_polled_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -10482,4 +10974,376 @@ export interface EngineeringBlockerRow {
   actor_type: string;
   actor_id: string;
   created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Getting work done through people (§52, `services/humanwork/`)
+// ---------------------------------------------------------------------------
+
+/**
+ * How Brain knows of somebody, which is never the same fact as their having
+ * agreed to anything. A team member holds a Brain account; an existing
+ * relationship is one a person attests to; a researched possibility came from
+ * a gated claim and has, by construction, agreed to nothing.
+ */
+export const HUMAN_WORK_RELATIONSHIPS = ['TEAM_MEMBER', 'EXISTING_RELATIONSHIP', 'RESEARCHED'] as const;
+export type HumanWorkRelationship = (typeof HUMAN_WORK_RELATIONSHIPS)[number];
+
+/**
+ * What stands behind a statement about somebody's competence.
+ *
+ * `CLAIMED_BY_CANDIDATE` exists so a person's own claim can be written down
+ * *as* a claim — and `qualification.ts` never counts it as evidence, which is
+ * the whole reason it is its own value rather than folded into an attestation.
+ */
+export const COMPETENCE_BASES = [
+  'GATED_CLAIM',
+  'BRAIN_RECORD',
+  'OBSERVED_DELIVERY',
+  'PERSON_ATTESTED',
+  'CLAIMED_BY_CANDIDATE',
+] as const;
+export type CompetenceBasis = (typeof COMPETENCE_BASES)[number];
+
+export interface CompetenceEvidence {
+  statement: string;
+  basis: CompetenceBasis;
+  /** A claim id, a row id, a document id — whatever lets a reader check it. */
+  ref: string | null;
+}
+
+/**
+ * How an acceptance condition is judged.
+ *
+ * `PERSON_REVIEW` is judged by somebody other than the assignee against the
+ * latest deliverable. The other two are read by Brain from rows on every pass,
+ * so a condition that stops holding stops reading MET — a check Brain can make
+ * is never delegated to anybody's say-so.
+ */
+export const ACCEPTANCE_CHECKS = ['PERSON_REVIEW', 'DOCUMENT_READY', 'ACCOUNT_FOUNDATION'] as const;
+export type AcceptanceCheck = (typeof ACCEPTANCE_CHECKS)[number];
+
+export interface AcceptanceCondition {
+  key: string;
+  statement: string;
+  check: AcceptanceCheck;
+  /** ACCOUNT_FOUNDATION: the user whose foundation dimension must PASS. */
+  userId?: string | null;
+  /** ACCOUNT_FOUNDATION: which of the six dimensions. */
+  dimension?: string | null;
+}
+
+export type HumanWorkOrderState = 'OPEN' | 'ACCEPTED' | 'CANCELLED';
+
+export interface HumanWorkOrderRow {
+  id: string;
+  project_id: string;
+  task_id: string;
+  allocation_id: string;
+  necessity_reason: string;
+  title: string;
+  work: string;
+  why_person: string;
+  brain_prepares: string;
+  deliverables: string;
+  acceptance: string;
+  shared_context: string;
+  access_required: string;
+  due_by: string | null;
+  budget_cents: number | null;
+  currency: string;
+  coordinator_user_id: string | null;
+  opened_by: string;
+  state: string;
+  closed_at: string | null;
+  close_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HumanWorkOrder {
+  id: string;
+  projectId: string;
+  taskId: string;
+  allocationId: string;
+  necessityReason: HumanNecessityReason;
+  title: string;
+  work: string;
+  whyPerson: string;
+  brainPrepares: string[];
+  deliverables: string[];
+  acceptance: AcceptanceCondition[];
+  sharedContext: string[];
+  accessRequired: string[];
+  dueBy: string | null;
+  budgetCents: number | null;
+  currency: string;
+  coordinatorUserId: string | null;
+  openedBy: string;
+  state: HumanWorkOrderState;
+  closedAt: string | null;
+  closeReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HumanWorkCandidateRow {
+  id: string;
+  project_id: string;
+  order_id: string;
+  display_name: string;
+  kind: string;
+  relationship: string;
+  user_id: string | null;
+  source_claim_id: string | null;
+  attested_by: string | null;
+  competence: string;
+  location: string | null;
+  availability: string | null;
+  quote_cents: number | null;
+  quote_basis: string | null;
+  quote_currency: string | null;
+  quote_source: string | null;
+  uncertainties: string;
+  contact_channel: string | null;
+  set_aside_at: string | null;
+  set_aside_reason: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export type QuoteSource = 'CANDIDATE_QUOTED' | 'PUBLISHED_RATE' | 'INTERNAL_NO_CHARGE';
+
+export interface HumanWorkCandidate {
+  id: string;
+  projectId: string;
+  orderId: string;
+  displayName: string;
+  kind: 'PERSON' | 'ORGANIZATION';
+  relationship: HumanWorkRelationship;
+  userId: string | null;
+  sourceClaimId: string | null;
+  attestedBy: string | null;
+  competence: CompetenceEvidence[];
+  location: string | null;
+  availability: string | null;
+  quoteCents: number | null;
+  quoteBasis: RateBasis | null;
+  quoteCurrency: string | null;
+  quoteSource: QuoteSource | null;
+  uncertainties: string[];
+  contactChannel: string | null;
+  setAsideAt: string | null;
+  setAsideReason: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export const ENGAGEMENT_STATES = [
+  'PROPOSED',
+  'APPROVED',
+  'INVITED',
+  'ENGAGED',
+  'COMPLETED',
+  'REFUSED_BY_OWNER',
+  'DECLINED_BY_WORKER',
+  'CANCELLED',
+] as const;
+export type EngagementState = (typeof ENGAGEMENT_STATES)[number];
+export const LIVE_ENGAGEMENT_STATES: readonly EngagementState[] = [
+  'PROPOSED',
+  'APPROVED',
+  'INVITED',
+  'ENGAGED',
+];
+
+export interface EngagementTerms {
+  scope: string;
+  deliverables: string[];
+  schedule: { milestone: string; due: string | null }[];
+  compensationCents: number;
+  currency: string;
+  rateBasis: RateBasis | null;
+  /** Why the figure is what it is: a quote, a published rate, or no charge. */
+  compensationBasis: string;
+  access: string[];
+  confidentiality: string;
+  ownership: string;
+}
+
+export interface HumanWorkEngagementRow {
+  id: string;
+  project_id: string;
+  order_id: string;
+  candidate_id: string;
+  terms: string;
+  terms_hash: string;
+  compensation_cents: number;
+  currency: string;
+  state: string;
+  decision_request_id: string | null;
+  approved_by_user_id: string | null;
+  approved_at: string | null;
+  approved_max_cents: number | null;
+  funding: string | null;
+  commitment_id: string | null;
+  assignee_user_id: string | null;
+  invited_at: string | null;
+  invited_by: string | null;
+  invitation_channel: string | null;
+  invitation_reference: string | null;
+  engaged_at: string | null;
+  engaged_evidence: string | null;
+  engaged_attested_by: string | null;
+  completed_at: string | null;
+  ended_reason: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EngagementFunding = 'COMMERCIAL_AUTHORITY' | 'DIRECT_APPROVAL' | 'NO_CHARGE';
+export type EngagedEvidence = 'ACCEPTED_IN_BRAIN' | 'ATTESTED_BY_COORDINATOR';
+
+export interface HumanWorkEngagement {
+  id: string;
+  projectId: string;
+  orderId: string;
+  candidateId: string;
+  terms: EngagementTerms;
+  termsHash: string;
+  compensationCents: number;
+  currency: string;
+  state: EngagementState;
+  decisionRequestId: string | null;
+  approvedByUserId: string | null;
+  approvedAt: string | null;
+  approvedMaxCents: number | null;
+  funding: EngagementFunding | null;
+  commitmentId: string | null;
+  assigneeUserId: string | null;
+  invitedAt: string | null;
+  invitedBy: string | null;
+  invitationChannel: string | null;
+  invitationReference: string | null;
+  engagedAt: string | null;
+  engagedEvidence: EngagedEvidence | null;
+  engagedAttestedBy: string | null;
+  completedAt: string | null;
+  endedReason: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HumanWorkEventRow {
+  id: string;
+  project_id: string;
+  order_id: string;
+  engagement_id: string | null;
+  kind: string;
+  summary: string;
+  detail: string;
+  actor: string;
+  actor_user_id: string | null;
+  created_at: string;
+}
+
+export type HumanWorkActor = 'BRAIN' | 'PERSON' | 'ASSIGNEE';
+
+export interface HumanWorkEvent {
+  id: string;
+  projectId: string;
+  orderId: string;
+  engagementId: string | null;
+  kind: string;
+  summary: string;
+  detail: Record<string, unknown>;
+  actor: HumanWorkActor;
+  actorUserId: string | null;
+  createdAt: string;
+}
+
+export interface HumanWorkDeliverableRow {
+  id: string;
+  project_id: string;
+  engagement_id: string;
+  round: number;
+  description: string;
+  document_id: string | null;
+  reference: string | null;
+  submitted_by_user_id: string;
+  submitted_as: string;
+  created_at: string;
+}
+
+export interface HumanWorkDeliverable {
+  id: string;
+  projectId: string;
+  engagementId: string;
+  round: number;
+  description: string;
+  documentId: string | null;
+  reference: string | null;
+  submittedByUserId: string;
+  submittedAs: 'ASSIGNEE' | 'COORDINATOR';
+  createdAt: string;
+}
+
+export type ReviewVerdict = 'MET' | 'NOT_MET' | 'CANNOT_VERIFY';
+
+export interface HumanWorkReviewRow {
+  id: string;
+  project_id: string;
+  engagement_id: string;
+  deliverable_id: string;
+  criterion_key: string;
+  verdict: string;
+  note: string;
+  repair: string | null;
+  reviewer_user_id: string;
+  created_at: string;
+}
+
+export interface HumanWorkReview {
+  id: string;
+  projectId: string;
+  engagementId: string;
+  deliverableId: string;
+  criterionKey: string;
+  verdict: ReviewVerdict;
+  note: string;
+  repair: string | null;
+  reviewerUserId: string;
+  createdAt: string;
+}
+
+export interface HumanWorkCostRow {
+  id: string;
+  project_id: string;
+  engagement_id: string;
+  kind: string;
+  amount_cents: number;
+  currency: string;
+  hours: number | null;
+  reference: string | null;
+  note: string | null;
+  recorded_by: string;
+  idempotency_key: string;
+  created_at: string;
+}
+
+export interface HumanWorkCost {
+  id: string;
+  projectId: string;
+  engagementId: string;
+  kind: 'INCURRED' | 'PAID';
+  amountCents: number;
+  currency: string;
+  hours: number | null;
+  reference: string | null;
+  note: string | null;
+  recordedBy: string;
+  idempotencyKey: string;
+  createdAt: string;
 }

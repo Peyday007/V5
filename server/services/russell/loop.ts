@@ -51,6 +51,7 @@
  * Hitting a bound preserves the remaining candidates for the next cycle. It
  * never drops them, and it never consumes a whole tick in one pass.
  */
+import { followSoftwareDeliveries } from './softwareDelivery.ts';
 import {
   claimCycle,
   completeCycle,
@@ -136,6 +137,7 @@ import {
 import { parseJson } from '../../repos/util.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
+import { runCommerceKernel } from '../commerce/kernel.ts';
 import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
 import { runLaborKernel } from '../labor/kernel.ts';
@@ -151,6 +153,7 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 export const RUSSELL_TICK_MS = 30_000;
 
 import { advanceSources } from '../capability/extraction.ts';
+import { runHumanWorkTick } from '../humanwork/kernel.ts';
 import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { advanceGoals, type GoalTickReport } from '../goals/tick.ts';
@@ -189,6 +192,8 @@ export interface TickReport {
    * about. Never the same outcome, because they do not mean the same thing.
    */
   integrityReopens: { resolved: string[]; superseded: string[] };
+  /** What the human-work tick did: assignments delivered in Brain, results accepted, deadlines passed. */
+  humanWork: { delivered: string[]; accepted: string[]; overdue: string[] };
   /**
    * The self-expansion kernel's own advance, fleet-wide.
    *
@@ -252,6 +257,12 @@ export interface TickReport {
     expansionsSettled: number;
     problems: string[];
   };
+  /**
+   * Software changes asked for in a conversation, followed back to it: the
+   * milestones recorded this tick, and any message a crashed tick left unsaid.
+   * See `services/russell/softwareDelivery.ts`.
+   */
+  softwareDelivery: { recorded: string[]; orphansWritten: number; problems: string[] };
   /**
    * Ideas the project's own archive already answered, judged and parked without
    * anything being dispatched. §13's default outcome, and the cheapest one.
@@ -534,6 +545,25 @@ export interface TickReport {
     promoted: string[];
     settled: string[];
   }[];
+  /**
+   * The social commerce kernel's pass, reported separately from the industry
+   * kernel's because they answer different questions about different rows.
+   *
+   * `tests` is the half worth reading on a quiet tick: a bounded sales test
+   * that is prepared and blocked is the most informative thing this loop
+   * produces, because it names precisely what is missing between a qualified
+   * product and a measured result.
+   */
+  commerceKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    channels: string[];
+    propositions: string[];
+    evidence: string[];
+    settled: string[];
+    tests: { propositionId: string; blocker: string | null }[];
+    capabilitiesRaised: string[];
+  }[];
   cashOperations: {
     projectId: string;
     needsRaised: string[];
@@ -589,6 +619,7 @@ const EMPTY: TickReport = {
   wroteBack: [],
   recovered: [],
   integrityReopens: { resolved: [], superseded: [] },
+  humanWork: { delivered: [], accepted: [], overdue: [] },
   capability: {
     dispatched: 0,
     settled: 0,
@@ -606,6 +637,7 @@ const EMPTY: TickReport = {
     },
   },
   design: { ingested: 0, learned: 0, expansionsOpened: 0, expansionsSettled: 0, problems: [] },
+  softwareDelivery: { recorded: [], orphansWritten: 0, problems: [] },
   answeredByArchive: [],
   planning: [],
   resumed: [],
@@ -627,6 +659,7 @@ const EMPTY: TickReport = {
   researchLessons: [],
   abandonedParks: [],
   restoredParks: [],
+  commerceKernel: [],
   followOns: [],
   linkedNext: [],
   needsHuman: [],
@@ -703,6 +736,7 @@ export async function tick(owner: string): Promise<TickReport> {
      *
      * `integrityReopens` gets away without this because it is replaced whole;
      * this one is not, which is exactly the difference.
+  commerceKernel: [],
      */
     capability: {
       dispatched: 0,
@@ -999,6 +1033,20 @@ export async function tick(owner: string): Promise<TickReport> {
     }
 
     /*
+     * Work done through people: an approved assignment that has not reached
+     * its team member yet, a no-charge result every condition of which Brain
+     * reads MET from rows, and a due date that passed. Fleet-wide, derived,
+     * and swallowed for `advanceSources`' reason. It approves nothing, contacts
+     * nobody outside Brain and pays nobody.
+     */
+    try {
+      const human = await runHumanWorkTick({ limit: cycle.maxEventsPerCycle });
+      report.humanWork = human;
+    } catch {
+      /* a piece of human work that could not be advanced is left as it was */
+    }
+
+    /*
      * And the packets the registry produced, one step each.
      *
      * Beside `advanceSources` because it is the rest of the same chain: that
@@ -1142,6 +1190,26 @@ export async function tick(owner: string): Promise<TickReport> {
      */
     for (const entry of await reconcileArguedAuditRoles(cycle.maxEventsPerCycle)) {
       report.retiredPacketWork.push(entry);
+    }
+
+    /*
+     * 1a-iv-c. Follow authorized software changes back to their conversation.
+     *
+     * Beside the other reconciliations for their reason: it is derived from
+     * rows, so it reaches a request whatever happened to the process that
+     * authorized it, and a tick that dies halfway leaves nothing a later tick
+     * cannot finish. Its own `try`, because a forge that did not answer must not
+     * stop Russell writing back a mission.
+     */
+    try {
+      const delivery = await followSoftwareDeliveries(cycle.maxEventsPerCycle);
+      for (const followed of delivery.followed) {
+        for (const kind of followed.recorded) report.softwareDelivery.recorded.push(`${followed.requestId}:${kind}`);
+        if (followed.note?.startsWith('could not follow')) report.softwareDelivery.problems.push(followed.note);
+      }
+      report.softwareDelivery.orphansWritten = delivery.orphansWritten;
+    } catch (error: unknown) {
+      report.softwareDelivery.problems.push(String(error));
     }
 
     const lineage = await recoverExecutionLineage(cycle.maxEventsPerCycle);
@@ -1387,6 +1455,61 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a sprint whose discovery could not run is left as it was */
+      }
+
+      try {
+        /*
+         * And the loop that turns an opening into something somebody sells.
+         *
+         * The industry kernel answers *where in the economy*; this one answers
+         * *what we would actually sell, to whom, on which surface, at what
+         * margin, and what would have to be true before a person spent
+         * anything finding out*. It is one shape of transaction — bought from
+         * a supplier, discovered on a social channel, shipped without ever
+         * being held — and it is deliberately one shape rather than a general
+         * commerce engine: a small perimeter whose loop closes is worth more
+         * than a general one whose last step has never run.
+         *
+         * Its own `try`, for the reason every block here has one: a kernel
+         * pass that threw must not stop a sprint settling a need or harvesting
+         * what already ran.
+         *
+         * Nothing it creates bypasses anything. A commerce round is a Russell
+         * candidate, and it goes through the archive check, the judgment pass,
+         * the compiler, the approval envelope, the evidence gate and all three
+         * audit roles exactly as a bucket does. The one step that would spend
+         * money stops at a row naming what is missing.
+         */
+        const commerce = await runCommerceKernel(project.id);
+        if (
+          commerce.opened.length > 0 ||
+          commerce.absorbed.channels.length > 0 ||
+          commerce.absorbed.propositions.length > 0 ||
+          commerce.absorbed.evidence.length > 0 ||
+          commerce.absorbed.settled.length > 0 ||
+          commerce.tests.length > 0 ||
+          commerce.capabilities.raised.length > 0
+        ) {
+          report.commerceKernel.push({
+            projectId: project.id,
+            opened: commerce.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            channels: commerce.absorbed.channels.map((one) => one.id),
+            propositions: commerce.absorbed.propositions.map((one) => one.id),
+            evidence: commerce.absorbed.evidence.map((one) => one.id),
+            settled: commerce.absorbed.settled.map((one) => one.roundId),
+            tests: commerce.tests.map((one) => ({
+              propositionId: one.propositionId,
+              blocker: one.blocker,
+            })),
+            capabilitiesRaised: commerce.capabilities.raised.map((one) => one.capability),
+          });
+        }
+      } catch {
+        /* a loop that could not be advanced is left exactly as it was */
       }
 
       try {
