@@ -112,7 +112,7 @@ export interface CaptureDecision {
  * has to be statable, and a three-word remark usually is not one.
  */
 export function shouldCapture(message: string): CaptureDecision {
-  const trimmed = message.trim();
+  const trimmed = message.trim().replace(/[\u2018\u2019]/g, "'");
   if (trimmed.length < 12) {
     return { capture: false, reason: 'too short to be an idea on its own' };
   }
