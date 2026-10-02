@@ -87,7 +87,7 @@ describe('listIdentityEvents given a non-finite limit', () => {
 /* Part 2: the route, over HTTP, against a real server (A01, A03)           */
 /* ------------------------------------------------------------------------ */
 
-const PORT = pickPort(8200, 100);
+const PORT = pickPort(8300, 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 let server: ChildProcessByStdio<null, Readable, Readable>;
