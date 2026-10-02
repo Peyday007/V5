@@ -212,6 +212,8 @@ describe('an unknown field inside a proposed part refuses the whole proposal', (
       title: 'Fix the checkout total',
       objective: 'The total should update without a page reload.',
       expectedOutcome: 'The total updates live as items change.',
+      acceptanceConditions: [],
+      liveCheck: null,
     });
   });
 

@@ -188,7 +188,19 @@ const KNOWN_FIELDS = new Set([
  */
 export const CANDIDATE_PART_FIELDS = new Set(['title', 'statement', 'duplicateOf']);
 export const PROBE_PART_FIELDS = new Set(['question', 'maxLookups']);
-export const SOFTWARE_PART_FIELDS = new Set(['title', 'objective', 'expectedOutcome']);
+/*
+ * `acceptanceConditions` and `liveCheck` are what "done" means for the change
+ * (§51), read and validated below; they arrived on a branch built in parallel
+ * with this closed set, and a set that omitted them refused every proposal
+ * that said what done means — the very proposals §51 asks a worker to make.
+ */
+export const SOFTWARE_PART_FIELDS = new Set([
+  'title',
+  'objective',
+  'expectedOutcome',
+  'acceptanceConditions',
+  'liveCheck',
+]);
 
 /** An unknown key inside a nested part, checked before any known field of it is read. */
 function unknownPartField(value: Record<string, unknown>, allowed: Set<string>): string | null {
