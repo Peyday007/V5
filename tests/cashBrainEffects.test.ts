@@ -38,7 +38,6 @@ import { actionsFor } from '../server/repos/cashActions.ts';
 import { readCapability } from '../server/services/cash/capabilities.ts';
 import {
   CONTACT_BUYER_NAMESPACE,
-  contactBuyerKey,
   sendContactBuyer,
 } from '../server/services/cash/effects.ts';
 import {
@@ -226,7 +225,7 @@ describe('A02: a CONFIRMED adapter', () => {
       }),
     );
     const request = {
-      key: contactBuyerKey('opp_fixed', '1'),
+      occurrence: '1',
       projectId,
       opportunityId: 'opp_fixed',
       payer: 'Somebody',

@@ -36,6 +36,8 @@
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
 import { readCapability } from './capabilities.ts';
 import { evidenceCard } from './card.ts';
+import { getOperation } from '../../repos/idempotency.ts';
+import { actionsFor } from '../../repos/cashActions.ts';
 import type { CashNeed } from '../../domain/types.ts';
 
 export interface NeedVerification {
@@ -99,6 +101,43 @@ export async function readNeedCondition(need: CashNeed): Promise<NeedVerificatio
       };
     }
     return null;
+  }
+
+  /*
+   * The two needs a commercial effect raises (`perform.ts`). Brain wrote both
+   * keys, so the operation is read back by id rather than by anything typed.
+   * An unknown outcome is settled the moment the operation stops being
+   * UNCERTAIN — by reconciliation or by a person — and a refusal is answered
+   * once the same action is on the record after it, by whoever did it.
+   */
+  if (need.requestKey.startsWith('effect-uncertain:')) {
+    const operationId = need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1);
+    const operation = await getOperation(operationId);
+    if (!operation) return null;
+    return {
+      holds: operation.state !== 'UNCERTAIN',
+      reading:
+        operation.state === 'UNCERTAIN'
+          ? 'The outcome of that attempt is still unknown.'
+          : `That attempt is now ${operation.state.toLowerCase()}.`,
+    };
+  }
+
+  if (need.requestKey.startsWith('effect-failed:') && need.opportunityId) {
+    const [, , action, operationId] = need.requestKey.split(':');
+    if (!action || !operationId) return null;
+    const operation = await getOperation(operationId);
+    if (!operation) return null;
+    const since = operation.completedAt ?? operation.updatedAt;
+    const later = (await actionsFor(need.opportunityId)).some(
+      (one) => one.action === action && one.createdAt >= since,
+    );
+    return {
+      holds: later,
+      reading: later
+        ? `A ${action} is on the record after the refusal.`
+        : `No ${action} has been recorded since the refusal.`,
+    };
   }
 
   return null;

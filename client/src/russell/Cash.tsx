@@ -37,6 +37,7 @@ import {
   type CashViewReading,
   type DerivedFigureView,
   type EngineCardView,
+  type ExecutionRecord,
   type OfferDraft,
   type Placement,
   type ReviewItem,
@@ -1967,6 +1968,14 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
                 onChanged={onChanged}
               />
             ) : null}
+            {page.capabilities.mayViewPrivateJob && work.records?.[placement.opportunity.id] ? (
+              <ExecutionPanel
+                opportunityId={placement.opportunity.id}
+                record={work.records[placement.opportunity.id]!}
+                mayAct={page.capabilities.mayActOnJob}
+                onChanged={onChanged}
+              />
+            ) : null}
             {page.capabilities.mayActOnJob &&
             view.mode &&
             (placement.opportunity.state === 'EXECUTING' ||
@@ -1982,6 +1991,226 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * What has happened on this piece, and what is waiting on whom.
+ *
+ * Everything here is the server's: the actions are `cash_actions` rows, the
+ * four figures are derived from the ledger, the attempts are Brain's own
+ * effect operations, and whether Brain could do something itself — and the
+ * reason it cannot — is decided server-side. Nothing is totalled in the
+ * browser. The two controls are the two decisions a person makes here: asking
+ * Brain to perform an action through a registered integration, and saying
+ * what happened to an attempt whose outcome Brain could not establish.
+ */
+function ExecutionPanel({
+  opportunityId,
+  record,
+  mayAct,
+  onChanged,
+}: {
+  opportunityId: string;
+  record: ExecutionRecord;
+  mayAct: boolean;
+  onChanged(): void;
+}): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [settling, setSettling] = useState<string | null>(null);
+  const [happened, setHappened] = useState<boolean | null>(null);
+  const [receipt, setReceipt] = useState('');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const m = record.money;
+  const unknown = record.attempts.filter((one) => one.status === 'UNKNOWN');
+  const settlingAttempt = record.attempts.find((one) => one.operationId === settling) ?? null;
+  const amountCents = centsFromAmount(amount);
+
+  async function run(work: () => Promise<{ message: string }>): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    setDone(null);
+    try {
+      const { message } = await work();
+      setDone(message);
+      setSettling(null);
+      setHappened(null);
+      setReceipt('');
+      setAmount('');
+      setNote('');
+      onChanged();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rs-cash-execution">
+      <p className="rs-item-meta">
+        Agreed {money(m.agreedCents, m.currency)} · paid {money(m.paidCents, m.currency)} · settled{' '}
+        {money(m.settledCents, m.currency)} · outstanding {money(m.outstandingCents, m.currency)}
+        {m.refundedCents > 0 ? ` · refunded ${money(m.refundedCents, m.currency)}` : ''}
+      </p>
+      {record.actions.length > 0 ? (
+        <ul className="rs-list rs-cash-execution-actions">
+          {record.actions.map((one) => (
+            <li key={one.id}>
+              <span className="rs-badge">
+                {one.action.toLowerCase().replace(/_/g, ' ')} ·{' '}
+                {one.performedBy === 'BRAIN' ? 'Brain, on a provider receipt' : 'a person'}
+              </span>{' '}
+              {one.detail}
+              {one.reference ? ` (reference ${one.reference})` : ''}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="rs-hint">Nothing has been done on this piece yet.</p>
+      )}
+      {record.attempts
+        .filter((one) => one.status !== 'PERFORMED')
+        .map((one) => (
+          <p
+            key={one.operationId}
+            className={one.status === 'UNKNOWN' ? 'rs-state rs-state-error' : 'rs-hint'}
+          >
+            {one.status === 'UNKNOWN'
+              ? `Brain tried ${one.action.toLowerCase().replace(/_/g, ' ')} and the outcome is unknown. Nothing will send it again until somebody says what happened.`
+              : one.status === 'REFUSED'
+                ? `The provider refused ${one.action.toLowerCase().replace(/_/g, ' ')}${one.reason ? `: ${one.reason}` : ''}. Nothing happened.`
+                : one.status === 'UNRECORDED'
+                  ? `${one.action.toLowerCase().replace(/_/g, ' ')} happened (reference ${one.receiptRef ?? 'none'}) and is not on the record yet.`
+                  : `${one.action.toLowerCase().replace(/_/g, ' ')} is under way.`}
+          </p>
+        ))}
+      {mayAct
+        ? record.performable.map((one) =>
+            one.available ? (
+              <button
+                key={one.action}
+                type="button"
+                className="rs-button-quiet"
+                disabled={busy}
+                onClick={() =>
+                  void run(() => CashApi.perform(opportunityId, one.action, record.nextOccurrence))
+                }
+              >
+                Have Brain do it: {one.doing}
+              </button>
+            ) : (
+              <p key={one.action} className="rs-hint">
+                Brain {one.doing}: {one.reason}
+              </p>
+            ),
+          )
+        : null}
+      {mayAct && unknown.length > 0 && settling === null
+        ? unknown.map((one) => (
+            <button
+              key={one.operationId}
+              type="button"
+              className="rs-button-quiet"
+              onClick={() => setSettling(one.operationId)}
+            >
+              Say what happened to this attempt
+            </button>
+          ))
+        : null}
+      {settlingAttempt ? (
+        <>
+          <p className="rs-hint">
+            Check the provider directly. If it happened, its reference is what makes the record
+            true; if it did not, Brain records that and sends nothing on its own.
+          </p>
+          <button
+            type="button"
+            className="rs-button-quiet"
+            aria-pressed={happened === true}
+            onClick={() => setHappened(true)}
+          >
+            It happened
+          </button>
+          <button
+            type="button"
+            className="rs-button-quiet"
+            aria-pressed={happened === false}
+            onClick={() => setHappened(false)}
+          >
+            It did not happen
+          </button>
+          {happened ? (
+            <>
+              <label className="rs-field-label" htmlFor={`cash-receipt-${settlingAttempt.operationId}`}>
+                The provider&rsquo;s reference
+              </label>
+              <input
+                id={`cash-receipt-${settlingAttempt.operationId}`}
+                value={receipt}
+                onChange={(event) => setReceipt(event.target.value)}
+              />
+              {settlingAttempt.action === 'ACCEPT_PAYMENT' ? (
+                <>
+                  <label className="rs-field-label" htmlFor={`cash-paid-${settlingAttempt.operationId}`}>
+                    Amount the provider shows was taken, in {m.currency}
+                  </label>
+                  <input
+                    id={`cash-paid-${settlingAttempt.operationId}`}
+                    inputMode="decimal"
+                    value={amount}
+                    onChange={(event) => setAmount(event.target.value)}
+                  />
+                </>
+              ) : null}
+            </>
+          ) : null}
+          {happened !== null ? (
+            <>
+              <label className="rs-field-label" htmlFor={`cash-checked-${settlingAttempt.operationId}`}>
+                What you checked. It is kept with the resolution.
+              </label>
+              <input
+                id={`cash-checked-${settlingAttempt.operationId}`}
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+              />
+              <button
+                type="button"
+                className="rs-button-quiet"
+                disabled={
+                  busy ||
+                  note.trim().length === 0 ||
+                  (happened && receipt.trim().length === 0) ||
+                  (happened && settlingAttempt.action === 'ACCEPT_PAYMENT' && amountCents === null)
+                }
+                onClick={() =>
+                  void run(() =>
+                    CashApi.resolveEffect(opportunityId, {
+                      operationId: settlingAttempt.operationId,
+                      happened,
+                      note: note.trim(),
+                      ...(happened ? { receiptRef: receipt.trim() } : {}),
+                      ...(happened && amountCents !== null ? { amountCents } : {}),
+                    }),
+                  )
+                }
+              >
+                Confirm
+              </button>
+            </>
+          ) : null}
+          <button type="button" className="rs-linklike" onClick={() => setSettling(null)}>
+            Cancel
+          </button>
+        </>
+      ) : null}
+      {done ? <p className="rs-state rs-state-ok">{done}</p> : null}
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+    </div>
   );
 }
 
@@ -2009,7 +2238,9 @@ function OpportunityMoney({
   currency: string;
   onChanged(): void;
 }): JSX.Element {
-  const [kind, setKind] = useState<'CUSTOMER_PAYMENT' | 'SETTLEMENT' | null>(null);
+  const [kind, setKind] = useState<'PIPELINE_AGREED' | 'CUSTOMER_PAYMENT' | 'SETTLEMENT' | null>(
+    null,
+  );
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
@@ -2019,7 +2250,10 @@ function OpportunityMoney({
   const amountCents = centsFromAmount(amount);
 
   async function run(): Promise<void> {
-    if (!kind || amountCents === null || !reference.trim()) return;
+    // An agreed amount needs no provider reference — it is pipeline, not cash —
+    // and the server says so; a payment and a settlement each need one.
+    const needsReference = kind !== 'PIPELINE_AGREED';
+    if (!kind || amountCents === null || (needsReference && !reference.trim())) return;
     setBusy(true);
     setProblem(null);
     try {
@@ -2027,14 +2261,26 @@ function OpportunityMoney({
         kind,
         amountCents,
         currency,
-        verifiedReference: reference.trim(),
+        ...(reference.trim() ? { verifiedReference: reference.trim() } : {}),
         opportunityId,
-        idempotencyKey: `${kind === 'SETTLEMENT' ? 'settlement' : 'payment'}:${opportunityId}:${reference.trim()}`,
+        /*
+         * Built from the kind, the piece and what was typed, never a clock: a
+         * retry after a lost response is the same entry once. An agreed amount
+         * with no reference is keyed by its amount, so agreeing a second,
+         * different figure is a second entry and resubmitting the same one is
+         * not.
+         */
+        idempotencyKey:
+          kind === 'PIPELINE_AGREED'
+            ? `agreed:${opportunityId}:${amountCents}:${reference.trim()}`
+            : `${kind === 'SETTLEMENT' ? 'settlement' : 'payment'}:${opportunityId}:${reference.trim()}`,
       });
       setDone(
         kind === 'SETTLEMENT'
           ? 'Settlement recorded. It now counts as available funds, and “Money is in” can be recorded.'
-          : 'Payment recorded. It is not available funds until it settles.',
+          : kind === 'PIPELINE_AGREED'
+            ? 'Agreed amount recorded. It is pipeline: nothing has been paid, and it is not cash.'
+            : 'Payment recorded. It is not available funds until it settles.',
       );
       setKind(null);
       setAmount('');
@@ -2052,6 +2298,16 @@ function OpportunityMoney({
       {done ? <p className="rs-state rs-state-ok">{done}</p> : null}
       {kind === null ? (
         <>
+          <button
+            type="button"
+            className="rs-button-quiet"
+            onClick={() => {
+              setKind('PIPELINE_AGREED');
+              setDone(null);
+            }}
+          >
+            Record the agreed amount
+          </button>
           <button
             type="button"
             className="rs-button-quiet"
@@ -2076,7 +2332,10 @@ function OpportunityMoney({
       ) : (
         <>
           <p className="rs-hint">
-            {kind === 'SETTLEMENT'
+            {kind === 'PIPELINE_AGREED'
+              ? 'What the customer agreed to pay for this work. It is pipeline, not cash, and it is ' +
+                'what an invoice is issued for. A reference — a quote or agreement number — is optional.'
+              : kind === 'SETTLEMENT'
               ? 'The money reached the account and is usable. Use the payout or bank reference.'
               : 'The customer paid. Use the payment provider’s or bank’s reference — a payment nobody can trace is pipeline, not cash.'}
           </p>
@@ -2100,7 +2359,11 @@ function OpportunityMoney({
           <button
             type="button"
             className="rs-button-quiet"
-            disabled={busy || amountCents === null || reference.trim().length === 0}
+            disabled={
+              busy ||
+              amountCents === null ||
+              (kind !== 'PIPELINE_AGREED' && reference.trim().length === 0)
+            }
             onClick={() => void run()}
           >
             {busy ? 'Recording…' : 'Confirm'}

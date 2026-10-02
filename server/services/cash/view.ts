@@ -30,6 +30,7 @@ import { cashPosition, explainEntries } from './money.ts';
 import { assemble } from './portfolio.ts';
 import { executionPath, type ExecutionPath } from './execution.ts';
 import { composeOffer, OFFER_STATES, type OfferDraft } from './offer.ts';
+import { executionRecord, type ExecutionRecord } from './record.ts';
 import { compressedReview } from './review.ts';
 import { authorityFor } from './opportunities.ts';
 import { sharedFrontier, type SharedFrontier } from './shared.ts';
@@ -49,6 +50,9 @@ import { composeLedger } from './monetization/ledger.ts';
 import { composeSurface, type MonetizationSurface } from './monetization/surface.ts';
 import { commissionView, type CommissionView } from './monetization/inFlight.ts';
 import { MAX_OPEN_COMMISSIONS } from './monetization/commission.ts';
+
+/** The states a piece has been decided on, so it has a record worth reading. */
+const RECORD_STATES = new Set(['READY', 'EXECUTING', 'DELIVERING', 'COLLECTED']);
 
 export interface CashView {
   /** Null when the section has never been activated here. */
@@ -118,6 +122,12 @@ export interface CashView {
      * commercial term (§34).
      */
     offers: Record<string, OfferDraft>;
+    /**
+     * What has happened on each piece somebody decided to test: its actions,
+     * its money from the ledger, Brain's own attempts and what Brain could
+     * perform itself. Owner view only — every figure is private (§34).
+     */
+    records: Record<string, ExecutionRecord>;
     /** The load-bearing blanks per opportunity, so a card renders without a second call. */
     cards: Record<string, { ready: boolean; missing: string[]; summary: string }>;
     /**
@@ -375,6 +385,12 @@ export async function cashView(input: {
     });
   }
 
+  const records: Record<string, ExecutionRecord> = {};
+  for (const opportunity of opportunities) {
+    if (!RECORD_STATES.has(opportunity.state)) continue;
+    records[opportunity.id] = await executionRecord({ opportunity, currency });
+  }
+
   /*
    * Read once and used twice: the authority block totals them and `myCash`
    * sends them. Two reads of one table is how two figures on one screen come to
@@ -407,7 +423,16 @@ export async function cashView(input: {
       ),
       commitments,
     },
-    myCurrentWork: { ...plan, cards, provenance, engineCards, economics, executionPaths, offers },
+    myCurrentWork: {
+      ...plan,
+      cards,
+      provenance,
+      engineCards,
+      economics,
+      executionPaths,
+      offers,
+      records,
+    },
     whatBrainHasDone: await listCashEvents(input.projectId, 40),
     whatBrainNeeds: needs.map((one) => ({
       ...one,
