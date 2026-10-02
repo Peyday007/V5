@@ -40,6 +40,7 @@ import { MachinesView } from './Machines.tsx';
 import { LaborView } from './Labor.tsx';
 import { PuzzlesView } from './Puzzles.tsx';
 import { IndustryView } from './Industry.tsx';
+import { DealflowScreen } from './Dealflow.tsx';
 import {
   FleetView,
   ProjectView,
@@ -116,6 +117,12 @@ const SECTIONS = [
    * Brain that does research, software and everything else.
    */
   { name: 'INDUSTRIES' as const, label: 'Industries', primary: false },
+   * Dealflow is secondary for the same reason as its three neighbours: it is a
+   * standing kernel a person examines rather than a destination steered
+   * hourly, and promoting it would rebuild the thumb bar around one reading in
+   * a Brain that does research, software and everything else.
+   */
+  { name: 'DEALFLOW' as const, label: 'Dealflow', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -581,6 +588,7 @@ export function RussellShell({
         {route.name === 'LABOR' ? <LaborView projectId={projectId} /> : null}
         {route.name === 'PUZZLES' ? <PuzzlesView projectId={projectId} /> : null}
         {route.name === 'INDUSTRIES' ? <IndustryView projectId={projectId} /> : null}
+        {route.name === 'DEALFLOW' ? <DealflowScreen projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (

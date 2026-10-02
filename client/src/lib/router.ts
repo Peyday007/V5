@@ -45,6 +45,8 @@ export type Route =
    * rather than a panel hanging off Cash.
    */
   | { name: 'PUZZLES' }
+  /** The cross-border dealflow kernel (§45): parties, deals, questions. */
+  | { name: 'DEALFLOW' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -113,6 +115,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'LABOR' };
     case 'puzzles':
       return { name: 'PUZZLES' };
+    case 'dealflow':
+      return { name: 'DEALFLOW' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
@@ -162,6 +166,8 @@ export function pathFor(route: Route): string {
       return '/labor';
     case 'PUZZLES':
       return '/puzzles';
+    case 'DEALFLOW':
+      return '/dealflow';
     case 'SEARCH':
       return '/search';
     case 'INVITE':
