@@ -1,0 +1,84 @@
+# Work done through people, read or started inside the deployed container.
+#
+# `show` is read-only. `connect-capacity` runs the reviewed recipe that opens a
+# member's Claude-connection work and puts the engagement decision in Needs You;
+# it approves nothing and contacts nobody. See `scripts/humanwork.ts`.
+name: Human work
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'show | connect-capacity'
+        required: true
+        default: show
+      project:
+        description: 'Project id or slug (prj_...)'
+        required: false
+        default: ''
+      member:
+        description: 'connect-capacity: the member user id (usr_...)'
+        required: false
+        default: ''
+      due:
+        description: 'connect-capacity: optional due date, YYYY-MM-DD'
+        required: false
+        default: ''
+      admin:
+        description: '--admin <email>: required by connect-capacity'
+        required: false
+        default: ''
+
+concurrency:
+  group: brain-console-humanwork
+  cancel-in-progress: false
+
+jobs:
+  humanwork:
+    name: Human work
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: ./.github/actions/await-release
+      - name: Run
+        timeout-minutes: 10
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Through the environment, never interpolated into the shell.
+          HW_COMMAND: ${{ inputs.command }}
+          HW_PROJECT: ${{ inputs.project }}
+          HW_MEMBER: ${{ inputs.member }}
+          HW_DUE: ${{ inputs.due }}
+          HW_ADMIN: ${{ inputs.admin }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          case "$HW_COMMAND" in
+            show|connect-capacity) ;;
+            *) echo "::error::Refusing '$HW_COMMAND'."; exit 1 ;;
+          esac
+          case "$HW_PROJECT$HW_MEMBER$HW_DUE" in
+            *[!A-Za-z0-9_-]*) echo "::error::Refusing the arguments: identifiers and dates only."; exit 1 ;;
+          esac
+          case "$HW_ADMIN" in
+            *[!A-Za-z0-9_.@+-]*) echo "::error::Refusing the administrator address."; exit 1 ;;
+          esac
+          args="$HW_COMMAND"
+          if [ -n "$HW_PROJECT" ]; then args="$args --project $HW_PROJECT"; fi
+          if [ -n "$HW_MEMBER" ];  then args="$args --member $HW_MEMBER"; fi
+          if [ -n "$HW_DUE" ];     then args="$args --due $HW_DUE"; fi
+          if [ -n "$HW_ADMIN" ];   then args="$args --admin $HW_ADMIN"; fi
+          echo "humanwork $args"
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/humanwork.sh $args" \
+            2>&1 | tee humanwork.txt
+          set -e
+          if grep -q '^HUMANWORK REFUSED' humanwork.txt; then
+            echo "::error::The command was refused; the reason is above."
+            exit 1
+          fi
+          if ! grep -q '^HUMANWORK: OK' humanwork.txt; then
+            echo "::error::No HUMANWORK: OK marker came back, so nothing here says the command finished."
+            exit 1
+          fi

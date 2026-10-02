@@ -27,6 +27,7 @@
  * because an escalation whose answer does nothing is the same defect one level
  * up, and it is the one that produced this module.
  */
+import { HUMAN_WORK_DECISION_PREFIX, resolveEngagementDecision } from '../humanwork/engage.ts';
 import { currentFragments, getOrchestration } from '../../repos/research.ts';
 import {
   askHuman,
@@ -680,6 +681,17 @@ export async function resumeAnsweredRequest(
    */
   if (!request.missionId && request.resumeKey.startsWith(CAPABILITY_AUTHORITY_PREFIX)) {
     return resumeCapabilityAuthority(request);
+  }
+  /*
+   * An engagement decision: whether to commit a person's time or the
+   * project's money on stated terms. Before the mission check for the capability
+   * card's reason — "not about a mission" would mark it RESUMED having carried
+   * out nothing. `resolveEngagementDecision` re-reads the answerer's authority
+   * and says whether it could act; a card it could not carry out comes back.
+   */
+  if (!request.missionId && request.resumeKey.startsWith(HUMAN_WORK_DECISION_PREFIX)) {
+    const outcome = await resolveEngagementDecision(request);
+    return { ok: outcome.settled, reason: outcome.reason, missionId: null, settled: outcome.settled };
   }
   if (!request.missionId) {
     return { ok: true, reason: 'the request was not about a mission', missionId: null, settled: true };
