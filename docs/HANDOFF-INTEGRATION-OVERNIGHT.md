@@ -107,7 +107,7 @@ PR shows only its own diff.
 | #96 impacted (SQLite) | 2554 passed |
 | #99 `pinAuth` | 10/10 runs |
 | **full suite, #89 + #90–#93 + #98 (SQLite)** | **5292 passed, 1 failed**; the failure was the port collision, fixed as defect 9 |
-| full suite, #89 + every train (SQLite) | running at handoff; result recorded in a follow-up commit |
+| **full suite, #89 + every train incl. the stack, final tree (SQLite)** | **5395 passed, 0 failed, 45 skipped** (302 files), after fixes 8, 9 and 12 |
 
 Every train typechecks clean. So does the full composition of #89 with every
 train, and that composition merges textually clean once fix 8 is in.
