@@ -11969,7 +11969,7 @@ re-opens device sign-in, which is a decision about the front door.
 
 ---
 
-## 51. A view is not a sale, and the whole loop is built on that one distinction.
+## 53. A view is not a sale, and the whole loop is built on that one distinction.
 
 The industry kernel gave the ten mechanism buckets an axis saying *where* in
 the economy to look, and it stops where a subject has produced an opening. An
