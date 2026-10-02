@@ -439,7 +439,13 @@ async function createTurnBin(input: {
           '"objective" (what should become true in the code) and "expectedOutcome" ' +
           '(what a person would see differently afterwards). Do not name a repository, ' +
           'a branch, a file or a directory — Brain supplies those from what this project ' +
-          'is authorized to change.',
+          'is authorized to change. Also give "acceptanceConditions": up to six ' +
+          '{"statement", "verification"} pairs saying what must be true when it is done ' +
+          'and how a reviewer checks it, in words the person can judge. If the change is ' +
+          'visible on this Brain\'s own pages, add "liveCheck": {"path": "/…", "contains": ' +
+          '"text"} — a path on this Brain and text it must serve once released, which ' +
+          'Brain will check in production after the release. Omit it when no served text ' +
+          'would show the change.',
         /*
          * The card is read on its own, days later, by somebody deciding whether
          * to spend a fleet on it. "Do the same for the contact page" is a
@@ -1231,6 +1237,8 @@ async function applyValidated(input: {
         title: proposal.software.title,
         objective: proposal.software.objective,
         expectedOutcome: proposal.software.expectedOutcome,
+        acceptanceConditions: proposal.software.acceptanceConditions,
+        liveCheck: proposal.software.liveCheck,
         /*
          * The conversation **owner**, never the worker.
          *

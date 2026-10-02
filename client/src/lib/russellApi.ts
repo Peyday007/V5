@@ -126,6 +126,11 @@ export interface ThreadResponse {
    * would eventually paraphrase it wrongly.
    */
   clarification: SoftwareClarification | null;
+  /**
+   * Where a change proposed here could run, when this reader could authorize
+   * it. Empty otherwise — the same answer as a project with no repository.
+   */
+  repositories: SoftwareRepositoryChoice[];
 }
 
 export interface TurnResponse {
@@ -618,6 +623,17 @@ export const RussellApi = {
     api(`/api/russell/software/${encodeURIComponent(requestId)}/authorize`, {
       method: 'POST',
       body: JSON.stringify(input),
+    }),
+
+  /**
+   * Refuse to release what the factory built. The release itself is merging the
+   * pull request on the forge; this records a person saying no, and closes
+   * nothing there.
+   */
+  refuseRelease: (requestId: string, reason: string): Promise<{ ok: true }> =>
+    api(`/api/russell/software/${encodeURIComponent(requestId)}/refuse-release`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
     }),
 
   declineSoftware: (requestId: string, reason: string): Promise<{ ok: true }> =>

@@ -230,6 +230,10 @@ There must be no workflow where the user has to remember "now go update the data
 47. No possibility discarded for ranking poorly — a rank is a view of the space
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
+48. No person treated as engaged who has not accepted, no result accepted that
+    was not judged against its conditions by something other than the person
+    who did it, and no one's time or money committed without a person's
+    decision on the concrete terms.
 
 ## 8. Model prose never mutates project state.
 
@@ -11833,6 +11837,135 @@ repair, and the shape is the register's (§43) carried one level up.
 `npm run goals` and the `Goals` workflow are the terminal and production doors;
 `file --from <row>` files real recorded work with that row's own words as the
 intent and composes nothing.
+## 51. A change asked for in a conversation is answered in that conversation, all the way to production.
+
+The Software Factory could be reached from Russell (§27) and stopped halfway
+back. A person asked for a change, a card appeared, and from there the journey
+was theirs to carry: the card's one button could never start a campaign, the
+conversation heard nothing while the work ran, the release decision lived on
+GitHub with nothing in Brain describing what it would release, and nothing
+anywhere observed the change reaching production or behaving there.
+`services/russell/softwareDelivery.ts` and `docs/SOFTWARE-SERVICE.md` are the
+other half, and they add an entrance and a ledger rather than a second set of
+rules.
+
+- **The Authorize button could never have worked, and two tests pinned it.**
+  `authorizeSoftwareRequest` refuses to invent acceptance conditions — correctly:
+  what success is is the person's, and a model supplying the conditions its own
+  work is judged against is §27's grading-its-own-exam — and the factory refuses
+  to approve a contract with none. Both cards posted `{ grantId }` and nothing
+  else, so every Authorize in Russell was refused, and
+  `softwareDecisionCard.test.tsx` asserted exactly that body. **A test that pins
+  the request a control sends is pinning whatever the control does, including
+  the defect.** The request now carries a *proposal* — the worker's conditions,
+  or the expected outcome itself when it proposed none — the card shows it
+  editable above the button, and Authorize sends what is on the screen. §24's
+  rule that a decision is a proposal to approve, at the one field the factory
+  will not start without. The server still refuses a request that sends none.
+- **Every fact is read, never reported.** A stage is the campaign row; a merge is
+  the forge's `merged` flag and merge commit; *released* is this process's own
+  `BRAIN_REVISION` containing that commit, answered by the forge's compare; the
+  live check is a GET the process makes against itself. No worker's summary
+  decides anything on this path.
+- **The release decision stays where the repository puts it.** For a hosted
+  campaign the release is merging the pull request, and §27 says the factory may
+  never merge one; Brain holds no forge credential and must not. So Russell
+  makes the decision *legible* — the files and line counts, the head commit and
+  whether it is the one Brain integrated and had reviewed, the verdict and its
+  independence tier, the checks, the conditions — links the place it is made,
+  and records a refusal. It observes the person's merge and performs none. A
+  refusal closes nothing on the forge, and the message says so.
+- **Brain can observe the deployment of one repository: its own.** The only
+  deployment it can read is the revision it was built from, so a merge anywhere
+  else is reported as a merge and its deployment as outside what Brain can see —
+  never guessed. `SELF_GRANT_ID` names the grant by the envelope's id rather than
+  by a remote, so a fork or a mirror is not mistaken for it.
+- **Each milestone once, in the conversation once.** `(request_id,
+  milestone_key)` is unique, only the inserting caller writes the message, and a
+  milestone whose message a crashed tick never wrote is finished by a later one
+  after a delay long enough never to race its inserter. Messages are `SYSTEM`
+  and render as **Brain**: they are facts Brain read, and attributing them to
+  Russell would make an observation read like an opinion.
+- **A resumed campaign says so.** The count of blockers seen is part of a stage
+  milestone's key, because otherwise a campaign blocked and resumed in the same
+  stage would leave "Blocked" as the conversation's last word over work that is
+  moving — §29's status contradicting the rows, in a thread.
+- **The forge is asked as little as the facts allow.** At most once per request
+  per `DELIVERY_POLL_MS`, claimed by a compare-and-swap on the last poll time; a
+  merge is permanent, so the pull request is never read again after one; and
+  whether a revision contains a merge can change only with a new process, so it
+  is asked once per revision and remembered in memory for exactly that reason.
+- **The live check is Brain's URL with the person's path.** A proposal supplies a
+  path and a piece of text, validated to start with `/`, never climb and never
+  name a host; the host is `127.0.0.1` and this process's own port. It follows
+  only same-origin script and style references, because a single-page
+  application's text is in its bundle, and a check that read only the HTML would
+  fail every interface change. It is on the card before anybody authorizes.
+
+**What it does not claim.** The acceptance conditions are verified on the
+integrated tree before release and are not re-run against production; the live
+check is one declared behaviour. The fixture suites prove the mechanism on both
+backends; `docs/SOFTWARE-SERVICE-EVIDENCE.md` records the live journey, and
+until a real request has travelled it this section is a design with tests, not
+a production reading — the separation Step 3 drew.
+
+## 52. A decision that a person is needed is not the person doing it.
+
+§41 decides *whether* a task needs a person and why. `server/services/humanwork/`
+(`docs/HUMAN-WORK.md`, migrations `101_human_work.sql` / pg `092_human_work.sql`)
+is everything after that decision, and it was found missing by reading
+production rather than by reading code: on 2026-09-23 `labor-report` answered
+`maps=0` across all thirteen projects, while `people foundation` showed a real
+task only a person can do sitting undone — three members whose Claude accounts
+Brain cannot connect for them.
+
+- **The gate is the existing judgment.** A work order is refused unless the
+  task's live labor allocation names a human layer and one of the six reasons.
+  What the order adds is what the judgment left unsaid: the exact work, why a
+  person, what Brain prepares first, and a non-empty acceptance standard.
+- **Three facts that are easy to collapse are kept apart by the schema.** A
+  candidate row holds no agreement (`TEAM_MEMBER` needs an account,
+  `RESEARCHED` a gated claim with a source, `EXISTING_RELATIONSHIP` a person
+  attesting); `INVITED` is not `ENGAGED`; and `ENGAGED` records *how* it is
+  known — the worker accepting in Brain, or a coordinator attesting with the
+  evidence named. Nobody accepts for a team member.
+- **The engagement decision is a Needs You card, and answering it is not
+  authority.** `resolveEngagementDecision` re-reads whether the answerer
+  administers the project at that moment and puts the card back otherwise —
+  §24's answering transition, and the capability card's placement in
+  `resumeAnsweredRequest` for the same reason. A standing commercial authority
+  covering `ENGAGE_CONTRACTOR` is never bypassed: the approval holds the amount
+  under its ceilings or is not carried out.
+- **Brain holds one channel to a person and says so.** A team member's own Home
+  page. For anybody else Brain composes the message and a person sends it and
+  records the channel; the missing outbound channel is reported as a blocker, not
+  papered over. A member who cannot sign in is a blocker naming People's control.
+- **A result is accepted only when every condition reads MET now**, judged three
+  ways and never by the worker: an account-foundation dimension re-read from rows,
+  a document Brain actually read, or a review of the latest round by somebody else.
+  A `NOT_MET` must name the repair. Brain accepts by itself only a no-charge result
+  whose every condition it reads from rows.
+- **The assignee holds no membership.** `/api/assignments` is one comparison
+  against the principal, and the brief is built field by field — the project is
+  not in it. Absent and not-yours are one body.
+- **Money and time are rows, and obligations outlive the work.** Payments need a
+  reference and cannot exceed what was approved; outstanding is derived and
+  survives acceptance and cancellation; reliability for the next staffing decision
+  is derived from earlier engagements and never stored.
+
+The screen acts on existing work and has no forms yet for opening an order,
+adding a candidate or preparing terms; those are the routes and
+`npm run humanwork -- connect-capacity`, the reviewed recipe for the task that
+exists today.
+
+**A member who holds a passkey and no PIN cannot receive the work, and that is
+the PIN migration's boundary rather than this kernel's defect.** The served
+sign-in screen asks for six digits only (`SignIn.tsx` records why), so such an
+account is `SIGN_IN BLOCKED`, the work order says so as a blocker for a Brain
+administrator, and the remedy is the existing recovery link, which ends in a
+PIN. `tests/humanWork.test.ts` walks that remedy on a passkey-only member and
+asserts the blocker clears and the assignment reaches them; nothing here
+re-opens device sign-in, which is a decision about the front door.
 
 ---
 
@@ -11994,6 +12127,7 @@ server/
     manufacturing.ts  the ladder, the capability ledger, and the one write research cannot reach
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
     labor.ts          workflows, tasks, who produces each, and what has been asked
+    humanWork.ts      orders, candidates, engagements, and the append-only record of delivery
     monetization.ts   the possibility ledger; nothing in it is ever deleted
     engineering.ts    evidence, interventions and blockers; append-only
   services/
@@ -12189,6 +12323,14 @@ server/
       view.ts           §13's six readings, and the four figures nothing measures
       declare.ts        a person naming a workflow; the one origin Brain may not write
       kernel.ts         the tick, bounded by authority and concurrency and nothing else
+    humanwork/
+      order.ts          a person is necessary, gated on the labor allocation, and for exactly what
+      candidates.ts     who could do it, the evidence for it, and reliability from earlier work
+      engage.ts         terms, the Needs You decision, the ask, and the person's own acceptance
+      deliver.ts        updates, deliverables, conditions judged three ways, acceptance, money
+      view.ts           the stage, who acts next, and the sentence Russell says; the assignee's brief
+      kernel.ts         the tick: deliver in Brain, accept what rows prove, note a missed date
+      recipes.ts        reviewed shapes of work only a person can do
     manufacturing/
       program.ts        starting a programme, and what pressing Start authorizes
       ladder.ts         the classes of machine, and how far Brain has got with each
@@ -12280,6 +12422,7 @@ server/
       probeEnvelope.ts  where a probe may look — in code, named by id
       proposal.ts       zero-trust validation of what a model proposes
       writeback.ts      what happens when a mission finishes, exactly once
+      softwareDelivery.ts  a change asked for here, followed to production and back
       needsHuman.ts     the park a packet stops at, and the answer that finishes it
       planning.ts       the judgment pass, its post-probe repeat, and the mission spec
       loop.ts           the durable tick, beside the dispatcher
@@ -12354,6 +12497,7 @@ server/
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
     labor.ts            the labor kernel's door: workflows, tasks, who produces each
+    humanWork.ts        work done by people: the project's door and the assignee's own
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     register.ts         the work register's door: workstreams, links, corrections
     bridge.ts           the conversation entrance: credentials, sync, transcript, status
@@ -12402,6 +12546,7 @@ scripts/
   refinement-report.ts      where every deep dive spent its time, stage by stage
   labor-report.ts           §13's six readings, and the four figures nothing measures
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
+  humanwork.ts              work done by people: show it, or open the reviewed capacity recipe
   puzzle-report.ts          what was made, proved, sold and learned; one puzzle re-rendered
   puzzle-report.sh          the same, inside the deployed container, on one connection
                             (reached by .github/workflows/puzzle-report.yml, which
@@ -12480,6 +12625,8 @@ tests/                  Vitest suites
   connectorIsolation.test.ts one site, two private operations, two identities
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
+  humanWork.test.ts          four principals, one journey, and every boundary between them
+  humanWorkBrowserToDatabase.test.ts  the assignee's Home card and Russell's line, over the real route
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```

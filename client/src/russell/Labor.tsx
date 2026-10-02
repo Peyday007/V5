@@ -53,6 +53,7 @@
  * that removes it has a different shape per reader, and *there is no button*
  * and *the button is not for you* are answers a person reads very differently.
  */
+import { HumanWorkSection } from './HumanWork.tsx';
 import { useCallback, useState } from 'react';
 import { api } from '../lib/api.ts';
 import { useAsync } from './useAsync.ts';
@@ -225,6 +226,7 @@ export function LaborView({ projectId }: { projectId: string | null }): JSX.Elem
       <Frontier view={view} />
       <Bottlenecks view={view} />
       <CapacityNeeds view={view} projectId={projectId} reload={query.reload} />
+      <HumanWorkSection projectId={projectId} />
       <Compression view={view} />
       <Economics view={view} />
       <Measurements view={view} />
