@@ -632,7 +632,7 @@ describe('J06: a provider refusal', () => {
     const contact = provider('CONTACT_BUYER', 'EXTERNAL_OPAQUE', 'msg');
     contact.onSend = async () => ({
       kind: 'REJECTED',
-      category: 'VALIDATION',
+      category: 'PROVIDER_REJECTED',
       retryable: false,
       detail: 'the recipient address is not deliverable',
     });
@@ -646,7 +646,7 @@ describe('J06: a provider refusal', () => {
       (one.requestKey ?? '').startsWith('effect-failed:'),
     );
     expect(refused).toHaveLength(1);
-    expect(refused[0]!.whyItMatters).toMatch(/VALIDATION/);
+    expect(refused[0]!.whyItMatters).toMatch(/PROVIDER_REJECTED/);
     expect((await record(piece.id)).attempts[0]!.status).toBe('REFUSED');
   });
 });
