@@ -104,6 +104,42 @@ const SECTIONS = [
 
 const DEPTH_KEY = 'brain.depth';
 
+/**
+ * Which project every screen other than the conversation is about.
+ *
+ * It was `projects[0]`: the first project this person can read, in whatever
+ * order the list came back. So a person reading a thread attached to one
+ * project and then opening Knows, Work, Build or Needs You was shown a
+ * *different* project's — silently, with nothing on the page saying which.
+ * §27's rule at a new surface: **a row outranks prose, and the conversation's
+ * attachment is the row.** `russell_conversations.project_id` is written by
+ * the router or by the person, with `attachment_source` recording who, so it
+ * is the one statement about what the person is looking at that has
+ * provenance.
+ *
+ * Falls back to the first readable project when the open thread is attached
+ * to nothing — an unattached thread still has to render the other screens —
+ * and it can only ever *narrow* to a project this person already reads,
+ * because the list is `decideProjectAccess`'s answer. An attachment naming a
+ * project absent from that list falls back rather than inventing one.
+ *
+ * It decides nothing about where a *new* thread is attached: new threads stay
+ * unattached (§47), and this only reads what a thread already says.
+ */
+export function shellProject(
+  projects: readonly Project[],
+  conversations: readonly { id: string; projectId: string | null }[],
+  conversationId: string | null,
+): Project | null {
+  const open = conversationId
+    ? (conversations.find((thread) => thread.id === conversationId) ?? null)
+    : null;
+  const attached = open?.projectId
+    ? (projects.find((row) => row.id === open.projectId) ?? null)
+    : null;
+  return attached ?? projects[0] ?? null;
+}
+
 export function useViewportWidth(): number {
   const [width, setWidth] = useState(() =>
     typeof window === 'undefined' ? 1200 : window.innerWidth,
@@ -203,9 +239,6 @@ export function RussellShell({
   const [depth, setDepth] = useDepth();
 
   const projects = useAsync(() => Api.projects(), []);
-  const project: Project | null = projects.data?.projects[0] ?? null;
-  const projectId = project?.id ?? null;
-
   const conversations = useAsync(() => RussellApi.conversations(), []);
   const [openedId, setOpenedId] = useState<string | null>(null);
 
@@ -249,9 +282,31 @@ export function RussellShell({
     return () => {
       cancelled = true;
     };
-  }, [openedId, conversations.loading, conversations.error, conversations.data, projectId]);
+  }, [openedId, conversations.loading, conversations.error, conversations.data]);
 
   const conversationId = route.name === 'CONVERSATION' ? route.conversationId : openedId;
+
+  /*
+   * Opening a thread by address makes it the one this shell is in.
+   *
+   * `openThread` sets it for a click, but a thread reached by its URL — a
+   * link, a reload, the back button — left `openedId` on whichever thread the
+   * landing effect chose. Leaving it for Knows, Work or Needs You then went
+   * back to *that* thread's project without saying so. The route is the
+   * person's own statement about what they are looking at, so it wins.
+   */
+  useEffect(() => {
+    if (route.name === 'CONVERSATION' && route.conversationId !== openedId) {
+      setOpenedId(route.conversationId);
+    }
+  }, [route, openedId]);
+
+  const project = shellProject(
+    projects.data?.projects ?? [],
+    conversations.data?.conversations ?? [],
+    conversationId,
+  );
+  const projectId = project?.id ?? null;
 
   const signOut = useCallback(() => {
     void Api.logout().then(onSignedOut, onSignedOut);
