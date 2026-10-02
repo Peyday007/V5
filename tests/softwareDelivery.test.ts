@@ -358,6 +358,36 @@ describe('a change followed back to its conversation', () => {
     expect((await systemMessages(conversationId)).some((m) => m.startsWith('Ready for your release decision'))).toBe(true);
   });
 
+  it('does not put a release decision in front of a person from a compare the forge refused', async () => {
+    // Production, 2026-09-30: an unauthenticated forge spends its 60 reads an
+    // hour on live campaigns and answers 403. RELEASE_READY is written once, so
+    // a card written from that refusal would say "0 file(s), +0/-0" for ever.
+    const { conversationId, requestId, campaignId } = await askedAndAuthorized({ grantId: 'brain-worker-bootstrap' });
+    await patchCampaign(campaignId, {
+      state: 'COMPLETE',
+      prUrl: 'https://github.com/Peyday007/brain-worker-bootstrap/pull/7',
+      prRef: '7',
+      integrationSha: HEAD,
+    });
+    const refusing: DeliveryDeps = {
+      ...world(),
+      async compareCommits() {
+        return { ok: false, status: 403, body: null, reason: "The forge's read rate limit is spent.", authenticated: false };
+      },
+    };
+    const first = await followSoftwareRequest(await reread(requestId), refusing);
+    expect(first.recorded).not.toContain('RELEASE_READY');
+    expect(first.note).toContain('rate limit');
+    expect((await systemMessages(conversationId)).some((m) => m.startsWith('Ready for your release decision'))).toBe(false);
+
+    await followSoftwareRequest(await reread(requestId), world({ at: 10 }));
+    const [view] = await softwareForConversation(conversationId);
+    const release = view?.delivery?.release as Record<string, unknown>;
+    expect(release['filesTotal']).toBe(1);
+    expect(release['additions']).toBe(3);
+    expect((await systemMessages(conversationId)).filter((m) => m.startsWith('Ready for your release decision'))).toHaveLength(1);
+  });
+
   it('records a refusal as a person, says so, and stops following', async () => {
     const { conversationId, requestId, campaignId } = await askedAndAuthorized({ grantId: 'brain-worker-bootstrap' });
     const early = await refuseSoftwareRelease({ requestId, userId: actor.id, reason: 'too early' });

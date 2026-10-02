@@ -422,8 +422,19 @@ export async function followSoftwareRequest(
       deps.compareCommits(repo, pr.baseRef || changeRequest.baseBranch, pr.headSha),
       deps.readChecks(repo, pr.headSha),
     ]);
+    /*
+     * `RELEASE_READY` is recorded once and never rewritten, so it must not be
+     * written from a compare the forge refused — a spent read budget (see
+     * `rateLimitReason` in forge.ts) would otherwise put "0 file(s), +0/-0"
+     * in front of the person deciding, permanently. The poll time is already
+     * claimed, so the next poll asks again; nothing is said until it answers.
+     */
+    if (!comparison.ok || !comparison.body) {
+      outcome.note = `the forge did not answer the compare: ${comparison.reason ?? comparison.status}`;
+      return outcome;
+    }
     const review = latestReview(view);
-    const files = comparison.ok && comparison.body ? comparison.body.fileStats.slice(0, MAX_RELEASE_FILES) : [];
+    const files = comparison.body.fileStats.slice(0, MAX_RELEASE_FILES);
     const summary = checksSummary(checks.ok ? checks.body : null);
     const detail = {
       pullRequest: { number: pr.number, url: pr.url, title: pr.title, baseRef: pr.baseRef, headRef: pr.headRef },
@@ -436,8 +447,8 @@ export async function followSoftwareRequest(
        */
       headIsIntegration: campaign.integrationSha === pr.headSha,
       files,
-      filesTotal: comparison.ok && comparison.body ? comparison.body.fileStats.length : null,
-      filesTruncated: comparison.ok && comparison.body ? comparison.body.truncated : null,
+      filesTotal: comparison.body.fileStats.length,
+      filesTruncated: comparison.body.truncated,
       additions: files.reduce((sum, f) => sum + f.additions, 0),
       deletions: files.reduce((sum, f) => sum + f.deletions, 0),
       checks: summary,
