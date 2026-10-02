@@ -176,3 +176,23 @@ answering* (§23), which is a Claude-side connector/Routine fix.
 Brain Research A / 1-B..D (connector selected, repository attached, sessions
 arriving), then `fleet set-state --kind routine --to ENABLED` one surface and
 watch one fire arrive before the rest. The recovered bins resume by themselves.
+
+## Single-surface recovery attempt (2026-10-02, 01:40Z)
+
+- **#88 is still not merged.** `production` and `deployed/production` are both
+  `0041975`; none of `5097b47` (launch window), `49020fb`
+  (`resumeUnlaunchedDives`) or `83993fd` (`filing-defect`) is deployed.
+- **Cause of the quarantine, read from Claude's own session records:** every
+  owner research Routine (Brain Research A `trig_01CBLu5o…`, 1/B, 1/C, 1-D)
+  uses the one `cloud-brain` connector (`78cc0603…`,
+  `https://northline-brain.fly.dev/mcp`), and that connector starts every
+  fired session as **`needs-auth`**, so `brain_check_in` does not exist in the
+  session. First seen 2026-09-23 13:58Z (`cse_01NmwyTfxgENDEVkZPE8PV61`).
+- **Test:** Brain Research A set `QUARANTINED → ENABLED` at 01:42:19Z; Brain
+  fired it at 01:42:23Z (`cse_01Dr4HZkBfxz34eA1qbWhZG3`); the session reported
+  `cloud-brain: needs-auth` and ended at 01:42:42Z without checking in. Set
+  back to `QUARANTINED` at 01:43:07Z. One activation spent; no others enabled.
+- **Person action:** reconnect `cloud-brain` at
+  https://claude.ai/customize/connectors (sign in to Brain on the consent
+  screen and approve worker `wkr_1cdd82…`). One reconnect covers all four
+  Routines. Then re-run this test on Brain Research A only.
