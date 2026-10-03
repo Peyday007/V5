@@ -628,6 +628,27 @@ export async function rotateRefreshToken(input: {
   /** Failure injection for tests: called inside the transaction at each stage. */
   inject?: (stage: 'REVOKED' | 'MINTED') => Promise<void>;
 }): Promise<RefreshRotation> {
+  try {
+    return await rotateWithin(input);
+  } catch (error) {
+    if (error instanceof RecoveryRaced) return { ok: false, reason: 'REUSED' };
+    throw error;
+  }
+}
+
+/** A concurrent rotation moved a legacy successor between the read and the supersede. */
+class RecoveryRaced extends Error {
+  constructor() {
+    super('A concurrent rotation moved the chain during recovery.');
+  }
+}
+
+async function rotateWithin(input: {
+  tokenId: string;
+  presentedSecret: string;
+  now?: number;
+  inject?: (stage: 'REVOKED' | 'MINTED') => Promise<void>;
+}): Promise<RefreshRotation> {
   const key = await rotationKey();
   const db = getDb();
   return db.transaction(async (): Promise<RefreshRotation> => {
@@ -744,7 +765,9 @@ export async function rotateRefreshToken(input: {
           WHERE id = ? AND revoked_at IS NULL`,
         [at, live.id],
       );
-      if (superseded.changes !== 1) return { ok: false, reason: 'REUSED' };
+      // Thrown rather than returned, so anything this loop already superseded
+      // rolls back with it instead of committing a revocation with no successor.
+      if (superseded.changes !== 1) throw new RecoveryRaced();
       await db.run(
         `UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'SUPERSEDED'
           WHERE parent_token_id = ? AND kind = 'ACCESS' AND revoked_at IS NULL`,
