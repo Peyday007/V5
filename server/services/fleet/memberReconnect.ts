@@ -65,6 +65,7 @@ import {
   type Connector,
 } from '../../repos/connectors.ts';
 import { getWorker } from '../../repos/identity.ts';
+import { getClientByClientId } from '../../repos/oauth.ts';
 import type { Worker } from '../../domain/types.ts';
 import { connectorHealth } from './connectorHealth.ts';
 
@@ -76,7 +77,8 @@ export type MemberReconnectRefusal =
   | 'CLIENT_ATTACHED_ELSEWHERE'
   | 'WORKER_UNAVAILABLE'
   | 'CONSENT_REVOKED'
-  | 'SCOPE_NOT_PREVIOUSLY_GRANTED';
+  | 'SCOPE_NOT_PREVIOUSLY_GRANTED'
+  | 'PUBLIC_CLIENT';
 
 export type MemberReconnect =
   | { ok: true; connector: Connector; worker: Worker; basis: string[] }
@@ -99,6 +101,8 @@ export const MEMBER_RECONNECT_SENTENCE: Record<MemberReconnectRefusal, string> =
     'Your connector’s authorization was explicitly withdrawn, and a withdrawal is not undone by reconnecting.',
   SCOPE_NOT_PREVIOUSLY_GRANTED:
     'This request asks for more access than your connector was ever granted.',
+  PUBLIC_CLIENT:
+    'This connection has no client secret, so Brain cannot tell that the code will be redeemed by the client that asked for it.',
 };
 
 function scopeSet(scope: string | null | undefined): Set<string> {
@@ -191,6 +195,18 @@ export async function resolveMemberReconnect(input: {
 }): Promise<MemberReconnect> {
   const endpoint = endpointOf(input.resource);
   if (endpoint === 'UNSPECIFIED') return { ok: false, reason: 'ENDPOINT_UNSPECIFIED', connectorIds: [] };
+
+  /*
+   * Only a confidential client. Attaching at redemption binds the client to
+   * whoever holds its secret; a public client has none, so a member who learned
+   * somebody else's freshly registered public client id could approve it,
+   * read the code off the callback and attach it to their own connector.
+   * Claude's connector registers as client_secret_post.
+   */
+  const client = await getClientByClientId(input.clientId);
+  if (!client || client.tokenAuthMethod === 'none') {
+    return { ok: false, reason: 'PUBLIC_CLIENT', connectorIds: [] };
+  }
 
   const owners = await connectorOwners();
   const mine: { connector: Connector; basis: string[]; others: number }[] = [];

@@ -185,6 +185,9 @@ offers the connector's worker only when every one of these holds, each read
 from a row:
 
 - the browser has an authenticated person;
+- the client is confidential (it registered with a secret, as Claude's
+  connector does): binding at redemption means nothing for a public client,
+  whose code anybody holding the callback could redeem;
 - exactly one connector at the endpoint the request names (`resource`) belongs
   to them — proven only by a `BOUND_INVITATION` attachment whose recorded
   `invitation_id` names this member and this connector (not a capacity

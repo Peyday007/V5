@@ -11927,7 +11927,8 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   again and records the member as approver, and the new client is attached to
   the same connector as `MEMBER_RECONNECT` only when its code is redeemed with
   the verifier and the client's secret, because a `client_id` is public, and
-  only after the whole question is asked again at redemption. A worker id is
+  only after the whole question is asked again at redemption — which is why a
+  public client (no secret) is refused outright. A worker id is
   never evidence: three people authenticate as worker-10. Two independent
   reviews shaped this. The first version also accepted a member's own capacity
   connection, earlier member reconnects, inferred attachments and any consent

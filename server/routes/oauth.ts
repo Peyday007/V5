@@ -1468,6 +1468,14 @@ function signInPage(
  * connecting can see what they are lending their account to, and it does not
  * name the projects' contents or anyone's account.
  */
+function redirectHost(uri: string): string {
+  try {
+    return new URL(uri).host;
+  } catch {
+    return uri;
+  }
+}
+
 /**
  * A signed-in member restoring the one connector Brain can prove is theirs.
  * One worker, no choice, and the connector named so the person can see it is
@@ -1482,8 +1490,9 @@ function memberReconnectPage(
   return page(
     'Reconnect',
     card(`<h1>Reconnect ${esc(workerIdentity(worker))}</h1>
-     <p class="sub"><strong>${esc(clientName)}</strong> is asking to restore your existing connector. It
-       gets the same worker's access it had before — nothing more.</p>
+     <p class="sub"><strong>${esc(clientName)}</strong> is asking to act as your connector's worker. Approve
+       only if you just pressed Reconnect in Claude: it gets the same worker's access your connector had —
+       nothing more — and the code is sent to <code>${esc(redirectHost(params.redirectUri))}</code>.</p>
      <div class="grant">
        <dt>Connector</dt><dd><code>${esc(reconnect.connector.id)}</code> at
          <code>${esc(reconnect.connector.resource)}</code></dd>

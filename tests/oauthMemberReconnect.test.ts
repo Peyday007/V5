@@ -122,10 +122,15 @@ function pkce(): { verifier: string; challenge: string } {
   return { verifier, challenge: crypto.createHash('sha256').update(verifier).digest('base64url') };
 }
 
-async function register(name: string): Promise<string> {
-  const registered = await api<{ client_id: string }>('POST', '/oauth/register', {
-    body: { client_name: name, redirect_uris: [REDIRECT] },
+/** Client secrets by client id, for the token step. */
+const secrets = new Map<string, string>();
+
+/** A confidential client, registered the way Claude's connector registers (client_secret_post). */
+async function register(name: string, method: 'client_secret_post' | 'none' = 'client_secret_post'): Promise<string> {
+  const registered = await api<{ client_id: string; client_secret?: string }>('POST', '/oauth/register', {
+    body: { client_name: name, redirect_uris: [REDIRECT], token_endpoint_auth_method: method },
   });
+  if (registered.body.client_secret) secrets.set(registered.body.client_id, registered.body.client_secret);
   return registered.body.client_id;
 }
 
@@ -181,6 +186,7 @@ async function exchange(clientId: string, code: string, verifier: string): Promi
       redirect_uri: REDIRECT,
       client_id: clientId,
       code_verifier: verifier,
+      ...(secrets.has(clientId) ? { client_secret: secrets.get(clientId)! } : {}),
     }).toString(),
   });
   return (await response.json()) as Record<string, string>;
@@ -502,6 +508,15 @@ describe('a signed-in member reconnecting their own connector', () => {
     for (const row of all) expect(row.metadata).not.toMatch(/brno_|brnr_|code_verifier|client_secret/);
   });
 
+  it('refuses a public client, whose code anybody holding the callback could redeem', async () => {
+    const client = await register('Claude (airyn, public)', 'none');
+    const page = await authorizePage(client, airyn.cookie);
+    expect(page.status).toBe(403);
+    expect((await pageEvents(client))[0]).toMatchObject({ reason: 'PUBLIC_CLIENT', userId: airyn.id });
+    const approved = await approve(client, airyn.cookie);
+    expect(approved.code).toBeNull();
+  });
+
   it('refuses a forged worker on the member path', async () => {
     const client = await register('Claude (airyn, forged worker)');
     const approved = await approve(client, airyn.cookie, { worker: otherWorkerId });
@@ -602,6 +617,7 @@ describe('a signed-in member reconnecting their own connector', () => {
         grant_type: 'refresh_token',
         refresh_token: caleb.oldRefresh,
         client_id: caleb.oldClientId,
+        client_secret: secrets.get(caleb.oldClientId)!,
       }).toString(),
     });
     expect(refused.status).toBe(400);
