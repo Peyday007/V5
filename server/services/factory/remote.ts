@@ -48,6 +48,7 @@ import { factoryEnvelope } from '../../domain/engineering.ts';
 import type {
   Bin,
   BinManifest,
+  BinRow,
   BinRepository,
   BinUnitSpec,
   CompletionContract,
@@ -57,7 +58,7 @@ import type {
   FactoryChangeRequest,
   FactoryWorkUnit,
 } from '../../domain/factory.ts';
-import { createBin, getBin, leaseCredentialFor, leaseWorkerFor, listBinUnitResults } from '../../repos/bins.ts';
+import { createBin, getBin, leaseCredentialFor, leaseWorkerFor, listBinUnitResults, mapBin } from '../../repos/bins.ts';
 import type { CreateBinInput } from '../../repos/bins.ts';
 import { manifestProblems } from '../bins/contracts.ts';
 import { FactoryError } from './errors.ts';
@@ -1493,16 +1494,12 @@ async function readSingle<T>(
 /** The bins this campaign has, newest first. */
 export async function campaignBins(campaignId: string): Promise<Bin[]> {
   const { getDb } = await import('../../db/database.ts');
-  const rows = await getDb().all<{ id: string }>(
-    `SELECT id FROM bins WHERE factory_campaign_id = ? ORDER BY created_at DESC`,
+  // One statement, not one per bin: the same rows `getBin` would have read.
+  const rows = await getDb().all<BinRow>(
+    `SELECT * FROM bins WHERE factory_campaign_id = ? ORDER BY created_at DESC`,
     [campaignId],
   );
-  const bins: Bin[] = [];
-  for (const row of rows) {
-    const bin = await getBin(row.id);
-    if (bin) bins.push(bin);
-  }
-  return bins;
+  return rows.map(mapBin);
 }
 
 /**

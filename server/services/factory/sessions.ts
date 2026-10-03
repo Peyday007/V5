@@ -177,6 +177,28 @@ export interface SessionSweepReport {
 }
 
 /**
+ * Finished bins whose whole history this process has already swept, keyed by
+ * the bin row's own state and `updated_at`.
+ *
+ * Every event that opens or closes an episode is written alongside a write to
+ * the bin row — an assignment, a takeover, a terminal transition — so a
+ * finished bin whose row has not changed since its last full sweep has no new
+ * episode to find. Re-reading its event history every twenty seconds for ever
+ * was measured load and established nothing. The fingerprint is the bin's own
+ * durable column, not a second record of anything: a restart forgets the memo
+ * and sweeps each bin once more, which is the old behaviour, and the unique
+ * index on `(bin_id, lease_generation)` still decides every write.
+ */
+const FINISHED_BIN_STATES: ReadonlySet<string> = new Set(['COMPLETE', 'FAILED', 'CANCELLED']);
+const sweptFinished = new Map<string, { fingerprint: string; recorded: number; unclosed: number }>();
+const SWEPT_FINISHED_CEILING = 50_000;
+
+/** Test seam: forget what this process has swept. */
+export function forgetSweptSessions(): void {
+  sweptFinished.clear();
+}
+
+/**
  * Record every finished assignment episode of one campaign's bins.
  *
  * Safe to run on every tick and safe to run twice at once: the unique index on
@@ -200,11 +222,21 @@ export async function recordObservedSessions(campaignId: string): Promise<Sessio
       report.unmapped += 1;
       continue;
     }
+    const fingerprint = `${bin.state}|${bin.updatedAt}`;
+    const swept = FINISHED_BIN_STATES.has(bin.state) ? sweptFinished.get(bin.id) : undefined;
+    if (swept && swept.fingerprint === fingerprint) {
+      report.alreadyRecorded += swept.recorded;
+      report.unclosed += swept.unclosed;
+      continue;
+    }
     const events = await listBinEvents(bin.id, EVENT_READ_LIMIT);
-    if (events.length >= EVENT_READ_LIMIT) report.partialReads += 1;
+    const partial = events.length >= EVENT_READ_LIMIT;
+    if (partial) report.partialReads += 1;
     const opens = events.filter((event) => OPENS.has(event.eventType)).length;
     const episodes = episodesOf(events);
-    report.unclosed += Math.max(0, opens - episodes.length);
+    const unclosed = Math.max(0, opens - episodes.length);
+    report.unclosed += unclosed;
+    let settledEpisodes = 0;
     for (const episode of episodes) {
       const workerId = episode.workerId ?? bin.workerId;
       if (!workerId) {
@@ -242,6 +274,13 @@ export async function recordObservedSessions(campaignId: string): Promise<Sessio
       });
       if (written) report.recorded += 1;
       else report.alreadyRecorded += 1;
+      settledEpisodes += 1;
+    }
+    // Only a history with every open closed is memoized: a terminal row written
+    // a moment before its close event would otherwise be remembered half-read.
+    if (FINISHED_BIN_STATES.has(bin.state) && !partial && unclosed === 0) {
+      if (sweptFinished.size >= SWEPT_FINISHED_CEILING) sweptFinished.clear();
+      sweptFinished.set(bin.id, { fingerprint, recorded: settledEpisodes, unclosed });
     }
   }
   return report;

@@ -27,7 +27,7 @@ import { listBinUnitResults } from '../../repos/bins.ts';
 import { getOrchestration } from '../../repos/research.ts';
 import { listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
 import { getDocument } from '../../repos/documents.ts';
-import { listAuditsByProject } from '../../repos/audits.ts';
+import { listAuditsByRun } from '../../repos/audits.ts';
 import { readObject, storageKeyOf } from '../storage.ts';
 
 /** What an evaluation concluded, and why. */
@@ -225,6 +225,46 @@ async function evaluateDeterministicUnits(bin: Bin): Promise<ContractVerdict> {
  * files a report, so none of them may complete a bin.
  */
 const PACKET_FILED: ReadonlySet<string> = new Set(['COMPLETE', 'COMPLETE_WITH_GAPS']);
+const PACKET_TERMINAL: ReadonlySet<string> = new Set([
+  'COMPLETE',
+  'COMPLETE_WITH_GAPS',
+  'FAILED',
+  'CANCELLED',
+  'NEEDS_HUMAN',
+]);
+
+/**
+ * Whether `RESEARCH_PACKET_V1` answers HUMAN for a packet in this status,
+ * whatever else its rows say.
+ *
+ * The evaluator's HUMAN disposition is a function of the packet's status alone:
+ * waiting for approval, or terminal without having filed. Exported so a caller
+ * that only needs that answer — `reopenParkedBin`, asked about every parked bin
+ * on every reconcile tick — can have it from one row instead of the work items,
+ * the document bytes and the project's whole audit trail. One rule, read by
+ * both, so the two cannot come to disagree.
+ */
+export function researchPacketParks(status: string): boolean {
+  return status === 'AWAITING_APPROVAL' || (PACKET_TERMINAL.has(status) && !PACKET_FILED.has(status));
+}
+
+const AWAITING_APPROVAL_REASON =
+  'The packet is planned and waiting for a person to approve it. Nothing is spent until ' +
+  'somebody reads the plan and approves it, so this bin is not work a worker can finish.';
+
+function notFilingReason(status: string): string {
+  return (
+    `The packet is ${status}, which is not a state it files a report in. A bin is ` +
+    'terminal when its packet is, and the packet runner decides that from its own fragments, ' +
+    'verdicts and audits.'
+  );
+}
+
+/** The contract's own sentence for why a packet in this status parks its bin, or null when it does not. */
+export function researchPacketParkReason(status: string): string | null {
+  if (!researchPacketParks(status)) return null;
+  return status === 'AWAITING_APPROVAL' ? AWAITING_APPROVAL_REASON : notFilingReason(status);
+}
 
 async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
   const orchestrationId = bin.orchestrationId;
@@ -266,22 +306,11 @@ async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
   // the plan is approved the bin is made ready again and the ordinary path
   // takes it from there.
   if (orchestration.status === 'AWAITING_APPROVAL') {
-    return refuse(
-      'HUMAN',
-      [
-        'The packet is planned and waiting for a person to approve it. Nothing is spent until ' +
-          'somebody reads the plan and approves it, so this bin is not work a worker can finish.',
-      ],
-      observed,
-    );
+    return refuse('HUMAN', [AWAITING_APPROVAL_REASON], observed);
   }
 
   if (!PACKET_FILED.has(orchestration.status)) {
-    reasons.push(
-      `The packet is ${orchestration.status}, which is not a state it files a report in. A bin is ` +
-        'terminal when its packet is, and the packet runner decides that from its own fragments, ' +
-        'verdicts and audits.',
-    );
+    reasons.push(notFilingReason(orchestration.status));
   }
   if (open.length > 0) {
     reasons.push(
@@ -324,10 +353,9 @@ async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
     }
   }
 
-  // The audit trail. `listAuditsByProject` is the same reader the console uses.
-  const audits = (await listAuditsByProject(bin.projectId)).filter(
-    (audit) => audit.runId === orchestration.runId,
-  );
+  // The audit trail: the packet's own run, read narrowly. Same rows the
+  // console's `listAuditsByProject` filtered to this run would give.
+  const audits = await listAuditsByRun(bin.projectId, orchestration.runId);
   observed['audits'] = audits.length;
   if (audits.length === 0) {
     reasons.push('No audit was recorded for this packet, so nothing judged the report.');
@@ -336,10 +364,7 @@ async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
   if (reasons.length > 0) {
     // A packet that is still running is work in progress; one that has gone
     // terminal without filing cannot be fixed by this worker.
-    const terminal = ['COMPLETE', 'COMPLETE_WITH_GAPS', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN'].includes(
-      orchestration.status,
-    );
-    return refuse(terminal && !PACKET_FILED.has(orchestration.status) ? 'HUMAN' : 'RETRY', reasons, observed);
+    return refuse(researchPacketParks(orchestration.status) ? 'HUMAN' : 'RETRY', reasons, observed);
   }
   return satisfied(observed);
 }

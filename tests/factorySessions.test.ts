@@ -24,6 +24,7 @@ import { campaignMetrics, maxOverlap } from '../server/services/factory/metrics.
 import { tickRemoteCampaign } from '../server/services/factory/remoteLoop.ts';
 import {
   episodesOf,
+  forgetSweptSessions,
   recordObservedSessions,
   ROLE_OF_BIN_KIND,
 } from '../server/services/factory/sessions.ts';
@@ -34,6 +35,7 @@ import {
   markDispatchRoutine,
   markDispatchSent,
 } from '../server/repos/bins.ts';
+import { getDb } from '../server/db/database.ts';
 import type { BinEvent } from '../server/domain/types.ts';
 
 const REMOTE = 'https://github.com/Peyday007/V5';
@@ -327,6 +329,45 @@ describe('what the hosted plane ran, recorded from Brain’s own rows', () => {
     const after = await campaignMetrics(campaignId);
     expect(after.concurrencyEvidence).toBe('MEASURED');
     expect(after.maxObservedConcurrency).toBe(1);
+  });
+
+  it('does not re-read a finished bin\'s history while its row is unchanged, and does once it moves', async () => {
+    const campaignId = await campaign();
+    const worker = await createWorker({ name: `w-${Date.now()}`, createdByType: 'SYSTEM', createdById: 't' });
+    const binId = await stageBin(campaignId, 'FACTORY_UNITS', 'u1');
+    await runBin(binId, worker.id, 'cse_one');
+    forgetSweptSessions();
+
+    const eventReads = async (work: () => Promise<unknown>): Promise<number> => {
+      const db = getDb() as unknown as Record<'all', (...args: unknown[]) => unknown>;
+      const original = db.all;
+      let reads = 0;
+      db.all = (...args: unknown[]) => {
+        if (String(args[0]).includes('FROM bin_events')) reads += 1;
+        return original.apply(db, args);
+      };
+      try {
+        await work();
+      } finally {
+        db.all = original;
+      }
+      return reads;
+    };
+
+    expect(await eventReads(() => recordObservedSessions(campaignId))).toBeGreaterThan(0);
+    let third: Awaited<ReturnType<typeof recordObservedSessions>> | null = null;
+    expect(
+      await eventReads(async () => {
+        third = await recordObservedSessions(campaignId);
+      }),
+    ).toBe(0);
+    // The report is what a full pass would have said.
+    expect(third!.recorded).toBe(0);
+    expect(third!.alreadyRecorded).toBe(1);
+
+    // The bin row moves, so its history is read again.
+    await getDb().run('UPDATE bins SET updated_at = ? WHERE id = ?', [new Date(Date.now() + 1000).toISOString(), binId]);
+    expect(await eventReads(() => recordObservedSessions(campaignId))).toBeGreaterThan(0);
   });
 
   /*

@@ -37,11 +37,14 @@ import {
   confinementFor,
   countBinEvents,
   finishBin,
+  binsWithWithheldUnclaimed,
   creditRefusedAssignments,
   firedSessionForArrival,
   getBin,
+  getBinHead,
   heartbeatBin,
   listBins,
+  listBinHeads,
   listBinUnitResults,
   proveBinOwnership,
   putBinUnitResult,
@@ -63,7 +66,7 @@ import {
   listWorkItemsForBin,
   type ClaimScope,
 } from '../../repos/workQueue.ts';
-import { evaluateContract, hashUnitValue, type ContractVerdict } from './contracts.ts';
+import { evaluateContract, hashUnitValue, researchPacketParkReason, type ContractVerdict } from './contracts.ts';
 import { getWorkerRouting } from '../../repos/identity.ts';
 import {
   allAdmissions,
@@ -1089,13 +1092,16 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
    * `creditRefusedAssignments` is derived from append-only events and is
    * idempotent per generation, so this is safe to run on every tick for ever.
    */
-  const chargeable = await listBins({
+  const chargeable = await listBinHeads({
     projectId,
     states: ['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN'],
     limit: 500,
   });
+  // One statement for the page: only bins with a withheld, unclaimed
+  // generation can be credited anything, so only those are asked.
+  const creditable = await binsWithWithheldUnclaimed(chargeable.map((bin) => bin.id));
   for (const bin of chargeable) {
-    const credited = await creditRefusedAssignments(bin.id);
+    const credited = creditable.has(bin.id) ? await creditRefusedAssignments(bin.id) : 0;
 
     /*
      * And the answering transition. §24: a state that says "waiting for a
@@ -1124,7 +1130,7 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
      * `reopenParkedBin` still refuses anything whose contract answers HUMAN.
      */
     if (bin.state !== 'NEEDS_HUMAN') continue;
-    const now = await getBin(bin.id);
+    const now = await getBinHead(bin.id);
     if (!now || now.state !== 'NEEDS_HUMAN' || now.attemptCount >= now.maxAttempts) continue;
     await reopenParkedBin({
       binId: now.id,
@@ -1141,7 +1147,7 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
     });
   }
 
-  const bins = await listBins({
+  const bins = await listBinHeads({
     projectId,
     states: ['DRAFT', 'READY', 'LEASED'],
     limit: 500,
@@ -1175,10 +1181,13 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
 
     // Out of attempts and nobody holds it. Nothing further will happen on its
     // own, so it becomes exactly one decision with the reason attached.
-    const verdict = await evaluateContract(bin);
+    // The one bin this pass acts on is read whole; the page was read as heads.
+    const full = await getBin(bin.id);
+    if (!full) continue;
+    const verdict = await evaluateContract(full);
     const reason =
-      `The bin used all ${bin.maxAttempts} attempts without satisfying ` +
-      `${bin.completionContract} v${bin.contractVersion}. ` +
+      `The bin used all ${full.maxAttempts} attempts without satisfying ` +
+      `${full.completionContract} v${full.contractVersion}. ` +
       (verdict.reasons.length > 0
         ? `Outstanding: ${verdict.reasons.join(' ')}`
         : 'The contract reported no outstanding reason, which is itself worth reading.') +
@@ -1246,7 +1255,9 @@ export async function reopenParkedBin(input: {
   operator: string;
   reason: string;
 }): Promise<ReopenOutcome> {
-  const bin = await getBin(input.binId);
+  // The head is enough to decide most reopens; the whole row is read only for
+  // the contract, which is the one reader that needs it.
+  const bin = await getBinHead(input.binId);
   if (!bin) return { ok: false, refusal: 'NOT_FOUND', reason: `No bin ${input.binId}.` };
 
   const evidence: Record<string, unknown> = { contract: bin.completionContract };
@@ -1296,7 +1307,29 @@ export async function reopenParkedBin(input: {
      * one and a packet that filed nothing all still refuse, by name, with the
      * contract's own words.
      */
-    const verdict = await evaluateContract(bin);
+    /*
+     * The HUMAN answer is a function of the packet's status alone, so it is
+     * asked of the row already in hand before the whole contract is. A parked
+     * bin whose packet has not moved is the ordinary case on every reconcile
+     * tick, and asking the full contract there read the packet's work items,
+     * its document's bytes from the store and its project's whole audit trail
+     * — measured as the largest single source of database egress — to refuse
+     * exactly what this refuses. Same rule, one reader (`researchPacketParkReason`).
+     */
+    const parked = researchPacketParkReason(orchestration.status);
+    if (parked) {
+      return {
+        ok: false,
+        refusal: 'WRONG_STATE',
+        reason:
+          `Packet ${orchestrationId} is ${orchestration.status}, and its completion contract ` +
+          `still answers HUMAN: ${parked} Reopening would spend an activation ` +
+          'to be refused for the same reason.',
+      };
+    }
+    const full = await getBin(bin.id);
+    if (!full) return { ok: false, refusal: 'NOT_FOUND', reason: `No bin ${input.binId}.` };
+    const verdict = await evaluateContract(full);
     evidence['orchestrationId'] = orchestrationId;
     evidence['orchestrationStatus'] = orchestration.status;
     evidence['documentId'] = orchestration.documentId;
