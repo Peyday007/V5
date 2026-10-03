@@ -226,6 +226,34 @@ describe('refresh rotation', () => {
     expect(await liveRefreshCount(held.workerId)).toBe(1);
   });
 
+  it('two racing recoveries of a legacy chain converge on one derived successor', async () => {
+    const held = await grant();
+    const parsed = parseOAuthToken(held.refresh)!;
+    const root = (await findPresentedToken(parsed.prefix, parsed.secret, 'REFRESH'))!;
+    await getDb().run("UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'ROTATED' WHERE id = ?", [
+      new Date().toISOString(),
+      root.id,
+    ]);
+    const legacy = generateOAuthToken();
+    await issueToken({
+      kind: 'REFRESH',
+      tokenPrefix: legacy.prefix,
+      tokenDigest: legacy.digest,
+      clientId: 'brnc_test',
+      workerId: held.workerId,
+      scope: 'project:read',
+      resource: null,
+      ttlMs: 30 * 24 * HOUR,
+      parentTokenId: root.id,
+      grantId: root.grantId,
+      now: Date.now() + 10,
+    });
+    const at = Date.now() + 20;
+    const [one, two] = await Promise.all([present(held.refresh, at), present(held.refresh, at)]);
+    expect(minted(one).refresh).toBe(minted(two).refresh);
+    expect(await liveRefreshCount(held.workerId)).toBe(1);
+  });
+
   it('a race whose answer has been in use for longer than the leeway is a replay', async () => {
     const held = await grant();
     const next = minted(await present(held.refresh));

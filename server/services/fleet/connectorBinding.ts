@@ -108,9 +108,29 @@ export async function reconcileConnectorBindings(): Promise<{ attached: number; 
        JOIN oauth_tokens t ON t.id = s.session_ref
       WHERE t.client_id NOT IN (SELECT client_id FROM connector_clients)`,
   );
-  const byClient = new Map<string, { accounts: Set<string>; resources: Set<string>; workerId: string }>();
+  const byClient = new Map<string, { accounts: Set<string>; resources: Set<string>; workerId: string; source: 'OBSERVED_ARRIVAL' | 'INVITATION_MEMBER' }>();
+  /*
+   * A `worker_sessions` row is written under the *fired* Routine's account even
+   * when nothing proves the arriving session was that fire (either provider
+   * session missing), so for a worker served by several accounts it is not
+   * evidence of which account's connector a client is. Only a single-account
+   * worker's observations are trusted here; a shared worker's clients wait for
+   * a proven arrival (`observeConnectorArrival`), a member-bound consent, or an
+   * operator.
+   */
+  const accountOf = new Map<string, string | null>();
+  const contradicted = new Set<string>();
   for (const row of observations) {
-    const entry = byClient.get(row.client_id) ?? { accounts: new Set(), resources: new Set(), workerId: row.worker_id };
+    if (!accountOf.has(row.worker_id)) accountOf.set(row.worker_id, await singleAccountFor(row.worker_id));
+    const single = accountOf.get(row.worker_id);
+    if (single === null) continue;
+    // A row naming an account the worker does not serve contradicts the rest:
+    // the client is reported ambiguous rather than attached on the majority.
+    if (single !== row.account_id) {
+      contradicted.add(row.client_id);
+      continue;
+    }
+    const entry = byClient.get(row.client_id) ?? { accounts: new Set(), resources: new Set(), workerId: row.worker_id, source: 'OBSERVED_ARRIVAL' as const };
     entry.accounts.add(row.account_id);
     entry.resources.add(endpointOf(row.resource));
     byClient.set(row.client_id, entry);
@@ -141,21 +161,27 @@ export async function reconcileConnectorBindings(): Promise<{ attached: number; 
     );
     if (!invitation?.intended_user_id) continue;
     const accounts = await getDb().all<{ account_id: string }>(
-      'SELECT DISTINCT account_id FROM capacity_connections WHERE user_id = ? AND account_id IS NOT NULL',
-      [invitation.intended_user_id],
+      // The member's connection *for this worker*: a research connection names a
+      // different account from a Factory pool's, and attaching across them would
+      // make every later proven arrival a conflict.
+      'SELECT DISTINCT account_id FROM capacity_connections WHERE user_id = ? AND worker_id = ? AND account_id IS NOT NULL',
+      [invitation.intended_user_id, invitation.worker_id],
     );
     const resources = await getDb().all<{ resource: string | null }>(
       'SELECT DISTINCT resource FROM oauth_tokens WHERE client_id = ?',
       [clientId],
     );
-    const entry = byClient.get(clientId) ?? { accounts: new Set(), resources: new Set(), workerId: invitation.worker_id };
+    const entry = byClient.get(clientId) ?? { accounts: new Set(), resources: new Set(), workerId: invitation.worker_id, source: 'INVITATION_MEMBER' as const };
     for (const a of accounts) entry.accounts.add(a.account_id);
     for (const r of resources) entry.resources.add(endpointOf(r.resource));
     byClient.set(clientId, entry);
   }
 
+  for (const clientId of contradicted) {
+    if (!byClient.has(clientId)) byClient.set(clientId, { accounts: new Set(), resources: new Set(), workerId: '', source: 'OBSERVED_ARRIVAL' });
+  }
   for (const [clientId, entry] of byClient) {
-    if (entry.accounts.size !== 1 || entry.resources.size !== 1) {
+    if (contradicted.has(clientId) || entry.accounts.size !== 1 || entry.resources.size !== 1) {
       ambiguous.push(clientId);
       continue;
     }
@@ -165,8 +191,11 @@ export async function reconcileConnectorBindings(): Promise<{ attached: number; 
     const outcome = await attachClient({
       clientId,
       connectorId: connector.id,
-      source: 'OBSERVED_ARRIVAL',
-      evidence: 'derived from recorded arrivals and member-bound consent',
+      source: entry.source,
+      evidence:
+        entry.source === 'INVITATION_MEMBER'
+          ? 'derived from a member-bound consent and that member’s connection for this worker'
+          : 'derived from recorded arrivals of a single-account worker',
     });
     if (outcome === 'ATTACHED') attached += 1;
   }
@@ -211,8 +240,17 @@ export async function recoverReauthorizedSurfaces(now = Date.now()): Promise<str
     if (!(routine.stateReason ?? '').includes(NO_SHOW_QUARANTINE_MARK)) continue;
     const health = await connectorHealth(routine.connectorId, now);
     if (!health || health.state !== 'HEALTHY') continue;
+    /*
+     * Only a new consent proves the connector was re-authorized. Token use is
+     * not proof: a connector is one account at one endpoint, so every Routine in
+     * that account shares it, and a sibling's ordinary MCP call would otherwise
+     * re-enable a surface whose own trigger is what never answers — "the
+     * no-shows were the connector's" would be false and the loop would repeat
+     * every three fires. `lastGrantAt` is an authorization-code grant
+     * (`parent_token_id IS NULL`), which only a person's consent produces.
+     */
     const since = routine.updatedAt;
-    const fresh = [health.lastGrantAt, health.lastAccessUseAt].filter((x): x is string => !!x && x > since).sort().at(-1);
+    const fresh = health.lastGrantAt && health.lastGrantAt > since ? health.lastGrantAt : null;
     if (!fresh) continue;
     const moved = await setRoutineState({
       routineId: routine.id,

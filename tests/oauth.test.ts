@@ -556,7 +556,10 @@ describe('an invitation in an administrator\u2019s browser', () => {
     clientId = registered.body.client_id;
     try {
       const { challenge } = pkce();
-      const approved = await approve(challenge, { cookie: `brain_invite=${encodeURIComponent(token)}` });
+      const approved = await approve(challenge, {
+        cookie: `brain_invite=${encodeURIComponent(token)}`,
+        extra: { resource: `${BASE}/mcp` },
+      });
       expect(approved.code).not.toBeNull();
     } finally {
       clientId = previous;
@@ -571,6 +574,97 @@ describe('an invitation in an administrator\u2019s browser', () => {
       expect(attached).toEqual({ connector_id: connectorId, source: 'BOUND_INVITATION' });
     } finally {
       await closeDatabase();
+    }
+  });
+
+  /*
+   * A reconnect link for the Factory connector must not attach a client asking
+   * for another endpoint: a member re-adding their research connector while
+   * holding it is not reconnecting the Factory one.
+   */
+  it('does not attach a client for another endpoint to the connector a reconnect restores', async () => {
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    let token = '';
+    try {
+      const admin = await getDb().get<{ id: string }>('SELECT id FROM users WHERE email = ?', [ADMIN_EMAIL]);
+      const now = new Date().toISOString();
+      const connectorId = `cnr_factory_${crypto.randomBytes(4).toString('hex')}`;
+      await getDb().run(
+        `INSERT INTO connectors (id, account_id, resource, worker_id, label, created_at, updated_at)
+         VALUES (?, ?, '/mcp/factory', ?, NULL, ?, ?)`,
+        [connectorId, `acct_${connectorId}`, workerId, now, now],
+      );
+      const generated = generateInvitationToken();
+      await createInvitation({
+        workerId,
+        tokenPrefix: generated.prefix,
+        tokenDigest: generated.digest,
+        createdByUserId: admin!.id,
+        kind: 'ADDITIONAL',
+        connectorId,
+      });
+      token = generated.plaintext;
+    } finally {
+      await closeDatabase();
+    }
+
+    const registered = await api<{ client_id: string }>('POST', '/oauth/register', {
+      body: { client_name: 'Claude (research, re-added)', redirect_uris: [REDIRECT] },
+    });
+    const previous = clientId;
+    clientId = registered.body.client_id;
+    try {
+      const { challenge } = pkce();
+      const approved = await approve(challenge, {
+        cookie: `brain_invite=${encodeURIComponent(token)}`,
+        extra: { resource: `${BASE}/mcp` },
+      });
+      expect(approved.code).not.toBeNull();
+    } finally {
+      clientId = previous;
+    }
+
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    try {
+      const attached = await getDb().get('SELECT connector_id FROM connector_clients WHERE client_id = ?', [
+        registered.body.client_id,
+      ]);
+      expect(attached ?? null).toBeNull();
+    } finally {
+      await closeDatabase();
+    }
+  });
+
+  it('refuses an invitation for another worker on a client already attributed to a connector', async () => {
+    const registered = await api<{ client_id: string }>('POST', '/oauth/register', {
+      body: { client_name: 'Claude (attributed)', redirect_uris: [REDIRECT] },
+    });
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    try {
+      const now = new Date().toISOString();
+      const connectorId = `cnr_attr_${crypto.randomBytes(4).toString('hex')}`;
+      await getDb().run(
+        `INSERT INTO connectors (id, account_id, resource, worker_id, label, created_at, updated_at)
+         VALUES (?, ?, '/mcp', ?, NULL, ?, ?)`,
+        [connectorId, `acct_${connectorId}`, workerId, now, now],
+      );
+      await getDb().run(
+        `INSERT INTO connector_clients (client_id, connector_id, source, evidence, attached_at) VALUES (?, ?, 'OPERATOR', NULL, ?)`,
+        [registered.body.client_id, connectorId, now],
+      );
+    } finally {
+      await closeDatabase();
+    }
+    const stale = await inviteCookieFor(orphanWorkerId);
+    const previous = clientId;
+    clientId = registered.body.client_id;
+    try {
+      const { challenge } = pkce();
+      const refused = await approve(challenge, { cookie: stale.cookie, worker: orphanWorkerId });
+      expect(refused.code).toBeNull();
+      expect(refused.status).toBe(403);
+    } finally {
+      clientId = previous;
     }
   });
 

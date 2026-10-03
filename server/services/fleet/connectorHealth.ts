@@ -267,7 +267,19 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
     if (recovery) base.lastRecoveredRefreshAt = recovery.at;
   }
 
-  if (base.lastRefusal && base.lastRefusal.at > lastActivity) {
+  /*
+   * A REUSED refusal while the grant still holds a live refresh token is not
+   * the client being stuck: REUSED means a newer token in that lineage was
+   * presented or used, so somebody holds it — and a stale or stolen old token
+   * presented while the real client is idle must not take the connector out of
+   * routing until a person re-consents. Whether the live chain is actually
+   * being picked up is the question the checks below already answer.
+   */
+  const refusalStrands =
+    base.lastRefusal !== null &&
+    base.lastRefusal.at > lastActivity &&
+    !(base.lastRefusal.reason === 'REUSED' && Number(facts.live_refresh ?? 0) > 0);
+  if (base.lastRefusal && refusalStrands) {
     return verdict(
       'HUMAN_REAUTH_REQUIRED',
       'CLIENT_HOLDS_REFUSED_CREDENTIAL',

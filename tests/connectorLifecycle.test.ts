@@ -24,7 +24,7 @@ import {
   rotateRefreshToken,
   touchToken,
 } from '../server/repos/oauth.ts';
-import { attachClient, ensureConnector, getConnector, bindRoutineConnector } from '../server/repos/connectors.ts';
+import { attachClient, connectorClient, ensureConnector, getConnector, bindRoutineConnector } from '../server/repos/connectors.ts';
 import {
   AUTH_NO_SHOW_LIMIT,
   connectorHealth,
@@ -336,6 +336,30 @@ describe('one identity per connector, even when every account is worker-10', () 
   });
 });
 
+describe('a shared worker’s unproven arrivals attribute nothing', () => {
+  it('does not attach a client from sessions recorded under one of several accounts the worker serves', async () => {
+    const airyn = await account('airyn');
+    await account('caleb'); // the worker now serves two accounts
+    const stray = await registerClient({
+      clientName: 'Factory Brain (who?)',
+      redirectUris: ['https://claude.ai/api/mcp/auth_callback'],
+      secretDigest: null,
+      tokenAuthMethod: 'none',
+    });
+    const minted = await issueGrant({ clientId: stray.clientId, workerId, scope: '', resource: RESOURCE });
+    const parsed = parseOAuthToken(minted.access)!;
+    const token = (await findLiveToken(parsed.prefix, parsed.secret, 'ACCESS'))!;
+    // Recorded under Airyn's account because Airyn's Routine was the one fired.
+    await getDb().run(
+      `INSERT INTO worker_sessions (session_ref, worker_id, routine_id, account_id, bin_id, lease_generation, observed_at)
+       VALUES (?, ?, ?, ?, 'bin_s', 1, ?)`,
+      [token.id, workerId, airyn.routineId, airyn.accountId, new Date().toISOString()],
+    );
+    await reconcileConnectorBindings();
+    expect(await connectorClient(stray.clientId)).toBeNull();
+  });
+});
+
 describe('an auth failure is not a no-show', () => {
   it('H. charges an unanswered fire at a recoverable connector to auth, then asks for consent at the limit', async () => {
     const airyn = await account('airyn');
@@ -422,6 +446,57 @@ describe('recovery needs nobody but the person who consents', () => {
     expect(recovered).toEqual([caleb.routineId]);
     expect((await getRoutine(caleb.routineId))!.state).toBe('ENABLED');
     expect((await getRoutine(airyn.routineId))!.state).toBe('QUARANTINED');
+  });
+
+  it('a sibling Routine using the shared connector is not re-authorization: only a new consent lifts it', async () => {
+    const owner = await account('owner');
+    // A second Routine in the same account shares the one connector.
+    const sibling = await createRoutine({
+      accountId: owner.accountId,
+      routineRef: 'trig_owner_b',
+      name: 'Research B',
+      tokenSecretName: 'SECRET_owner',
+      workerId,
+    });
+    await bindRoutineConnector(sibling.id, owner.connectorId);
+    const reason = shouldQuarantine({ consecutiveNoShows: 3, consecutiveFailures: 0 }).reason;
+    await setRoutineState({ routineId: owner.routineId, from: 'ENABLED', to: 'QUARANTINED', reason });
+    await getDb().run('UPDATE oauth_tokens SET created_at = ? WHERE client_id = ?', [
+      new Date(Date.now() - 120_000).toISOString(),
+      owner.clientId,
+    ]);
+    await getDb().run('UPDATE fleet_routines SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - 60_000).toISOString(),
+      owner.routineId,
+    ]);
+    // The sibling's ordinary session uses the connector after the quarantine.
+    await use(owner.access);
+    expect((await connectorHealth(owner.connectorId))!.state).toBe('HEALTHY');
+    expect(await recoverReauthorizedSurfaces()).toEqual([]);
+    expect((await getRoutine(owner.routineId))!.state).toBe('QUARANTINED');
+  });
+
+  it('a stale refresh token refused as reused does not strand a connector whose live chain is held', async () => {
+    const owner = await account('owner');
+    const first = await rotate(owner.refresh);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    // The real client moves on: it presents the successor.
+    expect((await rotate(first.minted.refresh)).ok).toBe(true);
+    // Somebody presents the original, long superseded token.
+    const stale = await rotate(owner.refresh);
+    expect(stale).toEqual({ ok: false, reason: 'REUSED' });
+    await age(owner.clientId, 60_000);
+    await recordIdentityEvent({
+      actorType: 'ANONYMOUS',
+      actorId: null,
+      action: 'OAUTH_TOKEN',
+      targetType: 'WORKER',
+      targetId: workerId,
+      result: 'DENIED',
+      metadata: { reason: 'REUSED', clientId: owner.clientId },
+    });
+    expect((await connectorHealth(owner.connectorId))!.state).not.toBe('HUMAN_REAUTH_REQUIRED');
   });
 
   it('never lifts a quarantine that was not for unanswered fires', async () => {

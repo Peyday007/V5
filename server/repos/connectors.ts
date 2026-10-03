@@ -192,8 +192,11 @@ export async function listConnectorClients(): Promise<ConnectorClient[]> {
  */
 export async function bindRoutineConnector(routineId: string, connectorId: string): Promise<boolean> {
   const result = await getDb().run(
-    'UPDATE fleet_routines SET connector_id = ?, updated_at = ? WHERE id = ? AND connector_id IS NULL',
-    [connectorId, nowIso(), routineId],
+    // Deliberately does not bump `updated_at`: an observation is not a fact
+    // about the surface, and `recoverReauthorizedSurfaces` reads `updated_at`
+    // as the earliest a re-authorizing consent may be.
+    'UPDATE fleet_routines SET connector_id = ? WHERE id = ? AND connector_id IS NULL',
+    [connectorId, routineId],
   );
   return result.changes === 1;
 }

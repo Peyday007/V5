@@ -64,7 +64,7 @@ import {
   INVITATION_TTL_MS,
 } from '../repos/invitations.ts';
 import type { Principal, Worker, WorkerInvitation } from '../domain/types.ts';
-import { attachClient, connectorClient, getConnector } from '../repos/connectors.ts';
+import { attachClient, connectorClient, endpointOf, getConnector } from '../repos/connectors.ts';
 import { touchConnectorRoutines } from '../services/fleet/connectorBinding.ts';
 import { MCP_PATHS } from '../mcp/endpoint.ts';
 import { card, esc, page } from './pages.ts';
@@ -342,16 +342,16 @@ async function approver(req: Request): Promise<Principal | null> {
 async function boundWorkerFor(
   req: Request,
   clientId: string,
+  resource: string | null,
 ): Promise<{ worker: Worker; why: string; connectorId: string | null; invitation: WorkerInvitation | null } | null> {
-  const held = await invitedApproval(req);
-  if (held) {
-    return {
-      worker: held.worker,
-      why: 'the invitation in this browser is for this worker',
-      connectorId: held.invitation.connectorId,
-      invitation: held.invitation,
-    };
-  }
+  /*
+   * A client already attributed to a connector is that connector for ever
+   * (a client is never re-pointed), so its binding outranks an invitation the
+   * browser happens to hold: a stale invitation for another worker must not
+   * mint that worker's tokens on this client. Where the two disagree, the
+   * invitation's own worker check refuses the approval rather than either
+   * silently winning.
+   */
   const attached = await connectorClient(clientId);
   if (attached) {
     const connector = await getConnector(attached.connectorId);
@@ -364,6 +364,24 @@ async function boundWorkerFor(
         invitation: null,
       };
     }
+  }
+  const held = await invitedApproval(req);
+  if (held) {
+    // The invitation binds the worker; it binds the connector only for a client
+    // asking for that connector's own endpoint — a member re-adding their
+    // research connector while holding a Factory reconnect link is not
+    // reconnecting the Factory connector.
+    let connectorId = held.invitation.connectorId;
+    if (connectorId) {
+      const connector = await getConnector(connectorId);
+      if (!connector || connector.resource !== endpointOf(resource)) connectorId = null;
+    }
+    return {
+      worker: held.worker,
+      why: 'the invitation in this browser is for this worker',
+      connectorId,
+      invitation: held.invitation,
+    };
   }
   return null;
 }
@@ -645,7 +663,7 @@ export function oauthRouter(): Router {
          * invitation is not spent on this path, and the posted `worker_id` is
          * the one that counts.
          */
-        const bound = await boundWorkerFor(req, params.clientId);
+        const bound = await boundWorkerFor(req, params.clientId, params.resource);
         await auditAuthorizePage(req, params.clientId, bound ? 'ADMIN_BOUND' : 'ADMIN_CHOOSER');
         res.type('html').send(await consentPage(req, params, client.clientName, person, null, bound));
         return;
@@ -790,9 +808,11 @@ export function oauthRouter(): Router {
         return;
       }
 
-      // An administrator is held to the binding too: the screen offered one
-      // worker, and a form can be edited.
-      const binding = person ? await boundWorkerFor(req, params.clientId) : null;
+      // Everybody is held to the binding: the screen offered one worker, and a
+      // form can be edited. An invitation for another worker than the one this
+      // client's connector already authorizes as is refused here rather than
+      // minting that worker's tokens on a client attributed elsewhere.
+      const binding = await boundWorkerFor(req, params.clientId, params.resource);
       if (binding && workerId !== binding.worker.id) {
         await audit({
           action: 'OAUTH_AUTHORIZE',
@@ -818,7 +838,7 @@ export function oauthRouter(): Router {
         if (person) {
           // Same chooser, same preselection: a re-render that lost it would
           // make an administrator's second attempt harder than their first.
-          const bound = await boundWorkerFor(req, params.clientId);
+          const bound = await boundWorkerFor(req, params.clientId, params.resource);
           res.status(400).type('html').send(await consentPage(req, params, client.clientName, person, detail, bound));
           return;
         }
@@ -901,17 +921,24 @@ export function oauthRouter(): Router {
        * that has just been re-authorized are touched, so dispatch intents
        * deferred while it could not authenticate are re-armed now.
        */
-      const restoring = invited?.invitation.connectorId ?? binding?.connectorId ?? null;
+      const bound = binding ?? (await boundWorkerFor(req, params.clientId, params.resource));
+      const restoring = bound?.connectorId ?? null;
       if (restoring) {
         const connector = await getConnector(restoring);
-        if (connector && (connector.workerId === null || connector.workerId === worker.id)) {
-          await attachClient({
+        if (
+          connector &&
+          connector.resource === endpointOf(params.resource) &&
+          (connector.workerId === null || connector.workerId === worker.id)
+        ) {
+          const outcome = await attachClient({
             clientId: params.clientId,
             connectorId: connector.id,
-            source: invited?.invitation.connectorId ? 'BOUND_INVITATION' : 'OPERATOR',
-            evidence: invited ? `invitation ${invited.invitation.id}` : `approved by ${person?.id ?? 'unknown'}`,
+            source: bound?.invitation?.connectorId ? 'BOUND_INVITATION' : 'OPERATOR',
+            evidence: bound?.invitation ? `invitation ${bound.invitation.id}` : `approved by ${person?.id ?? 'unknown'}`,
           });
-          await touchConnectorRoutines(connector.id);
+          // A conflict is reported by the attach and acted on by nobody: only a
+          // client that is this connector re-arms its Routines.
+          if (outcome !== 'CONFLICT') await touchConnectorRoutines(connector.id);
         }
       }
 

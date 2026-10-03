@@ -55,6 +55,12 @@ ALTER TABLE oauth_tokens ADD COLUMN first_used_at TEXT;
 ALTER TABLE fleet_routines ADD COLUMN connector_id TEXT;
 ALTER TABLE worker_invitations ADD COLUMN connector_id TEXT;
 
+-- Indexes first: the backfill below looks tokens up by parent and by grant,
+-- and without them each correlated lookup is a scan of the whole table.
+CREATE INDEX idx_oauth_tokens_grant ON oauth_tokens (grant_id, created_at);
+CREATE INDEX idx_oauth_tokens_parent ON oauth_tokens (parent_token_id);
+CREATE INDEX idx_oauth_tokens_client ON oauth_tokens (client_id, kind, created_at);
+
 -- The grant of every refresh token is the root of its parent chain.
 WITH RECURSIVE chain(id, root) AS (
   SELECT id, id FROM oauth_tokens WHERE kind = 'REFRESH' AND parent_token_id IS NULL
@@ -63,8 +69,9 @@ WITH RECURSIVE chain(id, root) AS (
    WHERE t.kind = 'REFRESH'
 )
 UPDATE oauth_tokens
-   SET grant_id = (SELECT root FROM chain WHERE chain.id = oauth_tokens.id)
- WHERE kind = 'REFRESH';
+   SET grant_id = chain.root
+  FROM chain
+ WHERE chain.id = oauth_tokens.id AND oauth_tokens.kind = 'REFRESH';
 
 UPDATE oauth_tokens
    SET grant_id = (SELECT p.grant_id FROM oauth_tokens p WHERE p.id = oauth_tokens.parent_token_id)
@@ -99,8 +106,8 @@ UPDATE oauth_tokens
 
 -- The best record of a first use is the last one; it is later than the truth,
 -- which only ever makes an in-flight chain more forgiving, never less.
-UPDATE oauth_tokens SET first_used_at = last_used_at WHERE last_used_at IS NOT NULL;
+-- The earliest a used token can have been first used is its creation, which is
+-- the strict direction: backfilling last_used_at would reopen the race leeway
+-- for every long-used successor for five minutes after the migration.
+UPDATE oauth_tokens SET first_used_at = created_at WHERE last_used_at IS NOT NULL;
 
-CREATE INDEX idx_oauth_tokens_grant ON oauth_tokens (grant_id, created_at);
-CREATE INDEX idx_oauth_tokens_parent ON oauth_tokens (parent_token_id);
-CREATE INDEX idx_oauth_tokens_client ON oauth_tokens (client_id, kind, created_at);

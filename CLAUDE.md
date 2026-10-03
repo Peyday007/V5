@@ -11872,7 +11872,12 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   the slowest measured rotation (~117 s). `grant_id`, `revoked_reason` and
   `first_used_at` (migration 100 / pg 091) are what make the question one read.
   An explicit revocation is never resurrected; a refusal under this model means
-  the token was withdrawn or provably superseded.
+  the token was withdrawn or provably superseded. **The cost is stated rather
+  than hidden:** a thief holding a refresh token converges on the same chain
+  instead of forking it, so theft is not detected by divergence — the window
+  before the successor's use existed before, the leeway after it is new — and
+  REUSED revokes no family, because a stale sibling session presenting an old
+  token would then kill the live chain and bring the manual reconnect back.
 - **A worker identity is not a connector.** `factory-brain` is several Claude
   accounts, so "worker-10 authenticated" proved nothing about Airyn's connector
   or Caleb's. A logical connector is (fleet account, endpoint) — Claude holds one
@@ -11894,8 +11899,9 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   prove the client stopped asking (`CLIENT_STOPPED_RETRYING`), and then it is
   refused rather than fired. A healthy connector's no-show still quarantines.
 - **Recovery needs nobody but the person who consents.** A quarantine for
-  unanswered fires lifts by itself once that Routine's *own* connector is
-  re-authorized after it; a refused connector becomes routable again by
+  unanswered fires lifts by itself once that Routine's *own* connector has a new
+  consent after it — a grant, never token use, since every Routine in an
+  account shares the connector and a sibling's call is not a repair; a refused connector becomes routable again by
   derivation; consent re-arms its deferred intents. The forgiveness boundary
   keeps the ceiling binding for a connector that was not really fixed.
 - **Consent is bound.** An invitation or an attributed client names the one

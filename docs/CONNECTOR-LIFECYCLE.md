@@ -62,6 +62,22 @@ refresh-recovery window. The structural holes behind all four:
 - A rotation no longer revokes the presented token's access tokens; they live
   out their hour, so a sibling session is not cut off. Explicit revocation
   still revokes everything.
+- **The accepted risk, stated.** Idempotent rotation means anybody holding a
+  refresh token — the client or a thief — receives the *same* successor until
+  that successor has been presented, or has been in use for longer than the
+  leeway. A stolen token therefore converges on the legitimate chain rather
+  than forking it, and a theft is not detected by divergence. That window
+  existed before (a stolen token was always redeemable until its successor was
+  used, and a REUSED refusal never revoked the thief's chain); what is new is
+  the five-minute leeway after first use, and the absence of a fork. It is
+  accepted because the alternative — refusing or revoking on the second
+  presentation — is exactly what turned every lost reply into a manual
+  reconnect, and because a refresh token is held only by Claude's connector
+  store, never by a browser. A refusal still revokes nothing; family
+  revocation on REUSED is deliberately not done, because a stale sibling
+  session presenting an old token would then kill the live chain.
+- A rotation also no longer revokes the presented token's access tokens: they
+  live out their hour, so a sibling session is not cut off mid-call.
 - A chain rotated before this change has a random successor nobody can re-send;
   its first retry supersedes it and issues the derived one (`RECOVERED`).
 - The token endpoint lost two read-backs and a duplicate client read: one
@@ -83,9 +99,11 @@ Attribution, never guessed from a worker id:
 - **Observed arrival.** Brain fired Routine R (account A); the session that
   arrived authenticated with a token from client C for endpoint E. Accepted only
   when the provider session matches the dispatch row, or every Routine bound to
-  that worker is in one account.
-- **Member-bound consent.** The client was approved on an invitation bound to a
-  member whose capacity connection names exactly one account.
+  that worker is in one account. The tick's derivation from `worker_sessions`
+  trusts only the second: those rows are written under the fired Routine's
+  account even when nothing proves the session was that fire.
+- **Member-bound consent.** Read through the member's capacity connection *for
+  the same worker*, so a research connection cannot attribute a Factory client.
 - **Bound reconnect.** An invitation carrying `connector_id` attaches whatever
   client Claude presents at consent to that connector.
 - **Operator.** `admin connectors attach <brnc_…> <trig_…>`.
@@ -135,7 +153,10 @@ delivery proof or a Routine's state column.
   A healthy connector's no-show still quarantines.
 - **Recovery.** `recoverReauthorizedSurfaces` (every dispatch tick) re-enables a
   Routine quarantined for unanswered fires once *its own* connector is `HEALTHY`
-  with a grant or token use after the quarantine — never a sibling account's.
+  with a **new consent** (an authorization-code grant) after the quarantine —
+  never a sibling account's, and never on token use alone: every Routine in an
+  account shares its connector, so a sibling's session would otherwise lift a
+  surface whose own trigger is what never answers.
   The forgiveness boundary means a connector that was not actually fixed is
   quarantined again three unanswered fires later.
 - A consent that attaches a client touches the connector's Routines, which
@@ -146,9 +167,12 @@ delivery proof or a Routine's state column.
 `server/routes/oauth.ts` · `boundWorkerFor`
 
 The consent screen names one worker and offers nothing else when Brain already
-knows it: an invitation in the browser (cookie, or the one live invitation bound
-to the signed-in member), or a client attributed to a connector. The approval
-refuses any other worker, administrator or not. A chooser appears only for an
+knows it: a client attributed to a connector (which outranks anything else,
+because a client is never re-pointed), or an invitation in the browser (cookie,
+or the one live invitation bound to the signed-in member). The approval refuses
+any other worker, administrator or invited. A reconnect invitation attaches the
+client to its connector only when the client asked for that connector's own
+endpoint, and only a client that actually attached re-arms the Routines. A chooser appears only for an
 unattributed client approached without an invitation.
 
 ## When a person is genuinely needed

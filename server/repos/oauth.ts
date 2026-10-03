@@ -583,6 +583,11 @@ export function rotationKey(): Promise<Buffer> {
     if (fromEnv && fromEnv.length >= 16) {
       return crypto.createHash('sha256').update(fromEnv, 'utf8').digest();
     }
+    if (fromEnv) {
+      // Said out loud rather than silently ignored: instances that disagree
+      // about the key would each supersede the other's successors.
+      console.warn('[oauth] BRAIN_OAUTH_ROTATION_KEY is shorter than 16 characters and is ignored; using the stored key.');
+    }
     const read = async (): Promise<string | null> =>
       (await db.get<{ key_hex: string }>(
         "SELECT key_hex FROM oauth_rotation_keys WHERE id = 'primary'",
@@ -659,6 +664,17 @@ export async function rotateRefreshToken(input: {
       presented = await db.get<OAuthTokenRow>('SELECT * FROM oauth_tokens WHERE id = ?', [input.tokenId]);
       if (!presented || presented.revoked_at === null) return { ok: false, reason: 'NOT_LIVE' };
     }
+
+    /*
+     * Serialize on the presented row before reading its lineage. Two requests
+     * presenting the same already-rotated token would otherwise both find no
+     * derived successor and both insert it (READ COMMITTED on Postgres, and
+     * `token_digest` is not unique), forking the chain. The no-op UPDATE takes
+     * the row lock; the loser blocks until the winner commits and then reads
+     * the successor the winner wrote, which is the redelivery it should get.
+     */
+    await db.run('UPDATE oauth_tokens SET revoked_reason = revoked_reason WHERE id = ?', [presented.id]);
+    presented = (await db.get<OAuthTokenRow>('SELECT * FROM oauth_tokens WHERE id = ?', [input.tokenId])) ?? presented;
 
     // Withdrawn is withdrawn. A null reason predates migration 100 and is read
     // as the stricter of the two, because guessing ROTATED would resurrect it.
