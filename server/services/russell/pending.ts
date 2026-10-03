@@ -55,6 +55,8 @@ interface TurnCondition {
   terminalReason: string | null;
   dispatchState: string | null;
   dispatchError: string | null;
+  /** When the bin's lease lapses; null when there is none or it was not read. */
+  leaseExpiresAt?: string | null;
   createdAt: string;
 }
 
@@ -81,6 +83,7 @@ async function conditions(messageIds: string[]): Promise<Map<string, TurnConditi
     terminal_reason: string | null;
     dispatch_state: string | null;
     last_error_kind: string | null;
+    lease_expires_at: string | null;
     created_at: string;
   }>(
     `SELECT m.id                AS message_id,
@@ -88,6 +91,7 @@ async function conditions(messageIds: string[]): Promise<Map<string, TurnConditi
             b.terminal_reason   AS terminal_reason,
             d.state             AS dispatch_state,
             d.last_error_kind   AS last_error_kind,
+            b.lease_expires_at  AS lease_expires_at,
             m.created_at        AS created_at
        FROM russell_messages m
        LEFT JOIN bins b
@@ -105,6 +109,7 @@ async function conditions(messageIds: string[]): Promise<Map<string, TurnConditi
       terminalReason: row.terminal_reason,
       dispatchState: row.dispatch_state,
       dispatchError: row.last_error_kind,
+      leaseExpiresAt: row.lease_expires_at,
       createdAt: row.created_at,
     });
   }
@@ -158,8 +163,15 @@ export function explain(condition: TurnCondition | undefined, now: number): stri
         return `This is queued and a worker has not been called yet.${since}`;
       }
       return `This is waiting to be handed to a worker.${since}`;
-    case 'LEASED':
+    case 'LEASED': {
+      // §19: an expired lease is claimable work, so nobody is working on it.
+      // A missing or unparseable expiry reads as live: we cannot tell.
+      const expiresAt = condition.leaseExpiresAt ? Date.parse(condition.leaseExpiresAt) : NaN;
+      if (Number.isFinite(expiresAt) && expiresAt <= now) {
+        return `The worker that was handling this stopped, so it will be offered to another worker.${since}`;
+      }
       return `A worker is working on this now.${since}`;
+    }
     case 'NEEDS_HUMAN':
       return condition.terminalReason
         ? `This needs a decision from you before it can go on: ${condition.terminalReason}`
