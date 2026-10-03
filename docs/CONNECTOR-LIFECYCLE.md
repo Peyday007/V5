@@ -175,6 +175,36 @@ client to its connector only when the client asked for that connector's own
 endpoint, and only a client that actually attached re-arms the Routines. A chooser appears only for an
 unattributed client approached without an invitation.
 
+### A signed-in member reconnecting their own connector
+
+`server/services/fleet/memberReconnect.ts` · `resolveMemberReconnect`
+
+A member with no unspent invitation, signed in to Brain in the browser Claude
+opens, reconnects their own connector without an administrator. The screen
+offers the connector's worker only when every one of these holds, each read
+from a row:
+
+- the browser has an authenticated person;
+- exactly one connector at the endpoint the request names (`resource`) belongs
+  to them — proven by a consent on an invitation bound to them for a client of
+  that connector, an earlier member reconnect by them, or their own
+  non-revoked capacity connection naming the connector's account and worker;
+- no other person has a claim to that connector;
+- the client is not already attached to a different connector;
+- the worker is live, and the connector's consent was not withdrawn and its
+  clients not disabled;
+- the request asks for no scope its earlier grants did not carry.
+
+The approval re-asks all of it, records the member as the approver, and
+attaches the new client as `MEMBER_RECONNECT` on the same connector. Anything
+else is refused by name (`ENDPOINT_UNSPECIFIED`, `NO_CONNECTOR_FOR_MEMBER`,
+`AMBIGUOUS_CONNECTORS`, `CONNECTOR_SHARED_WITH_ANOTHER_MEMBER`,
+`CLIENT_ATTACHED_ELSEWHERE`, `WORKER_UNAVAILABLE`, `CONSENT_REVOKED`,
+`SCOPE_NOT_PREVIOUSLY_GRANTED`) on a page that says the account is signed in
+and names the bound reconnect link as the next step. A signed-in person is never
+shown the sign-in page. Every `OAUTH_AUTHORIZE_PAGE` row carries `decision`,
+`userId`, `clientId`, `endpoint`, `connectorIds` and `reason`.
+
 ## When a person is genuinely needed
 
 Only for a `HUMAN_REAUTH_REQUIRED` connector. Prepare everything with:

@@ -11908,6 +11908,32 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   worker the screen offers and the approval accepts — administrator or not. A
   client's earlier approvals are deliberately not a binding, because inferring
   intent from history is the guess this module refuses.
+- **A member reconnecting their own connector needs no administrator.**
+  Production, 2026-10-03 08:37Z: Airyn pressed Reconnect, Claude registered a
+  fresh client, and Brain showed *"Sign in to connect a worker"* to a browser
+  signed in as him — both his invitations had been spent connecting the first
+  time, and a member could approve only on an unspent one. Nothing moved until
+  an administrator issued a third link, and every reconnect of every member
+  would have ended the same way. The grant a reconnect needs already exists: an
+  administrator approved *this member* for *this connector*. So
+  `services/fleet/memberReconnect.ts` answers one question from rows — exactly
+  one connector at the requested endpoint that this member's consent on a bound
+  invitation (or their own non-revoked capacity connection) proves is theirs,
+  and nobody else's; its worker live; its consent not withdrawn; no scope
+  beyond what it was already granted; the client not already another
+  connector — and the screen offers that connector's worker and nothing else.
+  The approval asks again, records the member as approver, and attaches the new
+  client to the same connector as `MEMBER_RECONNECT`. A worker id is never
+  evidence: three people authenticate as worker-10. Zero candidates, two, a
+  shared claim, an unnamed endpoint, a revoked consent or a widened scope is
+  each refused by name, and a signed-in person is never shown a sign-in page:
+  they are told Brain cannot determine which connector they are reconnecting,
+  and that a bound reconnect link is the next step. Every authorize decision is
+  audited with the signed-in user id, the client, the endpoint, the candidate
+  connectors and the reason — `signedInPerson: true` alone could not tell the
+  members of a shared worker apart. The invitation issued by hand for Airyn
+  that morning (`inv_be3ec49…`) is a legacy recovery for a pre-fix connector,
+  not the design.
 - **The one human action is prepared, not composed.** `admin connectors
   reconnect` issues one member-bound invitation naming the worker and the
   connector, prints no link (§17), and the person signs in, reconnects in Claude
@@ -12101,6 +12127,7 @@ server/
       capacity.ts       what the dispatcher would fire, counted once and labelled honestly
       connectorHealth.ts  the one answer to whether a connector can authenticate, and whose fault a no-show is
       connectorBinding.ts which connector a client and a Routine are, from proof; auth-caused quarantines lifted
+      memberReconnect.ts  the one connector a signed-in member may restore without an invitation, or why not
       probe.ts          the one bounded self-test that turns configured into proven
       commission.ts     every commissioning step in order, and one READY / NOT READY answer
       lab.ts            the eight test modes, and the five this version refuses to run
@@ -12444,6 +12471,7 @@ tests/                  Vitest suites
   passkeyEnrollment.test.ts  a link spent once, a recovery that retires, a count that waits
   passkeyHttp.test.ts        the door, over a socket: five ways in and nothing else new
   passkeyOnlyAuth.test.ts    the owner's own migration, and the door shutting behind it
+  oauthMemberReconnect.test.ts  a signed-in member restores their own connector; nobody else's
   signInIdentity.test.ts     one name, one account, and the door that stays open on purpose
   signInMobile.test.ts       the login journey on a phone, read out of the stylesheets
   signInSurface.test.tsx     the screen an unauthenticated person is actually served

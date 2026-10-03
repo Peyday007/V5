@@ -35,7 +35,7 @@ CREATE TABLE connector_clients (
   client_id     TEXT PRIMARY KEY,
   connector_id  TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
   source        TEXT NOT NULL
-    CHECK (source IN ('OBSERVED_ARRIVAL', 'INVITATION_MEMBER', 'BOUND_INVITATION', 'OPERATOR')),
+    CHECK (source IN ('OBSERVED_ARRIVAL', 'INVITATION_MEMBER', 'BOUND_INVITATION', 'MEMBER_RECONNECT', 'OPERATOR')),
   evidence      TEXT,
   attached_at   TEXT NOT NULL
 );
