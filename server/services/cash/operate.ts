@@ -944,9 +944,21 @@ async function runMonetizationLedger(
    * here, so the snapshot the allocator decided against and the snapshot a
    * reader sees are one object rather than two that could disagree.
    */
-  const ledger = await composeLedger({ projectId, now });
-  const commissions = await runCommissions({ projectId, ledger, now });
-  const movements = await recordMovements({ projectId, now });
+  const at = now ?? new Date().toISOString();
+  const ledger = await composeLedger({ projectId, now: at });
+  const commissions = await runCommissions({ projectId, ledger, now: at });
+  /*
+   * Recompose only when the commissions wrote something the ledger reads.
+   * Their only such write is a filed answer (a path fact); opening, settling
+   * and abandoning touch `monetization_commissions`, which `composeLedger`
+   * does not read. Composing an identical ledger twice a tick was measured
+   * load and changed no movement.
+   */
+  const movements = await recordMovements({
+    projectId,
+    now: at,
+    ledger: commissions.recorded.length === 0 ? ledger : undefined,
+  });
   return {
     pathsAdded: enumerated.added.flatMap((one) => one.pathIds),
     figuresCarried: enumerated.carried.map((one) => one.pathId),

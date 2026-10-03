@@ -57,7 +57,7 @@ import {
   ensureDispatchIntent,
   getBin,
   isDispatchable,
-  listDispatchableBins,
+  listDispatchableBinHeads,
   markDispatchDeferred,
   markDispatchFailed,
   markDispatchSent,
@@ -375,7 +375,7 @@ export async function dispatchTick(
   // advances the generation supersedes this one through the ordinary path.
   // Bins out of attempts are excluded by the same query, because firing at a
   // bin no worker is allowed to take burns an activation for nothing.
-  for (const bin of await listDispatchableBins(200)) {
+  for (const bin of await listDispatchableBinHeads(200, { onlyWithoutIntent: true })) {
     if (options.projectIds && !options.projectIds.includes(bin.projectId)) continue;
     if (await ensureDispatchIntent(bin)) result.intentsCreated += 1;
   }
@@ -859,7 +859,7 @@ export async function recoverDispatchAtBoot(): Promise<number> {
   // The same set the tick uses. A restart is also the moment when leases that
   // expired while the process was down become claimable, and those bins need
   // an activation just as much as the ones that were merely waiting.
-  const dispatchable = await listDispatchableBins(500);
+  const dispatchable = await listDispatchableBinHeads(500);
   let created = 0;
   for (const bin of dispatchable) {
     if (await ensureDispatchIntent(bin)) created += 1;

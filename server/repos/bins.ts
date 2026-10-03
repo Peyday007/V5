@@ -374,6 +374,77 @@ export async function getBin(id: string): Promise<Bin | null> {
   return row ? mapBin(row) : null;
 }
 
+/**
+ * The routing and state columns of a bin, without its manifest, objective,
+ * rationale or checkpoint.
+ *
+ * Hot loops — the dispatch tick, the reconcile pass — read a page of bins every
+ * few seconds and use only these. A full row is several kilobytes, almost all
+ * of it the manifest, and reading it hundreds of times a minute to look at the
+ * state column was measured as a large share of database egress. A caller that
+ * needs more reads the one bin it chose with `getBin`.
+ */
+export interface BinHead {
+  id: string;
+  projectId: string;
+  state: BinState;
+  leaseGeneration: number;
+  leaseExpiresAt: string | null;
+  attemptCount: number;
+  maxAttempts: number;
+  completionContract: CompletionContract;
+  orchestrationId: string | null;
+}
+
+const BIN_HEAD_COLUMNS =
+  'id, project_id, state, lease_generation, lease_expires_at, attempt_count, max_attempts, ' +
+  'completion_contract, orchestration_id';
+
+function mapBinHead(row: BinRow): BinHead {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    state: row.state as BinState,
+    leaseGeneration: row.lease_generation,
+    leaseExpiresAt: row.lease_expires_at,
+    attemptCount: row.attempt_count,
+    maxAttempts: row.max_attempts,
+    completionContract: row.completion_contract as CompletionContract,
+    orchestrationId: row.orchestration_id,
+  };
+}
+
+/** `listBins`, reading only the head columns. Same filter, same order. */
+export async function listBinHeads(filter: {
+  projectId?: string;
+  states?: BinState[];
+  limit?: number;
+}): Promise<BinHead[]> {
+  const clauses: string[] = [];
+  const params: SqlParam[] = [];
+  if (filter.projectId) {
+    clauses.push('project_id = ?');
+    params.push(filter.projectId);
+  }
+  if (filter.states && filter.states.length > 0) {
+    clauses.push(`state IN (${filter.states.map(() => '?').join(', ')})`);
+    params.push(...filter.states);
+  }
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  params.push(Math.min(500, Math.max(1, filter.limit ?? 100)));
+  const rows = await getDb().all<BinRow>(
+    `SELECT ${BIN_HEAD_COLUMNS} FROM bins ${where} ORDER BY priority DESC, created_at, rowid LIMIT ?`,
+    params,
+  );
+  return rows.map(mapBinHead);
+}
+
+/** One bin's head, re-read: the race check a hot loop makes before acting. */
+export async function getBinHead(id: string): Promise<BinHead | null> {
+  const row = await getDb().get<BinRow>(`SELECT ${BIN_HEAD_COLUMNS} FROM bins WHERE id = ?`, [id]);
+  return row ? mapBinHead(row) : null;
+}
+
 export async function listBins(filter: {
   projectId?: string;
   states?: BinState[];
@@ -776,6 +847,35 @@ export async function creditBinAttempt(input: {
  * Exactly once per generation, through `creditBinAttempt`'s deterministic id:
  * running it on every tick for ever credits the same assignment once.
  */
+/**
+ * Of these bins, the ones `creditRefusedAssignments` would find anything to
+ * consider for — one statement for the page instead of one per bin.
+ */
+export async function binsWithWithheldUnclaimed(binIds: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  for (let start = 0; start < binIds.length; start += 500) {
+    const slice = binIds.slice(start, start + 500);
+    if (slice.length === 0) continue;
+    const rows = await getDb().all<{ bin_id: string }>(
+      `SELECT DISTINCT w.bin_id AS bin_id
+         FROM bin_events w
+        WHERE w.bin_id IN (${slice.map(() => '?').join(', ')})
+          AND w.event_type = 'BIN_ITEM_WITHHELD'
+          AND w.outcome = 'REFUSED_BY_ADMISSION'
+          AND w.lease_generation IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM bin_events c
+             WHERE c.bin_id = w.bin_id
+               AND c.event_type = 'BIN_ITEM_CLAIMED'
+               AND c.lease_generation = w.lease_generation
+          )`,
+      slice,
+    );
+    for (const row of rows) found.add(row.bin_id);
+  }
+  return found;
+}
+
 export async function creditRefusedAssignments(binId: string): Promise<number> {
   const rows = await getDb().all<{ lease_generation: number }>(
     `SELECT DISTINCT w.lease_generation AS lease_generation
@@ -1442,6 +1542,33 @@ export function isDispatchable(bin: Bin, now: string = binNow()): boolean {
  * Every bin that deserves an activation, in the order a worker would be given
  * them. Bounded: the dispatcher reads a page, not the world.
  */
+/**
+ * The bins `listDispatchableBins` would return, as heads, optionally only those
+ * with no dispatch intent at their current generation yet.
+ *
+ * The tick's only use of the page is `ensureDispatchIntent`, an insert keyed on
+ * (bin, generation) that does nothing when the intent exists — so a bin that
+ * already has one is skipped here rather than re-inserted every ten seconds.
+ * Same predicate, same order; the skipped inserts were no-ops.
+ */
+export async function listDispatchableBinHeads(
+  limit = 200,
+  options: { onlyWithoutIntent?: boolean } = {},
+): Promise<BinHead[]> {
+  const now = binNow();
+  const intent = options.onlyWithoutIntent
+    ? `AND NOT EXISTS (SELECT 1 FROM bin_dispatch d WHERE d.bin_id = bins.id AND d.lease_generation = bins.lease_generation)`
+    : '';
+  const rows = await getDb().all<BinRow>(
+    `SELECT ${BIN_HEAD_COLUMNS} FROM bins
+      WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} ${intent}
+      ORDER BY priority DESC, created_at, rowid
+      LIMIT ?`,
+    [now, now, Math.min(500, Math.max(1, limit))],
+  );
+  return rows.map(mapBinHead);
+}
+
 export async function listDispatchableBins(limit = 200): Promise<Bin[]> {
   const now = binNow();
   const rows = await getDb().all<BinRow>(
@@ -2495,7 +2622,9 @@ export async function listBinUnitResults(binId: string): Promise<BinUnitResult[]
  *
  * Returns true when this call created the intent.
  */
-export async function ensureDispatchIntent(bin: Bin): Promise<boolean> {
+export async function ensureDispatchIntent(
+  bin: Pick<Bin, 'id' | 'projectId' | 'leaseGeneration'>,
+): Promise<boolean> {
   const at = binNow();
   const result = await getDb().run(
     `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
