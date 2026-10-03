@@ -515,6 +515,65 @@ describe('an invitation in an administrator\u2019s browser', () => {
     expect(await isLive(held.id)).toBe(true);
   });
 
+  /*
+   * A bound reconnect: the invitation names the worker and the logical
+   * connector it restores. Whatever OAuth client Claude presents — here a
+   * freshly registered one, as after a connector was deleted and re-added — is
+   * attached to that same connector at consent, so its Routines need nothing
+   * recreated and its health is read through the new client at once.
+   */
+  it('attaches a reconnect’s new client to the connector the invitation restores', async () => {
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    let connectorId = '';
+    let token = '';
+    try {
+      const admin = await getDb().get<{ id: string }>('SELECT id FROM users WHERE email = ?', [ADMIN_EMAIL]);
+      const now = new Date().toISOString();
+      connectorId = `cnr_reconnect_${crypto.randomBytes(4).toString('hex')}`;
+      await getDb().run(
+        `INSERT INTO connectors (id, account_id, resource, worker_id, label, created_at, updated_at)
+         VALUES (?, ?, '/mcp', ?, NULL, ?, ?)`,
+        [connectorId, `acct_${connectorId}`, workerId, now, now],
+      );
+      const generated = generateInvitationToken();
+      await createInvitation({
+        workerId,
+        tokenPrefix: generated.prefix,
+        tokenDigest: generated.digest,
+        createdByUserId: admin!.id,
+        kind: 'ADDITIONAL',
+        connectorId,
+      });
+      token = generated.plaintext;
+    } finally {
+      await closeDatabase();
+    }
+
+    const registered = await api<{ client_id: string }>('POST', '/oauth/register', {
+      body: { client_name: 'Claude (reconnected)', redirect_uris: [REDIRECT] },
+    });
+    const previous = clientId;
+    clientId = registered.body.client_id;
+    try {
+      const { challenge } = pkce();
+      const approved = await approve(challenge, { cookie: `brain_invite=${encodeURIComponent(token)}` });
+      expect(approved.code).not.toBeNull();
+    } finally {
+      clientId = previous;
+    }
+
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    try {
+      const attached = await getDb().get<{ connector_id: string; source: string }>(
+        'SELECT connector_id, source FROM connector_clients WHERE client_id = ?',
+        [registered.body.client_id],
+      );
+      expect(attached).toEqual({ connector_id: connectorId, source: 'BOUND_INVITATION' });
+    } finally {
+      await closeDatabase();
+    }
+  });
+
   it('keeps the single-worker screen for somebody who is not signed in', async () => {
     // The invited path is untouched by the change above: no chooser, no list,
     // and the worker named rather than offered.
