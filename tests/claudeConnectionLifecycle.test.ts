@@ -406,6 +406,78 @@ describe('taking a connection back, and getting it back', () => {
     expect(row.accountId).not.toBeNull();
   });
 
+  it('on a worker another account shares, an unattributed revoke takes nothing of the sibling’s', async () => {
+    const { routineId } = await registerSurface(member);
+    const worker = (await getWorkerByName(namesFor(member).workerName))!;
+    expect((await getRoutine(routineId))!.connectorId ?? null).toBeNull();
+    // A second Claude account serving the same worker, as worker-10 is served by
+    // two accounts in production.
+    const sibling = await createAccount({
+      name: 'a-sibling-account',
+      kind: 'CAPACITY',
+      planLabel: 'sibling',
+      declaredPlanPower: 'unknown',
+    });
+    await createRoutine({
+      accountId: sibling.id,
+      routineRef: 'trig_01SIBLINGROUTINEXXXX',
+      name: 'A sibling surface',
+      tokenSecretName: 'BRAIN_ROUTINE_TOKEN_SIBLING',
+      workerId: worker.id,
+    });
+    const siblingToken = await authorize(member);
+
+    const outcome = await revokeOwnConnection({ user: member, actor: member, reason: 'mine', origin: ORIGIN });
+    expect(outcome.ok).toBe(true);
+    // The surface still stops — that is what a revoke is for…
+    expect((await getRoutine(routineId))!.state).toBe('UNAVAILABLE');
+    // …the shared worker's tokens are not this member's to withdraw…
+    const tokens = await listTokensForWorker(worker.id);
+    expect(tokens.find((one) => one.id === siblingToken)!.revokedAt).toBeNull();
+    // …and the revoke says so rather than reading as complete.
+    expect(outcome.ok && outcome.credentialsLeftLive).toMatch(/still live/);
+  });
+
+  it('a hand-registered sibling with no connection row still counts as sharing the worker', async () => {
+    // The member has a worker and a token, but no Routine of their own yet.
+    await issueConnectorInvitation({ user: member, actor: owner, origin: ORIGIN });
+    const mine = await authorize(member);
+    const worker = (await getWorkerByName(namesFor(member).workerName))!;
+    const sibling = await createAccount({
+      name: 'a-hand-registered-account',
+      kind: 'CAPACITY',
+      planLabel: 'operator',
+      declaredPlanPower: 'unknown',
+    });
+    await createRoutine({
+      accountId: sibling.id,
+      routineRef: 'trig_01HANDREGISTEREDXXXX',
+      name: 'A hand-registered surface',
+      tokenSecretName: 'BRAIN_ROUTINE_TOKEN_HAND',
+      workerId: worker.id,
+    });
+    const outcome = await revokeOwnConnection({ user: member, actor: member, reason: 'mine', origin: ORIGIN });
+    expect(outcome.ok && outcome.credentialsLeftLive).toBeTruthy();
+    expect((await listTokensForWorker(worker.id)).find((one) => one.id === mine)!.revokedAt).toBeNull();
+  });
+
+  it('a worker one member alone holds is still revoked whole, however many of their own Routines it has', async () => {
+    const { routineId } = await registerSurface(member);
+    const worker = (await getWorkerByName(namesFor(member).workerName))!;
+    const own = (await getRoutine(routineId))!;
+    await createRoutine({
+      accountId: own.accountId,
+      routineRef: 'trig_01SAMEACCOUNTSECONDXX',
+      name: 'A second surface on the same account',
+      tokenSecretName: 'BRAIN_ROUTINE_TOKEN_SAME',
+      workerId: worker.id,
+    });
+    const outcome = await revokeOwnConnection({ user: member, actor: member, reason: 'mine', origin: ORIGIN });
+    expect(outcome.ok && outcome.credentialsLeftLive).toBeFalsy();
+    const tokens = await listTokensForWorker(worker.id);
+    expect(tokens.every((one) => one.revokedAt !== null)).toBe(true);
+  });
+
   it('is idempotent, and reconnecting puts the same surface back', async () => {
     const { routineId } = await registerSurface(member);
     await revokeOwnConnection({ user: member, actor: member, reason: 'once', origin: ORIGIN });
