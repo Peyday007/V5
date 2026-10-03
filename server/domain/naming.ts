@@ -21,10 +21,13 @@ export function sanitizeFilename(input: string): string {
   const cleaned = input
     .replace(ILLEGAL_FILENAME_CHARS, ' ')
     .replace(/\s+/g, ' ')
-    .replace(/^[.\s]+|[.\s]+$/g, '')
-    .slice(0, 180);
+    .slice(0, 180)
+    // Trimmed after the slice, so truncation never leaves a trailing space or dot.
+    .replace(/^[.\s]+|[.\s]+$/g, '');
   const safe = cleaned.length > 0 ? cleaned : 'untitled';
-  return RESERVED_WINDOWS_NAMES.test(safe) ? `_${safe}` : safe;
+  // Windows treats CON.txt as the device, so the rule applies to the part before the first dot.
+  const stem = (safe.split('.')[0] ?? '').trim();
+  return RESERVED_WINDOWS_NAMES.test(stem) ? `_${safe}` : safe;
 }
 
 export function buildCanonicalName(
