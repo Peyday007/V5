@@ -107,6 +107,7 @@ import {
 } from '../../repos/oauth.ts';
 import { getProject } from '../../repos/projects.ts';
 import { nowIso } from '../../repos/util.ts';
+import { getDb } from '../../db/database.ts';
 import { createInvitation, liveInvitationsForMember, revokeInvitation, revokeInvitationsForWorker } from '../../repos/invitations.ts';
 import { clientsOfConnector } from '../../repos/connectors.ts';
 import { generateInvitationToken } from '../identity/secrets.ts';
@@ -1830,9 +1831,22 @@ export async function revokeOwnConnection(input: {
     for (const invitation of await liveInvitationsForMember(input.user.id)) {
       if (!worker || invitation.workerId === worker.id) await revokeInvitation(invitation.id);
     }
-  } else if (worker) {
+  } else if (worker && !(await workerSharedBeyond(worker.id, input.user.id))) {
     await revokeTokensForWorker(worker.id);
     await revokeInvitationsForWorker(worker.id);
+  } else if (worker) {
+    /*
+     * The worker is shared and this member's connector is not attributed yet,
+     * so Brain cannot tell which of the worker's tokens are theirs. Revoking
+     * every token on it would take back a sibling account's connector — Airyn
+     * revoking would end Caleb's sessions on worker-10. Only what is provably
+     * this member's goes: the links issued to them. The surface still stops
+     * being fired below, which is the effect a revoke exists for; the tokens
+     * are withdrawn once the connector is attributed, or by an operator.
+     */
+    for (const invitation of await liveInvitationsForMember(input.user.id)) {
+      if (invitation.workerId === worker.id) await revokeInvitation(invitation.id);
+    }
   }
 
   /*
@@ -1965,4 +1979,25 @@ export async function verifyConnection(input: {
   origin: string;
 }): Promise<ConnectionOutcome> {
   return { ok: true, view: await connectionView({ user: input.user, origin: input.origin }) };
+}
+
+/**
+ * Whether a worker is held by anybody besides this member: a Routine bound to it
+ * under another account, or another member's connection naming it. Read from
+ * rows rather than assumed, because the worker-wide revoke it guards is right
+ * only for a worker one member alone holds (§51).
+ */
+async function workerSharedBeyond(workerId: string, userId: string): Promise<boolean> {
+  const db = getDb();
+  const accounts = await db.get<{ n: number }>(
+    `SELECT COUNT(DISTINCT account_id) AS n FROM fleet_routines
+      WHERE worker_id = ? AND state <> 'RETIRED'`,
+    [workerId],
+  );
+  if (Number(accounts?.n ?? 0) > 1) return true;
+  const others = await db.get<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM capacity_connections WHERE worker_id = ? AND user_id <> ?',
+    [workerId, userId],
+  );
+  return Number(others?.n ?? 0) > 0;
 }

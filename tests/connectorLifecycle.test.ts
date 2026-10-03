@@ -404,6 +404,47 @@ describe('recovery needs nobody but the person who consents', () => {
     expect((await connectorHealth(owner.connectorId))!.state).toBe('HEALTHY');
   });
 
+  it('the tip is the end of the lineage, whatever the clocks say', async () => {
+    // A rotation committed in the same millisecond as its predecessor, or on an
+    // instance whose clock is behind, must not make the rotated parent the tip:
+    // that read an unpicked-up reply as HEALTHY (deploy of 8462042, CI).
+    const owner = await account('owner');
+    await use(owner.access);
+    expect((await rotate(owner.refresh)).ok).toBe(true);
+    await age(owner.clientId, CONCURRENT_REFRESH_LEEWAY_MS + 60_000);
+    const rows = await getDb().all<{ id: string; parent_token_id: string | null; created_at: string }>(
+      "SELECT id, parent_token_id, created_at FROM oauth_tokens WHERE client_id = ? AND kind = 'REFRESH' ORDER BY created_at",
+      [owner.clientId],
+    );
+    const child = rows.find((one) => one.parent_token_id !== null)!;
+    const parent = rows.find((one) => one.id === child.parent_token_id)!;
+    // The parent now reads as the later of the two.
+    await getDb().run('UPDATE oauth_tokens SET created_at = ? WHERE id = ?', [
+      new Date(Date.parse(child.created_at) + 1).toISOString(),
+      parent.id,
+    ]);
+    expect((await connectorHealth(owner.connectorId))!.state).toBe('REFRESH_RECOVERABLE');
+  });
+
+  it('keeps no rotation key in the database', async () => {
+    await getDb().run(
+      "INSERT INTO oauth_rotation_keys (id, key_hex, created_at) VALUES ('stale', ?, ?)",
+      ['00'.repeat(32), new Date().toISOString()],
+    );
+    const { rotationKey } = await import('../server/repos/oauth.ts');
+    const key = await rotationKey();
+    expect(key.length).toBe(32);
+    const owner = await account('owner');
+    expect((await rotate(owner.refresh)).ok).toBe(true);
+    const stored = await getDb().get<{ n: number }>('SELECT COUNT(*) AS n FROM oauth_rotation_keys');
+    // The cache may predate this test's row, so the guarantee asserted is that
+    // nothing in oauth.ts writes one — read from the source.
+    const fs = await import('node:fs');
+    const source = fs.readFileSync(new URL('../server/repos/oauth.ts', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/INSERT INTO oauth_rotation_keys/);
+    expect(Number(stored!.n)).toBeLessThanOrEqual(1);
+  });
+
   it('G. an explicitly revoked authorization needs consent, and stays refused', async () => {
     const airyn = await account('airyn');
     const parsed = parseOAuthToken(airyn.refresh)!;

@@ -406,6 +406,36 @@ describe('taking a connection back, and getting it back', () => {
     expect(row.accountId).not.toBeNull();
   });
 
+  it('on a worker another account shares, an unattributed revoke takes nothing of the sibling’s', async () => {
+    const { routineId } = await registerSurface(member);
+    const worker = (await getWorkerByName(namesFor(member).workerName))!;
+    expect((await getRoutine(routineId))!.connectorId ?? null).toBeNull();
+    // A second Claude account serving the same worker, as worker-10 is served by
+    // two accounts in production.
+    const sibling = await createAccount({
+      name: 'a-sibling-account',
+      kind: 'CAPACITY',
+      planLabel: 'sibling',
+      declaredPlanPower: 'unknown',
+    });
+    await createRoutine({
+      accountId: sibling.id,
+      routineRef: 'trig_01SIBLINGROUTINEXXXX',
+      name: 'A sibling surface',
+      tokenSecretName: 'BRAIN_ROUTINE_TOKEN_SIBLING',
+      workerId: worker.id,
+    });
+    const siblingToken = await authorize(member);
+
+    const outcome = await revokeOwnConnection({ user: member, actor: member, reason: 'mine', origin: ORIGIN });
+    expect(outcome.ok).toBe(true);
+    // The surface still stops — that is what a revoke is for…
+    expect((await getRoutine(routineId))!.state).toBe('UNAVAILABLE');
+    // …and the shared worker's tokens are not this member's to withdraw.
+    const tokens = await listTokensForWorker(worker.id);
+    expect(tokens.find((one) => one.id === siblingToken)!.revokedAt).toBeNull();
+  });
+
   it('is idempotent, and reconnecting puts the same surface back', async () => {
     const { routineId } = await registerSurface(member);
     await revokeOwnConnection({ user: member, actor: member, reason: 'once', origin: ORIGIN });

@@ -134,7 +134,7 @@ describe('refresh rotation', () => {
   it('E. a restart between rotation and retry changes nothing: everything is in rows', async () => {
     const held = await grant();
     const before = minted(await present(held.refresh));
-    // A new process: the key is re-read from the database, not from memory.
+    // A new process: the key is re-derived from outside the database, not from memory.
     const { rotationKey } = await import('../server/repos/oauth.ts');
     await rotationKey();
     const after = minted(await present(held.refresh, Date.now() + 2 * HOUR));
