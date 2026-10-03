@@ -4193,3 +4193,245 @@ details.rs-card > section.rs-card {
 .rs-factory-line .rs-line-headline dd { margin: 0; font-weight: 600; }
 .rs-factory-line .rs-line-fault { color: var(--ochre-ink); text-decoration: underline; }
 .rs-factory-line .rs-line-list { padding-left: 1.1rem; }
+
+/* ---------------------------------------------------------------- puzzles --
+ * The puzzle kernel's operator surface (§48).
+ *
+ * Follows `.rs-labor` and `.rs-machines` exactly: a null reading is set in the
+ * same type as a value and dimmed, never coloured as a failure, because §48's
+ * leverage multipliers and economics contributions are unmeasured facts
+ * rather than refusals. Nothing here is coloured as an affirmative either — a
+ * route's state is marked so it can be scanned, not painted as good news.
+ * ------------------------------------------------------------------------ */
+.rs-puzzles {
+  container-type: inline-size;
+}
+
+.rs-puzzles-notavailable,
+.rs-puzzles-error {
+  font-style: italic;
+}
+
+.rs-puzzles-error {
+  color: var(--ochre-ink);
+}
+
+.rs-puzzles-counts {
+  list-style: none;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+}
+
+.rs-puzzles-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.rs-puzzles-list > li {
+  min-width: 0;
+}
+
+.rs-puzzles-list > li + li {
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.rs-puzzles-list header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.rs-puzzles-list header strong {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.rs-puzzles-route-state,
+.rs-puzzles-purpose,
+.rs-puzzles-rung,
+.rs-puzzles-cap-state {
+  font-size: 0.85em;
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.rs-puzzles-output,
+.rs-puzzles-because {
+  margin: 0.2rem 0 0.35rem;
+}
+
+/* A route nothing has established yet is the one worth reading closely, not
+   the one to alarm over — marked with a rule rather than coloured as wrong. */
+.rs-puzzles-route-BLOCKED,
+.rs-puzzles-route-UNPROVEN {
+  border-left: 3px solid var(--rule-soft);
+  padding-left: 0.75rem;
+}
+
+.rs-puzzles-route-ARCHIVED {
+  opacity: 0.75;
+}
+
+.rs-puzzles-rejected {
+  font-style: italic;
+}
+
+.rs-puzzles-topfive {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.rs-puzzles-readings {
+  margin: 0.5rem 0 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-puzzles-readings dt {
+  font-weight: 600;
+}
+
+.rs-puzzles-readings dd {
+  margin: 0.15rem 0 0.5rem;
+}
+
+.rs-puzzles-reading {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.rs-puzzles-reading-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Not measured, set in the same type as a number so it cannot be skimmed
+   past, and dimmed rather than coloured — it is a task and not a refusal. */
+.rs-puzzles-UNKNOWN .rs-puzzles-reading-value {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.rs-puzzles-withheld {
+  font-style: italic;
+}
+
+.rs-puzzles-lines {
+  margin-top: 0.5rem;
+}
+
+.rs-puzzles-lines > summary {
+  cursor: pointer;
+}
+
+.rs-puzzles-format header,
+.rs-puzzles-cap header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.rs-puzzles-limitation {
+  font-style: italic;
+}
+
+.rs-puzzles-lesson-PATTERN {
+  border-left: 3px solid var(--verdigris-ink);
+  padding-left: 0.75rem;
+}
+
+.rs-puzzles-statements {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.9em;
+  color: var(--ink-soft);
+}
+
+.rs-puzzles-cap-MISSING {
+  opacity: 0.85;
+}
+
+.rs-puzzles-form {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-puzzles-form label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.rs-puzzles-form input,
+.rs-puzzles-form select,
+.rs-puzzles-form textarea {
+  width: 100%;
+  font: inherit;
+}
+
+.rs-puzzles-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+}
+
+.rs-puzzles-problem {
+  color: var(--ochre-ink);
+}
+
+.rs-puzzles-said {
+  color: var(--moss-ink);
+}
+
+.rs-puzzles-declare > .rs-puzzles-form {
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.rs-puzzles-rendered {
+  margin-top: 0.75rem;
+}
+
+/* Whether the re-render hashes to what was recorded — a fact about the
+   generator, marked rather than styled as an error, since a mismatch is a
+   finding about the row rather than a broken screen. */
+.rs-puzzles-mismatch {
+  border-left: 3px solid var(--ochre-ink);
+  padding-left: 0.75rem;
+}
+
+.rs-puzzles-artifact {
+  margin-top: 0.5rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-puzzles-grid {
+  font-family: var(--font-mono, monospace);
+  white-space: pre;
+  overflow-x: auto;
+  background: var(--surface-sunk);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  margin: 0;
+}
+
+.rs-puzzles-prompts {
+  margin: 0;
+  padding-left: 1.1rem;
+}

@@ -734,9 +734,31 @@ function Capacity({ page }: { page: PeopleAndCapacity }): JSX.Element {
  * It carries no value of any kind — the name of an environment variable, a
  * trigger id and a state.
  */
-function Connections(): JSX.Element | null {
+function Connections({ onChanged }: { onChanged?: () => void }): JSX.Element | null {
   const reading = useAsync(() => PeopleApi.connections(), []);
   const [open, setOpen] = useState(false);
+  const [revoking, setRevoking] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const [adoptUser, setAdoptUser] = useState('');
+  const [routineRef, setRoutineRef] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  /** No optimistic state: the list is re-read, and the row changes after that. */
+  async function decide(action: () => Promise<unknown>, done: () => void): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await action();
+      done();
+      reading.reload();
+      onChanged?.();
+    } catch (error) {
+      setProblem(describe(error));
+    } finally {
+      setBusy(false);
+    }
+  }
   if (reading.error || !reading.data) return null;
   const waiting = reading.data.connections.filter((one) => one.state === 'WAITING_FOR_ADMIN');
   /*
@@ -789,9 +811,89 @@ function Connections(): JSX.Element | null {
                 set {one.secretName}
                 {one.triggerRef ? ` for ${one.triggerRef}` : ''}
               </span>
+              {revoking === one.userId ? (
+                <span>
+                  <label>
+                    Why are you taking it back?
+                    <input value={reason} onChange={(event) => setReason(event.target.value)} />
+                  </label>
+                  <button
+                    type="button"
+                    className="rs-button-quiet"
+                    disabled={busy || reason.trim().length === 0}
+                    onClick={() =>
+                      void decide(
+                        () => PeopleApi.revokeFor(one.userId, reason.trim()),
+                        () => {
+                          setRevoking(null);
+                          setReason('');
+                        },
+                      )
+                    }
+                  >
+                    Confirm taking it back
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="rs-button-quiet"
+                  onClick={() => {
+                    setRevoking(one.userId);
+                    setReason('');
+                    setProblem(null);
+                  }}
+                >
+                  Take this connection back
+                </button>
+              )}
             </li>
           ))}
         </ul>
+      ) : null}
+      {open ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void decide(
+              () => PeopleApi.adopt(adoptUser, routineRef.trim()),
+              () => setRoutineRef(''),
+            );
+          }}
+        >
+          <h4>Record an existing Routine as somebody&apos;s</h4>
+          <label>
+            Member
+            <select value={adoptUser} onChange={(event) => setAdoptUser(event.target.value)}>
+              <option value="">Choose a member</option>
+              {reading.data.connections.map((one) => (
+                <option key={one.userId} value={one.userId}>
+                  {one.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Routine reference
+            <input
+              value={routineRef}
+              placeholder="trig_…"
+              onChange={(event) => setRoutineRef(event.target.value)}
+            />
+          </label>
+          <button
+            type="submit"
+            className="rs-button-quiet"
+            disabled={busy || adoptUser === '' || routineRef.trim().length === 0}
+          >
+            Record this Routine
+          </button>
+        </form>
+      ) : null}
+      {problem ? (
+        <p className="rs-state rs-state-error" role="alert">
+          {problem}
+        </p>
       ) : null}
     </section>
   );
@@ -868,7 +970,7 @@ export function PeopleAndCapacityView(): JSX.Element {
         }}
       />
       <Capacity page={page} />
-      {page.you.isBrainAdmin ? <Connections /> : null}
+      {page.you.isBrainAdmin ? <Connections onChanged={() => reading.reload()} /> : null}
     </section>
   );
 }
