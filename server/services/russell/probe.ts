@@ -31,6 +31,7 @@ import {
   completeProbe,
   createProbe,
   destinationAllowed,
+  failProbe,
   getProbe,
   listObservations,
   permitLookup,
@@ -160,6 +161,20 @@ export type ProbeFetch = (
 ) => Promise<{ status: number; headers: { get(name: string): string | null }; text(): Promise<string> }>;
 
 /**
+ * The failure's class, and nothing else about it.
+ *
+ * `failProbe`'s explanation is read by a person, so it must never carry the
+ * thrown message or any value from the row that was being written — a
+ * database error's message routinely quotes the query or the row it failed
+ * on. The class is enough to tell "the probe crashed" from "the probe ran out
+ * of time", which is the whole of what this needs to say.
+ */
+function failureClassName(error: unknown): string {
+  if (error instanceof Error) return error.name || error.constructor.name || 'Error';
+  return typeof error;
+}
+
+/**
  * Run a probe to its end and record the verdict.
  *
  * Re-entrant: the observation count is the budget, and `completeProbe` is
@@ -185,69 +200,89 @@ export async function runProbe(input: {
   const lookups: LookupReport[] = [];
   const fetcher = input.fetcher ?? (globalThis.fetch as unknown as ProbeFetch);
 
-  for (const source of envelope.sources) {
-    let destination = destinationFor(source, probe.question);
+  /*
+   * Everything inside `fetchOnce` already classifies a network failure —
+   * a timeout, a reset, a refused connection — as UNREACHABLE and never
+   * throws. What can still escape is a step of Brain's own: `permitLookup`
+   * or `recordObservation` rejecting on a database error, most often. Until
+   * this try existed, that exception escaped `runProbe` uncaught, left the
+   * probe RUNNING, and was resolved only when `listExpiredProbes` ended it at
+   * UNKNOWN on a later tick — so "the probe crashed" and "the probe ran out
+   * of time" were recorded identically and the candidate waited out the
+   * deadline for no reason. `failProbe` (already guarded on PENDING/RUNNING,
+   * exactly as `completeProbe` is) records the honest fact instead.
+   */
+  try {
+    for (const source of envelope.sources) {
+      let destination = destinationFor(source, probe.question);
 
-    for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-      const permission = await permitLookup({ probeId: probe.id, url: destination });
-      if (!permission.ok) {
-        // Out of budget, past the deadline, or the destination is not allowed.
-        // All three end this source rather than the whole probe: another source
-        // may still be inside the envelope.
-        // Deliberately *not* an observation. The observations table is the
-        // budget, and a refusal consumed none of it — writing a row here would
-        // make the next `permitLookup` believe an allowance had been spent.
-        lookups.push({
-          url: source.label,
-          retrieval: 'REFUSED',
-          note: permission.detail,
-          mentioned: false,
-        });
-        break;
-      }
-
-      const attempt = await fetchOnce(fetcher, destination, envelope);
-      await recordObservation({
-        probeId: probe.id,
-        ordinal: permission.ordinal,
-        sourceUrl: destination,
-        retrieval: attempt.retrieval,
-        note: attempt.note,
-      });
-      lookups.push({
-        url: destination,
-        retrieval: attempt.retrieval,
-        note: attempt.note,
-        mentioned: attempt.retrieval === 'RETRIEVED' && mentions(probe.question, attempt.body),
-      });
-
-      if (attempt.redirectTo) {
-        if (!destinationAllowed(attempt.redirectTo, probe.allowedSources)) {
-          // A redirect out of the envelope is where an allowlist earns its
-          // keep. Refused by name, and the probe does not follow it.
+      for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+        const permission = await permitLookup({ probeId: probe.id, url: destination });
+        if (!permission.ok) {
+          // Out of budget, past the deadline, or the destination is not allowed.
+          // All three end this source rather than the whole probe: another source
+          // may still be inside the envelope.
+          // Deliberately *not* an observation. The observations table is the
+          // budget, and a refusal consumed none of it — writing a row here would
+          // make the next `permitLookup` believe an allowance had been spent.
           lookups.push({
             url: source.label,
             retrieval: 'REFUSED',
-            note: 'the redirect left this probe’s allowlist',
+            note: permission.detail,
             mentioned: false,
           });
           break;
         }
-        destination = attempt.redirectTo;
-        continue;
+
+        const attempt = await fetchOnce(fetcher, destination, envelope);
+        await recordObservation({
+          probeId: probe.id,
+          ordinal: permission.ordinal,
+          sourceUrl: destination,
+          retrieval: attempt.retrieval,
+          note: attempt.note,
+        });
+        lookups.push({
+          url: destination,
+          retrieval: attempt.retrieval,
+          note: attempt.note,
+          mentioned: attempt.retrieval === 'RETRIEVED' && mentions(probe.question, attempt.body),
+        });
+
+        if (attempt.redirectTo) {
+          if (!destinationAllowed(attempt.redirectTo, probe.allowedSources)) {
+            // A redirect out of the envelope is where an allowlist earns its
+            // keep. Refused by name, and the probe does not follow it.
+            lookups.push({
+              url: source.label,
+              retrieval: 'REFUSED',
+              note: 'the redirect left this probe’s allowlist',
+              mentioned: false,
+            });
+            break;
+          }
+          destination = attempt.redirectTo;
+          continue;
+        }
+
+        break;
       }
-
-      break;
     }
-  }
 
-  const outcome = verdictFrom(lookups);
-  await completeProbe({
-    probeId: probe.id,
-    outcome,
-    explanation: explain(outcome, lookups),
-  });
-  return { ok: true, reason: 'ran', outcome, lookups };
+    const outcome = verdictFrom(lookups);
+    await completeProbe({
+      probeId: probe.id,
+      outcome,
+      explanation: explain(outcome, lookups),
+    });
+    return { ok: true, reason: 'ran', outcome, lookups };
+  } catch (error) {
+    await failProbe({
+      probeId: probe.id,
+      explanation: `crashed with ${failureClassName(error)}`,
+    });
+    return { ok: false, reason: 'failed', outcome: null, lookups };
+  }
 }
 
 /**
