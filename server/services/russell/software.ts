@@ -70,6 +70,8 @@ import { ContractError, submitObjective, submissionKeyFor } from '../factory/con
 import { approveAndStartCampaign } from '../factory/start.ts';
 import { amendContract } from '../factory/contract.ts';
 import { campaignBriefing } from '../factory/projections.ts';
+import { deliveryViewFor } from './softwareDelivery.ts';
+import type { DeliveryPhase, DeliveryView } from './softwareDelivery.ts';
 import { getCampaign } from '../../repos/factory.ts';
 import {
   ScopeError,
@@ -84,7 +86,12 @@ import { decideProjectAccess } from '../identity/policy.ts';
 import { NEGATORS, clauseBefore } from './negation.ts';
 import { projectNamedInReply, resolveSoftwareTarget } from './softwareTarget.ts';
 import type { TargetDecision } from './softwareTarget.ts';
-import type { Principal, RussellSoftwareRequest } from '../../domain/types.ts';
+import type {
+  Principal,
+  RussellSoftwareRequest,
+  SoftwareAcceptanceCondition,
+  SoftwareLiveCheck,
+} from '../../domain/types.ts';
 
 /* -------------------------------------------------------------------------- */
 /* The gate                                                                    */
@@ -390,6 +397,9 @@ export async function captureSoftwareChange(input: {
   title: string;
   objective: string;
   expectedOutcome: string;
+  /** Proposed by the worker; derived from the expected outcome when absent. */
+  acceptanceConditions?: SoftwareAcceptanceCondition[];
+  liveCheck?: SoftwareLiveCheck | null;
   /**
    * Who is asking, so a project named in the message can be resolved against
    * what they may actually read.
@@ -464,6 +474,38 @@ export async function captureSoftwareChange(input: {
   return writeRequest({ ...input, projectId });
 }
 
+/**
+ * What "done" could mean for a request — a **proposal**, never empty.
+ *
+ * The factory refuses to approve a contract with no acceptance conditions, and
+ * `authorizeSoftwareRequest` refuses to invent them: what success is belongs to
+ * the person, because a model supplying the conditions its own work is graded
+ * against is §27's grading-its-own-exam. And the card in Russell had no way for
+ * a person to supply any, so its Authorize button failed every time it was
+ * pressed.
+ *
+ * So the request carries a proposal — the worker's conditions, or the expected
+ * outcome itself when it proposed none — and the card shows it, editable, above
+ * the button. Pressing Authorize sends what the person is looking at, and the
+ * contract records it as theirs through the amendment ledger. §24's rule that a
+ * decision is a proposal to approve rather than a form to fill in, at the one
+ * field the factory will not start without.
+ */
+export function conditionsFor(
+  proposed: readonly SoftwareAcceptanceCondition[],
+  expectedOutcome: string,
+): SoftwareAcceptanceCondition[] {
+  if (proposed.length > 0) return proposed.map((c) => ({ ...c }));
+  return [
+    {
+      statement: expectedOutcome,
+      verification:
+        "The repository's own checks pass on the integrated change, and an independent " +
+        'review confirms the change produces this.',
+    },
+  ];
+}
+
 /** One card per conversation per objective; see `captureSoftwareChange`. */
 function requestKeyFor(projectId: string, conversationId: string, objective: string): string {
   return submissionKeyFor(projectId, `${conversationId}\n${objective}`);
@@ -477,16 +519,21 @@ async function writeRequest(input: {
   title: string;
   objective: string;
   expectedOutcome: string;
+  acceptanceConditions?: SoftwareAcceptanceCondition[];
+  liveCheck?: SoftwareLiveCheck | null;
 }): Promise<CaptureSoftwareOutcome> {
   const objective = input.objective.trim();
+  const expectedOutcome = input.expectedOutcome.trim();
   const outcome = await captureSoftwareRequest({
     projectId: input.projectId,
     conversationId: input.conversationId,
     messageId: input.messageId,
     title: input.title.trim(),
     objective,
-    expectedOutcome: input.expectedOutcome.trim(),
+    expectedOutcome,
     submissionKey: requestKeyFor(input.projectId, input.conversationId, objective),
+    acceptanceConditions: conditionsFor(input.acceptanceConditions ?? [], expectedOutcome),
+    liveCheck: input.liveCheck ?? null,
   });
   return {
     request: outcome.request,
@@ -526,7 +573,7 @@ export async function resolveClarifiedChange(input: {
   /** The message the answer arrived in, so the row points at the person. */
   messageId: string | null;
   projectId: string;
-  ask: { title: string; objective: string; expectedOutcome: string };
+  ask: PendingAsk;
 }): Promise<CaptureSoftwareOutcome> {
   if (!decideProjectAccess(input.principal, input.projectId, 'READ').allowed) {
     /*
@@ -543,6 +590,8 @@ export async function resolveClarifiedChange(input: {
     title: input.ask.title,
     objective: input.ask.objective,
     expectedOutcome: input.ask.expectedOutcome,
+    acceptanceConditions: input.ask.acceptanceConditions ?? [],
+    liveCheck: input.ask.liveCheck ?? null,
   });
 }
 
@@ -736,7 +785,7 @@ export async function authorizeSoftwareRequest(input: {
           id: `A${String(index + 1).padStart(2, '0')}`,
           statement: condition.statement,
           verification: condition.verification,
-          mandatory: condition.mandatory ?? true,
+          mandatory: (condition as { mandatory?: boolean }).mandatory ?? true,
         })),
         reason:
           'The person authorizing this change supplied what success is, on a contract that had ' +
@@ -817,6 +866,11 @@ export interface SoftwareRequestView {
   line: string;
   /** True when this is what a person has to answer next. */
   awaitingPerson: boolean;
+  /**
+   * Everything after authorization: the stages, blockers, the release card and
+   * what happened to it. Null before the request is authorized.
+   */
+  delivery: DeliveryView | null;
 }
 
 /**
@@ -834,6 +888,7 @@ async function viewOf(request: RussellSoftwareRequest): Promise<SoftwareRequestV
       pullRequestUrl: null,
       line: 'Waiting for you to authorize it. Nothing has been spent.',
       awaitingPerson: true,
+      delivery: null,
     };
   }
   if (request.state === 'DECLINED') {
@@ -843,6 +898,7 @@ async function viewOf(request: RussellSoftwareRequest): Promise<SoftwareRequestV
       pullRequestUrl: null,
       line: `You declined this${request.declineReason ? `: ${request.declineReason}` : '.'}`,
       awaitingPerson: false,
+      delivery: null,
     };
   }
 
@@ -859,6 +915,7 @@ async function viewOf(request: RussellSoftwareRequest): Promise<SoftwareRequestV
       pullRequestUrl: null,
       line: 'Authorized, but no campaign was recorded. Authorize it again.',
       awaitingPerson: true,
+      delivery: null,
     };
   }
 
@@ -873,6 +930,7 @@ async function viewOf(request: RussellSoftwareRequest): Promise<SoftwareRequestV
       pullRequestUrl: null,
       line: 'Authorized. The campaign could not be read.',
       awaitingPerson: false,
+      delivery: await deliveryViewFor(request),
     };
   }
 
@@ -887,14 +945,37 @@ async function viewOf(request: RussellSoftwareRequest): Promise<SoftwareRequestV
       ? briefing.personNeeded.detail
       : `${briefing.stage} (${progress})`;
 
+  const delivery = await deliveryViewFor(request);
+  const after = delivery ? AFTER_PULL_REQUEST[delivery.phase] : null;
   return {
     request,
     campaign: briefing,
     pullRequestUrl: campaign?.prUrl ?? null,
-    line,
-    awaitingPerson: briefing.personNeeded.needed,
+    line: after ?? line,
+    awaitingPerson: delivery?.releaseDecisionWaiting === true || (!after && briefing.personNeeded.needed),
+    delivery,
   };
 }
+
+/**
+ * The line once the pull request exists, from the delivery ledger. Null for the
+ * phases where the campaign's own briefing is still the better sentence.
+ */
+const AFTER_PULL_REQUEST: Record<DeliveryPhase, string | null> = {
+  RUNNING: null,
+  BLOCKED: null,
+  AWAITING_RELEASE:
+    'Built, reviewed and ready: the release decision is yours. Merge the pull request to release it, or refuse it here.',
+  RELEASE_REFUSED: 'You refused this release. Nothing was merged.',
+  CLOSED_UNMERGED: 'The pull request was closed without merging. Nothing was released.',
+  CANCELLED: 'The campaign was cancelled. Nothing was released.',
+  MERGED: 'Merged. Waiting for production to serve it.',
+  DEPLOYED: 'Deployed: production is serving it. Checking that it behaves.',
+  RELEASED: 'Released: production is serving it.',
+  LIVE_VERIFIED: 'Released and verified working in production.',
+  LIVE_CHECK_FAILED: 'Released, but the live check did not pass in production.',
+  DEPLOY_UNOBSERVABLE: 'Merged. Its deployment is outside what Brain can observe.',
+};
 
 /** Everything this conversation asked for, and where each one got to. */
 export async function softwareForConversation(
@@ -978,6 +1059,8 @@ export interface PendingAsk {
   title: string;
   objective: string;
   expectedOutcome: string;
+  acceptanceConditions?: SoftwareAcceptanceCondition[];
+  liveCheck?: SoftwareLiveCheck | null;
 }
 
 export interface OutstandingClarification {
@@ -1015,7 +1098,26 @@ function askFrom(value: unknown): PendingAsk | null {
   const expectedOutcome =
     typeof record['expectedOutcome'] === 'string' ? record['expectedOutcome'].trim() : '';
   if (!title || !objective || !expectedOutcome) return null;
-  return { title, objective, expectedOutcome };
+  const conditions = Array.isArray(record['acceptanceConditions'])
+    ? (record['acceptanceConditions'] as unknown[]).flatMap((entry) => {
+        if (typeof entry !== 'object' || entry === null) return [];
+        const c = entry as Record<string, unknown>;
+        return typeof c['statement'] === 'string' && typeof c['verification'] === 'string'
+          ? [{ statement: c['statement'], verification: c['verification'] }]
+          : [];
+      })
+    : [];
+  const live = record['liveCheck'];
+  const liveCheck =
+    typeof live === 'object' && live !== null &&
+    typeof (live as Record<string, unknown>)['path'] === 'string' &&
+    typeof (live as Record<string, unknown>)['contains'] === 'string'
+      ? {
+          path: (live as Record<string, string>)['path']!,
+          contains: (live as Record<string, string>)['contains']!,
+        }
+      : null;
+  return { title, objective, expectedOutcome, acceptanceConditions: conditions, liveCheck };
 }
 
 function choicesFrom(value: unknown): { id: string; name: string }[] {

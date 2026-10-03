@@ -62,7 +62,34 @@ import {
   softwareForProject,
   softwareNeedingPerson,
 } from '../services/russell/software.ts';
-import { getSoftwareRequest } from '../repos/russellSoftware.ts';
+import { refuseSoftwareRelease } from '../services/russell/softwareDelivery.ts';
+import { getSoftwareRequest, listSoftwareRequestsForConversation } from '../repos/russellSoftware.ts';
+import { decideProjectAccess } from '../services/identity/policy.ts';
+import type { SoftwareRepositoryChoice } from '../services/russell/software.ts';
+
+/**
+ * The repositories a change proposed in this thread could run in — or none.
+ *
+ * None unless the reader could actually authorize (write access to the thread's
+ * project, which the authorize route re-checks anyway) and something here is
+ * waiting to be authorized. An empty list for somebody who may not authorize is
+ * the same answer as a project with no repository, which is the point: the card
+ * then says there is nowhere to run it rather than offering a button the route
+ * will refuse.
+ */
+async function repositoriesForThread(
+  projectId: string | null,
+  conversationId: string,
+): Promise<SoftwareRepositoryChoice[]> {
+  if (!projectId) return [];
+  const principal = currentPrincipal();
+  if (!principal || !decideProjectAccess(principal, projectId, 'WRITE').allowed) return [];
+  const requests = await listSoftwareRequestsForConversation(conversationId);
+  if (!requests.some((request) => request.state === 'PROPOSED' && request.projectId === projectId)) {
+    return [];
+  }
+  return repositoryChoicesFor(projectId);
+}
 import { briefing, focusLayer } from '../services/russell/projections.ts';
 import { homeFor } from '../services/russell/home.ts';
 import { collectionsFor } from '../services/russell/collections.ts';
@@ -272,6 +299,13 @@ russellRouter.get(
        * about one piece of work.
        */
       software: await softwareForConversation(conversation.id),
+      /*
+       * The repositories a proposed change here could run in, so the card in the
+       * thread can be authorized where it was asked for rather than on another
+       * page. Only for a person who could authorize it — the same write access
+       * the authorize route re-checks — and only while something is proposed.
+       */
+      repositories: await repositoriesForThread(conversation.projectId, conversation.id),
       /*
        * The one thing Brain declined to guess, when a sentence would settle it.
        *
@@ -1498,6 +1532,35 @@ russellRouter.post(
     // because retrying unchanged will not help and the message names what will.
     if (!outcome.ok) throw unprocessable(outcome.reason, outcome.detail);
     return outcome;
+  }),
+);
+
+/**
+ * A person refusing to release what the factory built.
+ *
+ * The release itself is merging the pull request, on the forge, by a person —
+ * §27: the factory may open a request and may never merge one, and Brain holds
+ * no forge credential. So the decision that belongs here is the refusal: it is
+ * recorded, said in the conversation, and ends Brain following the request. It
+ * closes nothing on the forge, and the conversation says so.
+ *
+ * The same pair as authorizing — `requirePerson` and `requireProject` at the
+ * write level — and for the same reason: a worker cannot decide a release.
+ */
+russellRouter.post(
+  '/software/:requestId/refuse-release',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const request = await getSoftwareRequest(pathId(req, 'requestId'));
+    if (!request) throw notFound('No such software request.');
+    await requireProject(request.projectId);
+    const outcome = await refuseSoftwareRelease({
+      requestId: request.id,
+      userId: principal.id,
+      reason: optionalString(bodyOf(req)['reason'], 'reason') ?? '',
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return { ok: true };
   }),
 );
 
