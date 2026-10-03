@@ -35,6 +35,8 @@ export type Route =
    * in a month or two would take it down with one.
    */
   | { name: 'LABOR' }
+  /** The cross-border dealflow kernel (§45): parties, deals, questions. */
+  | { name: 'DEALFLOW' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -99,6 +101,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'MACHINES' };
     case 'labor':
       return { name: 'LABOR' };
+    case 'dealflow':
+      return { name: 'DEALFLOW' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
@@ -144,6 +148,8 @@ export function pathFor(route: Route): string {
       return '/machines';
     case 'LABOR':
       return '/labor';
+    case 'DEALFLOW':
+      return '/dealflow';
     case 'SEARCH':
       return '/search';
     case 'INVITE':

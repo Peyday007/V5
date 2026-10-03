@@ -38,6 +38,7 @@ import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
 import { MachinesView } from './Machines.tsx';
 import { LaborView } from './Labor.tsx';
+import { DealflowScreen } from './Dealflow.tsx';
 import {
   FleetView,
   ProjectView,
@@ -100,6 +101,13 @@ const SECTIONS = [
    * here.
    */
   { name: 'LABOR' as const, label: 'Labor', primary: false },
+  /*
+   * Dealflow is secondary for the same reason as its three neighbours: it is a
+   * standing kernel a person examines rather than a destination steered
+   * hourly, and promoting it would rebuild the thumb bar around one reading in
+   * a Brain that does research, software and everything else.
+   */
+  { name: 'DEALFLOW' as const, label: 'Dealflow', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -563,6 +571,7 @@ export function RussellShell({
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
         {route.name === 'MACHINES' ? <MachinesView projectId={projectId} /> : null}
         {route.name === 'LABOR' ? <LaborView projectId={projectId} /> : null}
+        {route.name === 'DEALFLOW' ? <DealflowScreen projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (
