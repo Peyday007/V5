@@ -668,8 +668,8 @@ export async function rotateRefreshToken(input: {
     /*
      * Serialize on the presented row before reading its lineage. Two requests
      * presenting the same already-rotated token would otherwise both find no
-     * derived successor and both insert it (READ COMMITTED on Postgres, and
-     * `token_digest` is not unique), forking the chain. The no-op UPDATE takes
+     * derived successor and both try to insert it (READ COMMITTED on Postgres),
+     * and the loser fails on the unique `token_digest`. The no-op UPDATE takes
      * the row lock; the loser blocks until the winner commits and then reads
      * the successor the winner wrote, which is the redelivery it should get.
      */
@@ -736,10 +736,19 @@ export async function rotateRefreshToken(input: {
     // key: nobody can send it again, so it is superseded and the derived one
     // takes its place.
     for (const live of newer.filter((t) => t.kind === 'REFRESH' && t.revoked_at === null)) {
+      // Guarded on the refresh row itself: if the client rotated it between our
+      // read and this write, it is held and moving on, and minting here would
+      // fork the chain — so this presentation is a replay.
+      const superseded = await db.run(
+        `UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'SUPERSEDED'
+          WHERE id = ? AND revoked_at IS NULL`,
+        [at, live.id],
+      );
+      if (superseded.changes !== 1) return { ok: false, reason: 'REUSED' };
       await db.run(
         `UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'SUPERSEDED'
-          WHERE (id = ? OR parent_token_id = ?) AND revoked_at IS NULL`,
-        [at, live.id, live.id],
+          WHERE parent_token_id = ? AND kind = 'ACCESS' AND revoked_at IS NULL`,
+        [at, live.id],
       );
     }
     const minted = await mintPair({ ...base, refresh: successor, parentTokenId: presented.id });

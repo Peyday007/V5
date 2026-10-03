@@ -107,8 +107,6 @@ UPDATE oauth_tokens
      ELSE 'EXPLICIT' END
  WHERE kind = 'ACCESS' AND revoked_at IS NOT NULL;
 
--- The best record of a first use is the last one; it is later than the truth,
--- which only ever makes an in-flight chain more forgiving, never less.
 -- The earliest a used token can have been first used is its creation, which is
 -- the strict direction: backfilling last_used_at would reopen the race leeway
 -- for every long-used successor for five minutes after the migration.
