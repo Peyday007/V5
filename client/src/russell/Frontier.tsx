@@ -13,8 +13,9 @@
  */
 import { useState } from 'react';
 import { RussellApi } from '../lib/russellApi.ts';
-import type { FrontierRegionView } from '../lib/russellApi.ts';
+import type { FrontierRegionView, FrontierView } from '../lib/russellApi.ts';
 import type { RussellFrontierItem } from '../../../server/domain/types.ts';
+import type { SharedFindingView } from '../../../server/services/knowledge/shared.ts';
 import { useAsync } from './useAsync.ts';
 import { humanWhen, readingState } from './present.ts';
 
@@ -63,11 +64,6 @@ export function FrontierView_({ projectId }: { projectId: string | null }): JSX.
     value: query.data ?? null,
     noun: 'this project',
   });
-  if (state.phase !== 'READY' || !query.data) {
-    return <p className={`rs-state rs-state-${state.phase.toLowerCase()}`}>{state.message}</p>;
-  }
-  const frontier = query.data.frontier;
-  const anything = frontier.regions.some((region) => region.items.length > 0);
 
   return (
     <div className="rs-column">
@@ -78,6 +74,47 @@ export function FrontierView_({ projectId }: { projectId: string | null }): JSX.
         impression — each line names what it came from.
       </p>
 
+      {state.phase !== 'READY' || !query.data ? (
+        <p className={`rs-state rs-state-${state.phase.toLowerCase()}`}>{state.message}</p>
+      ) : (
+        <ProjectFrontier
+          frontier={query.data.frontier}
+          projectId={projectId}
+          onChanged={query.reload}
+        />
+      )}
+
+      {/*
+        Shared across every project in this Brain — §31 — and deliberately
+        independent of `projectId`: the pool is Brain-wide, so it renders
+        whether or not a project is selected and whatever the state of the
+        five regions above.
+      */}
+      <SharedFindings />
+    </div>
+  );
+}
+
+/**
+ * The five project-scoped regions, the open lenses and the pass counts.
+ *
+ * Pulled out of `FrontierView_` so the `SharedFindings` section below it is
+ * never nested inside this block's own loading/empty/error branches — the pool
+ * is Brain-wide and must render whatever this project's own reading says.
+ */
+function ProjectFrontier({
+  frontier,
+  projectId,
+  onChanged,
+}: {
+  frontier: FrontierView;
+  projectId: string | null;
+  onChanged(): void;
+}): JSX.Element {
+  const anything = frontier.regions.some((region) => region.items.length > 0);
+
+  return (
+    <>
       {!anything ? (
         <p className="rs-state rs-state-empty">
           Nothing has been recorded about this project yet, so there is no edge to read. This
@@ -86,7 +123,7 @@ export function FrontierView_({ projectId }: { projectId: string | null }): JSX.
       ) : null}
 
       {frontier.regions.map((region) => (
-        <Region key={region.region} region={region} projectId={projectId} onChanged={query.reload} />
+        <Region key={region.region} region={region} projectId={projectId} onChanged={onChanged} />
       ))}
 
       {/*
@@ -105,7 +142,7 @@ export function FrontierView_({ projectId }: { projectId: string | null }): JSX.
         {frontier.counts.live} live · {frontier.counts.dismissed} marked not required ·{' '}
         {frontier.counts.resolved} no longer on the frontier
       </p>
-    </div>
+    </>
   );
 }
 
@@ -435,6 +472,265 @@ function Item({
         </p>
       ) : null}
     </article>
+  );
+}
+
+/**
+ * A validated finding from any project in this Brain, and the two decisions
+ * that belong to whichever project produced it (§31).
+ *
+ * Brain-wide rather than project-scoped, so it fetches for itself rather than
+ * taking anything from `ProjectFrontier` — the pool exists whether or not a
+ * project is selected. Every sentence about a finding is the server's own:
+ * `withheldReason` and `decideRefusal` are rendered verbatim, never composed
+ * or inferred here, and a revoked or expired finding stays listed rather than
+ * disappearing.
+ */
+function SharedFindings(): JSX.Element {
+  const query = useAsync(() => RussellApi.sharedFindings(), []);
+
+  if (query.loading && !query.data) {
+    return (
+      <section className="rs-group rs-frontier-shared">
+        <h4 className="rs-group-title">Shared across this Brain</h4>
+        <p className="rs-state rs-state-loading">Reading the shared finding pool…</p>
+      </section>
+    );
+  }
+  if (query.error) {
+    return (
+      <section className="rs-group rs-frontier-shared">
+        <h4 className="rs-group-title">Shared across this Brain</h4>
+        <p className="rs-state rs-state-error">{query.error.message}</p>
+      </section>
+    );
+  }
+  if (!query.data) {
+    return (
+      <section className="rs-group rs-frontier-shared">
+        <h4 className="rs-group-title">Shared across this Brain</h4>
+        <p className="rs-state rs-state-loading">Reading the shared finding pool…</p>
+      </section>
+    );
+  }
+
+  const { findings, total, reusable } = query.data;
+
+  return (
+    <section className="rs-group rs-frontier-shared">
+      <h4 className="rs-group-title">Shared across this Brain</h4>
+      <p className="rs-hint">
+        A validated finding from any project here, kept whole with its evidence. Withdrawing one,
+        or setting how long it is good for, is the producing project's own decision.
+      </p>
+      <p className="rs-hint">
+        {total} finding(s) total · {reusable} Brain would reuse right now
+      </p>
+
+      {findings.length === 0 ? (
+        <p className="rs-state rs-state-empty">Nothing has been shared into this pool yet.</p>
+      ) : (
+        <ul className="rs-list">
+          {findings.map((finding) => (
+            <SharedFindingItem key={finding.id} finding={finding} onChanged={query.reload} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/**
+ * One shared finding, and the withdraw / horizon controls its own origin
+ * project may use.
+ *
+ * Both controls are always rendered — never removed — and are disabled with
+ * `finding.decideRefusal` verbatim when `finding.mayDecide` is false, following
+ * the `{enabled, disabledReason}` convention `ConnectionControl`
+ * (`services/capacity/connection.ts`) already established: "there is no
+ * button" and "the button is not for you" read very differently.
+ */
+function SharedFindingItem({
+  finding,
+  onChanged,
+}: {
+  finding: SharedFindingView;
+  onChanged(): void;
+}): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [reason, setReason] = useState('');
+  const [horizon, setHorizon] = useState(finding.validUntil ? finding.validUntil.slice(0, 10) : '');
+  const [problem, setProblem] = useState<string | null>(null);
+
+  async function withdraw(): Promise<void> {
+    if (busy || reason.trim().length === 0) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await RussellApi.withdrawSharedFinding(finding.id, reason.trim());
+      setWithdrawing(false);
+      setReason('');
+      onChanged();
+    } catch {
+      setProblem('That did not go through. Nothing was changed — try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveHorizon(validUntil: string | null): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await RussellApi.setSharedFindingHorizon(finding.id, validUntil);
+      onChanged();
+    } catch {
+      setProblem('That did not go through. Nothing was changed — try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const scope = [
+    finding.scope.geography,
+    finding.scope.timeframe,
+    finding.scope.population,
+    finding.scope.definition,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(' · ');
+
+  return (
+    <li>
+      <article className="rs-card">
+        <div className="rs-row">
+          <span className="rs-item-title">{finding.statement}</span>
+          <span className="rs-pill">{finding.claimType}</span>
+        </div>
+
+        <p className="rs-item-meta">
+          {finding.source.publisher ?? 'No publisher recorded'}
+          {finding.source.date ? ` · ${finding.source.date}` : ''}
+          {finding.source.url ? (
+            <>
+              {' · '}
+              <a href={finding.source.url} target="_blank" rel="noreferrer">
+                {finding.source.url}
+              </a>
+            </>
+          ) : null}
+        </p>
+        {finding.source.excerpt ? (
+          <p className="rs-item-meta rs-at-interested">“{finding.source.excerpt}”</p>
+        ) : null}
+        {finding.source.locator ? <p className="rs-ref rs-at-technical">{finding.source.locator}</p> : null}
+
+        {scope ? <p className="rs-item-meta rs-at-technical">{scope}</p> : null}
+
+        <p className="rs-item-meta">
+          {finding.state}
+          {finding.withheldReason ? ` · ${finding.withheldReason}` : ''}
+        </p>
+
+        <p className="rs-item-meta rs-at-technical">
+          {finding.provenance.originVisible
+            ? `From project ${finding.provenance.originProjectId}`
+            : 'Which project this came from is not shown to you.'}
+        </p>
+
+        <div className="rs-row">
+          {withdrawing ? (
+            <div className="rs-build-submit">
+              <label className="rs-decision-label" htmlFor={`rs-shared-reason-${finding.id}`}>
+                Why is this being withdrawn?
+              </label>
+              <input
+                id={`rs-shared-reason-${finding.id}`}
+                type="text"
+                value={reason}
+                maxLength={500}
+                disabled={busy}
+                onChange={(event) => setReason(event.target.value)}
+              />
+              <div className="rs-row">
+                <button
+                  type="button"
+                  className="rs-button"
+                  disabled={busy || reason.trim().length === 0}
+                  onClick={() => void withdraw()}
+                >
+                  {busy ? 'Withdrawing…' : 'Withdraw'}
+                </button>
+                <button
+                  type="button"
+                  className="rs-button-quiet"
+                  disabled={busy}
+                  onClick={() => {
+                    setWithdrawing(false);
+                    setReason('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="rs-button-quiet"
+              disabled={busy || !finding.mayDecide}
+              onClick={() => setWithdrawing(true)}
+            >
+              Withdraw
+            </button>
+          )}
+
+          <label className="rs-item-meta" htmlFor={`rs-shared-horizon-${finding.id}`}>
+            Good until
+          </label>
+          <input
+            id={`rs-shared-horizon-${finding.id}`}
+            type="date"
+            value={horizon}
+            disabled={busy || !finding.mayDecide}
+            onChange={(event) => setHorizon(event.target.value)}
+          />
+          <button
+            type="button"
+            className="rs-button-quiet"
+            disabled={busy || !finding.mayDecide || horizon.trim().length === 0}
+            onClick={() => void saveHorizon(new Date(horizon).toISOString())}
+          >
+            Set
+          </button>
+          {finding.validUntil ? (
+            <button
+              type="button"
+              className="rs-button-quiet"
+              disabled={busy || !finding.mayDecide}
+              onClick={() => {
+                setHorizon('');
+                void saveHorizon(null);
+              }}
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+
+        {!finding.mayDecide && finding.decideRefusal ? (
+          <p className="rs-item-meta rs-at-technical">{finding.decideRefusal}</p>
+        ) : null}
+
+        {problem ? (
+          <p className="rs-state rs-state-error" role="alert">
+            {problem}
+          </p>
+        ) : null}
+      </article>
+    </li>
   );
 }
 
