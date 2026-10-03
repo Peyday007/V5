@@ -20,7 +20,12 @@
 import { getDb } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
 
-export type ConnectorClientSource = 'OBSERVED_ARRIVAL' | 'INVITATION_MEMBER' | 'BOUND_INVITATION' | 'OPERATOR';
+export type ConnectorClientSource =
+  | 'OBSERVED_ARRIVAL'
+  | 'INVITATION_MEMBER'
+  | 'BOUND_INVITATION'
+  | 'MEMBER_RECONNECT'
+  | 'OPERATOR';
 
 export interface Connector {
   id: string;

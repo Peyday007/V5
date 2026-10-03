@@ -66,6 +66,11 @@ import {
 import type { Principal, Worker, WorkerInvitation } from '../domain/types.ts';
 import { attachClient, connectorClient, endpointOf, getConnector } from '../repos/connectors.ts';
 import { touchConnectorRoutines } from '../services/fleet/connectorBinding.ts';
+import {
+  MEMBER_RECONNECT_SENTENCE,
+  resolveMemberReconnect,
+  type MemberReconnect,
+} from '../services/fleet/memberReconnect.ts';
 import { MCP_PATHS } from '../mcp/endpoint.ts';
 import { card, esc, page } from './pages.ts';
 import { workerIdentity } from '../services/identity/authenticate.ts';
@@ -421,21 +426,48 @@ async function audit(input: {
  */
 async function auditAuthorizePage(
   req: Request,
-  clientId: string,
-  shown: 'ADMIN_CHOOSER' | 'ADMIN_BOUND' | 'INVITED_CONSENT' | 'SIGN_IN',
+  input: {
+    clientId: string;
+    resource: string | null;
+    shown: 'ADMIN_CHOOSER' | 'ADMIN_BOUND' | 'INVITED_CONSENT' | 'MEMBER_RECONNECT' | 'SIGNED_IN_UNRESOLVED' | 'SIGN_IN';
+    /** The connector the screen offers, or the candidates it could not choose between. */
+    connectorIds?: string[];
+    reason?: string | null;
+  },
 ): Promise<void> {
+  /*
+   * Who was signed in, by id. `signedInPerson: true` alone could not tell a
+   * multi-account shared worker's members apart, which is exactly the question a
+   * failed reconnect on worker-10 raises. Ids and categories only.
+   */
   const session = req.header('authorization') ? null : await authenticateRequest(req);
+  const userId = session?.ok === true && session.principal.type === 'HUMAN' ? session.principal.id : null;
+  const denied = input.shown === 'SIGN_IN' || input.shown === 'SIGNED_IN_UNRESOLVED';
   await audit({
     action: 'OAUTH_AUTHORIZE_PAGE',
-    actor: null,
-    targetId: clientId,
-    result: shown === 'SIGN_IN' ? 'DENIED' : 'SUCCESS',
+    actor: session?.ok === true && session.principal.type === 'HUMAN' ? session.principal : null,
+    targetId: input.clientId,
+    result: denied ? 'DENIED' : 'SUCCESS',
     metadata: {
-      shown,
-      signedInPerson: session?.ok === true && session.principal.type === 'HUMAN',
+      decision: input.shown,
+      shown: input.shown,
+      clientId: input.clientId,
+      endpoint: endpointOf(input.resource),
+      userId,
+      signedInPerson: userId !== null,
+      connectorIds: input.connectorIds ?? [],
+      reason: input.reason ?? null,
       invitationCookie: parseCookies(req.header('cookie'))[INVITE_COOKIE] !== undefined,
     },
   });
+}
+
+/** The member this browser is signed in as, from the session alone — never a bearer. */
+async function signedInMember(req: Request): Promise<Principal | null> {
+  if (req.header('authorization')) return null;
+  const outcome = await authenticateRequest(req);
+  if (!outcome.ok || outcome.principal.type !== 'HUMAN') return null;
+  return outcome.principal;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -664,7 +696,12 @@ export function oauthRouter(): Router {
          * the one that counts.
          */
         const bound = await boundWorkerFor(req, params.clientId, params.resource);
-        await auditAuthorizePage(req, params.clientId, bound ? 'ADMIN_BOUND' : 'ADMIN_CHOOSER');
+        await auditAuthorizePage(req, {
+          clientId: params.clientId,
+          resource: params.resource,
+          shown: bound ? 'ADMIN_BOUND' : 'ADMIN_CHOOSER',
+          connectorIds: bound?.connectorId ? [bound.connectorId] : [],
+        });
         res.type('html').send(await consentPage(req, params, client.clientName, person, null, bound));
         return;
       }
@@ -674,7 +711,12 @@ export function oauthRouter(): Router {
       // no choice, rather than a list.
       const invited = await invitedApproval(req);
       if (invited) {
-        await auditAuthorizePage(req, params.clientId, 'INVITED_CONSENT');
+        await auditAuthorizePage(req, {
+          clientId: params.clientId,
+          resource: params.resource,
+          shown: 'INVITED_CONSENT',
+          reason: `invitation ${invited.invitation.id}`,
+        });
         res.type('html').send(invitedConsentPage(req, params, client.clientName, invited.worker));
         return;
       }
@@ -692,7 +734,44 @@ export function oauthRouter(): Router {
         return;
       }
 
-      await auditAuthorizePage(req, params.clientId, 'SIGN_IN');
+      /*
+       * Somebody is signed in, so a sign-in page would be a contradiction — and
+       * it was the dead end production hit (2026-10-03 08:37Z, Airyn pressing
+       * Reconnect). A member reconnecting the connector Brain can prove is
+       * theirs gets that connector's consent; anybody else signed in is told
+       * plainly why Brain cannot tell which connector this is, and what to do.
+       */
+      const member = await signedInMember(req);
+      if (member) {
+        const reconnect = await resolveMemberReconnect({
+          userId: member.id,
+          clientId: params.clientId,
+          resource: params.resource,
+          scope: params.scope,
+        });
+        if (reconnect.ok) {
+          await auditAuthorizePage(req, {
+            clientId: params.clientId,
+            resource: params.resource,
+            shown: 'MEMBER_RECONNECT',
+            connectorIds: [reconnect.connector.id],
+            reason: reconnect.basis.join('; '),
+          });
+          res.type('html').send(memberReconnectPage(params, client.clientName, reconnect));
+          return;
+        }
+        await auditAuthorizePage(req, {
+          clientId: params.clientId,
+          resource: params.resource,
+          shown: 'SIGNED_IN_UNRESOLVED',
+          connectorIds: reconnect.connectorIds,
+          reason: reconnect.reason,
+        });
+        res.status(403).type('html').send(signedInUnresolvedPage(member, reconnect.reason));
+        return;
+      }
+
+      await auditAuthorizePage(req, { clientId: params.clientId, resource: params.resource, shown: 'SIGN_IN' });
       res.type('html').send(signInPage(req, params, client.clientName, null));
     })().catch(answerEscapedFailure(res, 'oauth'));
   });
@@ -742,7 +821,42 @@ export function oauthRouter(): Router {
 
       const person = await approver(req);
       const invited = person ? null : await invitedApproval(req);
-      if (!person && !invited) {
+      /*
+       * A signed-in member restoring their own connector: asked again here
+       * rather than trusted from the page, because the form can be replayed
+       * after anything it read has changed.
+       */
+      const member = person || invited ? null : await signedInMember(req);
+      const reconnect: MemberReconnect | null = member
+        ? await resolveMemberReconnect({
+            userId: member.id,
+            clientId: params.clientId,
+            resource: params.resource,
+            scope: params.scope,
+          })
+        : null;
+      const restoring = reconnect?.ok ? reconnect : null;
+      if (!person && !invited && member && !restoring && !(await boundInvitationProblem(req))) {
+        await audit({
+          action: 'OAUTH_AUTHORIZE',
+          actor: member,
+          targetId: params.clientId,
+          result: 'DENIED',
+          metadata: {
+            reason: reconnect && !reconnect.ok ? reconnect.reason : 'NOT_ADMIN',
+            clientId: params.clientId,
+            userId: member.id,
+            endpoint: endpointOf(params.resource),
+            connectorIds: reconnect && !reconnect.ok ? reconnect.connectorIds : [],
+          },
+        });
+        res
+          .status(403)
+          .type('html')
+          .send(signedInUnresolvedPage(member, reconnect && !reconnect.ok ? reconnect.reason : 'NO_CONNECTOR_FOR_MEMBER'));
+        return;
+      }
+      if (!person && !invited && !restoring) {
         // A live invitation bound to a different member — or to a member this
         // browser is not signed in as — is refused and left unspent.
         const problem = await boundInvitationProblem(req);
@@ -805,6 +919,24 @@ export function oauthRouter(): Router {
           metadata: { reason: 'INVITATION_WORKER_MISMATCH' },
         });
         errorPage(res, 403, 'Not authorized', 'That invitation does not cover this worker.');
+        return;
+      }
+
+      // A member reconnect restores exactly the connector's own worker.
+      if (restoring && workerId !== restoring.worker.id) {
+        await audit({
+          action: 'OAUTH_AUTHORIZE',
+          actor: member,
+          targetId: workerId || null,
+          result: 'DENIED',
+          metadata: {
+            reason: 'MEMBER_RECONNECT_WORKER_MISMATCH',
+            clientId: params.clientId,
+            userId: member?.id ?? null,
+            connectorId: restoring.connector.id,
+          },
+        });
+        errorPage(res, 403, 'Not authorized', `This connection is for ${workerIdentity(restoring.worker)}, not another worker.`);
         return;
       }
 
@@ -906,7 +1038,10 @@ export function oauthRouter(): Router {
         // The human who decided. On the invited path that is whoever created the
         // invitation, not whoever clicked — the recipient authorized nothing,
         // they spent an authorization somebody else had already given.
-        approvedByUserId: person ? person.id : invited!.approvedByUserId,
+        // On a member reconnect, the member: they are restoring a grant an
+        // administrator already gave them for this connector, and they are the
+        // person who decided to restore it.
+        approvedByUserId: person ? person.id : invited ? invited.approvedByUserId : member!.id,
         redirectUri: params.redirectUri,
         codeChallenge: params.codeChallenge,
         codeChallengeMethod: 'S256',
@@ -922,9 +1057,9 @@ export function oauthRouter(): Router {
        * deferred while it could not authenticate are re-armed now.
        */
       const bound = binding ?? (await boundWorkerFor(req, params.clientId, params.resource));
-      const restoring = bound?.connectorId ?? null;
-      if (restoring) {
-        const connector = await getConnector(restoring);
+      const restoringId = restoring ? restoring.connector.id : (bound?.connectorId ?? null);
+      if (restoringId) {
+        const connector = await getConnector(restoringId);
         if (
           connector &&
           connector.resource === endpointOf(params.resource) &&
@@ -933,8 +1068,16 @@ export function oauthRouter(): Router {
           const outcome = await attachClient({
             clientId: params.clientId,
             connectorId: connector.id,
-            source: bound?.invitation?.connectorId ? 'BOUND_INVITATION' : 'OPERATOR',
-            evidence: bound?.invitation ? `invitation ${bound.invitation.id}` : `approved by ${person?.id ?? 'unknown'}`,
+            source: restoring
+              ? 'MEMBER_RECONNECT'
+              : bound?.invitation?.connectorId
+                ? 'BOUND_INVITATION'
+                : 'OPERATOR',
+            evidence: restoring
+              ? `member ${member!.id} reconnected (${restoring.basis.join('; ')})`
+              : bound?.invitation
+                ? `invitation ${bound.invitation.id}`
+                : `approved by ${person?.id ?? 'unknown'}`,
           });
           // A conflict is reported by the attach and acted on by nobody: only a
           // client that is this connector re-arms its Routines.
@@ -944,13 +1087,17 @@ export function oauthRouter(): Router {
 
       await audit({
         action: 'OAUTH_AUTHORIZE',
-        actor: person,
+        actor: person ?? member,
         targetId: worker.id,
         result: 'SUCCESS',
         metadata: {
           clientId: params.clientId,
           workerName: worker.name,
+          endpoint: endpointOf(params.resource),
           ...(invited ? { via: 'INVITATION', invitationId: invited.invitation.id } : {}),
+          ...(restoring
+            ? { via: 'MEMBER_RECONNECT', userId: member!.id, connectorId: restoring.connector.id }
+            : {}),
         },
       });
 
@@ -1228,6 +1375,57 @@ function signInPage(
  * connecting can see what they are lending their account to, and it does not
  * name the projects' contents or anyone's account.
  */
+/**
+ * A signed-in member restoring the one connector Brain can prove is theirs.
+ * One worker, no choice, and the connector named so the person can see it is
+ * the one they meant.
+ */
+function memberReconnectPage(
+  params: AuthorizeParams,
+  clientName: string,
+  reconnect: Extract<MemberReconnect, { ok: true }>,
+): string {
+  const worker = reconnect.worker;
+  return page(
+    'Reconnect',
+    card(`<h1>Reconnect ${esc(workerIdentity(worker))}</h1>
+     <p class="sub"><strong>${esc(clientName)}</strong> is asking to restore your existing connector. It
+       gets the same worker's access it had before — nothing more.</p>
+     <div class="grant">
+       <dt>Connector</dt><dd><code>${esc(reconnect.connector.id)}</code> at
+         <code>${esc(reconnect.connector.resource)}</code></dd>
+       <dt>Worker</dt><dd><code>${esc(workerIdentity(worker))}</code> — the worker this connector
+         already acts as, so no other is offered.</dd>
+       <dt>Why you</dt><dd>You are signed in, and Brain's records show this connector is yours.</dd>
+     </div>
+     <form method="post" action="${OAUTH_BASE}/authorize/approve">
+       ${hiddenFields(params)}
+       <input type="hidden" name="worker_id" value="${esc(worker.id)}">
+       <button type="submit">Approve</button>
+     </form>
+     <p class="note">An administrator can still withdraw this connector at any time, and a withdrawal
+       is not undone by reconnecting.</p>`),
+  );
+}
+
+/**
+ * Somebody is signed in, and Brain cannot tell which connector they mean.
+ * Never a sign-in page: they already are. The sentence says why, and the
+ * next step is the one that resolves it without guessing.
+ */
+function signedInUnresolvedPage(person: Principal, reason: keyof typeof MEMBER_RECONNECT_SENTENCE): string {
+  return page(
+    'Brain cannot tell which connector this is',
+    card(`<h1>Brain cannot tell which connector this is</h1>
+     <p class="sub">This account is signed in as <strong>${esc(person.displayName ?? person.id)}</strong>, but Brain
+       cannot determine which connector you are reconnecting.</p>
+     <div class="err">${esc(MEMBER_RECONNECT_SENTENCE[reason])}</div>
+     <p>Next step: ask a Brain administrator for a reconnect link for your connector
+       (<code>npm run admin -- connectors reconnect</code>), open it in this browser, then press
+       Reconnect in Claude again. Nothing was authorized.</p>`),
+  );
+}
+
 function invitedConsentPage(
   req: Request,
   params: AuthorizeParams,
