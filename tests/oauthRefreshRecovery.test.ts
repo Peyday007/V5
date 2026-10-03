@@ -179,22 +179,35 @@ describe('refresh rotation', () => {
     });
   });
 
-  it('recovers once, and leaves one live successor when two retries race', async () => {
+  it('leaves one live successor when two retries race, and recovers a reply lost twice', async () => {
     const { workerId, refreshId } = await chain();
     await rotateRefreshToken({ tokenId: refreshId, mint: minter(workerId) });
     const results = await Promise.all([
       rotateRefreshToken({ tokenId: refreshId, mint: minter(workerId) }),
       rotateRefreshToken({ tokenId: refreshId, mint: minter(workerId) }),
     ]);
-    expect(results.filter((one) => one.ok)).toHaveLength(1);
+    // Serialized retries may each recover, each retiring the other's unused
+    // successor; what may never happen is two live successors at once.
+    expect(results.some((one) => one.ok)).toBe(true);
     const live = await getDb().get<{ n: number }>(
       `SELECT COUNT(*) AS n FROM oauth_tokens WHERE parent_token_id = ? AND kind = 'REFRESH' AND revoked_at IS NULL`,
       [refreshId],
     );
     expect(Number(live!.n)).toBe(1);
+    // Production, 2026-10-01 -> 10-03: the recovered reply was lost as well,
+    // and the third retry was refused over tokens nobody had presented.
+    const third = await rotateRefreshToken({ tokenId: refreshId, mint: minter(workerId) });
+    expect(third.ok && third.recovered).toBe(true);
+
+    // Once anything minted from the chain is used, a replay is refused.
+    const liveRow = await getDb().get<{ id: string }>(
+      `SELECT id FROM oauth_tokens WHERE parent_token_id = ? AND kind = 'REFRESH' AND revoked_at IS NULL`,
+      [refreshId],
+    );
+    await getDb().run('UPDATE oauth_tokens SET last_used_at = ? WHERE id = ?', [new Date().toISOString(), liveRow!.id]);
     expect(await rotateRefreshToken({ tokenId: refreshId, mint: minter(workerId) })).toEqual({
       ok: false,
-      reason: 'RECOVERY_SPENT',
+      reason: 'REUSED',
     });
   });
 });

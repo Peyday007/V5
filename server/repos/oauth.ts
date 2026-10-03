@@ -380,17 +380,16 @@ export async function findPresentedToken(
  * Each bound was a guess about when a client retries, and the client decides
  * that. What makes recovery safe was never the clock: the single successor and
  * every access token minted from it must never have been used, so the client
- * provably never received them, and recovery is spent the first time it is
- * honoured. Under those conditions the presented token is still the client's
+ * provably never received them. Under those conditions the presented token is still the client's
  * current credential in every sense but the row, so it is honoured for as long
  * as the token itself would have lived — its own `expires_at`, checked below
- * as NOT_LIVE. A replay after the successor was used is still REUSED, and a
- * second replay still RECOVERY_SPENT, which is the replay detection this keeps.
+ * as NOT_LIVE. A replay after any successor was used is still REUSED, which is
+ * the replay detection this keeps.
  */
 
 export type RefreshRotation<T> =
   | { ok: true; recovered: boolean; minted: T }
-  | { ok: false; reason: 'NOT_LIVE' | 'REUSED' | 'RECOVERY_SPENT' };
+  | { ok: false; reason: 'NOT_LIVE' | 'REUSED' };
 
 /**
  * Rotate a refresh token — atomically, and survivably when the answer is lost.
@@ -404,14 +403,19 @@ export type RefreshRotation<T> =
  * A presented token that is already revoked is refused, with one exception
  * that exists for the lost-response case and nothing else. It is honoured, once,
  * when every one of these holds: the token has not reached its own expiry;
- * exactly one refresh token has been minted from
- * it, so the revocation was a rotation and this is its first repeat; that
- * successor is still live, so nothing explicitly revoked it; and neither it nor
- * any access token minted from it has ever been used, so the client never
- * received it. The unused successor is then revoked and a new pair issued in
- * its place. Anything else — a replay after the replacement was used, a second
- * replay, an explicit revocation, an expired token — is refused, which
- * is the replay detection this keeps.
+ * the revocation was a rotation, so it has successors; exactly one of them is
+ * still live, so nothing explicitly revoked the chain; and no successor and no
+ * access token minted from any of them has ever been used, so the client never
+ * received a reply. The live successor is then revoked and a new pair issued in
+ * its place. Anything else — a replay after any replacement was used, an
+ * explicit revocation, an expired token — is refused, which is the replay
+ * detection this keeps.
+ *
+ * It is not spent after one use. Production, 2026-10-01: the `/mcp` Factory
+ * connector's rotation at 13:48 lost its reply, the retry at 20:04 was
+ * recovered and *its* reply was lost too, and the third retry, on 10-03, was
+ * refused — over two successors and two access tokens that nobody had ever
+ * presented. A count of recoveries says nothing about theft; a used token does.
  */
 export async function rotateRefreshToken<T>(input: {
   tokenId: string;
@@ -441,14 +445,24 @@ export async function rotateRefreshToken<T>(input: {
       [input.tokenId],
     );
     if (successors.length === 0) return { ok: false as const, reason: 'NOT_LIVE' as const };
-    if (successors.length > 1) return { ok: false as const, reason: 'RECOVERY_SPENT' as const };
-    const successor = successors[0]!;
-    if (successor.revoked_at !== null || successor.last_used_at !== null) {
+    // Every token this chain has ever minted must be untouched: one used by
+    // anybody means the client (or a thief) did receive a reply, and that is
+    // the replay detection this keeps. Earlier recoveries leave revoked,
+    // unused successors behind — a reply that was lost again — and those do not
+    // count against it. Exactly one successor must still be live, so a chain
+    // somebody explicitly revoked stays revoked.
+    if (successors.some((one) => one.last_used_at !== null)) {
       return { ok: false as const, reason: 'REUSED' as const };
     }
+    const live = successors.filter((one) => one.revoked_at === null);
+    if (live.length !== 1) return { ok: false as const, reason: 'REUSED' as const };
+    const successor = live[0]!;
     const used = await db.get<{ id: string }>(
-      `SELECT id FROM oauth_tokens WHERE parent_token_id = ? AND kind = 'ACCESS' AND last_used_at IS NOT NULL LIMIT 1`,
-      [successor.id],
+      `SELECT id FROM oauth_tokens
+        WHERE kind = 'ACCESS' AND last_used_at IS NOT NULL
+          AND parent_token_id IN (${successors.map(() => '?').join(', ')})
+        LIMIT 1`,
+      successors.map((one) => one.id),
     );
     if (used) return { ok: false as const, reason: 'REUSED' as const };
 
