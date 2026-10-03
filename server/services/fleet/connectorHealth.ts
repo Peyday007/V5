@@ -237,17 +237,25 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
 
   // The newest refusal the token endpoint recorded for this connector's clients.
   if (connector.workerId) {
+    // Narrowed by client in SQL: a worker shared by several accounts records
+    // every account's refreshes under one target, and the newest fifty of
+    // those need not include this connector's at all. The metadata is
+    // `toJson` output, so the key is written without spaces.
+    const clientLikes = clientIds.map((id) => `%"clientId":"${id}"%`);
     const denials = await getDb().all<{ created_at: string; metadata: string | null }>(
       `SELECT created_at, metadata FROM identity_events
         WHERE action = 'OAUTH_TOKEN' AND result = 'DENIED' AND target_id = ? AND created_at > ?
-        ORDER BY created_at DESC LIMIT 50`,
-      [connector.workerId, new Date(now - 45 * 24 * 3_600_000).toISOString()],
+          AND (${clientIds.map(() => 'metadata LIKE ?').join(' OR ')})
+        ORDER BY created_at DESC LIMIT 20`,
+      [connector.workerId, new Date(now - 45 * 24 * 3_600_000).toISOString(), ...clientLikes],
     );
     const recovered = await getDb().all<{ created_at: string; metadata: string | null }>(
       `SELECT created_at, metadata FROM identity_events
         WHERE action = 'OAUTH_TOKEN' AND result = 'SUCCESS' AND target_id = ? AND created_at > ?
-        ORDER BY created_at DESC LIMIT 50`,
-      [connector.workerId, new Date(now - 45 * 24 * 3_600_000).toISOString()],
+          AND metadata LIKE '%"recovered"%'
+          AND (${clientIds.map(() => 'metadata LIKE ?').join(' OR ')})
+        ORDER BY created_at DESC LIMIT 20`,
+      [connector.workerId, new Date(now - 45 * 24 * 3_600_000).toISOString(), ...clientLikes],
     );
     const mine = (rows: { created_at: string; metadata: string | null }[]) =>
       rows
