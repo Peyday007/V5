@@ -186,17 +186,23 @@ from a row:
 
 - the browser has an authenticated person;
 - exactly one connector at the endpoint the request names (`resource`) belongs
-  to them — proven by a consent on an invitation bound to them for a client of
-  that connector, an earlier member reconnect by them, or their own
-  non-revoked capacity connection naming the connector's account and worker;
+  to them — proven only by a consent on an invitation an administrator bound to
+  them, for a client attached to that connector as `BOUND_INVITATION` or
+  `INVITATION_MEMBER` (not a capacity connection, whose account is found by a
+  normalized name; not an earlier member reconnect, which would renew itself;
+  not an inferred arrival), and not given back (a REVOKED capacity connection
+  for that account and worker voids the claim);
 - no other person has a claim to that connector;
 - the client is not already attached to a different connector;
-- the worker is live, and the connector's consent was not withdrawn and its
-  clients not disabled;
+- the worker is live, nothing on the connector was explicitly revoked since its
+  last grant (read from the token rows, because a refused refresh after a
+  revocation changes the health verdict), and none of its clients is disabled;
 - the request asks for no scope its earlier grants did not carry.
 
-The approval re-asks all of it, records the member as the approver, and
-attaches the new client as `MEMBER_RECONNECT` on the same connector. Anything
+The approval re-asks all of it and records the member as the approver; the new
+client is attached as `MEMBER_RECONNECT` on the same connector when its code is
+redeemed with the verifier and the client's secret, not at approval, because a
+`client_id` is public. Anything
 else is refused by name (`ENDPOINT_UNSPECIFIED`, `NO_CONNECTOR_FOR_MEMBER`,
 `AMBIGUOUS_CONNECTORS`, `CONNECTOR_SHARED_WITH_ANOTHER_MEMBER`,
 `CLIENT_ATTACHED_ELSEWHERE`, `WORKER_UNAVAILABLE`, `CONSENT_REVOKED`,

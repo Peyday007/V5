@@ -23,13 +23,28 @@
  *   live, whose consent was not explicitly withdrawn, and whose earlier grants
  *   already covered every scope this request asks for?
  *
- * Ownership is proven by either of two rows, never by a name or a worker id:
+ * Ownership is proven by one kind of row, never by a name or a worker id:
+ * an `OAUTH_AUTHORIZE SUCCESS` approved on an invitation an administrator bound
+ * to this member, for a client that is this connector by a *recorded* binding
+ * (`BOUND_INVITATION` or `INVITATION_MEMBER`) rather than an inferred one.
  *
- *   CONSENT     an `OAUTH_AUTHORIZE SUCCESS` approved on an invitation bound to
- *               this member (or an earlier member reconnect by them), for a
- *               client attached to the connector.
- *   CONNECTION  the member's own `capacity_connections` row names the
- *               connector's account and worker, and is not REVOKED.
+ * Deliberately not evidence, and why (independent review of the first version):
+ *
+ *   - a member's own `capacity_connections` row. Its account is found by a
+ *     normalized display name (`member-<slug>`), and two names that differ only
+ *     by an accent fold to one slug — so a row a member can produce themselves
+ *     would name somebody else's account.
+ *   - an earlier member reconnect. Counting it would make ownership renew
+ *     itself for ever, so giving a connection back could never end it.
+ *   - an `OBSERVED_ARRIVAL` attachment. It is inferred, and a consent spent on
+ *     a client later inferred onto another connector must not own that one.
+ *
+ * A member who gave the connection back (a REVOKED capacity connection for the
+ * connector's account and worker, with no live one beside it) has no claim. And
+ * a connector whose tokens were explicitly withdrawn after its last grant, or
+ * whose clients were disabled, is refused — read from the token rows, not from
+ * the health verdict, because a refused refresh after a revocation turns the
+ * verdict into `CLIENT_HOLDS_REFUSED_CREDENTIAL` and would hide the withdrawal.
  *
  * A worker id is never evidence: Airyn, Caleb and the owner all authenticate
  * as worker-10, and "somebody who uses worker-10" is precisely the claim that
@@ -45,7 +60,6 @@ import {
   connectorClient,
   endpointOf,
   getConnector,
-  listConnectors,
   type Connector,
 } from '../../repos/connectors.ts';
 import { getWorker } from '../../repos/identity.ts';
@@ -106,9 +120,10 @@ export async function connectorOwners(): Promise<Map<string, Map<string, string[
     owners.set(connectorId, byUser);
   };
 
-  // CONSENT: an approval that names a member, for a client that is a connector.
-  const consents = await getDb().all<{ actor_id: string | null; metadata: string | null }>(
-    `SELECT actor_id, metadata FROM identity_events WHERE action = 'OAUTH_AUTHORIZE' AND result = 'SUCCESS'`,
+  // Narrowed in SQL to approvals that name an invitation; parsed exactly after.
+  const consents = await getDb().all<{ metadata: string | null }>(
+    `SELECT metadata FROM identity_events
+      WHERE action = 'OAUTH_AUTHORIZE' AND result = 'SUCCESS' AND metadata LIKE '%invitationId%'`,
   );
   for (const consent of consents) {
     let meta: Record<string, unknown>;
@@ -117,39 +132,58 @@ export async function connectorOwners(): Promise<Map<string, Map<string, string[
     } catch {
       continue;
     }
+    if (meta['via'] !== 'INVITATION' || typeof meta['invitationId'] !== 'string') continue;
     const clientId = typeof meta['clientId'] === 'string' ? meta['clientId'] : null;
     if (!clientId) continue;
     const attached = await connectorClient(clientId);
-    if (!attached) continue;
-    if (meta['via'] === 'INVITATION' && typeof meta['invitationId'] === 'string') {
-      const invitation = await getDb().get<{ intended_user_id: string | null; worker_id: string }>(
-        'SELECT intended_user_id, worker_id FROM worker_invitations WHERE id = ?',
-        [meta['invitationId']],
-      );
-      if (invitation?.intended_user_id) {
-        add(attached.connectorId, invitation.intended_user_id, `consent on invitation ${meta['invitationId'] as string}`);
-      }
-    } else if (meta['via'] === 'MEMBER_RECONNECT' && consent.actor_id) {
-      add(attached.connectorId, consent.actor_id, `earlier member reconnect of client ${clientId}`);
+    if (!attached || (attached.source !== 'BOUND_INVITATION' && attached.source !== 'INVITATION_MEMBER')) continue;
+    const invitation = await getDb().get<{ intended_user_id: string | null }>(
+      'SELECT intended_user_id FROM worker_invitations WHERE id = ?',
+      [meta['invitationId']],
+    );
+    if (invitation?.intended_user_id) {
+      add(attached.connectorId, invitation.intended_user_id, `consent on invitation ${meta['invitationId']}`);
     }
   }
 
-  // CONNECTION: the member's own Claude connection names the account and worker.
-  const connections = await getDb().all<{ id: string; user_id: string; account_id: string; worker_id: string }>(
-    `SELECT id, user_id, account_id, worker_id FROM capacity_connections
-      WHERE account_id IS NOT NULL AND worker_id IS NOT NULL AND state <> 'REVOKED'`,
-  );
-  if (connections.length > 0) {
-    const connectors = await listConnectors();
-    for (const connection of connections) {
-      for (const connector of connectors) {
-        if (connector.accountId === connection.account_id && connector.workerId === connection.worker_id) {
-          add(connector.id, connection.user_id, `capacity connection ${connection.id}`);
-        }
-      }
+  // A member who gave the connection back keeps no claim to it.
+  for (const [connectorId, byUser] of owners) {
+    const connector = await getConnector(connectorId);
+    if (!connector) continue;
+    for (const userId of [...byUser.keys()]) {
+      const rows = await getDb().all<{ state: string }>(
+        'SELECT state FROM capacity_connections WHERE user_id = ? AND account_id = ? AND worker_id = ?',
+        [userId, connector.accountId, connector.workerId],
+      );
+      if (rows.length > 0 && rows.every((row) => row.state === 'REVOKED')) byUser.delete(userId);
     }
+    if (byUser.size === 0) owners.delete(connectorId);
   }
   return owners;
+}
+
+/**
+ * Was this connector's authority withdrawn since it was last granted? Read from
+ * the token and client rows directly: an explicit revocation newer than the
+ * newest grant, or any of its clients disabled.
+ */
+async function withdrawnSinceLastGrant(clientIds: string[]): Promise<boolean> {
+  if (clientIds.length === 0) return false;
+  const list = clientIds.map(() => '?').join(', ');
+  const disabled = await getDb().get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM oauth_clients WHERE client_id IN (${list}) AND disabled_at IS NOT NULL`,
+    clientIds,
+  );
+  if ((disabled?.n ?? 0) > 0) return true;
+  const facts = await getDb().get<{ last_grant: string | null; last_withdrawal: string | null }>(
+    `SELECT
+       (SELECT MAX(created_at) FROM oauth_tokens
+         WHERE client_id IN (${list}) AND kind = 'REFRESH' AND parent_token_id IS NULL) AS last_grant,
+       (SELECT MAX(revoked_at) FROM oauth_tokens
+         WHERE client_id IN (${list}) AND revoked_reason = 'EXPLICIT') AS last_withdrawal`,
+    [...clientIds, ...clientIds],
+  );
+  return Boolean(facts?.last_withdrawal && (!facts.last_grant || facts.last_withdrawal >= facts.last_grant));
 }
 
 /**
@@ -192,15 +226,22 @@ export async function resolveMemberReconnect(input: {
   if (!worker || worker.disabled) return { ok: false, reason: 'WORKER_UNAVAILABLE', connectorIds: ids };
 
   const health = await connectorHealth(connector.id);
-  // An administrator withdrawing consent or disabling the clients is a decision
-  // a reconnect must not reverse.
-  if (health?.reason === 'CONSENT_REVOKED' || health?.reason === 'CLIENT_DISABLED') {
+  // A withdrawal or a disabled client is a decision a reconnect must not reverse.
+  const clients = (await clientsOfConnector(connector.id)).map((one) => one.clientId);
+  if (
+    health?.reason === 'CONSENT_REVOKED' ||
+    health?.reason === 'CLIENT_DISABLED' ||
+    (await withdrawnSinceLastGrant(clients))
+  ) {
     return { ok: false, reason: 'CONSENT_REVOKED', connectorIds: ids };
   }
   if (health?.state === 'DISABLED') return { ok: false, reason: 'WORKER_UNAVAILABLE', connectorIds: ids };
 
-  // Never wider than what this connector was already granted.
-  const clients = (await clientsOfConnector(connector.id)).map((one) => one.clientId);
+  /*
+   * Never wider than what this connector was already granted. Today Brain
+   * advertises no OAuth scopes and a worker's reach is its memberships, so this
+   * is a guard for the day scopes mean something rather than the boundary.
+   */
   const granted = new Set<string>();
   let anyGrant = false;
   if (clients.length > 0) {

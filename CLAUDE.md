@@ -11917,14 +11917,21 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   would have ended the same way. The grant a reconnect needs already exists: an
   administrator approved *this member* for *this connector*. So
   `services/fleet/memberReconnect.ts` answers one question from rows — exactly
-  one connector at the requested endpoint that this member's consent on a bound
-  invitation (or their own non-revoked capacity connection) proves is theirs,
-  and nobody else's; its worker live; its consent not withdrawn; no scope
-  beyond what it was already granted; the client not already another
-  connector — and the screen offers that connector's worker and nothing else.
-  The approval asks again, records the member as approver, and attaches the new
-  client to the same connector as `MEMBER_RECONNECT`. A worker id is never
-  evidence: three people authenticate as worker-10. Zero candidates, two, a
+  one connector at the requested endpoint that this member's consent on an
+  invitation an administrator bound to them proves is theirs, for a client that
+  is that connector by a *recorded* binding, and nobody else's; its worker live;
+  no withdrawal since its last grant, read from the token rows; no scope beyond
+  what it was already granted; the client not already another connector — and
+  the screen offers that connector's worker and nothing else. The approval asks
+  again and records the member as approver, and the new client is attached to
+  the same connector as `MEMBER_RECONNECT` only when its code is redeemed with
+  the verifier and the client's secret, because a `client_id` is public. A
+  worker id is never evidence: three people authenticate as worker-10. The
+  first version also accepted a member's own capacity connection, earlier
+  member reconnects and inferred attachments as ownership, and read withdrawal
+  from the health verdict; independent review showed each could be produced or
+  outlived by the member, and a refused refresh after a revocation hid the
+  revocation from the verdict. All four are gone, each with a regression. Zero candidates, two, a
   shared claim, an unnamed endpoint, a revoked consent or a widened scope is
   each refused by name, and a signed-in person is never shown a sign-in page:
   they are told Brain cannot determine which connector they are reconnecting,

@@ -5002,6 +5002,7 @@ export interface OAuthAuthorizationCodeRow {
   created_at: string;
   expires_at: string;
   redeemed_at: string | null;
+  attach_connector_id?: string | null;
 }
 
 export interface OAuthAuthorizationCode {
@@ -5019,6 +5020,13 @@ export interface OAuthAuthorizationCode {
   createdAt: string;
   expiresAt: string;
   redeemedAt: string | null;
+  /**
+   * The connector a member reconnect restores. The client is attached to it
+   * when this code is redeemed with the right verifier and secret, never at
+   * approval: a `client_id` is public, and approving somebody else's fresh
+   * client must not be able to weld it to the approver's connector.
+   */
+  attachConnectorId: string | null;
 }
 
 export interface OAuthTokenRow {

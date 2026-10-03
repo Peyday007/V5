@@ -826,7 +826,11 @@ export function oauthRouter(): Router {
        * rather than trusted from the page, because the form can be replayed
        * after anything it read has changed.
        */
-      const member = person || invited ? null : await signedInMember(req);
+      // A live invitation bound to somebody else in this browser is refused
+      // below, exactly as the page refused it — never quietly read as this
+      // member's own reconnect.
+      const heldElsewhere = person || invited ? null : await boundInvitationProblem(req);
+      const member = person || invited || heldElsewhere ? null : await signedInMember(req);
       const reconnect: MemberReconnect | null = member
         ? await resolveMemberReconnect({
             userId: member.id,
@@ -836,7 +840,7 @@ export function oauthRouter(): Router {
           })
         : null;
       const restoring = reconnect?.ok ? reconnect : null;
-      if (!person && !invited && member && !restoring && !(await boundInvitationProblem(req))) {
+      if (!person && !invited && member && !restoring) {
         await audit({
           action: 'OAUTH_AUTHORIZE',
           actor: member,
@@ -1047,6 +1051,9 @@ export function oauthRouter(): Router {
         codeChallengeMethod: 'S256',
         resource: params.resource,
         scope: params.scope,
+        // A member reconnect attaches its client when this code is redeemed —
+        // by whoever holds the verifier and the client's secret — not now.
+        attachConnectorId: restoring ? restoring.connector.id : null,
       });
 
       /*
@@ -1057,7 +1064,8 @@ export function oauthRouter(): Router {
        * deferred while it could not authenticate are re-armed now.
        */
       const bound = binding ?? (await boundWorkerFor(req, params.clientId, params.resource));
-      const restoringId = restoring ? restoring.connector.id : (bound?.connectorId ?? null);
+      // A member reconnect is attached at redemption (see the token endpoint).
+      const restoringId = restoring ? null : (bound?.connectorId ?? null);
       if (restoringId) {
         const connector = await getConnector(restoringId);
         if (
@@ -1068,16 +1076,8 @@ export function oauthRouter(): Router {
           const outcome = await attachClient({
             clientId: params.clientId,
             connectorId: connector.id,
-            source: restoring
-              ? 'MEMBER_RECONNECT'
-              : bound?.invitation?.connectorId
-                ? 'BOUND_INVITATION'
-                : 'OPERATOR',
-            evidence: restoring
-              ? `member ${member!.id} reconnected (${restoring.basis.join('; ')})`
-              : bound?.invitation
-                ? `invitation ${bound.invitation.id}`
-                : `approved by ${person?.id ?? 'unknown'}`,
+            source: bound?.invitation?.connectorId ? 'BOUND_INVITATION' : 'OPERATOR',
+            evidence: bound?.invitation ? `invitation ${bound.invitation.id}` : `approved by ${person?.id ?? 'unknown'}`,
           });
           // A conflict is reported by the attach and acted on by nobody: only a
           // client that is this connector re-arms its Routines.
@@ -1096,7 +1096,12 @@ export function oauthRouter(): Router {
           endpoint: endpointOf(params.resource),
           ...(invited ? { via: 'INVITATION', invitationId: invited.invitation.id } : {}),
           ...(restoring
-            ? { via: 'MEMBER_RECONNECT', userId: member!.id, connectorId: restoring.connector.id }
+            ? {
+                via: 'MEMBER_RECONNECT',
+                userId: member!.id,
+                connectorId: restoring.connector.id,
+                basis: restoring.basis,
+              }
             : {}),
         },
       });
@@ -1166,6 +1171,42 @@ export function oauthRouter(): Router {
         if (!worker || worker.disabled) {
           res.status(400).json({ error: 'invalid_grant' });
           return;
+        }
+
+        /*
+         * A member reconnect attaches its client to the connector it restores
+         * here, on redemption, rather than at approval: only the holder of the
+         * PKCE verifier and the client's own secret reaches this line, so
+         * approving somebody else's freshly registered (public) client id can
+         * no longer weld it to the approver's connector. A client that has
+         * meanwhile become another connector is refused, not re-pointed.
+         */
+        if (record.attachConnectorId) {
+          const connector = await getConnector(record.attachConnectorId);
+          const fits =
+            connector !== null &&
+            connector.resource === endpointOf(record.resource) &&
+            connector.workerId === record.workerId;
+          const outcome = fits
+            ? await attachClient({
+                clientId,
+                connectorId: connector.id,
+                source: 'MEMBER_RECONNECT',
+                evidence: `member ${record.approvedByUserId} reconnected; code ${record.id}`,
+              })
+            : 'CONFLICT';
+          if (outcome === 'CONFLICT') {
+            await audit({
+              action: 'OAUTH_TOKEN',
+              actor: null,
+              targetId: record.workerId,
+              result: 'DENIED',
+              metadata: { reason: 'MEMBER_RECONNECT_ATTACH_CONFLICT', clientId, connectorId: record.attachConnectorId },
+            });
+            res.status(400).json({ error: 'invalid_grant' });
+            return;
+          }
+          await touchConnectorRoutines(connector!.id);
         }
 
         await issueTokenPair(res, {
