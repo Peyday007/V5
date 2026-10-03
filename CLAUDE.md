@@ -11846,6 +11846,78 @@ repair, and the shape is the register's (§43) carried one level up.
 `file --from <row>` files real recorded work with that row's own words as the
 intent and composes nothing.
 
+## 51. A refresh is a state, a connector is an identity, and an auth failure is not a no-show.
+
+Four production fixes (2026-09-27, 09-30, 10-01, 10-03) each moved the clock on
+refresh-token recovery — five minutes, a day, the token's own life, any number of
+lost replies — and the same cycle kept returning: a lost reply, a connector
+Claude marks as needing authorization, Routines that fire into sessions with no
+usable Brain connector, no-shows, a quarantine, a person reconnecting, and again.
+`docs/CONNECTOR-LIFECYCLE.md` is the mechanism; this is why it is shaped so.
+
+- **A second answer to one request was a second credential.** Every recovery
+  minted a new random successor and retired the last one, so the client that
+  kept the *earlier* answer — a late reply, or one of two racing sessions — held
+  a revoked token with nothing descending from it. A clock could never fix
+  that, which is why four clocks did not. The successor is derived now
+  (`deriveOAuthSuccessor`: an HMAC over the presented token under a server-held
+  key), so presenting the same token again yields the same successor. Nothing
+  recoverable is stored — the derivation needs the presented secret, which
+  Brain never kept — and invariant 22 holds.
+- **Whether the presenter still deserves it is lineage, read in one statement.**
+  A newer token in the grant explicitly revoked → `REVOKED`; a newer refresh
+  token itself presented, or a newer token in use for longer than
+  `CONCURRENT_REFRESH_LEEWAY_MS` → `REUSED`; otherwise the same successor. The
+  leeway is the one clock left, it bounds only "in use", and it is derived from
+  the slowest measured rotation (~117 s). `grant_id`, `revoked_reason` and
+  `first_used_at` (migration 100 / pg 091) are what make the question one read.
+  An explicit revocation is never resurrected; a refusal under this model means
+  the token was withdrawn or provably superseded. **The cost is stated rather
+  than hidden:** a thief holding a refresh token converges on the same chain
+  instead of forking it, so theft is not detected by divergence — the window
+  before the successor's use existed before, the leeway after it is new — and
+  REUSED revokes no family, because a stale sibling session presenting an old
+  token would then kill the live chain and bring the manual reconnect back.
+- **A worker identity is not a connector.** `factory-brain` is several Claude
+  accounts, so "worker-10 authenticated" proved nothing about Airyn's connector
+  or Caleb's. A logical connector is (fleet account, endpoint) — Claude holds one
+  custom connector per URL — and every OAuth client a reconnect leaves behind it
+  is kept with its evidence (`connectors`, `connector_clients`,
+  `fleet_routines.connector_id`). Attribution is from proof only: an arrival
+  whose provider session matches the fire, a single-account worker, a
+  member-bound consent, a bound reconnect, or an operator. Ambiguity attaches
+  nothing; a client is never re-pointed.
+- **Health is one projection** (`services/fleet/connectorHealth.ts`), derived
+  from token rows, recorded refusals and fires, read by the router, the no-show
+  pass, the recovery and the operator alike. Configured is not authenticated,
+  and a past delivery proof is not a present answer. `HUMAN_REAUTH_REQUIRED`
+  names one of six reasons, each a row.
+- **An auth failure is not a no-show.** An unanswered fire at a connector that is
+  `REFRESH_RECOVERABLE` or `HUMAN_REAUTH_REQUIRED` is `DISPATCH_AUTH_NO_SHOW`,
+  which the quarantine count does not read. A recoverable connector is still
+  fired, because the fire *is* the retry that heals it; three unanswered ones
+  prove the client stopped asking (`CLIENT_STOPPED_RETRYING`), and then it is
+  refused rather than fired. A healthy connector's no-show still quarantines.
+- **Recovery needs nobody but the person who consents.** A quarantine for
+  unanswered fires lifts by itself once that Routine's *own* connector has a new
+  consent after it — a grant, never token use, since every Routine in an
+  account shares the connector and a sibling's call is not a repair; a refused connector becomes routable again by
+  derivation; consent re-arms its deferred intents. The forgiveness boundary
+  keeps the ceiling binding for a connector that was not really fixed.
+- **Consent is bound.** An invitation or an attributed client names the one
+  worker the screen offers and the approval accepts — administrator or not. A
+  client's earlier approvals are deliberately not a binding, because inferring
+  intent from history is the guess this module refuses.
+- **The one human action is prepared, not composed.** `admin connectors
+  reconnect` issues one member-bound invitation naming the worker and the
+  connector, prints no link (§17), and the person signs in, reconnects in Claude
+  and approves. `admin connectors show` is the one read, and replaces
+  archaeology through OAuth rows.
+- **What it cannot fix is named.** A refresh that never reached Brain is silence,
+  indistinguishable from a Routine not starting; Claude's own needs-auth state
+  clears only by consent in Claude. Brain answers every retry correctly and
+  fast; it cannot make a client retry.
+
 ## Repository map
 
 ```
@@ -11889,6 +11961,7 @@ server/
     auditReopens.ts     the record behind a re-audit, and its one reservation
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
     deliveryProofs.ts   what each Routine has been shown able to deliver, per repository
+    connectors.ts       one Claude account at one endpoint, and every OAuth client it ever was
     factory.ts          the contract, the campaign, and units that own a surface
     factoryFleet.ts     factory workers, sessions, reviews, findings, the ledger
     externalRecords.ts  a site's record, its version guard, and its refusals
@@ -12026,6 +12099,8 @@ server/
     fleet/
       view.ts           three capacity numbers that are not each other, and why it is slow
       capacity.ts       what the dispatcher would fire, counted once and labelled honestly
+      connectorHealth.ts  the one answer to whether a connector can authenticate, and whose fault a no-show is
+      connectorBinding.ts which connector a client and a Routine are, from proof; auth-caused quarantines lifted
       probe.ts          the one bounded self-test that turns configured into proven
       commission.ts     every commissioning step in order, and one READY / NOT READY answer
       lab.ts            the eight test modes, and the five this version refuses to run
@@ -12268,6 +12343,7 @@ server/
     passkeys.ts         enrolling, signing in with a device, and your own devices
     people.ts           who has joined, what can run, and connecting your Claude account
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
+                        (rotation is idempotent and a bound consent offers one worker, §51)
     pages.ts            shared chrome for the server-rendered pages
     guard.ts            request context, authentication, deny-by-default
     escape.ts           what a request answers when an error escapes its handler
@@ -12385,6 +12461,7 @@ tests/                  Vitest suites
   connectorIsolation.test.ts one site, two private operations, two identities
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
+  connectorLifecycle.test.ts two accounts on one worker, an auth no-show, and a recovery nobody pressed
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```

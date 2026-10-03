@@ -459,7 +459,15 @@ describe('an invitation in an administrator\u2019s browser', () => {
     }
   }
 
-  it('still shows the chooser, and says which worker the invitation names', async () => {
+  /*
+   * Corrected 2026-10-03: the screen used to show an administrator the whole
+   * chooser with the invited worker preselected, and that list is how an
+   * operator reconnecting worker-04 came to choose another identity. An
+   * invitation names exactly one worker, so the administrator's screen names
+   * it and offers nothing else — the administrator's own authority still
+   * decides, and the invitation is still not spent by this path.
+   */
+  it('shows only the worker the invitation names, and spends nothing by being read', async () => {
     const held = await inviteCookieFor(orphanWorkerId);
     const { challenge } = pkce();
     const response = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge)}`, {
@@ -467,50 +475,24 @@ describe('an invitation in an administrator\u2019s browser', () => {
     });
     const html = await response.text();
 
-    // The chooser, not the single-worker invited screen: the administrator's
-    // own authority is what this page runs on.
     expect(html).toContain('Connect a worker');
-    expect(html).toContain(workerLabel);
-    // By its neutral identity, never by the handle somebody typed: this is the
-    // screen where an identity is chosen, so a name that implies whose account
-    // it is, is how the wrong one gets picked.
-    expect(html).not.toContain('claude-max-worker-01');
-    // And the answer to "why am I being shown a list".
-    expect(html).toContain('This browser holds an invitation for');
     expect(html).toContain(orphanLabel);
+    // No unrelated worker is offered.
+    expect(html).not.toContain(`value="${workerId}"`);
     expect(html).not.toContain('orphan-worker');
-    expect(html).toContain('the invitation is not used');
-    // Preselected, so the ordinary case is one click.
-    expect(html).toMatch(new RegExp(`value="${orphanWorkerId}" selected`));
-
-    // Reading the screen spends nothing.
+    expect(html).not.toContain('claude-max-worker-01');
+    expect(html).toContain('the invitation in this browser is for this worker');
     expect(await isLive(held.id)).toBe(true);
   });
 
-  it('does not let the held invitation decide who is connected', async () => {
-    /*
-     * Display only. The administrator posts a different worker and gets that
-     * worker — the invitation neither authorized it nor constrained it, and it
-     * is still unspent afterwards. On the *invited* path the posted id is
-     * checked against the invitation and a mismatch is refused outright; that
-     * rule is unchanged and is asserted elsewhere in this file.
-     */
+  it('refuses an edited form that posts a worker the invitation does not name', async () => {
     const held = await inviteCookieFor(orphanWorkerId);
-    const { challenge, verifier } = pkce();
+    const { challenge } = pkce();
     const approved = await approve(challenge, {
       cookie: `${adminCookie}; ${held.cookie}`,
       worker: workerId,
     });
-    expect(approved.code).not.toBeNull();
-
-    const token = await exchange({
-      grant_type: 'authorization_code',
-      code: approved.code!,
-      redirect_uri: REDIRECT,
-      client_id: clientId,
-      code_verifier: verifier,
-    });
-    expect(token.status).toBe(200);
+    expect(approved.code).toBeNull();
     expect(await isLive(held.id)).toBe(true);
   });
 
@@ -531,6 +513,159 @@ describe('an invitation in an administrator\u2019s browser', () => {
     expect(html).toContain('the same endpoint under different names');
     // Opening still spends nothing.
     expect(await isLive(held.id)).toBe(true);
+  });
+
+  /*
+   * A bound reconnect: the invitation names the worker and the logical
+   * connector it restores. Whatever OAuth client Claude presents — here a
+   * freshly registered one, as after a connector was deleted and re-added — is
+   * attached to that same connector at consent, so its Routines need nothing
+   * recreated and its health is read through the new client at once.
+   */
+  it('attaches a reconnect’s new client to the connector the invitation restores', async () => {
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    let connectorId = '';
+    let token = '';
+    try {
+      const admin = await getDb().get<{ id: string }>('SELECT id FROM users WHERE email = ?', [ADMIN_EMAIL]);
+      const now = new Date().toISOString();
+      connectorId = `cnr_reconnect_${crypto.randomBytes(4).toString('hex')}`;
+      await getDb().run(
+        `INSERT INTO connectors (id, account_id, resource, worker_id, label, created_at, updated_at)
+         VALUES (?, ?, '/mcp', ?, NULL, ?, ?)`,
+        [connectorId, `acct_${connectorId}`, workerId, now, now],
+      );
+      const generated = generateInvitationToken();
+      await createInvitation({
+        workerId,
+        tokenPrefix: generated.prefix,
+        tokenDigest: generated.digest,
+        createdByUserId: admin!.id,
+        kind: 'ADDITIONAL',
+        connectorId,
+      });
+      token = generated.plaintext;
+    } finally {
+      await closeDatabase();
+    }
+
+    const registered = await api<{ client_id: string }>('POST', '/oauth/register', {
+      body: { client_name: 'Claude (reconnected)', redirect_uris: [REDIRECT] },
+    });
+    const previous = clientId;
+    clientId = registered.body.client_id;
+    try {
+      const { challenge } = pkce();
+      const approved = await approve(challenge, {
+        cookie: `brain_invite=${encodeURIComponent(token)}`,
+        extra: { resource: `${BASE}/mcp` },
+      });
+      expect(approved.code).not.toBeNull();
+    } finally {
+      clientId = previous;
+    }
+
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    try {
+      const attached = await getDb().get<{ connector_id: string; source: string }>(
+        'SELECT connector_id, source FROM connector_clients WHERE client_id = ?',
+        [registered.body.client_id],
+      );
+      expect(attached).toEqual({ connector_id: connectorId, source: 'BOUND_INVITATION' });
+    } finally {
+      await closeDatabase();
+    }
+  });
+
+  /*
+   * A reconnect link for the Factory connector must not attach a client asking
+   * for another endpoint: a member re-adding their research connector while
+   * holding it is not reconnecting the Factory one.
+   */
+  it('does not attach a client for another endpoint to the connector a reconnect restores', async () => {
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    let token = '';
+    try {
+      const admin = await getDb().get<{ id: string }>('SELECT id FROM users WHERE email = ?', [ADMIN_EMAIL]);
+      const now = new Date().toISOString();
+      const connectorId = `cnr_factory_${crypto.randomBytes(4).toString('hex')}`;
+      await getDb().run(
+        `INSERT INTO connectors (id, account_id, resource, worker_id, label, created_at, updated_at)
+         VALUES (?, ?, '/mcp/factory', ?, NULL, ?, ?)`,
+        [connectorId, `acct_${connectorId}`, workerId, now, now],
+      );
+      const generated = generateInvitationToken();
+      await createInvitation({
+        workerId,
+        tokenPrefix: generated.prefix,
+        tokenDigest: generated.digest,
+        createdByUserId: admin!.id,
+        kind: 'ADDITIONAL',
+        connectorId,
+      });
+      token = generated.plaintext;
+    } finally {
+      await closeDatabase();
+    }
+
+    const registered = await api<{ client_id: string }>('POST', '/oauth/register', {
+      body: { client_name: 'Claude (research, re-added)', redirect_uris: [REDIRECT] },
+    });
+    const previous = clientId;
+    clientId = registered.body.client_id;
+    try {
+      const { challenge } = pkce();
+      const approved = await approve(challenge, {
+        cookie: `brain_invite=${encodeURIComponent(token)}`,
+        extra: { resource: `${BASE}/mcp` },
+      });
+      expect(approved.code).not.toBeNull();
+    } finally {
+      clientId = previous;
+    }
+
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    try {
+      const attached = await getDb().get('SELECT connector_id FROM connector_clients WHERE client_id = ?', [
+        registered.body.client_id,
+      ]);
+      expect(attached ?? null).toBeNull();
+    } finally {
+      await closeDatabase();
+    }
+  });
+
+  it('refuses an invitation for another worker on a client already attributed to a connector', async () => {
+    const registered = await api<{ client_id: string }>('POST', '/oauth/register', {
+      body: { client_name: 'Claude (attributed)', redirect_uris: [REDIRECT] },
+    });
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    try {
+      const now = new Date().toISOString();
+      const connectorId = `cnr_attr_${crypto.randomBytes(4).toString('hex')}`;
+      await getDb().run(
+        `INSERT INTO connectors (id, account_id, resource, worker_id, label, created_at, updated_at)
+         VALUES (?, ?, '/mcp', ?, NULL, ?, ?)`,
+        [connectorId, `acct_${connectorId}`, workerId, now, now],
+      );
+      await getDb().run(
+        `INSERT INTO connector_clients (client_id, connector_id, source, evidence, attached_at) VALUES (?, ?, 'OPERATOR', NULL, ?)`,
+        [registered.body.client_id, connectorId, now],
+      );
+    } finally {
+      await closeDatabase();
+    }
+    const stale = await inviteCookieFor(orphanWorkerId);
+    const previous = clientId;
+    clientId = registered.body.client_id;
+    try {
+      const { challenge } = pkce();
+      const refused = await approve(challenge, { cookie: stale.cookie, worker: orphanWorkerId });
+      expect(refused.code).toBeNull();
+      expect(refused.status).toBe(403);
+    } finally {
+      clientId = previous;
+    }
   });
 
   it('keeps the single-worker screen for somebody who is not signed in', async () => {
@@ -847,17 +982,19 @@ describe('the token exchange', () => {
   const refresh = (token: string): Promise<Reply<Record<string, string>>> =>
     exchange({ grant_type: 'refresh_token', refresh_token: token, client_id: clientId });
 
-  it('rotates a refresh token, and refuses its replay once the replacement has been used', async () => {
+  it('rotates a refresh token, and refuses its replay once the replacement has itself been redeemed', async () => {
     const original = (await firstPair())['refresh_token']!;
     const second = await refresh(original);
     expect(second.status).toBe(200);
-    // The client carried on with what it was given.
+    // The client carried on with what it was given, and rotated again later.
     expect((await callTool(second.body['access_token']!, 'brain_whoami')).isError).toBe(false);
+    const third = await refresh(second.body['refresh_token']!);
+    expect(third.status).toBe(200);
 
-    // A stolen copy is usable at most once, and its reuse is visible.
+    // A stolen copy of the first token is now provably stale, and its reuse is visible.
     const reused = await refresh(original);
     expect(reused.status).toBe(400);
-    expect((await callTool(second.body['access_token']!, 'brain_whoami')).isError).toBe(false);
+    expect((await callTool(third.body['access_token']!, 'brain_whoami')).isError).toBe(false);
 
     // Visible means recorded: a refused refresh is the step after which a
     // connector reports it "stopped working", and it used to leave no row.
@@ -871,41 +1008,39 @@ describe('the token exchange', () => {
   });
 
   /*
-   * The 2026-09-27 incident. A refresh committed on the server and its response
-   * never reached the client, so the client retried with the token it still
-   * held — which the rotation had already revoked — and the connector was dead
-   * for good. The retry is honoured once, inside a short window, and only while
-   * the pair it replaces has never been used.
+   * The 2026-09-27, 09-30, 10-01 and 10-03 incidents. A refresh committed on the
+   * server and its response never reached the client, so the client retried
+   * with the token it still held. The retry is answered with the *same*
+   * successor, as often as the reply is lost, so there is only ever one
+   * credential for the client to end up holding.
    */
-  it('honours one retry of a refresh whose response was lost, and nothing past it', async () => {
+  it('answers a refresh whose response was lost with the same successor, as often as it is lost', async () => {
     const original = (await firstPair())['refresh_token']!;
     const lost = await refresh(original); // committed; the client never saw it
     expect(lost.status).toBe(200);
 
     const retried = await refresh(original);
     expect(retried.status).toBe(200);
+    expect(retried.body['refresh_token']).toBe(lost.body['refresh_token']);
     expect((await callTool(retried.body['access_token']!, 'brain_whoami')).isError).toBe(false);
-    // The pair the client never received is dead, so there is one live chain.
-    expect((await callTool(lost.body['access_token']!, 'brain_whoami')).isError).toBe(true);
-    expect((await refresh(lost.body['refresh_token']!)).status).toBe(400);
+    const again = await refresh(original);
+    expect(again.body['refresh_token']).toBe(lost.body['refresh_token']);
 
-    // Once, not again: a second replay of the same token is refused.
-    expect((await refresh(original)).status).toBe(400);
-    // And the recovered chain carries on normally.
+    // The recovered chain carries on normally, and then the original is stale.
     const next = await refresh(retried.body['refresh_token']!);
     expect(next.status).toBe(200);
+    expect((await refresh(original)).status).toBe(400);
   });
 
-  it('leaves exactly one live chain when two refreshes race with one token', async () => {
+  it('gives two refreshes racing with one token one successor, which both sessions can use', async () => {
     const original = (await firstPair())['refresh_token']!;
     const [a, b] = await Promise.all([refresh(original), refresh(original)]);
-    const answered = [a, b].filter((reply) => reply.status === 200);
-    expect(answered.length).toBeGreaterThanOrEqual(1);
-    let live = 0;
-    for (const reply of answered) {
-      if (!(await callTool(reply.body['access_token']!, 'brain_whoami')).isError) live += 1;
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    expect(a.body['refresh_token']).toBe(b.body['refresh_token']);
+    for (const reply of [a, b]) {
+      expect((await callTool(reply.body['access_token']!, 'brain_whoami')).isError).toBe(false);
     }
-    expect(live).toBe(1);
   });
 
   it('never lets an access token be used as a refresh token', async () => {

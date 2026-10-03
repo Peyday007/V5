@@ -256,6 +256,8 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
             set <worker> --families A,B [--repositories o/r,...]
                    [--capabilities a,b] --reason "why"
             clear <worker> | retire <worker> --reason "why"
+  connectors show | derive | attach <brnc_…> <trig_…>
+             reconnect <cnr_…|trig_…> <user|email>
   projects  list | create <name>
   access    show <worker> | grant <worker> <project> | revoke <worker> <project>
   queue     list <project>
@@ -827,6 +829,176 @@ async function main(): Promise<void> {
       console.log(`  expires ${view.expiresAt}. The link itself is not printed.`);
       console.log('  To spend it: sign in to this Brain in the browser Claude uses, then');
       console.log('  reconnect the connector from Claude. Consent finds this invitation.');
+      break;
+    }
+    /*
+     * The one operator read of every logical connector — one Claude account at
+     * one Brain endpoint — and its canonical health, from
+     * `services/fleet/connectorHealth.ts`. This replaces reading OAuth rows by
+     * hand every time something breaks. Ids, times and categories only: no
+     * token, no digest, no prefix.
+     */
+    case 'connectors show': {
+      const { allConnectorHealth } = await import('../server/services/fleet/connectorHealth.ts');
+      const { listRoutines, listAccounts } = await import('../server/repos/fleet.ts');
+      const { listClients } = await import('../server/repos/oauth.ts');
+      const { listConnectorClients } = await import('../server/repos/connectors.ts');
+      const accounts = new Map((await listAccounts()).map((a) => [a.id, a.name]));
+      const routines = await listRoutines();
+      const names = new Map((await listWorkers({ includeArchived: true })).map((w) => [w.id, workerIdentity(w)]));
+      const lastCheckIn = async (routineIds: string[]): Promise<string | null> => {
+        if (routineIds.length === 0) return null;
+        const row = await getDb().get<{ at: string | null }>(
+          `SELECT MAX(observed_at) AS at FROM worker_sessions WHERE routine_id IN (${routineIds.map(() => '?').join(', ')})`,
+          routineIds,
+        );
+        return row?.at ?? null;
+      };
+      const noShows = async (routineIds: string[]): Promise<number> => {
+        if (routineIds.length === 0) return 0;
+        const row = await getDb().get<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'DISPATCH_NO_SHOW'
+            AND routine_id IN (${routineIds.map(() => '?').join(', ')})
+            AND at > COALESCE((SELECT MAX(observed_at) FROM worker_sessions WHERE routine_id IN (${routineIds.map(() => '?').join(', ')})), '')`,
+          [...routineIds, ...routineIds],
+        );
+        return Number(row?.n ?? 0);
+      };
+      for (const health of await allConnectorHealth()) {
+        const mine = routines.filter((r) => r.connectorId === health.connectorId);
+        const ids = mine.map((r) => r.id);
+        console.log(`CONNECTOR ${health.connectorId}`);
+        console.log(`  account   ${accounts.get(health.accountId) ?? '?'} (${health.accountId})`);
+        console.log(`  endpoint  ${health.resource}`);
+        console.log(`  worker    ${health.workerId ? `${names.get(health.workerId) ?? '?'}(${health.workerId})` : '—'}`);
+        console.log(`  routines  ${mine.map((r) => `${r.name} ${r.routineRef} ${r.state}`).join('; ') || '—'}`);
+        console.log(`  HEALTH    ${health.state} ${health.reason}${health.humanActionRequired ? '  — HUMAN ACTION REQUIRED' : ''}`);
+        console.log(`  why       ${health.detail}`);
+        console.log(`  client    current=${health.currentClientId ?? '—'} all=${health.clientIds.join(',') || '—'}`);
+        console.log(
+          `  times     registered=${health.lastRegistrationAt ?? '—'} grant=${health.lastGrantAt ?? '—'} ` +
+            `refresh=${health.lastRefreshAt ?? '—'} recovered=${health.lastRecoveredRefreshAt ?? '—'} ` +
+            `access-use=${health.lastAccessUseAt ?? '—'}`,
+        );
+        console.log(
+          `  refusal   ${health.lastRefusal ? `${health.lastRefusal.reason} at ${health.lastRefusal.at}` : '—'}`,
+        );
+        const fired = mine.map((r) => r.lastFiredAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
+        console.log(
+          `  activity  last-fire=${fired ?? '—'} last-check-in=${(await lastCheckIn(ids)) ?? '—'} ` +
+            `real-no-shows=${await noShows(ids)} auth-no-shows-since-anomaly=${health.authNoShowsSinceAnomaly}`,
+        );
+      }
+      const attached = new Set((await listConnectorClients()).map((c) => c.clientId));
+      const unbound = routines.filter((r) => r.state !== 'RETIRED' && !r.connectorId);
+      const orphans = (await listClients()).filter((c) => !attached.has(c.clientId) && c.disabledAt === null);
+      console.log('');
+      console.log(`UNATTRIBUTED routines=${unbound.length} clients=${orphans.length}`);
+      for (const r of unbound) console.log(`  routine ${r.routineRef} ${r.name} ${r.state} account=${accounts.get(r.accountId) ?? r.accountId}`);
+      console.log('  A Routine binds to its connector from an observed arrival; where that cannot be proven,');
+      console.log('  `connectors attach <brnc_…> <trig_…>` is the one explicit binding.');
+      break;
+    }
+    /*
+     * The explicit binding, for a connector Brain could not attribute from
+     * evidence: this OAuth client is the connector this Routine uses. The
+     * connector is (the Routine's account, the client's endpoint).
+     */
+    case 'connectors attach': {
+      const actor = await administrator();
+      const clientId = rest[0] ?? fail('Name the OAuth client (brnc_…).');
+      const ref = rest[1] ?? fail('Name the Routine (trig_…) that uses it.');
+      const { getRoutineByRef } = await import('../server/repos/fleet.ts');
+      const { attachClient, bindRoutineConnector, connectorClient, endpointOf, ensureConnector, getConnector } =
+        await import('../server/repos/connectors.ts');
+      const routine = await getRoutineByRef(ref);
+      if (!routine) fail(`No Routine registered as ${ref}.`);
+      const token = await getDb().get<{ resource: string | null; worker_id: string }>(
+        'SELECT resource, worker_id FROM oauth_tokens WHERE client_id = ? ORDER BY created_at DESC LIMIT 1',
+        [clientId],
+      );
+      const existing = await connectorClient(clientId);
+      const connector = existing
+        ? await getConnector(existing.connectorId)
+        : await ensureConnector({
+            accountId: routine.accountId,
+            resource: endpointOf(token?.resource ?? null),
+            workerId: token?.worker_id ?? routine.workerId,
+          });
+      if (!connector) fail('The connector could not be resolved.');
+      if (connector.accountId !== routine.accountId) {
+        fail(`${clientId} is already ${connector.id} in another account; a client is not re-pointed.`);
+      }
+      const outcome = existing
+        ? 'ALREADY'
+        : await attachClient({ clientId, connectorId: connector.id, source: 'OPERATOR', evidence: `attached by ${actor.id}` });
+      const bound = routine.connectorId === connector.id || (await bindRoutineConnector(routine.id, connector.id));
+      console.log(`  ${clientId} -> ${connector.id} (${outcome}); ${ref} -> ${connector.id} (${bound ? 'bound' : `already bound to ${routine.connectorId}`})`);
+      break;
+    }
+    case 'connectors derive': {
+      await administrator();
+      const { reconcileConnectorBindings } = await import('../server/services/fleet/connectorBinding.ts');
+      const result = await reconcileConnectorBindings();
+      console.log(`  attached=${result.attached} routines-bound=${result.routinesBound} ambiguous=${result.ambiguous.join(',') || '—'}`);
+      break;
+    }
+    /*
+     * One bound reconnect, for a connector proven to need consent.
+     *
+     * Everything Brain can prepare is prepared: the invitation names the
+     * worker, the member and the logical connector, so the consent screen
+     * offers that worker and nothing else, and whatever OAuth client Claude
+     * presents is attached to the same connector — same Routines, no trigger,
+     * secret or Routine recreated. The link is not printed (§17): the member
+     * reconnects from Claude while signed in to this Brain, and consent finds
+     * the one live invitation bound to them. Older reconnect links for this
+     * connector are withdrawn, because two live links would leave the worker a
+     * guess.
+     */
+    case 'connectors reconnect': {
+      const actor = await administrator();
+      const target = rest[0] ?? fail('Name the connector (cnr_…) or one of its Routines (trig_…).');
+      const who = rest[1] ?? fail('Name the user id or address of the person whose Claude account this is.');
+      const { getRoutineByRef } = await import('../server/repos/fleet.ts');
+      const { getConnector } = await import('../server/repos/connectors.ts');
+      const { connectorHealth } = await import('../server/services/fleet/connectorHealth.ts');
+      const { createInvitation, liveInvitationsForMember, revokeInvitation } = await import('../server/repos/invitations.ts');
+      const { generateInvitationToken } = await import('../server/services/identity/secrets.ts');
+      const connectorId = target.startsWith('trig_') ? (await getRoutineByRef(target))?.connectorId ?? null : target;
+      const connector = connectorId ? await getConnector(connectorId) : null;
+      if (!connector) fail(`No connector for ${target}. Attribute it first: \`connectors attach <brnc_…> <trig_…>\`.`);
+      if (!connector.workerId) fail(`${connector.id} has no worker observed yet; nothing can be bound.`);
+      const person = (await listUsers()).find((one) => one.id === who || one.email === who);
+      if (!person) fail(`No user with id or address ${who}.`);
+      const health = await connectorHealth(connector.id);
+      console.log(`  ${connector.id} is ${health?.state ?? '?'} ${health?.reason ?? ''}`);
+      if (health && !health.humanActionRequired) {
+        console.log('  It does not need consent: Brain will recover it without a person. Issuing anyway, as asked.');
+      }
+      const live = await liveInvitationsForMember(person.id);
+      for (const old of live.filter((one) => one.connectorId === connector.id)) await revokeInvitation(old.id);
+      const others = live.filter((one) => one.connectorId !== connector.id);
+      const token = generateInvitationToken();
+      const invitation = await createInvitation({
+        workerId: connector.workerId,
+        tokenPrefix: token.prefix,
+        tokenDigest: token.digest,
+        createdByUserId: actor.id,
+        kind: 'ADDITIONAL',
+        intendedUserId: person.id,
+        connectorId: connector.id,
+        note: `reconnect ${connector.id}`,
+      });
+      console.log(`  issued ${invitation.id} for ${person.displayName} (${person.id}), worker ${connector.workerId}, expires ${invitation.expiresAt}.`);
+      console.log('  The link itself is not printed. The one human action: sign in to this Brain in the browser');
+      console.log('  Claude uses, reconnect the connector from Claude, and approve the worker already chosen.');
+      if (others.length > 0) {
+        console.log(
+          `  NOTE ${person.displayName} holds ${others.length} other live invitation(s) (${others.map((o) => o.id).join(', ')}); ` +
+            'consent finds a bound invitation only when exactly one is live — withdraw the others first.',
+        );
+      }
       break;
     }
     case 'capacity show': {

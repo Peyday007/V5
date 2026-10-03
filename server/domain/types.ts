@@ -4228,6 +4228,8 @@ export interface WorkerInvitationRow {
   note: string | null;
   kind: WorkerInvitationKind;
   intended_user_id: string | null;
+  /** The logical connector a reconnect invitation restores. Migration 100. */
+  connector_id?: string | null;
 }
 
 /**
@@ -4251,6 +4253,8 @@ export interface WorkerInvitation {
   kind: WorkerInvitationKind;
   /** The member this link was issued for, or null when anybody holding it may spend it. */
   intendedUserId: string | null;
+  /** The logical connector this link reconnects, or null for an ordinary link. */
+  connectorId: string | null;
 }
 
 /**
@@ -5031,7 +5035,18 @@ export interface OAuthTokenRow {
   last_used_at: string | null;
   revoked_at: string | null;
   parent_token_id: string | null;
+  /** The authorization every token in a lineage descends from. Migration 100. */
+  grant_id: string | null;
+  revoked_reason: OAuthRevokedReason | null;
+  first_used_at: string | null;
 }
+
+/**
+ * Why a token stopped being live. ROTATED: presented and replaced. SUPERSEDED:
+ * replaced by a lost-reply recovery. EXPLICIT: withdrawn by a person, a disabled
+ * worker or a revoked grant — the only one a refresh can never come back from.
+ */
+export type OAuthRevokedReason = 'ROTATED' | 'SUPERSEDED' | 'EXPLICIT';
 
 export interface OAuthToken {
   id: string;
@@ -5046,6 +5061,9 @@ export interface OAuthToken {
   lastUsedAt: string | null;
   revokedAt: string | null;
   parentTokenId: string | null;
+  grantId: string | null;
+  revokedReason: OAuthRevokedReason | null;
+  firstUsedAt: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -5196,6 +5214,7 @@ export interface FleetRoutineRow {
   consecutive_failures: number;
   consecutive_no_shows: number;
   no_shows_forgiven_at: string | null;
+  connector_id?: string | null;
   total_fires: number;
   total_refusals: number;
   last_fired_at: string | null;
@@ -5231,6 +5250,8 @@ export interface FleetRoutine {
    * of QUARANTINED, and only ever forward.
    */
   noShowsForgivenAt: string | null;
+  /** The logical connector this Routine's sessions authenticate through. Migration 100. */
+  connectorId: string | null;
   totalFires: number;
   totalRefusals: number;
   lastFiredAt: string | null;

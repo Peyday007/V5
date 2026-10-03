@@ -21,6 +21,7 @@ import type { FleetAccount, FleetPolicy } from '../../domain/types.ts';
 import { getWorker, getWorkerRouting, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { derivedFamiliesFrom } from '../bins/routing.ts';
 import { latestAllowanceReports } from '../../repos/allowance.ts';
+import { connectorHealthByRoutine } from '../fleet/connectorHealth.ts';
 
 /**
  * How long a sent activation counts as in flight.
@@ -133,6 +134,10 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
     latestAllowanceReports(),
   ]);
   const readingsByRoutine = await deliveryReadings();
+  // Read defensively: a failure here is an unknown, which routes as it always did.
+  const healthByRoutine = await connectorHealthByRoutine(now.getTime()).catch(
+    () => new Map<string, { state: string; reason: string }>(),
+  );
 
   const accountById = new Map<string, FleetAccount>(accounts.map((a) => [a.id, a]));
   const perAccount = new Map<string, number>();
@@ -173,6 +178,7 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
     candidates.push({
       routine,
       account,
+      connectorHealth: healthByRoutine.get(routine.id) ?? null,
       servesFamilies: routine.workerId
         ? scopeByWorker.get(routine.workerId)?.families ?? null
         : null,

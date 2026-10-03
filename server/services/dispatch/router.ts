@@ -164,6 +164,13 @@ export interface RoutingCandidate {
   routine: FleetRoutine;
   account: FleetAccount;
   /**
+   * The connector this Routine's sessions authenticate through, read from
+   * `services/fleet/connectorHealth.ts` — the one answer to whether it can
+   * authenticate now. Absent or null is unknown and eligible: a hand-built
+   * candidate predates it, and an unattributed connector can only waste a fire.
+   */
+  connectorHealth?: { state: string; reason: string } | null;
+  /**
    * The workload families the worker this Routine is bound to may be handed, or
    * `null` when the Routine resolves to no worker and the question cannot be
    * answered.
@@ -324,6 +331,16 @@ export function surfaceIneligibility(candidate: RoutingCandidate): string | null
   if (routine.workerId === null) return 'bound to no worker';
   if (!candidate.workerActive) return 'bound worker is disabled or archived';
   if (candidate.servesProjects.length === 0) return 'bound worker holds no project membership';
+  /*
+   * A connector proven unable to authenticate is not fired. Every fire would
+   * start a session with no usable Brain connector, never arrive, and spend an
+   * activation to learn what the token rows already say. It comes back by
+   * itself when consent is renewed — the health is derived, so nothing has to
+   * re-enable it.
+   */
+  if (candidate.connectorHealth?.state === 'HUMAN_REAUTH_REQUIRED') {
+    return `connector needs re-authorization (${candidate.connectorHealth.reason})`;
+  }
   return null;
 }
 

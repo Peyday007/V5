@@ -93,6 +93,7 @@ function mapRoutine(row: FleetRoutineRow): FleetRoutine {
     consecutiveFailures: row.consecutive_failures,
     consecutiveNoShows: row.consecutive_no_shows,
     noShowsForgivenAt: row.no_shows_forgiven_at ?? null,
+    connectorId: row.connector_id ?? null,
     totalFires: row.total_fires,
     totalRefusals: row.total_refusals,
     lastFiredAt: row.last_fired_at,

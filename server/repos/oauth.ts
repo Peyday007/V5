@@ -14,9 +14,16 @@
  * deliberately absent from the token, so there is no path by which an approver
  * could become the identity a tool call runs as.
  */
+import crypto from 'node:crypto';
 import { getDb } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
-import { constantTimeEquals, digestSecret } from '../services/identity/secrets.ts';
+import {
+  constantTimeEquals,
+  deriveOAuthSuccessor,
+  digestSecret,
+  generateOAuthToken,
+  type GeneratedOAuthToken,
+} from '../services/identity/secrets.ts';
 import type {
   OAuthAuthorizationCode,
   OAuthAuthorizationCodeRow,
@@ -105,6 +112,9 @@ export function mapToken(row: OAuthTokenRow): OAuthToken {
     lastUsedAt: row.last_used_at,
     revokedAt: row.revoked_at,
     parentTokenId: row.parent_token_id,
+    grantId: row.grant_id ?? null,
+    revokedReason: row.revoked_reason ?? null,
+    firstUsedAt: row.first_used_at ?? null,
   };
 }
 
@@ -186,6 +196,23 @@ export async function clientSecretMatches(clientId: string, presented: string | 
   if (row.secret_digest === null) return presented === null || presented === '';
   if (!presented) return false;
   return constantTimeEquals(digestSecret(presented), row.secret_digest);
+}
+
+/**
+ * The client a token request authenticates as, or null — one read.
+ *
+ * `getClientByClientId` followed by `clientSecretMatches` read the same row
+ * twice on the token endpoint's critical path. This is both answers at once.
+ */
+export async function authenticateClient(
+  clientId: string,
+  presented: string | null,
+): Promise<OAuthClient | null> {
+  const row = await getDb().get<OAuthClientRow>('SELECT * FROM oauth_clients WHERE client_id = ?', [clientId]);
+  if (!row || row.disabled_at !== null) return null;
+  if (row.secret_digest === null) return presented === null || presented === '' ? mapClient(row) : null;
+  if (!presented) return null;
+  return constantTimeEquals(digestSecret(presented), row.secret_digest) ? mapClient(row) : null;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -287,33 +314,162 @@ export interface IssueTokenInput {
   resource: string | null;
   ttlMs: number;
   parentTokenId?: string | null;
+  /** The authorization this token descends from; a fresh grant's refresh token is its own. */
+  grantId?: string | null;
+  /** Supplied when the caller needs the id before the row exists (a grant naming itself). */
+  id?: string;
+  now?: number;
 }
 
+/**
+ * Write one token and answer from the values written.
+ *
+ * No read-back. Issuance sits on the token endpoint's critical path, the one a
+ * client times out on, and every extra round trip is one more chance for a slow
+ * database to turn a committed credential into a reply nobody received.
+ */
 export async function issueToken(input: IssueTokenInput): Promise<OAuthToken> {
-  const id = newId('oat');
-  const now = Date.now();
+  const id = input.id ?? newId('oat');
+  const now = input.now ?? Date.now();
+  const row: OAuthTokenRow = {
+    id,
+    token_digest: input.tokenDigest,
+    token_prefix: input.tokenPrefix,
+    kind: input.kind,
+    client_id: input.clientId,
+    worker_id: input.workerId,
+    scope: input.scope,
+    resource: input.resource,
+    created_at: new Date(now).toISOString(),
+    expires_at: new Date(now + input.ttlMs).toISOString(),
+    last_used_at: null,
+    revoked_at: null,
+    parent_token_id: input.parentTokenId ?? null,
+    grant_id: input.grantId ?? (input.kind === 'REFRESH' && !input.parentTokenId ? id : null),
+    revoked_reason: null,
+    first_used_at: null,
+  };
   await getDb().run(
     `INSERT INTO oauth_tokens
        (id, token_digest, token_prefix, kind, client_id, worker_id, scope, resource,
-        created_at, expires_at, last_used_at, revoked_at, parent_token_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)`,
+        created_at, expires_at, last_used_at, revoked_at, parent_token_id, grant_id,
+        revoked_reason, first_used_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL, NULL)`,
     [
-      id,
-      input.tokenDigest,
-      input.tokenPrefix,
-      input.kind,
-      input.clientId,
-      input.workerId,
-      input.scope,
-      input.resource,
-      new Date(now).toISOString(),
-      new Date(now + input.ttlMs).toISOString(),
-      input.parentTokenId ?? null,
+      row.id,
+      row.token_digest,
+      row.token_prefix,
+      row.kind,
+      row.client_id,
+      row.worker_id,
+      row.scope,
+      row.resource,
+      row.created_at,
+      row.expires_at,
+      row.parent_token_id,
+      row.grant_id,
     ],
   );
-  const row = await getDb().get<OAuthTokenRow>('SELECT * FROM oauth_tokens WHERE id = ?', [id]);
-  if (!row) throw new Error('The OAuth token disappeared immediately after being written.');
   return mapToken(row);
+}
+
+/** The values a client is handed: never stored, only their digests are. */
+export interface MintedPair {
+  access: string;
+  refresh: string;
+  scope: string;
+  refreshTokenId: string;
+  grantId: string;
+}
+
+/**
+ * A fresh grant: the refresh token that roots it and an access token minted from
+ * it. Used for the authorization-code exchange, where nothing came before.
+ */
+export async function issueGrant(input: {
+  clientId: string;
+  workerId: string;
+  scope: string;
+  resource: string | null;
+  now?: number;
+}): Promise<MintedPair> {
+  const refreshId = newId('oat');
+  return mintPair({
+    ...input,
+    refresh: generateOAuthToken(),
+    refreshId,
+    parentTokenId: null,
+    grantId: refreshId,
+  });
+}
+
+async function mintPair(input: {
+  clientId: string;
+  workerId: string;
+  scope: string;
+  resource: string | null;
+  refresh: GeneratedOAuthToken;
+  refreshId?: string;
+  parentTokenId: string | null;
+  grantId: string;
+  now?: number;
+}): Promise<MintedPair> {
+  const refreshRow = await issueToken({
+    id: input.refreshId,
+    kind: 'REFRESH',
+    tokenPrefix: input.refresh.prefix,
+    tokenDigest: input.refresh.digest,
+    clientId: input.clientId,
+    workerId: input.workerId,
+    scope: input.scope,
+    resource: input.resource,
+    ttlMs: REFRESH_TOKEN_TTL_MS,
+    parentTokenId: input.parentTokenId,
+    grantId: input.grantId,
+    now: input.now,
+  });
+  const access = await mintAccess({
+    refreshId: refreshRow.id,
+    grantId: input.grantId,
+    clientId: input.clientId,
+    workerId: input.workerId,
+    scope: input.scope,
+    resource: input.resource,
+    now: input.now,
+  });
+  return {
+    access,
+    refresh: input.refresh.plaintext,
+    scope: input.scope,
+    refreshTokenId: refreshRow.id,
+    grantId: input.grantId,
+  };
+}
+
+async function mintAccess(input: {
+  refreshId: string;
+  grantId: string;
+  clientId: string;
+  workerId: string;
+  scope: string;
+  resource: string | null;
+  now?: number;
+}): Promise<string> {
+  const access = generateOAuthToken();
+  await issueToken({
+    kind: 'ACCESS',
+    tokenPrefix: access.prefix,
+    tokenDigest: access.digest,
+    clientId: input.clientId,
+    workerId: input.workerId,
+    scope: input.scope,
+    resource: input.resource,
+    ttlMs: ACCESS_TOKEN_TTL_MS,
+    parentTokenId: input.refreshId,
+    grantId: input.grantId,
+    now: input.now,
+  });
+  return access.plaintext;
 }
 
 /**
@@ -363,124 +519,264 @@ export async function findPresentedToken(
   return mapToken(row);
 }
 
-/*
- * There is no clock on the lost-response recovery, and there were two.
- *
- * Production, 2026-09-27 07:27Z: a refresh took about thirty seconds to commit,
- * the client never received the response, and it retried with the token the
- * rotation had just revoked. Five minutes was the first bound. Production,
- * 2026-09-30: the `/mcp/factory` rotation took ~84 s, and the retry came from
- * the Routine's next session 68 minutes later — so the bound became 24 hours.
- * Production, 2026-10-01 21:40Z: the cloud-brain connector's rotation took
- * ~117 s, Claude gave up, marked the connector as needing authorization and did
- * not retry on its own; the only retry was the person pressing *reconnect* at
- * 2026-10-03 04:58Z — 31 hours later — refused OUTSIDE_RETRY_WINDOW over a
- * successor and an access token that had never been used.
- *
- * Each bound was a guess about when a client retries, and the client decides
- * that. What makes recovery safe was never the clock: the single successor and
- * every access token minted from it must never have been used, so the client
- * provably never received them. Under those conditions the presented token is still the client's
- * current credential in every sense but the row, so it is honoured for as long
- * as the token itself would have lived — its own `expires_at`, checked below
- * as NOT_LIVE. A replay after any successor was used is still REUSED, which is
- * the replay detection this keeps.
- */
+/* ------------------------------------------------------------------------- */
+/* Rotation                                                                   */
+/* ------------------------------------------------------------------------- */
 
-export type RefreshRotation<T> =
-  | { ok: true; recovered: boolean; minted: T }
-  | { ok: false; reason: 'NOT_LIVE' | 'REUSED' };
+/*
+ * A refresh is a state, not a clock.
+ *
+ * Four production incidents (2026-09-27, 09-30, 10-01, 10-03) were each fixed by
+ * moving a clock: five minutes, twenty-four hours, the token's own life, then
+ * "any number of lost replies". Each was a guess about when a client retries,
+ * and each left the same shape behind — a rotation creates a *new random*
+ * successor, so a second answer to one request is a second credential, and the
+ * client may keep the one Brain then retires.
+ *
+ * The successor is derived now (`deriveOAuthSuccessor`): presenting the same
+ * refresh token again yields the same successor, so a lost reply, a retry an
+ * hour later, a restart in between and two sessions racing all converge on one
+ * logical credential. What decides whether the presenter still deserves it is
+ * the grant's own lineage, read in one statement:
+ *
+ *   - anything newer in the grant was explicitly revoked      -> REVOKED
+ *   - a newer refresh token was itself presented (rotated)    -> REUSED
+ *   - a newer token has been in use for longer than a race    -> REUSED
+ *   - otherwise the presenter is the client that never got,
+ *     or got and shares, the answer                           -> re-delivered
+ *
+ * "Newer was presented" and "newer has been in use" are the two proofs that the
+ * client moved on; nothing else is. The one clock left is
+ * CONCURRENT_REFRESH_LEEWAY_MS, and it applies only to the second proof: two
+ * sessions of one Routine refreshing on the same expiry can each start using
+ * the answer before the other's request commits, and the slowest rotation
+ * production has measured took ~117 s to commit. Five minutes is that, with
+ * room. A successor that has been in use for longer than that, and is then
+ * shadowed by its predecessor, is a replay.
+ */
+export const CONCURRENT_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
+
+export type RefreshOutcome = 'ROTATED' | 'REDELIVERED' | 'RECOVERED';
+export type RefreshRefusal = 'NOT_LIVE' | 'REUSED' | 'REVOKED';
+
+export type RefreshRotation =
+  | { ok: true; outcome: RefreshOutcome; minted: MintedPair }
+  | { ok: false; reason: RefreshRefusal };
+
+const rotationKeys = new WeakMap<object, Promise<Buffer>>();
 
 /**
- * Rotate a refresh token — atomically, and survivably when the answer is lost.
+ * The key successors are derived under.
  *
- * One transaction: the presented token and its access tokens are revoked by a
- * guarded write, and `mint` issues the replacement pair (its refresh token
- * carrying the presented one as its parent). A failure anywhere rolls all of
- * it back, so a rotation never leaves the client's token revoked with nothing
- * issued in its place.
- *
- * A presented token that is already revoked is refused, with one exception
- * that exists for the lost-response case and nothing else. It is honoured, once,
- * when every one of these holds: the token has not reached its own expiry;
- * the revocation was a rotation, so it has successors; exactly one of them is
- * still live, so nothing explicitly revoked the chain; and no successor and no
- * access token minted from any of them has ever been used, so the client never
- * received a reply. The live successor is then revoked and a new pair issued in
- * its place. Anything else — a replay after any replacement was used, an
- * explicit revocation, an expired token — is refused, which is the replay
- * detection this keeps.
- *
- * It is not spent after one use. Production, 2026-10-01: the `/mcp` Factory
- * connector's rotation at 13:48 lost its reply, the retry at 20:04 was
- * recovered and *its* reply was lost too, and the third retry, on 10-03, was
- * refused — over two successors and two access tokens that nobody had ever
- * presented. A count of recoveries says nothing about theft; a used token does.
+ * `BRAIN_OAUTH_ROTATION_KEY` when the deployment sets one; otherwise one row,
+ * created on first use and then read for ever. Replacing it costs nothing but
+ * determinism for in-flight chains — a successor derived under the old key no
+ * longer matches, and the rotation falls back to superseding it, which is the
+ * recovery path anyway.
  */
-export async function rotateRefreshToken<T>(input: {
-  tokenId: string;
-  now?: number;
-  mint: (parentTokenId: string) => Promise<T>;
-}): Promise<RefreshRotation<T>> {
+export function rotationKey(): Promise<Buffer> {
   const db = getDb();
-  return db.transaction(async () => {
-    const now = input.now ?? Date.now();
-    const at = new Date(now).toISOString();
-    const rotated = await db.run(
-      `UPDATE oauth_tokens SET revoked_at = ?
-        WHERE id = ? AND kind = 'REFRESH' AND revoked_at IS NULL AND expires_at > ?`,
-      [at, input.tokenId, at],
-    );
-    if (rotated.changes === 1) {
-      await revokeAccessMintedFrom(input.tokenId, at);
-      return { ok: true as const, recovered: false, minted: await input.mint(input.tokenId) };
+  const cached = rotationKeys.get(db);
+  if (cached) return cached;
+  const loading = (async (): Promise<Buffer> => {
+    const fromEnv = process.env['BRAIN_OAUTH_ROTATION_KEY'];
+    if (fromEnv && fromEnv.length >= 16) {
+      return crypto.createHash('sha256').update(fromEnv, 'utf8').digest();
     }
-
-    const presented = await db.get<OAuthTokenRow>('SELECT * FROM oauth_tokens WHERE id = ?', [input.tokenId]);
-    if (!presented || presented.kind !== 'REFRESH' || presented.revoked_at === null || presented.expires_at <= at) {
-      return { ok: false as const, reason: 'NOT_LIVE' as const };
+    if (fromEnv) {
+      // Said out loud rather than silently ignored: instances that disagree
+      // about the key would each supersede the other's successors.
+      console.warn('[oauth] BRAIN_OAUTH_ROTATION_KEY is shorter than 16 characters and is ignored; using the stored key.');
     }
-    const successors = await db.all<OAuthTokenRow>(
-      `SELECT * FROM oauth_tokens WHERE parent_token_id = ? AND kind = 'REFRESH' ORDER BY created_at`,
-      [input.tokenId],
-    );
-    if (successors.length === 0) return { ok: false as const, reason: 'NOT_LIVE' as const };
-    // Every token this chain has ever minted must be untouched: one used by
-    // anybody means the client (or a thief) did receive a reply, and that is
-    // the replay detection this keeps. Earlier recoveries leave revoked,
-    // unused successors behind — a reply that was lost again — and those do not
-    // count against it. Exactly one successor must still be live, so a chain
-    // somebody explicitly revoked stays revoked.
-    if (successors.some((one) => one.last_used_at !== null)) {
-      return { ok: false as const, reason: 'REUSED' as const };
+    const read = async (): Promise<string | null> =>
+      (await db.get<{ key_hex: string }>(
+        "SELECT key_hex FROM oauth_rotation_keys WHERE id = 'primary'",
+      ))?.key_hex ?? null;
+    let hex = await read();
+    if (!hex) {
+      await db.run(
+        `INSERT INTO oauth_rotation_keys (id, key_hex, created_at) VALUES ('primary', ?, ?)
+         ON CONFLICT (id) DO NOTHING`,
+        [crypto.randomBytes(32).toString('hex'), nowIso()],
+      );
+      hex = await read();
     }
-    const live = successors.filter((one) => one.revoked_at === null);
-    if (live.length !== 1) return { ok: false as const, reason: 'REUSED' as const };
-    const successor = live[0]!;
-    const used = await db.get<{ id: string }>(
-      `SELECT id FROM oauth_tokens
-        WHERE kind = 'ACCESS' AND last_used_at IS NOT NULL
-          AND parent_token_id IN (${successors.map(() => '?').join(', ')})
-        LIMIT 1`,
-      successors.map((one) => one.id),
-    );
-    if (used) return { ok: false as const, reason: 'REUSED' as const };
-
-    const retired = await db.run(
-      'UPDATE oauth_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL AND last_used_at IS NULL',
-      [at, successor.id],
-    );
-    if (retired.changes !== 1) return { ok: false as const, reason: 'REUSED' as const };
-    await revokeAccessMintedFrom(successor.id, at);
-    return { ok: true as const, recovered: true, minted: await input.mint(input.tokenId) };
-  });
+    if (!hex) throw new Error('The OAuth rotation key could not be established.');
+    return Buffer.from(hex, 'hex');
+  })();
+  rotationKeys.set(db, loading);
+  loading.catch(() => rotationKeys.delete(db));
+  return loading;
 }
 
-async function revokeAccessMintedFrom(refreshId: string, at: string): Promise<void> {
-  await getDb().run(
-    `UPDATE oauth_tokens SET revoked_at = ? WHERE parent_token_id = ? AND kind = 'ACCESS' AND revoked_at IS NULL`,
-    [at, refreshId],
-  );
+/**
+ * Rotate a refresh token, idempotently and atomically.
+ *
+ * One transaction. A live token is revoked as ROTATED by a guarded write and its
+ * derived successor written with a fresh access token. A token already rotated
+ * is judged by its grant's lineage (above) and, when the presenter is still the
+ * client, answered with the *same* successor and a fresh access token — no new
+ * refresh credential, so there is never a second live answer to choose between.
+ * A chain rotated before successors were derived (or under another key) has a
+ * random successor nobody can re-send: that one is superseded and the derived
+ * successor issued in its place, once, on the same lineage conditions.
+ */
+export async function rotateRefreshToken(input: {
+  tokenId: string;
+  presentedSecret: string;
+  now?: number;
+  /** Failure injection for tests: called inside the transaction at each stage. */
+  inject?: (stage: 'REVOKED' | 'MINTED') => Promise<void>;
+}): Promise<RefreshRotation> {
+  try {
+    return await rotateWithin(input);
+  } catch (error) {
+    if (error instanceof RecoveryRaced) return { ok: false, reason: 'REUSED' };
+    throw error;
+  }
+}
+
+/** A concurrent rotation moved a legacy successor between the read and the supersede. */
+class RecoveryRaced extends Error {
+  constructor() {
+    super('A concurrent rotation moved the chain during recovery.');
+  }
+}
+
+async function rotateWithin(input: {
+  tokenId: string;
+  presentedSecret: string;
+  now?: number;
+  inject?: (stage: 'REVOKED' | 'MINTED') => Promise<void>;
+}): Promise<RefreshRotation> {
+  const key = await rotationKey();
+  const db = getDb();
+  return db.transaction(async (): Promise<RefreshRotation> => {
+    const now = input.now ?? Date.now();
+    const at = new Date(now).toISOString();
+    let presented = await db.get<OAuthTokenRow>('SELECT * FROM oauth_tokens WHERE id = ?', [input.tokenId]);
+    if (!presented || presented.kind !== 'REFRESH' || presented.expires_at <= at) {
+      return { ok: false, reason: 'NOT_LIVE' };
+    }
+    const successor = deriveOAuthSuccessor(key, presented.id, input.presentedSecret);
+    const grantId = presented.grant_id ?? presented.id;
+    const base = {
+      clientId: presented.client_id,
+      workerId: presented.worker_id,
+      scope: presented.scope,
+      resource: presented.resource,
+      grantId,
+      now,
+    };
+
+    if (presented.revoked_at === null) {
+      const rotated = await db.run(
+        `UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'ROTATED'
+          WHERE id = ? AND kind = 'REFRESH' AND revoked_at IS NULL AND expires_at > ?`,
+        [at, presented.id, at],
+      );
+      if (rotated.changes === 1) {
+        await input.inject?.('REVOKED');
+        const minted = await mintPair({ ...base, refresh: successor, parentTokenId: presented.id });
+        await input.inject?.('MINTED');
+        return { ok: true, outcome: 'ROTATED', minted };
+      }
+      // A concurrent request rotated it between the read and the write.
+      presented = await db.get<OAuthTokenRow>('SELECT * FROM oauth_tokens WHERE id = ?', [input.tokenId]);
+      if (!presented || presented.revoked_at === null) return { ok: false, reason: 'NOT_LIVE' };
+    }
+
+    /*
+     * Serialize on the presented row before reading its lineage. Two requests
+     * presenting the same already-rotated token would otherwise both find no
+     * derived successor and both try to insert it (READ COMMITTED on Postgres),
+     * and the loser fails on the unique `token_digest`. The no-op UPDATE takes
+     * the row lock; the loser blocks until the winner commits and then reads
+     * the successor the winner wrote, which is the redelivery it should get.
+     */
+    await db.run('UPDATE oauth_tokens SET revoked_reason = revoked_reason WHERE id = ?', [presented.id]);
+    presented = (await db.get<OAuthTokenRow>('SELECT * FROM oauth_tokens WHERE id = ?', [input.tokenId])) ?? presented;
+
+    // Withdrawn is withdrawn. A null reason predates migration 100 and is read
+    // as the stricter of the two, because guessing ROTATED would resurrect it.
+    if (presented.revoked_reason !== 'ROTATED' && presented.revoked_reason !== 'SUPERSEDED') {
+      return { ok: false, reason: 'REVOKED' };
+    }
+
+    /*
+     * Everything in the grant from the presented token's instant on, minus the
+     * presented token, its own access tokens and its ancestors. Ancestors only
+     * appear here when they share the presented token's millisecond, which a
+     * test can arrange and production effectively cannot — but "newer" must
+     * mean later in the lineage, never "older and equal on the clock".
+     */
+    const ancestors = new Set<string>();
+    for (let cursor = presented.parent_token_id; cursor && ancestors.size < 16; ) {
+      ancestors.add(cursor);
+      const up: { parent_token_id: string | null; created_at: string } | undefined = await db.get(
+        'SELECT parent_token_id, created_at FROM oauth_tokens WHERE id = ?',
+        [cursor],
+      );
+      if (!up || up.created_at < presented.created_at) break;
+      cursor = up.parent_token_id;
+    }
+    const newer = (
+      await db.all<OAuthTokenRow>(
+        `SELECT * FROM oauth_tokens
+          WHERE (grant_id = ? OR parent_token_id = ?) AND id <> ? AND created_at >= ?`,
+        [grantId, presented.id, presented.id, presented.created_at],
+      )
+    ).filter(
+      (t) =>
+        !ancestors.has(t.id) &&
+        !(t.kind === 'ACCESS' && (t.parent_token_id === presented!.id || ancestors.has(t.parent_token_id ?? ''))),
+    );
+    if (newer.some((t) => t.kind === 'REFRESH' && t.revoked_at !== null && t.revoked_reason !== 'ROTATED' && t.revoked_reason !== 'SUPERSEDED')) {
+      return { ok: false, reason: 'REVOKED' };
+    }
+    if (newer.some((t) => t.kind === 'REFRESH' && t.revoked_reason === 'ROTATED')) {
+      return { ok: false, reason: 'REUSED' };
+    }
+    const settledBefore = new Date(now - CONCURRENT_REFRESH_LEEWAY_MS).toISOString();
+    if (newer.some((t) => (t.first_used_at ?? t.last_used_at) !== null && (t.first_used_at ?? t.last_used_at)! < settledBefore)) {
+      return { ok: false, reason: 'REUSED' };
+    }
+
+    const derived = newer.find((t) => t.kind === 'REFRESH' && t.token_digest === successor.digest);
+    if (derived) {
+      if (derived.revoked_at !== null || derived.expires_at <= at) return { ok: false, reason: 'NOT_LIVE' };
+      const access = await mintAccess({ ...base, refreshId: derived.id });
+      return {
+        ok: true,
+        outcome: 'REDELIVERED',
+        minted: { access, refresh: successor.plaintext, scope: presented.scope, refreshTokenId: derived.id, grantId },
+      };
+    }
+
+    // A random successor from before derivation, or one derived under another
+    // key: nobody can send it again, so it is superseded and the derived one
+    // takes its place.
+    for (const live of newer.filter((t) => t.kind === 'REFRESH' && t.revoked_at === null)) {
+      // Guarded on the refresh row itself: if the client rotated it between our
+      // read and this write, it is held and moving on, and minting here would
+      // fork the chain — so this presentation is a replay.
+      const superseded = await db.run(
+        `UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'SUPERSEDED'
+          WHERE id = ? AND revoked_at IS NULL`,
+        [at, live.id],
+      );
+      // Thrown rather than returned, so anything this loop already superseded
+      // rolls back with it instead of committing a revocation with no successor.
+      if (superseded.changes !== 1) throw new RecoveryRaced();
+      await db.run(
+        `UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'SUPERSEDED'
+          WHERE parent_token_id = ? AND kind = 'ACCESS' AND revoked_at IS NULL`,
+        [at, live.id],
+      );
+    }
+    const minted = await mintPair({ ...base, refresh: successor, parentTokenId: presented.id });
+    return { ok: true, outcome: 'RECOVERED', minted };
+  });
 }
 
 /**
@@ -499,15 +795,24 @@ export async function getToken(id: string): Promise<OAuthToken | null> {
   return row ? mapToken(row) : null;
 }
 
+/**
+ * A bearer was presented. The first use is kept beside the last, because whether
+ * a successor has been *in use* — rather than merely touched once just now — is
+ * what separates a replay from a race (`CONCURRENT_REFRESH_LEEWAY_MS`).
+ */
 export async function touchToken(id: string): Promise<void> {
-  await getDb().run('UPDATE oauth_tokens SET last_used_at = ? WHERE id = ?', [nowIso(), id]);
+  const at = nowIso();
+  await getDb().run(
+    'UPDATE oauth_tokens SET last_used_at = ?, first_used_at = COALESCE(first_used_at, ?) WHERE id = ?',
+    [at, at, id],
+  );
 }
 
 export async function revokeToken(id: string): Promise<void> {
-  await getDb().run('UPDATE oauth_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL', [
-    nowIso(),
-    id,
-  ]);
+  await getDb().run(
+    "UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'EXPLICIT' WHERE id = ? AND revoked_at IS NULL",
+    [nowIso(), id],
+  );
 }
 
 /**
@@ -521,8 +826,22 @@ export async function revokeToken(id: string): Promise<void> {
  */
 export async function revokeTokensForWorker(workerId: string): Promise<number> {
   const result = await getDb().run(
-    'UPDATE oauth_tokens SET revoked_at = ? WHERE worker_id = ? AND revoked_at IS NULL',
+    "UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'EXPLICIT' WHERE worker_id = ? AND revoked_at IS NULL",
     [nowIso(), workerId],
+  );
+  return result.changes;
+}
+
+/**
+ * Revoke everything one connector's clients hold — and nothing a sibling
+ * account behind the same worker holds. A shared worker is several connectors.
+ */
+export async function revokeTokensForClients(clientIds: string[]): Promise<number> {
+  if (clientIds.length === 0) return 0;
+  const result = await getDb().run(
+    `UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'EXPLICIT'
+      WHERE client_id IN (${clientIds.map(() => '?').join(', ')}) AND revoked_at IS NULL`,
+    [nowIso(), ...clientIds],
   );
   return result.changes;
 }
@@ -531,7 +850,7 @@ export async function revokeTokensForWorker(workerId: string): Promise<number> {
 export async function revokeTokenChain(tokenId: string): Promise<void> {
   const now = nowIso();
   await getDb().run(
-    'UPDATE oauth_tokens SET revoked_at = ? WHERE (id = ? OR parent_token_id = ?) AND revoked_at IS NULL',
+    "UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'EXPLICIT' WHERE (id = ? OR parent_token_id = ?) AND revoked_at IS NULL",
     [now, tokenId, tokenId],
   );
 }

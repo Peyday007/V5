@@ -281,6 +281,33 @@ export function generateOAuthToken(): GeneratedOAuthToken {
   return { plaintext: `${prefix}.${secret}`, prefix, digest: digestSecret(secret) };
 }
 
+/**
+ * The successor of a refresh token, derived rather than drawn.
+ *
+ * A rotation's answer can be lost — the commit is slow, the client gives up —
+ * and a client that retries with the token it still holds must be able to get
+ * the *same* successor back, or two answers exist for one request and the one
+ * the client keeps may be the one Brain retired. Brain cannot re-send a stored
+ * secret (none is stored), so the successor is computed: an HMAC over the
+ * presented token's row id and its secret, under a server-held key.
+ *
+ * Nothing recoverable is stored. Deriving it needs the secret of the token it
+ * replaces, which only the client holds, and the key, which only Brain holds —
+ * so a database reader cannot derive one, and somebody holding an old token
+ * cannot compute its successor offline without presenting it.
+ */
+export function deriveOAuthSuccessor(
+  key: Buffer,
+  presentedTokenId: string,
+  presentedSecret: string,
+): GeneratedOAuthToken {
+  const mac = (label: string): Buffer =>
+    crypto.createHmac('sha256', key).update(`${label}|${presentedTokenId}|${presentedSecret}`, 'utf8').digest();
+  const prefix = `${OAUTH_TOKEN_MARKER}${mac('prefix').subarray(0, PREFIX_BYTES).toString('hex')}`;
+  const secret = mac('secret').subarray(0, SECRET_BYTES).toString('base64url');
+  return { plaintext: `${prefix}.${secret}`, prefix, digest: digestSecret(secret) };
+}
+
 export function generateBridgeCredential(): GeneratedOAuthToken {
   const prefix = `${BRIDGE_CREDENTIAL_MARKER}${crypto.randomBytes(PREFIX_BYTES).toString('hex')}`;
   const secret = crypto.randomBytes(SECRET_BYTES).toString('base64url');

@@ -44,14 +44,14 @@ import {
 import {
   ACCESS_TOKEN_TTL_MS,
   REFRESH_TOKEN_TTL_MS,
-  clientSecretMatches,
   findLiveToken,
   getClientByClientId,
   issueAuthorizationCode,
-  issueToken,
   redeemAuthorizationCode,
   registerClient,
   findPresentedToken,
+  authenticateClient,
+  issueGrant,
   rotateRefreshToken,
 } from '../repos/oauth.ts';
 import { getWorker, listWorkers, listMembershipsForPrincipal, recordIdentityEvent } from '../repos/identity.ts';
@@ -64,6 +64,8 @@ import {
   INVITATION_TTL_MS,
 } from '../repos/invitations.ts';
 import type { Principal, Worker, WorkerInvitation } from '../domain/types.ts';
+import { attachClient, connectorClient, endpointOf, getConnector } from '../repos/connectors.ts';
+import { touchConnectorRoutines } from '../services/fleet/connectorBinding.ts';
 import { MCP_PATHS } from '../mcp/endpoint.ts';
 import { card, esc, page } from './pages.ts';
 import { workerIdentity } from '../services/identity/authenticate.ts';
@@ -323,6 +325,67 @@ async function approver(req: Request): Promise<Principal | null> {
   return outcome.principal;
 }
 
+/**
+ * The worker this connection is for, when Brain already knows it.
+ *
+ * A consent screen that offers a list invites the one mistake that matters
+ * here: choosing an existing identity for the wrong connector (§27). Brain
+ * usually knows the answer before the screen renders — an invitation in this
+ * browser names a worker, a client already attributed to a logical connector
+ * names the worker that connector authorizes as. In both cases the screen names
+ * that worker and offers nothing else, and the approval refuses any other. A
+ * client's earlier approvals are deliberately *not* a binding: an administrator
+ * may re-point a client nobody attributed, and inferring intent from history is
+ * the guess this module refuses. A chooser appears only for an unattributed
+ * client approached without an invitation.
+ */
+async function boundWorkerFor(
+  req: Request,
+  clientId: string,
+  resource: string | null,
+): Promise<{ worker: Worker; why: string; connectorId: string | null; invitation: WorkerInvitation | null } | null> {
+  /*
+   * A client already attributed to a connector is that connector for ever
+   * (a client is never re-pointed), so its binding outranks an invitation the
+   * browser happens to hold: a stale invitation for another worker must not
+   * mint that worker's tokens on this client. Where the two disagree, the
+   * invitation's own worker check refuses the approval rather than either
+   * silently winning.
+   */
+  const attached = await connectorClient(clientId);
+  if (attached) {
+    const connector = await getConnector(attached.connectorId);
+    const worker = connector?.workerId ? await getWorker(connector.workerId) : null;
+    if (connector && worker && !worker.disabled) {
+      return {
+        worker,
+        why: 'this connector already authorizes as this worker',
+        connectorId: connector.id,
+        invitation: null,
+      };
+    }
+  }
+  const held = await invitedApproval(req);
+  if (held) {
+    // The invitation binds the worker; it binds the connector only for a client
+    // asking for that connector's own endpoint — a member re-adding their
+    // research connector while holding a Factory reconnect link is not
+    // reconnecting the Factory connector.
+    let connectorId = held.invitation.connectorId;
+    if (connectorId) {
+      const connector = await getConnector(connectorId);
+      if (!connector || connector.resource !== endpointOf(resource)) connectorId = null;
+    }
+    return {
+      worker: held.worker,
+      why: 'the invitation in this browser is for this worker',
+      connectorId,
+      invitation: held.invitation,
+    };
+  }
+  return null;
+}
+
 async function audit(input: {
   action: string;
   actor: Principal | null;
@@ -359,7 +422,7 @@ async function audit(input: {
 async function auditAuthorizePage(
   req: Request,
   clientId: string,
-  shown: 'ADMIN_CHOOSER' | 'INVITED_CONSENT' | 'SIGN_IN',
+  shown: 'ADMIN_CHOOSER' | 'ADMIN_BOUND' | 'INVITED_CONSENT' | 'SIGN_IN',
 ): Promise<void> {
   const session = req.header('authorization') ? null : await authenticateRequest(req);
   await audit({
@@ -600,11 +663,9 @@ export function oauthRouter(): Router {
          * invitation is not spent on this path, and the posted `worker_id` is
          * the one that counts.
          */
-        const held = await invitedApproval(req);
-        await auditAuthorizePage(req, params.clientId, 'ADMIN_CHOOSER');
-        res.type('html').send(
-          await consentPage(req, params, client.clientName, person, null, held?.worker ?? null),
-        );
+        const bound = await boundWorkerFor(req, params.clientId, params.resource);
+        await auditAuthorizePage(req, params.clientId, bound ? 'ADMIN_BOUND' : 'ADMIN_CHOOSER');
+        res.type('html').send(await consentPage(req, params, client.clientName, person, null, bound));
         return;
       }
 
@@ -747,6 +808,23 @@ export function oauthRouter(): Router {
         return;
       }
 
+      // Everybody is held to the binding: the screen offered one worker, and a
+      // form can be edited. An invitation for another worker than the one this
+      // client's connector already authorizes as is refused here rather than
+      // minting that worker's tokens on a client attributed elsewhere.
+      const binding = await boundWorkerFor(req, params.clientId, params.resource);
+      if (binding && workerId !== binding.worker.id) {
+        await audit({
+          action: 'OAUTH_AUTHORIZE',
+          actor: person,
+          targetId: workerId || null,
+          result: 'DENIED',
+          metadata: { reason: 'BOUND_WORKER_MISMATCH', clientId: params.clientId },
+        });
+        errorPage(res, 403, 'Not authorized', `This connection is for ${workerIdentity(binding.worker)}, not another worker.`);
+        return;
+      }
+
       const worker = workerId ? await getWorker(workerId) : null;
 
       /**
@@ -760,10 +838,8 @@ export function oauthRouter(): Router {
         if (person) {
           // Same chooser, same preselection: a re-render that lost it would
           // make an administrator's second attempt harder than their first.
-          const held = await invitedApproval(req);
-          res.status(400).type('html').send(
-            await consentPage(req, params, client.clientName, person, detail, held?.worker ?? null),
-          );
+          const bound = await boundWorkerFor(req, params.clientId, params.resource);
+          res.status(400).type('html').send(await consentPage(req, params, client.clientName, person, detail, bound));
           return;
         }
         errorPage(res, 400, 'This connection cannot be completed', detail);
@@ -838,6 +914,34 @@ export function oauthRouter(): Router {
         scope: params.scope,
       });
 
+      /*
+       * A reconnect invitation names the logical connector it restores, so a
+       * new OAuth client approved on it is that connector — the same identity,
+       * the same Routines, no re-registration. And the Routines on a connector
+       * that has just been re-authorized are touched, so dispatch intents
+       * deferred while it could not authenticate are re-armed now.
+       */
+      const bound = binding ?? (await boundWorkerFor(req, params.clientId, params.resource));
+      const restoring = bound?.connectorId ?? null;
+      if (restoring) {
+        const connector = await getConnector(restoring);
+        if (
+          connector &&
+          connector.resource === endpointOf(params.resource) &&
+          (connector.workerId === null || connector.workerId === worker.id)
+        ) {
+          const outcome = await attachClient({
+            clientId: params.clientId,
+            connectorId: connector.id,
+            source: bound?.invitation?.connectorId ? 'BOUND_INVITATION' : 'OPERATOR',
+            evidence: bound?.invitation ? `invitation ${bound.invitation.id}` : `approved by ${person?.id ?? 'unknown'}`,
+          });
+          // A conflict is reported by the attach and acted on by nobody: only a
+          // client that is this connector re-arms its Routines.
+          if (outcome !== 'CONFLICT') await touchConnectorRoutines(connector.id);
+        }
+      }
+
       await audit({
         action: 'OAUTH_AUTHORIZE',
         actor: person,
@@ -878,13 +982,9 @@ export function oauthRouter(): Router {
         return;
       }
 
-      const client = await getClientByClientId(clientId);
-      if (!client || client.disabledAt !== null) {
-        res.status(401).json({ error: 'invalid_client' });
-        return;
-      }
-      const presentedSecret = str('client_secret') ?? basicClientSecret(req);
-      if (!(await clientSecretMatches(clientId, presentedSecret))) {
+      // One read for both: the client exists, is enabled, and authenticates.
+      const client = await authenticateClient(clientId, str('client_secret') ?? basicClientSecret(req));
+      if (!client) {
         res.status(401).json({ error: 'invalid_client' });
         return;
       }
@@ -973,21 +1073,11 @@ export function oauthRouter(): Router {
           await refuseRefresh('WORKER_UNAVAILABLE', existing.workerId);
           return;
         }
-        // Rotation: the presented refresh token and anything minted from it are
-        // revoked and the replacement issued in one transaction, so a stolen
-        // copy is usable at most once and a failed write changes nothing. The
-        // one bounded exception is a retry of a response that never arrived.
-        const rotation = await rotateRefreshToken({
-          tokenId: existing.id,
-          mint: (parentTokenId) =>
-            mintTokenPair({
-              clientId,
-              workerId: existing.workerId,
-              scope: existing.scope,
-              resource: existing.resource,
-              refreshParentId: parentTokenId,
-            }),
-        });
+        // Rotation is idempotent: presenting the same refresh token again yields
+        // the same successor until the client is proven to have moved on, so a
+        // lost reply, a delayed retry, a restart and a race all converge on one
+        // credential. See `rotateRefreshToken`.
+        const rotation = await rotateRefreshToken({ tokenId: existing.id, presentedSecret: parsed.secret });
         if (!rotation.ok) {
           await refuseRefresh(rotation.reason, existing.workerId);
           return;
@@ -1001,7 +1091,9 @@ export function oauthRouter(): Router {
           metadata: {
             clientId,
             grant: 'refresh_token',
-            ...(rotation.recovered ? { recovered: 'LOST_RESPONSE_RETRY' } : {}),
+            outcome: rotation.outcome,
+            grantId: rotation.minted.grantId,
+            ...(rotation.outcome !== 'ROTATED' ? { recovered: 'LOST_RESPONSE_RETRY' } : {}),
           },
         });
         return;
@@ -1022,60 +1114,10 @@ async function issueTokenPair(
   res: Response,
   input: { clientId: string; workerId: string; scope: string; resource: string | null },
 ): Promise<void> {
-  sendTokenPair(res, await mintTokenPair({ ...input, refreshParentId: null }));
+  sendTokenPair(res, await issueGrant(input));
 }
 
-interface MintedPair {
-  access: string;
-  refresh: string;
-  scope: string;
-}
-
-/**
- * Write a refresh token and an access token minted from it, and return their
- * values. Sending is separate so a rotation can mint inside its transaction
- * and answer only after it commits. A rotated refresh token names the one it
- * replaced as its parent, which is what lets a lost response be told apart
- * from a replay.
- */
-async function mintTokenPair(input: {
-  clientId: string;
-  workerId: string;
-  scope: string;
-  resource: string | null;
-  refreshParentId: string | null;
-}): Promise<MintedPair> {
-  const access = generateOAuthToken();
-  const refresh = generateOAuthToken();
-
-  const refreshRow = await issueToken({
-    kind: 'REFRESH',
-    tokenPrefix: refresh.prefix,
-    tokenDigest: refresh.digest,
-    clientId: input.clientId,
-    workerId: input.workerId,
-    scope: input.scope,
-    resource: input.resource,
-    ttlMs: REFRESH_TOKEN_TTL_MS,
-    parentTokenId: input.refreshParentId,
-  });
-
-  await issueToken({
-    kind: 'ACCESS',
-    tokenPrefix: access.prefix,
-    tokenDigest: access.digest,
-    clientId: input.clientId,
-    workerId: input.workerId,
-    scope: input.scope,
-    resource: input.resource,
-    ttlMs: ACCESS_TOKEN_TTL_MS,
-    parentTokenId: refreshRow.id,
-  });
-
-  return { access: access.plaintext, refresh: refresh.plaintext, scope: input.scope };
-}
-
-function sendTokenPair(res: Response, pair: MintedPair): void {
+function sendTokenPair(res: Response, pair: { access: string; refresh: string; scope: string }): void {
   res.setHeader('Cache-Control', 'no-store');
   res.status(200).json({
     access_token: pair.access,
@@ -1227,8 +1269,9 @@ async function consentPage(
    * it authorizes nothing, because a signed-in administrator's own authority is
    * what this screen runs on, and it is not spent by connecting from here.
    */
-  heldInvitationFor: Worker | null = null,
+  bound: { worker: Worker; why: string } | null = null,
 ): Promise<string> {
+  const heldInvitationFor = bound?.worker ?? null;
   /**
    * Disabled workers are not offered, but their existence changes what to say.
    *
@@ -1238,7 +1281,8 @@ async function consentPage(
    * to restore the one they have. Which is what happened.
    */
   const allWorkers = await listWorkers();
-  const workers = allWorkers.filter((worker) => !worker.disabled);
+  // A bound connection offers its one worker and nothing else.
+  const workers = allWorkers.filter((worker) => !worker.disabled && (!bound || worker.id === bound.worker.id));
   const someAreDisabled = allWorkers.length > workers.length;
 
   // Each worker is shown with what it can actually reach, because "approve this
@@ -1276,10 +1320,9 @@ async function consentPage(
 
   // Named rather than merely preselected, because "why am I being shown a list"
   // is the question this screen was quietly failing to answer.
-  const invitationNote = heldInvitationFor
-    ? `<div class="grant"><dt>Invitation</dt><dd>This browser holds an invitation for
-       <code>${esc(workerIdentity(heldInvitationFor))}</code>, which is chosen below. You are a Brain
-       administrator, so you may connect any worker here and the invitation is not used.</dd></div>`
+  const invitationNote = bound
+    ? `<div class="grant"><dt>Connecting as</dt><dd><code>${esc(workerIdentity(bound.worker))}</code> —
+       ${esc(bound.why)}, so no other worker is offered.</dd></div>`
     : '';
 
   const grants = described
