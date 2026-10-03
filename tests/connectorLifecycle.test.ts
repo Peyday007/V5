@@ -404,6 +404,24 @@ describe('recovery needs nobody but the person who consents', () => {
     expect((await connectorHealth(owner.connectorId))!.state).toBe('HEALTHY');
   });
 
+  it('reads the live token as the tip when a grant and its rotation share a millisecond', async () => {
+    const owner = await account('owner');
+    await use(owner.access);
+    await rotate(owner.refresh);
+    // Production can do this and deploy 385's runner did: one instant for both.
+    const instant = new Date(Date.now() - CONCURRENT_REFRESH_LEEWAY_MS - 60_000).toISOString();
+    await getDb().run('UPDATE oauth_tokens SET created_at = ?, last_used_at = NULL, first_used_at = NULL WHERE client_id = ?', [
+      instant,
+      owner.clientId,
+    ]);
+    await getDb().run(
+      "UPDATE oauth_tokens SET last_used_at = ?, first_used_at = ? WHERE client_id = ? AND kind = 'ACCESS' AND parent_token_id IS NULL",
+      [instant, instant, owner.clientId],
+    );
+    const health = (await connectorHealth(owner.connectorId))!;
+    expect(health.state).toBe('REFRESH_RECOVERABLE');
+  });
+
   it('G. an explicitly revoked authorization needs consent, and stays refused', async () => {
     const airyn = await account('airyn');
     const parsed = parseOAuthToken(airyn.refresh)!;

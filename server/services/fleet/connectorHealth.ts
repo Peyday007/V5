@@ -218,10 +218,12 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
   base.lastGrantAt = facts.last_grant;
   base.lastRefreshAt = facts.last_refresh;
 
+  // A grant and its rotation can share a millisecond; between tokens of one
+  // instant the live one is the tip, never a random id's choice of its parent.
   const tip = await getDb().get<TipRow & { client_id: string }>(
     `SELECT id, client_id, created_at, revoked_at, revoked_reason, parent_token_id, expires_at
        FROM oauth_tokens WHERE kind = 'REFRESH' AND client_id IN (${ph})
-      ORDER BY created_at DESC, id DESC LIMIT 1`,
+      ORDER BY created_at DESC, CASE WHEN revoked_at IS NULL THEN 0 ELSE 1 END, id DESC LIMIT 1`,
     clientIds,
   );
   if (!tip) {
