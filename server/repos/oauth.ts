@@ -125,6 +125,8 @@ export async function registerClient(input: RegisterClientInput): Promise<OAuthC
   // The client id is public but must not be guessable: a guessable one lets an
   // attacker start an authorization request that looks like a known client.
   const clientId = `brnc_${newId('').replace(/[^a-z0-9]/gi, '')}${Date.now().toString(36)}`;
+  const createdAt = nowIso();
+  const clientName = input.clientName.slice(0, 200);
   await getDb().run(
     `INSERT INTO oauth_clients (id, client_id, secret_digest, client_name, redirect_uris,
                                 token_auth_method, created_at, disabled_at)
@@ -133,15 +135,30 @@ export async function registerClient(input: RegisterClientInput): Promise<OAuthC
       id,
       clientId,
       input.secretDigest,
-      input.clientName.slice(0, 200),
+      clientName,
       JSON.stringify(input.redirectUris),
       input.tokenAuthMethod,
-      nowIso(),
+      createdAt,
     ],
   );
-  const row = await getDb().get<OAuthClientRow>('SELECT * FROM oauth_clients WHERE id = ?', [id]);
-  if (!row) throw new Error('The OAuth client disappeared immediately after being written.');
-  return mapClient(row);
+  /*
+   * Built from the values just written rather than read back. Registration is
+   * the one OAuth step a client times out on before consent ever appears, and
+   * on 2026-10-02 a read-back plus an audit write in front of the answer cost
+   * more than four seconds during a Supabase latency incident: the row was
+   * committed, Claude had already given up ("Couldn't register with … sign-in
+   * service"), and the client was never used. One round trip, not three.
+   */
+  return mapClient({
+    id,
+    client_id: clientId,
+    secret_digest: input.secretDigest,
+    client_name: clientName,
+    redirect_uris: JSON.stringify(input.redirectUris),
+    token_auth_method: input.tokenAuthMethod,
+    created_at: createdAt,
+    disabled_at: null,
+  });
 }
 
 export async function getClientByClientId(clientId: string): Promise<OAuthClient | null> {

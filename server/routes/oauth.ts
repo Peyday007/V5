@@ -443,14 +443,10 @@ export function oauthRouter(): Router {
         tokenAuthMethod: method,
       });
 
-      await audit({
-        action: 'OAUTH_CLIENT_REGISTERED',
-        actor: null,
-        targetId: client.clientId,
-        result: 'SUCCESS',
-        metadata: { clientName: client.clientName, redirectCount: redirectUris.length },
-      });
-
+      // Answer first, then audit. The client cannot proceed without this reply
+      // and has a short timeout; the audit row is still written, and a failure
+      // writing it reaches the log rather than turning a committed
+      // registration into an error the client never sees.
       res.status(201).json({
         client_id: client.clientId,
         // The only moment the secret exists outside the caller. Never stored.
@@ -460,6 +456,14 @@ export function oauthRouter(): Router {
         token_endpoint_auth_method: client.tokenAuthMethod,
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
+      });
+
+      await audit({
+        action: 'OAUTH_CLIENT_REGISTERED',
+        actor: null,
+        targetId: client.clientId,
+        result: 'SUCCESS',
+        metadata: { clientName: client.clientName, redirectCount: redirectUris.length },
       });
     })().catch(answerEscapedFailure(res, 'oauth'));
   });
