@@ -261,6 +261,8 @@ describe('one identity per connector, even when every account is worker-10', () 
     expect(await attachClient({ clientId: fresh.clientId, connectorId: airyn.connectorId, source: 'BOUND_INVITATION' })).toBe(
       'ATTACHED',
     );
+    // The reconnect comes after the original grant, as it does in production.
+    await age(airyn.clientId, 60_000);
     await issueGrant({ clientId: fresh.clientId, workerId, scope: '', resource: RESOURCE });
     const health = (await connectorHealth(airyn.connectorId))!;
     expect(health.clientIds).toEqual(expect.arrayContaining([airyn.clientId, fresh.clientId]));
