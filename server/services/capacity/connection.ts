@@ -103,10 +103,12 @@ import {
   getClientByClientId,
   listTokensForWorker,
   revokeTokensForWorker,
+  revokeTokensForClients,
 } from '../../repos/oauth.ts';
 import { getProject } from '../../repos/projects.ts';
 import { nowIso } from '../../repos/util.ts';
-import { createInvitation, revokeInvitationsForWorker } from '../../repos/invitations.ts';
+import { createInvitation, liveInvitationsForMember, revokeInvitation, revokeInvitationsForWorker } from '../../repos/invitations.ts';
+import { clientsOfConnector } from '../../repos/connectors.ts';
 import { generateInvitationToken } from '../identity/secrets.ts';
 import { withoutDomain } from '../identity/people.ts';
 import { getBin, listDispatchesForBin, markBinReady, retireBin } from '../../repos/bins.ts';
@@ -1814,7 +1816,21 @@ export async function revokeOwnConnection(input: {
   }
 
   const worker = await workerFor(connection, names.workerName);
-  if (worker) {
+  /*
+   * A worker can be shared by several Claude accounts (§51), so taking back
+   * one member's connection revokes what *their* connector holds — its own
+   * OAuth clients and the links bound to them — and never a sibling account's.
+   * A connection whose connector is not yet attributed falls back to the
+   * worker, which is only ever right for a worker this member alone holds.
+   */
+  const routine = connection.routineId ? await getRoutine(connection.routineId) : null;
+  const clients = routine?.connectorId ? await clientsOfConnector(routine.connectorId) : [];
+  if (clients.length > 0) {
+    await revokeTokensForClients(clients.map((one) => one.clientId));
+    for (const invitation of await liveInvitationsForMember(input.user.id)) {
+      if (!worker || invitation.workerId === worker.id) await revokeInvitation(invitation.id);
+    }
+  } else if (worker) {
     await revokeTokensForWorker(worker.id);
     await revokeInvitationsForWorker(worker.id);
   }

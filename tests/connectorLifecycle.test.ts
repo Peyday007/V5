@@ -20,6 +20,7 @@ import {
   issueGrant,
   registerClient,
   revokeTokenChain,
+  revokeTokensForClients,
   rotateRefreshToken,
   touchToken,
 } from '../server/repos/oauth.ts';
@@ -386,6 +387,16 @@ describe('recovery needs nobody but the person who consents', () => {
     expect(health.state).toBe('HUMAN_REAUTH_REQUIRED');
     expect(health.reason).toBe('CONSENT_REVOKED');
     expect((await rotate(airyn.refresh)).ok).toBe(false);
+  });
+
+  it('taking back one account’s connector leaves a sibling on the same worker untouched', async () => {
+    const airyn = await account('airyn');
+    const caleb = await account('caleb');
+    await use(caleb.access);
+    await revokeTokensForClients([airyn.clientId]);
+    expect((await connectorHealth(airyn.connectorId))!.reason).toBe('CONSENT_REVOKED');
+    expect((await connectorHealth(caleb.connectorId))!.state).toBe('HEALTHY');
+    await use(caleb.access);
   });
 
   it('a no-show quarantine lifts by itself once its own connector is re-authorized — and not a sibling’s', async () => {

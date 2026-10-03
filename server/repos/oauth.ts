@@ -784,6 +784,20 @@ export async function revokeTokensForWorker(workerId: string): Promise<number> {
   return result.changes;
 }
 
+/**
+ * Revoke everything one connector's clients hold — and nothing a sibling
+ * account behind the same worker holds. A shared worker is several connectors.
+ */
+export async function revokeTokensForClients(clientIds: string[]): Promise<number> {
+  if (clientIds.length === 0) return 0;
+  const result = await getDb().run(
+    `UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'EXPLICIT'
+      WHERE client_id IN (${clientIds.map(() => '?').join(', ')}) AND revoked_at IS NULL`,
+    [nowIso(), ...clientIds],
+  );
+  return result.changes;
+}
+
 /** Revoke a refresh token and everything minted from it. */
 export async function revokeTokenChain(tokenId: string): Promise<void> {
   const now = nowIso();
