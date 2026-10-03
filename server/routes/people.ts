@@ -327,7 +327,9 @@ peopleRouter.post(
       origin: originOf(req),
     });
     if (!outcome.ok) throw unprocessable(outcome.reason);
-    return outcome.view;
+    return outcome.credentialsLeftLive
+      ? { ...outcome.view, credentialsLeftLive: outcome.credentialsLeftLive }
+      : outcome.view;
   }),
 );
 
@@ -417,7 +419,9 @@ peopleRouter.post(
       origin: originOf(req),
     });
     if (!outcome.ok) throw unprocessable(outcome.reason);
-    return outcome.view;
+    return outcome.credentialsLeftLive
+      ? { ...outcome.view, credentialsLeftLive: outcome.credentialsLeftLive }
+      : outcome.view;
   }),
 );
 

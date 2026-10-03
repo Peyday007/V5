@@ -189,7 +189,7 @@ export const PeopleApi = {
     api('/api/people/me/claude/verify', { method: 'POST', body: '{}' }),
 
   /** Take your own connection back. Destroys nothing; reconnecting resumes it. */
-  revoke: (reason: string): Promise<ConnectionView> =>
+  revoke: (reason: string): Promise<ConnectionView & { credentialsLeftLive?: string }> =>
     api('/api/people/me/claude/revoke', { method: 'POST', body: JSON.stringify({ reason }) }),
 
   /** Put your own revoked connection back into the journey. */

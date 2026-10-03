@@ -208,13 +208,20 @@ export function ClaudeConnectionPanel({
   const [problem, setProblem] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
-  async function run(work: () => Promise<ConnectionView>, said?: string): Promise<void> {
+  async function run(
+    work: () => Promise<ConnectionView & { credentialsLeftLive?: string }>,
+    said?: string,
+  ): Promise<void> {
     setBusy(true);
     setProblem(null);
     setNote(null);
     try {
-      onChanged(await work());
-      if (said) setNote(said);
+      const next = await work();
+      onChanged(next);
+      // The server's own sentence wins when a revoke could not withdraw every
+      // credential: a reassurance over live tokens would be a false settled state.
+      if (next.credentialsLeftLive) setNote(next.credentialsLeftLive);
+      else if (said) setNote(said);
     } catch (error) {
       setProblem(describeError(error));
     } finally {
@@ -443,8 +450,9 @@ export function ClaudeConnectionPanel({
         <div className="rs-ready-link">
           <p className="rs-item-title">Take this connection back?</p>
           <p className="rs-hint">
-            Every token Brain issued against your worker is revoked, any link still outstanding
-            stops working, and Brain stops firing your surface. Your trigger id, your capacity
+            The tokens your connector holds are revoked, any link still outstanding stops
+            working, and Brain stops firing your surface. On a worker shared with another
+            account, Brain says so here if it cannot yet tell which tokens are yours. Your trigger id, your capacity
             account and your Routine are kept, so reconnecting later is one approval rather than a
             second setup.
           </p>

@@ -218,20 +218,18 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
   base.lastGrantAt = facts.last_grant;
   base.lastRefreshAt = facts.last_refresh;
 
-  /*
-   * The tip is the newest refresh token that nothing was rotated from — a leaf
-   * of its lineage. Ordering by time alone was wrong whenever a grant and its
-   * successor share a millisecond: the random-id tiebreak then picked the grant
-   * half the time, whose access token *was* used, and a reply nobody picked up
-   * read as HEALTHY (the CI gate on 8462042e, 2026-10-03). Lineage decides;
-   * time only orders separate leaves.
-   */
   const tip = await getDb().get<TipRow & { client_id: string }>(
-    `SELECT t.id, t.client_id, t.created_at, t.revoked_at, t.revoked_reason, t.parent_token_id, t.expires_at
-       FROM oauth_tokens t
-      WHERE t.kind = 'REFRESH' AND t.client_id IN (${ph})
-        AND NOT EXISTS (SELECT 1 FROM oauth_tokens c WHERE c.parent_token_id = t.id AND c.kind = 'REFRESH')
-      ORDER BY t.created_at DESC, t.id DESC LIMIT 1`,
+    `SELECT id, client_id, created_at, revoked_at, revoked_reason, parent_token_id, expires_at
+       FROM oauth_tokens WHERE kind = 'REFRESH' AND client_id IN (${ph})
+        -- The tip is the end of the lineage, not merely the newest row: a
+        -- rotation committed in the same millisecond as its predecessor ties on
+        -- created_at, and an id tiebreak then picks the rotated parent half the
+        -- time — which reads a reply nobody picked up as HEALTHY. A token with
+        -- a refresh child is never the tip.
+        AND NOT EXISTS (SELECT 1 FROM oauth_tokens c
+                         WHERE c.parent_token_id = oauth_tokens.id AND c.kind = 'REFRESH')
+      -- A superseded leaf loses a millisecond tie to its live sibling.
+      ORDER BY created_at DESC, CASE WHEN revoked_reason = 'SUPERSEDED' THEN 1 ELSE 0 END, id DESC LIMIT 1`,
     clientIds,
   );
   if (!tip) {

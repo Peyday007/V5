@@ -570,47 +570,72 @@ export type RefreshRotation =
 const rotationKeys = new WeakMap<object, Promise<Buffer>>();
 
 /**
- * The key successors are derived under.
+ * The key successors are derived under — never a row in the database.
  *
- * `BRAIN_OAUTH_ROTATION_KEY` when the deployment sets one; otherwise one row,
- * created on first use and then read for ever. Replacing it costs nothing but
- * determinism for in-flight chains — a successor derived under the old key no
- * longer matches, and the rotation falls back to superseding it, which is the
- * recovery path anyway.
+ * A successor is `HMAC(key, id | secret)` and every id is in `oauth_tokens`, so
+ * a key stored beside them hands anybody who can read the database and holds
+ * one old refresh token (a backup, a log, a long-rotated credential) every later
+ * token in that chain, offline and undetected. Invariant 22. So the key comes
+ * from outside the database, in this order:
+ *
+ *   1. `BRAIN_OAUTH_ROTATION_KEY`, when the deployment sets one;
+ *   2. otherwise derived from `SUPABASE_SERVICE_ROLE_KEY`, a deployment secret
+ *      cloud mode already holds and that no database row, dump or backup carries;
+ *   3. otherwise (a local Brain with neither) a key file under the data root,
+ *      which a copy of `brain.db` does not include.
+ *
+ * Any key an earlier version stored in `oauth_rotation_keys` is deleted rather
+ * than read. Changing the key costs nothing but determinism for in-flight
+ * chains: a successor derived under the old key no longer matches, and the
+ * rotation supersedes it, which is the recovery path anyway.
  */
 export function rotationKey(): Promise<Buffer> {
   const db = getDb();
   const cached = rotationKeys.get(db);
   if (cached) return cached;
   const loading = (async (): Promise<Buffer> => {
-    const fromEnv = process.env['BRAIN_OAUTH_ROTATION_KEY'];
-    if (fromEnv && fromEnv.length >= 16) {
-      return crypto.createHash('sha256').update(fromEnv, 'utf8').digest();
-    }
-    if (fromEnv) {
-      // Said out loud rather than silently ignored: instances that disagree
-      // about the key would each supersede the other's successors.
-      console.warn('[oauth] BRAIN_OAUTH_ROTATION_KEY is shorter than 16 characters and is ignored; using the stored key.');
-    }
-    const read = async (): Promise<string | null> =>
-      (await db.get<{ key_hex: string }>(
-        "SELECT key_hex FROM oauth_rotation_keys WHERE id = 'primary'",
-      ))?.key_hex ?? null;
-    let hex = await read();
-    if (!hex) {
-      await db.run(
-        `INSERT INTO oauth_rotation_keys (id, key_hex, created_at) VALUES ('primary', ?, ?)
-         ON CONFLICT (id) DO NOTHING`,
-        [crypto.randomBytes(32).toString('hex'), nowIso()],
-      );
-      hex = await read();
-    }
-    if (!hex) throw new Error('The OAuth rotation key could not be established.');
-    return Buffer.from(hex, 'hex');
+    const key = await rotationKeyOutsideDatabase();
+    await db.run('DELETE FROM oauth_rotation_keys');
+    return key;
   })();
   rotationKeys.set(db, loading);
   loading.catch(() => rotationKeys.delete(db));
   return loading;
+}
+
+async function rotationKeyOutsideDatabase(): Promise<Buffer> {
+  const fromEnv = process.env['BRAIN_OAUTH_ROTATION_KEY'];
+  if (fromEnv && fromEnv.length >= 16) {
+    return crypto.createHash('sha256').update(fromEnv, 'utf8').digest();
+  }
+  if (fromEnv) {
+    // Said out loud rather than silently ignored: instances that disagree about
+    // the key would each supersede the other's successors.
+    console.warn('[oauth] BRAIN_OAUTH_ROTATION_KEY is shorter than 16 characters and is ignored.');
+  }
+  const serviceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+  if (serviceKey && serviceKey.length >= 16) {
+    return crypto.createHmac('sha256', serviceKey).update('brain-oauth-rotation-key-v1', 'utf8').digest();
+  }
+  const { RUNTIME_ROOT } = await import('../env.ts');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const file = path.join(RUNTIME_ROOT, 'oauth-rotation.key');
+  try {
+    const hex = fs.readFileSync(file, 'utf8').trim();
+    if (/^[0-9a-f]{64}$/.test(hex)) return Buffer.from(hex, 'hex');
+  } catch {
+    // Absent: made below.
+  }
+  fs.mkdirSync(RUNTIME_ROOT, { recursive: true });
+  try {
+    fs.writeFileSync(file, crypto.randomBytes(32).toString('hex'), { flag: 'wx', mode: 0o600 });
+  } catch {
+    // Another process wrote it first; read theirs.
+  }
+  const hex = fs.readFileSync(file, 'utf8').trim();
+  if (!/^[0-9a-f]{64}$/.test(hex)) throw new Error('The OAuth rotation key file is unreadable.');
+  return Buffer.from(hex, 'hex');
 }
 
 /**
