@@ -235,6 +235,54 @@ Afterwards: the client is attached to the same connector, its Routines re-arm,
 an auth-caused quarantine lifts on the next tick, and no trigger, Routine or
 secret is recreated.
 
+## A quarantined Routine nobody can attribute
+
+Attribution needs a proven arrival, an arrival needs a fire, and Brain does not
+fire a quarantined surface — so a Routine that is quarantined **and** has no
+connector could otherwise leave that state only by an operator guessing which
+OAuth client is whose, or re-enabling it blind. Neither is the mechanism. The
+recovery probe is (`server/services/fleet/recoveryProbe.ts`):
+
+```
+npm run admin -- connectors probe <trig_…> --admin <email>
+npm run admin -- connectors probe-status <trig_…|crp_…>
+```
+
+(or the Admin workflow, commands `connectors probe` and `connectors
+probe-status`, subject the Routine.) One probe fires one Routine, once, outside
+routing, and waits for its session:
+
+- **Eligible:** QUARANTINED, or ENABLED with no connector. Refused for a
+  surface a person drained, gave back or retired, a disabled worker or account,
+  a trigger secret that is not deployed. **One probe in the Brain at a time**,
+  enforced by a UNIQUE column.
+- **The proof chain:** fire F → Routine R → provider session S (the fire's own
+  answer, never shown to anybody) → a check-in reporting S → authenticated with
+  access token T of OAuth client C → C is R's account's connector at T's
+  endpoint. S is single-use, bound to one Routine and one bin, and expires with
+  the probe. A worker id is never evidence.
+- **It cannot dispatch real work.** The probe's bin is a pinned
+  `DETERMINISTIC_CHECK` with one attempt, and the session the fire started is
+  offered that bin and nothing else, ever.
+- **It is not capacity and not a no-show.** It writes `RECOVERY_PROBE_FIRED`,
+  which the activation ledger does not count, and the no-show pass skips it.
+
+Outcomes, each with every field printed (fire, provider session, OAuth client,
+logical connector, account, health, surface state, the human action if any):
+
+| state | meaning | what happens |
+|---|---|---|
+| `HEALTHY` | arrived, authenticated, connector bound and healthy | a quarantine Brain derived (no-shows, a refused fire) lifts by itself; sibling Routines with an unambiguous connector are bound |
+| `REAUTH_REQUIRED` | the connector is proven to need consent | the one human action is named: self-service if a bound invitation already made the connector somebody's, otherwise one `connectors reconnect <cnr_…> <member>` |
+| `NO_MCP` | the provider started a session; nothing reached Brain | nothing attached, nothing charged; the account holder reconnects Brain in Claude and the Routine is probed again, which attaches whichever client arrives |
+| `PROVIDER_REFUSED` | the provider would not start a session | attribution untouched |
+| `AMBIGUOUS` | it arrived, but the arrival does not prove one connector | nothing attached; a conflict with an existing attribution is left for an operator |
+
+A connector is one account at one endpoint, and it authorizes as one worker. An
+arrival authenticated as a different worker at an endpoint whose connector
+already authorizes as another is a conflict, never a merge — so a person's
+research connector and their Factory connector stay separate.
+
 ## Reading it
 
 ```
@@ -246,7 +294,8 @@ human action is required and why, current and historical client ids, the last
 registration, grant, refresh, recovered refresh and access-token use, the last
 refusal category, the last fire and check-in, real no-shows and auth no-shows.
 No token, digest or prefix is printed. `connectors derive` runs the attribution
-now; `connectors attach` is the explicit binding.
+now; `connectors attach` is the explicit binding; `connectors probe` obtains the
+proof for a Routine nothing else can attribute.
 
 ## What it cannot fix
 

@@ -45,6 +45,14 @@ async function singleAccountFor(workerId: string): Promise<string | null> {
   return rows.length === 1 ? rows[0]!.account_id : null;
 }
 
+export type ArrivalAttribution = {
+  outcome: 'BOUND' | 'ALREADY' | 'CONFLICT' | 'NOT_EVIDENCE';
+  connectorId: string | null;
+  clientId: string | null;
+  /** Why, for CONFLICT and NOT_EVIDENCE; names ids and categories, never a credential. */
+  reason: string | null;
+};
+
 /**
  * A fired session arrived. Called from the arrival credit with the credential
  * the request authenticated with.
@@ -56,20 +64,72 @@ export async function observeConnectorArrival(input: {
   /** The arriving session is provably the one Brain fired (provider sessions match). */
   proven: boolean;
 }): Promise<'BOUND' | 'ALREADY' | 'CONFLICT' | 'NOT_EVIDENCE'> {
+  return (await attributeArrival(input)).outcome;
+}
+
+/**
+ * The same attribution, saying which connector it reached and why it did not.
+ *
+ * A connector is (account, endpoint), and one Claude connector at one URL holds
+ * one authorization — so a connector that already authorizes as one worker
+ * cannot also be the connector a session authenticated as a *different* worker
+ * came through. That is the case of one person's research connector and their
+ * Factory connector: same account, and if both were at one endpoint, the second
+ * would have silently become the first. It is a conflict, reported, and nothing
+ * is attached: the fix is to know which endpoint each uses, not to weld them.
+ */
+export async function attributeArrival(input: {
+  routineId: string;
+  workerId: string;
+  credentialId: string;
+  proven: boolean;
+}): Promise<ArrivalAttribution> {
+  const none = (outcome: ArrivalAttribution['outcome'], reason: string, clientId: string | null = null) => ({
+    outcome,
+    connectorId: null,
+    clientId,
+    reason,
+  });
   const token = await getToken(input.credentialId);
-  if (!token || token.kind !== 'ACCESS') return 'NOT_EVIDENCE';
+  if (!token || token.kind !== 'ACCESS') {
+    return none('NOT_EVIDENCE', 'the arrival did not authenticate with an OAuth access token, so it names no connector');
+  }
   const routine = await getRoutine(input.routineId);
-  if (!routine) return 'NOT_EVIDENCE';
-  if (!input.proven && (await singleAccountFor(input.workerId)) !== routine.accountId) return 'NOT_EVIDENCE';
+  if (!routine) return none('NOT_EVIDENCE', `no Routine ${input.routineId}`, token.clientId);
+  if (!input.proven && (await singleAccountFor(input.workerId)) !== routine.accountId) {
+    return none(
+      'NOT_EVIDENCE',
+      'the arrival is not provably the fired session and its worker serves more than one account',
+      token.clientId,
+    );
+  }
 
   const resource = endpointOf(token.resource);
   const existing = await connectorClient(token.clientId);
   let connectorId: string;
   if (existing) {
     const bound = await getConnector(existing.connectorId);
-    if (!bound || bound.accountId !== routine.accountId || bound.resource !== resource) return 'CONFLICT';
+    if (!bound || bound.accountId !== routine.accountId || bound.resource !== resource) {
+      return none(
+        'CONFLICT',
+        `client ${token.clientId} is already connector ${existing.connectorId}, which is not this account at ${resource}`,
+        token.clientId,
+      );
+    }
     connectorId = bound.id;
   } else {
+    const current = await getDb().get<{ id: string; worker_id: string | null }>(
+      'SELECT id, worker_id FROM connectors WHERE account_id = ? AND resource = ?',
+      [routine.accountId, resource],
+    );
+    if (current?.worker_id && current.worker_id !== token.workerId) {
+      return none(
+        'CONFLICT',
+        `connector ${current.id} (this account at ${resource}) authorizes as ${current.worker_id}, ` +
+          `but this arrival authenticated as ${token.workerId}; two workers are not one connector`,
+        token.clientId,
+      );
+    }
     const connector = await ensureConnector({ accountId: routine.accountId, resource, workerId: token.workerId });
     const outcome = await attachClient({
       clientId: token.clientId,
@@ -77,13 +137,22 @@ export async function observeConnectorArrival(input: {
       source: 'OBSERVED_ARRIVAL',
       evidence: `routine ${routine.id} fired; arrival authenticated with ${token.id}${input.proven ? ' (provider session matched)' : ' (single-account worker)'}`,
     });
-    if (outcome === 'CONFLICT') return 'CONFLICT';
+    if (outcome === 'CONFLICT') {
+      return none('CONFLICT', `client ${token.clientId} was attached to another connector concurrently`, token.clientId);
+    }
     connectorId = connector.id;
   }
-  if (routine.connectorId && routine.connectorId !== connectorId) return 'CONFLICT';
+  if (routine.connectorId && routine.connectorId !== connectorId) {
+    return {
+      outcome: 'CONFLICT',
+      connectorId,
+      clientId: token.clientId,
+      reason: `routine ${routine.id} is already bound to connector ${routine.connectorId}, not ${connectorId}`,
+    };
+  }
   const bound = routine.connectorId ? false : await bindRoutineConnector(routine.id, connectorId);
   forgetRoutingHealth();
-  return bound || !existing ? 'BOUND' : 'ALREADY';
+  return { outcome: bound || !existing ? 'BOUND' : 'ALREADY', connectorId, clientId: token.clientId, reason: null };
 }
 
 /**
