@@ -128,6 +128,11 @@ import { archiveWorkstream, createWorkstream, getWorkstream } from '../server/re
 import { researchIntelligenceView } from '../server/services/research/intelligence/view.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import type { Project, WorkerScope } from '../server/domain/types.ts';
+import { connectorClient, ensureConnector } from '../server/repos/connectors.ts';
+import { createInvitation, liveInvitationsForMember, revokeInvitation } from '../server/repos/invitations.ts';
+import { generateInvitationToken } from '../server/services/identity/secrets.ts';
+import { connectorHealth } from '../server/services/fleet/connectorHealth.ts';
+import { resolveMemberReconnect } from '../server/services/fleet/memberReconnect.ts';
 
 /* ------------------------------------------------------------------------ */
 /* The fixtures                                                              */
@@ -3544,6 +3549,278 @@ async function mcpChecks(fixtures: Fixtures): Promise<void> {
  */
 const BEACON = 'verify-hosted-beacon';
 
+/**
+ * A signed-in member reconnecting their own connector, with no invitation.
+ *
+ * The live shape of the Airyn defect (2026-10-03): a member whose connector
+ * already exists, already signed in to Brain, holding no unused invitation,
+ * and Claude registering a *fresh* OAuth client on Reconnect. Before the fix
+ * that dead-ended at "Sign in to connect a worker" until an administrator
+ * issued another link. The assertion that matters is the last one: the whole
+ * reconnect creates **zero** invitations.
+ *
+ * The connector is established once, the way production establishes one — a
+ * member-bound invitation naming it, consented on an earlier client — and is
+ * reused by every later run, which is exactly the state a returning member is
+ * in. That setup is the only place an invitation is ever written here, and it
+ * happens before the count is taken.
+ */
+const RECONNECT_WORKER_NAME = 'verification-reconnect-worker';
+const RECONNECT_ACCOUNT = 'verification-reconnect-account';
+const RECONNECT_REDIRECT = 'https://claude.ai/api/mcp/auth_callback';
+
+async function memberReconnect(fixtures: Fixtures, cookie: string): Promise<void> {
+  console.log('\nA signed-in member reconnecting their own connector');
+  // An exception here must not skip the run's cleanup, so it becomes a failed
+  // check. No secret appears in any URL or error text this path can produce.
+  try {
+    await memberReconnectChecks(fixtures, cookie);
+  } catch (error) {
+    record('the member reconnect ran to completion', false, error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function memberReconnectChecks(fixtures: Fixtures, cookie: string): Promise<void> {
+  if (!cookie) {
+    record('the member reconnect could be attempted', false, 'no member session');
+    return;
+  }
+  const resource = `${base}/mcp`;
+
+  const worker =
+    (await getWorkerByName(RECONNECT_WORKER_NAME)) ??
+    (await createWorker({
+      name: RECONNECT_WORKER_NAME,
+      displayName: 'Hosted verification reconnect worker',
+      workerType: 'GENERIC',
+      description: 'Created by scripts/verify-hosted.ts to prove a member reconnect. Safe to ignore.',
+      createdByType: 'SYSTEM',
+      createdById: 'verify-hosted',
+    }));
+  await setWorkerStatus(worker.id, 'ACTIVE');
+  // Consent refuses a worker that can reach nothing; read-only on the
+  // verification project is the narrowest grant that is not that.
+  await grantMembership({
+    projectId: fixtures.scope.id,
+    principalType: 'WORKER',
+    principalId: worker.id,
+    role: null,
+    scopes: ['project:read'],
+    grantedByType: 'SYSTEM',
+    grantedById: 'verify-hosted',
+  });
+  const connector = await ensureConnector({
+    accountId: RECONNECT_ACCOUNT,
+    resource: '/mcp',
+    workerId: worker.id,
+    label: 'verification (scripts/verify-hosted.ts)',
+  });
+
+  const secrets = new Map<string, string>();
+  const form = async (path: string, body: URLSearchParams, extraCookie = ''): Promise<BoundedReply> =>
+    boundedRequest(`${base}${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: base,
+        ...(extraCookie ? { cookie: extraCookie } : {}),
+      },
+      body: body.toString(),
+      timeoutMs: REQUEST_TIMEOUT_MS,
+    });
+  const registerClient = async (label: string): Promise<string> => {
+    const reply = await call('/oauth/register', {
+      method: 'POST',
+      body: { client_name: label, redirect_uris: [RECONNECT_REDIRECT], token_endpoint_auth_method: 'client_secret_post' },
+    });
+    const json = reply.json as { client_id?: string; client_secret?: string } | null;
+    if (!json?.client_id || !json.client_secret) throw new Error(`client registration answered ${reply.status}`);
+    secrets.set(json.client_id, json.client_secret);
+    return json.client_id;
+  };
+  const pkce = () => {
+    const verifier = crypto.randomBytes(48).toString('base64url');
+    return { verifier, challenge: crypto.createHash('sha256').update(verifier).digest('base64url') };
+  };
+  const query = (clientId: string, challenge: string, extra: Record<string, string> = {}) =>
+    new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: RECONNECT_REDIRECT,
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+      scope: '',
+      resource,
+      ...extra,
+    });
+  const approveAs = async (clientId: string, cookieHeader: string) => {
+    const { verifier, challenge } = pkce();
+    const reply = await form('/oauth/authorize/approve', query(clientId, challenge, { worker_id: worker.id }), cookieHeader);
+    const location = reply.headers['location'];
+    return { status: reply.status, code: location ? new URL(location).searchParams.get('code') : null, verifier };
+  };
+  const exchange = async (clientId: string, code: string, verifier: string) => {
+    const reply = await form(
+      '/oauth/token',
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: RECONNECT_REDIRECT,
+        client_id: clientId,
+        code_verifier: verifier,
+        client_secret: secrets.get(clientId) ?? '',
+      }),
+    );
+    let json: Record<string, string> = {};
+    try {
+      json = JSON.parse(reply.body) as Record<string, string>;
+    } catch {
+      /* reported below */
+    }
+    return { status: reply.status, json };
+  };
+
+  // Hygiene first: a live invitation for this member, left by a run that died,
+  // would send the reconnect down the invited path instead.
+  for (const leftover of await liveInvitationsForMember(fixtures.memberId)) await revokeInvitation(leftover.id);
+
+  // Seed the connector whenever it is not restorable for this member — on the
+  // first run, and after anything (a run that died between consent and token,
+  // a revocation) that would otherwise fail this check on every later deploy.
+  // A further bound invitation for the same member keeps one owner, so
+  // re-seeding is safe. The fresh client below is what the decision is asked
+  // about, and nothing is attached to it by asking.
+  const fresh = await registerClient('Hosted verification (reconnect)');
+  const precondition = await resolveMemberReconnect({ userId: fixtures.memberId, clientId: fresh, resource, scope: '' });
+  if (!precondition.ok || precondition.connector.id !== connector.id) {
+    const generated = generateInvitationToken();
+    await createInvitation({
+      workerId: worker.id,
+      tokenPrefix: generated.prefix,
+      tokenDigest: generated.digest,
+      createdByUserId: fixtures.adminId,
+      kind: 'ADDITIONAL',
+      intendedUserId: fixtures.memberId,
+      connectorId: connector.id,
+      note: 'verify-hosted: the connection a later reconnect restores',
+    });
+    const first = await registerClient('Hosted verification (first connection)');
+    const approved = await approveAs(first, `${cookie}; brain_invite=${encodeURIComponent(generated.plaintext)}`);
+    const tokens = approved.code ? await exchange(first, approved.code, approved.verifier) : null;
+    record(
+      'the member connected through a bound invitation (setup, before the count)',
+      Boolean(tokens?.json['access_token']),
+      `${precondition.ok ? 'other connector' : precondition.reason} -> ` +
+        (approved.code ? `token ${tokens?.status}` : `consent answered ${approved.status}`),
+    );
+    if (!tokens?.json['access_token']) return;
+  } else {
+    record('the member already owns a restorable connector from an earlier run', true, connector.id);
+  }
+
+  const liveBefore = (await liveInvitationsForMember(fixtures.memberId)).length;
+  record('the member holds no unused invitation', liveBefore === 0, `${liveBefore} live`);
+  // Scoped to this worker and this member, so an administrator issuing a real
+  // link to somebody else during the run cannot fail the release gate.
+  const countInvitations = async () =>
+    (await getDb().get<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM worker_invitations WHERE worker_id = ? OR intended_user_id = ?',
+      [worker.id, fixtures.memberId],
+    ))!.n;
+  const invitationsBefore = await countInvitations();
+
+  // Reconnect: Claude registered a fresh client and opens the consent page in
+  // a browser already signed in.
+  const { challenge } = pkce();
+  const page = await boundedRequest(`${base}/oauth/authorize?${query(fresh, challenge)}`, {
+    headers: { cookie },
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  });
+  record(
+    'a signed-in member is not shown the sign-in page',
+    !/Sign in to connect a worker/i.test(page.body),
+    `${page.status}`,
+  );
+  const shown = await getDb().get<{ metadata: string }>(
+    `SELECT metadata FROM identity_events WHERE action = 'OAUTH_AUTHORIZE_PAGE' AND target_id = ?
+      ORDER BY created_at DESC LIMIT 1`,
+    [fresh],
+  );
+  const shownMeta = shown ? (JSON.parse(shown.metadata) as Record<string, unknown>) : {};
+  record(
+    'the consent page is the member reconnect for this connector',
+    page.status === 200 && shownMeta['shown'] === 'MEMBER_RECONNECT' &&
+      Array.isArray(shownMeta['connectorIds']) && (shownMeta['connectorIds'] as string[]).includes(connector.id),
+    `shown=${String(shownMeta['shown'])} reason=${String(shownMeta['reason'] ?? '-')}`,
+  );
+
+  const approved = await approveAs(fresh, cookie);
+  record('approving issues a code', approved.status === 302 && Boolean(approved.code), `${approved.status}`);
+  if (!approved.code) return;
+  const tokens = await exchange(fresh, approved.code, approved.verifier);
+  const access = tokens.json['access_token'];
+  record('the code exchanges for a token', tokens.status === 200 && Boolean(access), `${tokens.status}`);
+  if (!access) return;
+
+  const attached = await connectorClient(fresh);
+  record(
+    'the fresh client is attached to the same connector as a member reconnect',
+    attached?.connectorId === connector.id && attached.source === 'MEMBER_RECONNECT',
+    `${attached?.connectorId ?? 'none'} / ${attached?.source ?? '-'}`,
+  );
+
+  const mcp = await boundedRequest(`${base}/mcp`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      authorization: `Bearer ${access}`,
+      'mcp-protocol-version': '2026-07-28',
+      'mcp-method': 'tools/call',
+      'mcp-name': 'brain_whoami',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: 'brain_whoami',
+        arguments: {},
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientCapabilities': {},
+        },
+      },
+    }),
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  });
+  let principal: Record<string, unknown> | null = null;
+  try {
+    principal = (JSON.parse(mcp.body) as { result?: { structuredContent?: Record<string, unknown> } }).result
+      ?.structuredContent ?? null;
+  } catch {
+    /* reported below */
+  }
+  record(
+    'the reconnected token authenticates an MCP call as the same worker',
+    mcp.status === 200 && principal?.['principalType'] === 'WORKER' && principal?.['handle'] === worker.label,
+    `${mcp.status} ${String(principal?.['handle'] ?? '')}`,
+  );
+
+  const health = await connectorHealth(connector.id);
+  record('the connector reads HEALTHY', health?.state === 'HEALTHY', `${health?.state}/${health?.reason}`);
+
+  const invitationsAfter = await countInvitations();
+  record(
+    'the reconnect created zero invitations',
+    invitationsAfter === invitationsBefore,
+    `${invitationsBefore} -> ${invitationsAfter}`,
+  );
+
+  // Disabled between runs like the other fixture workers; re-enabled above.
+  await setWorkerStatus(worker.id, 'DISABLED');
+}
+
 async function clearBeacons(): Promise<void> {
   const rows = await getDb().all<{ id: string }>(
     'SELECT id FROM work_items WHERE correlation_id LIKE ?',
@@ -4340,6 +4617,8 @@ async function main(): Promise<void> {
     await effectChecks(fixtures, fixtures.adminCookie, cookie);
     // Step 7. Before revocation, because it needs a live credential.
     await mcpChecks(fixtures);
+    // Before revocation: the member's session must still be live.
+    await memberReconnect(fixtures, cookie);
     // Step 9. Also before revocation: it needs the same live credential.
     await researchChecks(fixtures);
     // Step 12A. Before revocation, like the two above: it needs a live session.
