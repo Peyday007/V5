@@ -44,14 +44,14 @@ import {
 import {
   ACCESS_TOKEN_TTL_MS,
   REFRESH_TOKEN_TTL_MS,
-  clientSecretMatches,
   findLiveToken,
   getClientByClientId,
   issueAuthorizationCode,
-  issueToken,
   redeemAuthorizationCode,
   registerClient,
   findPresentedToken,
+  authenticateClient,
+  issueGrant,
   rotateRefreshToken,
 } from '../repos/oauth.ts';
 import { getWorker, listWorkers, listMembershipsForPrincipal, recordIdentityEvent } from '../repos/identity.ts';
@@ -878,13 +878,9 @@ export function oauthRouter(): Router {
         return;
       }
 
-      const client = await getClientByClientId(clientId);
-      if (!client || client.disabledAt !== null) {
-        res.status(401).json({ error: 'invalid_client' });
-        return;
-      }
-      const presentedSecret = str('client_secret') ?? basicClientSecret(req);
-      if (!(await clientSecretMatches(clientId, presentedSecret))) {
+      // One read for both: the client exists, is enabled, and authenticates.
+      const client = await authenticateClient(clientId, str('client_secret') ?? basicClientSecret(req));
+      if (!client) {
         res.status(401).json({ error: 'invalid_client' });
         return;
       }
@@ -973,21 +969,11 @@ export function oauthRouter(): Router {
           await refuseRefresh('WORKER_UNAVAILABLE', existing.workerId);
           return;
         }
-        // Rotation: the presented refresh token and anything minted from it are
-        // revoked and the replacement issued in one transaction, so a stolen
-        // copy is usable at most once and a failed write changes nothing. The
-        // one bounded exception is a retry of a response that never arrived.
-        const rotation = await rotateRefreshToken({
-          tokenId: existing.id,
-          mint: (parentTokenId) =>
-            mintTokenPair({
-              clientId,
-              workerId: existing.workerId,
-              scope: existing.scope,
-              resource: existing.resource,
-              refreshParentId: parentTokenId,
-            }),
-        });
+        // Rotation is idempotent: presenting the same refresh token again yields
+        // the same successor until the client is proven to have moved on, so a
+        // lost reply, a delayed retry, a restart and a race all converge on one
+        // credential. See `rotateRefreshToken`.
+        const rotation = await rotateRefreshToken({ tokenId: existing.id, presentedSecret: parsed.secret });
         if (!rotation.ok) {
           await refuseRefresh(rotation.reason, existing.workerId);
           return;
@@ -1001,7 +987,9 @@ export function oauthRouter(): Router {
           metadata: {
             clientId,
             grant: 'refresh_token',
-            ...(rotation.recovered ? { recovered: 'LOST_RESPONSE_RETRY' } : {}),
+            outcome: rotation.outcome,
+            grantId: rotation.minted.grantId,
+            ...(rotation.outcome !== 'ROTATED' ? { recovered: 'LOST_RESPONSE_RETRY' } : {}),
           },
         });
         return;
@@ -1022,60 +1010,10 @@ async function issueTokenPair(
   res: Response,
   input: { clientId: string; workerId: string; scope: string; resource: string | null },
 ): Promise<void> {
-  sendTokenPair(res, await mintTokenPair({ ...input, refreshParentId: null }));
+  sendTokenPair(res, await issueGrant(input));
 }
 
-interface MintedPair {
-  access: string;
-  refresh: string;
-  scope: string;
-}
-
-/**
- * Write a refresh token and an access token minted from it, and return their
- * values. Sending is separate so a rotation can mint inside its transaction
- * and answer only after it commits. A rotated refresh token names the one it
- * replaced as its parent, which is what lets a lost response be told apart
- * from a replay.
- */
-async function mintTokenPair(input: {
-  clientId: string;
-  workerId: string;
-  scope: string;
-  resource: string | null;
-  refreshParentId: string | null;
-}): Promise<MintedPair> {
-  const access = generateOAuthToken();
-  const refresh = generateOAuthToken();
-
-  const refreshRow = await issueToken({
-    kind: 'REFRESH',
-    tokenPrefix: refresh.prefix,
-    tokenDigest: refresh.digest,
-    clientId: input.clientId,
-    workerId: input.workerId,
-    scope: input.scope,
-    resource: input.resource,
-    ttlMs: REFRESH_TOKEN_TTL_MS,
-    parentTokenId: input.refreshParentId,
-  });
-
-  await issueToken({
-    kind: 'ACCESS',
-    tokenPrefix: access.prefix,
-    tokenDigest: access.digest,
-    clientId: input.clientId,
-    workerId: input.workerId,
-    scope: input.scope,
-    resource: input.resource,
-    ttlMs: ACCESS_TOKEN_TTL_MS,
-    parentTokenId: refreshRow.id,
-  });
-
-  return { access: access.plaintext, refresh: refresh.plaintext, scope: input.scope };
-}
-
-function sendTokenPair(res: Response, pair: MintedPair): void {
+function sendTokenPair(res: Response, pair: { access: string; refresh: string; scope: string }): void {
   res.setHeader('Cache-Control', 'no-store');
   res.status(200).json({
     access_token: pair.access,

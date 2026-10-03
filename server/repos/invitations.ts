@@ -40,6 +40,7 @@ function mapInvitation(row: WorkerInvitationRow): WorkerInvitation {
     note: row.note,
     kind: row.kind,
     intendedUserId: row.intended_user_id,
+    connectorId: row.connector_id ?? null,
   };
 }
 
@@ -54,6 +55,8 @@ export interface CreateInvitationInput {
   kind?: WorkerInvitationKind;
   /** The member it is for. Only ever chosen by the administrator issuing it. */
   intendedUserId?: string | null;
+  /** The logical connector this link reconnects. */
+  connectorId?: string | null;
 }
 
 export async function createInvitation(input: CreateInvitationInput): Promise<WorkerInvitation> {
@@ -62,8 +65,8 @@ export async function createInvitation(input: CreateInvitationInput): Promise<Wo
   await getDb().run(
     `INSERT INTO worker_invitations
        (id, worker_id, token_prefix, token_digest, created_by_user_id,
-        created_at, expires_at, redeemed_at, revoked_at, note, kind, intended_user_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)`,
+        created_at, expires_at, redeemed_at, revoked_at, note, kind, intended_user_id, connector_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`,
     [
       id,
       input.workerId,
@@ -75,6 +78,7 @@ export async function createInvitation(input: CreateInvitationInput): Promise<Wo
       input.note ?? null,
       input.kind ?? 'ROTATING',
       input.intendedUserId ?? null,
+      input.connectorId ?? null,
     ],
   );
   const row = await getDb().get<WorkerInvitationRow>(
