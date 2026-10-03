@@ -45,6 +45,7 @@ import {
   isRunning,
   onResearchProgress,
   researchQueueDepth,
+  resumeRefusal,
   resumeResearch,
 } from '../services/research/queue.ts';
 import { applyReviewDecisions, buildReview } from '../services/research/review.ts';
@@ -55,6 +56,7 @@ import {
   badRequest,
   bodyOf,
   handler,
+  conflict,
   notFound,
   optionalBoolean,
   optionalString,
@@ -389,8 +391,13 @@ researchRouter.post(
 researchRouter.post(
   '/research/:orchestrationId/resume',
   handler(async (req) => {
-    const orchestrationId = (await requireOrchestration(pathId(req, 'orchestrationId'))).id;
-    void resumeResearch(orchestrationId);
+    const orchestration = await requireOrchestration(pathId(req, 'orchestrationId'));
+    const orchestrationId = orchestration.id;
+    const refusal = resumeRefusal(orchestration);
+    if (refusal) throw conflict(refusal);
+    resumeResearch(orchestrationId).catch((error: unknown) => {
+      console.error(`Resuming research run ${orchestrationId} failed:`, error instanceof Error ? error.message : error);
+    });
     return orchestrationView(orchestrationId);
   }),
 );
