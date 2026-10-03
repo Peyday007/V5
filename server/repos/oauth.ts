@@ -363,36 +363,34 @@ export async function findPresentedToken(
   return mapToken(row);
 }
 
-/**
- * How long after a rotation its presented refresh token may be retried.
+/*
+ * There is no clock on the lost-response recovery, and there were two.
  *
  * Production, 2026-09-27 07:27Z: a refresh took about thirty seconds to commit,
  * the client never received the response, and it retried with the token the
- * rotation had just revoked — so a connector that had refreshed hourly for
- * three days was dead until a person reconnected it.
+ * rotation had just revoked. Five minutes was the first bound. Production,
+ * 2026-09-30: the `/mcp/factory` rotation took ~84 s, and the retry came from
+ * the Routine's next session 68 minutes later — so the bound became 24 hours.
+ * Production, 2026-10-01 21:40Z: the cloud-brain connector's rotation took
+ * ~117 s, Claude gave up, marked the connector as needing authorization and did
+ * not retry on its own; the only retry was the person pressing *reconnect* at
+ * 2026-10-03 04:58Z — 31 hours later — refused OUTSIDE_RETRY_WINDOW over a
+ * successor and an access token that had never been used.
  *
- * Five minutes was the first bound, on the assumption that a retry of a lost
- * response arrives within seconds. Production, 2026-09-30, measured otherwise:
- * the `/mcp/factory` connector's rotation at 14:32:18 took about 84 s to commit
- * on a degraded database, the client gave up, and the retry came from the *next
- * session the Routine started* — at 15:40:41, 68 minutes later — and was refused
- * OUTSIDE_RETRY_WINDOW. The successor and its access token had never been used.
- * Claude then marked the connector as needing interactive authorization, which
- * a Routine cannot do. A Routine client retries when it next runs, so the bound
- * has to cover the gap between runs, not the gap between packets.
- *
- * What keeps this safe is unchanged and is not the clock: recovery requires that
- * the single successor and every access token minted from it were never used, and
- * it is spent the first time it is honoured. The window only bounds how long a
- * stolen pre-rotation token stays worth anything when the legitimate client has
- * also gone quiet. Twenty-four hours covers a Routine that fires daily and is
- * still a small fraction of the thirty-day refresh lifetime.
+ * Each bound was a guess about when a client retries, and the client decides
+ * that. What makes recovery safe was never the clock: the single successor and
+ * every access token minted from it must never have been used, so the client
+ * provably never received them, and recovery is spent the first time it is
+ * honoured. Under those conditions the presented token is still the client's
+ * current credential in every sense but the row, so it is honoured for as long
+ * as the token itself would have lived — its own `expires_at`, checked below
+ * as NOT_LIVE. A replay after the successor was used is still REUSED, and a
+ * second replay still RECOVERY_SPENT, which is the replay detection this keeps.
  */
-export const LOST_RESPONSE_RETRY_MS = 24 * 60 * 60_000;
 
 export type RefreshRotation<T> =
   | { ok: true; recovered: boolean; minted: T }
-  | { ok: false; reason: 'NOT_LIVE' | 'REUSED' | 'RECOVERY_SPENT' | 'OUTSIDE_RETRY_WINDOW' };
+  | { ok: false; reason: 'NOT_LIVE' | 'REUSED' | 'RECOVERY_SPENT' };
 
 /**
  * Rotate a refresh token — atomically, and survivably when the answer is lost.
@@ -405,14 +403,14 @@ export type RefreshRotation<T> =
  *
  * A presented token that is already revoked is refused, with one exception
  * that exists for the lost-response case and nothing else. It is honoured, once,
- * when every one of these holds: the token was revoked no more than
- * `LOST_RESPONSE_RETRY_MS` ago; exactly one refresh token has been minted from
+ * when every one of these holds: the token has not reached its own expiry;
+ * exactly one refresh token has been minted from
  * it, so the revocation was a rotation and this is its first repeat; that
  * successor is still live, so nothing explicitly revoked it; and neither it nor
  * any access token minted from it has ever been used, so the client never
  * received it. The unused successor is then revoked and a new pair issued in
  * its place. Anything else — a replay after the replacement was used, a second
- * replay, an explicit revocation, a replay after the window — is refused, which
+ * replay, an explicit revocation, an expired token — is refused, which
  * is the replay detection this keeps.
  */
 export async function rotateRefreshToken<T>(input: {
@@ -443,9 +441,6 @@ export async function rotateRefreshToken<T>(input: {
       [input.tokenId],
     );
     if (successors.length === 0) return { ok: false as const, reason: 'NOT_LIVE' as const };
-    if (now - Date.parse(presented.revoked_at) > LOST_RESPONSE_RETRY_MS) {
-      return { ok: false as const, reason: 'OUTSIDE_RETRY_WINDOW' as const };
-    }
     if (successors.length > 1) return { ok: false as const, reason: 'RECOVERY_SPENT' as const };
     const successor = successors[0]!;
     if (successor.revoked_at !== null || successor.last_used_at !== null) {

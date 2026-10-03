@@ -11,7 +11,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
-  LOST_RESPONSE_RETRY_MS,
   issueToken,
   revokeTokensForWorker,
   rotateRefreshToken,
@@ -105,16 +104,31 @@ describe('refresh rotation', () => {
     expect(next.ok).toBe(true);
   });
 
-  it('refuses the retry once the window has passed', async () => {
+  /*
+   * Production, 2026-10-01 21:40Z: the rotation's answer was lost, Claude did
+   * not retry by itself, and the first retry was a person pressing reconnect
+   * 31 hours later — refused under the 24-hour bound over a successor nobody
+   * had used. It recovers now, for as long as the token itself would live.
+   */
+  it('recovers a lost response retried 31 hours later, and refuses it once the token itself has expired', async () => {
     const { workerId, refreshId } = await chain();
     const first = await rotateRefreshToken({ tokenId: refreshId, mint: minter(workerId) });
     expect(first.ok && !first.recovered).toBe(true);
     const late = await rotateRefreshToken({
       tokenId: refreshId,
-      now: Date.now() + LOST_RESPONSE_RETRY_MS + 1_000,
+      now: Date.now() + 31 * 60 * 60_000,
       mint: minter(workerId),
     });
-    expect(late).toEqual({ ok: false, reason: 'OUTSIDE_RETRY_WINDOW' });
+    expect(late.ok && late.recovered).toBe(true);
+
+    const second = await chain();
+    await rotateRefreshToken({ tokenId: second.refreshId, mint: minter(second.workerId) });
+    const expired = await rotateRefreshToken({
+      tokenId: second.refreshId,
+      now: Date.now() + 400 * 24 * 60 * 60_000,
+      mint: minter(second.workerId),
+    });
+    expect(expired).toEqual({ ok: false, reason: 'NOT_LIVE' });
   });
 
   /*
