@@ -96,7 +96,10 @@ export function noteFor(input: {
   const filed = input.milestones.filter((milestone) => milestone.kind === 'REPORT_FILED');
   const closed = input.milestones.filter((milestone) => milestone.kind === 'EDGE_CLOSED');
 
-  if (settled.length >= 2) {
+  if (settled.length > 2) {
+    return `${settled.length} foundations are settled now, most recently ${settled[0]!.what} and ${settled[1]!.what}. Those are the parts the rest can be built on.`;
+  }
+  if (settled.length === 2) {
     return `Two foundations are settled now — ${settled[0]!.what} and ${settled[1]!.what}. Those are the parts the rest can be built on.`;
   }
   if (filed.length >= 2) {
