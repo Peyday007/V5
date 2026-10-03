@@ -1,0 +1,40 @@
+# One-off, read-only egress diagnostic.
+#
+# Opens a single Postgres session from inside the production machine, sets it
+# READ ONLY, and runs SELECTs only: pg_stat_statements, row counts and table
+# sizes. It writes no row, creates nothing, changes no setting, and deploys
+# nothing. The script travels base64-encoded and is piped to node on stdin, so
+# nothing is written to the machine's disk.
+name: Egress diagnose
+
+on:
+  push:
+    branches:
+      - 'claude/optimistic-knuth-9elc7d'
+    paths:
+      - '.github/workflows/egress-diagnose.yml'
+
+concurrency:
+  group: brain-console-egress-diagnose
+  cancel-in-progress: false
+
+jobs:
+  read:
+    name: Read pg_stat_statements and table sizes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: ./.github/actions/await-release
+      - name: Read
+        timeout-minutes: 10
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "sh -c 'echo Y29uc3QgeyBDbGllbnQgfSA9IHJlcXVpcmUoJy9hcHAvbm9kZV9tb2R1bGVzL3BnJyk7CmNvbnN0IHVybCA9IHByb2Nlc3MuZW52LkJSQUlOX0RBVEFCQVNFX1VSTDsKaWYgKCF1cmwpIHsgY29uc29sZS5sb2coJ0VHUkVTUy1ESUFHOiBGQUlMRUQgbm8gQlJBSU5fREFUQUJBU0VfVVJMJyk7IHByb2Nlc3MuZXhpdCgxKTsgfQpjb25zdCBzc2wgPSAvc3NsbW9kZT0vaS50ZXN0KHVybCkgPyB1bmRlZmluZWQgOiB7IHJlamVjdFVuYXV0aG9yaXplZDogZmFsc2UgfTsKY29uc3QgYyA9IG5ldyBDbGllbnQoeyBjb25uZWN0aW9uU3RyaW5nOiB1cmwsIHNzbCwgc3RhdGVtZW50X3RpbWVvdXQ6IDYwMDAwIH0pOwpjb25zdCBRID0gWwogIFsncGdfc3RhdF9zdGF0ZW1lbnRzIHRvcCAyNSBieSByb3dzJywgYFNFTEVDVCBjYWxscywgcm93cywgcm91bmQocm93czo6bnVtZXJpYy9udWxsaWYoY2FsbHMsMCkpIEFTIGF2Z19yb3dzLCByb3VuZCh0b3RhbF9leGVjX3RpbWUpIEFTIG1zLCBsZWZ0KHJlZ2V4cF9yZXBsYWNlKHF1ZXJ5LCAnXFxzKycsICcgJywgJ2cnKSwgMjIwKSBBUyBxdWVyeSBGUk9NIHBnX3N0YXRfc3RhdGVtZW50cyBPUkRFUiBCWSByb3dzIERFU0MgTElNSVQgMjVgXSwKICBbJ3BnX3N0YXRfc3RhdGVtZW50cyB0b3AgMTUgYnkgY2FsbHMnLCBgU0VMRUNUIGNhbGxzLCByb3dzLCByb3VuZChyb3dzOjpudW1lcmljL251bGxpZihjYWxscywwKSkgQVMgYXZnX3Jvd3MsIGxlZnQocmVnZXhwX3JlcGxhY2UocXVlcnksICdcXHMrJywgJyAnLCAnZycpLCAxNjApIEFTIHF1ZXJ5IEZST00gcGdfc3RhdF9zdGF0ZW1lbnRzIE9SREVSIEJZIGNhbGxzIERFU0MgTElNSVQgMTVgXSwKICBbJ3BnX3N0YXRfc3RhdGVtZW50c19pbmZvIChyZXNldCB0aW1lKScsIGBTRUxFQ1QgKiBGUk9NIHBnX3N0YXRfc3RhdGVtZW50c19pbmZvYF0sCiAgWydmYWN0b3J5X2NhbXBhaWducyBieSBzdGF0ZScsIGBTRUxFQ1Qgc3RhdGUsIGNvdW50KCopIEZST00gZmFjdG9yeV9jYW1wYWlnbnMgR1JPVVAgQlkgMSBPUkRFUiBCWSAxYF0sCiAgWydiaW5zIFJFQURZL0xFQVNFRCBtYW5pZmVzdCcsIGBTRUxFQ1QgY291bnQoKiksIHJvdW5kKGF2ZyhsZW5ndGgobWFuaWZlc3QpKSkgQVMgYXZnX21hbmlmZXN0LCByb3VuZChhdmcobGVuZ3RoKGNvYWxlc2NlKGNoZWNrcG9pbnQsJycpKSkpIEFTIGF2Z19jaGVja3BvaW50IEZST00gYmlucyBXSEVSRSBzdGF0ZSBJTiAoJ1JFQURZJywnTEVBU0VEJylgXSwKICBbJ2JpbnMgYnkgc3RhdGUnLCBgU0VMRUNUIHN0YXRlLCBjb3VudCgqKSwgcm91bmQoYXZnKGxlbmd0aChtYW5pZmVzdCkpKSBBUyBhdmdfbWFuaWZlc3QgRlJPTSBiaW5zIEdST1VQIEJZIDEgT1JERVIgQlkgMiBERVNDYF0sCiAgWydleHRlcm5hbF9yZWNvcmRzIHdpdGggY2FuZGlkYXRlJywgYFNFTEVDVCBjb3VudCgqKSBGUk9NIGV4dGVybmFsX3JlY29yZHMgV0hFUkUgY2FuZGlkYXRlX2lkIElTIE5PVCBOVUxMYF0sCiAgWydiaW5fZXZlbnRzIGNvdW50JywgYFNFTEVDVCBjb3VudCgqKSBGUk9NIGJpbl9ldmVudHNgXSwKICBbJ3Jlc2VhcmNoX3Bhc3NlcycsIGBTRUxFQ1QgY291bnQoKiksIHJvdW5kKGF2ZyhsZW5ndGgoY29hbGVzY2UocHJvbXB0LCcnKSkrbGVuZ3RoKGNvYWxlc2NlKHJhd19yZXNwb25zZSwnJykpKSkgQVMgYXZnX3RleHRfYnl0ZXMgRlJPTSByZXNlYXJjaF9wYXNzZXNgXSwKICBbJ3RhYmxlIHNpemVzICh0b3AgMjUpJywgYFNFTEVDVCByZWxuYW1lLCBuX2xpdmVfdHVwLCBwZ19zaXplX3ByZXR0eShwZ190b3RhbF9yZWxhdGlvbl9zaXplKHJlbGlkKSkgQVMgdG90YWwsIHNlcV9zY2FuLCBzZXFfdHVwX3JlYWQsIGlkeF90dXBfZmV0Y2ggRlJPTSBwZ19zdGF0X3VzZXJfdGFibGVzIE9SREVSIEJZIHBnX3RvdGFsX3JlbGF0aW9uX3NpemUocmVsaWQpIERFU0MgTElNSVQgMjVgXSwKICBbJ3BnX3N0YXRfZGF0YWJhc2UnLCBgU0VMRUNUIGRhdG5hbWUsIHR1cF9yZXR1cm5lZCwgdHVwX2ZldGNoZWQsIHN0YXRzX3Jlc2V0IEZST00gcGdfc3RhdF9kYXRhYmFzZSBXSEVSRSBkYXRuYW1lID0gY3VycmVudF9kYXRhYmFzZSgpYF0sCl07Cihhc3luYyAoKSA9PiB7CiAgYXdhaXQgYy5jb25uZWN0KCk7CiAgYXdhaXQgYy5xdWVyeSgnU0VUIFNFU1NJT04gQ0hBUkFDVEVSSVNUSUNTIEFTIFRSQU5TQUNUSU9OIFJFQUQgT05MWScpOwogIGF3YWl0IGMucXVlcnkoIlNFVCBzZWFyY2hfcGF0aCA9IHB1YmxpYywgZXh0ZW5zaW9ucyIpOwogIGZvciAoY29uc3QgW25hbWUsIHNxbF0gb2YgUSkgewogICAgY29uc29sZS5sb2coYFxuPT09ICR7bmFtZX1gKTsKICAgIHRyeSB7IGNvbnN0IHIgPSBhd2FpdCBjLnF1ZXJ5KHNxbCk7IGNvbnNvbGUubG9nKEpTT04uc3RyaW5naWZ5KHIucm93cykpOyB9CiAgICBjYXRjaCAoZSkgeyBjb25zb2xlLmxvZygnRVJST1IgJyArIGUubWVzc2FnZSk7IH0KICB9CiAgYXdhaXQgYy5lbmQoKTsKICBjb25zb2xlLmxvZygnXG5FR1JFU1MtRElBRzogT0snKTsKfSkoKS5jYXRjaCgoZSkgPT4geyBjb25zb2xlLmxvZygnRUdSRVNTLURJQUc6IEZBSUxFRCAnICsgZS5tZXNzYWdlKTsgcHJvY2Vzcy5leGl0KDEpOyB9KTsK | base64 -d | node -'" \
+            2>&1 | tee diag.txt
+          set -e
+          grep -q '^EGRESS-DIAG: OK' diag.txt
