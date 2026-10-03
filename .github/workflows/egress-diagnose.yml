@@ -6,7 +6,7 @@
 # nothing. The script travels base64-encoded and is piped to node on stdin, so
 # nothing is written to the machine's disk.
 name: Egress diagnose
-# snapshot: T1
+# snapshot: T2 (pre-deploy)
 
 on:
   push:
