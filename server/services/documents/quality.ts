@@ -126,9 +126,14 @@ export function assessExtraction(input: AssessInput): ExtractionQuality {
   const readable: number[] = [];
   const failed: number[] = [];
   let characterCount = 0;
+  // Characters from pages OCR does not believe are not text we have read, so
+  // they never count towards the minimum-document check (the raw total above
+  // is still what is reported).
+  let trustedCharacterCount = 0;
 
   for (const page of pages) {
     characterCount += page.characterCount;
+    if (!distrusted.has(page.pageNumber)) trustedCharacterCount += page.characterCount;
     if (page.characterCount >= THRESHOLDS.minPageCharacters && !distrusted.has(page.pageNumber)) {
       readable.push(page.pageNumber);
     } else {
@@ -191,10 +196,10 @@ export function assessExtraction(input: AssessInput): ExtractionQuality {
   if (pagesExpected === 0) {
     status = 'BLOCKED';
     blockedReason = 'The document contains no pages.';
-  } else if (characterCount < THRESHOLDS.minDocumentCharacters) {
+  } else if (trustedCharacterCount < THRESHOLDS.minDocumentCharacters) {
     status = 'BLOCKED';
     blockedReason =
-      `Only ${characterCount} characters could be extracted from ${pagesExpected} page(s), ` +
+      `Only ${trustedCharacterCount} characters could be read from ${pagesExpected} page(s), ` +
       'which is not enough to audit. The file may be a scan with no OCR available, or empty.';
   } else if (coverageRatio < THRESHOLDS.minCoverageRatio) {
     status = 'BLOCKED';
