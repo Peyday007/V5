@@ -247,3 +247,20 @@ export async function recoveryProbesClosedBetween(since: string, until: string):
 export async function amendRecoveryOutcome(id: string, outcome: string): Promise<void> {
   await getDb().run('UPDATE connector_recovery_probes SET outcome = ? WHERE id = ?', [outcome, id]);
 }
+
+/** A probe abandoned mid-fire still names the session its fire started, so that session is recognised. */
+export async function recordAbandonedSession(id: string, providerSession: string): Promise<void> {
+  await getDb().run(
+    `UPDATE connector_recovery_probes SET provider_session = ?, session_key = ?
+      WHERE id = ? AND session_key IS NULL AND live IS NULL`,
+    [providerSession, normalizeSessionRef(providerSession), id],
+  );
+}
+
+export async function recoveryProbesHealthySince(since: string): Promise<RecoveryProbe[]> {
+  const rows = await getDb().all<RecoveryProbeRow>(
+    "SELECT * FROM connector_recovery_probes WHERE state = 'HEALTHY' AND settled_at >= ? ORDER BY settled_at, id",
+    [since],
+  );
+  return rows.map(map);
+}

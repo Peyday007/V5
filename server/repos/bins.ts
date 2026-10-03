@@ -2554,6 +2554,15 @@ async function sessionlessDuringRecovery(workerId: string, credentialId: string 
     [workerId, credentialId ?? ''],
   );
   if (!probe) return null;
+  // One event per probe and credential: a session that keeps polling inside
+  // the window must not write a row every time it asks.
+  const seen = await getDb().get<{ hit: number }>(
+    `SELECT 1 AS hit FROM bin_events
+      WHERE bin_id = ? AND event_type = 'RECOVERY_PROBE_SESSIONLESS_ARRIVAL' AND worker_id = ? AND measures LIKE ?
+      LIMIT 1`,
+    [probe.bin_id, workerId, `%${credentialId ?? 'null'}%`],
+  );
+  if (seen) return '__none__';
   await recordBinEvent({
     eventType: 'RECOVERY_PROBE_SESSIONLESS_ARRIVAL',
     binId: probe.bin_id,

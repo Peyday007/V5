@@ -79,9 +79,11 @@ import { getConnector } from '../../repos/connectors.ts';
 import { getBin, listBinEvents, markBinReady, recordRecoveryDispatch, retireBin } from '../../repos/bins.ts';
 import {
   amendRecoveryOutcome,
+  recordAbandonedSession,
   attachRecoveryBin,
   getRecoveryProbe,
   recoveryProbesClosedBetween,
+  recoveryProbesHealthySince,
   liveRecoveryProbe,
   listRecoveryProbes,
   markRecoveryFired,
@@ -248,8 +250,9 @@ export async function startRecoveryProbe(input: {
   // The session's identity first, so it is recognised the moment it arrives.
   if (!(await markRecoveryFired(probe.id, outcome.sessionRef!))) {
     // The tick settled the reservation as abandoned while the fire was in
-    // flight. The session it started will be offered nothing and is reported
-    // there; nothing more is written about it here.
+    // flight. Its session is still recorded on the row, so if it arrives it is
+    // recognised and offered nothing (its bin is retired just below).
+    await recordAbandonedSession(probe.id, outcome.sessionRef!);
     await retireBin({ binId, leaseGeneration: 0, operator: RECOVERY_PROBE_CREATOR, reason: 'recovery probe settled during its fire' });
     return (await getRecoveryProbe(probe.id))!;
   }
@@ -488,6 +491,23 @@ export async function settleRecoveryProbes(now = Date.now()): Promise<{ settled:
   for (const probe of await listRecoveryProbes(['FIRING', 'FIRED'])) {
     if (await settleRecoveryProbeNow(probe, now)) settled.push(probe.id);
   }
+  // A HEALTHY probe whose lift did not happen (the process stopped between
+  // claiming the outcome and lifting): re-derived here, idempotent through the
+  // state compare-and-swap. Only a quarantine Brain derived before the arrival.
+  for (const probe of await recoveryProbesHealthySince(new Date(now - 24 * 60 * 60_000).toISOString())) {
+    const routine = await getRoutine(probe.routineId);
+    if (!routine || routine.state !== 'QUARANTINED' || !probe.arrivedAt) continue;
+    if (!liftableQuarantine(routine.stateReason) || routine.updatedAt > probe.arrivedAt) continue;
+    if (routine.connectorId !== probe.connectorId) continue;
+    const moved = await setRoutineState({
+      routineId: routine.id,
+      from: 'QUARANTINED',
+      to: 'ENABLED',
+      reason: `Recovery probe ${probe.id} proved connector ${probe.connectorId} healthy; the lift it owed is applied now.`,
+    });
+    if (moved) forgetRoutingHealth();
+  }
+
   // A settled probe whose bin outlived its window: the session that held it is
   // gone (or never came), and with one attempt the bin can go nowhere else.
   const until = new Date(now).toISOString();

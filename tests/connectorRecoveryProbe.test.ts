@@ -29,7 +29,13 @@ import {
   startRecoveryProbe,
   type Fire,
 } from '../server/services/fleet/recoveryProbe.ts';
-import { getRecoveryProbe } from '../server/repos/recoveryProbes.ts';
+import {
+  getRecoveryProbe,
+  markRecoveryFired,
+  recordRecoveryArrival,
+  reserveRecoveryProbe,
+  settleRecoveryProbe,
+} from '../server/repos/recoveryProbes.ts';
 import { parseOAuthToken } from '../server/services/identity/secrets.ts';
 import type { BinManifest, Principal } from '../server/domain/types.ts';
 
@@ -407,6 +413,32 @@ describe('an arrival that reports no session during a probe', () => {
     const arrival = await arrive(caleb, null);
     expect(arrival.assigned).toBe(true);
     if (arrival.assigned) expect(arrival.assignment.binId).toBe(real);
+  });
+});
+
+describe('a lift that did not happen', () => {
+  it('is re-derived by the tick when the process stopped between proving and lifting', async () => {
+    const airyn = await account('airyn');
+    const connector = await ensureConnector({ accountId: airyn.accountId, resource: '/mcp/factory', workerId });
+    await attachClient({ clientId: airyn.clientId, connectorId: connector.id, source: 'OBSERVED_ARRIVAL' });
+    await bindRoutineConnector(airyn.routineId, connector.id);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const probe = (await reserveRecoveryProbe({
+      routineId: airyn.routineId,
+      accountId: airyn.accountId,
+      workerId,
+      requestedById: 'usr_admin',
+      authorityChannel: 'SHELL',
+      expiresAt: new Date(Date.now() + RECOVERY_PROBE_WINDOW_MS).toISOString(),
+    }))!;
+    await markRecoveryFired(probe.id, 'cse_CRASH');
+    await recordRecoveryArrival(probe.id, { credentialId: airyn.accessId, clientId: airyn.clientId, arrivedAt: new Date().toISOString() });
+    // Claimed HEALTHY, then the process died before setRoutineState.
+    await settleRecoveryProbe(probe.id, 'FIRED', { to: 'HEALTHY', connectorId: connector.id, outcome: 'Proven' });
+    expect((await getRoutine(airyn.routineId))!.state).toBe('QUARANTINED');
+
+    await settleRecoveryProbes();
+    expect((await getRoutine(airyn.routineId))!.state).toBe('ENABLED');
   });
 });
 
