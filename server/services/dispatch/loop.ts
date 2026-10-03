@@ -353,6 +353,18 @@ export async function dispatchTick(
   } catch {
     result.recoveredAfterReauth = [];
   }
+  /*
+   * Recovery probes (`services/fleet/recoveryProbe.ts`): settle any whose
+   * session has arrived or whose window has closed. A probe that proves a
+   * healthy connector lifts the quarantine Brain derived; one that proves
+   * nothing attaches nothing and charges nothing. Cheap when none is live.
+   */
+  try {
+    const { settleRecoveryProbes } = await import('../fleet/recoveryProbe.ts');
+    await settleRecoveryProbes();
+  } catch {
+    // Evidence, not a precondition. The next pass retries it.
+  }
 
   // Ensure intent for everything a worker could be given — which is not the
   // same set as "READY". A bin whose worker died is claimable the moment its

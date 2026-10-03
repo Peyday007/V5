@@ -11954,6 +11954,28 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   connector, prints no link (§17), and the person signs in, reconnects in Claude
   and approves. `admin connectors show` is the one read, and replaces
   archaeology through OAuth rows.
+- **A quarantined Routine nobody can attribute obtains its own proof.**
+  Attribution needs a proven arrival, an arrival needs a fire, and Brain does
+  not fire a quarantined surface — so without a way out, the only remedies were
+  an operator guessing which OAuth client is whose or re-enabling the surface
+  blind, and both were refused. `services/fleet/recoveryProbe.ts` is the way
+  out: one fire at one Routine, outside routing, one in the Brain at a time
+  (a UNIQUE column), whose session is recognised by the provider session the
+  fire returned — single-use, bound to one Routine, expiring with the probe and
+  withheld from the probe's output while live (operator-readable dispatch rows
+  still hold it, a residual risk stated in the doc). A check-in with no session
+  during a probe of its worker, from an unattributed client, is offered nothing
+  and settles the probe AMBIGUOUS, since it may have been the probe's own. The probe's bin is pinned,
+  has one attempt, and is the only bin its session is ever offered, so a probe
+  cannot dispatch real work; its fire is `RECOVERY_PROBE_FIRED`, which the
+  activation ledger does not count, and the no-show pass skips it. A healthy
+  arrival binds the connector and lifts a quarantine Brain derived; a connector
+  proven to need consent names the one human action; silence is `NO_MCP`,
+  attaching nothing and charging nothing. An arrival authenticated as a
+  different worker than the connector at that (account, endpoint) already
+  authorizes as is a conflict, never a merge, which keeps one person's research
+  and Factory connectors separate. `admin connectors probe` prints the whole
+  chain.
 - **What it cannot fix is named.** A refresh that never reached Brain is silence,
   indistinguishable from a Routine not starting; Claude's own needs-auth state
   clears only by consent in Claude. Brain answers every retry correctly and
@@ -12003,6 +12025,7 @@ server/
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
     deliveryProofs.ts   what each Routine has been shown able to deliver, per repository
     connectors.ts       one Claude account at one endpoint, and every OAuth client it ever was
+    recoveryProbes.ts   each recovery probe and what its fire proved; one live at a time
     factory.ts          the contract, the campaign, and units that own a surface
     factoryFleet.ts     factory workers, sessions, reviews, findings, the ledger
     externalRecords.ts  a site's record, its version guard, and its refusals
@@ -12142,6 +12165,7 @@ server/
       capacity.ts       what the dispatcher would fire, counted once and labelled honestly
       connectorHealth.ts  the one answer to whether a connector can authenticate, and whose fault a no-show is
       connectorBinding.ts which connector a client and a Routine are, from proof; auth-caused quarantines lifted
+      recoveryProbe.ts  one controlled fire that proves a quarantined, unattributed Routine's connector
       memberReconnect.ts  the one connector a signed-in member may restore without an invitation, or why not
       probe.ts          the one bounded self-test that turns configured into proven
       commission.ts     every commissioning step in order, and one READY / NOT READY answer
@@ -12505,6 +12529,7 @@ tests/                  Vitest suites
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
   connectorLifecycle.test.ts two accounts on one worker, an auth no-show, and a recovery nobody pressed
+  connectorRecoveryProbe.test.ts  a quarantined, unattributed Routine proving its own connector
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```

@@ -66,6 +66,9 @@ export async function createProbeBin(
      * READY. Defaults to true, which is what the terminal command wants.
      */
     ready?: boolean;
+    /** One for a recovery probe, so the bin can never be handed out twice. */
+    maxAttempts?: number;
+    priority?: number;
   },
 ): Promise<string> {
   const memberships = (await listMembershipsForPrincipal('WORKER', input.worker.id)).filter(
@@ -157,7 +160,8 @@ export async function createProbeBin(
     createdByType: input.createdByType ?? 'SYSTEM',
     createdById: input.createdById ?? 'capacity-probe',
     ready: input.ready ?? true,
-    maxAttempts: 2,
+    maxAttempts: input.maxAttempts ?? 2,
+    ...(input.priority !== undefined ? { priority: input.priority } : {}),
   });
   return bin.id;
 }

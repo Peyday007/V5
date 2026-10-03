@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'oauth trace | connectors show | connectors derive | connectors attach | connectors reconnect | people list | people rename | people foundation | capacity show | capacity adopt | factory invite | projects list | projects create | workers list | workers create | access show | access grant | research start | packets list | packets syntheses | packets recover-synthesis | cash seed-industry'
+        description: 'oauth trace | connectors show | connectors derive | connectors attach | connectors reconnect | connectors probe | connectors probe-status | connectors repoint-worker | people list | people rename | people foundation | capacity show | capacity adopt | factory invite | projects list | projects create | workers list | workers create | access show | access grant | research start | packets list | packets syntheses | packets recover-synthesis | cash seed-industry'
         required: true
         default: projects list
       subject:
@@ -92,7 +92,7 @@ jobs:
           # happened to `people list`, and what made a deployed image
           # unverifiable by the one command that could have proved it.
           case "$ADMIN_COMMAND" in
-            'oauth trace'|'connectors show'|'connectors derive'|'connectors attach'|'connectors reconnect'|'people list'|'people rename'|'people foundation'|'capacity show'|'capacity adopt'|'factory invite'|'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start'|'packets list'|'packets syntheses'|'packets recover-synthesis'|'cash seed-industry') ;;
+            'oauth trace'|'connectors show'|'connectors derive'|'connectors attach'|'connectors reconnect'|'connectors probe'|'connectors probe-status'|'connectors repoint-worker'|'people list'|'people rename'|'people foundation'|'capacity show'|'capacity adopt'|'factory invite'|'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start'|'packets list'|'packets syntheses'|'packets recover-synthesis'|'cash seed-industry') ;;
             *)
               echo "::error::Refusing '$ADMIN_COMMAND': see the command list on this workflow."
               exit 1
@@ -102,7 +102,7 @@ jobs:
           # Every mutating command names who it is recorded against. A creation
           # with no author is the thing `--admin` exists to prevent.
           case "$ADMIN_COMMAND" in
-            *create|'people rename'|'capacity adopt'|'factory invite'|'connectors derive'|'connectors attach'|'connectors reconnect'|'access grant'|'research start'|'cash seed-industry'|'packets recover-synthesis')
+            *create|'people rename'|'capacity adopt'|'factory invite'|'connectors derive'|'connectors attach'|'connectors reconnect'|'connectors probe'|'connectors repoint-worker'|'access grant'|'research start'|'cash seed-industry'|'packets recover-synthesis')
               if [ -z "$ADMIN_ADMIN" ]; then
                 echo "::error::'$ADMIN_COMMAND' changes something, so it needs --admin <email>."
                 exit 1

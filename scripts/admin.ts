@@ -258,6 +258,8 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
             clear <worker> | retire <worker> --reason "why"
   connectors show | derive | attach <brnc_…> <trig_…>
              reconnect <cnr_…|trig_…> <user|email>
+             probe <trig_…> [--no-wait] | probe-status <trig_…|crp_…>
+             repoint-worker <cnr_…> <to-worker>
   projects  list | create <name>
   access    show <worker> | grant <worker> <project> | revoke <worker> <project>
   queue     list <project>
@@ -269,6 +271,32 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
 Connecting a site is not here. It is a person's decision and it lives in
 Russell, under Connected sites, which is the only place a site credential is
 ever shown.`;
+
+/** Every field of a recovery probe's outcome, so nobody joins rows by hand. */
+async function printProbe(probe: import('../server/repos/recoveryProbes.ts').RecoveryProbe): Promise<void> {
+  const { getRoutine, getAccount } = await import('../server/repos/fleet.ts');
+  const { getConnector } = await import('../server/repos/connectors.ts');
+  const routine = await getRoutine(probe.routineId);
+  const account = await getAccount(probe.accountId);
+  const connector = probe.connectorId ? await getConnector(probe.connectorId) : null;
+  console.log(`RECOVERY PROBE ${probe.id}`);
+  console.log(`  routine           ${routine ? `${routine.name} ${routine.routineRef}` : probe.routineId}`);
+  console.log(`  account           ${account ? `${account.name} (${account.id})` : probe.accountId}`);
+  console.log(`  state             ${probe.state}`);
+  console.log(`  recovery fire     ${probe.firedAt ? `${probe.binId ?? '—'} at ${probe.firedAt}` : '—'}`);
+  // The provider session is the probe's proof; it is not printed while the
+  // probe is live, so a log line cannot be the way somebody else presents it.
+  const live = probe.state === 'FIRING' || probe.state === 'FIRED';
+  console.log(`  provider session  ${live ? (probe.providerSession ? '(withheld while the probe is live)' : '—') : (probe.providerSession ?? '—')}`);
+  console.log(`  arrived           ${probe.arrivedAt ?? '—'}`);
+  console.log(`  oauth client      ${probe.clientId ?? '—'}`);
+  console.log(`  logical connector ${connector ? `${connector.id} ${connector.resource} worker=${connector.workerId ?? '—'}` : (probe.connectorId ?? '—')}`);
+  console.log(`  health            ${probe.health ?? '—'}`);
+  console.log(`  surface state     ${routine ? `${routine.state}${routine.connectorId ? ` connector=${routine.connectorId}` : ' (unattributed)'}` : '—'}`);
+  console.log(`  outcome           ${probe.outcome ?? 'waiting for the session'}`);
+  console.log(`  human action      ${probe.nextAction ?? (probe.state === 'FIRED' ? 'none yet — still waiting' : 'none')}`);
+  console.log(`  window closes     ${probe.expiresAt}`);
+}
 
 async function main(): Promise<void> {
   if (!process.env['BRAIN_DATABASE_POOL_SIZE']) process.env['BRAIN_DATABASE_POOL_SIZE'] = '2';
@@ -999,6 +1027,76 @@ async function main(): Promise<void> {
             'consent finds a bound invitation only when exactly one is live — withdraw the others first.',
         );
       }
+      break;
+    }
+    /*
+     * The recovery probe (services/fleet/recoveryProbe.ts): one controlled
+     * fire at one quarantined or unattributed Routine, outside routing, whose
+     * session is recognised by the provider session the fire returned. It
+     * replaces both bad choices — guessing an OAuth client, or re-enabling a
+     * surface blind — with a proof Brain obtains itself. It waits for the
+     * outcome and prints the whole chain, so nobody correlates rows by hand.
+     */
+    case 'connectors probe': {
+      const actor = await administrator();
+      const ref = rest[0] ?? fail('Name the Routine (trig_…) to probe.');
+      const { startRecoveryProbe, settleRecoveryProbeNow, RecoveryProbeRefused, RECOVERY_PROBE_WINDOW_MS } =
+        await import('../server/services/fleet/recoveryProbe.ts');
+      const { getRecoveryProbe } = await import('../server/repos/recoveryProbes.ts');
+      let probe;
+      try {
+        probe = await startRecoveryProbe({ routineRef: ref, requestedById: actor.id, authorityChannel: 'SHELL' });
+      } catch (error) {
+        if (error instanceof RecoveryProbeRefused) fail(error.message);
+        throw error;
+      }
+      console.log(`  probe ${probe.id} for ${ref}: ${probe.state}`);
+      if (probe.state === 'FIRED' && !rest.includes('--no-wait')) {
+        // Wait for the session, settling as the tick would. Eight minutes, inside
+        // the workflow's ten: a session that can authenticate arrives in one or
+        // two. If it has not settled by then the tick keeps settling it until
+        // the window closes, and `connectors probe-status` reads the outcome.
+        const deadline = Date.now() + Math.min(RECOVERY_PROBE_WINDOW_MS, 8 * 60_000);
+        while (Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 10_000));
+          const current = await getRecoveryProbe(probe.id);
+          if (!current || current.state !== 'FIRED') break;
+          await settleRecoveryProbeNow(current);
+        }
+      }
+      await printProbe((await getRecoveryProbe(probe.id))!);
+      break;
+    }
+    case 'connectors repoint-worker': {
+      const actor = await administrator();
+      const connectorId = rest[0] ?? fail('Name the connector (cnr_…).');
+      const to = rest[1] ?? fail('Name the worker it should authorize as.');
+      const { repointConnectorWorker, getConnector } = await import('../server/repos/connectors.ts');
+      const { getWorker } = await import('../server/repos/identity.ts');
+      const { forgetRoutingHealth } = await import('../server/services/fleet/connectorHealth.ts');
+      const before = await getConnector(connectorId);
+      if (!before) fail(`No connector ${connectorId}.`);
+      if (!(await getWorker(to))) fail(`No worker ${to}.`);
+      // Guarded on the value just read, so a concurrent change is refused rather than overwritten.
+      if (!(await repointConnectorWorker({ connectorId, from: before.workerId, to }))) {
+        fail(`${connectorId} changed while this ran; nothing was changed. Read it again.`);
+      }
+      forgetRoutingHealth();
+      console.log(`  ${connectorId} now authorizes as ${to} (was ${before.workerId ?? 'none'}); recorded against ${actor.id}.`);
+      break;
+    }
+    case 'connectors probe-status': {
+      const target = rest[0] ?? fail('Name the Routine (trig_…) or the probe (crp_…).');
+      const { getRecoveryProbe, latestRecoveryProbeFor } = await import('../server/repos/recoveryProbes.ts');
+      const { getRoutineByRef } = await import('../server/repos/fleet.ts');
+      const probe = target.startsWith('crp_')
+        ? await getRecoveryProbe(target)
+        : await (async () => {
+            const routine = await getRoutineByRef(target);
+            return routine ? latestRecoveryProbeFor(routine.id) : null;
+          })();
+      if (!probe) fail(`No recovery probe for ${target}.`);
+      await printProbe(probe);
       break;
     }
     case 'capacity show': {

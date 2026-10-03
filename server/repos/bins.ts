@@ -1517,6 +1517,23 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
   const familyClause = familyWhereClause(input.families);
   if (familyClause === null) return null;
 
+  /*
+   * A session a recovery probe started is offered its probe bin and nothing
+   * else, ever (`services/fleet/recoveryProbe.ts`).
+   *
+   * A probe fires a surface Brain has taken out of routing, for the one purpose
+   * of learning which connector its sessions authenticate through. Without this
+   * the arriving session would be handed the oldest ready bin in its scope —
+   * real engineering or research work — on a surface nobody has yet shown can
+   * do it, and the probe bin would sit unclaimed. Matched on the provider
+   * session the fire returned, which only the fired session can report; an
+   * arrival that reports none is not narrowed here, and the pinned-bin guard
+   * below still refuses it the probe.
+   */
+  const recoveryOnly = input.sessionRef
+    ? await recoveryBinForSession(input.sessionRef)
+    : await sessionlessDuringRecovery(input.workerId, input.credentialId ?? null);
+
   for (let round = 0; round < 3; round += 1) {
     const now = binNow();
     const params: SqlParam[] = [now, ...input.projectIds, ...familyClause.params];
@@ -1532,9 +1549,10 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
         WHERE ${DISPATCHABLE_SQL}
           AND project_id IN (${input.projectIds.map(() => '?').join(', ')})
           ${familyClause.sql}
+          ${recoveryOnly ? 'AND id = ?' : ''}
         ORDER BY priority DESC, created_at, rowid
         LIMIT 25`,
-      params,
+      recoveryOnly ? [...params, recoveryOnly] : params,
     );
 
     if (candidates.length === 0) return null;
@@ -2499,6 +2517,127 @@ export async function ensureDispatchIntent(bin: Bin): Promise<boolean> {
 }
 
 /**
+ * The bin a recovery probe's session may take, or null when this session was
+ * not started by a probe. Read in any probe state: once a session is a
+ * probe's, it is never handed other work, even after the probe settled.
+ */
+async function recoveryBinForSession(sessionRef: string): Promise<string | null> {
+  const key = normalizeSessionRef(sessionRef);
+  if (!key) return null;
+  const row = await getDb().get<{ bin_id: string | null }>(
+    'SELECT bin_id FROM connector_recovery_probes WHERE session_key = ?',
+    [key],
+  );
+  // A probe whose session matched but has no bin offers nothing at all.
+  return row ? (row.bin_id ?? '__none__') : null;
+}
+
+/**
+ * A check-in that reports no session, while a recovery probe of this worker is
+ * waiting, from a credential no connector has been attributed.
+ *
+ * It may be the probe's own session, which left `session_ref` out — the field is
+ * optional, and §27 records workers doing exactly that. Brain cannot tell, so it
+ * fails closed: the arrival is offered nothing (a probe must never dispatch real
+ * work on a surface Brain has quarantined), nothing is attributed from it, and
+ * it is recorded on the probe's bin so the probe settles as AMBIGUOUS rather
+ * than claiming that nothing it started reached Brain. A credential whose client
+ * already belongs to a connector is some other surface's, and is unaffected.
+ */
+async function sessionlessDuringRecovery(workerId: string, credentialId: string | null): Promise<string | null> {
+  const probe = await getDb().get<{ id: string; bin_id: string | null }>(
+    `SELECT id, bin_id FROM connector_recovery_probes
+      WHERE state = 'FIRED' AND worker_id = ?
+        AND NOT EXISTS (SELECT 1 FROM oauth_tokens t JOIN connector_clients cc ON cc.client_id = t.client_id
+                         WHERE t.id = ?)
+      LIMIT 1`,
+    [workerId, credentialId ?? ''],
+  );
+  if (!probe) return null;
+  // One event per probe and credential: a session that keeps polling inside
+  // the window must not write a row every time it asks.
+  const seen = await getDb().get<{ hit: number }>(
+    `SELECT 1 AS hit FROM bin_events
+      WHERE bin_id = ? AND event_type = 'RECOVERY_PROBE_SESSIONLESS_ARRIVAL' AND worker_id = ? AND measures LIKE ?
+      LIMIT 1`,
+    [probe.bin_id, workerId, `%${credentialId ?? 'null'}%`],
+  );
+  if (seen) return '__none__';
+  await recordBinEvent({
+    eventType: 'RECOVERY_PROBE_SESSIONLESS_ARRIVAL',
+    binId: probe.bin_id,
+    workerId,
+    outcome: 'OFFERED_NOTHING',
+    reason:
+      'A check-in by this worker reported no provider session while a recovery probe of it was waiting. ' +
+      'It may be the probe’s own session, so it was offered nothing and nothing was attributed from it.',
+    measures: { probeId: probe.id, credentialId },
+  });
+  return '__none__';
+}
+
+/**
+ * A recovery probe's fire, recorded where every arrival reader already looks.
+ *
+ * A SENT `bin_dispatch` row at the bin's current generation is what
+ * `creditDispatchArrival` and the pinned-bin guard read to decide that the
+ * arriving session is the fired one. Written already SENT, with one attempt of
+ * one, so the dispatcher never claims it and never fires the bin again: a
+ * probe is one activation, and a second one would be a fire nobody asked for.
+ * It writes `RECOVERY_PROBE_FIRED` rather than `DISPATCH_SENT`, because the
+ * capacity ledger counts the second as useful-work activations and a probe is
+ * not one.
+ */
+export async function recordRecoveryDispatch(input: {
+  binId: string;
+  projectId: string;
+  routineId: string;
+  routineRef: string;
+  accountId: string;
+  sessionRef: string;
+  fireEventId: string | null;
+  probeId: string;
+}): Promise<string> {
+  const bin = await getBin(input.binId);
+  if (!bin) throw new Error(`No bin ${input.binId}.`);
+  const id = newId('bdp');
+  const at = binNow();
+  await getDb().run(
+    `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
+       next_attempt_at, routine_ref, routine_id, session_ref, fire_event_id, sent_at, created_at, updated_at)
+     VALUES (?, ?, ?, 'SENT', 1, 1, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      input.binId,
+      bin.leaseGeneration,
+      at,
+      input.routineRef,
+      input.routineId,
+      bounded(input.sessionRef, 200),
+      bounded(input.fireEventId, 200),
+      at,
+      at,
+      at,
+    ],
+  );
+  await recordBinEvent({
+    eventType: 'RECOVERY_PROBE_FIRED',
+    binId: input.binId,
+    projectId: input.projectId,
+    leaseGeneration: bin.leaseGeneration,
+    routineRef: input.routineRef,
+    routineId: input.routineId,
+    accountId: input.accountId,
+    sessionRef: input.sessionRef,
+    provider: 'claude-routine',
+    outcome: 'SENT',
+    evidenceClass: 'MEASURED',
+    measures: { probeId: input.probeId },
+  });
+  return id;
+}
+
+/**
  * A fire that nobody answered, and the bin it left with nothing coming for it.
  *
  * `services/dispatch/loop.ts` opens by saying why a fire is not sent at the
@@ -2610,6 +2749,9 @@ export async function reopenNoShowDispatches(
         AND d.sent_at <= ?
         AND ${claimableStateSql('b.')}
         AND b.lease_generation = d.lease_generation
+        -- A recovery probe's fire is not ordinary work: an unanswered one is
+        -- settled by the probe as NO_MCP and never charged to the surface.
+        AND NOT EXISTS (SELECT 1 FROM connector_recovery_probes p WHERE p.bin_id = b.id)
       ORDER BY d.sent_at, d.rowid
       LIMIT ?`,
     [before, now, Math.max(1, limit)] as never[],
