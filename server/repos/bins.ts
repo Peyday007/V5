@@ -830,24 +830,6 @@ export async function creditBinAttempt(input: {
 }
 
 /**
- * Give back the attempts that were charged for assignments Brain refused.
- *
- * The forward fix stops this happening: `assignNextBin` asks the admission hook
- * before the swap that charges the attempt, so a refused session is skipped for
- * free. This is the same rule applied backwards, to bins that were charged
- * before it existed — and it is derived entirely from `bin_events`, which is
- * append-only, so nothing is reset, rewritten or deleted.
- *
- * An assignment qualifies when its generation recorded a `BIN_ITEM_WITHHELD`
- * refused by admission and recorded no `BIN_ITEM_CLAIMED`. That is precisely
- * "the worker arrived, Brain handed it nothing, and it was Brain's own guard
- * that said no" — the seventy-one in production. A generation that claimed
- * something is left alone however it ended, because it did get the chance.
- *
- * Exactly once per generation, through `creditBinAttempt`'s deterministic id:
- * running it on every tick for ever credits the same assignment once.
- */
-/**
  * Of these bins, the ones `creditRefusedAssignments` would find anything to
  * consider for — one statement for the page instead of one per bin.
  */
@@ -876,6 +858,24 @@ export async function binsWithWithheldUnclaimed(binIds: string[]): Promise<Set<s
   return found;
 }
 
+/**
+ * Give back the attempts that were charged for assignments Brain refused.
+ *
+ * The forward fix stops this happening: `assignNextBin` asks the admission hook
+ * before the swap that charges the attempt, so a refused session is skipped for
+ * free. This is the same rule applied backwards, to bins that were charged
+ * before it existed — and it is derived entirely from `bin_events`, which is
+ * append-only, so nothing is reset, rewritten or deleted.
+ *
+ * An assignment qualifies when its generation recorded a `BIN_ITEM_WITHHELD`
+ * refused by admission and recorded no `BIN_ITEM_CLAIMED`. That is precisely
+ * "the worker arrived, Brain handed it nothing, and it was Brain's own guard
+ * that said no" — the seventy-one in production. A generation that claimed
+ * something is left alone however it ended, because it did get the chance.
+ *
+ * Exactly once per generation, through `creditBinAttempt`'s deterministic id:
+ * running it on every tick for ever credits the same assignment once.
+ */
 export async function creditRefusedAssignments(binId: string): Promise<number> {
   const rows = await getDb().all<{ lease_generation: number }>(
     `SELECT DISTINCT w.lease_generation AS lease_generation
@@ -1539,10 +1539,6 @@ export function isDispatchable(bin: Bin, now: string = binNow()): boolean {
 }
 
 /**
- * Every bin that deserves an activation, in the order a worker would be given
- * them. Bounded: the dispatcher reads a page, not the world.
- */
-/**
  * The bins `listDispatchableBins` would return, as heads, optionally only those
  * with no dispatch intent at their current generation yet.
  *
@@ -1556,19 +1552,32 @@ export async function listDispatchableBinHeads(
   options: { onlyWithoutIntent?: boolean } = {},
 ): Promise<BinHead[]> {
   const now = binNow();
-  const intent = options.onlyWithoutIntent
-    ? `AND NOT EXISTS (SELECT 1 FROM bin_dispatch d WHERE d.bin_id = bins.id AND d.lease_generation = bins.lease_generation)`
-    : '';
+  // The page is taken exactly as `listDispatchableBins` takes it, and only then
+  // filtered, so which bins are considered in a tick does not change.
   const rows = await getDb().all<BinRow>(
     `SELECT ${BIN_HEAD_COLUMNS} FROM bins
-      WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} ${intent}
+      WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL}
       ORDER BY priority DESC, created_at, rowid
       LIMIT ?`,
     [now, now, Math.min(500, Math.max(1, limit))],
   );
-  return rows.map(mapBinHead);
+  const heads = rows.map(mapBinHead);
+  if (!options.onlyWithoutIntent || heads.length === 0) return heads;
+  const holding = new Set<string>();
+  const pairs = heads.map(() => '(bin_id = ? AND lease_generation = ?)').join(' OR ');
+  for (const row of await getDb().all<{ bin_id: string }>(
+    `SELECT bin_id FROM bin_dispatch WHERE ${pairs}`,
+    heads.flatMap((head) => [head.id, head.leaseGeneration]),
+  )) {
+    holding.add(row.bin_id);
+  }
+  return heads.filter((head) => !holding.has(head.id));
 }
 
+/**
+ * Every bin that deserves an activation, in the order a worker would be given
+ * them. Bounded: the dispatcher reads a page, not the world.
+ */
 export async function listDispatchableBins(limit = 200): Promise<Bin[]> {
   const now = binNow();
   const rows = await getDb().all<BinRow>(

@@ -177,13 +177,6 @@ export interface SessionSweepReport {
 }
 
 /**
- * Record every finished assignment episode of one campaign's bins.
- *
- * Safe to run on every tick and safe to run twice at once: the unique index on
- * `(bin_id, lease_generation)` is the arbiter, so two ticks reading one
- * finished bin write one row and the loser is an ordinary outcome.
- */
-/**
  * Finished bins whose whole history this process has already swept, keyed by
  * the bin row's own state and `updated_at`.
  *
@@ -205,6 +198,13 @@ export function forgetSweptSessions(): void {
   sweptFinished.clear();
 }
 
+/**
+ * Record every finished assignment episode of one campaign's bins.
+ *
+ * Safe to run on every tick and safe to run twice at once: the unique index on
+ * `(bin_id, lease_generation)` is the arbiter, so two ticks reading one
+ * finished bin write one row and the loser is an ordinary outcome.
+ */
 export async function recordObservedSessions(campaignId: string): Promise<SessionSweepReport> {
   const report: SessionSweepReport = {
     recorded: 0,
@@ -276,7 +276,9 @@ export async function recordObservedSessions(campaignId: string): Promise<Sessio
       else report.alreadyRecorded += 1;
       settledEpisodes += 1;
     }
-    if (FINISHED_BIN_STATES.has(bin.state) && !partial) {
+    // Only a history with every open closed is memoized: a terminal row written
+    // a moment before its close event would otherwise be remembered half-read.
+    if (FINISHED_BIN_STATES.has(bin.state) && !partial && unclosed === 0) {
       if (sweptFinished.size >= SWEPT_FINISHED_CEILING) sweptFinished.clear();
       sweptFinished.set(bin.id, { fingerprint, recorded: settledEpisodes, unclosed });
     }
