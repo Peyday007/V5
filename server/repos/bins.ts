@@ -31,6 +31,8 @@ import { newId, nowIso, parseJson, retryAtWithin, toJson } from './util.ts';
 import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
 import { normalizeSessionRef, sameProviderSession } from '../domain/sessionRef.ts';
 import { contractLeaseFloorMs } from '../domain/binLease.ts';
+import { observeConnectorArrival } from '../services/fleet/connectorBinding.ts';
+import { chargesToAuth, connectorHealth } from '../services/fleet/connectorHealth.ts';
 import type { BinConfinement } from './workQueue.ts';
 import type {
   Bin,
@@ -1916,6 +1918,17 @@ async function creditDispatchArrival(
     binId,
     leaseGeneration,
   });
+  /*
+   * And which connector this Routine's sessions authenticate through — the
+   * OAuth client of the credential, attributed to this Routine's account. Only
+   * from proof: a matched provider session, or a worker whose Routines are all
+   * in one account. A failure here must never undo the assignment it rides on.
+   */
+  try {
+    await observeConnectorArrival({ routineId, workerId, credentialId, proven: sameFire });
+  } catch {
+    // Attribution is evidence, not a precondition; the tick's reconciliation retries it.
+  }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -2715,7 +2728,41 @@ export async function reopenNoShowDispatches(
      * in two dialects — and *why did this surface stop being chosen* is a
      * different question from *why is this intent pending again*.
      */
+    /*
+     * An unanswered fire at a connector Brain already knows cannot authenticate
+     * — its last rotation's answer was never picked up, or it holds a refused
+     * credential — is the connector's, not the surface's. Charging it as a
+     * no-show is how a lost refresh reply used to end in a quarantine: the
+     * surface was fine, the client had stopped presenting a credential. It is
+     * written as DISPATCH_AUTH_NO_SHOW, which the quarantine count does not
+     * read and the connector's own health does.
+     */
+    let chargedToAuth = false;
     if (row.routine_id && !refusedOnArrival) {
+      try {
+        const fired = await getRoutine(row.routine_id);
+        chargedToAuth = fired?.connectorId ? chargesToAuth(await connectorHealth(fired.connectorId)) : false;
+      } catch {
+        chargedToAuth = false;
+      }
+    }
+    if (row.routine_id && !refusedOnArrival && chargedToAuth) {
+      await recordBinEvent({
+        eventType: 'DISPATCH_AUTH_NO_SHOW',
+        binId: row.bin_id,
+        projectId: row.project_id,
+        leaseGeneration: row.lease_generation,
+        routineRef: row.routine_ref,
+        routineId: row.routine_id,
+        workloadClass: row.workload_class,
+        evidenceClass: 'MEASURED',
+        outcome: exhausted ? 'ABANDONED' : 'PENDING',
+        reason:
+          'Brain fired this surface while its connector could not authenticate, and no session ever claimed the bin. ' +
+          'Charged to the connector, not to the surface.',
+      });
+    }
+    if (row.routine_id && !refusedOnArrival && !chargedToAuth) {
       await recordBinEvent({
         eventType: 'DISPATCH_NO_SHOW',
         binId: row.bin_id,
@@ -2740,7 +2787,8 @@ export async function reopenNoShowDispatches(
       routineId: row.routine_id,
       outcome: exhausted ? 'ABANDONED' : 'PENDING',
       measures: {
-        noShow: !refusedOnArrival,
+        noShow: !refusedOnArrival && !chargedToAuth,
+        ...(chargedToAuth ? { chargedToAuth: true } : {}),
         ...(refusedOnArrival ? { refusedOnArrival: true } : {}),
         attempt: row.attempt_count,
         maxAttempts: row.max_attempts,

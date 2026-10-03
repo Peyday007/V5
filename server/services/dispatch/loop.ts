@@ -51,6 +51,7 @@
  * attempt. That is Step 10's job — a correct basic dispatcher — and
  * capacity-aware routing is explicitly Step 11's.
  */
+import { reconcileConnectorBindings, recoverReauthorizedSurfaces } from '../fleet/connectorBinding.ts';
 import {
   claimDispatchIntent,
   ensureDispatchIntent,
@@ -152,6 +153,8 @@ export interface TickResult {
   abandonedNoShows: number;
   /** Surfaces taken out of routing this tick for not answering their fires. */
   quarantinedForNoShow: string[];
+  /** Surfaces put back after their connector was re-authorized. */
+  recoveredAfterReauth: string[];
   intentsCreated: number;
   fired: number;
   failed: number;
@@ -175,6 +178,9 @@ export interface TickResult {
  * One pass. Exported so a test can drive it directly rather than waiting for a
  * timer, and so the acceptance harness can step the dispatcher deliberately.
  */
+let lastConnectorReconcile = 0;
+const CONNECTOR_RECONCILE_EVERY_MS = 5 * 60_000;
+
 export async function dispatchTick(
   options: { burst?: number; projectIds?: string[] } = {},
 ): Promise<TickResult> {
@@ -184,6 +190,7 @@ export async function dispatchTick(
     reopenedNoShows: 0,
     abandonedNoShows: 0,
     quarantinedForNoShow: [],
+    recoveredAfterReauth: [],
     intentsCreated: 0,
     fired: 0,
     failed: 0,
@@ -324,6 +331,27 @@ export async function dispatchTick(
       reason: verdict.reason,
     });
     if (moved) result.quarantinedForNoShow.push(routineId);
+  }
+
+  /*
+   * The connector lifecycle, on the same tick: attribute OAuth clients and
+   * Routines to their logical connectors from recorded evidence, and put back a
+   * surface whose no-show quarantine was its connector's and whose connector has
+   * since been re-authorized. Both are derivations over rows, so they reach the
+   * connectors that existed before this code did; neither may stop a dispatch.
+   */
+  if (Date.now() - lastConnectorReconcile > CONNECTOR_RECONCILE_EVERY_MS) {
+    lastConnectorReconcile = Date.now();
+    try {
+      await reconcileConnectorBindings();
+    } catch {
+      // Evidence, not a precondition. The next pass retries it.
+    }
+  }
+  try {
+    result.recoveredAfterReauth = await recoverReauthorizedSurfaces();
+  } catch {
+    result.recoveredAfterReauth = [];
   }
 
   // Ensure intent for everything a worker could be given — which is not the

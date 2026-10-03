@@ -459,7 +459,15 @@ describe('an invitation in an administrator\u2019s browser', () => {
     }
   }
 
-  it('still shows the chooser, and says which worker the invitation names', async () => {
+  /*
+   * Corrected 2026-10-03: the screen used to show an administrator the whole
+   * chooser with the invited worker preselected, and that list is how an
+   * operator reconnecting worker-04 came to choose another identity. An
+   * invitation names exactly one worker, so the administrator's screen names
+   * it and offers nothing else — the administrator's own authority still
+   * decides, and the invitation is still not spent by this path.
+   */
+  it('shows only the worker the invitation names, and spends nothing by being read', async () => {
     const held = await inviteCookieFor(orphanWorkerId);
     const { challenge } = pkce();
     const response = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge)}`, {
@@ -467,50 +475,24 @@ describe('an invitation in an administrator\u2019s browser', () => {
     });
     const html = await response.text();
 
-    // The chooser, not the single-worker invited screen: the administrator's
-    // own authority is what this page runs on.
     expect(html).toContain('Connect a worker');
-    expect(html).toContain(workerLabel);
-    // By its neutral identity, never by the handle somebody typed: this is the
-    // screen where an identity is chosen, so a name that implies whose account
-    // it is, is how the wrong one gets picked.
-    expect(html).not.toContain('claude-max-worker-01');
-    // And the answer to "why am I being shown a list".
-    expect(html).toContain('This browser holds an invitation for');
     expect(html).toContain(orphanLabel);
+    // No unrelated worker is offered.
+    expect(html).not.toContain(`value="${workerId}"`);
     expect(html).not.toContain('orphan-worker');
-    expect(html).toContain('the invitation is not used');
-    // Preselected, so the ordinary case is one click.
-    expect(html).toMatch(new RegExp(`value="${orphanWorkerId}" selected`));
-
-    // Reading the screen spends nothing.
+    expect(html).not.toContain('claude-max-worker-01');
+    expect(html).toContain('the invitation in this browser is for this worker');
     expect(await isLive(held.id)).toBe(true);
   });
 
-  it('does not let the held invitation decide who is connected', async () => {
-    /*
-     * Display only. The administrator posts a different worker and gets that
-     * worker — the invitation neither authorized it nor constrained it, and it
-     * is still unspent afterwards. On the *invited* path the posted id is
-     * checked against the invitation and a mismatch is refused outright; that
-     * rule is unchanged and is asserted elsewhere in this file.
-     */
+  it('refuses an edited form that posts a worker the invitation does not name', async () => {
     const held = await inviteCookieFor(orphanWorkerId);
-    const { challenge, verifier } = pkce();
+    const { challenge } = pkce();
     const approved = await approve(challenge, {
       cookie: `${adminCookie}; ${held.cookie}`,
       worker: workerId,
     });
-    expect(approved.code).not.toBeNull();
-
-    const token = await exchange({
-      grant_type: 'authorization_code',
-      code: approved.code!,
-      redirect_uri: REDIRECT,
-      client_id: clientId,
-      code_verifier: verifier,
-    });
-    expect(token.status).toBe(200);
+    expect(approved.code).toBeNull();
     expect(await isLive(held.id)).toBe(true);
   });
 

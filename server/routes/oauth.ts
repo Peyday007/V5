@@ -64,6 +64,8 @@ import {
   INVITATION_TTL_MS,
 } from '../repos/invitations.ts';
 import type { Principal, Worker, WorkerInvitation } from '../domain/types.ts';
+import { attachClient, connectorClient, getConnector } from '../repos/connectors.ts';
+import { touchConnectorRoutines } from '../services/fleet/connectorBinding.ts';
 import { MCP_PATHS } from '../mcp/endpoint.ts';
 import { card, esc, page } from './pages.ts';
 import { workerIdentity } from '../services/identity/authenticate.ts';
@@ -323,6 +325,49 @@ async function approver(req: Request): Promise<Principal | null> {
   return outcome.principal;
 }
 
+/**
+ * The worker this connection is for, when Brain already knows it.
+ *
+ * A consent screen that offers a list invites the one mistake that matters
+ * here: choosing an existing identity for the wrong connector (§27). Brain
+ * usually knows the answer before the screen renders — an invitation in this
+ * browser names a worker, a client already attributed to a logical connector
+ * names the worker that connector authorizes as. In both cases the screen names
+ * that worker and offers nothing else, and the approval refuses any other. A
+ * client's earlier approvals are deliberately *not* a binding: an administrator
+ * may re-point a client nobody attributed, and inferring intent from history is
+ * the guess this module refuses. A chooser appears only for an unattributed
+ * client approached without an invitation.
+ */
+async function boundWorkerFor(
+  req: Request,
+  clientId: string,
+): Promise<{ worker: Worker; why: string; connectorId: string | null; invitation: WorkerInvitation | null } | null> {
+  const held = await invitedApproval(req);
+  if (held) {
+    return {
+      worker: held.worker,
+      why: 'the invitation in this browser is for this worker',
+      connectorId: held.invitation.connectorId,
+      invitation: held.invitation,
+    };
+  }
+  const attached = await connectorClient(clientId);
+  if (attached) {
+    const connector = await getConnector(attached.connectorId);
+    const worker = connector?.workerId ? await getWorker(connector.workerId) : null;
+    if (connector && worker && !worker.disabled) {
+      return {
+        worker,
+        why: 'this connector already authorizes as this worker',
+        connectorId: connector.id,
+        invitation: null,
+      };
+    }
+  }
+  return null;
+}
+
 async function audit(input: {
   action: string;
   actor: Principal | null;
@@ -359,7 +404,7 @@ async function audit(input: {
 async function auditAuthorizePage(
   req: Request,
   clientId: string,
-  shown: 'ADMIN_CHOOSER' | 'INVITED_CONSENT' | 'SIGN_IN',
+  shown: 'ADMIN_CHOOSER' | 'ADMIN_BOUND' | 'INVITED_CONSENT' | 'SIGN_IN',
 ): Promise<void> {
   const session = req.header('authorization') ? null : await authenticateRequest(req);
   await audit({
@@ -600,11 +645,9 @@ export function oauthRouter(): Router {
          * invitation is not spent on this path, and the posted `worker_id` is
          * the one that counts.
          */
-        const held = await invitedApproval(req);
-        await auditAuthorizePage(req, params.clientId, 'ADMIN_CHOOSER');
-        res.type('html').send(
-          await consentPage(req, params, client.clientName, person, null, held?.worker ?? null),
-        );
+        const bound = await boundWorkerFor(req, params.clientId);
+        await auditAuthorizePage(req, params.clientId, bound ? 'ADMIN_BOUND' : 'ADMIN_CHOOSER');
+        res.type('html').send(await consentPage(req, params, client.clientName, person, null, bound));
         return;
       }
 
@@ -747,6 +790,21 @@ export function oauthRouter(): Router {
         return;
       }
 
+      // An administrator is held to the binding too: the screen offered one
+      // worker, and a form can be edited.
+      const binding = person ? await boundWorkerFor(req, params.clientId) : null;
+      if (binding && workerId !== binding.worker.id) {
+        await audit({
+          action: 'OAUTH_AUTHORIZE',
+          actor: person,
+          targetId: workerId || null,
+          result: 'DENIED',
+          metadata: { reason: 'BOUND_WORKER_MISMATCH', clientId: params.clientId },
+        });
+        errorPage(res, 403, 'Not authorized', `This connection is for ${workerIdentity(binding.worker)}, not another worker.`);
+        return;
+      }
+
       const worker = workerId ? await getWorker(workerId) : null;
 
       /**
@@ -760,10 +818,8 @@ export function oauthRouter(): Router {
         if (person) {
           // Same chooser, same preselection: a re-render that lost it would
           // make an administrator's second attempt harder than their first.
-          const held = await invitedApproval(req);
-          res.status(400).type('html').send(
-            await consentPage(req, params, client.clientName, person, detail, held?.worker ?? null),
-          );
+          const bound = await boundWorkerFor(req, params.clientId);
+          res.status(400).type('html').send(await consentPage(req, params, client.clientName, person, detail, bound));
           return;
         }
         errorPage(res, 400, 'This connection cannot be completed', detail);
@@ -837,6 +893,27 @@ export function oauthRouter(): Router {
         resource: params.resource,
         scope: params.scope,
       });
+
+      /*
+       * A reconnect invitation names the logical connector it restores, so a
+       * new OAuth client approved on it is that connector — the same identity,
+       * the same Routines, no re-registration. And the Routines on a connector
+       * that has just been re-authorized are touched, so dispatch intents
+       * deferred while it could not authenticate are re-armed now.
+       */
+      const restoring = invited?.invitation.connectorId ?? binding?.connectorId ?? null;
+      if (restoring) {
+        const connector = await getConnector(restoring);
+        if (connector && (connector.workerId === null || connector.workerId === worker.id)) {
+          await attachClient({
+            clientId: params.clientId,
+            connectorId: connector.id,
+            source: invited?.invitation.connectorId ? 'BOUND_INVITATION' : 'OPERATOR',
+            evidence: invited ? `invitation ${invited.invitation.id}` : `approved by ${person?.id ?? 'unknown'}`,
+          });
+          await touchConnectorRoutines(connector.id);
+        }
+      }
 
       await audit({
         action: 'OAUTH_AUTHORIZE',
@@ -1165,8 +1242,9 @@ async function consentPage(
    * it authorizes nothing, because a signed-in administrator's own authority is
    * what this screen runs on, and it is not spent by connecting from here.
    */
-  heldInvitationFor: Worker | null = null,
+  bound: { worker: Worker; why: string } | null = null,
 ): Promise<string> {
+  const heldInvitationFor = bound?.worker ?? null;
   /**
    * Disabled workers are not offered, but their existence changes what to say.
    *
@@ -1176,7 +1254,8 @@ async function consentPage(
    * to restore the one they have. Which is what happened.
    */
   const allWorkers = await listWorkers();
-  const workers = allWorkers.filter((worker) => !worker.disabled);
+  // A bound connection offers its one worker and nothing else.
+  const workers = allWorkers.filter((worker) => !worker.disabled && (!bound || worker.id === bound.worker.id));
   const someAreDisabled = allWorkers.length > workers.length;
 
   // Each worker is shown with what it can actually reach, because "approve this
@@ -1214,10 +1293,9 @@ async function consentPage(
 
   // Named rather than merely preselected, because "why am I being shown a list"
   // is the question this screen was quietly failing to answer.
-  const invitationNote = heldInvitationFor
-    ? `<div class="grant"><dt>Invitation</dt><dd>This browser holds an invitation for
-       <code>${esc(workerIdentity(heldInvitationFor))}</code>, which is chosen below. You are a Brain
-       administrator, so you may connect any worker here and the invitation is not used.</dd></div>`
+  const invitationNote = bound
+    ? `<div class="grant"><dt>Connecting as</dt><dd><code>${esc(workerIdentity(bound.worker))}</code> —
+       ${esc(bound.why)}, so no other worker is offered.</dd></div>`
     : '';
 
   const grants = described
