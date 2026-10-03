@@ -228,7 +228,8 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
         -- a refresh child is never the tip.
         AND NOT EXISTS (SELECT 1 FROM oauth_tokens c
                          WHERE c.parent_token_id = oauth_tokens.id AND c.kind = 'REFRESH')
-      ORDER BY created_at DESC, id DESC LIMIT 1`,
+      -- A superseded leaf loses a millisecond tie to its live sibling.
+      ORDER BY created_at DESC, CASE WHEN revoked_reason = 'SUPERSEDED' THEN 1 ELSE 0 END, id DESC LIMIT 1`,
     clientIds,
   );
   if (!tip) {

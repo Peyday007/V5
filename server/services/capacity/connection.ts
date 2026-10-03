@@ -1332,7 +1332,13 @@ function controlsFor(input: {
 /* ------------------------------------------------------------------------ */
 
 export type ConnectionOutcome =
-  | { ok: true; view: ConnectionView }
+  /**
+   * `credentialsLeftLive` is set when a revoke stopped the surface but could not
+   * withdraw the member's OAuth tokens without taking a sibling account's too.
+   * It is said rather than implied: a revoke that read as complete while the
+   * connector could still authenticate is a status contradicting the rows.
+   */
+  | { ok: true; view: ConnectionView; credentialsLeftLive?: string }
   | { ok: false; reason: string };
 
 /**
@@ -1826,15 +1832,19 @@ export async function revokeOwnConnection(input: {
    */
   const routine = connection.routineId ? await getRoutine(connection.routineId) : null;
   const clients = routine?.connectorId ? await clientsOfConnector(routine.connectorId) : [];
+  let tokens: 'CONNECTOR' | 'WORKER' | 'LEFT_LIVE_SHARED_WORKER' | 'NONE' = 'NONE';
   if (clients.length > 0) {
+    tokens = 'CONNECTOR';
     await revokeTokensForClients(clients.map((one) => one.clientId));
     for (const invitation of await liveInvitationsForMember(input.user.id)) {
       if (!worker || invitation.workerId === worker.id) await revokeInvitation(invitation.id);
     }
-  } else if (worker && !(await workerSharedBeyond(worker.id, input.user.id))) {
+  } else if (worker && !(await workerSharedBeyond(worker.id, input.user.id, connection.routineId))) {
+    tokens = 'WORKER';
     await revokeTokensForWorker(worker.id);
     await revokeInvitationsForWorker(worker.id);
   } else if (worker) {
+    tokens = 'LEFT_LIVE_SHARED_WORKER';
     /*
      * The worker is shared and this member's connector is not attributed yet,
      * so Brain cannot tell which of the worker's tokens are theirs. Revoking
@@ -1885,11 +1895,22 @@ export async function revokeOwnConnection(input: {
       result: 'SUCCESS',
       // The reason and whose connection it was. No token, no digest, no id of
       // anything that could be presented to anything.
-      metadata: { forUserId: input.user.id, reason: input.reason },
+      metadata: { forUserId: input.user.id, reason: input.reason, tokens },
     });
   }
 
-  return { ok: true, view: await connectionView({ user: input.user, origin: input.origin }) };
+  const view = await connectionView({ user: input.user, origin: input.origin });
+  return tokens === 'LEFT_LIVE_SHARED_WORKER'
+    ? {
+        ok: true,
+        view,
+        credentialsLeftLive:
+          'The surface has stopped, but this connector’s OAuth tokens are still live: its worker is shared with ' +
+          'another Claude account and Brain has not yet attributed which tokens are this connector’s, so withdrawing ' +
+          'them would also withdraw the other account’s. They are withdrawn once the connector is attributed ' +
+          '(`fleet bind-connector`), or remove this connector in the Claude account itself.',
+      }
+    : { ok: true, view };
 }
 
 /**
@@ -1982,21 +2003,29 @@ export async function verifyConnection(input: {
 }
 
 /**
- * Whether a worker is held by anybody besides this member: a Routine bound to it
- * under another account, or another member's connection naming it. Read from
+ * Whether a worker is held by anybody besides this member: a live Routine bound
+ * to it under another account, or another member's unrevoked connection naming it. Read from
  * rows rather than assumed, because the worker-wide revoke it guards is right
  * only for a worker one member alone holds (§51).
  */
-async function workerSharedBeyond(workerId: string, userId: string): Promise<boolean> {
+async function workerSharedBeyond(workerId: string, userId: string, ownRoutineId: string | null): Promise<boolean> {
   const db = getDb();
-  const accounts = await db.get<{ n: number }>(
-    `SELECT COUNT(DISTINCT account_id) AS n FROM fleet_routines
-      WHERE worker_id = ? AND state <> 'RETIRED'`,
-    [workerId],
+  // Any live surface on this worker under an account other than this member's
+  // own Routine's. A hand-registered sibling with no connection row counts too;
+  // a member whose Routine is not registered yet holds no account here, so
+  // every surface on the worker is somebody else's.
+  const own = ownRoutineId ? await getRoutine(ownRoutineId) : null;
+  const routines = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM fleet_routines
+      WHERE worker_id = ? AND state <> 'RETIRED' AND account_id <> ?`,
+    [workerId, own?.accountId ?? ''],
   );
-  if (Number(accounts?.n ?? 0) > 1) return true;
+  if (Number(routines?.n ?? 0) > 0) return true;
+  // Another member's connection that still names it. A connection somebody
+  // already took back holds nothing on it.
   const others = await db.get<{ n: number }>(
-    'SELECT COUNT(*) AS n FROM capacity_connections WHERE worker_id = ? AND user_id <> ?',
+    `SELECT COUNT(*) AS n FROM capacity_connections
+      WHERE worker_id = ? AND user_id <> ? AND state <> 'REVOKED'`,
     [workerId, userId],
   );
   return Number(others?.n ?? 0) > 0;
