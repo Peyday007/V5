@@ -517,6 +517,27 @@ describe('a signed-in member reconnecting their own connector', () => {
     expect(approved.code).toBeNull();
   });
 
+  it('refuses a client that sends the code anywhere but Claude, however it is named', async () => {
+    // The attack: anybody may register a confidential client called "Claude"
+    // with their own redirect, keep its secret, and send a signed-in member the
+    // authorize link. One Approve must not hand them worker tokens.
+    const ATTACKER = 'https://attacker.example/api/mcp/auth_callback';
+    const registered = await api<{ client_id: string }>('POST', '/oauth/register', {
+      body: { client_name: 'Claude', redirect_uris: [ATTACKER], token_endpoint_auth_method: 'client_secret_post' },
+    });
+    const client = registered.body.client_id;
+    const page = await authorizePage(client, airyn.cookie, { redirect_uri: ATTACKER });
+    expect(page.status).toBe(403);
+    expect((await pageEvents(client))[0]).toMatchObject({ reason: 'REDIRECT_NOT_CLAUDE', userId: airyn.id });
+    const approved = await approve(client, airyn.cookie, { extra: { redirect_uri: ATTACKER } });
+    expect(approved.code).toBeNull();
+    // A Claude redirect beside the attacker's does not launder it.
+    const mixed = await api<{ client_id: string }>('POST', '/oauth/register', {
+      body: { client_name: 'Claude', redirect_uris: [REDIRECT, ATTACKER], token_endpoint_auth_method: 'client_secret_post' },
+    });
+    expect((await approve(mixed.body.client_id, airyn.cookie)).code).toBeNull();
+  });
+
   it('refuses a forged worker on the member path', async () => {
     const client = await register('Claude (airyn, forged worker)');
     const approved = await approve(client, airyn.cookie, { worker: otherWorkerId });

@@ -78,7 +78,8 @@ export type MemberReconnectRefusal =
   | 'WORKER_UNAVAILABLE'
   | 'CONSENT_REVOKED'
   | 'SCOPE_NOT_PREVIOUSLY_GRANTED'
-  | 'PUBLIC_CLIENT';
+  | 'PUBLIC_CLIENT'
+  | 'REDIRECT_NOT_CLAUDE';
 
 export type MemberReconnect =
   | { ok: true; connector: Connector; worker: Worker; basis: string[] }
@@ -101,6 +102,8 @@ export const MEMBER_RECONNECT_SENTENCE: Record<MemberReconnectRefusal, string> =
     'Your connector’s authorization was explicitly withdrawn, and a withdrawal is not undone by reconnecting.',
   SCOPE_NOT_PREVIOUSLY_GRANTED:
     'This request asks for more access than your connector was ever granted.',
+  REDIRECT_NOT_CLAUDE:
+    'This connection sends its authorization somewhere other than Claude, so it cannot restore your connector. Reconnect from Claude itself, or ask an administrator for a reconnect link.',
   PUBLIC_CLIENT:
     'This connection has no client secret, so Brain cannot tell that the code will be redeemed by the client that asked for it.',
 };
@@ -207,6 +210,17 @@ export async function resolveMemberReconnect(input: {
   if (!client || client.tokenAuthMethod === 'none') {
     return { ok: false, reason: 'PUBLIC_CLIENT', connectorIds: [] };
   }
+  /*
+   * Only a client whose every redirect is Claude's own callback. Registration is
+   * unauthenticated and accepts any https redirect, so a confidential client is
+   * no proof of who registered it: an attacker holds its secret, sends a
+   * signed-in member the authorize link, and one Approve would hand the attacker
+   * worker tokens and attach their client to the member's connector. The
+   * invitation path is untouched; this is the path with no administrator in it.
+   */
+  if (!client.redirectUris.length || !client.redirectUris.every(isClaudeCallback)) {
+    return { ok: false, reason: 'REDIRECT_NOT_CLAUDE', connectorIds: [] };
+  }
 
   const owners = await connectorOwners();
   const mine: { connector: Connector; basis: string[]; others: number }[] = [];
@@ -268,4 +282,24 @@ export async function resolveMemberReconnect(input: {
     if (!granted.has(one)) return { ok: false, reason: 'SCOPE_NOT_PREVIOUSLY_GRANTED', connectorIds: ids };
   }
   return { ok: true, connector, worker, basis };
+}
+
+/** Claude's connector callback: https, a Claude host, the MCP auth callback path, nothing else. */
+export const CLAUDE_CALLBACK_HOSTS = new Set(['claude.ai', 'claude.com']);
+function isClaudeCallback(uri: string): boolean {
+  try {
+    const url = new URL(uri);
+    return (
+      url.protocol === 'https:' &&
+      CLAUDE_CALLBACK_HOSTS.has(url.hostname) &&
+      url.port === '' &&
+      url.username === '' &&
+      url.password === '' &&
+      url.pathname === '/api/mcp/auth_callback' &&
+      url.search === '' &&
+      url.hash === ''
+    );
+  } catch {
+    return false;
+  }
 }
