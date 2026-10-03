@@ -60,6 +60,8 @@ import {
   currentFragments,
   getFragment,
   getOrchestration,
+  getOrchestrationHead,
+  type OrchestrationHead,
   listClaimsForFragment,
   listFragments,
   listPendingOrchestrations,
@@ -81,7 +83,7 @@ import { binForOrchestration, creditBinAttempt } from '../../repos/bins.ts';
 import {
   cancelWork,
   enqueueWork,
-  listWorkItems,
+  listProjectPageItemsFor,
   listWorkItemsForOrchestration,
   queueNow,
 } from '../../repos/workQueue.ts';
@@ -231,8 +233,7 @@ function stillRunning(items: WorkItem[], predicate: (item: WorkItem) => boolean)
  * Every state, not only the live ones, for the reason in `alreadyCreated`.
  */
 async function itemsFor(orchestration: ResearchOrchestration): Promise<WorkItem[]> {
-  const items = await listWorkItems(orchestration.projectId, { limit: 500 });
-  return items.filter((item) => item.orchestrationId === orchestration.id);
+  return await listProjectPageItemsFor(orchestration.projectId, orchestration.id);
 }
 
 /**
@@ -1014,13 +1015,13 @@ const GATE_CONDITION_HINTS: [GateCondition, string][] = [
  */
 async function creditPacketProgress(orchestrationId: string): Promise<void> {
   try {
-    const orchestration = await getOrchestration(orchestrationId);
+    const orchestration = await getOrchestrationHead(orchestrationId);
     if (!orchestration) return;
     const bin = await binForOrchestration(orchestrationId);
     // No bin, or nothing to give back. The common case on most ticks.
     if (!bin || bin.attemptCount <= 0) return;
 
-    const items = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
+    const items = (await listProjectPageItemsFor(orchestration.projectId, orchestrationId)).filter(
       (item) => item.orchestrationId === orchestrationId && item.state === 'SUCCEEDED',
     );
     for (const item of items) {
@@ -1065,15 +1066,15 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
    * reaches an item stranded hours ago and writes nothing once it has.
    */
   {
-    const orchestration = await getOrchestration(orchestrationId);
+    const orchestration = await getOrchestrationHead(orchestrationId);
     if (orchestration) await finishRecordedAuditRoles(orchestration);
   }
   const result = await advanceOnce(orchestrationId);
   if (TERMINAL_ORCHESTRATION.has(result.status)) return result;
 
-  const items = await listWorkItems(
-    (await getOrchestration(orchestrationId))?.projectId ?? '',
-    { limit: 500 },
+  const items = await listProjectPageItemsFor(
+    (await getOrchestrationHead(orchestrationId))?.projectId ?? '',
+    orchestrationId,
   );
   const live = items.filter(
     (item) => item.orchestrationId === orchestrationId && LIVE_ITEM.has(item.state),
@@ -1197,7 +1198,7 @@ async function refusedByBudget(
  * never retires this round's item. Idempotent: an item already terminal is not
  * selected, so this writes nothing on every later pass.
  */
-async function finishRecordedAuditRoles(orchestration: ResearchOrchestration): Promise<number> {
+async function finishRecordedAuditRoles(orchestration: OrchestrationHead): Promise<number> {
   let finished = 0;
   for (const item of await listWorkItemsForOrchestration(orchestration.id)) {
     if (item.workType !== 'RESEARCH_AUDIT') continue;
@@ -2094,7 +2095,7 @@ export async function reconcileArguedAuditRoles(
   );
   const out: { orchestrationId: string; retired: number }[] = [];
   for (const row of rows) {
-    const orchestration = await getOrchestration(row.id);
+    const orchestration = await getOrchestrationHead(row.id);
     if (!orchestration) continue;
     const retired = await finishRecordedAuditRoles(orchestration);
     if (retired === 0) continue;
@@ -2186,10 +2187,10 @@ export async function concludeUnworkablePackets(
 
   const out: { orchestrationId: string; retired: number }[] = [];
   for (const row of rows) {
-    const orchestration = await getOrchestration(row.id);
+    const orchestration = await getOrchestrationHead(row.id);
     if (!orchestration) continue;
 
-    const outstanding = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
+    const outstanding = (await listProjectPageItemsFor(orchestration.projectId, orchestration.id)).filter(
       (item) =>
         item.orchestrationId === orchestration.id &&
         (item.state === 'QUEUED' || item.state === 'LEASED'),
@@ -2244,7 +2245,7 @@ export async function reconcileTerminalPackets(
   );
   const out: { orchestrationId: string; retired: number }[] = [];
   for (const row of rows) {
-    const orchestration = await getOrchestration(row.id);
+    const orchestration = await getOrchestrationHead(row.id);
     if (!orchestration) continue;
     const retired = await retireTerminalWork(orchestration);
     if (retired > 0) out.push({ orchestrationId: orchestration.id, retired });
@@ -2263,9 +2264,9 @@ export async function reconcileTerminalPackets(
  * The reason travels with each row, because "cancelled" with no explanation is
  * indistinguishable from a cancellation somebody performed by hand.
  */
-async function retireTerminalWork(orchestration: ResearchOrchestration): Promise<number> {
+async function retireTerminalWork(orchestration: OrchestrationHead): Promise<number> {
   let retired = 0;
-  for (const item of await listWorkItems(orchestration.projectId, { limit: 500 })) {
+  for (const item of await listProjectPageItemsFor(orchestration.projectId, orchestration.id)) {
     if (item.orchestrationId !== orchestration.id) continue;
     if (item.state !== 'QUEUED' && item.state !== 'LEASED') continue;
     /*
@@ -2299,7 +2300,7 @@ async function retireTerminalWork(orchestration: ResearchOrchestration): Promise
 
 /** Has this audit role already produced a completed pass? */
 async function auditRoleSubmitted(
-  orchestration: ResearchOrchestration,
+  orchestration: OrchestrationHead,
   role: AuditRole,
 ): Promise<boolean> {
   // Scoped to the current round. After an OTHER_LAYER handoff the previous
@@ -2324,7 +2325,7 @@ export async function approvePlan(input: {
   /** Fragment keys to drop. Everything not named is approved. */
   rejectedKeys?: string[];
 }): Promise<AdvanceResult> {
-  const orchestration = await getOrchestration(input.orchestrationId);
+  const orchestration = await getOrchestrationHead(input.orchestrationId);
   if (!orchestration) {
     return {
       orchestrationId: input.orchestrationId,
@@ -2449,7 +2450,7 @@ export async function resumePulledPackets(): Promise<number> {
   for (const orchestration of await listPendingOrchestrations()) {
     // Only packets that are actually worker-driven. A push-model orchestration
     // has no work items and enqueueing some would start it a second way.
-    const items = await listWorkItems(orchestration.projectId, { limit: 500 });
+    const items = await listProjectPageItemsFor(orchestration.projectId, orchestration.id);
     const isPulled = items.some((item) => item.orchestrationId === orchestration.id);
     if (!isPulled) continue;
 

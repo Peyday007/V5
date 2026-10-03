@@ -279,6 +279,34 @@ export async function listWorkItemsForBin(bin: BinConfinement): Promise<WorkItem
 }
 
 /** Every unit of one research packet, whatever state it is in. */
+/**
+ * The items of one packet among the project's first page of work, which is
+ * exactly what `listWorkItems(projectId, { limit: 500 })` followed by a filter
+ * on `orchestrationId` returned — the same page, the same order, the same
+ * bound — with the filter applied by the database instead of after the whole
+ * page has crossed the wire.
+ *
+ * The packet runner's per-tick sweeps read the project's page once per packet
+ * to find a handful of that packet's items; measured in production at about 270
+ * rows per call. The page is kept deliberately rather than replaced with an
+ * orchestration-scoped read: a project with more than 500 items would see a
+ * different set that way, and this change must not move any decision.
+ */
+export async function listProjectPageItemsFor(
+  projectId: string,
+  orchestrationId: string,
+): Promise<WorkItem[]> {
+  const rows = await getDb().all<WorkItemRow>(
+    `SELECT * FROM (
+       SELECT * FROM work_items WHERE project_id = ?
+        ORDER BY priority DESC, available_at, created_at, id LIMIT 500) page
+      WHERE page.orchestration_id = ?
+      ORDER BY page.priority DESC, page.available_at, page.created_at, page.id`,
+    [projectId, orchestrationId],
+  );
+  return rows.map(mapWorkItem);
+}
+
 export async function listWorkItemsForOrchestration(orchestrationId: string): Promise<WorkItem[]> {
   const rows = await getDb().all<WorkItemRow>(
     `SELECT * FROM work_items WHERE orchestration_id = ?

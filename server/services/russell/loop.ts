@@ -68,7 +68,7 @@ import {
   transitionMission,
   withdrawRequest,
 } from '../../repos/russellMissions.ts';
-import { currentFragments, getOrchestration, updateOrchestration } from '../../repos/research.ts';
+import { currentFragments, getOrchestrationHead, updateOrchestration } from '../../repos/research.ts';
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { getProject, listProjects } from '../../repos/projects.ts';
 import { frontierIsDue, refreshFrontier } from './frontier.ts';
@@ -2393,7 +2393,7 @@ async function unresolvedFollowOn(
   parentObjective: string,
 ): Promise<{ title: string; question: string; whyNow: string } | null> {
   if (!orchestrationId) return null;
-  const orchestration = await getOrchestration(orchestrationId);
+  const orchestration = await getOrchestrationHead(orchestrationId);
   /*
    * The packet's own terminal status is the gate, and only one of them means
    * this.
@@ -2667,7 +2667,7 @@ async function reopenAuditRound(
   const mission = await missionForDocument(routed.documentId);
 
   if (mission?.orchestrationId) {
-    const packet = await getOrchestration(mission.orchestrationId);
+    const packet = await getOrchestrationHead(mission.orchestrationId);
     if (packet && !TERMINAL_ORCHESTRATION.has(packet.status)) {
       /*
        * The previous round's audit items are withdrawn, not left to drain.

@@ -51,7 +51,7 @@ import {
   buildAdversarialPrompt,
   buildJudgePrompt,
 } from '../audit/prompts.ts';
-import { listPasses } from '../../repos/research.ts';
+import { getPassRawResponse, listPassHeads } from '../../repos/research.ts';
 import { auditRoundFor, type AuditRound } from './auditRound.ts';
 import type { ResearchOrchestration } from '../../domain/types.ts';
 
@@ -105,7 +105,8 @@ export async function earlierAuditRole(
   role: AuditRole,
   round?: AuditRound | null,
 ): Promise<string | null> {
-  const passes = await listPasses(orchestrationId);
+  // The heads only; the one raw reply this returns is read for the match alone.
+  const passes = await listPassHeads(orchestrationId);
   const since = round?.since ?? null;
   /*
    * A carried role satisfies the round without having run again.
@@ -123,7 +124,7 @@ export async function earlierAuditRole(
     .filter((pass) => pass.status === 'COMPLETE')
     .filter((pass) => carried || !since || (pass.completedAt ?? pass.startedAt) > since)
     .at(-1);
-  return match?.rawResponse ?? null;
+  return match ? await getPassRawResponse(match.id) : null;
 }
 
 /**

@@ -45,7 +45,7 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
-import { citableClaims, getOrchestration, listPasses } from '../../repos/research.ts';
+import { citableClaims, getOrchestrationHead, listPassCompletionTimes } from '../../repos/research.ts';
 import {
   cardFact,
   cardFactsFor,
@@ -605,7 +605,7 @@ export async function settleValidations(projectId: string): Promise<
     if (mission.state === 'NEEDS_HUMAN') {
       if (opportunity.validationState !== 'NEEDS_PERSON') {
         const packet = mission.orchestrationId
-          ? await getOrchestration(mission.orchestrationId)
+          ? await getOrchestrationHead(mission.orchestrationId)
           : null;
         await settle(
           projectId,
@@ -654,10 +654,11 @@ export async function settleValidations(projectId: string): Promise<
      * than no backstop.
      */
     if (startedAt && mission.state === 'RUNNING') {
-      const passes = mission.orchestrationId ? await listPasses(mission.orchestrationId) : [];
-      const finished = passes
-        .map((pass) => pass.completedAt)
-        .filter((at): at is string => at !== null);
+      // Only the completion times are read: this asks when the packet last
+      // moved, and a full pass row carries its whole prompt and raw reply.
+      const finished = mission.orchestrationId
+        ? await listPassCompletionTimes(mission.orchestrationId)
+        : [];
       // The most recent sign of life, which is the launch itself when a worker
       // has not finished anything yet.
       const lastMovedAt = finished.reduce((latest, at) => (at > latest ? at : latest), startedAt);
@@ -690,7 +691,7 @@ export async function settleValidations(projectId: string): Promise<
       continue;
     }
     if (mission.state === 'FAILED' || mission.state === 'CANCELLED') {
-      const packet = mission.orchestrationId ? await getOrchestration(mission.orchestrationId) : null;
+      const packet = mission.orchestrationId ? await getOrchestrationHead(mission.orchestrationId) : null;
       await settle(
         projectId,
         opportunity,

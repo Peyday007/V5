@@ -73,7 +73,60 @@ async function loadGaps(auditId: string): Promise<AuditGap[]> {
     .map(mapGap);
 }
 
+/**
+ * Findings and gaps for many audits in two statements rather than two per audit.
+ *
+ * The listings used to load every audit and then ask for its findings and its
+ * gaps one audit at a time — measured in production at 14.4 million findings
+ * queries and 14.4 million gap queries over forty days, the largest share of
+ * this Brain's database egress. The rows, their order within each audit, and
+ * the mapping are exactly what the per-audit reads returned.
+ */
+async function loadChildrenFor(auditIds: string[]): Promise<{
+  findings: Map<string, AuditFinding[]>;
+  gaps: Map<string, AuditGap[]>;
+}> {
+  const findings = new Map<string, AuditFinding[]>();
+  const gaps = new Map<string, AuditGap[]>();
+  const unique = [...new Set(auditIds)];
+  for (let start = 0; start < unique.length; start += IN_LIST_CHUNK) {
+    const slice = unique.slice(start, start + IN_LIST_CHUNK);
+    const marks = slice.map(() => '?').join(', ');
+    const findingRows = await getDb().all<AuditFindingRow>(
+      `SELECT * FROM audit_findings WHERE audit_id IN (${marks}) ORDER BY finding_type, ordinal`,
+      slice,
+    );
+    for (const row of findingRows) {
+      const list = findings.get(row.audit_id) ?? [];
+      list.push(mapFinding(row));
+      findings.set(row.audit_id, list);
+    }
+    const gapRows = await getDb().all<AuditGapRow>(
+      `SELECT * FROM audit_gaps WHERE audit_id IN (${marks}) ORDER BY ordinal, rowid`,
+      slice,
+    );
+    for (const row of gapRows) {
+      const list = gaps.get(row.audit_id) ?? [];
+      list.push(mapGap(row));
+      gaps.set(row.audit_id, list);
+    }
+  }
+  return { findings, gaps };
+}
+
+async function mapAudits(rows: AuditRow[]): Promise<Audit[]> {
+  if (rows.length === 0) return [];
+  const children = await loadChildrenFor(rows.map((row) => row.id));
+  return rows.map((row) =>
+    mapAuditWith(row, children.findings.get(row.id) ?? [], children.gaps.get(row.id) ?? []),
+  );
+}
+
 async function mapAudit(row: AuditRow, findings: AuditFinding[]): Promise<Audit> {
+  return mapAuditWith(row, findings, await loadGaps(row.id));
+}
+
+function mapAuditWith(row: AuditRow, findings: AuditFinding[], gaps: AuditGap[]): Audit {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -98,7 +151,7 @@ async function mapAudit(row: AuditRow, findings: AuditFinding[]): Promise<Audit>
     auditedDocumentIds: parseJson<string[]>(row.audited_document_ids, []),
     provider: row.provider ?? null,
     model: row.model ?? null,
-    gaps: await loadGaps(row.id),
+    gaps,
     evidenceManifest: parseJson<Record<string, unknown>>(row.evidence_manifest, {}),
   };
 }
@@ -238,7 +291,7 @@ export async function listAuditsByLayer(layerId: string): Promise<Audit[]> {
     'SELECT * FROM audits WHERE layer_id = ? ORDER BY created_at DESC',
     [layerId],
   );
-  return await Promise.all(rows.map(async (row) => mapAudit(row, await loadFindings(row.id))));
+  return await mapAudits(rows);
 }
 
 export async function listAuditsByProject(projectId: string): Promise<Audit[]> {
@@ -246,7 +299,42 @@ export async function listAuditsByProject(projectId: string): Promise<Audit[]> {
     'SELECT * FROM audits WHERE project_id = ? ORDER BY created_at DESC',
     [projectId],
   );
-  return await Promise.all(rows.map(async (row) => mapAudit(row, await loadFindings(row.id))));
+  return await mapAudits(rows);
+}
+
+/**
+ * The id and creation time of every audit recorded against one run in one
+ * project, newest first — and nothing else.
+ *
+ * The two callers that ran on every tick (the research-packet contract, which
+ * counts a packet's audits, and the mission-link reconciliation, which takes
+ * the newest) needed only these two columns and were loading every audit in
+ * the project with its full judge output, findings and gaps to get them.
+ * A null run matches audits with no run, as the in-memory filter it replaces did.
+ */
+export async function listAuditRefsForRun(
+  projectId: string,
+  runId: string | null,
+): Promise<Array<{ id: string; createdAt: string }>> {
+  const rows = runId === null
+    ? await getDb().all<{ id: string; created_at: string }>(
+        'SELECT id, created_at FROM audits WHERE project_id = ? AND run_id IS NULL ORDER BY created_at DESC',
+        [projectId],
+      )
+    : await getDb().all<{ id: string; created_at: string }>(
+        'SELECT id, created_at FROM audits WHERE project_id = ? AND run_id = ? ORDER BY created_at DESC',
+        [projectId, runId],
+      );
+  return rows.map((row) => ({ id: row.id, createdAt: row.created_at }));
+}
+
+/** One audit's id and creation time, or null. */
+export async function getAuditRef(id: string): Promise<{ id: string; createdAt: string } | null> {
+  const row = await getDb().get<{ id: string; created_at: string }>(
+    'SELECT id, created_at FROM audits WHERE id = ?',
+    [id],
+  );
+  return row ? { id: row.id, createdAt: row.created_at } : null;
 }
 
 export async function getLatestAuditForLayer(layerId: string): Promise<Audit | null> {

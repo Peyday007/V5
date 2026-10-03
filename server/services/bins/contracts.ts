@@ -24,10 +24,10 @@
 import { createHash } from 'node:crypto';
 import type { Bin, BinManifest, BinUnitSpec } from '../../domain/types.ts';
 import { listBinUnitResults } from '../../repos/bins.ts';
-import { getOrchestration } from '../../repos/research.ts';
+import { getOrchestrationHead, getOrchestrationStatus } from '../../repos/research.ts';
 import { listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
 import { getDocument } from '../../repos/documents.ts';
-import { listAuditsByProject } from '../../repos/audits.ts';
+import { listAuditRefsForRun } from '../../repos/audits.ts';
 import { readObject, storageKeyOf } from '../storage.ts';
 
 /** What an evaluation concluded, and why. */
@@ -226,6 +226,41 @@ async function evaluateDeterministicUnits(bin: Bin): Promise<ContractVerdict> {
  */
 const PACKET_FILED: ReadonlySet<string> = new Set(['COMPLETE', 'COMPLETE_WITH_GAPS']);
 
+/**
+ * The terminal statuses in which a packet filed nothing. A packet in one of
+ * these is refused `HUMAN`: no worker can finish it. (`COMPLETE` and
+ * `COMPLETE_WITH_GAPS` are the terminal statuses that do file; every other
+ * status is still running and is refused `RETRY`.)
+ */
+const PARKS_WITHOUT_FILING: ReadonlySet<string> = new Set(['FAILED', 'CANCELLED', 'NEEDS_HUMAN']);
+
+/**
+ * Whether `evaluateResearchPacket` is certain to answer `HUMAN` for this bin,
+ * decided from the packet's status alone.
+ *
+ * Its `HUMAN` answer depends on nothing else: a missing orchestration,
+ * `AWAITING_APPROVAL`, or a terminal status that filed nothing. Every other
+ * input — the work items, the stored bytes, the audit trail — only decides
+ * between `RETRY` and `SATISFIED`. So a pass that only wants to know "would
+ * reopening this parked bin be refused" can ask one narrow column instead of
+ * re-running the whole evaluation, which downloads the filed document and
+ * reads the audit trail. Measured in production, that re-evaluation of the same
+ * parked bins every thirty seconds was the largest single source of database
+ * egress.
+ *
+ * Returns false for any other contract: those are not decided here.
+ */
+export async function researchPacketCertainlyParks(bin: {
+  completionContract: string;
+  orchestrationId: string | null;
+}): Promise<boolean> {
+  if (bin.completionContract !== 'RESEARCH_PACKET_V1') return false;
+  if (!bin.orchestrationId) return true;
+  const status = await getOrchestrationStatus(bin.orchestrationId);
+  if (status === null) return true;
+  return status === 'AWAITING_APPROVAL' || PARKS_WITHOUT_FILING.has(status);
+}
+
 async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
   const orchestrationId = bin.orchestrationId;
   if (!orchestrationId) {
@@ -235,7 +270,7 @@ async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
       {},
     );
   }
-  const orchestration = await getOrchestration(orchestrationId);
+  const orchestration = await getOrchestrationHead(orchestrationId);
   if (!orchestration) {
     return refuse('HUMAN', [`Orchestration ${orchestrationId} does not exist.`], { orchestrationId });
   }
@@ -324,10 +359,9 @@ async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
     }
   }
 
-  // The audit trail. `listAuditsByProject` is the same reader the console uses.
-  const audits = (await listAuditsByProject(bin.projectId)).filter(
-    (audit) => audit.runId === orchestration.runId,
-  );
+  // The audit trail, scoped to this packet's run the same way the console scopes it.
+  // Only the count is read here, so only the ids are fetched.
+  const audits = await listAuditRefsForRun(bin.projectId, orchestration.runId);
   observed['audits'] = audits.length;
   if (audits.length === 0) {
     reasons.push('No audit was recorded for this packet, so nothing judged the report.');
@@ -336,10 +370,7 @@ async function evaluateResearchPacket(bin: Bin): Promise<ContractVerdict> {
   if (reasons.length > 0) {
     // A packet that is still running is work in progress; one that has gone
     // terminal without filing cannot be fixed by this worker.
-    const terminal = ['COMPLETE', 'COMPLETE_WITH_GAPS', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN'].includes(
-      orchestration.status,
-    );
-    return refuse(terminal && !PACKET_FILED.has(orchestration.status) ? 'HUMAN' : 'RETRY', reasons, observed);
+    return refuse(PARKS_WITHOUT_FILING.has(orchestration.status) ? 'HUMAN' : 'RETRY', reasons, observed);
   }
   return satisfied(observed);
 }

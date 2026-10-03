@@ -222,8 +222,11 @@ export async function clearDeliveryRefusal(input: {
  * implementation is what proves it. A later FAILED outranks an earlier PROVEN.
  */
 export async function deliveryReadings(): Promise<Map<string, Map<string, DeliveryReading>>> {
-  const rows = await getDb().all<RoutineDeliveryProofRow>(
-    `SELECT * FROM routine_delivery_proofs
+  // Three columns: the reading is a state per (routine, repository), and this
+  // runs on every dispatch tick over a table that gains a row per delivery.
+  // Same filter, same order, same first-row-wins below.
+  const rows = await getDb().all<Pick<RoutineDeliveryProofRow, 'routine_id' | 'repository' | 'state'>>(
+    `SELECT routine_id, repository, state FROM routine_delivery_proofs
       WHERE state IN ('PROVEN', 'FAILED', 'CLEARED')
       ORDER BY routine_id, repository, settled_at DESC, created_at DESC`,
   );

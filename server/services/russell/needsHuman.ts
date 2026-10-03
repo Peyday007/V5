@@ -27,7 +27,7 @@
  * because an escalation whose answer does nothing is the same defect one level
  * up, and it is the one that produced this module.
  */
-import { currentFragments, getOrchestration } from '../../repos/research.ts';
+import { currentFragments, getOrchestrationHead } from '../../repos/research.ts';
 import {
   askHuman,
   getMission,
@@ -326,7 +326,7 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
   for (const row of rows) {
     const mission = await getMission(row.id);
     if (!mission || !mission.orchestrationId) continue;
-    const orchestration = await getOrchestration(mission.orchestrationId);
+    const orchestration = await getOrchestrationHead(mission.orchestrationId);
     if (!orchestration || orchestration.status !== 'NEEDS_HUMAN') continue;
 
     /*

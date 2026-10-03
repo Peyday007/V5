@@ -26,7 +26,6 @@
  *    start and an end on the ledger, rather than inferred from a quiet screen.
  */
 import type { FactoryBlockerKind, FactoryCampaign } from '../../domain/factory.ts';
-import type { Bin } from '../../domain/types.ts';
 import {
   ensureCampaign,
   getCampaign,
@@ -45,7 +44,7 @@ import {
   type AdmissionPolicy,
   type FactoryQueueEntry,
 } from '../../repos/factoryLine.ts';
-import { listBins, listDispatchesForBin } from '../../repos/bins.ts';
+import { listBinHeads, listDispatchesForBin, type BinHead } from '../../repos/bins.ts';
 import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
@@ -452,7 +451,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   const [allLive, allQueued, bins, snapshot] = await Promise.all([
     listLiveCampaigns(),
     listQueueEntries(['QUEUED']),
-    listBins({ states: ['READY', 'LEASED'], limit: 500 }),
+    listBinHeads({ states: ['READY', 'LEASED'], limit: 500 }),
     fleetSnapshot(now),
   ]);
   const inScope = (projectId: string) => !options.projectId || projectId === options.projectId;
@@ -461,7 +460,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   const liveIds = new Set(live.map((campaign) => campaign.id));
 
   const factoryBins = bins.filter(
-    (bin: Bin) => bin.factoryCampaignId && (!options.projectId || liveIds.has(bin.factoryCampaignId)),
+    (bin: BinHead) => bin.factoryCampaignId && (!options.projectId || liveIds.has(bin.factoryCampaignId)),
   );
   const lineBins: LineBin[] = [];
   let readyBins = 0;

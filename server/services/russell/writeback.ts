@@ -34,7 +34,7 @@ import {
 } from '../../repos/russellMissions.ts';
 import { getCandidate, recordJudgment } from '../../repos/russellCandidates.ts';
 import { addMessage } from '../../repos/russellConversations.ts';
-import { getOrchestration } from '../../repos/research.ts';
+import { getOrchestrationHead } from '../../repos/research.ts';
 import type {
   KnowledgeConfidence,
   MissionState,
@@ -264,7 +264,7 @@ function brief(mission: RussellMission, input: WritebackInput): string {
  */
 export async function outcomeOf(mission: RussellMission): Promise<MissionOutcome | null> {
   if (!mission.orchestrationId) return null;
-  const orchestration = await getOrchestration(mission.orchestrationId);
+  const orchestration = await getOrchestrationHead(mission.orchestrationId);
   if (!orchestration) return null;
   switch (orchestration.status) {
     case 'COMPLETE':

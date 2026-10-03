@@ -60,9 +60,9 @@
  * left the row somebody does.
  */
 import { getDb } from '../../db/database.ts';
-import { getAudit, listAuditsByProject } from '../../repos/audits.ts';
+import { getAuditRef, listAuditRefsForRun } from '../../repos/audits.ts';
 import { recordEvent } from '../../repos/events.ts';
-import { getOrchestration } from '../../repos/research.ts';
+import { getOrchestrationHead, type OrchestrationHead } from '../../repos/research.ts';
 import {
   getMission,
   knowledgeForMission,
@@ -104,7 +104,7 @@ export interface LinkDrift {
  * "leave whatever is there" rather than as "clear it".
  */
 export async function currentLinksFor(
-  orchestration: ResearchOrchestration,
+  orchestration: OrchestrationHead,
 ): Promise<MissionLinks> {
   return {
     documentId: orchestration.documentId ?? null,
@@ -148,12 +148,14 @@ export async function currentLinksFor(
  * the single line that put round one's `MORE_RESEARCH` verdict on a mission
  * that had passed round two.
  */
-async function newestAuditId(orchestration: ResearchOrchestration): Promise<string | null> {
-  const candidates = (await listAuditsByProject(orchestration.projectId)).filter(
-    (audit) => audit.runId !== null && audit.runId === orchestration.runId,
-  );
+async function newestAuditId(orchestration: OrchestrationHead): Promise<string | null> {
+  // Only ids and creation times decide this, so only those are read.
+  const candidates =
+    orchestration.runId !== null
+      ? await listAuditRefsForRun(orchestration.projectId, orchestration.runId)
+      : [];
 
-  const named = orchestration.auditId ? await getAudit(orchestration.auditId) : null;
+  const named = orchestration.auditId ? await getAuditRef(orchestration.auditId) : null;
   if (named && !candidates.some((audit) => audit.id === named.id)) candidates.push(named);
 
   candidates.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
@@ -185,7 +187,7 @@ export async function alignMissionLinks(
   mission: RussellMission,
 ): Promise<{ mission: RussellMission; drift: LinkDrift[] }> {
   if (!mission.orchestrationId) return { mission, drift: [] };
-  const orchestration = await getOrchestration(mission.orchestrationId);
+  const orchestration = await getOrchestrationHead(mission.orchestrationId);
   if (!orchestration) return { mission, drift: [] };
 
   const drift = driftOf(mission, await currentLinksFor(orchestration));
@@ -241,7 +243,7 @@ export async function reconcileCompletedMission(
   if (!mission || !mission.orchestrationId) {
     return refuse(missionId, 'NO_ORCHESTRATION', 'This mission has no packet to be a projection of.');
   }
-  const orchestration = await getOrchestration(mission.orchestrationId);
+  const orchestration = await getOrchestrationHead(mission.orchestrationId);
   if (!orchestration) {
     return refuse(missionId, 'NO_SUCH_PACKET', 'The packet this mission names does not exist.');
   }

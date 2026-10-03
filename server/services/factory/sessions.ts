@@ -41,11 +41,16 @@
  */
 import type { Bin, BinEvent } from '../../domain/types.ts';
 import type { FactoryRole, FactorySessionState } from '../../domain/factory.ts';
-import { dispatchAttributionForLease, listBinEvents } from '../../repos/bins.ts';
+import {
+  dispatchAttributionForLease,
+  getBin,
+  listBinEvents,
+  listBinHeadsForCampaign,
+  type BinHead,
+} from '../../repos/bins.ts';
 import { getAccount, getRoutine } from '../../repos/fleet.ts';
 import { recordObservedSession } from '../../repos/factoryFleet.ts';
 import { listUnits } from '../../repos/factory.ts';
-import { campaignBins } from './remote.ts';
 
 /** An assignment that ended, which is the only thing that is a session here. */
 export interface SessionEpisode {
@@ -191,20 +196,38 @@ export async function recordObservedSessions(campaignId: string): Promise<Sessio
     unmapped: 0,
     partialReads: 0,
   };
-  const bins = await campaignBins(campaignId);
+  // The bins without their manifests: the sweep reads ids, kinds, states and
+  // workers, and fetches one whole bin only for an episode it is about to write.
+  const bins = await listBinHeadsForCampaign(campaignId);
   if (bins.length === 0) return report;
-  const units = await listUnits(campaignId);
+  let units: Awaited<ReturnType<typeof listUnits>> | null = null;
   for (const bin of bins) {
     const role = ROLE_OF_BIN_KIND[bin.kind];
     if (!role) {
       report.unmapped += 1;
       continue;
     }
+
+    const settled = settledReadings.get(bin.id);
+    const fingerprint = fingerprintOf(bin);
+    if (settled && settled.fingerprint === fingerprint) {
+      // Nothing about this bin can have changed since it was last read: see
+      // `mayRemember`. Its reading is reported exactly as it was then.
+      report.alreadyRecorded += settled.episodes;
+      report.unclosed += settled.unclosed;
+      report.partialReads += settled.partial ? 1 : 0;
+      continue;
+    }
+
     const events = await listBinEvents(bin.id, EVENT_READ_LIMIT);
-    if (events.length >= EVENT_READ_LIMIT) report.partialReads += 1;
+    const partial = events.length >= EVENT_READ_LIMIT;
+    if (partial) report.partialReads += 1;
     const opens = events.filter((event) => OPENS.has(event.eventType)).length;
     const episodes = episodesOf(events);
-    report.unclosed += Math.max(0, opens - episodes.length);
+    const unclosed = Math.max(0, opens - episodes.length);
+    report.unclosed += unclosed;
+    let attributed = 0;
+    let whole: Bin | null = null;
     for (const episode of episodes) {
       const workerId = episode.workerId ?? bin.workerId;
       if (!workerId) {
@@ -212,11 +235,14 @@ export async function recordObservedSessions(campaignId: string): Promise<Sessio
         // attributed to nobody is not a session anybody can reason about.
         continue;
       }
+      attributed += 1;
       const attribution = await dispatchAttributionForLease(bin.id, episode.leaseGeneration);
       const accountRef = await accountRefFor(attribution?.routineId ?? null);
+      units ??= await listUnits(campaignId);
+      whole ??= await getBin(bin.id);
       const written = await recordObservedSession({
         campaignId,
-        unitId: soleUnitOf(bin, units),
+        unitId: whole ? soleUnitOf(whole, units) : null,
         workerId,
         accountRef,
         attempt: episode.attempt,
@@ -243,8 +269,49 @@ export async function recordObservedSessions(campaignId: string): Promise<Sessio
       if (written) report.recorded += 1;
       else report.alreadyRecorded += 1;
     }
+    if (mayRemember(bin)) {
+      settledReadings.set(bin.id, { fingerprint, episodes: attributed, unclosed, partial });
+    } else {
+      settledReadings.delete(bin.id);
+    }
   }
   return report;
+}
+
+/**
+ * What the sweep last read from a bin that could not have changed since.
+ *
+ * The sweep runs every twenty seconds for every bin of every live campaign and
+ * read each bin's whole event history every time — measured in production at
+ * about 40 million `bin_events` rows — although a finished bin's history does
+ * not grow. A bin is remembered only when it is terminal and its row has not
+ * moved for `SETTLE_MS`: the events that open and close an episode are written
+ * beside the bin update that accompanies them, so a terminal bin untouched for
+ * that long has every one of them on the table already. Any change to the bin
+ * (a reopen, a new lease) changes the fingerprint and it is read again. The
+ * memo is in-process, so a restart simply reads everything once.
+ */
+const settledReadings = new Map<
+  string,
+  { fingerprint: string; episodes: number; unclosed: number; partial: boolean }
+>();
+
+const SETTLE_MS = 5 * 60 * 1000;
+const TERMINAL_BIN_STATES: ReadonlySet<string> = new Set(['COMPLETE', 'CANCELLED', 'FAILED']);
+
+function fingerprintOf(bin: BinHead): string {
+  return `${bin.state}|${bin.leaseGeneration}|${bin.updatedAt}|${bin.workerId ?? ''}`;
+}
+
+function mayRemember(bin: BinHead, now = Date.now()): boolean {
+  if (!TERMINAL_BIN_STATES.has(bin.state)) return false;
+  const updated = Date.parse(bin.updatedAt);
+  return !Number.isNaN(updated) && now - updated >= SETTLE_MS;
+}
+
+/** For tests: forget every remembered reading. */
+export function forgetSettledSessionReadings(): void {
+  settledReadings.clear();
 }
 
 /**

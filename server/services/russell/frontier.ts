@@ -38,6 +38,7 @@ import { listGapsByLayer } from '../../repos/audits.ts';
 import { listAcceptedLensFindings } from '../../repos/russellLenses.ts';
 import {
   listFrontier,
+  newestFrontierSeenAt,
   observeFrontierItem,
   resolveUnseenFrontierItems,
 } from '../../repos/russellFrontier.ts';
@@ -290,12 +291,9 @@ export const FRONTIER_REFRESH_MS = 10 * 60 * 1000;
  * with no frontier rows at all has never been read and is always due.
  */
 export async function frontierIsDue(projectId: string, now = Date.now()): Promise<boolean> {
-  const items = await listFrontier({ projectId, includeResolved: true, includePrivate: true });
-  let newest = 0;
-  for (const item of items) {
-    const at = Date.parse(item.lastSeenAt);
-    if (!Number.isNaN(at) && at > newest) newest = at;
-  }
+  const latest = await newestFrontierSeenAt(projectId);
+  const parsed = latest === null ? Number.NaN : Date.parse(latest);
+  const newest = Number.isNaN(parsed) ? 0 : parsed;
   if (newest === 0) return true;
   return now - newest >= FRONTIER_REFRESH_MS;
 }

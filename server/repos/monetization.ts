@@ -674,9 +674,22 @@ export async function recordSnapshot(input: {
 export async function latestSnapshots(
   projectId: string,
 ): Promise<Map<string, MonetizationRankSnapshot>> {
+  /*
+   * Only each path's newest snapshot — the one the map below keeps — rather
+   * than the whole append-only history. The history grows by a row whenever a
+   * position moves, and this runs on every tick; reading all of it to keep the
+   * last row per path was measured at 25 million rows returned. "Newest" is the
+   * same order the loop used: the greatest (evaluated_at, id).
+   */
   const rows = await getDb().all<MonetizationRankSnapshotRow>(
-    `SELECT * FROM monetization_rank_snapshots
-      WHERE project_id = ? ORDER BY evaluated_at, id`,
+    `SELECT s.* FROM monetization_rank_snapshots s
+      WHERE s.project_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM monetization_rank_snapshots n
+           WHERE n.path_id = s.path_id
+             AND (n.evaluated_at > s.evaluated_at
+                  OR (n.evaluated_at = s.evaluated_at AND n.id > s.id)))
+      ORDER BY s.evaluated_at, s.id`,
     [projectId],
   );
   const out = new Map<string, MonetizationRankSnapshot>();

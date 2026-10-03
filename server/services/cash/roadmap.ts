@@ -32,7 +32,7 @@
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
-import { getOrchestration, listFragments } from '../../repos/research.ts';
+import { getOrchestrationHead, listFragments } from '../../repos/research.ts';
 import { getCandidate } from '../../repos/russellCandidates.ts';
 import { FRAGMENT_STATUSES } from '../../domain/types.ts';
 import type {
@@ -211,7 +211,7 @@ async function activityOf(
       blocker: null,
     };
   }
-  const packet = await getOrchestration(plan.orchestrationId);
+  const packet = await getOrchestrationHead(plan.orchestrationId);
   if (packet && (packet.status === 'NEEDS_HUMAN' || packet.status === 'FAILED')) {
     return {
       activity: 'PARKED',

@@ -946,7 +946,21 @@ async function runMonetizationLedger(
    */
   const ledger = await composeLedger({ projectId, now });
   const commissions = await runCommissions({ projectId, ledger, now });
-  const movements = await recordMovements({ projectId, now });
+  /*
+   * The ledger is composed again only when the commission pass wrote something
+   * it reads. A pass that opened, recorded and settled nothing changed no row
+   * between the two compositions, so the second would be the first again —
+   * every path, fact, judgment and opportunity in the project re-read to arrive
+   * at the same object. The ordering argument above is untouched: whenever the
+   * pass did write, the movement is still taken from the ledger as it is after.
+   */
+  const wroteNothing =
+    commissions.opened.length === 0 &&
+    commissions.recorded.length === 0 &&
+    commissions.settled.length === 0;
+  const movements = await recordMovements(
+    wroteNothing ? { projectId, now, ledger } : { projectId, now },
+  );
   return {
     pathsAdded: enumerated.added.flatMap((one) => one.pathIds),
     figuresCarried: enumerated.carried.map((one) => one.pathId),

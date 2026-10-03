@@ -40,8 +40,10 @@ import {
   creditRefusedAssignments,
   firedSessionForArrival,
   getBin,
+  getBinHead,
   heartbeatBin,
   listBins,
+  listBinHeads,
   listBinUnitResults,
   proveBinOwnership,
   putBinUnitResult,
@@ -53,7 +55,7 @@ import {
   type BinProof,
   type ReopenOutcome,
 } from '../../repos/bins.ts';
-import { getOrchestration } from '../../repos/research.ts';
+import { getOrchestrationHead } from '../../repos/research.ts';
 import { recordWorkerArrival } from '../../repos/fleet.ts';
 import { auditAdmission, lineageForWorker } from '../research/auditAdmission.ts';
 import { distinctSessionPossibleAt } from '../research/sessionWindow.ts';
@@ -63,7 +65,12 @@ import {
   listWorkItemsForBin,
   type ClaimScope,
 } from '../../repos/workQueue.ts';
-import { evaluateContract, hashUnitValue, type ContractVerdict } from './contracts.ts';
+import {
+  evaluateContract,
+  hashUnitValue,
+  researchPacketCertainlyParks,
+  type ContractVerdict,
+} from './contracts.ts';
 import { getWorkerRouting } from '../../repos/identity.ts';
 import {
   allAdmissions,
@@ -1089,7 +1096,7 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
    * `creditRefusedAssignments` is derived from append-only events and is
    * idempotent per generation, so this is safe to run on every tick for ever.
    */
-  const chargeable = await listBins({
+  const chargeable = await listBinHeads({
     projectId,
     states: ['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN'],
     limit: 500,
@@ -1124,8 +1131,18 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
      * `reopenParkedBin` still refuses anything whose contract answers HUMAN.
      */
     if (bin.state !== 'NEEDS_HUMAN') continue;
-    const now = await getBin(bin.id);
+    const now = await getBinHead(bin.id);
     if (!now || now.state !== 'NEEDS_HUMAN' || now.attemptCount >= now.maxAttempts) continue;
+    /*
+     * A parked research bin whose packet status already decides the contract's
+     * `HUMAN` answer would only be refused again, and this pass discards that
+     * refusal. Asking the status is one narrow read; the refusal it skips
+     * re-ran the whole evaluation — the filed document from storage, the work
+     * items, the project's audit trail — for the same parked bins every thirty
+     * seconds. The bin is reopened the first tick its packet's status no
+     * longer decides it, exactly as before.
+     */
+    if (await researchPacketCertainlyParks(now)) continue;
     await reopenParkedBin({
       binId: now.id,
       operator: 'brain:admission-accounting',
@@ -1141,7 +1158,7 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
     });
   }
 
-  const bins = await listBins({
+  const bins = await listBinHeads({
     projectId,
     states: ['DRAFT', 'READY', 'LEASED'],
     limit: 500,
@@ -1175,7 +1192,11 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
 
     // Out of attempts and nobody holds it. Nothing further will happen on its
     // own, so it becomes exactly one decision with the reason attached.
-    const verdict = await evaluateContract(bin);
+    // The contract reads the bin's manifest and inputs, so it is handed the
+    // whole row; the listing above carried only what the triage needs.
+    const whole = await getBin(bin.id);
+    if (!whole) continue;
+    const verdict = await evaluateContract(whole);
     const reason =
       `The bin used all ${bin.maxAttempts} attempts without satisfying ` +
       `${bin.completionContract} v${bin.contractVersion}. ` +
@@ -1261,7 +1282,7 @@ export async function reopenParkedBin(input: {
           'is no packet whose state could have changed.',
       };
     }
-    const orchestration = await getOrchestration(orchestrationId);
+    const orchestration = await getOrchestrationHead(orchestrationId);
     if (!orchestration) {
       return {
         ok: false,

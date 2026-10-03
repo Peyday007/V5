@@ -374,6 +374,90 @@ export async function getBin(id: string): Promise<Bin | null> {
   return row ? mapBin(row) : null;
 }
 
+/**
+ * A bin without its large text: the objective, rationale, manifest, checkpoint,
+ * terminal reason and last refusal. Everything a state-and-accounting pass reads
+ * is here; the instructions a worker is handed are not.
+ *
+ * It exists because the hot passes (`reconcileBins` every thirty seconds, the
+ * factory loop every twenty) were reading `SELECT *` over hundreds of bins only
+ * to compare states, attempts and generations — about 7 KB of manifest per row,
+ * measured, to read a few dozen bytes. A caller that needs the manifest or the
+ * contract inputs still calls `getBin`, which is unchanged.
+ */
+export type BinHead = Omit<Bin, 'objective' | 'rationale' | 'manifest' | 'checkpoint' | 'terminalReason' | 'lastRefusal'>;
+
+const BIN_HEAD_COLUMNS =
+  'id, project_id, layer_id, kind, title, completion_contract, contract_version, state, priority, ' +
+  'orchestration_id, budget_units, attempt_count, max_attempts, dispatch_not_before, ' +
+  'held_by_workstream_id, held_reason, lease_generation, lease_id, worker_id, lease_credential_id, ' +
+  'lease_session_ref, leased_at, heartbeat_at, lease_expires_at, lease_renewals, checkpoint_at, ' +
+  'refusal_count, required_capabilities, workload_class, pinned_routine_id, created_by_type, ' +
+  'created_by_id, created_at, updated_at, ready_at, completed_at, factory_campaign_id';
+
+function mapBinHead(row: BinRow): BinHead {
+  // The same mapper over the same row, with the omitted columns absent. Going
+  // through `mapBin` keeps one definition of every field this type shares.
+  const full = mapBin({
+    ...row,
+    objective: '',
+    rationale: null,
+    manifest: '{}',
+    checkpoint: null,
+    terminal_reason: null,
+    last_refusal: null,
+  } as BinRow);
+  const {
+    objective: _objective,
+    rationale: _rationale,
+    manifest: _manifest,
+    checkpoint: _checkpoint,
+    terminalReason: _terminalReason,
+    lastRefusal: _lastRefusal,
+    ...head
+  } = full;
+  return head;
+}
+
+/** A factory campaign's bins without their large text, newest first. */
+export async function listBinHeadsForCampaign(campaignId: string): Promise<BinHead[]> {
+  const rows = await getDb().all<BinRow>(
+    `SELECT ${BIN_HEAD_COLUMNS} FROM bins WHERE factory_campaign_id = ? ORDER BY created_at DESC`,
+    [campaignId],
+  );
+  return rows.map(mapBinHead);
+}
+
+export async function getBinHead(id: string): Promise<BinHead | null> {
+  const row = await getDb().get<BinRow>(`SELECT ${BIN_HEAD_COLUMNS} FROM bins WHERE id = ?`, [id]);
+  return row ? mapBinHead(row) : null;
+}
+
+/** `listBins`, without the large text. Same filter, same order, same bound. */
+export async function listBinHeads(filter: {
+  projectId?: string;
+  states?: BinState[];
+  limit?: number;
+}): Promise<BinHead[]> {
+  const clauses: string[] = [];
+  const params: SqlParam[] = [];
+  if (filter.projectId) {
+    clauses.push('project_id = ?');
+    params.push(filter.projectId);
+  }
+  if (filter.states && filter.states.length > 0) {
+    clauses.push(`state IN (${filter.states.map(() => '?').join(', ')})`);
+    params.push(...filter.states);
+  }
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  params.push(Math.min(500, Math.max(1, filter.limit ?? 100)));
+  const rows = await getDb().all<BinRow>(
+    `SELECT ${BIN_HEAD_COLUMNS} FROM bins ${where} ORDER BY priority DESC, created_at, rowid LIMIT ?`,
+    params,
+  );
+  return rows.map(mapBinHead);
+}
+
 export async function listBins(filter: {
   projectId?: string;
   states?: BinState[];
@@ -1442,17 +1526,30 @@ export function isDispatchable(bin: Bin, now: string = binNow()): boolean {
  * Every bin that deserves an activation, in the order a worker would be given
  * them. Bounded: the dispatcher reads a page, not the world.
  */
-export async function listDispatchableBins(limit = 200): Promise<Bin[]> {
+export async function listDispatchableBins(limit = 200): Promise<DispatchableBinRef[]> {
   const now = binNow();
-  const rows = await getDb().all<BinRow>(
-    `SELECT * FROM bins
+  /*
+   * Three columns, not the row. This runs every ten seconds and its only
+   * reader keys a dispatch intent on (bin, generation). `SELECT *` returned
+   * every bin's manifest, checkpoint and contract with it — measured in
+   * production at about 39 GB of database egress to read three short values.
+   */
+  const rows = await getDb().all<{ id: string; project_id: string; lease_generation: number }>(
+    `SELECT id, project_id, lease_generation FROM bins
       WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL}
       ORDER BY priority DESC, created_at, rowid
       LIMIT ?`,
     [now, now, Math.min(500, Math.max(1, limit))],
   );
-  return rows.map(mapBin);
+  return rows.map((row) => ({
+    id: row.id,
+    projectId: row.project_id,
+    leaseGeneration: Number(row.lease_generation),
+  }));
 }
+
+/** What a dispatch intent is keyed on, and nothing else. */
+export type DispatchableBinRef = Pick<Bin, 'id' | 'projectId' | 'leaseGeneration'>;
 
 /**
  * The SQL that keeps another family's work out of the candidate list.
@@ -2495,7 +2592,7 @@ export async function listBinUnitResults(binId: string): Promise<BinUnitResult[]
  *
  * Returns true when this call created the intent.
  */
-export async function ensureDispatchIntent(bin: Bin): Promise<boolean> {
+export async function ensureDispatchIntent(bin: DispatchableBinRef): Promise<boolean> {
   const at = binNow();
   const result = await getDb().run(
     `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,

@@ -308,6 +308,47 @@ export async function createOrchestration(input: CreateOrchestrationInput): Prom
   return (await getOrchestration(id))!;
 }
 
+/**
+ * A packet without its two long texts — the assignment and the filed report.
+ *
+ * The background passes ask a packet's status, links and timestamps many times
+ * a tick and never read either text; reading them anyway was measured at about
+ * five million full-row reads. `getOrchestration` is unchanged for every reader
+ * that does want them.
+ */
+export type OrchestrationHead = Omit<ResearchOrchestration, 'assignment' | 'reportText'>;
+
+const ORCHESTRATION_HEAD_COLUMNS =
+  'id, project_id, layer_id, run_id, title, target_version, provider, model, status, current_pass, ' +
+  'attempt, parent_orchestration_id, repair_reason, document_id, audit_id, verdict, queued_at, ' +
+  'started_at, completed_at, failed_at, failure_reason, cancelled_at, cancel_reason, heartbeat_at, ' +
+  'auto_approve, fixture, approved_at, approval_note, created_at, updated_at, ' +
+  'unresolved_gap_policy, unresolved_gap_authorized_by, unresolved_gap_authorized_at, ' +
+  'approval_envelope_id, approval_envelope_authorized_by, approval_envelope_authorized_at';
+
+export async function getOrchestrationHead(id: string): Promise<OrchestrationHead | null> {
+  const row = await getDb().get<ResearchOrchestrationRow>(
+    `SELECT ${ORCHESTRATION_HEAD_COLUMNS} FROM research_orchestrations WHERE id = ?`,
+    [id],
+  );
+  if (!row) return null;
+  const { assignment: _assignment, reportText: _reportText, ...head } = mapOrchestration({
+    ...row,
+    assignment: '',
+    report_text: null,
+  } as ResearchOrchestrationRow);
+  return head;
+}
+
+/** One packet's status, without its report text or assignment. */
+export async function getOrchestrationStatus(id: string): Promise<string | null> {
+  const row = await getDb().get<{ status: string }>(
+    'SELECT status FROM research_orchestrations WHERE id = ?',
+    [id],
+  );
+  return row ? row.status : null;
+}
+
 export async function getOrchestration(id: string): Promise<ResearchOrchestration | null> {
   const row = await getDb().get<ResearchOrchestrationRow>(
     'SELECT * FROM research_orchestrations WHERE id = ?',
@@ -749,6 +790,62 @@ export async function finishPass(id: string, input: FinishPassInput): Promise<Re
 export async function getPass(id: string): Promise<ResearchPass | null> {
   const row = await getDb().get<ResearchPassRow>('SELECT * FROM research_passes WHERE id = ?', [id]);
   return row ? mapPass(row) : null;
+}
+
+/**
+ * The `completed_at` of every pass that has one, without the prompts and raw
+ * replies a full pass row carries. For the callers that only ask when a packet
+ * last moved.
+ */
+export async function listPassCompletionTimes(orchestrationId: string): Promise<string[]> {
+  const rows = await getDb().all<{ completed_at: string | null }>(
+    'SELECT completed_at FROM research_passes WHERE orchestration_id = ? ORDER BY ordinal, attempt, rowid',
+    [orchestrationId],
+  );
+  return rows.map((row) => row.completed_at).filter((at): at is string => at !== null);
+}
+
+/**
+ * Every pass of a packet with its key, ordinal, status and times — and not its
+ * prompt or raw reply. Same order as `listPasses`.
+ */
+export async function listPassHeads(orchestrationId: string): Promise<Array<{
+  id: string;
+  passKey: string;
+  ordinal: number;
+  status: string;
+  startedAt: string;
+  completedAt: string | null;
+}>> {
+  const rows = await getDb().all<{
+    id: string;
+    pass_key: string;
+    ordinal: number;
+    status: string;
+    started_at: string;
+    completed_at: string | null;
+  }>(
+    `SELECT id, pass_key, ordinal, status, started_at, completed_at FROM research_passes
+      WHERE orchestration_id = ? ORDER BY ordinal, attempt, rowid`,
+    [orchestrationId],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    passKey: row.pass_key,
+    ordinal: Number(row.ordinal),
+    status: row.status,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+  }));
+}
+
+/** One pass's raw reply, or null. */
+export async function getPassRawResponse(id: string): Promise<string | null> {
+  const row = await getDb().get<{ raw_response: string | null }>(
+    'SELECT raw_response FROM research_passes WHERE id = ?',
+    [id],
+  );
+  return row?.raw_response ?? null;
 }
 
 export async function listPasses(orchestrationId: string): Promise<ResearchPass[]> {

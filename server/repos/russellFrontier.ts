@@ -181,6 +181,26 @@ export async function listFrontier(input: {
 }
 
 /**
+ * The newest `last_seen_at` among the rows `listFrontier` would return with
+ * resolved and private items included — one value instead of up to 400 rows.
+ *
+ * `frontierIsDue` asks this every tick for every project and used to read the
+ * whole page to compute it. The subquery keeps the identical page (same order,
+ * same bound) so the answer is the same value the loop over rows found.
+ */
+export async function newestFrontierSeenAt(projectId: string): Promise<string | null> {
+  const row = await getDb().get<{ newest: string | null }>(
+    `SELECT MAX(last_seen_at) AS newest FROM (
+       SELECT last_seen_at FROM russell_frontier
+        WHERE project_id = ?
+        ORDER BY region, last_seen_at DESC
+        LIMIT 400) page`,
+    [projectId],
+  );
+  return row?.newest ?? null;
+}
+
+/**
  * A person saying an area is deliberately not required.
  *
  * Attributed and reasoned. It is reversible by passing `dismissed: false`,

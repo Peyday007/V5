@@ -26,7 +26,7 @@ import { getCandidate } from '../../repos/russellCandidates.ts';
 import { getMission } from '../../repos/russellMissions.ts';
 import { getConversation } from '../../repos/russellConversations.ts';
 import { getDocument } from '../../repos/documents.ts';
-import { getOrchestration } from '../../repos/research.ts';
+import { getOrchestrationHead } from '../../repos/research.ts';
 
 /**
  * What one link currently says.
@@ -230,7 +230,7 @@ async function readCandidate(link: WorkstreamLink): Promise<LinkReading> {
 }
 
 async function readPacket(link: WorkstreamLink): Promise<LinkReading> {
-  const packet = await getOrchestration(link.ref);
+  const packet = await getOrchestrationHead(link.ref);
   if (!packet) return unreadable(link, 'the research packet this points at is gone');
   const state: WorkstreamState =
     packet.status === 'NEEDS_HUMAN'
