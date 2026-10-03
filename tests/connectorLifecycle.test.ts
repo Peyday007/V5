@@ -445,6 +445,37 @@ describe('recovery needs nobody but the person who consents', () => {
     expect(Number(stored!.n)).toBeLessThanOrEqual(1);
   });
 
+  /*
+   * The CI gate on 8462042e failed the test above with HEALTHY: the grant and
+   * its successor were written in one millisecond, and the tip was chosen by
+   * time with a random-id tiebreak. Forced here rather than hoped for.
+   */
+  it('reads the lineage, not the clock, when a grant and its successor share a millisecond', async () => {
+    const owner = await account('owner');
+    await use(owner.access);
+    const lost = await rotate(owner.refresh);
+    expect(lost.ok).toBe(true);
+    const refreshes = await getDb().all<{ id: string; parent_token_id: string | null }>(
+      "SELECT id, parent_token_id FROM oauth_tokens WHERE client_id = ? AND kind = 'REFRESH'",
+      [owner.clientId],
+    );
+    const grant = refreshes.find((one) => one.parent_token_id === null)!;
+    const successor = refreshes.find((one) => one.parent_token_id === grant.id)!;
+    const at = new Date(Date.now() - CONCURRENT_REFRESH_LEEWAY_MS - 60_000).toISOString();
+    await getDb().run('UPDATE oauth_tokens SET created_at = ? WHERE client_id = ?', [at, owner.clientId]);
+    // And the id order that made the old query pick the grant: the successor
+    // renamed to sort below it, with its access token following it.
+    const lowId = 'oat_00000000000000000000';
+    expect(lowId < grant.id).toBe(true);
+    await getDb().run('UPDATE oauth_tokens SET parent_token_id = ? WHERE parent_token_id = ?', [lowId, successor.id]);
+    await getDb().run('UPDATE oauth_tokens SET id = ? WHERE id = ?', [lowId, successor.id]);
+    await getDb().run(
+      'UPDATE oauth_tokens SET last_used_at = ?, first_used_at = ? WHERE client_id = ? AND last_used_at IS NOT NULL',
+      [at, at, owner.clientId],
+    );
+    expect((await connectorHealth(owner.connectorId))!.state).toBe('REFRESH_RECOVERABLE');
+  });
+
   it('G. an explicitly revoked authorization needs consent, and stays refused', async () => {
     const airyn = await account('airyn');
     const parsed = parseOAuthToken(airyn.refresh)!;
