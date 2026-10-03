@@ -96,6 +96,7 @@ export function mapCode(row: OAuthAuthorizationCodeRow): OAuthAuthorizationCode 
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     redeemedAt: row.redeemed_at,
+    attachConnectorId: row.attach_connector_id ?? null,
   };
 }
 
@@ -229,6 +230,7 @@ export interface IssueCodeInput {
   codeChallengeMethod: string;
   resource: string | null;
   scope: string;
+  attachConnectorId?: string | null;
 }
 
 export async function issueAuthorizationCode(input: IssueCodeInput): Promise<OAuthAuthorizationCode> {
@@ -237,8 +239,9 @@ export async function issueAuthorizationCode(input: IssueCodeInput): Promise<OAu
   await getDb().run(
     `INSERT INTO oauth_authorization_codes
        (id, code_digest, client_id, worker_id, approved_by_user_id, redirect_uri,
-        code_challenge, code_challenge_method, resource, scope, created_at, expires_at, redeemed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+        code_challenge, code_challenge_method, resource, scope, created_at, expires_at, redeemed_at,
+        attach_connector_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
     [
       id,
       input.codeDigest,
@@ -252,6 +255,7 @@ export async function issueAuthorizationCode(input: IssueCodeInput): Promise<OAu
       input.scope,
       new Date(now).toISOString(),
       new Date(now + AUTHORIZATION_CODE_TTL_MS).toISOString(),
+      input.attachConnectorId ?? null,
     ],
   );
   const row = await getDb().get<OAuthAuthorizationCodeRow>(

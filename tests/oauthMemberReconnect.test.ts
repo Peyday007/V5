@@ -54,10 +54,14 @@ interface Member {
   connectorId: string;
   /** The client the first connection created — the one a lost refresh broke. */
   oldClientId: string;
+  /** That client's refresh token, which Claude would present to refresh. */
+  oldRefresh: string;
 }
 let airyn: Member;
 let caleb: Member;
 let stranger: { id: string; cookie: string };
+let dana: Member;
+let otherWorkerId = '';
 
 /* -- helpers --------------------------------------------------------------- */
 
@@ -253,7 +257,7 @@ async function connectMember(person: { id: string; cookie: string }, account: st
   if (!approved.code) throw new Error(`first connection for ${account} produced no code: ${approved.status}`);
   const tokens = await exchange(oldClientId, approved.code, approved.verifier);
   if (!tokens['access_token']) throw new Error(`first exchange failed: ${JSON.stringify(tokens)}`);
-  return { ...person, connectorId, oldClientId };
+  return { ...person, connectorId, oldClientId, oldRefresh: tokens['refresh_token']! };
 }
 
 async function invitationCount(): Promise<number> {
@@ -328,6 +332,16 @@ beforeAll(async () => {
   airyn = await connectMember(await createMember('airyn@example.invalid', 'Airyn'), 'airyn');
   caleb = await connectMember(await createMember('caleb@example.invalid', 'Caleb'), 'caleb');
   stranger = await createMember('stranger@example.invalid', 'Stranger');
+  dana = await connectMember(await createMember('dana@example.invalid', 'Dana'), 'dana');
+  const other = await api<{ worker: { id: string } }>('POST', '/api/admin/workers', {
+    cookie: adminCookie,
+    body: { name: 'research-brain', displayName: 'Research Brain' },
+  });
+  otherWorkerId = other.body.worker.id;
+  await api('POST', `/api/admin/projects/${projectId}/members`, {
+    cookie: adminCookie,
+    body: { principalId: otherWorkerId, principalType: 'WORKER', scopes: ['project:read'] },
+  });
 }, 120_000);
 
 afterAll(async () => {
@@ -364,6 +378,11 @@ describe('a signed-in member reconnecting their own connector', () => {
 
     const approved = await approve(newClientId, airyn.cookie);
     expect(approved.code).not.toBeNull();
+    // Approval alone attaches nothing: a client id is public, so the binding
+    // waits for the holder of the verifier and the client's secret.
+    expect(
+      await withDb(async () => getDb().get('SELECT 1 FROM connector_clients WHERE client_id = ?', [newClientId])),
+    ).toBeUndefined();
     const tokens = await exchange(newClientId, approved.code!, approved.verifier);
     expect(tokens['access_token']).toBeTruthy();
     expect(tokens['refresh_token']).toBeTruthy();
@@ -387,7 +406,7 @@ describe('a signed-in member reconnecting their own connector', () => {
       expect(clients.map((one) => one.client_id)).toEqual([airyn.oldClientId, newClientId]);
       // No new logical connector.
       const connectors = await getDb().get<{ n: number }>('SELECT COUNT(*) AS n FROM connectors');
-      expect(connectors!.n).toBe(2);
+      expect(connectors!.n).toBe(3);
     });
     expect(await invitationCount()).toBe(invitationsBefore);
   });
@@ -483,23 +502,92 @@ describe('a signed-in member reconnecting their own connector', () => {
     for (const row of all) expect(row.metadata).not.toMatch(/brno_|brnr_|code_verifier|client_secret/);
   });
 
-  it('does not guess between two connectors a member could be reconnecting', async () => {
-    // A second connector of Airyn's at the same endpoint, proven by his own
-    // Claude connection naming another account on the same worker.
+  it('refuses a forged worker on the member path', async () => {
+    const client = await register('Claude (airyn, forged worker)');
+    const approved = await approve(client, airyn.cookie, { worker: otherWorkerId });
+    expect(approved.code).toBeNull();
+    expect(approved.status).toBe(403);
+  });
+
+  it('refuses a member holding an invitation bound to somebody else', async () => {
+    const token = await withDb(async () => {
+      const admin = await getDb().get<{ id: string }>('SELECT id FROM users WHERE email = ?', [ADMIN_EMAIL]);
+      const generated = generateInvitationToken();
+      await createInvitation({
+        workerId,
+        tokenPrefix: generated.prefix,
+        tokenDigest: generated.digest,
+        createdByUserId: admin!.id,
+        kind: 'ADDITIONAL',
+        intendedUserId: airyn.id,
+        connectorId: airyn.connectorId,
+      });
+      return generated.plaintext;
+    });
+    const client = await register('Claude (caleb, holding airyn’s link)');
+    const approved = await approve(client, `${caleb.cookie}; brain_invite=${encodeURIComponent(token)}`);
+    expect(approved.code).toBeNull();
+    expect(approved.status).toBe(403);
+    // Left unspent for the person it is for, then withdrawn so it does not
+    // count as an unused invitation in later cases.
+    await withDb(async () => {
+      await getDb().run(
+        `UPDATE worker_invitations SET revoked_at = ? WHERE intended_user_id = ? AND redeemed_at IS NULL`,
+        [new Date().toISOString(), airyn.id],
+      );
+    });
+  });
+
+  it('does not undo a withdrawal, even after Claude’s refresh was refused', async () => {
+    // An administrator withdraws Caleb's connector; Claude then tries to
+    // refresh and is refused, which is the ordinary sequence after a revocation
+    // and the one that flips the health verdict to a refused credential.
+    await withDb(async () => {
+      const { revokeTokensForClients } = await import('../server/repos/oauth.ts');
+      await revokeTokensForClients([caleb.oldClientId]);
+    });
+    const refused = await fetch(`${BASE}/oauth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: caleb.oldRefresh,
+        client_id: caleb.oldClientId,
+      }).toString(),
+    });
+    expect(refused.status).toBe(400);
+    const client = await register('Claude (caleb, after withdrawal)');
+    const page = await authorizePage(client, caleb.cookie);
+    expect(page.status).toBe(403);
+    expect(page.html).toContain('explicitly withdrawn');
+    expect((await pageEvents(client))[0]).toMatchObject({ reason: 'CONSENT_REVOKED', userId: caleb.id });
+    const approved = await approve(client, caleb.cookie);
+    expect(approved.code).toBeNull();
+  });
+
+  it('gives a member who handed the connection back no claim to it', async () => {
     await withDb(async () => {
       const now = new Date().toISOString();
       await getDb().run(
-        `INSERT INTO connectors (id, account_id, resource, worker_id, label, created_at, updated_at)
-         VALUES ('cnr_airyn_second', 'acct_airyn_second', '/mcp', ?, NULL, ?, ?)`,
-        [workerId, now, now],
-      );
-      await getDb().run(
         `INSERT INTO capacity_connections
            (id, user_id, connector_name, routine_name, secret_name, account_id, worker_id, state, created_at, updated_at)
-         VALUES ('ccn_airyn_second', ?, 'Brain (second)', 'Airyn second', 'SECRET_SECOND', 'acct_airyn_second', ?, 'CONFIGURED', ?, ?)`,
-        [airyn.id, workerId, now, now],
+         VALUES ('ccn_dana', ?, 'Brain (dana)', 'Dana routine', 'SECRET_DANA', 'acct_dana', ?, 'REVOKED', ?, ?)`,
+        [dana.id, workerId, now, now],
       );
     });
+    const client = await register('Claude (dana, after giving it back)');
+    const page = await authorizePage(client, dana.cookie);
+    expect(page.status).toBe(403);
+    expect((await pageEvents(client))[0]).toMatchObject({ reason: 'NO_CONNECTOR_FOR_MEMBER', userId: dana.id });
+  });
+
+  it('does not guess between two connectors a member could be reconnecting', async () => {
+    // A second connector of Airyn's at the same endpoint, established the same
+    // way the first was: an administrator's invitation bound to him.
+    const second = await connectMember(
+      { id: airyn.id, cookie: airyn.cookie },
+      'airyn_second',
+    );
     const client = await register('Claude (airyn, ambiguous)');
     const page = await authorizePage(client, airyn.cookie);
     expect(page.status).toBe(403);
@@ -508,6 +596,6 @@ describe('a signed-in member reconnecting their own connector', () => {
     expect(approved.code).toBeNull();
     const events = await pageEvents(client);
     expect(events[0]).toMatchObject({ decision: 'SIGNED_IN_UNRESOLVED', reason: 'AMBIGUOUS_CONNECTORS', userId: airyn.id });
-    expect((events[0]!['connectorIds'] as string[]).sort()).toEqual([airyn.connectorId, 'cnr_airyn_second'].sort());
+    expect((events[0]!['connectorIds'] as string[]).sort()).toEqual([airyn.connectorId, second.connectorId].sort());
   });
 });
