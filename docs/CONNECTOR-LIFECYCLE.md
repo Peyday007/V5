@@ -186,12 +186,12 @@ from a row:
 
 - the browser has an authenticated person;
 - exactly one connector at the endpoint the request names (`resource`) belongs
-  to them — proven only by a consent on an invitation an administrator bound to
-  them, for a client attached to that connector as `BOUND_INVITATION` or
-  `INVITATION_MEMBER` (not a capacity connection, whose account is found by a
-  normalized name; not an earlier member reconnect, which would renew itself;
-  not an inferred arrival), and not given back (a REVOKED capacity connection
-  for that account and worker voids the claim);
+  to them — proven only by a `BOUND_INVITATION` attachment whose recorded
+  `invitation_id` names this member and this connector (not a capacity
+  connection, whose account is found by a normalized name; not an earlier member
+  reconnect, which would renew itself; not an inferred or `INVITATION_MEMBER`
+  attachment; not a consent matched to a public client id), and not given back
+  (a REVOKED capacity connection for that account and worker voids the claim);
 - no other person has a claim to that connector;
 - the client is not already attached to a different connector;
 - the worker is live, nothing on the connector was explicitly revoked since its
@@ -202,7 +202,9 @@ from a row:
 The approval re-asks all of it and records the member as the approver; the new
 client is attached as `MEMBER_RECONNECT` on the same connector when its code is
 redeemed with the verifier and the client's secret, not at approval, because a
-`client_id` is public. Anything
+`client_id` is public — and only after the whole question is asked again at
+redemption, so a withdrawal inside the code's lifetime holds. An invitation
+spent on a client that is already a connector must name that connector. Anything
 else is refused by name (`ENDPOINT_UNSPECIFIED`, `NO_CONNECTOR_FOR_MEMBER`,
 `AMBIGUOUS_CONNECTORS`, `CONNECTOR_SHARED_WITH_ANOTHER_MEMBER`,
 `CLIENT_ATTACHED_ELSEWHERE`, `WORKER_UNAVAILABLE`, `CONSENT_REVOKED`,

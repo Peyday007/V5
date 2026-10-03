@@ -43,6 +43,8 @@ export interface ConnectorClient {
   source: ConnectorClientSource;
   evidence: string | null;
   attachedAt: string;
+  /** The bound invitation whose consent produced a BOUND_INVITATION attachment. */
+  invitationId: string | null;
 }
 
 interface ConnectorRow {
@@ -61,6 +63,7 @@ interface ConnectorClientRow {
   source: ConnectorClientSource;
   evidence: string | null;
   attached_at: string;
+  invitation_id?: string | null;
 }
 
 function mapConnector(row: ConnectorRow): Connector {
@@ -82,6 +85,7 @@ function mapClient(row: ConnectorClientRow): ConnectorClient {
     source: row.source,
     evidence: row.evidence,
     attachedAt: row.attached_at,
+    invitationId: row.invitation_id ?? null,
   };
 }
 
@@ -159,12 +163,21 @@ export async function attachClient(input: {
   connectorId: string;
   source: ConnectorClientSource;
   evidence?: string | null;
+  /** Only for BOUND_INVITATION: the invitation whose consent this is. */
+  invitationId?: string | null;
 }): Promise<AttachOutcome> {
   const result = await getDb().run(
-    `INSERT INTO connector_clients (client_id, connector_id, source, evidence, attached_at)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO connector_clients (client_id, connector_id, source, evidence, attached_at, invitation_id)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT (client_id) DO NOTHING`,
-    [input.clientId, input.connectorId, input.source, input.evidence ?? null, nowIso()],
+    [
+      input.clientId,
+      input.connectorId,
+      input.source,
+      input.evidence ?? null,
+      nowIso(),
+      input.source === 'BOUND_INVITATION' ? (input.invitationId ?? null) : null,
+    ],
   );
   if (result.changes === 1) return 'ATTACHED';
   const existing = await connectorClient(input.clientId);

@@ -926,6 +926,32 @@ export function oauthRouter(): Router {
         return;
       }
 
+      /*
+       * An invitation spent on a client that is already some connector must
+       * name that connector. Otherwise a member holding any live invitation for
+       * a shared worker could consent on another member's (public) client id —
+       * nothing would attach, but nothing about that consent is theirs either.
+       */
+      if (invited) {
+        const attachedTo = await connectorClient(params.clientId);
+        if (attachedTo && attachedTo.connectorId !== invited.invitation.connectorId) {
+          await audit({
+            action: 'OAUTH_AUTHORIZE',
+            actor: null,
+            targetId: params.clientId,
+            result: 'DENIED',
+            metadata: {
+              reason: 'INVITATION_FOR_ANOTHER_CONNECTOR',
+              clientId: params.clientId,
+              invitationId: invited.invitation.id,
+              connectorId: attachedTo.connectorId,
+            },
+          });
+          errorPage(res, 403, 'Not authorized', 'This Claude connection belongs to a different connector than this invitation.');
+          return;
+        }
+      }
+
       // A member reconnect restores exactly the connector's own worker.
       if (restoring && workerId !== restoring.worker.id) {
         await audit({
@@ -1078,6 +1104,7 @@ export function oauthRouter(): Router {
             connectorId: connector.id,
             source: bound?.invitation?.connectorId ? 'BOUND_INVITATION' : 'OPERATOR',
             evidence: bound?.invitation ? `invitation ${bound.invitation.id}` : `approved by ${person?.id ?? 'unknown'}`,
+            invitationId: bound?.invitation?.connectorId ? bound.invitation.id : null,
           });
           // A conflict is reported by the attach and acted on by nobody: only a
           // client that is this connector re-arms its Routines.
@@ -1182,7 +1209,18 @@ export function oauthRouter(): Router {
          * meanwhile become another connector is refused, not re-pointed.
          */
         if (record.attachConnectorId) {
-          const connector = await getConnector(record.attachConnectorId);
+          /*
+           * Asked again at redemption, not trusted from the approval: a
+           * withdrawal, a connection given back or a change of ownership inside
+           * the code's lifetime must not be undone by a grant minted after it.
+           */
+          const again = await resolveMemberReconnect({
+            userId: record.approvedByUserId,
+            clientId,
+            resource: record.resource,
+            scope: record.scope,
+          });
+          const connector = again.ok && again.connector.id === record.attachConnectorId ? again.connector : null;
           const fits =
             connector !== null &&
             connector.resource === endpointOf(record.resource) &&
@@ -1201,7 +1239,14 @@ export function oauthRouter(): Router {
               actor: null,
               targetId: record.workerId,
               result: 'DENIED',
-              metadata: { reason: 'MEMBER_RECONNECT_ATTACH_CONFLICT', clientId, connectorId: record.attachConnectorId },
+              metadata: {
+                reason: again.ok ? 'MEMBER_RECONNECT_ATTACH_CONFLICT' : again.reason,
+                via: 'MEMBER_RECONNECT',
+                clientId,
+                userId: record.approvedByUserId,
+                endpoint: endpointOf(record.resource),
+                connectorId: record.attachConnectorId,
+              },
             });
             res.status(400).json({ error: 'invalid_grant' });
             return;
@@ -1220,7 +1265,14 @@ export function oauthRouter(): Router {
           actor: null,
           targetId: record.workerId,
           result: 'SUCCESS',
-          metadata: { clientId, grant: 'authorization_code' },
+          metadata: {
+            clientId,
+            grant: 'authorization_code',
+            endpoint: endpointOf(record.resource),
+            ...(record.attachConnectorId
+              ? { via: 'MEMBER_RECONNECT', userId: record.approvedByUserId, connectorId: record.attachConnectorId }
+              : {}),
+          },
         });
         return;
       }

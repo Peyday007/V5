@@ -509,6 +509,55 @@ describe('a signed-in member reconnecting their own connector', () => {
     expect(approved.status).toBe(403);
   });
 
+  it('does not let an invitation holder consent on another member’s client and become its owner', async () => {
+    // Caleb holds a live invitation of his own for the shared worker — one
+    // naming his connector, and one naming none — and consents on Airyn's
+    // public client id. Neither may succeed, and Airyn keeps sole ownership.
+    for (const connectorId of [caleb.connectorId, null]) {
+      const token = await withDb(async () => {
+        const admin = await getDb().get<{ id: string }>('SELECT id FROM users WHERE email = ?', [ADMIN_EMAIL]);
+        const generated = generateInvitationToken();
+        await createInvitation({
+          workerId,
+          tokenPrefix: generated.prefix,
+          tokenDigest: generated.digest,
+          createdByUserId: admin!.id,
+          kind: 'ADDITIONAL',
+          intendedUserId: caleb.id,
+          connectorId,
+        });
+        return generated.plaintext;
+      });
+      const approved = await approve(airyn.oldClientId, `${caleb.cookie}; brain_invite=${encodeURIComponent(token)}`);
+      expect(approved.code).toBeNull();
+      expect(approved.status).toBe(403);
+      await withDb(async () => {
+        await getDb().run(
+          'UPDATE worker_invitations SET revoked_at = ? WHERE intended_user_id = ? AND redeemed_at IS NULL',
+          [new Date().toISOString(), caleb.id],
+        );
+      });
+    }
+    const { connectorOwners } = await withDb(async () => import('../server/services/fleet/memberReconnect.ts'));
+    const owners = await withDb(async () => connectorOwners());
+    expect([...(owners.get(airyn.connectorId)?.keys() ?? [])]).toEqual([airyn.id]);
+  });
+
+  it('refuses at redemption when the client became another connector after approval', async () => {
+    const client = await register('Claude (airyn, raced)');
+    const approved = await approve(client, airyn.cookie);
+    expect(approved.code).not.toBeNull();
+    await withDb(async () => {
+      await getDb().run(
+        `INSERT INTO connector_clients (client_id, connector_id, source, evidence, attached_at) VALUES (?, ?, 'OPERATOR', NULL, ?)`,
+        [client, caleb.connectorId, new Date().toISOString()],
+      );
+    });
+    const tokens = await exchange(client, approved.code!, approved.verifier);
+    expect(tokens['access_token']).toBeUndefined();
+    expect(tokens['error']).toBe('invalid_grant');
+  });
+
   it('refuses a member holding an invitation bound to somebody else', async () => {
     const token = await withDb(async () => {
       const admin = await getDb().get<{ id: string }>('SELECT id FROM users WHERE email = ?', [ADMIN_EMAIL]);
@@ -563,6 +612,22 @@ describe('a signed-in member reconnecting their own connector', () => {
     expect((await pageEvents(client))[0]).toMatchObject({ reason: 'CONSENT_REVOKED', userId: caleb.id });
     const approved = await approve(client, caleb.cookie);
     expect(approved.code).toBeNull();
+  });
+
+  it('does not let a withdrawal inside the code’s lifetime be undone by redeeming it', async () => {
+    const client = await register('Claude (dana, withdrawn mid-flight)');
+    const approved = await approve(client, dana.cookie);
+    expect(approved.code).not.toBeNull();
+    await withDb(async () => {
+      const { revokeTokensForClients } = await import('../server/repos/oauth.ts');
+      await revokeTokensForClients([dana.oldClientId]);
+    });
+    const tokens = await exchange(client, approved.code!, approved.verifier);
+    expect(tokens['access_token']).toBeUndefined();
+    expect(tokens['error']).toBe('invalid_grant');
+    await withDb(async () => {
+      expect(await getDb().get('SELECT 1 FROM connector_clients WHERE client_id = ?', [client])).toBeUndefined();
+    });
   });
 
   it('gives a member who handed the connection back no claim to it', async () => {

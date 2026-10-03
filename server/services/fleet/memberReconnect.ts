@@ -23,10 +23,10 @@
  *   live, whose consent was not explicitly withdrawn, and whose earlier grants
  *   already covered every scope this request asks for?
  *
- * Ownership is proven by one kind of row, never by a name or a worker id:
- * an `OAUTH_AUTHORIZE SUCCESS` approved on an invitation an administrator bound
- * to this member, for a client that is this connector by a *recorded* binding
- * (`BOUND_INVITATION` or `INVITATION_MEMBER`) rather than an inferred one.
+ * Ownership is proven by one kind of row, never by a name or a worker id: a
+ * `BOUND_INVITATION` attachment, which records the invitation whose consent
+ * attached the client — an invitation on which an administrator named both this
+ * member and this connector.
  *
  * Deliberately not evidence, and why (independent review of the first version):
  *
@@ -36,8 +36,10 @@
  *     would name somebody else's account.
  *   - an earlier member reconnect. Counting it would make ownership renew
  *     itself for ever, so giving a connection back could never end it.
- *   - an `OBSERVED_ARRIVAL` attachment. It is inferred, and a consent spent on
- *     a client later inferred onto another connector must not own that one.
+ *   - a consent matched to a client id. A client id is public, so consenting
+ *     on someone else's client must not count as owning their connector.
+ *   - an `OBSERVED_ARRIVAL` or `INVITATION_MEMBER` attachment. Both are
+ *     inferred — the second's account comes from the same normalized name.
  *
  * A member who gave the connection back (a REVOKED capacity connection for the
  * connector's account and worker, with no live one beside it) has no claim. And
@@ -120,31 +122,22 @@ export async function connectorOwners(): Promise<Map<string, Map<string, string[
     owners.set(connectorId, byUser);
   };
 
-  // Narrowed in SQL to approvals that name an invitation; parsed exactly after.
-  const consents = await getDb().all<{ metadata: string | null }>(
-    `SELECT metadata FROM identity_events
-      WHERE action = 'OAUTH_AUTHORIZE' AND result = 'SUCCESS' AND metadata LIKE '%invitationId%'`,
+  /*
+   * Read from the attachment row itself: a BOUND_INVITATION client records the
+   * invitation whose consent attached it, and that invitation names both the
+   * member and this connector. Matching a consent to whatever a client id is
+   * attached to *now* would let anyone holding an invitation for the same
+   * worker consent on somebody else's public client id and appear to own it.
+   */
+  const rows = await getDb().all<{ connector_id: string; intended_user_id: string; invitation_id: string }>(
+    `SELECT cc.connector_id AS connector_id, i.intended_user_id AS intended_user_id, i.id AS invitation_id
+       FROM connector_clients cc
+       JOIN worker_invitations i ON i.id = cc.invitation_id
+      WHERE cc.source = 'BOUND_INVITATION'
+        AND i.intended_user_id IS NOT NULL
+        AND i.connector_id = cc.connector_id`,
   );
-  for (const consent of consents) {
-    let meta: Record<string, unknown>;
-    try {
-      meta = JSON.parse(consent.metadata ?? '{}') as Record<string, unknown>;
-    } catch {
-      continue;
-    }
-    if (meta['via'] !== 'INVITATION' || typeof meta['invitationId'] !== 'string') continue;
-    const clientId = typeof meta['clientId'] === 'string' ? meta['clientId'] : null;
-    if (!clientId) continue;
-    const attached = await connectorClient(clientId);
-    if (!attached || (attached.source !== 'BOUND_INVITATION' && attached.source !== 'INVITATION_MEMBER')) continue;
-    const invitation = await getDb().get<{ intended_user_id: string | null }>(
-      'SELECT intended_user_id FROM worker_invitations WHERE id = ?',
-      [meta['invitationId']],
-    );
-    if (invitation?.intended_user_id) {
-      add(attached.connectorId, invitation.intended_user_id, `consent on invitation ${meta['invitationId']}`);
-    }
-  }
+  for (const row of rows) add(row.connector_id, row.intended_user_id, `consent on invitation ${row.invitation_id}`);
 
   // A member who gave the connection back keeps no claim to it.
   for (const [connectorId, byUser] of owners) {

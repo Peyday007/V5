@@ -35,7 +35,7 @@ CREATE TABLE connector_clients (
   client_id     TEXT PRIMARY KEY,
   connector_id  TEXT NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
   source        TEXT NOT NULL
-    CHECK (source IN ('OBSERVED_ARRIVAL', 'INVITATION_MEMBER', 'BOUND_INVITATION', 'MEMBER_RECONNECT', 'OPERATOR')),
+    CHECK (source IN ('OBSERVED_ARRIVAL', 'INVITATION_MEMBER', 'BOUND_INVITATION', 'OPERATOR')),
   evidence      TEXT,
   attached_at   TEXT NOT NULL
 );
@@ -57,8 +57,6 @@ ALTER TABLE oauth_tokens ADD COLUMN IF NOT EXISTS revoked_reason TEXT;
 ALTER TABLE oauth_tokens ADD COLUMN IF NOT EXISTS first_used_at TEXT;
 ALTER TABLE fleet_routines ADD COLUMN IF NOT EXISTS connector_id TEXT;
 ALTER TABLE worker_invitations ADD COLUMN IF NOT EXISTS connector_id TEXT;
--- The connector a member reconnect restores; attached when the code is redeemed.
-ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS attach_connector_id TEXT;
 
 -- Indexes first: the backfill below looks tokens up by parent and by grant,
 -- and without them each correlated lookup is a scan of the whole table.

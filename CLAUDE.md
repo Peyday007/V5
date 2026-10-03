@@ -11917,21 +11917,28 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   would have ended the same way. The grant a reconnect needs already exists: an
   administrator approved *this member* for *this connector*. So
   `services/fleet/memberReconnect.ts` answers one question from rows — exactly
-  one connector at the requested endpoint that this member's consent on an
-  invitation an administrator bound to them proves is theirs, for a client that
-  is that connector by a *recorded* binding, and nobody else's; its worker live;
+  one connector at the requested endpoint that a `BOUND_INVITATION` attachment
+  proves is theirs — the attachment records the invitation whose consent made
+  it, and on that invitation an administrator named both this member and this
+  connector — and nobody else's; its worker live;
   no withdrawal since its last grant, read from the token rows; no scope beyond
   what it was already granted; the client not already another connector — and
   the screen offers that connector's worker and nothing else. The approval asks
   again and records the member as approver, and the new client is attached to
   the same connector as `MEMBER_RECONNECT` only when its code is redeemed with
-  the verifier and the client's secret, because a `client_id` is public. A
-  worker id is never evidence: three people authenticate as worker-10. The
-  first version also accepted a member's own capacity connection, earlier
-  member reconnects and inferred attachments as ownership, and read withdrawal
-  from the health verdict; independent review showed each could be produced or
-  outlived by the member, and a refused refresh after a revocation hid the
-  revocation from the verdict. All four are gone, each with a regression. Zero candidates, two, a
+  the verifier and the client's secret, because a `client_id` is public, and
+  only after the whole question is asked again at redemption. A worker id is
+  never evidence: three people authenticate as worker-10. Two independent
+  reviews shaped this. The first version also accepted a member's own capacity
+  connection, earlier member reconnects, inferred attachments and any consent
+  matched to a client id as ownership, and read withdrawal from the health
+  verdict; each could be produced or outlived by a member — consenting on
+  somebody else's public client id with one's own invitation was enough to
+  co-own their connector — and a refused refresh after a revocation hid the
+  revocation from the verdict. All are gone, each with a regression that fails
+  on the code it replaced. A connector made before `connector_clients.
+  invitation_id` existed has no such row, so its member is told to use a bound
+  reconnect link once; from then on reconnecting is theirs. Zero candidates, two, a
   shared claim, an unnamed endpoint, a revoked consent or a widened scope is
   each refused by name, and a signed-in person is never shown a sign-in page:
   they are told Brain cannot determine which connector they are reconnecting,
