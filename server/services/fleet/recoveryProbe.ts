@@ -78,8 +78,10 @@ import { getToken } from '../../repos/oauth.ts';
 import { getConnector } from '../../repos/connectors.ts';
 import { getBin, listBinEvents, markBinReady, recordRecoveryDispatch, retireBin } from '../../repos/bins.ts';
 import {
+  amendRecoveryOutcome,
   attachRecoveryBin,
   getRecoveryProbe,
+  recoveryProbesClosedBetween,
   liveRecoveryProbe,
   listRecoveryProbes,
   markRecoveryFired,
@@ -88,7 +90,7 @@ import {
   settleRecoveryProbe,
   type RecoveryProbe,
 } from '../../repos/recoveryProbes.ts';
-import { sameProviderSession } from '../../domain/sessionRef.ts';
+import { normalizeSessionRef, sameProviderSession } from '../../domain/sessionRef.ts';
 import type { FleetRoutine } from '../../domain/types.ts';
 import { fireRoutine, resolveToken, type FireOutcome, type FireTarget } from '../dispatch/fire.ts';
 import { attributeArrival, NO_SHOW_QUARANTINE_MARK, reconcileConnectorBindings } from './connectorBinding.ts';
@@ -99,8 +101,8 @@ import { createProbeBin, ProbeRefused } from './probe.ts';
 /**
  * How long a probe waits for its session. A Routine session boots, reads its
  * prompt and checks in within a minute or two when it can authenticate at all;
- * fifteen is generous, and stays well inside the thirty-minute in-flight window
- * so a probe never reads as a live activation after it has settled.
+ * fifteen is generous. (Its bin counts as in flight for its Routine until the
+ * bin is terminal, which is harmless: the Routine is out of routing anyway.)
  */
 export const RECOVERY_PROBE_WINDOW_MS = 15 * 60_000;
 
@@ -204,19 +206,35 @@ export async function startRecoveryProbe(input: {
     });
     return (await getRecoveryProbe(probe.id))!;
   }
-  await attachRecoveryBin(probe.id, binId);
+  if (!(await attachRecoveryBin(probe.id, binId))) {
+    // The tick settled this reservation while the bin was being made.
+    await retireBin({ binId, leaseGeneration: 0, operator: RECOVERY_PROBE_CREATOR, reason: 'recovery probe was settled before it fired' });
+    return (await getRecoveryProbe(probe.id))!;
+  }
 
   const token = resolveToken(routine.tokenSecretName)!;
   const fire = input.fire ?? ((options) => fireRoutine(options));
-  const outcome = await fire({
-    target: { routineId: routine.routineRef, token, baseUrl: routine.baseUrl, routineVersion: routine.routineVersion },
-  });
-  if (!outcome.ok || !outcome.sessionRef) {
+  let outcome: FireOutcome;
+  try {
+    outcome = await fire({
+      target: { routineId: routine.routineRef, token, baseUrl: routine.baseUrl, routineVersion: routine.routineVersion },
+    });
+  } catch (error) {
+    // Whether a session started is unknown, and unknown is not evidence.
+    await retireBin({ binId, leaseGeneration: 0, operator: RECOVERY_PROBE_CREATOR, reason: 'recovery probe fire threw' });
+    await settleRecoveryProbe(probe.id, 'FIRING', {
+      to: 'AMBIGUOUS',
+      outcome: `The fire threw before the provider answered (${error instanceof Error ? error.message.slice(0, 200) : 'unknown'}); whether a session started is unknown. Nothing was attributed.`,
+      nextAction: `Probe ${routine.routineRef} again.`,
+    });
+    return (await getRecoveryProbe(probe.id))!;
+  }
+  if (!outcome.ok || !normalizeSessionRef(outcome.sessionRef)) {
     await retireBin({ binId, leaseGeneration: 0, operator: RECOVERY_PROBE_CREATOR, reason: 'recovery probe was not fired' });
     await settleRecoveryProbe(probe.id, 'FIRING', {
-      to: 'PROVIDER_REFUSED',
+      to: outcome.ok ? 'AMBIGUOUS' : 'PROVIDER_REFUSED',
       outcome: outcome.ok
-        ? 'The provider accepted the fire but returned no session id, so no arrival could ever be matched to it. Nothing was attributed.'
+        ? 'The provider accepted the fire but returned no usable session id, so no arrival could ever be matched to it. Nothing was attributed.'
         : `The provider refused to start a session (${outcome.kind}: ${outcome.message.slice(0, 200)}). Attribution is untouched.`,
       nextAction: outcome.ok
         ? 'Probe again; if the provider keeps returning no session, this surface cannot be proven this way.'
@@ -227,6 +245,14 @@ export async function startRecoveryProbe(input: {
     return (await getRecoveryProbe(probe.id))!;
   }
 
+  // The session's identity first, so it is recognised the moment it arrives.
+  if (!(await markRecoveryFired(probe.id, outcome.sessionRef!))) {
+    // The tick settled the reservation as abandoned while the fire was in
+    // flight. The session it started will be offered nothing and is reported
+    // there; nothing more is written about it here.
+    await retireBin({ binId, leaseGeneration: 0, operator: RECOVERY_PROBE_CREATOR, reason: 'recovery probe settled during its fire' });
+    return (await getRecoveryProbe(probe.id))!;
+  }
   const bin = await getBin(binId);
   await recordRecoveryDispatch({
     binId,
@@ -234,10 +260,10 @@ export async function startRecoveryProbe(input: {
     routineId: routine.id,
     routineRef: routine.routineRef,
     accountId: routine.accountId,
-    sessionRef: outcome.sessionRef,
+    sessionRef: outcome.sessionRef!,
+    fireEventId: outcome.fireEventId,
     probeId: probe.id,
   });
-  await markRecoveryFired(probe.id, outcome.sessionRef);
   await markBinReady(binId);
   return (await getRecoveryProbe(probe.id))!;
 }
@@ -343,9 +369,22 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
     }
     const health = await connectorHealth(attribution.connectorId, now);
     if (health?.state === 'HEALTHY') {
+      const proven = `Proven: session ${arrival.sessionRef} authenticated as client ${attribution.clientId} -> connector ${attribution.connectorId}.`;
+      // The settlement is claimed first; only the winner applies its effects,
+      // so two settlers cannot both lift and the record never contradicts the surface.
+      const won = await settleRecoveryProbe(probe.id, 'FIRED', {
+        to: 'HEALTHY',
+        connectorId: attribution.connectorId,
+        clientId: attribution.clientId,
+        health: `${health.state} ${health.reason}`,
+        outcome: proven,
+        nextAction: null,
+      });
+      if (!won) return false;
       let lifted = 'It was not quarantined.';
-      if (routine.state === 'QUARANTINED') {
-        if (liftableQuarantine(routine.stateReason)) {
+      const current = (await getRoutine(routine.id)) ?? routine;
+      if (current.state === 'QUARANTINED') {
+        if (liftableQuarantine(current.stateReason)) {
           const moved = await setRoutineState({
             routineId: routine.id,
             from: 'QUARANTINED',
@@ -358,7 +397,7 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
           lifted = moved ? 'Its quarantine was lifted automatically.' : 'Its state moved concurrently; nothing was overwritten.';
           forgetRoutingHealth();
         } else {
-          lifted = `It stays quarantined: that quarantine was not Brain’s to lift (${(routine.stateReason ?? '').slice(0, 160)}).`;
+          lifted = `It stays quarantined: that quarantine was not Brain’s to lift (${(current.stateReason ?? '').slice(0, 160)}).`;
         }
       }
       let siblings = '';
@@ -368,15 +407,8 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
       } catch {
         // Sibling binding is the tick's to retry.
       }
-      const settled = await settleRecoveryProbe(probe.id, 'FIRED', {
-        to: 'HEALTHY',
-        connectorId: attribution.connectorId,
-        clientId: attribution.clientId,
-        health: `${health.state} ${health.reason}`,
-        outcome: `Proven: session ${arrival.sessionRef} authenticated as client ${attribution.clientId} -> connector ${attribution.connectorId}. ${lifted}${siblings}`,
-        nextAction: null,
-      });
-      return settled;
+      await amendRecoveryOutcome(probe.id, `${proven} ${lifted}${siblings}`);
+      return true;
     }
     const human = health?.humanActionRequired ?? false;
     return settleRecoveryProbe(probe.id, 'FIRED', {
@@ -390,6 +422,22 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
   }
 
   if (!expired) return false;
+
+  // A check-in with no session arrived during the window. It may have been
+  // this probe's session; Brain cannot tell, so it neither attributes from it
+  // nor claims that nothing reached it.
+  if (probe.binId && (await listBinEvents(probe.binId)).some((e) => e.eventType === 'RECOVERY_PROBE_SESSIONLESS_ARRIVAL')) {
+    const moved = await settleRecoveryProbe(probe.id, 'FIRED', {
+      to: 'AMBIGUOUS',
+      outcome:
+        `The provider started ${probe.providerSession}, and during the window a check-in by this worker arrived reporting ` +
+        'no provider session. It may have been this probe’s; Brain cannot tell, so nothing was attributed and it was offered nothing.',
+      nextAction:
+        'The Routine’s prompt must report its session at check-in (session_ref). Fix the prompt, then probe again.',
+    });
+    await retireProbeBin(probe, 'recovery probe: sessionless arrival');
+    return moved;
+  }
 
   // Nothing arrived. If the Routine's connector is already known to need
   // consent, that is the answer; otherwise nothing is attributed and nothing
@@ -442,9 +490,9 @@ export async function settleRecoveryProbes(now = Date.now()): Promise<{ settled:
   }
   // A settled probe whose bin outlived its window: the session that held it is
   // gone (or never came), and with one attempt the bin can go nowhere else.
-  for (const probe of await listRecoveryProbes(['HEALTHY', 'REAUTH_REQUIRED', 'AMBIGUOUS', 'NO_MCP'])) {
-    const closes = Date.parse(probe.expiresAt);
-    if (closes > now || closes < now - 24 * 60 * 60_000) continue;
+  const until = new Date(now).toISOString();
+  const since = new Date(now - 24 * 60 * 60_000).toISOString();
+  for (const probe of await recoveryProbesClosedBetween(since, until)) {
     await retireProbeBin(probe, 'recovery probe window closed');
   }
   return { settled };

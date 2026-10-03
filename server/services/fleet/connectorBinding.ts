@@ -126,7 +126,8 @@ export async function attributeArrival(input: {
       return none(
         'CONFLICT',
         `connector ${current.id} (this account at ${resource}) authorizes as ${current.worker_id}, ` +
-          `but this arrival authenticated as ${token.workerId}; two workers are not one connector`,
+          `but this arrival authenticated as ${token.workerId}; two workers are not one connector. If the worker ` +
+          `legitimately changed, an operator corrects it with \`connectors repoint-worker ${current.id} ${token.workerId}\``,
         token.clientId,
       );
     }

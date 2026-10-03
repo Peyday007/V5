@@ -1530,7 +1530,9 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
    * arrival that reports none is not narrowed here, and the pinned-bin guard
    * below still refuses it the probe.
    */
-  const recoveryOnly = input.sessionRef ? await recoveryBinForSession(input.sessionRef) : null;
+  const recoveryOnly = input.sessionRef
+    ? await recoveryBinForSession(input.sessionRef)
+    : await sessionlessDuringRecovery(input.workerId, input.credentialId ?? null);
 
   for (let round = 0; round < 3; round += 1) {
     const now = binNow();
@@ -2531,6 +2533,41 @@ async function recoveryBinForSession(sessionRef: string): Promise<string | null>
 }
 
 /**
+ * A check-in that reports no session, while a recovery probe of this worker is
+ * waiting, from a credential no connector has been attributed.
+ *
+ * It may be the probe's own session, which left `session_ref` out — the field is
+ * optional, and §27 records workers doing exactly that. Brain cannot tell, so it
+ * fails closed: the arrival is offered nothing (a probe must never dispatch real
+ * work on a surface Brain has quarantined), nothing is attributed from it, and
+ * it is recorded on the probe's bin so the probe settles as AMBIGUOUS rather
+ * than claiming that nothing it started reached Brain. A credential whose client
+ * already belongs to a connector is some other surface's, and is unaffected.
+ */
+async function sessionlessDuringRecovery(workerId: string, credentialId: string | null): Promise<string | null> {
+  const probe = await getDb().get<{ id: string; bin_id: string | null }>(
+    `SELECT id, bin_id FROM connector_recovery_probes
+      WHERE state = 'FIRED' AND worker_id = ?
+        AND NOT EXISTS (SELECT 1 FROM oauth_tokens t JOIN connector_clients cc ON cc.client_id = t.client_id
+                         WHERE t.id = ?)
+      LIMIT 1`,
+    [workerId, credentialId ?? ''],
+  );
+  if (!probe) return null;
+  await recordBinEvent({
+    eventType: 'RECOVERY_PROBE_SESSIONLESS_ARRIVAL',
+    binId: probe.bin_id,
+    workerId,
+    outcome: 'OFFERED_NOTHING',
+    reason:
+      'A check-in by this worker reported no provider session while a recovery probe of it was waiting. ' +
+      'It may be the probe’s own session, so it was offered nothing and nothing was attributed from it.',
+    measures: { probeId: probe.id, credentialId },
+  });
+  return '__none__';
+}
+
+/**
  * A recovery probe's fire, recorded where every arrival reader already looks.
  *
  * A SENT `bin_dispatch` row at the bin's current generation is what
@@ -2549,6 +2586,7 @@ export async function recordRecoveryDispatch(input: {
   routineRef: string;
   accountId: string;
   sessionRef: string;
+  fireEventId: string | null;
   probeId: string;
 }): Promise<string> {
   const bin = await getBin(input.binId);
@@ -2567,7 +2605,7 @@ export async function recordRecoveryDispatch(input: {
       input.routineRef,
       input.routineId,
       bounded(input.sessionRef, 200),
-      bounded(input.sessionRef, 200),
+      bounded(input.fireEventId, 200),
       at,
       at,
       at,

@@ -376,6 +376,40 @@ describe('a recovery probe establishes attribution from its own fire', () => {
   });
 });
 
+describe('an arrival that reports no session during a probe', () => {
+  it('is offered nothing, attributes nothing, and settles the probe as AMBIGUOUS rather than NO_MCP', async () => {
+    const airyn = await account('airyn');
+    const real = await realWork();
+    const probe = await startRecoveryProbe({ routineRef: airyn.routineRef, requestedById: 'usr_admin', fire: provider('cse_NOREF').fire });
+
+    // It may be the probe's own session that left session_ref out. It must not
+    // be handed real work on a surface Brain quarantined.
+    const arrival = await arrive(airyn, null);
+    expect(arrival.assigned).toBe(false);
+    expect((await getBin(real))!.state).toBe('READY');
+
+    await settleRecoveryProbes(later());
+    const settled = (await getRecoveryProbe(probe.id))!;
+    expect(settled.state).toBe('AMBIGUOUS');
+    expect(settled.outcome).toContain('no provider session');
+    expect(await connectorClient(airyn.clientId)).toBeNull();
+    expect((await getRoutine(airyn.routineId))!.connectorId).toBeNull();
+  });
+
+  it('does not hold up a surface whose client already belongs to a connector', async () => {
+    const airyn = await account('airyn');
+    const caleb = await account('caleb');
+    const connector = await ensureConnector({ accountId: caleb.accountId, resource: '/mcp/factory', workerId });
+    await attachClient({ clientId: caleb.clientId, connectorId: connector.id, source: 'OPERATOR' });
+    const real = await realWork();
+    await startRecoveryProbe({ routineRef: airyn.routineRef, requestedById: 'usr_admin', fire: provider('cse_A2').fire });
+
+    const arrival = await arrive(caleb, null);
+    expect(arrival.assigned).toBe(true);
+    if (arrival.assigned) expect(arrival.assignment.binId).toBe(real);
+  });
+});
+
 describe('what a probe refuses', () => {
   it('will not probe a surface a person switched off, or one with nothing to recover', async () => {
     const airyn = await account('airyn');

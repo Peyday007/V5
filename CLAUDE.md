@@ -11961,8 +11961,11 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   blind, and both were refused. `services/fleet/recoveryProbe.ts` is the way
   out: one fire at one Routine, outside routing, one in the Brain at a time
   (a UNIQUE column), whose session is recognised by the provider session the
-  fire returned — a value only the provider and that session hold, single-use,
-  bound to one Routine and expiring with the probe. The probe's bin is pinned,
+  fire returned — single-use, bound to one Routine, expiring with the probe and
+  withheld from the probe's output while live (operator-readable dispatch rows
+  still hold it, a residual risk stated in the doc). A check-in with no session
+  during a probe of its worker, from an unattributed client, is offered nothing
+  and settles the probe AMBIGUOUS, since it may have been the probe's own. The probe's bin is pinned,
   has one attempt, and is the only bin its session is ever offered, so a probe
   cannot dispatch real work; its fire is `RECOVERY_PROBE_FIRED`, which the
   activation ledger does not count, and the no-show pass skips it. A healthy

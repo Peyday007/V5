@@ -235,3 +235,19 @@ export async function repointRoutineConnector(input: {
   );
   return result.changes === 1;
 }
+
+/**
+ * The operator's correction of which worker a connector authorizes as, guarded
+ * on the value they say they are replacing. An observation never re-points it
+ * (`ensureConnector`); a worker that legitimately changed at the same endpoint
+ * is a person's decision, and this is where it is made.
+ */
+export async function repointConnectorWorker(input: { connectorId: string; from: string | null; to: string }): Promise<boolean> {
+  const result = await getDb().run(
+    input.from === null
+      ? 'UPDATE connectors SET worker_id = ?, updated_at = ? WHERE id = ? AND worker_id IS NULL'
+      : 'UPDATE connectors SET worker_id = ?, updated_at = ? WHERE id = ? AND worker_id = ?',
+    (input.from === null ? [input.to, nowIso(), input.connectorId] : [input.to, nowIso(), input.connectorId, input.from]) as never[],
+  );
+  return result.changes === 1;
+}

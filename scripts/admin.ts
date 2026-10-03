@@ -259,6 +259,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
   connectors show | derive | attach <brnc_…> <trig_…>
              reconnect <cnr_…|trig_…> <user|email>
              probe <trig_…> [--no-wait] | probe-status <trig_…|crp_…>
+             repoint-worker <cnr_…> <to-worker>
   projects  list | create <name>
   access    show <worker> | grant <worker> <project> | revoke <worker> <project>
   queue     list <project>
@@ -283,7 +284,10 @@ async function printProbe(probe: import('../server/repos/recoveryProbes.ts').Rec
   console.log(`  account           ${account ? `${account.name} (${account.id})` : probe.accountId}`);
   console.log(`  state             ${probe.state}`);
   console.log(`  recovery fire     ${probe.firedAt ? `${probe.binId ?? '—'} at ${probe.firedAt}` : '—'}`);
-  console.log(`  provider session  ${probe.providerSession ?? '—'}`);
+  // The provider session is the probe's proof; it is not printed while the
+  // probe is live, so a log line cannot be the way somebody else presents it.
+  const live = probe.state === 'FIRING' || probe.state === 'FIRED';
+  console.log(`  provider session  ${live ? (probe.providerSession ? '(withheld while the probe is live)' : '—') : (probe.providerSession ?? '—')}`);
   console.log(`  arrived           ${probe.arrivedAt ?? '—'}`);
   console.log(`  oauth client      ${probe.clientId ?? '—'}`);
   console.log(`  logical connector ${connector ? `${connector.id} ${connector.resource} worker=${connector.workerId ?? '—'}` : (probe.connectorId ?? '—')}`);
@@ -1046,7 +1050,7 @@ async function main(): Promise<void> {
         if (error instanceof RecoveryProbeRefused) fail(error.message);
         throw error;
       }
-      console.log(`  probe ${probe.id} for ${ref}: ${probe.state}${probe.providerSession ? `, provider session ${probe.providerSession}` : ''}`);
+      console.log(`  probe ${probe.id} for ${ref}: ${probe.state}`);
       if (probe.state === 'FIRED' && !rest.includes('--no-wait')) {
         // Wait for the session, settling as the tick would. Eight minutes, inside
         // the workflow's ten: a session that can authenticate arrives in one or
@@ -1061,6 +1065,24 @@ async function main(): Promise<void> {
         }
       }
       await printProbe((await getRecoveryProbe(probe.id))!);
+      break;
+    }
+    case 'connectors repoint-worker': {
+      const actor = await administrator();
+      const connectorId = rest[0] ?? fail('Name the connector (cnr_…).');
+      const to = rest[1] ?? fail('Name the worker it should authorize as.');
+      const { repointConnectorWorker, getConnector } = await import('../server/repos/connectors.ts');
+      const { getWorker } = await import('../server/repos/identity.ts');
+      const { forgetRoutingHealth } = await import('../server/services/fleet/connectorHealth.ts');
+      const before = await getConnector(connectorId);
+      if (!before) fail(`No connector ${connectorId}.`);
+      if (!(await getWorker(to))) fail(`No worker ${to}.`);
+      // Guarded on the value just read, so a concurrent change is refused rather than overwritten.
+      if (!(await repointConnectorWorker({ connectorId, from: before.workerId, to }))) {
+        fail(`${connectorId} changed while this ran; nothing was changed. Read it again.`);
+      }
+      forgetRoutingHealth();
+      console.log(`  ${connectorId} now authorizes as ${to} (was ${before.workerId ?? 'none'}); recorded against ${actor.id}.`);
       break;
     }
     case 'connectors probe-status': {

@@ -257,10 +257,20 @@ routing, and waits for its session:
   a trigger secret that is not deployed. **One probe in the Brain at a time**,
   enforced by a UNIQUE column.
 - **The proof chain:** fire F → Routine R → provider session S (the fire's own
-  answer, never shown to anybody) → a check-in reporting S → authenticated with
-  access token T of OAuth client C → C is R's account's connector at T's
-  endpoint. S is single-use, bound to one Routine and one bin, and expires with
-  the probe. A worker id is never evidence.
+  answer) → a check-in reporting S → authenticated with access token T of OAuth
+  client C → C is R's account's connector at T's endpoint. S is single-use,
+  bound to one Routine and one bin, and expires with the probe. A worker id is
+  never evidence. S is withheld from the probe's own output while the probe is
+  live; Brain's dispatch rows and `step10` traces do hold it, so the guarantee is
+  against anybody without operator read access — somebody who could read those
+  and also held another account's worker credential could present it inside the
+  window. That residual risk is accepted, not hidden.
+- **An arrival that reports no session** while a probe of its worker is live,
+  from a credential no connector has been attributed, may be the probe's own
+  session. It is offered nothing, nothing is attributed from it, and the probe
+  settles `AMBIGUOUS` (the Routine's prompt must send `session_ref`) rather
+  than claiming nothing arrived. A credential whose client already belongs to a
+  connector is unaffected.
 - **It cannot dispatch real work.** The probe's bin is a pinned
   `DETERMINISTIC_CHECK` with one attempt, and the session the fire started is
   offered that bin and nothing else, ever.
@@ -282,6 +292,13 @@ A connector is one account at one endpoint, and it authorizes as one worker. An
 arrival authenticated as a different worker at an endpoint whose connector
 already authorizes as another is a conflict, never a merge — so a person's
 research connector and their Factory connector stay separate.
+If the worker legitimately changed, `connectors repoint-worker <cnr_…> <worker>`
+is the operator's correction; an observation never re-points it.
+
+A probe proves a connector, not a delivery: it writes `RECOVERY_PROBE_FIRED`
+rather than `DISPATCH_SENT`, so `verify-surface`'s four-row chain is not closed
+by it. That is deliberate — the surface proof is a separate reading with its own
+probe.
 
 ## Reading it
 

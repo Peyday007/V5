@@ -231,3 +231,19 @@ export async function settleRecoveryProbe(
   );
   return result.changes === 1;
 }
+
+/** Settled probes whose window closed in [since, until): the ones whose bins may still need retiring. */
+export async function recoveryProbesClosedBetween(since: string, until: string): Promise<RecoveryProbe[]> {
+  const rows = await getDb().all<RecoveryProbeRow>(
+    `SELECT * FROM connector_recovery_probes
+      WHERE live IS NULL AND expires_at >= ? AND expires_at < ? AND bin_id IS NOT NULL
+      ORDER BY expires_at, id`,
+    [since, until],
+  );
+  return rows.map(map);
+}
+
+/** The sentence a won settlement records once its effects have run. Only rewords; never moves state. */
+export async function amendRecoveryOutcome(id: string, outcome: string): Promise<void> {
+  await getDb().run('UPDATE connector_recovery_probes SET outcome = ? WHERE id = ?', [outcome, id]);
+}
