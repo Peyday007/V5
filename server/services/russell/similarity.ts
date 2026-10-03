@@ -72,10 +72,34 @@ function fold(word: string): string {
   return out;
 }
 
+/** Words that turn a question into its opposite. Read before any filter. */
+const NEGATIONS = new Set(['not', 'no', 'never', 'without']);
+
+/**
+ * Lowercase, expand contractions to their negation and drop punctuation,
+ * keeping letters and digits of any script ("Zürich", "café" survive intact).
+ */
+function words(statement: string): string[] {
+  return statement
+    .toLowerCase()
+    .replace(/[\u2019\u2018]/g, "'")
+    .replace(/\bcan't\b|\bcannot\b/g, 'can not')
+    .replace(/\bwon't\b/g, 'will not')
+    .replace(/n't\b/g, ' not')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/** The negation words a statement carries, seen before length and noise filters. */
+export function negationWords(statement: string): Set<string> {
+  return new Set(words(statement).filter((word) => NEGATIONS.has(word)));
+}
+
 /** The content words of a statement, folded and de-duplicated. */
 export function contentTokens(statement: string): Set<string> {
   const out = new Set<string>();
-  for (const raw of statement.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)) {
+  for (const raw of words(statement)) {
     if (!raw || NOISE.has(raw)) continue;
     // A bare number is a quantity, not a subject. Two questions that both
     // mention "2026" are not thereby about the same thing.
@@ -147,6 +171,23 @@ export interface FloorVerdict {
 export function clearsFloor(a: string, b: string): FloorVerdict {
   const { score, shared } = overlap(a, b);
   const rounded = Math.round(score * 100) / 100;
+  // A negation on one side only is the same subject asked the opposite way.
+  const left = negationWords(a);
+  const right = negationWords(b);
+  const lopsided = [
+    ...[...left].filter((word) => !right.has(word)),
+    ...[...right].filter((word) => !left.has(word)),
+  ];
+  if (lopsided.length > 0) {
+    return {
+      ok: false,
+      score: rounded,
+      shared,
+      reason:
+        `one statement carries a negation (${[...new Set(lopsided)].sort().join(', ')}) ` +
+        `the other does not, so they may be opposites rather than repeats`,
+    };
+  }
   if (shared.length < SEMANTIC_MERGE_MIN_SHARED) {
     return {
       ok: false,

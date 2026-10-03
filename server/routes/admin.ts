@@ -24,6 +24,7 @@
 import { Router } from 'express';
 import type { Request } from 'express';
 import {
+  IDENTITY_RESULTS,
   PROJECT_ROLES,
   WORKER_SCOPES,
   type ActorType,
@@ -75,6 +76,8 @@ import {
   handler,
   notFound,
   optionalBoolean,
+  optionalEnum,
+  optionalInteger,
   optionalString,
   optionalStringArray,
   pathId,
@@ -788,12 +791,15 @@ adminRouter.get(
   '/identity-events',
   handler(async (req) => {
     const query = req.query as Record<string, unknown>;
+    const result = optionalEnum(query['result'], IDENTITY_RESULTS, 'result');
+    const limit = optionalInteger(query['limit'], 'limit', { min: 1, max: 1000 }) ?? 200;
     return {
       events: await listIdentityEvents({
         ...(typeof query['actorId'] === 'string' ? { actorId: query['actorId'] } : {}),
         ...(typeof query['projectId'] === 'string' ? { projectId: query['projectId'] } : {}),
         ...(typeof query['action'] === 'string' ? { action: query['action'] } : {}),
-        limit: Number(query['limit'] ?? 200),
+        ...(result ? { result } : {}),
+        limit,
       }),
     };
   }),
