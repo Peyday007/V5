@@ -1147,7 +1147,7 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
  * never allowed to exist, which is a different fact and reads differently to
  * whoever has to act on it.
  */
-async function refusedByBudget(
+export async function refusedByBudget(
   orchestration: ResearchOrchestration,
   detail: string,
 ): Promise<AdvanceResult> {
