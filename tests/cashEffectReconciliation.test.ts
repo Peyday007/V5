@@ -202,7 +202,7 @@ async function qualified(): Promise<CashOpportunity> {
     actorRef: 'BRAIN',
     patch: {
       payer: 'The operations manager, who signs',
-      reachableChannel: 'The address on the notice',
+      reachableChannel: 'ops@intake-buyer.example — the address on the notice',
       buyingSignal: 'Wanted: intake repair. Budget $1,200.',
       signalObservedAt: '2026-09-15T09:00:00.000Z',
       peakFundingCents: 0,
@@ -323,33 +323,33 @@ async function eventsOfKind(kind: string): Promise<number> {
 describe('A: confirmed, then the local write fails', () => {
   it('sends once, keeps the receipt, and the next tick records it once', async () => {
     const piece = await executingWithAgreement();
-    const invoice = provider('QUOTE_AND_INVOICE', 'inv');
+    const invoice = provider('ACCEPT_PAYMENT', 'pay');
 
     failures.recordAction = 1;
     const pressed = await act_(piece.id, 'perform', {
-      action: 'QUOTE_AND_INVOICE',
+      action: 'ACCEPT_PAYMENT',
       expectedOccurrence: await nextOccurrence(piece.id),
     });
     expect(pressed.status).toBe(200);
-    expect(pressed.body.result).toMatchObject({ kind: 'PERFORMED_NOT_RECORDED', receiptRef: 'inv-1' });
+    expect(pressed.body.result).toMatchObject({ kind: 'PERFORMED_NOT_RECORDED', receiptRef: 'pay-1' });
     expect(invoice.sends).toHaveLength(1);
 
     // The receipt is retained on the operation, and the page says so.
     const [operation] = (await commercialOperationsFor(projectId, piece.id)).filter(
-      (one) => one.action === 'QUOTE_AND_INVOICE',
+      (one) => one.action === 'ACCEPT_PAYMENT',
     );
-    expect(operation!.operation).toMatchObject({ state: 'SUCCEEDED', resultRef: 'inv-1' });
-    expect((await actionsFor(piece.id)).filter((one) => one.action === 'QUOTE_AND_INVOICE')).toEqual([]);
-    expect((await attemptsOnPage(piece.id)).find((one) => one.receiptRef === 'inv-1')!.status).toBe('UNRECORDED');
+    expect(operation!.operation).toMatchObject({ state: 'SUCCEEDED', resultRef: 'pay-1' });
+    expect((await actionsFor(piece.id)).filter((one) => one.action === 'ACCEPT_PAYMENT')).toEqual([]);
+    expect((await attemptsOnPage(piece.id)).find((one) => one.receiptRef === 'pay-1')!.status).toBe('UNRECORDED');
 
     // The durable tick finishes it, with nobody pressing anything.
     await operate(projectId);
-    const invoices = (await actionsFor(piece.id)).filter((one) => one.action === 'QUOTE_AND_INVOICE');
-    expect(invoices).toHaveLength(1);
-    expect(invoices[0]).toMatchObject({ performedBy: 'BRAIN', reference: 'inv-1', authorityId });
+    const charges = (await actionsFor(piece.id)).filter((one) => one.action === 'ACCEPT_PAYMENT');
+    expect(charges).toHaveLength(1);
+    expect(charges[0]).toMatchObject({ performedBy: 'BRAIN', reference: 'pay-1', authorityId });
     expect(invoice.sends).toHaveLength(1);
     expect(await eventsOfKind('CASH_EFFECT_RECONCILED')).toBe(1);
-    expect((await attemptsOnPage(piece.id)).find((one) => one.receiptRef === 'inv-1')!.status).toBe('PERFORMED');
+    expect((await attemptsOnPage(piece.id)).find((one) => one.receiptRef === 'pay-1')!.status).toBe('PERFORMED');
 
     // F: and the pass after that writes nothing at all.
     const before = await footprint(piece.id);
@@ -395,35 +395,33 @@ describe('B: the process dies after the provider confirmed', () => {
 });
 
 describe('C: the grant is revoked while the send is in flight', () => {
-  it('records the invoice under the grant it was sent with, and nothing new can be sent', async () => {
+  it('records the charge under the grant it was sent with, and nothing new can be sent', async () => {
     const piece = await executingWithAgreement();
-    const invoice = provider('QUOTE_AND_INVOICE', 'inv');
-    const payment = provider('ACCEPT_PAYMENT', 'pay');
-    invoice.onSend = async () => {
+    const charge = provider('ACCEPT_PAYMENT', 'pay');
+    charge.onSend = async () => {
       expect(await revokeAuthority({ authorityId, actorUserId: userId, reason: 'Stop now.' })).toBe(true);
-      return { kind: 'CONFIRMED', receiptRef: 'inv-1' };
+      return { kind: 'CONFIRMED', receiptRef: 'pay-1' };
     };
 
     const pressed = await act_(piece.id, 'perform', {
-      action: 'QUOTE_AND_INVOICE',
+      action: 'ACCEPT_PAYMENT',
       expectedOccurrence: await nextOccurrence(piece.id),
     });
     expect(pressed.status).toBe(200);
     expect(pressed.body.result.kind).toBe('RECORDED');
-    const invoices = (await actionsFor(piece.id)).filter((one) => one.action === 'QUOTE_AND_INVOICE');
-    expect(invoices).toHaveLength(1);
-    expect(invoices[0]).toMatchObject({ reference: 'inv-1', authorityId, performedBy: 'BRAIN' });
+    const charges = (await actionsFor(piece.id)).filter((one) => one.action === 'ACCEPT_PAYMENT');
+    expect(charges).toHaveLength(1);
+    expect(charges[0]).toMatchObject({ reference: 'pay-1', authorityId, performedBy: 'BRAIN' });
 
     // The revocation stops the next effect, from a person and from the tick.
     const next = await act_(piece.id, 'perform', {
-      action: 'ACCEPT_PAYMENT',
+      action: 'QUOTE_AND_INVOICE',
       expectedOccurrence: await nextOccurrence(piece.id),
     });
     expect(next.status).toBe(422);
     expect(String(next.body.error ?? next.body.reason ?? JSON.stringify(next.body))).toMatch(/authori/i);
     await operate(projectId);
-    expect(payment.sends).toHaveLength(0);
-    expect(invoice.sends).toHaveLength(1);
+    expect(charge.sends).toHaveLength(1);
   });
 
   it('a contact confirmed after a revocation is recorded, and the piece is not reached again', async () => {
@@ -479,9 +477,9 @@ describe('C: the grant is revoked while the send is in flight', () => {
 });
 
 describe('D: the piece moves while the send is in flight', () => {
-  it('records the invoice, invents no transition, and an open need says why', async () => {
+  it('records the charge, invents no transition, and an open need says why', async () => {
     const piece = await executingWithAgreement();
-    const invoice = provider('QUOTE_AND_INVOICE', 'inv');
+    const invoice = provider('ACCEPT_PAYMENT', 'pay');
     invoice.onSend = async () => {
       const archived = await archiveOpportunity({
         opportunityId: piece.id,
@@ -489,25 +487,25 @@ describe('D: the piece moves while the send is in flight', () => {
         reason: 'The buyer withdrew; reopen if they come back.',
       });
       expect(archived.ok).toBe(true);
-      return { kind: 'CONFIRMED', receiptRef: 'inv-1' };
+      return { kind: 'CONFIRMED', receiptRef: 'pay-1' };
     };
 
     const pressed = await act_(piece.id, 'perform', {
-      action: 'QUOTE_AND_INVOICE',
+      action: 'ACCEPT_PAYMENT',
       expectedOccurrence: await nextOccurrence(piece.id),
     });
     expect(pressed.status).toBe(200);
     expect(pressed.body.result.kind).toBe('RECORDED');
 
     expect((await getOpportunity(piece.id))!.state).toBe('ARCHIVED');
-    expect((await actionsFor(piece.id)).filter((one) => one.action === 'QUOTE_AND_INVOICE')).toEqual([
-      expect.objectContaining({ reference: 'inv-1', performedBy: 'BRAIN' }),
+    expect((await actionsFor(piece.id)).filter((one) => one.action === 'ACCEPT_PAYMENT')).toEqual([
+      expect.objectContaining({ reference: 'pay-1', performedBy: 'BRAIN' }),
     ]);
     const open = (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) =>
-      one.requestKey?.startsWith(`effect-unapplied:${piece.id}:QUOTE_AND_INVOICE:`),
+      one.requestKey?.startsWith(`effect-unapplied:${piece.id}:ACCEPT_PAYMENT:`),
     );
     expect(open).toHaveLength(1);
-    expect(open[0]!.whyItMatters).toMatch(/inv-1/);
+    expect(open[0]!.whyItMatters).toMatch(/pay-1/);
     expect(open[0]!.whyItMatters).toMatch(/archived/);
 
     // Nothing more happens on later passes: no resend, no second action, no second need.
@@ -522,16 +520,7 @@ describe('D: the piece moves while the send is in flight', () => {
 describe('E: a payment confirmed and not recorded', () => {
   it('becomes one payment for the amount sent, never a settlement, and stays one', async () => {
     const piece = await executingWithAgreement();
-    provider('QUOTE_AND_INVOICE', 'inv');
     const payment = provider('ACCEPT_PAYMENT', 'pay');
-    expect(
-      (
-        await act_(piece.id, 'perform', {
-          action: 'QUOTE_AND_INVOICE',
-          expectedOccurrence: await nextOccurrence(piece.id),
-        })
-      ).body.result.kind,
-    ).toBe('RECORDED');
 
     failures.recordAction = 1;
     const pressed = await act_(piece.id, 'perform', {

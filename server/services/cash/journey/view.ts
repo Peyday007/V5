@@ -79,13 +79,36 @@ export function nextFor(position: DealPosition, record: ExecutionRecord | undefi
     }
     return out;
   }
+  const drafted = position.invoices.filter((one) => one.state === 'DRAFTED');
   if (p.invoiceableCents > 0) {
+    out.push({
+      step: `Request the invoice for the ${p.invoiceableCents} cents agreed: who is billed, the tax treatment and the due date.`,
+      owner: 'PERSON',
+      why: 'Those are terms only you hold; Brain takes the amount from the agreement and invents none of them.',
+    });
+  }
+  if (drafted.length > 0) {
     const i = performable(record, 'QUOTE_AND_INVOICE');
-    out.push({ step: `Invoice the ${p.invoiceableCents} cents agreed and not yet billed.`, owner: i.brain ? 'BRAIN' : 'PERSON', why: i.why });
+    out.push({
+      step: 'Issue the drafted invoice.',
+      owner: i.brain ? 'BRAIN' : 'PERSON',
+      why: i.brain ? 'Brain issues it on its next pass, once, under its own key.' : (drafted[0]!.stateReason ?? i.why),
+    });
+  }
+  const overdue = position.invoices.filter((one) => one.state === 'ISSUED' && one.dueDate < new Date().toISOString().slice(0, 10));
+  if (overdue.length > 0) {
+    out.push({
+      step: `${overdue.length === 1 ? 'An invoice is' : `${overdue.length} invoices are`} past due and unpaid.`,
+      owner: 'PERSON',
+      why: 'Chase the buyer, or release the agreement if it has fallen through; Brain rewrites no invoice.',
+    });
   }
   if (p.owedByBuyerCents > 0 && !position.paymentInFlight) {
-    const t = performable(record, 'ACCEPT_PAYMENT');
-    out.push({ step: `Collect the ${p.owedByBuyerCents} cents billed and unpaid.`, owner: t.brain ? 'BRAIN' : 'BUYER', why: t.brain ? t.why : 'The buyer pays the invoice; the payment is recorded with its reference.' });
+    out.push({
+      step: `The buyer pays the ${p.owedByBuyerCents} cents billed.`,
+      owner: 'BUYER',
+      why: 'Brain reads the payment from the provider when it arrives, or a person records one made another way with its reference.',
+    });
   }
   if (position.paymentInFlight) {
     out.push({ step: 'A payment attempt is in flight or its outcome is unknown.', owner: 'PERSON', why: 'An unknown outcome is settled by checking the provider, never by sending again.' });

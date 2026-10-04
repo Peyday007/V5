@@ -284,10 +284,11 @@ describe('winding down stops new discovery and nothing else', () => {
     const paid = await recordMoneyEvent({
       projectId,
       opportunityId: id,
-      kind: 'PIPELINE_AGREED',
+      kind: 'COST',
       amountCents: 75_000,
       currency: 'USD',
-      idempotencyKey: 'agreed-1',
+      verifiedReference: 'supplier-bill-1',
+      idempotencyKey: 'cost-archived-1',
       actorRef: userId,
     });
     expect(paid.ok).toBe(true);

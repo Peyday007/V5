@@ -8,13 +8,13 @@
  * already stranded. Each step is idempotent by a row, never by a flag:
  *
  *   1. an agreement's ledger entries exist (and its release, if released);
- *   2. a confirmed invoice effect has its invoice row;
+ *   2. (invoices are issued and read back by `invoicing.ts`, just before this);
  *   3. Brain's own fulfilment work is read back — a Russell mission DONE or a
  *      Factory campaign COMPLETE makes it performed, a failed one fails it;
  *   4. a buyer's DELIVERY_ACCEPTED delivers performed work, DELIVERY_REJECTED
  *      fails it;
  *   5. a contact with no reply inside the window is recorded as BUYER_SILENT;
- *   6. an invoice past its due date and unpaid expires;
+ *   6. (an unpaid invoice past its due date is reported, never rewritten);
  *   7. EXECUTING → DELIVERING once work exists, DELIVERING → COLLECTED once
  *      `collectable` holds;
  *   8. what the deal taught is recorded as outcomes (`learning.ts`).
@@ -29,21 +29,17 @@ import { latestMissionForCandidate } from '../../../repos/russellMissions.ts';
 import { getCampaignByChangeRequest } from '../../../repos/factory.ts';
 import {
   agreementsInProject,
-  closeInvoiceRow,
   endFulfilment,
   fulfilmentsInProject,
   insertObservation,
-  issuedInvoicesInProject,
   markFulfilmentDelivered,
   observationsFor,
   opportunitiesInJourney,
 } from '../../../repos/cashJourney.ts';
-import { commercialOperationsInProject, intentFor } from '../effects.ts';
 import {
   ensureAgreementLedger,
   moveToDelivering,
   performed,
-  recordInvoiceFromEffect,
 } from './deal.ts';
 import { collectable, dealPosition } from './position.ts';
 import { recordOutcomes } from './learning.ts';
@@ -55,12 +51,10 @@ export const RESPONSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface JourneyTickReport {
   ledgerChecked: number;
-  invoicesRecorded: number;
   performed: number;
   delivered: number;
   failed: number;
   silences: number;
-  invoicesExpired: number;
   delivering: number;
   collected: number;
   outcomes: number;
@@ -72,12 +66,10 @@ export async function advanceJourney(
 ): Promise<JourneyTickReport> {
   const report: JourneyTickReport = {
     ledgerChecked: 0,
-    invoicesRecorded: 0,
     performed: 0,
     delivered: 0,
     failed: 0,
     silences: 0,
-    invoicesExpired: 0,
     delivering: 0,
     collected: 0,
     outcomes: 0,
@@ -89,29 +81,6 @@ export async function advanceJourney(
   for (const agreement of await agreementsInProject(projectId)) {
     await ensureAgreementLedger(agreement);
     report.ledgerChecked += 1;
-  }
-
-  // 2. A confirmed invoice has its invoice row, against the agreement it named.
-  for (const one of await commercialOperationsInProject(projectId)) {
-    if (one.action !== 'QUOTE_AND_INVOICE') continue;
-    if (one.operation.state !== 'SUCCEEDED' || !one.operation.resultRef) continue;
-    const intent = one.operation.correlationId
-      ? await intentFor(one.opportunityId, one.operation.correlationId)
-      : null;
-    if (!intent?.subjectRef || !intent.amountCents) continue;
-    const before = await issuedInvoicesInProject(projectId);
-    const row = await recordInvoiceFromEffect({
-      opportunityId: one.opportunityId,
-      agreementId: intent.subjectRef,
-      amountCents: intent.amountCents,
-      currency: mode.currency,
-      operationId: one.operation.id,
-      receiptRef: one.operation.resultRef,
-      actorRef: BRAIN,
-    });
-    if (row && !before.some((inv) => inv.id === row.id) && row.state === 'ISSUED') {
-      report.invoicesRecorded += 1;
-    }
   }
 
   // 3 and 4. Fulfilment, read from the machinery doing the work.
@@ -203,26 +172,6 @@ export async function advanceJourney(
           if (written.created) report.silences += 1;
         }
       }
-    }
-  }
-
-  // 6. An invoice past due and unpaid expires; what it billed is billable again.
-  for (const invoice of await issuedInvoicesInProject(projectId)) {
-    if (!invoice.dueAt || invoice.dueAt > now.toISOString()) continue;
-    const opportunity = await getOpportunity(invoice.opportunityId);
-    if (!opportunity) continue;
-    const position = await dealPosition({ opportunity, currency: mode.currency });
-    if (position.pnl.owedByBuyerCents <= 0) continue;
-    if (await closeInvoiceRow({ id: invoice.id, to: 'EXPIRED', reason: `Unpaid at its due date ${invoice.dueAt}.` })) {
-      report.invoicesExpired += 1;
-      await recordCashEvent({
-        projectId,
-        opportunityId: invoice.opportunityId,
-        kind: 'CASH_INVOICE_EXPIRED',
-        actorRef: BRAIN,
-        summary: `Invoice ${invoice.providerRef} expired unpaid.`,
-        detail: { invoiceId: invoice.id },
-      });
     }
   }
 

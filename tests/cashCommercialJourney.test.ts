@@ -259,7 +259,7 @@ async function qualified(): Promise<CashOpportunity> {
     actorRef: 'BRAIN',
     patch: {
       payer: 'The operations manager, who signs',
-      reachableChannel: 'The address on the notice',
+      reachableChannel: 'ops@intake-buyer.example — the address on the notice',
       buyingSignal: 'Wanted: intake repair. Budget $1,200.',
       signalObservedAt: '2026-09-15T09:00:00.000Z',
       peakFundingCents: 0,
@@ -379,6 +379,15 @@ describe('J01: READY to settled, through the real routes', () => {
 
     rec = await record(piece.id);
     expect(rec.money).toMatchObject({ agreedCents: 120_000, paidCents: 0, outstandingCents: 120_000 });
+    // An invoice is drafted with the terms only a person holds, then Brain
+    // issues that one row — the press and the tick share one key.
+    const drafted = await call('POST', `/api/projects/${projectId}/cash/opportunities/${piece.id}/invoice`, {
+      customerName: 'Intake Buyer Ltd',
+      customerEmail: 'accounts@intake-buyer.example',
+      taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31',
+    });
+    expect(drafted.status).toBe(200);
     const invoiced = await act_(piece.id, 'perform', {
       action: 'QUOTE_AND_INVOICE',
       expectedOccurrence: rec.nextOccurrence,
@@ -386,7 +395,7 @@ describe('J01: READY to settled, through the real routes', () => {
     expect(invoiced.status).toBe(200);
     expect(invoiced.body.result.kind).toBe('RECORDED');
     expect(invoice.sends).toEqual([
-      expect.objectContaining({ amountCents: 120_000, currency: 'USD' }),
+      expect.objectContaining({ amountCents: 120_000, currency: 'USD', customerEmail: 'accounts@intake-buyer.example' }),
     ]);
 
     // The same press again — a double click, a retry after a lost response —

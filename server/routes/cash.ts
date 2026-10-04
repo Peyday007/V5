@@ -105,17 +105,19 @@ import { recordFurtherAction } from '../services/cash/actions.ts';
 import {
   acceptDelivery,
   agreementsFor,
-  closeInvoice,
   createFulfilment,
   endFulfilmentWith,
   recordAgreement,
-  recordInvoiceByPerson,
   recordObservation,
   recordPerformed,
   releaseAgreement,
 } from '../services/cash/journey/deal.ts';
-import { getFulfilment, getInvoice } from '../repos/cashJourney.ts';
+import { getFulfilment } from '../repos/cashJourney.ts';
 import { performCommercialAction, resolveCommercialEffect } from '../services/cash/perform.ts';
+import { requestInvoice } from '../services/cash/invoicing.ts';
+import { listInvoices } from '../repos/cashInvoices.ts';
+import { commercialProviderStatus } from '../services/cash/providers/status.ts';
+import { TAX_TREATMENTS } from '../services/cash/providers/stripe.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
 import { cashView } from '../services/cash/view.ts';
 import { cashCapabilities, decideCashRead } from '../services/cash/access.ts';
@@ -971,37 +973,6 @@ cashRouter.post(
         );
         return { agreement: value, message };
       }
-      case 'record-invoice': {
-        const { value, message } = taken(
-          await recordInvoiceByPerson({
-            opportunityId: opportunity.id,
-            agreementId: requiredString(body['agreementId'], 'agreementId'),
-            amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 1 }) ?? 0,
-            providerRef: requiredString(body['providerRef'], 'providerRef'),
-            dueAt: optionalString(body['dueAt'], 'dueAt') ?? null,
-            actorRef: principal.id,
-          }),
-        );
-        return { invoice: value, message };
-      }
-      case 'close-invoice': {
-        const invoiceId = requiredString(body['invoiceId'], 'invoiceId');
-        const invoice = await getInvoice(invoiceId);
-        if (!invoice || invoice.opportunityId !== opportunity.id) {
-          throw unprocessable('No invoice with that id on this piece.');
-        }
-        const to = requiredString(body['to'], 'to');
-        if (to !== 'VOID' && to !== 'EXPIRED') throw badRequest('"to" is VOID or EXPIRED.');
-        const { value, message } = taken(
-          await closeInvoice({
-            invoiceId,
-            to,
-            reason: requiredString(body['reason'], 'reason'),
-            actorRef: principal.id,
-          }),
-        );
-        return { invoice: value, message };
-      }
       case 'fulfil': {
         const { value, message } = taken(
           await createFulfilment({
@@ -1176,6 +1147,62 @@ cashRouter.post(
       }),
     );
     return { entry: value, message };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Commercial providers and invoices (§52)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Messaging, invoices and payments: CONNECTED or MISSING, with the exact next
+ * action. Names settings, never values, so any project member may read it.
+ */
+cashRouter.get(
+  '/projects/:projectId/cash/providers',
+  handler(async (req) => {
+    requirePerson();
+    await requireProject(pathId(req, 'projectId'));
+    return { providers: await commercialProviderStatus(), taxTreatments: TAX_TREATMENTS };
+  }),
+);
+
+cashRouter.get(
+  '/projects/:projectId/cash/invoices',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { invoices: await listInvoices({ projectId: project.id }) };
+  }),
+);
+
+/**
+ * A person's request to invoice an agreed amount.
+ *
+ * Records a draft and sends nothing: the tick issues it under the standing
+ * QUOTE_AND_INVOICE authority once an invoicing provider is usable. The amount
+ * and currency are the agreed ledger entry's; the customer, tax treatment and
+ * due date are this person's — Brain supplies none of them.
+ */
+cashRouter.post(
+  '/projects/:projectId/cash/opportunities/:opportunityId/invoice',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const { value, message } = taken(
+      await requestInvoice({
+        projectId: project.id,
+        opportunityId: pathId(req, 'opportunityId'),
+        pipelineEntryId: optionalString(body['pipelineEntryId'], 'pipelineEntryId') ?? null,
+        customerName: requiredString(body['customerName'], 'customerName'),
+        customerEmail: requiredString(body['customerEmail'], 'customerEmail'),
+        taxTreatment: requiredString(body['taxTreatment'], 'taxTreatment'),
+        dueDate: requiredString(body['dueDate'], 'dueDate'),
+        actorRef: principal.id,
+      }),
+    );
+    return { invoice: value, message };
   }),
 );
 

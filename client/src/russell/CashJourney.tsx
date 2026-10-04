@@ -61,16 +61,19 @@ export function JourneyTotals({ journey, currency }: { journey: JourneyView; cur
   );
 }
 
-type Form = null | 'observe' | 'agree' | 'fulfil' | 'performed' | 'accept' | 'release';
+type Form = null | 'observe' | 'agree' | 'invoice' | 'fulfil' | 'performed' | 'accept' | 'release';
 
 export function DealJourney({
   deal,
   currency,
+  projectId,
   mayAct,
   onChanged,
 }: {
   deal: DealView;
   currency: string;
+  /** Needed only to request an invoice, which is a project-scoped route. */
+  projectId?: string;
   mayAct: boolean;
   onChanged(): void;
 }): JSX.Element {
@@ -90,7 +93,10 @@ export function DealJourney({
     setBusy(true);
     setProblem(null);
     try {
-      const result = await CashApi.act(deal.opportunityId, action, body);
+      const result =
+        action === 'invoice'
+          ? await CashApi.requestInvoice(projectId!, deal.opportunityId, body)
+          : await CashApi.act(deal.opportunityId, action, body);
       setDone(result.message);
       setForm(null);
       setFields({});
@@ -137,7 +143,7 @@ export function DealJourney({
       {deal.invoices.length > 0 ? (
         <p className="rs-item-meta">
           Invoices:{' '}
-          {deal.invoices.map((one) => `${one.providerRef} ${money(one.amountCents, currency)} (${one.state.toLowerCase()})`).join('; ')}
+          {deal.invoices.map((one) => `${one.providerNumber ?? one.providerInvoiceId ?? 'draft'} ${money(one.amountCents, currency)} (${one.state.toLowerCase()}${one.state === 'ISSUED' ? `, due ${one.dueDate}` : ''})`).join('; ')}
         </p>
       ) : null}
       {deal.fulfilments.length > 0 ? (
@@ -155,6 +161,11 @@ export function DealJourney({
             <button type="button" className="rs-button-quiet" onClick={() => setForm('agree')}>
               Record the agreement
             </button>
+            {deal.pnl.invoiceableCents > 0 && projectId ? (
+              <button type="button" className="rs-button-quiet" onClick={() => setForm('invoice')}>
+                Request the invoice
+              </button>
+            ) : null}
             {live.length > 0 ? (
               <button type="button" className="rs-button-quiet" onClick={() => setForm('fulfil')}>
                 Create the fulfilment
@@ -216,6 +227,26 @@ export function DealJourney({
                 {field('evidenceRef', 'Its reference')}
               </>
             ) : null}
+            {form === 'invoice' ? (
+              <>
+                <p className="rs-hint">
+                  The amount is the agreement’s, {money(deal.pnl.invoiceableCents, currency)}. Brain issues it under your
+                  authority once an invoicing provider is connected.
+                </p>
+                {field('customerName', 'Who is billed')}
+                {field('customerEmail', 'Their billing email')}
+                <label className="rs-field-label" htmlFor={`journey-${deal.opportunityId}-tax`}>
+                  Tax treatment
+                </label>
+                <select id={`journey-${deal.opportunityId}-tax`} value={fields.taxTreatment ?? ''} onChange={set('taxTreatment')}>
+                  <option value="">Choose…</option>
+                  <option value="NO_TAX_CHARGED">No tax charged</option>
+                  <option value="TAX_EXEMPT">Tax exempt</option>
+                  <option value="REVERSE_CHARGE">Reverse charge</option>
+                </select>
+                {field('dueDate', 'Due date (YYYY-MM-DD)')}
+              </>
+            ) : null}
             {form === 'fulfil' ? (
               <>
                 <label className="rs-field-label" htmlFor={`journey-${deal.opportunityId}-path`}>
@@ -254,6 +285,13 @@ export function DealJourney({
                     acceptanceCondition: fields.acceptanceCondition,
                     evidenceKind: fields.evidenceKind,
                     evidenceRef: fields.evidenceRef,
+                  });
+                } else if (form === 'invoice') {
+                  void submit('invoice', {
+                    customerName: fields.customerName,
+                    customerEmail: fields.customerEmail,
+                    taxTreatment: fields.taxTreatment,
+                    dueDate: fields.dueDate,
                   });
                 } else if (form === 'fulfil') {
                   void submit('fulfil', { agreementId, path: fields.path, workKind: 'EXTERNAL', workRef: fields.workRef });

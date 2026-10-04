@@ -878,6 +878,17 @@ export const CashApi = {
       body: JSON.stringify(body),
     }),
 
+  /** Draft an invoice for an agreement, with the terms only a person holds. */
+  requestInvoice: (
+    projectId: string,
+    opportunityId: string,
+    body: Record<string, unknown>,
+  ): Promise<{ invoice: { id: string; state: string }; message: string }> =>
+    api(`/api/projects/${p(projectId)}/cash/opportunities/${p(opportunityId)}/invoice`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   /**
    * Ask Brain to perform an action itself, through a registered integration.
    *

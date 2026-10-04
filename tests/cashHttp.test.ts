@@ -218,6 +218,11 @@ describe('who can reach any of this', () => {
     { method: 'POST', route: `${CASH()}/money` },
     { method: 'POST', route: `${CASH()}/commitments` },
     { method: 'POST', route: `${CASH()}/needs` },
+    // Commercial providers and invoices (§52): status and invoices are any
+    // member's to read, a request is a person's, and none is a machine's.
+    { method: 'GET', route: `${CASH()}/providers` },
+    { method: 'GET', route: `${CASH()}/invoices` },
+    { method: 'POST', route: `${CASH()}/opportunities/cop_any/invoice` },
     // The dealflow kernel's door. Reading it is any member's; seeding a party,
     // retiring one and recording what an attempt taught are ADMIN — and none
     // of them is reachable by a machine at all.
@@ -661,6 +666,77 @@ describe('one account’s whole journey', () => {
     }>('GET', CASH(), { cookie: adminCookie });
     expect(view.body.myCash.position.customerPaymentsCents).toBe(75_000);
     expect(view.body.myCash.position.availableFundsCents).toBe(0);
+  });
+
+  it('says which commercial providers are connected, naming settings and never values', async () => {
+    const status = await call<{ providers: { area: string; state: string; nextAction: string }[] }>(
+      'GET',
+      `${CASH()}/providers`,
+      { cookie: memberCookie },
+    );
+    expect(status.status).toBe(200);
+    // Nothing is configured on this server, so all three are MISSING with
+    // the exact settings to supply.
+    expect(status.body.providers.map((one) => [one.area, one.state])).toEqual([
+      ['MESSAGING', 'MISSING'],
+      ['INVOICES', 'MISSING'],
+      ['PAYMENTS', 'MISSING'],
+    ]);
+    expect(status.body.providers[0]!.nextAction).toContain('RESEND_API_KEY');
+    expect(status.body.providers[1]!.nextAction).toContain('STRIPE_SECRET_KEY');
+  });
+
+  it('refuses to invoice an amount nobody agreed, then drafts one for the agreed amount, once', async () => {
+    const terms = {
+      customerName: 'Buyer Ltd',
+      customerEmail: 'accounts@buyer.example',
+      taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31',
+    };
+    const refused = await call<{ error: string }>('POST', `${CASH()}/opportunities/${opportunityId}/invoice`, {
+      cookie: adminCookie,
+      body: terms,
+    });
+    expect(refused.status).toBe(422);
+    expect(refused.text).toContain('Record the agreement');
+
+    // An agreement, not a bare amount: a bare PIPELINE_AGREED is never billed.
+    const bare = await call('POST', `${CASH()}/money`, {
+      cookie: adminCookie,
+      body: { opportunityId, kind: 'PIPELINE_AGREED', amountCents: 75_000, idempotencyKey: 'journey-agreed' },
+    });
+    expect(bare.status).toBe(422);
+    const agreed = await call('POST', `/api/cash/opportunities/${opportunityId}/agree`, {
+      cookie: adminCookie,
+      body: {
+        amountCents: 75_000,
+        deliverable: 'One afternoon of configuration',
+        acceptanceCondition: 'The owner signs off the configured system.',
+        evidenceKind: 'WRITTEN_ACCEPTANCE',
+        evidenceRef: 'msg-8841-reply',
+      },
+    });
+    expect(agreed.status).toBe(200);
+
+    const drafted = await call<{ invoice: { id: string; state: string; amountCents: number } }>(
+      'POST',
+      `${CASH()}/opportunities/${opportunityId}/invoice`,
+      { cookie: adminCookie, body: { ...terms, amountCents: 1 } },
+    );
+    expect(drafted.status).toBe(200);
+    expect(drafted.body.invoice.state).toBe('DRAFTED');
+    // The amount is the agreed entry's; a caller's figure is not read at all.
+    expect(drafted.body.invoice.amountCents).toBe(75_000);
+
+    const again = await call<{ invoice: { id: string } }>(
+      'POST',
+      `${CASH()}/opportunities/${opportunityId}/invoice`,
+      { cookie: adminCookie, body: terms },
+    );
+    expect(again.body.invoice.id).toBe(drafted.body.invoice.id);
+
+    const listed = await call<{ invoices: { id: string }[] }>('GET', `${CASH()}/invoices`, { cookie: memberCookie });
+    expect(listed.body.invoices.map((one) => one.id)).toEqual([drafted.body.invoice.id]);
   });
 
   it('refuses a commitment the account cannot cover', async () => {

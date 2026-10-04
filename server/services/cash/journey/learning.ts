@@ -109,12 +109,16 @@ export async function recordOutcomes(opportunity: CashOpportunity, currency: str
 
   // The money figures are read once the deal has ended, so they are final
   // rather than a snapshot of a deal still moving.
+  // A cost or a refund can still land after a deal ends, so each figure is
+  // keyed by its value: a changed figure is a later row beside the earlier one,
+  // never an edit of it, and readers take the latest per deal.
   if (TERMINAL.has(opportunity.state)) {
     const p = position.pnl;
     const suffix = opportunity.state;
-    await write('ACTUAL_COST', suffix, { cents: p.incrementalCostsCents + p.unpaidCommitmentsCents }, 'ledger: COST + outstanding UNPAID_COMMITMENT');
-    if (p.refundsCents > 0) await write('REFUNDED', suffix, { cents: p.refundsCents }, 'ledger: REFUND');
-    await write('REALIZED_CONTRIBUTION', suffix, { cents: p.contributionCents }, 'ledger: payments − refunds − costs − owed');
+    const cost = p.incrementalCostsCents + p.unpaidCommitmentsCents;
+    await write('ACTUAL_COST', `${suffix}:${cost}`, { cents: cost }, 'ledger: COST + outstanding UNPAID_COMMITMENT');
+    if (p.refundsCents > 0) await write('REFUNDED', `${suffix}:${p.refundsCents}`, { cents: p.refundsCents }, 'ledger: REFUND');
+    await write('REALIZED_CONTRIBUTION', `${suffix}:${p.contributionCents}`, { cents: p.contributionCents }, 'ledger: payments − refunds − costs − owed');
     if (opportunity.state !== 'COLLECTED') {
       await write(
         'FAILURE_REASON',
@@ -161,7 +165,16 @@ export async function cashOutcomeLessons(projectId: string): Promise<CashLesson[
   }
   const out: CashLesson[] = [];
   for (const items of groups.values()) {
-    const of = (kind: OutcomeKind) => items.filter((one) => one.kind === kind);
+    // Money figures can be re-read after a deal ends; the latest row per deal
+    // is the figure, and the earlier ones are history.
+    const LATEST_ONLY = new Set<OutcomeKind>(['ACTUAL_COST', 'REFUNDED', 'REALIZED_CONTRIBUTION']);
+    const of = (kind: OutcomeKind) => {
+      const rows = items.filter((one) => one.kind === kind);
+      if (!LATEST_ONLY.has(kind)) return rows;
+      const latest = new Map<string, CashOutcome>();
+      for (const row of rows) latest.set(row.opportunityId, row);
+      return [...latest.values()];
+    };
     const contactRows = of('CONTACT_RESULT');
     const offered = new Map(of('OFFERED_PRICE').map((one) => [one.opportunityId, one.valueCents ?? 0]));
     const ratios = of('ACCEPTED_PRICE')

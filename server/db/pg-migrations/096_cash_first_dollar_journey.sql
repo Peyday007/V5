@@ -1,88 +1,13 @@
--- brain:rebuild-without-foreign-keys
---
--- ---------------------------------------------------------------------------
--- THE FIRST-DOLLAR JOURNEY: what happens between READY and COLLECTED
--- ---------------------------------------------------------------------------
---
--- Cash Mode could record that a buyer was reached (a `cash_actions` row written
--- from a provider receipt), that money was agreed (a `PIPELINE_AGREED` entry),
--- that money arrived and that it settled. Four facts in between had nowhere to
--- live, so each was either a sentence in a note or a button:
---
---   * what was agreed — the deliverable, the acceptance condition and the
---     evidence that the buyer agreed — rather than only an amount;
---   * which invoice was issued against which agreement, so a second invoice
---     bills what is still invoiceable instead of the whole agreement again;
---   * what the buyer said, as an observation with a source rather than hidden
---     state;
---   * whether the work was actually done and accepted, rather than `DELIVERING`
---     written on a button press.
---
--- And one fact had no way to be undone: an agreement that falls through left
--- its `PIPELINE_AGREED` entry counting for ever. The ledger is append-only, so
--- the undo is an entry of its own, `PIPELINE_RELEASED`, which needs the inline
--- CHECK widened — and SQLite cannot widen one in place, so `cash_money_entries`
--- is rebuilt by §32's procedure. Nothing references it by foreign key, which
--- `PRAGMA foreign_key_check` checks rather than this comment asserting. Every
--- row is carried across with its rowid, every index is recreated.
---
--- Nothing in these tables holds a balance. Every figure is still derived from
--- `cash_money_entries` (invariant 37); these tables say *what the money was
--- for*, which is the half a ledger row cannot carry.
--- ---------------------------------------------------------------------------
-
-CREATE TABLE cash_money_entries_rebuilt (
-  id                  TEXT PRIMARY KEY,
-  project_id          TEXT NOT NULL REFERENCES projects(id),
-  opportunity_id      TEXT,
-  kind                TEXT NOT NULL CHECK (kind IN (
-                        'CAPITAL_IN',
-                        'CAPITAL_OUT',
-                        'PIPELINE_AGREED',
-                        'PIPELINE_RELEASED',   -- agreed work that will no longer be billed
-                        'CUSTOMER_PAYMENT',
-                        'SETTLEMENT',
-                        'REFUND',
-                        'COST',
-                        'UNPAID_COMMITMENT',
-                        'COMMITMENT_PAID',
-                        'RESERVE',
-                        'RESERVE_RELEASE'
-                      )),
-  amount_cents        INTEGER NOT NULL CHECK (amount_cents >= 0),
-  currency            TEXT NOT NULL,
-  verified_reference  TEXT,
-  funds_available_at  TEXT,
-  occurred_at         TEXT NOT NULL,
-  note                TEXT,
-  recorded_by         TEXT NOT NULL,
-  created_at          TEXT NOT NULL,
-  idempotency_key     TEXT,
-  payload_fingerprint TEXT,
-  commitment_id       TEXT
-);
-
-INSERT INTO cash_money_entries_rebuilt
-  (rowid, id, project_id, opportunity_id, kind, amount_cents, currency, verified_reference,
-   funds_available_at, occurred_at, note, recorded_by, created_at, idempotency_key,
-   payload_fingerprint, commitment_id)
-SELECT rowid, id, project_id, opportunity_id, kind, amount_cents, currency, verified_reference,
-       funds_available_at, occurred_at, note, recorded_by, created_at, idempotency_key,
-       payload_fingerprint, commitment_id
-  FROM cash_money_entries;
-
-DROP TABLE cash_money_entries;
-
-ALTER TABLE cash_money_entries_rebuilt RENAME TO cash_money_entries;
-
-CREATE INDEX IF NOT EXISTS idx_cash_money_project
-  ON cash_money_entries(project_id, occurred_at);
-
-CREATE INDEX IF NOT EXISTS idx_cash_money_opportunity
-  ON cash_money_entries(opportunity_id, occurred_at);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_money_key
-  ON cash_money_entries(project_id, idempotency_key);
+-- The first-dollar journey (SQLite 105_cash_first_dollar_journey.sql), on the
+-- Postgres chain. The ledger's inline CHECK is widened in place, which Postgres
+-- can do; the constraint is named as Postgres names an inline column CHECK and
+-- dropped without IF EXISTS on purpose (§35: the tolerant form leaves the old
+-- constraint standing beside the new one).
+ALTER TABLE cash_money_entries DROP CONSTRAINT cash_money_entries_kind_check;
+ALTER TABLE cash_money_entries ADD CONSTRAINT cash_money_entries_kind_check
+  CHECK (kind IN ('CAPITAL_IN', 'CAPITAL_OUT', 'PIPELINE_AGREED', 'PIPELINE_RELEASED',
+                  'CUSTOMER_PAYMENT', 'SETTLEMENT', 'REFUND', 'COST', 'UNPAID_COMMITMENT',
+                  'COMMITMENT_PAID', 'RESERVE', 'RESERVE_RELEASE'));
 
 -- ---------------------------------------------------------------------------
 -- cash_observations — what the buyer (or the world) said, as evidence
@@ -96,6 +21,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_money_key
 -- learning loop counts the same silence the screen showed.
 CREATE TABLE IF NOT EXISTS cash_observations (
   id              TEXT PRIMARY KEY,
+  seq                      BIGSERIAL,
   project_id      TEXT NOT NULL REFERENCES projects(id),
   opportunity_id  TEXT NOT NULL,
   kind            TEXT NOT NULL CHECK (kind IN (
@@ -129,6 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_cash_observations_opportunity
 -- agreement nobody can point at is "they seemed interested".
 CREATE TABLE IF NOT EXISTS cash_agreements (
   id                    TEXT PRIMARY KEY,
+  seq                      BIGSERIAL,
   project_id            TEXT NOT NULL REFERENCES projects(id),
   opportunity_id        TEXT NOT NULL,
   amount_cents          INTEGER NOT NULL CHECK (amount_cents > 0),
@@ -157,37 +84,13 @@ CREATE INDEX IF NOT EXISTS idx_cash_agreements_opportunity
   ON cash_agreements(opportunity_id, state);
 
 -- ---------------------------------------------------------------------------
--- cash_invoices — one row per invoice actually issued, against an agreement
+-- Invoices are `cash_invoices` (104 / pg 095, the provider adapters), and that
+-- is the only invoice table. An invoice bills one `PIPELINE_AGREED` entry, and
+-- an agreement writes exactly one, keyed `agreement:<id>` — so which agreement
+-- an invoice bills is a join through the ledger rather than a second column
+-- that could disagree with it. `services/cash/invoicing.ts` refuses to draft
+-- one against an entry no live agreement stands behind.
 -- ---------------------------------------------------------------------------
---
--- Written from a provider receipt (`issued_by = 'BRAIN'`, `operation_id` set,
--- keyed by the operation so a retry or a reconciliation writes one row) or from
--- a person's record of an invoice they issued themselves. `provider_ref` is
--- NOT NULL for the same reason an agreement's evidence is. Whether it is paid is
--- derived from the ledger and never stored here.
-CREATE TABLE IF NOT EXISTS cash_invoices (
-  id              TEXT PRIMARY KEY,
-  project_id      TEXT NOT NULL REFERENCES projects(id),
-  opportunity_id  TEXT NOT NULL,
-  agreement_id    TEXT NOT NULL REFERENCES cash_agreements(id),
-  amount_cents    INTEGER NOT NULL CHECK (amount_cents > 0),
-  currency        TEXT NOT NULL,
-  issued_by       TEXT NOT NULL CHECK (issued_by IN ('BRAIN', 'PERSON')),
-  provider_ref    TEXT NOT NULL,
-  operation_id    TEXT,
-  due_at          TEXT,
-  state           TEXT NOT NULL CHECK (state IN ('ISSUED', 'VOID', 'EXPIRED')),
-  state_reason    TEXT,
-  request_key     TEXT NOT NULL,
-  recorded_by     TEXT NOT NULL,
-  created_at      TEXT NOT NULL,
-  updated_at      TEXT NOT NULL
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_invoices_key
-  ON cash_invoices(project_id, request_key);
-CREATE INDEX IF NOT EXISTS idx_cash_invoices_opportunity
-  ON cash_invoices(opportunity_id, state);
 
 -- ---------------------------------------------------------------------------
 -- cash_fulfilments — work created, work performed, work accepted
@@ -201,6 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_cash_invoices_opportunity
 -- somebody wanted.
 CREATE TABLE IF NOT EXISTS cash_fulfilments (
   id                       TEXT PRIMARY KEY,
+  seq                      BIGSERIAL,
   project_id               TEXT NOT NULL REFERENCES projects(id),
   opportunity_id           TEXT NOT NULL,
   agreement_id             TEXT NOT NULL REFERENCES cash_agreements(id),
@@ -245,6 +149,7 @@ CREATE INDEX IF NOT EXISTS idx_cash_fulfilments_opportunity
 -- result. Never updated, never deleted — a later outcome is a later row.
 CREATE TABLE IF NOT EXISTS cash_outcomes (
   id              TEXT PRIMARY KEY,
+  seq                      BIGSERIAL,
   project_id      TEXT NOT NULL REFERENCES projects(id),
   opportunity_id  TEXT NOT NULL,
   kind            TEXT NOT NULL CHECK (kind IN (

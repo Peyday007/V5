@@ -1151,6 +1151,13 @@ export async function recordMoneyEvent(input: {
    * number one is checked against. A settlement landing between a commitment's
    * insert and its sum would make that sum true of neither moment.
    */
+  if (input.kind === 'PIPELINE_AGREED' && !input.idempotencyKey.startsWith('agreement:')) {
+    return refuse(
+      'Agreed work is recorded as an agreement — the amount, what is delivered, what counts as ' +
+        'acceptance and the evidence the buyer agreed — which writes this entry itself. A bare ' +
+        'amount is never billed, so it is not recorded on its own.',
+    );
+  }
   if (input.kind === 'PIPELINE_RELEASED' && !input.idempotencyKey.startsWith('agreement-released:')) {
     return refuse(
       'Agreed work is released by releasing its agreement, which keeps the agreement and voids ' +

@@ -79,10 +79,11 @@ import {
 } from './effects.ts';
 import type { CashOpportunity, IdempotencyOperation } from '../../domain/types.ts';
 import { createHash } from 'node:crypto';
-import { cardFactsFor } from '../../repos/cashCardFacts.ts';
-import { composeOffer } from './offer.ts';
+import { composeBuyerMessage } from './outreach.ts';
 import { dealPosition } from './journey/position.ts';
-import { nextInvoiceTarget, recordInvoiceFromEffect } from './journey/deal.ts';
+import { emptyInvoicingPass, issueOne } from './invoicing.ts';
+import { listInvoices } from '../../repos/cashInvoices.ts';
+import { usableAdapter } from './effects.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -443,25 +444,6 @@ export async function recordConfirmedEffect(input: {
     });
   }
 
-  if (action === 'QUOTE_AND_INVOICE') {
-    // The invoice row, keyed by the operation, against the agreement the send
-    // named. Without both, the record says so on a need rather than guessing
-    // which agreement was billed.
-    const mode = await getCashMode(opportunity.projectId);
-    const amount = input.amountCents ?? intent?.amountCents ?? null;
-    if (mode && amount && intent?.subjectRef) {
-      await recordInvoiceFromEffect({
-        opportunityId: opportunity.id,
-        agreementId: intent.subjectRef,
-        amountCents: amount,
-        currency: mode.currency,
-        operationId: operation.id,
-        receiptRef,
-        actorRef: input.actorRef,
-      });
-    }
-  }
-
   if (action === 'ACCEPT_PAYMENT') {
     const mode = await getCashMode(opportunity.projectId);
     const amount = input.amountCents ?? intent?.amountCents ?? null;
@@ -668,24 +650,30 @@ export async function prepare(
   const payer = opportunity.payer;
   const channel = opportunity.reachableChannel;
   if (action === 'CONTACT_BUYER') {
-    const draft = composeOffer({ opportunity, facts: await cardFactsFor(opportunity.id) });
-    if (!draft.sendable || !draft.text) {
-      return refuse(
-        `The offer cannot be drafted from this card, so there is nothing to send. Missing: ` +
-          `${draft.missing.map((one) => one.label).join(', ')}.`,
-      );
+    /*
+     * The message a real provider sends (`outreach.ts`): one address read from
+     * the channel the buyer published, the offer and price from the card, an
+     * opt-out, and nothing a model wrote. Its version is the digest of the
+     * exact words, so the record of what reached the buyer names them.
+     */
+    const message = composeBuyerMessage(opportunity);
+    if (!message.ok) {
+      return refuse(`There is no message to send: ${message.reason}. Fill ${message.missing} on the card.`);
     }
+    const version = offerVersion(`${message.to}\n${message.subject}\n${message.text}`);
     return {
       ok: true,
       value: {
         payload: {
           payer: payer ?? 'the payer',
           channel: channel ?? 'the recorded channel',
-          offerText: draft.text,
-          offerVersion: offerVersion(draft.text),
+          to: message.to,
+          subject: message.subject,
+          text: message.text,
+          offerVersion: version,
         },
         amountCents: null,
-        subjectRef: offerVersion(draft.text),
+        subjectRef: version,
       },
       message: 'Prepared.',
     };
@@ -696,24 +684,9 @@ export async function prepare(
   if (!mode) return refuse('Cash Mode has not been activated for this project.');
 
   if (action === 'QUOTE_AND_INVOICE') {
-    const target = await nextInvoiceTarget({ opportunityId: opportunity.id, currency: mode.currency });
-    if (!target.ok) return target;
-    return {
-      ok: true,
-      value: {
-        payload: {
-          payer,
-          channel: channel ?? null,
-          amountCents: target.value.amountCents,
-          currency: mode.currency,
-          description: opportunity.title,
-          agreementId: target.value.agreementId,
-        },
-        amountCents: target.value.amountCents,
-        subjectRef: target.value.agreementId,
-      },
-      message: 'Prepared.',
-    };
+    // Never composed here: an invoice is a `cash_invoices` row with its terms,
+    // issued under its own key by `invoicing.ts` (see `performCommercialAction`).
+    return refuse('An invoice is issued from its drafted row, not from this payload.');
   }
 
   const position = await dealPosition({ opportunity, currency: mode.currency });
@@ -741,7 +714,7 @@ export async function prepare(
         payer,
         amountCents: outstanding,
         currency: mode.currency,
-        invoiceReference: open.at(-1)?.providerRef ?? null,
+        invoiceReference: open.at(-1)?.providerNumber ?? open.at(-1)?.providerInvoiceId ?? null,
       },
       amountCents: outstanding,
       subjectRef: open.at(-1)?.id ?? null,
@@ -827,6 +800,59 @@ export async function performCommercialAction(input: {
       `${effect.doing[0]!.toUpperCase()}${effect.doing.slice(1)} needs ${effect.capability}, ` +
         `which reads ${reading.state}: no integration for it is registered on this Brain. Do it ` +
         'yourself and record it on this piece instead.',
+    );
+  }
+
+  /*
+   * An invoice has exactly one way out of Brain: its drafted `cash_invoices`
+   * row, issued under `issueInvoiceKey(row)` by `invoicing.ts`. A person's
+   * press issues that same row now instead of composing a second request, so a
+   * press racing the tick is one operation and never two invoices — and an
+   * invoice with no drafted terms (who is billed, the tax treatment, the due
+   * date) is refused rather than invented.
+   */
+  if (action === 'QUOTE_AND_INVOICE') {
+    const pending = (
+      await listInvoices({ projectId: opportunity.projectId, opportunityId: opportunity.id, states: ['DRAFTED', 'UNCERTAIN'] })
+    )[0];
+    if (!pending) {
+      return refuse(
+        'No invoice is drafted for this piece. Request one with the customer it bills, the tax ' +
+          'treatment and the due date; Brain issues it under your authority, once, and never invents ' +
+          'those terms.',
+      );
+    }
+    const pass = emptyInvoicingPass();
+    await issueOne(pending, pass);
+    const after = (await listInvoices({ projectId: opportunity.projectId, opportunityId: opportunity.id })).find(
+      (one) => one.id === pending.id,
+    )!;
+    const refreshed = (await getOpportunity(opportunity.id))!;
+    const result: EffectResult =
+      after.state === 'ISSUED' || after.state === 'PAID' || after.state === 'SETTLED'
+        ? {
+            kind: 'RECORDED',
+            receiptRef: after.providerInvoiceId ?? after.id,
+            opportunity: refreshed,
+            message: `Issued. The provider's reference is ${after.providerInvoiceId}.`,
+          }
+        : after.state === 'UNCERTAIN'
+          ? { kind: 'UNCERTAIN', operationId: after.id, reason: after.stateReason ?? 'The outcome is unknown; Brain asks the provider and never resends.' }
+          : after.state === 'FAILED'
+            ? { kind: 'FAILED', operationId: after.id, reason: after.stateReason ?? 'The provider refused it.' }
+            : { kind: 'FAILED', operationId: after.id, reason: pass.withheld[0]?.because ?? 'It was not issued.' };
+    if (result.kind === 'FAILED' && after.state === 'DRAFTED') return refuse(result.reason);
+    return { ok: true, value: result, message: messageFor(result) };
+  }
+
+  // Taking a payment is something Brain performs only through a charge adapter.
+  // A payment reader (the buyer paying an invoice's hosted page) makes
+  // TAKE_A_PAYMENT present too, and is read back by `invoicing.ts` rather than
+  // sent from here.
+  if (action === 'ACCEPT_PAYMENT' && !usableAdapter(effect.namespace)) {
+    return refuse(
+      'The buyer pays the invoice through the provider’s own payment page, and Brain records the ' +
+        'payment when the provider says it arrived. There is nothing for Brain to charge.',
     );
   }
 

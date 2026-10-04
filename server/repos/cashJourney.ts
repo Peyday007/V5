@@ -14,13 +14,11 @@ import type {
   AgreementEvidenceKind,
   CashAgreement,
   CashFulfilment,
-  CashInvoice,
   CashObservation,
   CashOutcome,
   FulfilmentPath,
   FulfilmentState,
   FulfilmentWorkKind,
-  InvoiceState,
   ObservationKind,
   ObservationSource,
   OutcomeKind,
@@ -215,103 +213,6 @@ export async function releaseAgreementRow(input: {
         SET state = 'RELEASED', released_reason = ?, released_by = ?, released_at = ?, updated_at = ?
       WHERE id = ? AND state = 'AGREED'`,
     [input.reason, input.by, at, at, input.id],
-  );
-  return res.changes === 1;
-}
-
-/* ------------------------------------------------------------------------- */
-/* Invoices                                                                   */
-/* ------------------------------------------------------------------------- */
-
-function mapInvoice(r: Row): CashInvoice {
-  return {
-    id: s(r.id),
-    projectId: s(r.project_id),
-    opportunityId: s(r.opportunity_id),
-    agreementId: s(r.agreement_id),
-    amountCents: Number(r.amount_cents),
-    currency: s(r.currency),
-    issuedBy: s(r.issued_by) as CashInvoice['issuedBy'],
-    providerRef: s(r.provider_ref),
-    operationId: ns(r.operation_id),
-    dueAt: ns(r.due_at),
-    state: s(r.state) as InvoiceState,
-    stateReason: ns(r.state_reason),
-    requestKey: s(r.request_key),
-    recordedBy: s(r.recorded_by),
-    createdAt: s(r.created_at),
-    updatedAt: s(r.updated_at),
-  };
-}
-
-export async function insertInvoice(input: {
-  projectId: string;
-  opportunityId: string;
-  agreementId: string;
-  amountCents: number;
-  currency: string;
-  issuedBy: 'BRAIN' | 'PERSON';
-  providerRef: string;
-  operationId?: string | null;
-  dueAt?: string | null;
-  recordedBy: string;
-  requestKey: string;
-}): Promise<{ row: CashInvoice; created: boolean }> {
-  const id = newId('cin');
-  const at = journeyNow();
-  await getDb().run(
-    `INSERT INTO cash_invoices
-       (id, project_id, opportunity_id, agreement_id, amount_cents, currency, issued_by,
-        provider_ref, operation_id, due_at, state, request_key, recorded_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ISSUED', ?, ?, ?, ?)
-     ON CONFLICT (project_id, request_key) DO NOTHING`,
-    [
-      id,
-      input.projectId,
-      input.opportunityId,
-      input.agreementId,
-      input.amountCents,
-      input.currency,
-      input.issuedBy,
-      input.providerRef,
-      input.operationId ?? null,
-      input.dueAt ?? null,
-      input.requestKey,
-      input.recordedBy,
-      at,
-      at,
-    ],
-  );
-  const row = await getDb().get<Row>(
-    'SELECT * FROM cash_invoices WHERE project_id = ? AND request_key = ?',
-    [input.projectId, input.requestKey],
-  );
-  return { row: mapInvoice(row!), created: s(row!.id) === id };
-}
-
-export async function invoicesFor(opportunityId: string): Promise<CashInvoice[]> {
-  const rows = await getDb().all<Row>(
-    'SELECT * FROM cash_invoices WHERE opportunity_id = ? ORDER BY created_at, id',
-    [opportunityId],
-  );
-  return rows.map(mapInvoice);
-}
-
-export async function getInvoice(id: string): Promise<CashInvoice | null> {
-  const row = await getDb().get<Row>('SELECT * FROM cash_invoices WHERE id = ?', [id]);
-  return row ? mapInvoice(row) : null;
-}
-
-/** ISSUED → VOID | EXPIRED, guarded on ISSUED. */
-export async function closeInvoiceRow(input: {
-  id: string;
-  to: 'VOID' | 'EXPIRED';
-  reason: string;
-}): Promise<boolean> {
-  const res = await getDb().run(
-    `UPDATE cash_invoices SET state = ?, state_reason = ?, updated_at = ?
-      WHERE id = ? AND state = 'ISSUED'`,
-    [input.to, input.reason, journeyNow(), input.id],
   );
   return res.changes === 1;
 }
@@ -548,12 +449,4 @@ export async function fulfilmentsInProject(projectId: string): Promise<CashFulfi
     [projectId],
   );
   return rows.map(mapFulfilment);
-}
-
-export async function issuedInvoicesInProject(projectId: string): Promise<CashInvoice[]> {
-  const rows = await getDb().all<Row>(
-    "SELECT * FROM cash_invoices WHERE project_id = ? AND state = 'ISSUED' ORDER BY created_at, id",
-    [projectId],
-  );
-  return rows.map(mapInvoice);
 }

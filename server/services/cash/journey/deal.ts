@@ -30,18 +30,14 @@ import { getCandidate } from '../../../repos/russellCandidates.ts';
 import { getChangeRequest } from '../../../repos/factory.ts';
 import {
   agreementsFor,
-  closeInvoiceRow,
   endFulfilment,
   fulfilmentsFor,
   getAgreement,
   getFulfilment,
-  getInvoice,
   getObservation,
   insertAgreement,
   insertFulfilment,
-  insertInvoice,
   insertObservation,
-  invoicesFor,
   markFulfilmentDelivered,
   markFulfilmentPerformed,
   releaseAgreementRow,
@@ -56,11 +52,13 @@ import {
   isOneOf,
   type CashAgreement,
   type CashFulfilment,
-  type CashInvoice,
   type CashObservation,
   type ObservationSource,
 } from '../../../domain/cashJourney.ts';
-import { dealPosition, invoiceRoomByAgreement } from './position.ts';
+import { agreementLedgerKey } from './position.ts';
+import { listInvoices, moveInvoice } from '../../../repos/cashInvoices.ts';
+import { moneyEntryByKey } from '../../../repos/cashLedger.ts';
+import { raiseNeed } from '../needs.ts';
 
 const AFTER_FIRST_ACTION = new Set(['EXECUTING', 'DELIVERING']);
 
@@ -153,9 +151,7 @@ export async function recordObservation(input: {
 /* Agreements                                                                 */
 /* ------------------------------------------------------------------------- */
 
-export function agreementLedgerKey(agreementId: string): string {
-  return `agreement:${agreementId}`;
-}
+export { agreementLedgerKey };
 export function releaseLedgerKey(agreementId: string): string {
   return `agreement-released:${agreementId}`;
 }
@@ -310,9 +306,39 @@ export async function releaseAgreement(input: {
   const after = (await getAgreement(agreement.id))!;
   if (!moved && agreement.state !== 'RELEASED') return refuse('This agreement could not be released.');
   await ensureAgreementLedger(after);
-  for (const invoice of await invoicesFor(agreement.opportunityId)) {
-    if (invoice.agreementId === agreement.id && invoice.state === 'ISSUED') {
-      await closeInvoiceRow({ id: invoice.id, to: 'VOID', reason: `The agreement was released: ${input.reason.trim()}` });
+  /*
+   * What was billed against it. A draft nothing has sent is voided here; an
+   * invoice the provider holds cannot be unsent from Brain's side, so an open
+   * need names it for a person to void at the provider — never a state
+   * written over a provider record Brain has not changed.
+   */
+  const entry = await moneyEntryByKey(agreement.projectId, agreementLedgerKey(agreement.id));
+  if (entry) {
+    for (const invoice of await listInvoices({ projectId: agreement.projectId, opportunityId: agreement.opportunityId })) {
+      if (invoice.pipelineEntryId !== entry.id) continue;
+      if (invoice.state === 'DRAFTED') {
+        await moveInvoice({
+          id: invoice.id,
+          from: 'DRAFTED',
+          to: 'VOID',
+          patch: { stateReason: `The agreement was released before it was sent: ${input.reason.trim()}` },
+        });
+      } else if (invoice.state === 'ISSUED' || invoice.state === 'UNCERTAIN') {
+        await raiseNeed({
+          projectId: agreement.projectId,
+          opportunityId: agreement.opportunityId,
+          actorRef: 'BRAIN',
+          blockedAction: `Void invoice ${invoice.providerNumber ?? invoice.id} at the provider`,
+          whyItMatters:
+            'Its agreement was released, and the provider still holds an invoice the buyer can pay. ' +
+            'Brain does not unsend it on its own.',
+          recommendedPath: 'Void the invoice at the invoicing provider; Brain reads the voided state back.',
+          setupEffort: 'A minute.',
+          nextStep: `Void ${invoice.providerInvoiceId ?? invoice.id} at the provider.`,
+          completionCondition: 'The provider reads the invoice as void.',
+          requestKey: `void-released:${invoice.id}`,
+        });
+      }
     }
   }
   if (moved) {
@@ -326,172 +352,6 @@ export async function releaseAgreement(input: {
     });
   }
   return { ok: true, value: after, message: moved ? 'Released.' : 'This agreement was already released.' };
-}
-
-/* ------------------------------------------------------------------------- */
-/* Invoices                                                                   */
-/* ------------------------------------------------------------------------- */
-
-/**
- * What the next invoice may be for: the oldest live agreement with room on it,
- * and no more than the deal as a whole still has invoiceable.
- */
-export async function nextInvoiceTarget(input: {
-  opportunityId: string;
-  currency: string;
-}): Promise<Outcome<{ agreementId: string; amountCents: number }>> {
-  const opportunity = await getOpportunity(input.opportunityId);
-  if (!opportunity) return refuse('No opportunity with that id.');
-  const position = await dealPosition({ opportunity, currency: input.currency });
-  if (position.pnl.agreedRevenueCents <= 0) {
-    return refuse(
-      position.pnl.unbackedAgreedCents > 0
-        ? 'An amount is recorded as agreed with no agreement behind it. Record the agreement — the ' +
-            'deliverable, the acceptance condition and the evidence — before anything is invoiced.'
-        : 'No agreement is recorded for this piece, so there is nothing to invoice. Brain does not ' +
-            'choose what a customer is billed.',
-    );
-  }
-  if (position.pnl.invoiceableCents <= 0) {
-    return refuse('Everything agreed has already been invoiced or paid.');
-  }
-  const room = invoiceRoomByAgreement(position.agreements, position.invoices).find((one) => one.roomCents > 0);
-  if (!room) return refuse('Everything agreed has already been invoiced.');
-  return {
-    ok: true,
-    value: {
-      agreementId: room.agreement.id,
-      amountCents: Math.min(room.roomCents, position.pnl.invoiceableCents),
-    },
-    message: 'Ready to invoice.',
-  };
-}
-
-/** The invoice row a confirmed provider effect implies, keyed by the operation. */
-export async function recordInvoiceFromEffect(input: {
-  opportunityId: string;
-  agreementId: string;
-  amountCents: number;
-  currency: string;
-  operationId: string;
-  receiptRef: string;
-  actorRef: string;
-}): Promise<CashInvoice | null> {
-  const opportunity = await getOpportunity(input.opportunityId);
-  if (!opportunity) return null;
-  const agreement = await getAgreement(input.agreementId);
-  if (!agreement || agreement.opportunityId !== opportunity.id) return null;
-  const written = await insertInvoice({
-    projectId: opportunity.projectId,
-    opportunityId: opportunity.id,
-    agreementId: agreement.id,
-    amountCents: input.amountCents,
-    currency: input.currency,
-    issuedBy: 'BRAIN',
-    providerRef: input.receiptRef,
-    operationId: input.operationId,
-    recordedBy: input.actorRef,
-    requestKey: `invoice-effect:${input.operationId}`,
-  });
-  if (written.created) {
-    await recordCashEvent({
-      projectId: opportunity.projectId,
-      opportunityId: opportunity.id,
-      kind: 'CASH_INVOICE_ISSUED',
-      actorRef: input.actorRef,
-      summary: `Invoiced ${input.amountCents} cents (provider reference ${input.receiptRef}).`,
-      detail: { invoiceId: written.row.id, agreementId: agreement.id, operationId: input.operationId },
-    });
-  }
-  return written.row;
-}
-
-/**
- * A person issued an invoice themselves and records it. Bounded by the same
- * invoiceable figure Brain's own invoice is, so a hand-recorded invoice cannot
- * bill an agreement twice either.
- */
-export async function recordInvoiceByPerson(input: {
-  opportunityId: string;
-  agreementId: string;
-  amountCents: number;
-  providerRef: string;
-  dueAt?: string | null;
-  actorRef: string;
-}): Promise<Outcome<CashInvoice>> {
-  const opportunity = await getOpportunity(input.opportunityId);
-  if (!opportunity) return refuse('No opportunity with that id.');
-  const mode = await getCashMode(opportunity.projectId);
-  if (!mode) return refuse('Cash Mode has not been activated for this project.');
-  const missing = required(input.providerRef, "The invoice's own reference");
-  if (missing) return refuse(missing);
-  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
-    return refuse('An invoice amount is a whole number of cents greater than zero.');
-  }
-  const key = `invoice:${opportunity.id}:${digest(input.providerRef.trim())}`;
-  const existing = (await invoicesFor(opportunity.id)).find((one) => one.requestKey === key);
-  if (existing) return { ok: true, value: existing, message: 'This invoice was already recorded.' };
-  const position = await dealPosition({ opportunity, currency: mode.currency });
-  const room = invoiceRoomByAgreement(position.agreements, position.invoices).find(
-    (one) => one.agreement.id === input.agreementId,
-  );
-  if (!room) return refuse('No live agreement with that id on this piece.');
-  const limit = Math.min(room.roomCents, position.pnl.invoiceableCents);
-  if (input.amountCents > limit) {
-    return refuse(
-      `Only ${limit} cents of that agreement is still invoiceable, and this invoice is for ` +
-        `${input.amountCents}. Billing more than was agreed would be a second invoice for the same work.`,
-    );
-  }
-  const written = await insertInvoice({
-    projectId: opportunity.projectId,
-    opportunityId: opportunity.id,
-    agreementId: input.agreementId,
-    amountCents: input.amountCents,
-    currency: mode.currency,
-    issuedBy: 'PERSON',
-    providerRef: input.providerRef.trim(),
-    dueAt: input.dueAt ?? null,
-    recordedBy: input.actorRef,
-    requestKey: key,
-  });
-  if (written.created) {
-    await recordCashEvent({
-      projectId: opportunity.projectId,
-      opportunityId: opportunity.id,
-      kind: 'CASH_INVOICE_ISSUED',
-      actorRef: input.actorRef,
-      summary: `Invoice ${written.row.providerRef} recorded for ${input.amountCents} cents.`,
-      detail: { invoiceId: written.row.id, agreementId: input.agreementId },
-    });
-  }
-  return { ok: true, value: written.row, message: written.created ? 'Recorded.' : 'Already recorded.' };
-}
-
-/** An invoice that will not be paid as issued: voided, or expired. */
-export async function closeInvoice(input: {
-  invoiceId: string;
-  to: 'VOID' | 'EXPIRED';
-  reason: string;
-  actorRef: string;
-}): Promise<Outcome<CashInvoice>> {
-  const invoice = await getInvoice(input.invoiceId);
-  if (!invoice) return refuse('No invoice with that id.');
-  const missing = required(input.reason, 'Why');
-  if (missing) return refuse(missing);
-  const moved = await closeInvoiceRow({ id: invoice.id, to: input.to, reason: input.reason.trim() });
-  if (!moved && invoice.state === 'ISSUED') return refuse('This invoice could not be closed.');
-  if (moved) {
-    await recordCashEvent({
-      projectId: invoice.projectId,
-      opportunityId: invoice.opportunityId,
-      kind: `CASH_INVOICE_${input.to}`,
-      actorRef: input.actorRef,
-      summary: `Invoice ${invoice.providerRef} ${input.to.toLowerCase()}: ${input.reason.trim()}`,
-      detail: { invoiceId: invoice.id },
-    });
-  }
-  return { ok: true, value: (await getInvoice(invoice.id))!, message: moved ? 'Closed.' : 'Already closed.' };
 }
 
 /* ------------------------------------------------------------------------- */

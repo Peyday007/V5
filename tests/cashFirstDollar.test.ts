@@ -58,13 +58,10 @@ import { advanceJourney, RESPONSE_WINDOW_MS } from '../server/services/cash/jour
 import { dealPosition } from '../server/services/cash/journey/position.ts';
 import { cashOutcomeLessons } from '../server/services/cash/journey/learning.ts';
 import { recordPerformed } from '../server/services/cash/journey/deal.ts';
-import {
-  agreementsFor,
-  fulfilmentsFor,
-  invoicesFor,
-  observationsFor,
-  outcomesFor,
-} from '../server/repos/cashJourney.ts';
+import { agreementsFor, fulfilmentsFor, observationsFor, outcomesFor } from '../server/repos/cashJourney.ts';
+import { listInvoices } from '../server/repos/cashInvoices.ts';
+import { clearPaymentReader, registerPaymentReader } from '../server/services/cash/providers/payments.ts';
+import type { InvoiceReading } from '../server/services/cash/providers/stripe.ts';
 import { createCandidate } from '../server/repos/russellCandidates.ts';
 import { launchMission, transitionMission } from '../server/repos/russellMissions.ts';
 import { COMMERCIAL_EFFECTS } from '../server/services/cash/effects.ts';
@@ -72,6 +69,7 @@ import {
   clearAdapters,
   registerAdapter,
   type EffectAdapter,
+  type ReconcileOutcome,
   type SendOutcome,
 } from '../server/services/effects/adapter.ts';
 import { cashRouter } from '../server/routes/cash.ts';
@@ -164,6 +162,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   clearAdapters();
+  clearPaymentReader();
   if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
   server = null;
 });
@@ -214,7 +213,7 @@ async function qualified(title = 'A published intake repair request'): Promise<C
     actorRef: 'BRAIN',
     patch: {
       payer: 'The operations manager, who signs',
-      reachableChannel: 'The address on the notice',
+      reachableChannel: 'ops@intake-buyer.example — the address on the notice',
       buyingSignal: 'Wanted: intake repair. Budget $1,200.',
       signalObservedAt: '2026-09-15T09:00:00.000Z',
       peakFundingCents: 0,
@@ -240,6 +239,7 @@ async function qualified(title = 'A published intake repair request'): Promise<C
 interface Provider {
   sends: Record<string, unknown>[];
   onSend: (payload: Record<string, unknown>) => Promise<SendOutcome>;
+  onReconcile: () => Promise<ReconcileOutcome>;
 }
 
 /**
@@ -248,15 +248,21 @@ interface Provider {
  * forget how many times the outside world was actually asked.
  */
 const outside: Record<string, Record<string, unknown>[]> = {};
-function provider(action: keyof typeof COMMERCIAL_EFFECTS, prefix: string): Provider {
+function provider(
+  action: keyof typeof COMMERCIAL_EFFECTS,
+  prefix: string,
+  effectClass: 'EXTERNAL_OPAQUE' | 'EXTERNAL_RECONCILABLE' = 'EXTERNAL_OPAQUE',
+): Provider {
   outside[action] ??= [];
   const state: Provider = {
     sends: outside[action]!,
     onSend: async () => ({ kind: 'CONFIRMED', receiptRef: `${prefix}-${state.sends.length}` }),
+    onReconcile: async () => ({ kind: 'INCONCLUSIVE', reason: 'not visible yet' }),
   };
   const adapter: EffectAdapter = {
     name: `sandbox.${action.toLowerCase()}`,
-    effectClass: 'EXTERNAL_OPAQUE',
+    effectClass,
+    ...(effectClass === 'EXTERNAL_RECONCILABLE' ? { reconcile: async () => await state.onReconcile() } : {}),
     namespace: COMMERCIAL_EFFECTS[action].namespace.name,
     validate: (payload) => {
       if (payload === null || typeof payload !== 'object') throw new Error('not an object');
@@ -274,6 +280,42 @@ function provider(action: keyof typeof COMMERCIAL_EFFECTS, prefix: string): Prov
 
 function resetOutside(): void {
   for (const key of Object.keys(outside)) delete outside[key];
+  for (const key of Object.keys(ledger)) delete ledger[key];
+}
+
+/**
+ * The provider's own account of each invoice, which the sandbox payment reader
+ * answers from — the buyer paying a hosted page and the funds landing are both
+ * things that happen *outside* Brain and that Brain only reads.
+ */
+const ledger: Record<string, InvoiceReading> = {};
+function paymentReader(): void {
+  registerPaymentReader({
+    name: 'sandbox.invoice_payments',
+    provider: 'sandbox',
+    health: () => ({ usable: true, reason: 'sandbox' }),
+    read: async (id) => ledger[id] ?? { kind: 'READ', status: 'open', hostedUrl: `https://pay.example/${id}`, number: `N-${id}`, amountPaidCents: 0, currency: 'USD', chargeId: null, paidAt: null, balance: null },
+  });
+}
+function buyerPays(id: string, amountCents: number): void {
+  ledger[id] = { kind: 'READ', status: 'paid', hostedUrl: null, number: `N-${id}`, amountPaidCents: amountCents, currency: 'USD', chargeId: `ch-${id}`, paidAt: new Date().toISOString(), balance: { id: `txn-${id}`, status: 'pending', currency: 'USD', amountCents, feeCents: 0, availableOn: null } };
+}
+function fundsLand(id: string, amountCents: number, feeCents: number): void {
+  const read = ledger[id] as Extract<InvoiceReading, { kind: 'READ' }>;
+  ledger[id] = { ...read, balance: { id: `txn-${id}`, status: 'available', currency: 'USD', amountCents, feeCents, availableOn: new Date().toISOString() } };
+}
+function providerSays(id: string, status: 'void' | 'uncollectible'): void {
+  ledger[id] = { kind: 'READ', status, hostedUrl: null, number: `N-${id}`, amountPaidCents: 0, currency: 'USD', chargeId: null, paidAt: null, balance: null };
+}
+const TERMS = { customerName: 'Intake Buyer Ltd', customerEmail: 'accounts@intake-buyer.example', taxTreatment: 'NO_TAX_CHARGED', dueDate: '2099-01-31' };
+async function requestInvoice(pieceId: string, body: Record<string, unknown> = TERMS) {
+  return await call('POST', `/api/projects/${projectId}/cash/opportunities/${pieceId}/invoice`, body);
+}
+/** The tick's payment reads are rate-limited per invoice; step past it. */
+let clock = Date.now();
+async function tick(): Promise<void> {
+  clock += 10 * 60 * 1000;
+  await operate(projectId, new Date(clock).toISOString());
 }
 
 /** The process dies: the database is reopened and every adapter forgotten. */
@@ -323,18 +365,20 @@ describe('F01: the sandbox first-dollar journey', () => {
     await granted();
     let contact = provider('CONTACT_BUYER', 'msg');
     let invoice = provider('QUOTE_AND_INVOICE', 'inv');
-    let payment = provider('ACCEPT_PAYMENT', 'pay');
+    paymentReader();
     const piece = await qualified();
 
     // READY_TO_TEST → a real action. The tick reaches the buyer through the
-    // adapter with the exact offer text and its version; EXECUTING because a
-    // receipt exists, never because a state changed.
+    // messaging adapter with the exact message and its version; EXECUTING
+    // because a receipt exists, never because a state changed.
     await advanceWithinAuthority(projectId);
     expect((await getOpportunity(piece.id))!.state).toBe('EXECUTING');
     expect(contact.sends).toHaveLength(1);
     expect(contact.sends[0]).toMatchObject({
-      offerText: expect.stringContaining('To: The operations manager, who signs'),
+      to: 'ops@intake-buyer.example',
+      text: expect.stringContaining('If you would rather not hear from us'),
       offerVersion: expect.stringMatching(/^offer-[0-9a-f]{16}$/),
+      requestKey: expect.stringMatching(/^contact-buyer\./),
     });
     const [contacted] = await actionsFor(piece.id);
     expect(contacted).toMatchObject({ action: 'CONTACT_BUYER', performedBy: 'BRAIN', reference: 'msg-1' });
@@ -350,70 +394,81 @@ describe('F01: the sandbox first-dollar journey', () => {
     await restart();
     contact = provider('CONTACT_BUYER', 'msg');
     invoice = provider('QUOTE_AND_INVOICE', 'inv');
-    payment = provider('ACCEPT_PAYMENT', 'pay');
-    await operate(projectId);
+    paymentReader();
+    await tick();
     expect(contact.sends).toHaveLength(1);
+
+    // An invoice is refused until something is agreed — and a bare amount in
+    // the ledger is not an agreement.
+    expect((await requestInvoice(piece.id)).status).toBe(422);
 
     // The agreement: amount, deliverable, acceptance condition, evidence.
     const agreement = await agree(piece.id, 120_000, reply.body.observation.id);
 
-    // Invoice exactly what is invoiceable against that agreement.
-    const nextOccurrence = async () =>
+    // The invoice: Brain's amount (the agreement's), the person's terms.
+    const drafted = await requestInvoice(piece.id, { ...TERMS, amountCents: 1 });
+    expect(drafted.status).toBe(200);
+    expect(drafted.body.invoice).toMatchObject({ amountCents: 120_000, state: 'DRAFTED' });
+    // A repeat is the same draft.
+    expect((await requestInvoice(piece.id)).body.invoice.id).toBe(drafted.body.invoice.id);
+
+    // The owner presses "have Brain do it": the same row, under its one key.
+    const occurrence = async () =>
       (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id].nextOccurrence;
-    const invoiced = await act(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await nextOccurrence() });
-    expect(invoiced.status).toBe(200);
-    expect(invoice.sends).toEqual([expect.objectContaining({ amountCents: 120_000, agreementId: agreement.id })]);
-    // A second invoice for the same agreement is refused: nothing left to bill.
-    const again = await act(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await nextOccurrence() });
-    expect(again.status).toBe(422);
+    const issued = await act(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await occurrence() });
+    expect(issued.status).toBe(200);
+    expect(invoice.sends).toEqual([expect.objectContaining({ amountCents: 120_000, customerEmail: 'accounts@intake-buyer.example' })]);
+    // A second press, and a tick, issue nothing more.
+    expect((await act(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await occurrence() })).status).toBe(422);
+    await tick();
     expect(invoice.sends).toHaveLength(1);
 
-    // Restart #2, between the invoice and the payment.
+    // Restart #2, with the invoice out and unpaid.
     await restart();
     contact = provider('CONTACT_BUYER', 'msg');
     invoice = provider('QUOTE_AND_INVOICE', 'inv');
-    payment = provider('ACCEPT_PAYMENT', 'pay');
-    await operate(projectId);
+    paymentReader();
+    await tick();
     expect(invoice.sends).toHaveLength(1);
-    expect(await invoicesFor(piece.id)).toEqual([
-      expect.objectContaining({ amountCents: 120_000, agreementId: agreement.id, providerRef: 'inv-1', state: 'ISSUED' }),
-    ]);
-
-    // The customer pays the outstanding invoice. Earned, not cash.
-    const paid = await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: await nextOccurrence() });
-    expect(paid.status).toBe(200);
-    expect(payment.sends).toEqual([expect.objectContaining({ amountCents: 120_000, invoiceReference: 'inv-1' })]);
+    const [billed] = await listInvoices({ projectId, opportunityId: piece.id });
+    expect(billed).toMatchObject({ state: 'ISSUED', providerInvoiceId: 'inv-1', amountCents: 120_000 });
     let deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
+    expect(deal.paymentState).toBe('OUTSTANDING');
+    expect(deal.pnl.owedByBuyerCents).toBe(120_000);
+
+    // The buyer pays the hosted page. Brain reads it: earned, not cash.
+    buyerPays('inv-1', 120_000);
+    await tick();
+    deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
     expect(deal.paymentState).toBe('PAID_UNSETTLED');
     expect((await cashPosition({ projectId, currency: 'USD' })).availableFundsCents).toBe(0);
 
     // Fulfilment: work created, performed, accepted on evidence.
     await fulfilAndAccept(piece.id, agreement.id);
     expect((await getOpportunity(piece.id))!.state).toBe('DELIVERING');
-    // Not yet collected: the payment has not settled.
-    await operate(projectId);
+    await tick();
     expect((await fulfilmentsFor(piece.id))[0]!.state).toBe('DELIVERED');
+    // Not collected: the payment has not settled.
     expect((await getOpportunity(piece.id))!.state).toBe('DELIVERING');
 
-    // Settlement: the payment becoming cash, never a second sale.
-    const overSettled = await money({
-      opportunityId: piece.id,
-      kind: 'SETTLEMENT',
-      amountCents: 240_000,
-      verifiedReference: 'payout-double',
-      idempotencyKey: `settlement:${piece.id}:payout-double`,
-    });
-    expect(overSettled.status).toBe(422);
-    const settled = await money({
-      opportunityId: piece.id,
-      kind: 'SETTLEMENT',
-      amountCents: 120_000,
-      verifiedReference: 'payout-1',
-      idempotencyKey: `settlement:${piece.id}:payout-1`,
-    });
-    expect(settled.status).toBe(200);
+    // A settlement larger than the payment is a second sale, and refused.
+    expect(
+      (
+        await money({
+          opportunityId: piece.id,
+          kind: 'SETTLEMENT',
+          amountCents: 240_000,
+          verifiedReference: 'payout-double',
+          idempotencyKey: `settlement:${piece.id}:payout-double`,
+        })
+      ).status,
+    ).toBe(422);
 
-    // One incremental cost, paid once.
+    // The funds land at the provider, less its fee: one settlement, one fee.
+    fundsLand('inv-1', 120_000, 3_510);
+    await tick();
+
+    // One incremental cost of our own, paid once.
     const held = await commitSpend({
       projectId,
       opportunityId: piece.id,
@@ -428,10 +483,10 @@ describe('F01: the sandbox first-dollar journey', () => {
     expect(held.ok).toBe(true);
     if (held.ok) expect((await settleSpend({ commitmentId: held.value.id, spentCents: 10_000, actorRef: userId })).ok).toBe(true);
 
-    // Brain moves it to collected by itself, and learns from it.
-    await operate(projectId);
+    // Brain moved it to collected by itself, and learns from it.
+    await tick();
     expect((await getOpportunity(piece.id))!.state).toBe('COLLECTED');
-    await operate(projectId);
+    await tick();
 
     // Profit and loss, from rows, each cost once.
     deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
@@ -442,48 +497,56 @@ describe('F01: the sandbox first-dollar journey', () => {
       customerPaymentsCents: 120_000,
       settledCashCents: 120_000,
       unsettledCents: 0,
-      incrementalCostsCents: 10_000,
+      incrementalCostsCents: 13_510,
       unpaidCommitmentsCents: 0,
-      contributionCents: 110_000,
+      contributionCents: 106_490,
       owedByBuyerCents: 0,
       invoiceableCents: 0,
     });
     const position = await cashPosition({ projectId, currency: 'USD' });
-    expect(position.availableFundsCents).toBe(110_000);
-    expect(position.deployableCents).toBe(110_000);
+    expect(position.availableFundsCents).toBe(106_490);
+    expect(position.deployableCents).toBe(106_490);
 
-    // No duplicate effects, across two restarts and several ticks.
-    expect([outside.CONTACT_BUYER!.length, outside.QUOTE_AND_INVOICE!.length, outside.ACCEPT_PAYMENT!.length]).toEqual([1, 1, 1]);
+    // No duplicate effects, across two restarts and many ticks.
+    expect([outside.CONTACT_BUYER!.length, outside.QUOTE_AND_INVOICE!.length]).toEqual([1, 1]);
     expect(await moneyCount(piece.id)).toEqual({
       PIPELINE_AGREED: 1,
       CUSTOMER_PAYMENT: 1,
       SETTLEMENT: 1,
-      COST: 1,
+      COST: 2,
     });
     expect(await agreementsFor(piece.id)).toHaveLength(1);
-    expect(await invoicesFor(piece.id)).toHaveLength(1);
-    expect(await fulfilmentsFor(piece.id)).toHaveLength(1);
-    expect((await actionsFor(piece.id)).map((one) => one.action)).toEqual([
-      'CONTACT_BUYER',
-      'QUOTE_AND_INVOICE',
-      'ACCEPT_PAYMENT',
+    expect(await listInvoices({ projectId, opportunityId: piece.id })).toEqual([
+      expect.objectContaining({ state: 'SETTLED' }),
     ]);
+    expect(await fulfilmentsFor(piece.id)).toHaveLength(1);
+    expect((await actionsFor(piece.id)).map((one) => one.action)).toEqual(['CONTACT_BUYER', 'QUOTE_AND_INVOICE']);
 
     // What it taught, measured, and labelled as one result.
     const learned = await outcomesFor({ projectId, opportunityId: piece.id });
-    expect(learned.map((one) => one.kind).sort()).toEqual(
+    expect([...new Set(learned.map((one) => one.kind))].sort()).toEqual(
       ['ACCEPTED_PRICE', 'ACTUAL_COST', 'CONTACT_RESULT', 'FULFILMENT_DURATION', 'OFFERED_PRICE', 'REALIZED_CONTRIBUTION', 'TIME_TO_AGREEMENT'].sort(),
     );
     expect(learned.find((one) => one.kind === 'CONTACT_RESULT')!.valueText).toBe('BUYER_ACCEPTED');
-    expect(learned.find((one) => one.kind === 'REALIZED_CONTRIBUTION')!.valueCents).toBe(110_000);
+    // The plugin cost landed after the deal collected: the first reading is
+    // kept as history and the later one is the figure.
+    expect(learned.filter((one) => one.kind === 'REALIZED_CONTRIBUTION').map((one) => one.valueCents)).toEqual([116_490, 106_490]);
     const [lesson] = await cashOutcomeLessons(projectId);
-    expect(lesson).toMatchObject({ mechanism: 'EXPLICIT_PAID_REQUEST', contacts: 1, answered: 1, agreements: 1, completed: 1, anecdote: true });
+    expect(lesson).toMatchObject({
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      contacts: 1,
+      answered: 1,
+      agreements: 1,
+      completed: 1,
+      realizedContributionCents: 106_490,
+      anecdote: true,
+    });
 
     // The owner's one surface says all of it, from the server.
     const page = (await call('GET', `/api/projects/${projectId}/cash`)).body;
     const shown = page.myCurrentWork.journey.deals.find((one: any) => one.opportunityId === piece.id);
     expect(shown).toMatchObject({ stage: 'COMPLETE', paymentState: 'SETTLED' });
-    expect(page.myCurrentWork.journey.totals).toMatchObject({ settledCashCents: 120_000, contributionCents: 110_000 });
+    expect(page.myCurrentWork.journey.totals).toMatchObject({ settledCashCents: 120_000, contributionCents: 106_490 });
   }, 120_000);
 });
 
@@ -512,35 +575,39 @@ describe('failure, refund and partial paths', () => {
     expect(await moneyCount(piece.id)).toEqual({});
   });
 
-  it('F03: the buyer disappears after agreeing — the invoice expires and the agreement is released by an entry', async () => {
+  it('F03: the buyer disappears after agreeing — the invoice is voided at the provider and the agreement released by an entry', async () => {
     await granted();
     provider('CONTACT_BUYER', 'msg');
+    provider('QUOTE_AND_INVOICE', 'inv');
+    paymentReader();
     const piece = await qualified();
     await advanceWithinAuthority(projectId);
     const agreement = await agree(piece.id, 80_000);
-    // Interest is not an agreement; an agreement with no evidence is refused.
+    // Interest is not an agreement; an agreement with no evidence kind is refused.
     expect((await act(piece.id, 'agree', { amountCents: 80_000, deliverable: 'x', acceptanceCondition: 'y', evidenceKind: 'SEEMED_INTERESTED', evidenceRef: 'call' })).status).toBe(422);
-    const due = new Date(Date.now() + 86_400_000).toISOString();
-    const invoiced = await act(piece.id, 'record-invoice', { agreementId: agreement.id, amountCents: 80_000, providerRef: 'INV-77', dueAt: due });
-    expect(invoiced.status).toBe(200);
-    // A second invoice beyond the agreement is refused.
-    expect((await act(piece.id, 'record-invoice', { agreementId: agreement.id, amountCents: 1, providerRef: 'INV-78' })).status).toBe(422);
-    await advanceJourney(projectId, new Date(Date.now() + 2 * 86_400_000));
-    expect((await invoicesFor(piece.id))[0]!.state).toBe('EXPIRED');
-    let deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
-    expect(deal.pnl.owedByBuyerCents).toBe(0);
-    expect(deal.pnl.invoiceableCents).toBe(80_000);
+    expect((await requestInvoice(piece.id)).status).toBe(200);
+    await tick();
+    expect((await listInvoices({ projectId, opportunityId: piece.id }))[0]!.state).toBe('ISSUED');
 
+    // The buyer goes quiet and the agreement is released. The provider still
+    // holds a payable invoice, so a need says to void it there — Brain does not
+    // pretend it unsent anything.
     const released = await act(piece.id, 'release-agreement', { agreementId: agreement.id, reason: 'The buyer stopped answering after agreeing.' });
     expect(released.status).toBe(200);
     expect((await act(piece.id, 'release-agreement', { agreementId: agreement.id, reason: 'again' })).status).toBe(200);
-    await advanceJourney(projectId);
-    deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
-    expect(deal.pnl.agreedRevenueCents).toBe(0);
+    const page = (await call('GET', `/api/projects/${projectId}/cash`)).body;
+    expect(page.whatBrainNeeds.some((one: any) => String(one.blockedAction).startsWith('Void invoice'))).toBe(true);
+    providerSays('inv-1', 'void');
+    await tick();
+    expect((await listInvoices({ projectId, opportunityId: piece.id }))[0]!.state).toBe('VOID');
+    const deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
+    expect(deal.pnl).toMatchObject({ agreedRevenueCents: 0, owedByBuyerCents: 0, invoiceableCents: 0 });
     expect((await cashPosition({ projectId, currency: 'USD' })).pipelineCents).toBe(0);
     expect(await moneyCount(piece.id)).toEqual({ PIPELINE_AGREED: 1, PIPELINE_RELEASED: 1 });
     // A release is not something the money route can write by itself.
     expect((await money({ opportunityId: piece.id, kind: 'PIPELINE_RELEASED', amountCents: 1, idempotencyKey: 'sneaky' })).status).toBe(422);
+    // And a released agreement is not invoiced again.
+    expect((await requestInvoice(piece.id)).status).toBe(422);
   });
 
   it('F04: contact fails at the provider — nothing recorded, nothing executing, a need names it', async () => {
@@ -554,75 +621,89 @@ describe('failure, refund and partial paths', () => {
     expect((await act(piece.id, 'agree', { amountCents: 1_000, deliverable: 'x', acceptanceCondition: 'y', evidenceKind: 'WRITTEN_ACCEPTANCE', evidenceRef: 'z' })).status).toBe(422);
   });
 
-  it('F05: the payment fails at the provider — still owed, nothing paid, nothing collected', async () => {
+  it('F05: the payment fails — the buyer does not pay, the provider writes it off, nothing is cash', async () => {
     await granted();
     provider('CONTACT_BUYER', 'msg');
     provider('QUOTE_AND_INVOICE', 'inv');
-    const pay = provider('ACCEPT_PAYMENT', 'pay');
-    pay.onSend = async () => ({ kind: 'REJECTED', category: 'PROVIDER_REJECTED', detail: 'card declined', retryable: false });
+    paymentReader();
     const piece = await qualified();
     await advanceWithinAuthority(projectId);
     await agree(piece.id, 50_000);
-    const occ = async () => (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id].nextOccurrence;
-    expect((await act(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await occ() })).status).toBe(200);
-    const tried = await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: await occ() });
-    expect(tried.body.result.kind).toBe('FAILED');
-    const deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
+    expect((await requestInvoice(piece.id)).status).toBe(200);
+    await tick();
+    // A failed card at the hosted page: the provider still says open.
+    await tick();
+    let deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
     expect(deal.paymentState).toBe('OUTSTANDING');
     expect(deal.pnl).toMatchObject({ owedByBuyerCents: 50_000, customerPaymentsCents: 0 });
+    // There is no charge for Brain to perform: payment is read, not taken.
+    const occ = (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id].nextOccurrence;
+    expect((await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: occ })).status).toBe(422);
+    providerSays('inv-1', 'uncollectible');
+    await tick();
+    deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
+    expect(deal.pnl).toMatchObject({ owedByBuyerCents: 0, customerPaymentsCents: 0, invoiceableCents: 50_000 });
     expect((await act(piece.id, 'collect')).status).toBe(422);
+    expect(await moneyCount(piece.id)).toEqual({ PIPELINE_AGREED: 1 });
   });
 
-  it('F06: the invoice outcome is unknown — no invoice row, no resend; settled by a person, exactly one', async () => {
+  it('F06: the invoice outcome is unknown — no resend across a restart, then the provider confirms it once', async () => {
     await granted();
     provider('CONTACT_BUYER', 'msg');
-    const inv = provider('QUOTE_AND_INVOICE', 'inv');
+    let inv = provider('QUOTE_AND_INVOICE', 'inv', 'EXTERNAL_RECONCILABLE');
     inv.onSend = async () => ({ kind: 'UNCERTAIN', reason: 'the connection reset after the request left' });
+    paymentReader();
     const piece = await qualified();
     await advanceWithinAuthority(projectId);
     await agree(piece.id, 60_000);
+    expect((await requestInvoice(piece.id)).status).toBe(200);
     const occ = async () => (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id].nextOccurrence;
     const first = await act(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await occ() });
     expect(first.body.result.kind).toBe('UNCERTAIN');
-    expect(await invoicesFor(piece.id)).toEqual([]);
+    expect((await listInvoices({ projectId, opportunityId: piece.id }))[0]!.state).toBe('UNCERTAIN');
+    // A second invoice request finds the same row rather than a new one.
+    expect((await requestInvoice(piece.id)).body.invoice.state).toBe('UNCERTAIN');
     await restart();
-    provider('QUOTE_AND_INVOICE', 'inv');
-    await operate(projectId);
+    inv = provider('QUOTE_AND_INVOICE', 'inv', 'EXTERNAL_RECONCILABLE');
+    paymentReader();
+    await tick();
     expect(outside.QUOTE_AND_INVOICE!.length).toBe(1);
-    expect(await invoicesFor(piece.id)).toEqual([]);
-    const resolved = await act(piece.id, 'resolve-effect', {
-      operationId: first.body.result.operationId,
-      happened: true,
-      receiptRef: 'INV-CHECKED-1',
-      note: 'Checked the invoicing provider; it was issued.',
-    });
-    expect(resolved.status).toBe(200);
-    await operate(projectId);
-    expect(await invoicesFor(piece.id)).toEqual([expect.objectContaining({ amountCents: 60_000, providerRef: 'INV-CHECKED-1' })]);
+    expect((await listInvoices({ projectId, opportunityId: piece.id }))[0]!.state).toBe('UNCERTAIN');
+    // The provider answers the question it was asked: it does exist.
+    inv.onReconcile = async () => ({ kind: 'FOUND', receiptRef: 'inv-found-1' });
+    await tick();
+    expect(await listInvoices({ projectId, opportunityId: piece.id })).toEqual([
+      expect.objectContaining({ state: 'ISSUED', providerInvoiceId: 'inv-found-1', amountCents: 60_000 }),
+    ]);
     expect(outside.QUOTE_AND_INVOICE!.length).toBe(1);
   });
 
   it('F07: partial payment, partial delivery and a refund — every figure from rows, no figure doubled', async () => {
     await granted();
     provider('CONTACT_BUYER', 'msg');
+    provider('QUOTE_AND_INVOICE', 'inv');
+    paymentReader();
     const piece = await qualified();
     await advanceWithinAuthority(projectId);
     const whole = await agree(piece.id, 100_000);
-    expect((await act(piece.id, 'record-invoice', { agreementId: whole.id, amountCents: 100_000, providerRef: 'INV-100' })).status).toBe(200);
-    expect((await money({ opportunityId: piece.id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, verifiedReference: 'pi-40', idempotencyKey: `payment:${piece.id}:pi-40` })).status).toBe(200);
+    expect((await requestInvoice(piece.id)).status).toBe(200);
+    await tick();
+    // The buyer pays part by bank transfer, recorded with its reference.
+    expect((await money({ opportunityId: piece.id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, verifiedReference: 'bank-40', idempotencyKey: `payment:${piece.id}:bank-40` })).status).toBe(200);
     let deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
     expect(deal.paymentState).toBe('PARTIALLY_PAID');
     expect(deal.pnl.owedByBuyerCents).toBe(60_000);
 
-    // Only part is delivered: the whole agreement is released and the part
-    // agreed afresh, so no row is edited and the first agreement stays readable.
+    // Only part is delivered: the whole agreement is released, the part agreed
+    // afresh, and the provider voids the original invoice.
     expect((await act(piece.id, 'release-agreement', { agreementId: whole.id, reason: 'Scope cut to the first form.' })).status).toBe(200);
+    providerSays('inv-1', 'void');
+    await tick();
     const part = await agree(piece.id, 40_000);
     await fulfilAndAccept(piece.id, part.id);
     await advanceJourney(projectId);
     deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
     expect(deal.pnl).toMatchObject({ agreedRevenueCents: 40_000, owedByBuyerCents: 0, invoiceableCents: 0 });
-    expect((await invoicesFor(piece.id))[0]!.state).toBe('VOID');
     expect(deal.paymentState).toBe('PAID_UNSETTLED');
 
     // A refund of part of it: never more than was paid.
@@ -635,8 +716,7 @@ describe('failure, refund and partial paths', () => {
     expect(deal.paymentState).toBe('PARTIALLY_PAID');
     // Paid net 30,000 against 40,000 agreed: not collectable.
     expect((await act(piece.id, 'collect')).status).toBe(422);
-    const position = await cashPosition({ projectId, currency: 'USD' });
-    expect(position.availableFundsCents).toBe(20_000); // settled 30,000 − refunded 10,000
+    expect((await cashPosition({ projectId, currency: 'USD' })).availableFundsCents).toBe(20_000);
   });
 
   it('F08: fulfilment fails — the buyer rejects the work and nothing collects', async () => {

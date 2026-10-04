@@ -22,23 +22,66 @@
  * settled reads as `unsettledCents`, and a settlement is never a second sale —
  * contribution is read from payments, never from settlements.
  */
-import { totalsByKind } from '../../../repos/cashLedger.ts';
+import { moneyEntryByKey, totalsByKind } from '../../../repos/cashLedger.ts';
+import { listInvoices } from '../../../repos/cashInvoices.ts';
 import { listCommitments } from '../../../repos/cashAuthority.ts';
 import { actionsFor } from '../../../repos/cashActions.ts';
-import {
-  agreementsFor,
-  fulfilmentsFor,
-  invoicesFor,
-  observationsFor,
-} from '../../../repos/cashJourney.ts';
+import { agreementsFor, fulfilmentsFor, observationsFor } from '../../../repos/cashJourney.ts';
 import { commercialOperationsFor } from '../effects.ts';
+import type { CashAgreement, CashFulfilment, CashObservation } from '../../../domain/cashJourney.ts';
 import type {
-  CashAgreement,
-  CashFulfilment,
   CashInvoice,
-  CashObservation,
-} from '../../../domain/cashJourney.ts';
-import type { CashOpportunity, CashMoneyKind } from '../../../domain/types.ts';
+  CashInvoiceState,
+  CashMoneyEntry,
+  CashOpportunity,
+  CashMoneyKind,
+} from '../../../domain/types.ts';
+
+/** The ledger key an agreement's PIPELINE_AGREED entry is written under. */
+export function agreementLedgerKey(agreementId: string): string {
+  return `agreement:${agreementId}`;
+}
+
+/** Billed: the provider confirmed it, whatever has happened to its money since. */
+export const BILLED_INVOICE_STATES: readonly CashInvoiceState[] = ['ISSUED', 'PAID', 'SETTLED'];
+/** Billed, or on its way to being billed, or of unknown outcome: never invoiced again. */
+export const LIVE_INVOICE_STATES: readonly CashInvoiceState[] = ['DRAFTED', 'UNCERTAIN', 'ISSUED', 'PAID', 'SETTLED'];
+
+/**
+ * The PIPELINE_AGREED entry each agreement wrote. An invoice names the entry it
+ * bills, so which agreement an invoice bills is this join and nothing else.
+ */
+async function entriesFor(agreements: CashAgreement[]): Promise<Map<string, CashMoneyEntry>> {
+  const out = new Map<string, CashMoneyEntry>();
+  for (const agreement of agreements) {
+    const entry = await moneyEntryByKey(agreement.projectId, agreementLedgerKey(agreement.id));
+    if (entry) out.set(agreement.id, entry);
+  }
+  return out;
+}
+
+/**
+ * Live agreements no live invoice bills yet, oldest first, with the ledger
+ * entry an invoice for each must name. The one reader `invoicing.ts` asks
+ * before drafting, so an amount with no agreement behind it is never billed
+ * and an agreement already billed is never billed twice.
+ */
+export async function invoiceableAgreements(input: {
+  projectId: string;
+  opportunityId: string;
+}): Promise<{ agreement: CashAgreement; entry: CashMoneyEntry }[]> {
+  const agreements = (await agreementsFor(input.opportunityId)).filter((one) => one.state === 'AGREED');
+  const entries = await entriesFor(agreements);
+  const invoices = await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId });
+  const out: { agreement: CashAgreement; entry: CashMoneyEntry }[] = [];
+  for (const agreement of agreements) {
+    const entry = entries.get(agreement.id);
+    if (!entry) continue;
+    const billed = invoices.some((one) => one.pipelineEntryId === entry.id && LIVE_INVOICE_STATES.includes(one.state));
+    if (!billed) out.push({ agreement, entry });
+  }
+  return out;
+}
 
 /** The stage of the journey, read from rows. Ordered: each needs the last. */
 export const JOURNEY_STAGES = [
@@ -126,21 +169,6 @@ export interface DealPosition {
 
 const num = (t: Partial<Record<CashMoneyKind, number>>, k: CashMoneyKind): number => Number(t[k] ?? 0);
 
-/** Each live agreement's room for another invoice, oldest first. */
-export function invoiceRoomByAgreement(
-  agreements: CashAgreement[],
-  invoices: CashInvoice[],
-): { agreement: CashAgreement; roomCents: number }[] {
-  return agreements
-    .filter((one) => one.state === 'AGREED')
-    .map((agreement) => {
-      const billed = invoices
-        .filter((one) => one.agreementId === agreement.id && one.state === 'ISSUED')
-        .reduce((sum, one) => sum + one.amountCents, 0);
-      return { agreement, roomCents: Math.max(0, agreement.amountCents - billed) };
-    });
-}
-
 export async function dealPosition(input: {
   opportunity: CashOpportunity;
   currency: string;
@@ -149,7 +177,7 @@ export async function dealPosition(input: {
   const [agreements, invoices, fulfilments, observations, actions, totals, operations, commitments] =
     await Promise.all([
       agreementsFor(opportunity.id),
-      invoicesFor(opportunity.id),
+      listInvoices({ projectId: opportunity.projectId, opportunityId: opportunity.id }),
       fulfilmentsFor(opportunity.id),
       observationsFor(opportunity.id),
       actionsFor(opportunity.id),
@@ -161,8 +189,14 @@ export async function dealPosition(input: {
   const live = agreements.filter((one) => one.state === 'AGREED' && one.currency === currency);
   const agreedRevenue = live.reduce((sum, one) => sum + one.amountCents, 0);
   const ledgerAgreed = Math.max(0, num(totals, 'PIPELINE_AGREED') - num(totals, 'PIPELINE_RELEASED'));
-  const issued = invoices.filter((one) => one.state === 'ISSUED' && one.currency === currency);
-  const invoiced = issued.reduce((sum, one) => sum + one.amountCents, 0);
+  const ours = invoices.filter((one) => one.currency === currency);
+  const invoiced = ours
+    .filter((one) => BILLED_INVOICE_STATES.includes(one.state))
+    .reduce((sum, one) => sum + one.amountCents, 0);
+  // Drafted or of unknown outcome: not billed, and not billable again either.
+  const pendingInvoice = ours
+    .filter((one) => one.state === 'DRAFTED' || one.state === 'UNCERTAIN')
+    .reduce((sum, one) => sum + one.amountCents, 0);
 
   const payments = num(totals, 'CUSTOMER_PAYMENT');
   const refunds = num(totals, 'REFUND');
@@ -179,7 +213,7 @@ export async function dealPosition(input: {
   const owed = Math.max(0, invoiced - payments);
   // What an invoice that expired unpaid left is billable again; what was paid
   // against it is not.
-  const invoiceable = Math.max(0, agreedRevenue - Math.max(invoiced, paidNet));
+  const invoiceable = Math.max(0, agreedRevenue - Math.max(invoiced + pendingInvoice, paidNet));
   const paymentInFlight = operations.some(
     (one) =>
       one.action === 'ACCEPT_PAYMENT' &&

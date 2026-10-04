@@ -5860,6 +5860,12 @@ named, and none of them has a reader, because there is nothing to read. Nothing
 here forms a view about what settling a question is worth, for the same reason
 `judgment.ts` does not.
 
+**That paragraph was true when it was written and is corrected in §52 rather
+than edited here.** Three of those capabilities now have readers: a deployment
+that sets the messaging and billing secrets can write to a buyer, issue an
+invoice and read its payment and settlement back. One that does not reads
+exactly as this paragraph describes.
+
 
 ## 31. A validated finding belongs to the Brain. Everything else belongs to its project.
 
@@ -12009,6 +12015,55 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   clears only by consent in Claude. Brain answers every retry correctly and
   fast; it cannot make a client retry.
 
+## 52. A provider is a deployment secret and an effect class, never a boolean.
+
+`SEND_A_MESSAGE`, `ISSUE_AN_INVOICE` and `TAKE_A_PAYMENT` read MISSING because
+nothing implemented them. `server/services/cash/providers/` and
+`services/cash/invoicing.ts` are the adapters, and `docs/CASH-PROVIDERS.md` is
+the setup. Everything here is an entrance to Step 6's effects engine; nothing is
+a second credential framework or a second idempotency mechanism.
+
+- **The credential is a deployment secret, exactly like a Routine's bearer.**
+  `BRAIN_MESSAGING_PROVIDER` / `RESEND_API_KEY` / `BRAIN_MESSAGING_FROM` and
+  `BRAIN_BILLING_PROVIDER` / `STRIPE_SECRET_KEY`, read per call and never
+  stored, logged, put in a URL or returned. A provider error body is reduced to
+  its type and code, because provider messages echo requests; the suite asserts
+  the key appears in no stored row after a 401 that echoed it.
+- **PRESENT is registered *and* usable now.** Boot registers only the provider a
+  deployment selected; `health()` re-reads its configuration on every capability
+  reading, so a removed secret reads MISSING without a restart. A live key check
+  sends nothing and is the operator's (`cash-report --probe`), never the tick's.
+- **Each adapter declares the class it can honestly keep.** Resend is
+  `EXTERNAL_OPAQUE`: its idempotency key lives twenty-four hours and an email
+  cannot be looked up by Brain's identity, so a timeout stops at UNCERTAIN with
+  a need and is never resent — the key is still sent, inside its window. Stripe
+  is `EXTERNAL_RECONCILABLE`: five keyed requests, every object tagged
+  `metadata[brain_invoice]`, and after an ambiguous send the engine *searches*
+  instead of sending. Stripe's search lags, so an empty search is INCONCLUSIVE
+  and never ABSENT — ABSENT would license a second invoice.
+- **A 5xx, a reset, a timeout or an unreadable 2xx is UNCERTAIN; only a
+  documented "not processed" is a refusal, and only a 429 is a retryable one**
+  (invariant 26). A retryable refusal leaves the operation open, so a draft stays
+  a draft rather than becoming FAILED.
+- **Brain supplies no term.** The recipient is the one address the buyer's
+  published channel names — none or two is a need, never a pick. The message is
+  the card's offer in a fixed template with an opt-out, at most three per pass,
+  one recipient each. An invoice's amount and currency are a `PIPELINE_AGREED`
+  entry; its customer, tax treatment (`NO_TAX_CHARGED`, `TAX_EXEMPT`,
+  `REVERSE_CHARGE` — Brain computes no tax) and due date are a person's.
+- **Paid and settled are two readings and two entries.** `CUSTOMER_PAYMENT` when
+  Stripe says the invoice is paid (under `ACCEPT_PAYMENT`), `SETTLEMENT` for the
+  gross and a `COST` for the fee when its balance transaction is `available`,
+  each keyed on the invoice so a re-read records nothing. A payment outside
+  Stripe is settled by a person, because Stripe holds no balance for it.
+
+**What is true today:** the adapters, the invoice table (`104_cash_invoices.sql`
+/ pg `095_cash_invoices.sql`), the tick pass and the status surface exist and
+are tested against fake providers (`tests/commercialProviders.test.ts`). No
+real buyer has been written to, no real invoice issued and no real money moved,
+and no provider secret has been set on the deployment — so all three still read
+MISSING in production until the owner sets them.
+
 ## Repository map
 
 ```
@@ -12199,6 +12254,9 @@ server/
       commission.ts     every commissioning step in order, and one READY / NOT READY answer
       lab.ts            the eight test modes, and the five this version refuses to run
     cash/
+      providers/        Resend and Stripe adapters, their config and status (§52)
+      invoicing.ts      an agreed amount invoiced, paid and settled — two entries
+      outreach.ts       the message a buyer is sent, composed from the card
       access.ts         where the shared frontier ends and a private job begins
       shared.ts         what every member may read, built from the columns it names
       lifecycle.ts      activating a sprint, giving it somewhere to file, winding it down

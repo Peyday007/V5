@@ -42,9 +42,6 @@ export type AgreementEvidenceKind = (typeof AGREEMENT_EVIDENCE_KINDS)[number];
 export const AGREEMENT_STATES = ['AGREED', 'RELEASED'] as const;
 export type AgreementState = (typeof AGREEMENT_STATES)[number];
 
-export const INVOICE_STATES = ['ISSUED', 'VOID', 'EXPIRED'] as const;
-export type InvoiceState = (typeof INVOICE_STATES)[number];
-
 export const FULFILMENT_PATHS = [
   'BRAIN_RESEARCH',
   'FACTORY_SOFTWARE',
@@ -131,25 +128,6 @@ export interface CashAgreement {
   releasedReason: string | null;
   releasedBy: string | null;
   releasedAt: string | null;
-  requestKey: string;
-  recordedBy: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CashInvoice {
-  id: string;
-  projectId: string;
-  opportunityId: string;
-  agreementId: string;
-  amountCents: number;
-  currency: string;
-  issuedBy: 'BRAIN' | 'PERSON';
-  providerRef: string;
-  operationId: string | null;
-  dueAt: string | null;
-  state: InvoiceState;
-  stateReason: string | null;
   requestKey: string;
   recordedBy: string;
   createdAt: string;

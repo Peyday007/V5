@@ -1987,6 +1987,7 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
                     <DealJourney
                       deal={deal}
                       currency={view.myCash.position.currency}
+                      projectId={view.mode?.projectId}
                       mayAct={page.capabilities.mayActOnJob}
                       onChanged={onChanged}
                     />
