@@ -5822,6 +5822,29 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   test journeys had recorded the money unattributed, or after collecting; they
   were wrong about the order and are corrected rather than the guard loosened.
 
+- **Every walk that reached READY did it with a person typing the card, so
+  "Brain prepares things worth testing by itself" had never been shown — and
+  driving it without the person found two writers that did not exist.** The
+  load-bearing `exposure` field (`peak_funding_cents`) was owned by
+  `BRAIN_RESEARCH`, `reconcileDiscoverableGaps` raised a need for it, and
+  `applyOne` then returned false because `COLUMN` had no entry for it: the need
+  sat open beside a finished mission for ever and every autonomous piece stopped
+  at QUALIFIED. And a researched `price` wrote the claim's *sentence* into the
+  integer `price_cents` — stored as text on SQLite, refused by Postgres, which
+  throws out of `applyResearchAnswers` and stops every pass after it in the
+  operating step. Both are one rule now: a money field is read through
+  `readMoneyFigures` (`MONEY_FIELD`, `figureFor` in `answers.ts`), taking the
+  unfavourable end — the lowest published price, the highest published cost —
+  and a claim with no figure answers nothing and is reported as such. The
+  exposure is also proposed from published direct costs that state a figure,
+  and never from a cost sentence that does not. `tests/cashAutonomousFunnel`
+  walks an ACTIVE sprint with no handcrafted opportunity from discovery to
+  READY_TO_TEST with no `PERSON` fact on the card, and fails at QUALIFIED,
+  naming `exposure`, against the code it replaced — on both backends.
+  Staleness, early retirement, target replenishment, configurable portfolio
+  concurrency, the software-need handoff to the Factory and a funnel reading
+  are not built here; they are `objectives/cash-autonomy-*.json`.
+
 **What this version does not do, and says so.** It records the authorization and
 the money; it does not itself contact a buyer, issue an invoice or move funds. A
 missing integration is a `cash_needs` row with a recommended way forward, which

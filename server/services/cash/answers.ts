@@ -98,7 +98,48 @@ export const COLUMN: Record<string, string> = {
   fulfillment: 'fulfillment_owner',
   economics: 'economics_note',
   nextAction: 'next_action',
+  /*
+   * The exposure, which was load-bearing and answered by nothing.
+   *
+   * `evidenceCard` refuses readiness while it is blank, `reconcileDiscoverableGaps`
+   * raised a research need for it, and `applyOne` then returned false because
+   * there was no column to put the answer in — so the need sat open beside a
+   * finished mission for ever and no piece could reach READY_TO_TEST without a
+   * person typing a number. §24's *waiting nobody can resolve*, at a column.
+   */
+  exposure: 'peak_funding_cents',
 };
+
+/**
+ * Which columns hold minor units rather than prose, and which end of a stated
+ * range each one takes.
+ *
+ * A research claim is a sentence, and writing the sentence into an integer
+ * column is wrong twice: SQLite stores the text and `money()` renders nonsense,
+ * and Postgres refuses the statement, which throws out of `applyResearchAnswers`
+ * and stops every pass after it in the operating step. So a money field is read
+ * through `readMoneyFigures` — which refuses bare numbers, shorthand and
+ * percentages, so its failure mode is missing a figure rather than inventing
+ * one — and a claim with no figure in it does not answer a money field.
+ *
+ * The end chosen is the unfavourable one in both directions: the lowest price
+ * anybody published, and the highest cost. An unknown may never be read as the
+ * favourable assumption, and the end of a range is a choice between two
+ * published figures rather than an estimate.
+ */
+export const MONEY_FIELD: Readonly<Record<string, 'LOW' | 'HIGH'>> = Object.freeze({
+  price: 'LOW',
+  exposure: 'HIGH',
+});
+
+/** The figure a sentence states for a money field, or null when it states none. */
+export function figureFor(field: string, text: string, currency: string): number | null {
+  const end = MONEY_FIELD[field];
+  if (!end) return null;
+  const figures = readMoneyFigures(text, currency);
+  if (figures.length === 0) return null;
+  return end === 'LOW' ? figures[0]!.cents : figures[figures.length - 1]!.cents;
+}
 
 export interface AppliedAnswer {
   needId: string;
@@ -259,14 +300,45 @@ export async function applyResearchAnswers(projectId: string): Promise<ResearchA
       });
       continue;
     }
-    const claim = assessed.supporting[0]!;
-    const applied = await applyOne({
-      opportunity: assessed.opportunity,
-      field: assessed.field,
-      need: assessed.need,
-      claim,
-    });
-    if (!applied) continue;
+    /*
+     * The first supporting claim that actually answers the field.
+     *
+     * Taking `supporting[0]` alone was right while every field took prose; a
+     * money field takes only a claim that states a figure, and the one that
+     * does may not be first. A finished mission none of whose claims can
+     * answer the field is reported rather than skipped silently, because an
+     * open need beside a DONE mission otherwise reads as research in progress.
+     */
+    let claim: ResearchClaim | null = null;
+    for (const candidate of assessed.supporting) {
+      if (
+        await applyOne({
+          opportunity: assessed.opportunity,
+          field: assessed.field,
+          need: assessed.need,
+          claim: candidate,
+        })
+      ) {
+        claim = candidate;
+        break;
+      }
+    }
+    if (!claim) {
+      if (MONEY_FIELD[assessed.field]) {
+        out.unanswered.push({
+          needId: assessed.need.id,
+          opportunityId: assessed.opportunity.id,
+          field: assessed.field,
+          state: 'NO_SUPPORT',
+          detail:
+            `The research finished and none of its ${assessed.supporting.length} gated ` +
+            `claim${assessed.supporting.length === 1 ? '' : 's'} states a figure in ` +
+            `${assessed.opportunity.currency}, so the ${assessed.field} stays unknown rather ` +
+            'than being read out of a sentence.',
+        });
+      }
+      continue;
+    }
     out.applied.push({
       needId: assessed.need.id,
       opportunityId: assessed.opportunity.id,
@@ -298,7 +370,12 @@ async function applyOne(input: {
   if (!mayReplace(existing, 'EVIDENCE')) return false;
 
   const value = clamp(input.claim.claim, 600);
-  const patch: Record<string, string | null> = { [column]: value };
+  const patch: Record<string, string | number | null> = { [column]: value };
+  if (MONEY_FIELD[input.field]) {
+    const cents = figureFor(input.field, input.claim.claim, input.opportunity.currency);
+    if (cents === null) return false;
+    patch[column] = cents;
+  }
   /*
    * The buying signal carries its observation date or it is not evidence.
    *
@@ -523,6 +600,46 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
   }
 
   // ---------------------------------------------------------------------
+  // The exposure, read from what the costs are published at
+  // ---------------------------------------------------------------------
+  //
+  // The most money out before any comes back is a reading of the published
+  // direct costs, and only where they state a figure: the highest one, because
+  // a cost is the unfavourable direction and the top of a range is what could
+  // actually be spent. A cost sentence with no figure in it — "nothing to buy",
+  // "a few tools" — proposes nothing, because a zero read out of prose is the
+  // single most flattering thing this card could say.
+  const costs = await cardFact(opportunity.id, 'directCosts');
+  const costCents =
+    costs && costs.kind === 'EVIDENCE' ? figureFor('exposure', costs.value, opportunity.currency) : null;
+  let exposureCents = opportunity.peakFundingCents;
+  if (costCents !== null) {
+    exposureCents = exposureCents ?? costCents;
+    out.terms.push({
+      field: 'exposure',
+      cents: costCents,
+      value:
+        `At most ${formatMoney(costCents, opportunity.currency)} out before the buyer pays — ` +
+        'the highest direct cost the sources publish.',
+      basis: `The published direct costs${costs!.claimId ? ` (claim ${costs!.claimId})` : ''}: ` +
+        `${clamp(costs!.value, 200)}.`,
+      assumptions:
+        'That the published costs are the whole of what has to be paid before the money ' +
+        'arrives, and that they are paid once rather than per attempt.',
+      uncertainty:
+        'A cost the sources do not publish is not in this figure, and an unsuccessful test ' +
+        'spends it without anything coming back.',
+    });
+  } else if (opportunity.peakFundingCents === null) {
+    out.withheld.push({
+      field: 'exposure',
+      because:
+        'No published cost on this card states a figure, so the most money out before payment ' +
+        'is unknown. Reading zero out of that would make the piece look free to test.',
+    });
+  }
+
+  // ---------------------------------------------------------------------
   // Delivery, and who does it
   // ---------------------------------------------------------------------
   const canResearch = await readCapability('RESEARCH_A_QUESTION');
@@ -551,7 +668,7 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
   // The margin, which needs both halves
   // ---------------------------------------------------------------------
   const price = low?.cents ?? opportunity.priceCents;
-  const exposure = opportunity.peakFundingCents;
+  const exposure = exposureCents;
   if (price !== null && price !== undefined && exposure !== null) {
     const margin = price - exposure;
     const hours = opportunity.humanHours;

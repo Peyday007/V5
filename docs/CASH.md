@@ -405,6 +405,25 @@ the evidence that work began.
 attempt or stops unrelated work. An open need is a valid execution state and
 Brain carries on around it.
 
+### 10b. The autonomous funnel, end to end
+
+`tests/cashAutonomousFunnel.test.ts` is the acceptance for "Brain finds and
+prepares things worth testing without being fed": an ACTIVE sprint with no
+handcrafted opportunity, a person doing nothing but pressing Start, and the
+piece walking SIGNAL → CANDIDATE → QUALIFIED → READY_TO_TEST with every card
+fact either gated research (`EVIDENCE`) or Brain's own `RECOMMENDATION`.
+
+Money fields are read from figures, never prose: `price` takes the lowest
+figure a source states, `exposure` the highest published cost, and a claim
+with no figure in the sprint's currency answers neither. Before this, a
+researched exposure had no column to land in (every autonomous piece stopped at
+QUALIFIED) and a researched price wrote a sentence into an integer column.
+
+The rest of the autonomous loop — staleness, early retirement, replenishment to
+a target, configurable portfolio concurrency, handing a blocking software need
+to the Factory, and a funnel reading — is specified in
+`objectives/cash-autonomy-1…6.json`.
+
 ---
 
 ## 11. What this deliberately does not do
