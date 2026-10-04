@@ -20,7 +20,7 @@ import type { DealFinding, PuzzleFinding, PuzzleProductClass } from '../domain/t
 import type { OpportunitySignal } from '../domain/types.ts';
 import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
-import { chargeFragments } from './russellAuthority.ts';
+import { chargeFragments, settleReservation } from './russellAuthority.ts';
 import {
   parseDependencies,
   serializeDependencies,
@@ -54,6 +54,8 @@ import { buildUpdate, fromBool, newId, nowIso, parseJson, toBool, toJson } from 
 
 function mapOrchestration(row: ResearchOrchestrationRow): ResearchOrchestration {
   return {
+    goalId: row.goal_id ?? null,
+    goalPacketKey: row.goal_packet_key ?? null,
     unresolvedGapPolicy: row.unresolved_gap_policy === 'RECORD_GAPS' ? 'RECORD_GAPS' : null,
     unresolvedGapAuthorizedBy: row.unresolved_gap_authorized_by ?? null,
     unresolvedGapAuthorizedAt: row.unresolved_gap_authorized_at ?? null,
@@ -588,6 +590,13 @@ export async function createFragments(inputs: CreateFragmentInput[]): Promise<Re
       );
     }
   });
+  /*
+   * Settled only now that the fragments exist, so a created fragment counts for
+   * ever and a crash before this point leaves the reservations HELD to expire
+   * and refund themselves. Left HELD they stopped counting after their TTL,
+   * which handed a capped goal back every fragment it had already created.
+   */
+  for (const reservationId of charge.reservationIds) await settleReservation(reservationId);
   const loaded = await Promise.all(ids.map((id) => getFragment(id)));
   return loaded.filter((f): f is ResearchFragment => f !== null);
 }
