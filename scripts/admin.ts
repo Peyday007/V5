@@ -38,7 +38,7 @@
  *   npm run admin -- workers archive <name> --admin someone@example.com
  *   npm run admin -- research start <project> --admin someone@example.com
  *   npm run admin -- research start <project> --goal <goalId> --packet-key <key> [--bucket <id>] --admin someone@example.com
- *   npm run admin -- research goal create <project> --name "…" --max-packets N --max-fragments N [--deadline ISO] --admin someone@example.com
+ *   npm run admin -- research goal create <project> --name "…" --max-packets N --max-fragments N --deadline ISO --admin someone@example.com
  *   npm run admin -- research goal show <goalId>
  *   npm run admin -- research goal list <project>
  *   npm run admin -- projects list
@@ -1252,10 +1252,9 @@ async function main(): Promise<void> {
         const name = flag('name') ?? fail('Pass --name.');
         const maxPackets = Number(flag('max-packets') ?? fail('Pass --max-packets N.'));
         const maxFragments = Number(flag('max-fragments') ?? fail('Pass --max-fragments N.'));
-        // The ledger needs a real deadline, so an omitted one is stated rather than left implicit.
-        const deadlineFlag = flag('deadline');
-        const deadline = deadlineFlag ?? new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
-        if (!deadlineFlag) console.log(`  no --deadline given; using ${deadline} (30 days from now)`);
+        // The ledger needs a real deadline and the route requires one, so the terminal does too:
+        // a ceiling nobody chose is not one the person set.
+        const deadline = flag('deadline') ?? fail('Pass --deadline ISO: a research goal needs a date it ends.');
         let goalId: string;
         try {
           goalId = (
