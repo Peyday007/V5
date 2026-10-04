@@ -40,6 +40,7 @@ import {
   createFragments,
   createOrchestration,
   findOrchestrationByGoalPacket,
+  FragmentBudgetRefused,
   getOrchestration,
   PacketBudgetRefused,
   listFragments,
@@ -51,7 +52,7 @@ import { runTypeForNewPacket } from '../runArtifacts.ts';
 import { inventoryProject } from '../reconcile/plan.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
 import { workType } from '../queue/workTypes.ts';
-import { advancePacket, type AdvanceResult } from './packetRunner.ts';
+import { advancePacket, refusedByBudget, type AdvanceResult } from './packetRunner.ts';
 import { getApprovalEnvelope } from './approvalEnvelope.ts';
 
 /**
@@ -592,19 +593,46 @@ export async function placePlan(
     coverage.decisions.map((decision) => [decision.fragmentKey, decision.requirementId]),
   );
 
-  return await createFragments(
-    plan.map((fragment, index) => {
-      const requirementId = requirementByKey.get(fragment.fragmentKey);
-      return {
-        ...fragment,
-        orchestrationId: orchestration.id,
+  try {
+    return await createFragments(
+      plan.map((fragment, index) => {
+        const requirementId = requirementByKey.get(fragment.fragmentKey);
+        return {
+          ...fragment,
+          orchestrationId: orchestration.id,
+          projectId: orchestration.projectId,
+          layerId: orchestration.layerId,
+          fragmentIndex: index,
+          requirementIds: requirementId ? [requirementId] : [],
+        };
+      }),
+    );
+  } catch (error) {
+    if (!(error instanceof FragmentBudgetRefused)) throw error;
+    // A plan over the fragment ceiling is a decision for a person, not a
+    // failure: nothing was created and earlier packets' fragments are
+    // untouched. The packet parks at NEEDS_HUMAN naming the ceiling.
+    if (orchestration.goalId) {
+      await recordEvent({
         projectId: orchestration.projectId,
         layerId: orchestration.layerId,
-        fragmentIndex: index,
-        requirementIds: requirementId ? [requirementId] : [],
-      };
-    }),
-  );
+        entityType: 'research_goal',
+        entityId: orchestration.goalId,
+        eventType: 'RESEARCH_GOAL_BUDGET_STOPPED',
+        payload: {
+          goalId: orchestration.goalId,
+          ceiling: 'FRAGMENTS',
+          orchestrationId: orchestration.id,
+          reason: error.detail,
+        },
+      });
+    }
+    await refusedByBudget(
+      orchestration,
+      `${orchestration.goalId ? "The research goal's FRAGMENTS ceiling" : 'The fragment allowance'} stopped this plan: ${error.detail}`,
+    );
+    return [];
+  }
 }
 
 /** How many connected workers could actually claim what was just queued. */

@@ -19,6 +19,7 @@ import {
   GoalBudgetExhausted,
   GoalBudgetMoneyRefused,
   NoSuchTarget,
+  placePlan,
   startPacket,
   type ApprovalPolicy,
 } from '../server/services/research/startPacket.ts';
@@ -226,10 +227,36 @@ describe('GOAL_BUDGET plan approval by the runner', () => {
     const before = (await currentFragments(first.orchestration.id)).map((f) => f.id);
 
     const second = await start(policy(goal.id, 'b'));
-    await expect(plan(second.orchestration.id, 2)).rejects.toThrow();
+    // Placed the way a compiled plan is: the refusal parks the packet rather
+    // than escaping as an exception.
+    const secondRow = (await getOrchestration(second.orchestration.id))!;
+    const placed = await placePlan(
+      secondRow,
+      Array.from({ length: 2 }, (_unused, index) => ({
+        geography: 'Michigan',
+        requiredEvidence: [{ id: 'official_source', description: 'a published record', necessity: 'REQUIRED' }],
+        acceptableSourceTypes: ['an official publication'],
+        excludedSourceTypes: ['a forecast presented as a current fact'],
+        completionCriteria: ['one dated published record'],
+        minIndependentSources: 1,
+        maxRepairs: 2,
+        fragmentKey: `over-${index}`,
+        question: `Over the ceiling ${index}?`,
+        dependsOn: [],
+        attempt: 1,
+      })) as unknown as Parameters<typeof placePlan>[1],
+    );
+    expect(placed).toEqual([]);
     await advancePacket(second.orchestration.id);
 
     expect((await currentFragments(second.orchestration.id)).length).toBe(0);
+    const parked = (await getOrchestration(second.orchestration.id))!;
+    expect(parked.status).toBe('NEEDS_HUMAN');
+    expect(parked.failureReason).toMatch(/FRAGMENTS ceiling/);
+    const stopped = (await listEvents(fixture.project.id)).filter(
+      (event) => event.eventType === 'RESEARCH_GOAL_BUDGET_STOPPED',
+    );
+    expect(stopped.some((event) => (event.payload as { ceiling?: string }).ceiling === 'FRAGMENTS')).toBe(true);
     expect((await currentFragments(first.orchestration.id)).map((f) => f.id)).toEqual(before);
   });
 
