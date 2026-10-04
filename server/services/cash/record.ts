@@ -75,7 +75,7 @@ export async function executionRecord(input: {
     opportunityId: opportunity.id,
     currency,
   });
-  const agreed = Number(totals.PIPELINE_AGREED ?? 0);
+  const agreed = Math.max(0, Number(totals.PIPELINE_AGREED ?? 0) - Number(totals.PIPELINE_RELEASED ?? 0));
   const payments = Number(totals.CUSTOMER_PAYMENT ?? 0);
   const settlements = Number(totals.SETTLEMENT ?? 0);
   const refunds = Number(totals.REFUND ?? 0);

@@ -102,6 +102,19 @@ import {
   settleSpend,
 } from '../services/cash/opportunities.ts';
 import { recordFurtherAction } from '../services/cash/actions.ts';
+import {
+  acceptDelivery,
+  agreementsFor,
+  closeInvoice,
+  createFulfilment,
+  endFulfilmentWith,
+  recordAgreement,
+  recordInvoiceByPerson,
+  recordObservation,
+  recordPerformed,
+  releaseAgreement,
+} from '../services/cash/journey/deal.ts';
+import { getFulfilment, getInvoice } from '../repos/cashJourney.ts';
 import { performCommercialAction, resolveCommercialEffect } from '../services/cash/perform.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
 import { cashView } from '../services/cash/view.ts';
@@ -907,6 +920,134 @@ cashRouter.post(
           }),
         );
         return { result: value, message };
+      }
+      /*
+       * The first-dollar journey after the first real action
+       * (`services/cash/journey/deal.ts`). Every id a body names is resolved
+       * against *this* piece, so a call can never reach another piece's row.
+       */
+      case 'observe': {
+        const kind = requiredString(body['kind'], 'kind');
+        const { value, message } = taken(
+          await recordObservation({
+            opportunityId: opportunity.id,
+            kind,
+            source: 'PERSON',
+            evidenceRef: requiredString(body['evidenceRef'], 'evidenceRef'),
+            amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 0 }) ?? null,
+            note: optionalString(body['note'], 'note') ?? null,
+            actorRef: principal.id,
+          }),
+        );
+        return { observation: value, message };
+      }
+      case 'agree': {
+        const mode = await getCashMode(opportunity.projectId);
+        const { value, message } = taken(
+          await recordAgreement({
+            opportunityId: opportunity.id,
+            amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 1 }) ?? 0,
+            currency: optionalString(body['currency'], 'currency') ?? mode?.currency ?? '',
+            deliverable: requiredString(body['deliverable'], 'deliverable'),
+            acceptanceCondition: requiredString(body['acceptanceCondition'], 'acceptanceCondition'),
+            evidenceKind: requiredString(body['evidenceKind'], 'evidenceKind'),
+            evidenceRef: requiredString(body['evidenceRef'], 'evidenceRef'),
+            observationId: optionalString(body['observationId'], 'observationId') ?? null,
+            actorRef: principal.id,
+          }),
+        );
+        return { agreement: value, message };
+      }
+      case 'release-agreement': {
+        const agreementId = requiredString(body['agreementId'], 'agreementId');
+        const owned = (await agreementsFor(opportunity.id)).some((one) => one.id === agreementId);
+        if (!owned) throw unprocessable('No agreement with that id on this piece.');
+        const { value, message } = taken(
+          await releaseAgreement({
+            agreementId,
+            reason: requiredString(body['reason'], 'reason'),
+            actorRef: principal.id,
+          }),
+        );
+        return { agreement: value, message };
+      }
+      case 'record-invoice': {
+        const { value, message } = taken(
+          await recordInvoiceByPerson({
+            opportunityId: opportunity.id,
+            agreementId: requiredString(body['agreementId'], 'agreementId'),
+            amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 1 }) ?? 0,
+            providerRef: requiredString(body['providerRef'], 'providerRef'),
+            dueAt: optionalString(body['dueAt'], 'dueAt') ?? null,
+            actorRef: principal.id,
+          }),
+        );
+        return { invoice: value, message };
+      }
+      case 'close-invoice': {
+        const invoiceId = requiredString(body['invoiceId'], 'invoiceId');
+        const invoice = await getInvoice(invoiceId);
+        if (!invoice || invoice.opportunityId !== opportunity.id) {
+          throw unprocessable('No invoice with that id on this piece.');
+        }
+        const to = requiredString(body['to'], 'to');
+        if (to !== 'VOID' && to !== 'EXPIRED') throw badRequest('"to" is VOID or EXPIRED.');
+        const { value, message } = taken(
+          await closeInvoice({
+            invoiceId,
+            to,
+            reason: requiredString(body['reason'], 'reason'),
+            actorRef: principal.id,
+          }),
+        );
+        return { invoice: value, message };
+      }
+      case 'fulfil': {
+        const { value, message } = taken(
+          await createFulfilment({
+            opportunityId: opportunity.id,
+            agreementId: requiredString(body['agreementId'], 'agreementId'),
+            path: requiredString(body['path'], 'path'),
+            workKind: requiredString(body['workKind'], 'workKind'),
+            workRef: requiredString(body['workRef'], 'workRef'),
+            actorRef: principal.id,
+          }),
+        );
+        return { fulfilment: value, message };
+      }
+      case 'performed':
+      case 'accept-delivery':
+      case 'end-fulfilment': {
+        const fulfilmentId = requiredString(body['fulfilmentId'], 'fulfilmentId');
+        const fulfilment = await getFulfilment(fulfilmentId);
+        if (!fulfilment || fulfilment.opportunityId !== opportunity.id) {
+          throw unprocessable('No fulfilment with that id on this piece.');
+        }
+        let outcome: Outcome<unknown>;
+        if (action === 'performed') {
+          outcome = await recordPerformed({
+            fulfilmentId,
+            evidence: requiredString(body['evidence'], 'evidence'),
+            actorRef: principal.id,
+          });
+        } else if (action === 'accept-delivery') {
+          outcome = await acceptDelivery({
+            fulfilmentId,
+            observationId: requiredString(body['observationId'], 'observationId'),
+            actorRef: principal.id,
+          });
+        } else {
+          const to = requiredString(body['to'], 'to');
+          if (to !== 'FAILED' && to !== 'CANCELLED') throw badRequest('"to" is FAILED or CANCELLED.');
+          outcome = await endFulfilmentWith({
+            fulfilmentId,
+            to,
+            reason: requiredString(body['reason'], 'reason'),
+            actorRef: principal.id,
+          });
+        }
+        const { value, message } = taken(outcome);
+        return { fulfilment: value, message };
       }
       case 'deliver':
       case 'collect': {

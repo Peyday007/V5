@@ -969,6 +969,32 @@ describe('one account’s whole journey', () => {
     });
     expect(settled.status).toBe(200);
 
+    // And the work was agreed, done and accepted: "the money is in and the
+    // delivery is done" needs both halves (`journey/position.ts`).
+    const op = (name: string, body: Record<string, unknown>) =>
+      call<any>('POST', `/api/cash/opportunities/${opportunityId}/${name}`, { cookie: adminCookie, body });
+    const agreed = await op('agree', {
+      amountCents: 75_000,
+      deliverable: 'One afternoon of configuration',
+      acceptanceCondition: 'The owner signs off the configured system.',
+      evidenceKind: 'WRITTEN_ACCEPTANCE',
+      evidenceRef: 'msg-8841-reply',
+    });
+    expect(agreed.status).toBe(200);
+    const work = await op('fulfil', {
+      agreementId: agreed.body.agreement.id,
+      path: 'PERSON',
+      workKind: 'EXTERNAL',
+      workRef: 'operator calendar, the afternoon booked',
+    });
+    expect(work.status).toBe(200);
+    expect((await op('performed', { fulfilmentId: work.body.fulfilment.id, evidence: 'configuration notes' })).status).toBe(200);
+    const seen = await op('observe', { kind: 'DELIVERY_ACCEPTED', evidenceRef: 'owner sign-off email' });
+    expect(seen.status).toBe(200);
+    expect(
+      (await op('accept-delivery', { fulfilmentId: work.body.fulfilment.id, observationId: seen.body.observation.id })).status,
+    ).toBe(200);
+
     const collected = await call('POST', `/api/cash/opportunities/${opportunityId}/collect`, {
       cookie: adminCookie,
       body: { outcome: 'Delivered and paid.' },

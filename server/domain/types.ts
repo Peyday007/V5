@@ -7083,6 +7083,8 @@ export const CASH_MONEY_KINDS = [
   'CAPITAL_IN',
   'CAPITAL_OUT',
   'PIPELINE_AGREED',
+  /** Agreed work that will no longer be billed: the append-only undo of an agreement. */
+  'PIPELINE_RELEASED',
   'CUSTOMER_PAYMENT',
   'SETTLEMENT',
   'REFUND',

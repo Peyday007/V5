@@ -46,6 +46,7 @@
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { advanceJourney, type JourneyTickReport } from './journey/tick.ts';
 import {
   getOpportunity,
   listNeeds,
@@ -799,6 +800,8 @@ export async function operate(
   effects: ReconciledEffect[];
   authority: AuthorityAdvance;
   monetization: MonetizationPass;
+  /** The first-dollar journey advanced from rows; absent when Cash Mode is not active here. */
+  journey?: JourneyTickReport;
 }> {
   if (!(await getCashMode(projectId))) {
     return {
@@ -873,6 +876,13 @@ export async function operate(
    * writing down history is not new discovery.
    */
   const effects = await reconcileConfirmedEffects(projectId);
+  /*
+   * Then the journey after the first action, from rows: ledger entries for
+   * agreements, invoice rows for confirmed invoices, Brain's own fulfilment
+   * work read back, acceptance applied, silence and expiry recorded, the state
+   * moved, and what finished deals taught. It sends nothing.
+   */
+  const journey = await advanceJourney(projectId, now ? new Date(now) : new Date());
   const authority = await advanceWithinAuthority(projectId);
   /*
    * And the possibility ledger, last, reading everything the passes above
@@ -903,6 +913,7 @@ export async function operate(
     effects,
     authority,
     monetization,
+    journey,
   };
 }
 

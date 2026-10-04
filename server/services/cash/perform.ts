@@ -58,7 +58,6 @@ import { OperationConflict, OperationInProgress } from '../effects/engine.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
-import { cashPosition } from './money.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import {
   actionKey,
@@ -79,6 +78,11 @@ import {
   type PerformableAction,
 } from './effects.ts';
 import type { CashOpportunity, IdempotencyOperation } from '../../domain/types.ts';
+import { createHash } from 'node:crypto';
+import { cardFactsFor } from '../../repos/cashCardFacts.ts';
+import { composeOffer } from './offer.ts';
+import { dealPosition } from './journey/position.ts';
+import { nextInvoiceTarget, recordInvoiceFromEffect } from './journey/deal.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -439,6 +443,25 @@ export async function recordConfirmedEffect(input: {
     });
   }
 
+  if (action === 'QUOTE_AND_INVOICE') {
+    // The invoice row, keyed by the operation, against the agreement the send
+    // named. Without both, the record says so on a need rather than guessing
+    // which agreement was billed.
+    const mode = await getCashMode(opportunity.projectId);
+    const amount = input.amountCents ?? intent?.amountCents ?? null;
+    if (mode && amount && intent?.subjectRef) {
+      await recordInvoiceFromEffect({
+        opportunityId: opportunity.id,
+        agreementId: intent.subjectRef,
+        amountCents: amount,
+        currency: mode.currency,
+        operationId: operation.id,
+        receiptRef,
+        actorRef: input.actorRef,
+      });
+    }
+  }
+
   if (action === 'ACCEPT_PAYMENT') {
     const mode = await getCashMode(opportunity.projectId);
     const amount = input.amountCents ?? intent?.amountCents ?? null;
@@ -622,11 +645,21 @@ export async function reconcileConfirmedEffects(projectId: string): Promise<Reco
 interface Prepared {
   payload: Record<string, unknown>;
   amountCents: number | null;
+  /** The journey row this send is for: the agreement an invoice bills. */
+  subjectRef: string | null;
 }
 
 /**
  * The payload boundary: what an adapter is handed for this action, from the
  * rows and nothing the caller sent. No amount is ever composed here.
+ *
+ * A contact carries the exact offer text and its version — the digest of that
+ * text — so the record of what was sent names the words that were sent, and a
+ * piece whose offer cannot be drafted is not contacted at all. An invoice is
+ * for what is still invoiceable against a live agreement
+ * (`journey/deal.ts`), never the whole agreed figure again. A payment is for
+ * what is billed and unpaid, or, where nothing is billed yet, what is agreed
+ * and unpaid.
  */
 async function prepare(
   action: PerformableAction,
@@ -635,11 +668,24 @@ async function prepare(
   const payer = opportunity.payer;
   const channel = opportunity.reachableChannel;
   if (action === 'CONTACT_BUYER') {
+    const draft = composeOffer({ opportunity, facts: await cardFactsFor(opportunity.id) });
+    if (!draft.sendable || !draft.text) {
+      return refuse(
+        `The offer cannot be drafted from this card, so there is nothing to send. Missing: ` +
+          `${draft.missing.map((one) => one.label).join(', ')}.`,
+      );
+    }
     return {
       ok: true,
       value: {
-        payload: { payer: payer ?? 'the payer', channel: channel ?? 'the recorded channel' },
+        payload: {
+          payer: payer ?? 'the payer',
+          channel: channel ?? 'the recorded channel',
+          offerText: draft.text,
+          offerVersion: offerVersion(draft.text),
+        },
         amountCents: null,
+        subjectRef: offerVersion(draft.text),
       },
       message: 'Prepared.',
     };
@@ -648,46 +694,46 @@ async function prepare(
 
   const mode = await getCashMode(opportunity.projectId);
   if (!mode) return refuse('Cash Mode has not been activated for this project.');
-  const position = await cashPosition({
-    projectId: opportunity.projectId,
-    opportunityId: opportunity.id,
-    currency: mode.currency,
-  });
 
   if (action === 'QUOTE_AND_INVOICE') {
-    if (position.pipelineCents <= 0) {
-      return refuse(
-        'No amount is recorded as agreed for this piece, so there is nothing to invoice. Record ' +
-          'the agreed amount first; Brain does not choose what a customer is billed.',
-      );
-    }
+    const target = await nextInvoiceTarget({ opportunityId: opportunity.id, currency: mode.currency });
+    if (!target.ok) return target;
     return {
       ok: true,
       value: {
         payload: {
           payer,
           channel: channel ?? null,
-          amountCents: position.pipelineCents,
+          amountCents: target.value.amountCents,
           currency: mode.currency,
           description: opportunity.title,
+          agreementId: target.value.agreementId,
         },
-        amountCents: position.pipelineCents,
+        amountCents: target.value.amountCents,
+        subjectRef: target.value.agreementId,
       },
       message: 'Prepared.',
     };
   }
 
-  const outstanding = position.pipelineCents - position.customerPaymentsCents;
-  if (outstanding <= 0) {
+  const position = await dealPosition({ opportunity, currency: mode.currency });
+  const p = position.pnl;
+  if (p.agreedRevenueCents <= 0) {
     return refuse(
-      position.pipelineCents <= 0
-        ? 'No amount is recorded as agreed for this piece, so nothing is owed to collect.'
-        : 'Everything agreed for this piece has already been paid.',
+      p.unbackedAgreedCents > 0
+        ? 'An amount is recorded as agreed with no agreement behind it. Record the agreement before ' +
+            'anything is collected.'
+        : 'No agreement is recorded for this piece, so nothing is owed to collect.',
     );
   }
-  const invoices = (await actionsFor(opportunity.id)).filter(
-    (one) => one.action === 'QUOTE_AND_INVOICE',
-  );
+  const outstanding =
+    p.invoicedCents > 0
+      ? p.owedByBuyerCents
+      : Math.max(0, p.agreedRevenueCents - (p.customerPaymentsCents - p.refundsCents));
+  if (outstanding <= 0) {
+    return refuse('Everything agreed and billed for this piece has already been paid.');
+  }
+  const open = position.invoices.filter((one) => one.state === 'ISSUED');
   return {
     ok: true,
     value: {
@@ -695,12 +741,18 @@ async function prepare(
         payer,
         amountCents: outstanding,
         currency: mode.currency,
-        invoiceReference: invoices.at(-1)?.reference ?? null,
+        invoiceReference: open.at(-1)?.providerRef ?? null,
       },
       amountCents: outstanding,
+      subjectRef: open.at(-1)?.id ?? null,
     },
     message: 'Prepared.',
   };
+}
+
+/** The version of an offer: the digest of the exact words. */
+export function offerVersion(text: string): string {
+  return `offer-${createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 16)}`;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -819,6 +871,7 @@ export async function performCommercialAction(input: {
       authorityId: decision.authority!.id,
       amountCents: prepared.value.amountCents,
       stateAtSend: opportunity.state,
+      subjectRef: prepared.value.subjectRef,
     });
   } catch (error) {
     if (error instanceof OperationInProgress) {

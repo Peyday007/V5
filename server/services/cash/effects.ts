@@ -280,6 +280,12 @@ export interface EffectIntent {
   amountCents: number | null;
   /** The piece's state when it was sent, so a later mismatch can be named. */
   stateAtSend: string;
+  /**
+   * The journey row the send was for — the agreement an invoice bills — read
+   * back when the receipt is recorded rather than re-chosen then, because the
+   * agreement with room on it later may not be the one billed.
+   */
+  subjectRef: string | null;
   at: string;
 }
 
@@ -301,6 +307,7 @@ export async function intentFor(
       authorityId: detail.authorityId,
       amountCents: typeof detail.amountCents === 'number' ? detail.amountCents : null,
       stateAtSend: String(detail.stateAtSend ?? ''),
+      subjectRef: typeof detail.subjectRef === 'string' ? detail.subjectRef : null,
       at: event.createdAt,
     };
   }
@@ -327,6 +334,8 @@ export interface CommercialEffectRequest {
   amountCents: number | null;
   /** The piece's state at the moment of sending. */
   stateAtSend: string;
+  /** See `EffectIntent.subjectRef`. */
+  subjectRef?: string | null;
 }
 
 /**
@@ -370,6 +379,7 @@ export async function sendCommercialEffect(input: CommercialEffectRequest): Prom
         authorityId: input.authorityId,
         amountCents: input.amountCents,
         stateAtSend: input.stateAtSend,
+        subjectRef: input.subjectRef ?? null,
       },
     });
   }

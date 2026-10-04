@@ -101,7 +101,9 @@ export async function cashPosition(input: {
 
   const capitalIn = sum(totals, 'CAPITAL_IN');
   const capitalOut = sum(totals, 'CAPITAL_OUT');
-  const pipeline = sum(totals, 'PIPELINE_AGREED');
+  // An agreement that fell through is released by an entry of its own rather
+  // than an edit, so the pipeline is what was agreed less what was let go.
+  const pipeline = Math.max(0, sum(totals, 'PIPELINE_AGREED') - sum(totals, 'PIPELINE_RELEASED'));
   const payments = sum(totals, 'CUSTOMER_PAYMENT');
   const settled = sum(totals, 'SETTLEMENT');
   const refunds = sum(totals, 'REFUND');
@@ -220,6 +222,7 @@ const EFFECTS: Record<CashMoneyKind, string> = {
   CAPITAL_IN: 'adds to available funds',
   CAPITAL_OUT: 'takes money out of available funds',
   PIPELINE_AGREED: 'is agreed work and changes no balance',
+  PIPELINE_RELEASED: 'releases agreed work that will no longer be billed, and changes no balance',
   CUSTOMER_PAYMENT: 'is earned, and is not usable until it settles',
   SETTLEMENT: 'makes money usable',
   REFUND: 'reverses earnings and is paid out of available funds',

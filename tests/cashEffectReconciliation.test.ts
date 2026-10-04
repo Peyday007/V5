@@ -274,11 +274,14 @@ async function executingWithAgreement(): Promise<CashOpportunity> {
   const piece = await qualified();
   await advanceWithinAuthority(projectId);
   expect((await getOpportunity(piece.id))!.state).toBe('EXECUTING');
-  const agreed = await call('POST', `/api/projects/${projectId}/cash/money`, {
-    kind: 'PIPELINE_AGREED',
+  // What was agreed, with its evidence: an invoice bills an agreement, never
+  // a bare amount (`journey/deal.ts`).
+  const agreed = await call('POST', `/api/cash/opportunities/${piece.id}/agree`, {
     amountCents: 120_000,
-    opportunityId: piece.id,
-    idempotencyKey: `agreed:${piece.id}:120000:`,
+    deliverable: 'The work on the card.',
+    acceptanceCondition: 'The buyer confirms it in writing.',
+    evidenceKind: 'WRITTEN_ACCEPTANCE',
+    evidenceRef: `email-${piece.id}`,
   });
   expect(agreed.status).toBe(200);
   return piece;
