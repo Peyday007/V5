@@ -528,3 +528,67 @@ describe('goalBudgetStatus', () => {
     expect(await goalBudgetStatus('rgl_missing')).toBeNull();
   });
 });
+
+describe('binding a packet to its goal', () => {
+  async function bare(title: string) {
+    return createOrchestration({
+      projectId,
+      layerId,
+      runId,
+      title,
+      assignment: 'a bounded question',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+  }
+
+  it('refuses to bind a packet nothing reserved, and links nothing', async () => {
+    const goal = await researchGoal({ maxPackets: 2 });
+    const o = await bare('unreserved');
+    expect(await bindPacketToGoal({ orchestrationId: o.id, goalId: goal.id, packetKey: 'never' })).toBe(false);
+    expect((await getOrchestration(o.id))!.goalId).toBeNull();
+    expect((await goalBudgetStatus(goal.id))!.packets.used).toBe(0);
+  });
+
+  it('refuses a goal that is not a research goal', async () => {
+    const standing = await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: `Standing ${Math.random().toString(36).slice(2, 8)}`,
+      allowedWork: ['RESEARCH'],
+      maxMissions: 1,
+      maxFragments: 1,
+      maxConcurrent: 1,
+      maxProbes: 0,
+    });
+    const o = await bare('standing');
+    expect(await bindPacketToGoal({ orchestrationId: o.id, goalId: standing.id, packetKey: 'k' })).toBe(false);
+    expect((await getOrchestration(o.id))!.goalId).toBeNull();
+  });
+
+  it('refuses a lapsed reservation, which must be re-reserved first, and links nothing', async () => {
+    const goal = await researchGoal({ maxPackets: 1 });
+    expect((await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId })).ok).toBe(true);
+    await expireHolds(goal.id, 'MISSION');
+    const o = await bare('lapsed');
+    expect(await bindPacketToGoal({ orchestrationId: o.id, goalId: goal.id, packetKey: 'A' })).toBe(false);
+    expect((await getOrchestration(o.id))!.goalId).toBeNull();
+  });
+
+  it('links and settles together, and a failed link leaves the reservation held', async () => {
+    const goal = await researchGoal({ maxPackets: 2 });
+    await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId });
+    const first = await bare('first');
+    expect(await bindPacketToGoal({ orchestrationId: first.id, goalId: goal.id, packetKey: 'A' })).toBe(true);
+    expect((await listReservations(goal.id))[0]!.state).toBe('SETTLED');
+
+    await reserveGoalPacket({ goalId: goal.id, packetKey: 'B', projectId });
+    const taken = await bare('taken');
+    await bindPacketToGoal({ orchestrationId: taken.id, goalId: goal.id, packetKey: 'A' }).catch(() => false);
+    const second = await bare('second');
+    expect(await bindPacketToGoal({ orchestrationId: second.id, goalId: goal.id, packetKey: 'B' })).toBe(true);
+    // An orchestration already linked cannot be pointed at a second goal.
+    expect(await bindPacketToGoal({ orchestrationId: second.id, goalId: goal.id, packetKey: 'B' })).toBe(false);
+  });
+});

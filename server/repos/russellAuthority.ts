@@ -1175,18 +1175,36 @@ export async function bindPacketToGoal(input: {
   goalId: string;
   packetKey: string;
 }): Promise<boolean> {
-  const linked = await getDb().run(
-    `UPDATE research_orchestrations SET goal_id = ?, goal_packet_key = ?
-      WHERE id = ? AND goal_id IS NULL`,
-    [input.goalId, input.packetKey, input.orchestrationId],
-  );
-  if (linked.changes !== 1) return false;
-  const held = await getDb().all<{ id: string }>(
-    'SELECT id FROM russell_budget_reservations WHERE idempotency_key = ?',
-    [goalPacketKey(input.goalId, input.packetKey)],
-  );
-  if (held[0]) await settleReservation(held[0].id);
-  return true;
+  const goal = await getGoal(input.goalId);
+  if (!goal || goal.purpose !== 'RESEARCH_GOAL') return false;
+  const now = authorityNow();
+  /*
+   * The link and the settlement are one transaction, so there is no window in
+   * which a packet is linked and its reservation is left to expire and refund,
+   * and none in which a charge is settled for a packet that was never linked.
+   * It binds only against a reservation that actually stands for this key —
+   * unexpired `HELD`, since a lapsed one counts for nothing and has to be
+   * re-reserved (and so re-judged against the ceiling) before it can be spent.
+   */
+  return getDb().transaction(async () => {
+    const held = await getDb().all<{ id: string; state: string; expires_at: string }>(
+      'SELECT id, state, expires_at FROM russell_budget_reservations WHERE idempotency_key = ? AND goal_id = ?',
+      [goalPacketKey(input.goalId, input.packetKey), input.goalId],
+    );
+    const reservation = held[0];
+    if (!reservation) return false;
+    const standing =
+      reservation.state === 'SETTLED' || (reservation.state === 'HELD' && reservation.expires_at > now);
+    if (!standing) return false;
+    const linked = await getDb().run(
+      `UPDATE research_orchestrations SET goal_id = ?, goal_packet_key = ?
+        WHERE id = ? AND goal_id IS NULL`,
+      [input.goalId, input.packetKey, input.orchestrationId],
+    );
+    if (linked.changes !== 1) return false;
+    if (reservation.state === 'HELD') await settleReservation(reservation.id);
+    return true;
+  });
 }
 
 export interface GoalBudgetStatus {
