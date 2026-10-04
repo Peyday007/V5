@@ -88,6 +88,7 @@ import {
 import { getDb } from '../../db/database.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
+import { authorityNow, getGoal } from '../../repos/russellAuthority.ts';
 import { recomputeProject } from '../stateEngine.ts';
 
 /** A fragment that has finished, whatever its verdict. */
@@ -1584,6 +1585,63 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
         orchestrationId,
         approvedByUserId: `SYSTEM:${verdict.envelopeId}@${verdict.validatorVersion}`,
       });
+    }
+
+    /*
+     * A plan inside a research goal's budget.
+     *
+     * The ceilings were enforced when this was created: the packet by
+     * `reserveGoalPacket` at start, the fragments by `createFragments`' charge
+     * (a plan over the remaining fragment ceiling never gets here — it parks at
+     * NEEDS_HUMAN with the ceiling named). What is left to decide is whether the
+     * goal still authorizes anything *now*: it must be ACTIVE and before its
+     * deadline, on Brain's clock.
+     *
+     * Past the deadline (or once the goal is no longer ACTIVE) the still-PLANNED
+     * fragments are not approved and the packet parks with the reason named.
+     * Fragments already QUEUED or LEASED before then are not touched and may
+     * finish — the same way an exhausted allowance keeps queued work: the
+     * authorization stopped new spending, it did not recall what was begun.
+     */
+    if (orchestration.goalId) {
+      const goal = await getGoal(orchestration.goalId);
+      const now = authorityNow();
+      const stopped = !goal
+        ? 'its research goal no longer exists'
+        : goal.state !== 'ACTIVE'
+          ? `its research goal is ${goal.state.toLowerCase()}`
+          : goal.expiresAt && goal.expiresAt <= now
+            ? `its research goal's deadline (${goal.expiresAt}) has passed`
+            : null;
+      if (!goal || stopped) {
+        await updateOrchestration(orchestrationId, {
+          status: 'NEEDS_HUMAN',
+          failureReason:
+            `The proposed plan was not approved: ${stopped}. Fragments already queued may finish; ` +
+            'extending the goal is a person\'s decision.',
+        });
+        return {
+          orchestrationId,
+          status: 'NEEDS_HUMAN',
+          enqueued: [],
+          waitingOn: `a person, because ${stopped}`,
+        };
+      }
+      await recordEvent({
+        projectId: orchestration.projectId,
+        layerId: orchestration.layerId,
+        entityType: 'RUN',
+        entityId: orchestration.runId,
+        eventType: 'RESEARCH_PLAN_SYSTEM_APPROVED',
+        payload: {
+          orchestrationId,
+          mode: 'GOAL_BUDGET',
+          goalId: goal.id,
+          authorizedBy: goal.createdByUserId,
+          fragments: awaitingApproval.length,
+        },
+      });
+      return await approvePlan({ orchestrationId, approvedByUserId: goal.createdByUserId });
     }
 
     return {
