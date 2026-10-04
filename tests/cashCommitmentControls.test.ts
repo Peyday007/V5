@@ -426,7 +426,10 @@ describe('committing spend, and settling it', () => {
     expect(after!.spentCents).toBe(15_000);
 
     // A fresh GET happened — the figure did not just change on the client.
-    expect(viewFetchCount).toBeGreaterThan(fetchesBeforeSettle);
+    // Waited for rather than read at once: the confirmation renders before the
+    // reload it triggers has reached the server, so reading the count at that
+    // instant was a race that a slightly heavier page read loses.
+    await waitFor(() => expect(viewFetchCount).toBeGreaterThan(fetchesBeforeSettle));
 
     // What the page now shows is exactly what a fresh, independent read of the
     // server says right now — proof that the number came from the server
