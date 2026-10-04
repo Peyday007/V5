@@ -1163,6 +1163,7 @@ function goalStopReason(
 
 /**
  * Record that a reserved packet now exists, and settle what paid for it.
+ * Refuses (false) without a live or settled reservation under the goal's key.
  *
  * The link is a guarded `UPDATE` on `goal_id IS NULL`, so two callers cannot
  * point one packet at two goals, and the unique `(goal_id, goal_packet_key)`
@@ -1175,19 +1176,40 @@ export async function bindPacketToGoal(input: {
   goalId: string;
   packetKey: string;
 }): Promise<boolean> {
-  const linked = await getDb().run(
-    `UPDATE research_orchestrations SET goal_id = ?, goal_packet_key = ?
-      WHERE id = ? AND goal_id IS NULL`,
-    [input.goalId, input.packetKey, input.orchestrationId],
-  );
-  if (linked.changes !== 1) return false;
-  const held = await getDb().all<{ id: string }>(
-    'SELECT id FROM russell_budget_reservations WHERE idempotency_key = ?',
-    [goalPacketKey(input.goalId, input.packetKey)],
-  );
-  if (held[0]) await settleReservation(held[0].id);
-  return true;
+  // One transaction, charge first: a packet is linked only when what pays for
+  // it is settled (or already was), and a crash between the two rolls both back
+  // rather than leaving a linked packet whose hold lapses and refunds.
+  return getDb().transaction(async () => {
+    const goal = await getGoal(input.goalId);
+    if (!goal || goal.purpose !== 'RESEARCH_GOAL') return false;
+    const held = await getDb().all<RussellReservationRow>(
+      'SELECT * FROM russell_budget_reservations WHERE idempotency_key = ?',
+      [goalPacketKey(input.goalId, input.packetKey)],
+    );
+    const reservation = held[0];
+    // No reservation, one for another goal, a released one or a lapsed hold is
+    // not a charge: refuse rather than create a free packet.
+    if (!reservation || reservation.goal_id !== goal.id) return false;
+    if (reservation.state === 'HELD') {
+      if (reservation.expires_at <= authorityNow()) return false;
+      if (!(await settleReservation(reservation.id))) return false;
+    } else if (reservation.state !== 'SETTLED') {
+      return false;
+    }
+    const linked = await getDb().run(
+      `UPDATE research_orchestrations SET goal_id = ?, goal_packet_key = ?
+        WHERE id = ? AND goal_id IS NULL`,
+      [input.goalId, input.packetKey, input.orchestrationId],
+    );
+    if (linked.changes !== 1) throw new BindRefused();
+    return true;
+  }).catch((error: unknown) => {
+    if (error instanceof BindRefused) return false;
+    throw error;
+  });
 }
+
+class BindRefused extends Error {}
 
 export interface GoalBudgetStatus {
   goalId: string;

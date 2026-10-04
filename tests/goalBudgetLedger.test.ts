@@ -140,6 +140,53 @@ async function expireHolds(goalId: string, kind: 'MISSION' | 'FRAGMENT') {
   );
 }
 
+describe('binding a packet', () => {
+  async function bare(title: string) {
+    return createOrchestration({
+      projectId,
+      layerId,
+      runId,
+      title,
+      assignment: 'a bounded question',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+  }
+
+  it('refuses a packet with no reservation, and links nothing', async () => {
+    const goal = await researchGoal();
+    const o = await bare('free packet');
+    expect(await bindPacketToGoal({ orchestrationId: o.id, goalId: goal.id, packetKey: 'none' })).toBe(false);
+    const rows = await getDb().all<{ goal_id: string | null }>(
+      'SELECT goal_id FROM research_orchestrations WHERE id = ?',
+      [o.id],
+    );
+    expect(rows[0]?.goal_id).toBeNull();
+  });
+
+  it('refuses a lapsed hold and a goal that is not a research goal', async () => {
+    const goal = await researchGoal();
+    await reserveGoalPacket({ goalId: goal.id, packetKey: 'late', projectId });
+    await expireHolds(goal.id, 'MISSION');
+    const o = await bare('late packet');
+    expect(await bindPacketToGoal({ orchestrationId: o.id, goalId: goal.id, packetKey: 'late' })).toBe(false);
+    expect(await bindPacketToGoal({ orchestrationId: o.id, goalId: 'rgl_missing', packetKey: 'late' })).toBe(false);
+  });
+
+  it('settles the charge and links together, and a second binding of the packet is refused', async () => {
+    const goal = await researchGoal();
+    await reserveGoalPacket({ goalId: goal.id, packetKey: 'ok', projectId });
+    const o = await bare('paid packet');
+    expect(await bindPacketToGoal({ orchestrationId: o.id, goalId: goal.id, packetKey: 'ok' })).toBe(true);
+    const held = await getDb().all<{ state: string }>(
+      'SELECT state FROM russell_budget_reservations WHERE goal_id = ?',
+      [goal.id],
+    );
+    expect(held.map((r) => r.state)).toEqual(['SETTLED']);
+    expect(await bindPacketToGoal({ orchestrationId: o.id, goalId: goal.id, packetKey: 'ok' })).toBe(false);
+  });
+});
+
 describe('creating a research goal', () => {
   it('writes a capped, research-only, zero-money goal that ends at the deadline', async () => {
     const deadline = deadlineIn();
