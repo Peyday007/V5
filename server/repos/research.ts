@@ -350,6 +350,17 @@ export async function createOrchestration(input: CreateOrchestrationInput): Prom
   return (await getOrchestration(id))!;
 }
 
+export async function findOrchestrationByGoalPacket(
+  goalId: string,
+  packetKey: string,
+): Promise<ResearchOrchestration | null> {
+  const row = await getDb().get<ResearchOrchestrationRow>(
+    'SELECT * FROM research_orchestrations WHERE goal_id = ? AND goal_packet_key = ?',
+    [goalId, packetKey],
+  );
+  return row ? mapOrchestration(row) : null;
+}
+
 export async function getOrchestration(id: string): Promise<ResearchOrchestration | null> {
   const row = await getDb().get<ResearchOrchestrationRow>(
     'SELECT * FROM research_orchestrations WHERE id = ?',

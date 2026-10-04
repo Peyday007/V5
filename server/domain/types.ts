@@ -179,6 +179,7 @@ export type ProjectPurpose = (typeof PROJECT_PURPOSES)[number];
 
 export const EVENT_TYPES = [
   'PROJECT_CREATED',
+  'RESEARCH_GOAL_BUDGET_STOPPED',
   'DOCUMENT_CREATED',
   'DOCUMENT_IMPORTED',
   'DOCUMENT_COMPLETED',
