@@ -230,6 +230,13 @@ export interface ReserveInput {
   workItemId?: string | null;
   leaseGeneration?: number | null;
   retentionClass?: RetentionClass;
+  /**
+   * Armed in the same statement as the reservation, for an external effect:
+   * a process that dies between reserving and arming would otherwise leave a
+   * row that reads IN_PROGRESS for ever. Nothing was sent at that point, so a
+   * take-over finds no attempt and simply makes the first one.
+   */
+  recoverAfter?: string | null;
 }
 
 /**
@@ -283,7 +290,7 @@ async function tryReserve(input: ReserveInput): Promise<ReserveOutcome | null> {
        result_ref, result_status, result_summary, retention_class,
        reserved_at, started_at, completed_at, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-             'RESERVED', 0, NULL, NULL, NULL,
+             'RESERVED', 0, NULL, NULL, ?,
              NULL, NULL, NULL, ?, ?, NULL, NULL, ?, ?)
      ON CONFLICT (scope_hash, key_fingerprint) DO NOTHING`,
     [
@@ -300,6 +307,7 @@ async function tryReserve(input: ReserveInput): Promise<ReserveOutcome | null> {
       input.leaseGeneration ?? null,
       input.requestFingerprint,
       input.fingerprintVersion,
+      input.recoverAfter ?? null,
       input.retentionClass ?? 'STANDARD',
       at,
       at,

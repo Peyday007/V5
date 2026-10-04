@@ -213,7 +213,8 @@ describe('A02: a CONFIRMED adapter', () => {
     expect(actions).toHaveLength(1);
     expect(actions[0]!.action).toBe('CONTACT_BUYER');
     expect(actions[0]!.performedBy).toBe('BRAIN');
-    expect(actions[0]!.reference).toBe(`rcpt_${piece.id}`);
+    // The provider is told the identity of this one effect, never only the piece.
+    expect(actions[0]!.reference).toBe(`rcpt_cash:${piece.id}:CONTACT_BUYER:1`);
   });
 
   it('run twice: the identical attempt replays rather than sending again', async () => {

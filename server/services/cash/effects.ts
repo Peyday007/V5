@@ -378,7 +378,11 @@ export async function sendCommercialEffect(input: CommercialEffectRequest): Prom
     namespace: effect.namespace,
     projectId: input.projectId,
     key: commercialEffectKey(input.action, input.opportunityId, input.occurrence, input.retry ?? 0),
-    businessId: input.opportunityId,
+    // The identity of this one effect, not of the piece it is for: a
+    // reconcile asked by opportunity would answer a timed-out second payment
+    // with the first payment's receipt, and record a charge that may have
+    // happened as one that already had.
+    businessId: correlationId,
     payload: input.payload,
     principalType: 'SYSTEM',
     principalId: principalIdFor(input.action),
@@ -402,6 +406,8 @@ export function receiptOf(outcome: ExternalOutcome): string | null {
 export interface ContactBuyerRequest {
   /** The occurrence this attempt is for. See `commercialEffectKey`. */
   occurrence: string;
+  /** Attempts at this occurrence closed as not having happened (`sendGate`). */
+  retry?: number;
   projectId: string;
   opportunityId: string;
   payer: string;
@@ -417,6 +423,7 @@ export async function sendContactBuyer(input: ContactBuyerRequest): Promise<Exte
     projectId: input.projectId,
     opportunityId: input.opportunityId,
     occurrence: input.occurrence,
+    retry: input.retry ?? 0,
     payload: { payer: input.payer, channel: input.channel },
     authorityId: input.authorityId,
     amountCents: null,

@@ -20,7 +20,7 @@ import { listMoneyEntries, totalsByKind } from '../../repos/cashLedger.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
 import { COMMERCIAL_EFFECTS, PERFORMABLE_ACTIONS, type PerformableAction } from './effects.ts';
-import { effectAttemptsFor, type EffectAttemptView } from './perform.ts';
+import { effectAttemptsFor, sendGate, type EffectAttemptView } from './perform.ts';
 import type { CashActionPerformer, CashOpportunity } from '../../domain/types.ts';
 
 export interface ExecutionRecord {
@@ -144,19 +144,15 @@ export async function executionRecord(input: {
         'Brain cannot do this itself. Do it yourself and record it here.';
     } else if (!decision.ok) {
       reason = `Not authorized: ${decision.reason}.`;
-    } else if (
-      attempts.some(
-        (one) => one.action === action && one.status === 'UNKNOWN' && one.occurrence !== nextOccurrence,
-      )
-    ) {
-      // The same refusal `performCommercialAction` gives, so the record never
+    } else {
+      // The same gate `performCommercialAction` asks, so the record never
       // offers a press the server would refuse.
-      reason = `An earlier attempt at ${effect.doing} has an unknown outcome. Settle it first, so this is never done twice.`;
-    } else if (attempts.some((one) => one.action === action && one.status === 'IN_PROGRESS')) {
-      reason = `${effect.doing[0]!.toUpperCase()}${effect.doing.slice(1)} is already under way.`;
-    } else if (action !== 'CONTACT_BUYER' && agreed <= 0) {
+      const gate = await sendGate(opportunity, action);
+      if (!gate.ok) reason = gate.reason;
+    }
+    if (reason === null && action !== 'CONTACT_BUYER' && agreed <= 0) {
       reason = 'No amount is recorded as agreed, so there is nothing to bill or collect.';
-    } else if (action === 'ACCEPT_PAYMENT' && agreed - paid <= 0) {
+    } else if (reason === null && action === 'ACCEPT_PAYMENT' && agreed - paid <= 0) {
       reason = 'Everything agreed has already been paid.';
     }
     performable.push({

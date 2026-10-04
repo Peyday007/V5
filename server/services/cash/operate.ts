@@ -74,12 +74,13 @@ import { recordWorkModelReclassification, type Reclassification } from './reclas
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
-import { countActions } from '../../repos/cashActions.ts';
 import { sendContactBuyer } from './effects.ts';
 import {
   alreadyContacted,
   applyEffectOutcome,
   reconcileConfirmedEffects,
+  recoverAbandonedEffects,
+  sendGate,
   type ReconciledEffect,
 } from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
@@ -680,12 +681,38 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
       continue;
     }
 
-    const occurrence = String((await countActions(opportunity.id)) + 1);
+    /*
+     * The same gate a person's press reads: nothing under way, nothing that
+     * happened and is not yet recorded, no unknown waiting on a person — and
+     * the retry counted the same way, so a contact a person established did
+     * not happen is retried under the key that person's own press would use,
+     * never the spent first one.
+     */
+    const gate = await sendGate(opportunity, CONTACT_ACTION);
+    if (!gate.ok) {
+      out.withheld.push({ opportunityId: opportunity.id, because: gate.reason });
+      continue;
+    }
+    const { occurrence, retry } = gate.value;
+    // A new key exists only because an earlier attempt at this occurrence was
+    // closed as not having happened — the provider refusing outright, or a
+    // person establishing it. Trying again is that person's call; the tick
+    // retrying a refusal would send into the same refusal on every pass.
+    if (retry > 0) {
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because:
+          'An earlier attempt to reach the buyer was closed as not having happened. Brain tries ' +
+          'again only when a person asks it to, from this piece.',
+      });
+      continue;
+    }
 
     let outcome: ExternalOutcome;
     try {
       outcome = await sendContactBuyer({
         occurrence,
+        retry,
         projectId: opportunity.projectId,
         opportunityId: opportunity.id,
         payer: opportunity.payer ?? 'the payer',
@@ -872,7 +899,8 @@ export async function operate(
    * buyer. It sends nothing, and it runs in every sprint state, because
    * writing down history is not new discovery.
    */
-  const effects = await reconcileConfirmedEffects(projectId);
+  const recovered = await recoverAbandonedEffects(projectId);
+  const effects = [...recovered, ...(await reconcileConfirmedEffects(projectId))];
   const authority = await advanceWithinAuthority(projectId);
   /*
    * And the possibility ledger, last, reading everything the passes above

@@ -100,6 +100,28 @@ export function setExternalSendTimeoutForTests(ms: number | null): void {
 
 const SEND_TIMED_OUT = Symbol('send timed out');
 
+/**
+ * Asking is bounded too: a reconcile that never answers would otherwise hold
+ * an executor past its lease exactly as an unbounded send did. A reconcile
+ * that does not answer in time throws, which every caller reads as "could not
+ * tell" — never as an answer.
+ */
+async function boundedReconcile(adapter: EffectAdapter, businessId: string): Promise<ReconcileOutcome> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const asked = adapter.reconcile!(businessId);
+  asked.catch(() => undefined);
+  try {
+    return await Promise.race([
+      asked,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('the provider did not answer in time')), sendTimeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function boundedSend(
   send: () => Promise<SendOutcome>,
   timeoutMs: number,
@@ -191,6 +213,7 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
     // effect could be attempted again. Deleting one would make a completed
     // external effect silently repeatable.
     retentionClass: 'PERMANENT',
+    recoverAfter: new Date(Date.parse(operationNow()) + EXTERNAL_ATTEMPT_LEASE_MS).toISOString(),
   });
 
   switch (reserved.outcome) {
@@ -335,6 +358,42 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
 }
 
 /**
+ * Recover an attempt whose executor stopped, without sending anything.
+ *
+ * For a durable tick: the operation is RESERVED and its lease has run out.
+ * It is taken over through the same compare-and-swap a retry would use, and
+ * then only asked about — `resumeAfterCrash` reads the attempt rows and the
+ * provider. If no attempt was ever sent, or the provider said definitively
+ * that it did nothing, the operation is closed FAILED so that a later send
+ * runs under a new key, which is the only way a new send can ever happen;
+ * this function itself never calls `send`.
+ *
+ * Returns null when there is nothing to recover (not reserved, lease still
+ * live, or another recoverer won the take-over).
+ */
+export async function recoverExternalEffect(input: {
+  adapter: EffectAdapter;
+  operation: IdempotencyOperation;
+  businessId: string;
+}): Promise<ExternalOutcome | null> {
+  const { operation } = input;
+  if (operation.state !== 'RESERVED' || !operation.recoverAfter) return null;
+  if (operation.recoverAfter > operationNow()) return null;
+  if (!(await takeOverOperation(operation.id, operation.recoverAfter))) return null;
+  const resumed = await resumeAfterCrash(input.adapter, operation, input.businessId);
+  if (resumed) return resumed;
+  const attempt = await latestSentAttempt(operation.id);
+  await failOperation(operation.id, {
+    category: 'DEPENDENCY_UNAVAILABLE',
+    terminal: true,
+    detail: attempt
+      ? 'the provider said it did nothing; a new attempt needs a new key'
+      : 'the executor stopped before anything was sent; a new attempt needs a new key',
+  });
+  return { status: 'FAILED', operation: (await getOperation(operation.id)) ?? operation };
+}
+
+/**
  * Ask the provider what it already did.
  *
  * Only possible for a reconcilable adapter. For an opaque one this returns
@@ -350,7 +409,7 @@ async function tryReconcile(
 
   let answer: ReconcileOutcome;
   try {
-    answer = await adapter.reconcile(businessId);
+    answer = await boundedReconcile(adapter, businessId);
   } catch (error) {
     // Failing to reconcile is not evidence either way. Stop.
     return null;
@@ -380,7 +439,17 @@ async function tryReconcile(
 
   if (answer.kind === 'ABSENT' && absentMeansNothingSent) {
     // The provider is authoritative and says it never saw it, so nothing
-    // happened and this may be executed again.
+    // happened and this may be executed again. The attempt is closed as
+    // FAILED first, so a later take-over reads the provider's answer from it
+    // rather than an unknown (`resumeAfterCrash`).
+    const absent = await latestSentAttempt(operation.id);
+    if (absent) {
+      await closeAttempt(absent.id, {
+        phase: 'FAILED',
+        outcome: 'FAILED',
+        detail: 'the provider confirmed it never received this',
+      });
+    }
     await failOperation(operation.id, {
       category: 'DEPENDENCY_UNAVAILABLE',
       terminal: false,
@@ -401,7 +470,7 @@ async function resumeUncertain(
   // One more attempt to reconcile is safe — asking is not sending.
   const attempt = await latestSentAttempt(operation.id);
   if (adapter.reconcile && attempt) {
-    const answer = await adapter.reconcile(businessId).catch(() => null);
+    const answer = await boundedReconcile(adapter, businessId).catch(() => null);
     if (answer && answer.kind === 'FOUND') {
       const safe = adapter.redactReceipt
         ? adapter.redactReceipt(answer.receiptMeta ?? {})
@@ -447,7 +516,31 @@ async function resumeAfterCrash(
 ): Promise<ExternalOutcome | null> {
   const attempt = await latestSentAttempt(operation.id);
   if (!attempt) return null; // nothing was ever sent; a fresh attempt is safe
-  if (attempt.endedAt !== null) return null; // that attempt was resolved
+
+  /*
+   * A closed attempt on an operation still RESERVED is not "resolved": its
+   * executor recorded what the provider said and then died, or failed to
+   * write, before the operation itself moved. What the attempt says decides,
+   * never the fact that it ended — reading `endedAt` alone sent a confirmed
+   * effect a second time once the recovery lease made this path reachable.
+   */
+  if (attempt.endedAt !== null) {
+    if (attempt.outcome === 'SUCCEEDED' && attempt.receiptRef) {
+      // The provider's receipt is already on the attempt: finish the operation.
+      await succeedOperation(operation.id, {
+        resultRef: attempt.receiptRef,
+        resultSummary: 'recorded from a confirmed attempt whose executor did not finish',
+      });
+      return {
+        status: 'RECONCILED',
+        operation: (await getOperation(operation.id)) ?? operation,
+        receiptRef: attempt.receiptRef,
+      };
+    }
+    // Only the provider saying it did nothing permits another send.
+    if (attempt.outcome === 'FAILED') return null;
+    // UNCERTAIN or ABANDONED: an unknown, handled exactly as an open attempt.
+  }
 
   if (adapter.effectClass === 'EXTERNAL_IDEMPOTENT') {
     // Safe to send again: the provider de-duplicates on the same stable key,

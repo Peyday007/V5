@@ -606,9 +606,15 @@ describe('J04/J05: an opaque provider, settled by a person', () => {
     expect(settled.status).toBe(200);
     expect((await getOpportunity(piece.id))!.state).toBe('READY');
 
-    // The tick does not retry what a person closed: still one send.
+    // The tick does not retry what a person closed: still one send — and it
+    // does not dress the closed attempt up as a fresh provider refusal either.
     await advanceWithinAuthority(projectId);
     expect(contact.sends).toHaveLength(1);
+    expect(
+      (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) =>
+        (one.requestKey ?? '').startsWith('effect-failed:'),
+      ),
+    ).toEqual([]);
 
     contact.onSend = async () => ({ kind: 'CONFIRMED', receiptRef: 'msg-retry' });
     const rec = await record(piece.id);
