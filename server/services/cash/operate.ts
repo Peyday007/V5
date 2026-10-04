@@ -76,12 +76,13 @@ import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { countActions } from '../../repos/cashActions.ts';
-import { sendContactBuyer } from './effects.ts';
+import { sendCommercialEffect } from './effects.ts';
 import {
   alreadyContacted,
   applyEffectOutcome,
   reconcileConfirmedEffects,
   type ReconciledEffect,
+  prepare,
 } from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
@@ -683,16 +684,29 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
 
     const occurrence = String((await countActions(opportunity.id)) + 1);
 
+    /*
+     * The same payload a person's "have Brain do it" sends (`perform.ts`
+     * `prepare`): the exact offer text and its version, so the record of what
+     * reached the buyer names the words that reached them. A card whose offer
+     * cannot be drafted is not contacted at all.
+     */
+    const prepared = await prepare(CONTACT_ACTION, opportunity);
+    if (!prepared.ok) {
+      out.withheld.push({ opportunityId: opportunity.id, because: prepared.reason });
+      continue;
+    }
     let outcome: ExternalOutcome;
     try {
-      outcome = await sendContactBuyer({
+      outcome = await sendCommercialEffect({
+        action: CONTACT_ACTION,
         occurrence,
         projectId: opportunity.projectId,
         opportunityId: opportunity.id,
-        payer: opportunity.payer ?? 'the payer',
-        channel: opportunity.reachableChannel ?? 'the recorded channel',
+        payload: prepared.value.payload,
         authorityId: decision.authority!.id,
+        amountCents: null,
         stateAtSend: opportunity.state,
+        subjectRef: prepared.value.subjectRef,
       });
     } catch (error) {
       out.withheld.push({

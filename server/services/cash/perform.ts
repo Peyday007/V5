@@ -661,7 +661,7 @@ interface Prepared {
  * what is billed and unpaid, or, where nothing is billed yet, what is agreed
  * and unpaid.
  */
-async function prepare(
+export async function prepare(
   action: PerformableAction,
   opportunity: CashOpportunity,
 ): Promise<Outcome<Prepared>> {
