@@ -12,6 +12,7 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { Constellation } from './Constellation.tsx';
 import { Register } from './Register.tsx';
+import { ResearchBudgets } from './ResearchBudgets.tsx';
 import { DecisionCard, Goals } from './Goals.tsx';
 import { GoalsApi } from '../lib/goalsApi.ts';
 import { Frontier } from './Frontier.tsx';
@@ -2136,6 +2137,7 @@ export function NeedsYouView({
           ))}
         </ul>
       ) : null}
+      <ResearchBudgets projectId={projectId} />
       <SoftwareDecisions
         software={software}
         repositories={repositories}
