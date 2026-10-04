@@ -38,18 +38,21 @@
  * same reading `auditAdmission` uses, so the two cannot disagree about whether
  * this Brain can do research today. `SEND_A_MESSAGE` is `PRESENT` only when a
  * real effect adapter is registered for it (`effects.ts`'s
- * `contactBuyerAdapter`), so the moment a messaging integration exists is the
+ * `adapterFor`), so the moment a messaging integration exists is the
  * moment it can be checked rather than assumed — and on this Brain, with none
  * registered, it reads exactly as it did when this was `read: null`.
  *
- * Everything else in the vocabulary is declared `MISSING` with the integration
- * it needs named, which is the honest state of this version: §30 says plainly
- * that it records the authorization and the money and does not itself issue an
- * invoice or move funds. Making any of those report `PRESENT` would be the
- * invented measurement this file exists to refuse.
+ * `ISSUE_AN_INVOICE` and `TAKE_A_PAYMENT` follow the same rule against their
+ * own operation namespaces (`effects.ts`' `COMMERCIAL_EFFECTS`): an interface
+ * existing is not an integration, so with no adapter registered — every
+ * deployment today — they read `MISSING` exactly as `read: null` did. The rest
+ * of the vocabulary has nothing to read and is declared `MISSING` with the
+ * integration it needs named. Making any of those report `PRESENT` without a
+ * registered adapter would be the invented measurement this file exists to
+ * refuse.
  */
 import { separationCapacity } from '../research/auditAdmission.ts';
-import { contactBuyerAdapter } from './effects.ts';
+import { adapterFor } from './effects.ts';
 
 export type CapabilityState = 'PRESENT' | 'MISSING' | 'UNKNOWN';
 
@@ -104,7 +107,7 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
     // never a boolean somebody flipped. With none registered, which is every
     // deployment of this Brain today, this reads MISSING exactly as it did
     // when `read` was `null`.
-    read: async () => contactBuyerAdapter() !== null,
+    read: async () => adapterFor('CONTACT_BUYER') !== null,
   },
   {
     id: 'ISSUE_AN_INVOICE',
@@ -113,7 +116,9 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
     nextStep:
       'Until one exists, the invoice is issued outside Brain and the settlement is recorded ' +
       'against its own reference.',
-    read: null,
+    // The same rule as messaging: a registered adapter for `cash.issue_invoice`
+    // is what makes this PRESENT, and no deployment registers one today.
+    read: async () => adapterFor('QUOTE_AND_INVOICE') !== null,
   },
   {
     id: 'TAKE_A_PAYMENT',
@@ -122,7 +127,7 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
     nextStep:
       'Until one exists, payment is taken outside Brain and reaches the ledger as a SETTLEMENT ' +
       'carrying a verifiable reference.',
-    read: null,
+    read: async () => adapterFor('ACCEPT_PAYMENT') !== null,
   },
   {
     id: 'PUBLISH_A_LISTING',

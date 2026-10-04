@@ -243,6 +243,24 @@ export async function listCashEvents(projectId: string, limit = 50): Promise<Cas
   return rows.map(mapEvent);
 }
 
+/**
+ * One kind of event about one opportunity, oldest first and unbounded.
+ *
+ * `listCashEventsFor` is a page of the newest, which is right for showing
+ * history and wrong for finding the one row a later decision depends on — an
+ * effect's send-time intent must not fall off the end of a page because the
+ * piece has been busy since.
+ */
+export async function cashEventsOfKind(opportunityId: string, kind: string): Promise<CashEvent[]> {
+  const rows = await getDb().all<CashEventRow>(
+    `SELECT * FROM cash_events
+      WHERE opportunity_id = ? AND kind = ?
+      ORDER BY created_at, id`,
+    [opportunityId, kind],
+  );
+  return rows.map(mapEvent);
+}
+
 export async function listCashEventsFor(
   opportunityId: string,
   limit = 50,

@@ -75,7 +75,13 @@ import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { countActions } from '../../repos/cashActions.ts';
-import { contactBuyerKey, sendContactBuyer } from './effects.ts';
+import { sendContactBuyer } from './effects.ts';
+import {
+  alreadyContacted,
+  applyEffectOutcome,
+  reconcileConfirmedEffects,
+  type ReconciledEffect,
+} from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
@@ -648,20 +654,44 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
      * and still needs somebody to press a button the moment an integration
      * arrives.
      */
+    /*
+     * A buyer already reached is never reached again by the tick. This is
+     * where a contact the provider confirmed lands when beginning execution
+     * was refused at the moment it was recorded (`recordConfirmedEffect`):
+     * the contact is history and the piece stayed READY. What is left is the
+     * transition alone, retried from the action already on the record — never
+     * a second send, which a fresh occurrence would otherwise be.
+     */
+    const contacted = await alreadyContacted(opportunity.id);
+    if (contacted) {
+      const began = await beginExecution({ opportunityId: opportunity.id, actorRef: BRAIN });
+      if (began.ok) {
+        out.took.push({
+          opportunityId: opportunity.id,
+          did: 'BEGAN_EXECUTION',
+          detail: 'The buyer was already reached; execution began from that recorded contact.',
+        });
+      } else {
+        out.withheld.push({
+          opportunityId: opportunity.id,
+          because: `The buyer was already reached, and beginning execution is refused: ${began.reason}`,
+        });
+      }
+      continue;
+    }
+
     const occurrence = String((await countActions(opportunity.id)) + 1);
-    // The idempotency key this attempt is reserved under, and the
-    // (differently shaped) key `cash_actions` dedupes on — see
-    // `contactBuyerKey`'s own comment for why they are not one key.
-    const effectKey = contactBuyerKey(opportunity.id, occurrence);
 
     let outcome: ExternalOutcome;
     try {
       outcome = await sendContactBuyer({
-        key: effectKey,
+        occurrence,
         projectId: opportunity.projectId,
         opportunityId: opportunity.id,
         payer: opportunity.payer ?? 'the payer',
         channel: opportunity.reachableChannel ?? 'the recorded channel',
+        authorityId: decision.authority!.id,
+        stateAtSend: opportunity.state,
       });
     } catch (error) {
       out.withheld.push({
@@ -674,83 +704,35 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
       continue;
     }
 
-    if (outcome.status === 'UNCERTAIN') {
-      /*
-       * The send left and what happened to it is unknown. Recording a
-       * performed action here, or beginning execution, would be the exact
-       * defect invariants 25 and 26 exist to refuse. An open need names the
-       * unknown outcome instead — and a second pass asks the identical
-       * question under the identical key, which `runExternalEffect` answers
-       * by trying to reconcile rather than by sending again.
-       */
-      await raiseNeed({
-        projectId: opportunity.projectId,
-        opportunityId: opportunity.id,
-        actorRef: BRAIN,
-        blockedAction: `Confirm whether ${opportunity.payer ?? 'the payer'} was actually reached ` +
-          `for "${opportunity.title}"`,
-        whyItMatters:
-          'A message may or may not have reached them. The send left and what happened to it is ' +
-          'unknown, and recording it as done or as failed would both be a guess Brain is not ' +
-          `permitted to make. ${outcome.operation.uncertaintyReason ?? ''}`.trim(),
-        recommendedPath:
-          'Check the messaging provider directly, or reach the buyer yourself and record what ' +
-          'happened.',
-        setupEffort: 'A few minutes of checking.',
-        nextStep: 'Confirm the outcome of this attempt and record it.',
-        completionCondition: 'The outcome of this attempt is known, one way or the other.',
-        blocksState: 'EXECUTING',
-        requestKey: `contact-uncertain:${opportunity.id}:${effectKey}`,
-      });
-      out.withheld.push({
-        opportunityId: opportunity.id,
-        because:
-          'Reaching the buyer left the outcome unknown, so nothing here says anybody was ' +
-          'contacted and this stays ready rather than executing. An open need names it.',
-      });
-      continue;
-    }
-
-    if (outcome.status === 'FAILED') {
-      out.withheld.push({
-        opportunityId: opportunity.id,
-        because:
-          `Reaching ${opportunity.payer ?? 'the payer'} through ${CONTACT_CAPABILITY} was ` +
-          'refused, so nobody has been contacted.',
-      });
-      continue;
-    }
-
-    // CONFIRMED, RECONCILED or REPLAYED: the provider's own receipt is what
-    // makes this true, carried as the action's reference rather than composed
-    // as a sentence about what Brain assumes happened.
-    const receiptRef =
-      outcome.status === 'REPLAYED'
-        ? (outcome.operation.resultRef ?? outcome.operation.id)
-        : outcome.receiptRef;
-
-    const began = await beginExecution({
-      opportunityId: opportunity.id,
+    /*
+     * What the provider said becomes what the record says in one place
+     * (`perform.ts`), shared with a person's own "have Brain do it" and with
+     * a person settling an unknown — so the three cannot come to disagree.
+     * UNCERTAIN raises a need naming the operation and records nothing;
+     * FAILED keeps the provider's refusal on a need rather than only in this
+     * report; a receipt is the only thing that begins execution.
+     */
+    const result = await applyEffectOutcome({
+      opportunity,
+      action: CONTACT_ACTION,
+      occurrence,
+      outcome,
       actorRef: BRAIN,
-      firstAction: {
-        action: CONTACT_ACTION,
-        performedBy: 'BRAIN',
-        detail:
-          `Reached ${opportunity.payer ?? 'the payer'} through ${
-            opportunity.reachableChannel ?? 'the recorded channel'
-          } with the offer on this card.`,
-        reference: receiptRef,
-        requestKey: actionKey(opportunity.id, CONTACT_ACTION, occurrence),
-      },
     });
-    if (began.ok) {
+    if (result.kind === 'RECORDED') {
       out.took.push({
         opportunityId: opportunity.id,
         did: 'BEGAN_EXECUTION',
-        detail: began.message ?? 'executing',
+        detail: result.message,
       });
     } else {
-      out.withheld.push({ opportunityId: opportunity.id, because: began.reason });
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because:
+          result.kind === 'PERFORMED_NOT_RECORDED'
+            ? `The buyer was reached (reference ${result.receiptRef}) and recording it was refused: ${result.reason}`
+            : result.reason,
+      });
     }
   }
 
@@ -813,6 +795,8 @@ export async function operate(
   continuations: Continuation[];
   dependentWork: DependentWork[];
   validations: ValidationProgress;
+  /** Confirmed effects whose record this pass finished. Empty when there were none. */
+  effects: ReconciledEffect[];
   authority: AuthorityAdvance;
   monetization: MonetizationPass;
 }> {
@@ -826,6 +810,7 @@ export async function operate(
       continuations: [],
       dependentWork: [],
       validations: { started: [], settled: [] },
+      effects: [],
       authority: { took: [], withheld: [] },
       monetization: {
         pathsAdded: [],
@@ -877,6 +862,17 @@ export async function operate(
    * not, both of which happened above. Asking first would ask about last tick's
    * card and defer every decision by one pass.
    */
+  /*
+   * Before Brain acts, it finishes writing down what it already did.
+   *
+   * A provider that confirmed an effect whose record never landed — a crash,
+   * a write that failed, a grant revoked between the receipt and the record —
+   * leaves a SUCCEEDED operation and no action. Recording it first is what
+   * stops the pass below mistaking an unrecorded contact for an uncontacted
+   * buyer. It sends nothing, and it runs in every sprint state, because
+   * writing down history is not new discovery.
+   */
+  const effects = await reconcileConfirmedEffects(projectId);
   const authority = await advanceWithinAuthority(projectId);
   /*
    * And the possibility ledger, last, reading everything the passes above
@@ -904,6 +900,7 @@ export async function operate(
     continuations,
     dependentWork,
     validations,
+    effects,
     authority,
     monetization,
   };
