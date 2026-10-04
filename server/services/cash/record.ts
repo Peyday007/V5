@@ -16,7 +16,7 @@
  * how a sprint comes to believe it has money it has not got.
  */
 import { actionsFor } from '../../repos/cashActions.ts';
-import { totalsByKind } from '../../repos/cashLedger.ts';
+import { listMoneyEntries, totalsByKind } from '../../repos/cashLedger.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
 import { COMMERCIAL_EFFECTS, PERFORMABLE_ACTIONS, type PerformableAction } from './effects.ts';
@@ -44,8 +44,23 @@ export interface ExecutionRecord {
     /** Agreed and not yet paid. Zero when nothing was agreed. */
     outstandingCents: number;
   };
+  /** Each customer payment and each settlement, with its provider reference. */
+  payments: MoneyLine[];
+  settlements: MoneyLine[];
   /** Brain's own attempts through an effect adapter, newest first. */
   attempts: EffectAttemptView[];
+  /** The attempts counted by what is known about them. */
+  effects: {
+    attempted: number;
+    /** The provider confirmed it and it is on the record. */
+    confirmed: number;
+    /** The provider confirmed it and the record has not caught up yet; the tick finishes it. */
+    confirmedNotRecorded: number;
+    /** Nobody knows whether it happened; a person settles it. Never resent. */
+    uncertain: number;
+    refused: number;
+    inProgress: number;
+  };
   /** The occurrence the next recorded action will be — what `perform` compares. */
   nextOccurrence: string;
   /** What Brain could do here itself, and why not where it cannot. */
@@ -53,9 +68,25 @@ export interface ExecutionRecord {
     action: PerformableAction;
     doing: string;
     capability: string;
+    /** What reading the capability gives right now — PRESENT only with an adapter. */
+    capabilityState: string;
     available: boolean;
     reason: string | null;
   }[];
+  /** The actions Brain could perform on this piece now, in the order offered. */
+  brainCanDoNow: PerformableAction[];
+  /**
+   * Why Brain can do nothing here itself, in one sentence, or null when it can
+   * do something. The first action's own reason: the one a person would act on.
+   */
+  blocker: string | null;
+}
+
+export interface MoneyLine {
+  id: string;
+  amountCents: number;
+  reference: string | null;
+  at: string;
 }
 
 const PERFORMABLE_FROM: Readonly<Record<PerformableAction, readonly string[]>> = {
@@ -81,6 +112,23 @@ export async function executionRecord(input: {
   const refunds = Number(totals.REFUND ?? 0);
   const paid = Math.max(0, payments - refunds);
 
+  const attempts = await effectAttemptsFor(opportunity.projectId, opportunity.id);
+  const nextOccurrence = String(actions.length + 1);
+  const entries = await listMoneyEntries({
+    projectId: opportunity.projectId,
+    opportunityId: opportunity.id,
+    currency,
+  });
+  const lines = (kind: string): MoneyLine[] =>
+    entries
+      .filter((one) => one.kind === kind)
+      .map((one) => ({
+        id: one.id,
+        amountCents: one.amountCents,
+        reference: one.verifiedReference,
+        at: one.occurredAt,
+      }));
+
   const performable: ExecutionRecord['performable'] = [];
   for (const action of PERFORMABLE_ACTIONS) {
     if (!PERFORMABLE_FROM[action].includes(opportunity.state)) continue;
@@ -96,6 +144,16 @@ export async function executionRecord(input: {
         'Brain cannot do this itself. Do it yourself and record it here.';
     } else if (!decision.ok) {
       reason = `Not authorized: ${decision.reason}.`;
+    } else if (
+      attempts.some(
+        (one) => one.action === action && one.status === 'UNKNOWN' && one.occurrence !== nextOccurrence,
+      )
+    ) {
+      // The same refusal `performCommercialAction` gives, so the record never
+      // offers a press the server would refuse.
+      reason = `An earlier attempt at ${effect.doing} has an unknown outcome. Settle it first, so this is never done twice.`;
+    } else if (attempts.some((one) => one.action === action && one.status === 'IN_PROGRESS')) {
+      reason = `${effect.doing[0]!.toUpperCase()}${effect.doing.slice(1)} is already under way.`;
     } else if (action !== 'CONTACT_BUYER' && agreed <= 0) {
       reason = 'No amount is recorded as agreed, so there is nothing to bill or collect.';
     } else if (action === 'ACCEPT_PAYMENT' && agreed - paid <= 0) {
@@ -105,6 +163,7 @@ export async function executionRecord(input: {
       action,
       doing: effect.doing,
       capability: effect.capability,
+      capabilityState: reading.state,
       available: reason === null,
       reason,
     });
@@ -127,8 +186,23 @@ export async function executionRecord(input: {
       refundedCents: refunds,
       outstandingCents: Math.max(0, agreed - paid),
     },
-    attempts: await effectAttemptsFor(opportunity.projectId, opportunity.id),
-    nextOccurrence: String(actions.length + 1),
+    payments: lines('CUSTOMER_PAYMENT'),
+    settlements: lines('SETTLEMENT'),
+    attempts,
+    effects: {
+      attempted: attempts.length,
+      confirmed: attempts.filter((one) => one.status === 'PERFORMED').length,
+      confirmedNotRecorded: attempts.filter((one) => one.status === 'UNRECORDED').length,
+      uncertain: attempts.filter((one) => one.status === 'UNKNOWN').length,
+      refused: attempts.filter((one) => one.status === 'REFUSED').length,
+      inProgress: attempts.filter((one) => one.status === 'IN_PROGRESS').length,
+    },
+    nextOccurrence,
     performable,
+    brainCanDoNow: performable.filter((one) => one.available).map((one) => one.action),
+    blocker: performable.some((one) => one.available)
+      ? null
+      : (performable[0]?.reason ??
+        `Brain performs nothing on a piece that is ${opportunity.state.toLowerCase()}.`),
   };
 }

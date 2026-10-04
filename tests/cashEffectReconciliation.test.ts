@@ -65,6 +65,8 @@ import {
   type SendOutcome,
 } from '../server/services/effects/adapter.ts';
 import { cashRouter } from '../server/routes/cash.ts';
+import { setExternalSendTimeoutForTests } from '../server/services/effects/external.ts';
+import { markUncertain } from '../server/repos/idempotency.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
 import type { CashOpportunity, Principal, ProjectMembership } from '../server/domain/types.ts';
 
@@ -172,6 +174,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   failures.recordAction = 0;
+  setExternalSendTimeoutForTests(null);
   clearAdapters();
   if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
   server = null;
@@ -597,5 +600,205 @@ describe('E: a payment confirmed and not recorded', () => {
     expect(payments).toEqual([expect.objectContaining({ amountCents: 120_000, verifiedReference: 'pay-1' })]);
     expect((await actionsFor(piece.id)).filter((one) => one.action === 'ACCEPT_PAYMENT')).toHaveLength(1);
     expect(payment.sends).toHaveLength(1);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* The commercial execution kernel: the cases #89 left open                   */
+/* ------------------------------------------------------------------------- */
+
+async function recordOnPage(opportunityId: string): Promise<any> {
+  const read = await call('GET', `/api/projects/${projectId}/cash`);
+  expect(read.status).toBe(200);
+  return read.body.myCurrentWork.records[opportunityId];
+}
+
+describe('G: a provider that does not answer in time', () => {
+  it('is UNKNOWN, not FAILED, even when the provider has not seen it yet — and never resent', async () => {
+    const piece = await executingWithAgreement();
+    setExternalSendTimeoutForTests(40);
+    const sends: unknown[] = [];
+    let visible = false;
+    registerAdapter({
+      name: 'synthetic.slow_invoice',
+      effectClass: 'EXTERNAL_RECONCILABLE',
+      namespace: COMMERCIAL_EFFECTS.QUOTE_AND_INVOICE.namespace.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (request) => {
+        sends.push(request.payload);
+        // Answers long after this attempt stops waiting.
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        visible = true;
+        return { kind: 'CONFIRMED', receiptRef: 'inv-slow' };
+      },
+      // Not visible yet while the send is still on its way.
+      reconcile: async () => (visible ? { kind: 'FOUND', receiptRef: 'inv-slow' } : { kind: 'ABSENT' }),
+    });
+
+    const pressed = await act_(piece.id, 'perform', {
+      action: 'QUOTE_AND_INVOICE',
+      expectedOccurrence: await nextOccurrence(piece.id),
+    });
+    expect(pressed.status).toBe(200);
+    // ABSENT right after a timeout is not evidence that nothing was sent.
+    expect(pressed.body.result.kind).toBe('UNCERTAIN');
+    const [operation] = await commercialOperationsFor(projectId, piece.id).then((all) =>
+      all.filter((one) => one.action === 'QUOTE_AND_INVOICE'),
+    );
+    expect(operation!.operation.state).toBe('UNCERTAIN');
+
+    // The record says so. (The other attempt is the tick's confirmed contact.)
+    let record = await recordOnPage(piece.id);
+    expect(record.effects).toMatchObject({ attempted: 2, uncertain: 1, confirmed: 1 });
+
+    // The late answer lands at the provider; the tick sends nothing.
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await operate(projectId);
+    expect(sends).toHaveLength(1);
+
+    // Pressing again for the same occurrence asks — it does not send.
+    const again = await act_(piece.id, 'perform', {
+      action: 'QUOTE_AND_INVOICE',
+      expectedOccurrence: await nextOccurrence(piece.id),
+    });
+    expect(again.status).toBe(200);
+    expect(again.body.result).toMatchObject({ kind: 'RECORDED', receiptRef: 'inv-slow' });
+    expect(sends).toHaveLength(1);
+    expect((await actionsFor(piece.id)).filter((one) => one.action === 'QUOTE_AND_INVOICE')).toHaveLength(1);
+    record = await recordOnPage(piece.id);
+    expect(record.effects).toMatchObject({ attempted: 2, uncertain: 0, confirmed: 2 });
+  });
+});
+
+describe('H: a confirmation that arrives after a recovery called it unknown', () => {
+  it('resolves the unknown with the receipt instead of dropping it', async () => {
+    const piece = await executingWithAgreement();
+    const invoice = provider('QUOTE_AND_INVOICE', 'inv');
+    invoice.onSend = async () => {
+      // A takeover finds this attempt's lease spent and records it unknown
+      // while the provider is still answering.
+      const [op] = (await commercialOperationsFor(projectId, piece.id)).filter(
+        (one) => one.action === 'QUOTE_AND_INVOICE',
+      );
+      expect(await markUncertain(op!.operation.id, 'taken over')).toBe(true);
+      return { kind: 'CONFIRMED', receiptRef: 'inv-late' };
+    };
+    const pressed = await act_(piece.id, 'perform', {
+      action: 'QUOTE_AND_INVOICE',
+      expectedOccurrence: await nextOccurrence(piece.id),
+    });
+    expect(pressed.body.result).toMatchObject({ kind: 'RECORDED', receiptRef: 'inv-late' });
+    const [op] = (await commercialOperationsFor(projectId, piece.id)).filter(
+      (one) => one.action === 'QUOTE_AND_INVOICE',
+    );
+    // Left UNCERTAIN, a person could close it "did not happen" and the retry
+    // would be a second invoice.
+    expect(op!.operation).toMatchObject({ state: 'SUCCEEDED', resultRef: 'inv-late' });
+    expect(invoice.sends).toHaveLength(1);
+  });
+});
+
+describe('I: one provider payment reference is one customer payment', () => {
+  it('refuses the same reference under a second key, and Brain does not add another', async () => {
+    const piece = await executingWithAgreement();
+    provider('QUOTE_AND_INVOICE', 'inv');
+    const payment = provider('ACCEPT_PAYMENT', 'pay');
+    await act_(piece.id, 'perform', {
+      action: 'QUOTE_AND_INVOICE',
+      expectedOccurrence: await nextOccurrence(piece.id),
+    });
+
+    // A person records the payment by hand first, under a key of their own.
+    const byHand = await call('POST', `/api/projects/${projectId}/cash/money`, {
+      kind: 'CUSTOMER_PAYMENT',
+      amountCents: 120_000,
+      opportunityId: piece.id,
+      verifiedReference: 'pay-1',
+      idempotencyKey: 'hand-recorded-1',
+    });
+    expect(byHand.status).toBe(200);
+    // The same reference again, under another key, is not a second payment.
+    const twice = await call('POST', `/api/projects/${projectId}/cash/money`, {
+      kind: 'CUSTOMER_PAYMENT',
+      amountCents: 120_000,
+      opportunityId: piece.id,
+      verifiedReference: 'pay-1',
+      idempotencyKey: 'hand-recorded-2',
+    });
+    expect(twice.status).toBe(422);
+    // The same key is still a replay, not a refusal.
+    const replay = await call('POST', `/api/projects/${projectId}/cash/money`, {
+      kind: 'CUSTOMER_PAYMENT',
+      amountCents: 120_000,
+      opportunityId: piece.id,
+      verifiedReference: 'pay-1',
+      idempotencyKey: 'hand-recorded-1',
+    });
+    expect(replay.status).toBe(200);
+
+    // Brain's own take-payment receipt carrying that reference — the
+    // provider's earlier receipt, delivered by a reconciliation — is the same
+    // payment, and repeated passes leave it one.
+    const outcome = await sendCommercialEffect({
+      action: 'ACCEPT_PAYMENT',
+      projectId,
+      opportunityId: piece.id,
+      occurrence: await nextOccurrence(piece.id),
+      payload: { payer: 'x', amountCents: 120_000, currency: 'USD' },
+      authorityId,
+      amountCents: 120_000,
+      stateAtSend: 'EXECUTING',
+    });
+    expect(outcome.status).toBe('CONFIRMED');
+    await operate(projectId);
+    const before = await footprint(piece.id);
+    await operate(projectId);
+    expect(await footprint(piece.id)).toEqual(before);
+    const payments = (await listMoneyEntries({ projectId, limit: 50 })).filter(
+      (one) => one.kind === 'CUSTOMER_PAYMENT',
+    );
+    expect(payments).toHaveLength(1);
+    expect(payment.sends).toHaveLength(1);
+  });
+});
+
+describe('J: the execution record is the server’s answer', () => {
+  it('names the blocker when Brain can do nothing, and lists payments and settlements', async () => {
+    const piece = await executingWithAgreement();
+    clearAdapters(); // no invoicing or payment integration on this Brain
+    let record = await recordOnPage(piece.id);
+    expect(record.brainCanDoNow).toEqual([]);
+    expect(record.performable.find((one: any) => one.action === 'QUOTE_AND_INVOICE')).toMatchObject({
+      capabilityState: 'MISSING',
+      available: false,
+    });
+    expect(record.blocker).toMatch(/reads MISSING/);
+    expect(record.money).toMatchObject({ agreedCents: 120_000, outstandingCents: 120_000 });
+
+    provider('QUOTE_AND_INVOICE', 'inv');
+    provider('ACCEPT_PAYMENT', 'pay');
+    record = await recordOnPage(piece.id);
+    expect(record.brainCanDoNow).toEqual(['QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT']);
+    expect(record.blocker).toBeNull();
+
+    await act_(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await nextOccurrence(piece.id) });
+    await act_(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: await nextOccurrence(piece.id) });
+    const settled = await call('POST', `/api/projects/${projectId}/cash/money`, {
+      kind: 'SETTLEMENT',
+      amountCents: 120_000,
+      opportunityId: piece.id,
+      verifiedReference: 'payout-1',
+      idempotencyKey: 'settle-1',
+    });
+    expect(settled.status).toBe(200);
+
+    record = await recordOnPage(piece.id);
+    expect(record.payments).toEqual([expect.objectContaining({ amountCents: 120_000, reference: 'pay-1' })]);
+    expect(record.settlements).toEqual([expect.objectContaining({ amountCents: 120_000, reference: 'payout-1' })]);
+    expect(record.money).toMatchObject({ paidCents: 120_000, settledCents: 120_000, outstandingCents: 0 });
+    // The tick's contact, the invoice and the payment.
+    expect(record.effects).toMatchObject({ attempted: 3, confirmed: 3, uncertain: 0 });
+    expect(record.performable.find((one: any) => one.action === 'ACCEPT_PAYMENT').reason).toMatch(/already been paid/);
   });
 });

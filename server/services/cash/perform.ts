@@ -49,7 +49,7 @@
  */
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
 import { actionsFor, countActions, recordAction } from '../../repos/cashActions.ts';
-import { moneyEntryByKey } from '../../repos/cashLedger.ts';
+import { customerPaymentByReference, moneyEntryByKey } from '../../repos/cashLedger.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { getOperation, resolveUncertain } from '../../repos/idempotency.ts';
 import { listNeeds, openNeedForKey } from '../../repos/cashPortfolio.ts';
@@ -442,7 +442,11 @@ export async function recordConfirmedEffect(input: {
   if (action === 'ACCEPT_PAYMENT') {
     const mode = await getCashMode(opportunity.projectId);
     const amount = input.amountCents ?? intent?.amountCents ?? null;
-    if (mode && amount !== null && amount > 0) {
+    const onLedger = await customerPaymentByReference(opportunity.projectId, receiptRef);
+    if (onLedger) {
+      // Already recorded — by hand, or by an earlier pass — and one provider
+      // payment is one entry. Nothing to write.
+    } else if (mode && amount !== null && amount > 0) {
       const key = paymentKey(opportunity.id, receiptRef);
       const before = await moneyEntryByKey(opportunity.projectId, key);
       // Keyed exactly as the page's own "Record a payment received" control
@@ -547,9 +551,11 @@ export async function reconcileConfirmedEffects(projectId: string): Promise<Reco
     const recorded = (await actionsFor(one.opportunityId)).some(
       (action) => action.requestKey === actionKey(one.opportunityId, one.action, one.occurrence),
     );
+    // A payment is on the ledger once its provider reference is, under
+    // whichever key a person or Brain wrote it — one reference is one entry.
     const paid =
       one.action !== 'ACCEPT_PAYMENT' ||
-      (await moneyEntryByKey(projectId, paymentKey(one.opportunityId, receiptRef))) !== null;
+      (await customerPaymentByReference(projectId, receiptRef)) !== null;
     if (recorded && paid) continue;
 
     let done: { result: EffectResult; created: boolean };

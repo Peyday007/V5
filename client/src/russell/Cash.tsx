@@ -2056,6 +2056,22 @@ function ExecutionPanel({
         {money(m.settledCents, m.currency)} · outstanding {money(m.outstandingCents, m.currency)}
         {m.refundedCents > 0 ? ` · refunded ${money(m.refundedCents, m.currency)}` : ''}
       </p>
+      {record.payments.length + record.settlements.length > 0 ? (
+        <ul className="rs-list rs-cash-execution-money">
+          {record.payments.map((one) => (
+            <li key={one.id}>
+              Payment {money(one.amountCents, m.currency)}
+              {one.reference ? ` (reference ${one.reference})` : ''}, earned and not yet usable
+            </li>
+          ))}
+          {record.settlements.map((one) => (
+            <li key={one.id}>
+              Settled {money(one.amountCents, m.currency)}
+              {one.reference ? ` (reference ${one.reference})` : ''}, usable
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {record.actions.length > 0 ? (
         <ul className="rs-list rs-cash-execution-actions">
           {record.actions.map((one) => (
@@ -2084,7 +2100,7 @@ function ExecutionPanel({
               : one.status === 'REFUSED'
                 ? `The provider refused ${one.action.toLowerCase().replace(/_/g, ' ')}${one.reason ? `: ${one.reason}` : ''}. Nothing happened.`
                 : one.status === 'UNRECORDED'
-                  ? `${one.action.toLowerCase().replace(/_/g, ' ')} happened (reference ${one.receiptRef ?? 'none'}) and is not on the record yet.`
+                  ? `${one.action.toLowerCase().replace(/_/g, ' ')} happened (reference ${one.receiptRef ?? 'none'}) and is not on the record yet; Brain finishes recording it on its next pass and sends nothing again.`
                   : `${one.action.toLowerCase().replace(/_/g, ' ')} is under way.`}
           </p>
         ))}

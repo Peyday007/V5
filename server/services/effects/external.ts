@@ -77,6 +77,48 @@ export interface ExternalRunInput {
  */
 export const EXTERNAL_ATTEMPT_LEASE_MS = 15 * 60 * 1000;
 
+/**
+ * How long this executor waits for the provider before it stops waiting and
+ * records the attempt as UNCERTAIN.
+ *
+ * Strictly shorter than the recovery lease, and that is the point: without a
+ * bound, a send that was merely slow could outlive `EXTERNAL_ATTEMPT_LEASE_MS`,
+ * be taken over by a later caller as though its executor had died, and then
+ * confirm into an operation that caller had already settled — two executors
+ * holding one effect. Bounded here, the executor gives the effect up before
+ * anybody else may take it. Giving up is not evidence (invariant 26): the
+ * attempt is UNCERTAIN, the provider is asked, and nothing is resent.
+ */
+export const EXTERNAL_SEND_TIMEOUT_MS = 5 * 60 * 1000;
+
+let sendTimeoutMs = EXTERNAL_SEND_TIMEOUT_MS;
+
+/** Tests only: shorten the wait so a slow provider can be exercised. */
+export function setExternalSendTimeoutForTests(ms: number | null): void {
+  sendTimeoutMs = ms ?? EXTERNAL_SEND_TIMEOUT_MS;
+}
+
+const SEND_TIMED_OUT = Symbol('send timed out');
+
+async function boundedSend(
+  send: () => Promise<SendOutcome>,
+  timeoutMs: number,
+): Promise<SendOutcome | typeof SEND_TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof SEND_TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(SEND_TIMED_OUT), timeoutMs);
+  });
+  // A send that settles after the bound is deliberately ignored: by then the
+  // attempt is UNCERTAIN and only the provider's own answer may resolve it.
+  const sent = send();
+  sent.catch(() => undefined);
+  try {
+    return await Promise.race([sent, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export type ExternalOutcome =
   | { status: 'CONFIRMED'; operation: IdempotencyOperation; receiptRef: string }
   | { status: 'REPLAYED'; operation: IdempotencyOperation }
@@ -103,7 +145,17 @@ async function recordConfirmed(
     receiptRef,
     receiptMeta: safe,
   });
-  await succeedOperation(operation.id, { resultRef: receiptRef, resultSummary: null });
+  if (await succeedOperation(operation.id, { resultRef: receiptRef, resultSummary: null })) return;
+  // The operation left RESERVED while this attempt was out: a recovery took it
+  // over and could not confirm it, so it is UNCERTAIN. A receipt is the
+  // evidence an unknown waits for, so it resolves the unknown rather than
+  // being dropped — dropped, a person could later close it as "did not
+  // happen" and the retry that follows would be a second effect.
+  await resolveUncertain(operation.id, {
+    as: 'SUCCEEDED',
+    resultRef: receiptRef,
+    summary: 'the provider confirmed this attempt after it had been recorded as unknown',
+  });
 }
 
 export async function runExternalEffect(input: ExternalRunInput): Promise<ExternalOutcome> {
@@ -202,12 +254,26 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
   await markAttemptSent(attempt.id);
 
   let outcome: SendOutcome;
+  let timedOut = false;
   try {
-    outcome = await input.adapter.send({
-      providerKey,
-      businessId: input.businessId,
-      payload,
-    });
+    const answered = await boundedSend(
+      () =>
+        input.adapter.send({
+          providerKey,
+          businessId: input.businessId,
+          payload,
+        }),
+      sendTimeoutMs,
+    );
+    if (answered === SEND_TIMED_OUT) {
+      timedOut = true;
+      outcome = {
+        kind: 'UNCERTAIN',
+        reason: 'the provider did not answer within the time this attempt waits',
+      };
+    } else {
+      outcome = answered;
+    }
   } catch (error) {
     // A thrown transport error is the ambiguous case, not a failure. The
     // request may well have arrived.
@@ -254,7 +320,10 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
     outcome: 'UNCERTAIN',
     detail: outcome.reason,
   });
-  const reconciled = await tryReconcile(input.adapter, operation, input.businessId);
+  // After a timeout the request may still be on its way, so the provider
+  // saying it has not seen it is not yet evidence that nothing was sent —
+  // the same rule `resumeAfterCrash` applies to a send nobody saw return.
+  const reconciled = await tryReconcile(input.adapter, operation, input.businessId, !timedOut);
   if (reconciled) return reconciled;
 
   await markUncertain(operation.id, outcome.reason);
