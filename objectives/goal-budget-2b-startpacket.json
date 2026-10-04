@@ -1,0 +1,51 @@
+{
+  "objective": "DECOMPOSITION CONSTRAINT (an earlier campaign for this objective deadlocked on it): making packetKey part of the GOAL_BUDGET ApprovalPolicy type breaks the existing call at tests/startPacket.test.ts (~L424) under npm run typecheck, so the unit that changes startPacket.ts MUST also own and update tests/startPacket.test.ts in the same commit. Never put a test-file update that the typecheck needs into a unit that depends on the unit that breaks it; every unit must leave the merged tree passing typecheck on its own. Prefer two units: (a) startPacket.ts + tests/startPacket.test.ts + tests/goalBudgetStartPacket.test.ts startPacket cases, (b) packetRunner.ts approval branch + its tests in tests/goalBudgetStartPacket.test.ts, (b) depending on (a). NOTE the merged foundation already gives createOrchestration an optional goal {goalId, packetKey} that reserves, binds and settles the packet and throws PacketBudgetRefused — use it rather than reserving twice. Enable GOAL_BUDGET in server/services/research/startPacket.ts as a real, enforced approval mode, on top of the goal ledger already merged (createResearchGoal, reserveGoalPacket, research_orchestrations.goal_id/goal_packet_key, goalForOrchestration, settled fragment reservations in server/repos/russellAuthority.ts and server/repos/research.ts). (1) Add GOAL_BUDGET to SUPPORTED_APPROVAL_MODES only together with the enforcement below, and rewrite the comments that explain why it was absent so they say what now enforces each ceiling. The policy carries goalId, budget and a required packetKey (the stable idempotency handle for this packet within the goal; a retry with the same key is the same packet). The budget supplied by the caller is never trusted: the ceilings, deadline and zero money are read from the goal row; a caller budget with externalSpendCents !== 0 or paidOveragesEnabled !== false is refused by name (invariant 18). (2) Before createRun/createOrchestration: resolve the goal (must be purpose RESEARCH_GOAL, ACTIVE, in the same project, else the same NoSuchTarget refusal), then reserveGoalPacket. If the same (goal_id, goal_packet_key) orchestration already exists return it unchanged (no second run, orchestration or charge). On refusal create nothing, append a project_events row RESEARCH_GOAL_BUDGET_STOPPED naming the ceiling (PACKETS, FRAGMENTS, DEADLINE) and the goal, and throw a typed GoalBudgetExhausted error whose message tells a person exactly which ceiling stopped it and that raising it is their decision — reaching a ceiling is not a failed packet and nothing existing is touched. On success create the orchestration with goal_id and goal_packet_key set and settle the packet reservation. (3) autoApprove must stay FALSE for GOAL_BUDGET (the plan must still be produced). In server/services/research/packetRunner.ts, beside the AUTO_WITHIN_ENVELOPE approval branch, approve a PLANNED plan of an orchestration with goal_id when the goal is still ACTIVE and before its deadline (Brain's clock), recording who authorized it (the goal's created_by_user_id) and the goal id; fragments were already charged in createFragments, so a plan over the fragment ceiling never reaches approval (FragmentBudgetRefused parks it at NEEDS_HUMAN with the ceiling named — keep that). After the deadline a GOAL_BUDGET packet's still-PLANNED fragments are not approved and the packet parks with the deadline named; fragments already QUEUED or LEASED before the deadline may finish (state this decision in a comment beside the branch, consistent with how an exhausted allowance keeps queued work). (4) The PER_PACKET and AUTO_WITHIN_ENVELOPE paths behave exactly as before.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "claude/goal-budget-authorization-9t3oyu",
+  "expectedOutcome": "startPacket accepts GOAL_BUDGET, proves the packet fits the goal before creating anything, and the packet runner approves goal-budget plans mechanically within the approved ceilings and deadline.",
+  "nonGoals": [
+    "Autonomous continuation (deciding a second packet is needed) — a later objective",
+    "HTTP routes, admin commands or UI",
+    "Editing server/services/research/approvalEnvelope.ts or server/services/identity/**",
+    "Lowering any evidence bar or changing the gate"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/goalBudgetStartPacket.test.ts: a goal with maxPackets=2 admits two startPacket calls with distinct packet keys and refuses the third with GoalBudgetExhausted naming PACKETS, creating no run, orchestration or fragment, and appending RESEARCH_GOAL_BUDGET_STOPPED; a repeated packetKey returns the existing orchestration without a second charge",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/goalBudgetStartPacket.test.ts: a GOAL_BUDGET packet's plan is produced (autoApprove false) and approved by the runner without a person when inside the ceilings; a plan exceeding the remaining fragment ceiling parks NEEDS_HUMAN and earlier packets' fragments are untouched; after the deadline neither a new packet nor approval of PLANNED fragments happens",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/goalBudgetStartPacket.test.ts: a caller budget with non-zero externalSpendCents or paidOveragesEnabled true is refused; two concurrent startPacket calls for one remaining packet slot create exactly one orchestration",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/research/startPacket.ts",
+    "server/services/research/packetRunner.ts",
+    "server/repos/research.ts",
+    "server/repos/russellAuthority.ts",
+    "server/domain/types.ts",
+    "tests/goalBudgetStartPacket.test.ts",
+    "tests/startPacket.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Revert the commits; GOAL_BUDGET returns to being refused and no schema changes.",
+  "submissionKey": "goal-budget-2b-startpacket"
+}
