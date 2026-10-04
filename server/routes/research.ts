@@ -54,6 +54,7 @@ import { ocrStatus } from '../services/documents/ocr.ts';
 import {
   badRequest,
   bodyOf,
+  conflict,
   handler,
   notFound,
   optionalBoolean,
@@ -63,10 +64,14 @@ import {
   requireImportJob,
   requireLayer,
   requireOrchestration,
+  requirePerson,
   requireProject,
   requiredString,
   withRequestContext,
 } from './helpers.ts';
+import { decideProjectAccess } from '../services/identity/policy.ts';
+import { createResearchGoal, getGoal, revokeGoal } from '../repos/russellAuthority.ts';
+import { goalBudgetViewFor, listGoalBudgetViews } from '../services/research/goalBudgetView.ts';
 import { researchIntelligenceView } from '../services/research/intelligence/view.ts';
 
 /** A body field that has to be an object before it can be read as one. */
@@ -494,5 +499,97 @@ researchRouter.get(
     unsubscribe();
     res.end();
   });
+  }),
+);
+
+/*
+ * Research goals: the budgets a person opens for bounded research.
+ *
+ * A goal's ceilings are derived into one stopping sentence by
+ * `goalBudgetView.ts`; nothing here decides them. Reads are for any member who
+ * may read the project, and opening or revoking one is ADMIN — asked of the
+ * policy module directly, because the path-derived level for a POST under a
+ * project is WRITE. A worker is refused by type, and a goal that is absent, in
+ * another project, or not a research goal is one 404 with one body.
+ */
+const RESEARCH_GOAL_FIELDS = new Set(['name', 'maxPackets', 'maxFragments', 'deadline']);
+const REFUSED_MONEY_FIELDS = new Set([
+  'externalSpendCents',
+  'paidOveragesEnabled',
+  'maxExternalSpend',
+  'paidOverages',
+]);
+
+async function requireProjectAdmin(projectId: string): Promise<{ projectId: string; userId: string }> {
+  const principal = requirePerson();
+  const project = await requireProject(projectId);
+  if (!decideProjectAccess(principal, project.id, 'ADMIN').allowed) throw notFound('No project with that id.');
+  return { projectId: project.id, userId: principal.id };
+}
+
+function wholeNumber(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw badRequest(`"${field}" is required and must be a positive whole number.`);
+  }
+  return value;
+}
+
+researchRouter.get(
+  '/projects/:projectId/research-goals',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { goals: await listGoalBudgetViews(project.id) };
+  }),
+);
+
+researchRouter.post(
+  '/projects/:projectId/research-goals',
+  handler(async (req) => {
+    const { projectId, userId } = await requireProjectAdmin(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    for (const key of Object.keys(body)) {
+      if (REFUSED_MONEY_FIELDS.has(key)) {
+        throw badRequest(`"${key}" is refused: a research goal cannot carry external spend or paid overages.`);
+      }
+      if (!RESEARCH_GOAL_FIELDS.has(key)) throw badRequest(`"${key}" is not a field a research goal takes.`);
+    }
+    const name = requiredString(body['name'], 'name');
+    const maxPackets = wholeNumber(body['maxPackets'], 'maxPackets');
+    const maxFragments = wholeNumber(body['maxFragments'], 'maxFragments');
+    const deadline = requiredString(body['deadline'], 'deadline');
+    let goalId: string;
+    try {
+      const goal = await createResearchGoal({
+        projectId,
+        ownerUserId: userId,
+        createdByUserId: userId,
+        name,
+        maxPackets,
+        maxFragments,
+        deadline,
+      });
+      goalId = goal.id;
+    } catch (error) {
+      throw badRequest(error instanceof Error ? error.message : 'The research goal could not be opened.');
+    }
+    const view = await goalBudgetViewFor(goalId);
+    return { goal: view };
+  }),
+);
+
+researchRouter.post(
+  '/projects/:projectId/research-goals/:goalId/revoke',
+  handler(async (req) => {
+    const { projectId, userId } = await requireProjectAdmin(pathId(req, 'projectId'));
+    const goal = await getGoal(pathId(req, 'goalId'));
+    if (!goal || goal.projectId !== projectId || goal.purpose !== 'RESEARCH_GOAL') {
+      throw notFound('No research goal with that id.');
+    }
+    const reason = optionalString(bodyOf(req)['reason'], 'reason') ?? 'Revoked by a person.';
+    if (!(await revokeGoal({ goalId: goal.id, actorUserId: userId, reason }))) {
+      throw conflict('This research goal is no longer live, so there is nothing to revoke.');
+    }
+    return { goal: await goalBudgetViewFor(goal.id) };
   }),
 );
