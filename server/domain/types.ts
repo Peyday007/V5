@@ -1995,6 +1995,9 @@ export interface ProviderConnectionRow {
 }
 
 export interface ResearchOrchestrationRow {
+  /** The research goal whose budget this packet was reserved against; null for every other packet. */
+  goal_id?: string | null;
+  goal_packet_key?: string | null;
   /** Null unless a person preauthorized an envelope this plan may be approved against. */
   approval_envelope_id: string | null;
   approval_envelope_authorized_by: string | null;
@@ -3050,6 +3053,9 @@ export interface ProviderConnection {
  * not pass, which is a different thing from a job that failed.
  */
 export interface ResearchOrchestration {
+  /** The research goal this packet was reserved against, if any. */
+  goalId?: string | null;
+  goalPacketKey?: string | null;
   /**
    * Set only when a person has authorized this packet to record unresolved
    * gaps rather than stop. Null on every packet unless somebody said so, and
@@ -6069,6 +6075,8 @@ export interface RussellGoalRow {
   max_concurrent: number;
   max_probes: number;
   work_policy?: string | null;
+  /** STANDING (Russell's grant) or RESEARCH_GOAL (a bounded research budget). */
+  purpose?: string | null;
   max_external_spend: number;
   starts_at: string;
   expires_at: string | null;
@@ -6385,6 +6393,8 @@ export interface RussellGoal {
    * capacity, not an artificial quota.
    */
   workPolicy: WorkPolicy;
+  /** STANDING is Russell's grant; RESEARCH_GOAL is a bounded research budget and never a standing grant. */
+  purpose?: 'STANDING' | 'RESEARCH_GOAL';
   maxExternalSpend: number;
   startsAt: string;
   expiresAt: string | null;

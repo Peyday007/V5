@@ -20,7 +20,7 @@ import type { DealFinding, PuzzleFinding, PuzzleProductClass } from '../domain/t
 import type { OpportunitySignal } from '../domain/types.ts';
 import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
-import { chargeFragments } from './russellAuthority.ts';
+import { bindPacketToGoal, chargeFragments, reserveGoalPacket, settleReservation } from './russellAuthority.ts';
 import {
   parseDependencies,
   serializeDependencies,
@@ -54,6 +54,8 @@ import { buildUpdate, fromBool, newId, nowIso, parseJson, toBool, toJson } from 
 
 function mapOrchestration(row: ResearchOrchestrationRow): ResearchOrchestration {
   return {
+    goalId: row.goal_id ?? null,
+    goalPacketKey: row.goal_packet_key ?? null,
     unresolvedGapPolicy: row.unresolved_gap_policy === 'RECORD_GAPS' ? 'RECORD_GAPS' : null,
     unresolvedGapAuthorizedBy: row.unresolved_gap_authorized_by ?? null,
     unresolvedGapAuthorizedAt: row.unresolved_gap_authorized_at ?? null,
@@ -290,9 +292,36 @@ export interface CreateOrchestrationInput {
   /** False plans the run and then waits for a person to approve it. */
   autoApprove?: boolean;
   fixture?: boolean;
+  /**
+   * Charge this packet to a research goal. Both or neither: the goal and the
+   * caller's own key for this packet (the key is what makes a retry the same
+   * packet and not a second charge).
+   */
+  goal?: { goalId: string; packetKey: string };
+}
+
+export class PacketBudgetRefused extends Error {
+  constructor(public readonly detail: string) {
+    super(detail);
+    this.name = 'PacketBudgetRefused';
+  }
 }
 
 export async function createOrchestration(input: CreateOrchestrationInput): Promise<ResearchOrchestration> {
+  /*
+   * A goal's packet ceiling is spent before the packet exists and settled only
+   * once it does (`bindPacketToGoal`): a crash in between leaves a HELD
+   * reservation that lapses and refunds itself. Nothing is created when the
+   * ceiling, the deadline or the goal's state refuses.
+   */
+  if (input.goal) {
+    const outcome = await reserveGoalPacket({
+      goalId: input.goal.goalId,
+      packetKey: input.goal.packetKey,
+      projectId: input.projectId,
+    });
+    if (!outcome.ok) throw new PacketBudgetRefused(outcome.reason);
+  }
   const ts = nowIso();
   const id = newId('orc');
   await getDb().run(
@@ -305,6 +334,19 @@ export async function createOrchestration(input: CreateOrchestrationInput): Prom
       input.parentOrchestrationId ?? null, input.repairReason ?? null,
       fromBool(input.autoApprove ?? true), fromBool(input.fixture ?? false), ts, ts, ts],
   );
+  if (input.goal) {
+    const bound = await bindPacketToGoal({
+      orchestrationId: id,
+      goalId: input.goal.goalId,
+      packetKey: input.goal.packetKey,
+    });
+    if (!bound) {
+      // The packet was never paid for (the hold lapsed, or the key already
+      // names another packet): withdraw it rather than leave a free one.
+      await getDb().run('DELETE FROM research_orchestrations WHERE id = ?', [id]);
+      throw new PacketBudgetRefused('this research goal could not settle the packet, so it was not created');
+    }
+  }
   return (await getOrchestration(id))!;
 }
 
@@ -588,6 +630,13 @@ export async function createFragments(inputs: CreateFragmentInput[]): Promise<Re
       );
     }
   });
+  /*
+   * Settled only now that the fragments exist, so a created fragment counts for
+   * ever and a crash before this point leaves the reservations HELD to expire
+   * and refund themselves. Left HELD they stopped counting after their TTL,
+   * which handed a capped goal back every fragment it had already created.
+   */
+  for (const reservationId of charge.reservationIds) await settleReservation(reservationId);
   const loaded = await Promise.all(ids.map((id) => getFragment(id)));
   return loaded.filter((f): f is ResearchFragment => f !== null);
 }
