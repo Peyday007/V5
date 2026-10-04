@@ -78,6 +78,19 @@ export async function candidateProjects(principal: Principal): Promise<
   return allowed;
 }
 
+/**
+ * Whether `name` appears in `message` as a whole name, not inside another word.
+ * Boundaries are anything that is not a letter or a digit, so "Brain" does not
+ * match "brainstorm", "Cash" does not match "cashflow" and "V4" does not match
+ * "V45", while "Deal Dispatch" still matches verbatim.
+ */
+function namesWhole(message: string, name: string): boolean {
+  const trimmed = name.trim();
+  if (trimmed === '') return false;
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu').test(message);
+}
+
 function tokens(text: string): Set<string> {
   return new Set(
     text
@@ -101,12 +114,11 @@ async function score(
   project: { id: string; name: string; slug: string },
   message: string,
 ): Promise<Scored> {
-  const lower = message.toLowerCase();
   const words = tokens(message);
   const evidence: string[] = [];
   let points = 0;
 
-  if (lower.includes(project.name.toLowerCase())) {
+  if (namesWhole(message, project.name)) {
     points += 60;
     evidence.push(`it names ${project.name}`);
   } else {
@@ -122,7 +134,7 @@ async function score(
   }
 
   for (const layer of await listLayers(project.id)) {
-    if (lower.includes(layer.name.toLowerCase())) {
+    if (namesWhole(message, layer.name)) {
       points += 30;
       evidence.push(`it names the ${layer.name} layer`);
       continue;
