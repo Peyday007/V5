@@ -495,6 +495,39 @@ describe('the deadline, on Brain’s clock', () => {
   });
 });
 
+describe('a lapsed hold is not a replay', () => {
+  it('judges a retried key against the ceiling once its hold has expired', async () => {
+    const goal = await researchGoal({ maxPackets: 1 });
+    const first = await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId });
+    expect(first.ok).toBe(true);
+    await expireHolds(goal.id, 'MISSION');
+    // Another packet takes the refunded slot and is created and settled.
+    await packet(goal.id, 'B');
+    const retried = await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId });
+    expect(retried.ok).toBe(false);
+    expect(retried.refusedBy).toBe('PACKETS');
+    const status = await goalBudgetStatus(goal.id);
+    expect(status?.packets.reserved).toBe(1);
+    expect(status?.packets.used).toBe(1);
+  });
+
+  it('still replays a live hold as the same packet', async () => {
+    const goal = await researchGoal({ maxPackets: 1 });
+    expect((await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId })).ok).toBe(true);
+    const again = await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId });
+    expect(again.ok).toBe(true);
+    expect(again.replayed).toBe(true);
+  });
+
+  it('revives a lapsed hold when the slot is still free', async () => {
+    const goal = await researchGoal({ maxPackets: 1 });
+    await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId });
+    await expireHolds(goal.id, 'MISSION');
+    const retried = await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId });
+    expect(retried.ok).toBe(true);
+  });
+});
+
 describe('goalBudgetStatus', () => {
   it('reports ceilings, use, deadline and who authorized it from narrow reads', async () => {
     const deadline = deadlineIn();

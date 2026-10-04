@@ -489,6 +489,7 @@ export async function reserve(input: {
     return { ok: false, reservation: null, reason: 'the reservation could not be taken', replayed: false };
   }
   let mine = existing;
+  let lapsedHold = false;
   if (existing.id !== id) {
     /*
      * Somebody equivalent got there first. That is success for an idempotent
@@ -507,7 +508,16 @@ export async function reserve(input: {
      * equivalent caller. It keeps its original `rowid`, which means it keeps
      * its place in the queue for the slot — it was there first.
      */
-    if (existing.state !== 'RELEASED') {
+    /*
+     * A `HELD` row whose hold has lapsed is not a previous success either: an
+     * expired hold counts for nothing (that is what refunds a crashed launch),
+     * so its slot may since have been taken by somebody else. Replaying it as
+     * `ok` skipped the ceiling and let a goal exceed it once the original key
+     * was retried. It is revived like a released row — by a guarded swap on
+     * still being lapsed — and then judged against the ceiling below.
+     */
+    lapsedHold = existing.state === 'HELD' && existing.expires_at <= now;
+    if (existing.state !== 'RELEASED' && !lapsedHold) {
       return {
         ok: existing.state === 'HELD' || existing.state === 'SETTLED',
         reservation: mapReservation(existing),
@@ -518,8 +528,8 @@ export async function reserve(input: {
     const revived = await getDb().run(
       `UPDATE russell_budget_reservations
           SET state = 'HELD', expires_at = ?, released_at = NULL, release_reason = NULL
-        WHERE id = ? AND state = 'RELEASED'`,
-      [expires, existing.id],
+        WHERE id = ? AND (state = 'RELEASED' OR (state = 'HELD' AND expires_at <= ?))`,
+      [expires, existing.id, now],
     );
     const reread = (
       await getDb().all<RussellReservationRow>(
@@ -565,7 +575,9 @@ export async function reserve(input: {
    * hold for each ceiling separately: a request may be inside the cumulative
    * limit and outside the concurrent one, and it must lose exactly one of them.
    */
-  const totals = await totalsThroughMine(goal.id, input.kind, now, mine);
+  // A revived lapsed hold has lost its place in line: what was settled or
+  // taken since it lapsed is counted in full, not only what ranks before it.
+  const totals = await totalsThroughMine(goal.id, input.kind, now, mine, lapsedHold);
   const limits = ceilingsFor(goal, input.kind);
 
   if (limits.total !== null && totals.total > limits.total) {
@@ -871,6 +883,7 @@ async function totalsThroughMine(
   kind: ReservationKind,
   now: string,
   mine: RussellReservationRow,
+  wholeLedger = false,
 ): Promise<{ total: number; active: number }> {
   const rows = await getDb().all<{ total: number; active: number }>(
     `SELECT
@@ -882,8 +895,8 @@ async function totalsThroughMine(
           ELSE 0 END), 0) AS active
        FROM russell_budget_reservations
       WHERE goal_id = ? AND kind = ?
-        AND rowid <= (SELECT rowid FROM russell_budget_reservations WHERE id = ?)`,
-    [now, now, goalId, kind, mine.id],
+        AND (? = 1 OR rowid <= (SELECT rowid FROM russell_budget_reservations WHERE id = ?))`,
+    [now, now, goalId, kind, wholeLedger ? 1 : 0, mine.id],
   );
   return { total: Number(rows[0]?.total ?? 0), active: Number(rows[0]?.active ?? 0) };
 }
