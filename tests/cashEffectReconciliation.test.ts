@@ -66,7 +66,7 @@ import {
 } from '../server/services/effects/adapter.ts';
 import { cashRouter } from '../server/routes/cash.ts';
 import { setExternalSendTimeoutForTests } from '../server/services/effects/external.ts';
-import { markUncertain } from '../server/repos/idempotency.ts';
+import { armRecovery, getOperation, markUncertain } from '../server/repos/idempotency.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
 import type { CashOpportunity, Principal, ProjectMembership } from '../server/domain/types.ts';
 
@@ -905,5 +905,114 @@ describe('M: a payment that happened and is not on the ledger stops the next one
     );
     expect(payments).toEqual([expect.objectContaining({ verifiedReference: 'pay-1', amountCents: 120_000 })]);
     expect(payment.sends).toHaveLength(1);
+  });
+});
+
+/** Rewrite one operation into what a process that died mid-send leaves. */
+async function stoppedMidSend(operationId: string): Promise<void> {
+  await getDb().run(
+    `UPDATE idempotency_operations
+        SET state = 'RESERVED', result_ref = NULL, completed_at = NULL, recover_after = ?
+      WHERE id = ?`,
+    ['2000-01-01T00:00:00.000Z', operationId],
+  );
+  await getDb().run(
+    `UPDATE effect_attempts SET phase = 'SENT', outcome = NULL, ended_at = NULL,
+            receipt_ref = NULL WHERE operation_id = ?`,
+    [operationId],
+  );
+}
+
+describe('N: a retried attempt is under way, whatever the last one was refused for', () => {
+  it('a live retry after a retryable refusal blocks another send', async () => {
+    const piece = await executingWithAgreement();
+    const invoice = provider('QUOTE_AND_INVOICE', 'inv');
+    invoice.onSend = async () => ({ kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true });
+    await act_(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await nextOccurrence(piece.id) });
+    const [op] = (await commercialOperationsFor(projectId, piece.id)).filter(
+      (one) => one.action === 'QUOTE_AND_INVOICE',
+    );
+    expect(op!.operation).toMatchObject({ state: 'RESERVED', failureCategory: 'DEPENDENCY_UNAVAILABLE' });
+    // The retry begins: its executor arms its lease and is now waiting on the provider.
+    expect(await armRecovery(op!.operation.id, '2999-01-01T00:00:00.000Z')).toBe(true);
+    expect((await getOperation(op!.operation.id))!.failureCategory).toBeNull();
+    const offered = (await recordOnPage(piece.id)).performable.find(
+      (one: any) => one.action === 'QUOTE_AND_INVOICE',
+    );
+    expect(offered).toMatchObject({ available: false });
+    expect(offered.reason).toMatch(/under way/);
+  });
+});
+
+describe('O: recovery never closes what an idempotent provider may have received', () => {
+  it('records it unknown rather than failed, and sends nothing', async () => {
+    const piece = await executingWithAgreement();
+    const sends: unknown[] = [];
+    registerAdapter({
+      name: 'synthetic.idempotent_invoice',
+      effectClass: 'EXTERNAL_IDEMPOTENT',
+      providerKeyLimit: 64,
+      namespace: COMMERCIAL_EFFECTS.QUOTE_AND_INVOICE.namespace.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (request) => {
+        sends.push(request.payload);
+        return { kind: 'CONFIRMED', receiptRef: `inv-${sends.length}` };
+      },
+    } as EffectAdapter);
+    const outcome = await sendCommercialEffect({
+      action: 'QUOTE_AND_INVOICE',
+      projectId,
+      opportunityId: piece.id,
+      occurrence: await nextOccurrence(piece.id),
+      payload: { payer: 'x', amountCents: 120_000, currency: 'USD' },
+      authorityId,
+      amountCents: 120_000,
+      stateAtSend: 'EXECUTING',
+    });
+    await stoppedMidSend(outcome.operation.id);
+    await operate(projectId);
+    // Closed as FAILED, the next send would carry a new provider key the
+    // provider cannot de-duplicate against.
+    expect((await getOperation(outcome.operation.id))!.state).toBe('UNCERTAIN');
+    expect(sends).toHaveLength(1);
+  });
+});
+
+describe('P: a take-over holds a lease of its own', () => {
+  it('is never left as a reservation nobody can recover', async () => {
+    const piece = await executingWithAgreement();
+    let leaseDuringAsk: string | null | undefined;
+    let opId = '';
+    registerAdapter({
+      name: 'synthetic.reconcilable_invoice',
+      effectClass: 'EXTERNAL_RECONCILABLE',
+      namespace: COMMERCIAL_EFFECTS.QUOTE_AND_INVOICE.namespace.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async () => ({ kind: 'CONFIRMED', receiptRef: 'inv-1' }),
+      reconcile: async () => {
+        leaseDuringAsk = (await getOperation(opId))!.recoverAfter;
+        return { kind: 'INCONCLUSIVE', reason: 'the provider is still indexing' };
+      },
+    });
+    const outcome = await sendCommercialEffect({
+      action: 'QUOTE_AND_INVOICE',
+      projectId,
+      opportunityId: piece.id,
+      occurrence: await nextOccurrence(piece.id),
+      payload: { payer: 'x', amountCents: 120_000, currency: 'USD' },
+      authorityId,
+      amountCents: 120_000,
+      stateAtSend: 'EXECUTING',
+    });
+    opId = outcome.operation.id;
+    await stoppedMidSend(opId);
+    await operate(projectId);
+    // While the take-over was asking, a death there would have been
+    // recoverable — not a row every reader takes for live for ever.
+    expect(leaseDuringAsk).toBeTruthy();
+    expect(leaseDuringAsk! > new Date().toISOString()).toBe(true);
+    expect((await getOperation(opId))!.state).toBe('UNCERTAIN');
   });
 });

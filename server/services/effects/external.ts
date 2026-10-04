@@ -93,6 +93,10 @@ export const EXTERNAL_SEND_TIMEOUT_MS = 5 * 60 * 1000;
 
 let sendTimeoutMs = EXTERNAL_SEND_TIMEOUT_MS;
 
+function nextLease(): string {
+  return new Date(Date.parse(operationNow()) + EXTERNAL_ATTEMPT_LEASE_MS).toISOString();
+}
+
 /** Tests only: shorten the wait so a slow provider can be exercised. */
 export function setExternalSendTimeoutForTests(ms: number | null): void {
   sendTimeoutMs = ms ?? EXTERNAL_SEND_TIMEOUT_MS;
@@ -213,7 +217,7 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
     // effect could be attempted again. Deleting one would make a completed
     // external effect silently repeatable.
     retentionClass: 'PERMANENT',
-    recoverAfter: new Date(Date.parse(operationNow()) + EXTERNAL_ATTEMPT_LEASE_MS).toISOString(),
+    recoverAfter: nextLease(),
   });
 
   switch (reserved.outcome) {
@@ -235,6 +239,7 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
       const taken = await takeOverOperation(
         reserved.operation.id,
         reserved.operation.recoverAfter ?? '',
+        nextLease(),
       );
       if (!taken) throw new OperationInProgress(reserved.operation);
       // An executor died. Whether it had already sent is exactly what the
@@ -252,10 +257,7 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
   // If this process dies between here and recording what came back, the next
   // caller must be able to take over and ask the provider — never wait for
   // ever, and never send again blind. See `armRecovery`.
-  await armRecovery(
-    operation.id,
-    new Date(Date.parse(operationNow()) + EXTERNAL_ATTEMPT_LEASE_MS).toISOString(),
-  );
+  await armRecovery(operation.id, nextLease());
   const providerKey = deriveProviderKey({
     adapter: input.adapter,
     operationId: operation.id,
@@ -379,10 +381,22 @@ export async function recoverExternalEffect(input: {
   const { operation } = input;
   if (operation.state !== 'RESERVED' || !operation.recoverAfter) return null;
   if (operation.recoverAfter > operationNow()) return null;
-  if (!(await takeOverOperation(operation.id, operation.recoverAfter))) return null;
+  if (!(await takeOverOperation(operation.id, operation.recoverAfter, nextLease()))) return null;
+  const attempt = await latestSentAttempt(operation.id);
+  // Something may have gone out and the provider was not asked to confirm it:
+  // an idempotent adapter's open attempt, which `resumeAfterCrash` would
+  // resend under the same provider key. Recovery never sends, and closing it
+  // would put the next send under a new key the provider cannot de-duplicate
+  // against — so it is an unknown, settled like any other.
+  const mayHaveSent =
+    attempt !== null && !(attempt.endedAt !== null && attempt.outcome === 'FAILED');
+  if (mayHaveSent && input.adapter.effectClass === 'EXTERNAL_IDEMPOTENT') {
+    const reason = 'an earlier attempt sent this and did not record an outcome';
+    await markUncertain(operation.id, reason);
+    return { status: 'UNCERTAIN', operation: (await getOperation(operation.id)) ?? operation, reason };
+  }
   const resumed = await resumeAfterCrash(input.adapter, operation, input.businessId);
   if (resumed) return resumed;
-  const attempt = await latestSentAttempt(operation.id);
   await failOperation(operation.id, {
     category: 'DEPENDENCY_UNAVAILABLE',
     terminal: true,

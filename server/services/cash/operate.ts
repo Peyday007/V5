@@ -74,7 +74,7 @@ import { recordWorkModelReclassification, type Reclassification } from './reclas
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
-import { sendContactBuyer } from './effects.ts';
+import { commercialOperationsFor, sendContactBuyer } from './effects.ts';
 import {
   alreadyContacted,
   applyEffectOutcome,
@@ -698,12 +698,24 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
     // closed as not having happened — the provider refusing outright, or a
     // person establishing it. Trying again is that person's call; the tick
     // retrying a refusal would send into the same refusal on every pass.
-    if (retry > 0) {
+    // And a same-key attempt the provider refused retryably is waiting on its
+    // own backoff and a person, not on the tick sending into it again.
+    const refusedHere = (await commercialOperationsFor(opportunity.projectId, opportunity.id)).some(
+      (one) =>
+        one.action === CONTACT_ACTION &&
+        one.occurrence === occurrence &&
+        one.retry === retry &&
+        one.operation.state === 'RESERVED' &&
+        one.operation.failureCategory !== null,
+    );
+    if (retry > 0 || refusedHere) {
       out.withheld.push({
         opportunityId: opportunity.id,
-        because:
-          'An earlier attempt to reach the buyer was closed as not having happened. Brain tries ' +
-          'again only when a person asks it to, from this piece.',
+        because: refusedHere
+          ? 'The provider refused reaching the buyer and said it may be retried. Brain tries again ' +
+            'only when a person asks it to, from this piece.'
+          : 'An earlier attempt to reach the buyer was closed as not having happened. Brain tries ' +
+            'again only when a person asks it to, from this piece.',
       });
       continue;
     }
