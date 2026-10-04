@@ -1,0 +1,45 @@
+{
+  "objective": "One operator reading of the autonomous funnel. (1) server/services/cash/funnel.ts exports funnelReading(projectId, now) derived from the tiers the view already computes: counts of SIGNAL, CANDIDATE, QUALIFIED, READY_TO_TEST, retired (if cash-autonomy-2 merged) and stale (if cash-autonomy-1 merged); the first blocker per piece (tier.toAdvance[0] with its owner); live discovery rounds; dives and need research in flight against their ceilings; and when the funnel has produced no READY_TO_TEST, one sentence naming the most common first blocker across pieces. (2) It is a section of the existing Cash page (same skeleton for both roles; members get counts and owners, never values) and a FUNNEL block in scripts/cash-report.ts printing each piece id with its tier and first blocker. (3) Read-only, no writes, reuses cashView's loaded rows. (4) Tests: the reading on a fixture portfolio; the section renders in tests/cashSection.test.tsx for both roles.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "claude/autonomous-opportunity-pipeline-6ph954",
+  "expectedOutcome": "'Can Brain find things worth testing' is answered by one reading, with the first real blocker named when it cannot.",
+  "nonGoals": [
+    "A second opportunity pipeline, queue, scheduler or polling loop beside the durable Russell tick and operate()",
+    "Changing the evidence gate, verification, audit roles or approval envelopes",
+    "Editing server/services/identity/** or server/services/research/approvalEnvelope.ts",
+    "A full-table read on every tick; every new read is narrow, indexed and bounded"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "funnel tests pass",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "cashSection parity test passes",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/cash/funnel.ts",
+    "server/services/cash/view.ts",
+    "server/services/cash/shared.ts",
+    "client/src/russell/Cash.tsx",
+    "client/src/russell/cashPage.ts",
+    "scripts/cash-report.ts",
+    "tests/**"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commits; any migration only adds columns with defaults or a nullable column."
+}
