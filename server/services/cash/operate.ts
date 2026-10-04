@@ -76,6 +76,8 @@ import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { countActions } from '../../repos/cashActions.ts';
 import { contactBuyerKey, sendContactBuyer } from './effects.ts';
+import { composeBuyerMessage } from './outreach.ts';
+import { runInvoicing, type InvoicingPass } from './invoicing.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
@@ -569,6 +571,9 @@ export interface AuthorityAdvance {
  * contacted somebody would be the one lie this section could tell that costs
  * real money.
  */
+/** How many buyers one pass may write to. See the loop below. */
+export const MAX_CONTACTS_PER_PASS = 3;
+
 export async function advanceWithinAuthority(projectId: string): Promise<AuthorityAdvance> {
   const out: AuthorityAdvance = { took: [], withheld: [] };
   const mode = await getCashMode(projectId);
@@ -608,6 +613,7 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
     }
   }
 
+  let sentThisPass = 0;
   for (const opportunity of await listOpportunities({ projectId, states: ['READY'] })) {
     // The person's decision first, because it is the authorization and the
     // other is an operational fact: deny-by-default asks whether this may
@@ -648,6 +654,50 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
      * and still needs somebody to press a button the moment an integration
      * arrives.
      */
+    /*
+     * The message, composed from the card and nothing else. A card whose
+     * published channel names no single address cannot be written to, and
+     * that is a need with a remedy rather than a guess at an address.
+     */
+    const message = composeBuyerMessage(opportunity);
+    if (!message.ok) {
+      await raiseNeed({
+        projectId: opportunity.projectId,
+        opportunityId: opportunity.id,
+        actorRef: BRAIN,
+        blockedAction: `Write to ${opportunity.payer ?? 'the payer'} about "${opportunity.title}"`,
+        whyItMatters:
+          `Brain may reach this buyer and has a messaging provider, but ${message.reason}. ` +
+          'Brain does not invent an address or an offer to send.',
+        recommendedPath:
+          'Record the single email address the buyer published, or the offer and price, on the card.',
+        setupEffort: 'A minute, if the address or offer is known.',
+        nextStep: `Fill ${message.missing} on the card.`,
+        completionCondition: 'The card names one published email address, an offer and a price.',
+        blocksState: 'EXECUTING',
+        requestKey: `contact-uncomposable:${opportunity.id}:${message.missing}`,
+      });
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because: `No message was sent: ${message.reason}. An open need names what is missing.`,
+      });
+      continue;
+    }
+
+    /*
+     * A bound on how many buyers one pass may write to. Not a quota — the next
+     * pass continues — but it is what stops a portfolio that reached READY all
+     * at once becoming a burst of outbound mail nobody watched leave.
+     */
+    if (sentThisPass >= MAX_CONTACTS_PER_PASS) {
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because: `${MAX_CONTACTS_PER_PASS} buyers were already written to this pass; this one waits for the next.`,
+      });
+      continue;
+    }
+    sentThisPass += 1;
+
     const occurrence = String((await countActions(opportunity.id)) + 1);
     // The idempotency key this attempt is reserved under, and the
     // (differently shaped) key `cash_actions` dedupes on — see
@@ -662,6 +712,7 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
         opportunityId: opportunity.id,
         payer: opportunity.payer ?? 'the payer',
         channel: opportunity.reachableChannel ?? 'the recorded channel',
+        message: { to: message.to, subject: message.subject, text: message.text },
       });
     } catch (error) {
       out.withheld.push({
@@ -738,7 +789,7 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
         detail:
           `Reached ${opportunity.payer ?? 'the payer'} through ${
             opportunity.reachableChannel ?? 'the recorded channel'
-          } with the offer on this card.`,
+          } at ${message.to} with the offer on this card.`,
         reference: receiptRef,
         requestKey: actionKey(opportunity.id, CONTACT_ACTION, occurrence),
       },
@@ -814,6 +865,7 @@ export async function operate(
   dependentWork: DependentWork[];
   validations: ValidationProgress;
   authority: AuthorityAdvance;
+  invoicing: InvoicingPass;
   monetization: MonetizationPass;
 }> {
   if (!(await getCashMode(projectId))) {
@@ -827,6 +879,7 @@ export async function operate(
       dependentWork: [],
       validations: { started: [], settled: [] },
       authority: { took: [], withheld: [] },
+      invoicing: { issued: [], uncertain: [], failed: [], withheld: [], paid: [], settled: [], voided: [] },
       monetization: {
         pathsAdded: [],
         figuresCarried: [],
@@ -879,6 +932,14 @@ export async function operate(
    */
   const authority = await advanceWithinAuthority(projectId);
   /*
+   * Invoices a person asked for, issued under QUOTE_AND_INVOICE while an
+   * invoicing provider is usable, and the provider's answers about payment and
+   * settlement read back into the ledger as two separate entries (§52). After
+   * the contact pass because nothing here depends on it, and before the
+   * ledger because the ledger reads money this may have just recorded.
+   */
+  const invoicing = await runInvoicing(projectId, now ? new Date(now) : new Date());
+  /*
    * And the possibility ledger, last, reading everything the passes above
    * wrote.
    *
@@ -898,6 +959,7 @@ export async function operate(
   return {
     reclassified,
     capabilities,
+    invoicing,
     gaps,
     research,
     proposed,

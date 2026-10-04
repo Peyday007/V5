@@ -57,11 +57,50 @@ const PRINCIPAL_ID = 'cash-contact-buyer';
  * cannot disagree about whether a real integration exists.
  */
 export function contactBuyerAdapter(): EffectAdapter | null {
-  // An adapter's own `name` is how it is registered (`getAdapter` looks it up
-  // that way); its `namespace` is which operation it serves, which is what
-  // this asks about — so the registry is scanned by namespace rather than
-  // guessed at by name.
-  return listAdapters().find((one) => one.namespace === CONTACT_BUYER_NAMESPACE.name) ?? null;
+  return adapterFor(CONTACT_BUYER_NAMESPACE);
+}
+
+/**
+ * The adapter registered for an operation, or none.
+ *
+ * An adapter's own `name` is how it is registered (`getAdapter` looks it up
+ * that way); its `namespace` is which operation it serves, which is what this
+ * asks about — so the registry is scanned by namespace rather than guessed at
+ * by name.
+ */
+function adapterFor(namespace: OperationNamespace): EffectAdapter | null {
+  return listAdapters().find((one) => one.namespace === namespace.name) ?? null;
+}
+
+/**
+ * Whether an operation can actually be performed now: an adapter is
+ * registered for it **and** that adapter's own configuration reads usable.
+ *
+ * Both halves, because registration says which provider was chosen and
+ * `health` says whether its key and settings are present *now* — a deployment
+ * whose secret was removed still has the adapter registered, and must not read
+ * as able to send. A test double with no `health` is usable by being
+ * registered, which is the only kind of adapter that lacks one.
+ */
+export function usableAdapter(namespace: OperationNamespace): EffectAdapter | null {
+  const adapter = adapterFor(namespace);
+  if (!adapter) return null;
+  if (adapter.health && !adapter.health().usable) return null;
+  return adapter;
+}
+
+/** Why an operation is or is not usable, in words that name no secret. */
+export function adapterStatus(namespace: OperationNamespace): {
+  adapter: string | null;
+  usable: boolean;
+  reason: string;
+} {
+  const adapter = adapterFor(namespace);
+  if (!adapter) {
+    return { adapter: null, usable: false, reason: 'No provider adapter is registered for this.' };
+  }
+  const health = adapter.health ? adapter.health() : { usable: true, reason: 'registered' };
+  return { adapter: adapter.name, usable: health.usable, reason: health.reason };
 }
 
 /**
@@ -87,6 +126,12 @@ export interface ContactBuyerRequest {
   opportunityId: string;
   payer: string;
   channel: string;
+  /**
+   * The message, composed from the card by `outreach.ts` — never by the
+   * adapter, and never by a model. One address, read from the channel the
+   * buyer published.
+   */
+  message: { to: string; subject: string; text: string };
 }
 
 /**
@@ -98,7 +143,7 @@ export interface ContactBuyerRequest {
  * surface rather than a withheld capability to report.
  */
 export async function sendContactBuyer(input: ContactBuyerRequest): Promise<ExternalOutcome> {
-  const adapter = contactBuyerAdapter();
+  const adapter = usableAdapter(CONTACT_BUYER_NAMESPACE);
   if (!adapter) {
     throw new Error(
       `No effect adapter is registered for "${CONTACT_BUYER_NAMESPACE.name}", so ` +
@@ -111,8 +156,79 @@ export async function sendContactBuyer(input: ContactBuyerRequest): Promise<Exte
     projectId: input.projectId,
     key: input.key,
     businessId: input.opportunityId,
-    payload: { payer: input.payer, channel: input.channel },
+    payload: {
+      requestKey: input.key,
+      payer: input.payer,
+      channel: input.channel,
+      to: input.message.to,
+      subject: input.message.subject,
+      text: input.message.text,
+    },
     principalType: 'SYSTEM',
     principalId: PRINCIPAL_ID,
+  });
+}
+
+/* ------------------------------------------------------------------------- */
+/* Issuing an invoice                                                         */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The operation of issuing one invoice for one agreed amount.
+ *
+ * Its business identity is Brain's own `cash_invoices` row id, which exists
+ * before anything is sent and is the one value the provider can be asked about
+ * afterwards (`metadata[brain_invoice]`). That is what makes the adapter
+ * reconcilable rather than opaque.
+ */
+export const ISSUE_INVOICE_NAMESPACE: OperationNamespace = {
+  name: 'cash.issue_invoice',
+  version: 1,
+  principalScope: 'PROJECT',
+  retention: 'PERMANENT',
+};
+
+export function issueInvoiceKey(invoiceId: string): string {
+  return `issue-invoice.${invoiceId}`;
+}
+
+export interface IssueInvoiceRequest {
+  projectId: string;
+  invoiceId: string;
+  amountCents: number;
+  currency: string;
+  customerEmail: string;
+  customerName: string;
+  taxTreatment: string;
+  dueDate: string;
+  description: string;
+}
+
+export async function sendIssueInvoice(input: IssueInvoiceRequest): Promise<ExternalOutcome> {
+  const adapter = usableAdapter(ISSUE_INVOICE_NAMESPACE);
+  if (!adapter) {
+    throw new Error(
+      `No usable effect adapter is registered for "${ISSUE_INVOICE_NAMESPACE.name}", so ` +
+        'ISSUE_AN_INVOICE should not have read PRESENT.',
+    );
+  }
+  return await runExternalEffect({
+    adapter,
+    namespace: ISSUE_INVOICE_NAMESPACE,
+    projectId: input.projectId,
+    // One invoice row is one invoice, for ever: the key is the row.
+    key: issueInvoiceKey(input.invoiceId),
+    businessId: input.invoiceId,
+    payload: {
+      amountCents: input.amountCents,
+      currency: input.currency,
+      customerEmail: input.customerEmail,
+      customerName: input.customerName,
+      taxTreatment: input.taxTreatment,
+      dueDate: input.dueDate,
+      description: input.description,
+    },
+    principalType: 'SYSTEM',
+    principalId: 'cash-issue-invoice',
   });
 }

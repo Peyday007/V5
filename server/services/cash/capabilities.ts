@@ -38,18 +38,21 @@
  * same reading `auditAdmission` uses, so the two cannot disagree about whether
  * this Brain can do research today. `SEND_A_MESSAGE` is `PRESENT` only when a
  * real effect adapter is registered for it (`effects.ts`'s
- * `contactBuyerAdapter`), so the moment a messaging integration exists is the
- * moment it can be checked rather than assumed — and on this Brain, with none
- * registered, it reads exactly as it did when this was `read: null`.
+ * `usableAdapter`) **and** that adapter's own configuration reads usable now,
+ * so the moment a messaging integration exists is the moment it can be checked
+ * rather than assumed. `ISSUE_AN_INVOICE` and `TAKE_A_PAYMENT` read the same
+ * way, from the invoice adapter and the payment reader `providers/register.ts`
+ * registers when the deployment selects a provider (§52). With none selected,
+ * which is a deployment whose owner has not supplied a key, all three read
+ * exactly as they did when they were `read: null`.
  *
  * Everything else in the vocabulary is declared `MISSING` with the integration
- * it needs named, which is the honest state of this version: §30 says plainly
- * that it records the authorization and the money and does not itself issue an
- * invoice or move funds. Making any of those report `PRESENT` would be the
- * invented measurement this file exists to refuse.
+ * it needs named. Making any of those report `PRESENT` would be the invented
+ * measurement this file exists to refuse.
  */
 import { separationCapacity } from '../research/auditAdmission.ts';
-import { contactBuyerAdapter } from './effects.ts';
+import { CONTACT_BUYER_NAMESPACE, ISSUE_INVOICE_NAMESPACE, usableAdapter } from './effects.ts';
+import { usablePaymentReader } from './providers/payments.ts';
 
 export type CapabilityState = 'PRESENT' | 'MISSING' | 'UNKNOWN';
 
@@ -96,33 +99,41 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
   {
     id: 'SEND_A_MESSAGE',
     does: 'Deliver a message to a buyer at an address or number they published.',
-    requires: 'An outbound messaging integration connected to this Brain.',
+    requires:
+      'An outbound messaging integration connected to this Brain: BRAIN_MESSAGING_PROVIDER=resend, ' +
+      'RESEND_API_KEY and BRAIN_MESSAGING_FROM set on the deployment.',
     nextStep:
-      'Until one exists, the message is sent by a person and the send is recorded as a confirmed ' +
-      'action on the opportunity.',
-    // `PRESENT` means a real effect adapter is registered for this operation —
-    // never a boolean somebody flipped. With none registered, which is every
-    // deployment of this Brain today, this reads MISSING exactly as it did
-    // when `read` was `null`.
-    read: async () => contactBuyerAdapter() !== null,
+      'Set the three messaging secrets on the deployment and restart. Until then, the message is ' +
+      'sent by a person and the send is recorded as a confirmed action on the opportunity.',
+    // `PRESENT` means a real effect adapter is registered for this operation
+    // and its configuration reads usable now — never a boolean somebody
+    // flipped.
+    read: async () => usableAdapter(CONTACT_BUYER_NAMESPACE) !== null,
   },
   {
     id: 'ISSUE_AN_INVOICE',
     does: 'Produce and send an invoice a buyer can pay.',
-    requires: 'An invoicing integration, and the account details it bills from.',
+    requires:
+      'An invoicing integration: BRAIN_BILLING_PROVIDER=stripe and STRIPE_SECRET_KEY set on the ' +
+      'deployment.',
     nextStep:
-      'Until one exists, the invoice is issued outside Brain and the settlement is recorded ' +
-      'against its own reference.',
-    read: null,
+      'Set the two billing secrets on the deployment and restart. Until then, the invoice is ' +
+      'issued outside Brain and the settlement is recorded against its own reference.',
+    read: async () => usableAdapter(ISSUE_INVOICE_NAMESPACE) !== null,
   },
   {
     id: 'TAKE_A_PAYMENT',
     does: 'Accept money from a buyer.',
-    requires: 'A payment processor connected to this Brain.',
+    requires:
+      'A payment processor connected to this Brain: the same Stripe configuration that issues ' +
+      "invoices, whose hosted page takes the buyer's payment.",
     nextStep:
-      'Until one exists, payment is taken outside Brain and reaches the ledger as a SETTLEMENT ' +
-      'carrying a verifiable reference.',
-    read: null,
+      'Set the two billing secrets on the deployment and restart. Until then, payment is taken ' +
+      'outside Brain and reaches the ledger as a SETTLEMENT carrying a verifiable reference.',
+    // Collection is the invoice's hosted page plus reading what Stripe says
+    // happened to it, so it is present exactly when a payment reader is
+    // registered and configured.
+    read: async () => usablePaymentReader() !== null,
   },
   {
     id: 'PUBLISH_A_LISTING',
