@@ -489,6 +489,7 @@ export async function reserve(input: {
     return { ok: false, reservation: null, reason: 'the reservation could not be taken', replayed: false };
   }
   let mine = existing;
+  let revivedLapsed = false;
   if (existing.id !== id) {
     /*
      * Somebody equivalent got there first. That is success for an idempotent
@@ -507,7 +508,18 @@ export async function reserve(input: {
      * equivalent caller. It keeps its original `rowid`, which means it keeps
      * its place in the queue for the slot — it was there first.
      */
-    if (existing.state !== 'RELEASED') {
+    /*
+     * An expired `HELD` row is the same kind of previous stand-down: it counts
+     * for nothing (that is what makes a crashed reservation refund itself), so
+     * replaying it as a success would hand back a slot without ever asking
+     * whether the slot is still free — somebody else may have taken it since,
+     * and settling the replay would then take the goal over its ceiling. It is
+     * revived and judged like a fresh request, against **everything** now on the
+     * ledger rather than only the rows ranked before it: its old `rowid` says it
+     * was early, not that the room it held is still there.
+     */
+    const lapsed = existing.state === 'HELD' && existing.expires_at <= now;
+    if (existing.state !== 'RELEASED' && !lapsed) {
       return {
         ok: existing.state === 'HELD' || existing.state === 'SETTLED',
         reservation: mapReservation(existing),
@@ -518,8 +530,8 @@ export async function reserve(input: {
     const revived = await getDb().run(
       `UPDATE russell_budget_reservations
           SET state = 'HELD', expires_at = ?, released_at = NULL, release_reason = NULL
-        WHERE id = ? AND state = 'RELEASED'`,
-      [expires, existing.id],
+        WHERE id = ? AND (state = 'RELEASED' OR (state = 'HELD' AND expires_at <= ?))`,
+      [expires, existing.id, now],
     );
     const reread = (
       await getDb().all<RussellReservationRow>(
@@ -540,6 +552,7 @@ export async function reserve(input: {
       };
     }
     mine = reread;
+    revivedLapsed = lapsed;
   }
 
   /*
@@ -565,7 +578,7 @@ export async function reserve(input: {
    * hold for each ceiling separately: a request may be inside the cumulative
    * limit and outside the concurrent one, and it must lose exactly one of them.
    */
-  const totals = await totalsThroughMine(goal.id, input.kind, now, mine);
+  const totals = await totalsThroughMine(goal.id, input.kind, now, mine, revivedLapsed);
   const limits = ceilingsFor(goal, input.kind);
 
   if (limits.total !== null && totals.total > limits.total) {
@@ -871,6 +884,8 @@ async function totalsThroughMine(
   kind: ReservationKind,
   now: string,
   mine: RussellReservationRow,
+  /** Count every row on the ledger, not only those ranked up to mine: for a revived lapsed hold. */
+  everything = false,
 ): Promise<{ total: number; active: number }> {
   const rows = await getDb().all<{ total: number; active: number }>(
     `SELECT
@@ -882,8 +897,8 @@ async function totalsThroughMine(
           ELSE 0 END), 0) AS active
        FROM russell_budget_reservations
       WHERE goal_id = ? AND kind = ?
-        AND rowid <= (SELECT rowid FROM russell_budget_reservations WHERE id = ?)`,
-    [now, now, goalId, kind, mine.id],
+        AND (? = 1 OR rowid <= (SELECT rowid FROM russell_budget_reservations WHERE id = ?))`,
+    [now, now, goalId, kind, everything ? 1 : 0, mine.id],
   );
   return { total: Number(rows[0]?.total ?? 0), active: Number(rows[0]?.active ?? 0) };
 }

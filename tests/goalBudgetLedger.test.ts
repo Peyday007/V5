@@ -528,3 +528,38 @@ describe('goalBudgetStatus', () => {
     expect(await goalBudgetStatus('rgl_missing')).toBeNull();
   });
 });
+
+describe('a lapsed hold is not a standing one', () => {
+  it('refuses a packet key replayed after its hold expired and the slot was taken', async () => {
+    const goal = await researchGoal({ maxPackets: 1 });
+    expect((await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId })).ok).toBe(true);
+    await expireHolds(goal.id, 'MISSION');
+    await packet(goal.id, 'B');
+
+    const replay = await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId });
+    expect(replay.ok).toBe(false);
+    expect(replay.refusedBy).toBe('PACKETS');
+    expect((await goalBudgetStatus(goal.id))!.packets.reserved).toBe(1);
+  });
+
+  it('revives a lapsed packet hold when its slot is still free, charging once', async () => {
+    const goal = await researchGoal({ maxPackets: 1 });
+    await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId });
+    await expireHolds(goal.id, 'MISSION');
+    const again = await reserveGoalPacket({ goalId: goal.id, packetKey: 'A', projectId });
+    expect(again.ok).toBe(true);
+    expect((await goalBudgetStatus(goal.id))!.packets.reserved).toBe(1);
+  });
+
+  it('refuses a fragment key replayed after its hold expired and the room was taken', async () => {
+    const goal = await researchGoal({ maxFragments: 1 });
+    const one = await packet(goal.id, 'one');
+    expect((await chargeFragments({ orchestrationId: one.id, fragmentKeys: ['a'] })).ok).toBe(true);
+    await expireHolds(goal.id, 'FRAGMENT');
+    await createFragments(fragmentInputs(one.id, ['b']));
+
+    const replay = await chargeFragments({ orchestrationId: one.id, fragmentKeys: ['a'] });
+    expect(replay.ok).toBe(false);
+    expect((await spendTotals(goal.id, 'FRAGMENT', new Date().toISOString())).committed).toBe(1);
+  });
+});
