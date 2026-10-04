@@ -107,6 +107,7 @@ import {
   reconcileTerminalPackets,
 } from '../research/packetRunner.ts';
 import { reconcileRetrospectives } from '../research/intelligence/retrospective.ts';
+import { recoverFilingFailures, type FilingRecovery } from '../research/synthesisRecovery.ts';
 import { recoverExecutionLineage } from '../dispatch/lineageRecovery.ts';
 import { recomputeProject } from '../stateEngine.ts';
 import {
@@ -361,6 +362,8 @@ export interface TickReport {
    * a packet that had already finished, so nothing ever cleared it.
    */
   retiredPacketWork: { orchestrationId: string; retired: number }[];
+  /** Syntheses reissued because Brain itself could not file them. See `recoverFilingFailures`. */
+  filingRecoveries: FilingRecovery[];
   /** Campaigns whose lessons were written this tick. See `retrospective.ts`. */
   researchLessons: { orchestrationId: string; lessons: number }[];
   abandonedParks: { orchestrationId: string; missionId: string; missionState: string }[];
@@ -637,6 +640,7 @@ const EMPTY: TickReport = {
   lineageRecovered: [],
   lineageUnresolved: [],
   retiredPacketWork: [],
+  filingRecoveries: [],
   researchLessons: [],
   abandonedParks: [],
   restoredParks: [],
@@ -698,6 +702,7 @@ export async function tick(owner: string): Promise<TickReport> {
     lineageUnresolved: [],
     linksUnreconciled: [],
     retiredPacketWork: [],
+    filingRecoveries: [],
   researchLessons: [],
     abandonedParks: [],
     restoredParks: [],
@@ -962,6 +967,18 @@ export async function tick(owner: string): Promise<TickReport> {
     for (const entry of await concludeUnworkablePackets(cycle.maxEventsPerCycle)) {
       report.retiredPacketWork.push(entry);
     }
+
+    /*
+     * 1a-iv-b'. And reissue a synthesis whose only failure was Brain's own filing.
+     *
+     * A packet whose report the document store refused kept its research and
+     * lost its prose, and its mission was left holding a research slot over a
+     * synthesis nothing would ever reissue — the operator-only recovery was the
+     * one way out. Selected from Brain's own effect ledger, once per packet,
+     * every refusal of the targeted recovery still applying. Throttled inside:
+     * it is a backlog, not a ten-second concern.
+     */
+    report.filingRecoveries = await recoverFilingFailures(cycle.maxEventsPerCycle);
 
     /*
      * 1a-iv-c. Settle the integrity reopens whose condition has stopped holding.

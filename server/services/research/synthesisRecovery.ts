@@ -54,7 +54,13 @@ import {
   updateOrchestration,
 } from '../../repos/research.ts';
 import { enqueueWork, getWorkItem, listWorkItems } from '../../repos/workQueue.ts';
-import { binForOrchestration, getBin, reopenNeedsHumanBin } from '../../repos/bins.ts';
+import {
+  binForOrchestration,
+  getBin,
+  regrantBinAttempts,
+  reopenNeedsHumanBin,
+} from '../../repos/bins.ts';
+import { getDb } from '../../db/database.ts';
 import { getLayer } from '../../repos/layers.ts';
 import { getProject } from '../../repos/projects.ts';
 import { getRun } from '../../repos/runs.ts';
@@ -699,6 +705,161 @@ export async function assessProjectSyntheses(projectId: string): Promise<Synthes
           ? 'ALREADY_RECOVERED'
           : (assessed.outcome.refusal ?? null),
       reason: assessed.eligible ? 'Eligible for recovery.' : assessed.outcome.reason,
+    });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// The automatic half: a filing Brain itself refused
+// ---------------------------------------------------------------------------
+
+/**
+ * Who an automatic recovery is recorded as. A row, not a person: the item it
+ * creates says `SYSTEM` and this id, so "did Brain do this by itself" is one
+ * column rather than a reading of event prose.
+ */
+export const FILING_RECOVERY_ACTOR = 'synthesis-filing-recovery';
+
+/** The reason a bin's spent budget is raised for this recovery, matched exactly. */
+export const FILING_REGRANT_REASON =
+  'FILING_DEFECT: the dispatch attempts went on syntheses Brain could not file; the research survived';
+
+/** How much budget the one regrant adds: a synthesis and three audit roles. */
+const FILING_REGRANT_ATTEMPTS = 4;
+
+/** Not on every ten-second tick: the scan reads work items, and this is a backlog. */
+const FILING_RECOVERY_INTERVAL_MS = 10 * 60 * 1000;
+let lastFilingRecoveryAt = 0;
+
+/** Test seam: the throttle is process state, and a suite runs many passes. */
+export function resetFilingRecoveryThrottle(): void {
+  lastFilingRecoveryAt = 0;
+}
+
+export interface FilingRecovery {
+  workItemId: string;
+  orchestrationId: string | null;
+  regranted: string | null;
+  outcome: RecoveryOutcome['status'];
+  refusal: RecoveryOutcome['refusal'] | null;
+}
+
+/**
+ * Recover, without a person, a synthesis whose only failure was Brain's own
+ * filing.
+ *
+ * `recoverFailedSynthesis` was deliberately a targeted operator action — "a
+ * sweep is how a narrow recovery becomes a general one". This is the sweep, and
+ * it stays narrow by what it selects rather than by who presses it:
+ *
+ *   - a `RESEARCH_SYNTHESIZE` item that stopped (FAILED or CANCELLED) on a
+ *     packet that filed nothing;
+ *   - **whose own effect ledger records the document store refusing or not
+ *     answering an upload** — an attempt row Brain wrote, in Brain's words,
+ *     about Brain's half of the exchange. A worker that submitted nothing, or
+ *     whose submission Brain judged, is not selected: those are about the work;
+ *   - with no live synthesis beside it, and no earlier automatic recovery on
+ *     the same packet. One per packet, ever: if the replacement is refused by
+ *     the store again, the defect is not historical and a person should look.
+ *
+ * Everything after selection is `assessSynthesisRecovery` unchanged — every
+ * refusal it has still applies, including the store being asked for an orphan
+ * upload before a second copy is written. The one thing added is the answer to
+ * `BIN_EXHAUSTED`: a bin whose dispatch budget was spent fetching syntheses the
+ * store refused is regranted once, by `FILING_REGRANT_ATTEMPTS`, through the
+ * guarded transition that only ever raises and records why.
+ *
+ * Nothing is re-researched. The claims, verifications and gate decisions were
+ * written by earlier tools and survived the rollback; what is re-run is the
+ * synthesis, because its text rolled back with the failed filing.
+ */
+export async function recoverFilingFailures(
+  limit: number,
+  options: { force?: boolean } = {},
+): Promise<FilingRecovery[]> {
+  const now = Date.now();
+  if (!options.force && now - lastFilingRecoveryAt < FILING_RECOVERY_INTERVAL_MS) return [];
+  lastFilingRecoveryAt = now;
+
+  const db = getDb();
+  const rows = await db.all<{ id: string }>(
+    `SELECT w.id AS id
+       FROM work_items w
+       JOIN research_orchestrations o ON o.id = w.orchestration_id
+      WHERE w.work_type = 'RESEARCH_SYNTHESIZE'
+        AND w.state IN ('FAILED','CANCELLED')
+        AND o.document_id IS NULL
+        AND o.status IN ('NEEDS_HUMAN','SYNTHESIZING','AWAITING_REPAIR','RESEARCHING','VERIFYING')
+        AND EXISTS (
+          SELECT 1 FROM idempotency_operations op
+            JOIN effect_attempts a ON a.operation_id = op.id
+           WHERE op.work_item_id = w.id
+             AND op.namespace = 'research.synthesis'
+             AND a.outcome = 'FAILED'
+             AND (a.detail LIKE '%document store refused an upload%'
+                  OR a.detail LIKE '%Could not reach the document store%')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM work_items r
+           WHERE r.orchestration_id = w.orchestration_id
+             AND r.work_type = 'RESEARCH_SYNTHESIZE'
+             AND (r.state IN ('QUEUED','LEASED')
+                  OR (r.created_by_type = 'SYSTEM' AND r.created_by_id = ?))
+        )
+      ORDER BY w.updated_at, w.id
+      LIMIT ?`,
+    [FILING_RECOVERY_ACTOR, Math.max(1, limit)],
+  );
+
+  const out: FilingRecovery[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const assessed = await assessSynthesisRecovery(row.id);
+    const orchestrationId = assessed.eligible
+      ? assessed.context.orchestration.id
+      : assessed.outcome.orchestrationId;
+    if (orchestrationId && seen.has(orchestrationId)) continue;
+    if (orchestrationId) seen.add(orchestrationId);
+
+    let regranted: string | null = null;
+    if (!assessed.eligible && assessed.outcome.refusal === 'BIN_EXHAUSTED' && orchestrationId) {
+      const found = await binForOrchestration(orchestrationId);
+      const bin = found ? await getBin(found.id) : null;
+      if (bin) {
+        const prior = await db.get<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM bin_events
+            WHERE bin_id = ? AND event_type = 'BIN_ATTEMPTS_REGRANTED' AND reason = ?`,
+          [bin.id, FILING_REGRANT_REASON],
+        );
+        if (Number(prior?.n ?? 0) === 0) {
+          const raised = await regrantBinAttempts({
+            binId: bin.id,
+            maxAttempts: bin.attemptCount + FILING_REGRANT_ATTEMPTS,
+            reason: FILING_REGRANT_REASON,
+          });
+          if (raised.raised) regranted = bin.id;
+        }
+      }
+    }
+
+    const outcome =
+      assessed.eligible || regranted
+        ? await recoverFailedSynthesis({
+            workItemId: row.id,
+            actor: { type: 'SYSTEM', id: FILING_RECOVERY_ACTOR },
+            reason:
+              'Brain could not file this synthesis (its document store refused the upload); the ' +
+              'filing path has since been repaired, so the synthesis is reissued over the evidence ' +
+              'that survived.',
+          })
+        : assessed.outcome;
+    out.push({
+      workItemId: row.id,
+      orchestrationId,
+      regranted,
+      outcome: outcome.status,
+      refusal: outcome.refusal ?? null,
     });
   }
   return out;

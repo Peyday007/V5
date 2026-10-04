@@ -14,7 +14,14 @@ import { createCandidate, getCandidate, recordJudgment, transitionCandidate } fr
 import { launchMission, transitionMission } from '../server/repos/russellMissions.ts';
 import { createOpportunity, getOpportunity, updateOpportunity } from '../server/repos/cashPortfolio.ts';
 import { listCashEventsFor, recordCashEvent } from '../server/repos/cashMode.ts';
-import { resumeUnlaunchedDives, whyNotDiving } from '../server/services/cash/validation.ts';
+import {
+  resumeUnlaunchedDives,
+  settleValidations,
+  VALIDATION_STALL_MS,
+  whyNotDiving,
+} from '../server/services/cash/validation.ts';
+import { discoveryAuthority } from '../server/services/cash/discoveryAuthority.ts';
+import { reserve, setGoalConcurrency, settleReservation } from '../server/repos/russellAuthority.ts';
 
 describe('resuming a deep dive that never launched', () => {
   it('gives back exactly the rounds that researched nothing, once', async () => {
@@ -138,9 +145,117 @@ describe('resuming a deep dive that never launched', () => {
     // Twice is once.
     expect(await resumeUnlaunchedDives(projectId)).toEqual([]);
 
-    // And the same idea is never resumed a second time: if it stalls again it
-    // stays BLOCKED rather than cycling every six hours.
+    // A launchable idea may be resumed a second time — production's ideas were
+    // closed twice by a stall backstop that did not yet wait on a full mission
+    // slot — and never a third: if it stalls again it stays BLOCKED rather
+    // than cycling every six hours.
+    await updateOpportunity(neither, { validation_state: 'BLOCKED' });
+    expect(await resumeUnlaunchedDives(projectId)).toContain(neither);
     await updateOpportunity(neither, { validation_state: 'BLOCKED' });
     expect(await resumeUnlaunchedDives(projectId)).not.toContain(neither);
+  });
+
+  it('resumes an idea with no compiled specification only once', async () => {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const owner = await createUser({
+      email: 'resume-once@example.com',
+      displayName: 'Peyton',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    const started = await activate({
+      projectId,
+      ownerUserId: owner.id,
+      actorUserId: owner.id,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    if (!started.ok) throw new Error('not activated');
+    const candidate = await createCandidate({ projectId, visibility: 'SHARED', title: 'x', statement: 'x' });
+    await recordJudgment({ candidateId: candidate.id, state: 'QUEUED', priority: 'WORTH_DOING', reason: 't', judgment: {} });
+    const made = await createOpportunity({
+      projectId,
+      cashModeId: started.mode.id,
+      ownerUserId: owner.id,
+      title: 'unspecified',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    await recordCashEvent({
+      projectId,
+      opportunityId: made.id,
+      kind: 'CASH_VALIDATION_STARTED',
+      actorRef: 'BRAIN',
+      summary: 'started',
+      detail: { candidateId: candidate.id, round: 1 },
+    });
+    await updateOpportunity(made.id, {
+      candidate_id: candidate.id,
+      validation_state: 'BLOCKED',
+      validation_rounds: 1,
+    });
+    expect(await resumeUnlaunchedDives(projectId)).toEqual([made.id]);
+    await updateOpportunity(made.id, { validation_state: 'BLOCKED' });
+    expect(await resumeUnlaunchedDives(projectId)).toEqual([]);
+  });
+});
+
+describe('the deep-dive stall backstop', () => {
+  it('waits while every research mission slot is held, and closes the dive once one is free', async () => {
+    const fixture = await freshProject();
+    const projectId = fixture.project.id;
+    const owner = await createUser({
+      email: 'backstop@example.com',
+      displayName: 'Peyton',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    const started = await activate({
+      projectId,
+      ownerUserId: owner.id,
+      actorUserId: owner.id,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    if (!started.ok) throw new Error('not activated');
+    const goal = (await discoveryAuthority(projectId))!;
+    expect(goal).not.toBeNull();
+    await setGoalConcurrency(goal.id, 1);
+    const held = await reserve({ goalId: goal.id, kind: 'MISSION', idempotencyKey: 'someone-else' });
+    expect(held.ok).toBe(true);
+
+    const candidate = await createCandidate({ projectId, visibility: 'SHARED', title: 'q', statement: 'q' });
+    await recordJudgment({
+      candidateId: candidate.id,
+      state: 'QUEUED',
+      priority: 'WORTH_DOING',
+      reason: 't',
+      judgment: { missionSpec: { projectId, objective: 'q' } },
+    });
+    const made = await createOpportunity({
+      projectId,
+      cashModeId: started.mode.id,
+      ownerUserId: owner.id,
+      title: 'waiting dive',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    await updateOpportunity(made.id, {
+      candidate_id: candidate.id,
+      validation_state: 'PENDING',
+      validation_started_at: new Date(Date.now() - VALIDATION_STALL_MS - 60_000).toISOString(),
+      validation_rounds: 1,
+    });
+
+    // Every slot held: queued, not stalled. The round is kept.
+    expect(await settleValidations(projectId)).toEqual([]);
+    let now = (await getOpportunity(made.id))!;
+    expect(now.validationState).toBe('PENDING');
+    expect(now.validationRounds).toBe(1);
+
+    // A free slot and still no mission: that is a stall, and it is closed.
+    await settleReservation(held.reservation!.id);
+    expect(await settleValidations(projectId)).toEqual([{ opportunityId: made.id, to: 'BLOCKED' }]);
+    now = (await getOpportunity(made.id))!;
+    expect(now.validationState).toBe('BLOCKED');
   });
 });
