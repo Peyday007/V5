@@ -1,0 +1,53 @@
+{
+  "objective": "GOAL_BUDGET foundation: a durable research goal that owns a budget, a packet's link back to it, and mechanically enforced packet, fragment and deadline ceilings — by extending the existing owner (russell_goals + russell_budget_reservations in server/repos/russellAuthority.ts), never by building a second quota system. (1) Migrations server/db/migrations/104_research_goal_budget.sql and server/db/pg-migrations/095_research_goal_budget.sql (check the numbers are still free; both chains, no dollar-quoted bodies): add russell_goals.purpose TEXT NOT NULL DEFAULT 'STANDING' with CHECK (purpose IN ('STANDING','RESEARCH_GOAL')); add research_orchestrations.goal_id TEXT REFERENCES russell_goals(id) ON DELETE SET NULL and research_orchestrations.goal_packet_key TEXT; a UNIQUE index on research_orchestrations (goal_id, goal_packet_key) and an index on research_orchestrations (goal_id). Update RussellGoalRow/ResearchOrchestrationRow and their domain types and mappers in the same change. (2) In server/repos/russellAuthority.ts: createResearchGoal({projectId, ownerUserId, createdByUserId, name, maxPackets, maxFragments, deadline}) writes a goal with purpose RESEARCH_GOAL, work_policy CAPPED, max_missions = maxPackets, max_fragments = maxFragments, max_probes 0, max_external_spend 0 (refuse any non-zero spend or paid-overage input — invariant 18), allowed_work ['RESEARCH'], expires_at = deadline; positive integer ceilings required. Every reader that means 'the project's standing authority' (listGoals as used by chargeProbe, authorityFor, liveGoalNamed, checkAuthority, ensureGoal and their callers) must ignore RESEARCH_GOAL rows, so a research goal never becomes Russell's standing grant. (3) reserveGoalPacket({goalId, packetKey, projectId}) reuses reserve() with kind MISSION and the key `research:packet:<goalId>:<packetKey>` (a packet is the research goal's mission; document this rather than adding a reservation kind), refuses with a typed, person-readable reason naming which ceiling stopped it (PACKETS, DEADLINE, REVOKED/PAUSED, WRONG_PROJECT), and a replay of the same key is the same packet and charges once. Packets are settled once the orchestration exists (settleReservation); a HELD reservation whose creation never happened expires and refunds itself, which is the restart semantics. (4) goalForOrchestration reads research_orchestrations.goal_id first and falls back to the russell_missions path, so chargeFragments (already called from createFragments in server/repos/research.ts) enforces maxFragments across every packet of a goal. Fix the leak: fragment reservations are never settled, so a HELD fragment reservation expires after its TTL and stops counting — settle fragment reservations after the fragments are inserted, so a created fragment counts for ever and a crash before insertion refunds. (5) Deadline is evaluated with Brain's clock (queueNow() or authorityNow(), one of them, stated), and after it no packet or fragment reservation succeeds; existing rows are untouched. (6) goalBudgetStatus(goalId): packets used, fragments committed, ceilings, deadline, authorizedBy, created_at, state — narrow indexed reads (COUNT on research_orchestrations by goal_id, spendTotals), no SELECT * scans.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "claude/goal-budget-authorization-9t3oyu",
+  "expectedOutcome": "A research goal with a budget exists durably, packets link to it, and the packet ceiling, the cross-packet fragment ceiling and the deadline are enforced atomically before work is created, with money pinned at zero, on SQLite and Postgres.",
+  "nonGoals": [
+    "Changing startPacket or SUPPORTED_APPROVAL_MODES (a later objective enables GOAL_BUDGET)",
+    "Any HTTP route, admin command or UI",
+    "Changing Russell's standing-authority behaviour for STANDING goals",
+    "A second reservation table, queue or quota mechanism",
+    "Editing server/services/research/approvalEnvelope.ts or server/services/identity/**"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "Both migration chains add russell_goals.purpose, research_orchestrations.goal_id and goal_packet_key with the unique and goal_id indexes; tests/deploymentOwnership.test.ts still passes",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/goalBudgetLedger.test.ts: maxPackets=2 admits two distinct packet keys and refuses a third naming PACKETS; a replayed key charges once; two concurrent reservations for one remaining packet slot produce exactly one success",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/goalBudgetLedger.test.ts: maxFragments is enforced across two orchestrations of one goal through createFragments (FragmentBudgetRefused, nothing inserted), concurrent fragment charges cannot overspend, created fragments stay counted after the reservation TTL has passed, and a reservation never followed by creation expires and refunds",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/goalBudgetLedger.test.ts: after the deadline (Brain's clock) no packet or fragment reservation succeeds and earlier rows are untouched; createResearchGoal refuses non-zero external spend or paid overages and stores max_external_spend 0; a RESEARCH_GOAL is invisible to the standing-authority readers",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/db/migrations/104_research_goal_budget.sql",
+    "server/db/pg-migrations/095_research_goal_budget.sql",
+    "server/domain/types.ts",
+    "server/repos/russellAuthority.ts",
+    "server/repos/research.ts",
+    "server/services/russell/authority.ts",
+    "tests/goalBudgetLedger.test.ts"
+  ],
+  "verificationCommands": ["npm run typecheck", "npm test"],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Revert the commits; the migration only adds nullable columns, a defaulted column and indexes, and no existing row changes meaning."
+}

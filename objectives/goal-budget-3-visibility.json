@@ -1,0 +1,48 @@
+{
+  "objective": "Operator and person visibility for GOAL_BUDGET research goals, on top of the goal ledger already merged (createResearchGoal and goalBudgetStatus in server/repos/russellAuthority.ts). (1) HTTP, in server/routes/research.ts: GET /api/projects/:projectId/research-goals lists the project's RESEARCH_GOAL goals with goalBudgetStatus each (READ access through the existing resolvers); POST /api/projects/:projectId/research-goals creates one (requirePerson plus project ADMIN through the existing helpers, a worker principal refused by type; body: name, maxPackets, maxFragments, deadline — the authorizing user comes from the principal, never a field; any externalSpendCents or paidOveragesEnabled field in the body is refused, never silently dropped); POST /api/projects/:projectId/research-goals/:goalId/revoke at ADMIN. Absent and forbidden goals answer the same 404 with the same body (invariant 23). (2) Derived, never stored: a status function returns for each goal which ceiling (if any) currently stops new work — PACKETS when packets used equals maxPackets, FRAGMENTS when fragments committed equals maxFragments, DEADLINE when Brain's clock is past the deadline, REVOKED/PAUSED from state — with a sentence a person can read naming the ceiling and saying that raising it is their decision, and 'nothing stops it' otherwise. (3) Terminal: in scripts/admin.ts add `research goal create <project> --name … --max-packets N --max-fragments N [--deadline ISO] --admin <email>`, `research goal show <goalId>` and `research goal list <project>`, attributed to the resolved administrator exactly as `research start` resolves --admin; and extend `research start` with `--goal <goalId> --packet-key <key>` that starts the packet with approval mode GOAL_BUDGET (if startPacket still refuses the mode, the command prints the refusal unchanged). (4) Client: client/src/lib/researchGoalsApi.ts and client/src/russell/ResearchBudgets.tsx, a read-only section rendered inside NeedsYouView in client/src/russell/Views.tsx that lists the project's research goals with used/limit for packets and fragments, the deadline, who authorized it, and the server's own stopping sentence; it renders nothing when there are none and composes no sentence of its own.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "claude/goal-budget-authorization-9t3oyu",
+  "expectedOutcome": "A person or operator can create a budgeted research goal, see exactly how much of each ceiling it has used and which ceiling (if any) stopped it, from the product, the API and a terminal.",
+  "nonGoals": [
+    "Changing startPacket or the packet runner",
+    "Autonomous continuation",
+    "A control that raises a ceiling (revoke and create a new goal instead)",
+    "Editing server/services/identity/**"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/researchGoalsHttp.test.ts drives the real routes over a socket: an ADMIN person creates a goal and reads it back with zero usage; a plain member is refused creation; a worker principal is refused; a body carrying externalSpendCents or paidOveragesEnabled is refused; another project's goal answers the byte-identical 404 an invented id does",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/researchGoalsHttp.test.ts: the derived stopping reason reads PACKETS, FRAGMENTS and DEADLINE in the states that produce them, and nothing when headroom remains",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/researchBudgetsSection.test.tsx renders the section from a payload typed against the server's view type, shows used/limit and the server's sentence verbatim, and renders nothing for an empty list",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck and build pass",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/routes/research.ts",
+    "server/services/research/goalBudgetView.ts",
+    "scripts/admin.ts",
+    "client/src/lib/researchGoalsApi.ts",
+    "client/src/russell/ResearchBudgets.tsx",
+    "client/src/russell/Views.tsx",
+    "tests/researchGoalsHttp.test.ts",
+    "tests/researchBudgetsSection.test.tsx"
+  ],
+  "verificationCommands": ["npm run typecheck", "npm test", "npm run build"],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commits; no schema change."
+}

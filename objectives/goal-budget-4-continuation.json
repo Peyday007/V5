@@ -1,0 +1,51 @@
+{
+  "objective": "Autonomous continuation for GOAL_BUDGET research goals, on top of the merged goal ledger and the GOAL_BUDGET mode of startPacket. A person approves a research goal once; after that Brain creates the packets the goal needs, without asking again, inside the ceilings. (1) A research goal carries what it is for: add the assignment text and target layer to the goal through a new migration (server/db/migrations/105_research_goal_assignment.sql and server/db/pg-migrations/096_research_goal_assignment.sql — confirm free numbers; nullable columns on russell_goals: research_assignment TEXT, research_layer_id TEXT REFERENCES layers(id) ON DELETE SET NULL, plus an index on russell_goals (purpose, state)), set by createResearchGoal's optional inputs, with the row type and mapper updated. (2) server/services/research/goalContinuation.ts exports advanceResearchGoals(): for each ACTIVE RESEARCH_GOAL with an assignment (one narrow indexed query, no SELECT *, no archive-wide counting), if no packet of that goal is live (non-terminal), decide whether another packet is needed: ask the archive first through the existing coverBeforeWork / reconcile path — when the archive already answers the assignment, start nothing (zero packets is correct; unused allowance is a ceiling, not a target); when the goal has no packet yet, or its latest packet is terminal and left unresolved mandatory requirements or recorded gaps, start the next packet with startPacket in GOAL_BUDGET mode and packetKey `round-<n>` where n is one more than the goal's packet count (so a retry or two ticks produce one packet). (3) When startPacket refuses with GoalBudgetExhausted, raise exactly one russell_human_requests row through the existing askHuman (resume_key derived from the goal and the ceiling) saying which ceiling stopped the goal and that raising it is the person's decision; all accepted work stays. (4) Call advanceResearchGoals from the durable Russell tick in server/services/russell/loop.ts, wrapped so a failure never stops the rest of the tick, at most once per tick, bounded to a small number of goals per pass. (5) Write docs/GOAL-BUDGET.md and update the 'Research budgets' section of docs/ROADMAP.md and add a CLAUDE.md section recording: the goal is a russell_goals row with purpose RESEARCH_GOAL and work_policy CAPPED (a recorded correction to §24's statement that CAPPED is offered by no live grant), packets reserve as kind MISSION, fragments are settled at creation, the deadline semantics (no new packet or fragment after it; already-queued work may finish), money stays zero.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "claude/goal-budget-authorization-9t3oyu",
+  "expectedOutcome": "After one approval Brain creates packet 1, then packet 2 when packet 1 leaves the goal unanswered, without another approval, and stops with a clear person-facing reason when a ceiling is reached, keeping all accepted work.",
+  "nonGoals": [
+    "A new queue, scheduler or polling loop beside the Russell tick",
+    "Changing the evidence gate, audits or approval envelopes",
+    "Editing server/services/research/approvalEnvelope.ts or server/services/identity/**",
+    "Raising a ceiling automatically"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/goalBudgetJourney.test.ts walks the real path with only the worker simulated through the MCP tools: a person creates a goal (maxPackets 2) once; the tick starts packet 1; a worker proposes fragments, they are approved without a person, claims are submitted and verified; packet 1 ends leaving a mandatory requirement unresolved; the tick starts packet 2 with no new approval; packet and fragment counters read exactly what was created",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/goalBudgetJourney.test.ts: with the packet ceiling reached the tick creates nothing, raises exactly one human request naming PACKETS across repeated ticks, and every earlier fragment, claim and orchestration is unchanged; a goal whose assignment the archive already answers starts zero packets",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/goalBudgetJourney.test.ts: two concurrent advanceResearchGoals passes create one packet, not two; a pass after a simulated restart between reservation and creation still creates exactly one",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes and docs/GOAL-BUDGET.md exists describing the enforced ceilings and deadline semantics",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/db/migrations/105_research_goal_assignment.sql",
+    "server/db/pg-migrations/096_research_goal_assignment.sql",
+    "server/domain/types.ts",
+    "server/repos/russellAuthority.ts",
+    "server/services/research/goalContinuation.ts",
+    "server/services/research/startPacket.ts",
+    "server/services/russell/loop.ts",
+    "tests/goalBudgetJourney.test.ts",
+    "docs/GOAL-BUDGET.md",
+    "docs/ROADMAP.md",
+    "CLAUDE.md"
+  ],
+  "verificationCommands": ["npm run typecheck", "npm test"],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Revert the commits; the migration only adds nullable columns and an index."
+}
