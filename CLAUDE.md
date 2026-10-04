@@ -12143,6 +12143,88 @@ real buyer has been written to, no real invoice issued and no real money moved,
 and no provider secret has been set on the deployment — so all three still read
 MISSING in production until the owner sets them.
 
+## 53. The first dollar is a journey of rows, and each step is a fact somebody else can check.
+
+Money Builds 1 to 3 each built a stretch of the road. Build 1 made a commercial
+effect safe to attempt. Build 2 made sending a message, issuing an invoice and
+reading a payment real. Build 3 made discovery fill the card. Nothing connected
+the stretches. An opportunity could be contacted with nothing recording the
+buyer's answer. It could be invoiced from a bare agreed amount somebody typed.
+It could be marked COLLECTED with no work delivered. It could learn nothing from
+any of it. `server/services/cash/journey/`, `server/repos/cashJourney.ts`,
+`server/domain/cashJourney.ts` and `docs/FIRST-DOLLAR.md` are the connection,
+and they add no second lifecycle. The opportunity state machine, the ledger, the
+effects engine and the invoice table are Builds 1 and 2's, unchanged in kind.
+
+- **An agreement is evidence, not an amount.** `PIPELINE_AGREED` used to be an
+  ordinary money entry, so interest could become pipeline by a typed figure.
+  Now `recordMoneyEvent` refuses that kind unless its key is `agreement:<id>`.
+  The only writer of such a key is `recordAgreement`, and it requires five
+  things:
+  - a deliverable
+  - an acceptance condition
+  - one of four evidence kinds, with a reference
+  - the sprint's currency
+  - a BUYER_ACCEPTED or BUYER_COUNTERED observation behind it, whose amount
+    matches, wherever an observation is named
+
+  Releasing writes `PIPELINE_RELEASED` beside it rather than deleting anything,
+  and pipeline is agreed minus released. Migration 105 / pg 096 adds that kind.
+  It is a rebuild on SQLite because a CHECK cannot be altered there.
+- **What the buyer said is a closed kind with a reference.** `cash_observations`
+  holds it. `BUYER_SILENT` is the one kind only Brain may write, derived seven
+  days after a contact with no reply. It is keyed per contact, so the tick says
+  it once.
+- **One invoice per agreement, and its amount is what is still invoiceable.**
+  Build 2's table and key are the only ones. The duplicate this branch wrote
+  first was removed rather than merged beside them. `invoiceableAgreements` is
+  live agreed minus the larger of (invoiced plus pending) and net paid, so a
+  retry, a second press and a payment taken before invoicing all converge on one
+  bill. `QUOTE_AND_INVOICE` only issues an invoice a person drafted, because the
+  customer, tax treatment and due date are a person's.
+- **Paid, settled and refunded are ceilings, checked under the lock.** A
+  settlement may not exceed what was paid, net of refunds and earlier
+  settlements. A refund may not exceed what was paid. A replay of either is
+  skipped before the check, so asking twice still answers.
+- **Fulfilment is named in the machinery that does it.** `cash_fulfilments`
+  points at one of these:
+  - a Russell idea
+  - a Factory change request
+  - a cash job
+  - a commitment
+  - work outside Brain
+
+  For Brain's own work, `PERFORMED` is read from that work's rows: a mission
+  that is DONE, or a campaign that is COMPLETE. A person may not attest to it.
+  `DELIVERED` needs the buyer's `DELIVERY_ACCEPTED`. `advance(DELIVERING)` needs
+  a live fulfilment. `advance(COLLECTED)` needs `collectable`: every live
+  agreement paid, nothing billed owed, the payment settled and the work
+  accepted. The tick reaches COLLECTED from the same predicate the route checks,
+  because two readers of one fact is the defect this file records most.
+- **The P&L is derived, and each cost counts once.** `dealPosition` reads the
+  ledger, the invoices and the commitments. Contribution is payments minus
+  refunds minus costs minus unpaid commitments. A provider fee is a `COST` the
+  settlement pass writes, and no balance is stored anywhere.
+- **Learning is a measured outcome with its basis, never a rewrite.** Each
+  `cash_outcomes` row is keyed by the figure it records, so a contribution
+  re-read after a refund or a late fee is a new row. Lessons read the latest row
+  per deal. Below `LESSON_MIN_SAMPLE` a lesson is labelled an anecdote. Ranking
+  uses it only as a late tie-break past that floor, so one result is never
+  treated as universal.
+- **Contact carries the exact offer.** The tick and the press share one
+  `prepare`. Its payload is the message Brain composed, its version
+  (`offer-<sha256>`) and the one address the buyer published. Build 1's
+  `sendGate` and Build 2's per-pass bound both apply.
+
+**What is true today:** `tests/cashFirstDollar.test.ts` walks the whole journey
+on both backends. Sandbox adapters sit only at the provider boundary, Brain is
+restarted twice mid-journey, and every effect is counted. It records exactly
+one agreement, one payment, one settlement and two costs, with zero duplicates.
+It also walks each failure path in `docs/FIRST-DOLLAR.md`. No real buyer has
+been contacted and no real money has moved. What separates the sandbox from the
+first real dollar is the six external or human items in that document. None of
+them is engineering.
+
 ## Repository map
 
 ```
@@ -12196,6 +12278,7 @@ server/
     cashPortfolio.ts  the opportunities, and the needs they raise
     cashLedger.ts     money, as append-only rows; no balance column anywhere
     cashActions.ts    what was actually done, and under which grant
+    cashJourney.ts    what the buyer said, what was agreed, the work, and what it taught
     cashLock.ts       where two cash decisions stop being concurrent
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
     researchIntelligence.ts  the judgement above the engine: what to learn, and what changed it
@@ -12335,6 +12418,12 @@ server/
     cash/
       providers/        Resend and Stripe adapters, their config and status (§52)
       invoicing.ts      an agreed amount invoiced, paid and settled — two entries
+      journey/
+        position.ts     where one deal stands, and its P&L, derived from the ledger
+        deal.ts         observations, agreements and fulfilments; evidence or refusal
+        tick.ts         silence, performed work, delivery and collection, on the tick
+        learning.ts     measured outcomes, and lessons with their sample shown
+        view.ts         every next step, and who takes it
       outreach.ts       the message a buyer is sent, composed from the card
       access.ts         where the shared frontier ends and a private job begins
       shared.ts         what every member may read, built from the columns it names
@@ -12660,6 +12749,7 @@ tests/                  Vitest suites
   cashOperate.test.ts        a capability read, a need resumed, an action recorded
   cashIntegrationPass.test.ts  one sprint, walked the whole way, entrances only
   cashProposal.test.ts       the seven terms, and the numbers Brain will not invent
+  cashFirstDollar.test.ts    discovery to settled cash, restarted twice, and every way it fails
   cashOpportunityStandard.test.ts  what is an opportunity, and whose question is whose
   monetizationLedger.test.ts   forty ways preserved, ranked, and never rounded to one
   monetizationCommissioning.test.ts  a discovery to a moved rank, and every way it must not double-ask
