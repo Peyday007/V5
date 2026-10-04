@@ -123,12 +123,11 @@ export type ApprovalPolicy =
    * so that a caller's claim about money can be refused by name; its ceilings
    * and deadline are never read, because the goal row is what a person set.
    *
-   * `packetKey` is required at runtime (a missing one is refused as
-   * GoalIncomplete) but optional in the type: `scripts/admin.ts` builds this
-   * policy and is outside this change's paths, so a required field would break
-   * its typecheck. Making it required in the type is a follow-up there.
+   * Required in the type as well as refused at runtime when blank: every
+   * caller (`scripts/admin.ts`, the tests) now passes one, so an omission is a
+   * compile error rather than a surprise at the moment a packet is started.
    */
-  | { mode: 'GOAL_BUDGET'; goalId: string; budget: ResearchBudget; packetKey?: string };
+  | { mode: 'GOAL_BUDGET'; goalId: string; budget: ResearchBudget; packetKey: string };
 
 /**
  * The modes `startPacket` will actually act on.
