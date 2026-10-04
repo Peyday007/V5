@@ -1317,9 +1317,9 @@ async function main(): Promise<void> {
         /*
          * One packet under a goal's budget. `startPacket` decides whether
          * GOAL_BUDGET is a mode it will act on; if it refuses, that refusal is
-         * printed as it was said and nothing is reserved. The reservation is
-         * taken only after the packet exists, keyed by the caller's own key, so
-         * a retry replays the same charge.
+         * printed as it was said and the hold lapses and refunds by itself. The
+         * reservation is taken before the packet exists, keyed by the caller's
+         * own key, so a retry replays the same charge.
          */
         const packetKey = flag('packet-key') ?? fail('Pass --packet-key: the charge needs a key a retry can repeat.');
         const goal = await getGoal(goalRef);
@@ -1338,6 +1338,10 @@ async function main(): Promise<void> {
         if (!cashEnvelope?.assignmentTemplate) {
           fail('RUSSELL_CASH_DISCOVERY_V1 defines no assignment template in this build.');
         }
+        // Charge first: a hold that is never bound expires and refunds itself, whereas a
+        // packet started before its charge is refused would run uncounted.
+        const reserved = await reserveGoalPacket({ goalId: goal.id, packetKey, projectId: project.id });
+        if (!reserved.ok) fail(`The goal refused this packet's charge, so no packet was started: ${reserved.reason}`);
         try {
           const packet = await startPacket({
             projectId: project.id,
@@ -1359,10 +1363,6 @@ async function main(): Promise<void> {
             },
             startedBy: { kind: 'PERSON', id: actor.id },
           });
-          const reserved = await reserveGoalPacket({ goalId: goal.id, packetKey, projectId: project.id });
-          if (!reserved.ok) {
-            fail(`The packet ${packet.orchestration.id} exists but the goal refused its charge: ${reserved.reason}`);
-          }
           await bindPacketToGoal({ orchestrationId: packet.orchestration.id, goalId: goal.id, packetKey });
           console.log(`  started    ${bucket.id}  ${packet.orchestration.id}  under goal ${goal.id}`);
         } catch (error) {
