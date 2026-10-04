@@ -53,6 +53,16 @@ import {
   revokeAuthority,
 } from '../repos/cashAuthority.ts';
 import { getNeed, getOpportunity } from '../repos/cashPortfolio.ts';
+import {
+  answerRefund,
+  authorizeRefund,
+  declare as declareFulfillmentFor,
+  outcomeLessons,
+  readFulfillments,
+  recordCost as recordFulfillmentCost,
+  recordEvent as recordFulfillmentEventFor,
+} from '../services/cash/fulfillment.ts';
+
 import { getNode } from '../repos/industry.ts';
 import { seedSubject, retireSubject } from '../services/industry/seed.ts';
 import { industryView } from '../services/industry/view.ts';
@@ -993,6 +1003,157 @@ cashRouter.post(
       }),
     );
     return { entry: value, message };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Fulfillment: after a buyer agrees
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The obligation an opportunity's agreement created, and everything recorded
+ * against it. Every route here re-resolves the opportunity inside the project
+ * in the path, so an opportunity id is never a way into another operation —
+ * and a refund, which pays money out, is project ADMIN in the policy module.
+ */
+async function opportunityInProject(projectId: string, opportunityId: string) {
+  const opportunity = await getOpportunity(opportunityId);
+  if (!opportunity || opportunity.projectId !== projectId) {
+    throw notFound('No opportunity with that id.');
+  }
+  return opportunity;
+}
+
+cashRouter.get(
+  '/projects/:projectId/cash/fulfillment',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return {
+      fulfillments: await readFulfillments(project.id),
+      lessons: await outcomeLessons(project.id),
+    };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/fulfillment/:opportunityId',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const opportunity = await opportunityInProject(project.id, pathId(req, 'opportunityId'));
+    const body = bodyOf(req);
+    const scope = body['mutationScope'];
+    if (scope !== undefined && (!Array.isArray(scope) || scope.some((one) => typeof one !== 'string'))) {
+      throw badRequest('"mutationScope" is a list of path globs.');
+    }
+    const { value, message } = taken(
+      await declareFulfillmentFor({
+        projectId: project.id,
+        opportunityId: opportunity.id,
+        kind: requiredString(body['kind'], 'kind'),
+        promise: requiredString(body['promise'], 'promise'),
+        performer: requiredString(body['performer'], 'performer'),
+        acceptanceCondition: optionalString(body['acceptanceCondition'], 'acceptanceCondition') ?? null,
+        // A remote only. A path on this server is not something a request
+        // may choose (§18): a local checkout is a terminal's business.
+        repositoryRemote: optionalString(body['repositoryRemote'], 'repositoryRemote') ?? null,
+        baseBranch: optionalString(body['baseBranch'], 'baseBranch') ?? null,
+        mutationScope: (scope as string[] | undefined) ?? [],
+        supplierName: optionalString(body['supplierName'], 'supplierName') ?? null,
+        actorRef: principal.id,
+      }),
+    );
+    return { fulfillment: value, message };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/fulfillment/:opportunityId/events',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const opportunity = await opportunityInProject(project.id, pathId(req, 'opportunityId'));
+    const body = bodyOf(req);
+    const { value, message } = taken(
+      await recordFulfillmentEventFor({
+        projectId: project.id,
+        opportunityId: opportunity.id,
+        kind: requiredString(body['kind'], 'kind'),
+        detail: requiredString(body['detail'], 'detail'),
+        evidenceRef: optionalString(body['evidenceRef'], 'evidenceRef') ?? null,
+        actorRef: principal.id,
+      }),
+    );
+    return { reading: value, message };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/fulfillment/:opportunityId/costs',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const opportunity = await opportunityInProject(project.id, pathId(req, 'opportunityId'));
+    const body = bodyOf(req);
+    const amountCents = optionalInteger(body['amountCents'], 'amountCents', { min: 1 });
+    if (amountCents === undefined) throw badRequest('"amountCents" is required.');
+    const { value, message } = taken(
+      await recordFulfillmentCost({
+        projectId: project.id,
+        opportunityId: opportunity.id,
+        kind: requiredString(body['kind'], 'kind'),
+        amountCents,
+        detail: requiredString(body['detail'], 'detail'),
+        reference: optionalString(body['reference'], 'reference') ?? null,
+        actorRef: principal.id,
+      }),
+    );
+    return { reading: value, message };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/fulfillment/:opportunityId/refunds',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const opportunity = await opportunityInProject(project.id, pathId(req, 'opportunityId'));
+    const body = bodyOf(req);
+    const amountCents = optionalInteger(body['amountCents'], 'amountCents', { min: 1 });
+    if (amountCents === undefined) throw badRequest('"amountCents" is required.');
+    const { value, message } = taken(
+      await authorizeRefund({
+        projectId: project.id,
+        opportunityId: opportunity.id,
+        amountCents,
+        reason: requiredString(body['reason'], 'reason'),
+        actorRef: principal.id,
+      }),
+    );
+    return { reading: value, message };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/fulfillment/:opportunityId/refunds/:refundKey/:answer',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const opportunity = await opportunityInProject(project.id, pathId(req, 'opportunityId'));
+    const answer = pathId(req, 'answer');
+    if (answer !== 'confirm' && answer !== 'not-sent') throw notFound('No such route.');
+    const { value, message } = taken(
+      await answerRefund({
+        projectId: project.id,
+        opportunityId: opportunity.id,
+        refundKey: pathId(req, 'refundKey'),
+        answer,
+        reference: requiredString(bodyOf(req)['reference'], 'reference'),
+        actorRef: principal.id,
+      }),
+    );
+    return { reading: value, message };
   }),
 );
 

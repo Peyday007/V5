@@ -31,6 +31,7 @@ import { Api } from '../lib/api.ts';
 import type { Project } from '../../../server/domain/types.ts';
 import {
   CashApi,
+  type FulfillmentReadingView,
   type CashModeState,
   type CashRoadmap,
   type CashView,
@@ -1913,11 +1914,42 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
   const held = work.waiting;
   const qualifying = work.beingQualified ?? [];
   const evidence = work.evidence ?? [];
+  const readings = new Map(
+    (view.fulfillment?.readings ?? []).map((one) => [one.opportunityId, one] as const),
+  );
+  const listed = new Set([...acting, ...held].map((one) => one.opportunity.id));
+  /*
+   * Obligations whose opportunity is no longer in the work list — collected,
+   * finished, failed — stay visible here, because a refund still owed or a
+   * cost still unpaid on a finished job is current work whatever the
+   * opportunity's own state says.
+   */
+  const otherObligations = page.capabilities.mayViewPrivateJob
+    ? [...readings.values()].filter((one) => !listed.has(one.opportunityId))
+    : [];
+  const obligations =
+    otherObligations.length > 0 && view.mode ? (
+      <ul className="rs-list rs-cash-obligations">
+        {otherObligations.map((reading) => (
+          <li key={reading.opportunityId} className="rs-group">
+            <p className="rs-item-title">{reading.title}</p>
+            <Fulfillment
+              projectId={view.mode!.projectId}
+              opportunityId={reading.opportunityId}
+              reading={reading}
+              canAct={page.capabilities.mayActOnJob}
+              onChanged={onChanged}
+            />
+          </li>
+        ))}
+      </ul>
+    ) : null;
 
   if (acting.length === 0 && held.length === 0) {
     return (
       <section className="rs-card rs-cash-work">
         <h3>Your current work</h3>
+        {obligations}
         <p className="rs-hint">
           Nothing is ready for you to act on, and nothing is waiting on you.
           {qualifying.length > 0
@@ -1967,6 +1999,18 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
                 onChanged={onChanged}
               />
             ) : null}
+            {page.capabilities.mayViewPrivateJob &&
+            view.mode &&
+            (placement.opportunity.state === 'EXECUTING' ||
+              placement.opportunity.state === 'DELIVERING') ? (
+              <Fulfillment
+                projectId={view.mode.projectId}
+                opportunityId={placement.opportunity.id}
+                reading={readings.get(placement.opportunity.id) ?? null}
+                canAct={page.capabilities.mayActOnJob}
+                onChanged={onChanged}
+              />
+            ) : null}
             {page.capabilities.mayActOnJob &&
             view.mode &&
             (placement.opportunity.state === 'EXECUTING' ||
@@ -1981,7 +2025,256 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
           </li>
         ))}
       </ul>
+      {obligations}
     </section>
+  );
+}
+
+const STAGE_LABEL: Record<FulfillmentReadingView['stage'], string> = {
+  REQUIRED: 'Fulfillment required',
+  IN_PROGRESS: 'Fulfillment in progress',
+  DELIVERED: 'Delivered, not yet accepted',
+  REJECTED: 'Rejected by the buyer',
+  ACCEPTED: 'Accepted',
+  FAILED: 'Fulfillment failed',
+  COMPLETE: 'Complete',
+};
+
+/**
+ * What happens after a buyer agreed, for one obligation.
+ *
+ * Every sentence is the server's (`services/cash/fulfillment.ts`): the stage,
+ * the work, the delivery, the acceptance, the money and both lists of what
+ * comes next. The controls are the three things a person records — how it is
+ * fulfilled, what happened, and a refund — and each is checked again
+ * server-side; nothing here decides whether anything may happen.
+ */
+function Fulfillment({
+  projectId,
+  opportunityId,
+  reading,
+  canAct,
+  onChanged,
+}: {
+  projectId: string;
+  opportunityId: string;
+  reading: FulfillmentReadingView | null;
+  canAct: boolean;
+  onChanged(): void;
+}): JSX.Element {
+  const [kind, setKind] = useState('PERSON');
+  const [promise, setPromise] = useState('');
+  const [performer, setPerformer] = useState('');
+  const [condition, setCondition] = useState('');
+  const [extra, setExtra] = useState('');
+  const [eventKind, setEventKind] = useState('DELIVERED');
+  const [detail, setDetail] = useState('');
+  const [evidence, setEvidence] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  async function run(call: () => Promise<{ message: string }>): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const result = await call();
+      setDone(result.message);
+      onChanged();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const fulfillment = reading?.fulfillment ?? null;
+  const currency = reading?.money.currency ?? 'USD';
+  const refundCents = centsFromAmount(refundAmount);
+
+  return (
+    <div className="rs-cash-fulfillment">
+      {reading ? (
+        <>
+          <p className="rs-badge">{STAGE_LABEL[reading.stage]}</p>
+          {fulfillment ? (
+            <p className="rs-item-meta">
+              Promised: {fulfillment.promise}. Performed by {fulfillment.performer} (
+              {fulfillment.kind.toLowerCase()}).
+              {fulfillment.acceptanceCondition
+                ? ` Accepted when: ${fulfillment.acceptanceCondition}.`
+                : ' No acceptance condition is stated yet.'}
+            </p>
+          ) : null}
+          <p className="rs-item-meta">Work: {reading.work.detail}</p>
+          <p className="rs-item-meta">
+            Delivery:{' '}
+            {reading.delivery.state === 'DELIVERED'
+              ? `delivered (${reading.delivery.evidence ?? 'no reference'})`
+              : reading.delivery.state === 'PARTIAL'
+                ? `${reading.delivery.portions.length} part(s) delivered. ${reading.delivery.remaining ?? ''}`
+                : 'nothing delivered yet'}
+            . Acceptance: {reading.acceptance.state.toLowerCase().replace(/_/g, ' ')}
+            {reading.acceptance.reason ? ` — ${reading.acceptance.reason}` : ''}.
+          </p>
+          <p className="rs-item-meta">
+            Agreed {money(reading.money.agreedCents, currency)}, paid{' '}
+            {money(reading.money.paidCents, currency)}
+            {reading.money.outstandingCents !== null
+              ? `, ${money(reading.money.outstandingCents, currency)} still to collect`
+              : ''}
+            . Costs {money(reading.money.costCents, currency)}
+            {reading.money.unpaidCommitmentCents > 0
+              ? `, ${money(reading.money.unpaidCommitmentCents, currency)} still owed to the supplier`
+              : ''}
+            {reading.money.refundedCents > 0
+              ? `. Refunded ${money(reading.money.refundedCents, currency)}`
+              : ''}
+            .
+          </p>
+          {reading.refunds.length > 0 ? (
+            <ul className="rs-list">
+              {reading.refunds.map((refund) => (
+                <li key={refund.refundKey} className="rs-item-meta">
+                  Refund {money(refund.amountCents, currency)}: {refund.state.toLowerCase()}
+                  {refund.reference ? ` (${refund.reference})` : ''} — {refund.reason}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {reading.failure ? <p className="rs-decision-why">Failed: {reading.failure.reason}</p> : null}
+          {reading.brainNext.length > 0 ? (
+            <p className="rs-item-meta">Brain next: {reading.brainNext.join(' ')}</p>
+          ) : null}
+          {reading.personNext.length > 0 ? (
+            <p className="rs-decision-why">Needs a person: {reading.personNext.join(' ')}</p>
+          ) : null}
+        </>
+      ) : (
+        <p className="rs-hint">No agreement is recorded on this yet, so nothing is owed.</p>
+      )}
+      {done ? <p className="rs-state rs-state-ok">{done}</p> : null}
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      {canAct ? (
+        <details className="rs-cash-fulfillment-controls">
+          <summary>Record fulfillment</summary>
+          {!fulfillment ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void run(() =>
+                  CashApi.declareFulfillment(projectId, opportunityId, {
+                    kind,
+                    promise: promise.trim(),
+                    performer: performer.trim(),
+                    ...(condition.trim() ? { acceptanceCondition: condition.trim() } : {}),
+                    ...(kind === 'SOFTWARE' && extra.trim() ? { repositoryRemote: extra.trim() } : {}),
+                    ...(kind === 'SUPPLIER' && extra.trim() ? { supplierName: extra.trim() } : {}),
+                  }),
+                );
+              }}
+            >
+              <label>
+                Performed by
+                <select value={kind} onChange={(event) => setKind(event.target.value)}>
+                  <option value="PERSON">A person</option>
+                  <option value="SUPPLIER">A supplier</option>
+                  <option value="SOFTWARE">The Software Factory</option>
+                  <option value="RESEARCH">Research</option>
+                </select>
+              </label>
+              <label>
+                What was promised
+                <input value={promise} onChange={(event) => setPromise(event.target.value)} />
+              </label>
+              <label>
+                Who does it
+                <input value={performer} onChange={(event) => setPerformer(event.target.value)} />
+              </label>
+              <label>
+                Accepted when
+                <input value={condition} onChange={(event) => setCondition(event.target.value)} />
+              </label>
+              {kind === 'SOFTWARE' || kind === 'SUPPLIER' ? (
+                <label>
+                  {kind === 'SOFTWARE' ? 'Repository' : 'Supplier'}
+                  <input value={extra} onChange={(event) => setExtra(event.target.value)} />
+                </label>
+              ) : null}
+              <button type="submit" disabled={busy || !promise.trim() || !performer.trim()}>
+                Record how it is fulfilled
+              </button>
+            </form>
+          ) : (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void run(() =>
+                  CashApi.recordFulfillmentEvent(projectId, opportunityId, {
+                    kind: eventKind,
+                    detail: detail.trim(),
+                    ...(evidence.trim() ? { evidenceRef: evidence.trim() } : {}),
+                  }),
+                );
+              }}
+            >
+              <label>
+                What happened
+                <select value={eventKind} onChange={(event) => setEventKind(event.target.value)}>
+                  <option value="WORK_COMPLETE">The work is done</option>
+                  <option value="PARTIALLY_DELIVERED">Part of it was delivered</option>
+                  <option value="DELIVERED">It was delivered</option>
+                  <option value="ACCEPTED">The buyer accepted it</option>
+                  <option value="REJECTED">The buyer rejected it</option>
+                  <option value="SUPPLIER_FAILED">The supplier failed</option>
+                  <option value="FAILED">It failed</option>
+                  <option value="ABANDONED">It was abandoned</option>
+                </select>
+              </label>
+              <label>
+                In words
+                <input value={detail} onChange={(event) => setDetail(event.target.value)} />
+              </label>
+              <label>
+                What proves it
+                <input value={evidence} onChange={(event) => setEvidence(event.target.value)} />
+              </label>
+              <button type="submit" disabled={busy || !detail.trim()}>
+                Record it
+              </button>
+            </form>
+          )}
+          {fulfillment && reading && reading.money.paidCents - reading.money.refundedCents > 0 ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (refundCents === null) return;
+                void run(() =>
+                  CashApi.authorizeRefund(projectId, opportunityId, {
+                    amountCents: refundCents,
+                    reason: refundReason.trim(),
+                  }),
+                );
+              }}
+            >
+              <label>
+                Refund ({currency})
+                <input value={refundAmount} onChange={(event) => setRefundAmount(event.target.value)} />
+              </label>
+              <label>
+                Why
+                <input value={refundReason} onChange={(event) => setRefundReason(event.target.value)} />
+              </label>
+              <button type="submit" disabled={busy || refundCents === null || !refundReason.trim()}>
+                Authorize the refund
+              </button>
+            </form>
+          ) : null}
+        </details>
+      ) : null}
+    </div>
   );
 }
 

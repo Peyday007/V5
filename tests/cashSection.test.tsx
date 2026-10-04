@@ -2607,3 +2607,102 @@ describe('the offer a person could send', () => {
     expect(screen.queryByRole('button', { name: /copy offer/i })).toBeNull();
   });
 });
+
+/**
+ * After a buyer agrees, the obligation is read on the piece it belongs to.
+ *
+ * Every sentence is the server's — the stage, the work, what Brain does next
+ * and what needs a person — and the control posts to the fulfillment door
+ * rather than to the opportunity's own state transitions, because delivered
+ * and accepted are facts with evidence, not buttons.
+ */
+describe('fulfillment on a piece in flight', () => {
+  function reading(over: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      opportunityId: 'cop_9',
+      title: 'A booking widget, agreed',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      fulfillment: {
+        id: 'cff_1',
+        kind: 'PERSON',
+        promise: 'Install the booking widget',
+        performer: 'Airyn',
+        acceptanceCondition: 'A test booking reaches the calendar',
+        supplierName: null,
+        workRef: null,
+      },
+      money: {
+        currency: 'USD',
+        agreedCents: 75_000,
+        paidCents: 30_000,
+        settledCents: 0,
+        refundedCents: 0,
+        outstandingCents: 45_000,
+        costCents: 0,
+        unpaidCommitmentCents: 0,
+        contributionCents: 30_000,
+      },
+      work: { state: 'COMPLETE', ref: null, artifact: 'screenshot-1', detail: 'Installed and tested.' },
+      delivery: { state: 'DELIVERED', portions: [], evidence: 'email-1', deliveredAt: 't', remaining: null },
+      acceptance: { state: 'AWAITING_ACCEPTANCE', condition: 'A test booking reaches the calendar', evidence: null, reason: null },
+      refunds: [],
+      failure: null,
+      stage: 'DELIVERED',
+      complete: false,
+      outstanding: ['the buyer has not accepted it against the agreed condition'],
+      brainNext: [],
+      personNext: ['Record the buyer’s acceptance, or rejection, with their evidence.'],
+      ...over,
+    };
+  }
+
+  function flightView(): Record<string, unknown> {
+    return view({
+      myCurrentWork: {
+        ...(view().myCurrentWork as Record<string, unknown>),
+        executeNow: [
+          {
+            opportunity: opportunity({ id: 'cop_9', title: 'A booking widget, agreed', state: 'DELIVERING' }),
+            disposition: 'EXECUTE_NOW',
+            because: 'It is being delivered.',
+            missing: [],
+            tier: tier(),
+          },
+        ],
+        waiting: [],
+      },
+      fulfillment: { readings: [reading()], lessons: [] },
+    });
+  }
+
+  it('shows the stage, the money still to collect and what needs a person', async () => {
+    base({ [VIEW]: { body: flightView() } });
+    await mount();
+    const work = await waitFor(() => {
+      const node = document.querySelector('.rs-cash-work .rs-cash-fulfillment') as HTMLElement;
+      expect(node).toBeTruthy();
+      return within(node);
+    });
+    expect(work.getByText('Delivered, not yet accepted')).toBeTruthy();
+    expect(work.getByText(/still to collect/)).toBeTruthy();
+    expect(work.getByText(/Needs a person: Record the buyer’s acceptance/)).toBeTruthy();
+  });
+
+  it('records what happened through the fulfillment door, with its evidence', async () => {
+    const route = `POST /api/projects/${PROJECT}/cash/fulfillment/cop_9/events`;
+    base({ [VIEW]: { body: flightView() }, [route]: { body: { message: 'Recorded.' } } });
+    await mount();
+    const panel = await waitFor(() => {
+      const node = document.querySelector('.rs-cash-work .rs-cash-fulfillment') as HTMLElement;
+      expect(node).toBeTruthy();
+      return within(node);
+    });
+    fireEvent.change(panel.getByLabelText(/what happened/i), { target: { value: 'ACCEPTED' } });
+    fireEvent.change(panel.getByLabelText(/in words/i), { target: { value: 'It reached the calendar' } });
+    fireEvent.change(panel.getByLabelText(/what proves it/i), { target: { value: 'reply-4' } });
+    await act(async () => {
+      fireEvent.click(panel.getByRole('button', { name: /record it/i }));
+    });
+    expect(bodies[route]).toEqual({ kind: 'ACCEPTED', detail: 'It reached the calendar', evidenceRef: 'reply-4' });
+  });
+});

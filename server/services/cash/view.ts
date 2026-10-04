@@ -15,6 +15,7 @@
  *
  * It writes nothing.
  */
+import { outcomeLessons, readFulfillments, type FulfillmentReading, type OutcomeLesson } from './fulfillment.ts';
 import { cashNow, listCashEvents } from '../../repos/cashMode.ts';
 import { listMoneyEntries } from '../../repos/cashLedger.ts';
 import { listCommitments } from '../../repos/cashAuthority.ts';
@@ -100,6 +101,12 @@ export interface CashView {
     entries: { entry: ReturnType<typeof explainEntries>[number]['entry']; effect: string }[];
     commitments: CashCommitment[];
   };
+  /**
+   * After a buyer agrees: each obligation, where it stands, and what finished
+   * work taught. Private — every line carries the money or the terms of one
+   * job — so it is here and never in the shared projection (§34).
+   */
+  fulfillment: { readings: FulfillmentReading[]; lessons: OutcomeLesson[] };
   myCurrentWork: AssembledPlan & {
     /**
      * The compiled instruction for each live piece, in dependency order.
@@ -408,6 +415,11 @@ export async function cashView(input: {
       commitments,
     },
     myCurrentWork: { ...plan, cards, provenance, engineCards, economics, executionPaths, offers },
+    // Derived on read like everything beside it; writes nothing.
+    fulfillment: {
+      readings: await readFulfillments(input.projectId),
+      lessons: await outcomeLessons(input.projectId),
+    },
     whatBrainHasDone: await listCashEvents(input.projectId, 40),
     whatBrainNeeds: needs.map((one) => ({
       ...one,

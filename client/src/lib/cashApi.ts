@@ -318,6 +318,8 @@ export interface CashView {
       stopCondition: string;
     }[];
   };
+  /** After a buyer agrees. Optional for the deploy reason every late field has. */
+  fulfillment?: { readings: FulfillmentReadingView[]; lessons: OutcomeLessonView[] };
   myCurrentWork: {
     placements: Placement[];
     executeNow: Placement[];
@@ -460,6 +462,69 @@ export interface IssuedEnrollment {
 }
 
 const p = (value: string): string => encodeURIComponent(value);
+
+/**
+ * One obligation after a buyer agreed, as `services/cash/fulfillment.ts`
+ * derives it. Every sentence is the server's; the screen composes none.
+ */
+export interface FulfillmentReadingView {
+  opportunityId: string;
+  title: string;
+  mechanism: string;
+  fulfillment: {
+    id: string;
+    kind: 'SOFTWARE' | 'RESEARCH' | 'PERSON' | 'SUPPLIER';
+    promise: string;
+    performer: string;
+    acceptanceCondition: string | null;
+    supplierName: string | null;
+    workRef: string | null;
+  } | null;
+  money: {
+    currency: string;
+    agreedCents: number;
+    paidCents: number;
+    settledCents: number;
+    refundedCents: number;
+    outstandingCents: number | null;
+    costCents: number;
+    unpaidCommitmentCents: number;
+    contributionCents: number;
+  };
+  work: { state: string; ref: string | null; artifact: string | null; detail: string };
+  delivery: {
+    state: 'NOT_DELIVERED' | 'PARTIAL' | 'DELIVERED';
+    portions: { detail: string; evidence: string | null; at: string }[];
+    evidence: string | null;
+    deliveredAt: string | null;
+    remaining: string | null;
+  };
+  acceptance: { state: string; condition: string | null; evidence: string | null; reason: string | null };
+  refunds: {
+    refundKey: string;
+    amountCents: number;
+    reason: string;
+    state: 'PENDING' | 'UNKNOWN' | 'CONFIRMED' | 'FAILED';
+    reference: string | null;
+  }[];
+  failure: { kind: string; reason: string; at: string } | null;
+  stage: 'REQUIRED' | 'IN_PROGRESS' | 'DELIVERED' | 'REJECTED' | 'ACCEPTED' | 'FAILED' | 'COMPLETE';
+  complete: boolean;
+  outstanding: string[];
+  brainNext: string[];
+  personNext: string[];
+}
+
+export interface OutcomeLessonView {
+  mechanism: string;
+  fulfillmentKind: string;
+  obligations: number;
+  successes: number;
+  failures: number;
+  refunds: number;
+  contributions: number[];
+  anecdote: boolean;
+}
 
 export const CashApi = {
   /**
@@ -767,6 +832,46 @@ export const CashApi = {
     api(`/api/cash/opportunities/${p(opportunityId)}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
+    }),
+
+  /** Say how an agreed opportunity is fulfilled. */
+  declareFulfillment: (
+    projectId: string,
+    opportunityId: string,
+    body: {
+      kind: string;
+      promise: string;
+      performer: string;
+      acceptanceCondition?: string;
+      repositoryRemote?: string;
+      supplierName?: string;
+    },
+  ): Promise<{ message: string }> =>
+    api(`/api/projects/${p(projectId)}/cash/fulfillment/${p(opportunityId)}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /** Record something that happened to an obligation, with what proves it. */
+  recordFulfillmentEvent: (
+    projectId: string,
+    opportunityId: string,
+    body: { kind: string; detail: string; evidenceRef?: string },
+  ): Promise<{ message: string }> =>
+    api(`/api/projects/${p(projectId)}/cash/fulfillment/${p(opportunityId)}/events`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /** Authorize paying a buyer back. Project ADMIN, refused above what was paid. */
+  authorizeRefund: (
+    projectId: string,
+    opportunityId: string,
+    body: { amountCents: number; reason: string },
+  ): Promise<{ message: string }> =>
+    api(`/api/projects/${p(projectId)}/cash/fulfillment/${p(opportunityId)}/refunds`, {
+      method: 'POST',
+      body: JSON.stringify(body),
     }),
 
   /** Record money that actually moved. Refused without a verifiable reference. */

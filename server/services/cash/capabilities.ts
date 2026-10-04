@@ -49,7 +49,7 @@
  * invented measurement this file exists to refuse.
  */
 import { separationCapacity } from '../research/auditAdmission.ts';
-import { contactBuyerAdapter } from './effects.ts';
+import { contactBuyerAdapter, refundAdapter } from './effects.ts';
 
 export type CapabilityState = 'PRESENT' | 'MISSING' | 'UNKNOWN';
 
@@ -123,6 +123,18 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
       'Until one exists, payment is taken outside Brain and reaches the ledger as a SETTLEMENT ' +
       'carrying a verifiable reference.',
     read: null,
+  },
+  {
+    id: 'ISSUE_A_REFUND',
+    does: 'Pay a buyer back through the provider that took their money.',
+    requires: 'A refund effect adapter registered for "cash.refund".',
+    nextStep:
+      'Until one exists, the refund is paid out by a person and confirmed on the obligation ' +
+      'with the provider or bank reference, which is what writes the REFUND entry.',
+    // `PRESENT` only when a real adapter is registered, read the way
+    // `SEND_A_MESSAGE` is, so this and `services/cash/fulfillment.ts` cannot
+    // disagree about whether Brain can send one.
+    read: async () => refundAdapter() !== null,
   },
   {
     id: 'PUBLISH_A_LISTING',

@@ -79,6 +79,7 @@ import { contactBuyerKey, sendContactBuyer } from './effects.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
+import { advanceFulfillment, type FulfillmentPass } from './fulfillment.ts';
 
 /** Brain acting on its own account, never a person and never a worker. */
 const BRAIN = 'BRAIN';
@@ -814,6 +815,7 @@ export async function operate(
   dependentWork: DependentWork[];
   validations: ValidationProgress;
   authority: AuthorityAdvance;
+  fulfillment: FulfillmentPass;
   monetization: MonetizationPass;
 }> {
   if (!(await getCashMode(projectId))) {
@@ -827,6 +829,7 @@ export async function operate(
       dependentWork: [],
       validations: { started: [], settled: [] },
       authority: { took: [], withheld: [] },
+      fulfillment: { workCreated: [], needsRaised: [], needsSettled: [], refundsSettled: [], observations: 0 },
       monetization: {
         pathsAdded: [],
         figuresCarried: [],
@@ -879,6 +882,14 @@ export async function operate(
    */
   const authority = await advanceWithinAuthority(projectId);
   /*
+   * After a buyer agrees: the obligation's work created exactly once, its
+   * refunds taken as far as Brain can, its needs raised and settled, and what
+   * finished work taught recorded. After the authority pass, because that pass
+   * is what moves a piece into execution; before the ledger, which reads none
+   * of this. See `fulfillment.ts`.
+   */
+  const fulfillment = await advanceFulfillment(projectId);
+  /*
    * And the possibility ledger, last, reading everything the passes above
    * wrote.
    *
@@ -905,6 +916,7 @@ export async function operate(
     dependentWork,
     validations,
     authority,
+    fulfillment,
     monetization,
   };
 }

@@ -34,6 +34,7 @@
  * forget.
  */
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
+import { fulfillmentEvents, fulfillmentForOpportunity, getFulfillment } from '../../repos/cashFulfillment.ts';
 import { readCapability } from './capabilities.ts';
 import { evidenceCard } from './card.ts';
 import type { CashNeed } from '../../domain/types.ts';
@@ -101,5 +102,69 @@ export async function readNeedCondition(need: CashNeed): Promise<NeedVerificatio
     return null;
   }
 
+  if (need.requestKey.startsWith('fulfillment:')) return readFulfillmentCondition(need);
+
   return null;
+}
+
+/**
+ * The conditions `services/cash/fulfillment.ts` raises, read from the rows it
+ * named — never from what somebody typed when closing the need.
+ *
+ * Read here from the repository rather than through the fulfillment service,
+ * because that service raises needs and `needs.ts` reads this module: going
+ * through it would be the import cycle this file's header already explains.
+ */
+async function readFulfillmentCondition(need: CashNeed): Promise<NeedVerification | null> {
+  const parts = need.requestKey!.split(':');
+  const what = parts[1];
+  if (what === 'refund' || what === 'refund-unknown') {
+    const fulfillment = await getFulfillment(parts[2] ?? '');
+    if (!fulfillment) return null;
+    const refundKey = parts[3] ?? '';
+    const settled = (await fulfillmentEvents(fulfillment.id)).find(
+      (one) =>
+        one.refundKey === refundKey && (one.kind === 'REFUND_CONFIRMED' || one.kind === 'REFUND_FAILED'),
+    );
+    return {
+      holds: Boolean(settled),
+      reading: settled
+        ? `Refund ${refundKey} is ${settled.kind === 'REFUND_CONFIRMED' ? 'confirmed' : 'recorded as not sent'}.`
+        : `Refund ${refundKey} is not resolved yet.`,
+    };
+  }
+  const opportunityId = parts[2] ?? '';
+  const fulfillment = await fulfillmentForOpportunity(need.projectId, opportunityId);
+  switch (what) {
+    case 'requirement':
+      return {
+        holds: fulfillment !== null,
+        reading: fulfillment ? 'A fulfillment is declared.' : 'Nothing says how this is fulfilled yet.',
+      };
+    case 'acceptance':
+      return {
+        holds: Boolean(fulfillment?.acceptanceCondition),
+        reading: fulfillment?.acceptanceCondition
+          ? 'The obligation carries an acceptance condition.'
+          : 'The obligation still has no acceptance condition.',
+      };
+    case 'work':
+      return {
+        holds: Boolean(fulfillment?.workCreatedAt),
+        reading: fulfillment?.workCreatedAt
+          ? `Work exists for this obligation${fulfillment.workRef ? ` (${fulfillment.workRef})` : ''}.`
+          : 'No work exists for this obligation yet.',
+      };
+    case 'refund-decision': {
+      const authorized = fulfillment
+        ? (await fulfillmentEvents(fulfillment.id)).some((one) => one.kind === 'REFUND_AUTHORIZED')
+        : false;
+      return {
+        holds: authorized,
+        reading: authorized ? 'A refund is authorized.' : 'No refund has been authorized.',
+      };
+    }
+    default:
+      return null;
+  }
 }

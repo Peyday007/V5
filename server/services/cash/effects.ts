@@ -116,3 +116,71 @@ export async function sendContactBuyer(input: ContactBuyerRequest): Promise<Exte
     principalId: PRINCIPAL_ID,
   });
 }
+
+/* --------------------------------------------------------------------------
+ * Refunds
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Paying a buyer back, through the same machinery a contact goes through.
+ *
+ * A refund is money leaving the account, so it is exactly the effect invariant
+ * 26 exists for: a timeout is not evidence it did not happen, and an unknown
+ * outcome is recorded as unknown and never resent. `runExternalEffect` already
+ * refuses to resend against an unresolved attempt; this module adds nothing to
+ * that rule and has no second way to send.
+ *
+ * `PROJECT` scope for `CONTACT_BUYER_NAMESPACE`'s reason: the business identity
+ * — the fulfillment and which authorized refund this is — is already unique in
+ * the project, so two calls for one refund are one intent to join.
+ */
+export const REFUND_NAMESPACE: OperationNamespace = {
+  name: 'cash.refund',
+  version: 1,
+  principalScope: 'PROJECT',
+  retention: 'PERMANENT',
+};
+
+/** The adapter registered for refunds, or none — read the way contact is. */
+export function refundAdapter(): EffectAdapter | null {
+  return listAdapters().find((one) => one.namespace === REFUND_NAMESPACE.name) ?? null;
+}
+
+/**
+ * The idempotency key for one authorized refund, from server facts only.
+ *
+ * The fulfillment and the refund key the authorization was recorded under —
+ * never a clock, an attempt or anything a caller sent — so the tick asking
+ * again after a restart reaches the same reservation rather than a second
+ * payout.
+ */
+export function refundEffectKey(fulfillmentId: string, refundKey: string): string {
+  return `refund.${fulfillmentId}.${refundKey}`;
+}
+
+export async function sendRefund(input: {
+  projectId: string;
+  fulfillmentId: string;
+  refundKey: string;
+  amountCents: number;
+  currency: string;
+  reason: string;
+}): Promise<ExternalOutcome> {
+  const adapter = refundAdapter();
+  if (!adapter) {
+    throw new Error(
+      `No effect adapter is registered for "${REFUND_NAMESPACE.name}", so a refund cannot be ` +
+        'sent by Brain. The caller should have raised a need instead.',
+    );
+  }
+  return await runExternalEffect({
+    adapter,
+    namespace: REFUND_NAMESPACE,
+    projectId: input.projectId,
+    key: refundEffectKey(input.fulfillmentId, input.refundKey),
+    businessId: `${input.fulfillmentId}:${input.refundKey}`,
+    payload: { amountCents: input.amountCents, currency: input.currency, reason: input.reason },
+    principalType: 'SYSTEM',
+    principalId: 'cash-refund',
+  });
+}

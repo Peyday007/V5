@@ -11981,6 +11981,75 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   clears only by consent in Claude. Brain answers every retry correctly and
   fast; it cannot make a client retry.
 
+## 52. Delivered is not accepted, and a refund nobody confirmed did not happen.
+
+Cash Mode could carry an opportunity to `PIPELINE_AGREED` and to a settlement,
+and nothing in between knew what had been promised, who was doing it, whether
+it was delivered, whether the buyer accepted it, what it cost, or what to do
+when it went wrong. `advance` moved a piece to `DELIVERING` on a button, and
+"delivered" and "accepted" were not different facts anywhere.
+`server/services/cash/fulfillment.ts`, `server/repos/cashFulfillment.ts` and
+`104_cash_fulfillment.sql` (pg `095_cash_fulfillment.sql`) are that middle, and
+they are an **entrance** to owners that already exist.
+
+- **The obligation is a row and its standing is derived.** `cash_fulfillments`
+  holds what was promised, the kind (`SOFTWARE`, `RESEARCH`, `PERSON`,
+  `SUPPLIER` — a person's statement, never inferred from prose), who performs
+  it, the acceptance condition and the work Brain created. There is no state
+  column: `readFulfillment` derives work, delivery, acceptance, refunds and
+  completion from the obligation's append-only events, the ledger and the work
+  it points at, every read.
+- **No second queue, ledger or effects engine.** Software work is a Factory
+  change request (`submitObjective`, keyed by the obligation, so a retry
+  collides); research is a Russell idea (`capture`, which folds a repeat);
+  a person or supplier's obligation *is* the work. Money is
+  `recordMoneyEvent`. A refund is `runExternalEffect` on `cash.refund`, or a
+  need when no adapter is registered — `ISSUE_A_REFUND` reads `PRESENT` only
+  then. Work is claimed once by a guarded `UPDATE … WHERE work_ref IS NULL AND
+  work_created_at IS NULL`.
+- **Completion is read from the owner, never from a word.** `WORK_COMPLETE`
+  is refused for software and research — the campaign and the filed mission
+  say it. `DELIVERED` needs the work complete and evidence; `ACCEPTED` needs a
+  stated condition, a full delivery and the buyer's evidence; a partial
+  delivery cannot be accepted as the whole. Commercially `complete` needs all
+  of that, every authorized refund resolved, no recorded failure, and a
+  supplier's commitment on the record. It never needs settlement, and it never
+  makes unsettled money available cash.
+- **An unknown refund stays unknown.** `REFUND_UNKNOWN` is never resent by
+  the tick — the effect engine refuses to, and nothing here asks it to — and
+  an unknown refund counts against what may still be refunded, because it may
+  have happened. The `REFUND` entry is written only on confirmation, carrying
+  the provider's reference, under a key derived from the refund.
+- **Costs use the ledger's own arithmetic.** A supplier commitment is
+  `UNPAID_COMMITMENT`; its payment is `COST` plus `COMMITMENT_PAID` for the part
+  it closes, read back from its own key on a retry rather than recomputed from
+  a balance the first attempt moved. There is no estimate kind.
+- **A failure after payment is a person's decision, raised as a need.** So is
+  a missing obligation, a missing acceptance condition and a Factory refusal.
+  Each need's condition is read from rows in `conditions.ts`, and the tick
+  closes it `BRAIN_READ_THE_ROW` once it holds.
+- **Learning is append-only and shows its sample.** `cash_outcome_observations`
+  is written once per terminal point — success, failure, each confirmed refund
+  — and never revised; `outcomeLessons` groups by mechanism and fulfillment
+  kind with the count and calls one obligation an anecdote. It informs and
+  gates nothing.
+
+**`raiseNeed` raced itself, and this work is what found it.** It asked whether
+a need was open and then inserted, so two ticks at once both answered "no" and
+the second threw a unique-constraint error out of the tick. `createNeedOnce`
+puts the arbiter where every other idempotent write here has it — `ON CONFLICT
+DO NOTHING` on `(project_id, request_key, occurrence)` and a read-back — and
+fixes it for every caller rather than this one. **And two events in one
+millisecond sorted by a random id**, so a redelivery after a rejection could
+read as before it; events are ordered by insertion (`rowid`, `seq` on
+Postgres). Both regressions were seen to fail first.
+
+**What is true today.** The journeys in `tests/cashFulfillment.test.ts` pass on
+both backends. No buyer has been fulfilled in production, no refund adapter is
+registered in any deployment (so every refund there is a person's to pay and
+confirm), and the Factory and research handoffs are proved against a fixture
+repository and simulated mission rows — the separation Step 3 drew.
+
 ## Repository map
 
 ```
@@ -12035,6 +12104,7 @@ server/
     cashLedger.ts     money, as append-only rows; no balance column anywhere
     cashActions.ts    what was actually done, and under which grant
     cashLock.ts       where two cash decisions stop being concurrent
+    cashFulfillment.ts obligations after a buyer agrees, their events, what they taught
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
     researchIntelligence.ts  the judgement above the engine: what to learn, and what changed it
     register.ts       workstreams, what they point at, and what happened to them
@@ -12191,6 +12261,7 @@ server/
       engineCard.ts     fact, estimate, decision, unknown — and the margin withheld
       discovery.ts      where the portfolio comes from: buckets, and a lane
       operate.ts        acting on a need: raise, settle, resume, start work
+      fulfillment.ts    agreement to work, delivery, acceptance, costs, refunds, lessons
       view.ts           one private section, derived in one place
       monetization/
         enumerate.ts    the possibility space, from a closed table rather than a model
@@ -12490,6 +12561,7 @@ tests/                  Vitest suites
   cashDiscovery.test.ts      the buckets, the lane, and the blank card they produce
   cashPipelineRepair.test.ts the fifteen proofs the production audit asked for
   cashOperate.test.ts        a capability read, a need resumed, an action recorded
+  cashFulfillment.test.ts    an agreed job carried to acceptance, refund and lesson, both backends
   cashIntegrationPass.test.ts  one sprint, walked the whole way, entrances only
   cashProposal.test.ts       the seven terms, and the numbers Brain will not invent
   cashOpportunityStandard.test.ts  what is an opportunity, and whose question is whose

@@ -224,6 +224,14 @@ describe('who can reach any of this', () => {
     { method: 'GET', route: `${CASH()}/dealflow` },
     { method: 'POST', route: `${CASH()}/dealflow/parties` },
     { method: 'POST', route: `${CASH()}/dealflow/observations` },
+    // After a buyer agrees. Declaring and recording are work inside the
+    // operation; a refund pays money out and is ADMIN. No machine reaches any.
+    { method: 'GET', route: `${CASH()}/fulfillment` },
+    { method: 'POST', route: `${CASH()}/fulfillment/cop_any` },
+    { method: 'POST', route: `${CASH()}/fulfillment/cop_any/events` },
+    { method: 'POST', route: `${CASH()}/fulfillment/cop_any/costs` },
+    { method: 'POST', route: `${CASH()}/fulfillment/cop_any/refunds` },
+    { method: 'POST', route: `${CASH()}/fulfillment/cop_any/refunds/abc/confirm` },
   ];
 
   it('refuses an anonymous caller everywhere', async () => {
@@ -1045,5 +1053,54 @@ describe('one account’s whole journey', () => {
       body: { reason: 'Trying it on.' },
     });
     expect(result.status).toBe(404);
+  });
+});
+
+describe('fulfillment, at the door', () => {
+  it('lets a member declare and read obligations and refuses them a refund, which pays money out', async () => {
+    // An opportunity the journey above already created. Winding down stops new
+    // discovery and nothing else, so declaring how a real one is fulfilled
+    // still works here — which is invariant 40, at this door.
+    const view = await call<{ myCurrentWork: { placements: { opportunity: { id: string } }[] } }>(
+      'GET',
+      CASH(),
+      { cookie: adminCookie },
+    );
+    const real = view.body.myCurrentWork.placements[0]!.opportunity.id;
+
+    const declared = await call('POST', `${CASH()}/fulfillment/${real}`, {
+      cookie: memberCookie,
+      body: { kind: 'PERSON', promise: 'Repair the form', performer: 'The owner' },
+    });
+    expect(declared.status).toBe(200);
+    const read = await call<{ fulfillments: { opportunityId: string }[] }>('GET', `${CASH()}/fulfillment`, {
+      cookie: memberCookie,
+    });
+    expect(read.status).toBe(200);
+    expect(read.body.fulfillments.some((one) => one.opportunityId === real)).toBe(true);
+
+    // The opportunity is real and declared, so a member's 404 here can only be
+    // the ADMIN level refusing them — the administrator reaches the handler and
+    // is refused by it on the merits instead.
+    const memberRefund = await call('POST', `${CASH()}/fulfillment/${real}/refunds`, {
+      cookie: memberCookie,
+      body: { amountCents: 100, reason: 'goodwill' },
+    });
+    expect(memberRefund.status).toBe(404);
+    const adminRefund = await call('POST', `${CASH()}/fulfillment/${real}/refunds`, {
+      cookie: adminCookie,
+      body: { amountCents: 100, reason: 'goodwill' },
+    });
+    // The administrator reaches the handler, and this opportunity was paid for
+    // in the journey above, so the authorization lands.
+    expect(adminRefund.status, adminRefund.text).toBe(200);
+  });
+
+  it('answers an unknown opportunity the same way for an administrator', async () => {
+    const declared = await call('POST', `${CASH()}/fulfillment/cop_does_not_exist`, {
+      cookie: adminCookie,
+      body: { kind: 'PERSON', promise: 'x', performer: 'y' },
+    });
+    expect(declared.status).toBe(404);
   });
 });

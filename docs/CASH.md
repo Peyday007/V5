@@ -459,6 +459,23 @@ selected, so somebody with a broad Brain project and a private cash project
 could be shown the wrong one; the operation is chosen now, from the ones that
 exist.
 
+## 11b. After a buyer agrees
+
+An agreement (`PIPELINE_AGREED` on an opportunity) asks for an obligation:
+how it is fulfilled (software through the Factory, research through the
+pipeline, a person, or a supplier), what was promised and what proves it
+landed. `services/cash/fulfillment.ts` creates the work exactly once, reads its
+completion from the Factory or the pipeline (never from a person's word for
+software or research), records delivery and the buyer's acceptance with
+evidence, books costs into the existing ledger, and takes refunds through the
+effect engine or — with no refund adapter, which is every deployment today —
+to a person who pays it out and confirms the reference. An unknown refund is
+never resent. A job is commercially complete only when the work is done, the
+whole promise is delivered, the buyer accepted it against the stated
+condition, every refund is resolved and nothing failed; settlement is still
+what makes money available. Finished and failed jobs leave append-only
+observations, grouped by mechanism with their sample size. See CLAUDE.md §52.
+
 ## 12. Checks
 
 ```
