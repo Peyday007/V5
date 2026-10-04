@@ -528,3 +528,31 @@ describe('goalBudgetStatus', () => {
     expect(await goalBudgetStatus('rgl_missing')).toBeNull();
   });
 });
+
+describe('the service entrance to a research goal', () => {
+  it('is what a person uses: ADMIN opens, a worker and a stranger are refused alike', async () => {
+    const { openResearchGoal, reserveResearchPacket, researchGoalStatus } = await import(
+      '../server/services/russell/authority.ts'
+    );
+    const person = { type: 'HUMAN', id: userId, isBrainAdmin: true, memberships: [] } as never;
+    const worker = { type: 'WORKER', id: 'wkr_x', isBrainAdmin: true, memberships: [] } as never;
+    const opened = await openResearchGoal(person, {
+      projectId,
+      name: 'Entrance goal',
+      maxPackets: 1,
+      maxFragments: 2,
+      deadline: deadlineIn(),
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    expect(await openResearchGoal(worker, { projectId, name: 'n', maxPackets: 1, maxFragments: 1, deadline: deadlineIn() })).toEqual(
+      { ok: false, reason: 'There is nothing here for you to see.' },
+    );
+    const reserved = await reserveResearchPacket(person, { projectId, goalId: opened.goalId, packetKey: 'p1' });
+    expect('ok' in reserved && reserved.ok).toBe(true);
+    const status = await researchGoalStatus(person, { projectId, goalId: opened.goalId });
+    expect(status?.packets.reserved).toBe(1);
+    expect(await researchGoalStatus(worker, { projectId, goalId: opened.goalId })).toBeNull();
+    expect(await researchGoalStatus(person, { projectId: 'prj_other', goalId: opened.goalId })).toBeNull();
+  });
+});
