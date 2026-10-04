@@ -208,6 +208,8 @@ export const EVENT_TYPES = [
   'RESEARCH_AWAITING_APPROVAL',
   /** Brain approved a plan against a preauthorized envelope, with no person. */
   'RESEARCH_PLAN_SYSTEM_APPROVED',
+  /** A research goal's ceiling (packets, fragments or deadline) stopped a packet before it existed. */
+  'RESEARCH_GOAL_BUDGET_STOPPED',
   /** A proposed plan fell outside its envelope and went to a person instead. */
   'RESEARCH_PLAN_OUTSIDE_ENVELOPE',
   'RESEARCH_COVERAGE_GAP',

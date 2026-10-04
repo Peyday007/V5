@@ -339,6 +339,11 @@ export async function createOrchestration(input: CreateOrchestrationInput): Prom
       orchestrationId: id,
       goalId: input.goal.goalId,
       packetKey: input.goal.packetKey,
+    }).catch(async (error: unknown) => {
+      // A twin call holding the same key wins the unique index; this packet is
+      // withdrawn rather than left unbound and free.
+      await getDb().run('DELETE FROM research_orchestrations WHERE id = ?', [id]);
+      throw error;
     });
     if (!bound) {
       // The packet was never paid for (the hold lapsed, or the key already
@@ -348,6 +353,18 @@ export async function createOrchestration(input: CreateOrchestrationInput): Prom
     }
   }
   return (await getOrchestration(id))!;
+}
+
+/** The packet a research goal already holds under this key, if any. */
+export async function getOrchestrationByGoalPacket(
+  goalId: string,
+  packetKey: string,
+): Promise<ResearchOrchestration | null> {
+  const row = await getDb().get<ResearchOrchestrationRow>(
+    'SELECT * FROM research_orchestrations WHERE goal_id = ? AND goal_packet_key = ?',
+    [goalId, packetKey],
+  );
+  return row ? mapOrchestration(row) : null;
 }
 
 export async function getOrchestration(id: string): Promise<ResearchOrchestration | null> {

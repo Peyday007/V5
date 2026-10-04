@@ -33,11 +33,13 @@ import type {
 } from '../../domain/types.ts';
 import { getProject } from '../../repos/projects.ts';
 import { listLayers } from '../../repos/layers.ts';
-import { createRun } from '../../repos/runs.ts';
+import { createRun, getRun, updateRun } from '../../repos/runs.ts';
 import {
   createFragments,
   createOrchestration,
   getOrchestration,
+  getOrchestrationByGoalPacket,
+  PacketBudgetRefused,
   listFragments,
   updateOrchestration,
   type CreateFragmentInput,
@@ -49,16 +51,19 @@ import { listMembershipsForProject } from '../../repos/identity.ts';
 import { workType } from '../queue/workTypes.ts';
 import { advancePacket, type AdvanceResult } from './packetRunner.ts';
 import { getApprovalEnvelope } from './approvalEnvelope.ts';
+import { getGoal, reserveGoalPacket, type GoalPacketRefusal } from '../../repos/russellAuthority.ts';
+import { recordEvent } from '../../repos/events.ts';
 
 /**
  * How much research this goal is authorized to consume.
  *
  * Every field is a ceiling rather than a target: authorization to run five
- * packets is not an instruction to run five. Nothing enforces these yet — see
- * `SUPPORTED_APPROVAL_MODES` below, and `docs/ROADMAP.md` for where the
- * enforcement is scheduled — and the type exists now so that the decision
- * about approval can be recorded in one place instead of being rediscovered by
- * each caller.
+ * packets is not an instruction to run five. A caller never supplies the
+ * numbers that bind: under GOAL_BUDGET the packet ceiling, the fragment
+ * ceiling and the deadline are read from the research goal's own row
+ * (`reserveGoalPacket` and `createFragments`' charge enforce the first two,
+ * the packet runner the deadline), and this type only restates the money
+ * fields so a caller asking for anything but zero is refused by name.
  */
 export interface ResearchBudget {
   /** How many packets this goal may produce. */
@@ -113,28 +118,32 @@ export type ApprovalPolicy =
    * argument.
    */
   | { mode: 'AUTO_WITHIN_ENVELOPE'; envelopeId: string; authorizedBy: string }
-  | { mode: 'GOAL_BUDGET'; goalId: string; budget: ResearchBudget };
+  | {
+      mode: 'GOAL_BUDGET';
+      goalId: string;
+      budget: ResearchBudget;
+      /** The stable handle for this packet within the goal; the same key is the same packet. */
+      packetKey: string;
+    };
 
 /**
- * The modes `startPacket` will actually act on today.
+ * The modes `startPacket` will actually act on.
  *
- * GOAL_BUDGET is deliberately absent. Accepting it would mean setting
- * `autoApprove` and letting the packet research itself, and nothing in the
- * Brain yet counts packets, counts fragments or watches a deadline — so the
- * budget half of the authorization would be decorative while the approval half
- * took effect. A ceiling nothing enforces is worse than no ceiling, because
- * the person who set it believes they have one.
- *
- * The parameter is here now so that the decision has one home when the counter
- * arrives. Until then this refuses, by name, with the reason.
+ * GOAL_BUDGET is here because each of its ceilings is now counted by something:
+ * the packet ceiling by `reserveGoalPacket` (a compare-and-swap reservation
+ * keyed on the packet key, so a retry is the same packet and concurrent callers
+ * cannot both take the last slot), the fragment ceiling by `createFragments`'
+ * charge against the goal's settled reservations, and the deadline by this
+ * function at creation and by the packet runner at approval. The budget a
+ * caller passes is never trusted for any of them.
  */
 export const SUPPORTED_APPROVAL_MODES: ApprovalPolicy['mode'][] = [
   'PER_PACKET',
   // Enforceable because its limits are counted rather than declared: the
   // validator is a pure function over the planned fragments, and every rule it
-  // applies is checked before anything is queued. That is the difference from
-  // GOAL_BUDGET below, which would still be a ceiling nothing measures.
+  // applies is checked before anything is queued.
   'AUTO_WITHIN_ENVELOPE',
+  'GOAL_BUDGET',
 ];
 
 export class NoSuchEnvelope extends Error {
@@ -151,12 +160,42 @@ export class NoSuchEnvelope extends Error {
 export class ApprovalModeUnavailable extends Error {
   constructor(readonly mode: ApprovalPolicy['mode']) {
     super(
-      `The "${mode}" approval mode is not enforceable yet: nothing in the Brain counts packets, ` +
-        'counts fragments or watches a deadline, so its budget would not be a limit. Start this ' +
-        'packet with per-packet approval, or implement budget accounting first.',
+      `The "${mode}" approval mode is not one this build can enforce. Start this packet with ` +
+        'per-packet approval.',
     );
     this.name = 'ApprovalModeUnavailable';
   }
+}
+
+/**
+ * A research goal's ceiling stopped a packet before it existed.
+ *
+ * Reaching a ceiling is not a failed packet: nothing was created and nothing
+ * that exists was touched. Raising a ceiling is a person's decision.
+ */
+export class GoalBudgetExhausted extends Error {
+  constructor(readonly ceiling: 'PACKETS' | 'FRAGMENTS' | 'DEADLINE', detail: string) {
+    super(
+      `The research goal's ${ceiling.toLowerCase()} ceiling stopped this packet: ${detail}. ` +
+        'Raising that ceiling is a person\'s decision; nothing was created and nothing existing was changed.',
+    );
+    this.name = 'GoalBudgetExhausted';
+  }
+}
+
+/** Refused by name, because paid overages and external spend are never a caller's to choose. */
+export class GoalBudgetMoneyRefused extends Error {
+  constructor() {
+    super(
+      'A GOAL_BUDGET packet cannot carry external spend or paid overages: the money is zero and ' +
+        'only a person can change that, never a caller.',
+    );
+    this.name = 'GoalBudgetMoneyRefused';
+  }
+}
+
+function ceilingFor(refusedBy: GoalPacketRefusal): 'PACKETS' | 'FRAGMENTS' | 'DEADLINE' {
+  return refusedBy === 'DEADLINE' ? 'DEADLINE' : 'PACKETS';
 }
 
 export class NoSuchTarget extends Error {
@@ -331,6 +370,46 @@ export async function startPacket(input: StartPacketInput): Promise<StartPacketR
   const layer = (await listLayers(project.id)).find((candidate) => candidate.id === input.layerId);
   if (!layer) throw new NoSuchTarget();
 
+  // GOAL_BUDGET: everything that can refuse is asked before a row exists.
+  let goalCharge: { goalId: string; packetKey: string } | undefined;
+  if (input.approval.mode === 'GOAL_BUDGET') {
+    const { goalId, budget, packetKey } = input.approval;
+    // The caller's budget is never trusted for a ceiling; the only things it can
+    // do here are ask for money, and that is refused by name (invariant 18).
+    const asked = budget as { externalSpendCents?: unknown; paidOveragesEnabled?: unknown };
+    if (asked.externalSpendCents !== 0 || asked.paidOveragesEnabled !== false) {
+      throw new GoalBudgetMoneyRefused();
+    }
+    if (!packetKey || !packetKey.trim()) throw new GoalIncomplete('a packet key');
+    const goal = await getGoal(goalId);
+    if (
+      !goal ||
+      goal.purpose !== 'RESEARCH_GOAL' ||
+      goal.projectId !== project.id ||
+      goal.state !== 'ACTIVE'
+    ) {
+      throw new NoSuchTarget();
+    }
+
+    const reserved = await reserveGoalPacket({ goalId: goal.id, packetKey, projectId: project.id });
+    if (!reserved.ok) {
+      const ceiling = ceilingFor(reserved.refusedBy ?? 'UNAVAILABLE');
+      await recordEvent({
+        projectId: project.id,
+        layerId: layer.id,
+        entityType: 'RESEARCH_GOAL',
+        entityId: goal.id,
+        eventType: 'RESEARCH_GOAL_BUDGET_STOPPED',
+        payload: { goalId: goal.id, ceiling, packetKey, refusedBy: reserved.refusedBy, reason: reserved.reason },
+      });
+      throw new GoalBudgetExhausted(ceiling, reserved.reason);
+    }
+
+    const existing = await getOrchestrationByGoalPacket(goal.id, packetKey);
+    if (existing) return await replayedPacket(project, layer, existing);
+    goalCharge = { goalId: goal.id, packetKey };
+  }
+
   // Before anything is created. Reading the archive after queueing the plan
   // would still be reading it, but it would no longer be able to inform
   // whether the packet should exist.
@@ -359,14 +438,16 @@ export async function startPacket(input: StartPacketInput): Promise<StartPacketR
     prompt: assignment,
   });
 
-  const orchestration = await createOrchestration({
+  let orchestration: ResearchOrchestration;
+  try {
+    orchestration = await createOrchestration({
     projectId: project.id,
     layerId: layer.id,
     runId: run.id,
     title,
     assignment,
     provider: 'WORKER',
-    // False for both supported modes, and the reason differs.
+    // False for every supported mode, and the reason differs.
     //
     // Under PER_PACKET it is the §16 gate: nothing runs without a person.
     // Under AUTO_WITHIN_ENVELOPE it is what keeps the envelope honest. That
@@ -374,9 +455,37 @@ export async function startPacket(input: StartPacketInput): Promise<StartPacketR
     // would let the packet queue research before anything had been checked
     // against the envelope at all, which is the bypass the envelope exists
     // instead of. The plan is still made, still landed, still validated — the
-    // only thing that changes is who does the approving.
-    autoApprove: input.approval.mode === 'GOAL_BUDGET',
-  });
+    // only thing that changes is who does the approving. Under GOAL_BUDGET the
+    // packet runner approves a produced plan against the goal's ACTIVE state
+    // and deadline; the plan is still made first.
+    autoApprove: false,
+    ...(goalCharge ? { goal: goalCharge } : {}),
+    });
+  } catch (error) {
+    if (!goalCharge) throw error;
+    // The run was created before the orchestration it belongs to; it is closed
+    // rather than deleted, because history is not destroyed (§5).
+    await updateRun(run.id, {
+      status: 'FAILED',
+      failedAt: new Date().toISOString(),
+      failureReason: 'The research goal did not admit this packet, so no orchestration was created.',
+    });
+    // A twin call holding the same packet key won the race: this is that packet.
+    const twin = await getOrchestrationByGoalPacket(goalCharge.goalId, goalCharge.packetKey);
+    if (twin) return await replayedPacket(project, layer, twin);
+    if (error instanceof PacketBudgetRefused) {
+      await recordEvent({
+        projectId: project.id,
+        layerId: layer.id,
+        entityType: 'RESEARCH_GOAL',
+        entityId: goalCharge.goalId,
+        eventType: 'RESEARCH_GOAL_BUDGET_STOPPED',
+        payload: { goalId: goalCharge.goalId, ceiling: 'PACKETS', packetKey: goalCharge.packetKey, reason: error.detail },
+      });
+      throw new GoalBudgetExhausted('PACKETS', error.detail);
+    }
+    throw error;
+  }
 
   if (input.approval.mode === 'AUTO_WITHIN_ENVELOPE') {
     await updateOrchestration(orchestration.id, {
@@ -495,4 +604,37 @@ async function countClaimants(
     [...required].every((scope) => membership.scopes.includes(scope as never)),
   );
   return { workers: memberships.length, eligible: eligible.length };
+}
+
+/**
+ * A packet this goal already holds under the same key, handed back unchanged:
+ * no run, no orchestration, no charge, and nothing advanced.
+ */
+async function replayedPacket(
+  project: Project,
+  layer: Layer,
+  orchestration: ResearchOrchestration,
+): Promise<StartPacketResult> {
+  const run = await getRun(orchestration.runId);
+  if (!run) throw new NoSuchTarget();
+  const inventory = await inventoryProject(project.id);
+  const advanced: AdvanceResult = {
+    orchestrationId: orchestration.id,
+    status: orchestration.status,
+    enqueued: [],
+    waitingOn: 'this packet already exists under that key',
+  };
+  return {
+    project,
+    layer,
+    run,
+    orchestration,
+    advanced,
+    archive: {
+      claims: inventory.claims.length,
+      documentsRead: inventory.documentsRead,
+      documentsUnreadable: inventory.documentsUnreadable,
+    },
+    claimants: await countClaimants(project.id, advanced),
+  };
 }
