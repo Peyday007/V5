@@ -23,6 +23,7 @@ import {
   FragmentBudgetRefused,
   currentFragments,
   getOrchestration,
+  PacketBudgetRefused,
 } from '../server/repos/research.ts';
 import {
   bindPacketToGoal,
@@ -606,5 +607,25 @@ describe('goalBudgetStatus', () => {
     });
     expect(await goalBudgetStatus(standing.id)).toBeNull();
     expect(await goalBudgetStatus('rgl_missing')).toBeNull();
+  });
+  it('createOrchestration is a real entrance: it charges, binds and refuses at the ceiling', async () => {
+    const goal = await researchGoal({ maxPackets: 1 });
+    const create = (key: string) =>
+      createOrchestration({
+        projectId,
+        layerId,
+        runId,
+        title: `Packet ${key}`,
+        assignment: 'a bounded question',
+        provider: 'WORKER',
+        autoApprove: false,
+        goal: { goalId: goal.id, packetKey: key },
+      });
+    const first = await create('one');
+    expect(first.id).toBeTruthy();
+    const status = await goalBudgetStatus(goal.id);
+    expect(status?.packets.used).toBe(1);
+    await expect(create('two')).rejects.toBeInstanceOf(PacketBudgetRefused);
+    expect((await goalBudgetStatus(goal.id))?.packets.used).toBe(1);
   });
 });
