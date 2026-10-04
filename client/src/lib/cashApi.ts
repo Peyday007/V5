@@ -23,6 +23,7 @@ import type { SharedCashView } from '../../../server/services/cash/shared.ts';
 import type { OfferDraft } from '../../../server/services/cash/offer.ts';
 import type { ExecutionRecord } from '../../../server/services/cash/record.ts';
 import type { EffectResult } from '../../../server/services/cash/perform.ts';
+import type { JourneyView } from '../../../server/services/cash/journey/view.ts';
 import type { CommissionView } from '../../../server/services/cash/monetization/inFlight.ts';
 import type {
   MonetizationSurface,
@@ -371,6 +372,12 @@ export interface CashView {
      * the same deploy reason as `offers`.
      */
     records?: Record<string, ExecutionRecord>;
+    /**
+     * The first-dollar journey per deal: agreement, invoices, payment state,
+     * fulfilment, P&L, and what happens next and who does it. Optional for the
+     * same deploy reason as `offers`.
+     */
+    journey?: JourneyView;
   };
   whatBrainHasDone: CashEvent[];
   whatBrainNeeds: (CashNeed & { researchStatus: string | null })[];
