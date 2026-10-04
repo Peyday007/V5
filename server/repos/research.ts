@@ -20,7 +20,7 @@ import type { DealFinding, PuzzleFinding, PuzzleProductClass } from '../domain/t
 import type { OpportunitySignal } from '../domain/types.ts';
 import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
-import { chargeFragments, settleReservation } from './russellAuthority.ts';
+import { bindPacketToGoal, chargeFragments, reserveGoalPacket, settleReservation } from './russellAuthority.ts';
 import {
   parseDependencies,
   serializeDependencies,
@@ -292,9 +292,36 @@ export interface CreateOrchestrationInput {
   /** False plans the run and then waits for a person to approve it. */
   autoApprove?: boolean;
   fixture?: boolean;
+  /**
+   * Charge this packet to a research goal. Both or neither: the goal and the
+   * caller's own key for this packet (the key is what makes a retry the same
+   * packet and not a second charge).
+   */
+  goal?: { goalId: string; packetKey: string };
+}
+
+export class PacketBudgetRefused extends Error {
+  constructor(public readonly detail: string) {
+    super(detail);
+    this.name = 'PacketBudgetRefused';
+  }
 }
 
 export async function createOrchestration(input: CreateOrchestrationInput): Promise<ResearchOrchestration> {
+  /*
+   * A goal's packet ceiling is spent before the packet exists and settled only
+   * once it does (`bindPacketToGoal`): a crash in between leaves a HELD
+   * reservation that lapses and refunds itself. Nothing is created when the
+   * ceiling, the deadline or the goal's state refuses.
+   */
+  if (input.goal) {
+    const outcome = await reserveGoalPacket({
+      goalId: input.goal.goalId,
+      packetKey: input.goal.packetKey,
+      projectId: input.projectId,
+    });
+    if (!outcome.ok) throw new PacketBudgetRefused(outcome.reason);
+  }
   const ts = nowIso();
   const id = newId('orc');
   await getDb().run(
@@ -307,6 +334,19 @@ export async function createOrchestration(input: CreateOrchestrationInput): Prom
       input.parentOrchestrationId ?? null, input.repairReason ?? null,
       fromBool(input.autoApprove ?? true), fromBool(input.fixture ?? false), ts, ts, ts],
   );
+  if (input.goal) {
+    const bound = await bindPacketToGoal({
+      orchestrationId: id,
+      goalId: input.goal.goalId,
+      packetKey: input.goal.packetKey,
+    });
+    if (!bound) {
+      // The packet was never paid for (the hold lapsed, or the key already
+      // names another packet): withdraw it rather than leave a free one.
+      await getDb().run('DELETE FROM research_orchestrations WHERE id = ?', [id]);
+      throw new PacketBudgetRefused('this research goal could not settle the packet, so it was not created');
+    }
+  }
   return (await getOrchestration(id))!;
 }
 
