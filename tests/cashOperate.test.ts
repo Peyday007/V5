@@ -1184,6 +1184,7 @@ describe('the operating pass as the tick calls it', () => {
       dependentWork: [],
       validations: { started: [], settled: [] },
       authority: { took: [], withheld: [] },
+      invoicing: { issued: [], uncertain: [], failed: [], withheld: [], paid: [], settled: [], voided: [] },
       /*
        * The possibility ledger reports nothing too, and that is the assertion
        * rather than an addition to it: `enumeratePossibilities` and
