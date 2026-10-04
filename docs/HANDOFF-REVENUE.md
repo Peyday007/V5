@@ -359,3 +359,43 @@ send), C revocation in flight (invoice and contact), D archived in flight,
 E payment once with no settlement plus a partial (action without ledger
 entry) record, F second pass writes nothing. All seven fail against the
 previous server code; unwiring the pass from the tick fails A, B and both E.
+
+## Commercial execution kernel on current production (2026-10-04)
+
+Branch `claude/commercial-execution-kernel-nmc6bm`, cut from `production`
+`40d2bce`. PR #89 merged cleanly onto it: production had changed only
+`operate.ts` among #89's files, and the two changes compose. Nothing of #89 had
+been absorbed, because #88 (its base) was merged and #89 was not. This branch
+supersedes #89.
+
+Three rounds of independent review found 4 BLOCKER and 3 MAJOR defects in the
+effect path, two of them made reachable by #89's own lease. All are fixed, each
+with a regression that fails without its fix (`cashEffectReconciliation` G–P,
+J05):
+- a confirmed effect resent after a crash between closing the attempt and
+  moving the operation;
+- the provider asked by opportunity instead of by effect;
+- a second charge possible while a payment was confirmed and not yet on the
+  ledger;
+- a retried attempt read as idle;
+- an idempotent attempt closed as FAILED;
+- a take-over that left no lease;
+- the tick retrying, or reporting as a refusal, what a person closed.
+
+New pieces:
+- **Bounded sends and reconciles**, both inside the lease.
+- **`sendGate`**, shared by every caller.
+- **`recoverAbandonedEffects`** on the tick.
+- **One `CUSTOMER_PAYMENT` per provider reference**.
+- **A fuller server-derived execution record.**
+
+Verification:
+- `typecheck`: clean.
+- `test:impacted`: SQLite 33 files / 747 passed; Postgres 16 33 files / 748
+  passed.
+
+**Still external:**
+- a provider adapter for each of `cash.contact_buyer`, `cash.issue_invoice` and
+  `cash.take_payment` (owner's choice and credentials);
+- a commercial authority grant (person);
+- merge and deploy.
