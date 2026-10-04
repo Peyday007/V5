@@ -65,6 +65,8 @@ import {
   type SendOutcome,
 } from '../server/services/effects/adapter.ts';
 import { cashRouter } from '../server/routes/cash.ts';
+import { setExternalSendTimeoutForTests } from '../server/services/effects/external.ts';
+import { armRecovery, getOperation, markUncertain } from '../server/repos/idempotency.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
 import type { CashOpportunity, Principal, ProjectMembership } from '../server/domain/types.ts';
 
@@ -172,6 +174,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   failures.recordAction = 0;
+  setExternalSendTimeoutForTests(null);
   clearAdapters();
   if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
   server = null;
@@ -529,7 +532,12 @@ describe('E: a payment confirmed and not recorded', () => {
     });
     expect(pressed.body.result).toMatchObject({ kind: 'PERFORMED_NOT_RECORDED', receiptRef: 'pay-1' });
     expect(payment.sends).toEqual([expect.objectContaining({ amountCents: 120_000 })]);
-    expect((await listMoneyEntries({ projectId, limit: 50 })).filter((one) => one.kind === 'CUSTOMER_PAYMENT')).toEqual([]);
+    // The money is written before the action, so the injected action failure
+    // leaves the payment on the ledger and the occurrence unmoved — never the
+    // reverse, which left the amount outstanding beside a recorded action and
+    // let a second charge through before any tick finished the record.
+    expect((await listMoneyEntries({ projectId, limit: 50 })).filter((one) => one.kind === 'CUSTOMER_PAYMENT')).toHaveLength(1);
+    expect((await actionsFor(piece.id)).filter((one) => one.action === 'ACCEPT_PAYMENT')).toEqual([]);
 
     // A revocation after the money was taken does not unsay that it was taken.
     await revokeAuthority({ authorityId, actorUserId: userId, reason: 'Stop now.' });
@@ -589,5 +597,431 @@ describe('E: a payment confirmed and not recorded', () => {
     expect(payments).toEqual([expect.objectContaining({ amountCents: 120_000, verifiedReference: 'pay-1' })]);
     expect((await actionsFor(piece.id)).filter((one) => one.action === 'ACCEPT_PAYMENT')).toHaveLength(1);
     expect(payment.sends).toHaveLength(1);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* The commercial execution kernel: the cases #89 left open                   */
+/* ------------------------------------------------------------------------- */
+
+async function recordOnPage(opportunityId: string): Promise<any> {
+  const read = await call('GET', `/api/projects/${projectId}/cash`);
+  expect(read.status).toBe(200);
+  return read.body.myCurrentWork.records[opportunityId];
+}
+
+describe('G: a provider that does not answer in time', () => {
+  it('is UNKNOWN, not FAILED, even when the provider has not seen it yet — and never resent', async () => {
+    const piece = await executingWithAgreement();
+    setExternalSendTimeoutForTests(40);
+    const sends: unknown[] = [];
+    let visible = false;
+    registerAdapter({
+      name: 'synthetic.slow_charge',
+      effectClass: 'EXTERNAL_RECONCILABLE',
+      namespace: COMMERCIAL_EFFECTS.ACCEPT_PAYMENT.namespace.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (request) => {
+        sends.push(request.payload);
+        // Answers long after this attempt stops waiting.
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        visible = true;
+        return { kind: 'CONFIRMED', receiptRef: 'pay-slow' };
+      },
+      // Not visible yet while the send is still on its way.
+      reconcile: async () => (visible ? { kind: 'FOUND', receiptRef: 'pay-slow' } : { kind: 'ABSENT' }),
+    });
+
+    const pressed = await act_(piece.id, 'perform', {
+      action: 'ACCEPT_PAYMENT',
+      expectedOccurrence: await nextOccurrence(piece.id),
+    });
+    expect(pressed.status).toBe(200);
+    // ABSENT right after a timeout is not evidence that nothing was sent.
+    expect(pressed.body.result.kind).toBe('UNCERTAIN');
+    const [operation] = await commercialOperationsFor(projectId, piece.id).then((all) =>
+      all.filter((one) => one.action === 'ACCEPT_PAYMENT'),
+    );
+    expect(operation!.operation.state).toBe('UNCERTAIN');
+
+    // The record says so. (The other attempt is the tick's confirmed contact.)
+    let record = await recordOnPage(piece.id);
+    expect(record.effects).toMatchObject({ attempted: 2, uncertain: 1, confirmed: 1 });
+
+    // The late answer lands at the provider; the tick sends nothing.
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await operate(projectId);
+    expect(sends).toHaveLength(1);
+
+    // Pressing again for the same occurrence asks — it does not send.
+    const again = await act_(piece.id, 'perform', {
+      action: 'ACCEPT_PAYMENT',
+      expectedOccurrence: await nextOccurrence(piece.id),
+    });
+    expect(again.status).toBe(200);
+    expect(again.body.result).toMatchObject({ kind: 'RECORDED', receiptRef: 'pay-slow' });
+    expect(sends).toHaveLength(1);
+    expect((await actionsFor(piece.id)).filter((one) => one.action === 'ACCEPT_PAYMENT')).toHaveLength(1);
+    record = await recordOnPage(piece.id);
+    expect(record.effects).toMatchObject({ attempted: 2, uncertain: 0, confirmed: 2 });
+  });
+});
+
+describe('H: a confirmation that arrives after a recovery called it unknown', () => {
+  it('resolves the unknown with the receipt instead of dropping it', async () => {
+    const piece = await executingWithAgreement();
+    const invoice = provider('ACCEPT_PAYMENT', 'pay');
+    invoice.onSend = async () => {
+      // A takeover finds this attempt's lease spent and records it unknown
+      // while the provider is still answering.
+      const [op] = (await commercialOperationsFor(projectId, piece.id)).filter(
+        (one) => one.action === 'ACCEPT_PAYMENT',
+      );
+      expect(await markUncertain(op!.operation.id, 'taken over')).toBe(true);
+      return { kind: 'CONFIRMED', receiptRef: 'pay-late' };
+    };
+    const pressed = await act_(piece.id, 'perform', {
+      action: 'ACCEPT_PAYMENT',
+      expectedOccurrence: await nextOccurrence(piece.id),
+    });
+    expect(pressed.body.result).toMatchObject({ kind: 'RECORDED', receiptRef: 'pay-late' });
+    const [op] = (await commercialOperationsFor(projectId, piece.id)).filter(
+      (one) => one.action === 'ACCEPT_PAYMENT',
+    );
+    // Left UNCERTAIN, a person could close it "did not happen" and the retry
+    // would be a second charge.
+    expect(op!.operation).toMatchObject({ state: 'SUCCEEDED', resultRef: 'pay-late' });
+    expect(invoice.sends).toHaveLength(1);
+  });
+});
+
+describe('I: one provider payment reference is one customer payment', () => {
+  it('refuses the same reference under a second key, and Brain does not add another', async () => {
+    const piece = await executingWithAgreement();
+    provider('QUOTE_AND_INVOICE', 'inv');
+    const payment = provider('ACCEPT_PAYMENT', 'pay');
+    await act_(piece.id, 'perform', {
+      action: 'QUOTE_AND_INVOICE',
+      expectedOccurrence: await nextOccurrence(piece.id),
+    });
+
+    // A person records the payment by hand first, under a key of their own.
+    const byHand = await call('POST', `/api/projects/${projectId}/cash/money`, {
+      kind: 'CUSTOMER_PAYMENT',
+      amountCents: 120_000,
+      opportunityId: piece.id,
+      verifiedReference: 'pay-1',
+      idempotencyKey: 'hand-recorded-1',
+    });
+    expect(byHand.status).toBe(200);
+    // The same reference again, under another key, is not a second payment.
+    const twice = await call('POST', `/api/projects/${projectId}/cash/money`, {
+      kind: 'CUSTOMER_PAYMENT',
+      amountCents: 120_000,
+      opportunityId: piece.id,
+      verifiedReference: 'pay-1',
+      idempotencyKey: 'hand-recorded-2',
+    });
+    expect(twice.status).toBe(422);
+    // The same key is still a replay, not a refusal.
+    const replay = await call('POST', `/api/projects/${projectId}/cash/money`, {
+      kind: 'CUSTOMER_PAYMENT',
+      amountCents: 120_000,
+      opportunityId: piece.id,
+      verifiedReference: 'pay-1',
+      idempotencyKey: 'hand-recorded-1',
+    });
+    expect(replay.status).toBe(200);
+
+    // Brain's own take-payment receipt carrying that reference — the
+    // provider's earlier receipt, delivered by a reconciliation — is the same
+    // payment, and repeated passes leave it one.
+    const outcome = await sendCommercialEffect({
+      action: 'ACCEPT_PAYMENT',
+      projectId,
+      opportunityId: piece.id,
+      occurrence: await nextOccurrence(piece.id),
+      payload: { payer: 'x', amountCents: 120_000, currency: 'USD' },
+      authorityId,
+      amountCents: 120_000,
+      stateAtSend: 'EXECUTING',
+    });
+    expect(outcome.status).toBe('CONFIRMED');
+    await operate(projectId);
+    const before = await footprint(piece.id);
+    await operate(projectId);
+    expect(await footprint(piece.id)).toEqual(before);
+    const payments = (await listMoneyEntries({ projectId, limit: 50 })).filter(
+      (one) => one.kind === 'CUSTOMER_PAYMENT',
+    );
+    expect(payments).toHaveLength(1);
+    expect(payment.sends).toHaveLength(1);
+  });
+});
+
+describe('J: the execution record is the server’s answer', () => {
+  it('names the blocker when Brain can do nothing, and lists payments and settlements', async () => {
+    const piece = await executingWithAgreement();
+    clearAdapters(); // no invoicing or payment integration on this Brain
+    let record = await recordOnPage(piece.id);
+    expect(record.brainCanDoNow).toEqual([]);
+    expect(record.performable.find((one: any) => one.action === 'QUOTE_AND_INVOICE')).toMatchObject({
+      capabilityState: 'MISSING',
+      available: false,
+    });
+    expect(record.blocker).toMatch(/reads MISSING/);
+    expect(record.money).toMatchObject({ agreedCents: 120_000, outstandingCents: 120_000 });
+
+    provider('QUOTE_AND_INVOICE', 'inv');
+    provider('ACCEPT_PAYMENT', 'pay');
+    record = await recordOnPage(piece.id);
+    // Invoicing is connected, and still waits on a drafted invoice: its terms
+    // (who is billed, the tax treatment, the due date) are a person's.
+    expect(record.brainCanDoNow).toEqual(['ACCEPT_PAYMENT']);
+    expect(record.performable.find((one: any) => one.action === 'QUOTE_AND_INVOICE').reason).toMatch(/No invoice is drafted/);
+    expect(
+      (
+        await call('POST', `/api/projects/${projectId}/cash/opportunities/${piece.id}/invoice`, {
+          customerName: 'Intake Buyer Ltd',
+          customerEmail: 'accounts@intake-buyer.example',
+          taxTreatment: 'NO_TAX_CHARGED',
+          dueDate: '2099-01-31',
+        })
+      ).status,
+    ).toBe(200);
+    record = await recordOnPage(piece.id);
+    expect(record.brainCanDoNow).toEqual(['QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT']);
+    expect(record.blocker).toBeNull();
+
+    await act_(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await nextOccurrence(piece.id) });
+    await act_(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: await nextOccurrence(piece.id) });
+    const settled = await call('POST', `/api/projects/${projectId}/cash/money`, {
+      kind: 'SETTLEMENT',
+      amountCents: 120_000,
+      opportunityId: piece.id,
+      verifiedReference: 'payout-1',
+      idempotencyKey: 'settle-1',
+    });
+    expect(settled.status).toBe(200);
+
+    record = await recordOnPage(piece.id);
+    expect(record.payments).toEqual([expect.objectContaining({ amountCents: 120_000, reference: 'pay-1' })]);
+    expect(record.settlements).toEqual([expect.objectContaining({ amountCents: 120_000, reference: 'payout-1' })]);
+    expect(record.money).toMatchObject({ paidCents: 120_000, settledCents: 120_000, outstandingCents: 0 });
+    // The tick's contact and the charge. The invoice is its own row
+    // (`cash_invoices`, issued under its own key), not a correlated attempt.
+    expect(record.effects).toMatchObject({ attempted: 2, confirmed: 2, uncertain: 0 });
+    expect(record.actions.map((one: any) => one.action)).toContain('QUOTE_AND_INVOICE');
+    expect(record.performable.find((one: any) => one.action === 'ACCEPT_PAYMENT').reason).toMatch(/already been paid/);
+  });
+});
+
+describe('K: an attempt that confirmed and whose operation never left RESERVED', () => {
+  it('is finished from the attempt’s own receipt once its lease runs out — never sent again', async () => {
+    const piece = await executingWithAgreement();
+    const invoice = provider('QUOTE_AND_INVOICE', 'inv');
+    const outcome = await sendCommercialEffect({
+      action: 'QUOTE_AND_INVOICE',
+      projectId,
+      opportunityId: piece.id,
+      occurrence: await nextOccurrence(piece.id),
+      payload: { payer: 'The operations manager, who signs', amountCents: 120_000, currency: 'USD' },
+      authorityId,
+      amountCents: 120_000,
+      stateAtSend: 'EXECUTING',
+    });
+    expect(outcome.status).toBe('CONFIRMED');
+    // Exactly what a process that died between closing the attempt and moving
+    // the operation leaves behind: the attempt says CONFIRMED with its
+    // receipt, the operation is still RESERVED, and its lease has run out.
+    await getDb().run(
+      `UPDATE idempotency_operations
+          SET state = 'RESERVED', result_ref = NULL, completed_at = NULL, recover_after = ?
+        WHERE id = ?`,
+      ['2000-01-01T00:00:00.000Z', outcome.operation.id],
+    );
+
+    await operate(projectId);
+    await operate(projectId);
+    expect(invoice.sends).toHaveLength(1);
+    const invoices = (await actionsFor(piece.id)).filter((one) => one.action === 'QUOTE_AND_INVOICE');
+    expect(invoices).toEqual([expect.objectContaining({ reference: 'inv-1', performedBy: 'BRAIN' })]);
+    const [op] = (await commercialOperationsFor(projectId, piece.id)).filter(
+      (one) => one.action === 'QUOTE_AND_INVOICE',
+    );
+    expect(op!.operation).toMatchObject({ state: 'SUCCEEDED', resultRef: 'inv-1' });
+  });
+});
+
+describe('L: the provider is asked about one effect, not about the piece', () => {
+  it('reconciles a second payment by its own identity', async () => {
+    const piece = await executingWithAgreement();
+    provider('QUOTE_AND_INVOICE', 'inv');
+    const asked: string[] = [];
+    registerAdapter({
+      name: 'synthetic.reconcilable_payment',
+      effectClass: 'EXTERNAL_RECONCILABLE',
+      namespace: COMMERCIAL_EFFECTS.ACCEPT_PAYMENT.namespace.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async () => {
+        throw new Error('connection reset after the request was written');
+      },
+      reconcile: async (businessId) => {
+        asked.push(businessId);
+        return { kind: 'ABSENT' };
+      },
+    });
+    await act_(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await nextOccurrence(piece.id) });
+    const occurrence = await nextOccurrence(piece.id);
+    await act_(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: occurrence });
+    expect(asked.length).toBeGreaterThan(0);
+    // Asked by opportunity, an earlier payment's receipt would answer this one.
+    expect(new Set(asked)).toEqual(new Set([`cash:${piece.id}:ACCEPT_PAYMENT:${occurrence}`]));
+  });
+});
+
+describe('M: a payment that happened and is not on the ledger stops the next one', () => {
+  it('refuses another charge until the record is finished, then the tick finishes it', async () => {
+    const piece = await executingWithAgreement();
+    provider('QUOTE_AND_INVOICE', 'inv');
+    const payment = provider('ACCEPT_PAYMENT', 'pay');
+    await act_(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await nextOccurrence(piece.id) });
+    await act_(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: await nextOccurrence(piece.id) });
+    // The action is on the record and the entry is not: the amount reads
+    // outstanding again and the occurrence has moved on.
+    await getDb().run(
+      `DELETE FROM cash_money_entries WHERE project_id = ? AND kind = 'CUSTOMER_PAYMENT'`,
+      [projectId],
+    );
+    const record = await recordOnPage(piece.id);
+    const offered = record.performable.find((one: any) => one.action === 'ACCEPT_PAYMENT');
+    expect(offered.available).toBe(false);
+    expect(offered.reason).toMatch(/already happened/);
+    expect(record.attempts.find((one: any) => one.receiptRef === 'pay-1').status).toBe('UNRECORDED');
+
+    const again = await act_(piece.id, 'perform', {
+      action: 'ACCEPT_PAYMENT',
+      expectedOccurrence: record.nextOccurrence,
+    });
+    expect(again.status).toBe(422);
+    expect(payment.sends).toHaveLength(1);
+
+    await operate(projectId);
+    const payments = (await listMoneyEntries({ projectId, limit: 50 })).filter(
+      (one) => one.kind === 'CUSTOMER_PAYMENT',
+    );
+    expect(payments).toEqual([expect.objectContaining({ verifiedReference: 'pay-1', amountCents: 120_000 })]);
+    expect(payment.sends).toHaveLength(1);
+  });
+});
+
+/** Rewrite one operation into what a process that died mid-send leaves. */
+async function stoppedMidSend(operationId: string): Promise<void> {
+  await getDb().run(
+    `UPDATE idempotency_operations
+        SET state = 'RESERVED', result_ref = NULL, completed_at = NULL, recover_after = ?
+      WHERE id = ?`,
+    ['2000-01-01T00:00:00.000Z', operationId],
+  );
+  await getDb().run(
+    `UPDATE effect_attempts SET phase = 'SENT', outcome = NULL, ended_at = NULL,
+            receipt_ref = NULL WHERE operation_id = ?`,
+    [operationId],
+  );
+}
+
+describe('N: a retried attempt is under way, whatever the last one was refused for', () => {
+  it('a live retry after a retryable refusal blocks another send', async () => {
+    const piece = await executingWithAgreement();
+    const invoice = provider('ACCEPT_PAYMENT', 'pay');
+    invoice.onSend = async () => ({ kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true });
+    await act_(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: await nextOccurrence(piece.id) });
+    const [op] = (await commercialOperationsFor(projectId, piece.id)).filter(
+      (one) => one.action === 'ACCEPT_PAYMENT',
+    );
+    expect(op!.operation).toMatchObject({ state: 'RESERVED', failureCategory: 'DEPENDENCY_UNAVAILABLE' });
+    // The retry begins: its executor arms its lease and is now waiting on the provider.
+    expect(await armRecovery(op!.operation.id, '2999-01-01T00:00:00.000Z')).toBe(true);
+    expect((await getOperation(op!.operation.id))!.failureCategory).toBeNull();
+    const offered = (await recordOnPage(piece.id)).performable.find(
+      (one: any) => one.action === 'ACCEPT_PAYMENT',
+    );
+    expect(offered).toMatchObject({ available: false });
+    expect(offered.reason).toMatch(/under way/);
+  });
+});
+
+describe('O: recovery never closes what an idempotent provider may have received', () => {
+  it('records it unknown rather than failed, and sends nothing', async () => {
+    const piece = await executingWithAgreement();
+    const sends: unknown[] = [];
+    registerAdapter({
+      name: 'synthetic.idempotent_invoice',
+      effectClass: 'EXTERNAL_IDEMPOTENT',
+      providerKeyLimit: 64,
+      namespace: COMMERCIAL_EFFECTS.QUOTE_AND_INVOICE.namespace.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (request) => {
+        sends.push(request.payload);
+        return { kind: 'CONFIRMED', receiptRef: `inv-${sends.length}` };
+      },
+    } as EffectAdapter);
+    const outcome = await sendCommercialEffect({
+      action: 'QUOTE_AND_INVOICE',
+      projectId,
+      opportunityId: piece.id,
+      occurrence: await nextOccurrence(piece.id),
+      payload: { payer: 'x', amountCents: 120_000, currency: 'USD' },
+      authorityId,
+      amountCents: 120_000,
+      stateAtSend: 'EXECUTING',
+    });
+    await stoppedMidSend(outcome.operation.id);
+    await operate(projectId);
+    // Closed as FAILED, the next send would carry a new provider key the
+    // provider cannot de-duplicate against.
+    expect((await getOperation(outcome.operation.id))!.state).toBe('UNCERTAIN');
+    expect(sends).toHaveLength(1);
+  });
+});
+
+describe('P: a take-over holds a lease of its own', () => {
+  it('is never left as a reservation nobody can recover', async () => {
+    const piece = await executingWithAgreement();
+    let leaseDuringAsk: string | null | undefined;
+    let opId = '';
+    registerAdapter({
+      name: 'synthetic.reconcilable_invoice',
+      effectClass: 'EXTERNAL_RECONCILABLE',
+      namespace: COMMERCIAL_EFFECTS.QUOTE_AND_INVOICE.namespace.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async () => ({ kind: 'CONFIRMED', receiptRef: 'inv-1' }),
+      reconcile: async () => {
+        leaseDuringAsk = (await getOperation(opId))!.recoverAfter;
+        return { kind: 'INCONCLUSIVE', reason: 'the provider is still indexing' };
+      },
+    });
+    const outcome = await sendCommercialEffect({
+      action: 'QUOTE_AND_INVOICE',
+      projectId,
+      opportunityId: piece.id,
+      occurrence: await nextOccurrence(piece.id),
+      payload: { payer: 'x', amountCents: 120_000, currency: 'USD' },
+      authorityId,
+      amountCents: 120_000,
+      stateAtSend: 'EXECUTING',
+    });
+    opId = outcome.operation.id;
+    await stoppedMidSend(opId);
+    await operate(projectId);
+    // While the take-over was asking, a death there would have been
+    // recoverable — not a row every reader takes for live for ever.
+    expect(leaseDuringAsk).toBeTruthy();
+    expect(leaseDuringAsk! > new Date().toISOString()).toBe(true);
+    expect((await getOperation(opId))!.state).toBe('UNCERTAIN');
   });
 });

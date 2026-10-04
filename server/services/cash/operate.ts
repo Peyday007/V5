@@ -75,14 +75,15 @@ import { recordWorkModelReclassification, type Reclassification } from './reclas
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
-import { countActions } from '../../repos/cashActions.ts';
-import { sendCommercialEffect } from './effects.ts';
+import { commercialOperationsFor, sendCommercialEffect } from './effects.ts';
 import { composeBuyerMessage } from './outreach.ts';
 import { runInvoicing, type InvoicingPass } from './invoicing.ts';
 import {
   alreadyContacted,
   applyEffectOutcome,
   reconcileConfirmedEffects,
+  recoverAbandonedEffects,
+  sendGate,
   type ReconciledEffect,
   prepare,
 } from './perform.ts';
@@ -732,7 +733,44 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
     }
     sentThisPass += 1;
 
-    const occurrence = String((await countActions(opportunity.id)) + 1);
+    /*
+     * The same gate a person's press reads: nothing under way, nothing that
+     * happened and is not yet recorded, no unknown waiting on a person — and
+     * the retry counted the same way, so a contact a person established did
+     * not happen is retried under the key that person's own press would use,
+     * never the spent first one.
+     */
+    const gate = await sendGate(opportunity, CONTACT_ACTION);
+    if (!gate.ok) {
+      out.withheld.push({ opportunityId: opportunity.id, because: gate.reason });
+      continue;
+    }
+    const { occurrence, retry } = gate.value;
+    // A new key exists only because an earlier attempt at this occurrence was
+    // closed as not having happened — the provider refusing outright, or a
+    // person establishing it. Trying again is that person's call; the tick
+    // retrying a refusal would send into the same refusal on every pass.
+    // And a same-key attempt the provider refused retryably is waiting on its
+    // own backoff and a person, not on the tick sending into it again.
+    const refusedHere = (await commercialOperationsFor(opportunity.projectId, opportunity.id)).some(
+      (one) =>
+        one.action === CONTACT_ACTION &&
+        one.occurrence === occurrence &&
+        one.retry === retry &&
+        one.operation.state === 'RESERVED' &&
+        one.operation.failureCategory !== null,
+    );
+    if (retry > 0 || refusedHere) {
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because: refusedHere
+          ? 'The provider refused reaching the buyer and said it may be retried. Brain tries again ' +
+            'only when a person asks it to, from this piece.'
+          : 'An earlier attempt to reach the buyer was closed as not having happened. Brain tries ' +
+            'again only when a person asks it to, from this piece.',
+      });
+      continue;
+    }
 
     /*
      * The same payload a person's "have Brain do it" sends (`perform.ts`
@@ -750,6 +788,7 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
       outcome = await sendCommercialEffect({
         action: CONTACT_ACTION,
         occurrence,
+        retry,
         projectId: opportunity.projectId,
         opportunityId: opportunity.id,
         payload: prepared.value.payload,
@@ -942,12 +981,13 @@ export async function operate(
    * buyer. It sends nothing, and it runs in every sprint state, because
    * writing down history is not new discovery.
    */
-  const effects = await reconcileConfirmedEffects(projectId);
+  const recovered = await recoverAbandonedEffects(projectId);
+  const effects = [...recovered, ...(await reconcileConfirmedEffects(projectId))];
   /*
    * Then the journey after the first action, from rows: ledger entries for
-   * agreements, invoice rows for confirmed invoices, Brain's own fulfilment
-   * work read back, acceptance applied, silence and expiry recorded, the state
-   * moved, and what finished deals taught. It sends nothing.
+   * agreements, Brain's own fulfilment work read back, acceptance applied,
+   * silence recorded, the state moved, and what finished deals taught. It
+   * sends nothing.
    */
   const authority = await advanceWithinAuthority(projectId);
   /*

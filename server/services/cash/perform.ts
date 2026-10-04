@@ -48,14 +48,14 @@
  * revocation stops the *next* effect; it never unsays one that happened.
  */
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
-import { actionsFor, countActions, recordAction } from '../../repos/cashActions.ts';
-import { moneyEntryByKey } from '../../repos/cashLedger.ts';
+import { actionsFor, recordAction } from '../../repos/cashActions.ts';
+import { customerPaymentByReference, moneyEntryByKey } from '../../repos/cashLedger.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
-import { getOperation, resolveUncertain } from '../../repos/idempotency.ts';
+import { getOperation, operationNow, resolveUncertain } from '../../repos/idempotency.ts';
 import { listNeeds, openNeedForKey } from '../../repos/cashPortfolio.ts';
 import { readNeedCondition } from './conditions.ts';
 import { OperationConflict, OperationInProgress } from '../effects/engine.ts';
-import type { ExternalOutcome } from '../effects/external.ts';
+import { recoverExternalEffect, type ExternalOutcome } from '../effects/external.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
@@ -69,6 +69,7 @@ import {
 import {
   COMMERCIAL_EFFECTS,
   commercialOperationsFor,
+  adapterFor,
   commercialOperationsInProject,
   intentFor,
   isPerformable,
@@ -361,6 +362,65 @@ export async function recordConfirmedEffect(input: {
   let created = false;
   let unapplied: string | null = null;
 
+  /*
+   * The money first, then the action. A payment whose action landed and whose
+   * ledger entry did not advanced the piece's occurrence while leaving the
+   * amount outstanding — and the page then offered, and the server accepted,
+   * a second charge before any tick finished the record. With the entry
+   * written first, a failure here leaves neither, the occurrence unmoved, and
+   * the next press or tick replays this same operation rather than a new one.
+   */
+  if (action === 'ACCEPT_PAYMENT') {
+    const mode = await getCashMode(opportunity.projectId);
+    const amount = input.amountCents ?? intent?.amountCents ?? null;
+    const onLedger = await customerPaymentByReference(opportunity.projectId, receiptRef);
+    if (onLedger) {
+      // Already recorded — by hand, or by an earlier pass — and one provider
+      // payment is one entry. Nothing to write.
+    } else if (mode && amount !== null && amount > 0) {
+      const key = paymentKey(opportunity.id, receiptRef);
+      const before = await moneyEntryByKey(opportunity.projectId, key);
+      // Keyed exactly as the page's own "Record a payment received" control
+      // keys a payment, so a person recording the same receipt by hand is the
+      // same entry rather than a second one. A payment, never a settlement:
+      // the money becoming usable is a separate fact from a different source.
+      const money = await recordMoneyEvent({
+        projectId: opportunity.projectId,
+        opportunityId: opportunity.id,
+        kind: 'CUSTOMER_PAYMENT',
+        amountCents: amount,
+        currency: mode.currency,
+        verifiedReference: receiptRef,
+        note: 'Taken by Brain through the payment integration; settlement is recorded separately.',
+        idempotencyKey: key,
+        actorRef: input.actorRef,
+        confirmedEffectOperationId: operation.id,
+      });
+      if (!money.ok) {
+        return {
+          result: { kind: 'PERFORMED_NOT_RECORDED', receiptRef, reason: money.reason },
+          created,
+        };
+      }
+      if (!before) created = true;
+    } else if (mode) {
+      await raiseNeed({
+        projectId: opportunity.projectId,
+        opportunityId: opportunity.id,
+        actorRef: BRAIN,
+        blockedAction: `Record the payment taken for "${opportunity.title}"`,
+        whyItMatters:
+          `The provider confirmed taking a payment (reference ${receiptRef}) and Brain holds no ` +
+          'record of the amount it asked for, so it will not write a figure it did not see.',
+        recommendedPath: "Record the payment on this piece with the provider's reference and amount.",
+        setupEffort: 'A minute.',
+        nextStep: `Record the payment with reference ${receiptRef}.`,
+        completionCondition: `A payment carrying reference ${receiptRef} is on the ledger.`,
+        requestKey: unattributedEffectKey(opportunity.id, operation.id),
+      });
+    }
+  }
+
   const already = (await actionsFor(opportunity.id)).some((one) => one.requestKey === requestKey);
   if (!already) {
     let began: Outcome<CashOpportunity> | null = null;
@@ -444,53 +504,6 @@ export async function recordConfirmedEffect(input: {
     });
   }
 
-  if (action === 'ACCEPT_PAYMENT') {
-    const mode = await getCashMode(opportunity.projectId);
-    const amount = input.amountCents ?? intent?.amountCents ?? null;
-    if (mode && amount !== null && amount > 0) {
-      const key = paymentKey(opportunity.id, receiptRef);
-      const before = await moneyEntryByKey(opportunity.projectId, key);
-      // Keyed exactly as the page's own "Record a payment received" control
-      // keys a payment, so a person recording the same receipt by hand is the
-      // same entry rather than a second one. A payment, never a settlement:
-      // the money becoming usable is a separate fact from a different source.
-      const money = await recordMoneyEvent({
-        projectId: opportunity.projectId,
-        opportunityId: opportunity.id,
-        kind: 'CUSTOMER_PAYMENT',
-        amountCents: amount,
-        currency: mode.currency,
-        verifiedReference: receiptRef,
-        note: 'Taken by Brain through the payment integration; settlement is recorded separately.',
-        idempotencyKey: key,
-        actorRef: input.actorRef,
-        confirmedEffectOperationId: operation.id,
-      });
-      if (!money.ok) {
-        return {
-          result: { kind: 'PERFORMED_NOT_RECORDED', receiptRef, reason: money.reason },
-          created,
-        };
-      }
-      if (!before) created = true;
-    } else if (mode) {
-      await raiseNeed({
-        projectId: opportunity.projectId,
-        opportunityId: opportunity.id,
-        actorRef: BRAIN,
-        blockedAction: `Record the payment taken for "${opportunity.title}"`,
-        whyItMatters:
-          `The provider confirmed taking a payment (reference ${receiptRef}) and Brain holds no ` +
-          'record of the amount it asked for, so it will not write a figure it did not see.',
-        recommendedPath: "Record the payment on this piece with the provider's reference and amount.",
-        setupEffort: 'A minute.',
-        nextStep: `Record the payment with reference ${receiptRef}.`,
-        completionCondition: `A payment carrying reference ${receiptRef} is on the ledger.`,
-        requestKey: unattributedEffectKey(opportunity.id, operation.id),
-      });
-    }
-  }
-
   // An outcome that is now known settles the unknown it may have left behind.
   const left = await openNeedForKey(
     opportunity.projectId,
@@ -522,12 +535,92 @@ export async function recordConfirmedEffect(input: {
   };
 }
 
+/**
+ * Ask the provider about every attempt whose executor stopped mid-send.
+ *
+ * The other half of `reconcileConfirmedEffects`, and it runs first: that pass
+ * reads only SUCCEEDED operations, so an attempt left RESERVED by a process
+ * that died was reachable only by somebody pressing the same button again at
+ * the same occurrence — and once anything else was recorded on the piece, by
+ * nobody, while the send gate refused every new attempt because of it. Here
+ * the lease running out is the signal, never evidence: the operation is taken
+ * over and **asked** (`recoverExternalEffect` calls no `send`). A receipt is
+ * recorded once through `applyEffectOutcome`; an unknown becomes a need a
+ * person settles; and only "nothing was sent" or the provider saying it did
+ * nothing closes it, so a later send runs under a new key.
+ */
+export async function recoverAbandonedEffects(projectId: string): Promise<ReconciledEffect[]> {
+  const out: ReconciledEffect[] = [];
+  for (const one of await commercialOperationsInProject(projectId)) {
+    const { operation } = one;
+    if (operation.state !== 'RESERVED' || operation.failureCategory) continue;
+    const adapter = adapterFor(one.action);
+    // No adapter on this process: it cannot be asked, so it waits for one.
+    if (!adapter) continue;
+    let outcome: ExternalOutcome | null;
+    try {
+      outcome = await recoverExternalEffect({
+        adapter,
+        operation,
+        businessId: operation.correlationId ?? one.opportunityId,
+      });
+    } catch {
+      continue; // asking failed; still reserved and expired, so the next pass asks again
+    }
+    if (!outcome) continue;
+    const opportunity = await getOpportunity(one.opportunityId);
+    if (!opportunity) continue;
+    let result: EffectResult['kind'] | 'CLOSED_UNSENT' = 'CLOSED_UNSENT';
+    if (outcome.status === 'FAILED') {
+      await recordCashEvent({
+        projectId,
+        opportunityId: opportunity.id,
+        kind: 'CASH_EFFECT_RECOVERED',
+        actorRef: BRAIN,
+        summary:
+          `An attempt at ${COMMERCIAL_EFFECTS[one.action].doing} stopped before it could have ` +
+          'happened, and is closed; a later attempt runs under a new key.',
+        detail: { operationId: operation.id, action: one.action, occurrence: one.occurrence },
+      });
+    } else {
+      result = (
+        await applyEffectOutcome({
+          opportunity,
+          action: one.action,
+          occurrence: one.occurrence,
+          outcome,
+          actorRef: BRAIN,
+        })
+      ).kind;
+      await recordCashEvent({
+        projectId,
+        opportunityId: opportunity.id,
+        kind: 'CASH_EFFECT_RECOVERED',
+        actorRef: BRAIN,
+        summary:
+          `Brain asked the provider about an attempt at ${COMMERCIAL_EFFECTS[one.action].doing} ` +
+          `whose executor stopped: ${result.toLowerCase().replace(/_/g, ' ')}. Nothing was sent again.`,
+        detail: { operationId: operation.id, action: one.action, occurrence: one.occurrence, result },
+      });
+    }
+    out.push({
+      operationId: operation.id,
+      opportunityId: opportunity.id,
+      action: one.action,
+      receiptRef: receiptOf(outcome) ?? '',
+      result,
+    });
+  }
+  return out;
+}
+
 export interface ReconciledEffect {
   operationId: string;
   opportunityId: string;
   action: PerformableAction;
   receiptRef: string;
-  result: EffectResult['kind'];
+  /** `CLOSED_UNSENT`: a recovered attempt that had sent nothing, closed so a new key may follow. */
+  result: EffectResult['kind'] | 'CLOSED_UNSENT';
 }
 
 /**
@@ -552,9 +645,11 @@ export async function reconcileConfirmedEffects(projectId: string): Promise<Reco
     const recorded = (await actionsFor(one.opportunityId)).some(
       (action) => action.requestKey === actionKey(one.opportunityId, one.action, one.occurrence),
     );
+    // A payment is on the ledger once its provider reference is, under
+    // whichever key a person or Brain wrote it — one reference is one entry.
     const paid =
       one.action !== 'ACCEPT_PAYMENT' ||
-      (await moneyEntryByKey(projectId, paymentKey(one.opportunityId, receiptRef))) !== null;
+      (await customerPaymentByReference(projectId, receiptRef)) !== null;
     if (recorded && paid) continue;
 
     let done: { result: EffectResult; created: boolean };
@@ -737,6 +832,95 @@ export async function alreadyContacted(opportunityId: string): Promise<boolean> 
   return (await actionsFor(opportunityId)).some((one) => one.action === 'CONTACT_BUYER');
 }
 
+export interface SendSlot {
+  /** The occurrence this send is for: the next action on the piece. */
+  occurrence: string;
+  /** Attempts at this occurrence a provider or a person closed as not having happened. */
+  retry: number;
+}
+
+/**
+ * Whether Brain may send this action on this piece now, and under which key.
+ *
+ * The one answer the tick's contact, a person's press and the execution record
+ * all read, because a rule applied by one of three readers is how a second
+ * effect gets sent: each of these alone once let one through.
+ *
+ *   - **Under way.** An operation for this action still RESERVED with no
+ *     refusal on it is an executor waiting on a provider. Another send now is
+ *     a second effect whatever its key.
+ *   - **Happened, not yet on the record.** A SUCCEEDED operation whose action
+ *     — or, for a payment, whose ledger entry by the provider's reference — is
+ *     missing. The money still reads outstanding and the occurrence may have
+ *     moved, so another payment would be a second charge; the tick finishes
+ *     the record and nothing is sent until it has.
+ *   - **Unknown.** An UNCERTAIN operation under another key is a person's to settle. A
+ *     pressing again at the same occurrence reaches the same key, which asks
+ *     the provider rather than sending; anything else waits, and the tick
+ *     never presses for anybody.
+ *
+ * The retry is counted from operations closed FAILED at this occurrence —
+ * the provider saying nothing happened, or a person establishing it — so a
+ * new key is never a resend of an unknown, and the tick and a person compute
+ * the same one.
+ */
+export async function sendGate(
+  opportunity: CashOpportunity,
+  action: PerformableAction,
+): Promise<Outcome<SendSlot>> {
+  const effect = COMMERCIAL_EFFECTS[action];
+  const doing = `${effect.doing[0]!.toUpperCase()}${effect.doing.slice(1)}`;
+  const actions = await actionsFor(opportunity.id);
+  // Counted, not de-duplicated: an action a person recorded by hand may carry
+  // no request key, and it is still an occurrence.
+  const occurrence = String(actions.length + 1);
+  const recorded = new Set(actions.map((one) => one.requestKey));
+  const attempts = (await commercialOperationsFor(opportunity.projectId, opportunity.id)).filter(
+    (one) => one.action === action,
+  );
+  const retry = attempts.filter(
+    (one) => one.occurrence === occurrence && one.operation.state === 'FAILED',
+  ).length;
+  for (const one of attempts) {
+    const { operation } = one;
+    // The key this send would use reaches `runExternalEffect`'s replay,
+    // take-over and resume paths, which ask the provider and never send a
+    // second time — so an unknown or stopped attempt under that same key is
+    // settled by pressing again, and only one under another key blocks.
+    const sameKey = one.occurrence === occurrence && one.retry === retry;
+    if (operation.state === 'RESERVED' && !operation.failureCategory) {
+      const stopped = operation.recoverAfter !== null && operation.recoverAfter <= operationNow();
+      if (stopped && sameKey) continue;
+      return refuse(
+        stopped
+          ? `An earlier attempt at ${effect.doing} stopped before it recorded what happened. Brain ` +
+              'asks the provider on its next pass, and sends nothing until it knows.'
+          : `${doing} is already under way.`,
+      );
+    }
+    if (operation.state === 'UNCERTAIN' && !sameKey) {
+      return refuse(
+        `An earlier attempt at ${effect.doing} has its outcome unknown. Settle it first, so this ` +
+          'is never done twice.',
+      );
+    }
+    if (operation.state === 'SUCCEEDED') {
+      const onRecord =
+        recorded.has(actionKey(opportunity.id, action, one.occurrence)) &&
+        (action !== 'ACCEPT_PAYMENT' ||
+          (operation.resultRef !== null &&
+            (await customerPaymentByReference(opportunity.projectId, operation.resultRef)) !== null));
+      if (!onRecord && !sameKey) {
+        return refuse(
+          `${doing} already happened (reference ${operation.resultRef ?? 'none'}) and Brain is ` +
+            'finishing its record. Nothing more is sent until it has.',
+        );
+      }
+    }
+  }
+  return { ok: true, value: { occurrence, retry }, message: 'Clear to send.' };
+}
+
 /** Where an action Brain performs may start from. */
 function stateAllows(action: PerformableAction, state: CashOpportunity['state']): boolean {
   if (action === 'CONTACT_BUYER') return state === 'READY' || state === 'EXECUTING' || state === 'DELIVERING';
@@ -856,29 +1040,13 @@ export async function performCommercialAction(input: {
     );
   }
 
-  const occurrence = String((await countActions(opportunity.id)) + 1);
-  const attempts = (await commercialOperationsFor(opportunity.projectId, opportunity.id)).filter(
-    (one) => one.action === action,
-  );
-  const open = attempts.filter((one) => one.operation.state === 'UNCERTAIN');
-  // Each attempt at this occurrence that ended FAILED moves the key on by
-  // one. A terminal failure is either the provider saying nothing happened or
-  // a person establishing it, so a new key is never a resend of an unknown —
-  // and a retryable refusal stays RESERVED and keeps its key.
-  const retry = attempts.filter(
-    (one) => one.occurrence === occurrence && one.operation.state === 'FAILED',
-  ).length;
+  const gate = await sendGate(opportunity, action);
+  if (!gate.ok) return gate;
+  const { occurrence, retry } = gate.value;
   if (input.expectedOccurrence !== occurrence) {
     return refuse(
       'Something has been recorded on this piece since the page was loaded, so this press may ' +
         'already have been done. Reload and check before asking again.',
-    );
-  }
-  const unresolvedElsewhere = open.find((one) => one.occurrence !== occurrence);
-  if (unresolvedElsewhere) {
-    return refuse(
-      `An earlier attempt at ${effect.doing} has an unknown outcome. Settle it first, so this ` +
-        'is never done twice.',
     );
   }
 
@@ -1104,13 +1272,28 @@ export async function effectAttemptsFor(
   const attempts = await commercialOperationsFor(projectId, opportunityId);
   if (attempts.length === 0) return [];
   const keys = new Set((await actionsFor(opportunityId)).map((one) => one.requestKey));
-  return attempts.map((one) => ({
+  // A payment is on the record only once its ledger entry is too: the action
+  // alone would read PERFORMED over money that still reads outstanding.
+  const views: EffectAttemptView[] = [];
+  for (const one of attempts) {
+    const ref = one.operation.resultRef;
+    const recorded =
+      keys.has(actionKey(opportunityId, one.action, one.occurrence)) &&
+      (one.action !== 'ACCEPT_PAYMENT' ||
+        (ref !== null && (await customerPaymentByReference(projectId, ref)) !== null));
+    views.push(toView(one, recorded));
+  }
+  return views;
+}
+
+function toView(one: CommercialOperation, recorded: boolean): EffectAttemptView {
+  return {
     operationId: one.operation.id,
     action: one.action,
     occurrence: one.occurrence,
-    status: statusOf(one.operation, keys.has(actionKey(opportunityId, one.action, one.occurrence))),
+    status: statusOf(one.operation, recorded),
     receiptRef: one.operation.resultRef,
     reason: one.operation.uncertaintyReason ?? one.operation.resultSummary ?? one.operation.failureCategory,
     at: one.operation.updatedAt,
-  }));
+  };
 }

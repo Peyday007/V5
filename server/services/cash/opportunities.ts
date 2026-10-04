@@ -1129,7 +1129,10 @@ export async function recordMoneyEvent(input: {
       backing.projectId === input.projectId &&
       backing.namespace === COMMERCIAL_EFFECTS.ACCEPT_PAYMENT.namespace.name &&
       backing.resultRef !== null &&
-      backing.resultRef === (input.verifiedReference ?? null);
+      backing.resultRef === (input.verifiedReference ?? null) &&
+      // and taken for this piece, by the correlation Brain composed at send
+      (input.opportunityId == null ||
+        (backing.correlationId ?? '').startsWith(`cash:${input.opportunityId}:`));
     if (!confirmed) {
       const decision = await checkCommercialAuthority({
         projectId: input.projectId,

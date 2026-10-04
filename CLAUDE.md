@@ -662,6 +662,34 @@ never a process-local lock.
   as IN_PROGRESS for ever, and the crash reconciliation was reachable only from
   a test that wrote the column by hand. `armRecovery` sets it when the attempt
   begins. A take-over asks the provider and never resends blind.
+- **The executor stops waiting before anybody may take over.** A lease alone
+  let a merely slow send outlive it, be taken over as dead, and then confirm
+  into an operation the take-over had already called UNCERTAIN — two
+  executors holding one effect, and the receipt dropped because
+  `succeedOperation` is guarded on `RESERVED`. So a send is bounded by
+  `EXTERNAL_SEND_TIMEOUT_MS` (5 min), strictly inside the 15-minute lease; a
+  timed-out send is UNCERTAIN, and a provider's ABSENT right after it is not
+  read as "nothing was sent", for `resumeAfterCrash`'s reason. A receipt that
+  still arrives after a take-over resolves the unknown as SUCCEEDED rather
+  than being dropped: left UNCERTAIN, a person could close it "did not
+  happen" and the retry would be a second effect.
+- **An attempt that ended is not an attempt that was resolved.** A confirmed
+  attempt whose operation never left `RESERVED` — the executor wrote what the
+  provider said and died before moving the operation — was read by
+  `resumeAfterCrash` as "nothing pending", and the lease above made that
+  path reachable: a confirmed effect sent twice. A take-over decides by what
+  the attempt says. A receipt on it finishes the operation; only the provider
+  saying it did nothing permits another send; anything else is unknown. A
+  take-over sets its own lease in the same compare-and-swap, and a new
+  attempt clears the last refusal's category, because either left behind made
+  a live or stopped attempt read as idle. Recovery never closes as FAILED what
+  an idempotent provider may have received: the next send would carry a key
+  the provider cannot de-duplicate against.
+- **The provider is asked about one effect, never the thing it was for.** A
+  commercial effect's business id is its correlation
+  (`cash:<opportunity>:<action>:<occurrence>[:<retry>]`). Asked by
+  opportunity, a second payment's timeout was answered with the first
+  payment's receipt.
 
 - **The caller's own timeout is part of the boundary, and it is shorter than
   Brain thinks.** A mutation that commits after the client has given up is
@@ -5872,6 +5900,34 @@ contacted again.
   Staleness, early retirement, target replenishment, configurable portfolio
   concurrency, the software-need handoff to the Factory and a funnel reading
   are not built here; they are `objectives/cash-autonomy-*.json`.
+
+**One provider payment reference is one customer payment**, whatever key it
+arrives under. The key alone could not say so: Brain keys a take-payment by the
+piece, and a person recording the same receipt by hand, or against another
+piece, would have been money that arrived once earned twice. `recordMoney`
+refuses a second `CUSTOMER_PAYMENT` carrying a reference already on the
+project's ledger (a read, safe because every ledger writer already holds
+`serializeCash`), a confirmed take-payment whose reference is already there
+writes nothing, and the reconciliation pass reads it as done rather than
+retrying a refusal every tick.
+
+**Every send passes `sendGate`, and so does every offer of one.** A person's
+press, the tick's contact and the execution record read one answer: nothing
+under way, nothing stopped or unknown under another key, nothing that happened
+and is not on the record (for a payment, its ledger entry by reference), and
+the retry key counted the same way for all three. A same-key unknown or stopped
+attempt passes, because that key only reaches the paths that ask rather than
+send. `recoverAbandonedEffects` on the tick asks about every attempt whose lease
+ran out and calls no `send`. A payment's ledger entry is written before its
+action, and the tick never retries what a person or a provider closed as not
+having happened.
+
+**The execution record never offers what `perform` would refuse.** Beside the
+money it carries each action's capability state, the attempts counted by what
+is known about them (confirmed, confirmed-not-recorded, uncertain, refused, in
+progress), every payment and settlement with its reference, `brainCanDoNow`
+and one `blocker` sentence — and an action with an unknown earlier attempt, or
+one already under way, reads unavailable for the reason `perform` gives.
 
 **What this version does not do, and says so.** It records the authorization and
 the money; it does not itself contact a buyer, issue an invoice or move funds. A
