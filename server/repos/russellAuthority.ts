@@ -64,6 +64,7 @@ function mapGoal(row: RussellGoalRow): RussellGoal {
     maxConcurrent: row.max_concurrent,
     maxProbes: row.max_probes,
     workPolicy: (row.work_policy ?? 'UNCAPPED') as WorkPolicy,
+    purpose: row.purpose === 'RESEARCH_GOAL' ? 'RESEARCH_GOAL' : 'STANDING',
     maxExternalSpend: row.max_external_spend,
     startsAt: row.starts_at,
     expiresAt: row.expires_at,
@@ -253,7 +254,7 @@ export async function ensureGoal(input: {
 export async function liveGoalNamed(projectId: string, name: string): Promise<RussellGoal | null> {
   const rows = await getDb().all<RussellGoalRow>(
     `SELECT * FROM russell_goals
-      WHERE project_id = ? AND name = ? AND state = 'ACTIVE'
+      WHERE project_id = ? AND name = ? AND state = 'ACTIVE' AND purpose = 'STANDING'
       ORDER BY created_at DESC, rowid DESC`,
     [projectId, name],
   );
@@ -265,9 +266,15 @@ export async function getGoal(id: string): Promise<RussellGoal | null> {
   return rows[0] ? mapGoal(rows[0]) : null;
 }
 
+/**
+ * The project's standing grants, newest first. A `RESEARCH_GOAL` is never one:
+ * it is a bounded budget for one piece of research, and letting it appear here
+ * would let it become Russell's standing authority by being listed.
+ */
 export async function listGoals(projectId: string): Promise<RussellGoal[]> {
   const rows = await getDb().all<RussellGoalRow>(
-    'SELECT * FROM russell_goals WHERE project_id = ? ORDER BY created_at DESC, rowid DESC',
+    `SELECT * FROM russell_goals WHERE project_id = ? AND purpose = 'STANDING'
+      ORDER BY created_at DESC, rowid DESC`,
     [projectId],
   );
   return rows.map(mapGoal);
@@ -363,7 +370,7 @@ export async function checkAuthority(input: {
   const now = input.at ?? authorityNow();
   const rows = await getDb().all<RussellGoalRow>(
     `SELECT * FROM russell_goals
-      WHERE project_id = ? AND state = 'ACTIVE'
+      WHERE project_id = ? AND state = 'ACTIVE' AND purpose = 'STANDING'
       ORDER BY created_at DESC, rowid DESC`,
     [input.projectId],
   );
@@ -704,6 +711,15 @@ function ceilingsFor(
  * what those older steps do.
  */
 async function goalForOrchestration(orchestrationId: string): Promise<RussellGoal | null> {
+  // A packet reserved against a research goal says so on its own row, and that
+  // is read first: it is what lets one goal's fragment ceiling span every
+  // packet of the goal. Everything else falls back to the mission path.
+  const linked = await getDb().all<{ goal_id: string | null }>(
+    'SELECT goal_id FROM research_orchestrations WHERE id = ?',
+    [orchestrationId],
+  );
+  const linkedGoalId = linked[0]?.goal_id ?? null;
+  if (linkedGoalId) return getGoal(linkedGoalId);
   const rows = await getDb().all<{ goal_id: string | null }>(
     `SELECT goal_id FROM russell_missions
       WHERE orchestration_id = ? AND goal_id IS NOT NULL
@@ -722,6 +738,12 @@ export interface ChargeOutcome {
   refusedBy?: 'IN_TOTAL' | 'AT_ONCE';
   /** How many of these were already charged — a repair, a redelivery, a replay. */
   replayed: number;
+  /**
+   * Every reservation that now stands behind this charge, replays included.
+   * The caller settles them once what they paid for exists, so a created
+   * fragment counts for ever while a charge never followed by creation expires.
+   */
+  reservationIds: string[];
 }
 
 /**
@@ -751,9 +773,10 @@ export async function chargeFragments(input: {
   fragmentKeys: string[];
 }): Promise<ChargeOutcome> {
   const goal = await goalForOrchestration(input.orchestrationId);
-  if (!goal) return { ok: true, reason: 'not governed by a standing authority', replayed: 0 };
+  if (!goal) return { ok: true, reason: 'not governed by a standing authority', replayed: 0, reservationIds: [] };
 
   const taken: string[] = [];
+  const standing: string[] = [];
   let replayed = 0;
   for (const key of input.fragmentKeys) {
     const outcome = await reserve({
@@ -775,12 +798,14 @@ export async function chargeFragments(input: {
         reason: outcome.reason,
         ...(outcome.refusedBy ? { refusedBy: outcome.refusedBy } : {}),
         replayed,
+        reservationIds: [],
       };
     }
     if (outcome.replayed) replayed += 1;
     else if (outcome.reservation) taken.push(outcome.reservation.id);
+    if (outcome.reservation) standing.push(outcome.reservation.id);
   }
-  return { ok: true, reason: 'charged', replayed };
+  return { ok: true, reason: 'charged', replayed, reservationIds: standing };
 }
 
 /**
@@ -798,7 +823,7 @@ export async function chargeProbe(input: {
 }): Promise<ChargeOutcome> {
   const goals = (await listGoals(input.projectId)).filter((goal) => goal.state === 'ACTIVE');
   const goal = goals[0];
-  if (!goal) return { ok: true, reason: 'not governed by a standing authority', replayed: 0 };
+  if (!goal) return { ok: true, reason: 'not governed by a standing authority', replayed: 0, reservationIds: [] };
 
   const outcome = await reserve({
     goalId: goal.id,
@@ -806,12 +831,18 @@ export async function chargeProbe(input: {
     idempotencyKey: `russell:probe:${input.candidateId}`,
   });
   return outcome.ok
-    ? { ok: true, reason: 'charged', replayed: outcome.replayed ? 1 : 0 }
+    ? {
+        ok: true,
+        reason: 'charged',
+        replayed: outcome.replayed ? 1 : 0,
+        reservationIds: outcome.reservation ? [outcome.reservation.id] : [],
+      }
     : {
         ok: false,
         reason: outcome.reason,
         ...(outcome.refusedBy ? { refusedBy: outcome.refusedBy } : {}),
         replayed: 0,
+        reservationIds: [],
       };
 }
 
@@ -940,4 +971,262 @@ export async function listReservations(goalId: string): Promise<RussellReservati
     [goalId],
   );
   return rows.map(mapReservation);
+}
+
+/*
+ * Research goals: a bounded budget for one piece of research.
+ *
+ * This extends the owner above rather than adding a second quota system. A
+ * research goal is a `russell_goals` row with `purpose = 'RESEARCH_GOAL'`, a
+ * CAPPED policy, and the same reservation ledger doing the same arithmetic:
+ *
+ *   - **a packet is the research goal's mission.** `max_missions` is the
+ *     packet ceiling and a packet is reserved as kind `MISSION`; a new
+ *     reservation kind would be a second vocabulary for one count. The key is
+ *     `research:packet:<goalId>:<packetKey>`, so a replay is the same packet
+ *     and is charged once. `max_concurrent` equals `max_missions`, so the
+ *     concurrency check can never be the one that refuses a packet.
+ *   - **a fragment is a fragment.** `chargeFragments` already reserves them and
+ *     now resolves the governing goal from `research_orchestrations.goal_id`
+ *     first, so `max_fragments` is enforced across every packet of the goal.
+ *   - **money is pinned at zero.** `max_external_spend` is 0, `max_probes` is 0
+ *     and `ALWAYS_PROHIBITED` (which names PAID_OVERAGE) is unioned in; there
+ *     is no input that raises any of them (invariant 18).
+ *   - **the deadline is `expires_at`, judged on Brain's clock** —
+ *     `authorityNow()`, the same one `reserve` and `checkAuthority` use, and
+ *     nothing else. After it no packet or fragment reservation succeeds; rows
+ *     already written are never touched.
+ *
+ * A research goal is invisible to every standing-authority reader
+ * (`checkAuthority`, `listGoals`, `liveGoalNamed`, and so `authorityFor`,
+ * `chargeProbe` and `ensureGoal`'s read-back), so it never becomes Russell's
+ * standing grant.
+ */
+
+export async function createResearchGoal(input: {
+  projectId: string;
+  ownerUserId: string;
+  createdByUserId: string;
+  name: string;
+  maxPackets: number;
+  maxFragments: number;
+  deadline: string;
+  /** Accepted only to be refused: nothing here may carry money. */
+  paidOverages?: boolean;
+}): Promise<RussellGoal> {
+  // Read off an untyped view, because no spend field is part of this input's
+  // contract; a caller that sends one (from JSON, say) is refused, not ignored.
+  const spend = (input as Record<string, unknown>).maxExternalSpend;
+  if ((spend !== undefined && spend !== null && Number(spend) !== 0) || input.paidOverages) {
+    throw new Error('A research goal cannot carry external spend or paid overages.');
+  }
+  if (!Number.isInteger(input.maxPackets) || input.maxPackets < 1) {
+    throw new Error('A research goal needs a packet ceiling that is a positive whole number.');
+  }
+  if (!Number.isInteger(input.maxFragments) || input.maxFragments < 1) {
+    throw new Error('A research goal needs a fragment ceiling that is a positive whole number.');
+  }
+  if (!input.name.trim()) throw new Error('A research goal needs a name.');
+  const deadlineMs = Date.parse(input.deadline);
+  if (!Number.isFinite(deadlineMs)) throw new Error('A research goal needs a deadline that is a real date.');
+  const at = authorityNow();
+  const deadline = new Date(deadlineMs).toISOString();
+  if (deadline <= at) throw new Error('A research goal needs a deadline that has not already passed.');
+
+  const id = newId('rgl');
+  await getDb().run(
+    `INSERT INTO russell_goals
+       (id, project_id, owner_user_id, name, policy_version, allowed_work, prohibitions,
+        max_missions, max_fragments, max_concurrent, max_probes, max_external_spend,
+        work_policy, purpose,
+        starts_at, expires_at, state, revoked_at, revoked_by_user_id, revoked_reason,
+        created_by_user_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 0, 0, 'CAPPED', 'RESEARCH_GOAL',
+             ?, ?, 'ACTIVE', NULL, NULL, NULL, ?, ?, ?)`,
+    [
+      id,
+      input.projectId,
+      input.ownerUserId,
+      input.name,
+      toJson(['RESEARCH']),
+      toJson([...ALWAYS_PROHIBITED]),
+      input.maxPackets,
+      input.maxFragments,
+      input.maxPackets,
+      at,
+      deadline,
+      input.createdByUserId,
+      at,
+      at,
+    ],
+  );
+  const created = await getGoal(id);
+  if (!created) throw new Error('The research goal disappeared immediately after being written.');
+  return created;
+}
+
+/** Which ceiling or condition stopped a packet, in a form a caller can switch on. */
+export type GoalPacketRefusal =
+  | 'PACKETS'
+  | 'CONCURRENCY'
+  | 'DEADLINE'
+  | 'REVOKED'
+  | 'PAUSED'
+  | 'WRONG_PROJECT'
+  | 'NOT_A_RESEARCH_GOAL'
+  | 'UNAVAILABLE';
+
+export interface GoalPacketOutcome {
+  ok: boolean;
+  reservation: RussellReservation | null;
+  /** Null when ok. */
+  refusedBy: GoalPacketRefusal | null;
+  /** Safe to show a person; names the ceiling and never an id. */
+  reason: string;
+  /** True when this key already held a packet: the same packet, charged once. */
+  replayed: boolean;
+}
+
+export function goalPacketKey(goalId: string, packetKey: string): string {
+  return `research:packet:${goalId}:${packetKey}`;
+}
+
+/**
+ * Reserve one packet against a research goal.
+ *
+ * The conditions are checked here only to *name* the refusal; `reserve` checks
+ * them again inside the same call, so a goal revoked or expired between the
+ * two is still refused and is reported by what it is now.
+ */
+export async function reserveGoalPacket(input: {
+  goalId: string;
+  packetKey: string;
+  projectId: string;
+  at?: string;
+}): Promise<GoalPacketOutcome> {
+  const refuse = (refusedBy: GoalPacketRefusal, reason: string): GoalPacketOutcome => ({
+    ok: false,
+    reservation: null,
+    refusedBy,
+    reason,
+    replayed: false,
+  });
+  const now = input.at ?? authorityNow();
+  const goal = await getGoal(input.goalId);
+  if (!goal || goal.purpose !== 'RESEARCH_GOAL') {
+    return refuse('NOT_A_RESEARCH_GOAL', 'there is no research goal with that id');
+  }
+  if (goal.projectId !== input.projectId) {
+    return refuse('WRONG_PROJECT', 'this research goal belongs to a different project');
+  }
+  const why = goalStopReason(goal, now);
+  if (why) return refuse(why.refusedBy, why.reason);
+  if (!input.packetKey.trim()) return refuse('UNAVAILABLE', 'a packet needs a key');
+
+  const outcome = await reserve({
+    goalId: goal.id,
+    kind: 'MISSION',
+    idempotencyKey: goalPacketKey(goal.id, input.packetKey),
+    at: now,
+  });
+  if (outcome.ok) {
+    return {
+      ok: true,
+      reservation: outcome.reservation,
+      refusedBy: null,
+      reason: outcome.replayed ? 'this packet was already reserved' : 'reserved',
+      replayed: outcome.replayed,
+    };
+  }
+  if (outcome.refusedBy === 'IN_TOTAL') {
+    return refuse('PACKETS', `this research goal allows ${goal.maxMissions} packet(s) and they are all used`);
+  }
+  if (outcome.refusedBy === 'AT_ONCE') {
+    return refuse('CONCURRENCY', 'this research goal has no free packet slot right now');
+  }
+  const latest = await getGoal(goal.id);
+  const stopped = latest ? goalStopReason(latest, authorityNow()) : null;
+  return stopped ? refuse(stopped.refusedBy, stopped.reason) : refuse('UNAVAILABLE', outcome.reason);
+}
+
+function goalStopReason(
+  goal: RussellGoal,
+  now: string,
+): { refusedBy: GoalPacketRefusal; reason: string } | null {
+  if (goal.state === 'REVOKED') return { refusedBy: 'REVOKED', reason: 'this research goal was withdrawn' };
+  if (goal.state !== 'ACTIVE') return { refusedBy: 'PAUSED', reason: `this research goal is ${goal.state.toLowerCase()}` };
+  if (goal.expiresAt && goal.expiresAt <= now) {
+    return { refusedBy: 'DEADLINE', reason: 'this research goal has passed its deadline' };
+  }
+  return null;
+}
+
+/**
+ * Record that a reserved packet now exists, and settle what paid for it.
+ *
+ * The link is a guarded `UPDATE` on `goal_id IS NULL`, so two callers cannot
+ * point one packet at two goals, and the unique `(goal_id, goal_packet_key)`
+ * index means one packet key is at most one orchestration. A reservation that
+ * is never followed by this call stays `HELD`, expires and refunds itself —
+ * that is the restart semantics, and nothing sweeps it.
+ */
+export async function bindPacketToGoal(input: {
+  orchestrationId: string;
+  goalId: string;
+  packetKey: string;
+}): Promise<boolean> {
+  const linked = await getDb().run(
+    `UPDATE research_orchestrations SET goal_id = ?, goal_packet_key = ?
+      WHERE id = ? AND goal_id IS NULL`,
+    [input.goalId, input.packetKey, input.orchestrationId],
+  );
+  if (linked.changes !== 1) return false;
+  const held = await getDb().all<{ id: string }>(
+    'SELECT id FROM russell_budget_reservations WHERE idempotency_key = ?',
+    [goalPacketKey(input.goalId, input.packetKey)],
+  );
+  if (held[0]) await settleReservation(held[0].id);
+  return true;
+}
+
+export interface GoalBudgetStatus {
+  goalId: string;
+  name: string;
+  /** What the goal is now: its own state, or EXPIRED once the deadline has passed. */
+  state: GoalState | 'EXPIRED';
+  packets: { used: number; reserved: number; ceiling: number };
+  fragments: { committed: number; ceiling: number };
+  deadline: string | null;
+  authorizedBy: string;
+  createdAt: string;
+}
+
+/**
+ * Where a research goal stands. Narrow indexed reads only: one COUNT on
+ * `research_orchestrations (goal_id)` and two `spendTotals`.
+ *
+ * `used` is packets that exist; `reserved` is what the ledger holds for
+ * packets, which also counts a reservation whose packet is not yet created.
+ */
+export async function goalBudgetStatus(goalId: string, at?: string): Promise<GoalBudgetStatus | null> {
+  const goal = await getGoal(goalId);
+  if (!goal || goal.purpose !== 'RESEARCH_GOAL') return null;
+  const now = at ?? authorityNow();
+  const counted = await getDb().all<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM research_orchestrations WHERE goal_id = ?',
+    [goal.id],
+  );
+  const packets = await spendTotals(goal.id, 'MISSION', now);
+  const fragments = await spendTotals(goal.id, 'FRAGMENT', now);
+  const expired = goal.expiresAt !== null && goal.expiresAt <= now;
+  return {
+    goalId: goal.id,
+    name: goal.name,
+    state: goal.state === 'ACTIVE' && expired ? 'EXPIRED' : goal.state,
+    packets: { used: Number(counted[0]?.n ?? 0), reserved: packets.committed, ceiling: goal.maxMissions },
+    fragments: { committed: fragments.committed, ceiling: goal.maxFragments },
+    deadline: goal.expiresAt,
+    authorizedBy: goal.createdByUserId,
+    createdAt: goal.createdAt,
+  };
 }
