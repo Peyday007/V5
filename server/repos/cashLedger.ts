@@ -175,6 +175,18 @@ export async function recordMoney(input: MoneyWrite): Promise<MoneyOutcome> {
   return { ok: true, entry: mapEntry(existing), reason: 'already recorded', replayed: true };
 }
 
+/** The entry one idempotency key wrote, or none — read without writing. */
+export async function moneyEntryByKey(
+  projectId: string,
+  idempotencyKey: string,
+): Promise<CashMoneyEntry | null> {
+  const rows = await getDb().all<CashMoneyEntryRow>(
+    'SELECT * FROM cash_money_entries WHERE project_id = ? AND idempotency_key = ?',
+    [projectId, idempotencyKey],
+  );
+  return rows[0] ? mapEntry(rows[0]) : null;
+}
+
 export async function getMoneyEntry(id: string): Promise<CashMoneyEntry | null> {
   const rows = await getDb().all<CashMoneyEntryRow>(
     'SELECT * FROM cash_money_entries WHERE id = ?',

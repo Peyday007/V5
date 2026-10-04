@@ -102,6 +102,7 @@ import {
   settleSpend,
 } from '../services/cash/opportunities.ts';
 import { recordFurtherAction } from '../services/cash/actions.ts';
+import { performCommercialAction, resolveCommercialEffect } from '../services/cash/perform.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
 import { cashView } from '../services/cash/view.ts';
 import { cashCapabilities, decideCashRead } from '../services/cash/access.ts';
@@ -865,6 +866,47 @@ cashRouter.post(
           }),
         );
         return { opportunity: value, message };
+      }
+      case 'perform': {
+        /*
+         * Have Brain perform the action itself, through a registered effect
+         * adapter. `expectedOccurrence` is what the page showed as the next
+         * occurrence; it is compared, never used to build the key, so a second
+         * press after the first was recorded is refused rather than becoming a
+         * second invoice. With no adapter registered the service refuses in
+         * words naming the missing capability, and nothing is sent.
+         */
+        const { value, message } = taken(
+          await performCommercialAction({
+            opportunityId: opportunity.id,
+            action: requiredString(body['action'], 'action'),
+            actorRef: principal.id,
+            expectedOccurrence: requiredString(body['expectedOccurrence'], 'expectedOccurrence'),
+          }),
+        );
+        return { result: value, message };
+      }
+      case 'resolve-effect': {
+        /*
+         * A person who checked the provider says what happened to an attempt
+         * Brain could not establish. The operation is found among this piece's
+         * own attempts, never by id alone, so this cannot reach another
+         * piece's row; and only an UNCERTAIN one can be settled.
+         */
+        const happened = body['happened'];
+        if (typeof happened !== 'boolean') throw badRequest('"happened" must be true or false.');
+        const { value, message } = taken(
+          await resolveCommercialEffect({
+            opportunityId: opportunity.id,
+            operationId: requiredString(body['operationId'], 'operationId'),
+            actorRef: principal.id,
+            happened,
+            receiptRef: optionalString(body['receiptRef'], 'receiptRef') ?? null,
+            amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 1 }) ?? null,
+            note: requiredString(body['note'], 'note'),
+          }),
+        );
+        return { result: value, message };
       }
       case 'deliver':
       case 'collect': {

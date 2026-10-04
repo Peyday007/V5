@@ -20,6 +20,7 @@
  * decides whether reconciliation is needed.
  */
 import {
+  armRecovery,
   closeAttempt,
   failOperation,
   getOperation,
@@ -27,6 +28,7 @@ import {
   markAttemptSent,
   markUncertain,
   openAttempt,
+  operationNow,
   resolveUncertain,
   reserveOperation,
   succeedOperation,
@@ -66,6 +68,14 @@ export interface ExternalRunInput {
   principalId: string;
   correlationId?: string | null;
 }
+
+/**
+ * How long one external attempt may run before a later caller treats its
+ * executor as gone. Generous on purpose: being taken over early costs a
+ * reconciliation (or an UNCERTAIN a person settles), never a second send,
+ * because `resumeAfterCrash` asks before it acts.
+ */
+export const EXTERNAL_ATTEMPT_LEASE_MS = 15 * 60 * 1000;
 
 export type ExternalOutcome =
   | { status: 'CONFIRMED'; operation: IdempotencyOperation; receiptRef: string }
@@ -164,6 +174,13 @@ export async function runExternalEffect(input: ExternalRunInput): Promise<Extern
 
   const operation = reserved.operation;
   const attemptNumber = await beginAttemptOn(operation.id);
+  // If this process dies between here and recording what came back, the next
+  // caller must be able to take over and ask the provider — never wait for
+  // ever, and never send again blind. See `armRecovery`.
+  await armRecovery(
+    operation.id,
+    new Date(Date.parse(operationNow()) + EXTERNAL_ATTEMPT_LEASE_MS).toISOString(),
+  );
   const providerKey = deriveProviderKey({
     adapter: input.adapter,
     operationId: operation.id,
