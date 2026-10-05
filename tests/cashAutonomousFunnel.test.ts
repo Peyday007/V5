@@ -745,6 +745,17 @@ describe('a proposed exposure never replaces a figure that is not a proposal', (
     expect(proposed.terms.find((term) => term.field === 'exposure')?.cents).toBe(30_000);
     await applyProposal({ opportunity: blank, proposal: proposed });
     expect((await getOpportunity(piece.id))!.peakFundingCents).toBe(30_000);
+
+    // The proposal path applies the writer's rule too: a rate is not a price,
+    // and a figure Postgres's INTEGER cannot hold is not proposed.
+    for (const signal of [
+      'The authority pays $25 per hour for ownership research.',
+      'The authority budgets $30,000,000 for the programme.',
+    ]) {
+      await updateOpportunity(piece.id, { buying_signal: signal, price_cents: null } as never);
+      const again = await proposeTerms((await getOpportunity(piece.id))!);
+      expect(again.terms.some((term) => term.field === 'price'), signal).toBe(false);
+    }
   });
 });
 

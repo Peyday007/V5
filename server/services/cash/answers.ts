@@ -571,11 +571,16 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
     sources.push({ text: opportunity.buyingSignal, claimId: null });
   }
 
+  // The same predicate research's writer applies, so the two writers of
+  // `price_cents` cannot disagree: a rate is not a price, and a figure the
+  // Postgres column cannot hold is not proposed at all.
   const figures = sources.flatMap((source) =>
-    readMoneyFigures(source.text, opportunity.currency).map((figure) => ({
-      ...figure,
-      claimId: source.claimId,
-    })),
+    readMoneyFigures(source.text, opportunity.currency)
+      .filter((figure) => !figure.perUnit && figure.cents <= MAX_COLUMN_CENTS)
+      .map((figure) => ({
+        ...figure,
+        claimId: source.claimId,
+      })),
   );
   const cited = [...new Set(figures.map((one) => one.claimId).filter((one) => one !== null))];
   const low = figures[0];
@@ -695,7 +700,10 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
   // ---------------------------------------------------------------------
   // The margin, which needs both halves
   // ---------------------------------------------------------------------
-  const price = low?.cents ?? opportunity.priceCents;
+  // The price the card will actually hold after this pass: the proposal only
+  // where `applyProposal` would write it, otherwise what is already there.
+  const priceProposable = mayReplace(await cardFact(opportunity.id, 'price'), 'RECOMMENDATION');
+  const price = (priceProposable ? low?.cents : undefined) ?? opportunity.priceCents;
   const exposure = exposureCents;
   if (price !== null && price !== undefined && exposure !== null) {
     const margin = price - exposure;
