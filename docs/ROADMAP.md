@@ -262,6 +262,14 @@ turns into a consequence — an implementation somebody has to live with,
 external spending, a destructive action, or another governed decision — not in
 front of every packet.
 
+**Built.** `GOAL_BUDGET` is enforced and served by `startPacket`, and a goal
+now continues on its own: `advanceResearchGoals` runs on the Russell tick,
+asks the archive first, and starts `round-<n>` packets inside the ceilings. A
+ceiling that stops it raises one request for a person. The goal is a
+`russell_goals` row with `purpose = 'RESEARCH_GOAL'` and `work_policy =
+'CAPPED'`; packets reserve as kind `MISSION`, fragments are settled at creation,
+and money stays zero. See `docs/GOAL-BUDGET.md`.
+
 ### The separations that matter most
 
 - **Step 4 is not Step 5.** Knowing *who* a worker is does not make it safe for

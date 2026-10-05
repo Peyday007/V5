@@ -1,0 +1,74 @@
+# The live GOAL_BUDGET journey, on the deployed Brain.
+#
+# `open` approves the proof's seven research goals once; every packet after that
+# is created by the Russell tick's own continuation pass, which is the thing
+# being proved. `report` reads the rows and writes nothing.
+#
+# A closed door: two commands, a project reference and an administrator
+# address, each checked against the narrowest class that admits a real value
+# and passed through the environment rather than interpolated into a shell.
+# Reaching this is the authentication (§26); --admin is the attribution.
+name: GOAL_BUDGET proof
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'open | report'
+        required: true
+        default: report
+      project:
+        description: 'Project id or slug'
+        required: true
+      admin:
+        description: '--admin <email>, required by open'
+        required: false
+        default: ''
+
+# Its own group: a shared group lets a newer dispatch silently evict an older one.
+concurrency:
+  group: brain-console-goal-budget-proof
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    name: GOAL_BUDGET proof
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Wait for a release rather than racing one. Bounded and fails open.
+      - uses: ./.github/actions/await-release
+
+      - name: Run
+        timeout-minutes: 10
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          PROOF_COMMAND: ${{ inputs.command }}
+          PROOF_PROJECT: ${{ inputs.project }}
+          PROOF_ADMIN: ${{ inputs.admin }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          case "$PROOF_COMMAND" in
+            open|report) ;;
+            *) echo "::error::Refusing '$PROOF_COMMAND': open or report."; exit 1 ;;
+          esac
+          case "$PROOF_PROJECT" in
+            ''|*[!A-Za-z0-9_-]*) echo "::error::Refusing the project: letters, digits, dash and underscore."; exit 1 ;;
+          esac
+          case "$PROOF_ADMIN" in
+            '') ;;
+            *[!A-Za-z0-9_.@+-]*) echo "::error::Refusing the administrator address."; exit 1 ;;
+          esac
+          if [ "$PROOF_COMMAND" = open ] && [ -z "$PROOF_ADMIN" ]; then
+            echo "::error::open changes something, so it needs an administrator."; exit 1
+          fi
+          args="$PROOF_COMMAND $PROOF_PROJECT"
+          if [ -n "$PROOF_ADMIN" ]; then args="$args --admin $PROOF_ADMIN"; fi
+          set +e
+          flyctl ssh console --app "$app" -C "sh /app/scripts/goal-budget-proof.sh $args" 2>&1 | tee proof.txt
+          set -e
+          # The verdict is a line the script printed; FAILED does not match it.
+          grep -q '^GOAL-BUDGET-PROOF: OK' proof.txt
