@@ -37,6 +37,10 @@
  *   npm run admin -- workers disable <name> --admin someone@example.com
  *   npm run admin -- workers archive <name> --admin someone@example.com
  *   npm run admin -- research start <project> --admin someone@example.com
+ *   npm run admin -- research start <project> --goal <goalId> --packet-key <key> [--bucket <id>] --admin someone@example.com
+ *   npm run admin -- research goal create <project> --name "…" --max-packets N --max-fragments N --deadline ISO [--assignment "…" --layer <name|id>] --admin someone@example.com
+ *   npm run admin -- research goal show <goalId>
+ *   npm run admin -- research goal list <project>
  *   npm run admin -- projects list
  *   npm run admin -- projects create "A name" --admin someone@example.com
  *   npm run admin -- access grant <worker> <project> --admin someone@example.com
@@ -54,6 +58,12 @@
  *   npm run admin -- cash seed-industry <project> "<subject name>" --admin someone@example.com
  */
 import { startPacket } from '../server/services/research/startPacket.ts';
+import type { GoalBudgetStatus } from '../server/repos/russellAuthority.ts';
+import {
+  createResearchGoal,
+  getGoal,
+  goalBudgetStatus,
+} from '../server/repos/russellAuthority.ts';
 import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
 import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
 import { CASH_LAYER_NAME } from '../server/services/cash/lifecycle.ts';
@@ -80,6 +90,7 @@ import {
 import {
   archiveWorker,
   clearWorkerRouting,
+  getUser,
   getUserByEmail,
   getWorkerRouting,
   listWorkerRouting,
@@ -155,6 +166,15 @@ function words(): string[] {
     out.push(value);
   }
   return out;
+}
+
+async function printGoalBudget(status: GoalBudgetStatus): Promise<void> {
+  const author = await getUser(status.authorizedBy);
+  console.log(`  ${status.goalId}  ${status.name}  [${status.state}]`);
+  console.log(`    packets     ${Math.max(status.packets.used, status.packets.reserved)} of ${status.packets.ceiling}`);
+  console.log(`    fragments   ${status.fragments.committed} of ${status.fragments.ceiling}`);
+  console.log(`    deadline    ${status.deadline ?? 'none'}`);
+  console.log(`    authorized  ${author?.displayName ?? status.authorizedBy}  (${status.authorizedBy})`);
 }
 
 function fail(message: string): never {
@@ -1222,9 +1242,139 @@ async function main(): Promise<void> {
      * rather than creating a second, because it is named from the same
      * constant.
      */
+    case 'research goal': {
+      const sub = rest[0] ?? fail('Say what to do with a research goal: create, show or list.');
+      if (sub === 'create') {
+        const actor = await administrator();
+        const project = await projectFrom(rest[1] ?? fail('Name a project.'));
+        const name = flag('name') ?? fail('Pass --name.');
+        const maxPackets = Number(flag('max-packets') ?? fail('Pass --max-packets N.'));
+        const maxFragments = Number(flag('max-fragments') ?? fail('Pass --max-fragments N.'));
+        // The ledger needs a real deadline and the route requires one, so the terminal does too:
+        // a ceiling nobody chose is not one the person set.
+        const deadline = flag('deadline') ?? fail('Pass --deadline ISO: a research goal needs a date it ends.');
+        // With an assignment and a layer, Brain continues the goal by itself on
+        // the tick; without them a person starts each packet with research start.
+        const assignment = flag('assignment') ?? null;
+        const layerRef = flag('layer');
+        const layer = layerRef
+          ? (await listLayers(project.id)).find((one) => one.id === layerRef || one.name === layerRef) ??
+            fail(`No layer "${layerRef}" in this project.`)
+          : null;
+        let goalId: string;
+        try {
+          goalId = (
+            await createResearchGoal({
+              projectId: project.id,
+              ownerUserId: actor.id,
+              createdByUserId: actor.id,
+              name,
+              maxPackets,
+              maxFragments,
+              deadline,
+              researchAssignment: assignment,
+              researchLayerId: layer?.id ?? null,
+            })
+          ).id;
+        } catch (error) {
+          fail(error instanceof Error ? error.message : 'The research goal could not be opened.');
+        }
+        await recordIdentityEvent({
+          actorType: 'HUMAN',
+          actorId: actor.id,
+          action: 'OPEN_RESEARCH_GOAL',
+          targetType: 'PROJECT',
+          targetId: project.id,
+          projectId: project.id,
+          result: 'SUCCESS',
+          metadata: { goalId, maxPackets: String(maxPackets), maxFragments: String(maxFragments) },
+        });
+        const status = await goalBudgetStatus(goalId);
+        if (status) await printGoalBudget(status);
+        break;
+      }
+      if (sub === 'show') {
+        const status = await goalBudgetStatus(rest[1] ?? fail('Name a research goal id.'));
+        if (!status) fail('No research goal with that id.');
+        await printGoalBudget(status);
+        break;
+      }
+      if (sub === 'list') {
+        const project = await projectFrom(rest[1] ?? fail('Name a project.'));
+        const ids = await getDb().all<{ id: string }>(
+          `SELECT id FROM russell_goals WHERE project_id = ? AND purpose = 'RESEARCH_GOAL'
+            ORDER BY created_at DESC, rowid DESC`,
+          [project.id],
+        );
+        if (ids.length === 0) console.log('  This project holds no research goals.');
+        for (const row of ids) {
+          const status = await goalBudgetStatus(row.id);
+          if (status) await printGoalBudget(status);
+        }
+        break;
+      }
+      fail(`"${sub}" is not a research goal command: create, show or list.`);
+    }
     case 'research start': {
       const actor = await administrator();
       const project = await projectFrom(rest[0] ?? fail('Name a project.'));
+
+      const goalRef = flag('goal');
+      if (goalRef) {
+        /*
+         * One packet under a goal's budget. `startPacket` decides whether
+         * GOAL_BUDGET is a mode it will act on; if it refuses, that refusal is
+         * printed as it was said and the hold lapses and refunds by itself. The
+         * reservation is taken before the packet exists, keyed by the caller's
+         * own key, so a retry replays the same charge.
+         */
+        const packetKey = flag('packet-key') ?? fail('Pass --packet-key: the charge needs a key a retry can repeat.');
+        const goal = await getGoal(goalRef);
+        if (!goal || goal.projectId !== project.id || goal.purpose !== 'RESEARCH_GOAL') {
+          fail('No research goal with that id in this project.');
+        }
+        const bucket =
+          SEARCH_BUCKETS.find((one) => one.id === flag('bucket')) ??
+          (flag('bucket') ? fail(`No discovery bucket "${flag('bucket')}".`) : SEARCH_BUCKETS[0]) ??
+          fail('This build defines no discovery bucket.');
+        const layers = await listLayers(project.id);
+        const layer =
+          layers.find((one) => one.name === CASH_LAYER_NAME) ??
+          (await createLayer({ projectId: project.id, name: CASH_LAYER_NAME, orderIndex: layers.length }));
+        const cashEnvelope = getApprovalEnvelope('RUSSELL_CASH_DISCOVERY_V1');
+        if (!cashEnvelope?.assignmentTemplate) {
+          fail('RUSSELL_CASH_DISCOVERY_V1 defines no assignment template in this build.');
+        }
+        // startPacket reserves, binds and settles the charge itself, keyed by packetKey.
+        try {
+          const packet = await startPacket({
+            projectId: project.id,
+            layerId: layer.id,
+            title: bucket.title,
+            assignment: cashEnvelope.assignmentTemplate
+              .replace('{JURISDICTION}', cashEnvelope.jurisdiction)
+              .replace('{QUESTION}', bucket.question),
+            approval: {
+              mode: 'GOAL_BUDGET',
+              goalId: goal.id,
+              packetKey,
+              budget: {
+                maxPackets: goal.maxMissions,
+                maxFragments: goal.maxFragments,
+                deadline: goal.expiresAt,
+                externalSpendCents: 0,
+                paidOveragesEnabled: false,
+              },
+            },
+            startedBy: { kind: 'PERSON', id: actor.id },
+          });
+          console.log(`  started    ${bucket.id}  ${packet.orchestration.id}  under goal ${goal.id}`);
+        } catch (error) {
+          if (error instanceof Halt) throw error;
+          fail(error instanceof Error ? error.message : String(error));
+        }
+        break;
+      }
 
       const layers = await listLayers(project.id);
       const layer =
