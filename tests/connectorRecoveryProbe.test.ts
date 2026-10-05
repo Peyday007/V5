@@ -37,7 +37,7 @@ import {
   settleRecoveryProbe,
 } from '../server/repos/recoveryProbes.ts';
 import { parseOAuthToken } from '../server/services/identity/secrets.ts';
-import type { BinManifest, Principal } from '../server/domain/types.ts';
+import type { BinManifest, Principal, WorkerScope } from '../server/domain/types.ts';
 
 const RESOURCE = 'https://brain.example/mcp/factory';
 let projectId = '';
@@ -191,6 +191,57 @@ async function noShowEvents(routineId: string): Promise<number> {
 const later = (): number => Date.now() + RECOVERY_PROBE_WINDOW_MS + 1_000;
 
 describe('a recovery probe establishes attribution from its own fire', () => {
+  it('an arrival authenticated as another worker is a conflict: nothing is adopted and the quarantine is not lifted', async () => {
+    // Production, 2026-10-04: Brain Research A is bound to the research worker
+    // on Cash Mode 1, and its Claude connector had been approved as a different
+    // worker. The probe arrived healthy and the quarantine was lifted, so the
+    // router went back to firing that worker's bins at a session handed none.
+    // `attributeArrival` now refuses that arrival as a CONFLICT (dec6d83), so the
+    // probe attributes nothing — and this pins the property the incident was
+    // about: the surface stays out of routing.
+    const airyn = await account('airyn');
+    const stranger = await createWorker({ name: 'somebody-else', createdByType: 'SYSTEM', createdById: 'test' });
+    const scopes: WorkerScope[] = ['project:read', 'queue:claim', 'queue:complete'];
+    await grantMembership({ projectId, principalType: 'WORKER', principalId: stranger.id, role: 'MEMBER', scopes, grantedByType: 'SYSTEM', grantedById: 'test' });
+    await setWorkerRouting({ workerId: stranger.id, families: ['FACTORY'], repositories: ['owner/fixture'], capabilities: [], reason: 'test', setBy: 'test' });
+    const minted = await issueGrant({ clientId: airyn.clientId, workerId: stranger.id, scope: '', resource: RESOURCE, now: Date.now() - 60_000 });
+    const parsed = parseOAuthToken(minted.access)!;
+    const strangerAccess = (await findLiveToken(parsed.prefix, parsed.secret, 'ACCESS'))!;
+
+    const { fire } = provider('cse_MISBOUND1');
+    const probe = await startRecoveryProbe({ routineRef: airyn.routineRef, requestedById: 'usr_admin', fire });
+    await touchToken(strangerAccess.id);
+    const principal = {
+      type: 'WORKER',
+      id: stranger.id,
+      handle: 'worker-04',
+      displayName: 'somebody-else',
+      isBrainAdmin: false,
+      mustChangePassword: false,
+      credentialId: strangerAccess.id,
+      authMethod: 'OAUTH_BEARER',
+      memberships: [
+        { projectId, principalType: 'WORKER', principalId: stranger.id, role: 'MEMBER', scopes, active: true },
+      ],
+      requestId: 'req_stranger',
+    } as unknown as Principal;
+    const arrival = await checkIn({ principal, workerId: stranger.id, sessionRef: 'cse_MISBOUND1' });
+    expect(arrival.assigned).toBe(true);
+
+    await settleRecoveryProbes();
+    await settleRecoveryProbes(later());
+    const settled = (await getRecoveryProbe(probe.id))!;
+    // The contradiction is reported and nothing is attached to either worker.
+    expect(settled.state).toBe('AMBIGUOUS');
+    expect(settled.connectorId).toBeNull();
+    expect(settled.outcome).toContain(workerId);
+    expect(settled.outcome).toContain(stranger.id);
+    // And the surface it was fired for stays out of routing.
+    const routine = (await getRoutine(airyn.routineId))!;
+    expect(routine.state).toBe('QUARANTINED');
+    expect(routine.connectorId).toBeNull();
+  });
+
   it('A/B: probes Airyn on a shared worker, binds only Airyn, and lifts the quarantine by itself', async () => {
     const airyn = await account('airyn');
     const caleb = await account('caleb');
