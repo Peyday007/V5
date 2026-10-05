@@ -11981,6 +11981,31 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   clears only by consent in Claude. Brain answers every retry correctly and
   fast; it cannot make a client retry.
 
+## 52. A research goal is approved once, and its ceilings are what remain.
+
+A research goal (`docs/GOAL-BUDGET.md`) is a `russell_goals` row with `purpose`
+`RESEARCH_GOAL` and `work_policy` `CAPPED`. **This is a recorded correction to
+§24**, which says `CAPPED` is offered by no live grant: that stays true of a
+standing grant, and a research goal is the one live row that carries it, because
+a bounded experiment is exactly what `CAPPED` was kept for. It is invisible to
+every standing-authority reader, so it never becomes Russell's grant.
+
+- **Packets reserve as kind `MISSION`.** A new reservation kind would be a
+  second vocabulary for one count. The key is
+  `research:packet:<goalId>:<packetKey>`, so a replay is the same packet and is
+  charged once.
+- **Fragments are settled at creation**, across every packet of the goal, from
+  `research_orchestrations.goal_id`.
+- **The deadline is judged on Brain's clock.** After it no new packet or
+  fragment is created; work already queued may finish, and nothing written is
+  touched.
+- **Money stays zero.** No input raises it (invariant 18).
+- **Continuation is derived, not scheduled.** `advanceResearchGoals` runs once
+  per Russell tick, asks the archive first (§13), and starts `round-<n>` only
+  when no packet is live and the last one left a mandatory requirement
+  unresolved. The key makes two passes one packet. A ceiling that stops it
+  raises exactly one request for a person and never raises the ceiling itself.
+
 ## Repository map
 
 ```
