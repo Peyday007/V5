@@ -1082,6 +1082,45 @@ describe('agreement and invoice', () => {
     expect(invoice).toMatchObject({ state: 'ISSUED', providerInvoiceId: 'in_found' });
   });
 
+  it('a draft that comes back from an unprocessed send is never sent for an agreement released meanwhile', async () => {
+    const id = await executing();
+    const released = await agree(id, 40_000);
+    let sent = 0;
+    let refuse = true;
+    registerAdapter({
+      name: 'test.invoice',
+      effectClass: 'EXTERNAL_OPAQUE',
+      namespace: ISSUE_INVOICE_NAMESPACE.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (): Promise<SendOutcome> => {
+        sent += 1;
+        return refuse
+          ? { kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true, detail: '429' }
+          : { kind: 'CONFIRMED', receiptRef: `in_${sent}` };
+      },
+    });
+    const drafted = await draftFor(id);
+    if (!drafted.ok) throw new Error('not drafted');
+    await runInvoicing(projectId);
+    // The send is mid-flight (claimed) when the agreement is released, so the
+    // release leaves the row for a person; then the claim proves never to have
+    // reached the provider and comes back to DRAFTED.
+    await getDb().run("UPDATE cash_invoices SET state = 'UNCERTAIN' WHERE id = ?", [drafted.value.id]);
+    expect((await releaseAgreement({ agreementId: released.id, reason: 'The buyer withdrew.', actorRef: userId })).ok).toBe(true);
+    // A second, larger agreement keeps money looking owed on the piece, so
+    // coverage alone would not stop the released one's draft.
+    await agree(id, 50_000);
+    await getDb().run("UPDATE cash_invoices SET updated_at = '2020-01-01T00:00:00.000Z' WHERE id = ?", [drafted.value.id]);
+    refuse = false;
+    sent = 0;
+    await runInvoicing(projectId);
+    await runInvoicing(projectId);
+    expect(sent).toBe(0);
+    const row = (await listInvoices({ projectId, opportunityId: id })).find((one) => one.id === drafted.value.id)!;
+    expect(row.state).toBe('VOID');
+  });
+
   it('an agreement answers only the latest contact before it, and never a contact the buyer already ignored', () => {
     const at = (iso: string) => ({ createdAt: iso });
     const first = at('2026-10-01T00:00:00.000Z');

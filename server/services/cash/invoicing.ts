@@ -35,7 +35,7 @@
  * The payment and the settlement are never one entry. `money.ts` exists to keep
  * them apart: a payment is not funds until the provider says it is.
  */
-import { dealPosition, invoiceableAgreements } from './journey/position.ts';
+import { agreementLedgerKey, dealPosition, invoiceableAgreements } from './journey/position.ts';
 import { getOpportunity, needForKey } from '../../repos/cashPortfolio.ts';
 import { draftInvoice, getInvoice, listInvoices, moveInvoice } from '../../repos/cashInvoices.ts';
 import { recordAction } from '../../repos/cashActions.ts';
@@ -52,7 +52,8 @@ import { TAX_TREATMENTS, dueDateSeconds } from './providers/stripe.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import type { CashInvoice } from '../../domain/types.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { customerPaymentByReference, getMoneyEntry } from '../../repos/cashLedger.ts';
+import { customerPaymentByReference, getMoneyEntry, moneyEntryByKey } from '../../repos/cashLedger.ts';
+import { agreementsFor } from '../../repos/cashJourney.ts';
 
 const BRAIN = 'BRAIN';
 const INVOICE_ACTION = 'QUOTE_AND_INVOICE';
@@ -439,6 +440,34 @@ export async function issueOne(invoice: CashInvoice, pass: InvoicingPass): Promi
         because: 'Paid another way before it was sent; voided rather than billed twice.',
       });
       if ((await getInvoice(invoice.id))?.state !== 'DRAFTED') return { voided, claimed: false, pending: false };
+      /*
+       * The agreement this draft bills must still be live. A release voids a
+       * DRAFTED row itself, but leaves one that was mid-send (UNCERTAIN) for a
+       * person; if that send turns out never to have reached the provider the
+       * row comes back to DRAFTED, and coverage alone would not stop it — on a
+       * piece with a second agreement the money still looks owed.
+       */
+      const live = (await agreementsFor(invoice.opportunityId)).filter((one) => one.state === 'AGREED');
+      let backed = false;
+      for (const agreement of live) {
+        if ((await moneyEntryByKey(projectId, agreementLedgerKey(agreement.id)))?.id === invoice.pipelineEntryId) {
+          backed = true;
+          break;
+        }
+      }
+      if (!backed) {
+        if (
+          await moveInvoice({
+            id: invoice.id,
+            from: 'DRAFTED',
+            to: 'VOID',
+            patch: { stateReason: 'Its agreement is no longer live, so it was voided rather than sent.' },
+          })
+        ) {
+          voided.push(invoice.id);
+        }
+        return { voided, claimed: false, pending: false };
+      }
       const opportunity = await getOpportunity(invoice.opportunityId);
       if (opportunity && (await dealPosition({ opportunity, currency: invoice.currency })).paymentState === 'PAYMENT_PENDING') {
         return { voided, claimed: false, pending: true };
