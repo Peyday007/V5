@@ -67,6 +67,8 @@ function mapGoal(row: RussellGoalRow): RussellGoal {
     purpose: row.purpose === 'RESEARCH_GOAL' ? 'RESEARCH_GOAL' : 'STANDING',
     researchAssignment: row.research_assignment ?? null,
     researchLayerId: row.research_layer_id ?? null,
+    researchConsideredAt: row.research_considered_at ?? null,
+    researchArchiveMarker: row.research_archive_marker ?? null,
     maxExternalSpend: row.max_external_spend,
     startsAt: row.starts_at,
     expiresAt: row.expires_at,
