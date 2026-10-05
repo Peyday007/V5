@@ -104,6 +104,24 @@ export async function attributeArrival(input: {
     );
   }
 
+  /*
+   * A Routine is registered for one worker, and an arrival authenticated as a
+   * different one did not come through this Routine's connector as it should
+   * be. Production, 2026-10-03: a reconnect consented as worker-04 on the Brain
+   * Research A account, and the first proven arrival through it created that
+   * account's connector *as worker-04* and bound the worker-05 Routine to it —
+   * enshrining the wrong consent as the connector's identity. A contradiction
+   * is reported and nothing is created or bound.
+   */
+  if (routine.workerId && routine.workerId !== token.workerId) {
+    return none(
+      'CONFLICT',
+      `routine ${routine.id} is registered for ${routine.workerId}, but this arrival authenticated as ` +
+        `${token.workerId}; the connector's consent was for the wrong worker and is not adopted`,
+      token.clientId,
+    );
+  }
+
   const resource = endpointOf(token.resource);
   const existing = await connectorClient(token.clientId);
   let connectorId: string;

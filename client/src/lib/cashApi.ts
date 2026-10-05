@@ -21,6 +21,8 @@ import type { CashRoadmap } from '../../../server/services/cash/roadmap.ts';
 import type { CashForecast } from '../../../server/services/cash/forecast.ts';
 import type { SharedCashView } from '../../../server/services/cash/shared.ts';
 import type { OfferDraft } from '../../../server/services/cash/offer.ts';
+import type { ExecutionRecord } from '../../../server/services/cash/record.ts';
+import type { EffectResult } from '../../../server/services/cash/perform.ts';
 import type { CommissionView } from '../../../server/services/cash/monetization/inFlight.ts';
 import type {
   MonetizationSurface,
@@ -35,6 +37,8 @@ export type {
   CashForecast,
   SharedCashView,
   OfferDraft,
+  ExecutionRecord,
+  EffectResult,
   MonetizationSurface,
   LedgerEntry,
   TopEntry,
@@ -361,6 +365,12 @@ export interface CashView {
      * fetched before it existed renders as no draft rather than throwing.
      */
     offers?: Record<string, OfferDraft>;
+    /**
+     * What has happened on each decided piece — actions, the ledger's four
+     * figures, Brain's own attempts, what Brain could perform. Optional for
+     * the same deploy reason as `offers`.
+     */
+    records?: Record<string, ExecutionRecord>;
   };
   whatBrainHasDone: CashEvent[];
   whatBrainNeeds: (CashNeed & { researchStatus: string | null })[];
@@ -857,6 +867,39 @@ export const CashApi = {
     body: Record<string, unknown> = {},
   ): Promise<{ opportunity: CashOpportunity; message: string }> =>
     api(`/api/cash/opportunities/${p(opportunityId)}/${p(action)}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Ask Brain to perform an action itself, through a registered integration.
+   *
+   * `expectedOccurrence` is the record's `nextOccurrence` as this page read
+   * it; the server compares it and builds the key itself, so a second press
+   * after the first was recorded is refused rather than done twice.
+   */
+  perform: (
+    opportunityId: string,
+    action: string,
+    expectedOccurrence: string,
+  ): Promise<{ result: EffectResult; message: string }> =>
+    api(`/api/cash/opportunities/${p(opportunityId)}/perform`, {
+      method: 'POST',
+      body: JSON.stringify({ action, expectedOccurrence }),
+    }),
+
+  /** Say what happened to one of Brain's attempts whose outcome is unknown. */
+  resolveEffect: (
+    opportunityId: string,
+    body: {
+      operationId: string;
+      happened: boolean;
+      receiptRef?: string;
+      amountCents?: number;
+      note: string;
+    },
+  ): Promise<{ result: EffectResult; message: string }> =>
+    api(`/api/cash/opportunities/${p(opportunityId)}/resolve-effect`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
