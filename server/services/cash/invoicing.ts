@@ -42,7 +42,7 @@ import { recordAction } from '../../repos/cashActions.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
-import { ISSUE_INVOICE_NAMESPACE, sendIssueInvoice, adapterStatus } from './effects.ts';
+import { ISSUE_INVOICE_NAMESPACE, sendIssueInvoice, adapterStatus, commercialOperationsFor } from './effects.ts';
 import { raiseNeed } from './needs.ts';
 import { recordMoneyEvent, voidUncoveredDrafts } from './opportunities.ts';
 import { usablePaymentReader } from './providers/payments.ts';
@@ -51,7 +51,7 @@ import { TAX_TREATMENTS, dueDateSeconds } from './providers/stripe.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import type { CashInvoice } from '../../domain/types.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { customerPaymentByReference, getMoneyEntry } from '../../repos/cashLedger.ts';
+import { customerPaymentByReference, getMoneyEntry, moneyEntryByKey } from '../../repos/cashLedger.ts';
 
 const BRAIN = 'BRAIN';
 const INVOICE_ACTION = 'QUOTE_AND_INVOICE';
@@ -563,12 +563,21 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
     if (invoice.state === 'PAID' && reading.status === 'paid' && reading.amountPaidCents > 0 && current.paymentEntryId) {
       const named = await getMoneyEntry(current.paymentEntryId);
       const providerRef = reading.chargeId ?? current.providerInvoiceId;
+      // Brain's charge is known by its provenance — the receipt of a
+      // SUCCEEDED take-payment for this piece — never by who pressed for it.
       const brainCharge =
         named !== null &&
-        named.recordedBy === BRAIN &&
         named.idempotencyKey !== `invoice-payment:${current.id}` &&
-        named.verifiedReference !== providerRef;
+        named.verifiedReference !== null &&
+        named.verifiedReference !== providerRef &&
+        (await commercialOperationsFor(projectId, current.opportunityId)).some(
+          (one) =>
+            one.action === 'ACCEPT_PAYMENT' &&
+            one.operation.state === 'SUCCEEDED' &&
+            one.operation.resultRef === named.verifiedReference,
+        );
       if (brainCharge) {
+        const firstReading = !(await moneyEntryByKey(projectId, `invoice-payment:${current.id}`));
         const second = await recordMoneyEvent({
           projectId,
           opportunityId: current.opportunityId,
@@ -583,7 +592,14 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
           paidInvoiceId: current.id,
           besideBrainCharge: true,
         });
-        await raiseNeed({
+        if (!second.ok) {
+          await holdWithReason(current, `The buyer paid this invoice as well as Brain's charge, and it could not be recorded: ${second.reason}`, pass);
+          await moveInvoice({ id: current.id, from: 'PAID', to: 'PAID', patch: { lastReadAt: readAt } });
+          continue;
+        }
+        // Asked once, when the second payment is first recorded: a need a
+        // person closed is not reopened by the next read of the same money.
+        if (firstReading) await raiseNeed({
           projectId,
           opportunityId: current.opportunityId,
           actorRef: BRAIN,
@@ -598,11 +614,6 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
           blocksState: null,
           requestKey: `invoice-paid-twice:${current.id}`,
         });
-        if (!second.ok) {
-          await holdWithReason(current, `The buyer paid this invoice as well as Brain's charge, and it could not be recorded: ${second.reason}`, pass);
-          await moveInvoice({ id: current.id, from: 'PAID', to: 'PAID', patch: { lastReadAt: readAt } });
-          continue;
-        }
       }
     }
 

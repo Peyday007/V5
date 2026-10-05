@@ -360,3 +360,20 @@ export async function unattributedPersonPayments(
   );
   return rows.map((one) => ({ id: one.id, amountCents: Number(one.amount_cents), reference: one.verified_reference }));
 }
+
+/**
+ * Payments the provider read on an invoice that another payment had already
+ * paid — the buyer paying twice (`invoicing.ts`). They are money against that
+ * invoice, owed back rather than credit for other agreements, so they never
+ * count as paid outside every invoice.
+ */
+export async function invoiceOverpaymentCents(opportunityId: string, currency: string): Promise<number> {
+  const row = await getDb().get<{ n: number | null }>(
+    `SELECT SUM(e.amount_cents) AS n FROM cash_money_entries e
+       JOIN cash_invoices i ON e.idempotency_key = 'invoice-payment:' || i.id
+      WHERE e.opportunity_id = ? AND e.kind = 'CUSTOMER_PAYMENT' AND e.currency = ?
+        AND i.payment_entry_id IS NOT NULL AND i.payment_entry_id <> e.id`,
+    [opportunityId, currency],
+  );
+  return Number(row?.n ?? 0);
+}

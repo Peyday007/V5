@@ -59,7 +59,7 @@ import { dealPosition } from '../server/services/cash/journey/position.ts';
 import { cashOutcomeLessons } from '../server/services/cash/journey/learning.ts';
 import { readObligations } from '../server/services/cash/journey/fulfillment.ts';
 import { agreementsFor, observationsFor, outcomesFor } from '../server/repos/cashJourney.ts';
-import { listInvoices } from '../server/repos/cashInvoices.ts';
+import { draftInvoice, listInvoices, moveInvoice } from '../server/repos/cashInvoices.ts';
 import { clearPaymentReader, registerPaymentReader } from '../server/services/cash/providers/payments.ts';
 import type { InvoiceReading } from '../server/services/cash/providers/stripe.ts';
 import { launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
@@ -706,6 +706,44 @@ describe('failure, refund and partial paths', () => {
     expect(asked.body.error ?? JSON.stringify(asked.body)).toMatch(/still unresolved/);
     expect(await listInvoices({ projectId, opportunityId: piece.id })).toHaveLength(0);
     expect(outside.QUOTE_AND_INVOICE ?? []).toHaveLength(0);
+  });
+
+  it('F05d: a buyer who pays an invoice Brain’s charge already covered has a second payment on the record, and the next agreement stays billable', async () => {
+    await granted();
+    provider('CONTACT_BUYER', 'msg');
+    provider('QUOTE_AND_INVOICE', 'inv');
+    provider('ACCEPT_PAYMENT', 'pay');
+    paymentReader();
+    const piece = await qualified();
+    await advanceWithinAuthority(projectId);
+    await agree(piece.id, 100_000);
+    const occ = (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id].nextOccurrence;
+    expect((await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: occ })).status).toBe(200);
+    const [charge] = await getDb().all<{ id: string; pipeline: string }>(
+      "SELECT e.id, (SELECT p.id FROM cash_money_entries p WHERE p.opportunity_id = e.opportunity_id AND p.kind = 'PIPELINE_AGREED') AS pipeline FROM cash_money_entries e WHERE e.opportunity_id = ? AND e.kind = 'CUSTOMER_PAYMENT'",
+      [piece.id],
+    );
+    // The race the open-invoice refusal narrows: an invoice issued for the
+    // same money while the charge was in flight, then paid by the charge.
+    const { invoice } = await draftInvoice({
+      projectId, opportunityId: piece.id, pipelineEntryId: charge!.pipeline, amountCents: 100_000, currency: 'USD',
+      customerName: 'Intake Buyer Ltd', customerEmail: 'accounts@intake-buyer.example', taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31', description: 'raced', requestedBy: 'test',
+    });
+    expect(await moveInvoice({ id: invoice.id, from: 'DRAFTED', to: 'ISSUED', patch: { provider: 'sandbox', providerInvoiceId: 'inv-race' } })).toBe(true);
+    expect(await moveInvoice({ id: invoice.id, from: 'ISSUED', to: 'PAID', patch: { paymentEntryId: charge!.id, paidAt: new Date().toISOString() } })).toBe(true);
+    // The buyer pays the invoice's page as well.
+    buyerPays('inv-race', 100_000);
+    fundsLand('inv-race', 100_000, 300);
+    await tick();
+    await tick();
+    expect(await moneyCount(piece.id)).toMatchObject({ CUSTOMER_PAYMENT: 2, SETTLEMENT: 1 });
+    const needs = await getDb().all<{ request_key: string }>("SELECT request_key FROM cash_needs WHERE project_id = ?", [projectId]);
+    expect(needs.filter((one) => one.request_key === `invoice-paid-twice:${invoice.id}`)).toHaveLength(1);
+    // The second payment is owed back, never credit against the next agreement.
+    await agree(piece.id, 50_000);
+    const deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
+    expect(deal.pnl.invoiceableCents).toBe(50_000);
   });
 
   it('F06: the invoice outcome is unknown — no resend across a restart, then the provider confirms it once', async () => {

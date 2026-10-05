@@ -680,44 +680,6 @@ describe('agreement and invoice', () => {
     expect(needs.map((one) => one.requestKey)).toContain(`void-if-issued:${draft.id}`);
   });
 
-  it('the buyer paying an invoice Brain already charged them for is a second payment on the record, not absorbed', async () => {
-    const id = await executing();
-    await agree(id, 100_000);
-    const invoice = await issuedInvoice(id, 'in_twice');
-    // Brain's own charge, marked as this invoice's payment.
-    const at = new Date().toISOString();
-    await getDb().run(
-      `INSERT INTO cash_money_entries (id, project_id, opportunity_id, kind, amount_cents, currency,
-         verified_reference, funds_available_at, occurred_at, note, recorded_by, created_at,
-         idempotency_key, payload_fingerprint, commitment_id)
-       VALUES ('cme_brain_charge', ?, ?, 'CUSTOMER_PAYMENT', 100000, 'USD', 'pay_brain', NULL, ?, NULL, 'BRAIN', ?, 'cash:brain-charge', NULL, NULL)`,
-      [projectId, id, at, at],
-    );
-    expect(await moveInvoice({ id: invoice.id, from: 'ISSUED', to: 'PAID', patch: { provider: 'sandbox', paymentEntryId: 'cme_brain_charge', paidAt: at } })).toBe(true);
-    registerPaymentReader({
-      name: 'sandbox.reader',
-      provider: 'sandbox',
-      health: () => ({ usable: true, reason: 'sandbox' }),
-      read: async () => ({
-        kind: 'READ', status: 'paid', hostedUrl: null, number: 'N-1', amountPaidCents: 100_000, currency: 'USD',
-        chargeId: 'ch_second', paidAt: new Date().toISOString(),
-        balance: { id: 'txn_second', status: 'available', currency: 'USD', amountCents: 100_000, feeCents: 300, availableOn: new Date().toISOString() },
-      }),
-    });
-    try {
-      await runInvoicing(projectId);
-      await runInvoicing(projectId, new Date(Date.now() + 3_600_000));
-      // Both payments are money that arrived; the second is not hidden.
-      expect(await ledgerCount(id, 'CUSTOMER_PAYMENT')).toBe(2);
-      expect((await position(id)).pnl.customerPaymentsCents).toBe(200_000);
-      const needs = await listNeeds({ projectId });
-      expect(needs.map((one) => one.requestKey)).toContain(`invoice-paid-twice:${invoice.id}`);
-      expect(await ledgerCount(id, 'SETTLEMENT')).toBe(1);
-    } finally {
-      clearPaymentReader();
-    }
-  });
-
   it('the provider reading the very payment a person attributed settles it once', async () => {
     const id = await executing();
     await agree(id, 100_000);

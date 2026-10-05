@@ -22,7 +22,7 @@
  * settled reads as `unsettledCents`, and a settlement is never a second sale —
  * contribution is read from payments, never from settlements.
  */
-import { moneyEntryByKey, totalsByKind, unattributedPersonPayments } from '../../../repos/cashLedger.ts';
+import { invoiceOverpaymentCents, moneyEntryByKey, totalsByKind, unattributedPersonPayments } from '../../../repos/cashLedger.ts';
 import { listInvoices } from '../../../repos/cashInvoices.ts';
 import { listCommitments } from '../../../repos/cashAuthority.ts';
 import { actionsFor } from '../../../repos/cashActions.ts';
@@ -248,7 +248,10 @@ export async function dealPosition(input: {
   // take-payment for that amount, a person who said which, or a person's later
   // attribution. A hand payment nobody tied stays here, and a provider read
   // beside one is held rather than counted twice.
-  const paidOutsideInvoices = Math.max(0, payments - paidAgainstInvoices);
+  // A buyer paying an invoice a second time is that invoice's money too —
+  // owed back, never credit that makes another agreement unbillable.
+  const overpaidInvoices = await invoiceOverpaymentCents(opportunity.id, currency);
+  const paidOutsideInvoices = Math.max(0, payments - paidAgainstInvoices - overpaidInvoices);
   const invoiceable = Math.max(0, agreedRevenue - invoiced - pendingInvoice - paidOutsideInvoices);
   const uncoveredPending = Math.max(
     0,
