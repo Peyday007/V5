@@ -255,14 +255,18 @@ async function settleIssue(
   firstSend = invoice.state !== 'UNCERTAIN',
 ): Promise<void> {
   // The row as it is now, not as this send found it: a concurrent pass may
-  // have moved it, and a move guarded on a stale state matches nothing.
+  // have moved it, and a move guarded on a stale state matches nothing. An
+  // outcome only ever moves a row *forward* from a state that was waiting on
+  // it (DRAFTED or UNCERTAIN); a row a newer answer already moved on — issued,
+  // paid, settled, failed — keeps that answer, and VOID has its own branch.
   invoice = (await getInvoice(invoice.id)) ?? invoice;
+  const waiting = invoice.state === 'DRAFTED' || invoice.state === 'UNCERTAIN';
   if (outcome.status === 'UNCERTAIN') {
     let moved =
       invoice.state === 'UNCERTAIN' ||
-      (invoice.state !== 'VOID' && await moveInvoice({
+      (invoice.state === 'DRAFTED' && await moveInvoice({
         id: invoice.id,
-        from: invoice.state,
+        from: 'DRAFTED',
         to: 'UNCERTAIN',
         patch: { stateReason: outcome.reason, provider: adapterStatus(ISSUE_INVOICE_NAMESPACE).adapter },
       }));
@@ -317,6 +321,7 @@ async function settleIssue(
   }
   if (outcome.status === 'FAILED') {
     const category = outcome.operation.failureCategory ?? 'PROVIDER_REJECTED';
+    if (!waiting) return;
     await moveInvoice({
       id: invoice.id,
       from: invoice.state,
@@ -346,7 +351,10 @@ async function settleIssue(
     stateReason: null as string | null,
   };
   // A row voided under the send is handled below, with its need; never moved straight to ISSUED.
-  let moved = invoice.state !== 'VOID' && (await moveInvoice({ id: invoice.id, from: invoice.state, to: 'ISSUED', patch }));
+  // Already issued, paid or settled by a newer answer: nothing to move, and
+  // a stale confirmation must not blank what the payment pass has read since.
+  if (invoice.state === 'ISSUED' || invoice.state === 'PAID' || invoice.state === 'SETTLED') return;
+  let moved = waiting && (await moveInvoice({ id: invoice.id, from: invoice.state, to: 'ISSUED', patch }));
   if (!moved) {
     /*
      * Released while the send was in flight: the agreement's release voided a

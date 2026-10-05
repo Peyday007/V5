@@ -1054,6 +1054,34 @@ describe('agreement and invoice', () => {
     expect((await listInvoices({ projectId, opportunityId: deal.id }))[0]!.state).toBe('VOID');
   });
 
+  it('a stale inconclusive answer never moves an invoice a newer answer already issued back to UNCERTAIN', async () => {
+    const id = await executing();
+    await agree(id, 40_000);
+    let invoiceId = '';
+    let asked = 0;
+    registerAdapter({
+      name: 'test.invoice',
+      effectClass: 'EXTERNAL_RECONCILABLE',
+      namespace: ISSUE_INVOICE_NAMESPACE.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (): Promise<SendOutcome> => ({ kind: 'UNCERTAIN', reason: 'timed out' }),
+      reconcile: async () => {
+        asked += 1;
+        // Another pass's ask found it and issued the row while this one waited.
+        await moveInvoice({ id: invoiceId, from: 'UNCERTAIN', to: 'ISSUED', patch: { providerInvoiceId: 'in_found' } });
+        return { kind: 'INCONCLUSIVE', reason: 'search index lag' };
+      },
+    });
+    const drafted = await draftFor(id);
+    if (!drafted.ok) throw new Error('not drafted');
+    invoiceId = drafted.value.id;
+    await runInvoicing(projectId);
+    expect(asked).toBeGreaterThan(0);
+    const [invoice] = await listInvoices({ projectId, opportunityId: id });
+    expect(invoice).toMatchObject({ state: 'ISSUED', providerInvoiceId: 'in_found' });
+  });
+
   it('an agreement answers only the latest contact before it, and never a contact the buyer already ignored', () => {
     const at = (iso: string) => ({ createdAt: iso });
     const first = at('2026-10-01T00:00:00.000Z');
