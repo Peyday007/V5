@@ -45,6 +45,20 @@ export const FACTORY_EVENT_KINDS = {
    */
   workerStateChanged: 'WORKER_STATE_CHANGED',
   unitPlanned: 'UNIT_PLANNED',
+  /**
+   * The factory changed a proposed plan so every unit could finish: a file moved
+   * to the unit that needs it, or two inseparable units merged. One row per
+   * change, written when the plan is installed, with the reason from
+   * `ownership.ts`'s closed vocabulary — a plan nobody can see was rewritten is
+   * a plan nobody can argue with.
+   */
+  planRewritten: 'PLAN_REWRITTEN',
+  /**
+   * A finding whose repair would have been impossible, so none was created: the
+   * file it must change could not be established, or is not one the factory may
+   * write. Written once per finding; the campaign blocks with the same reason.
+   */
+  repairOwnershipBlocked: 'REPAIR_OWNERSHIP_BLOCKED',
   unitReady: 'UNIT_READY',
   unitClaimed: 'UNIT_CLAIMED',
   unitTakeover: 'UNIT_TAKEOVER',

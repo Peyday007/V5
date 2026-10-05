@@ -75,6 +75,7 @@ import {
 import { reviewCampaign } from './review.ts';
 import {
   gatingFindings,
+  ownershipBlockedDetail,
   queueRepairs,
   queueVerificationRepair,
   reconcileRepairs,
@@ -1140,6 +1141,17 @@ async function actOnVerdict(
     });
   }
 
+  const unresolved = repairs.ownershipBlocked.filter((need) =>
+    gating.some((finding) => finding.id === need.findingId),
+  );
+  if (repairs.queued.length === 0 && unresolved.length > 0) {
+    // A repair whose root cause could not be established would be a bin that can
+    // only weaken a test or BLOCK. None is created; the same re-ask answers it.
+    return await block(report, campaign, 'REPAIR_OWNERSHIP_UNRESOLVED', {
+      detail: ownershipBlockedDetail(unresolved),
+    });
+  }
+
   if (repairs.queued.length === 0 && gating.length > 0) {
     // Every gating finding already has a repair, and they are not landing.
     const exhausted = await reconcileRepairs(campaign.id);
@@ -1373,7 +1385,8 @@ async function unblockStage(
       }
       return await advance(report, campaign, 'EXECUTING', 'a unit became movable again');
     }
-    case 'SCOPE_AMENDMENT_REQUIRED': {
+    case 'SCOPE_AMENDMENT_REQUIRED':
+    case 'REPAIR_OWNERSHIP_UNRESOLVED': {
       // Answered by an amendment, re-read here: `queueRepairs` looks only at
       // findings with no repair yet, so this queues exactly what was waiting.
       const repairs = await queueRepairs(campaign, changeRequest);
@@ -1382,7 +1395,14 @@ async function unblockStage(
         gating.some((finding) => finding.id === need.findingId),
       );
       if (stranded.length > 0) {
-        report.blocker = { kind: campaign.blockerKind, detail: amendmentNeededDetail(stranded, changeRequest.id) };
+        report.blocker = { kind: 'SCOPE_AMENDMENT_REQUIRED', detail: amendmentNeededDetail(stranded, changeRequest.id) };
+        return report;
+      }
+      const unresolved = repairs.ownershipBlocked.filter((need) =>
+        gating.some((finding) => finding.id === need.findingId),
+      );
+      if (unresolved.length > 0) {
+        report.blocker = { kind: 'REPAIR_OWNERSHIP_UNRESOLVED', detail: ownershipBlockedDetail(unresolved) };
         return report;
       }
       report.repairsQueued = repairs.queued.length;

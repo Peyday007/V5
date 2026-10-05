@@ -57,7 +57,13 @@ import {
 import { listDispatchesForBin } from '../../repos/bins.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { installPlan, validatePlan } from './planner.ts';
-import { amendmentNeededDetail, gatingFindings, queueRepairs, reconcileRepairs } from './repair.ts';
+import {
+  amendmentNeededDetail,
+  gatingFindings,
+  ownershipBlockedDetail,
+  queueRepairs,
+  reconcileRepairs,
+} from './repair.ts';
 import { listCampaignsPendingOutcome, recordCampaignOutcome } from './writeback.ts';
 import {
   acceptIntegration,
@@ -180,7 +186,7 @@ async function ingestPlanBin(
     );
     return false;
   }
-  const installed = await installPlan(campaign.id, validation.units);
+  const installed = await installPlan(campaign.id, validation.units, { rewrites: validation.rewrites });
   for (const unit of validation.units) {
     await recordFactoryEvent({
       campaignId: campaign.id,
@@ -1836,6 +1842,23 @@ async function runRemoteTick(
         report.notes.push(`${stranded.length} finding(s) need a scope amendment before a repair exists`);
         report.state = 'BLOCKED';
         report.stage = 'a repair needs a file outside the approved scope';
+        return report;
+      }
+      const unresolved = repairs.ownershipBlocked.filter((need) =>
+        gating.some((finding) => finding.id === need.findingId),
+      );
+      if (unresolved.length > 0 && !repairing) {
+        // No bin for a repair that could not reach its root cause: the same
+        // per-pass re-ask answers a person's amendment naming the file.
+        await patchCampaign(fresh.id, {
+          state: 'BLOCKED',
+          blockerKind: 'REPAIR_OWNERSHIP_UNRESOLVED',
+          blockerDetail: ownershipBlockedDetail(unresolved),
+          stageDetail: 'a repair could not be given the file its defect must be fixed in',
+        });
+        report.notes.push(`${unresolved.length} finding(s) have no establishable root-cause file`);
+        report.state = 'BLOCKED';
+        report.stage = 'a repair could not be given the file its defect must be fixed in';
         return report;
       }
       report.notes.push(`${gating.length} gating finding(s) still open`);

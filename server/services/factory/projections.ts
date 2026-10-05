@@ -64,6 +64,10 @@ const BLOCKER_REMEDIES: Record<FactoryBlockerKind, string> = {
   SCOPE_AMENDMENT_REQUIRED:
     'A repair needs files outside the approved mutation scope. Amend the scope to add exactly ' +
     'the files named, or retire the finding; nothing is repaired outside what a person approved.',
+  REPAIR_OWNERSHIP_UNRESOLVED:
+    'A finding was seen in a file whose root cause the factory could not establish. Amend the ' +
+    'scope to name the exact file it must be fixed in, or retire the finding; no repair is created ' +
+    'that could only weaken a test.',
 };
 
 /** A unit somebody is actually working on right now, as opposed to waiting or done. */
