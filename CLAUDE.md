@@ -12033,6 +12033,24 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   members of a shared worker apart. The invitation issued by hand for Airyn
   that morning (`inv_be3ec49…`) is a legacy recovery for a pre-fix connector,
   not the design.
+- **A reconnect chooses a connector, and keeps its worker.** Production,
+  2026-10-03 04:52–04:59Z: the owner reconnected the Brain Research A research
+  connector; Claude registered a fresh client; the consent screen was
+  `ADMIN_CHOOSER` — every live worker, nothing tying the client to the
+  connector it replaced — and both approvals posted `calebworker1` (worker-04).
+  When the connectors table arrived that afternoon, the first proven arrival
+  through that client *created* the account's connector as worker-04 and bound
+  the worker-05 Routine to it, so the wrong consent became the connector's
+  identity and Cash Mode 1 research could not run. Two guards
+  (`services/fleet/connectorContinuity.ts`): an administrator approving an
+  unattributed client where connectors exist at that endpoint chooses a
+  *connector*, whose worker is the one its Routines are registered for — the
+  new client attaches to it, a posted worker that disagrees is refused, and
+  nothing is preselected; connecting a worker as a new connector is a separate,
+  labelled choice. And `attributeArrival` refuses to adopt an arrival whose
+  worker contradicts the fired Routine's registered worker. A connector already
+  enshrined as the wrong worker is restored to its Routines' worker by that same
+  explicit reconnect, never by a token silently changing identity.
 - **The one human action is prepared, not composed.** `admin connectors
   reconnect` issues one member-bound invitation naming the worker and the
   connector, prints no link (§17), and the person signs in, reconnects in Claude
