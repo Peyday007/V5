@@ -61,7 +61,11 @@ describe('the two files this unit wires', () => {
     // A forbidden path is refused on the files that moved, on both planes.
     expect(read('server', 'services', 'factory', 'integrate.ts')).toMatch(/forbiddenIn\(/);
     expect(read('server', 'services', 'factory', 'remote.ts').match(/forbiddenIn\(/g)).toHaveLength(2);
-    expect(read('server', 'services', 'factory', 'planner.ts')).toMatch(/ownershipReachesForbidden\(/);
+    // And on ownership, by the one validator the planner and repair creation both call.
+    expect(read('server', 'services', 'factory', 'ownership.ts')).toMatch(/ownershipReachesForbidden\(/);
+    expect(read('server', 'services', 'factory', 'planner.ts')).toMatch(/rewritePlanGraph\(/);
+    expect(read('server', 'services', 'factory', 'planner.ts')).toMatch(/validateUnitGraph\(/);
+    expect(read('server', 'services', 'factory', 'repair.ts')).toMatch(/validateUnitGraph\(/);
   });
 
   it('routes/factory.ts imports projections.ts, throughput.ts and pullRequest.ts', () => {

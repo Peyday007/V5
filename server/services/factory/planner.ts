@@ -23,6 +23,15 @@
  *   * **Ownership overlap is reported.** Two units that can write the same file
  *     will be serialised by the claim loop; that is safe but wasteful, so the
  *     plan says so and the architect can split differently.
+ *   * **Every unit can finish.** A unit whose completion needs a file a unit
+ *     *waiting for it* owns is a deadlock that looks like a busy campaign. The
+ *     graph questions — scope, forbidden paths, unknown edges, cycles, overlap,
+ *     and that one — are asked by `ownership.ts`, the single validator repair
+ *     creation and every replan also go through, and a fixable deadlock is
+ *     rewritten (the file moved, or the units merged) before anything is
+ *     installed. The rewrite is returned beside the plan and recorded as an
+ *     event when the plan is installed, so a reader can see what the factory
+ *     changed and why.
  */
 import type {
   FactoryChangeRequest,
@@ -34,15 +43,22 @@ import {
   addDependency,
   ensureUnit,
   findDependencyCycle,
+  getCampaign,
+  getChangeRequest,
   getUnitByKey,
-  pathsOverlap,
   promoteReadyUnits,
   refreshDownstreamCounts,
 } from '../../repos/factory.ts';
-import { recordFactoryEvent } from '../../repos/factoryFleet.ts';
+import { listFactoryEvents, recordFactoryEvent } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
-import { narrowsOrEqual } from './contract.ts';
-import { forbiddenPathsFor, ownershipReachesForbidden } from './forbidden.ts';
+import { forbiddenPathsFor } from './forbidden.ts';
+import { FactoryError } from './errors.ts';
+import {
+  rewritePlanGraph,
+  validateUnitGraph,
+  type OwnershipIssue,
+  type PlanRewrite,
+} from './ownership.ts';
 
 /** The only shape a proposed unit may have. An unknown field refuses the plan. */
 export interface UnitSpec {
@@ -95,6 +111,10 @@ export interface PlanValidation {
   warnings: string[];
   /** Conditions no unit claims to serve. Not fatal here; fatal at the packet check. */
   uncoveredConditions: string[];
+  /** The graph verdict, typed, after any rewrite. `errors` carries the same in words. */
+  issues: OwnershipIssue[];
+  /** What the factory changed about the proposed graph to make it completable, in order. */
+  rewrites: PlanRewrite[];
 }
 
 export const MAX_PLAN_UNITS = 24;
@@ -127,14 +147,14 @@ export function validatePlan(
   const forbiddenHere = forbiddenPathsFor(changeRequest.repository);
 
   if (typeof proposed !== 'object' || proposed === null || Array.isArray(proposed)) {
-    return { ok: false, units: [], errors: ['The plan is not an object.'], warnings, uncoveredConditions: [] };
+    return { ok: false, units: [], errors: ['The plan is not an object.'], warnings, uncoveredConditions: [], issues: [], rewrites: [] };
   }
   const raw = (proposed as { units?: unknown }).units;
   if (!Array.isArray(raw)) {
-    return { ok: false, units: [], errors: ['The plan has no `units` array.'], warnings, uncoveredConditions: [] };
+    return { ok: false, units: [], errors: ['The plan has no `units` array.'], warnings, uncoveredConditions: [], issues: [], rewrites: [] };
   }
   if (raw.length === 0) {
-    return { ok: false, units: [], errors: ['The plan has no units.'], warnings, uncoveredConditions: [] };
+    return { ok: false, units: [], errors: ['The plan has no units.'], warnings, uncoveredConditions: [], issues: [], rewrites: [] };
   }
   if (raw.length > maxUnits) {
     errors.push(`The plan has ${raw.length} units; the ceiling is ${maxUnits}.`);
@@ -187,38 +207,8 @@ export function validatePlan(
     if (ownedPaths.length === 0) {
       errors.push(`${key}: owns no paths, so the integrator cannot hold its diff to anything.`);
     }
-    for (const path of ownedPaths) {
-      if (path.startsWith('/') || path.includes('..')) {
-        errors.push(`${key}: \`${path}\` climbs or is absolute.`);
-      }
-    }
-    if (ownedPaths.length > 0 && !narrowsOrEqual(ownedPaths, changeRequest.mutationScope)) {
-      errors.push(
-        `${key}: owns paths outside the approved mutation scope. A plan cannot widen the ` +
-          'authority of the change request it implements.',
-      );
-    }
-    /*
-     * And the paths the repository's own grant puts out of reach.
-     *
-     * A mutation scope says what this contract narrowed itself to; this says what
-     * the repository never allows whatever a contract says — a deployment
-     * workflow, the git directory itself. The two are different authorities and
-     * are kept apart: one a person wrote on a submission, the other lives in the
-     * envelope in code, so a contract cannot widen it by asking.
-     */
-    for (const path of ownedPaths) {
-      // Asked of the glob, not of a path: `**` owns `.github/workflows/deploy.yml`
-      // exactly as much as naming it does. See `forbidden.ts`.
-      const forbidden = ownershipReachesForbidden(path, forbiddenHere);
-      if (forbidden) {
-        errors.push(
-          `${key}: \`${path}\` reaches into \`${forbidden}\`, which this repository's grant puts ` +
-            'out of the factory\'s reach whatever a contract says. Name narrower paths that ' +
-            'stay clear of it.',
-        );
-      }
-    }
+    // Climbing, the approved scope and the forbidden list are graph questions,
+    // asked once for every unit by `validateUnitGraph` below.
 
     const verification = asStringArray(record['verification']);
     for (const command of verification) {
@@ -231,7 +221,6 @@ export function validatePlan(
     }
 
     const dependsOn = asStringArray(record['dependsOn']);
-    if (dependsOn.includes(key)) errors.push(`${key}: depends on itself.`);
 
     const risk = String(record['risk'] ?? 'MEDIUM') as FactoryRiskClass;
     const modelClass = String(record['modelClass'] ?? 'FAST') as FactoryModelClass;
@@ -254,76 +243,51 @@ export function validatePlan(
     });
   });
 
-  for (const unit of units) {
-    for (const dependency of unit.dependsOn) {
-      if (!keys.has(dependency)) {
-        errors.push(`${unit.key}: depends on \`${dependency}\`, which the plan does not define.`);
-      }
-    }
+  /*
+   * The graph, asked of the one validator and rewritten where a deadlock can be
+   * removed without inventing the plan. Run even when a unit already failed its
+   * own checks, so the architect hears every error in one round trip.
+   */
+  const ctx = { mutationScope: changeRequest.mutationScope, forbiddenPaths: forbiddenHere };
+  const rewritten = rewritePlanGraph(units, ctx);
+  const rewriting = errors.length === 0;
+  const finalUnits = rewriting ? rewritten.units : units;
+  const verdict = rewriting ? rewritten.verdict : validateUnitGraph(units, ctx);
+  const rewrites = rewriting ? rewritten.rewrites : [];
+  for (const issue of verdict.issues) {
+    // Not rewriting because of another error: a deadlock the factory would fix by
+    // itself is not something to send the architect back for.
+    if (!rewriting && issue.reason === 'MUTATION_OWNED_BY_DEPENDENT') continue;
+    if (issue.fatal) errors.push(issue.detail);
+    else warnings.push(issue.detail);
   }
-
-  const cycle = detectCycle(units);
-  if (cycle) {
-    errors.push(`The plan has a dependency cycle: ${cycle.join(' -> ')}.`);
+  if (rewriting && rewritten.unresolved) {
+    errors.push(
+      'The factory could not rewrite this plan so that every unit can finish without one owning ' +
+        'what another needs; restructure the units so no unit owns a file a unit it waits for must change.',
+    );
   }
+  for (const rewrite of rewrites) warnings.push(`Rewritten: ${rewrite.detail}`);
 
-  // Overlap is not fatal. The claim loop serialises overlapping units correctly;
-  // what it costs is the parallelism the plan thought it had, so it is reported
-  // rather than refused.
-  for (let i = 0; i < units.length; i += 1) {
-    for (let j = i + 1; j < units.length; j += 1) {
-      const a = units[i];
-      const b = units[j];
-      if (!a || !b) continue;
-      if (a.dependsOn.includes(b.key) || b.dependsOn.includes(a.key)) continue;
-      if (pathsOverlap(a.ownedPaths, b.ownedPaths)) {
-        warnings.push(
-          `${a.key} and ${b.key} own overlapping paths and do not depend on each other; they ` +
-            'will be serialised rather than run in parallel.',
-        );
-      }
-    }
-  }
-
-  const served = new Set(units.flatMap((unit) => unit.serves));
+  const served = new Set(finalUnits.flatMap((unit) => unit.serves));
   const uncoveredConditions = changeRequest.acceptanceConditions
     .filter((condition) => condition.mandatory && !served.has(condition.id))
     .map((condition) => condition.id);
 
-  return { ok: errors.length === 0, units, errors, warnings, uncoveredConditions };
+  return {
+    ok: errors.length === 0,
+    units: finalUnits,
+    errors,
+    warnings,
+    uncoveredConditions,
+    issues: verdict.issues,
+    rewrites,
+  };
 }
 
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === 'string').map((item) => item.trim());
-}
-
-function detectCycle(units: UnitSpec[]): string[] | null {
-  const edges = new Map(units.map((unit) => [unit.key, unit.dependsOn]));
-  const state = new Map<string, 'VISITING' | 'DONE'>();
-  const stack: string[] = [];
-
-  const visit = (key: string): string[] | null => {
-    const mark = state.get(key);
-    if (mark === 'DONE') return null;
-    if (mark === 'VISITING') return [...stack.slice(stack.indexOf(key)), key];
-    state.set(key, 'VISITING');
-    stack.push(key);
-    for (const next of edges.get(key) ?? []) {
-      if (!edges.has(next)) continue;
-      const cycle = visit(next);
-      if (cycle) return cycle;
-    }
-    stack.pop();
-    state.set(key, 'DONE');
-    return null;
-  };
-
-  for (const unit of units) {
-    const cycle = visit(unit.key);
-    if (cycle) return cycle;
-  }
-  return null;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -348,10 +312,34 @@ export interface InstallResult {
 export async function installPlan(
   campaignId: string,
   units: UnitSpec[],
-  options: { priorityBase?: number } = {},
+  options: { priorityBase?: number; rewrites?: PlanRewrite[] } = {},
 ): Promise<InstallResult> {
   let created = 0;
   let existing = 0;
+
+  /*
+   * The same validator again, over exactly what is about to become rows. Every
+   * caller ran `validatePlan` first; this is what makes a caller that did not —
+   * or a retry carrying the proposal rather than the validation — unable to
+   * install a graph a worker could never finish. Refused whole, before a row.
+   */
+  const campaign = await getCampaign(campaignId);
+  const changeRequest = campaign ? await getChangeRequest(campaign.changeRequestId) : null;
+  if (changeRequest) {
+    // The same derivation `validatePlan` uses, so the two cannot disagree.
+    const verdict = validateUnitGraph(units, {
+      mutationScope: changeRequest.mutationScope,
+      forbiddenPaths: forbiddenPathsFor(changeRequest.repository),
+    });
+    const fatal = verdict.issues.filter((issue) => issue.fatal);
+    if (fatal.length > 0) {
+      throw new FactoryError(
+        `The plan cannot be installed: ${fatal.map((issue) => `${issue.reason} — ${issue.detail}`).join(' ')}`,
+        { issues: fatal },
+      );
+    }
+  }
+
 
   for (const spec of units) {
     const { unit, created: isNew } = await ensureUnit({
@@ -401,6 +389,40 @@ export async function installPlan(
       const dependency = await getUnitByKey(campaignId, dependencyKey);
       if (!dependency) continue;
       await addDependency(campaignId, unit.id, dependency.id, `${spec.key} needs ${dependencyKey}`);
+    }
+  }
+
+  /*
+   * What the factory changed about the proposal, recorded once per change and
+   * idempotent by the ledger itself rather than by whether units existed — a
+   * crash between the units and these rows is finished by the next call.
+   */
+  const recorded = new Set(
+    (options.rewrites ?? []).length === 0
+      ? []
+      : (await listFactoryEvents(campaignId, { kinds: [FACTORY_EVENT_KINDS.planRewritten] })).map(
+          (event) =>
+            `${String(event.detail['action'])}:${String(event.detail['from'])}:${String(event.detail['to'])}:` +
+            `${[...((event.detail['paths'] as string[] | undefined) ?? [])].sort().join(',')}`,
+        ),
+  );
+  {
+    for (const rewrite of (options.rewrites ?? []).filter(
+      (r) => !recorded.has(`${r.action}:${r.from}:${r.to}:${[...r.paths].sort().join(',')}`),
+    )) {
+      await recordFactoryEvent({
+        campaignId,
+        kind: FACTORY_EVENT_KINDS.planRewritten,
+        evidenceClass: 'DERIVED',
+        detail: {
+          action: rewrite.action,
+          reason: rewrite.reason,
+          from: rewrite.from,
+          to: rewrite.to,
+          paths: rewrite.paths,
+          detail: rewrite.detail,
+        },
+      });
     }
   }
 

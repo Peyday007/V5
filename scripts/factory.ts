@@ -415,7 +415,7 @@ async function main(): Promise<void> {
           `warning: no unit claims to serve ${validation.uncoveredConditions.join(', ')}\n`,
         );
       }
-      const installed = await installPlan(campaignId, validation.units);
+      const installed = await installPlan(campaignId, validation.units, { rewrites: validation.rewrites });
       process.stdout.write(
         `installed ${installed.created} new unit(s), ${installed.existing} already present, ` +
           `${installed.promoted} ready${installed.cycle ? `, CYCLE: ${installed.cycle.join(' -> ')}` : ''}\n`,
