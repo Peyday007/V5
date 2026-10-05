@@ -140,12 +140,22 @@ export async function recordOutcomes(opportunity: CashOpportunity, currency: str
    */
   if (ended) {
     const p = position.pnl;
-    const suffix = opportunity.state;
+    /*
+     * The end is the first terminal state the deal reached. COLLECTED and
+     * DECLINED may each be archived later; read as a second end, a collected
+     * deal archived afterwards would be learned as a failure, and a declined
+     * one archived afterwards counted as failing twice.
+     */
+    const earlier = (await outcomesFor({ projectId: opportunity.projectId, opportunityId: opportunity.id }))
+      .filter((one) => one.kind === 'REALIZED_CONTRIBUTION')
+      .map((one) => one.requestKey.split(':').at(-1)!)
+      .find((key) => TERMINAL.has(key));
+    const suffix = earlier ?? opportunity.state;
     const cost = p.incrementalCostsCents + p.unpaidCommitmentsCents;
     await write('ACTUAL_COST', suffix, { cents: cost }, 'ledger: COST + outstanding UNPAID_COMMITMENT');
     if (p.refundsCents > 0) await write('REFUNDED', suffix, { cents: p.refundsCents }, 'ledger: REFUND');
     await write('REALIZED_CONTRIBUTION', suffix, { cents: p.contributionCents }, 'money.ts contributionFrom: payments − refunds − costs − owed');
-    if (opportunity.state !== 'COLLECTED') {
+    if (suffix !== 'COLLECTED') {
       await write(
         'FAILURE_REASON',
         `ended-${suffix}`,
@@ -225,7 +235,14 @@ export async function cashOutcomeLessons(projectId: string): Promise<CashLesson[
       .filter((one) => (offered.get(one.opportunityId) ?? 0) > 0)
       .map((one) => Math.round(((one.valueCents ?? 0) * 10_000) / offered.get(one.opportunityId)!));
     const failures = new Map<string, number>();
+    // A deal ends once: rows written before that rule (an end per terminal
+    // state) count one ending per deal, the first.
+    const endedSeen = new Set<string>();
     for (const one of of('FAILURE_REASON')) {
+      if (one.requestKey.includes(':FAILURE_REASON:ended-')) {
+        if (endedSeen.has(one.opportunityId)) continue;
+        endedSeen.add(one.opportunityId);
+      }
       const reason = one.valueText ?? 'unstated';
       failures.set(reason, (failures.get(reason) ?? 0) + 1);
     }

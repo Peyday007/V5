@@ -680,7 +680,7 @@ describe('the deployable artifact', () => {
         amountCents: 60_000,
         currency: 'USD',
         verifiedReference: 'smoke-pay-0001',
-        idempotencyKey: 'payment:smoke-pay-0001',
+        idempotencyKey: 'manual-payment:smoke-pay-0001',
       },
     });
     expect(paid.status).toBe(200);

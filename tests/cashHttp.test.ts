@@ -1062,6 +1062,14 @@ describe('one account’s whole journey', () => {
       expect(step.status, JSON.stringify(step.body)).toBe(200);
     }
 
+    // A key in a namespace Brain writes from its own rows is refused, so a
+    // caller cannot occupy the entry Brain will write later.
+    const squatted = await call('POST', `${CASH()}/money`, {
+      cookie: memberCookie,
+      body: { opportunityId, kind: 'COST', amountCents: 1, idempotencyKey: 'refund:anything' },
+    });
+    expect(squatted.status).toBe(422);
+
     // An agreement is resolved against this piece, so an id from nowhere
     // reaches no obligation.
     const foreign = await op('obligation-event', {

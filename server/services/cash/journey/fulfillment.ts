@@ -1024,9 +1024,19 @@ async function settleRefund(input: { fulfillment: CashFulfillment; agreement: Ca
   }
   const mode = await getCashMode(fulfillment.projectId);
   if (!mode) return;
+  // The payments as they stood when the refund was authorized, not as they
+  // stand now: the payload is part of the effect's identity (invariant 27), so
+  // a payment landing between a retryable refusal and the next pass must not
+  // turn the same refund into a conflicting one.
   const paymentReferences = (await listMoneyEntries({ projectId: fulfillment.projectId, opportunityId: opportunity.id }))
-    .filter((one) => one.kind === 'CUSTOMER_PAYMENT' && one.verifiedReference)
-    .map((one) => one.verifiedReference!);
+    .filter((one) => one.kind === 'CUSTOMER_PAYMENT' && one.verifiedReference && one.createdAt <= refund.authorizedAt)
+    .map((one) => one.verifiedReference!)
+    .sort();
+  // A person may have answered this refund since it was read above; asked
+  // again immediately before the send, so a refund confirmed by hand is not
+  // also sent.
+  const still = readRefunds(await fulfillmentEvents(fulfillment.id)).find((one) => one.refundKey === refund.refundKey);
+  if (!still || still.state !== 'PENDING') return;
   let outcome;
   try {
     outcome = await sendRefund({
@@ -1042,7 +1052,13 @@ async function settleRefund(input: { fulfillment: CashFulfillment; agreement: Ca
   } catch (error) {
     // Another attempt holds the reservation right now. It will record what
     // happened; this one must not guess.
-    if (error instanceof OperationInProgress || error instanceof OperationConflict) return;
+    if (error instanceof OperationInProgress) return;
+    if (error instanceof OperationConflict) {
+      // Never silent: a refund whose effect identity no longer matches would
+      // otherwise sit PENDING for ever with nothing saying why.
+      await recordRefundUnknown(input, refund.refundKey, 'The refund could not be sent under its original identity.');
+      return;
+    }
     throw error;
   }
   if (outcome.status === 'CONFIRMED' || outcome.status === 'RECONCILED' || outcome.status === 'REPLAYED') {
@@ -1197,6 +1213,18 @@ export async function answerRefund(input: {
   const operation = await refundOperation(agreement, fulfillment, refund.refundKey);
   if (operation && operation.state === 'RESERVED') {
     return refuse('Brain’s send of this refund is still waiting on the provider. Its answer comes first; ask again once it has.');
+  }
+  if (!operation && refundAdapter()) {
+    // Brain sends this one itself. An answer before its send would race it,
+    // and the send would pay the buyer a second time.
+    return refuse('Brain sends this refund through the provider itself. Ask again once its send has an outcome.');
+  }
+  // The provider's own terminal answer is not contradicted by a person.
+  if (operation && operation.state === 'SUCCEEDED' && input.answer === 'not-sent') {
+    return refuse('The provider confirmed this refund was sent. A refund the provider says happened is not recorded as not sent.');
+  }
+  if (operation && operation.state === 'FAILED' && input.answer === 'confirm') {
+    return refuse('The provider refused this refund, so nothing left the account. It is not recorded as paid back.');
   }
   if (operation && operation.state === 'UNCERTAIN') {
     await resolveUncertain(

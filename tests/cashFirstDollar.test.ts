@@ -697,7 +697,7 @@ describe('failure, refund and partial paths', () => {
     expect((await requestInvoice(piece.id)).status).toBe(200);
     await tick();
     // The buyer pays part by bank transfer, recorded with its reference.
-    expect((await money({ opportunityId: piece.id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, verifiedReference: 'bank-40', idempotencyKey: `payment:${piece.id}:bank-40` })).status).toBe(200);
+    expect((await money({ opportunityId: piece.id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, verifiedReference: 'bank-40', idempotencyKey: `manual-payment:${piece.id}:bank-40` })).status).toBe(200);
     let deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
     expect(deal.paymentState).toBe('PARTIALLY_PAID');
     expect(deal.pnl.owedByBuyerCents).toBe(60_000);
@@ -716,7 +716,7 @@ describe('failure, refund and partial paths', () => {
 
     // A refund of part of it goes through the obligation it pays back — never
     // the bare money route — and is never more than was paid.
-    expect((await money({ opportunityId: piece.id, kind: 'REFUND', amountCents: 10_000, verifiedReference: 're-10', idempotencyKey: `refund:${piece.id}:re-10` })).status).toBe(422);
+    expect((await money({ opportunityId: piece.id, kind: 'REFUND', amountCents: 10_000, verifiedReference: 're-10', idempotencyKey: `manual-refund:${piece.id}:re-10` })).status).toBe(422);
     expect((await act(piece.id, 'refund', { agreementId: part.id, amountCents: 50_000, reason: 'Goodwill' })).status).toBe(422);
     const refunded = await act(piece.id, 'refund', { agreementId: part.id, amountCents: 10_000, reason: 'One form arrived late' });
     expect(refunded.status).toBe(200);

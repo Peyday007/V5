@@ -50,6 +50,8 @@ import { ADDRESS } from './providers/config.ts';
 import { TAX_TREATMENTS, dueDateSeconds } from './providers/stripe.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import type { CashInvoice } from '../../domain/types.ts';
+import { serializeCash } from '../../repos/cashLock.ts';
+import { customerPaymentByReference } from '../../repos/cashLedger.ts';
 
 const BRAIN = 'BRAIN';
 const INVOICE_ACTION = 'QUOTE_AND_INVOICE';
@@ -136,14 +138,6 @@ export async function requestInvoice(input: {
    * net of refunds (`position.ts`). Derived arithmetic, never a figure chosen
    * — and refused outright when nothing remains to bill.
    */
-  const position = await dealPosition({ opportunity, currency: mode.currency });
-  const amountCents = Math.min(entry.amountCents, position.pnl.invoiceableCents);
-  if (amountCents <= 0) {
-    return refuse(
-      'Everything agreed on this piece is already billed or paid, so there is nothing left to invoice. ' +
-        'Brain never bills money it has already been paid.',
-    );
-  }
 
   const customerName = input.customerName.trim();
   const customerEmail = input.customerEmail.trim();
@@ -159,7 +153,21 @@ export async function requestInvoice(input: {
   if (due === null) return refuse('The due date is a calendar date, YYYY-MM-DD.');
   if (due * 1000 <= (input.now ?? new Date()).getTime()) return refuse('The due date has already passed.');
 
-  const { invoice, created } = await draftInvoice({
+  /*
+   * The amount is read and the draft written under the project's cash lock, so
+   * two requests for two agreements cannot both read the same remainder and
+   * each bill it.
+   */
+  const drafted = await serializeCash(input.projectId, mode.currency, async (): Promise<Outcome<{ invoice: CashInvoice; created: boolean }>> => {
+  const position = await dealPosition({ opportunity, currency: mode.currency });
+  const amountCents = Math.min(entry.amountCents, position.pnl.invoiceableCents);
+  if (amountCents <= 0) {
+    return refuse(
+      'Everything agreed on this piece is already billed or paid, so there is nothing left to invoice. ' +
+        'Brain never bills money it has already been paid.',
+    );
+  }
+  const made = await draftInvoice({
     projectId: input.projectId,
     opportunityId: opportunity.id,
     pipelineEntryId: entry.id,
@@ -172,6 +180,11 @@ export async function requestInvoice(input: {
     description: (opportunity.offerScope ?? opportunity.title).slice(0, 500),
     requestedBy: input.actorRef,
   });
+  return { ok: true, value: made, message: '' };
+  });
+  if (!drafted.ok) return drafted;
+  const { invoice, created } = drafted.value;
+  const amountCents = invoice.amountCents;
   if (created) {
     await recordCashEvent({
       projectId: input.projectId,
@@ -209,9 +222,28 @@ async function holdWithReason(invoice: CashInvoice, because: string, pass: Invoi
   }
 }
 
+/** The same need a release raises for an invoice it found already sent. */
+async function askToVoidReleased(invoice: CashInvoice, providerInvoiceId: string | null): Promise<void> {
+  await raiseNeed({
+    projectId: invoice.projectId,
+    opportunityId: invoice.opportunityId,
+    actorRef: BRAIN,
+    blockedAction: `Void invoice ${invoice.id} at the provider`,
+    whyItMatters:
+      'Its agreement was released while the invoice was being sent, and the provider may hold an invoice ' +
+      'the buyer can pay. Brain does not unsend it on its own.',
+    recommendedPath: 'Void the invoice at the invoicing provider; Brain reads the voided state back.',
+    setupEffort: 'A minute.',
+    nextStep: `Void ${providerInvoiceId ?? `the invoice with metadata brain_invoice=${invoice.id}`} at the provider.`,
+    completionCondition: 'The provider reads the invoice as void.',
+    blocksState: null,
+    requestKey: `void-released:${invoice.id}`,
+  });
+}
+
 async function settleIssue(invoice: CashInvoice, outcome: ExternalOutcome, pass: InvoicingPass): Promise<void> {
   if (outcome.status === 'UNCERTAIN') {
-    const moved =
+    let moved =
       invoice.state === 'UNCERTAIN' ||
       (await moveInvoice({
         id: invoice.id,
@@ -219,6 +251,16 @@ async function settleIssue(invoice: CashInvoice, outcome: ExternalOutcome, pass:
         to: 'UNCERTAIN',
         patch: { stateReason: outcome.reason, provider: adapterStatus(ISSUE_INVOICE_NAMESPACE).adapter },
       }));
+    if (!moved && (await getInvoice(invoice.id))?.state === 'VOID') {
+      // Released mid-send: an unknown outcome is still unknown, not void.
+      moved = await moveInvoice({
+        id: invoice.id,
+        from: 'VOID',
+        to: 'UNCERTAIN',
+        patch: { stateReason: outcome.reason, provider: adapterStatus(ISSUE_INVOICE_NAMESPACE).adapter },
+      });
+      if (moved) await askToVoidReleased(invoice, null);
+    }
     if (moved && invoice.state !== 'UNCERTAIN') {
       await raiseNeed({
         projectId: invoice.projectId,
@@ -272,21 +314,35 @@ async function settleIssue(invoice: CashInvoice, outcome: ExternalOutcome, pass:
   const reader = usablePaymentReader();
   const reading = reader ? await reader.read(providerInvoiceId).catch(() => null) : null;
   const read = reading && reading.kind === 'READ' ? reading : null;
-  const moved = await moveInvoice({
-    id: invoice.id,
-    from: invoice.state,
-    to: 'ISSUED',
-    patch: {
-      provider: reader?.provider ?? adapterStatus(ISSUE_INVOICE_NAMESPACE).adapter,
-      providerInvoiceId,
-      providerStatus: read?.status ?? null,
-      providerNumber: read?.number ?? null,
-      hostedUrl: read?.hostedUrl ?? null,
-      issuedAt: new Date().toISOString(),
-      stateReason: null,
-    },
-  });
-  if (!moved) return;
+  const patch = {
+    provider: reader?.provider ?? adapterStatus(ISSUE_INVOICE_NAMESPACE).adapter,
+    providerInvoiceId,
+    providerStatus: read?.status ?? null,
+    providerNumber: read?.number ?? null,
+    hostedUrl: read?.hostedUrl ?? null,
+    issuedAt: new Date().toISOString(),
+    stateReason: null as string | null,
+  };
+  let moved = await moveInvoice({ id: invoice.id, from: invoice.state, to: 'ISSUED', patch });
+  if (!moved) {
+    /*
+     * Released while the send was in flight: the agreement's release voided a
+     * draft this pass had already sent. The provider holds an invoice the buyer
+     * can pay, so the row says so — ISSUED, with the provider's id — and a
+     * person is asked to void it there. Leaving it VOID would hide a live bill
+     * and the payment the provider may later read for it.
+     */
+    if ((await getInvoice(invoice.id))?.state === 'VOID') {
+      moved = await moveInvoice({
+        id: invoice.id,
+        from: 'VOID',
+        to: 'ISSUED',
+        patch: { ...patch, stateReason: 'Issued at the provider after its agreement was released.' },
+      });
+      if (moved) await askToVoidReleased(invoice, providerInvoiceId);
+    }
+    if (!moved) return;
+  }
 
   const authority = await checkCommercialAuthority({ projectId: invoice.projectId, action: INVOICE_ACTION });
   if (authority.authority) {
@@ -408,12 +464,26 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
         actorRef: BRAIN,
         paidInvoiceId: current.id,
       });
-      if (!payment.ok) {
-        await holdWithReason(current, `The provider says this was paid and it could not be recorded: ${payment.reason}`, pass);
+      /*
+       * The same provider reference already on this piece's ledger is this
+       * payment, recorded once already (a person, or an earlier read whose
+       * invoice move did not land). Adopt it rather than hold the invoice
+       * ISSUED for ever: one reference is one payment (§30), and the
+       * settlement and the fee still have to be read.
+       */
+      const entry = payment.ok
+        ? payment.value
+        : await customerPaymentByReference(projectId, reading.chargeId ?? current.providerInvoiceId ?? '');
+      if (!entry || entry.opportunityId !== current.opportunityId) {
+        await holdWithReason(
+          current,
+          `The provider says this was paid and it could not be recorded: ${payment.ok ? 'it belongs to another piece' : payment.reason}`,
+          pass,
+        );
         await moveInvoice({ id: current.id, from: 'ISSUED', to: 'ISSUED', patch: { lastReadAt: readAt } });
         continue;
       }
-      if (!(await moveInvoice({ id: current.id, from: 'ISSUED', to: 'PAID', patch: { providerStatus: reading.status, paymentEntryId: payment.value.id, paidAt: reading.paidAt ?? readAt, stateReason: null } }))) {
+      if (!(await moveInvoice({ id: current.id, from: 'ISSUED', to: 'PAID', patch: { providerStatus: reading.status, paymentEntryId: entry.id, paidAt: reading.paidAt ?? readAt, stateReason: null } }))) {
         continue;
       }
       pass.paid.push(current.id);

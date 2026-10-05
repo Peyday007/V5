@@ -1289,6 +1289,47 @@ export async function recordMoneyEvent(input: {
         };
       }
     }
+    /*
+     * A payment on an agreed deal is never more than was agreed. One payment
+     * can reach the ledger two ways — read from the provider under its own
+     * reference, and recorded by a person under whatever reference they had —
+     * and the reference check in `recordMoney` cannot see that two different
+     * references are one payment. Counted twice it would inflate everything
+     * read from it: what may be settled, what may be refunded, and the
+     * contribution. So the total is held to the live agreements, and the second
+     * reading is refused naming the likely cause rather than recorded.
+     */
+    if (
+      input.kind === 'CUSTOMER_PAYMENT' &&
+      input.opportunityId &&
+      !(await moneyEntryByKey(input.projectId, input.idempotencyKey))
+    ) {
+      const live = (await agreementsFor(input.opportunityId)).filter(
+        (one) => one.state === 'AGREED' && one.currency === input.currency,
+      );
+      if (live.length > 0) {
+        const agreed = live.reduce((sum, one) => sum + one.amountCents, 0);
+        const totals = await totalsByKind({
+          projectId: input.projectId,
+          opportunityId: input.opportunityId,
+          currency: input.currency,
+        });
+        // Net of refunds: money paid back may be paid again.
+        const paid = Number(totals.CUSTOMER_PAYMENT ?? 0) - Number(totals.REFUND ?? 0);
+        if (paid + input.amountCents > agreed) {
+          return {
+            ok: false as const,
+            entry: null,
+            replayed: false,
+            reason:
+              `${paid} cents is already recorded as paid against ${agreed} agreed, so ${input.amountCents} more ` +
+              'would be more than the buyer agreed to pay. If this is the same money recorded another way ' +
+              '(a provider-read invoice payment and a manual entry), it is already counted; if the buyer ' +
+              'really paid more, record the agreement for it first.',
+          };
+        }
+      }
+    }
     if (input.kind === 'COMMITMENT_RELEASED' && !(await moneyEntryByKey(input.projectId, input.idempotencyKey))) {
       const totals = await totalsByKind({
         projectId: input.projectId,

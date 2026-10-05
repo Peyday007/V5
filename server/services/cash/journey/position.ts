@@ -226,7 +226,18 @@ export async function dealPosition(input: {
   const owed = Math.max(0, invoiced - payments);
   // What an invoice that expired unpaid left is billable again; what was paid
   // against it is not.
-  const invoiceable = Math.max(0, agreedRevenue - Math.max(invoiced + pendingInvoice, paidNet));
+  //
+  // A payment is either against an invoice (the provider read it and the
+  // invoice names the entry) or made another way. Only the second reduces what
+  // is still billable on top of the invoices: counting a payment against an
+  // invoice again would under-bill, and taking the larger of the two (the old
+  // rule) over-billed whenever money arrived outside an invoice and a second
+  // agreement was invoiced afterwards.
+  const paidAgainstInvoices = ours
+    .filter((one) => one.paymentEntryId && BILLED_INVOICE_STATES.includes(one.state))
+    .reduce((sum, one) => sum + one.amountCents, 0);
+  const paidOutsideInvoices = Math.max(0, payments - paidAgainstInvoices);
+  const invoiceable = Math.max(0, agreedRevenue - invoiced - pendingInvoice - paidOutsideInvoices);
   const paymentInFlight = operations.some(
     (one) =>
       one.action === 'ACCEPT_PAYMENT' &&

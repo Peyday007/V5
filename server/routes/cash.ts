@@ -178,6 +178,19 @@ import {
   CASH_MONEY_KINDS,
   type CashMoneyKind,
 } from '../domain/types.ts';
+
+/** Ledger key namespaces Brain writes from its own rows, never a caller's. */
+const SERVER_LEDGER_KEY_PREFIXES = [
+  'agreement:',
+  'agreement-released:',
+  'refund:',
+  'fulfillment-cost:',
+  'invoice-payment:',
+  'invoice-settlement:',
+  'invoice-fee:',
+  'settle:',
+  'payment:',
+] as const;
 import type { Outcome } from '../services/cash/opportunities.ts';
 
 export const cashRouter: Router = Router();
@@ -1160,6 +1173,20 @@ cashRouter.post(
      * believing they have a property they do not — and it is the same rule
      * here with money on the other side of it.
      */
+    /*
+     * Brain writes some ledger entries under keys it derives from its own rows
+     * (an agreement, a refund, a supplier cost, a provider-read payment). A key
+     * a caller chose in one of those namespaces could occupy the entry Brain
+     * will write later, so its real write would replay the caller's or be
+     * refused as a conflict. Refused by name rather than renamed.
+     */
+    const callerKey = String(body['idempotencyKey'] ?? '').trim();
+    const reserved = SERVER_LEDGER_KEY_PREFIXES.find((prefix) => callerKey.startsWith(prefix));
+    if (reserved) {
+      throw unprocessable(
+        `Keys beginning "${reserved}" are written by Brain itself from its own rows. Choose another key.`,
+      );
+    }
     const stated = optionalString(body['currency'], 'currency');
     if (stated && stated !== mode.currency) {
       throw unprocessable(

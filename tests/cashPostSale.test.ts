@@ -27,6 +27,7 @@ import { ALWAYS_PROHIBITED_COMMERCIAL, COMMERCIAL_ACTIONS } from '../server/serv
 import {
   actionKey,
   advance,
+  archiveOpportunity,
   beginExecution,
   capture,
   fillCard,
@@ -50,9 +51,9 @@ import {
 import { collectable, dealPosition } from '../server/services/cash/journey/position.ts';
 import { advanceJourney } from '../server/services/cash/journey/tick.ts';
 import { cashOutcomeLessons, LESSON_MIN_SAMPLE, measuredByMechanism } from '../server/services/cash/journey/learning.ts';
-import { requestInvoice } from '../server/services/cash/invoicing.ts';
+import { requestInvoice, runInvoicing } from '../server/services/cash/invoicing.ts';
 import { readCapability } from '../server/services/cash/capabilities.ts';
-import { REFUND_NAMESPACE } from '../server/services/cash/effects.ts';
+import { ISSUE_INVOICE_NAMESPACE, REFUND_NAMESPACE } from '../server/services/cash/effects.ts';
 import { clearAdapters, registerAdapter, type SendOutcome } from '../server/services/effects/adapter.ts';
 import { approveObjective } from '../server/services/factory/contract.ts';
 import { ensureCampaign, factoryNow, listChangeRequests, patchCampaign } from '../server/repos/factory.ts';
@@ -430,6 +431,78 @@ describe('agreement and invoice', () => {
     expect((await requestInvoice(terms)).ok).toBe(false);
   });
 
+  it('money paid outside an invoice is never billed again, across two agreements', async () => {
+    const id = await executing();
+    await agree(id, 100_000, 'First half');
+    await agree(id, 100_000, 'Second half');
+    expect((await money(id, 'CUSTOMER_PAYMENT', 150_000, 'bank-150')).ok).toBe(true);
+    const terms = (pipelineEntryId: string) => ({
+      projectId,
+      opportunityId: id,
+      pipelineEntryId,
+      customerName: 'Owner',
+      customerEmail: 'owner@buyer.example',
+      taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31',
+      actorRef: userId,
+    });
+    const entries = (await getDb().all<{ id: string }>(
+      "SELECT id FROM cash_money_entries WHERE opportunity_id = ? AND kind = 'PIPELINE_AGREED' ORDER BY created_at, id",
+      [id],
+    )).map((one) => one.id);
+    const first = await requestInvoice(terms(entries[0]!));
+    expect(first.ok && first.value.amountCents).toBe(50_000);
+    // The old rule took the larger of billed and paid and billed 50k again here.
+    expect((await requestInvoice(terms(entries[1]!))).ok).toBe(false);
+    const billed = (await listInvoices({ projectId, opportunityId: id })).reduce((sum, one) => sum + one.amountCents, 0);
+    expect(billed).toBe(50_000);
+  });
+
+  it('one payment recorded two ways is not counted twice', async () => {
+    const id = await executing();
+    await agree(id, 50_000);
+    expect((await money(id, 'CUSTOMER_PAYMENT', 50_000, 'stripe-ch-1')).ok).toBe(true);
+    const again = await money(id, 'CUSTOMER_PAYMENT', 50_000, 'INV-0001');
+    expect(again.ok).toBe(false);
+    expect(again.reason).toMatch(/already recorded as paid/);
+    expect((await position(id)).pnl.contributionCents).toBe(50_000);
+  });
+
+  it('an agreement released while its invoice was being sent leaves the provider’s invoice visible, not void', async () => {
+    const id = await executing();
+    const agreement = await agree(id, 40_000);
+    let released = false;
+    registerAdapter({
+      name: 'test.invoice',
+      effectClass: 'EXTERNAL_OPAQUE',
+      namespace: ISSUE_INVOICE_NAMESPACE.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async () => {
+        // The release lands while the request is at the provider.
+        released = (await releaseAgreement({ agreementId: agreement.id, reason: 'The buyer withdrew.', actorRef: userId })).ok;
+        return { kind: 'CONFIRMED', receiptRef: 'in_live_1' };
+      },
+    });
+    const drafted = await requestInvoice({
+      projectId,
+      opportunityId: id,
+      customerName: 'Owner',
+      customerEmail: 'owner@buyer.example',
+      taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31',
+      actorRef: userId,
+    });
+    expect(drafted.ok).toBe(true);
+    await runInvoicing(projectId);
+    expect(released).toBe(true);
+    const [invoice] = await listInvoices({ projectId, opportunityId: id });
+    expect(invoice!.state).toBe('ISSUED');
+    expect(invoice!.providerInvoiceId).toBe('in_live_1');
+    const needs = (await listNeeds({ projectId, states: ['OPEN'] })).map((one) => one.requestKey);
+    expect(needs).toContain(`void-released:${invoice!.id}`);
+  });
+
   it('the buyer disappears after agreement: release writes its own entry and nothing is owed', async () => {
     const id = await executing();
     const agreement = await agree(id, 60_000);
@@ -644,6 +717,25 @@ describe('refunds', () => {
     expect(provider.sends()).toBe(1);
   });
 
+  it('a person’s answer cannot race Brain’s own send, and a provider’s terminal answer is not contradicted', async () => {
+    const { id, agreement } = await paidAndDelivered();
+    // Authorized while no refund integration existed: a person was asked.
+    const authorized = await authorizeRefund({ projectId, agreementId: agreement.id, amountCents: 10_000, reason: 'late', actorRef: userId });
+    const refundKey = authorized.ok ? authorized.value.refunds[0]!.refundKey : '';
+    // Then one is connected. Brain sends it; a person confirming first would
+    // be paid out twice.
+    const provider = refundProvider(async () => ({ kind: 'CONFIRMED', receiptRef: 're_9' }));
+    const early = await answerRefund({ projectId, agreementId: agreement.id, refundKey, answer: 'confirm', reference: 'manual-1', actorRef: userId });
+    expect(early.ok).toBe(false);
+    await advanceFulfillment(projectId);
+    expect(provider.sends()).toBe(1);
+    expect(await ledgerCount(id, 'REFUND')).toBe(1);
+    // The provider said it happened; it is not recorded as not sent.
+    const contradict = await answerRefund({ projectId, agreementId: agreement.id, refundKey, answer: 'not-sent', reference: 'nothing', actorRef: userId });
+    expect(contradict.ok).toBe(false);
+    expect(await ledgerCount(id, 'REFUND')).toBe(1);
+  });
+
   it('a failure after payment asks what is owed back, and a failed refund does not answer it', async () => {
     const { agreement } = await paidAndDelivered();
     await event(agreement, 'FAILED', null, 'Could not be done.');
@@ -668,6 +760,23 @@ describe('restart, concurrency and learning', () => {
     await person(agreement);
     await Promise.all([advanceJourney(projectId), advanceJourney(projectId)]);
     expect(await count("SELECT COUNT(*) AS n FROM cash_events WHERE opportunity_id = ? AND kind = 'CASH_FULFILLMENT_OPENED'", [id])).toBe(1);
+  });
+
+  it('a collected deal archived later is not learned as a failure', async () => {
+    const id = await executing();
+    const agreement = await agree(id, 20_000);
+    await person(agreement);
+    for (const kind of ['WORK_COMPLETE', 'DELIVERED', 'ACCEPTED']) await event(agreement, kind);
+    await money(id, 'CUSTOMER_PAYMENT', 20_000, 'ch-a');
+    await money(id, 'SETTLEMENT', 20_000, 'po-a');
+    await advanceJourney(projectId);
+    expect((await getOpportunity(id))!.state).toBe('COLLECTED');
+    expect((await archiveOpportunity({ opportunityId: id, actorRef: userId, reason: 'Filed away.' })).ok).toBe(true);
+    await advanceJourney(projectId);
+    await advanceJourney(projectId);
+    const outcomes = await outcomesFor({ projectId, opportunityId: id });
+    expect(outcomes.filter((one) => one.kind === 'FAILURE_REASON')).toHaveLength(0);
+    expect(outcomes.filter((one) => one.kind === 'REALIZED_CONTRIBUTION')).toHaveLength(1);
   });
 
   it('a lesson needs a sample on both sides of the ratio before it can steer ranking', async () => {

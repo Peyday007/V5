@@ -966,7 +966,7 @@ describe('one sprint, from activation to money in and winding down', () => {
             amountCents: 120_000,
             currency: 'USD',
             verifiedReference: 'stripe-pi-88412',
-            idempotencyKey: `payment:${piece.id}`,
+            idempotencyKey: `manual-payment:${piece.id}`,
           })
         ).status,
       ).toBe(200);
