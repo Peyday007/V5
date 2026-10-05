@@ -12384,7 +12384,15 @@ table are unchanged in kind.
   payments less the larger of the owed-back money and refunds, and
   `owedBackCents` is what is still to be paid back — and every comparison with
   what was agreed or billed reads those. A deal with money owed back is not
-  collectable however the rest reads.
+  collectable however the rest reads. Money paid on an agreement that was
+  later released is the same fact one door along and is counted the same way:
+  only invoices for a *live* agreement bill anything, and what was paid on a
+  released one is owed back. Before that, a released agreement's paid invoice
+  made the next agreement read paid and unbillable. And that money had no way
+  back: a refund on an agreed deal belongs to the obligation, `declare`
+  refuses a released agreement, so with no obligation declared the refund was
+  refused everywhere. The money route now records it where no obligation
+  exists and none can be declared, bounded under the same lock.
 - **An invoice is claimed before it is sent, never checked and then sent.**
   The coverage check, the check that Brain's own charge is not in flight and
   the move `DRAFTED → UNCERTAIN` are one decision under the cash lock, and the

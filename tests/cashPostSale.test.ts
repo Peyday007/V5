@@ -1121,6 +1121,53 @@ describe('agreement and invoice', () => {
     expect(row.state).toBe('VOID');
   });
 
+  it('money paid on a released agreement is owed back, never payment for the next one, and can be refunded', async () => {
+    const id = await executing();
+    const first = await agree(id, 40_000);
+    const drafted = await draftFor(id);
+    if (!drafted.ok) throw new Error('not drafted');
+    expect(await moveInvoice({ id: drafted.value.id, from: 'DRAFTED', to: 'ISSUED', patch: { providerInvoiceId: 'in_released' } })).toBe(true);
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId, opportunityId: id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, currency: 'USD',
+          verifiedReference: 'bank-first', idempotencyKey: `pay:${id}:first`, actorRef: userId,
+          appliesTo: { invoiceId: drafted.value.id },
+        })
+      ).ok,
+    ).toBe(true);
+    // The buyer cancels before any obligation was declared; a new deal follows.
+    expect((await releaseAgreement({ agreementId: first.id, reason: 'The buyer cancelled.', actorRef: userId })).ok).toBe(true);
+    await agree(id, 40_000 + 1);
+    let deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
+    // The second agreement is unpaid and fully billable; the first's money is owed back.
+    expect(deal.pnl).toMatchObject({ creditedPaymentsCents: 0, owedBackCents: 40_000, invoiceableCents: 40_001, owedByBuyerCents: 0 });
+    expect(deal.paymentState).not.toMatch(/PAID_UNSETTLED|SETTLED/);
+    expect(collectable(deal).ok).toBe(false);
+    // There is a way to pay it back even though no obligation ever existed:
+    // the second agreement is live, but the piece is not being performed yet.
+    await getDb().run("UPDATE cash_opportunities SET state = 'DECLINED' WHERE id = ?", [id]);
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId, opportunityId: id, kind: 'REFUND', amountCents: 40_000, currency: 'USD',
+          verifiedReference: 'refund-first', idempotencyKey: `refund:${id}:first`, actorRef: userId,
+        })
+      ).ok,
+    ).toBe(true);
+    // And never more than was paid.
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId, opportunityId: id, kind: 'REFUND', amountCents: 1, currency: 'USD',
+          verifiedReference: 'refund-extra', idempotencyKey: `refund:${id}:extra`, actorRef: userId,
+        })
+      ).ok,
+    ).toBe(false);
+    deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
+    expect(deal.pnl.owedBackCents).toBe(0);
+  });
+
   it('an agreement answers only the latest contact before it, and never a contact the buyer already ignored', () => {
     const at = (iso: string) => ({ createdAt: iso });
     const first = at('2026-10-01T00:00:00.000Z');

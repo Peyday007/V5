@@ -43,7 +43,7 @@ import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
 import { getMoneyEntry, invoiceOverpaymentCents, moneyEntryByKey, recordMoney, totalsByKind, unattributedPersonPayments } from '../../repos/cashLedger.ts';
 import { agreementsFor, getAgreement } from '../../repos/cashJourney.ts';
-import { unresolvedRefundCents } from '../../repos/cashFulfillment.ts';
+import { fulfillmentsForOpportunity, unresolvedRefundCents } from '../../repos/cashFulfillment.ts';
 import { getInvoice, listInvoices, moveInvoice } from '../../repos/cashInvoices.ts';
 import { raiseNeed } from './needs.ts';
 import { collectable, dealPosition } from './journey/position.ts';
@@ -1289,7 +1289,20 @@ export async function recordMoneyEvent(input: {
     if (!backing.ok) return refuse(backing.reason);
   }
   if (input.kind === 'REFUND' && input.opportunityId && !input.confirmsRefund) {
-    if ((await agreementsFor(input.opportunityId)).length > 0) {
+    /*
+     * On an agreed deal a refund belongs to the obligation it pays back. Where
+     * no obligation exists and none can be declared — every agreement
+     * released, or the piece no longer being performed — that route does not
+     * exist, and refusing here would leave money owed back with no way to
+     * record it being paid. It is bounded below under the lock either way.
+     */
+    const agreements = await agreementsFor(input.opportunityId);
+    const piece = await getOpportunity(input.opportunityId);
+    const performing = piece !== null && (piece.state === 'EXECUTING' || piece.state === 'DELIVERING');
+    const obligationPossible =
+      (await fulfillmentsForOpportunity(input.projectId, input.opportunityId)).length > 0 ||
+      (performing && agreements.some((one) => one.state === 'AGREED'));
+    if (agreements.length > 0 && obligationPossible) {
       return refuse(
         'A refund on an agreed deal is authorized on the obligation it pays back, which bounds it ' +
           'against every refund still pending or unknown and sends it once. Record it there.',

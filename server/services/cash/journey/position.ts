@@ -216,7 +216,16 @@ export async function dealPosition(input: {
   const live = agreements.filter((one) => one.state === 'AGREED' && one.currency === currency);
   const agreedRevenue = live.reduce((sum, one) => sum + one.amountCents, 0);
   const ledgerAgreed = Math.max(0, num(totals, 'PIPELINE_AGREED') - num(totals, 'PIPELINE_RELEASED'));
-  const ours = invoices.filter((one) => one.currency === currency);
+  // Only invoices for a *live* agreement bill anything still agreed. A
+  // released agreement's invoice is history: what it billed is not owed, and
+  // what was paid on it is owed back below, never credit toward another
+  // agreement.
+  const liveEntryIds = new Set([...(await entriesFor(live)).values()].map((one) => one.id));
+  const allOurs = invoices.filter((one) => one.currency === currency);
+  const ours = allOurs.filter((one) => one.pipelineEntryId !== null && liveEntryIds.has(one.pipelineEntryId));
+  const paidOnReleased = allOurs
+    .filter((one) => !ours.includes(one) && one.paymentEntryId && BILLED_INVOICE_STATES.includes(one.state))
+    .reduce((sum, one) => sum + one.amountCents, 0);
   const invoiced = ours
     .filter((one) => BILLED_INVOICE_STATES.includes(one.state))
     .reduce((sum, one) => sum + one.amountCents, 0);
@@ -242,7 +251,9 @@ export async function dealPosition(input: {
   // owed back, never credit that makes another agreement paid or unbillable.
   // Every comparison of payments with what was agreed or billed reads these
   // three, so no reader can count the owed-back money as payment.
-  const overpaidInvoices = await invoiceOverpaymentCents(opportunity.id, currency);
+  // Owed back: a second payment of an already-paid invoice, and money paid on
+  // an agreement that was since released.
+  const overpaidInvoices = (await invoiceOverpaymentCents(opportunity.id, currency)) + paidOnReleased;
   const credited = Math.max(0, payments - overpaidInvoices);
   const creditedNet = Math.max(0, payments - Math.max(overpaidInvoices, refunds));
   const owedBack = Math.max(0, overpaidInvoices - refunds);
