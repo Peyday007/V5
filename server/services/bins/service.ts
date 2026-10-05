@@ -60,6 +60,8 @@ import { getOrchestration } from '../../repos/research.ts';
 import { recordWorkerArrival } from '../../repos/fleet.ts';
 import { auditAdmission, lineageForWorker } from '../research/auditAdmission.ts';
 import { distinctSessionPossibleAt } from '../research/sessionWindow.ts';
+import { asWorkload, classifyInfraFailure, noteInfraFailure, type InfraFailureKind } from '../../db/infra.ts';
+import { recordUnservedArrival } from '../infra/incidents.ts';
 import {
   claimWork,
   getWorkItemRow,
@@ -132,7 +134,24 @@ export interface Assignment {
 
 export type CheckInResult =
   | { assigned: true; assignment: Assignment }
-  | { assigned: false; reason: 'NO_READY_BINS' };
+  | { assigned: false; reason: 'NO_READY_BINS' }
+  /**
+   * The session was established and Brain could not finish choosing its work —
+   * the database did not answer, or choosing ran past the check-in's time
+   * budget. Not a refusal and not "no work": the caller asks again.
+   */
+  | { assigned: false; reason: 'RETRY_LATER' };
+
+/**
+ * How long choosing work may take inside one check-in.
+ *
+ * The Cowork connector gives up on a call at sixty seconds (§20), and a check-in
+ * that runs past that reads to the worker as a dead connector — so the session
+ * is established first, and the expensive half is bounded well inside the
+ * client's own patience: authentication and the arrival have already been
+ * spent out of it, and the reply still has to travel.
+ */
+export const CHECK_IN_ADMISSION_BUDGET_MS = 25_000;
 
 /**
  * Give this worker one bin, or tell it there is nothing.
@@ -480,7 +499,121 @@ export async function checkIn(input: {
   workerId: string;
   sessionRef?: string | null;
   leaseMs?: number;
+  /** Test seam: the instant choosing work must stop. */
+  deadline?: number;
 }): Promise<CheckInResult> {
+  const deadline = input.deadline ?? Date.now() + CHECK_IN_ADMISSION_BUDGET_MS;
+  /*
+   * Two phases, and the boundary between them is the fix for a check-in that
+   * timed out at sixty seconds because a research audit query did.
+   *
+   * ESTABLISHING — this function is entered on the control plane (`plane:
+   * 'CONTROL'` on the tool). Crediting the arrival is one indexed UPDATE, and a
+   * worker proving it is here must never wait behind work selection for it.
+   *
+   * CHOOSING — everything after the arrival steps back out to the workload pool
+   * and is bounded: a candidate whose admission throws on an infrastructure
+   * failure, or that is reached after the deadline, is skipped quietly (no
+   * refusal row, no fire deferral, no attempt), and if that leaves the session
+   * with nothing the answer is RETRY_LATER rather than an exception. The
+   * session is recorded as having arrived either way, so its fire is never
+   * charged as a no-show (`services/infra/incidents.ts`).
+   */
+  try {
+    await recordWorkerArrival(input.workerId);
+  } catch (error) {
+    const kind = classifyInfraFailure(error);
+    if (kind) {
+      // The session got as far as Brain and Brain could not write that it had:
+      // a control-plane failure on the arrival path, and this session's own
+      // evidence of arriving. The worker is answered INFRA_RETRYABLE.
+      noteInfraFailure(kind, 'check_in:establish');
+      noteSessionUnserved(input, kind);
+    }
+    throw error;
+  }
+  const choosing = { infra: null as InfraFailureKind | null, deferred: false };
+  try {
+    const result = await asWorkload(() => chooseWork(input, deadline, choosing));
+    if (!result.assigned && (choosing.infra || choosing.deferred)) {
+      noteSessionUnserved(input, choosing.infra ?? 'CHECK_IN_BUDGET');
+      return { assigned: false, reason: 'RETRY_LATER' };
+    }
+    return result;
+  } catch (error) {
+    const kind = classifyInfraFailure(error);
+    if (!kind) throw error;
+    noteInfraFailure(kind, 'check_in:choose');
+    noteSessionUnserved(input, kind);
+    return { assigned: false, reason: 'RETRY_LATER' };
+  }
+}
+
+/** A session that arrived and could not be served, for the no-show pass. */
+function noteSessionUnserved(
+  input: { workerId: string; sessionRef?: string | null },
+  kind: InfraFailureKind | 'CHECK_IN_BUDGET',
+): void {
+  recordUnservedArrival({ workerId: input.workerId, sessionRef: input.sessionRef ?? null, kind });
+}
+
+/**
+ * Skip a candidate whose admission cannot be answered now, instead of failing
+ * the whole check-in. Quiet, exactly as losing the compare-and-swap is.
+ */
+function bounded(
+  admit: BinAdmission,
+  deadline: number,
+  choosing: { infra: InfraFailureKind | null; deferred: boolean },
+): BinAdmission {
+  return async (bin) => {
+    if (Date.now() >= deadline) {
+      choosing.deferred = true;
+      return { ok: false, quiet: true, reason: 'The check-in ran out of time to choose work.' };
+    }
+    try {
+      /*
+       * Bounded by what is left of the budget. Admission only reads, so a
+       * verdict abandoned here changes nothing: the candidate is skipped as
+       * losing the race would skip it, and the read finishes harmlessly.
+       */
+      const verdict = await beforeDeadline(admit(bin), deadline);
+      if (verdict === TIMED_OUT) {
+        choosing.deferred = true;
+        return { ok: false, quiet: true, reason: 'The check-in ran out of time to choose work.' };
+      }
+      return verdict;
+    } catch (error) {
+      const kind = classifyInfraFailure(error);
+      if (!kind) throw error;
+      noteInfraFailure(kind, 'check_in:admission');
+      choosing.infra = kind;
+      return { ok: false, quiet: true, reason: 'Admission could not be read just now.' };
+    }
+  };
+}
+
+const TIMED_OUT = Symbol('timed out');
+
+/** `work`, or TIMED_OUT if the deadline passes first. Only for reads. */
+async function beforeDeadline<T>(work: Promise<T>, deadline: number): Promise<T | typeof TIMED_OUT> {
+  let timer: NodeJS.Timeout | undefined;
+  const expired = new Promise<typeof TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), Math.max(0, deadline - Date.now()));
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([work, expired]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function chooseWork(
+  input: { principal: Principal; workerId: string; sessionRef?: string | null; leaseMs?: number },
+  deadline: number,
+  choosing: { infra: InfraFailureKind | null; deferred: boolean },
+): Promise<CheckInResult> {
   /*
    * The arrival is credited first, and unconditionally.
    *
@@ -490,8 +623,6 @@ export async function checkIn(input: {
    * a duplicate activation — indistinguishable from "never started". See
    * `recordWorkerArrival`.
    */
-  await recordWorkerArrival(input.workerId);
-
   const scopes = claimableProjects(input.principal);
   if (scopes.length === 0) return { assigned: false, reason: 'NO_READY_BINS' };
 
@@ -520,13 +651,22 @@ export async function checkIn(input: {
      * earns a recorded refusal plus a fire backoff — so the next arrival is a
      * fresh session rather than the same one a second later.
      */
-    admit: await binAdmission({
-      workerId: input.workerId,
-      principal: input.principal,
-      sessionRef: input.sessionRef ?? null,
-    }),
+    admit: bounded(
+      await binAdmission({
+        workerId: input.workerId,
+        principal: input.principal,
+        sessionRef: input.sessionRef ?? null,
+      }),
+      deadline,
+      choosing,
+    ),
   });
   if (!assigned) {
+    // Past the budget, deriving more work is the part to give up first.
+    if (Date.now() >= deadline) {
+      choosing.deferred = true;
+      return { assigned: false, reason: 'NO_READY_BINS' };
+    }
     /*
      * Nothing was ready — so derive once before saying so, and look again.
      *
@@ -553,7 +693,12 @@ export async function checkIn(input: {
      * because the honest answer to "is there anything to do" is the one computed
      * from current state rather than from the last time a timer happened to fire.
      */
-    const derived = await deriveReadyWork(scopes.map((scope) => scope.projectId));
+    // Bounded by what is left of the budget. The tick is idempotent and guarded
+    // by its own compare-and-swap, so one that outlives this wait simply
+    // finishes in the background and the next check-in sees what it made.
+    const derivedOrLate = await beforeDeadline(deriveReadyWork(scopes.map((scope) => scope.projectId)), deadline);
+    if (derivedOrLate === TIMED_OUT) choosing.deferred = true;
+    const derived = derivedOrLate === true;
     if (!derived) return { assigned: false, reason: 'NO_READY_BINS' };
     const retried = await assignNextBin({
       workerId: input.workerId,
@@ -562,11 +707,15 @@ export async function checkIn(input: {
       sessionRef: input.sessionRef ?? null,
       leaseMs: input.leaseMs,
       families,
-      admit: await binAdmission({
-        workerId: input.workerId,
-        principal: input.principal,
-        sessionRef: input.sessionRef ?? null,
-      }),
+      admit: bounded(
+        await binAdmission({
+          workerId: input.workerId,
+          principal: input.principal,
+          sessionRef: input.sessionRef ?? null,
+        }),
+        deadline,
+        choosing,
+      ),
     });
     if (!retried) return { assigned: false, reason: 'NO_READY_BINS' };
     assigned = retried;

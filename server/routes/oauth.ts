@@ -77,6 +77,7 @@ import { MCP_PATHS } from '../mcp/endpoint.ts';
 import { card, esc, page } from './pages.ts';
 import { workerIdentity } from '../services/identity/authenticate.ts';
 import { answerEscapedFailure } from './escape.ts';
+import { asControlPlane, noteLatency } from '../db/infra.ts';
 
 export const OAUTH_BASE = '/oauth';
 
@@ -1225,7 +1226,16 @@ export function oauthRouter(): Router {
   /* -- Token ------------------------------------------------------------- */
 
   router.post('/token', (req: Request, res: Response) => {
-    (async (): Promise<void> => {
+    /*
+     * The whole grant on the control plane (`server/db/infra.ts`): client
+     * authentication, code redemption and refresh rotation are indexed lookups
+     * and one short transaction, and they must not wait behind research for a
+     * connection. A failure here escapes to `answerEscapedFailure` — `503
+     * temporarily_unavailable` with `Retry-After` — never to `invalid_grant`, so
+     * a database that did not answer never reads as a credential withdrawn.
+     */
+    const tokenStarted = Date.now();
+    void asControlPlane(async (): Promise<void> => {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const str = (name: string): string | null => {
         const value = body[name];
@@ -1418,7 +1428,9 @@ export function oauthRouter(): Router {
       }
 
       res.status(400).json({ error: 'unsupported_grant_type' });
-    })().catch(answerEscapedFailure(res, 'oauth'));
+    })
+      .finally(() => noteLatency('oauth_token', Date.now() - tokenStarted))
+      .catch(answerEscapedFailure(res, 'oauth:token'));
   });
 
   return router;

@@ -217,6 +217,7 @@ async function openCloud(config: DatabaseConfig): Promise<{ db: Database; descri
    * `readServerConnectionLimit` returns nulls rather than throwing, so nothing
    * about this can stop a boot that had otherwise succeeded.
    */
+  await adapter.warmControlPlane();
   connectionHeadroom = describeConnectionHeadroom(
     await readServerConnectionLimit(adapter),
     config.poolSize,
@@ -246,6 +247,25 @@ let connectionHeadroom: string | null = null;
 
 export function databaseConnectionHeadroom(): string | null {
   return connectionHeadroom;
+}
+
+/**
+ * What the pools are holding right now, or null on SQLite where there is no
+ * pool. A reading taken at the instant of asking, for the connection report.
+ */
+export function databasePoolReadings(): ReturnType<PostgresAdapter['poolReadings']> | null {
+  return db instanceof PostgresAdapter ? db.poolReadings() : null;
+}
+
+/**
+ * Run a background write outside any transaction the caller's context carries.
+ * Both adapters need it: on Postgres the write would run on a client the
+ * transaction had released, and on SQLite it would skip the connection lock
+ * into another request's BEGIN.
+ */
+export function outsideTransaction<T>(fn: () => Promise<T>): Promise<T> {
+  const open = db as (Database & { detached?: <R>(work: () => Promise<R>) => Promise<R> }) | null;
+  return open?.detached ? open.detached(fn) : fn();
 }
 
 /** Which backend actually answered, for the health endpoint and the banner. */

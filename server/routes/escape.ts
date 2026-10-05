@@ -18,6 +18,7 @@
  * is refused.
  */
 import type { Response } from 'express';
+import { classifyInfraFailure, noteInfraFailure } from '../db/infra.ts';
 
 /** The body every escaped failure answers with. OAuth's own code for it. */
 export const ESCAPED_FAILURE_BODY = { error: 'temporarily_unavailable' } as const;
@@ -31,6 +32,13 @@ export function answerEscapedFailure(res: Response, where: string): (error: unkn
       if (!res.writableEnded) res.end();
       return;
     }
+    // Counted, and carrying the one retry hint every client understands: an
+    // escaped database failure on `/oauth/token` is the refresh a connector
+    // must simply send again, and must never read as a revoked grant.
+    const kind = classifyInfraFailure(error);
+    if (kind) noteInfraFailure(kind, where);
+    res.setHeader('Retry-After', '5');
+    res.setHeader('Cache-Control', 'no-store');
     res.status(503).json(ESCAPED_FAILURE_BODY);
   };
 }

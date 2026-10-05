@@ -34,6 +34,7 @@ import { getDb } from '../../db/database.ts';
 import { CONCURRENT_REFRESH_LEEWAY_MS } from '../../repos/oauth.ts';
 import { clientsOfConnector, getConnector, listConnectors, type Connector } from '../../repos/connectors.ts';
 import { getWorker } from '../../repos/identity.ts';
+import { tokenUseHeld } from '../identity/tokenTouch.ts';
 
 export type ConnectorAuthState =
   | 'HEALTHY'
@@ -312,7 +313,21 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
     [tip.id, tip.id],
   );
   const settledBefore = new Date(now - CONCURRENT_REFRESH_LEEWAY_MS).toISOString();
-  if (!tipUse?.used && tip.revoked_at === null && tip.created_at < settledBefore) {
+  /*
+   * A use this process saw and could not yet write is a use. Under database
+   * pressure the touch waits in memory (`tokenTouch.ts`), and reading only the
+   * column would call a reply that *was* picked up "never picked up" — the
+   * first step towards CLIENT_STOPPED_RETRYING and a reconnect nobody needs.
+   */
+  let heldUse = false;
+  if (!tipUse?.used) {
+    const lineage = await getDb().all<{ id: string }>('SELECT id FROM oauth_tokens WHERE id = ? OR parent_token_id = ?', [
+      tip.id,
+      tip.id,
+    ]);
+    heldUse = lineage.some((t) => tokenUseHeld(t.id));
+  }
+  if (!tipUse?.used && !heldUse && tip.revoked_at === null && tip.created_at < settledBefore) {
     base.authNoShowsSinceAnomaly = await authNoShowsSince(connector.id, tip.created_at);
     if (base.authNoShowsSinceAnomaly >= AUTH_NO_SHOW_LIMIT) {
       return verdict(

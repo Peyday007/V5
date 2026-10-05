@@ -56,6 +56,7 @@ import { ocrStatus } from './services/documents/ocr.ts';
 import { queueUnreadDocuments } from './services/documents/queue.ts';
 import { recoverInterruptedResearch } from './services/research/queue.ts';
 import { recoverDispatchAtBoot, startDispatcher } from './services/dispatch/loop.ts';
+import { recordProcessStart, startInfraIncidentRecorder } from './services/infra/incidents.ts';
 import { startRussell } from './services/russell/loop.ts';
 import { startConnectRefresh } from './services/connect/loop.ts';
 import { startFactoryRemoteLoop } from './services/factory/remoteLoop.ts';
@@ -715,6 +716,18 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
    * the next tick or completion will find them.
    */
   void (async () => {
+    /*
+     * The window the previous process left unserved, written first so the
+     * no-show pass never charges a surface for a fire that arrived while the
+     * machine was being replaced (`services/infra/incidents.ts`), and the
+     * recorder that turns every later infrastructure failure into a row.
+     */
+    startInfraIncidentRecorder();
+    const restart = await afterListenStep('record the restart window', () => recordProcessStart());
+    if (restart?.gapMs !== null && restart?.gapMs !== undefined) {
+      console.log(`  the previous process was last alive ${(restart.gapMs / 1000).toFixed(0)}s before this one listened`);
+    }
+
     // Worker-driven packets resume differently, and the difference is the point.
     // A push-model research run needs a process to continue it, so an interrupted
     // one is closed and left for a person. A pulled packet's next step is a

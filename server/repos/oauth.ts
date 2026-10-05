@@ -829,11 +829,22 @@ export async function getToken(id: string): Promise<OAuthToken | null> {
  * a successor has been *in use* — rather than merely touched once just now — is
  * what separates a replay from a race (`CONCURRENT_REFRESH_LEEWAY_MS`).
  */
-export async function touchToken(id: string): Promise<void> {
-  const at = nowIso();
+/**
+ * Record that a token was used, at the instant it was used.
+ *
+ * `at` is the observation's own time rather than the write's, so a touch that
+ * had to wait out a database hiccup still records when the client presented the
+ * token — the lineage and the connector's health both read it as that.
+ * `last_used_at` only moves forward, so a late write can never make a token
+ * look older than a touch that landed first.
+ */
+export async function touchToken(id: string, at: string = nowIso()): Promise<void> {
   await getDb().run(
-    'UPDATE oauth_tokens SET last_used_at = ?, first_used_at = COALESCE(first_used_at, ?) WHERE id = ?',
-    [at, at, id],
+    `UPDATE oauth_tokens
+        SET last_used_at = CASE WHEN last_used_at IS NULL OR last_used_at < ? THEN ? ELSE last_used_at END,
+            first_used_at = CASE WHEN first_used_at IS NULL OR first_used_at > ? THEN ? ELSE first_used_at END
+      WHERE id = ?`,
+    [at, at, at, at, id],
   );
 }
 
