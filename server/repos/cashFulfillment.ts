@@ -161,7 +161,8 @@ export async function declareFulfillment(
         SET kind = ?, promise = ?, performer = ?, acceptance_condition = ?,
             repository_remote = ?, repository_root = ?, base_branch = ?, mutation_scope = ?,
             supplier_name = ?, declared_by = ?, updated_at = ?
-      WHERE id = ? AND work_ref IS NULL AND work_created_at IS NULL`,
+      WHERE id = ? AND work_ref IS NULL AND work_created_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM cash_fulfillment_events e WHERE e.fulfillment_id = cash_fulfillments.id)`,
     [
       input.kind,
       input.promise,
@@ -234,6 +235,23 @@ export async function claimFulfillmentWork(id: string, workRef: string | null): 
     `UPDATE cash_fulfillments SET work_ref = ?, work_created_at = ?, updated_at = ?
       WHERE id = ? AND work_ref IS NULL AND work_created_at IS NULL`,
     [workRef, nowIso(), nowIso(), id],
+  );
+  return (result.changes ?? 0) === 1;
+}
+
+/**
+ * Give back work that failed, so the tick can create it again.
+ *
+ * Guarded on the work this caller read, so two people retrying at once release
+ * it once and a retry cannot clear work somebody else already recreated. The
+ * failed work keeps its own rows wherever it lives; only the pointer moves, and
+ * the retry itself is recorded on the cash history by the caller.
+ */
+export async function releaseFulfillmentWork(id: string, workRef: string): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE cash_fulfillments SET work_ref = NULL, work_created_at = NULL, updated_at = ?
+      WHERE id = ? AND work_ref = ? AND work_created_at IS NOT NULL`,
+    [nowIso(), id, workRef],
   );
   return (result.changes ?? 0) === 1;
 }

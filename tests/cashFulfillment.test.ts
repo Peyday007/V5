@@ -46,6 +46,7 @@ import {
   readFulfillment,
   recordCost,
   recordEvent,
+  retryWork,
 } from '../server/services/cash/fulfillment.ts';
 import { readCapability } from '../server/services/cash/capabilities.ts';
 import { REFUND_NAMESPACE } from '../server/services/cash/effects.ts';
@@ -930,5 +931,161 @@ describe('closing a fulfillment need by hand', () => {
       actorUserId: userId,
     });
     expect(kept.ok).toBe(true);
+  });
+});
+
+describe('what the independent review found', () => {
+  async function paidPerson(title: string, paid: number): Promise<string> {
+    const id = await agreed(title, paid);
+    await declare({ projectId, opportunityId: id, kind: 'PERSON', promise: 'The job', performer: 'Me', actorRef: userId });
+    await advanceFulfillment(projectId);
+    await money(id, 'CUSTOMER_PAYMENT', paid, 'pay-r', `pay-r-${id}`);
+    return id;
+  }
+
+  it('two refunds authorized at once never add up to more than was paid', async () => {
+    const id = await paidPerson('Two people refund at once', 40_000);
+    const [one, two] = await Promise.all([
+      authorizeRefund({ projectId, opportunityId: id, amountCents: 25_000, reason: 'late', actorRef: userId }),
+      authorizeRefund({ projectId, opportunityId: id, amountCents: 25_000, reason: 'defect', actorRef: userId }),
+    ]);
+    expect([one.ok, two.ok].filter(Boolean)).toHaveLength(1);
+    const authorized = (await reading(id)).refunds.reduce((total, refund) => total + refund.amountCents, 0);
+    expect(authorized).toBe(25_000);
+  });
+
+  it('two supplier payments at once close what was owed once', async () => {
+    const id = await agreed('Two payments at once', 50_000);
+    await declare({
+      projectId,
+      opportunityId: id,
+      kind: 'SUPPLIER',
+      promise: 'Flyers',
+      performer: 'PrintCo',
+      supplierName: 'PrintCo',
+      actorRef: userId,
+    });
+    await advanceFulfillment(projectId);
+    await recordCost({
+      projectId,
+      opportunityId: id,
+      kind: 'SUPPLIER_COMMITMENT',
+      amountCents: 12_000,
+      detail: 'Order placed',
+      reference: 'po-2',
+      actorRef: userId,
+    });
+    const pay = (reference: string) =>
+      recordCost({
+        projectId,
+        opportunityId: id,
+        kind: 'SUPPLIER_PAYMENT',
+        amountCents: 12_000,
+        detail: `Paid PrintCo ${reference}`,
+        reference,
+        actorRef: userId,
+      });
+    await Promise.all([pay('bank-a'), pay('bank-b')]);
+    const closed = await getDb().all<{ amount_cents: number }>(
+      "SELECT amount_cents FROM cash_money_entries WHERE opportunity_id = ? AND kind = 'COMMITMENT_PAID'",
+      [id],
+    );
+    expect(closed.reduce((total, row) => total + Number(row.amount_cents), 0)).toBe(12_000);
+    expect(await ledgerCount(id, 'COST')).toBe(2);
+    // A retry of the second payment does not recompute what it closed.
+    await pay('bank-b');
+    expect(await ledgerCount(id, 'COMMITMENT_PAID')).toBe(1);
+  });
+
+  it('a refund that did not happen can be authorized again; a confirmed one is not repeated', async () => {
+    const id = await paidPerson('A refund retried', 30_000);
+    const ask = () =>
+      authorizeRefund({ projectId, opportunityId: id, amountCents: 10_000, reason: 'goodwill', actorRef: userId });
+    expect((await ask()).ok).toBe(true);
+    const first = (await reading(id)).refunds[0]!;
+    await answerRefund({
+      projectId,
+      opportunityId: id,
+      refundKey: first.refundKey,
+      answer: 'not-sent',
+      reference: 'provider shows nothing',
+      actorRef: userId,
+    });
+    expect((await ask()).ok).toBe(true);
+    const refunds = (await reading(id)).refunds;
+    expect(refunds).toHaveLength(2);
+    expect(refunds.map((one) => one.state).sort()).toEqual(['FAILED', 'PENDING']);
+    const second = refunds.find((one) => one.state === 'PENDING')!;
+    await answerRefund({
+      projectId,
+      opportunityId: id,
+      refundKey: second.refundKey,
+      answer: 'confirm',
+      reference: 're_9',
+      actorRef: userId,
+    });
+    const again = await ask();
+    expect(again.ok).toBe(true);
+    expect(again.ok && again.message).toContain('already confirmed');
+    expect((await reading(id)).refunds).toHaveLength(2);
+    expect(await ledgerCount(id, 'REFUND')).toBe(1);
+  });
+
+  it('a need a person withdrew is not raised again every tick', async () => {
+    const id = await paidPerson('A payment kept', 5_000);
+    await recordEvent({ projectId, opportunityId: id, kind: 'ABANDONED', detail: 'Buyer went silent', actorRef: userId });
+    await advanceFulfillment(projectId);
+    const key = `fulfillment:refund-decision:${id}`;
+    const need = (await listNeeds({ projectId, states: ['OPEN'] })).find((one) => one.requestKey === key)!;
+    await closeNeed({ needId: need.id, to: 'WITHDRAWN', resolution: 'The deposit is kept.', actorUserId: userId });
+    await advanceFulfillment(projectId);
+    await advanceFulfillment(projectId);
+    expect(await openNeedKeys()).not.toContain(key);
+    expect((await listNeeds({ projectId })).filter((one) => one.requestKey === key)).toHaveLength(1);
+  });
+
+  it('failed work can be created again, and teaches no failure it did not have', async () => {
+    const id = await agreed('Research that failed once');
+    await declare({
+      projectId,
+      opportunityId: id,
+      kind: 'RESEARCH',
+      promise: 'Survey prices in two cities',
+      performer: 'Brain research',
+      acceptanceCondition: 'A sourced table',
+      actorRef: userId,
+    });
+    await advanceFulfillment(projectId);
+    const firstRef = (await fulfillmentForOpportunity(projectId, id))!.workRef!;
+    const { mission } = await launchMission({
+      projectId,
+      layerId,
+      visibility: 'SHARED',
+      candidateId: firstRef,
+      objective: 'Survey prices',
+      whyNow: 'A buyer is owed it',
+      idempotencyKey: `fulfil-retry-${id}`,
+    });
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+    await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'FAILED', terminalReason: 'No sources' });
+    expect((await reading(id)).failure?.kind).toBe('WORK_FAILED');
+    await advanceFulfillment(projectId);
+    expect(
+      (await listObservations({ projectId, opportunityId: id })).filter((one) => one.outcome === 'FAILURE'),
+    ).toHaveLength(0);
+
+    expect((await retryWork({ projectId, opportunityId: id, reason: '', actorRef: userId })).ok).toBe(false);
+    const retried = await retryWork({ projectId, opportunityId: id, reason: 'Widened to five cities', actorRef: userId });
+    expect(retried.ok).toBe(true);
+    // A second retry finds nothing failed to retry.
+    expect((await retryWork({ projectId, opportunityId: id, reason: 'again', actorRef: userId })).ok).toBe(false);
+    await advanceFulfillment(projectId);
+    await advanceFulfillment(projectId);
+    const now = (await fulfillmentForOpportunity(projectId, id))!;
+    expect(now.workRef).toMatch(/^rcn_/);
+    expect(now.workRef).not.toBe(firstRef);
+    const after = await reading(id);
+    expect(after.failure).toBeNull();
+    expect(after.work.state).toBe('QUEUED');
   });
 });

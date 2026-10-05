@@ -12044,6 +12044,46 @@ millisecond sorted by a random id**, so a redelivery after a rejection could
 read as before it; events are ordered by insertion (`rowid`, `seq` on
 Postgres). Both regressions were seen to fail first.
 
+**An independent review then found five more, and each is fixed with a
+regression seen to fail first.**
+
+- **Two refunds authorized at once could add up to more than was paid.** The
+  refundable amount was read and the authorization written with awaits in
+  between and no lock, so 600 and 600 against 1000 both passed — on SQLite as
+  well as Postgres. Both halves now run inside `serializeCash`, the lock
+  `cashAuthority` already uses for the same shape.
+- **Two supplier payments at once could close the same commitment twice**, and
+  the project-wide clamp in `money.ts` then cancelled a *different*
+  opportunity's commitment. The payment and the part it closes are one
+  decision under the same lock, in one transaction, so the `COST` key exists
+  exactly when the decision was made and a retry never recomputes it.
+- **A refund that failed could not be retried, and a repeat refund was dropped
+  silently.** The key is the request's content, so a lost reply joins the
+  refund it made; only a `FAILED` one frees the words for another try. A
+  confirmed refund is never joined into a second one: the same amount for the
+  same reason again needs its own reason, because a retry after a lost reply
+  and a deliberate second refund are otherwise the same request.
+- **A need a person withdrew came back every tick.** Withdrawing the
+  refund-decision need is how "the payment is kept" is said, and the rows its
+  condition reads do not change when somebody says it. A key whose latest
+  occurrence was withdrawn now stays withdrawn; a resolved one can still
+  return, because that means the condition held and then stopped holding.
+- **A failure read from the work was permanent, and taught a failure that never
+  happened.** A withdrawn change request, a cancelled campaign or a research
+  mission ending without a document failed the obligation with no way back,
+  and wrote FAILURE observations beside the later success. `retryWork`
+  (`POST …/fulfillment/:opportunityId/retry`) is the answering transition: it
+  writes `CASH_FULFILLMENT_WORK_RETRIED` and releases the work under a guard on
+  the work that failed, and the next attempt's Factory key and research
+  statement carry the attempt number. Only a failure a person *recorded* is
+  terminal for learning, and a person may still close the obligation out over
+  failed work.
+
+The surfaces the readings point at now exist on the card. That means
+confirm/not-sent per unresolved refund, a cost form (including the supplier
+commitment), and the retry form. Recording an obligation's contribution also
+subtracts what is still owed to its supplier.
+
 **What is true today.** The journeys in `tests/cashFulfillment.test.ts` pass on
 both backends. No buyer has been fulfilled in production, no refund adapter is
 registered in any deployment (so every refund there is a person's to pay and

@@ -48,6 +48,7 @@
 import { createHash } from 'node:crypto';
 import {
   claimFulfillmentWork,
+  releaseFulfillmentWork,
   declareFulfillment,
   fulfillmentEvents,
   fulfillmentForOpportunity,
@@ -59,11 +60,13 @@ import {
   supplyAcceptanceCondition,
 } from '../../repos/cashFulfillment.ts';
 import { getDb } from '../../db/database.ts';
-import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
+import { getCashMode, listCashEventsFor, recordCashEvent } from '../../repos/cashMode.ts';
 import { totalsByKind } from '../../repos/cashLedger.ts';
+import { serializeCash } from '../../repos/cashLock.ts';
 import {
   getOpportunity,
   listNeeds,
+  needForKey,
   transitionOpportunity,
 } from '../../repos/cashPortfolio.ts';
 import { getCampaignByChangeRequest, getChangeRequest } from '../../repos/factory.ts';
@@ -91,6 +94,9 @@ import {
 
 /** Who Brain records itself as, on rows it writes from the tick. */
 const BRAIN = 'BRAIN';
+
+/** A refusal inside the cash lock, thrown so the transaction rolls back whole. */
+class RefusedInLock extends Error {}
 
 function digest(...parts: (string | number | null | undefined)[]): string {
   return createHash('sha256')
@@ -180,8 +186,9 @@ export async function declare(input: {
   });
 
   if (!declared.created && !declared.revised) {
-    // Work already exists for this obligation, so the promise it was built
-    // from is the one that was made. The acceptance condition is the one field
+    // Work already exists for this obligation, or something is already
+    // recorded against it, so the promise those were built on is the one that
+    // was made. The acceptance condition is the one field
     // that may still be supplied, and only from empty.
     if (condition && !declared.fulfillment.acceptanceCondition) {
       await supplyAcceptanceCondition(declared.fulfillment.id, condition);
@@ -191,7 +198,8 @@ export async function declare(input: {
       ok: true,
       value: now!,
       message:
-        'Work already exists for this obligation, so what was promised stays as declared. ' +
+        'Work already exists for this obligation, or something is recorded against it, so what was ' +
+        'promised stays as declared. ' +
         (condition && !declared.fulfillment.acceptanceCondition
           ? 'The acceptance condition it was missing is recorded.'
           : 'Nothing was changed.'),
@@ -657,6 +665,9 @@ export async function readFulfillment(
     if (fulfillment.kind === 'SUPPLIER' && supplierCommitted === 0) {
       personNext.push('Record the supplier’s commitment and what it costs.');
     }
+    if (failure && (failure as { kind: string }).kind === 'WORK_FAILED') {
+      personNext.push('Retry the work with what changed, or record the obligation as failed or abandoned.');
+    }
     if (failure && paid - refunded > 0 && refunds.length === 0) {
       personNext.push('Decide what is owed back to the buyer for a failed obligation they paid for.');
     }
@@ -798,7 +809,12 @@ export async function recordEvent(input: {
   if (!detail) return refuse('Say what happened, in words somebody can check later.');
 
   const before = (await readFulfillment(opportunity))!;
-  if (before.failure) {
+  // A failure read from the work is a fact about that work, which can be
+  // retried; a person may still close the obligation out over it. A failure a
+  // person recorded is final.
+  const closingOverWork =
+    before.failure?.kind === 'WORK_FAILED' && (input.kind === 'FAILED' || input.kind === 'ABANDONED');
+  if (before.failure && !closingOverWork) {
     return refuse(
       `This obligation already failed (${before.failure.reason}). Nothing more is recorded against ` +
         'it except refunds; a new agreement is a new obligation.',
@@ -980,12 +996,20 @@ export async function recordCost(input: {
       requestKey: key,
     });
   } else {
-    if (kind === 'SUPPLIER_PAYMENT') {
-      const paidKey = `${key}:closes`;
-      let closes = (await moneyKeyExists(input.projectId, paidKey))?.amount ?? null;
-      if (closes === null) {
+    /*
+     * A payment and the part of it that closes what was owed are one decision,
+     * under the project's cash lock and in one transaction. Outside the lock
+     * two payments would each read the same unpaid balance and each close all
+     * of it — and the excess would cancel another opportunity's commitments in
+     * the project-wide arithmetic. In one transaction the `COST` entry exists
+     * exactly when the decision was made, so a retry that finds it does not
+     * recompute against commitments recorded since: zero closed stays zero.
+     */
+    const written = await serializeCash(input.projectId, mode.currency, async (): Promise<Outcome<null>> => {
+      if (await moneyKeyExists(input.projectId, key)) return { ok: true, value: null, message: 'Already recorded.' };
+      if (kind === 'SUPPLIER_PAYMENT') {
         const before = await readFulfillment(opportunity);
-        closes = Math.min(amount, before?.money.unpaidCommitmentCents ?? 0);
+        const closes = Math.min(amount, before?.money.unpaidCommitmentCents ?? 0);
         if (closes > 0) {
           const paid = await recordMoneyEvent({
             projectId: input.projectId,
@@ -995,25 +1019,32 @@ export async function recordCost(input: {
             currency: mode.currency,
             verifiedReference: reference,
             note: `closes what was owed to ${fulfillment.supplierName ?? fulfillment.performer}`,
-            idempotencyKey: paidKey,
+            idempotencyKey: `${key}:closes`,
             actorRef: input.actorRef,
           });
-          if (!paid.ok) return paid;
+          if (!paid.ok) throw new RefusedInLock(paid.reason);
         }
       }
-    }
-    const cost = await recordMoneyEvent({
-      projectId: input.projectId,
-      opportunityId: opportunity.id,
-      kind: 'COST',
-      amountCents: amount,
-      currency: mode.currency,
-      verifiedReference: reference,
-      note: detail,
-      idempotencyKey: key,
-      actorRef: input.actorRef,
+      const cost = await recordMoneyEvent({
+        projectId: input.projectId,
+        opportunityId: opportunity.id,
+        kind: 'COST',
+        amountCents: amount,
+        currency: mode.currency,
+        verifiedReference: reference,
+        note: detail,
+        idempotencyKey: key,
+        actorRef: input.actorRef,
+      });
+      if (!cost.ok) throw new RefusedInLock(cost.reason);
+      return { ok: true, value: null, message: 'Recorded.' };
+    }).catch((error: unknown) => {
+      // A refusal rolls the whole decision back, so a closed commitment is
+      // never left behind without the payment that closed it.
+      if (error instanceof RefusedInLock) return refuse(error.message);
+      throw error;
     });
-    if (!cost.ok) return cost;
+    if (!written.ok) return written;
   }
   const after = (await readFulfillment(opportunity))!;
   return { ok: true, value: after, message: 'Recorded in the ledger.' };
@@ -1050,20 +1081,45 @@ export async function authorizeRefund(input: {
   const reason = input.reason.trim();
   if (!reason) return refuse('Say why the buyer is owed this. The reason is what the next deal learns from.');
 
-  const refundKey = digest('refund', amount, reason);
-  const before = (await readFulfillment(opportunity))!;
-  const existing = before.refunds.find((one) => one.refundKey === refundKey);
-  if (!existing) {
+  const mode = await getCashMode(input.projectId);
+  if (!mode) return refuse('Cash Mode has not been activated for this project.');
+
+  /*
+   * The check and the authorization are one decision, so they happen under the
+   * project's cash lock (`repos/cashLock.ts`). Read outside it, two people
+   * authorizing 600 against 1000 paid would each see 1000 refundable and both
+   * be recorded — 1200 owed back for 1000 received.
+   *
+   * The key is the request's own content, so a lost reply asked again joins the
+   * refund it already made rather than authorizing a second. The one exception
+   * is a refund that *failed*: nothing left the account, so the same words are
+   * a retry and take the next occurrence. A confirmed refund is never joined
+   * into a second one — the same amount for the same reason twice needs its own
+   * reason, because a retry after a lost reply and a deliberate second refund
+   * are otherwise the same request.
+   */
+  const decided = await serializeCash(
+    input.projectId,
+    mode.currency,
+    async (): Promise<{ refundKey: string; created: boolean } | { refused: string }> => {
+    const before = (await readFulfillment(opportunity))!;
+    const failedBefore = before.refunds.filter(
+      (one) => one.state === 'FAILED' && one.amountCents === amount && one.reason === reason,
+    ).length;
+    const refundKey = failedBefore === 0 ? digest('refund', amount, reason) : digest('refund', amount, reason, failedBefore);
+    const existing = before.refunds.find((one) => one.refundKey === refundKey);
+    if (existing) return { refundKey, created: false };
     const committed = before.refunds
       .filter((one) => one.state === 'PENDING' || one.state === 'UNKNOWN')
       .reduce((total, one) => total + one.amountCents, 0);
     const refundable = before.money.paidCents - before.money.refundedCents - committed;
     if (amount > refundable) {
-      return refuse(
-        `${refundable} cents are refundable: ${before.money.paidCents} paid, ${before.money.refundedCents} ` +
+      return {
+        refused:
+          `${refundable} cents are refundable: ${before.money.paidCents} paid, ${before.money.refundedCents} ` +
           `already refunded and ${committed} in refunds not yet resolved. A refund larger than what ` +
           'was paid is a payment, not a refund.',
-      );
+      };
     }
     const recorded = await recordFulfillmentEvent({
       projectId: input.projectId,
@@ -1076,15 +1132,30 @@ export async function authorizeRefund(input: {
       recordedBy: input.actorRef,
       requestKey: `refund:${refundKey}:authorized`,
     });
-    if (recorded.created) {
-      await recordCashEvent({
-        projectId: input.projectId,
-        opportunityId: opportunity.id,
-        kind: 'CASH_REFUND_AUTHORIZED',
-        actorRef: input.actorRef,
-        summary: `A refund of ${amount} cents was authorized: ${reason}`,
-        detail: { fulfillmentId: fulfillment.id, refundKey, amountCents: amount },
-      });
+    return { refundKey, created: recorded.created };
+  },
+  );
+  if ('refused' in decided) return refuse(decided.refused);
+  const { refundKey } = decided;
+  if (decided.created) {
+    await recordCashEvent({
+      projectId: input.projectId,
+      opportunityId: opportunity.id,
+      kind: 'CASH_REFUND_AUTHORIZED',
+      actorRef: input.actorRef,
+      summary: `A refund of ${amount} cents was authorized: ${reason}`,
+      detail: { fulfillmentId: fulfillment.id, refundKey, amountCents: amount },
+    });
+  } else {
+    const prior = (await readFulfillment(opportunity))!.refunds.find((one) => one.refundKey === refundKey);
+    if (prior?.state === 'CONFIRMED') {
+      return {
+        ok: true,
+        value: (await readFulfillment(opportunity))!,
+        message:
+          'A refund of this amount for this reason is already confirmed. A second refund needs its own ' +
+          'reason, so it cannot be mistaken for a retry of the first.',
+      };
     }
   }
   await settleRefund({ fulfillment, opportunity, refundKey });
@@ -1122,6 +1193,7 @@ async function settleRefund(input: {
   if (!reading || !refund || refund.state !== 'PENDING') return;
 
   if (!refundAdapter()) {
+    if (await withdrawnByPerson(input.fulfillment.projectId, `fulfillment:refund:${input.fulfillment.id}:${refund.refundKey}`)) return;
     await raiseNeed({
       projectId: input.fulfillment.projectId,
       opportunityId: input.opportunity.id,
@@ -1223,6 +1295,7 @@ async function recordRefundUnknown(
     recordedBy: BRAIN,
     requestKey: `refund:${refundKey}:unknown`,
   });
+  if (await withdrawnByPerson(input.fulfillment.projectId, `fulfillment:refund-unknown:${input.fulfillment.id}:${refundKey}`)) return;
   await raiseNeed({
     projectId: input.fulfillment.projectId,
     opportunityId: input.opportunity.id,
@@ -1458,6 +1531,11 @@ export async function advanceFulfillment(projectId: string): Promise<Fulfillment
   return pass;
 }
 
+/** Whether the latest occurrence of this need is one a person withdrew. */
+async function withdrawnByPerson(projectId: string, key: string): Promise<boolean> {
+  return (await needForKey(projectId, key))?.state === 'WITHDRAWN';
+}
+
 async function raise(
   pass: FulfillmentPass,
   input: {
@@ -1471,6 +1549,16 @@ async function raise(
     completionCondition: string;
   },
 ): Promise<void> {
+  /*
+   * A person withdrawing one of these is their answer — "the payment is kept",
+   * "there is no condition to state" — and the rows it reads do not change when
+   * they say it. Raising it again would put the same question back every tick,
+   * a new occurrence and a new event each time, until they stopped reading the
+   * review. So a key whose latest occurrence a person withdrew stays withdrawn;
+   * a resolved one can still come back, because that means the condition held
+   * and then stopped holding.
+   */
+  if (await withdrawnByPerson(input.projectId, input.key)) return;
   const raised = await raiseNeed({
     projectId: input.projectId,
     opportunityId: input.opportunity.id,
@@ -1518,6 +1606,10 @@ async function createWork(
   // neither is created without one; the need for it is already raised.
   if (!fulfillment.acceptanceCondition) return;
 
+  // Each retry a person asked for is a new attempt, named by how many came
+  // before it — read from the append-only history, so every pass computes the
+  // same key and the Factory and `capture` collide on it rather than duplicate.
+  const attempt = await workAttempt(fulfillment);
   let ref: string | null = null;
   if (fulfillment.kind === 'SOFTWARE') {
     try {
@@ -1539,7 +1631,8 @@ async function createWork(
         ...(fulfillment.repositoryRoot ? { repositoryRoot: fulfillment.repositoryRoot } : {}),
         ...(fulfillment.baseBranch ? { baseBranch: fulfillment.baseBranch } : {}),
         ...(fulfillment.mutationScope.length > 0 ? { mutationScope: fulfillment.mutationScope } : {}),
-        submissionKey: `cash-fulfillment-${fulfillment.id}`,
+        submissionKey:
+          attempt === 0 ? `cash-fulfillment-${fulfillment.id}` : `cash-fulfillment-${fulfillment.id}-${attempt}`,
       });
       ref = result.changeRequest.id;
     } catch (error) {
@@ -1563,7 +1656,8 @@ async function createWork(
       title: `Deliver to a buyer: ${fulfillment.promise}`.slice(0, 200),
       statement:
         `${fulfillment.promise}\n\nThis is owed to a buyer who agreed to pay for it. It is ` +
-        `accepted when: ${fulfillment.acceptanceCondition}`,
+        `accepted when: ${fulfillment.acceptanceCondition}` +
+        (attempt === 0 ? '' : `\n\nAttempt ${attempt + 1}: the previous attempt failed.`),
       projectId: fulfillment.projectId,
       visibility: 'SHARED',
     });
@@ -1597,6 +1691,60 @@ async function createWork(
       detail: { fulfillmentId: fulfillment.id, ref },
     });
   }
+}
+
+async function workAttempt(fulfillment: CashFulfillment): Promise<number> {
+  const events = await listCashEventsFor(fulfillment.opportunityId, 500);
+  return events.filter(
+    (one) => one.kind === 'CASH_FULFILLMENT_WORK_RETRIED' && one.detail.fulfillmentId === fulfillment.id,
+  ).length;
+}
+
+/**
+ * A person asks Brain to create the work again after it failed.
+ *
+ * The answering transition for a failure read from the work: without it a
+ * withdrawn change request, a cancelled campaign or a research mission that
+ * ended without a document would fail the obligation for good. Only that kind
+ * of failure can be retried — one a person recorded is their decision. The
+ * retry is written to the history first and the work released second, guarded
+ * on the work that failed, so a crash between them costs one extra attempt
+ * number and never two pieces of work.
+ */
+export async function retryWork(input: {
+  projectId: string;
+  opportunityId: string;
+  reason: string;
+  actorRef: string;
+}): Promise<Outcome<FulfillmentReading>> {
+  const opportunity = await getOpportunity(input.opportunityId);
+  if (!opportunity || opportunity.projectId !== input.projectId) return refuse('No opportunity with that id.');
+  const fulfillment = await fulfillmentForOpportunity(input.projectId, opportunity.id);
+  const reading = await readFulfillment(opportunity);
+  if (!fulfillment || !reading) return refuse('Say how this is fulfilled first.');
+  const reason = input.reason.trim();
+  if (!reason) return refuse('Say what changed, so the next attempt is not the same one again.');
+  if (reading.failure?.kind !== 'WORK_FAILED' || !fulfillment.workRef) {
+    return refuse(
+      reading.failure
+        ? 'This obligation was recorded as failed by a person. That is their decision, and it is not retried.'
+        : 'The work has not failed, so there is nothing to retry.',
+    );
+  }
+  await recordCashEvent({
+    projectId: input.projectId,
+    opportunityId: opportunity.id,
+    kind: 'CASH_FULFILLMENT_WORK_RETRIED',
+    actorRef: input.actorRef,
+    summary: `The work for "${opportunity.title}" failed and is being created again: ${reason}`,
+    detail: { fulfillmentId: fulfillment.id, previousRef: fulfillment.workRef, failure: reading.failure.reason, reason },
+  });
+  await releaseFulfillmentWork(fulfillment.id, fulfillment.workRef);
+  return {
+    ok: true,
+    value: (await readFulfillment(opportunity))!,
+    message: 'Brain creates the work again on the next pass. The failed attempt keeps its rows.',
+  };
 }
 
 /* --------------------------------------------------------------------------
@@ -1645,7 +1793,14 @@ async function observe(reading: FulfillmentReading, opportunity: CashOpportunity
     }
   };
 
-  const terminal = reading.complete ? 'SUCCESS' : reading.failure ? 'FAILURE' : null;
+  // Only a failure a person recorded is terminal for learning. A failure read
+  // from the work can be retried into a success, and an obligation counted as
+  // both would teach the next deal something that did not happen.
+  const terminal = reading.complete
+    ? 'SUCCESS'
+    : reading.failure && reading.failure.kind !== 'WORK_FAILED'
+      ? 'FAILURE'
+      : null;
   if (terminal) {
     // Stable per terminal point: a recorded failure is named by its own event,
     // and a failure read from the work by the work it read — never by a
@@ -1653,9 +1808,7 @@ async function observe(reading: FulfillmentReading, opportunity: CashOpportunity
     const marker =
       terminal === 'SUCCESS'
         ? 'complete'
-        : reading.failure!.kind === 'WORK_FAILED'
-          ? `failed:work:${fulfillment.workRef ?? 'none'}`
-          : `failed:${digest(reading.failure!.kind, reading.failure!.at)}`;
+        : `failed:${digest(reading.failure!.kind, reading.failure!.at)}`;
     const decision = [...events].reverse().find((one) => one.kind === 'ACCEPTED' || one.kind === 'REJECTED');
     if (decision) {
       await put(terminal, marker, 'BUYER_RESPONSE', `${decision.kind}: ${decision.detail}`);
@@ -1697,8 +1850,9 @@ async function observe(reading: FulfillmentReading, opportunity: CashOpportunity
       terminal,
       marker,
       'REALIZED_CONTRIBUTION',
-      `${reading.money.contributionCents} cents realized`,
-      reading.money.contributionCents,
+      `${reading.money.contributionCents - reading.money.unpaidCommitmentCents} cents realized, after ` +
+        `${reading.money.unpaidCommitmentCents} still owed to the supplier`,
+      reading.money.contributionCents - reading.money.unpaidCommitmentCents,
     );
   }
   for (const refund of reading.refunds) {

@@ -474,7 +474,12 @@ never resent. A job is commercially complete only when the work is done, the
 whole promise is delivered, the buyer accepted it against the stated
 condition, every refund is resolved and nothing failed; settlement is still
 what makes money available. Finished and failed jobs leave append-only
-observations, grouped by mechanism with their sample size. See CLAUDE.md §52.
+observations, grouped by mechanism with their sample size. Refund
+authorization and supplier payments run under the project's cash lock, so two
+at once cannot over-refund or close one commitment twice. Work that failed
+(a withdrawn change request, a cancelled campaign, research that filed
+nothing) can be created again from the card, and only a failure a person
+recorded counts as a failure in the lessons. See CLAUDE.md §52.
 
 ## 12. Checks
 

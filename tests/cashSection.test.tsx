@@ -2656,7 +2656,7 @@ describe('fulfillment on a piece in flight', () => {
     };
   }
 
-  function flightView(): Record<string, unknown> {
+  function flightView(over: Record<string, unknown> = {}): Record<string, unknown> {
     return view({
       myCurrentWork: {
         ...(view().myCurrentWork as Record<string, unknown>),
@@ -2671,9 +2671,58 @@ describe('fulfillment on a piece in flight', () => {
         ],
         waiting: [],
       },
-      fulfillment: { readings: [reading()], lessons: [] },
+      fulfillment: { readings: [reading(over)], lessons: [] },
     });
   }
+
+  async function panel(): Promise<ReturnType<typeof within>> {
+    return waitFor(() => {
+      const node = document.querySelector('.rs-cash-work .rs-cash-fulfillment') as HTMLElement;
+      expect(node).toBeTruthy();
+      return within(node);
+    });
+  }
+
+  it('answers an unresolved refund with the provider’s reference, and nothing without one', async () => {
+    const route = `POST /api/projects/${PROJECT}/cash/fulfillment/cop_9/refunds/rk1/confirm`;
+    base({
+      [VIEW]: {
+        body: flightView({
+          refunds: [{ refundKey: 'rk1', amountCents: 5_000, reason: 'late', state: 'UNKNOWN', reference: null }],
+        }),
+      },
+      [route]: { body: { message: 'Recorded.' } },
+    });
+    await mount();
+    const card = await panel();
+    const confirm = card.getByRole('button', { name: /it was refunded/i }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(card.getByLabelText(/provider reference/i), { target: { value: 're_77' } });
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+    expect(bodies[route]).toEqual({ reference: 're_77' });
+  });
+
+  it('offers to create failed work again, saying what changed', async () => {
+    const route = `POST /api/projects/${PROJECT}/cash/fulfillment/cop_9/retry`;
+    base({
+      [VIEW]: {
+        body: flightView({
+          failure: { kind: 'WORK_FAILED', reason: 'The research mission failed', at: 't' },
+          stage: 'FAILED',
+        }),
+      },
+      [route]: { body: { message: 'Brain creates the work again on the next pass.' } },
+    });
+    await mount();
+    const card = await panel();
+    fireEvent.change(card.getByLabelText(/what changed/i), { target: { value: 'Five cities, not two' } });
+    await act(async () => {
+      fireEvent.click(card.getByRole('button', { name: /create the work again/i }));
+    });
+    expect(bodies[route]).toEqual({ reason: 'Five cities, not two' });
+  });
 
   it('shows the stage, the money still to collect and what needs a person', async () => {
     base({ [VIEW]: { body: flightView() } });

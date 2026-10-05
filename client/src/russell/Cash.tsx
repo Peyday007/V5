@@ -2072,6 +2072,12 @@ function Fulfillment({
   const [evidence, setEvidence] = useState('');
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
+  const [refundReference, setRefundReference] = useState<Record<string, string>>({});
+  const [costKind, setCostKind] = useState('INTERNAL_COST');
+  const [costAmount, setCostAmount] = useState('');
+  const [costDetail, setCostDetail] = useState('');
+  const [costReference, setCostReference] = useState('');
+  const [retryReason, setRetryReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -2093,6 +2099,7 @@ function Fulfillment({
   const fulfillment = reading?.fulfillment ?? null;
   const currency = reading?.money.currency ?? 'USD';
   const refundCents = centsFromAmount(refundAmount);
+  const costCents = centsFromAmount(costAmount);
 
   return (
     <div className="rs-cash-fulfillment">
@@ -2140,6 +2147,53 @@ function Fulfillment({
                 <li key={refund.refundKey} className="rs-item-meta">
                   Refund {money(refund.amountCents, currency)}: {refund.state.toLowerCase()}
                   {refund.reference ? ` (${refund.reference})` : ''} — {refund.reason}
+                  {canAct && (refund.state === 'PENDING' || refund.state === 'UNKNOWN') ? (
+                    <span className="rs-cash-refund-answer">
+                      <label>
+                        Provider reference
+                        <input
+                          value={refundReference[refund.refundKey] ?? ''}
+                          onChange={(event) =>
+                            setRefundReference({ ...refundReference, [refund.refundKey]: event.target.value })
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={busy || !(refundReference[refund.refundKey] ?? '').trim()}
+                        onClick={() =>
+                          void run(() =>
+                            CashApi.answerRefund(
+                              projectId,
+                              opportunityId,
+                              refund.refundKey,
+                              'confirm',
+                              (refundReference[refund.refundKey] ?? '').trim(),
+                            ),
+                          )
+                        }
+                      >
+                        It was refunded
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy || !(refundReference[refund.refundKey] ?? '').trim()}
+                        onClick={() =>
+                          void run(() =>
+                            CashApi.answerRefund(
+                              projectId,
+                              opportunityId,
+                              refund.refundKey,
+                              'not-sent',
+                              (refundReference[refund.refundKey] ?? '').trim(),
+                            ),
+                          )
+                        }
+                      >
+                        It did not happen
+                      </button>
+                    </span>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -2246,6 +2300,66 @@ function Fulfillment({
               </button>
             </form>
           )}
+          {fulfillment && reading?.failure?.kind === 'WORK_FAILED' ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void run(() => CashApi.retryFulfillmentWork(projectId, opportunityId, retryReason.trim()));
+              }}
+            >
+              <label>
+                What changed, so the work can be tried again
+                <input value={retryReason} onChange={(event) => setRetryReason(event.target.value)} />
+              </label>
+              <button type="submit" disabled={busy || !retryReason.trim()}>
+                Create the work again
+              </button>
+            </form>
+          ) : null}
+          {fulfillment ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (costCents === null) return;
+                void run(() =>
+                  CashApi.recordFulfillmentCost(projectId, opportunityId, {
+                    kind: costKind,
+                    amountCents: costCents,
+                    detail: costDetail.trim(),
+                    ...(costReference.trim() ? { reference: costReference.trim() } : {}),
+                  }),
+                );
+              }}
+            >
+              <label>
+                A cost
+                <select value={costKind} onChange={(event) => setCostKind(event.target.value)}>
+                  <option value="INTERNAL_COST">Money we spent</option>
+                  {fulfillment.kind === 'SUPPLIER' ? (
+                    <>
+                      <option value="SUPPLIER_COMMITMENT">What the supplier will be owed</option>
+                      <option value="SUPPLIER_PAYMENT">A payment to the supplier</option>
+                    </>
+                  ) : null}
+                </select>
+              </label>
+              <label>
+                Amount ({currency})
+                <input value={costAmount} onChange={(event) => setCostAmount(event.target.value)} />
+              </label>
+              <label>
+                For what
+                <input value={costDetail} onChange={(event) => setCostDetail(event.target.value)} />
+              </label>
+              <label>
+                Reference
+                <input value={costReference} onChange={(event) => setCostReference(event.target.value)} />
+              </label>
+              <button type="submit" disabled={busy || costCents === null || !costDetail.trim()}>
+                Record the cost
+              </button>
+            </form>
+          ) : null}
           {fulfillment && reading && reading.money.paidCents - reading.money.refundedCents > 0 ? (
             <form
               onSubmit={(event) => {

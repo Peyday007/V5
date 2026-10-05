@@ -874,6 +874,41 @@ export const CashApi = {
       body: JSON.stringify(body),
     }),
 
+  /** Answer an authorized refund with the provider's own word. Project ADMIN. */
+  answerRefund: (
+    projectId: string,
+    opportunityId: string,
+    refundKey: string,
+    answer: 'confirm' | 'not-sent',
+    reference: string,
+  ): Promise<{ message: string }> =>
+    api(
+      `/api/projects/${p(projectId)}/cash/fulfillment/${p(opportunityId)}/refunds/${p(refundKey)}/${answer}`,
+      { method: 'POST', body: JSON.stringify({ reference }) },
+    ),
+
+  /** Record a cost of fulfilling that actually happened. */
+  recordFulfillmentCost: (
+    projectId: string,
+    opportunityId: string,
+    body: { kind: string; amountCents: number; detail: string; reference?: string },
+  ): Promise<{ message: string }> =>
+    api(`/api/projects/${p(projectId)}/cash/fulfillment/${p(opportunityId)}/costs`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /** Ask Brain to create failed work again, saying what changed. */
+  retryFulfillmentWork: (
+    projectId: string,
+    opportunityId: string,
+    reason: string,
+  ): Promise<{ message: string }> =>
+    api(`/api/projects/${p(projectId)}/cash/fulfillment/${p(opportunityId)}/retry`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
   /** Record money that actually moved. Refused without a verifiable reference. */
   recordMoney: (
     projectId: string,

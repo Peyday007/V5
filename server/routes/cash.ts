@@ -61,6 +61,7 @@ import {
   readFulfillments,
   recordCost as recordFulfillmentCost,
   recordEvent as recordFulfillmentEventFor,
+  retryWork as retryFulfillmentWork,
 } from '../services/cash/fulfillment.ts';
 
 import { getNode } from '../repos/industry.ts';
@@ -1082,6 +1083,24 @@ cashRouter.post(
         kind: requiredString(body['kind'], 'kind'),
         detail: requiredString(body['detail'], 'detail'),
         evidenceRef: optionalString(body['evidenceRef'], 'evidenceRef') ?? null,
+        actorRef: principal.id,
+      }),
+    );
+    return { reading: value, message };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/fulfillment/:opportunityId/retry',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const opportunity = await opportunityInProject(project.id, pathId(req, 'opportunityId'));
+    const { value, message } = taken(
+      await retryFulfillmentWork({
+        projectId: project.id,
+        opportunityId: opportunity.id,
+        reason: requiredString(bodyOf(req)['reason'], 'reason'),
         actorRef: principal.id,
       }),
     );
