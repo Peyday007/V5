@@ -24,6 +24,7 @@ import { connectRouter } from './connect.ts';
 import { cashRouter } from './cash.ts';
 import { laborRouter } from './labor.ts';
 import { manufacturingRouter } from './manufacturing.ts';
+import { designRouter } from './design.ts';
 import { invitationsRouter } from './invitations.ts';
 import { passkeyRouter } from './passkeys.ts';
 import { peopleRouter } from './people.ts';
@@ -115,6 +116,10 @@ export function createApiRouter(): Router {
   // prefix and must sit before the projects router.
   router.use(laborRouter);
   router.use(manufacturingRouter);
+  // The design kernel (§42). Brain-wide rather than project-scoped — its tables
+  // carry no project_id — so it mounts beside `peopleRouter` rather than under
+  // `/projects/:id/...`, and its one route is guarded the same way.
+  router.use(designRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);

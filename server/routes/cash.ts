@@ -56,10 +56,12 @@ import { getNeed, getOpportunity } from '../repos/cashPortfolio.ts';
 import { getNode } from '../repos/industry.ts';
 import { seedSubject, retireSubject } from '../services/industry/seed.ts';
 import { industryView } from '../services/industry/view.ts';
+import { industryCapabilities, industryVocabulary } from '../services/industry/access.ts';
 import { isIndustryNodeKind } from '../domain/industry.ts';
 import { getDeal } from '../repos/dealflow.ts';
 import { observe, retire, seedParty } from '../services/dealflow/seed.ts';
 import { dealDetail, dealflowView } from '../services/dealflow/view.ts';
+import { dealflowAccess, retiredDealflowParties } from '../services/dealflow/access.ts';
 import { isDealObservationKind, isDealPartyKind } from '../domain/dealflow.ts';
 import { getPuzzleInstance, getPuzzleProduct } from '../repos/puzzle.ts';
 import { defineMaster, observe as observePuzzle, retireFormat, seedFormat } from '../services/puzzle/seed.ts';
@@ -1217,7 +1219,18 @@ cashRouter.get(
   handler(async (req) => {
     requirePerson();
     const project = await requireProject(pathId(req, 'projectId'));
-    return industryView(project.id);
+    /*
+     * The reading, plus what a control over it may be offered for.
+     *
+     * Composed here rather than inside `industryView`, the same way
+     * `routes/labor.ts` composes `laborCapabilities` and `laborVocabulary`
+     * at its own GET route rather than inside `laborView`.
+     */
+    return {
+      ...(await industryView(project.id)),
+      capabilities: industryCapabilities(project.id),
+      vocabulary: industryVocabulary(),
+    };
   }),
 );
 
@@ -1330,7 +1343,23 @@ cashRouter.get(
   handler(async (req) => {
     requirePerson();
     const project = await requireProject(pathId(req, 'projectId'));
-    return dealflowView(project.id);
+    /*
+     * The reading, plus what a control over it may be offered for. Composed
+     * here rather than inside `dealflowView`, for `routes/labor.ts`'s reason:
+     * `dealflowAccess` needs the authenticated principal, and `dealflowView`
+     * has no such caller to depend on.
+     *
+     * `retiredDealflowParties` is a third, separate reading for the same
+     * reason: a retired party still belongs on this screen with the reason a
+     * person gave (§45's A02), which `dealflowView` deliberately does not
+     * answer — it filters a retired party out of what the *kernel* offers to
+     * research, not out of what the *operator* may still read.
+     */
+    return {
+      ...(await dealflowView(project.id)),
+      ...dealflowAccess(project.id),
+      ...(await retiredDealflowParties(project.id)),
+    };
   }),
 );
 

@@ -20,6 +20,7 @@ import { listState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { FactoryApi } from '../lib/factoryApi.ts';
 import type {
+  EvidenceNumber,
   FactoryCampaign,
   FactoryChangeRequest,
   FactoryInvitations,
@@ -31,6 +32,7 @@ import type {
   OnboardResult,
   RepositoryOnboarding,
   SubmitResponse,
+  ThroughputReport,
 } from '../lib/factoryApi.ts';
 
 export function BuildView({ projectId }: { projectId: string | null }): JSX.Element {
@@ -1116,7 +1118,139 @@ function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
           independent session has passed it.
         </p>
       )}
+      <PullRequestPreview campaignId={campaign.id} />
+      <ThroughputPreview campaignId={campaign.id} />
     </li>
+  );
+}
+
+/**
+ * The reviewable artifact's title and body, read rather than assumed.
+ *
+ * §27 records what it cost the local plane not to have this: `assemble.ts`
+ * renders the body and stops, and "the one person who has to act on it had
+ * nowhere to read what they were about to open." The route already existed;
+ * nothing called it. Fetched only once this disclosure is opened, because a
+ * campaign row that is never read should never cost a request.
+ */
+function PullRequestPreview({ campaignId }: { campaignId: string }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<{ title: string | null; body: string | null } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const toggle = useCallback(() => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (data !== null || busy) return;
+    setBusy(true);
+    setProblem(null);
+    FactoryApi.pullRequest(campaignId).then(
+      (result) => {
+        setData(result);
+        setBusy(false);
+      },
+      (error: unknown) => {
+        setProblem(error instanceof Error ? error.message : String(error));
+        setBusy(false);
+      },
+    );
+  }, [open, data, busy, campaignId]);
+
+  return (
+    <div className="rs-build-pr-preview">
+      <button type="button" className="rs-button-quiet" aria-expanded={open} onClick={toggle}>
+        {open ? 'Hide the pull request it would open' : 'Read the pull request it would open'}
+      </button>
+      {open ? (
+        busy ? (
+          <p className="rs-hint">Reading…</p>
+        ) : problem ? (
+          <p className="rs-state rs-state-error">{problem}</p>
+        ) : data && data.title !== null ? (
+          <div className="rs-build-pr-body">
+            <p className="rs-item-title">{data.title}</p>
+            <pre>{data.body}</pre>
+          </div>
+        ) : (
+          <p className="rs-hint">No pull request has been rendered yet.</p>
+        )
+      ) : null}
+    </div>
+  );
+}
+
+/** One evidence-backed figure, labelled with the class of evidence it carries. */
+function EvidenceLine({ label, entry }: { label: string; entry: EvidenceNumber }): JSX.Element {
+  return (
+    <li className="rs-ready-row">
+      <span>{label}</span>
+      <span className="rs-ready-state" data-state={entry.evidence}>
+        {entry.value === null ? 'not measured' : entry.value}
+        <span className="rs-hint"> &middot; {entry.evidence}</span>
+      </span>
+      <span className="rs-hint">{entry.basis}</span>
+    </li>
+  );
+}
+
+/**
+ * The factory's own throughput, with an evidence class on every number.
+ *
+ * Every figure here is what `throughputReport` actually measured, derived or
+ * left `UNKNOWN` — never zero for a number nobody has observed. Fetched only
+ * once this disclosure is opened.
+ */
+function ThroughputPreview({ campaignId }: { campaignId: string }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<ThroughputReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const toggle = useCallback(() => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (data !== null || busy) return;
+    setBusy(true);
+    setProblem(null);
+    FactoryApi.throughput(campaignId).then(
+      (result) => {
+        setData(result);
+        setBusy(false);
+      },
+      (error: unknown) => {
+        setProblem(error instanceof Error ? error.message : String(error));
+        setBusy(false);
+      },
+    );
+  }, [open, data, busy, campaignId]);
+
+  return (
+    <div className="rs-build-throughput">
+      <button type="button" className="rs-button-quiet" aria-expanded={open} onClick={toggle}>
+        {open ? 'Hide how fast it ran' : 'How fast it ran'}
+      </button>
+      {open ? (
+        busy ? (
+          <p className="rs-hint">Reading…</p>
+        ) : problem ? (
+          <p className="rs-state rs-state-error">{problem}</p>
+        ) : data ? (
+          <ul className="rs-ready-list">
+            <EvidenceLine label="Units per hour" entry={data.unitsPerHour} />
+            <EvidenceLine label="Peak concurrency observed" entry={data.maxObservedConcurrency} />
+            <EvidenceLine label="Concurrency observed" entry={data.concurrency.observed} />
+            <EvidenceLine label="Concurrency declared" entry={data.concurrency.declared} />
+          </ul>
+        ) : null
+      ) : null}
+    </div>
   );
 }
 

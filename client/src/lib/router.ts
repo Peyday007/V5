@@ -26,6 +26,7 @@ export type Route =
   | { name: 'SITES' }
   | { name: 'CASH' }
   | { name: 'MACHINES' }
+  | { name: 'INDUSTRIES' }
   /**
    * Who does the work here.
    *
@@ -35,6 +36,25 @@ export type Route =
    * in a month or two would take it down with one.
    */
   | { name: 'LABOR' }
+  /**
+   * The puzzle kernel's operator surface.
+   *
+   * Its own address for the same reason as `LABOR`: the puzzle products
+   * ledger, its maturity ladder and its lessons are true of the kernel's whole
+   * attempt rather than of any one sprint, so it gets a bookmarkable address
+   * rather than a panel hanging off Cash.
+   */
+  | { name: 'PUZZLES' }
+  /** The cross-border dealflow kernel (§45): parties, deals, questions. */
+  | { name: 'DEALFLOW' }
+  /**
+   * The design kernel's own operator surface.
+   *
+   * Brain-wide rather than a project's, for `PEOPLE`'s reason: §42's tables
+   * carry no `project_id`, so this address takes no project and the screen it
+   * reaches renders with none.
+   */
+  | { name: 'DESIGN' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -97,8 +117,16 @@ export function parseRoute(pathname: string): Route {
       return { name: 'CASH' };
     case 'machines':
       return { name: 'MACHINES' };
+    case 'industries':
+      return { name: 'INDUSTRIES' };
     case 'labor':
       return { name: 'LABOR' };
+    case 'puzzles':
+      return { name: 'PUZZLES' };
+    case 'dealflow':
+      return { name: 'DEALFLOW' };
+    case 'design':
+      return { name: 'DESIGN' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
@@ -142,8 +170,16 @@ export function pathFor(route: Route): string {
       return '/cash';
     case 'MACHINES':
       return '/machines';
+    case 'INDUSTRIES':
+      return '/industries';
     case 'LABOR':
       return '/labor';
+    case 'PUZZLES':
+      return '/puzzles';
+    case 'DEALFLOW':
+      return '/dealflow';
+    case 'DESIGN':
+      return '/design';
     case 'SEARCH':
       return '/search';
     case 'INVITE':
