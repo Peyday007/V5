@@ -621,8 +621,8 @@ describe('the automatic recovery of a synthesis Brain could not file', () => {
     expect((await getMission(missionId))!.state).toBe('RUNNING');
   });
 
-  it('leaves a packet alone when a person has already answered its card', async () => {
-    const stuck = await stuckPacket();
+  it('leaves a packet alone when a person has already answered its card, its bin included', async () => {
+    const stuck = await stuckPacket({ binAttempts: 3 });
     await ledger(stuck.workItemId, STORE_REFUSED);
     const { missionId, requestId } = await parkedWithCard(stuck);
     const person = await createCredentiallessUser({ email: null, displayName: 'Answerer', createdByType: 'SYSTEM', createdById: 'test' });
@@ -633,6 +633,7 @@ describe('the automatic recovery of a synthesis Brain could not file', () => {
     expect((await getHumanRequest(requestId))!.state).toBe('ANSWERED');
     expect((await getMission(missionId))!.state).toBe('NEEDS_HUMAN');
     expect((await getOrchestration(stuck.orchestrationId))!.status).toBe('NEEDS_HUMAN');
+    expect((await getBin(stuck.binId))!.maxAttempts).toBe(3);
   });
 
   it('asks a withdrawn question again when the same stop comes back, and never reaches an answered one', async () => {

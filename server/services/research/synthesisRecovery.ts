@@ -46,7 +46,7 @@
  * general "retry this item" built on top of it would be exactly what the
  * runner's one-item-per-target rule forbids.
  */
-import type { ActorType, ResearchOrchestration, WorkItem } from '../../domain/types.ts';
+import type { ActorType, ResearchOrchestration, RussellHumanRequest, WorkItem } from '../../domain/types.ts';
 import {
   citableClaims,
   getOrchestration,
@@ -67,7 +67,13 @@ import { getRun } from '../../repos/runs.ts';
 import { listDocuments } from '../../repos/documents.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { operationsForWorkItems } from '../../repos/idempotency.ts';
-import { getMissionByOrchestration, transitionMission, withdrawRequest } from '../../repos/russellMissions.ts';
+import {
+  getHumanRequest,
+  getMissionByOrchestration,
+  reopenWithdrawnRequest,
+  transitionMission,
+  withdrawRequest,
+} from '../../repos/russellMissions.ts';
 import { buildNames } from '../../domain/naming.ts';
 import { layerPrefix } from '../storage.ts';
 import { getStorage } from '../storage/index.ts';
@@ -794,6 +800,18 @@ const PERMANENT_REFUSALS = new Set<string>([
 ]);
 const permanentlyRefused = new Set<string>();
 
+/** Put back cards this pass withdrew for a recovery that did not go ahead. */
+async function restoreCards(cards: RussellHumanRequest[]): Promise<void> {
+  for (const card of cards) {
+    await reopenWithdrawnRequest({
+      requestId: card.id,
+      choices: card.choices,
+      authorityNeeded: card.authorityNeeded,
+      whyNotRussell: card.whyNotRussell,
+    });
+  }
+}
+
 export async function recoverFilingFailures(
   limit: number,
   options: { force?: boolean } = {},
@@ -878,6 +896,19 @@ export async function recoverFilingFailures(
     if (orchestrationId && seen.has(orchestrationId)) continue;
     if (orchestrationId) seen.add(orchestrationId);
 
+    // A person's answer is theirs to have carried out: checked before anything
+    // here touches the packet, its bin included.
+    const requests = mission
+      ? await db.all<{ id: string; state: string }>(
+          `SELECT id, state FROM russell_human_requests WHERE mission_id = ? AND state IN ('OPEN','ANSWERED')`,
+          [mission.id],
+        )
+      : [];
+    if (requests.some((request) => request.state === 'ANSWERED')) {
+      out.push({ workItemId: row.id, orchestrationId, regranted: null, outcome: 'REFUSED', refusal: 'PERSON_HAS_ANSWERED' });
+      continue;
+    }
+
     let regranted: string | null = null;
     if (!assessed.eligible && assessed.outcome.refusal === 'BIN_EXHAUSTED' && orchestrationId) {
       const found = await binForOrchestration(orchestrationId);
@@ -908,30 +939,25 @@ export async function recoverFilingFailures(
      * open, with the reason on the row; if it was answered in between, nothing
      * is recovered.
      */
-    let withdrew: string | null = null;
-    if ((assessed.eligible || regranted) && mission) {
-      const requests = await db.all<{ id: string; state: string }>(
-        `SELECT id, state FROM russell_human_requests WHERE mission_id = ? AND state IN ('OPEN','ANSWERED')`,
-        [mission.id],
-      );
-      if (requests.some((request) => request.state === 'ANSWERED')) {
-        out.push({ workItemId: row.id, orchestrationId, regranted, outcome: 'REFUSED', refusal: 'PERSON_HAS_ANSWERED' });
-        continue;
-      }
+    const withdrawn: RussellHumanRequest[] = [];
+    let lostRace = false;
+    if (assessed.eligible || regranted) {
       for (const request of requests) {
+        const before = await getHumanRequest(request.id);
         const taken = await withdrawRequest({
           requestId: request.id,
           reason:
             'Withdrawn by Brain: this packet stopped because Brain could not file its report, and that is repaired. ' +
             'The synthesis was reissued over the evidence that survived, so there is nothing here to decide.',
         });
-        if (!taken) {
-          withdrew = null;
+        if (!taken || !before) {
+          lostRace = true;
           break;
         }
-        withdrew = request.id;
+        withdrawn.push(before);
       }
-      if (requests.length > 0 && !withdrew) {
+      if (lostRace) {
+        await restoreCards(withdrawn);
         out.push({ workItemId: row.id, orchestrationId, regranted, outcome: 'REFUSED', refusal: 'PERSON_HAS_ANSWERED' });
         continue;
       }
@@ -948,6 +974,8 @@ export async function recoverFilingFailures(
               'that survived.',
           })
         : assessed.outcome;
+    // A card withdrawn for a recovery that did not happen is asked again.
+    if (outcome.status !== 'RECOVERED') await restoreCards(withdrawn);
     // An exhausted bin whose one regrant is already spent cannot change on its own either.
     const spentBudget = outcome.refusal === 'BIN_EXHAUSTED' && !regranted;
     if (outcome.status !== 'RECOVERED' && outcome.refusal && (PERMANENT_REFUSALS.has(outcome.refusal) || spentBudget) && orchestrationId) {
