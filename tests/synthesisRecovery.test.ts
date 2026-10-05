@@ -31,6 +31,7 @@ import {
 import { cancelWork, enqueueWork, getWorkItem, listWorkItems } from '../server/repos/workQueue.ts';
 import { createBin, getBin, listBins } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
+import { getMission, launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
 import { storeFile } from '../server/services/storage.ts';
 import { initStorage, resetStorage } from '../server/services/storage/index.ts';
 import {
@@ -39,6 +40,7 @@ import {
   FILING_REGRANT_REASON,
   recoverFailedSynthesis,
   recoverFilingFailures,
+  resetFilingRecoveryThrottle,
 } from '../server/services/research/synthesisRecovery.ts';
 
 let projectId = '';
@@ -47,6 +49,7 @@ let layerName = '';
 let fixture: Awaited<ReturnType<typeof freshProject>>;
 
 beforeEach(async () => {
+  resetFilingRecoveryThrottle();
   fixture = await freshProject();
   projectId = fixture.project.id;
   const layer = (await listLayers(projectId))[0]!;
@@ -548,6 +551,57 @@ describe('the automatic recovery of a synthesis Brain could not file', () => {
     const out = await recoverFilingFailures(10, { force: true });
     expect(out[0]).toMatchObject({ outcome: 'REFUSED', refusal: 'NO_CITABLE_EVIDENCE' });
     expect((await getOrchestration(stuck.orchestrationId))!.status).toBe('NEEDS_HUMAN');
+  });
+
+  it('never undoes a person\'s STOP: a cancelled mission stays cancelled', async () => {
+    const stuck = await stuckPacket();
+    await ledger(stuck.workItemId, STORE_REFUSED);
+    const { mission } = await launchMission({
+      projectId,
+      visibility: 'SHARED',
+      objective: 'a bounded question',
+      whyNow: 'test',
+      idempotencyKey: `stop-${stuck.orchestrationId}`,
+    });
+    await linkMission({ missionId: mission.id, orchestrationId: stuck.orchestrationId });
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'CANCELLED', terminalReason: 'STOP' });
+
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out[0]).toMatchObject({ outcome: 'REFUSED', refusal: 'MISSION_ENDED_BY_DECISION' });
+    expect((await getMission(mission.id))!.state).toBe('CANCELLED');
+    expect((await getOrchestration(stuck.orchestrationId))!.status).toBe('NEEDS_HUMAN');
+    const live = (await listWorkItems(projectId, { limit: 50 })).filter(
+      (item) => item.orchestrationId === stuck.orchestrationId && item.state === 'QUEUED',
+    );
+    expect(live).toHaveLength(0);
+  });
+
+  it('takes one place per packet, and a permanent refusal does not hold the front of the queue', async () => {
+    // An old packet that failed several times and can never be recovered.
+    const dead = await stuckPacket({ claims: 0 });
+    await ledger(dead.workItemId, STORE_REFUSED);
+    for (let i = 0; i < 3; i += 1) {
+      const extra = await enqueueWork({
+        projectId,
+        workType: 'RESEARCH_SYNTHESIZE',
+        payload: {},
+        orchestrationId: dead.orchestrationId,
+        createdByType: 'WORKER',
+        createdById: 'test',
+      });
+      await cancelWork(extra.id, 'refused');
+      await ledger(extra.id, STORE_REFUSED);
+    }
+    const first = await recoverFilingFailures(1, { force: true });
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({ orchestrationId: dead.orchestrationId, refusal: 'NO_CITABLE_EVIDENCE' });
+
+    // A recoverable packet arrives; a batch of one reaches it next time.
+    const live = await stuckPacket();
+    await ledger(live.workItemId, STORE_REFUSED);
+    const second = await recoverFilingFailures(1, { force: true });
+    expect(second).toHaveLength(1);
+    expect(second[0]).toMatchObject({ orchestrationId: live.orchestrationId, outcome: 'RECOVERED' });
   });
 
   it('is throttled, so a ten-second tick does not rescan the backlog', async () => {

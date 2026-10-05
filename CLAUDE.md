@@ -10740,7 +10740,20 @@ through the guarded raise with `FILING_REGRANT_REASON` on its history, and one
 packet is recovered automatically at most once: a replacement refused by the
 store again means the defect is not historical and a person should look.
 Nothing is re-researched; the synthesis is re-run because its text rolled back
-with the failed filing.
+with the failed filing. **It never undoes a person's STOP**: a packet whose
+mission is CANCELLED or FAILED is refused by name and left to the operator,
+because the targeted recovery would move that mission back to RUNNING. It takes
+one place per packet and remembers the refusals no tick can change, so a
+packet that can never be recovered cannot hold the front of the queue.
+
+**A session id that is a variable's name is refused at check-in.** The probe
+fired at Brain Research A on 2026-10-05 started a session that checked in with
+the literal `$CLAUDE_CODE_REMOTE_SESSION_ID`, was handed two Cash Mode 1 bins
+and filed a synthesis — and the probe, comparing that literal against the
+session it fired, recorded NO_MCP. The same literal from every worker would also
+be one "session" to the audit-independence floor. No provider session id
+contains `$`, so `brain_check_in` refuses one that does, names the remedy and
+assigns nothing; leaving the field out still works.
 
 ### Two things the gates found that reading did not.
 
