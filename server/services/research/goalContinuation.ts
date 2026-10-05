@@ -57,6 +57,9 @@ interface GoalRow {
   name: string;
   research_assignment: string;
   research_layer_id: string | null;
+  max_missions: number;
+  max_fragments: number;
+  expires_at: string | null;
 }
 
 interface PacketRow {
@@ -90,18 +93,41 @@ async function leftUnresolved(packet: PacketRow): Promise<boolean> {
   });
 }
 
-async function hasOpenCeilingRequest(goalId: string): Promise<boolean> {
+type Ceiling = 'PACKETS' | 'FRAGMENTS' | 'DEADLINE';
+
+/**
+ * The question's key: the goal, the ceiling and the value that ceiling holds
+ * now. The value is what lets a ceiling a person raised and then reached again
+ * ask a new question; with only the goal and the ceiling the answered row would
+ * be returned for ever and nobody would be asked. Never a clock, an attempt or a
+ * lease.
+ */
+function ceilingRequestKey(
+  goalId: string,
+  ceiling: Ceiling,
+  limits: { max_missions: number; max_fragments: number; expires_at: string | null },
+): string {
+  const value =
+    ceiling === 'PACKETS' ? limits.max_missions : ceiling === 'FRAGMENTS' ? limits.max_fragments : limits.expires_at;
+  return `goal-budget:${goalId}:${ceiling}:${value ?? 'none'}`;
+}
+
+/** Is a question about this goal's current ceilings still waiting on a person? */
+async function hasOpenCeilingRequest(goal: GoalRow): Promise<boolean> {
+  const keys = (['PACKETS', 'FRAGMENTS', 'DEADLINE'] as const).map((ceiling) =>
+    ceilingRequestKey(goal.id, ceiling, goal),
+  );
   const rows = await getDb().all<{ id: string }>(
     `SELECT id FROM russell_human_requests
-      WHERE state = 'OPEN' AND resume_key LIKE ? LIMIT 1`,
-    [`goal-budget:${goalId}:%`],
+      WHERE state = 'OPEN' AND resume_key IN (?, ?, ?) LIMIT 1`,
+    keys,
   );
   return rows.length > 0;
 }
 
 async function askAboutCeiling(
   goal: GoalRow,
-  ceiling: 'PACKETS' | 'FRAGMENTS' | 'DEADLINE',
+  ceiling: Ceiling,
   detail: string,
 ): Promise<boolean> {
   const { created } = await askHuman({
@@ -127,9 +153,9 @@ async function askAboutCeiling(
       },
     ],
     urgency: 'WHENEVER',
-    // The goal and the ceiling, so the same stop asked on every tick is one
-    // request. Never a clock, an attempt or a lease.
-    resumeKey: `goal-budget:${goal.id}:${ceiling}`,
+    // The goal, the ceiling and its value: the same stop asked on every tick is
+    // one request, and a raised ceiling reached again is a new one.
+    resumeKey: ceilingRequestKey(goal.id, ceiling, goal),
   });
   return created;
 }
@@ -139,7 +165,7 @@ async function advanceOne(goal: GoalRow, report: GoalContinuationReport): Promis
     report.skipped.push({ goalId: goal.id, reason: 'the goal names no layer to file under' });
     return;
   }
-  if (await hasOpenCeilingRequest(goal.id)) {
+  if (await hasOpenCeilingRequest(goal)) {
     report.skipped.push({ goalId: goal.id, reason: 'waiting on a person about a ceiling' });
     return;
   }
@@ -234,7 +260,8 @@ export async function advanceResearchGoals(): Promise<GoalContinuationReport> {
     skipped: [],
   };
   const goals = await getDb().all<GoalRow>(
-    `SELECT id, project_id, name, research_assignment, research_layer_id
+    `SELECT id, project_id, name, research_assignment, research_layer_id,
+            max_missions, max_fragments, expires_at
        FROM russell_goals
       WHERE purpose = 'RESEARCH_GOAL' AND state = 'ACTIVE' AND research_assignment IS NOT NULL
       ORDER BY created_at, id

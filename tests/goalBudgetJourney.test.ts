@@ -344,6 +344,54 @@ describe('a ceiling stops the goal and asks a person once', () => {
     expect((await packetsOf(goal.id)).map((p) => p.status)).toEqual(['COMPLETE_WITH_GAPS']);
   });
 
+  it('asks again when a raised ceiling is reached again, and never twice for one ceiling', async () => {
+    const goal = await newGoal({ maxPackets: 1 });
+    await advanceResearchGoals();
+    const [one] = await packetsOf(goal.id);
+    await updateOrchestration(one!.id, { status: 'COMPLETE_WITH_GAPS', completedAt: new Date().toISOString() });
+
+    await advanceResearchGoals();
+    const [first] = await requestsFor(goal.id);
+    expect(first?.state).toBe('OPEN');
+
+    // The person answers LEAVE_STOPPED and leaves the ceiling alone: the goal
+    // stays stopped and the answered question is not asked a second time.
+    await getDb().run(`UPDATE russell_human_requests
+          SET state = 'ANSWERED', answered_by_user_id = ?, answered_choice = 'LEAVE_STOPPED'
+        WHERE id = ?`,
+      [userId, first!.id]);
+    await advanceResearchGoals();
+    await advanceResearchGoals();
+    expect(await requestsFor(goal.id)).toHaveLength(1);
+    expect(await packetsOf(goal.id)).toHaveLength(1);
+
+    // They raise it instead; packet 2 starts, ends short, and the new ceiling
+    // is reached: a new question, because the ceiling is not the one answered.
+    await getDb().run(`UPDATE russell_goals SET max_missions = 2 WHERE id = ?`, [goal.id]);
+    const resumed = await advanceResearchGoals();
+    expect(resumed.started).toHaveLength(1);
+    const packets = await packetsOf(goal.id);
+    await updateOrchestration(packets[1]!.id, { status: 'COMPLETE_WITH_GAPS', completedAt: new Date().toISOString() });
+    await advanceResearchGoals();
+    const requests = await requestsFor(goal.id);
+    expect(requests).toHaveLength(2);
+    expect(requests.filter((r) => r.state === 'OPEN')).toHaveLength(1);
+  });
+
+  it('does not read another goal\'s request as its own, whatever the ids contain', async () => {
+    const goal = await newGoal({ maxPackets: 1 });
+    // An id differing from the goal's only where `_` would be a LIKE wildcard.
+    const lookalike = `${goal.id.slice(0, 3)}X${goal.id.slice(4)}`;
+    await getDb().run(
+      `INSERT INTO russell_human_requests
+         (id, project_id, visibility, authority_needed, why_not_russell, choices, urgency, state, resume_key, created_at, updated_at)
+       VALUES ('rhr_lookalike', ?, 'SHARED', 'x', 'x', '[]', 'WHENEVER', 'OPEN', ?, ?, ?)`,
+      [fixture.project.id, `goal-budget:${lookalike}:PACKETS:1`, new Date().toISOString(), new Date().toISOString()],
+    );
+    const report = await advanceResearchGoals();
+    expect(report.started).toHaveLength(1);
+  });
+
   async function archiveThatAnswers(): Promise<void> {
     await importFile({
       projectId: fixture.project.id,
