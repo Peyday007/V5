@@ -32,6 +32,7 @@ import { getDb } from '../../db/database.ts';
 import { askHuman } from '../../repos/russellMissions.ts';
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { coverBeforeWork } from '../russell/coverage.ts';
+import { inventoryProject } from '../reconcile/plan.ts';
 import { TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { GoalBudgetExhausted, startPacket } from './startPacket.ts';
 
@@ -168,9 +169,14 @@ async function advanceOne(goal: GoalRow, report: GoalContinuationReport): Promis
   }
 
   // Ask the archive first. A goal it already answers starts nothing.
+  // Inventory first, as startPacket does: a document that was read and never
+  // inventoried has no stored claims, and would read MISSING here while the
+  // archive in fact answers the assignment.
+  const inventory = await inventoryProject(goal.project_id);
   const coverage = await coverBeforeWork({
     projectId: goal.project_id,
     layerId: goal.research_layer_id,
+    claims: inventory.claims,
     requirements: [
       { key: 'goal-assignment', statement: goal.research_assignment, necessity: 'MANDATORY' },
     ],

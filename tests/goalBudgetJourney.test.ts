@@ -314,18 +314,7 @@ describe('a ceiling stops the goal and asks a person once', () => {
     expect((await goalBudgetStatus(goal.id))?.packets.used).toBe(0);
   });
 
-  /*
-   * A FOUND DEFECT, recorded rather than hidden. `advanceResearchGoals` hands
-   * `coverBeforeWork` the project's claims as stored, and a document that was
-   * read but never inventoried has none stored — so an archive that does answer
-   * the assignment reads MISSING on the goal's first pass and a packet is
-   * reserved before `startPacket`'s own reconcile finds the answer. The fix
-   * belongs in `goalContinuation.ts` (call `inventoryProject` and pass its
-   * claims), which this test unit does not own. `it.fails` keeps the suite
-   * honest: it passes while the defect stands and goes red the moment it is
-   * fixed, which is the cue to delete the wrapper.
-   */
-  it.fails('starts zero packets for an archive nobody has inventoried yet', async () => {
+  it('starts zero packets for an archive nobody has inventoried yet', async () => {
     await archiveThatAnswers();
     const goal = await newGoal({ assignment: QUESTION });
     const report = await advanceResearchGoals();
