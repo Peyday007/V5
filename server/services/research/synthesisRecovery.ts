@@ -67,7 +67,7 @@ import { getRun } from '../../repos/runs.ts';
 import { listDocuments } from '../../repos/documents.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { operationsForWorkItems } from '../../repos/idempotency.ts';
-import { getMissionByOrchestration, transitionMission } from '../../repos/russellMissions.ts';
+import { getMissionByOrchestration, transitionMission, withdrawRequest } from '../../repos/russellMissions.ts';
 import { buildNames } from '../../domain/naming.ts';
 import { layerPrefix } from '../storage.ts';
 import { getStorage } from '../storage/index.ts';
@@ -745,7 +745,7 @@ export interface FilingRecovery {
   orchestrationId: string | null;
   regranted: string | null;
   outcome: RecoveryOutcome['status'];
-  refusal: RecoveryOutcome['refusal'] | 'MISSION_ENDED_BY_DECISION' | null;
+  refusal: RecoveryOutcome['refusal'] | 'MISSION_ENDED_BY_DECISION' | 'PERSON_HAS_ANSWERED' | null;
 }
 
 /**
@@ -789,6 +789,8 @@ const PERMANENT_REFUSALS = new Set<string>([
   'PACKET_NOT_RECOVERABLE',
   'ALREADY_FILED',
   'ALREADY_RECOVERED',
+  'OPERATION_SUCCEEDED',
+  'SYNTHESIS_RECORDED',
 ]);
 const permanentlyRefused = new Set<string>();
 
@@ -897,6 +899,44 @@ export async function recoverFilingFailures(
       }
     }
 
+    /*
+     * A Needs You card about this park is the person's, and recovering past it
+     * would leave a question open about a packet that is running again — a STOP
+     * answered on it later cancels the mission and leaves the packet working.
+     * An answer already given is theirs to have carried out, so the packet is
+     * left alone. An open card is withdrawn first, guarded on its still being
+     * open, with the reason on the row; if it was answered in between, nothing
+     * is recovered.
+     */
+    let withdrew: string | null = null;
+    if ((assessed.eligible || regranted) && mission) {
+      const requests = await db.all<{ id: string; state: string }>(
+        `SELECT id, state FROM russell_human_requests WHERE mission_id = ? AND state IN ('OPEN','ANSWERED')`,
+        [mission.id],
+      );
+      if (requests.some((request) => request.state === 'ANSWERED')) {
+        out.push({ workItemId: row.id, orchestrationId, regranted, outcome: 'REFUSED', refusal: 'PERSON_HAS_ANSWERED' });
+        continue;
+      }
+      for (const request of requests) {
+        const taken = await withdrawRequest({
+          requestId: request.id,
+          reason:
+            'Withdrawn by Brain: this packet stopped because Brain could not file its report, and that is repaired. ' +
+            'The synthesis was reissued over the evidence that survived, so there is nothing here to decide.',
+        });
+        if (!taken) {
+          withdrew = null;
+          break;
+        }
+        withdrew = request.id;
+      }
+      if (requests.length > 0 && !withdrew) {
+        out.push({ workItemId: row.id, orchestrationId, regranted, outcome: 'REFUSED', refusal: 'PERSON_HAS_ANSWERED' });
+        continue;
+      }
+    }
+
     const outcome =
       assessed.eligible || regranted
         ? await recoverFailedSynthesis({
@@ -908,7 +948,9 @@ export async function recoverFilingFailures(
               'that survived.',
           })
         : assessed.outcome;
-    if (outcome.status !== 'RECOVERED' && outcome.refusal && PERMANENT_REFUSALS.has(outcome.refusal) && orchestrationId) {
+    // An exhausted bin whose one regrant is already spent cannot change on its own either.
+    const spentBudget = outcome.refusal === 'BIN_EXHAUSTED' && !regranted;
+    if (outcome.status !== 'RECOVERED' && outcome.refusal && (PERMANENT_REFUSALS.has(outcome.refusal) || spentBudget) && orchestrationId) {
       permanentlyRefused.add(orchestrationId);
     }
     out.push({

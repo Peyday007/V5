@@ -10744,7 +10744,12 @@ with the failed filing. **It never undoes a person's STOP**: a packet whose
 mission is CANCELLED or FAILED is refused by name and left to the operator,
 because the targeted recovery would move that mission back to RUNNING. It takes
 one place per packet and remembers the refusals no tick can change, so a
-packet that can never be recovered cannot hold the front of the queue.
+packet that can never be recovered cannot hold the front of the queue. And a card
+about the park is the person's: an answered one leaves the packet alone, and an
+open one is withdrawn first with the reason on the row — a STOP answered later
+on a card about a packet that is running again would cancel the mission and
+leave the packet working. If the same stop comes back, the park reopens that
+withdrawn card rather than finding it and showing nothing.
 
 **A session id that is a variable's name is refused at check-in.** The probe
 fired at Brain Research A on 2026-10-05 started a session that checked in with

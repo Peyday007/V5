@@ -31,7 +31,17 @@ import {
 import { cancelWork, enqueueWork, getWorkItem, listWorkItems } from '../server/repos/workQueue.ts';
 import { createBin, getBin, listBins } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
-import { getMission, launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
+import { createCredentiallessUser } from '../server/repos/identity.ts';
+import {
+  answerHumanRequest,
+  askHuman,
+  getHumanRequest,
+  getMission,
+  launchMission,
+  linkMission,
+  reopenWithdrawnRequest,
+  transitionMission,
+} from '../server/repos/russellMissions.ts';
 import { storeFile } from '../server/services/storage.ts';
 import { initStorage, resetStorage } from '../server/services/storage/index.ts';
 import {
@@ -574,6 +584,67 @@ describe('the automatic recovery of a synthesis Brain could not file', () => {
       (item) => item.orchestrationId === stuck.orchestrationId && item.state === 'QUEUED',
     );
     expect(live).toHaveLength(0);
+  });
+
+  async function parkedWithCard(stuck: Stuck): Promise<{ missionId: string; requestId: string }> {
+    const { mission } = await launchMission({
+      projectId,
+      visibility: 'SHARED',
+      objective: 'a bounded question',
+      whyNow: 'test',
+      idempotencyKey: `park-${stuck.orchestrationId}`,
+    });
+    await linkMission({ missionId: mission.id, orchestrationId: stuck.orchestrationId });
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'NEEDS_HUMAN', waitingOn: 'the filing failed' });
+    const { request } = await askHuman({
+      projectId,
+      missionId: mission.id,
+      authorityNeeded: 'whether to continue',
+      whyNotRussell: 'the packet stopped',
+      choices: [
+        { key: 'RECORD_GAPS', label: 'Record', consequence: 'files short' },
+        { key: 'STOP', label: 'Stop', consequence: 'stops' },
+      ],
+      resumeKey: `russell:needs-human:${mission.id}:${stuck.orchestrationId}`,
+    });
+    return { missionId: mission.id, requestId: request.id };
+  }
+
+  it('withdraws the open card about the park before it reissues, so a later STOP cannot strand a running packet', async () => {
+    const stuck = await stuckPacket();
+    await ledger(stuck.workItemId, STORE_REFUSED);
+    const { missionId, requestId } = await parkedWithCard(stuck);
+
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out[0]).toMatchObject({ outcome: 'RECOVERED' });
+    expect((await getHumanRequest(requestId))!.state).toBe('WITHDRAWN');
+    expect((await getMission(missionId))!.state).toBe('RUNNING');
+  });
+
+  it('leaves a packet alone when a person has already answered its card', async () => {
+    const stuck = await stuckPacket();
+    await ledger(stuck.workItemId, STORE_REFUSED);
+    const { missionId, requestId } = await parkedWithCard(stuck);
+    const person = await createCredentiallessUser({ email: null, displayName: 'Answerer', createdByType: 'SYSTEM', createdById: 'test' });
+    await answerHumanRequest({ requestId, actorUserId: person.id, choice: 'STOP' });
+
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out[0]).toMatchObject({ outcome: 'REFUSED', refusal: 'PERSON_HAS_ANSWERED' });
+    expect((await getHumanRequest(requestId))!.state).toBe('ANSWERED');
+    expect((await getMission(missionId))!.state).toBe('NEEDS_HUMAN');
+    expect((await getOrchestration(stuck.orchestrationId))!.status).toBe('NEEDS_HUMAN');
+  });
+
+  it('asks a withdrawn question again when the same stop comes back, and never reaches an answered one', async () => {
+    const stuck = await stuckPacket();
+    await ledger(stuck.workItemId, STORE_REFUSED);
+    const { requestId } = await parkedWithCard(stuck);
+    await recoverFilingFailures(10, { force: true });
+    const choices = [{ key: 'STOP', label: 'Stop', consequence: 'stops' }];
+    expect(await reopenWithdrawnRequest({ requestId, choices, authorityNeeded: 'a', whyNotRussell: 'b' })).toBe(true);
+    expect((await getHumanRequest(requestId))!.state).toBe('OPEN');
+    // Twice is once.
+    expect(await reopenWithdrawnRequest({ requestId, choices, authorityNeeded: 'a', whyNotRussell: 'b' })).toBe(false);
   });
 
   it('takes one place per packet, and a permanent refusal does not hold the front of the queue', async () => {
