@@ -47,9 +47,11 @@ import {
 } from '../../repos/russellMissions.ts';
 import { getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import {
+  authorityNow,
   checkAuthority,
   releaseReservation,
   reserve,
+  spendTotals,
 } from '../../repos/russellAuthority.ts';
 import { placePlan, startPacket } from '../research/startPacket.ts';
 import { advancePacket } from '../research/packetRunner.ts';
@@ -65,6 +67,25 @@ import type { RussellMission, RussellVisibility } from '../../domain/types.ts';
 
 /** The class of work a research mission consumes, as the grant names it. */
 export const RESEARCH_WORK_CLASS = 'RESEARCH';
+
+/**
+ * Whether a research mission in this project would be refused `AT_ONCE` now.
+ *
+ * The same grant `launch()` resolves and the same live-hold arithmetic `reserve`
+ * enforces (`spendTotals` is that arithmetic without the rank clause), so a
+ * reader that waits on this is waiting on exactly the refusal `launch()` would
+ * give. It exists for the cash deep-dive backstop: an idea that has not
+ * launched because every mission slot is held is queued, not stalled, and
+ * closing it would spend one of its two bounded rounds on a wait that was never
+ * about the idea. Null when no grant governs research here — that is not a full
+ * slot, it is a different refusal with its own remedy.
+ */
+export async function researchMissionSlotsFull(projectId: string): Promise<boolean | null> {
+  const authority = await checkAuthority({ projectId, workClass: RESEARCH_WORK_CLASS });
+  if (!authority.ok || !authority.goal) return null;
+  const { live } = await spendTotals(authority.goal.id, 'MISSION', authorityNow());
+  return live >= authority.goal.maxConcurrent;
+}
 
 export interface LaunchInput {
   projectId: string;
