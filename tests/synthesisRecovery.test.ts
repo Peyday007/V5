@@ -31,11 +31,26 @@ import {
 import { cancelWork, enqueueWork, getWorkItem, listWorkItems } from '../server/repos/workQueue.ts';
 import { createBin, getBin, listBins } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
+import { createCredentiallessUser } from '../server/repos/identity.ts';
+import {
+  answerHumanRequest,
+  askHuman,
+  getHumanRequest,
+  getMission,
+  launchMission,
+  linkMission,
+  reopenWithdrawnRequest,
+  transitionMission,
+} from '../server/repos/russellMissions.ts';
 import { storeFile } from '../server/services/storage.ts';
 import { initStorage, resetStorage } from '../server/services/storage/index.ts';
 import {
   assessProjectSyntheses,
+  FILING_RECOVERY_ACTOR,
+  FILING_REGRANT_REASON,
   recoverFailedSynthesis,
+  recoverFilingFailures,
+  resetFilingRecoveryThrottle,
 } from '../server/services/research/synthesisRecovery.ts';
 
 let projectId = '';
@@ -44,6 +59,7 @@ let layerName = '';
 let fixture: Awaited<ReturnType<typeof freshProject>>;
 
 beforeEach(async () => {
+  resetFilingRecoveryThrottle();
   fixture = await freshProject();
   projectId = fixture.project.id;
   const layer = (await listLayers(projectId))[0]!;
@@ -440,5 +456,230 @@ describe('an external filing the database cannot see', () => {
     } finally {
       resetStorage();
     }
+  });
+});
+
+/**
+ * Write the ledger a filing refusal leaves: one `research.synthesis` operation
+ * on the failed item, and an attempt row carrying Brain's own words for what
+ * the store said. That row is what the automatic recovery selects on.
+ */
+async function ledger(workItemId: string, detail: string): Promise<void> {
+  const now = new Date().toISOString();
+  const op = `idop_${Math.random().toString(16).slice(2)}`;
+  await getDb().run(
+    `INSERT INTO idempotency_operations
+       (id, scope_hash, key_fingerprint, namespace, namespace_version, project_id,
+        created_by_type, work_item_id, request_fingerprint, state, attempt_count,
+        failure_category, reserved_at, completed_at, created_at, updated_at)
+     VALUES (?, ?, ?, 'research.synthesis', 1, ?, 'WORKER', ?, 'fp', 'FAILED', 1,
+             'INTERNAL_ERROR', ?, ?, ?, ?)`,
+    [op, `scope-${op}`, `key-${op}`, projectId, workItemId, now, now, now, now],
+  );
+  await getDb().run(
+    `INSERT INTO effect_attempts
+       (id, operation_id, attempt_number, executor_type, work_item_id, phase, started_at,
+        ended_at, outcome, detail)
+     VALUES (?, ?, 1, 'WORKER', ?, 'FAILED', ?, ?, 'FAILED', ?)`,
+    [`att_${op}`, op, workItemId, now, now, detail],
+  );
+}
+
+describe('the automatic recovery of a synthesis Brain could not file', () => {
+  const STORE_REFUSED = 'The document store refused an upload (HTTP 400). · InvalidKey';
+
+  it('reissues it without a person, leaving the research and the original intact', async () => {
+    const stuck = await stuckPacket({ claims: 2 });
+    await ledger(stuck.workItemId, STORE_REFUSED);
+
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ workItemId: stuck.workItemId, outcome: 'RECOVERED', regranted: null });
+
+    const items = (await listWorkItems(projectId, { limit: 50 })).filter(
+      (item) => item.orchestrationId === stuck.orchestrationId,
+    );
+    const live = items.filter((item) => item.state === 'QUEUED');
+    expect(live).toHaveLength(1);
+    expect(live[0]!.createdByType).toBe('SYSTEM');
+    expect(live[0]!.createdById).toBe(FILING_RECOVERY_ACTOR);
+    // Nothing was re-researched: the only new item is the synthesis.
+    expect(items.filter((item) => item.workType !== 'RESEARCH_SYNTHESIZE')).toHaveLength(0);
+    expect((await getWorkItem(stuck.workItemId))!.state).toBe('CANCELLED');
+    expect((await getOrchestration(stuck.orchestrationId))!.status).toBe('SYNTHESIZING');
+    expect((await getBin(stuck.binId))!.state).toBe('READY');
+
+    // Never twice: a second pass finds the live replacement and does nothing.
+    expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+  });
+
+  it('regrants a bin whose budget the refused filings spent, once, and records why', async () => {
+    const stuck = await stuckPacket({ binAttempts: 3 });
+    await ledger(stuck.workItemId, STORE_REFUSED);
+
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out[0]).toMatchObject({ regranted: stuck.binId, outcome: 'RECOVERED' });
+    const bin = (await getBin(stuck.binId))!;
+    expect(bin.attemptCount).toBe(3); // the history of spent attempts is kept
+    expect(bin.maxAttempts).toBe(7);
+    expect(bin.state).toBe('READY');
+    const events = await getDb().all<{ reason: string }>(
+      `SELECT reason FROM bin_events WHERE bin_id = ? AND event_type = 'BIN_ATTEMPTS_REGRANTED'`,
+      [stuck.binId],
+    );
+    expect(events.map((event) => event.reason)).toEqual([FILING_REGRANT_REASON]);
+  });
+
+  it('does not loop when the replacement is refused by the store as well', async () => {
+    const stuck = await stuckPacket();
+    await ledger(stuck.workItemId, STORE_REFUSED);
+    const first = await recoverFilingFailures(10, { force: true });
+    const replacement = (await listWorkItems(projectId, { limit: 50 })).find(
+      (item) => item.orchestrationId === stuck.orchestrationId && item.state === 'QUEUED',
+    )!;
+    expect(first[0]!.outcome).toBe('RECOVERED');
+
+    // The replacement fails the same way. The defect is not historical now,
+    // and a person should look: nothing is reissued a second time.
+    await cancelWork(replacement.id, 'refused again');
+    await ledger(replacement.id, STORE_REFUSED);
+    expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+  });
+
+  it('leaves alone a synthesis whose failure was not Brain\'s filing', async () => {
+    const stuck = await stuckPacket();
+    await ledger(stuck.workItemId, 'The report cites claim clm_x, which is not citable in this packet.');
+    expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+    // And one with no ledger at all — a worker that never submitted.
+    await stuckPacket();
+    expect(await recoverFilingFailures(10, { force: true })).toEqual([]);
+  });
+
+  it('still refuses what the targeted recovery refuses', async () => {
+    const stuck = await stuckPacket({ claims: 0 });
+    await ledger(stuck.workItemId, STORE_REFUSED);
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out[0]).toMatchObject({ outcome: 'REFUSED', refusal: 'NO_CITABLE_EVIDENCE' });
+    expect((await getOrchestration(stuck.orchestrationId))!.status).toBe('NEEDS_HUMAN');
+  });
+
+  it('never undoes a person\'s STOP: a cancelled mission stays cancelled', async () => {
+    const stuck = await stuckPacket();
+    await ledger(stuck.workItemId, STORE_REFUSED);
+    const { mission } = await launchMission({
+      projectId,
+      visibility: 'SHARED',
+      objective: 'a bounded question',
+      whyNow: 'test',
+      idempotencyKey: `stop-${stuck.orchestrationId}`,
+    });
+    await linkMission({ missionId: mission.id, orchestrationId: stuck.orchestrationId });
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'CANCELLED', terminalReason: 'STOP' });
+
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out[0]).toMatchObject({ outcome: 'REFUSED', refusal: 'MISSION_ENDED_BY_DECISION' });
+    expect((await getMission(mission.id))!.state).toBe('CANCELLED');
+    expect((await getOrchestration(stuck.orchestrationId))!.status).toBe('NEEDS_HUMAN');
+    const live = (await listWorkItems(projectId, { limit: 50 })).filter(
+      (item) => item.orchestrationId === stuck.orchestrationId && item.state === 'QUEUED',
+    );
+    expect(live).toHaveLength(0);
+  });
+
+  async function parkedWithCard(stuck: Stuck): Promise<{ missionId: string; requestId: string }> {
+    const { mission } = await launchMission({
+      projectId,
+      visibility: 'SHARED',
+      objective: 'a bounded question',
+      whyNow: 'test',
+      idempotencyKey: `park-${stuck.orchestrationId}`,
+    });
+    await linkMission({ missionId: mission.id, orchestrationId: stuck.orchestrationId });
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'NEEDS_HUMAN', waitingOn: 'the filing failed' });
+    const { request } = await askHuman({
+      projectId,
+      missionId: mission.id,
+      authorityNeeded: 'whether to continue',
+      whyNotRussell: 'the packet stopped',
+      choices: [
+        { key: 'RECORD_GAPS', label: 'Record', consequence: 'files short' },
+        { key: 'STOP', label: 'Stop', consequence: 'stops' },
+      ],
+      resumeKey: `russell:needs-human:${mission.id}:${stuck.orchestrationId}`,
+    });
+    return { missionId: mission.id, requestId: request.id };
+  }
+
+  it('withdraws the open card about the park before it reissues, so a later STOP cannot strand a running packet', async () => {
+    const stuck = await stuckPacket();
+    await ledger(stuck.workItemId, STORE_REFUSED);
+    const { missionId, requestId } = await parkedWithCard(stuck);
+
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out[0]).toMatchObject({ outcome: 'RECOVERED' });
+    expect((await getHumanRequest(requestId))!.state).toBe('WITHDRAWN');
+    expect((await getMission(missionId))!.state).toBe('RUNNING');
+  });
+
+  it('leaves a packet alone when a person has already answered its card, its bin included', async () => {
+    const stuck = await stuckPacket({ binAttempts: 3 });
+    await ledger(stuck.workItemId, STORE_REFUSED);
+    const { missionId, requestId } = await parkedWithCard(stuck);
+    const person = await createCredentiallessUser({ email: null, displayName: 'Answerer', createdByType: 'SYSTEM', createdById: 'test' });
+    await answerHumanRequest({ requestId, actorUserId: person.id, choice: 'STOP' });
+
+    const out = await recoverFilingFailures(10, { force: true });
+    expect(out[0]).toMatchObject({ outcome: 'REFUSED', refusal: 'PERSON_HAS_ANSWERED' });
+    expect((await getHumanRequest(requestId))!.state).toBe('ANSWERED');
+    expect((await getMission(missionId))!.state).toBe('NEEDS_HUMAN');
+    expect((await getOrchestration(stuck.orchestrationId))!.status).toBe('NEEDS_HUMAN');
+    expect((await getBin(stuck.binId))!.maxAttempts).toBe(3);
+  });
+
+  it('asks a withdrawn question again when the same stop comes back, and never reaches an answered one', async () => {
+    const stuck = await stuckPacket();
+    await ledger(stuck.workItemId, STORE_REFUSED);
+    const { requestId } = await parkedWithCard(stuck);
+    await recoverFilingFailures(10, { force: true });
+    const choices = [{ key: 'STOP', label: 'Stop', consequence: 'stops' }];
+    expect(await reopenWithdrawnRequest({ requestId, choices, authorityNeeded: 'a', whyNotRussell: 'b' })).toBe(true);
+    expect((await getHumanRequest(requestId))!.state).toBe('OPEN');
+    // Twice is once.
+    expect(await reopenWithdrawnRequest({ requestId, choices, authorityNeeded: 'a', whyNotRussell: 'b' })).toBe(false);
+  });
+
+  it('takes one place per packet, and a permanent refusal does not hold the front of the queue', async () => {
+    // An old packet that failed several times and can never be recovered.
+    const dead = await stuckPacket({ claims: 0 });
+    await ledger(dead.workItemId, STORE_REFUSED);
+    for (let i = 0; i < 3; i += 1) {
+      const extra = await enqueueWork({
+        projectId,
+        workType: 'RESEARCH_SYNTHESIZE',
+        payload: {},
+        orchestrationId: dead.orchestrationId,
+        createdByType: 'WORKER',
+        createdById: 'test',
+      });
+      await cancelWork(extra.id, 'refused');
+      await ledger(extra.id, STORE_REFUSED);
+    }
+    const first = await recoverFilingFailures(1, { force: true });
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({ orchestrationId: dead.orchestrationId, refusal: 'NO_CITABLE_EVIDENCE' });
+
+    // A recoverable packet arrives; a batch of one reaches it next time.
+    const live = await stuckPacket();
+    await ledger(live.workItemId, STORE_REFUSED);
+    const second = await recoverFilingFailures(1, { force: true });
+    expect(second).toHaveLength(1);
+    expect(second[0]).toMatchObject({ orchestrationId: live.orchestrationId, outcome: 'RECOVERED' });
+  });
+
+  it('is throttled, so a ten-second tick does not rescan the backlog', async () => {
+    await recoverFilingFailures(10, { force: true });
+    const stuck = await stuckPacket();
+    await ledger(stuck.workItemId, STORE_REFUSED);
+    expect(await recoverFilingFailures(10)).toEqual([]);
   });
 });

@@ -68,7 +68,7 @@ jobs:
           args="$PROOF_COMMAND $PROOF_PROJECT"
           if [ -n "$PROOF_ADMIN" ]; then args="$args --admin $PROOF_ADMIN"; fi
           set +e
-          flyctl ssh console --app "$app" -C "sh /app/scripts/goal-budget-proof.sh $args" 2>&1 | tee proof.txt
+          flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000 sh /app/scripts/goal-budget-proof.sh $args" 2>&1 | tee proof.txt
           set -e
           # The verdict is a line the script printed; FAILED does not match it.
           grep -q '^GOAL-BUDGET-PROOF: OK' proof.txt

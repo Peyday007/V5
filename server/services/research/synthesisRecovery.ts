@@ -46,7 +46,7 @@
  * general "retry this item" built on top of it would be exactly what the
  * runner's one-item-per-target rule forbids.
  */
-import type { ActorType, ResearchOrchestration, WorkItem } from '../../domain/types.ts';
+import type { ActorType, ResearchOrchestration, RussellHumanRequest, WorkItem } from '../../domain/types.ts';
 import {
   citableClaims,
   getOrchestration,
@@ -54,14 +54,26 @@ import {
   updateOrchestration,
 } from '../../repos/research.ts';
 import { enqueueWork, getWorkItem, listWorkItems } from '../../repos/workQueue.ts';
-import { binForOrchestration, getBin, reopenNeedsHumanBin } from '../../repos/bins.ts';
+import {
+  binForOrchestration,
+  getBin,
+  regrantBinAttempts,
+  reopenNeedsHumanBin,
+} from '../../repos/bins.ts';
+import { getDb } from '../../db/database.ts';
 import { getLayer } from '../../repos/layers.ts';
 import { getProject } from '../../repos/projects.ts';
 import { getRun } from '../../repos/runs.ts';
 import { listDocuments } from '../../repos/documents.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { operationsForWorkItems } from '../../repos/idempotency.ts';
-import { getMissionByOrchestration, transitionMission } from '../../repos/russellMissions.ts';
+import {
+  getHumanRequest,
+  getMissionByOrchestration,
+  reopenWithdrawnRequest,
+  transitionMission,
+  withdrawRequest,
+} from '../../repos/russellMissions.ts';
 import { buildNames } from '../../domain/naming.ts';
 import { layerPrefix } from '../storage.ts';
 import { getStorage } from '../storage/index.ts';
@@ -523,6 +535,8 @@ export async function recoverFailedSynthesis(input: {
       originalWorkItemId: original.id,
       originalState: original.state,
       originalAttempts: original.attemptCount,
+      // The packet's own diagnosis, kept: the reissue clears it from the row.
+      priorFailureReason: orchestration.failureReason ?? null,
       replacementWorkItemId: outcome.value.workItemId,
       citableClaims: citableClaimCount,
       actorType: input.actor.type,
@@ -699,6 +713,280 @@ export async function assessProjectSyntheses(projectId: string): Promise<Synthes
           ? 'ALREADY_RECOVERED'
           : (assessed.outcome.refusal ?? null),
       reason: assessed.eligible ? 'Eligible for recovery.' : assessed.outcome.reason,
+    });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// The automatic half: a filing Brain itself refused
+// ---------------------------------------------------------------------------
+
+/**
+ * Who an automatic recovery is recorded as. A row, not a person: the item it
+ * creates says `SYSTEM` and this id, so "did Brain do this by itself" is one
+ * column rather than a reading of event prose.
+ */
+export const FILING_RECOVERY_ACTOR = 'synthesis-filing-recovery';
+
+/** The reason a bin's spent budget is raised for this recovery, matched exactly. */
+export const FILING_REGRANT_REASON =
+  'FILING_DEFECT: the dispatch attempts went on syntheses Brain could not file; the research survived';
+
+/** How much budget the one regrant adds: a synthesis and three audit roles. */
+const FILING_REGRANT_ATTEMPTS = 4;
+
+/** Not on every ten-second tick: the scan reads work items, and this is a backlog. */
+const FILING_RECOVERY_INTERVAL_MS = 10 * 60 * 1000;
+let lastFilingRecoveryAt = 0;
+
+/** Test seam: the throttle is process state, and a suite runs many passes. */
+export function resetFilingRecoveryThrottle(): void {
+  lastFilingRecoveryAt = 0;
+  permanentlyRefused.clear();
+}
+
+export interface FilingRecovery {
+  workItemId: string;
+  orchestrationId: string | null;
+  regranted: string | null;
+  outcome: RecoveryOutcome['status'];
+  refusal: RecoveryOutcome['refusal'] | 'MISSION_ENDED_BY_DECISION' | 'PERSON_HAS_ANSWERED' | null;
+}
+
+/**
+ * Recover, without a person, a synthesis whose only failure was Brain's own
+ * filing.
+ *
+ * `recoverFailedSynthesis` was deliberately a targeted operator action — "a
+ * sweep is how a narrow recovery becomes a general one". This is the sweep, and
+ * it stays narrow by what it selects rather than by who presses it:
+ *
+ *   - a `RESEARCH_SYNTHESIZE` item that stopped (FAILED or CANCELLED) on a
+ *     packet that filed nothing;
+ *   - **whose own effect ledger records the document store refusing or not
+ *     answering an upload** — an attempt row Brain wrote, in Brain's words,
+ *     about Brain's half of the exchange. A worker that submitted nothing, or
+ *     whose submission Brain judged, is not selected: those are about the work;
+ *   - with no live synthesis beside it, and no earlier automatic recovery on
+ *     the same packet. One per packet, ever: if the replacement is refused by
+ *     the store again, the defect is not historical and a person should look.
+ *
+ * Everything after selection is `assessSynthesisRecovery` unchanged — every
+ * refusal it has still applies, including the store being asked for an orphan
+ * upload before a second copy is written. The one thing added is the answer to
+ * `BIN_EXHAUSTED`: a bin whose dispatch budget was spent fetching syntheses the
+ * store refused is regranted once, by `FILING_REGRANT_ATTEMPTS`, through the
+ * guarded transition that only ever raises and records why.
+ *
+ * Nothing is re-researched. The claims, verifications and gate decisions were
+ * written by earlier tools and survived the rollback; what is re-run is the
+ * synthesis, because its text rolled back with the failed filing.
+ */
+/**
+ * Refusals that no later tick can change on their own: the evidence, the bytes
+ * or the packet would have to move first. Remembered per process so they do not
+ * hold the front of the queue; a restart re-asks each one once.
+ */
+const PERMANENT_REFUSALS = new Set<string>([
+  'NO_CITABLE_EVIDENCE',
+  'AMBIGUOUS_EXTERNAL_FILING',
+  'BIN_UNAVAILABLE',
+  'PACKET_NOT_RECOVERABLE',
+  'ALREADY_FILED',
+  'ALREADY_RECOVERED',
+  'OPERATION_SUCCEEDED',
+  'SYNTHESIS_RECORDED',
+]);
+const permanentlyRefused = new Set<string>();
+
+/** Put back cards this pass withdrew for a recovery that did not go ahead. */
+async function restoreCards(cards: RussellHumanRequest[]): Promise<void> {
+  for (const card of cards) {
+    await reopenWithdrawnRequest({
+      requestId: card.id,
+      choices: card.choices,
+      authorityNeeded: card.authorityNeeded,
+      whyNotRussell: card.whyNotRussell,
+    });
+  }
+}
+
+export async function recoverFilingFailures(
+  limit: number,
+  options: { force?: boolean } = {},
+): Promise<FilingRecovery[]> {
+  const now = Date.now();
+  if (!options.force && now - lastFilingRecoveryAt < FILING_RECOVERY_INTERVAL_MS) return [];
+  lastFilingRecoveryAt = now;
+
+  const db = getDb();
+  /*
+   * One row per packet — its newest stopped synthesis — so a packet that failed
+   * eight times takes one place in the batch rather than eight. Ordered by the
+   * packet's own id so a batch is stable, and filtered by the permanent refusals
+   * this process has already met, so they cannot hold the front of the queue.
+   */
+  const rows = await db.all<{ id: string; orchestration_id: string }>(
+    `SELECT w.id AS id, w.orchestration_id AS orchestration_id
+       FROM work_items w
+       JOIN research_orchestrations o ON o.id = w.orchestration_id
+      WHERE w.work_type = 'RESEARCH_SYNTHESIZE'
+        AND w.state IN ('FAILED','CANCELLED')
+        AND o.document_id IS NULL
+        AND o.status IN ('NEEDS_HUMAN','SYNTHESIZING','AWAITING_REPAIR','RESEARCHING','VERIFYING')
+        AND NOT EXISTS (
+          SELECT 1 FROM work_items newer
+           WHERE newer.orchestration_id = w.orchestration_id
+             AND newer.work_type = 'RESEARCH_SYNTHESIZE'
+             AND newer.state IN ('FAILED','CANCELLED')
+             AND (newer.updated_at > w.updated_at OR (newer.updated_at = w.updated_at AND newer.id > w.id))
+        )
+        AND EXISTS (
+          SELECT 1 FROM work_items f
+            JOIN idempotency_operations op ON op.work_item_id = f.id
+            JOIN effect_attempts a ON a.operation_id = op.id
+           WHERE f.orchestration_id = w.orchestration_id
+             AND f.work_type = 'RESEARCH_SYNTHESIZE'
+             AND op.namespace = 'research.synthesis'
+             AND a.outcome = 'FAILED'
+             AND (a.detail LIKE '%document store refused an upload%'
+                  OR a.detail LIKE '%Could not reach the document store%to store a document%')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM work_items r
+           WHERE r.orchestration_id = w.orchestration_id
+             AND r.work_type = 'RESEARCH_SYNTHESIZE'
+             AND (r.state IN ('QUEUED','LEASED')
+                  OR (r.created_by_type = 'SYSTEM' AND r.created_by_id = ?))
+        )
+      ORDER BY w.orchestration_id
+      LIMIT ?`,
+    [FILING_RECOVERY_ACTOR, Math.max(1, limit) + permanentlyRefused.size],
+  );
+
+  const out: FilingRecovery[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (permanentlyRefused.has(row.orchestration_id)) continue;
+    if (out.length >= Math.max(1, limit)) break;
+    /*
+     * A person's STOP is never undone here. Answering STOP cancels the mission
+     * and can leave its packet parked; `recoverFailedSynthesis` would move a
+     * CANCELLED or FAILED mission back to RUNNING, which on the automatic path
+     * would overrule a decision only a person may make. Those packets stay with
+     * the operator's targeted recovery.
+     */
+    const mission = await getMissionByOrchestration(row.orchestration_id);
+    if (mission && (mission.state === 'CANCELLED' || mission.state === 'FAILED')) {
+      permanentlyRefused.add(row.orchestration_id);
+      out.push({
+        workItemId: row.id,
+        orchestrationId: row.orchestration_id,
+        regranted: null,
+        outcome: 'REFUSED',
+        refusal: 'MISSION_ENDED_BY_DECISION',
+      });
+      continue;
+    }
+    const assessed = await assessSynthesisRecovery(row.id);
+    const orchestrationId = assessed.eligible
+      ? assessed.context.orchestration.id
+      : assessed.outcome.orchestrationId;
+    if (orchestrationId && seen.has(orchestrationId)) continue;
+    if (orchestrationId) seen.add(orchestrationId);
+
+    // A person's answer is theirs to have carried out: checked before anything
+    // here touches the packet, its bin included.
+    const requests = mission
+      ? await db.all<{ id: string; state: string }>(
+          `SELECT id, state FROM russell_human_requests WHERE mission_id = ? AND state IN ('OPEN','ANSWERED')`,
+          [mission.id],
+        )
+      : [];
+    if (requests.some((request) => request.state === 'ANSWERED')) {
+      out.push({ workItemId: row.id, orchestrationId, regranted: null, outcome: 'REFUSED', refusal: 'PERSON_HAS_ANSWERED' });
+      continue;
+    }
+
+    let regranted: string | null = null;
+    if (!assessed.eligible && assessed.outcome.refusal === 'BIN_EXHAUSTED' && orchestrationId) {
+      const found = await binForOrchestration(orchestrationId);
+      const bin = found ? await getBin(found.id) : null;
+      if (bin) {
+        const prior = await db.get<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM bin_events
+            WHERE bin_id = ? AND event_type = 'BIN_ATTEMPTS_REGRANTED' AND reason = ?`,
+          [bin.id, FILING_REGRANT_REASON],
+        );
+        if (Number(prior?.n ?? 0) === 0) {
+          const raised = await regrantBinAttempts({
+            binId: bin.id,
+            maxAttempts: bin.attemptCount + FILING_REGRANT_ATTEMPTS,
+            reason: FILING_REGRANT_REASON,
+          });
+          if (raised.raised) regranted = bin.id;
+        }
+      }
+    }
+
+    /*
+     * A Needs You card about this park is the person's, and recovering past it
+     * would leave a question open about a packet that is running again — a STOP
+     * answered on it later cancels the mission and leaves the packet working.
+     * An answer already given is theirs to have carried out, so the packet is
+     * left alone. An open card is withdrawn first, guarded on its still being
+     * open, with the reason on the row; if it was answered in between, nothing
+     * is recovered.
+     */
+    const withdrawn: RussellHumanRequest[] = [];
+    let lostRace = false;
+    if (assessed.eligible || regranted) {
+      for (const request of requests) {
+        const before = await getHumanRequest(request.id);
+        const taken = await withdrawRequest({
+          requestId: request.id,
+          reason:
+            'Withdrawn by Brain: this packet stopped because Brain could not file its report, and that is repaired. ' +
+            'The synthesis was reissued over the evidence that survived, so there is nothing here to decide.',
+        });
+        if (!taken || !before) {
+          lostRace = true;
+          break;
+        }
+        withdrawn.push(before);
+      }
+      if (lostRace) {
+        await restoreCards(withdrawn);
+        out.push({ workItemId: row.id, orchestrationId, regranted, outcome: 'REFUSED', refusal: 'PERSON_HAS_ANSWERED' });
+        continue;
+      }
+    }
+
+    const outcome =
+      assessed.eligible || regranted
+        ? await recoverFailedSynthesis({
+            workItemId: row.id,
+            actor: { type: 'SYSTEM', id: FILING_RECOVERY_ACTOR },
+            reason:
+              'Brain could not file this synthesis (its document store refused the upload); the ' +
+              'filing path has since been repaired, so the synthesis is reissued over the evidence ' +
+              'that survived.',
+          })
+        : assessed.outcome;
+    // A card withdrawn for a recovery that did not happen is asked again.
+    if (outcome.status !== 'RECOVERED') await restoreCards(withdrawn);
+    // An exhausted bin whose one regrant is already spent cannot change on its own either.
+    const spentBudget = outcome.refusal === 'BIN_EXHAUSTED' && !regranted;
+    if (outcome.status !== 'RECOVERED' && outcome.refusal && (PERMANENT_REFUSALS.has(outcome.refusal) || spentBudget) && orchestrationId) {
+      permanentlyRefused.add(orchestrationId);
+    }
+    out.push({
+      workItemId: row.id,
+      orchestrationId,
+      regranted,
+      outcome: outcome.status,
+      refusal: outcome.refusal ?? null,
     });
   }
   return out;
