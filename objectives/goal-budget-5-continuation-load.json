@@ -1,26 +1,38 @@
 {
-  "objective": "Two defects in server/services/research/goalContinuation.ts advanceResearchGoals (merged from Factory campaign fcp_26236480b97a4aa8b340), both found by the operator after delivery. (1) HOT PATH: a RESEARCH_GOAL whose assignment the archive already answers stays ACTIVE, so every Russell tick (RUSSELL_TICK_MS, 30s) re-runs inventoryProject(project) and coverBeforeWork for it for ever — an archive-wide read every 30 seconds per such goal, which is exactly the hot polling this repository just removed to reduce Supabase load. (2) STARVATION: the pass selects `LIMIT MAX_GOALS_PER_PASS ORDER BY created_at, id`, so five older goals that are settled, answered or waiting on a person permanently take every slot and a newer goal is never considered. Fix both by extending the goal row rather than adding a scheduler or queue: a migration server/db/migrations/106_research_goal_pass_marks.sql and server/db/pg-migrations/097_research_goal_pass_marks.sql (confirm the numbers are free on both chains; additive only, no dollar-quoted bodies) adding nullable russell_goals.research_considered_at TEXT and russell_goals.research_archive_answered_at TEXT, plus an index on russell_goals (purpose, state, research_considered_at); update RussellGoalRow and the mapper. The pass orders candidates least-recently-considered first (never-considered first, written so it orders identically on SQLite and Postgres — no NULLS FIRST, use COALESCE) and stamps research_considered_at for each goal it looks at, so every ACTIVE goal is reached within ceil(goals/MAX_GOALS_PER_PASS) passes. When coverBeforeWork says the archive fully answers the goal, stamp research_archive_answered_at; while that stamp is younger than an exported ARCHIVE_RECHECK_MS (6 hours) the pass skips the goal with reason 'answered by the archive; re-asked after <time>' without calling inventoryProject or coverBeforeWork, and after it the archive is asked again (new evidence may have changed the answer). The cheap checks that already exist (live packet, open ceiling request, latest packet left nothing unresolved) stay ahead of the archive read. Brain's clock (the same now the pass already uses) decides; nothing else about the decision changes.",
+  "objective": "Two defects in server/services/research/goalContinuation.ts advanceResearchGoals (merged from Factory campaign fcp_26236480b97a4aa8b340), found by the operator after delivery. Do not redesign GOAL_BUDGET: what counts as answered, the ceilings, startPacket, the packet key round-<n> and the ceiling human request stay exactly as they are. (1) ARCHIVE HOT PATH: a RESEARCH_GOAL whose assignment the archive already answers stays ACTIVE, so every Russell tick (RUSSELL_TICK_MS, 30s) re-runs inventoryProject(project) and coverBeforeWork for it for ever — an archive-wide read every 30 seconds per such goal. Fix it with durable change markers, not a timer: when coverBeforeWork says the archive fully answers the goal, record on the goal row the archive marker the decision was made against, and on later passes recompute that marker with narrow indexed reads and skip inventoryProject/coverBeforeWork while it is unchanged (reason 'answered by the archive; unchanged since <marker time>'). The marker is composed only from state that already exists and already moves when the inputs to that decision move: (a) the goal's project's latest project_events row (every import, extraction and filing records one — invariant 3; read MAX(created_at) with the existing idx_events_project (project_id, created_at DESC)); (b) the shared findings the coverage reads (COUNT and MAX(updated_at) over shared_findings, plus the earliest valid_until still in the future among ACTIVE findings, so a finding expiring re-asks once Brain's clock passes it); (c) the goal's own research_assignment and research_layer_id. Because a shared finding's eligibility also depends on its claim's contradiction_state, make markContradiction in server/repos/research.ts also set shared_findings.updated_at for that claim (one indexed UPDATE on the unique claim_id index, in the same call) so a contested shared claim changes the marker; check every other setter of a column ELIGIBLE_SQL in server/repos/sharedFindings.ts reads and do the same if one exists. No timer-based recheck, no new table, queue, scheduler or loop. (2) STARVATION: the pass selects `ORDER BY created_at, id LIMIT MAX_GOALS_PER_PASS`, so five older goals that are settled, answered or waiting on a person permanently take every slot and a newer goal is never considered. Do not raise the limit. Order candidates least-recently-considered first (never-considered first, written so it orders identically on SQLite and Postgres — no NULLS FIRST; use COALESCE to a sentinel; tie-break created_at, id), and durably stamp research_considered_at = Brain's now on each goal the pass looks at, whatever the outcome, so every ACTIVE goal is reached within ceil(goals/MAX_GOALS_PER_PASS) passes and a restart resumes the rotation from rows rather than starting over. Schema: server/db/migrations/106_research_goal_pass_marks.sql and server/db/pg-migrations/097_research_goal_pass_marks.sql (confirm the numbers are free on both chains; additive only; no dollar-quoted bodies) adding nullable russell_goals.research_considered_at TEXT, russell_goals.research_archive_marker TEXT and an index on russell_goals (purpose, state, research_considered_at); update RussellGoalRow and the mapper. The cheap checks that already exist (layer, open ceiling request, live packet, latest packet cancelled or left nothing unresolved) stay ahead of the archive read. Duplicate packet creation must stay impossible: the exclusion is still startPacket's replay of round-<n> on UNIQUE (goal_id, goal_packet_key). Document the marker and the rotation in docs/GOAL-BUDGET.md.",
   "repository": "https://github.com/Peyday007/V5",
   "baseBranch": "claude/goal-budget-authorization-9t3oyu",
-  "expectedOutcome": "The goal continuation pass reads the archive for an answered goal at most once per six hours, and no ACTIVE research goal is starved by older ones.",
+  "expectedOutcome": "The continuation pass reads the archive for an archive-answered goal only when the project's archive or the shared findings actually changed, and every ACTIVE research goal is considered in bounded rotation that survives a restart, with no duplicate packet.",
   "nonGoals": [
-    "Changing what counts as answered, the ceilings, startPacket or the human request",
-    "A new scheduler, queue or loop",
-    "Changing RUSSELL_TICK_MS"
+    "Changing what counts as answered, the ceilings, startPacket, the packet key or the ceiling human request",
+    "A timer-based archive recheck",
+    "A new scheduler, queue, loop or state table",
+    "Raising MAX_GOALS_PER_PASS or changing RUSSELL_TICK_MS",
+    "Editing server/services/research/approvalEnvelope.ts or server/services/identity/**"
   ],
   "acceptanceConditions": [
     {
-      "statement": "tests/goalBudgetContinuationLoad.test.ts: with a goal the archive answers, two consecutive passes inside ARCHIVE_RECHECK_MS call inventoryProject once (spy or counted), and a pass after the recheck window calls it again",
+      "statement": "tests/goalBudgetContinuationLoad.test.ts: with a goal the archive answers, repeated passes call inventoryProject exactly once (counted) while nothing changes, including after Brain's clock advances by more than a day",
       "verification": "npm test",
       "mandatory": true
     },
     {
-      "statement": "tests/goalBudgetContinuationLoad.test.ts: with MAX_GOALS_PER_PASS+2 active goals where the oldest MAX_GOALS_PER_PASS are settled, the two newest are considered (and can start a packet) within two passes",
+      "statement": "tests/goalBudgetContinuationLoad.test.ts: each of these makes the next pass ask the archive again — a new project_events row in the goal's project, a new or revoked shared finding, markContradiction on a claim behind an active shared finding, and Brain's clock passing an active shared finding's valid_until; an event in a different project does not",
       "verification": "npm test",
       "mandatory": true
     },
     {
-      "statement": "tests/goalBudgetJourney.test.ts and tests/deploymentOwnership.test.ts still pass",
+      "statement": "tests/goalBudgetContinuationLoad.test.ts: with MAX_GOALS_PER_PASS+2 active goals where the oldest MAX_GOALS_PER_PASS are archive-answered or settled, the two newest are considered and start a packet within two passes; after a simulated restart (a fresh pass over the same persisted rows) the rotation continues from the stamped rows rather than returning to the oldest goals",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/goalBudgetContinuationLoad.test.ts: two passes run concurrently over the same actionable goal create exactly one research_orchestrations row for it (round-1)",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/goalBudgetJourney.test.ts, tests/goalBudgetLedger.test.ts and tests/deploymentOwnership.test.ts still pass",
       "verification": "npm test",
       "mandatory": true
     },
@@ -35,6 +47,8 @@
     "server/db/pg-migrations/097_research_goal_pass_marks.sql",
     "server/domain/types.ts",
     "server/repos/russellAuthority.ts",
+    "server/repos/research.ts",
+    "server/repos/sharedFindings.ts",
     "server/services/research/goalContinuation.ts",
     "tests/goalBudgetContinuationLoad.test.ts",
     "tests/goalBudgetJourney.test.ts",
