@@ -258,7 +258,7 @@ export async function planCampaign(input: ArchitectInput): Promise<ArchitectOutc
     };
   }
 
-  const installed = await installPlan(campaign.id, validation.units);
+  const installed = await installPlan(campaign.id, validation.units, { rewrites: validation.rewrites });
   await recordWorkerSuccess(worker.id);
 
   return {

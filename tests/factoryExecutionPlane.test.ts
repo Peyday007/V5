@@ -2787,6 +2787,27 @@ describe('a finding whose repair landed is closed on this plane too', () => {
       executionMode: 'REMOTE',
     });
 
+    // The unit the reviewed work came from. A finding that names no file is
+    // repaired within the campaign's own units; with none at all its root cause
+    // is unknown and no repair is created (see factoryOwnership.test.ts) — the
+    // old fallback to the whole mutation scope was a repair that could write
+    // anywhere in the repository.
+    const { ensureUnit: seedUnit } = await import('../server/repos/factory.ts');
+    await seedUnit({
+      campaignId: campaign.id,
+      unitKey: 'ci-floor',
+      kind: 'IMPLEMENTATION',
+      role: 'IMPLEMENTER',
+      title: 'ci',
+      objective: 'ci',
+      acceptance: [],
+      ownedPaths: ['.github/workflows/ci.yml'],
+      requiredContext: [],
+      verification: [],
+      expectedArtifact: 'a commit',
+      state: 'INTEGRATED',
+    });
+
     // A review with one finding, and the repair unit the finding produced.
     const { recordReview, listFindings } = await import('../server/repos/factoryFleet.ts');
     await recordReview({
