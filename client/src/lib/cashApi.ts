@@ -797,6 +797,10 @@ export const CashApi = {
       opportunityId?: string;
       note?: string;
       idempotencyKey: string;
+      /** The unpaid issued invoice a hand-recorded payment pays. */
+      paysInvoiceId?: string;
+      /** Or: it arrived outside every invoice. */
+      outsideInvoices?: boolean;
     },
   ): Promise<{ entry: { id: string }; message: string }> =>
     api(`/api/projects/${p(projectId)}/cash/money`, {

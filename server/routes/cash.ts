@@ -189,7 +189,6 @@ const SERVER_LEDGER_KEY_PREFIXES = [
   'invoice-settlement:',
   'invoice-fee:',
   'settle:',
-  'payment:',
 ] as const;
 import type { Outcome } from '../services/cash/opportunities.ts';
 
@@ -1211,6 +1210,14 @@ cashRouter.post(
         note: optionalString(body['note'], 'note') ?? null,
         idempotencyKey: requiredString(body['idempotencyKey'], 'idempotencyKey'),
         actorRef: principal.id,
+        appliesTo: (() => {
+          const invoiceId = optionalString(body['paysInvoiceId'], 'paysInvoiceId');
+          if (invoiceId && body['outsideInvoices'] === true) {
+            throw unprocessable('A payment pays one invoice or arrived outside every invoice, not both.');
+          }
+          if (invoiceId) return { invoiceId };
+          return body['outsideInvoices'] === true ? 'OUTSIDE_INVOICES' : null;
+        })(),
       }),
     );
     return { entry: value, message };

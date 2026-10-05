@@ -41,10 +41,10 @@ import { countActions, recordAction } from '../../repos/cashActions.ts';
 import { cardFact, cardFactsFor, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { moneyEntryByKey, recordMoney, totalsByKind } from '../../repos/cashLedger.ts';
+import { getMoneyEntry, moneyEntryByKey, recordMoney, totalsByKind } from '../../repos/cashLedger.ts';
 import { agreementsFor, getAgreement } from '../../repos/cashJourney.ts';
 import { unresolvedRefundCents } from '../../repos/cashFulfillment.ts';
-import { getInvoice } from '../../repos/cashInvoices.ts';
+import { getInvoice, listInvoices, moveInvoice } from '../../repos/cashInvoices.ts';
 import { collectable, dealPosition } from './journey/position.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { getOperation } from '../../repos/idempotency.ts';
@@ -1154,6 +1154,14 @@ export async function recordMoneyEvent(input: {
    * from the database, never taken on the caller's word.
    */
   paidInvoiceId?: string | null;
+  /**
+   * What a payment a **person** records pays, while this piece has an issued
+   * invoice still unpaid: that invoice, or money that arrived outside every
+   * invoice. Required in exactly that case, because a payment nobody
+   * attributed is the one thing that cannot later be told apart from the
+   * provider's own reading of the same money.
+   */
+  appliesTo?: { invoiceId: string } | 'OUTSIDE_INVOICES' | null;
 }): Promise<Outcome<CashMoneyEntry>> {
   const check = checkMoneyEntry({
     kind: input.kind,
@@ -1177,6 +1185,8 @@ export async function recordMoneyEvent(input: {
     );
   }
 
+  // A payment the provider itself confirmed, rather than one a person typed.
+  let providerFact = false;
   if (input.kind === 'CUSTOMER_PAYMENT') {
     const backing = input.confirmedEffectOperationId
       ? await getOperation(input.confirmedEffectOperationId)
@@ -1198,6 +1208,7 @@ export async function recordMoneyEvent(input: {
       invoice.opportunityId === (input.opportunityId ?? null) &&
       invoice.providerInvoiceId !== null &&
       (invoice.state === 'ISSUED' || invoice.state === 'PAID' || invoice.state === 'SETTLED');
+    providerFact = confirmed || paidInvoice;
     if (!confirmed && !paidInvoice) {
       const decision = await checkCommercialAuthority({
         projectId: input.projectId,
@@ -1299,9 +1310,67 @@ export async function recordMoneyEvent(input: {
      * contribution. So the total is held to the live agreements, and the second
      * reading is refused naming the likely cause rather than recorded.
      */
+    let paysInvoice: Awaited<ReturnType<typeof getInvoice>> = null;
     if (
       input.kind === 'CUSTOMER_PAYMENT' &&
       input.opportunityId &&
+      !(await moneyEntryByKey(input.projectId, input.idempotencyKey))
+    ) {
+      if (input.paidInvoiceId) {
+        /*
+         * The provider's reading of an invoice a person already attributed a
+         * payment to is that payment, not a second one: the person said so
+         * under this same lock, and this read arrives after.
+         */
+        const current = await getInvoice(input.paidInvoiceId);
+        if (current?.paymentEntryId) {
+          const existing = await getMoneyEntry(current.paymentEntryId);
+          if (existing) return { ok: true as const, entry: existing, replayed: true, reason: 'This payment is already recorded against that invoice.' };
+        }
+        if (current && current.state === 'ISSUED') paysInvoice = current;
+      }
+      if (!providerFact) {
+        const unpaid = (
+          await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId, states: ['ISSUED'] })
+        ).filter((one) => !one.paymentEntryId && one.currency === input.currency);
+        const applies = input.appliesTo ?? null;
+        if (unpaid.length > 0 && applies === null) {
+          return {
+            ok: false as const,
+            entry: null,
+            replayed: false,
+            reason:
+              `This piece has ${unpaid.length === 1 ? 'an issued invoice' : `${unpaid.length} issued invoices`} still ` +
+              'unpaid. Say whether this payment pays one of them or arrived outside every invoice — Brain ' +
+              'cannot tell a payment you record by hand from the provider later reporting the same money.',
+          };
+        }
+        if (applies !== null && applies !== 'OUTSIDE_INVOICES') {
+          const target = unpaid.find((one) => one.id === applies.invoiceId) ?? null;
+          if (!target) {
+            return { ok: false as const, entry: null, replayed: false, reason: 'That is not an unpaid issued invoice on this piece.' };
+          }
+          if (target.amountCents !== input.amountCents) {
+            return {
+              ok: false as const,
+              entry: null,
+              replayed: false,
+              reason: `That invoice is for ${target.amountCents} cents and this payment is ${input.amountCents}. Record a payment against it only for its whole amount.`,
+            };
+          }
+          paysInvoice = target;
+        }
+      }
+    }
+    /*
+     * The cap is on what a person types. A payment the provider confirmed is
+     * money that arrived, and refusing it would leave real money unrecorded
+     * and its invoice unable to settle; an overpayment is then visible as one.
+     */
+    if (
+      input.kind === 'CUSTOMER_PAYMENT' &&
+      input.opportunityId &&
+      !providerFact &&
       !(await moneyEntryByKey(input.projectId, input.idempotencyKey))
     ) {
       const live = (await agreementsFor(input.opportunityId)).filter(
@@ -1349,7 +1418,7 @@ export async function recordMoneyEvent(input: {
         };
       }
     }
-    return await recordMoney({
+    const recorded = await recordMoney({
       projectId: input.projectId,
       opportunityId: input.opportunityId ?? null,
       commitmentId: input.commitmentId ?? null,
@@ -1363,6 +1432,23 @@ export async function recordMoneyEvent(input: {
       recordedBy: input.actorRef,
       idempotencyKey: input.idempotencyKey,
     });
+    /*
+     * The invoice names the entry in the same transaction, so a later reading
+     * of the same money — by a person or by the provider — finds it paid.
+     */
+    if (recorded.ok && recorded.entry && !recorded.replayed && paysInvoice) {
+      await moveInvoice({
+        id: paysInvoice.id,
+        from: 'ISSUED',
+        to: 'PAID',
+        patch: {
+          paymentEntryId: recorded.entry.id,
+          paidAt: recorded.entry.occurredAt,
+          ...(providerFact ? { providerStatus: 'paid', stateReason: null } : { stateReason: 'Paid outside the provider; recorded by a person.' }),
+        },
+      });
+    }
+    return recorded;
   });
   if (!written.ok || !written.entry) return refuse(written.reason);
 

@@ -2003,6 +2003,9 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
                 projectId={view.mode.projectId}
                 opportunityId={placement.opportunity.id}
                 currency={view.myCash.position.currency}
+                unpaidInvoices={(
+                  work.journey?.deals.find((one) => one.opportunityId === placement.opportunity.id)?.invoices ?? []
+                ).filter((one) => one.state === 'ISSUED' && !one.paymentEntryId)}
                 onChanged={onChanged}
               />
             ) : null}
@@ -2297,16 +2300,22 @@ function OpportunityMoney({
   projectId,
   opportunityId,
   currency,
+  unpaidInvoices = [],
   onChanged,
 }: {
   projectId: string;
   opportunityId: string;
   currency: string;
+  /** Issued and unpaid: a payment recorded by hand must say whether it pays one. */
+  unpaidInvoices?: { id: string; amountCents: number; providerNumber: string | null }[];
   onChanged(): void;
 }): JSX.Element {
   const [kind, setKind] = useState<'CUSTOMER_PAYMENT' | 'SETTLEMENT' | null>(
     null,
   );
+  // '' until chosen; 'OUTSIDE' or an invoice id.
+  const [appliesTo, setAppliesTo] = useState('');
+  const mustAttribute = kind === 'CUSTOMER_PAYMENT' && unpaidInvoices.length > 0;
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
@@ -2333,6 +2342,11 @@ function OpportunityMoney({
          * retry after a lost response is the same entry once.
          */
         idempotencyKey: `${kind === 'SETTLEMENT' ? 'settlement' : 'payment'}:${opportunityId}:${reference.trim()}`,
+        ...(mustAttribute
+          ? appliesTo === 'OUTSIDE'
+            ? { outsideInvoices: true }
+            : { paysInvoiceId: appliesTo }
+          : {}),
       });
       setDone(
         kind === 'SETTLEMENT'
@@ -2342,6 +2356,7 @@ function OpportunityMoney({
       setKind(null);
       setAmount('');
       setReference('');
+      setAppliesTo('');
       onChanged();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
@@ -2400,13 +2415,34 @@ function OpportunityMoney({
             value={reference}
             onChange={(event) => setReference(event.target.value)}
           />
+          {mustAttribute ? (
+            <>
+              <label className="rs-field-label" htmlFor={`cash-om-applies-${opportunityId}`}>
+                What does this payment pay?
+              </label>
+              <select
+                id={`cash-om-applies-${opportunityId}`}
+                value={appliesTo}
+                onChange={(event) => setAppliesTo(event.target.value)}
+              >
+                <option value="">Choose one</option>
+                {unpaidInvoices.map((one) => (
+                  <option key={one.id} value={one.id}>
+                    Invoice {one.providerNumber ?? one.id} ({(one.amountCents / 100).toFixed(2)} {currency})
+                  </option>
+                ))}
+                <option value="OUTSIDE">None of these invoices</option>
+              </select>
+            </>
+          ) : null}
           <button
             type="button"
             className="rs-button-quiet"
             disabled={
               busy ||
               amountCents === null ||
-              reference.trim().length === 0
+              reference.trim().length === 0 ||
+              (mustAttribute && appliesTo === '')
             }
             onClick={() => void run()}
           >

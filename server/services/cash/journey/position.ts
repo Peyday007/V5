@@ -236,6 +236,8 @@ export async function dealPosition(input: {
   const paidAgainstInvoices = ours
     .filter((one) => one.paymentEntryId && BILLED_INVOICE_STATES.includes(one.state))
     .reduce((sum, one) => sum + one.amountCents, 0);
+  // Every payment against an invoice names it (a person recording one by hand
+  // must say which), so what is left arrived outside every invoice.
   const paidOutsideInvoices = Math.max(0, payments - paidAgainstInvoices);
   const invoiceable = Math.max(0, agreedRevenue - invoiced - pendingInvoice - paidOutsideInvoices);
   const paymentInFlight = operations.some(

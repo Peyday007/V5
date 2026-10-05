@@ -1069,6 +1069,14 @@ describe('one account’s whole journey', () => {
       body: { opportunityId, kind: 'COST', amountCents: 1, idempotencyKey: 'refund:anything' },
     });
     expect(squatted.status).toBe(422);
+    // The page's own payment control keys an entry `payment:<piece>:<ref>`,
+    // the key Brain's own take-payment converges on — so it is not reserved.
+    const pageKey = await call('POST', `${CASH()}/money`, {
+      cookie: memberCookie,
+      // A settlement nothing was paid for: refused for its amount, never for its key.
+      body: { opportunityId, kind: 'SETTLEMENT', amountCents: 1, verifiedReference: 'x', idempotencyKey: `payment:${opportunityId}:x` },
+    });
+    expect(JSON.stringify(pageKey.body)).not.toMatch(/written by Brain itself/);
 
     // An agreement is resolved against this piece, so an id from nowhere
     // reaches no obligation.

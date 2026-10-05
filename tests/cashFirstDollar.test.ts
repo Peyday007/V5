@@ -697,7 +697,12 @@ describe('failure, refund and partial paths', () => {
     expect((await requestInvoice(piece.id)).status).toBe(200);
     await tick();
     // The buyer pays part by bank transfer, recorded with its reference.
-    expect((await money({ opportunityId: piece.id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, verifiedReference: 'bank-40', idempotencyKey: `manual-payment:${piece.id}:bank-40` })).status).toBe(200);
+    // While an invoice is issued and unpaid, a hand-recorded payment must say
+    // what it pays: unattributed, it cannot later be told from the provider's
+    // own reading of the same money.
+    expect((await money({ opportunityId: piece.id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, verifiedReference: 'bank-40', idempotencyKey: `payment:${piece.id}:bank-40` })).status).toBe(422);
+    // Part of the invoice, by transfer: not the invoice's whole payment.
+    expect((await money({ opportunityId: piece.id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, verifiedReference: 'bank-40', idempotencyKey: `payment:${piece.id}:bank-40`, outsideInvoices: true })).status).toBe(200);
     let deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
     expect(deal.paymentState).toBe('PARTIALLY_PAID');
     expect(deal.pnl.owedByBuyerCents).toBe(60_000);

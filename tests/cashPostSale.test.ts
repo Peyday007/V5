@@ -468,6 +468,100 @@ describe('agreement and invoice', () => {
     expect((await position(id)).pnl.contributionCents).toBe(50_000);
   });
 
+  /** An issued invoice for the first live agreement, as the provider would leave it. */
+  async function issuedInvoice(id: string, providerInvoiceId: string) {
+    const [first] = await getDb().all<{ id: string }>(
+      "SELECT id FROM cash_money_entries WHERE opportunity_id = ? AND kind = 'PIPELINE_AGREED' ORDER BY created_at, id",
+      [id],
+    );
+    const drafted = await requestInvoice({
+      projectId,
+      opportunityId: id,
+      pipelineEntryId: first!.id,
+      customerName: 'Owner',
+      customerEmail: 'owner@buyer.example',
+      taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31',
+      actorRef: userId,
+    });
+    if (!drafted.ok) throw new Error(drafted.reason);
+    expect(await moveInvoice({ id: drafted.value.id, from: 'DRAFTED', to: 'ISSUED', patch: { providerInvoiceId } })).toBe(true);
+    return drafted.value;
+  }
+
+  const providerRead = (id: string, invoiceId: string, amountCents: number, chargeId: string) =>
+    recordMoneyEvent({
+      projectId,
+      opportunityId: id,
+      kind: 'CUSTOMER_PAYMENT',
+      amountCents,
+      currency: 'USD',
+      verifiedReference: chargeId,
+      idempotencyKey: `invoice-payment:${invoiceId}`,
+      actorRef: 'BRAIN',
+      paidInvoiceId: invoiceId,
+    });
+
+  it('a hand-recorded payment names the invoice it pays, so the next agreement is still billed and the provider read is not a second payment', async () => {
+    const id = await executing();
+    await agree(id, 100_000, 'First half');
+    await agree(id, 100_000, 'Second half');
+    const invoice = await issuedInvoice(id, 'in_A');
+    expect(invoice.amountCents).toBe(100_000);
+    // Unattributed while the invoice is unpaid: refused, naming why.
+    const bare = await money(id, 'CUSTOMER_PAYMENT', 100_000, 'bank-xyz');
+    expect(bare.ok).toBe(false);
+    expect(bare.reason).toMatch(/issued invoice still unpaid/);
+    const named = await recordMoneyEvent({
+      projectId,
+      opportunityId: id,
+      kind: 'CUSTOMER_PAYMENT',
+      amountCents: 100_000,
+      currency: 'USD',
+      verifiedReference: 'bank-xyz',
+      idempotencyKey: `payment:${id}:bank-xyz`,
+      actorRef: userId,
+      appliesTo: { invoiceId: invoice.id },
+    });
+    expect(named.ok).toBe(true);
+    const [paid] = await listInvoices({ projectId, opportunityId: id });
+    expect(paid!.state).toBe('PAID');
+    // The second agreement is still billable (the review's under-billing case).
+    expect((await position(id)).pnl.invoiceableCents).toBe(100_000);
+    // The provider later reads the same money under its own reference: the
+    // payment the invoice already names, not a second one.
+    const read = await providerRead(id, invoice.id, 100_000, 'ch_A');
+    expect(read.ok).toBe(true);
+    expect(await ledgerCount(id, 'CUSTOMER_PAYMENT')).toBe(1);
+  });
+
+  it('a payment the provider confirmed is recorded even past the agreed total, so its invoice can settle', async () => {
+    const id = await executing();
+    await agree(id, 100_000);
+    const invoice = await issuedInvoice(id, 'in_B');
+    // A person records a transfer they say arrived outside the invoice.
+    const outside = await recordMoneyEvent({
+      projectId,
+      opportunityId: id,
+      kind: 'CUSTOMER_PAYMENT',
+      amountCents: 100_000,
+      currency: 'USD',
+      verifiedReference: 'bank-1',
+      idempotencyKey: `payment:${id}:bank-1`,
+      actorRef: userId,
+      appliesTo: 'OUTSIDE_INVOICES',
+    });
+    expect(outside.ok).toBe(true);
+    // The buyer also paid the invoice: real money, recorded and visible as an overpayment.
+    const read = await providerRead(id, invoice.id, 100_000, 'ch_B');
+    expect(read.ok).toBe(true);
+    const [paid] = await listInvoices({ projectId, opportunityId: id });
+    expect(paid!.state).toBe('PAID');
+    expect((await position(id)).pnl.customerPaymentsCents).toBe(200_000);
+    // A second hand entry past the agreed total is still refused.
+    expect((await money(id, 'CUSTOMER_PAYMENT', 1_000, 'bank-2')).ok).toBe(false);
+  });
+
   it('an agreement released while its invoice was being sent leaves the provider’s invoice visible, not void', async () => {
     const id = await executing();
     const agreement = await agree(id, 40_000);

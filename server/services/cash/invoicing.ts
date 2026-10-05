@@ -484,7 +484,10 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
         continue;
       }
       if (!(await moveInvoice({ id: current.id, from: 'ISSUED', to: 'PAID', patch: { providerStatus: reading.status, paymentEntryId: entry.id, paidAt: reading.paidAt ?? readAt, stateReason: null } }))) {
-        continue;
+        // Recording the payment names the invoice in the same transaction, so
+        // it is usually PAID already; anything else is another pass's move.
+        const after = await getInvoice(current.id);
+        if (!after || after.state !== 'PAID' || after.paymentEntryId !== entry.id) continue;
       }
       pass.paid.push(current.id);
       current = (await getInvoice(current.id)) ?? current;
