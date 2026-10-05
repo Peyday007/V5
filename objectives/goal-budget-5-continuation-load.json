@@ -1,0 +1,47 @@
+{
+  "objective": "Two defects in server/services/research/goalContinuation.ts advanceResearchGoals (merged from Factory campaign fcp_26236480b97a4aa8b340), both found by the operator after delivery. (1) HOT PATH: a RESEARCH_GOAL whose assignment the archive already answers stays ACTIVE, so every Russell tick (RUSSELL_TICK_MS, 30s) re-runs inventoryProject(project) and coverBeforeWork for it for ever — an archive-wide read every 30 seconds per such goal, which is exactly the hot polling this repository just removed to reduce Supabase load. (2) STARVATION: the pass selects `LIMIT MAX_GOALS_PER_PASS ORDER BY created_at, id`, so five older goals that are settled, answered or waiting on a person permanently take every slot and a newer goal is never considered. Fix both by extending the goal row rather than adding a scheduler or queue: a migration server/db/migrations/106_research_goal_pass_marks.sql and server/db/pg-migrations/097_research_goal_pass_marks.sql (confirm the numbers are free on both chains; additive only, no dollar-quoted bodies) adding nullable russell_goals.research_considered_at TEXT and russell_goals.research_archive_answered_at TEXT, plus an index on russell_goals (purpose, state, research_considered_at); update RussellGoalRow and the mapper. The pass orders candidates least-recently-considered first (never-considered first, written so it orders identically on SQLite and Postgres — no NULLS FIRST, use COALESCE) and stamps research_considered_at for each goal it looks at, so every ACTIVE goal is reached within ceil(goals/MAX_GOALS_PER_PASS) passes. When coverBeforeWork says the archive fully answers the goal, stamp research_archive_answered_at; while that stamp is younger than an exported ARCHIVE_RECHECK_MS (6 hours) the pass skips the goal with reason 'answered by the archive; re-asked after <time>' without calling inventoryProject or coverBeforeWork, and after it the archive is asked again (new evidence may have changed the answer). The cheap checks that already exist (live packet, open ceiling request, latest packet left nothing unresolved) stay ahead of the archive read. Brain's clock (the same now the pass already uses) decides; nothing else about the decision changes.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "claude/goal-budget-authorization-9t3oyu",
+  "expectedOutcome": "The goal continuation pass reads the archive for an answered goal at most once per six hours, and no ACTIVE research goal is starved by older ones.",
+  "nonGoals": [
+    "Changing what counts as answered, the ceilings, startPacket or the human request",
+    "A new scheduler, queue or loop",
+    "Changing RUSSELL_TICK_MS"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/goalBudgetContinuationLoad.test.ts: with a goal the archive answers, two consecutive passes inside ARCHIVE_RECHECK_MS call inventoryProject once (spy or counted), and a pass after the recheck window calls it again",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/goalBudgetContinuationLoad.test.ts: with MAX_GOALS_PER_PASS+2 active goals where the oldest MAX_GOALS_PER_PASS are settled, the two newest are considered (and can start a packet) within two passes",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/goalBudgetJourney.test.ts and tests/deploymentOwnership.test.ts still pass",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/db/migrations/106_research_goal_pass_marks.sql",
+    "server/db/pg-migrations/097_research_goal_pass_marks.sql",
+    "server/domain/types.ts",
+    "server/repos/russellAuthority.ts",
+    "server/services/research/goalContinuation.ts",
+    "tests/goalBudgetContinuationLoad.test.ts",
+    "tests/goalBudgetJourney.test.ts",
+    "docs/GOAL-BUDGET.md"
+  ],
+  "verificationCommands": ["npm run typecheck", "npm test"],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commits; the migration only adds nullable columns and an index."
+}
