@@ -5,7 +5,8 @@
  * What this walks
  * ---------------------------------------------------------------------------
  *
- * A person creates a goal (two packets at most). The continuation pass starts
+ * A person creates a goal (two packets at most). The durable Russell tick —
+ * `tick()` itself, so the call in loop.ts is part of the walk — starts
  * packet 1; a worker proposes fragments, claims and verifications through the
  * real MCP tools, and the packet's fragments are approved with nobody asked.
  * When packet 1 ends leaving a mandatory requirement unresolved the pass starts
@@ -14,8 +15,11 @@
  *
  * **What is simulated, said rather than assumed.** The worker's own judgements
  * (the fragment, the claims, the verdicts) are the declared external edge, and
- * the end of packet 1 is set by the test: synthesis and the three audit roles
- * are not driven here, because they are not what this module decides. Everything
+ * the end of packet 1 is set by the test. That is deliberate rather than
+ * convenient: a packet that leaves a mandatory requirement unresolved reaches a
+ * terminal status only through repair attempts, three separately sessioned audit
+ * roles and, for a filed-short packet, a person's decision (§16, §23) — all of
+ * which have their own suites and none of which this module decides. Everything
  * the continuation pass reads and writes — goal rows, packet rows, the budget
  * ledger, the human request — is the real one, and every assertion reads rows.
  * It is not a live Cowork session and it is the tool layer rather than the MCP
@@ -34,6 +38,7 @@ import { currentFragments, updateOrchestration } from '../server/repos/research.
 import { inventoryProject } from '../server/services/reconcile/plan.ts';
 import { advancePacket } from '../server/services/research/packetRunner.ts';
 import { advanceResearchGoals } from '../server/services/research/goalContinuation.ts';
+import { tick } from '../server/services/russell/loop.ts';
 import type { ClaimedWork, Layer, Principal, WorkerScope } from '../server/domain/types.ts';
 
 const HOUR = 3_600_000;
@@ -206,14 +211,17 @@ describe('a goal approved once continues without another approval', () => {
     const goal = await newGoal();
     expect((await getGoal(goal.id))?.researchAssignment).toMatch(/telemarketing/);
 
-    const first = await advanceResearchGoals();
-    expect(first.started).toHaveLength(1);
-    expect(first.started[0]!.packetKey).toBe('round-1');
+    // Through the durable tick, as production runs it: the wiring in loop.ts is
+    // part of what is being walked, so removing the call fails here.
+    const first = await tick('journey');
+    expect(first.ran).toBe(true);
+    expect(first.researchGoals?.started).toHaveLength(1);
+    expect(first.researchGoals?.started[0]!.packetKey).toBe('round-1');
     const [one] = await packetsOf(goal.id);
     expect(one?.goal_packet_key).toBe('round-1');
 
-    // A second pass while packet 1 is live creates nothing.
-    await advanceResearchGoals();
+    // A second tick while packet 1 is live creates nothing.
+    await tick('journey');
     expect(await packetsOf(goal.id)).toHaveLength(1);
 
     // The worker plans through the real tools; nobody approves the fragments.
@@ -302,9 +310,9 @@ describe('a goal approved once continues without another approval', () => {
     // reads the packet's own requirements and coverage.
     await updateOrchestration(one!.id, { status: 'COMPLETE', completedAt: new Date().toISOString() });
 
-    const second = await advanceResearchGoals();
-    expect(second.started).toHaveLength(1);
-    expect(second.started[0]!.packetKey).toBe('round-2');
+    const second = await tick('journey');
+    expect(second.researchGoals?.started).toHaveLength(1);
+    expect(second.researchGoals?.started[0]!.packetKey).toBe('round-2');
     const packets = await packetsOf(goal.id);
     expect(packets.map((p) => p.goal_packet_key)).toEqual(['round-1', 'round-2']);
 
@@ -327,10 +335,10 @@ describe('a ceiling stops the goal and asks a person once', () => {
     const fragments = await count('research_fragments');
     const claims = await claimCount();
 
-    const a = await advanceResearchGoals();
-    expect(a.stopped).toEqual([{ goalId: goal.id, ceiling: 'PACKETS', asked: true }]);
-    await advanceResearchGoals();
-    await advanceResearchGoals();
+    const a = await tick('journey');
+    expect(a.researchGoals?.stopped).toEqual([{ goalId: goal.id, ceiling: 'PACKETS', asked: true }]);
+    await tick('journey');
+    await tick('journey');
 
     const requests = await requestsFor(goal.id);
     expect(requests).toHaveLength(1);
