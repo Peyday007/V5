@@ -815,7 +815,9 @@ export async function prepare(
   const outstanding =
     p.invoicedCents > 0
       ? p.owedByBuyerCents
-      : Math.max(0, p.agreedRevenueCents - (p.customerPaymentsCents - p.refundsCents));
+      : // Credited before refunds, as `owed` is: owed-back money is not payment
+        // toward an agreement, and a refund never makes it owed again.
+        Math.max(0, p.agreedRevenueCents - p.creditedGrossCents);
   if (outstanding <= 0) {
     return refuse('Everything agreed and billed for this piece has already been paid.');
   }

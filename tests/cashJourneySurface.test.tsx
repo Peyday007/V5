@@ -36,6 +36,7 @@ const DEAL: DealView = {
     heldCommitmentsCents: 0,
     contributionCents: 0,
     creditedPaymentsCents: 0,
+    creditedGrossCents: 0,
     owedBackCents: 0,
     owedByBuyerCents: 0,
     invoiceableCents: 0,

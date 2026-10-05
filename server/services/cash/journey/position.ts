@@ -154,6 +154,12 @@ export interface DealPnl {
    * payment owed back to the buyer is never credit toward an agreement.
    */
   creditedPaymentsCents: number;
+  /**
+   * The same, before refunds: what counts toward the agreements as having been
+   * paid at all. "What is still to collect" reads this, because a refund paid
+   * back never makes the buyer owe that money again.
+   */
+  creditedGrossCents: number;
   /** A second payment of an already-paid invoice, not yet refunded: owed back. */
   owedBackCents: number;
   /** Billed and not yet paid. */
@@ -365,6 +371,7 @@ export async function dealPosition(input: {
       heldCommitmentsCents: held,
       contributionCents: contributionFrom({ payments, refunds, costs, unpaidCommitments: unpaid }),
       creditedPaymentsCents: creditedNet,
+      creditedGrossCents: credited,
       owedBackCents: owedBack,
       owedByBuyerCents: owed,
       invoiceableCents: invoiceable,

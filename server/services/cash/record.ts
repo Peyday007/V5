@@ -112,6 +112,9 @@ export async function executionRecord(input: {
   const refunds = pnl.refundsCents;
   // Credited, not gross: a second payment owed back is not money toward the agreement.
   const paid = pnl.creditedPaymentsCents;
+  // What is left to collect: credited before refunds, the rule `prepare` and
+  // the invoice path's `owed` both apply — a refund never makes it owed again.
+  const outstanding = Math.max(0, agreed - pnl.creditedGrossCents);
 
   const attempts = await effectAttemptsFor(opportunity.projectId, opportunity.id);
   const nextOccurrence = String(actions.length + 1);
@@ -179,7 +182,7 @@ export async function executionRecord(input: {
     }
     if (reason === null && action !== 'CONTACT_BUYER' && agreed <= 0) {
       reason = 'No amount is recorded as agreed, so there is nothing to bill or collect.';
-    } else if (reason === null && action === 'ACCEPT_PAYMENT' && agreed - paid <= 0) {
+    } else if (reason === null && action === 'ACCEPT_PAYMENT' && outstanding <= 0) {
       reason = 'Everything agreed has already been paid.';
     }
     performable.push({
@@ -207,7 +210,7 @@ export async function executionRecord(input: {
       paidCents: paid,
       settledCents: pnl.settledCashCents,
       refundedCents: refunds,
-      outstandingCents: Math.max(0, agreed - paid),
+      outstandingCents: outstanding,
     },
     payments: lines('CUSTOMER_PAYMENT'),
     settlements: lines('SETTLEMENT'),

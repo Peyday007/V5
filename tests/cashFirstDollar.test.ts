@@ -72,6 +72,8 @@ import {
   type SendOutcome,
 } from '../server/services/effects/adapter.ts';
 import { cashRouter } from '../server/routes/cash.ts';
+import { refundConfirmed } from './helpers/cashDeal.ts';
+import { getAgreement } from '../server/repos/cashJourney.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
 import type { CashOpportunity, Principal, ProjectMembership } from '../server/domain/types.ts';
 
@@ -813,6 +815,28 @@ describe('failure, refund and partial paths', () => {
     await tick();
     const learned = await outcomesFor({ projectId, opportunityId: piece.id });
     expect(learned.find((one) => one.kind === 'CONTACT_RESULT')?.valueText).toBe('BUYER_ACCEPTED');
+  });
+
+  it('F05f: a partial refund of Brain’s own charge is never charged to the buyer again', async () => {
+    await granted();
+    provider('CONTACT_BUYER', 'msg');
+    provider('ACCEPT_PAYMENT', 'pay');
+    paymentReader();
+    const piece = await qualified();
+    await advanceWithinAuthority(projectId);
+    const agreement = await agree(piece.id, 100_000);
+    const occ = async () => (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id];
+    expect((await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: (await occ()).nextOccurrence })).status).toBe(200);
+    expect(outside.ACCEPT_PAYMENT!).toHaveLength(1);
+    // Part of it is paid back through the obligation.
+    expect((await act(piece.id, 'fulfil', { agreementId: agreement.id, kind: 'PERSON', performer: 'The operator' })).status).toBe(200);
+    await refundConfirmed((await getAgreement(agreement.id))!, 30_000, 'refund-partial', userId);
+    // Nothing is left to collect: a refund does not make the buyer owe it again.
+    const record = await occ();
+    expect(record.money.outstandingCents).toBe(0);
+    expect(record.brainCanDoNow).not.toContain('ACCEPT_PAYMENT');
+    expect((await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: record.nextOccurrence })).status).toBe(422);
+    expect(outside.ACCEPT_PAYMENT!).toHaveLength(1);
   });
 
   it('F05e: an invoice marked paid out of band is not a second payment; an unrelated hand payment does not block a real one', async () => {
