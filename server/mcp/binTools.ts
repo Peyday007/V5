@@ -20,6 +20,7 @@
  * would be a second security model, and the second one is always the weaker.
  */
 import { invalidInput, notFoundError } from './errors.ts';
+import { isUnexpandedSessionRef } from '../domain/sessionRef.ts';
 import {
   MUTATING,
   READ_ONLY,
@@ -118,6 +119,12 @@ const checkInTool: McpTool = {
   annotations: { title: 'Check in for work', ...MUTATING },
   run: async (args, { principal }) => {
     const workerId = workerOnly(principal);
+    if (isUnexpandedSessionRef(optionalString(args, 'session_ref'))) {
+      throw invalidInput(
+        'session_ref is an unexpanded variable, not a session id. Run `echo $CLAUDE_CODE_REMOTE_SESSION_ID` ' +
+          'and send what it prints (it looks like cse_…), or leave session_ref out. Nothing was assigned.',
+      );
+    }
     const result = await checkIn({
       principal,
       workerId,
