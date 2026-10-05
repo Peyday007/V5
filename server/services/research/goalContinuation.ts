@@ -28,7 +28,9 @@
  *   - Money is not here at all. `startPacket` pins it at zero and refuses a
  *     claim otherwise.
  */
+import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
+import { nowIso } from '../../repos/util.ts';
 import { askHuman } from '../../repos/russellMissions.ts';
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { coverBeforeWork } from '../russell/coverage.ts';
@@ -60,6 +62,7 @@ interface GoalRow {
   max_missions: number;
   max_fragments: number;
   expires_at: string | null;
+  research_archive_marker: string | null;
 }
 
 interface PacketRow {
@@ -160,6 +163,50 @@ async function askAboutCeiling(
   return created;
 }
 
+/**
+ * What the archive looked like when it was asked, from narrow indexed reads and
+ * from state that already moves when the inputs to `coverBeforeWork` move: the
+ * project's newest event (every import, extraction and filing records one), the
+ * shared findings the coverage reads (their count, newest change, and the
+ * earliest expiry still ahead of Brain's clock, so passing it changes the
+ * marker), and the goal's own assignment and layer. Never a timer: an unchanged
+ * marker is the only reason the archive is not read again.
+ */
+async function archiveMarker(goal: GoalRow, now: string): Promise<{ marker: string; since: string }> {
+  const db = getDb();
+  const [events, findings, expiry] = await Promise.all([
+    db.all<{ at: string | null }>(
+      'SELECT MAX(created_at) AS at FROM project_events WHERE project_id = ?',
+      [goal.project_id],
+    ),
+    db.all<{ n: number | string; at: string | null }>(
+      'SELECT COUNT(*) AS n, MAX(updated_at) AS at FROM shared_findings',
+      [],
+    ),
+    db.all<{ at: string | null }>(
+      `SELECT MIN(valid_until) AS at FROM shared_findings
+        WHERE state = 'ACTIVE' AND valid_until IS NOT NULL AND valid_until > ?`,
+      [now],
+    ),
+  ]);
+  const lastEvent = events[0]?.at ?? '';
+  const count = Number(findings[0]?.n ?? 0);
+  const lastFinding = findings[0]?.at ?? '';
+  const nextExpiry = expiry[0]?.at ?? '';
+  const own = createHash('sha256')
+    .update(`${goal.research_assignment}\u0000${goal.research_layer_id ?? ''}`)
+    .digest('hex')
+    .slice(0, 16);
+  return {
+    marker: `v1|e=${lastEvent}|n=${count}|u=${lastFinding}|x=${nextExpiry}|g=${own}`,
+    since: [lastEvent, lastFinding].filter(Boolean).sort().pop() ?? 'the goal began',
+  };
+}
+
+async function recordArchiveMarker(goalId: string, marker: string | null): Promise<void> {
+  await getDb().run('UPDATE russell_goals SET research_archive_marker = ? WHERE id = ?', [marker, goalId]);
+}
+
 async function advanceOne(goal: GoalRow, report: GoalContinuationReport): Promise<void> {
   if (!goal.research_layer_id) {
     report.skipped.push({ goalId: goal.id, reason: 'the goal names no layer to file under' });
@@ -195,6 +242,19 @@ async function advanceOne(goal: GoalRow, report: GoalContinuationReport): Promis
   }
 
   // Ask the archive first. A goal it already answers starts nothing.
+  // A marker taken when it last answered, and unchanged since, is the same
+  // answer: the archive is read again only when something it reads moved.
+  const now = nowIso();
+  const current = await archiveMarker(goal, now);
+  if (goal.research_archive_marker !== null && goal.research_archive_marker === current.marker) {
+    report.answeredByArchive.push(goal.id);
+    report.skipped.push({
+      goalId: goal.id,
+      reason: `answered by the archive; unchanged since ${current.since}`,
+    });
+    return;
+  }
+
   // Inventory first, as startPacket does: a document that was read and never
   // inventoried has no stored claims, and would read MISSING here while the
   // archive in fact answers the assignment.
@@ -208,9 +268,13 @@ async function advanceOne(goal: GoalRow, report: GoalContinuationReport): Promis
     ],
   });
   if (coverage.fullyAnswered) {
+    // Recorded against the marker taken before the read, so a change that lands
+    // during it is seen again on the next pass rather than absorbed.
+    await recordArchiveMarker(goal.id, current.marker);
     report.answeredByArchive.push(goal.id);
     return;
   }
+  if (goal.research_archive_marker !== null) await recordArchiveMarker(goal.id, null);
 
   const packetKey = `round-${packets.length + 1}`;
   try {
@@ -247,8 +311,8 @@ async function advanceOne(goal: GoalRow, report: GoalContinuationReport): Promis
 /**
  * One pass over the active research goals that have an assignment.
  *
- * Bounded to `MAX_GOALS_PER_PASS`, oldest first, so a quiet goal never starves
- * behind a busy one across ticks. A goal that throws is recorded and left as it
+ * Bounded to `MAX_GOALS_PER_PASS`, least recently considered first (never
+ * considered first), so a quiet goal never starves behind a busy one across ticks. A goal that throws is recorded and left as it
  * was; the rest are still considered.
  */
 export async function advanceResearchGoals(): Promise<GoalContinuationReport> {
@@ -261,15 +325,18 @@ export async function advanceResearchGoals(): Promise<GoalContinuationReport> {
   };
   const goals = await getDb().all<GoalRow>(
     `SELECT id, project_id, name, research_assignment, research_layer_id,
-            max_missions, max_fragments, expires_at
+            max_missions, max_fragments, expires_at, research_archive_marker
        FROM russell_goals
       WHERE purpose = 'RESEARCH_GOAL' AND state = 'ACTIVE' AND research_assignment IS NOT NULL
-      ORDER BY created_at, id
+      ORDER BY COALESCE(research_considered_at, ''), created_at, id
       LIMIT ?`,
     [MAX_GOALS_PER_PASS],
   );
   for (const goal of goals) {
     report.considered += 1;
+    // Stamped whatever the outcome, so the next pass takes the goals this one
+    // did not reach, and a restart resumes the rotation from rows.
+    await getDb().run('UPDATE russell_goals SET research_considered_at = ? WHERE id = ?', [nowIso(), goal.id]);
     try {
       await advanceOne(goal, report);
     } catch (error) {

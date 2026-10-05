@@ -44,15 +44,16 @@ unioned in. A goal cannot carry spend by any input.
 once per Russell tick, inside a `try` so a failure never stops the tick.
 
 For each active research goal with an assignment — one narrow indexed query
-over `(purpose, state)`, named columns, at most five goals per pass, oldest
-first:
+over `(purpose, state, research_considered_at)`, named columns, at most five
+goals per pass, least recently considered first (see *Rotation* below):
 
 1. A goal with a live (non-terminal) packet is left alone. A packet waiting on
    a person (`NEEDS_HUMAN`) is live.
 2. A goal whose latest packet was cancelled is left alone.
 3. A goal whose latest packet finished with every mandatory research
    requirement settled is left alone.
-4. The archive is asked first, through `coverBeforeWork`. When it already
+4. The archive is asked first, through `coverBeforeWork` (see *The archive
+   marker* below for when it is not re-asked). When it already
    answers the assignment nothing starts. Unused allowance is a ceiling, not a
    target; zero packets is a correct number.
 5. Otherwise `startPacket` runs in `GOAL_BUDGET` mode with packet key
@@ -69,3 +70,46 @@ created and nothing existing was touched. The pass raises exactly one
 that raising it is the person's decision. Repeated ticks find the same key and
 create nothing more. While that request is open the goal is not retried.
 Every accepted fragment, claim and filed report stays.
+
+### The archive marker
+
+A goal the archive answers stays `ACTIVE`, so without more the pass would run
+`inventoryProject` and `coverBeforeWork` for it on every tick for ever. When
+`coverBeforeWork` says the archive fully answers a goal, the pass records the
+marker that decision was made against in `russell_goals.research_archive_marker`.
+Later passes recompute the marker with narrow indexed reads and skip both calls
+while it is unchanged, with the reason `answered by the archive; unchanged since
+<time>`. There is no timer and no recheck interval.
+
+The marker is composed only of state that already moves when the inputs to the
+decision move:
+
+- the project's newest `project_events` row (every import, extraction and
+  filing records one), via `idx_events_project`;
+- the shared findings coverage reads: their count, the newest `updated_at`, and
+  the earliest `valid_until` of an `ACTIVE` finding that is still ahead of
+  Brain's clock, so a finding expiring changes the marker once the clock passes
+  it;
+- the goal's own `research_assignment` and `research_layer_id`.
+
+A shared finding's eligibility also depends on its claim, so the writers of
+what `ELIGIBLE_SQL` reads touch `shared_findings.updated_at` for that claim in
+the same call: `markContradiction` (contradiction state), `decideClaim`
+(accepted) and `updateFragment` when it moves a fragment's status. The other
+columns it reads (`sourced`, `validation_state`, `source_url`, `derived`) are
+written when a claim is inserted, before it can have been promoted. The marker
+is written against the value read before coverage ran, so a change that lands
+during the read is seen on the next pass. When the archive stops answering, the
+marker is cleared.
+
+### Rotation
+
+Candidates are ordered `COALESCE(research_considered_at, ''), created_at, id`
+(never-considered first; no `NULLS FIRST`, so SQLite and Postgres agree), and
+`research_considered_at` is stamped with Brain's now on every goal the pass
+looks at, whatever the outcome. Settled, answered or person-waiting goals
+therefore cannot hold all five slots: every active goal is reached within
+`ceil(goals / MAX_GOALS_PER_PASS)` passes, and a restart resumes from the
+stamped rows. `MAX_GOALS_PER_PASS` is unchanged. Duplicate packets remain
+impossible for the old reason: `startPacket` replays `round-<n>` on
+`UNIQUE (goal_id, goal_packet_key)`.
