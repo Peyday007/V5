@@ -979,6 +979,50 @@ describe('O: recovery never closes what an idempotent provider may have received
   });
 });
 
+describe('Q: an idempotent provider’s confirmed attempt left RESERVED', () => {
+  it('is finished from its own receipt, not called unknown', async () => {
+    const piece = await executingWithAgreement();
+    const sends: unknown[] = [];
+    registerAdapter({
+      name: 'synthetic.idempotent_invoice_confirmed',
+      effectClass: 'EXTERNAL_IDEMPOTENT',
+      providerKeyLimit: 64,
+      namespace: COMMERCIAL_EFFECTS.QUOTE_AND_INVOICE.namespace.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (request) => {
+        sends.push(request.payload);
+        return { kind: 'CONFIRMED', receiptRef: `inv-${sends.length}` };
+      },
+    } as EffectAdapter);
+    const outcome = await sendCommercialEffect({
+      action: 'QUOTE_AND_INVOICE',
+      projectId,
+      opportunityId: piece.id,
+      occurrence: await nextOccurrence(piece.id),
+      payload: { payer: 'x', amountCents: 120_000, currency: 'USD' },
+      authorityId,
+      amountCents: 120_000,
+      stateAtSend: 'EXECUTING',
+    });
+    expect(outcome.status).toBe('CONFIRMED');
+    // The process died after closing the attempt with its receipt and before
+    // moving the operation: the attempt says SUCCEEDED, the operation does not.
+    await getDb().run(
+      `UPDATE idempotency_operations
+          SET state = 'RESERVED', result_ref = NULL, completed_at = NULL, recover_after = ?
+        WHERE id = ?`,
+      ['2000-01-01T00:00:00.000Z', outcome.operation.id],
+    );
+    await operate(projectId);
+    await operate(projectId);
+    expect(sends).toHaveLength(1);
+    expect(await getOperation(outcome.operation.id)).toMatchObject({ state: 'SUCCEEDED', resultRef: 'inv-1' });
+    const invoices = (await actionsFor(piece.id)).filter((one) => one.action === 'QUOTE_AND_INVOICE');
+    expect(invoices).toEqual([expect.objectContaining({ reference: 'inv-1', performedBy: 'BRAIN' })]);
+  });
+});
+
 describe('P: a take-over holds a lease of its own', () => {
   it('is never left as a reservation nobody can recover', async () => {
     const piece = await executingWithAgreement();

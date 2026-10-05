@@ -388,8 +388,17 @@ export async function recoverExternalEffect(input: {
   // resend under the same provider key. Recovery never sends, and closing it
   // would put the next send under a new key the provider cannot de-duplicate
   // against — so it is an unknown, settled like any other.
+  // A closed attempt carrying a receipt is not an unknown: the provider
+  // confirmed it, and `resumeAfterCrash` finishes the operation from that
+  // receipt. Marking it UNCERTAIN would hide a confirmed charge behind a
+  // question a person could answer "did not happen".
+  const confirmed =
+    attempt !== null &&
+    attempt.endedAt !== null &&
+    attempt.outcome === 'SUCCEEDED' &&
+    attempt.receiptRef !== null;
   const mayHaveSent =
-    attempt !== null && !(attempt.endedAt !== null && attempt.outcome === 'FAILED');
+    attempt !== null && !confirmed && !(attempt.endedAt !== null && attempt.outcome === 'FAILED');
   if (mayHaveSent && input.adapter.effectClass === 'EXTERNAL_IDEMPOTENT') {
     const reason = 'an earlier attempt sent this and did not record an outcome';
     await markUncertain(operation.id, reason);
