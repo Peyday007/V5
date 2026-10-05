@@ -1211,6 +1211,11 @@ async function verifyStage(
       exitCode: failed?.exitCode ?? -1,
       tail: failed?.tail ?? '',
     });
+    if (!repair.ok) {
+      return await block(report, campaign, 'REPAIR_OWNERSHIP_UNRESOLVED', {
+        detail: `${repair.reason}: ${repair.detail}`,
+      });
+    }
     report.repairsQueued = repair.created ? 1 : 0;
     report.notes.push(
       repair.created
@@ -1394,15 +1399,21 @@ async function unblockStage(
       const stranded = repairs.needsAmendment.filter((need) =>
         gating.some((finding) => finding.id === need.findingId),
       );
-      if (stranded.length > 0) {
-        report.blocker = { kind: 'SCOPE_AMENDMENT_REQUIRED', detail: amendmentNeededDetail(stranded, changeRequest.id) };
-        return report;
-      }
       const unresolved = repairs.ownershipBlocked.filter((need) =>
         gating.some((finding) => finding.id === need.findingId),
       );
-      if (unresolved.length > 0) {
-        report.blocker = { kind: 'REPAIR_OWNERSHIP_UNRESOLVED', detail: ownershipBlockedDetail(unresolved) };
+      const still: { kind: 'SCOPE_AMENDMENT_REQUIRED' | 'REPAIR_OWNERSHIP_UNRESOLVED'; detail: string } | null =
+        stranded.length > 0
+          ? { kind: 'SCOPE_AMENDMENT_REQUIRED', detail: amendmentNeededDetail(stranded, changeRequest.id) }
+          : unresolved.length > 0
+            ? { kind: 'REPAIR_OWNERSHIP_UNRESOLVED', detail: ownershipBlockedDetail(unresolved) }
+            : null;
+      if (still) {
+        // The row says what the report says: one condition can give way to the other.
+        if (still.kind !== campaign.blockerKind || still.detail !== campaign.blockerDetail) {
+          await patchCampaign(campaign.id, { blockerKind: still.kind, blockerDetail: still.detail });
+        }
+        report.blocker = still;
         return report;
       }
       report.repairsQueued = repairs.queued.length;

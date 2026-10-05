@@ -57,6 +57,7 @@ import {
 import { listDispatchesForBin } from '../../repos/bins.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { installPlan, validatePlan } from './planner.ts';
+import { FactoryError } from './errors.ts';
 import {
   amendmentNeededDetail,
   gatingFindings,
@@ -186,7 +187,16 @@ async function ingestPlanBin(
     );
     return false;
   }
-  const installed = await installPlan(campaign.id, validation.units, { rewrites: validation.rewrites });
+  let installed: Awaited<ReturnType<typeof installPlan>>;
+  try {
+    installed = await installPlan(campaign.id, validation.units, { rewrites: validation.rewrites });
+  } catch (error) {
+    // The same validator refusing over the rows it re-read: said, not thrown out
+    // of the tick, which would stop every later pass at this line.
+    if (!(error instanceof FactoryError)) throw error;
+    report.notes.push(`The plan from bin ${bin.id} was not installed: ${error.message}`);
+    return false;
+  }
   for (const unit of validation.units) {
     await recordFactoryEvent({
       campaignId: campaign.id,

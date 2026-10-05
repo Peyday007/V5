@@ -559,3 +559,132 @@ describe('B — a repair owns where the defect must be fixed, not only where it 
     });
   });
 });
+
+describe('what the independent review found, pinned', () => {
+  it('merges the units between two inseparable ones, rather than making a cycle', async () => {
+    const changeRequest = await approved();
+    const validation = validatePlan(
+      {
+        units: [
+          unit({ key: 'impl-unit', ownedPaths: ['src/impl.ts'] }),
+          unit({ key: 'mid-unit', ownedPaths: ['src/other.ts'], dependsOn: ['impl-unit'] }),
+          unit({ key: 'test-unit', kind: 'TEST', ownedPaths: ['src/impl.test.ts'], dependsOn: ['mid-unit'] }),
+        ],
+      },
+      changeRequest,
+    );
+    expect(validation.ok).toBe(true);
+    expect(validation.issues.map((i) => i.reason)).not.toContain('DEPENDENCY_CYCLE');
+    expect(validation.units.map((u) => u.key)).toEqual(['impl-unit']);
+    expect(validation.units[0]!.ownedPaths).toEqual(['src/impl.ts', 'src/impl.test.ts', 'src/other.ts']);
+    expect(validation.units[0]!.dependsOn).toEqual([]);
+  });
+
+  it('never reports a defect the rewrite introduced as the architect’s', async () => {
+    // A dependency the merge would inherit, which itself waits on the needer
+    // through a unit outside the path: nothing to merge it with cleanly.
+    const changeRequest = await approved();
+    const validation = validatePlan(
+      {
+        units: [
+          unit({ key: 'impl-unit', ownedPaths: ['src/impl.ts'] }),
+          unit({ key: 'side-unit', ownedPaths: ['src/other.ts'], dependsOn: ['impl-unit'] }),
+          unit({ key: 'test-unit', kind: 'TEST', ownedPaths: ['src/impl.test.ts'], dependsOn: ['impl-unit', 'side-unit'] }),
+        ],
+      },
+      changeRequest,
+    );
+    // Whatever the outcome, a cycle the architect never wrote is never the answer.
+    expect(validation.issues.map((i) => i.reason)).not.toContain('DEPENDENCY_CYCLE');
+    if (validation.ok) {
+      expect(validateUnitGraph(validation.units, { mutationScope: ['src/**'], forbiddenPaths: [] }).ok).toBe(true);
+    }
+  });
+
+  it('does not let a reviewer’s category “failing test” bring back the test-only repair', async () => {
+    const changeRequest = await approved();
+    const campaign = await campaignFor(changeRequest);
+    for (const [key, owned] of [['change-impl', 'src/impl.ts'], ['verify-impl', 'src/impl.test.ts']] as const) {
+      await ensureUnit({
+        campaignId: campaign.id, unitKey: key, kind: 'IMPLEMENTATION', role: 'IMPLEMENTER',
+        title: key, objective: key, acceptance: [], ownedPaths: [owned], requiredContext: [],
+        verification: ['npm test'], expectedArtifact: 'a commit', state: 'INTEGRATED',
+      });
+    }
+    await recordReview({
+      campaignId: campaign.id, round: 1, scope: 'CAMPAIGN', reviewerSessionId: null, reviewedSha: 'c'.repeat(40),
+      verdict: 'CHANGES_REQUIRED', summary: 'x', independence: 'WORKER_SEPARATED',
+      findings: [{ key: 'total-wrong', severity: 'MAJOR', category: 'failing test', statement: 'src/impl.test.ts fails: total wrong', evidence: 'Suggested paths: src/impl.test.ts' }],
+    });
+    await queueRepairs(campaign, changeRequest);
+    const repair = (await listUnits(campaign.id)).find((u) => u.kind === 'REPAIR')!;
+    expect(repair.ownedPaths).toEqual(['src/impl.ts', 'src/impl.test.ts']);
+  });
+
+  it('records a suggested glob as a rejected hint instead of granting a directory', () => {
+    const finding = {
+      findingKey: 'x', category: 'correctness', severity: 'MAJOR',
+      statement: 'src/impl.ts:4 returns the old value', evidence: 'Suggested paths: src/impl.ts, src/**',
+    } as unknown as FactoryFinding;
+    const ownership = ownershipForRepair(finding, { mutationScope: ['src/**'] } as unknown as FactoryChangeRequest, [
+      { unitKey: 'u', kind: 'IMPLEMENTATION', state: 'INTEGRATED', ownedPaths: ['src/**'] },
+    ] as never);
+    expect(ownership).toMatchObject({ ok: true, ownedPaths: ['src/impl.ts'], rejectedHints: ['src/**'] });
+  });
+
+  it('keeps a line the statement cites even when the reviewer also suggested paths', () => {
+    const finding = {
+      findingKey: 'x', category: 'correctness', severity: 'MAJOR',
+      statement: 'lib/calc.ts:40 rounds early, which src/impl.test.ts shows', evidence: 'Suggested paths: src/impl.test.ts',
+    } as unknown as FactoryFinding;
+    const ownership = ownershipForRepair(finding, { mutationScope: ['src/**', 'lib/**'] } as unknown as FactoryChangeRequest, [
+      { unitKey: 't', kind: 'TEST', state: 'INTEGRATED', ownedPaths: ['src/impl.test.ts'] },
+    ] as never);
+    expect(ownership).toMatchObject({ ok: true, rootCauseFiles: ['lib/calc.ts'] });
+  });
+
+  it('does not pair a common stem across directories, nor read a negated mention as a need', async () => {
+    const changeRequest = await approved(['server/**', 'tests/**', 'src/**']);
+    const validation = validatePlan(
+      {
+        units: [
+          unit({ key: 'server-unit', ownedPaths: ['server/routes/index.ts'], acceptance: ['must not modify src/other.ts'] }),
+          unit({ key: 'ui-unit', ownedPaths: ['tests/ui/index.test.tsx', 'src/other.ts'], dependsOn: ['server-unit'] }),
+        ],
+      },
+      changeRequest,
+    );
+    expect(validation.ok).toBe(true);
+    expect(validation.rewrites).toEqual([]);
+    expect(validation.units.map((u) => u.key)).toEqual(['server-unit', 'ui-unit']);
+  });
+
+  it('records each rewrite once, even when a crash interrupted the first install', async () => {
+    const changeRequest = await approved();
+    const campaign = await campaignFor(changeRequest);
+    const validation = validatePlan(DEADLOCK_PLAN, changeRequest);
+    // The crash: units written, events not.
+    await installPlan(campaign.id, validation.units);
+    await installPlan(campaign.id, validation.units, { rewrites: validation.rewrites });
+    await installPlan(campaign.id, validation.units, { rewrites: validation.rewrites });
+    const events = (await listFactoryEvents(campaign.id)).filter((e) => e.kind === 'PLAN_REWRITTEN');
+    expect(events.map((e) => e.detail['action'])).toEqual(['MOVE_PATH', 'MERGE_UNITS']);
+  });
+
+  it('gives a failing final command a repair inside the campaign’s own work, never the whole scope', async () => {
+    const { queueVerificationRepair } = await import('../server/services/factory/repair.ts');
+    const changeRequest = await approved(['**']);
+    const campaign = await campaignFor(changeRequest);
+    const none = await queueVerificationRepair(campaign, changeRequest, { command: 'npm test', exitCode: 1, tail: '' });
+    expect(none).toMatchObject({ ok: false, reason: 'REPAIR_SCOPE_INSUFFICIENT' });
+    await ensureUnit({
+      campaignId: campaign.id, unitKey: 'change-impl', kind: 'IMPLEMENTATION', role: 'IMPLEMENTER',
+      title: 'impl', objective: 'impl', acceptance: [], ownedPaths: ['src/impl.ts'], requiredContext: [],
+      verification: ['npm test'], expectedArtifact: 'a commit', state: 'INTEGRATED',
+    });
+    const queued = await queueVerificationRepair(campaign, changeRequest, { command: 'npm test', exitCode: 1, tail: '' });
+    expect(queued.ok).toBe(true);
+    const repair = (await listUnits(campaign.id)).find((u) => u.kind === 'REPAIR')!;
+    expect(repair.ownedPaths).toEqual(['src/impl.ts']);
+  });
+});

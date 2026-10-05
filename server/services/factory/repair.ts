@@ -129,7 +129,9 @@ export function ownershipForRepair(
     mutationScope: changeRequest.mutationScope,
     forbiddenPaths,
     units: units
-      .filter((unit) => unit.kind !== 'REPAIR' && unit.state !== 'CANCELLED' && unit.state !== 'SUPERSEDED')
+      // Earlier repairs included: a file only a previous repair owned is still
+      // something this campaign has already been trusted to change.
+      .filter((unit) => unit.state !== 'CANCELLED' && unit.state !== 'SUPERSEDED')
       .map((unit) => ({ unitKey: unit.unitKey, ownedPaths: unit.ownedPaths, dependsOn: dependsOn.get(unit.unitKey) ?? [] })),
   });
 }
@@ -206,8 +208,7 @@ export async function queueRepairs(
   const alreadyBlocked = new Set(
     findings.length === 0
       ? []
-      : (await listFactoryEvents(campaign.id))
-          .filter((event) => event.kind === FACTORY_EVENT_KINDS.repairOwnershipBlocked)
+      : (await listFactoryEvents(campaign.id, { kinds: [FACTORY_EVENT_KINDS.repairOwnershipBlocked] }))
           .map((event) => `${String(event.detail['findingId'])}:${String(event.detail['reason'])}`),
   );
 
@@ -355,11 +356,37 @@ export async function queueVerificationRepair(
   campaign: FactoryCampaign,
   changeRequest: FactoryChangeRequest,
   failure: { command: string; exitCode: number; tail: string },
-): Promise<{ unitId: string; unitKey: string; created: boolean }> {
+): Promise<
+  | { ok: true; unitId: string; unitKey: string; created: boolean }
+  | { ok: false; unitKey: string; reason: string; detail: string }
+> {
   const slug = failure.command.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const unitKey = `repair-verification-${slug}`.slice(0, 60);
   const units = await listUnits(campaign.id);
-  const ownedPaths = [...new Set(units.flatMap((unit) => unit.ownedPaths))];
+  const live = units.filter((unit) => unit.state !== 'CANCELLED' && unit.state !== 'SUPERSEDED');
+  /*
+   * The campaign's own work, and never the mutation scope: two units broke each
+   * other, so the fix is inside what they owned. The old fallback to the whole
+   * scope was a repair that could write anywhere the contract could. Held to the
+   * same validator as every other unit.
+   */
+  const ownedPaths = [...new Set(live.flatMap((unit) => unit.ownedPaths))];
+  const forbiddenPaths = changeRequest.repository ? forbiddenPathsFor(changeRequest.repository) : [];
+  if (ownedPaths.length === 0) {
+    return {
+      ok: false, unitKey, reason: 'REPAIR_SCOPE_INSUFFICIENT',
+      detail: `\`${failure.command}\` fails and the campaign has no unit whose work the fix could be in.`,
+    };
+  }
+  const verdict = validateUnitGraph(
+    [
+      ...graphFromRows(units, await listDependencies(campaign.id)).filter((unit) => unit.key !== unitKey),
+      { key: unitKey, kind: 'REPAIR', ownedPaths, dependsOn: [], acceptance: [] },
+    ],
+    { mutationScope: changeRequest.mutationScope, forbiddenPaths },
+  );
+  const refusal = verdict.issues.find((issue) => issue.fatal && issue.units.includes(unitKey));
+  if (refusal) return { ok: false, unitKey, reason: refusal.reason, detail: refusal.detail };
 
   const { unit, created } = await ensureUnit({
     campaignId: campaign.id,
@@ -377,7 +404,7 @@ export async function queueVerificationRepair(
       `\`${failure.command}\` exits 0 on the merged tree`,
       'no test was weakened, skipped or deleted to achieve it',
     ],
-    ownedPaths: ownedPaths.length > 0 ? ownedPaths : changeRequest.mutationScope,
+    ownedPaths,
     requiredContext: [],
     verification: [failure.command],
     expectedArtifact: 'a commit that makes the command pass',
@@ -404,7 +431,7 @@ export async function queueVerificationRepair(
     });
   }
   await promoteReadyUnits(campaign.id);
-  return { unitId: unit.id, unitKey, created };
+  return { ok: true, unitId: unit.id, unitKey, created };
 }
 
 /**

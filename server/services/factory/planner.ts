@@ -49,7 +49,7 @@ import {
   promoteReadyUnits,
   refreshDownstreamCounts,
 } from '../../repos/factory.ts';
-import { recordFactoryEvent } from '../../repos/factoryFleet.ts';
+import { listFactoryEvents, recordFactoryEvent } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { forbiddenPathsFor } from './forbidden.ts';
 import { FactoryError } from './errors.ts';
@@ -250,12 +250,22 @@ export function validatePlan(
    */
   const ctx = { mutationScope: changeRequest.mutationScope, forbiddenPaths: forbiddenHere };
   const rewritten = rewritePlanGraph(units, ctx);
-  const finalUnits = errors.length === 0 ? rewritten.units : units;
-  const verdict = errors.length === 0 ? rewritten.verdict : validateUnitGraph(units, ctx);
-  const rewrites = errors.length === 0 ? rewritten.rewrites : [];
+  const rewriting = errors.length === 0;
+  const finalUnits = rewriting ? rewritten.units : units;
+  const verdict = rewriting ? rewritten.verdict : validateUnitGraph(units, ctx);
+  const rewrites = rewriting ? rewritten.rewrites : [];
   for (const issue of verdict.issues) {
+    // Not rewriting because of another error: a deadlock the factory would fix by
+    // itself is not something to send the architect back for.
+    if (!rewriting && issue.reason === 'MUTATION_OWNED_BY_DEPENDENT') continue;
     if (issue.fatal) errors.push(issue.detail);
     else warnings.push(issue.detail);
+  }
+  if (rewriting && rewritten.unresolved) {
+    errors.push(
+      'The factory could not rewrite this plan so that every unit can finish without one owning ' +
+        'what another needs; restructure the units so no unit owns a file a unit it waits for must change.',
+    );
   }
   for (const rewrite of rewrites) warnings.push(`Rewritten: ${rewrite.detail}`);
 
@@ -316,9 +326,10 @@ export async function installPlan(
   const campaign = await getCampaign(campaignId);
   const changeRequest = campaign ? await getChangeRequest(campaign.changeRequestId) : null;
   if (changeRequest) {
+    // The same derivation `validatePlan` uses, so the two cannot disagree.
     const verdict = validateUnitGraph(units, {
       mutationScope: changeRequest.mutationScope,
-      forbiddenPaths: changeRequest.repository ? forbiddenPathsFor(changeRequest.repository) : [],
+      forbiddenPaths: forbiddenPathsFor(changeRequest.repository),
     });
     const fatal = verdict.issues.filter((issue) => issue.fatal);
     if (fatal.length > 0) {
@@ -329,12 +340,6 @@ export async function installPlan(
     }
   }
 
-  /*
-   * What the factory changed about the proposal, recorded once per campaign:
-   * a plan is installed exactly once (every later call finds its units), so a
-   * rewrite is written only on the call that creates the first unit.
-   */
-  const firstInstall = units.length > 0 && !(await getUnitByKey(campaignId, units[0]!.key));
 
   for (const spec of units) {
     const { unit, created: isNew } = await ensureUnit({
@@ -387,8 +392,22 @@ export async function installPlan(
     }
   }
 
-  if (firstInstall && created > 0) {
-    for (const rewrite of options.rewrites ?? []) {
+  /*
+   * What the factory changed about the proposal, recorded once per change and
+   * idempotent by the ledger itself rather than by whether units existed — a
+   * crash between the units and these rows is finished by the next call.
+   */
+  const recorded = new Set(
+    (options.rewrites ?? []).length === 0
+      ? []
+      : (await listFactoryEvents(campaignId, { kinds: [FACTORY_EVENT_KINDS.planRewritten] })).map(
+          (event) => `${String(event.detail['action'])}:${String(event.detail['from'])}:${String(event.detail['to'])}`,
+        ),
+  );
+  {
+    for (const rewrite of (options.rewrites ?? []).filter(
+      (r) => !recorded.has(`${r.action}:${r.from}:${r.to}`),
+    )) {
       await recordFactoryEvent({
         campaignId,
         kind: FACTORY_EVENT_KINDS.planRewritten,

@@ -125,18 +125,34 @@ export function siblingSubjectOf(testPath: string): string | null {
 }
 
 /**
+ * Stems too common to pair across directories: `tests/ui/index.test.tsx` says
+ * nothing about `server/routes/index.ts`. A heuristic's own limit rather than a
+ * list of files — same-directory siblings still pair whatever the stem.
+ */
+const AMBIGUOUS_STEMS = new Set(['index', 'main', 'mod', 'types', 'type', 'utils', 'util', 'helpers', 'helper', 'constants', 'config']);
+
+/**
  * The tests a unit's own verification exercises for a file it owns: the sibling
- * test, plus any test the graph names with the same stem — preferring the same
- * directory, and taking another directory only when the stem is unambiguous.
+ * test, plus a test the graph names in a test directory with the same stem —
+ * only when exactly one source file in the graph has that stem and the stem is
+ * not one every project repeats. `fcp_5b8378e0bd3f4920bb85` was
+ * `server/services/research/startPacket.ts` and `tests/startPacket.test.ts`.
  */
 function testsExercising(path: string, knownPaths: string[]): string[] {
-  const out = new Set(siblingTestsOf(path));
   if (isTestPath(path) || !isConcrete(path)) return [];
+  const out = new Set(siblingTestsOf(path));
   const stem = stemOf(path);
   const sameStemSubjects = knownPaths.filter((p) => !isTestPath(p) && isConcrete(p) && stemOf(p) === stem);
   for (const candidate of knownPaths) {
     if (!isTestPath(candidate) || !isConcrete(candidate) || stemOf(candidate) !== stem) continue;
-    if (dirOf(candidate) === dirOf(path) || sameStemSubjects.length === 1) out.add(candidate);
+    if (dirOf(candidate) === dirOf(path)) out.add(candidate);
+    else if (
+      TEST_DIRECTORY.test(candidate) &&
+      sameStemSubjects.length === 1 &&
+      !AMBIGUOUS_STEMS.has(stem.toLowerCase())
+    ) {
+      out.add(candidate);
+    }
   }
   return [...out];
 }
@@ -184,9 +200,18 @@ function derivedRequirements(unit: GraphUnit, knownPaths: string[]): string[] {
   const needs = new Set<string>();
   for (const path of unit.ownedPaths) for (const test of testsExercising(path, knownPaths)) needs.add(test);
   for (const text of [...unit.acceptance, unit.expectedArtifact ?? '']) {
-    for (const path of pathsNamedIn(text)) needs.add(path);
+    for (const path of pathsNamedIn(text)) if (!negatedMention(text, path)) needs.add(path);
   }
   return [...needs].filter((path) => !owns(unit.ownedPaths, path));
+}
+
+/** "Must not modify src/b.ts" names a file it does not need. */
+function negatedMention(text: string, path: string): boolean {
+  const at = text.indexOf(path);
+  if (at === -1) return false;
+  const before = text.slice(Math.max(0, at - 40), at);
+  const clause = before.slice(Math.max(before.lastIndexOf('.'), before.lastIndexOf(';'), before.lastIndexOf(',')) + 1);
+  return /\b(not|never|without|no|nor)\b|n't\b/i.test(clause);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -204,7 +229,8 @@ function findCycle(units: GraphUnit[]): string[] | null {
     state.set(key, 'VISITING');
     stack.push(key);
     for (const next of edges.get(key) ?? []) {
-      if (!edges.has(next)) continue;
+      // A self-edge is reported as itself, once, above.
+      if (!edges.has(next) || next === key) continue;
       const cycle = visit(next);
       if (cycle) return cycle;
     }
@@ -432,18 +458,33 @@ function union(a: string[] = [], b: string[] = []): string[] {
 export function rewritePlanGraph<T extends RewritableUnit>(
   input: T[],
   ctx: GraphContext,
-): { units: T[]; rewrites: PlanRewrite[]; verdict: GraphVerdict } {
-  let units: T[] = input.map((unit) => ({ ...unit }));
+): { units: T[]; rewrites: PlanRewrite[]; verdict: GraphVerdict; unresolved: boolean } {
+  const original = validateUnitGraph(input, ctx);
+  let units: T[] = input.map((unit) => ({ ...unit, dependsOn: [...unit.dependsOn] }));
   const rewrites: PlanRewrite[] = [];
   const ceiling = input.reduce((n, unit) => n + unit.ownedPaths.length, 0) + input.length + 1;
+
+  const finish = (verdict: GraphVerdict) => {
+    /*
+     * A rewrite may only ever remove problems. If what is left carries a reason
+     * the proposal did not have — a cycle a merge produced, say — the factory's
+     * own change is what failed, and the architect must hear about the plan it
+     * wrote rather than a defect it never wrote. So the original is returned,
+     * flagged unresolved.
+     */
+    const before = new Set(original.issues.filter((i) => i.fatal).map((i) => i.reason));
+    const introduced = verdict.issues.some((i) => i.fatal && !before.has(i.reason));
+    if (!verdict.ok && (introduced || rewrites.length > 0)) {
+      return { units: input.map((unit) => ({ ...unit })), rewrites: [], verdict: original, unresolved: rewrites.length > 0 || introduced };
+    }
+    return { units, rewrites, verdict, unresolved: false };
+  };
 
   for (let round = 0; round < ceiling; round += 1) {
     const verdict = validateUnitGraph(units, ctx);
     const fatal = verdict.issues.filter((issue) => issue.fatal);
-    if (fatal.length === 0) return { units, rewrites, verdict };
-    if (fatal.some((issue) => issue.reason !== 'MUTATION_OWNED_BY_DEPENDENT')) {
-      return { units, rewrites, verdict };
-    }
+    if (fatal.length === 0) return finish(verdict);
+    if (fatal.some((issue) => issue.reason !== 'MUTATION_OWNED_BY_DEPENDENT')) return finish(verdict);
     const issue = fatal[0]!;
     const [neederKey, ownerKey] = issue.units as [string, string];
     const needer = units.find((u) => u.key === neederKey)!;
@@ -466,43 +507,70 @@ export function rewritePlanGraph<T extends RewritableUnit>(
       if (owner.ownedPaths.length > 0) continue;
     }
 
-    // Merge `owner` into `needer`: their completion conditions are inseparable.
-    needer.ownedPaths = union(needer.ownedPaths, owner.ownedPaths);
-    needer.acceptance = union(needer.acceptance, owner.acceptance);
-    needer.serves = union(needer.serves, owner.serves);
-    needer.verification = union(needer.verification, owner.verification);
-    needer.requiredContext = union(needer.requiredContext, owner.requiredContext);
-    needer.criticalPath = Boolean(needer.criticalPath || owner.criticalPath);
-    if (needer.risk && owner.risk && RISK_ORDER.indexOf(owner.risk) > RISK_ORDER.indexOf(needer.risk)) {
-      needer.risk = owner.risk;
+    /*
+     * Merge `owner` into `needer`: their completion conditions are inseparable.
+     * Every unit on a path between them goes too — `owner` waits for it and it
+     * waits for `needer` — because leaving it out would make the merged unit wait
+     * for something that waits for the merged unit. A cycle the factory made.
+     */
+    const byKey = new Map(units.map((unit) => [unit.key, unit as GraphUnit]));
+    const ownerAncestors = ancestorsOf(owner.key, byKey);
+    const between = units.filter(
+      (unit) => unit.key !== needer.key && ownerAncestors.has(unit.key) && ancestorsOf(unit.key, byKey).has(needer.key),
+    );
+    for (const absorbed of [...between, owner]) {
+      units = mergeInto(units, needer, absorbed);
+      rewrites.push({
+        action: 'MERGE_UNITS', reason: issue.reason, from: absorbed.key, to: needer.key, paths: issue.paths,
+        detail:
+          absorbed === owner
+            ? `Merged ${owner.key} into ${needer.key}: ${owner.key} owned ` +
+              `${issue.paths.map((p) => `\`${p}\``).join(', ')} that ${needer.key} needs to complete, and ` +
+              'what was left of it could not stand on its own.'
+            : `Merged ${absorbed.key} into ${needer.key}: it sits between ${needer.key} and ${owner.key}, ` +
+              'which are being merged, so it could not wait for one and be waited for by the other.',
+      });
     }
-    if (owner.modelClass === 'STRONGEST') needer.modelClass = 'STRONGEST';
-    needer.dependsOn = union(needer.dependsOn, owner.dependsOn).filter((key) => key !== needer.key && key !== owner.key);
-    units = units.filter((unit) => unit.key !== owner.key);
-    for (const unit of units) {
-      if (!unit.dependsOn.includes(owner.key)) continue;
-      unit.dependsOn = union(unit.dependsOn.map((key) => (key === owner.key ? needer.key : key))).filter(
-        (key) => key !== unit.key,
-      );
-    }
-    rewrites.push({
-      action: 'MERGE_UNITS', reason: issue.reason, from: owner.key, to: needer.key, paths: issue.paths,
-      detail:
-        `Merged ${owner.key} into ${needer.key}: ${owner.key} owned ` +
-        `${issue.paths.map((p) => `\`${p}\``).join(', ')} that ${needer.key} needs to complete, and ` +
-        'what was left of it could not stand on its own.',
-    });
   }
-  return { units, rewrites, verdict: validateUnitGraph(units, ctx) };
+  return finish(validateUnitGraph(units, ctx));
+}
+
+function mergeInto<T extends RewritableUnit>(units: T[], into: T, absorbed: T): T[] {
+  into.ownedPaths = union(into.ownedPaths, absorbed.ownedPaths);
+  into.acceptance = union(into.acceptance, absorbed.acceptance);
+  into.serves = union(into.serves, absorbed.serves);
+  into.verification = union(into.verification, absorbed.verification);
+  into.requiredContext = union(into.requiredContext, absorbed.requiredContext);
+  into.criticalPath = Boolean(into.criticalPath || absorbed.criticalPath);
+  if (into.risk && absorbed.risk && RISK_ORDER.indexOf(absorbed.risk) > RISK_ORDER.indexOf(into.risk)) {
+    into.risk = absorbed.risk;
+  }
+  if (absorbed.modelClass === 'STRONGEST') into.modelClass = 'STRONGEST';
+  into.dependsOn = union(into.dependsOn, absorbed.dependsOn).filter((key) => key !== into.key && key !== absorbed.key);
+  const rest = units.filter((unit) => unit.key !== absorbed.key);
+  for (const unit of rest) {
+    if (!unit.dependsOn.includes(absorbed.key)) continue;
+    unit.dependsOn = union(unit.dependsOn.map((key) => (key === absorbed.key ? into.key : key))).filter(
+      (key) => key !== unit.key,
+    );
+  }
+  return rest;
 }
 
 /* ------------------------------------------------------------------------- */
 /* What a repair may write                                                    */
 /* ------------------------------------------------------------------------- */
 
-/** A finding is about a test, rather than about what a test shows, only by its category. */
+/**
+ * Categories that mean the finding is about the test itself — missing or weak
+ * coverage — rather than about what a test shows. Closed and exact: a reviewer
+ * writing "failing test" is describing a symptom, and reading that as a test-only
+ * finding would hand back the repair that could only weaken the test.
+ */
+export const TEST_ONLY_CATEGORIES = new Set(['coverage', 'test-coverage', 'test-quality', 'missing-test', 'missing-tests']);
+
 export function isTestFinding(category: string): boolean {
-  return /\btest|coverage\b/i.test(category);
+  return TEST_ONLY_CATEGORIES.has(category.trim().toLowerCase());
 }
 
 export interface RepairScopeInput {
@@ -575,20 +643,27 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
   const fromStatement = pathsNamedIn(input.statement);
   const fromEvidence = pathsCitedAtLine(input.evidence);
   const named =
-    input.suggested.length > 0 ? input.suggested : fromStatement.length > 0 ? fromStatement : fromEvidence;
-  const evidenceFiles = [...new Set(named)];
+    input.suggested.length > 0
+      ? [...input.suggested, ...pathsCitedAtLine(input.statement)]
+      : fromStatement.length > 0
+        ? fromStatement
+        : fromEvidence;
+  // A glob is not a file anybody saw a defect in; it would be a reviewer asking
+  // for a directory. Recorded and left out, so a hint can never widen.
+  const globHints = [...new Set(named.filter((path) => !isConcrete(path)))];
+  const evidenceFiles = [...new Set(named.filter(isConcrete))];
 
   if (evidenceFiles.length === 0) {
     const union = [...new Set(input.units.flatMap((unit) => unit.ownedPaths))];
     if (union.length === 0) {
       return {
-        ok: false, reason: 'REPAIR_SCOPE_INSUFFICIENT', evidenceFiles: [], rejectedHints: [],
+        ok: false, reason: 'REPAIR_SCOPE_INSUFFICIENT', evidenceFiles: [], rejectedHints: globHints,
         detail: 'The finding names no file and the campaign has no unit whose work it could be about.',
       };
     }
     return {
       ok: true, ownedPaths: union, evidenceFiles: [], rootCauseFiles: [], verificationFiles: [],
-      rejectedHints: [], derivedFrom: 'UNIT_OWNERSHIP', beyondUnits: [],
+      rejectedHints: globHints, derivedFrom: 'UNIT_OWNERSHIP', beyondUnits: [],
     };
   }
 
@@ -610,12 +685,12 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
     forbiddenIn([path], input.forbiddenPaths).length === 0;
 
   const accepted = evidenceFiles.filter(anchored);
-  const rejectedHints = evidenceFiles.filter((path) => !anchored(path));
+  const rejectedHints = [...evidenceFiles.filter((path) => !anchored(path)), ...globHints];
   if (accepted.length === 0) {
     return {
       ok: false, reason: 'REPAIR_SCOPE_INSUFFICIENT', evidenceFiles, rejectedHints,
       detail:
-        `Nothing the factory holds anchors ${rejectedHints.map((p) => `\`${p}\``).join(', ')}: no unit ` +
+        `Nothing the factory holds anchors ${evidenceFiles.map((p) => `\`${p}\``).join(', ')}: no unit ` +
         'owned it, the approved scope does not name it, and the finding does not cite it at a line.',
     };
   }
