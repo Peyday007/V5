@@ -6078,6 +6078,9 @@ export interface RussellGoalRow {
   work_policy?: string | null;
   /** STANDING (Russell's grant) or RESEARCH_GOAL (a bounded research budget). */
   purpose?: string | null;
+  /** What a research goal is for, and the layer its packets file under. */
+  research_assignment?: string | null;
+  research_layer_id?: string | null;
   max_external_spend: number;
   starts_at: string;
   expires_at: string | null;
@@ -6396,6 +6399,10 @@ export interface RussellGoal {
   workPolicy: WorkPolicy;
   /** STANDING is Russell's grant; RESEARCH_GOAL is a bounded research budget and never a standing grant. */
   purpose?: 'STANDING' | 'RESEARCH_GOAL';
+  /** A research goal's assignment text; null for a standing grant. */
+  researchAssignment?: string | null;
+  /** The layer a research goal's packets file under; null when none was named. */
+  researchLayerId?: string | null;
   maxExternalSpend: number;
   startsAt: string;
   expiresAt: string | null;

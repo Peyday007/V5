@@ -65,6 +65,8 @@ function mapGoal(row: RussellGoalRow): RussellGoal {
     maxProbes: row.max_probes,
     workPolicy: (row.work_policy ?? 'UNCAPPED') as WorkPolicy,
     purpose: row.purpose === 'RESEARCH_GOAL' ? 'RESEARCH_GOAL' : 'STANDING',
+    researchAssignment: row.research_assignment ?? null,
+    researchLayerId: row.research_layer_id ?? null,
     maxExternalSpend: row.max_external_spend,
     startsAt: row.starts_at,
     expiresAt: row.expires_at,
@@ -1024,6 +1026,10 @@ export async function createResearchGoal(input: {
   maxPackets: number;
   maxFragments: number;
   deadline: string;
+  /** What the goal is for; the continuation pass researches this. */
+  researchAssignment?: string | null;
+  /** The layer the goal's packets file under. */
+  researchLayerId?: string | null;
   /** Accepted only to be refused: nothing here may carry money. */
   paidOverages?: boolean;
 }): Promise<RussellGoal> {
@@ -1051,10 +1057,10 @@ export async function createResearchGoal(input: {
     `INSERT INTO russell_goals
        (id, project_id, owner_user_id, name, policy_version, allowed_work, prohibitions,
         max_missions, max_fragments, max_concurrent, max_probes, max_external_spend,
-        work_policy, purpose,
+        work_policy, purpose, research_assignment, research_layer_id,
         starts_at, expires_at, state, revoked_at, revoked_by_user_id, revoked_reason,
         created_by_user_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 0, 0, 'CAPPED', 'RESEARCH_GOAL',
+     VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 0, 0, 'CAPPED', 'RESEARCH_GOAL', ?, ?,
              ?, ?, 'ACTIVE', NULL, NULL, NULL, ?, ?, ?)`,
     [
       id,
@@ -1066,6 +1072,8 @@ export async function createResearchGoal(input: {
       input.maxPackets,
       input.maxFragments,
       input.maxPackets,
+      input.researchAssignment?.trim() || null,
+      input.researchLayerId || null,
       at,
       deadline,
       input.createdByUserId,
