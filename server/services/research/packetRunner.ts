@@ -40,6 +40,7 @@
  */
 import { envelopeAvailable, getApprovalEnvelope, planFitsEnvelope } from './approvalEnvelope.ts';
 import { getProject } from '../../repos/projects.ts';
+import { authorityNow, getGoal } from '../../repos/russellAuthority.ts';
 import { dependencyKeys } from '../../domain/dependencies.ts';
 import { outcomeFor, repairable, TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { bundleKeyFor } from './bundling.ts';
@@ -1146,7 +1147,7 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
  * never allowed to exist, which is a different fact and reads differently to
  * whoever has to act on it.
  */
-async function refusedByBudget(
+export async function refusedByBudget(
   orchestration: ResearchOrchestration,
   detail: string,
 ): Promise<AdvanceResult> {
@@ -1583,6 +1584,62 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
       return await approvePlan({
         orchestrationId,
         approvedByUserId: `SYSTEM:${verdict.envelopeId}@${verdict.validatorVersion}`,
+      });
+    }
+
+    if (orchestration.goalId) {
+      /*
+       * A plan a person authorized the limits of in advance, by creating the
+       * research goal. The packet ceiling was spent when the packet started and
+       * the fragment ceiling in `createFragments`, so a plan over the fragment
+       * ceiling never reaches this line (FragmentBudgetRefused parks it at
+       * NEEDS_HUMAN naming the ceiling). What is left to decide here is only
+       * whether the goal still stands: ACTIVE and before its deadline, on
+       * Brain's clock.
+       *
+       * Past the deadline, still-PLANNED fragments are not approved and the
+       * packet parks naming the deadline. Fragments already QUEUED or LEASED
+       * before it may finish — the same way an exhausted allowance keeps queued
+       * work rather than discarding it — and nothing already written is touched.
+       */
+      const goal = await getGoal(orchestration.goalId);
+      const now = authorityNow();
+      const stopped =
+        !goal || goal.purpose !== 'RESEARCH_GOAL' || goal.state !== 'ACTIVE'
+          ? 'the research goal is no longer active'
+          : goal.expiresAt && goal.expiresAt <= now
+            ? `the DEADLINE of research goal ${goal.id} (${goal.expiresAt}) has passed`
+            : null;
+      if (!goal || stopped) {
+        await updateOrchestration(orchestrationId, {
+          status: 'NEEDS_HUMAN',
+          failureReason:
+            `This packet's plan is not approved: ${stopped}. Extending the goal or ` +
+            'starting a new one is a decision for a person.',
+        });
+        return {
+          orchestrationId,
+          status: 'NEEDS_HUMAN',
+          enqueued: [],
+          waitingOn: `a person, because ${stopped}`,
+        };
+      }
+      await recordEvent({
+        projectId: orchestration.projectId,
+        layerId: orchestration.layerId,
+        entityType: 'RUN',
+        entityId: orchestration.runId,
+        eventType: 'RESEARCH_PLAN_SYSTEM_APPROVED',
+        payload: {
+          orchestrationId,
+          goalId: goal.id,
+          authorizedBy: goal.createdByUserId,
+          fragments: awaitingApproval.length,
+        },
+      });
+      return await approvePlan({
+        orchestrationId,
+        approvedByUserId: `GOAL:${goal.id}:${goal.createdByUserId}`,
       });
     }
 

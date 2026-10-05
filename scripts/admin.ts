@@ -60,11 +60,9 @@
 import { startPacket } from '../server/services/research/startPacket.ts';
 import type { GoalBudgetStatus } from '../server/repos/russellAuthority.ts';
 import {
-  bindPacketToGoal,
   createResearchGoal,
   getGoal,
   goalBudgetStatus,
-  reserveGoalPacket,
 } from '../server/repos/russellAuthority.ts';
 import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
 import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
@@ -1337,10 +1335,7 @@ async function main(): Promise<void> {
         if (!cashEnvelope?.assignmentTemplate) {
           fail('RUSSELL_CASH_DISCOVERY_V1 defines no assignment template in this build.');
         }
-        // Charge first: a hold that is never bound expires and refunds itself, whereas a
-        // packet started before its charge is refused would run uncounted.
-        const reserved = await reserveGoalPacket({ goalId: goal.id, packetKey, projectId: project.id });
-        if (!reserved.ok) fail(`The goal refused this packet's charge, so no packet was started: ${reserved.reason}`);
+        // startPacket reserves, binds and settles the charge itself, keyed by packetKey.
         try {
           const packet = await startPacket({
             projectId: project.id,
@@ -1352,6 +1347,7 @@ async function main(): Promise<void> {
             approval: {
               mode: 'GOAL_BUDGET',
               goalId: goal.id,
+              packetKey,
               budget: {
                 maxPackets: goal.maxMissions,
                 maxFragments: goal.maxFragments,
@@ -1362,7 +1358,6 @@ async function main(): Promise<void> {
             },
             startedBy: { kind: 'PERSON', id: actor.id },
           });
-          await bindPacketToGoal({ orchestrationId: packet.orchestration.id, goalId: goal.id, packetKey });
           console.log(`  started    ${bucket.id}  ${packet.orchestration.id}  under goal ${goal.id}`);
         } catch (error) {
           if (error instanceof Halt) throw error;

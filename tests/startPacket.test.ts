@@ -30,7 +30,6 @@ import { listRequirements, listCoverage } from '../server/repos/reconciliation.t
 import { getRun } from '../server/repos/runs.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import {
-  ApprovalModeUnavailable,
   GoalIncomplete,
   NoSuchTarget,
   startPacket,
@@ -416,14 +415,15 @@ describe('startPacket', () => {
     expect(noProject!.message).toBe(noLayer!.message);
   });
 
-  it('refuses an approval mode whose budget nothing enforces', async () => {
-    expect(SUPPORTED_APPROVAL_MODES).not.toContain('GOAL_BUDGET');
+  it('accepts GOAL_BUDGET only with enforcement, and refuses a goal that is not there', async () => {
+    expect(SUPPORTED_APPROVAL_MODES).toContain('GOAL_BUDGET');
 
     const refused = await startPacket(
       goal({
         approval: {
           mode: 'GOAL_BUDGET',
           goalId: 'goal_test',
+          packetKey: 'k1',
           budget: {
             maxPackets: 3,
             maxFragments: 12,
@@ -438,9 +438,8 @@ describe('startPacket', () => {
       (error: unknown) => error as Error,
     );
 
-    expect(refused).toBeInstanceOf(ApprovalModeUnavailable);
-    // Refused before anything was created, so a ceiling nobody enforces never
-    // becomes a packet that ran without one.
+    expect(refused).toBeInstanceOf(NoSuchTarget);
+    // Refused before anything was created.
     expect(await listWorkItems(fixture.project.id, { limit: 100 })).toHaveLength(0);
   });
 });
