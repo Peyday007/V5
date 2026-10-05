@@ -205,7 +205,13 @@ function derivedRequirements(unit: GraphUnit, knownPaths: string[]): string[] {
   return [...needs].filter((path) => !owns(unit.ownedPaths, path));
 }
 
-/** "Must not modify src/b.ts" names a file it does not need. */
+/**
+ * "Must not modify src/b.ts" names a file it does not need.
+ *
+ * A word heuristic, and it fails open: a negator it misreads drops a need and
+ * can miss a deadlock, which is the shape this validator existed before it.
+ * It never invents a need, so it can never merge units that did not need it.
+ */
 function negatedMention(text: string, path: string): boolean {
   const at = text.indexOf(path);
   if (at === -1) return false;
@@ -642,15 +648,19 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
    */
   const fromStatement = pathsNamedIn(input.statement);
   const fromEvidence = pathsCitedAtLine(input.evidence);
+  // Globs leave before the choice, so suggesting `src/**` cannot displace the
+  // file the statement names. They are kept only to be recorded as rejected.
+  const suggestedGlobs = input.suggested.filter((path) => !isConcrete(path));
+  const suggested = input.suggested.filter(isConcrete);
   const named =
-    input.suggested.length > 0
-      ? [...input.suggested, ...pathsCitedAtLine(input.statement)]
+    suggested.length > 0
+      ? [...suggested, ...pathsCitedAtLine(input.statement)]
       : fromStatement.length > 0
         ? fromStatement
         : fromEvidence;
   // A glob is not a file anybody saw a defect in; it would be a reviewer asking
   // for a directory. Recorded and left out, so a hint can never widen.
-  const globHints = [...new Set(named.filter((path) => !isConcrete(path)))];
+  const globHints = [...new Set([...suggestedGlobs, ...named.filter((path) => !isConcrete(path))])];
   const evidenceFiles = [...new Set(named.filter(isConcrete))];
 
   if (evidenceFiles.length === 0) {

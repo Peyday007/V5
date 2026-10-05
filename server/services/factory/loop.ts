@@ -1212,8 +1212,17 @@ async function verifyStage(
       tail: failed?.tail ?? '',
     });
     if (!repair.ok) {
-      return await block(report, campaign, 'REPAIR_OWNERSHIP_UNRESOLVED', {
-        detail: `${repair.reason}: ${repair.detail}`,
+      /*
+       * The units' own paths no longer fit the contract (a scope narrowed below
+       * installed work), or there are none. Not REPAIR_OWNERSHIP_UNRESOLVED: that
+       * kind is answered by re-asking the review findings, and a verification
+       * failure has none, so it would walk straight back here every few ticks.
+       * The contract and the work disagree, and only a person's amendment settles it.
+       */
+      return await block(report, campaign, 'CONTRADICTORY_CONTRACT', {
+        detail:
+          `\`${failed?.command ?? '(unknown)'}\` fails on the merged tree and no repair can be created: ` +
+          `${repair.reason}: ${repair.detail}`,
       });
     }
     report.repairsQueued = repair.created ? 1 : 0;

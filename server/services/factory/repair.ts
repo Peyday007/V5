@@ -202,7 +202,7 @@ export async function queueRepairs(
   const units = await listUnits(campaign.id);
   const dependencies = await listDependencies(campaign.id);
   const result: RepairResult = { queued: [], skipped: [], needsAmendment: [], ownershipBlocked: [] };
-  const forbiddenPaths = changeRequest.repository ? forbiddenPathsFor(changeRequest.repository) : [];
+  const forbiddenPaths = forbiddenPathsFor(changeRequest.repository);
   const graph = graphFromRows(units, dependencies);
   const dependsOn = new Map(graph.map((unit) => [unit.key, unit.dependsOn]));
   const alreadyBlocked = new Set(
@@ -371,7 +371,7 @@ export async function queueVerificationRepair(
    * same validator as every other unit.
    */
   const ownedPaths = [...new Set(live.flatMap((unit) => unit.ownedPaths))];
-  const forbiddenPaths = changeRequest.repository ? forbiddenPathsFor(changeRequest.repository) : [];
+  const forbiddenPaths = forbiddenPathsFor(changeRequest.repository);
   if (ownedPaths.length === 0) {
     return {
       ok: false, unitKey, reason: 'REPAIR_SCOPE_INSUFFICIENT',

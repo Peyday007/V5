@@ -195,6 +195,15 @@ async function ingestPlanBin(
     // of the tick, which would stop every later pass at this line.
     if (!(error instanceof FactoryError)) throw error;
     report.notes.push(`The plan from bin ${bin.id} was not installed: ${error.message}`);
+    const seen = await listFactoryEvents(campaign.id, { kinds: [FACTORY_EVENT_KINDS.planNotInstalled] });
+    if (!seen.some((event) => event.detail['binId'] === bin.id)) {
+      await recordFactoryEvent({
+        campaignId: campaign.id,
+        kind: FACTORY_EVENT_KINDS.planNotInstalled,
+        evidenceClass: 'DERIVED',
+        detail: { binId: bin.id, reason: error.message.slice(0, 2000) },
+      });
+    }
     return false;
   }
   for (const unit of validation.units) {

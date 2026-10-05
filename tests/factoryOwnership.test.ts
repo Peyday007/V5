@@ -688,3 +688,24 @@ describe('what the independent review found, pinned', () => {
     expect(repair.ownedPaths).toEqual(['src/impl.ts']);
   });
 });
+
+describe('the re-review’s findings, pinned', () => {
+  it('does not let a suggested glob displace the file the statement names', () => {
+    const finding = {
+      findingKey: 'x', category: 'correctness', severity: 'MAJOR',
+      statement: 'src/impl.ts returns the old value', evidence: 'Suggested paths: src/**',
+    } as unknown as FactoryFinding;
+    const ownership = ownershipForRepair(finding, { mutationScope: ['src/**'] } as unknown as FactoryChangeRequest, [
+      { unitKey: 'u', kind: 'IMPLEMENTATION', state: 'INTEGRATED', ownedPaths: ['src/impl.ts'] },
+      { unitKey: 'v', kind: 'IMPLEMENTATION', state: 'INTEGRATED', ownedPaths: ['src/other/**'] },
+    ] as never);
+    expect(ownership).toMatchObject({ ok: true, ownedPaths: ['src/impl.ts'], rejectedHints: ['src/**'] });
+  });
+
+  it('blocks a refused verification repair on the contract, whose answer is a person, not a re-ask that loops', () => {
+    const source = fs.readFileSync(path.join(process.cwd(), 'server', 'services', 'factory', 'loop.ts'), 'utf8');
+    const at = source.indexOf('if (!repair.ok) {');
+    expect(at).toBeGreaterThan(-1);
+    expect(source.slice(at, at + 1200)).toMatch(/block\(report, campaign, 'CONTRADICTORY_CONTRACT'/);
+  });
+});

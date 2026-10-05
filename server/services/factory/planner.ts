@@ -401,12 +401,14 @@ export async function installPlan(
     (options.rewrites ?? []).length === 0
       ? []
       : (await listFactoryEvents(campaignId, { kinds: [FACTORY_EVENT_KINDS.planRewritten] })).map(
-          (event) => `${String(event.detail['action'])}:${String(event.detail['from'])}:${String(event.detail['to'])}`,
+          (event) =>
+            `${String(event.detail['action'])}:${String(event.detail['from'])}:${String(event.detail['to'])}:` +
+            `${[...((event.detail['paths'] as string[] | undefined) ?? [])].sort().join(',')}`,
         ),
   );
   {
     for (const rewrite of (options.rewrites ?? []).filter(
-      (r) => !recorded.has(`${r.action}:${r.from}:${r.to}`),
+      (r) => !recorded.has(`${r.action}:${r.from}:${r.to}:${[...r.paths].sort().join(',')}`),
     )) {
       await recordFactoryEvent({
         campaignId,

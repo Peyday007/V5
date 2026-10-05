@@ -59,6 +59,12 @@ export const FACTORY_EVENT_KINDS = {
    * write. Written once per finding; the campaign blocks with the same reason.
    */
   repairOwnershipBlocked: 'REPAIR_OWNERSHIP_BLOCKED',
+  /**
+   * A completed plan bin whose plan the validator refused over the rows it
+   * re-read at install. Once per bin, so the ledger says why the campaign has no
+   * units rather than only a tick note that lives as long as the process.
+   */
+  planNotInstalled: 'PLAN_NOT_INSTALLED',
   unitReady: 'UNIT_READY',
   unitClaimed: 'UNIT_CLAIMED',
   unitTakeover: 'UNIT_TAKEOVER',
