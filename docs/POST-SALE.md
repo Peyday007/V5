@@ -74,7 +74,10 @@ Neither survived whole. Each fact went to the owner whose invariant was stronger
 | The invoice fails | `FAILED` is history. The agreement can be invoiced again, because only a *live* invoice is unique. |
 | The invoice outcome is unknown | `UNCERTAIN`. Brain never resends it; the provider is asked under the same key. |
 | The payment fails or is written off | The invoice stays owed until the provider says void or uncollectible. Then it can be billed again for what remains. |
-| Partial payment | `PARTIALLY_PAID`; the rest stays owed and invoiceable. |
+| Partial payment | The deal's payment state reads `PARTIALLY_PAID` (a derived reading, not an invoice state); the rest stays owed and invoiceable. |
+| Paid outside an invoice | A person's `CUSTOMER_PAYMENT` against the piece counts as paid, so it is never billed again — on this agreement or the next. A payment that would take net paid above what was agreed is refused, because the likeliest cause is one payment recorded twice. |
+| One payment recorded two ways | The provider reads a charge whose reference is already on the ledger: the invoice adopts that entry and moves to `PAID`, rather than writing a second payment. An entry that belongs to another piece holds the invoice with a reason. |
+| Released while the invoice was being sent | If the provider confirms the invoice after the agreement was released, it is recorded as `ISSUED` (the money may still arrive) and a need asks for it to be voided at the provider. An unknown outcome is recorded the same way. |
 | The work fails | `WORK_FAILED`, derived. **Retry** releases the work and advances `work_attempt` in one statement, then creates attempt N+1. The failed attempt keeps its rows. |
 | Partial delivery | `PARTIALLY_DELIVERED`. It never completes the obligation; a full `DELIVERED` is still owed. |
 | Rejection | `REJECTED`. The obligation is not complete. A redelivery is a new round with its own key, so an identical redelivery is not swallowed. |
@@ -82,6 +85,7 @@ Neither survived whole. Each fact went to the owner whose invariant was stronger
 | Refund | Authorized against `paid − refunded − unresolved` under the cash lock. Sent once through a usable adapter, or paid out by a person who confirms it with the provider reference. The money route cannot refund an agreed deal. |
 | Unknown refund | `REFUND_UNKNOWN`. Never resent, and still counted against what can be refunded. A person's answer resolves the effect operation itself. |
 | Supplier cost changes | Up: another `SUPPLIER_COMMITMENT`. Down: `SUPPLIER_COST_REDUCED`, written as `COMMITMENT_RELEASED` and bounded by what is still owed. Each cost counts once. |
+| A ledger key Brain composes, sent by a caller | `POST /cash/money` refuses any key beginning with a prefix Brain writes itself (`agreement:`, `refund:`, `invoice-payment:` and the rest), so a hand-entered row can never pre-empt or impersonate one. |
 | Restart during any external effect | Every write is idempotent by a key built from server facts. Effects go through `runExternalEffect`, and an unknown is never auto-retried. |
 
 ## What was removed
