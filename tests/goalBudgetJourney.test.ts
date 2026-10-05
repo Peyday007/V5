@@ -244,8 +244,63 @@ describe('a goal approved once continues without another approval', () => {
     // No person was ever asked: the goal's approval was the only approval.
     expect(await requestsFor(goal.id)).toHaveLength(0);
 
-    // Packet 1 ends with a mandatory requirement unresolved (set by the test).
-    await updateOrchestration(one!.id, { status: 'COMPLETE_WITH_GAPS', completedAt: new Date().toISOString() });
+    // The worker researches and a verifier judges, through the real tools.
+    const researching = await claimOf('RESEARCH_FRAGMENT');
+    const submitted = await call('brain_submit_claims', {
+      ...proof(researching),
+      claims: [
+        {
+          claim: 'Employment in the outsourced telemarketing occupation was 81,580 in 2024.',
+          claim_type: 'SOURCED_FACT',
+          source_url: 'https://www.bls.gov/oes/current/oes419041.htm',
+          source_title: 'A published page',
+          source_publisher: 'www.bls.gov',
+          source_date: '2025-04-01',
+          evidence_excerpt: 'Employment in the outsourced telemarketing occupation was 81,580 in 2024.',
+          evidence_locator: 'the page body',
+          evidence_lane: 'official_statistics',
+          retrieved_at: '2026-09-12',
+          confidence: 0.9,
+          primary_source: true,
+        },
+      ],
+      search_queries: [QUESTION],
+    });
+    const stored = (submitted['claims'] ?? []) as { claimId: string }[];
+    expect(stored.length).toBe(1);
+    await call('brain_complete_work', {
+      ...proof(researching),
+      result_ref: String(submitted['recorded']),
+      summary: 'claims submitted',
+    });
+    await advancePacket(one!.id);
+    const verifying = await claimOf('RESEARCH_VERIFY');
+    await call('brain_submit_verification', {
+      ...proof(verifying),
+      verdicts: stored.map((row) => ({
+        claim_id: row.claimId,
+        supports_claim: true,
+        geography: 'MATCH',
+        timeframe: 'MATCH',
+        population: 'MATCH',
+        definitions: 'MATCH',
+        geography_basis: 'Judged against the geography the fragment declares.',
+        timeframe_basis: 'Judged against the timeframe the fragment declares.',
+        population_basis: 'Judged against the population the fragment declares.',
+        definitions_basis: 'Judged against the definitions the fragment declares.',
+        note: 'Read the page.',
+      })),
+      sufficiency: 'INSUFFICIENT',
+      missing_lanes: ['official_statistics'],
+      unresolved_gaps: [],
+    });
+    await call('brain_complete_work', { ...proof(verifying), result_ref: 'gated', summary: 'verified and gated' });
+    expect(await requestsFor(goal.id)).toHaveLength(0);
+
+    // Packet 1 ends, finished but not answered. Not COMPLETE_WITH_GAPS: that
+    // status alone would settle the question, so this reaches the branch that
+    // reads the packet's own requirements and coverage.
+    await updateOrchestration(one!.id, { status: 'COMPLETE', completedAt: new Date().toISOString() });
 
     const second = await advanceResearchGoals();
     expect(second.started).toHaveLength(1);
