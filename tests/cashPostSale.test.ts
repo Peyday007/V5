@@ -878,6 +878,55 @@ describe('agreement and invoice', () => {
     expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('VOID');
   });
 
+  it('an UNCERTAIN row whose send was refused unprocessed is never sent from there past the checks, even after a crash', async () => {
+    const id = await executing();
+    await agree(id, 40_000);
+    let sent = 0;
+    let refuse = true;
+    registerAdapter({
+      name: 'test.invoice',
+      effectClass: 'EXTERNAL_OPAQUE',
+      namespace: ISSUE_INVOICE_NAMESPACE.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (): Promise<SendOutcome> => {
+        sent += 1;
+        return refuse
+          ? { kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true, detail: '429' }
+          : { kind: 'CONFIRMED', receiptRef: `in_${sent}` };
+      },
+    });
+    const drafted = await draftFor(id);
+    expect(drafted.ok).toBe(true);
+    if (!drafted.ok) return;
+    await runInvoicing(projectId);
+    expect(sent).toBe(1);
+    // The process died after the refusal was recorded and before the row went
+    // back to DRAFTED: the engine holds an open, reserved operation.
+    expect(await moveInvoice({ id: drafted.value.id, from: 'DRAFTED', to: 'UNCERTAIN', patch: {} })).toBe(true);
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId,
+          opportunityId: id,
+          kind: 'CUSTOMER_PAYMENT',
+          amountCents: 40_000,
+          currency: 'USD',
+          verifiedReference: 'bank-after-crash',
+          idempotencyKey: `pay:${id}:after-crash`,
+          actorRef: userId,
+          appliesTo: 'OUTSIDE_INVOICES',
+        })
+      ).ok,
+    ).toBe(true);
+    refuse = false;
+    await runInvoicing(projectId);
+    await runInvoicing(projectId);
+    // Returned to DRAFTED and voided by the coverage check; nothing sent.
+    expect(sent).toBe(1);
+    expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('VOID');
+  });
+
   it('an agreement answers only the latest contact before it, and never a contact the buyer already ignored', () => {
     const at = (iso: string) => ({ createdAt: iso });
     const first = at('2026-10-01T00:00:00.000Z');

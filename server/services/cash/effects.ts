@@ -559,17 +559,20 @@ export async function sendIssueInvoice(input: IssueInvoiceRequest): Promise<Exte
 
 const ISSUE_INVOICE_PRINCIPAL = 'cash-issue-invoice';
 
-/** Whether the issue effect for this invoice row was ever reserved — see `findExternalOperation`. */
+/** The issue effect's operation for this invoice row, or null when none was ever reserved — see `findExternalOperation`. */
+export async function issueInvoiceOperation(projectId: string, invoiceId: string): Promise<IdempotencyOperation | null> {
+  return await findExternalOperation({
+    namespace: ISSUE_INVOICE_NAMESPACE,
+    projectId,
+    principalType: 'SYSTEM',
+    principalId: ISSUE_INVOICE_PRINCIPAL,
+    key: issueInvoiceKey(invoiceId),
+  });
+}
+
+/** Whether the issue effect for this invoice row was ever reserved. */
 export async function issueInvoiceReserved(projectId: string, invoiceId: string): Promise<boolean> {
-  return (
-    (await findExternalOperation({
-      namespace: ISSUE_INVOICE_NAMESPACE,
-      projectId,
-      principalType: 'SYSTEM',
-      principalId: ISSUE_INVOICE_PRINCIPAL,
-      key: issueInvoiceKey(invoiceId),
-    })) !== null
-  );
+  return (await issueInvoiceOperation(projectId, invoiceId)) !== null;
 }
 
 /* --------------------------------------------------------------------------

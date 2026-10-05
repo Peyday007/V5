@@ -42,7 +42,8 @@ import { recordAction } from '../../repos/cashActions.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
-import { ISSUE_INVOICE_NAMESPACE, issueInvoiceReserved, sendIssueInvoice, adapterStatus, commercialOperationsFor } from './effects.ts';
+import { listAttempts } from '../../repos/idempotency.ts';
+import { ISSUE_INVOICE_NAMESPACE, issueInvoiceOperation, issueInvoiceReserved, sendIssueInvoice, adapterStatus, commercialOperationsFor } from './effects.ts';
 import { raiseNeed } from './needs.ts';
 import { recordMoneyEvent, voidUncoveredDrafts } from './opportunities.ts';
 import { usablePaymentReader } from './providers/payments.ts';
@@ -253,6 +254,9 @@ async function settleIssue(
   pass: InvoicingPass,
   firstSend = invoice.state !== 'UNCERTAIN',
 ): Promise<void> {
+  // The row as it is now, not as this send found it: a concurrent pass may
+  // have moved it, and a move guarded on a stale state matches nothing.
+  invoice = (await getInvoice(invoice.id)) ?? invoice;
   if (outcome.status === 'UNCERTAIN') {
     let moved =
       invoice.state === 'UNCERTAIN' ||
@@ -459,15 +463,30 @@ export async function issueOne(invoice: CashInvoice, pass: InvoicingPass): Promi
      * own send cannot still be about to reserve: the window between the claim
      * and the reservation is one process's next statement.
      */
-    if (!(await issueInvoiceReserved(projectId, invoice.id))) {
-      // Unreserved and young: its own send is about to reserve, so this pass
-      // leaves it alone. Never sent from here — a first send happens only
-      // from DRAFTED, after every check.
-      if (Date.now() - Date.parse(invoice.updatedAt) > ABANDONED_CLAIM_MS) {
+    /*
+     * Re-entering the engine from here may only *ask* (an UNCERTAIN or settled
+     * operation is reconciled or replayed). An operation still RESERVED is
+     * either a send in flight, or one the provider refused unprocessed — the
+     * engine leaves that open and would send again on re-entry, past every
+     * check. So: never reserved, or refused unprocessed, goes back to DRAFTED
+     * (the first only once its own send can no longer be about to reserve);
+     * in flight is left alone until a crash is old enough for the engine's
+     * own recovery to ask the provider rather than send.
+     */
+    const operation = await issueInvoiceOperation(projectId, invoice.id);
+    const old = Date.now() - Date.parse(invoice.updatedAt) > ABANDONED_CLAIM_MS;
+    const refusedUnprocessed =
+      operation !== null &&
+      operation.state === 'RESERVED' &&
+      operation.failureCategory !== null &&
+      (await listAttempts(operation.id)).every((attempt) => attempt.endedAt !== null);
+    if (!operation || refusedUnprocessed) {
+      if (operation || old) {
         await moveInvoice({ id: invoice.id, from: 'UNCERTAIN', to: 'DRAFTED', patch: { stateReason: null } });
       }
       return;
     }
+    if (operation.state === 'RESERVED' && !old) return;
     // An UNCERTAIN invoice is only ever *asked about*, and asking needs the
     // provider too. Without one it stays exactly as unknown as it was.
     if ((await readCapability('ISSUE_AN_INVOICE')).state !== 'PRESENT') return;
