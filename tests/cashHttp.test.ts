@@ -686,7 +686,7 @@ describe('one account’s whole journey', () => {
     expect(status.body.providers[1]!.nextAction).toContain('STRIPE_SECRET_KEY');
   });
 
-  it('refuses to invoice an amount nobody agreed, then drafts one for the agreed amount, once', async () => {
+  it('refuses to invoice an amount nobody agreed, and never bills money already paid', async () => {
     const terms = {
       customerName: 'Buyer Ltd',
       customerEmail: 'accounts@buyer.example',
@@ -718,25 +718,19 @@ describe('one account’s whole journey', () => {
     });
     expect(agreed.status).toBe(200);
 
-    const drafted = await call<{ invoice: { id: string; state: string; amountCents: number } }>(
+    // The buyer already paid the whole 75,000 (the payment above), so an
+    // invoice for the agreed amount would bill money already received — and is
+    // refused, whatever figure a caller sends.
+    const drafted = await call<{ error: string }>(
       'POST',
       `${CASH()}/opportunities/${opportunityId}/invoice`,
       { cookie: adminCookie, body: { ...terms, amountCents: 1 } },
     );
-    expect(drafted.status).toBe(200);
-    expect(drafted.body.invoice.state).toBe('DRAFTED');
-    // The amount is the agreed entry's; a caller's figure is not read at all.
-    expect(drafted.body.invoice.amountCents).toBe(75_000);
-
-    const again = await call<{ invoice: { id: string } }>(
-      'POST',
-      `${CASH()}/opportunities/${opportunityId}/invoice`,
-      { cookie: adminCookie, body: terms },
-    );
-    expect(again.body.invoice.id).toBe(drafted.body.invoice.id);
+    expect(drafted.status).toBe(422);
+    expect(drafted.text).toContain('already billed or paid');
 
     const listed = await call<{ invoices: { id: string }[] }>('GET', `${CASH()}/invoices`, { cookie: memberCookie });
-    expect(listed.body.invoices.map((one) => one.id)).toEqual([drafted.body.invoice.id]);
+    expect(listed.body.invoices).toEqual([]);
   });
 
   it('refuses a commitment the account cannot cover', async () => {
@@ -1057,19 +1051,16 @@ describe('one account’s whole journey', () => {
       evidenceRef: 'msg-8841-reply',
     });
     expect(agreed.status).toBe(200);
-    const work = await op('fulfil', {
-      agreementId: agreed.body.agreement.id,
-      path: 'PERSON',
-      workKind: 'EXTERNAL',
-      workRef: 'operator calendar, the afternoon booked',
-    });
-    expect(work.status).toBe(200);
-    expect((await op('performed', { fulfilmentId: work.body.fulfilment.id, evidence: 'configuration notes' })).status).toBe(200);
-    const seen = await op('observe', { kind: 'DELIVERY_ACCEPTED', evidenceRef: 'owner sign-off email' });
-    expect(seen.status).toBe(200);
-    expect(
-      (await op('accept-delivery', { fulfilmentId: work.body.fulfilment.id, observationId: seen.body.observation.id })).status,
-    ).toBe(200);
+    const agreementId = agreed.body.agreement.id;
+    expect((await op('fulfil', { agreementId, kind: 'PERSON', performer: 'The operator' })).status).toBe(200);
+    for (const [kind, evidenceRef] of [
+      ['WORK_COMPLETE', 'configuration notes'],
+      ['DELIVERED', 'operator calendar, the afternoon held'],
+      ['ACCEPTED', 'owner sign-off email'],
+    ] as const) {
+      const step = await op('obligation-event', { agreementId, kind, detail: kind.toLowerCase(), evidenceRef });
+      expect(step.status, JSON.stringify(step.body)).toBe(200);
+    }
 
     const collected = await call('POST', `/api/cash/opportunities/${opportunityId}/collect`, {
       cookie: adminCookie,

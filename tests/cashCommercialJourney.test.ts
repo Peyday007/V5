@@ -424,19 +424,18 @@ describe('J01: READY to settled, through the real routes', () => {
     // A payment is not settled money, so "money is in" is refused until it is.
     // Delivering is work that exists; collecting needs it accepted as well.
     expect((await act_(piece.id, 'deliver')).status).toBe(422);
-    const work = await act_(piece.id, 'fulfil', {
-      agreementId: agreed.body.agreement.id,
-      path: 'PERSON',
-      workKind: 'EXTERNAL',
-      workRef: 'the operator delivers it',
-    });
-    expect(work.status).toBe(200);
+    const agreementId = agreed.body.agreement.id;
+    expect((await act_(piece.id, 'fulfil', { agreementId, kind: 'PERSON', performer: 'The operator' })).status).toBe(200);
+    // Declaring who performs it is not delivery; delivering something is.
+    expect((await getOpportunity(piece.id))!.state).toBe('EXECUTING');
+    for (const [kind, evidenceRef] of [
+      ['WORK_COMPLETE', 'delivered.zip'],
+      ['DELIVERED', 'delivered.zip, sent'],
+      ['ACCEPTED', 'buyer-signoff'],
+    ] as const) {
+      expect((await act_(piece.id, 'obligation-event', { agreementId, kind, detail: kind.toLowerCase(), evidenceRef })).status).toBe(200);
+    }
     expect((await getOpportunity(piece.id))!.state).toBe('DELIVERING');
-    expect((await act_(piece.id, 'performed', { fulfilmentId: work.body.fulfilment.id, evidence: 'delivered.zip' })).status).toBe(200);
-    const seen = await act_(piece.id, 'observe', { kind: 'DELIVERY_ACCEPTED', evidenceRef: 'buyer-signoff' });
-    expect(
-      (await act_(piece.id, 'accept-delivery', { fulfilmentId: work.body.fulfilment.id, observationId: seen.body.observation.id })).status,
-    ).toBe(200);
     expect((await act_(piece.id, 'collect')).status).toBe(422);
     const settled = await call('POST', `/api/projects/${projectId}/cash/money`, {
       kind: 'SETTLEMENT',

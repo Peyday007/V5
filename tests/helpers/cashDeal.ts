@@ -9,7 +9,7 @@
  * because those are what most tests are about.
  */
 import { recordAgreement } from '../../server/services/cash/journey/deal.ts';
-import { declare, recordEvent } from '../../server/services/cash/journey/fulfillment.ts';
+import { answerRefund, authorizeRefund, declare, recordEvent } from '../../server/services/cash/journey/fulfillment.ts';
 import type { CashAgreement } from '../../server/domain/cashJourney.ts';
 
 export async function agree(
@@ -77,4 +77,36 @@ export async function agreeAndDeliver(
   const agreement = await agree(opportunityId, amountCents, actorRef, currency);
   await fulfil(agreement, actorRef);
   return agreement;
+}
+
+/**
+ * Refund through the agreement's obligation — the only refund path on an
+ * agreed deal — and confirm it with the provider's reference, as a person who
+ * paid it out would.
+ */
+export async function refundConfirmed(
+  agreement: CashAgreement,
+  amountCents: number,
+  reference: string,
+  actorRef: string,
+): Promise<void> {
+  const authorized = await authorizeRefund({
+    projectId: agreement.projectId,
+    agreementId: agreement.id,
+    amountCents,
+    reason: `refund ${reference}`,
+    actorRef,
+  });
+  if (!authorized.ok) throw new Error(`refund refused: ${authorized.reason}`);
+  const pending = authorized.value.refunds.find((one) => one.state === 'PENDING');
+  if (!pending) return;
+  const answered = await answerRefund({
+    projectId: agreement.projectId,
+    agreementId: agreement.id,
+    refundKey: pending.refundKey,
+    answer: 'confirm',
+    reference,
+    actorRef,
+  });
+  if (!answered.ok) throw new Error(`refund confirmation refused: ${answered.reason}`);
 }

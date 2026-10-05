@@ -663,18 +663,15 @@ describe('the deployable artifact', () => {
       evidenceRef: 'smoke-notice-1-reply',
     });
     expect(agreed.status).toBe(200);
-    const work = await at('fulfil', {
-      agreementId: agreed.body.agreement.id,
-      path: 'PERSON',
-      workKind: 'EXTERNAL',
-      workRef: 'the operator delivers it',
-    });
-    expect(work.status).toBe(200);
-    expect((await at('performed', { fulfilmentId: work.body.fulfilment.id, evidence: 'delivered.pdf' })).status).toBe(200);
-    const seen = await at('observe', { kind: 'DELIVERY_ACCEPTED', evidenceRef: 'requester-signoff' });
-    expect(
-      (await at('accept-delivery', { fulfilmentId: work.body.fulfilment.id, observationId: seen.body.observation.id })).status,
-    ).toBe(200);
+    const agreementId = agreed.body.agreement.id;
+    expect((await at('fulfil', { agreementId, kind: 'PERSON', performer: 'The operator' })).status).toBe(200);
+    for (const [kind, evidenceRef] of [
+      ['WORK_COMPLETE', 'delivered.pdf'],
+      ['DELIVERED', 'delivered.pdf, sent'],
+      ['ACCEPTED', 'requester-signoff'],
+    ] as const) {
+      expect((await at('obligation-event', { agreementId, kind, detail: kind.toLowerCase(), evidenceRef })).status).toBe(200);
+    }
     const paid = await call('POST', `/api/projects/${project}/cash/money`, {
       cookie: admin,
       body: {

@@ -13,7 +13,7 @@
  * delivery still runs would also pass in a Brain where the *whole tick* had
  * been paused and nothing else was running either.
  */
-import { agreeAndDeliver } from './helpers/cashDeal.ts';
+import { agreeAndDeliver, refundConfirmed } from './helpers/cashDeal.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -887,10 +887,10 @@ describe('the money is in only when the ledger says so', () => {
 
   it('does not count a settlement that was refunded in full', async () => {
     const id = await executing('Refunded');
-    await agreeAndDeliver(id, 50_000, userId);
+    const agreement = await agreeAndDeliver(id, 50_000, userId);
     await money(id, 'CUSTOMER_PAYMENT', 'paid');
     await money(id, 'SETTLEMENT', 'settled');
-    await money(id, 'REFUND', 'refunded');
+    await refundConfirmed(agreement, 50_000, 'refunded', userId);
     expect((await advance({ opportunityId: id, to: 'COLLECTED', actorRef: userId })).ok).toBe(false);
   });
 
