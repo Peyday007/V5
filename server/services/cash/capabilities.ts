@@ -55,6 +55,7 @@ import {
   COMMERCIAL_EFFECTS,
   CONTACT_BUYER_NAMESPACE,
   ISSUE_INVOICE_NAMESPACE,
+  refundAdapter,
   usableAdapter,
 } from './effects.ts';
 import { usablePaymentReader } from './providers/payments.ts';
@@ -144,6 +145,17 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
     read: async () =>
       usablePaymentReader() !== null ||
       usableAdapter(COMMERCIAL_EFFECTS.ACCEPT_PAYMENT.namespace) !== null,
+  },
+  {
+    id: 'ISSUE_A_REFUND',
+    does: 'Pay a buyer back through the provider that took their money.',
+    requires: 'A usable refund effect adapter registered for "cash.refund".',
+    nextStep:
+      'Until one exists, an authorized refund is paid out by a person and confirmed on the ' +
+      'obligation with the provider or bank reference, which is what writes the REFUND entry.',
+    // `PRESENT` only when a real, healthy adapter is registered — the same
+    // reading `journey/fulfillment.ts` uses to decide whether to send one.
+    read: async () => refundAdapter() !== null,
   },
   {
     id: 'PUBLISH_A_LISTING',

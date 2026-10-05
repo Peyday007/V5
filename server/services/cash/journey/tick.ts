@@ -9,14 +9,15 @@
  *
  *   1. an agreement's ledger entries exist (and its release, if released);
  *   2. (invoices are issued and read back by `invoicing.ts`, just before this);
- *   3. Brain's own fulfilment work is read back — a Russell mission DONE or a
- *      Factory campaign COMPLETE makes it performed, a failed one fails it;
- *   4. a buyer's DELIVERY_ACCEPTED delivers performed work, DELIVERY_REJECTED
- *      fails it;
+ *   3. each agreement's obligation advances (`fulfillment.ts`): its work is
+ *      created once per attempt, a refund is taken as far as Brain can, and
+ *      the needs it raises are settled from rows;
+ *   4. (delivery and acceptance are recorded against the obligation, never
+ *      inferred here);
  *   5. a contact with no reply inside the window is recorded as BUYER_SILENT;
  *   6. (an unpaid invoice past its due date is reported, never rewritten);
- *   7. EXECUTING → DELIVERING once work exists, DELIVERING → COLLECTED once
- *      `collectable` holds;
+ *   7. EXECUTING → DELIVERING once something agreed was delivered,
+ *      DELIVERING → COLLECTED once `collectable` holds;
  *   8. what the deal taught is recorded as outcomes (`learning.ts`).
  *
  * It sends nothing. Every external effect is still a person's press or a
@@ -25,22 +26,14 @@
 import { getOpportunity, transitionOpportunity, listOpportunities } from '../../../repos/cashPortfolio.ts';
 import { getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
 import { actionsFor } from '../../../repos/cashActions.ts';
-import { latestMissionForCandidate } from '../../../repos/russellMissions.ts';
-import { getCampaignByChangeRequest } from '../../../repos/factory.ts';
 import {
   agreementsInProject,
-  endFulfilment,
-  fulfilmentsInProject,
   insertObservation,
-  markFulfilmentDelivered,
   observationsFor,
   opportunitiesInJourney,
 } from '../../../repos/cashJourney.ts';
-import {
-  ensureAgreementLedger,
-  moveToDelivering,
-  performed,
-} from './deal.ts';
+import { ensureAgreementLedger } from './deal.ts';
+import { advanceFulfillment, moveToDelivering, type FulfillmentPass } from './fulfillment.ts';
 import { collectable, dealPosition } from './position.ts';
 import { recordOutcomes } from './learning.ts';
 
@@ -51,9 +44,9 @@ export const RESPONSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface JourneyTickReport {
   ledgerChecked: number;
-  performed: number;
-  delivered: number;
-  failed: number;
+  /** Agreements whose ledger entry could not be written, with why. Never silent. */
+  ledgerRefused: { agreementId: string; reason: string }[];
+  fulfillment: FulfillmentPass;
   silences: number;
   delivering: number;
   collected: number;
@@ -66,9 +59,8 @@ export async function advanceJourney(
 ): Promise<JourneyTickReport> {
   const report: JourneyTickReport = {
     ledgerChecked: 0,
-    performed: 0,
-    delivered: 0,
-    failed: 0,
+    ledgerRefused: [],
+    fulfillment: { workCreated: [], needsRaised: [], needsSettled: [], refundsSettled: [] },
     silences: 0,
     delivering: 0,
     collected: 0,
@@ -79,65 +71,14 @@ export async function advanceJourney(
 
   // 1. The ledger counts every agreement exactly once, and every release.
   for (const agreement of await agreementsInProject(projectId)) {
-    await ensureAgreementLedger(agreement);
+    const counted = await ensureAgreementLedger(agreement);
+    if (!counted.ok) report.ledgerRefused.push({ agreementId: agreement.id, reason: counted.reason });
     report.ledgerChecked += 1;
   }
 
-  // 3 and 4. Fulfilment, read from the machinery doing the work.
-  for (const fulfilment of await fulfilmentsInProject(projectId)) {
-    if (fulfilment.state === 'CREATED') {
-      if (fulfilment.workKind === 'RUSSELL_CANDIDATE') {
-        const mission = await latestMissionForCandidate(fulfilment.workRef);
-        if (mission?.state === 'DONE') {
-          const done = await performed(
-            fulfilment,
-            `Russell mission ${mission.id} finished${mission.documentId ? `, filing ${mission.documentId}` : ''}.`,
-            BRAIN,
-          );
-          if (done.ok) report.performed += 1;
-        } else if (mission && (mission.state === 'FAILED' || mission.state === 'CANCELLED')) {
-          if (await endFulfilment({ id: fulfilment.id, to: 'FAILED', reason: `Russell mission ${mission.id} ended ${mission.state.toLowerCase()}.` })) {
-            report.failed += 1;
-          }
-        }
-      } else if (fulfilment.workKind === 'FACTORY_CHANGE_REQUEST') {
-        const campaign = await getCampaignByChangeRequest(fulfilment.workRef);
-        if (campaign?.state === 'COMPLETE') {
-          const done = await performed(fulfilment, `Factory campaign ${campaign.id} complete.`, BRAIN);
-          if (done.ok) report.performed += 1;
-        } else if (campaign?.state === 'CANCELLED') {
-          if (await endFulfilment({ id: fulfilment.id, to: 'FAILED', reason: `Factory campaign ${campaign.id} was cancelled.` })) {
-            report.failed += 1;
-          }
-        }
-      }
-    }
-  }
-  for (const fulfilment of await fulfilmentsInProject(projectId)) {
-    if (fulfilment.state !== 'PERFORMED' || !fulfilment.performedAt) continue;
-    const after = (await observationsFor(fulfilment.opportunityId)).filter(
-      (one) => one.observedAt >= fulfilment.performedAt! || one.createdAt >= fulfilment.performedAt!,
-    );
-    const accepted = after.find((one) => one.kind === 'DELIVERY_ACCEPTED');
-    const rejected = after.find((one) => one.kind === 'DELIVERY_REJECTED');
-    if (accepted) {
-      if (await markFulfilmentDelivered({ id: fulfilment.id, observationId: accepted.id })) {
-        report.delivered += 1;
-        await recordCashEvent({
-          projectId,
-          opportunityId: fulfilment.opportunityId,
-          kind: 'CASH_FULFILMENT_DELIVERED',
-          actorRef: BRAIN,
-          summary: `The buyer accepted the work (${accepted.evidenceRef}).`,
-          detail: { fulfilmentId: fulfilment.id, observationId: accepted.id },
-        });
-      }
-    } else if (rejected) {
-      if (await endFulfilment({ id: fulfilment.id, to: 'FAILED', reason: `The buyer rejected the delivery (${rejected.evidenceRef}).` })) {
-        report.failed += 1;
-      }
-    }
-  }
+  // 3. Each agreement's obligation: work created once, refunds taken as far as
+  // Brain can, needs raised and settled (`fulfillment.ts`).
+  report.fulfillment = await advanceFulfillment(projectId);
 
   // Bounded to the pieces a journey can be on: live ones, plus ended ones that
   // have journey rows to learn from. A portfolio of a hundred signals costs

@@ -103,16 +103,19 @@ import {
 } from '../services/cash/opportunities.ts';
 import { recordFurtherAction } from '../services/cash/actions.ts';
 import {
-  acceptDelivery,
   agreementsFor,
-  createFulfilment,
-  endFulfilmentWith,
   recordAgreement,
   recordObservation,
-  recordPerformed,
   releaseAgreement,
 } from '../services/cash/journey/deal.ts';
-import { getFulfilment } from '../repos/cashJourney.ts';
+import {
+  answerRefund,
+  authorizeRefund,
+  declare as declareFulfillment,
+  recordCost as recordObligationCost,
+  recordEvent as recordObligationEvent,
+  retryWork as retryObligationWork,
+} from '../services/cash/journey/fulfillment.ts';
 import { performCommercialAction, resolveCommercialEffect } from '../services/cash/perform.ts';
 import { requestInvoice } from '../services/cash/invoicing.ts';
 import { listInvoices } from '../repos/cashInvoices.ts';
@@ -924,8 +927,8 @@ cashRouter.post(
         return { result: value, message };
       }
       /*
-       * The first-dollar journey after the first real action
-       * (`services/cash/journey/deal.ts`). Every id a body names is resolved
+       * The deal after the first real action (`services/cash/journey/deal.ts`):
+       * what the buyer said and what was agreed. Every id a body names is resolved
        * against *this* piece, so a call can never reach another piece's row.
        */
       case 'observe': {
@@ -973,52 +976,89 @@ cashRouter.post(
         );
         return { agreement: value, message };
       }
-      case 'fulfil': {
-        const { value, message } = taken(
-          await createFulfilment({
-            opportunityId: opportunity.id,
-            agreementId: requiredString(body['agreementId'], 'agreementId'),
-            path: requiredString(body['path'], 'path'),
-            workKind: requiredString(body['workKind'], 'workKind'),
-            workRef: requiredString(body['workRef'], 'workRef'),
-            actorRef: principal.id,
-          }),
-        );
-        return { fulfilment: value, message };
-      }
-      case 'performed':
-      case 'accept-delivery':
-      case 'end-fulfilment': {
-        const fulfilmentId = requiredString(body['fulfilmentId'], 'fulfilmentId');
-        const fulfilment = await getFulfilment(fulfilmentId);
-        if (!fulfilment || fulfilment.opportunityId !== opportunity.id) {
-          throw unprocessable('No fulfilment with that id on this piece.');
-        }
+      /*
+       * The obligation an agreement creates (`journey/fulfillment.ts`). The
+       * agreement a body names is resolved against *this* piece first, so a
+       * call can never reach another piece's obligation.
+       */
+      case 'fulfil':
+      case 'obligation-event':
+      case 'obligation-cost':
+      case 'obligation-retry':
+      case 'refund':
+      case 'refund-answer': {
+        const agreementId = requiredString(body['agreementId'], 'agreementId');
+        const owned = (await agreementsFor(opportunity.id)).some((one) => one.id === agreementId);
+        if (!owned) throw unprocessable('No agreement with that id on this piece.');
+        const projectId = opportunity.projectId;
         let outcome: Outcome<unknown>;
-        if (action === 'performed') {
-          outcome = await recordPerformed({
-            fulfilmentId,
-            evidence: requiredString(body['evidence'], 'evidence'),
+        if (action === 'fulfil') {
+          const scope = body['mutationScope'];
+          if (scope !== undefined && (!Array.isArray(scope) || scope.some((one) => typeof one !== 'string'))) {
+            throw badRequest('"mutationScope" is a list of paths.');
+          }
+          outcome = await declareFulfillment({
+            projectId,
+            agreementId,
+            kind: requiredString(body['kind'], 'kind'),
+            performer: requiredString(body['performer'], 'performer'),
+            // A remote, never a root: a filesystem path from a browser is a
+            // caller choosing where the Factory works (§27).
+            repositoryRemote: optionalString(body['repositoryRemote'], 'repositoryRemote') ?? null,
+            baseBranch: optionalString(body['baseBranch'], 'baseBranch') ?? null,
+            mutationScope: (scope as string[] | undefined) ?? [],
+            supplierName: optionalString(body['supplierName'], 'supplierName') ?? null,
             actorRef: principal.id,
           });
-        } else if (action === 'accept-delivery') {
-          outcome = await acceptDelivery({
-            fulfilmentId,
-            observationId: requiredString(body['observationId'], 'observationId'),
+        } else if (action === 'obligation-event') {
+          outcome = await recordObligationEvent({
+            projectId,
+            agreementId,
+            kind: requiredString(body['kind'], 'kind'),
+            detail: requiredString(body['detail'], 'detail'),
+            evidenceRef: optionalString(body['evidenceRef'], 'evidenceRef') ?? null,
+            actorRef: principal.id,
+          });
+        } else if (action === 'obligation-cost') {
+          outcome = await recordObligationCost({
+            projectId,
+            agreementId,
+            kind: requiredString(body['kind'], 'kind'),
+            amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 1 }) ?? 0,
+            detail: requiredString(body['detail'], 'detail'),
+            reference: optionalString(body['reference'], 'reference') ?? null,
+            actorRef: principal.id,
+          });
+        } else if (action === 'obligation-retry') {
+          outcome = await retryObligationWork({
+            projectId,
+            agreementId,
+            reason: requiredString(body['reason'], 'reason'),
+            actorRef: principal.id,
+          });
+        } else if (action === 'refund') {
+          // ADMIN, by the policy override: a refund pays money out.
+          outcome = await authorizeRefund({
+            projectId,
+            agreementId,
+            amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 1 }) ?? 0,
+            reason: requiredString(body['reason'], 'reason'),
             actorRef: principal.id,
           });
         } else {
-          const to = requiredString(body['to'], 'to');
-          if (to !== 'FAILED' && to !== 'CANCELLED') throw badRequest('"to" is FAILED or CANCELLED.');
-          outcome = await endFulfilmentWith({
-            fulfilmentId,
-            to,
-            reason: requiredString(body['reason'], 'reason'),
+          const answer = requiredString(body['answer'], 'answer');
+          if (answer !== 'confirm' && answer !== 'not-sent') throw badRequest('"answer" is confirm or not-sent.');
+          outcome = await answerRefund({
+            projectId,
+            agreementId,
+            refundKey: requiredString(body['refundKey'], 'refundKey'),
+            answer,
+            reference: requiredString(body['reference'], 'reference'),
             actorRef: principal.id,
           });
         }
         const { value, message } = taken(outcome);
-        return { fulfilment: value, message };
+        return { obligation: value, message };
       }
       case 'deliver':
       case 'collect': {

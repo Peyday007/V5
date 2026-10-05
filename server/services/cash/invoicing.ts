@@ -23,7 +23,10 @@
  *              next pass *asks the provider* under the same key rather than
  *              sending again — that is the recovery by prior request identity.
  *   payment    ISSUED → PAID when the provider says the customer paid. One
- *              CUSTOMER_PAYMENT, keyed on the invoice, under ACCEPT_PAYMENT.
+ *              CUSTOMER_PAYMENT, keyed on the invoice, backed by the invoice
+ *              Brain issued under QUOTE_AND_INVOICE — the buyer paying it is
+ *              not Brain taking a payment, and a revoked grant does not
+ *              unsay money that arrived.
  *   settlement PAID → SETTLED when the provider says the funds are available.
  *              One SETTLEMENT for the gross amount and one COST for the
  *              provider's fee, so available funds equal what actually landed
@@ -32,7 +35,7 @@
  * The payment and the settlement are never one entry. `money.ts` exists to keep
  * them apart: a payment is not funds until the provider says it is.
  */
-import { invoiceableAgreements } from './journey/position.ts';
+import { dealPosition, invoiceableAgreements } from './journey/position.ts';
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
 import { draftInvoice, getInvoice, listInvoices, moveInvoice } from '../../repos/cashInvoices.ts';
 import { recordAction } from '../../repos/cashActions.ts';
@@ -125,6 +128,22 @@ export async function requestInvoice(input: {
   if (entry.currency !== mode.currency) {
     return refuse(`The agreed amount is in ${entry.currency} and this sprint keeps its money in ${mode.currency}.`);
   }
+  /*
+   * Never more than is still owed. The amount is the agreement's own, unless
+   * money already reached the ledger for this deal (a payment made another
+   * way, a partial payment against an earlier invoice), in which case it is
+   * what remains: agreed, less the larger of what is billed and what was paid
+   * net of refunds (`position.ts`). Derived arithmetic, never a figure chosen
+   * — and refused outright when nothing remains to bill.
+   */
+  const position = await dealPosition({ opportunity, currency: mode.currency });
+  const amountCents = Math.min(entry.amountCents, position.pnl.invoiceableCents);
+  if (amountCents <= 0) {
+    return refuse(
+      'Everything agreed on this piece is already billed or paid, so there is nothing left to invoice. ' +
+        'Brain never bills money it has already been paid.',
+    );
+  }
 
   const customerName = input.customerName.trim();
   const customerEmail = input.customerEmail.trim();
@@ -144,7 +163,7 @@ export async function requestInvoice(input: {
     projectId: input.projectId,
     opportunityId: opportunity.id,
     pipelineEntryId: entry.id,
-    amountCents: entry.amountCents,
+    amountCents,
     currency: entry.currency,
     customerName,
     customerEmail,
@@ -159,7 +178,7 @@ export async function requestInvoice(input: {
       opportunityId: opportunity.id,
       kind: 'CASH_INVOICE_REQUESTED',
       actorRef: input.actorRef,
-      summary: `An invoice for ${entry.amountCents} cents ${entry.currency} was requested.`,
+      summary: `An invoice for ${amountCents} cents ${entry.currency} was requested.`,
       detail: { invoiceId: invoice.id, pipelineEntryId: entry.id },
     });
   }
@@ -387,6 +406,7 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
         note: `Paid invoice ${current.providerNumber ?? current.providerInvoiceId}.`,
         idempotencyKey: `invoice-payment:${current.id}`,
         actorRef: BRAIN,
+        paidInvoiceId: current.id,
       });
       if (!payment.ok) {
         await holdWithReason(current, `The provider says this was paid and it could not be recorded: ${payment.reason}`, pass);

@@ -61,16 +61,35 @@ export async function recordOutcomes(opportunity: CashOpportunity, currency: str
     });
     if (fresh) created += 1;
   };
+  const ended = TERMINAL.has(opportunity.state);
 
-  // What each contact produced: the first reading after it, from a closed set.
+  /*
+   * What each contact produced, written once and only from terminal evidence:
+   * a reply (or the channel refusing) is final for that contact; silence is
+   * not, because a buyer can answer late — so silence is learned only once the
+   * deal moved on without a reply (it ended, or an agreement came from
+   * elsewhere). A late reply therefore never contradicts a silence already
+   * learned.
+   */
   for (const contact of contacts) {
-    const first = position.observations.find(
+    const answered = position.observations.find(
       (one) =>
         one.observedAt >= contact.createdAt &&
+        one.kind !== 'BUYER_SILENT' &&
         (one.kind.startsWith('BUYER_') || one.kind === 'CONTACT_UNDELIVERABLE'),
     );
-    if (first) {
-      await write('CONTACT_RESULT', contact.id, { text: first.kind }, `action ${contact.id}; observation ${first.id}`);
+    const silence = position.observations.find(
+      (one) => one.kind === 'BUYER_SILENT' && one.observedAt >= contact.createdAt,
+    );
+    if (answered) {
+      await write('CONTACT_RESULT', contact.id, { text: answered.kind }, `action ${contact.id}; observation ${answered.id}`);
+    } else if (silence && (ended || position.agreements.length > 0)) {
+      await write(
+        'CONTACT_RESULT',
+        contact.id,
+        { text: 'BUYER_SILENT' },
+        `action ${contact.id}; observation ${silence.id}; no reply before the deal moved on`,
+      );
     }
     if (opportunity.priceCents !== null) {
       await write('OFFERED_PRICE', contact.id, { cents: opportunity.priceCents }, `action ${contact.id}; card price`);
@@ -93,32 +112,38 @@ export async function recordOutcomes(opportunity: CashOpportunity, currency: str
     }
   }
 
-  for (const fulfilment of position.fulfilments) {
-    if (fulfilment.state === 'DELIVERED' && fulfilment.deliveredAt) {
+  for (const obligation of position.obligations) {
+    const id = obligation.fulfillment?.id;
+    if (!id) continue;
+    if (obligation.complete && obligation.delivery.deliveredAt) {
       await write(
-        'FULFILMENT_DURATION',
-        fulfilment.id,
-        { ms: ms(fulfilment.createdAt, fulfilment.deliveredAt) },
-        `fulfilment ${fulfilment.id} (${fulfilment.path})`,
+        'FULFILLMENT_DURATION',
+        id,
+        { ms: ms(obligation.fulfillment!.createdAt, obligation.delivery.deliveredAt) },
+        `obligation ${id} (${obligation.fulfillment!.kind}): declared → delivered and accepted`,
       );
     }
-    if (fulfilment.state === 'FAILED') {
-      await write('FAILURE_REASON', `fulfilment-${fulfilment.id}`, { text: fulfilment.stateReason ?? 'failed' }, `fulfilment ${fulfilment.id}`);
+    // A failure read from the work can be retried, so it is not terminal; one a
+    // person recorded is.
+    if (obligation.failure && obligation.failure.kind !== 'WORK_FAILED') {
+      await write('FAILURE_REASON', `obligation-${id}`, { text: obligation.failure.reason }, `obligation ${id} ${obligation.failure.kind}`);
     }
   }
 
-  // The money figures are read once the deal has ended, so they are final
-  // rather than a snapshot of a deal still moving.
-  // A cost or a refund can still land after a deal ends, so each figure is
-  // keyed by its value: a changed figure is a later row beside the earlier one,
-  // never an edit of it, and readers take the latest per deal.
-  if (TERMINAL.has(opportunity.state)) {
+  /*
+   * The money figures, once, at the moment the deal ended — keyed by the end
+   * state rather than by the figure, so asking again writes nothing. A refund
+   * confirmed after that is terminal evidence of its own: it writes the refund
+   * and the contribution it leaves, beside (never over) what was learned.
+   * Readers take the latest figure per deal.
+   */
+  if (ended) {
     const p = position.pnl;
     const suffix = opportunity.state;
     const cost = p.incrementalCostsCents + p.unpaidCommitmentsCents;
-    await write('ACTUAL_COST', `${suffix}:${cost}`, { cents: cost }, 'ledger: COST + outstanding UNPAID_COMMITMENT');
-    if (p.refundsCents > 0) await write('REFUNDED', `${suffix}:${p.refundsCents}`, { cents: p.refundsCents }, 'ledger: REFUND');
-    await write('REALIZED_CONTRIBUTION', `${suffix}:${p.contributionCents}`, { cents: p.contributionCents }, 'ledger: payments − refunds − costs − owed');
+    await write('ACTUAL_COST', suffix, { cents: cost }, 'ledger: COST + outstanding UNPAID_COMMITMENT');
+    await write('REFUNDED', suffix, { cents: p.refundsCents }, 'ledger: REFUND');
+    await write('REALIZED_CONTRIBUTION', suffix, { cents: p.contributionCents }, 'money.ts contributionFrom: payments − refunds − costs − owed');
     if (opportunity.state !== 'COLLECTED') {
       await write(
         'FAILURE_REASON',
@@ -126,6 +151,16 @@ export async function recordOutcomes(opportunity: CashOpportunity, currency: str
         { text: opportunity.declinedReason ?? opportunity.archivedReason ?? opportunity.state },
         `opportunity ended ${suffix.toLowerCase()}`,
       );
+    }
+    const refundedBefore = (await outcomesFor({ projectId: opportunity.projectId, opportunityId: opportunity.id }))
+      .filter((one) => one.kind === 'REFUNDED')
+      .reduce((most, one) => Math.max(most, one.valueCents ?? 0), 0);
+    // Refunds only ever add up, so a running total larger than any learned is
+    // new terminal evidence, and the total itself names it exactly once.
+    if (p.refundsCents > refundedBefore) {
+      const marker = `after-refunds-${p.refundsCents}`;
+      await write('REFUNDED', marker, { cents: p.refundsCents }, 'ledger: REFUND, confirmed after the deal ended');
+      await write('REALIZED_CONTRIBUTION', marker, { cents: p.contributionCents }, 'money.ts contributionFrom, after the refund');
     }
   }
   return created;
@@ -213,17 +248,22 @@ export async function cashOutcomeLessons(projectId: string): Promise<CashLesson[
  * — an unmeasured mechanism is unknown, and an unknown never helps (§30).
  */
 export function measuredByMechanism(lessons: CashLesson[]): Record<string, number> {
-  const totals = new Map<string, { contacts: number; contribution: number }>();
+  const totals = new Map<string, { contacts: number; ended: number; contribution: number }>();
   for (const lesson of lessons) {
     if (!lesson.mechanism) continue;
-    const seen = totals.get(lesson.mechanism) ?? { contacts: 0, contribution: 0 };
+    const seen = totals.get(lesson.mechanism) ?? { contacts: 0, ended: 0, contribution: 0 };
     seen.contacts += lesson.contacts;
+    seen.ended += lesson.completed;
     seen.contribution += lesson.realizedContributionCents;
     totals.set(lesson.mechanism, seen);
   }
   const out: Record<string, number> = {};
   for (const [mechanism, seen] of totals) {
-    if (seen.contacts >= LESSON_MIN_SAMPLE) out[mechanism] = Math.round(seen.contribution / seen.contacts);
+    // Both halves of the ratio need a sample: three contacts over one finished
+    // deal is one deal's money spread thin, and reads like a rate it is not.
+    if (seen.contacts >= LESSON_MIN_SAMPLE && seen.ended >= LESSON_MIN_SAMPLE) {
+      out[mechanism] = Math.round(seen.contribution / seen.contacts);
+    }
   }
   return out;
 }

@@ -26,9 +26,11 @@ import { moneyEntryByKey, totalsByKind } from '../../../repos/cashLedger.ts';
 import { listInvoices } from '../../../repos/cashInvoices.ts';
 import { listCommitments } from '../../../repos/cashAuthority.ts';
 import { actionsFor } from '../../../repos/cashActions.ts';
-import { agreementsFor, fulfilmentsFor, observationsFor } from '../../../repos/cashJourney.ts';
+import { agreementsFor, observationsFor } from '../../../repos/cashJourney.ts';
+import { readObligation, type ObligationReading } from './fulfillment.ts';
+import { contributionFrom } from '../money.ts';
 import { commercialOperationsFor } from '../effects.ts';
-import type { CashAgreement, CashFulfilment, CashObservation } from '../../../domain/cashJourney.ts';
+import type { CashAgreement, CashObservation } from '../../../domain/cashJourney.ts';
 import type {
   CashInvoice,
   CashInvoiceState,
@@ -158,10 +160,17 @@ export interface DealPosition {
   pnl: DealPnl;
   agreements: CashAgreement[];
   invoices: CashInvoice[];
-  fulfilments: CashFulfilment[];
+  /** Each agreement's obligation, as `fulfillment.ts` reads it. */
+  obligations: ObligationReading[];
   observations: CashObservation[];
   contacted: boolean;
-  /** Whether the work has been accepted against its acceptance condition. */
+  /**
+   * Every live agreement's obligation is complete: the work done, the whole
+   * promise delivered, the buyer's acceptance recorded, no failure and every
+   * refund resolved. False with no live agreement, and false while any one
+   * obligation is short of that — one delivered agreement does not deliver
+   * another.
+   */
   delivered: boolean;
   /** Whether a take-payment attempt is in flight or unknown. */
   paymentInFlight: boolean;
@@ -174,11 +183,10 @@ export async function dealPosition(input: {
   currency: string;
 }): Promise<DealPosition> {
   const { opportunity, currency } = input;
-  const [agreements, invoices, fulfilments, observations, actions, totals, operations, commitments] =
+  const [agreements, invoices, observations, actions, totals, operations, commitments] =
     await Promise.all([
       agreementsFor(opportunity.id),
       listInvoices({ projectId: opportunity.projectId, opportunityId: opportunity.id }),
-      fulfilmentsFor(opportunity.id),
       observationsFor(opportunity.id),
       actionsFor(opportunity.id),
       totalsByKind({ projectId: opportunity.projectId, opportunityId: opportunity.id, currency }),
@@ -186,6 +194,8 @@ export async function dealPosition(input: {
       listCommitments(opportunity.projectId),
     ]);
 
+  const obligations: ObligationReading[] = [];
+  for (const agreement of agreements) obligations.push(await readObligation(agreement));
   const live = agreements.filter((one) => one.state === 'AGREED' && one.currency === currency);
   const agreedRevenue = live.reduce((sum, one) => sum + one.amountCents, 0);
   const ledgerAgreed = Math.max(0, num(totals, 'PIPELINE_AGREED') - num(totals, 'PIPELINE_RELEASED'));
@@ -203,7 +213,10 @@ export async function dealPosition(input: {
   const paidNet = Math.max(0, payments - refunds);
   const settled = num(totals, 'SETTLEMENT');
   const costs = num(totals, 'COST');
-  const unpaid = Math.max(0, num(totals, 'UNPAID_COMMITMENT') - num(totals, 'COMMITMENT_PAID'));
+  const unpaid = Math.max(
+    0,
+    num(totals, 'UNPAID_COMMITMENT') - num(totals, 'COMMITMENT_PAID') - num(totals, 'COMMITMENT_RELEASED'),
+  );
   const held = commitments
     .filter((one) => one.opportunityId === opportunity.id && one.state === 'HELD' && one.currency === currency)
     .reduce((sum, one) => sum + one.amountCents, 0);
@@ -230,8 +243,9 @@ export async function dealPosition(input: {
   else paymentState = 'NOT_INVOICED';
 
   const contacted = actions.some((one) => one.action === 'CONTACT_BUYER');
-  const delivered = fulfilments.some((one) => one.state === 'DELIVERED');
-  const fulfilling = fulfilments.some((one) => one.state === 'CREATED' || one.state === 'PERFORMED');
+  const liveObligations = obligations.filter((one) => one.agreement.state === 'AGREED');
+  const delivered = liveObligations.length > 0 && liveObligations.every((one) => one.complete);
+  const fulfilling = liveObligations.some((one) => one.fulfillment !== null && !one.complete);
   const responded = observations.some((one) => one.kind.startsWith('BUYER_') && one.kind !== 'BUYER_SILENT');
 
   let stage: JourneyStage;
@@ -264,13 +278,13 @@ export async function dealPosition(input: {
       incrementalCostsCents: costs,
       unpaidCommitmentsCents: unpaid,
       heldCommitmentsCents: held,
-      contributionCents: payments - refunds - costs - unpaid,
+      contributionCents: contributionFrom({ payments, refunds, costs, unpaidCommitments: unpaid }),
       owedByBuyerCents: owed,
       invoiceableCents: invoiceable,
     },
     agreements,
     invoices,
-    fulfilments,
+    obligations,
     observations,
     contacted,
     delivered,
@@ -292,8 +306,8 @@ export function collectable(position: DealPosition): { ok: true } | { ok: false;
     return {
       ok: false,
       reason:
-        'The work has not been accepted by the buyer, so the delivery is not done. Record the ' +
-        'fulfilment, what was performed, and the buyer accepting it.',
+        'Not every agreement on this piece is fulfilled: each needs its work done, the whole promise ' +
+        'delivered, the buyer’s acceptance recorded, no failure and every refund resolved.',
     };
   }
   if (p.agreedRevenueCents <= 0) {

@@ -16,9 +16,10 @@
  * how a sprint comes to believe it has money it has not got.
  */
 import { listInvoices } from '../../repos/cashInvoices.ts';
+import { dealPosition } from './journey/position.ts';
 import { usableAdapter } from './effects.ts';
 import { actionsFor } from '../../repos/cashActions.ts';
-import { listMoneyEntries, totalsByKind } from '../../repos/cashLedger.ts';
+import { listMoneyEntries } from '../../repos/cashLedger.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
 import { COMMERCIAL_EFFECTS, PERFORMABLE_ACTIONS, type PerformableAction } from './effects.ts';
@@ -36,11 +37,11 @@ export interface ExecutionRecord {
   }[];
   money: {
     currency: string;
-    /** `PIPELINE_AGREED`: what was agreed. Not cash. */
+    /** Live agreements' amounts: what was agreed. Not cash. */
     agreedCents: number;
     /** `CUSTOMER_PAYMENT` net of refunds: earned, not usable until it settles. */
     paidCents: number;
-    /** `SETTLEMENT` net of refunds: usable. */
+    /** Settled and usable, never more than was paid net of refunds. */
     settledCents: number;
     refundedCents: number;
     /** Agreed and not yet paid. Zero when nothing was agreed. */
@@ -103,16 +104,13 @@ export async function executionRecord(input: {
 }): Promise<ExecutionRecord> {
   const { opportunity, currency } = input;
   const actions = await actionsFor(opportunity.id);
-  const totals = await totalsByKind({
-    projectId: opportunity.projectId,
-    opportunityId: opportunity.id,
-    currency,
-  });
-  const agreed = Math.max(0, Number(totals.PIPELINE_AGREED ?? 0) - Number(totals.PIPELINE_RELEASED ?? 0));
-  const payments = Number(totals.CUSTOMER_PAYMENT ?? 0);
-  const settlements = Number(totals.SETTLEMENT ?? 0);
-  const refunds = Number(totals.REFUND ?? 0);
-  const paid = Math.max(0, payments - refunds);
+  // The deal's figures are `position.ts`'s, the one derivation of a deal's
+  // money; this record shows them beside the actions and attempts rather than
+  // computing a second set that could disagree.
+  const { pnl } = await dealPosition({ opportunity, currency });
+  const agreed = pnl.agreedRevenueCents;
+  const refunds = pnl.refundsCents;
+  const paid = Math.max(0, pnl.customerPaymentsCents - refunds);
 
   const attempts = await effectAttemptsFor(opportunity.projectId, opportunity.id);
   const nextOccurrence = String(actions.length + 1);
@@ -196,7 +194,7 @@ export async function executionRecord(input: {
       currency,
       agreedCents: agreed,
       paidCents: paid,
-      settledCents: Math.max(0, settlements - refunds),
+      settledCents: pnl.settledCashCents,
       refundedCents: refunds,
       outstandingCents: Math.max(0, agreed - paid),
     },

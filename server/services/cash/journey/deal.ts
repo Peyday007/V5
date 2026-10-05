@@ -1,6 +1,7 @@
 /**
- * The transitions of a deal after its first real action: what the buyer said,
- * what was agreed, what was billed, and whether the work was done.
+ * The transitions of a deal after its first real action: what the buyer said
+ * and what was agreed. What was billed is `invoicing.ts`; the obligation an
+ * agreement creates is `fulfillment.ts`.
  *
  * Every function here is a guarded, idempotent write with a named refusal, and
  * none of them sends anything. Contacting a buyer, issuing an invoice through a
@@ -14,44 +15,28 @@
  *   - **No agreement from interest.** An agreement needs the deliverable, the
  *     acceptance condition, an amount and evidence somebody can point at. A
  *     buyer replying is an observation, never an agreement.
- *   - **No delivery from an intention.** A fulfilment is work created in
- *     existing machinery; it is performed when that machinery says so (or a
- *     person records evidence for work done outside Brain), and delivered only
- *     against acceptance evidence.
- *   - **No figure composed.** An invoice is for what is still invoiceable
+ *  *   - **No figure composed.** An invoice is for what is still invoiceable
  *     against a live agreement; nothing here chooses a price.
  */
 import { createHash } from 'node:crypto';
 import { getOpportunity, transitionOpportunity } from '../../../repos/cashPortfolio.ts';
 import { getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
-import { getCommitment } from '../../../repos/cashAuthority.ts';
-import { getJob } from '../../../repos/cashJobs.ts';
-import { getCandidate } from '../../../repos/russellCandidates.ts';
-import { getChangeRequest } from '../../../repos/factory.ts';
 import {
   agreementsFor,
-  endFulfilment,
-  fulfilmentsFor,
   getAgreement,
-  getFulfilment,
   getObservation,
   insertAgreement,
-  insertFulfilment,
   insertObservation,
-  markFulfilmentDelivered,
-  markFulfilmentPerformed,
   releaseAgreementRow,
 } from '../../../repos/cashJourney.ts';
+import { serializeCash } from '../../../repos/cashLock.ts';
 import { recordMoneyEvent, refuse, type Outcome } from '../opportunities.ts';
 import {
   AGREEMENT_EVIDENCE_KINDS,
-  FULFILMENT_PATHS,
-  FULFILMENT_WORK_KINDS,
   OBSERVATION_KINDS,
-  WORK_KINDS_FOR_PATH,
   isOneOf,
+  type AgreementEvidenceKind,
   type CashAgreement,
-  type CashFulfilment,
   type CashObservation,
   type ObservationSource,
 } from '../../../domain/cashJourney.ts';
@@ -110,8 +95,8 @@ export async function recordObservation(input: {
       return refuse('An amount is a whole, non-negative number of cents.');
     }
   }
-  if ((input.kind === 'BUYER_COUNTERED' || input.kind === 'SUPPLIER_COST_CHANGED') && !input.amountCents) {
-    return refuse('A counter-offer or a changed cost carries the amount the other side stated.');
+  if (input.kind === 'BUYER_COUNTERED' && !input.amountCents) {
+    return refuse('A counter-offer carries the amount the buyer stated.');
   }
   const mode = await getCashMode(opportunity.projectId);
   const key =
@@ -161,8 +146,8 @@ export function releaseLedgerKey(agreementId: string): string {
  * agreement and again by the tick, so a crash between the two is finished on
  * the next pass rather than leaving an agreement the ledger does not count.
  */
-export async function ensureAgreementLedger(agreement: CashAgreement): Promise<void> {
-  await recordMoneyEvent({
+export async function ensureAgreementLedger(agreement: CashAgreement): Promise<Outcome<null>> {
+  const agreed = await recordMoneyEvent({
     projectId: agreement.projectId,
     opportunityId: agreement.opportunityId,
     kind: 'PIPELINE_AGREED',
@@ -172,8 +157,9 @@ export async function ensureAgreementLedger(agreement: CashAgreement): Promise<v
     idempotencyKey: agreementLedgerKey(agreement.id),
     actorRef: agreement.recordedBy,
   });
+  if (!agreed.ok) return agreed;
   if (agreement.state === 'RELEASED') {
-    await recordMoneyEvent({
+    const released = await recordMoneyEvent({
       projectId: agreement.projectId,
       opportunityId: agreement.opportunityId,
       kind: 'PIPELINE_RELEASED',
@@ -183,8 +169,13 @@ export async function ensureAgreementLedger(agreement: CashAgreement): Promise<v
       idempotencyKey: releaseLedgerKey(agreement.id),
       actorRef: agreement.releasedBy ?? agreement.recordedBy,
     });
+    if (!released.ok) return released;
   }
+  return { ok: true, value: null, message: 'The ledger counts this agreement.' };
 }
+
+/** A refusal inside the cash lock, thrown so the transaction rolls back whole. */
+class RefusedInLock extends Error {}
 
 /**
  * The buyer agreed: an amount, a deliverable, an acceptance condition, and the
@@ -252,20 +243,37 @@ export async function recordAgreement(input: {
     input.acceptanceCondition.trim(),
     input.evidenceRef.trim(),
   )}`;
-  const written = await insertAgreement({
-    projectId: opportunity.projectId,
-    opportunityId: opportunity.id,
-    amountCents: input.amountCents,
-    currency: input.currency,
-    deliverable: input.deliverable.trim(),
-    acceptanceCondition: input.acceptanceCondition.trim(),
-    evidenceKind: input.evidenceKind,
-    evidenceRef: input.evidenceRef.trim(),
-    observationId: input.observationId ?? null,
-    recordedBy: input.actorRef,
-    requestKey,
-  });
-  await ensureAgreementLedger(written.row);
+  /*
+   * The agreement and its PIPELINE_AGREED entry are one decision, in one
+   * transaction under the cash lock: there is no moment at which an agreement
+   * exists the ledger does not count, or an amount is counted that no
+   * agreement stands behind. The tick's `ensureAgreementLedger` stays as the
+   * backstop for rows written before this was so.
+   */
+  let written: Awaited<ReturnType<typeof insertAgreement>>;
+  try {
+    written = await serializeCash(opportunity.projectId, mode.currency, async () => {
+      const row = await insertAgreement({
+        projectId: opportunity.projectId,
+        opportunityId: opportunity.id,
+        amountCents: input.amountCents,
+        currency: input.currency,
+        deliverable: input.deliverable.trim(),
+        acceptanceCondition: input.acceptanceCondition.trim(),
+        evidenceKind: input.evidenceKind as AgreementEvidenceKind,
+        evidenceRef: input.evidenceRef.trim(),
+        observationId: input.observationId ?? null,
+        recordedBy: input.actorRef,
+        requestKey,
+      });
+      const counted = await ensureAgreementLedger(row.row);
+      if (!counted.ok) throw new RefusedInLock(counted.reason);
+      return row;
+    });
+  } catch (error) {
+    if (error instanceof RefusedInLock) return refuse(error.message);
+    throw error;
+  }
   if (written.created) {
     await recordCashEvent({
       projectId: opportunity.projectId,
@@ -302,10 +310,22 @@ export async function releaseAgreement(input: {
   if (!agreement) return refuse('No agreement with that id.');
   const missing = required(input.reason, 'Why the agreement is released');
   if (missing) return refuse(missing);
-  const moved = await releaseAgreementRow({ id: agreement.id, reason: input.reason.trim(), by: input.actorRef });
+  // The release and its PIPELINE_RELEASED entry are one decision, as the
+  // agreement and its PIPELINE_AGREED entry were.
+  let moved: boolean;
+  try {
+    moved = await serializeCash(agreement.projectId, agreement.currency, async () => {
+      const did = await releaseAgreementRow({ id: agreement.id, reason: input.reason.trim(), by: input.actorRef });
+      const counted = await ensureAgreementLedger((await getAgreement(agreement.id))!);
+      if (!counted.ok) throw new RefusedInLock(counted.reason);
+      return did;
+    });
+  } catch (error) {
+    if (error instanceof RefusedInLock) return refuse(error.message);
+    throw error;
+  }
   const after = (await getAgreement(agreement.id))!;
-  if (!moved && agreement.state !== 'RELEASED') return refuse('This agreement could not be released.');
-  await ensureAgreementLedger(after);
+  if (!moved && after.state !== 'RELEASED') return refuse('This agreement could not be released.');
   /*
    * What was billed against it. A draft nothing has sent is voided here; an
    * invoice the provider holds cannot be unsent from Brain's side, so an open
@@ -352,225 +372,6 @@ export async function releaseAgreement(input: {
     });
   }
   return { ok: true, value: after, message: moved ? 'Released.' : 'This agreement was already released.' };
-}
-
-/* ------------------------------------------------------------------------- */
-/* Fulfilment                                                                 */
-/* ------------------------------------------------------------------------- */
-
-/** Whether the row a fulfilment names exists, read from the machinery that owns it. */
-async function workExists(
-  workKind: CashFulfilment['workKind'],
-  workRef: string,
-  projectId: string,
-  opportunityId: string,
-): Promise<string | null> {
-  switch (workKind) {
-    case 'RUSSELL_CANDIDATE':
-      return (await getCandidate(workRef)) ? null : 'No Russell idea with that id.';
-    case 'FACTORY_CHANGE_REQUEST':
-      return (await getChangeRequest(workRef)) ? null : 'No Factory change request with that id.';
-    case 'CASH_JOB': {
-      const job = await getJob(workRef);
-      return job && job.opportunityId === opportunityId ? null : 'No job with that id on this piece.';
-    }
-    case 'COMMITMENT': {
-      const held = await getCommitment(workRef);
-      return held && held.projectId === projectId && held.opportunityId === opportunityId
-        ? null
-        : 'No spending commitment with that id on this piece.';
-    }
-    case 'EXTERNAL':
-      return workRef.trim() ? null : 'Name where the work is held outside Brain.';
-  }
-}
-
-/**
- * Work created to deliver an agreement, in the machinery that does it.
- *
- * The first fulfilment moves the piece from EXECUTING to DELIVERING, because
- * that is what DELIVERING means now: work exists, rather than somebody having
- * pressed a button.
- */
-export async function createFulfilment(input: {
-  opportunityId: string;
-  agreementId: string;
-  path: string;
-  workKind: string;
-  workRef: string;
-  actorRef: string;
-}): Promise<Outcome<CashFulfilment>> {
-  const opportunity = await getOpportunity(input.opportunityId);
-  if (!opportunity) return refuse('No opportunity with that id.');
-  if (!AFTER_FIRST_ACTION.has(opportunity.state)) {
-    return refuse(`This is ${opportunity.state.toLowerCase()}, and fulfilment follows an agreement on a piece being executed.`);
-  }
-  if (!isOneOf(FULFILMENT_PATHS, input.path)) {
-    return refuse(`A fulfilment path is one of: ${FULFILMENT_PATHS.join(', ')}.`);
-  }
-  if (!isOneOf(FULFILMENT_WORK_KINDS, input.workKind)) {
-    return refuse(`Work is held as one of: ${FULFILMENT_WORK_KINDS.join(', ')}.`);
-  }
-  if (!WORK_KINDS_FOR_PATH[input.path].includes(input.workKind)) {
-    return refuse(
-      `${input.path} work is held as ${WORK_KINDS_FOR_PATH[input.path].join(' or ')}, not ${input.workKind}.`,
-    );
-  }
-  const agreement = await getAgreement(input.agreementId);
-  if (!agreement || agreement.opportunityId !== opportunity.id || agreement.state !== 'AGREED') {
-    return refuse('No live agreement with that id on this piece. Fulfilment delivers an agreement.');
-  }
-  const absent = await workExists(input.workKind, input.workRef, opportunity.projectId, opportunity.id);
-  if (absent) return refuse(absent);
-  const written = await insertFulfilment({
-    projectId: opportunity.projectId,
-    opportunityId: opportunity.id,
-    agreementId: agreement.id,
-    path: input.path,
-    workKind: input.workKind,
-    workRef: input.workRef.trim(),
-    commitmentId: input.workKind === 'COMMITMENT' ? input.workRef.trim() : null,
-    createdBy: input.actorRef,
-    requestKey: `fulfilment:${agreement.id}:${input.workKind}:${digest(input.workRef.trim())}`,
-  });
-  if (written.created) {
-    await recordCashEvent({
-      projectId: opportunity.projectId,
-      opportunityId: opportunity.id,
-      kind: 'CASH_FULFILMENT_CREATED',
-      actorRef: input.actorRef,
-      summary: `Fulfilment created (${input.path.toLowerCase()}): ${input.workKind} ${written.row.workRef}.`,
-      detail: { fulfilmentId: written.row.id, agreementId: agreement.id },
-    });
-  }
-  await moveToDelivering(opportunity.id, input.actorRef);
-  return { ok: true, value: written.row, message: written.created ? 'Fulfilment created.' : 'Already created.' };
-}
-
-/** EXECUTING → DELIVERING once work exists. Idempotent; a no-op past it. */
-export async function moveToDelivering(opportunityId: string, actorRef: string): Promise<boolean> {
-  const live = (await fulfilmentsFor(opportunityId)).some((one) => one.state !== 'CANCELLED' && one.state !== 'FAILED');
-  if (!live) return false;
-  const moved = await transitionOpportunity({ id: opportunityId, from: ['EXECUTING'], to: 'DELIVERING' });
-  if (moved) {
-    const opportunity = (await getOpportunity(opportunityId))!;
-    await recordCashEvent({
-      projectId: opportunity.projectId,
-      opportunityId,
-      kind: 'CASH_DELIVERING',
-      actorRef,
-      summary: 'Work to deliver the agreement exists, so this is being delivered.',
-      detail: {},
-    });
-  }
-  return moved;
-}
-
-/**
- * A person records that work done outside Brain was performed, with evidence.
- *
- * Refused for Brain's own paths: whether a Russell mission or a Factory
- * campaign finished is read from those rows by the tick, and a person's say-so
- * standing in for Brain's own record would be the attestation §33 removed.
- */
-export async function recordPerformed(input: {
-  fulfilmentId: string;
-  evidence: string;
-  actorRef: string;
-}): Promise<Outcome<CashFulfilment>> {
-  const fulfilment = await getFulfilment(input.fulfilmentId);
-  if (!fulfilment) return refuse('No fulfilment with that id.');
-  if (fulfilment.workKind === 'RUSSELL_CANDIDATE' || fulfilment.workKind === 'FACTORY_CHANGE_REQUEST') {
-    return refuse('This work is Brain\'s, so whether it was performed is read from its own rows, not recorded.');
-  }
-  const missing = required(input.evidence, 'Evidence that the work was performed');
-  if (missing) return refuse(missing);
-  return await performed(fulfilment, input.evidence.trim(), input.actorRef);
-}
-
-export async function performed(
-  fulfilment: CashFulfilment,
-  evidence: string,
-  actorRef: string,
-): Promise<Outcome<CashFulfilment>> {
-  const moved = await markFulfilmentPerformed(fulfilment.id, evidence);
-  if (!moved && fulfilment.state !== 'PERFORMED' && fulfilment.state !== 'DELIVERED') {
-    return refuse(`This fulfilment is ${fulfilment.state.toLowerCase()}, and performing it does not follow.`);
-  }
-  if (moved) {
-    await recordCashEvent({
-      projectId: fulfilment.projectId,
-      opportunityId: fulfilment.opportunityId,
-      kind: 'CASH_FULFILMENT_PERFORMED',
-      actorRef,
-      summary: `Work performed: ${evidence}`,
-      detail: { fulfilmentId: fulfilment.id },
-    });
-  }
-  return { ok: true, value: (await getFulfilment(fulfilment.id))!, message: moved ? 'Recorded.' : 'Already recorded.' };
-}
-
-/**
- * The buyer accepted the work. Needs a `DELIVERY_ACCEPTED` observation on this
- * piece — the evidence — and a fulfilment that was performed.
- */
-export async function acceptDelivery(input: {
-  fulfilmentId: string;
-  observationId: string;
-  actorRef: string;
-}): Promise<Outcome<CashFulfilment>> {
-  const fulfilment = await getFulfilment(input.fulfilmentId);
-  if (!fulfilment) return refuse('No fulfilment with that id.');
-  const seen = await getObservation(input.observationId);
-  if (!seen || seen.opportunityId !== fulfilment.opportunityId || seen.kind !== 'DELIVERY_ACCEPTED') {
-    return refuse('Acceptance needs the buyer\'s DELIVERY_ACCEPTED observation on this piece.');
-  }
-  if (fulfilment.state === 'DELIVERED') {
-    return { ok: true, value: fulfilment, message: 'Already delivered.' };
-  }
-  if (fulfilment.state !== 'PERFORMED') {
-    return refuse('The work has not been performed yet, so there is nothing for the buyer to have accepted.');
-  }
-  const moved = await markFulfilmentDelivered({ id: fulfilment.id, observationId: seen.id });
-  if (moved) {
-    await recordCashEvent({
-      projectId: fulfilment.projectId,
-      opportunityId: fulfilment.opportunityId,
-      kind: 'CASH_FULFILMENT_DELIVERED',
-      actorRef: input.actorRef,
-      summary: `The buyer accepted the work (${seen.evidenceRef}).`,
-      detail: { fulfilmentId: fulfilment.id, observationId: seen.id },
-    });
-  }
-  return { ok: true, value: (await getFulfilment(fulfilment.id))!, message: 'Delivered.' };
-}
-
-/** The work failed, or will not be done. Keeps the row with its reason. */
-export async function endFulfilmentWith(input: {
-  fulfilmentId: string;
-  to: 'FAILED' | 'CANCELLED';
-  reason: string;
-  actorRef: string;
-}): Promise<Outcome<CashFulfilment>> {
-  const fulfilment = await getFulfilment(input.fulfilmentId);
-  if (!fulfilment) return refuse('No fulfilment with that id.');
-  const missing = required(input.reason, 'Why');
-  if (missing) return refuse(missing);
-  const moved = await endFulfilment({ id: fulfilment.id, to: input.to, reason: input.reason.trim() });
-  if (!moved && fulfilment.state !== input.to) {
-    return refuse(`This fulfilment is ${fulfilment.state.toLowerCase()} and cannot be ${input.to.toLowerCase()}.`);
-  }
-  if (moved) {
-    await recordCashEvent({
-      projectId: fulfilment.projectId,
-      opportunityId: fulfilment.opportunityId,
-      kind: `CASH_FULFILMENT_${input.to}`,
-      actorRef: input.actorRef,
-      summary: `Fulfilment ${input.to.toLowerCase()}: ${input.reason.trim()}`,
-      detail: { fulfilmentId: fulfilment.id },
-    });
-  }
-  return { ok: true, value: (await getFulfilment(fulfilment.id))!, message: moved ? 'Recorded.' : 'Already recorded.' };
 }
 
 export { agreementsFor };

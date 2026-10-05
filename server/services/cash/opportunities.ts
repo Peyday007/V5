@@ -42,6 +42,9 @@ import { cardFact, cardFactsFor, mayReplace, recordCardFact } from '../../repos/
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
 import { moneyEntryByKey, recordMoney, totalsByKind } from '../../repos/cashLedger.ts';
+import { agreementsFor, getAgreement } from '../../repos/cashJourney.ts';
+import { unresolvedRefundCents } from '../../repos/cashFulfillment.ts';
+import { getInvoice } from '../../repos/cashInvoices.ts';
 import { collectable, dealPosition } from './journey/position.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { getOperation } from '../../repos/idempotency.ts';
@@ -728,10 +731,11 @@ export async function advance(input: {
    * written on a refusal, and the remedy is named.
    */
   /*
-   * Neither state may be claimed from an intention. DELIVERING means work to
-   * deliver an agreement exists (`journey/deal.ts` creates it and moves the
-   * piece itself); COLLECTED means every live agreement is paid, the payment
-   * has settled, and the buyer accepted the work — the one predicate the
+   * Neither state may be claimed from an intention. DELIVERING means something
+   * agreed has been delivered (`journey/fulfillment.ts` records it and moves
+   * the piece itself); COLLECTED means every live agreement's obligation is
+   * complete — accepted, nothing failed, every refund resolved — and the money
+   * is paid and settled — the one predicate the
    * journey tick also asks, so a button and the tick cannot disagree. "The
    * money is in" is still a statement about the ledger first (invariant 37):
    * a SETTLEMENT is the one entry that is cash. Nothing is written on a
@@ -741,11 +745,13 @@ export async function advance(input: {
   if (!mode) return refuse('Cash Mode has not been activated for this project.');
   const position = await dealPosition({ opportunity, currency: mode.currency });
   if (input.to === 'DELIVERING') {
-    const live = position.fulfilments.some((one) => one.state !== 'FAILED' && one.state !== 'CANCELLED');
-    if (!live) {
+    const begun = position.obligations.some(
+      (one) => one.agreement.state === 'AGREED' && one.delivery.state !== 'NOT_DELIVERED',
+    );
+    if (!begun) {
       return refuse(
-        'No work exists to deliver this, so it is not being delivered. Record the agreement and ' +
-          'create the fulfilment — the work in the machinery that does it.',
+        'Nothing agreed has been delivered yet, so this is not being delivered. Record the delivery ' +
+          'on the agreement’s obligation; that moves the piece itself.',
       );
     }
   }
@@ -1063,6 +1069,44 @@ export async function commitSpend(input: {
 }
 
 /**
+ * Whether a PIPELINE_AGREED / PIPELINE_RELEASED entry is the one its agreement
+ * implies: the key names an agreement on this project, the agreement is on the
+ * same opportunity in the same currency for the same amount, and a release is
+ * of an agreement that was released.
+ */
+async function agreementBehind(input: {
+  projectId: string;
+  opportunityId?: string | null;
+  kind: CashMoneyKind;
+  amountCents: number;
+  currency: string;
+  idempotencyKey: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const prefix = input.kind === 'PIPELINE_AGREED' ? 'agreement:' : 'agreement-released:';
+  const agreement = input.idempotencyKey.startsWith(prefix)
+    ? await getAgreement(input.idempotencyKey.slice(prefix.length))
+    : null;
+  const matches =
+    agreement !== null &&
+    agreement.projectId === input.projectId &&
+    agreement.opportunityId === (input.opportunityId ?? null) &&
+    agreement.amountCents === input.amountCents &&
+    agreement.currency === input.currency &&
+    (input.kind === 'PIPELINE_AGREED' || agreement.state === 'RELEASED');
+  if (matches) return { ok: true };
+  return {
+    ok: false,
+    reason:
+      input.kind === 'PIPELINE_AGREED'
+        ? 'Agreed work is recorded as an agreement — the amount, what is delivered, what counts as ' +
+          'acceptance and the evidence the buyer agreed — which writes this entry itself. A bare ' +
+          'amount is never billed, so it is not recorded on its own.'
+        : 'Agreed work is released by releasing its agreement, which keeps the agreement and voids ' +
+          'what was billed against it in the same pass.',
+  };
+}
+
+/**
  * Write one money event. Append-only, once per key, in the sprint's currency.
  *
  * Three things are checked before anything is written, and each exists because
@@ -1096,6 +1140,20 @@ export async function recordMoneyEvent(input: {
    * on the caller's word, and anything else still meets the grant.
    */
   confirmedEffectOperationId?: string | null;
+  /**
+   * The authorized refund this REFUND entry confirms. Internal: only the
+   * obligation's refund path (`journey/fulfillment.ts`) passes it, and no
+   * route reads it from a body.
+   */
+  confirmsRefund?: { fulfillmentId: string; refundKey: string } | null;
+  /**
+   * The invoice a provider says this payment paid. Internal, like
+   * `confirmedEffectOperationId` and for its reason: the invoice was issued
+   * under QUOTE_AND_INVOICE and the buyer paid it on the provider's own page,
+   * so the money arrived whatever has happened to a grant since. Read back
+   * from the database, never taken on the caller's word.
+   */
+  paidInvoiceId?: string | null;
 }): Promise<Outcome<CashMoneyEntry>> {
   const check = checkMoneyEntry({
     kind: input.kind,
@@ -1133,7 +1191,14 @@ export async function recordMoneyEvent(input: {
       // and taken for this piece, by the correlation Brain composed at send
       (input.opportunityId == null ||
         (backing.correlationId ?? '').startsWith(`cash:${input.opportunityId}:`));
-    if (!confirmed) {
+    const invoice = input.paidInvoiceId ? await getInvoice(input.paidInvoiceId) : null;
+    const paidInvoice =
+      invoice !== null &&
+      invoice.projectId === input.projectId &&
+      invoice.opportunityId === (input.opportunityId ?? null) &&
+      invoice.providerInvoiceId !== null &&
+      (invoice.state === 'ISSUED' || invoice.state === 'PAID' || invoice.state === 'SETTLED');
+    if (!confirmed && !paidInvoice) {
       const decision = await checkCommercialAuthority({
         projectId: input.projectId,
         action: 'ACCEPT_PAYMENT',
@@ -1154,18 +1219,23 @@ export async function recordMoneyEvent(input: {
    * number one is checked against. A settlement landing between a commitment's
    * insert and its sum would make that sum true of neither moment.
    */
-  if (input.kind === 'PIPELINE_AGREED' && !input.idempotencyKey.startsWith('agreement:')) {
-    return refuse(
-      'Agreed work is recorded as an agreement — the amount, what is delivered, what counts as ' +
-        'acceptance and the evidence the buyer agreed — which writes this entry itself. A bare ' +
-        'amount is never billed, so it is not recorded on its own.',
-    );
+  /*
+   * Agreed work, its release and a refund on an agreed deal each have exactly
+   * one writer in the post-sale model (docs/POST-SALE.md), and the check is on
+   * a server fact rather than the shape of a key the caller supplied: a key
+   * prefix is a string anybody can type into `POST /cash/money`.
+   */
+  if (input.kind === 'PIPELINE_AGREED' || input.kind === 'PIPELINE_RELEASED') {
+    const backing = await agreementBehind(input);
+    if (!backing.ok) return refuse(backing.reason);
   }
-  if (input.kind === 'PIPELINE_RELEASED' && !input.idempotencyKey.startsWith('agreement-released:')) {
-    return refuse(
-      'Agreed work is released by releasing its agreement, which keeps the agreement and voids ' +
-        'what was billed against it in the same pass.',
-    );
+  if (input.kind === 'REFUND' && input.opportunityId && !input.confirmsRefund) {
+    if ((await agreementsFor(input.opportunityId)).length > 0) {
+      return refuse(
+        'A refund on an agreed deal is authorized on the obligation it pays back, which bounds it ' +
+          'against every refund still pending or unknown and sends it once. Record it there.',
+      );
+    }
   }
 
   const written = await serializeCash(input.projectId, input.currency, async () => {
@@ -1180,6 +1250,19 @@ export async function recordMoneyEvent(input: {
       (input.kind === 'SETTLEMENT' || input.kind === 'REFUND') &&
       !(await moneyEntryByKey(input.projectId, input.idempotencyKey))
     ) {
+      // A refund still pending or unknown may already have left the account,
+      // so it counts against what may be refunded — except the one this entry
+      // confirms.
+      const unresolved =
+        input.kind === 'REFUND'
+          ? await unresolvedRefundCents({
+              projectId: input.projectId,
+              opportunityId: input.opportunityId,
+              except: input.confirmsRefund
+                ? `${input.confirmsRefund.fulfillmentId}:${input.confirmsRefund.refundKey}`
+                : null,
+            })
+          : 0;
       const totals = await totalsByKind({
         projectId: input.projectId,
         opportunityId: input.opportunityId,
@@ -1189,7 +1272,7 @@ export async function recordMoneyEvent(input: {
       const room =
         input.kind === 'SETTLEMENT'
           ? paid - Number(totals.REFUND ?? 0) - Number(totals.SETTLEMENT ?? 0)
-          : paid - Number(totals.REFUND ?? 0);
+          : paid - Number(totals.REFUND ?? 0) - unresolved;
       if (input.amountCents > room) {
         return {
           ok: false as const,
@@ -1200,8 +1283,28 @@ export async function recordMoneyEvent(input: {
               ? `Only ${Math.max(0, room)} cents paid on this piece has not settled, and this settlement is ` +
                 `for ${input.amountCents}. A settlement is a payment becoming usable, never a second sale — ` +
                 'record the payment first.'
-              : `Only ${Math.max(0, room)} cents has been paid on this piece, so a refund of ` +
-                `${input.amountCents} would return money that never arrived.`,
+              : `Only ${Math.max(0, room)} cents paid on this piece is not already refunded or in a ` +
+                `refund still unresolved, so a refund of ${input.amountCents} would return money that ` +
+                'never arrived — or that may already have gone back.',
+        };
+      }
+    }
+    if (input.kind === 'COMMITMENT_RELEASED' && !(await moneyEntryByKey(input.projectId, input.idempotencyKey))) {
+      const totals = await totalsByKind({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId ?? undefined,
+        currency: input.currency,
+      });
+      const owed =
+        Number(totals.UNPAID_COMMITMENT ?? 0) -
+        Number(totals.COMMITMENT_PAID ?? 0) -
+        Number(totals.COMMITMENT_RELEASED ?? 0);
+      if (input.amountCents > owed) {
+        return {
+          ok: false as const,
+          entry: null,
+          replayed: false,
+          reason: `Only ${Math.max(0, owed)} cents is owed, so ${input.amountCents} cannot stop being owed.`,
         };
       }
     }

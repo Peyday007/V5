@@ -1,6 +1,7 @@
 /**
- * Rows for the first-dollar journey: observations, agreements, invoices,
- * fulfilments and outcomes.
+ * Rows for a deal around its agreement: observations, agreements and outcomes.
+ * The obligation an agreement creates is `cashFulfillment.ts`; invoices are
+ * `cashInvoices.ts`.
  *
  * Every insert is `ON CONFLICT (project_id, request_key) DO NOTHING` followed
  * by a read-back, so a retry, a restart mid-journey or two ticks racing produce
@@ -13,12 +14,8 @@ import { newId, nowIso } from './util.ts';
 import type {
   AgreementEvidenceKind,
   CashAgreement,
-  CashFulfilment,
   CashObservation,
   CashOutcome,
-  FulfilmentPath,
-  FulfilmentState,
-  FulfilmentWorkKind,
   ObservationKind,
   ObservationSource,
   OutcomeKind,
@@ -218,133 +215,6 @@ export async function releaseAgreementRow(input: {
 }
 
 /* ------------------------------------------------------------------------- */
-/* Fulfilments                                                                */
-/* ------------------------------------------------------------------------- */
-
-function mapFulfilment(r: Row): CashFulfilment {
-  return {
-    id: s(r.id),
-    projectId: s(r.project_id),
-    opportunityId: s(r.opportunity_id),
-    agreementId: s(r.agreement_id),
-    path: s(r.path) as FulfilmentPath,
-    workKind: s(r.work_kind) as FulfilmentWorkKind,
-    workRef: s(r.work_ref),
-    commitmentId: ns(r.commitment_id),
-    state: s(r.state) as FulfilmentState,
-    performedEvidence: ns(r.performed_evidence),
-    acceptedObservationId: ns(r.accepted_observation_id),
-    acceptanceEvidence: ns(r.acceptance_evidence),
-    stateReason: ns(r.state_reason),
-    requestKey: s(r.request_key),
-    createdBy: s(r.created_by),
-    createdAt: s(r.created_at),
-    performedAt: ns(r.performed_at),
-    deliveredAt: ns(r.delivered_at),
-    endedAt: ns(r.ended_at),
-    updatedAt: s(r.updated_at),
-  };
-}
-
-export async function insertFulfilment(input: {
-  projectId: string;
-  opportunityId: string;
-  agreementId: string;
-  path: FulfilmentPath;
-  workKind: FulfilmentWorkKind;
-  workRef: string;
-  commitmentId?: string | null;
-  createdBy: string;
-  requestKey: string;
-}): Promise<{ row: CashFulfilment; created: boolean }> {
-  const id = newId('cfu');
-  const at = journeyNow();
-  await getDb().run(
-    `INSERT INTO cash_fulfilments
-       (id, project_id, opportunity_id, agreement_id, path, work_kind, work_ref, commitment_id,
-        state, request_key, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'CREATED', ?, ?, ?, ?)
-     ON CONFLICT (project_id, request_key) DO NOTHING`,
-    [
-      id,
-      input.projectId,
-      input.opportunityId,
-      input.agreementId,
-      input.path,
-      input.workKind,
-      input.workRef,
-      input.commitmentId ?? null,
-      input.requestKey,
-      input.createdBy,
-      at,
-      at,
-    ],
-  );
-  const row = await getDb().get<Row>(
-    'SELECT * FROM cash_fulfilments WHERE project_id = ? AND request_key = ?',
-    [input.projectId, input.requestKey],
-  );
-  return { row: mapFulfilment(row!), created: s(row!.id) === id };
-}
-
-export async function fulfilmentsFor(opportunityId: string): Promise<CashFulfilment[]> {
-  const rows = await getDb().all<Row>(
-    'SELECT * FROM cash_fulfilments WHERE opportunity_id = ? ORDER BY created_at, id',
-    [opportunityId],
-  );
-  return rows.map(mapFulfilment);
-}
-
-export async function getFulfilment(id: string): Promise<CashFulfilment | null> {
-  const row = await getDb().get<Row>('SELECT * FROM cash_fulfilments WHERE id = ?', [id]);
-  return row ? mapFulfilment(row) : null;
-}
-
-/** CREATED → PERFORMED with the evidence, guarded. */
-export async function markFulfilmentPerformed(id: string, evidence: string): Promise<boolean> {
-  const at = journeyNow();
-  const res = await getDb().run(
-    `UPDATE cash_fulfilments
-        SET state = 'PERFORMED', performed_evidence = ?, performed_at = ?, updated_at = ?
-      WHERE id = ? AND state = 'CREATED'`,
-    [evidence, at, at, id],
-  );
-  return res.changes === 1;
-}
-
-/** PERFORMED → DELIVERED with acceptance evidence, guarded. */
-export async function markFulfilmentDelivered(input: {
-  id: string;
-  observationId?: string | null;
-  evidence?: string | null;
-}): Promise<boolean> {
-  const at = journeyNow();
-  const res = await getDb().run(
-    `UPDATE cash_fulfilments
-        SET state = 'DELIVERED', accepted_observation_id = ?, acceptance_evidence = ?,
-            delivered_at = ?, ended_at = ?, updated_at = ?
-      WHERE id = ? AND state = 'PERFORMED'`,
-    [input.observationId ?? null, input.evidence ?? null, at, at, at, input.id],
-  );
-  return res.changes === 1;
-}
-
-/** CREATED | PERFORMED → FAILED | CANCELLED, guarded. */
-export async function endFulfilment(input: {
-  id: string;
-  to: 'FAILED' | 'CANCELLED';
-  reason: string;
-}): Promise<boolean> {
-  const at = journeyNow();
-  const res = await getDb().run(
-    `UPDATE cash_fulfilments SET state = ?, state_reason = ?, ended_at = ?, updated_at = ?
-      WHERE id = ? AND state IN ('CREATED', 'PERFORMED')`,
-    [input.to, input.reason, at, at, input.id],
-  );
-  return res.changes === 1;
-}
-
-/* ------------------------------------------------------------------------- */
 /* Outcomes                                                                   */
 /* ------------------------------------------------------------------------- */
 
@@ -441,12 +311,4 @@ export async function agreementsInProject(projectId: string): Promise<CashAgreem
     [projectId],
   );
   return rows.map(mapAgreement);
-}
-
-export async function fulfilmentsInProject(projectId: string): Promise<CashFulfilment[]> {
-  const rows = await getDb().all<Row>(
-    'SELECT * FROM cash_fulfilments WHERE project_id = ? ORDER BY created_at, id',
-    [projectId],
-  );
-  return rows.map(mapFulfilment);
 }

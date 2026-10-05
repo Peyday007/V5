@@ -56,7 +56,7 @@ export interface NewInvoice {
   requestedBy: string;
 }
 
-/** Insert once per agreed amount; a repeat returns the row already there. */
+/** Insert once per agreed amount while one is live; a repeat returns the live row. */
 export async function draftInvoice(input: NewInvoice): Promise<{ invoice: CashInvoice; created: boolean }> {
   const id = newId('cin');
   const at = nowIso();
@@ -66,7 +66,7 @@ export async function draftInvoice(input: NewInvoice): Promise<{ invoice: CashIn
         customer_name, customer_email, tax_treatment, due_date, description,
         state, requested_by, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFTED', ?, ?, ?)
-     ON CONFLICT (project_id, pipeline_entry_id) DO NOTHING`,
+     ON CONFLICT (project_id, pipeline_entry_id) WHERE state NOT IN ('VOID', 'FAILED') DO NOTHING`,
     [
       id,
       input.projectId,
@@ -86,7 +86,10 @@ export async function draftInvoice(input: NewInvoice): Promise<{ invoice: CashIn
   );
   const row = (
     await getDb().all<CashInvoiceRow>(
-      'SELECT * FROM cash_invoices WHERE project_id = ? AND pipeline_entry_id = ?',
+      // The live one: a VOID or FAILED invoice for the same agreed amount is
+      // history, and the partial unique index lets the agreement be billed again.
+      `SELECT * FROM cash_invoices WHERE project_id = ? AND pipeline_entry_id = ?
+         AND state NOT IN ('VOID', 'FAILED')`,
       [input.projectId, input.pipelineEntryId],
     )
   )[0];

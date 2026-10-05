@@ -7091,6 +7091,8 @@ export const CASH_MONEY_KINDS = [
   'COST',
   'UNPAID_COMMITMENT',
   'COMMITMENT_PAID',
+  /** A supplier liability that shrank before it was paid: owed no longer, never a cost. */
+  'COMMITMENT_RELEASED',
   'RESERVE',
   'RESERVE_RELEASE',
 ] as const;

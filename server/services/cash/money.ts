@@ -81,6 +81,21 @@ function sum(totals: Partial<Record<CashMoneyKind, number>>, kind: CashMoneyKind
  * one deal's — so they are counted only when the whole project is being asked
  * about. An opportunity's own position is about what that transaction did.
  */
+/**
+ * The one contribution formula: payments, less refunds, less every incremental
+ * cost incurred — paid (`COST`) or still owed (unpaid commitments). Each cost
+ * once: a `COMMITMENT_PAID` closes the owed amount at the moment its `COST`
+ * exists. Fees are `COST` entries, so they are in it exactly once.
+ */
+export function contributionFrom(input: {
+  payments: number;
+  refunds: number;
+  costs: number;
+  unpaidCommitments: number;
+}): number {
+  return input.payments - input.refunds - input.costs - input.unpaidCommitments;
+}
+
 export async function cashPosition(input: {
   projectId: string;
   opportunityId?: string;
@@ -109,7 +124,7 @@ export async function cashPosition(input: {
   const refunds = sum(totals, 'REFUND');
   const costs = sum(totals, 'COST');
   const unpaid = sum(totals, 'UNPAID_COMMITMENT');
-  const paidOff = sum(totals, 'COMMITMENT_PAID');
+  const paidOff = sum(totals, 'COMMITMENT_PAID') + sum(totals, 'COMMITMENT_RELEASED');
   const reserved = sum(totals, 'RESERVE');
   const released = sum(totals, 'RESERVE_RELEASE');
 
@@ -121,7 +136,8 @@ export async function cashPosition(input: {
 
   // Incurred and not yet paid. `COMMITMENT_PAID` is the moment a bill becomes a
   // `COST`, so it is subtracted here and the cost is subtracted above; the same
-  // dollar is never counted in both at once.
+  // dollar is never counted in both at once. `COMMITMENT_RELEASED` is a bill
+  // that shrank before it was paid: no longer owed, and never a cost.
   const unpaidCommitments = Math.max(0, unpaid - paidOff);
 
   const held = input.opportunityId ? 0 : await heldCentsForProject(input.projectId, input.currency ?? 'USD');
@@ -131,8 +147,10 @@ export async function cashPosition(input: {
 
   // Earned, not received: a contribution is what the transaction produced, and
   // it is complete whether or not the provider has paid out yet. Every
-  // incremental cost is in it, including the tests that produced no sale.
-  const completedContribution = payments - refunds - costs;
+  // incremental cost is in it, including the tests that produced no sale — and
+  // a cost incurred and not yet paid is a cost, so it is in it too. The one
+  // formula; `journey/position.ts` reads it rather than restating it.
+  const completedContribution = contributionFrom({ payments, refunds, costs, unpaidCommitments });
 
   return {
     currency: input.currency ?? 'USD',
@@ -228,6 +246,7 @@ const EFFECTS: Record<CashMoneyKind, string> = {
   REFUND: 'reverses earnings and is paid out of available funds',
   COST: 'has already left the account',
   UNPAID_COMMITMENT: 'is owed and reduces deployable cash',
+  COMMITMENT_RELEASED: 'is a supplier bill that no longer has to be paid, and is never a cost',
   COMMITMENT_PAID: 'closes an amount owed, which the matching cost records',
   RESERVE: 'protects cash from being redeployed',
   RESERVE_RELEASE: 'makes protected cash deployable again',

@@ -34,6 +34,8 @@
  * forget.
  */
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
+import { fulfillmentEvents, fulfillmentForAgreement, getFulfillment } from '../../repos/cashFulfillment.ts';
+import { getAgreement } from '../../repos/cashJourney.ts';
 import { readCapability } from './capabilities.ts';
 import { evidenceCard } from './card.ts';
 import { getOperation } from '../../repos/idempotency.ts';
@@ -176,5 +178,68 @@ export async function readNeedCondition(need: CashNeed): Promise<NeedVerificatio
     };
   }
 
+  if (need.requestKey.startsWith('fulfillment:')) return readFulfillmentCondition(need);
+
+  return null;
+}
+
+/**
+ * The conditions `journey/fulfillment.ts` raises, read from the rows they
+ * name — never from what somebody typed when closing the need. Read from the
+ * repositories rather than through that service, because it raises needs and
+ * `needs.ts` reads this module: going through it would be the import cycle
+ * this file's header already explains.
+ */
+async function readFulfillmentCondition(need: CashNeed): Promise<NeedVerification | null> {
+  const parts = need.requestKey!.split(':');
+  const what = parts[1];
+  if (what === 'requirement') {
+    const agreement = await getAgreement(parts[2] ?? '');
+    if (!agreement) return null;
+    const declared = await fulfillmentForAgreement(agreement.id);
+    const settled = declared !== null || agreement.state === 'RELEASED';
+    return {
+      holds: settled,
+      reading: declared
+        ? 'A fulfillment is declared for this agreement.'
+        : agreement.state === 'RELEASED'
+          ? 'The agreement was released, so nothing is owed to fulfil.'
+          : 'Nothing says how this agreement is fulfilled yet.',
+    };
+  }
+  const fulfillment = await getFulfillment(parts[2] ?? '');
+  if (!fulfillment) return null;
+  if (what === 'work') {
+    return {
+      holds: Boolean(fulfillment.workCreatedAt),
+      reading: fulfillment.workCreatedAt
+        ? `Work exists for this obligation${fulfillment.workRef ? ` (${fulfillment.workRef})` : ''}.`
+        : 'No work exists for this obligation yet.',
+    };
+  }
+  const events = await fulfillmentEvents(fulfillment.id);
+  const outcomeOf = (refundKey: string) =>
+    events.find((one) => one.refundKey === refundKey && (one.kind === 'REFUND_CONFIRMED' || one.kind === 'REFUND_FAILED'));
+  if (what === 'refund' || what === 'refund-unknown') {
+    const refundKey = parts[3] ?? '';
+    const settled = outcomeOf(refundKey);
+    return {
+      holds: Boolean(settled),
+      reading: settled
+        ? `Refund ${refundKey} is ${settled.kind === 'REFUND_CONFIRMED' ? 'confirmed' : 'recorded as not sent'}.`
+        : `Refund ${refundKey} is not resolved yet.`,
+    };
+  }
+  if (what === 'refund-decision') {
+    // A refund that later failed returned nothing, so it does not answer what
+    // the buyer is owed.
+    const standing = events.some(
+      (one) => one.kind === 'REFUND_AUTHORIZED' && outcomeOf(one.refundKey ?? '')?.kind !== 'REFUND_FAILED',
+    );
+    return {
+      holds: standing,
+      reading: standing ? 'A refund is authorized and has not failed.' : 'No standing refund has been authorized.',
+    };
+  }
   return null;
 }

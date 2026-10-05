@@ -113,18 +113,20 @@ export function nextFor(position: DealPosition, record: ExecutionRecord | undefi
   if (position.paymentInFlight) {
     out.push({ step: 'A payment attempt is in flight or its outcome is unknown.', owner: 'PERSON', why: 'An unknown outcome is settled by checking the provider, never by sending again.' });
   }
-  const live = position.fulfilments.filter((one) => one.state !== 'FAILED' && one.state !== 'CANCELLED');
-  if (live.length === 0) {
-    out.push({ step: 'Create the fulfilment: the work, in the machinery that does it.', owner: 'PERSON', why: 'Which path delivers this is a decision about who does the work.' });
-  } else if (live.some((one) => one.state === 'CREATED')) {
-    const brainWork = live.some((one) => one.state === 'CREATED' && (one.workKind === 'RUSSELL_CANDIDATE' || one.workKind === 'FACTORY_CHANGE_REQUEST'));
-    out.push({
-      step: 'The work is being performed.',
-      owner: brainWork ? 'BRAIN' : 'PERSON',
-      why: brainWork ? 'Brain reads the work as performed from its own rows when it finishes.' : 'Record what was performed, with evidence, once it is.',
-    });
-  } else if (live.some((one) => one.state === 'PERFORMED')) {
-    out.push({ step: 'The buyer accepts the work against the acceptance condition.', owner: 'BUYER', why: 'Delivery is complete only on acceptance evidence.' });
+  // Each live agreement's obligation says what it is waiting on, in its own
+  // words (`fulfillment.ts`); the view only says whose turn it is.
+  for (const obligation of position.obligations) {
+    if (obligation.agreement.state !== 'AGREED' || obligation.complete) continue;
+    const label = position.obligations.length > 1 ? ` (${obligation.agreement.deliverable})` : '';
+    for (const step of obligation.personNext) {
+      out.push({ step: `${step}${label}`, owner: 'PERSON', why: obligation.outstanding[0] ?? 'The obligation is not complete.' });
+    }
+    for (const step of obligation.brainNext) {
+      out.push({ step: `${step}${label}`, owner: 'BRAIN', why: 'From the obligation’s own rows; nothing is needed from a person.' });
+    }
+    if (obligation.acceptance.state === 'AWAITING_ACCEPTANCE') {
+      out.push({ step: `The buyer accepts the work against: ${obligation.acceptance.condition}`, owner: 'BUYER', why: 'Delivered is not accepted.' });
+    }
   }
   if (p.unsettledCents > 0) {
     out.push({ step: `${p.unsettledCents} cents paid has not settled yet.`, owner: 'PERSON', why: 'A settlement is recorded with the bank or provider payout reference; until then it is not cash.' });

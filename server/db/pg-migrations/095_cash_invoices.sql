@@ -5,8 +5,8 @@
 -- Nothing here is a figure Brain chose. The amount and the currency are copied
 -- from the PIPELINE_AGREED ledger entry the row names (`pipeline_entry_id`),
 -- and the customer, the tax treatment and the due date are what a person
--- recorded. UNIQUE (project_id, pipeline_entry_id): one agreed amount is
--- invoiced once, whichever request or tick gets there first.
+-- recorded. One live invoice per agreed amount (the partial unique index
+-- below), whichever request or tick gets there first.
 --
 -- state is where the invoice is, never a verdict about the money:
 --   DRAFTED    a person recorded the terms; nothing has been sent
@@ -48,9 +48,15 @@ CREATE TABLE cash_invoices (
   last_read_at        TEXT,
   requested_by        TEXT NOT NULL,
   created_at          TEXT NOT NULL,
-  updated_at          TEXT NOT NULL,
-  UNIQUE (project_id, pipeline_entry_id)
+  updated_at          TEXT NOT NULL
 );
+
+-- One LIVE invoice per agreed amount. A VOID or FAILED invoice is history and
+-- keeps its row; the agreement it billed may be invoiced again, which the
+-- partial index allows and the full one it replaced did not.
+CREATE UNIQUE INDEX cash_invoices_live_entry
+  ON cash_invoices (project_id, pipeline_entry_id)
+  WHERE state NOT IN ('VOID', 'FAILED');
 
 CREATE INDEX cash_invoices_project_state ON cash_invoices (project_id, state);
 CREATE INDEX cash_invoices_opportunity ON cash_invoices (opportunity_id);

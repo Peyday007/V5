@@ -540,3 +540,82 @@ export async function sendIssueInvoice(input: IssueInvoiceRequest): Promise<Exte
     principalId: 'cash-issue-invoice',
   });
 }
+
+/* --------------------------------------------------------------------------
+ * Refunds
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Paying a buyer back, through the same machinery every commercial effect goes
+ * through (ported from PR #124, and the only refund path in the post-sale
+ * model).
+ *
+ * A refund is money leaving the account, so it is exactly the effect invariant
+ * 26 exists for: a timeout is not evidence it did not happen, and an unknown
+ * outcome is recorded as unknown and never resent. `runExternalEffect` already
+ * refuses to resend against an unresolved attempt; this adds nothing to that
+ * rule and has no second way to send.
+ *
+ * `PROJECT` scope for the reason the other commercial effects carry it: the
+ * obligation and which authorized refund this is are unique in the project.
+ */
+export const REFUND_NAMESPACE: OperationNamespace = {
+  name: 'cash.refund',
+  version: 1,
+  principalScope: 'PROJECT',
+  retention: 'PERMANENT',
+};
+
+/** The refund adapter that can send now — registered and healthy — or none. */
+export function refundAdapter(): EffectAdapter | null {
+  return usableAdapter(REFUND_NAMESPACE);
+}
+
+/**
+ * The idempotency key for one authorized refund, from server facts only — the
+ * obligation and the refund key its authorization was recorded under — so the
+ * tick asking again after a restart reaches the same reservation.
+ */
+export function refundEffectKey(fulfillmentId: string, refundKey: string): string {
+  return `refund.${fulfillmentId}.${refundKey}`;
+}
+
+export async function sendRefund(input: {
+  projectId: string;
+  opportunityId: string;
+  fulfillmentId: string;
+  refundKey: string;
+  amountCents: number;
+  currency: string;
+  reason: string;
+  /**
+   * The provider references of the payments being refunded, read from the
+   * ledger. Without them a real provider could not know which charge to
+   * return; Brain never chooses among them.
+   */
+  paymentReferences: string[];
+}): Promise<ExternalOutcome> {
+  const adapter = refundAdapter();
+  if (!adapter) {
+    throw new Error(
+      `No usable effect adapter is registered for "${REFUND_NAMESPACE.name}", so a refund cannot ` +
+        'be sent by Brain. The caller should have raised a need instead.',
+    );
+  }
+  return await runExternalEffect({
+    adapter,
+    namespace: REFUND_NAMESPACE,
+    projectId: input.projectId,
+    key: refundEffectKey(input.fulfillmentId, input.refundKey),
+    businessId: `${input.fulfillmentId}:${input.refundKey}`,
+    correlationId: `refund:${input.opportunityId}:${input.fulfillmentId}:${input.refundKey}`,
+    payload: {
+      amountCents: input.amountCents,
+      currency: input.currency,
+      reason: input.reason,
+      paymentReferences: input.paymentReferences,
+    },
+    principalType: 'SYSTEM',
+    principalId: 'cash-refund',
+  });
+}

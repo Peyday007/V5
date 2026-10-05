@@ -1,34 +1,40 @@
 -- brain:rebuild-without-foreign-keys
 --
 -- ---------------------------------------------------------------------------
--- THE FIRST-DOLLAR JOURNEY: what happens between READY and COLLECTED
+-- THE POST-SALE MODEL: what happens after a buyer agrees, with one owner per fact
 -- ---------------------------------------------------------------------------
 --
--- Cash Mode could record that a buyer was reached (a `cash_actions` row written
--- from a provider receipt), that money was agreed (a `PIPELINE_AGREED` entry),
--- that money arrived and that it settled. Four facts in between had nowhere to
--- live, so each was either a sentence in a note or a button:
+-- Two branches modelled this independently (the first-dollar journey and the
+-- fulfillment/refund work). This migration is the one model that survived; the
+-- ownership matrix is docs/POST-SALE.md, and CLAUDE.md §53 says why each owner
+-- won. In one line each:
 --
---   * what was agreed — the deliverable, the acceptance condition and the
---     evidence that the buyer agreed — rather than only an amount;
---   * which invoice bills which agreement, so nothing bills an agreement twice
---     and nothing bills an amount nobody can point at an agreement for;
---   * what the buyer said, as an observation with a source rather than hidden
---     state;
---   * whether the work was actually done and accepted, rather than `DELIVERING`
---     written on a button press.
+--   cash_observations       what a buyer (or the channel) said, as evidence
+--   cash_agreements         what was agreed: amount, deliverable, acceptance
+--                           condition, evidence — and its PIPELINE_AGREED entry
+--   cash_invoices (104)     what was billed against which agreement
+--   cash_money_entries      every figure: payments, settlements, refunds, costs,
+--                           supplier liabilities (invariant 37)
+--   cash_fulfillments       the obligation one agreement creates: who performs
+--                           it and the work Brain created for it
+--   cash_fulfillment_events what happened to that obligation, append-only:
+--                           work completed, delivered (wholly or partly),
+--                           accepted, rejected, failed — and each refund's
+--                           authorization and outcome
+--   cash_outcomes           what a finished deal taught, written once from
+--                           terminal evidence
 --
--- And one fact had no way to be undone: an agreement that falls through left
--- its `PIPELINE_AGREED` entry counting for ever. The ledger is append-only, so
--- the undo is an entry of its own, `PIPELINE_RELEASED`, which needs the inline
--- CHECK widened — and SQLite cannot widen one in place, so `cash_money_entries`
--- is rebuilt by §32's procedure. Nothing references it by foreign key, which
--- `PRAGMA foreign_key_check` checks rather than this comment asserting. Every
--- row is carried across with its rowid, every index is recreated.
+-- No table here has a column saying where an obligation or a deal stands; that
+-- is derived on the read path (services/cash/journey/). The two state columns
+-- that remain are decisions, not readings: an agreement a person released, and
+-- an invoice whose provider record Brain read.
 --
--- Nothing in these tables holds a balance. Every figure is still derived from
--- `cash_money_entries` (invariant 37); these tables say *what the money was
--- for*, which is the half a ledger row cannot carry.
+-- The ledger's kind CHECK widens by two entries, PIPELINE_RELEASED (agreed work
+-- that will no longer be billed) and COMMITMENT_RELEASED (a supplier liability
+-- that shrank before it was paid), each the append-only undo of an entry that
+-- would otherwise count for ever. SQLite cannot widen an inline CHECK in place,
+-- so cash_money_entries is rebuilt by §32's procedure: nothing references it by
+-- foreign key, every row is carried with its rowid, every index recreated.
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE cash_money_entries_rebuilt (
@@ -46,6 +52,7 @@ CREATE TABLE cash_money_entries_rebuilt (
                         'COST',
                         'UNPAID_COMMITMENT',
                         'COMMITMENT_PAID',
+                        'COMMITMENT_RELEASED', -- owed to a supplier and no longer owed: a cost that changed
                         'RESERVE',
                         'RESERVE_RELEASE'
                       )),
@@ -85,23 +92,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_money_key
   ON cash_money_entries(project_id, idempotency_key);
 
 -- ---------------------------------------------------------------------------
--- cash_observations — what the buyer (or the world) said, as evidence
+-- cash_observations — what the buyer (or the channel) said, as evidence
 -- ---------------------------------------------------------------------------
 --
--- A buyer's reply is evidence about a transaction and is kept the way evidence
--- is kept: a closed kind, a source, a reference somebody can check, and the
--- moment it was observed. `BUYER_SILENT` is the one kind Brain derives — from a
--- contact with no reply inside the window — and it is recorded as an
--- observation with its basis rather than inferred at every read, so the
--- learning loop counts the same silence the screen showed.
+-- Pre-agreement only. Acceptance or rejection of delivered work is a fact about
+-- one obligation and lives in cash_fulfillment_events; a supplier's price is a
+-- ledger entry. BUYER_SILENT is the one kind Brain derives, from a contact with
+-- no reply inside the window.
 CREATE TABLE IF NOT EXISTS cash_observations (
   id              TEXT PRIMARY KEY,
   project_id      TEXT NOT NULL REFERENCES projects(id),
   opportunity_id  TEXT NOT NULL,
   kind            TEXT NOT NULL CHECK (kind IN (
                     'BUYER_REPLIED', 'BUYER_ACCEPTED', 'BUYER_COUNTERED', 'BUYER_DECLINED',
-                    'BUYER_SILENT', 'CONTACT_UNDELIVERABLE', 'DELIVERY_ACCEPTED',
-                    'DELIVERY_REJECTED', 'SUPPLIER_COST_CHANGED')),
+                    'BUYER_SILENT', 'CONTACT_UNDELIVERABLE')),
   source          TEXT NOT NULL CHECK (source IN ('PROVIDER', 'PERSON', 'BRAIN')),
   channel         TEXT,
   evidence_ref    TEXT NOT NULL,
@@ -123,10 +127,10 @@ CREATE INDEX IF NOT EXISTS idx_cash_observations_opportunity
 -- cash_agreements — what was agreed, not only how much
 -- ---------------------------------------------------------------------------
 --
--- An agreement writes its `PIPELINE_AGREED` entry in the same transaction,
--- keyed from the agreement, so the two cannot disagree; releasing one writes
--- `PIPELINE_RELEASED` the same way. `evidence_ref` is NOT NULL because an
--- agreement nobody can point at is "they seemed interested".
+-- The only writer of PIPELINE_AGREED / PIPELINE_RELEASED, under keys
+-- `agreement:<id>` / `agreement-released:<id>`, in the same transaction as the
+-- row. The deliverable and acceptance condition are the obligation's promise
+-- and its acceptance condition: they are not copied anywhere else.
 CREATE TABLE IF NOT EXISTS cash_agreements (
   id                    TEXT PRIMARY KEY,
   project_id            TEXT NOT NULL REFERENCES projects(id),
@@ -157,75 +161,82 @@ CREATE INDEX IF NOT EXISTS idx_cash_agreements_opportunity
   ON cash_agreements(opportunity_id, state);
 
 -- ---------------------------------------------------------------------------
--- Invoices are `cash_invoices` (104 / pg 095, the provider adapters), and that
--- is the only invoice table. An invoice bills one `PIPELINE_AGREED` entry, and
--- an agreement writes exactly one, keyed `agreement:<id>` — so which agreement
--- an invoice bills is a join through the ledger rather than a second column
--- that could disagree with it. `services/cash/invoicing.ts` refuses to draft
--- one against an entry no live agreement stands behind.
--- ---------------------------------------------------------------------------
-
--- ---------------------------------------------------------------------------
--- cash_fulfilments — work created, work performed, work accepted
+-- cash_fulfillments — the obligation one agreement creates
 -- ---------------------------------------------------------------------------
 --
--- `work_kind` / `work_ref` point at the existing machinery that does the work —
--- a Russell idea, a Factory change request, a cash job, a commitment to a
--- supplier — so "performed" is read from that row where the row can say it and
--- recorded with evidence where it cannot. `DELIVERED` needs acceptance evidence
--- (`accepted_observation_id` or `acceptance_evidence`), never a state change
--- somebody wanted.
-CREATE TABLE IF NOT EXISTS cash_fulfilments (
-  id                       TEXT PRIMARY KEY,
-  project_id               TEXT NOT NULL REFERENCES projects(id),
-  opportunity_id           TEXT NOT NULL,
-  agreement_id             TEXT NOT NULL REFERENCES cash_agreements(id),
-  path                     TEXT NOT NULL CHECK (path IN (
-                             'BRAIN_RESEARCH', 'FACTORY_SOFTWARE', 'PERSON', 'CONTRACTOR',
-                             'SUPPLIER', 'OTHER')),
-  work_kind                TEXT NOT NULL CHECK (work_kind IN (
-                             'RUSSELL_CANDIDATE', 'FACTORY_CHANGE_REQUEST', 'CASH_JOB',
-                             'COMMITMENT', 'EXTERNAL')),
-  work_ref                 TEXT NOT NULL,
-  commitment_id            TEXT,
-  state                    TEXT NOT NULL CHECK (state IN (
-                             'CREATED', 'PERFORMED', 'DELIVERED', 'FAILED', 'CANCELLED')),
-  performed_evidence       TEXT,
-  accepted_observation_id  TEXT,
-  acceptance_evidence      TEXT,
-  state_reason             TEXT,
-  request_key              TEXT NOT NULL,
-  created_by               TEXT NOT NULL,
-  created_at               TEXT NOT NULL,
-  performed_at             TEXT,
-  delivered_at             TEXT,
-  ended_at                 TEXT,
-  updated_at               TEXT NOT NULL,
-  CHECK (state NOT IN ('PERFORMED', 'DELIVERED') OR performed_evidence IS NOT NULL),
-  CHECK (state <> 'DELIVERED'
-         OR accepted_observation_id IS NOT NULL OR acceptance_evidence IS NOT NULL)
+-- One per agreement. Who performs it and the work Brain created for it; never
+-- a stage. `work_attempt` is advanced by the same guarded UPDATE that releases
+-- failed work, so a retry's Factory key can never collide with the failed one.
+CREATE TABLE IF NOT EXISTS cash_fulfillments (
+  id                 TEXT PRIMARY KEY,
+  project_id         TEXT NOT NULL REFERENCES projects(id),
+  opportunity_id     TEXT NOT NULL,
+  agreement_id       TEXT NOT NULL REFERENCES cash_agreements(id),
+  kind               TEXT NOT NULL CHECK (kind IN ('SOFTWARE', 'RESEARCH', 'PERSON', 'SUPPLIER')),
+  performer          TEXT NOT NULL,
+  repository_remote  TEXT,
+  repository_root    TEXT,
+  base_branch        TEXT,
+  mutation_scope     TEXT,
+  supplier_name      TEXT,
+  work_ref           TEXT,
+  work_created_at    TEXT,
+  work_attempt       INTEGER NOT NULL DEFAULT 0 CHECK (work_attempt >= 0),
+  declared_by        TEXT NOT NULL,
+  created_at         TEXT NOT NULL,
+  updated_at         TEXT NOT NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_fulfilments_key
-  ON cash_fulfilments(project_id, request_key);
-CREATE INDEX IF NOT EXISTS idx_cash_fulfilments_opportunity
-  ON cash_fulfilments(opportunity_id, state);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_fulfillments_agreement
+  ON cash_fulfillments(agreement_id);
+CREATE INDEX IF NOT EXISTS idx_cash_fulfillments_opportunity
+  ON cash_fulfillments(project_id, opportunity_id);
 
 -- ---------------------------------------------------------------------------
--- cash_outcomes — what a commercial test actually taught, append-only
+-- cash_fulfillment_events — what happened to the obligation, append-only
 -- ---------------------------------------------------------------------------
 --
--- One row per measured fact, each carrying the rows it was read from. Nothing
--- here is a rule: whether several outcomes amount to one is derived on the read
--- path with the sample beside it, and a single result is reported as a single
--- result. Never updated, never deleted — a later outcome is a later row.
+-- `request_key` makes one logical event one row, so a retry after a lost
+-- response is the same outcome. `refund_key` ties a refund's authorization to
+-- its outcome; the money of a confirmed refund is a REFUND ledger entry.
+CREATE TABLE IF NOT EXISTS cash_fulfillment_events (
+  id              TEXT PRIMARY KEY,
+  project_id      TEXT NOT NULL REFERENCES projects(id),
+  fulfillment_id  TEXT NOT NULL REFERENCES cash_fulfillments(id),
+  opportunity_id  TEXT NOT NULL,
+  kind            TEXT NOT NULL CHECK (kind IN (
+                    'WORK_COMPLETE', 'DELIVERED', 'PARTIALLY_DELIVERED', 'ACCEPTED', 'REJECTED',
+                    'FAILED', 'SUPPLIER_FAILED', 'ABANDONED',
+                    'REFUND_AUTHORIZED', 'REFUND_CONFIRMED', 'REFUND_UNKNOWN', 'REFUND_FAILED')),
+  detail          TEXT NOT NULL,
+  evidence_ref    TEXT,
+  amount_cents    INTEGER CHECK (amount_cents IS NULL OR amount_cents > 0),
+  refund_key      TEXT,
+  recorded_by     TEXT NOT NULL,
+  request_key     TEXT NOT NULL,
+  created_at      TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_fulfillment_events_key
+  ON cash_fulfillment_events(fulfillment_id, request_key);
+CREATE INDEX IF NOT EXISTS idx_cash_fulfillment_events_fulfillment
+  ON cash_fulfillment_events(fulfillment_id, created_at);
+
+-- ---------------------------------------------------------------------------
+-- cash_outcomes — what a finished deal taught, written once
+-- ---------------------------------------------------------------------------
+--
+-- One row per measured fact, each carrying its basis (the rows it was read
+-- from). Keyed by the terminal point it describes — a contact answered or the
+-- deal ended, an agreement, a delivered obligation, a confirmed refund — so a
+-- pass that asks again writes nothing. Never updated, never deleted.
 CREATE TABLE IF NOT EXISTS cash_outcomes (
   id              TEXT PRIMARY KEY,
   project_id      TEXT NOT NULL REFERENCES projects(id),
   opportunity_id  TEXT NOT NULL,
   kind            TEXT NOT NULL CHECK (kind IN (
                     'CONTACT_RESULT', 'OFFERED_PRICE', 'ACCEPTED_PRICE', 'TIME_TO_AGREEMENT',
-                    'FULFILMENT_DURATION', 'ACTUAL_COST', 'REFUNDED', 'REALIZED_CONTRIBUTION',
+                    'FULFILLMENT_DURATION', 'ACTUAL_COST', 'REFUNDED', 'REALIZED_CONTRIBUTION',
                     'FAILURE_REASON')),
   mechanism       TEXT,
   channel         TEXT,
