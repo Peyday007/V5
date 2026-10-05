@@ -478,16 +478,21 @@ export async function issueOne(invoice: CashInvoice, pass: InvoicingPass): Promi
     // Young means its claimer may still be inside the send: only the owner of
     // a send decides about it then (`settleIssue`), never a second pass.
     const old = Date.now() - Date.parse(invoice.updatedAt) > ABANDONED_CLAIM_MS;
-    // Reserved with no attempt open: nothing is in flight and nothing is
-    // unknown at the provider — refused unprocessed, or never attempted. The
-    // engine would *send* on re-entry, so the row goes back to DRAFTED and
-    // meets every check first, guarded on the very row this pass read so a
-    // claim made since cannot be undone by it.
-    const nothingInFlight =
+    // Nothing reached the provider: never reserved, or reserved and every
+    // attempt either never left INTENT (opened, never sent) or was sent and
+    // refused unprocessed (ended FAILED while the operation stayed open). The
+    // engine would *send* on re-entry here, so the row goes back to DRAFTED
+    // and meets every check first, guarded on the very row this pass read so
+    // a claim made since cannot be undone by it. An attempt that ended any
+    // other way — confirmed, uncertain, abandoned — may be at the provider,
+    // and is only ever asked about.
+    const nothingReachedProvider =
       operation === null ||
       (operation.state === 'RESERVED' &&
-        (await listAttempts(operation.id)).every((attempt) => attempt.endedAt !== null));
-    if (nothingInFlight) {
+        (await listAttempts(operation.id)).every(
+          (attempt) => attempt.phase === 'INTENT' || (attempt.endedAt !== null && attempt.outcome === 'FAILED'),
+        ));
+    if (nothingReachedProvider) {
       if (old) {
         await moveInvoice({
           id: invoice.id,

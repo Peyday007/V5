@@ -981,6 +981,79 @@ describe('agreement and invoice', () => {
     expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('VOID');
   });
 
+  /** One confirmed send, then the engine's rows reshaped into a crash at a chosen statement. */
+  async function crashAfterSend(attemptShape: { phase: string; outcome: string | null; ended: boolean }) {
+    const id = await executing();
+    await agree(id, 40_000);
+    let sent = 0;
+    registerAdapter({
+      name: 'test.invoice',
+      effectClass: 'EXTERNAL_OPAQUE',
+      namespace: ISSUE_INVOICE_NAMESPACE.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (): Promise<SendOutcome> => {
+        sent += 1;
+        return { kind: 'CONFIRMED', receiptRef: `in_${sent}` };
+      },
+    });
+    const drafted = await draftFor(id);
+    if (!drafted.ok) throw new Error('not drafted');
+    await runInvoicing(projectId);
+    expect(sent).toBe(1);
+    const [op] = await getDb().all<{ id: string }>(
+      'SELECT id FROM idempotency_operations WHERE project_id = ? AND namespace = ?',
+      [projectId, ISSUE_INVOICE_NAMESPACE.name],
+    );
+    await getDb().run(
+      "UPDATE idempotency_operations SET state = 'RESERVED', completed_at = NULL, result_ref = NULL, failure_category = NULL, recover_after = '2020-01-01T00:00:00.000Z' WHERE id = ?",
+      [op!.id],
+    );
+    await getDb().run('UPDATE effect_attempts SET phase = ?, outcome = ?, ended_at = ? WHERE operation_id = ?', [
+      attemptShape.phase,
+      attemptShape.outcome,
+      attemptShape.ended ? '2020-01-01T00:00:00.000Z' : null,
+      op!.id,
+    ]);
+    await getDb().run("UPDATE cash_invoices SET state = 'UNCERTAIN', provider_invoice_id = NULL, updated_at = '2020-01-01T00:00:00.000Z' WHERE id = ?", [drafted.value.id]);
+    return { id, invoiceId: drafted.value.id, sends: () => sent };
+  }
+
+  it('a send confirmed at the provider whose operation was never closed stays asked about, never drafted and silently voided', async () => {
+    const deal = await crashAfterSend({ phase: 'CONFIRMED', outcome: 'SUCCEEDED', ended: true });
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId, opportunityId: deal.id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, currency: 'USD',
+          verifiedReference: 'bank-confirmed-crash', idempotencyKey: `pay:${deal.id}:confirmed-crash`, actorRef: userId,
+          appliesTo: 'OUTSIDE_INVOICES',
+        })
+      ).ok,
+    ).toBe(true);
+    await runInvoicing(projectId);
+    await runInvoicing(projectId);
+    // The provider holds it: never DRAFTED, never VOID, and never sent again.
+    expect(deal.sends()).toBe(1);
+    expect((await listInvoices({ projectId, opportunityId: deal.id }))[0]!.state).not.toMatch(/^(DRAFTED|VOID)$/);
+  });
+
+  it('an attempt opened and never sent is drafted again and meets every check, never sent from UNCERTAIN', async () => {
+    const deal = await crashAfterSend({ phase: 'INTENT', outcome: null, ended: false });
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId, opportunityId: deal.id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, currency: 'USD',
+          verifiedReference: 'bank-intent-crash', idempotencyKey: `pay:${deal.id}:intent-crash`, actorRef: userId,
+          appliesTo: 'OUTSIDE_INVOICES',
+        })
+      ).ok,
+    ).toBe(true);
+    await runInvoicing(projectId);
+    await runInvoicing(projectId);
+    expect(deal.sends()).toBe(1);
+    expect((await listInvoices({ projectId, opportunityId: deal.id }))[0]!.state).toBe('VOID');
+  });
+
   it('an agreement answers only the latest contact before it, and never a contact the buyer already ignored', () => {
     const at = (iso: string) => ({ createdAt: iso });
     const first = at('2026-10-01T00:00:00.000Z');
