@@ -110,7 +110,8 @@ export async function executionRecord(input: {
   const { pnl } = await dealPosition({ opportunity, currency });
   const agreed = pnl.agreedRevenueCents;
   const refunds = pnl.refundsCents;
-  const paid = Math.max(0, pnl.customerPaymentsCents - refunds);
+  // Credited, not gross: a second payment owed back is not money toward the agreement.
+  const paid = pnl.creditedPaymentsCents;
 
   const attempts = await effectAttemptsFor(opportunity.projectId, opportunity.id);
   const nextOccurrence = String(actions.length + 1);

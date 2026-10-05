@@ -12374,6 +12374,29 @@ table are unchanged in kind.
   Brain's charge already covered has the second payment *recorded*, with
   `invoice-paid-twice:` asking for a refund — never absorbed into the first
   payment's settlement, which would hide the refund that is owed.
+  **That second payment was still credit by every other reading, and the final
+  review of the integration found it.** `invoiceable` subtracted it and
+  nothing else did, so `owed`, the payment state, `collectable()`, the
+  execution record's outstanding figure and the hand-payment cap all read the
+  gross amount: a second agreement read paid, an unpaid invoice for it read
+  owed nothing, and the deal could reach COLLECTED on money owed back to the
+  buyer. `dealPosition` now computes it once — `creditedPaymentsCents` is
+  payments less the larger of the owed-back money and refunds, and
+  `owedBackCents` is what is still to be paid back — and every comparison with
+  what was agreed or billed reads those. A deal with money owed back is not
+  collectable however the rest reads.
+- **An invoice is claimed before it is sent, never checked and then sent.**
+  The coverage check, the check that Brain's own charge is not in flight and
+  the move `DRAFTED → UNCERTAIN` are one decision under the cash lock, and the
+  send follows. UNCERTAIN means "may be at the provider", which is exactly
+  true while the request is out, so a payment or a release landing mid-send
+  asks a person to void it there instead of voiding the row being sent, and a
+  remainder cannot be drafted beside it. Before this, a draft voided mid-send
+  still reached the buyer, and when a remainder had been drafted beside it the
+  late `VOID → ISSUED` move hit the live-invoice index and the issued invoice
+  left tracking altogether. A claim a crash abandoned before the effect was
+  reserved (`findExternalOperation` says none was) goes back to DRAFTED after
+  ten minutes and meets every check again, rather than being sent past them.
 - **A refund is a state machine bounded by money that has not left.**
   - Authorization happens under the cash lock, against
     `paid − refunded − unresolved`.
@@ -12396,8 +12419,17 @@ table are unchanged in kind.
   read it. The old project formula skipped unpaid liabilities, so it reported a
   deal as more profitable than its own position said.
 - **Learning is written once, from terminal evidence.**
-  - Silence is learned only once a deal has ended or an agreement exists, so a
-    late reply is learned as the reply.
+  - An agreement recorded after a contact *is* that contact's answer, whether
+    or not anybody also recorded the reply as an observation. Silence is never
+    derived for such a contact and is learned only once a deal ended without
+    one, so a late reply is learned as the reply. The first version learned a
+    buyer who signed as silent, in an append-only row nothing corrects.
+  - `OFFERED_PRICE` is the price in the words that reached the buyer, not the
+    card's price when the tick happens to run. It is written only when the card
+    still composes the exact message digest every send intent of that contact
+    carried; otherwise no row states the offer in cents and nothing is learned.
+    The first version read today's card, so a sourced price replacing a
+    proposal after the contact rewrote what had been offered.
   - Each `cash_outcomes` row is keyed by its figure.
   - A change after the end is a new row keyed by the ledger entry that caused
     it.
@@ -12409,8 +12441,15 @@ table are unchanged in kind.
 backends. Sandbox adapters sit only at the provider boundary, and every effect
 is counted. No real buyer has been contacted and no real money has moved. No
 deployment has a refund adapter, so `ISSUE_A_REFUND` reads MISSING and a person
-pays refunds out and confirms them. Build 3's autonomous funnel is not part of
-this model and stays on its own branch.
+pays refunds out and confirms them. Build 3's autonomous funnel landed in
+production as #128, and the two halves are one system rather than two proofs:
+`tests/cashAutonomousFunnel.test.ts` walks one opportunity the funnel found and
+readied, with no person answering a fact, through contact, agreement, invoice,
+payment, fulfilment, settlement, contribution and learning, across a restart
+and a replay that double nothing. It needed the sprint to hold capital first —
+the opening the funnel found needs money out before money comes back, and with
+nothing deployable Brain contacts the buyer and correctly declines to begin
+execution.
 
 ## Repository map
 

@@ -147,6 +147,15 @@ export interface DealPnl {
    * never both counted.
    */
   contributionCents: number;
+  /**
+   * Payments that count toward what was agreed and billed: gross payments less
+   * a second payment of an already-paid invoice, less refunds — the larger of
+   * the two, since a refund of that second payment is the same money. A
+   * payment owed back to the buyer is never credit toward an agreement.
+   */
+  creditedPaymentsCents: number;
+  /** A second payment of an already-paid invoice, not yet refunded: owed back. */
+  owedBackCents: number;
   /** Billed and not yet paid. */
   owedByBuyerCents: number;
   /** Agreed and not yet billed — what a next invoice may be for. */
@@ -229,9 +238,17 @@ export async function dealPosition(input: {
     .filter((one) => one.opportunityId === opportunity.id && one.state === 'HELD' && one.currency === currency)
     .reduce((sum, one) => sum + one.amountCents, 0);
 
+  // A buyer paying an invoice a second time is that invoice's money too —
+  // owed back, never credit that makes another agreement paid or unbillable.
+  // Every comparison of payments with what was agreed or billed reads these
+  // three, so no reader can count the owed-back money as payment.
+  const overpaidInvoices = await invoiceOverpaymentCents(opportunity.id, currency);
+  const credited = Math.max(0, payments - overpaidInvoices);
+  const creditedNet = Math.max(0, payments - Math.max(overpaidInvoices, refunds));
+  const owedBack = Math.max(0, overpaidInvoices - refunds);
   // A payment the buyer made reduces what they owe; a refund Brain paid back
   // does not make them owe it again.
-  const owed = Math.max(0, invoiced - payments);
+  const owed = Math.max(0, invoiced - credited);
   // What an invoice that expired unpaid left is billable again; what was paid
   // against it is not.
   //
@@ -248,9 +265,6 @@ export async function dealPosition(input: {
   // take-payment for that amount, a person who said which, or a person's later
   // attribution. A hand payment nobody tied stays here, and a provider read
   // beside one is held rather than counted twice.
-  // A buyer paying an invoice a second time is that invoice's money too —
-  // owed back, never credit that makes another agreement unbillable.
-  const overpaidInvoices = await invoiceOverpaymentCents(opportunity.id, currency);
   const paidOutsideInvoices = Math.max(0, payments - paidAgainstInvoices - overpaidInvoices);
   const invoiceable = Math.max(0, agreedRevenue - invoiced - pendingInvoice - paidOutsideInvoices);
   const uncoveredPending = Math.max(
@@ -266,7 +280,7 @@ export async function dealPosition(input: {
   let paymentState: PaymentState;
   if (agreedRevenue <= 0 && payments <= 0) paymentState = 'NOTHING_OWED';
   else if (paymentInFlight) paymentState = 'PAYMENT_PENDING';
-  else if (paidNet > 0 && paidNet >= agreedRevenue && owed === 0) {
+  else if (creditedNet > 0 && creditedNet >= agreedRevenue && owed === 0) {
     paymentState = settled >= paidNet ? 'SETTLED' : 'PAID_UNSETTLED';
   } else if (payments > 0) paymentState = 'PARTIALLY_PAID';
   else if (invoiced > 0) paymentState = 'OUTSTANDING';
@@ -309,6 +323,8 @@ export async function dealPosition(input: {
       unpaidCommitmentsCents: unpaid,
       heldCommitmentsCents: held,
       contributionCents: contributionFrom({ payments, refunds, costs, unpaidCommitments: unpaid }),
+      creditedPaymentsCents: creditedNet,
+      owedBackCents: owedBack,
       owedByBuyerCents: owed,
       invoiceableCents: invoiceable,
       uncoveredPendingCents: uncoveredPending,
@@ -345,8 +361,16 @@ export function collectable(position: DealPosition): { ok: true } | { ok: false;
   if (p.agreedRevenueCents <= 0) {
     return { ok: false, reason: 'Nothing is agreed on this piece, so there is nothing to collect.' };
   }
-  if (p.owedByBuyerCents > 0 || p.customerPaymentsCents - p.refundsCents < p.agreedRevenueCents) {
+  if (p.owedByBuyerCents > 0 || p.creditedPaymentsCents < p.agreedRevenueCents) {
     return { ok: false, reason: 'Not everything agreed has been paid yet.' };
+  }
+  if (p.owedBackCents > 0) {
+    return {
+      ok: false,
+      reason:
+        'The buyer paid an invoice twice and the second payment has not been refunded; money owed back ' +
+        'is not collected revenue.',
+    };
   }
   if (p.unsettledCents > 0) {
     return {

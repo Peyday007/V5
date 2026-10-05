@@ -109,3 +109,23 @@ export interface CashOutcome {
   requestKey: string;
   createdAt: string;
 }
+
+/**
+ * The agreement that answers a contact, or none: one recorded after it, with no
+ * later contact sent before that agreement (the buyer answered the latest one),
+ * and no silence observed for the contact before the agreement existed (a
+ * buyer who ignored a contact and agreed after a follow-up did not answer the
+ * first). The one rule the tick's silence derivation and learning both read.
+ */
+export function agreementAnswering<
+  C extends { createdAt: string },
+  A extends { createdAt: string },
+>(contact: C, contacts: readonly C[], agreements: readonly A[], silencedAt: string | null): A | null {
+  for (const agreement of agreements) {
+    if (agreement.createdAt < contact.createdAt) continue;
+    if (contacts.some((other) => other.createdAt > contact.createdAt && other.createdAt <= agreement.createdAt)) continue;
+    if (silencedAt !== null && silencedAt < agreement.createdAt) continue;
+    return agreement;
+  }
+  return null;
+}

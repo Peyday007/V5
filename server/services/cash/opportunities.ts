@@ -41,7 +41,7 @@ import { countActions, recordAction } from '../../repos/cashActions.ts';
 import { cardFact, cardFactsFor, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { getMoneyEntry, moneyEntryByKey, recordMoney, totalsByKind, unattributedPersonPayments } from '../../repos/cashLedger.ts';
+import { getMoneyEntry, invoiceOverpaymentCents, moneyEntryByKey, recordMoney, totalsByKind, unattributedPersonPayments } from '../../repos/cashLedger.ts';
 import { agreementsFor, getAgreement } from '../../repos/cashJourney.ts';
 import { unresolvedRefundCents } from '../../repos/cashFulfillment.ts';
 import { getInvoice, listInvoices, moveInvoice } from '../../repos/cashInvoices.ts';
@@ -1457,8 +1457,12 @@ export async function recordMoneyEvent(input: {
           opportunityId: input.opportunityId,
           currency: input.currency,
         });
-        // Net of refunds: money paid back may be paid again.
-        const paid = Number(totals.CUSTOMER_PAYMENT ?? 0) - Number(totals.REFUND ?? 0);
+        // Net of refunds — money paid back may be paid again — and of a second
+        // payment of an already-paid invoice, which is owed back rather than
+        // payment toward any agreement (`journey/position.ts` reads the same).
+        const owedBackGross = await invoiceOverpaymentCents(input.opportunityId, input.currency);
+        const paid =
+          Number(totals.CUSTOMER_PAYMENT ?? 0) - Math.max(owedBackGross, Number(totals.REFUND ?? 0));
         if (paid + input.amountCents > agreed && readOfInvoice) {
           /*
            * A person recorded money nobody tied to an invoice, and the

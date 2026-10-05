@@ -26,8 +26,24 @@
  * Brain itself asked — a bucket round, a deep dive, or a card need — and the
  * test only ever answers candidates Brain created.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, restartDatabase } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { createAuthority } from '../server/repos/cashAuthority.ts';
+import { ALWAYS_PROHIBITED_COMMERCIAL, COMMERCIAL_ACTIONS } from '../server/services/cash/authority.ts';
+import { advanceWithinAuthority, operate } from '../server/services/cash/operate.ts';
+import { cashPosition } from '../server/services/cash/money.ts';
+import { recordObservation } from '../server/services/cash/journey/deal.ts';
+import { requestInvoice } from '../server/services/cash/invoicing.ts';
+import { dealPosition } from '../server/services/cash/journey/position.ts';
+import { agreementsFor, outcomesFor } from '../server/repos/cashJourney.ts';
+import { listInvoices } from '../server/repos/cashInvoices.ts';
+import { clearPaymentReader, registerPaymentReader } from '../server/services/cash/providers/payments.ts';
+import type { InvoiceReading } from '../server/services/cash/providers/stripe.ts';
+import { COMMERCIAL_EFFECTS } from '../server/services/cash/effects.ts';
+import { clearAdapters, registerAdapter, type EffectAdapter } from '../server/services/effects/adapter.ts';
+import { agree, fulfil } from './helpers/cashDeal.ts';
+import { recordMoneyEvent } from '../server/services/cash/opportunities.ts';
 import { createUser, createWorker, grantMembership } from '../server/repos/identity.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration } from '../server/repos/research.ts';
@@ -801,4 +817,205 @@ describe('a money field is read from a figure, never from a sentence', () => {
     expect(figureFor('exposure', 'A $30,000,000 machine is required.', 'USD')).toBeNull();
     expect(MAX_COLUMN_CENTS).toBe(2_147_483_647);
   });
+});
+
+/*
+ * The whole money stack as one system. The two halves were each proven
+ * separately — this file to READY_TO_TEST, `cashFirstDollar` from a card a
+ * test filled in — and nothing held one opportunity across the seam. Here the
+ * opening the autonomous funnel found and readied is the one Brain contacts,
+ * agrees, invoices, collects, fulfils, settles and learns from. Only the
+ * providers are fakes; every transition is the service a route or the tick
+ * calls, and a restart and a replay in the middle must double nothing.
+ */
+describe('one opportunity from discovery to learning, across the seam', () => {
+  const sends: Record<string, Record<string, unknown>[]> = {};
+  const readings: Record<string, InvoiceReading> = {};
+
+  function sandbox(action: keyof typeof COMMERCIAL_EFFECTS, prefix: string): void {
+    sends[action] ??= [];
+    const list = sends[action]!;
+    const adapter: EffectAdapter = {
+      name: `sandbox.${action.toLowerCase()}`,
+      effectClass: 'EXTERNAL_OPAQUE',
+      namespace: COMMERCIAL_EFFECTS[action].namespace.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (request) => {
+        list.push(request.payload as Record<string, unknown>);
+        return { kind: 'CONFIRMED', receiptRef: `${prefix}-${list.length}` };
+      },
+    };
+    registerAdapter(adapter);
+  }
+
+  function connect(): void {
+    clearAdapters();
+    sandbox('CONTACT_BUYER', 'msg');
+    sandbox('QUOTE_AND_INVOICE', 'inv');
+    registerPaymentReader({
+      name: 'sandbox.invoice_payments',
+      provider: 'sandbox',
+      health: () => ({ usable: true, reason: 'sandbox' }),
+      read: async (id) =>
+        readings[id] ?? {
+          kind: 'READ', status: 'open', hostedUrl: `https://pay.example/${id}`, number: `N-${id}`,
+          amountPaidCents: 0, currency: 'USD', chargeId: null, paidAt: null, balance: null,
+        },
+    });
+  }
+
+  let clock = Date.now();
+  const pass = async () => {
+    clock += 10 * 60 * 1000;
+    await operate(projectId, new Date(clock).toISOString());
+  };
+
+  async function entries(opportunityId: string): Promise<Record<string, number>> {
+    const rows = await getDb().all<{ kind: string; n: number }>(
+      'SELECT kind, COUNT(*) AS n FROM cash_money_entries WHERE opportunity_id = ? GROUP BY kind',
+      [opportunityId],
+    );
+    return Object.fromEntries(rows.map((one) => [one.kind, Number(one.n)]));
+  }
+
+  afterEach(() => {
+    clearAdapters();
+    clearPaymentReader();
+  });
+
+  it('discovers, qualifies, contacts, agrees, invoices, collects, fulfils, settles and learns', async () => {
+    // DISCOVERY → SIGNAL → CANDIDATE → QUALIFIED → READY_TO_TEST, autonomously.
+    const { final, reading, observed } = await drive();
+    expect(observed[0]!.tier).toBe('SIGNAL');
+    expect(reading.tier).toBe('READY_TO_TEST');
+    expect(final.state).toBe('READY');
+    const id = final.id;
+
+    // A person's standing commercial grant, and the providers connected.
+    await createAuthority({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'Cash Mode commercial authority',
+      allowedActions: [...COMMERCIAL_ACTIONS],
+      prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+      maxCommittedCents: 500_000,
+      maxPerActionCents: 300_000,
+      maxConcurrent: 3,
+      currency: 'USD',
+    });
+    // The opening needs money out before money comes back, so the sprint has
+    // capital; without it Brain contacts and correctly declines to execute.
+    const capital = await recordMoneyEvent({
+      projectId,
+      kind: 'CAPITAL_IN',
+      amountCents: 50_000,
+      currency: 'USD',
+      verifiedReference: 'owner transfer 2026-10-05',
+      idempotencyKey: 'capital:seam',
+      actorRef: userId,
+    });
+    expect(capital.ok).toBe(true);
+    connect();
+
+    // CONTACT: Brain reaches the one published address, by itself.
+    await advanceWithinAuthority(projectId);
+    expect((await getOpportunity(id))!.state).toBe('EXECUTING');
+    expect(sends.CONTACT_BUYER).toHaveLength(1);
+    expect(sends.CONTACT_BUYER![0]).toMatchObject({ to: 'procurement@westfield-drainage.example' });
+
+    // BUYER RESPONSE is evidence; AGREEMENT is its own owner.
+    const reply = await recordObservation({
+      opportunityId: id,
+      kind: 'BUYER_ACCEPTED',
+      source: 'PERSON',
+      evidenceRef: 'reply 2026-10-05 "proceed at USD 2,000"',
+      actorRef: userId,
+    });
+    expect(reply.ok).toBe(true);
+    const agreement = await agree(id, 200_000, userId);
+
+    // A restart between the agreement and the invoice: nothing is resent.
+    clearAdapters();
+    await restartDatabase();
+    connect();
+    await pass();
+    expect(sends.CONTACT_BUYER).toHaveLength(1);
+
+    // INVOICE: the agreement's amount, the person's terms; the tick issues it.
+    const drafted = await requestInvoice({
+      projectId,
+      opportunityId: id,
+      customerName: 'Westfield Drainage Authority',
+      customerEmail: 'accounts@westfield-drainage.example',
+      taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31',
+      actorRef: userId,
+    });
+    expect(drafted.ok).toBe(true);
+    if (drafted.ok) expect(drafted.value.amountCents).toBe(200_000);
+    await pass();
+    await pass();
+    expect(sends.QUOTE_AND_INVOICE).toHaveLength(1);
+    const [issued] = await listInvoices({ projectId, opportunityId: id });
+    expect(issued).toMatchObject({ state: 'ISSUED', amountCents: 200_000, providerInvoiceId: 'inv-1' });
+
+    // PAYMENT is earned, not cash.
+    readings['inv-1'] = {
+      kind: 'READ', status: 'paid', hostedUrl: null, number: 'N-inv-1', amountPaidCents: 200_000,
+      currency: 'USD', chargeId: 'ch-inv-1', paidAt: new Date().toISOString(),
+      balance: { id: 'txn-inv-1', status: 'pending', currency: 'USD', amountCents: 200_000, feeCents: 0, availableOn: null },
+    };
+    await pass();
+    expect((await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' })).paymentState).toBe(
+      'PAID_UNSETTLED',
+    );
+    expect((await cashPosition({ projectId, currency: 'USD' })).availableFundsCents).toBe(50_000);
+
+    // FULFILMENT → DELIVERY → ACCEPTANCE, each its own fact. Paid is not done.
+    await fulfil(agreement, userId);
+    await pass();
+    expect((await getOpportunity(id))!.state).toBe('DELIVERING');
+
+    // SETTLEMENT and the provider's fee, once each.
+    readings['inv-1'] = {
+      ...(readings['inv-1'] as Extract<InvoiceReading, { kind: 'READ' }>),
+      balance: { id: 'txn-inv-1', status: 'available', currency: 'USD', amountCents: 200_000, feeCents: 5_830, availableOn: new Date().toISOString() },
+    };
+    await pass();
+    await pass();
+    expect((await getOpportunity(id))!.state).toBe('COLLECTED');
+    await pass();
+
+    // CONTRIBUTION from rows: settled less the fee, nothing counted twice.
+    const deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
+    expect(deal.stage).toBe('COMPLETE');
+    expect(deal.pnl).toMatchObject({
+      agreedRevenueCents: 200_000,
+      customerPaymentsCents: 200_000,
+      settledCashCents: 200_000,
+      unsettledCents: 0,
+      contributionCents: 194_170,
+      owedByBuyerCents: 0,
+    });
+
+    // LEARNING: terminal evidence, once, carrying the price research found.
+    const learned = await outcomesFor({ projectId, opportunityId: id });
+    expect(learned.find((one) => one.kind === 'CONTACT_RESULT')!.valueText).toBe('BUYER_ACCEPTED');
+    expect(learned.find((one) => one.kind === 'ACCEPTED_PRICE')!.valueCents).toBe(200_000);
+
+    // A replay of every pass, and a second restart, change nothing anywhere.
+    const before = { money: await entries(id), learned: learned.length };
+    clearAdapters();
+    await restartDatabase();
+    connect();
+    for (let again = 0; again < 4; again += 1) await pass();
+    await tick('autonomous');
+    expect(await entries(id)).toEqual(before.money);
+    expect(before.money).toEqual({ PIPELINE_AGREED: 1, CUSTOMER_PAYMENT: 1, SETTLEMENT: 1, COST: 1 });
+    expect((await outcomesFor({ projectId, opportunityId: id })).length).toBe(before.learned);
+    expect([sends.CONTACT_BUYER!.length, sends.QUOTE_AND_INVOICE!.length]).toEqual([1, 1]);
+    expect(await agreementsFor(id)).toHaveLength(1);
+  }, 180_000);
 });

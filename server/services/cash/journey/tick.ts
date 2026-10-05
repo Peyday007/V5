@@ -27,12 +27,14 @@ import { getOpportunity, transitionOpportunity, listOpportunities } from '../../
 import { getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
 import { actionsFor } from '../../../repos/cashActions.ts';
 import {
+  agreementsFor,
   agreementsInProject,
   insertObservation,
   observationsFor,
   opportunitiesInJourney,
 } from '../../../repos/cashJourney.ts';
 import { ensureAgreementLedger } from './deal.ts';
+import { agreementAnswering } from '../../../domain/cashJourney.ts';
 import { advanceFulfillment, moveToDelivering, type FulfillmentPass } from './fulfillment.ts';
 import { collectable, dealPosition } from './position.ts';
 import { recordOutcomes } from './learning.ts';
@@ -93,8 +95,10 @@ export async function advanceJourney(
     {
       const contacts = (await actionsFor(listed.id)).filter((one) => one.action === 'CONTACT_BUYER');
       const observed = await observationsFor(listed.id);
+      const agreements = await agreementsFor(listed.id);
       for (const contact of contacts) {
-        const answered = observed.some(
+        // The agreement that answers this contact answers it, observation or not.
+        const answered = agreementAnswering(contact, contacts, agreements, null) !== null || observed.some(
           (one) => one.kind !== 'BUYER_SILENT' && one.kind.startsWith('BUYER_') && one.observedAt >= contact.createdAt,
         ) || observed.some((one) => one.kind === 'CONTACT_UNDELIVERABLE' && one.observedAt >= contact.createdAt);
         const age = now.getTime() - new Date(contact.createdAt).getTime();

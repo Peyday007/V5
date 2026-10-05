@@ -19,8 +19,11 @@ import { actionsFor } from '../../../repos/cashActions.ts';
 import { insertOutcome, outcomesFor } from '../../../repos/cashJourney.ts';
 import { listMoneyEntries } from '../../../repos/cashLedger.ts';
 import { dealPosition } from './position.ts';
+import { contactOfferVersions } from '../effects.ts';
+import { composeBuyerMessage } from '../outreach.ts';
+import { offerVersion } from '../perform.ts';
 import type { CashOpportunity } from '../../../domain/types.ts';
-import type { CashOutcome, OutcomeKind } from '../../../domain/cashJourney.ts';
+import { agreementAnswering, type CashOutcome, type OutcomeKind } from '../../../domain/cashJourney.ts';
 
 /** Below this many observations a figure is an anecdote, and says so. */
 export const LESSON_MIN_SAMPLE = 3;
@@ -82,8 +85,14 @@ export async function recordOutcomes(opportunity: CashOpportunity, currency: str
     const silence = position.observations.find(
       (one) => one.kind === 'BUYER_SILENT' && one.observedAt >= contact.createdAt,
     );
+    // An agreement recorded after the contact is the buyer's answer whether or
+    // not anybody also recorded their reply as an observation: a buyer who
+    // signed is never learned as silent.
+    const agreedAfter = agreementAnswering(contact, contacts, position.agreements, silence?.observedAt ?? null);
     if (answered) {
       await write('CONTACT_RESULT', contact.id, { text: answered.kind }, `action ${contact.id}; observation ${answered.id}`);
+    } else if (agreedAfter) {
+      await write('CONTACT_RESULT', contact.id, { text: 'BUYER_ACCEPTED' }, `action ${contact.id}; agreement ${agreedAfter.id}`);
     } else if (silence && (ended || position.agreements.length > 0)) {
       await write(
         'CONTACT_RESULT',
@@ -92,8 +101,20 @@ export async function recordOutcomes(opportunity: CashOpportunity, currency: str
         `action ${contact.id}; observation ${silence.id}; no reply before the deal moved on`,
       );
     }
+    // What was offered is the price in the words that reached the buyer, not
+    // the card's price today. It is learned only when the card still composes
+    // exactly the message every send of this contact carried (the digest on
+    // its intent), so the card's price provably is the one sent; a contact
+    // sent before intents carried the message, or recorded by hand, or one
+    // whose card has changed since, offered a price no row states.
     if (opportunity.priceCents !== null) {
-      await write('OFFERED_PRICE', contact.id, { cents: opportunity.priceCents }, `action ${contact.id}; card price`);
+      const occurrence = contact.requestKey?.split(':').at(-1) ?? '';
+      const sent = occurrence ? await contactOfferVersions(opportunity.id, occurrence) : [];
+      const message = composeBuyerMessage(opportunity);
+      const now = message.ok ? offerVersion(`${message.to}\n${message.subject}\n${message.text}`) : null;
+      if (now && sent.length > 0 && sent.every((one) => one === now)) {
+        await write('OFFERED_PRICE', contact.id, { cents: opportunity.priceCents }, `action ${contact.id}; offer ${now}`);
+      }
     }
   }
 

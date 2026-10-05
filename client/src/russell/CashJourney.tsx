@@ -128,6 +128,12 @@ export function DealJourney({
         {money(p.settledCashCents, currency)}; costs {money(p.incrementalCostsCents + p.unpaidCommitmentsCents, currency)};
         contribution {money(p.contributionCents, currency)}.
       </p>
+      {p.owedBackCents > 0 ? (
+        <p className="rs-state rs-state-warn">
+          {money(p.owedBackCents, currency)} was paid twice on an invoice and is owed back to the buyer. It is not
+          payment toward any agreement, and the deal is not collected until it is refunded.
+        </p>
+      ) : null}
       {p.unbackedAgreedCents > 0 ? (
         <p className="rs-state rs-state-warn">
           {money(p.unbackedAgreedCents, currency)} is recorded as agreed with no agreement behind it, so it is never

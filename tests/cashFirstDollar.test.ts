@@ -55,7 +55,7 @@ import { getOpportunity } from '../server/repos/cashPortfolio.ts';
 import { actionsFor } from '../server/repos/cashActions.ts';
 import { cashPosition } from '../server/services/cash/money.ts';
 import { advanceJourney, RESPONSE_WINDOW_MS } from '../server/services/cash/journey/tick.ts';
-import { dealPosition } from '../server/services/cash/journey/position.ts';
+import { collectable, dealPosition } from '../server/services/cash/journey/position.ts';
 import { cashOutcomeLessons } from '../server/services/cash/journey/learning.ts';
 import { readObligations } from '../server/services/cash/journey/fulfillment.ts';
 import { agreementsFor, observationsFor, outcomesFor } from '../server/repos/cashJourney.ts';
@@ -716,7 +716,7 @@ describe('failure, refund and partial paths', () => {
     paymentReader();
     const piece = await qualified();
     await advanceWithinAuthority(projectId);
-    await agree(piece.id, 100_000);
+    const first = await agree(piece.id, 100_000);
     const occ = (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id].nextOccurrence;
     expect((await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: occ })).status).toBe(200);
     const [charge] = await getDb().all<{ id: string; pipeline: string }>(
@@ -741,9 +741,78 @@ describe('failure, refund and partial paths', () => {
     const needs = await getDb().all<{ request_key: string }>("SELECT request_key FROM cash_needs WHERE project_id = ?", [projectId]);
     expect(needs.filter((one) => one.request_key === `invoice-paid-twice:${invoice.id}`)).toHaveLength(1);
     // The second payment is owed back, never credit against the next agreement.
-    await agree(piece.id, 50_000);
-    const deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
+    const second = await agree(piece.id, 50_000);
+    let deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
     expect(deal.pnl.invoiceableCents).toBe(50_000);
+    // Nor is it payment by any other reading: the second agreement is unpaid,
+    // the money is owed back, and nothing can call the deal collected. (The
+    // final review reproduced all three reading the gross 200,000.)
+    expect(deal.pnl).toMatchObject({ customerPaymentsCents: 200_000, creditedPaymentsCents: 100_000, owedBackCents: 100_000 });
+    expect(deal.paymentState).toBe('PARTIALLY_PAID');
+    expect(collectable(deal).ok).toBe(false);
+    const shown = (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id];
+    expect(shown.money.outstandingCents).toBe(50_000);
+    // Brain's own charge settles; the deal still is not settled, because the
+    // second agreement's money has not arrived.
+    expect(
+      (await money({ opportunityId: piece.id, kind: 'SETTLEMENT', amountCents: 100_000, verifiedReference: 'payout-charge', idempotencyKey: `settlement:${piece.id}:charge` })).status,
+    ).toBe(200);
+    deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
+    expect(deal.paymentState).toBe('PARTIALLY_PAID');
+    expect(deal.pnl.owedByBuyerCents + deal.pnl.invoiceableCents).toBe(50_000);
+    // The buyer's real payment for the second agreement is not refused as
+    // "more than agreed" because of money that is owed back.
+    expect(
+      (await money({ opportunityId: piece.id, kind: 'CUSTOMER_PAYMENT', amountCents: 50_000, verifiedReference: 'bank-B', idempotencyKey: `payment:${piece.id}:B`, outsideInvoices: true })).status,
+    ).toBe(200);
+    deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
+    expect(deal.pnl.creditedPaymentsCents).toBe(150_000);
+    // Both delivered and accepted, every agreed cent credited: the money owed
+    // back is the one thing left, and it alone keeps the deal from COLLECTED.
+    await fulfilAndAccept(piece.id, first.id);
+    await fulfilAndAccept(piece.id, second.id);
+    deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
+    expect(deal.delivered).toBe(true);
+    // Still owed back, so still not collectable however the rest reads.
+    expect(deal.pnl.owedBackCents).toBe(100_000);
+    expect(collectable(deal)).toMatchObject({ ok: false, reason: expect.stringContaining('owed back') });
+  });
+
+  it('F11: learning records what was offered, never the card price as it reads later', async () => {
+    await granted();
+    provider('CONTACT_BUYER', 'msg');
+    paymentReader();
+    const piece = await qualified();
+    await advanceWithinAuthority(projectId);
+    const offeredBefore = (await getOpportunity(piece.id))!.priceCents;
+    // The card's price moves after the contact went out.
+    await getDb().run('UPDATE cash_opportunities SET price_cents = ? WHERE id = ?', [offeredBefore! + 50_000, piece.id]);
+    await act(piece.id, 'observe', { kind: 'BUYER_DECLINED', evidenceRef: 'reply: not now' });
+    await tick();
+    await tick();
+    const learned = await outcomesFor({ projectId, opportunityId: piece.id });
+    expect(learned.find((one) => one.kind === 'CONTACT_RESULT')?.valueText).toBe('BUYER_DECLINED');
+    // The price that reached the buyer is not the card's now, and no row says
+    // what it was in cents — so nothing is learned rather than the wrong figure.
+    expect(learned.filter((one) => one.kind === 'OFFERED_PRICE')).toEqual([]);
+  });
+
+  it('F12: a buyer who agreed with no reply recorded is never derived or learned as silent', async () => {
+    await granted();
+    provider('CONTACT_BUYER', 'msg');
+    paymentReader();
+    const piece = await qualified();
+    await advanceWithinAuthority(projectId);
+    // Agreed by a signed document; nobody recorded a reply observation.
+    await agree(piece.id, 90_000);
+    // Well past the response window.
+    clock += RESPONSE_WINDOW_MS * 2;
+    await tick();
+    await advanceJourney(projectId, new Date(clock));
+    expect((await observationsFor(piece.id)).filter((one) => one.kind === 'BUYER_SILENT')).toEqual([]);
+    await tick();
+    const learned = await outcomesFor({ projectId, opportunityId: piece.id });
+    expect(learned.find((one) => one.kind === 'CONTACT_RESULT')?.valueText).toBe('BUYER_ACCEPTED');
   });
 
   it('F05e: an invoice marked paid out of band is not a second payment; an unrelated hand payment does not block a real one', async () => {

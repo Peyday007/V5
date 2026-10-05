@@ -54,7 +54,7 @@
  * re-authorized by whoever acts on it.
  */
 import { listAdapters, type EffectAdapter } from '../effects/adapter.ts';
-import { runExternalEffect, type ExternalOutcome } from '../effects/external.ts';
+import { findExternalOperation, runExternalEffect, type ExternalOutcome } from '../effects/external.ts';
 import type { OperationNamespace } from '../effects/engine.ts';
 import { operationsByCorrelation } from '../../repos/idempotency.ts';
 import { cashEventsOfKind, recordCashEvent } from '../../repos/cashMode.ts';
@@ -320,6 +320,22 @@ export interface EffectIntent {
   at: string;
 }
 
+/**
+ * The offer digests (`offerVersion`) every send of one contact occurrence was
+ * made with, read from the intents written before each send. Empty when the
+ * contact was never sent by Brain — recorded by hand, or sent before intents
+ * carried the message — and then what reached the buyer is not on any row.
+ */
+export async function contactOfferVersions(opportunityId: string, occurrence: string): Promise<(string | null)[]> {
+  const out: (string | null)[] = [];
+  for (const event of await cashEventsOfKind(opportunityId, EFFECT_INTENT_KIND)) {
+    const detail = event.detail as Record<string, unknown>;
+    if (detail.action !== 'CONTACT_BUYER' || String(detail.occurrence ?? '') !== occurrence) continue;
+    out.push(typeof detail.subjectRef === 'string' ? detail.subjectRef : null);
+  }
+  return out;
+}
+
 /** The first intent recorded for this correlation, or none. */
 export async function intentFor(
   opportunityId: string,
@@ -537,8 +553,23 @@ export async function sendIssueInvoice(input: IssueInvoiceRequest): Promise<Exte
       description: input.description,
     },
     principalType: 'SYSTEM',
-    principalId: 'cash-issue-invoice',
+    principalId: ISSUE_INVOICE_PRINCIPAL,
   });
+}
+
+const ISSUE_INVOICE_PRINCIPAL = 'cash-issue-invoice';
+
+/** Whether the issue effect for this invoice row was ever reserved — see `findExternalOperation`. */
+export async function issueInvoiceReserved(projectId: string, invoiceId: string): Promise<boolean> {
+  return (
+    (await findExternalOperation({
+      namespace: ISSUE_INVOICE_NAMESPACE,
+      projectId,
+      principalType: 'SYSTEM',
+      principalId: ISSUE_INVOICE_PRINCIPAL,
+      key: issueInvoiceKey(invoiceId),
+    })) !== null
+  );
 }
 
 /* --------------------------------------------------------------------------

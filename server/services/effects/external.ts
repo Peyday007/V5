@@ -34,6 +34,7 @@ import {
   succeedOperation,
   takeOverOperation,
   beginAttemptOn,
+  findOperation,
 } from '../../repos/idempotency.ts';
 import {
   FINGERPRINT_VERSION,
@@ -590,4 +591,34 @@ async function resumeAfterCrash(
     operation: (await getOperation(operation.id)) ?? operation,
     reason,
   };
+}
+
+/**
+ * The operation an external effect reserved under this exact scope and key, or
+ * null when none was ever reserved.
+ *
+ * Null is evidence of one thing only: `runExternalEffect` never reached its
+ * reservation for this key, so no attempt was opened and nothing could have
+ * reached the provider. A caller that claimed a row before sending uses it to
+ * tell a claim a crash abandoned from a send in flight. The scope is computed
+ * here, from the same fields the reservation used, so no caller holds a second
+ * copy of the rule.
+ */
+export async function findExternalOperation(input: {
+  namespace: OperationNamespace;
+  projectId: string;
+  principalType: ActorType;
+  principalId: string;
+  key: string;
+}): Promise<IdempotencyOperation | null> {
+  const scope = scopeHash({
+    boundary: BRAIN_BOUNDARY,
+    projectId: input.projectId,
+    namespace: input.namespace.name,
+    namespaceVersion: input.namespace.version,
+    principalScope: input.namespace.principalScope,
+    principalType: input.principalType,
+    principalId: input.principalId,
+  });
+  return await findOperation(scope, fingerprintKey(input.key));
 }

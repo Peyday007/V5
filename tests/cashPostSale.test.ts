@@ -64,7 +64,7 @@ import { listInvoices, moveInvoice } from '../server/repos/cashInvoices.ts';
 import { fulfillmentEvents } from '../server/repos/cashFulfillment.ts';
 import { launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
 import { getOperation, operationsByCorrelation } from '../server/repos/idempotency.ts';
-import type { CashAgreement } from '../server/domain/cashJourney.ts';
+import { agreementAnswering, type CashAgreement } from '../server/domain/cashJourney.ts';
 
 const exec = promisify(execFile);
 
@@ -715,6 +715,184 @@ describe('agreement and invoice', () => {
     expect((await releaseAgreement({ agreementId: second!.id, reason: 'Scope cut.', actorRef: userId })).ok).toBe(true);
     expect((await providerRead(id, invoice.id, 150_000, 'ch_C')).ok).toBe(true);
     expect((await position(id)).pnl.customerPaymentsCents).toBe(150_000);
+  });
+
+  /*
+   * The send claims the draft under the cash lock before it reaches the
+   * provider. Before that claim, a payment or a release landing mid-send voided
+   * the very row being sent: the buyer received an invoice for money already
+   * paid, and in the second interleaving the live invoice fell out of tracking
+   * altogether when its VOID→ISSUED move collided with a remainder drafted
+   * beside it (final review of #130).
+   */
+  function blockingInvoiceProvider(during: () => Promise<void>): { sends: () => number } {
+    let sent = 0;
+    registerAdapter({
+      name: 'test.invoice',
+      effectClass: 'EXTERNAL_OPAQUE',
+      namespace: ISSUE_INVOICE_NAMESPACE.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async () => {
+        sent += 1;
+        await during();
+        return { kind: 'CONFIRMED', receiptRef: `in_sent_${sent}` };
+      },
+    });
+    return { sends: () => sent };
+  }
+  const draftFor = (id: string) =>
+    requestInvoice({
+      projectId,
+      opportunityId: id,
+      customerName: 'Owner',
+      customerEmail: 'owner@buyer.example',
+      taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31',
+      actorRef: userId,
+    });
+
+  it('a payment recorded while the invoice is at the provider leaves it live and asked about, never voided under the send', async () => {
+    const id = await executing();
+    await agree(id, 40_000);
+    let midSend: { ok: boolean; reason?: string } | null = null;
+    const provider = blockingInvoiceProvider(async () => {
+      midSend = await recordMoneyEvent({
+        projectId,
+        opportunityId: id,
+        kind: 'CUSTOMER_PAYMENT',
+        amountCents: 40_000,
+        currency: 'USD',
+        verifiedReference: 'bank-mid-send',
+        idempotencyKey: `pay:${id}:mid-send`,
+        actorRef: userId,
+        appliesTo: 'OUTSIDE_INVOICES',
+      });
+    });
+    expect((await draftFor(id)).ok).toBe(true);
+    await runInvoicing(projectId);
+    expect(provider.sends()).toBe(1);
+    expect(midSend!.ok).toBe(true);
+    const [invoice] = await listInvoices({ projectId, opportunityId: id });
+    // The provider holds it, so the row says so — never VOID over a live bill.
+    expect(invoice).toMatchObject({ state: 'ISSUED', providerInvoiceId: 'in_sent_1' });
+    const needs = (await listNeeds({ projectId, states: ['OPEN'] })).map((one) => one.requestKey ?? '');
+    expect(needs.some((key) => key.includes(invoice!.id))).toBe(true);
+  });
+
+  it('a remainder cannot be drafted beside an invoice in flight, so the live one is never lost from tracking', async () => {
+    const id = await executing();
+    await agree(id, 40_000);
+    let remainder: { ok: boolean; value?: { id: string } } | null = null;
+    blockingInvoiceProvider(async () => {
+      expect(
+        (
+          await recordMoneyEvent({
+            projectId,
+            opportunityId: id,
+            kind: 'CUSTOMER_PAYMENT',
+            amountCents: 10_000,
+            currency: 'USD',
+            verifiedReference: 'bank-partial',
+            idempotencyKey: `pay:${id}:partial`,
+            actorRef: userId,
+            appliesTo: 'OUTSIDE_INVOICES',
+          })
+        ).ok,
+      ).toBe(true);
+      remainder = await draftFor(id);
+    });
+    expect((await draftFor(id)).ok).toBe(true);
+    await runInvoicing(projectId);
+    const invoices = await listInvoices({ projectId, opportunityId: id });
+    // The request answers with the invoice already in flight, not a second one.
+    expect(invoices).toHaveLength(1);
+    if (remainder!.ok) expect(remainder!.value!.id).toBe(invoices[0]!.id);
+    // Issued and in the payment pass's reach: its payment would be read.
+    expect(invoices[0]).toMatchObject({ state: 'ISSUED', providerInvoiceId: 'in_sent_1' });
+  });
+
+  it('a claim a crash abandoned before reserving is drafted again and meets every check, then sends once', async () => {
+    const id = await executing();
+    await agree(id, 40_000);
+    const provider = blockingInvoiceProvider(async () => {});
+    const drafted = await draftFor(id);
+    expect(drafted.ok).toBe(true);
+    if (!drafted.ok) return;
+    // The process died between claiming the row and reserving the effect.
+    expect(await moveInvoice({ id: drafted.value.id, from: 'DRAFTED', to: 'UNCERTAIN', patch: {} })).toBe(true);
+    await getDb().run('UPDATE cash_invoices SET updated_at = ? WHERE id = ?', ['2020-01-01T00:00:00.000Z', drafted.value.id]);
+    await runInvoicing(projectId);
+    expect(provider.sends()).toBe(0);
+    expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('DRAFTED');
+    await runInvoicing(projectId);
+    await runInvoicing(projectId);
+    expect(provider.sends()).toBe(1);
+    expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('ISSUED');
+  });
+
+  it('a first send the provider refused unprocessed goes back to DRAFTED, so a payment since then voids it rather than it being sent', async () => {
+    const id = await executing();
+    await agree(id, 40_000);
+    let sent = 0;
+    let refuse = true;
+    registerAdapter({
+      name: 'test.invoice',
+      effectClass: 'EXTERNAL_OPAQUE',
+      namespace: ISSUE_INVOICE_NAMESPACE.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (): Promise<SendOutcome> => {
+        sent += 1;
+        return refuse
+          ? { kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true, detail: '429' }
+          : { kind: 'CONFIRMED', receiptRef: `in_${sent}` };
+      },
+    });
+    expect((await draftFor(id)).ok).toBe(true);
+    await runInvoicing(projectId);
+    expect(sent).toBe(1);
+    // Nothing was billed, so the row is a draft again, not "maybe at the provider".
+    expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('DRAFTED');
+    // The buyer pays another way before the next attempt.
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId,
+          opportunityId: id,
+          kind: 'CUSTOMER_PAYMENT',
+          amountCents: 40_000,
+          currency: 'USD',
+          verifiedReference: 'bank-after-429',
+          idempotencyKey: `pay:${id}:after-429`,
+          actorRef: userId,
+          appliesTo: 'OUTSIDE_INVOICES',
+        })
+      ).ok,
+    ).toBe(true);
+    refuse = false;
+    await runInvoicing(projectId);
+    await runInvoicing(projectId);
+    // Voided by the coverage check, never sent past it.
+    expect(sent).toBe(1);
+    expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('VOID');
+  });
+
+  it('an agreement answers only the latest contact before it, and never a contact the buyer already ignored', () => {
+    const at = (iso: string) => ({ createdAt: iso });
+    const first = at('2026-10-01T00:00:00.000Z');
+    const second = at('2026-10-09T00:00:00.000Z');
+    const agreement = { createdAt: '2026-10-10T00:00:00.000Z', id: 'agr' };
+    const contacts = [first, second];
+    // The follow-up is what was answered; the first contact was ignored.
+    expect(agreementAnswering(first, contacts, [agreement], null)).toBeNull();
+    expect(agreementAnswering(second, contacts, [agreement], null)).toBe(agreement);
+    // A silence observed before the agreement stands.
+    expect(agreementAnswering(first, [first], [agreement], '2026-10-08T00:00:00.000Z')).toBeNull();
+    // One contact, agreed with no reply recorded: that is the answer.
+    expect(agreementAnswering(first, [first], [agreement], null)).toBe(agreement);
+    // An agreement before the contact answers nothing.
+    expect(agreementAnswering(second, [second], [{ createdAt: '2026-10-05T00:00:00.000Z' }], null)).toBeNull();
   });
 
   it('an agreement released while its invoice was being sent leaves the provider’s invoice visible, not void', async () => {

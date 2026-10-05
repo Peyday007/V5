@@ -41,7 +41,7 @@ import {
   type ObservationSource,
 } from '../../../domain/cashJourney.ts';
 import { agreementLedgerKey } from './position.ts';
-import { listInvoices, moveInvoice } from '../../../repos/cashInvoices.ts';
+import { getInvoice, listInvoices, moveInvoice } from '../../../repos/cashInvoices.ts';
 import { moneyEntryByKey } from '../../../repos/cashLedger.ts';
 import { raiseNeed } from '../needs.ts';
 
@@ -336,14 +336,19 @@ export async function releaseAgreement(input: {
   if (entry) {
     for (const invoice of await listInvoices({ projectId: agreement.projectId, opportunityId: agreement.opportunityId })) {
       if (invoice.pipelineEntryId !== entry.id) continue;
-      if (invoice.state === 'DRAFTED') {
-        await moveInvoice({
+      let state = invoice.state;
+      if (state === 'DRAFTED') {
+        const voided = await moveInvoice({
           id: invoice.id,
           from: 'DRAFTED',
           to: 'VOID',
           patch: { stateReason: `The agreement was released before it was sent: ${input.reason.trim()}` },
         });
-      } else if (invoice.state === 'ISSUED' || invoice.state === 'UNCERTAIN') {
+        // A send claimed the draft first (`invoicing.ts`): it may now be at the
+        // provider, so it is asked about below rather than silently left live.
+        if (!voided) state = (await getInvoice(invoice.id))?.state ?? state;
+      }
+      if (state === 'ISSUED' || state === 'UNCERTAIN') {
         await raiseNeed({
           projectId: agreement.projectId,
           opportunityId: agreement.opportunityId,

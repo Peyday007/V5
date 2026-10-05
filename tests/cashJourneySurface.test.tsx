@@ -35,6 +35,8 @@ const DEAL: DealView = {
     unpaidCommitmentsCents: 0,
     heldCommitmentsCents: 0,
     contributionCents: 0,
+    creditedPaymentsCents: 0,
+    owedBackCents: 0,
     owedByBuyerCents: 0,
     invoiceableCents: 0,
     uncoveredPendingCents: 0,

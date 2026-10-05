@@ -42,7 +42,7 @@ import { recordAction } from '../../repos/cashActions.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
-import { ISSUE_INVOICE_NAMESPACE, sendIssueInvoice, adapterStatus, commercialOperationsFor } from './effects.ts';
+import { ISSUE_INVOICE_NAMESPACE, issueInvoiceReserved, sendIssueInvoice, adapterStatus, commercialOperationsFor } from './effects.ts';
 import { raiseNeed } from './needs.ts';
 import { recordMoneyEvent, voidUncoveredDrafts } from './opportunities.ts';
 import { usablePaymentReader } from './providers/payments.ts';
@@ -247,7 +247,12 @@ async function askToVoidReleased(invoice: CashInvoice, providerInvoiceId: string
   });
 }
 
-async function settleIssue(invoice: CashInvoice, outcome: ExternalOutcome, pass: InvoicingPass): Promise<void> {
+async function settleIssue(
+  invoice: CashInvoice,
+  outcome: ExternalOutcome,
+  pass: InvoicingPass,
+  firstSend = invoice.state !== 'UNCERTAIN',
+): Promise<void> {
   if (outcome.status === 'UNCERTAIN') {
     let moved =
       invoice.state === 'UNCERTAIN' ||
@@ -267,7 +272,7 @@ async function settleIssue(invoice: CashInvoice, outcome: ExternalOutcome, pass:
       });
       if (moved) await askToVoidReleased(invoice, null);
     }
-    if (moved && invoice.state !== 'UNCERTAIN') {
+    if (moved && (firstSend || !(await needForKey(invoice.projectId, `invoice-uncertain:${invoice.id}`)))) {
       await raiseNeed({
         projectId: invoice.projectId,
         opportunityId: invoice.opportunityId,
@@ -291,9 +296,16 @@ async function settleIssue(invoice: CashInvoice, outcome: ExternalOutcome, pass:
   if (outcome.status === 'FAILED' && outcome.operation.state !== 'FAILED') {
     // A refusal the provider documents as "nothing was processed" — a rate
     // limit, or a key not configured — leaves the operation open for another
-    // attempt, so the invoice stays where it was and the next pass tries again.
+    // attempt. Nothing was billed, so a row claimed for the send goes back to
+    // DRAFTED: the next attempt meets the authority, coverage and charge
+    // checks again rather than being sent past them from UNCERTAIN.
+    let current = invoice;
+    if (invoice.state === 'UNCERTAIN') {
+      await moveInvoice({ id: invoice.id, from: 'UNCERTAIN', to: 'DRAFTED', patch: {} });
+      current = (await getInvoice(invoice.id)) ?? invoice;
+    }
     await holdWithReason(
-      invoice,
+      current,
       `The provider did not process this yet (${outcome.operation.failureCategory ?? 'refused'}); Brain tries again on a later pass.`,
       pass,
     );
@@ -396,18 +408,38 @@ export async function issueOne(invoice: CashInvoice, pass: InvoicingPass): Promi
      * so it is checked again immediately before the send, under the cash lock,
      * and a draft the ledger has overtaken is voided rather than billed.
      */
-    const voided = await serializeCash(projectId, invoice.currency, () =>
-      voidUncoveredDrafts({
+    /*
+     * Claimed, not merely checked. The coverage check, the check that Brain's
+     * own charge is not in flight, and the move off DRAFTED are one decision
+     * under the cash lock, so nothing can void this draft between the check
+     * and the send: a payment recorded mid-send finds it UNCERTAIN — "may be
+     * at the provider", which is exactly true while the request is out — and
+     * asks a person to void it there rather than voiding a row whose invoice
+     * the buyer may be about to receive. The same holds for a release, and a
+     * remainder cannot be drafted beside it, because UNCERTAIN is live.
+     */
+    const claim = await serializeCash(projectId, invoice.currency, async () => {
+      const voided = await voidUncoveredDrafts({
         projectId,
         opportunityId: invoice.opportunityId,
         currency: invoice.currency,
         because: 'Paid another way before it was sent; voided rather than billed twice.',
-      }),
-    );
-    if (voided.length > 0) pass.voided.push(...voided);
-    if ((await getInvoice(invoice.id))?.state !== 'DRAFTED') return;
-    const opportunity = await getOpportunity(invoice.opportunityId);
-    if (opportunity && (await dealPosition({ opportunity, currency: invoice.currency })).paymentState === 'PAYMENT_PENDING') {
+      });
+      if ((await getInvoice(invoice.id))?.state !== 'DRAFTED') return { voided, claimed: false, pending: false };
+      const opportunity = await getOpportunity(invoice.opportunityId);
+      if (opportunity && (await dealPosition({ opportunity, currency: invoice.currency })).paymentState === 'PAYMENT_PENDING') {
+        return { voided, claimed: false, pending: true };
+      }
+      const claimed = await moveInvoice({
+        id: invoice.id,
+        from: 'DRAFTED',
+        to: 'UNCERTAIN',
+        patch: { stateReason: SENDING_REASON },
+      });
+      return { voided, claimed, pending: false };
+    });
+    if (claim.voided.length > 0) pass.voided.push(...claim.voided);
+    if (claim.pending) {
       await holdWithReason(
         invoice,
         'Brain’s own charge for this piece is still unresolved; the invoice is sent once the provider has answered, or voided if it went through.',
@@ -415,13 +447,43 @@ export async function issueOne(invoice: CashInvoice, pass: InvoicingPass): Promi
       );
       return;
     }
+    if (!claim.claimed) return;
+    await sendClaimed({ ...invoice, state: 'UNCERTAIN', stateReason: SENDING_REASON }, pass, true);
+    return;
   } else if (invoice.state === 'UNCERTAIN') {
+    /*
+     * A claim a crash abandoned before the effect was reserved never reached
+     * the provider — no reservation, no attempt, nothing sent — so it goes
+     * back to DRAFTED and meets every check again on the next pass, rather
+     * than being sent from here past them. Only a claim old enough that its
+     * own send cannot still be about to reserve: the window between the claim
+     * and the reservation is one process's next statement.
+     */
+    if (!(await issueInvoiceReserved(projectId, invoice.id))) {
+      // Unreserved and young: its own send is about to reserve, so this pass
+      // leaves it alone. Never sent from here — a first send happens only
+      // from DRAFTED, after every check.
+      if (Date.now() - Date.parse(invoice.updatedAt) > ABANDONED_CLAIM_MS) {
+        await moveInvoice({ id: invoice.id, from: 'UNCERTAIN', to: 'DRAFTED', patch: { stateReason: null } });
+      }
+      return;
+    }
     // An UNCERTAIN invoice is only ever *asked about*, and asking needs the
     // provider too. Without one it stays exactly as unknown as it was.
     if ((await readCapability('ISSUE_AN_INVOICE')).state !== 'PRESENT') return;
   } else {
     return;
   }
+  await sendClaimed(invoice, pass, false);
+}
+
+/** Read as "being sent" until the provider answers; never shown as a settled state. */
+const SENDING_REASON = 'Being sent to the provider; Brain records what the provider answers.';
+/** Older than any send's gap between claiming its row and reserving its effect. */
+const ABANDONED_CLAIM_MS = 10 * 60 * 1000;
+
+async function sendClaimed(invoice: CashInvoice, pass: InvoicingPass, firstSend: boolean): Promise<void> {
+  const projectId = invoice.projectId;
   let outcome: ExternalOutcome;
   try {
     // An UNCERTAIN invoice re-enters under the identical key, which the
@@ -438,14 +500,19 @@ export async function issueOne(invoice: CashInvoice, pass: InvoicingPass): Promi
       description: invoice.description,
     });
   } catch (error) {
+    // Never reserved: nothing could have reached the provider, so the row goes
+    // back to DRAFTED and meets every check again before any later send.
+    if (!(await issueInvoiceReserved(projectId, invoice.id))) {
+      await moveInvoice({ id: invoice.id, from: 'UNCERTAIN', to: 'DRAFTED', patch: { stateReason: null } });
+    }
     await holdWithReason(
-      invoice,
+      (await getInvoice(invoice.id)) ?? invoice,
       `Issuing could not be attempted: ${error instanceof Error ? error.name : 'error'}.`,
       pass,
     );
     return;
   }
-  await settleIssue(invoice, outcome, pass);
+  await settleIssue(invoice, outcome, pass, firstSend);
 }
 
 async function issuePass(projectId: string, pass: InvoicingPass): Promise<void> {
