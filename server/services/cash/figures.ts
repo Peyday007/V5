@@ -38,7 +38,21 @@ export interface MoneyFigure {
   currency: string;
   /** Exactly the text it was read from, so a reader can check it. */
   text: string;
+  /**
+   * The figure is stated per something — an hour, a word, a unit, `/mo`.
+   *
+   * Reported rather than refused: a rate is a real published figure, and only
+   * the caller knows whether it wanted one. A card's price or exposure is a
+   * total, and a rate read as a total is wrong by however many units there are.
+   */
+  perUnit: boolean;
 }
+
+/** A scale word after a figure, which this module refuses rather than applies. */
+const SCALE_WORD = /^\s*(?:thousand|million|billion|trillion|bn|mn|mm|m|k)\b/i;
+
+/** A figure stated per something: `per hour`, `an hour`, `/hr`, `a month`. */
+const PER_UNIT = /^\s*(?:\/\s*[a-z]|per\b|an?\s+(?:hour|day|week|month|year|minute|word|page|unit|item|piece|seat|user|head)\b|each\b|hourly\b|monthly\b|weekly\b|daily\b|annually\b|yearly\b)/i;
 
 function escape(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -106,12 +120,20 @@ export function readMoneyFigures(text: string, currency: string): MoneyFigure[] 
       // A percentage is not a price.
       const after = text.slice(match.index + match[0].length, match.index + match[0].length + 1);
       if (after === '%') continue;
-      // Shorthand is refused rather than expanded.
+      // Shorthand is refused rather than expanded, and so is a spelled-out
+      // scale: `$1,200 million` is not USD 1,200.
       if (/^[kKmMbB]/.test(after) && !/\s/.test(after)) continue;
+      const rest = text.slice(match.index + match[0].length);
+      if (SCALE_WORD.test(rest)) continue;
+      // A symbol glued to a letter belongs to another currency: `C$`, `A$`,
+      // `HK$` and `NT$` all end in `$`, and reading them as dollars is the
+      // unknown read as the favourable assumption. `US$` is its own marker.
+      const before = text.slice(Math.max(0, match.index - 1), match.index);
+      if (/^\p{L}$/u.test(before) && !/^[A-Z]{3}$/i.test(match[0].trim().slice(0, 3))) continue;
       const cents = amountOf(raw);
       if (cents === null || seen.has(cents)) continue;
       seen.add(cents);
-      found.push({ cents, currency: code, text: match[0].trim() });
+      found.push({ cents, currency: code, text: match[0].trim(), perUnit: PER_UNIT.test(rest) });
     }
   }
   return found.sort((a, b) => a.cents - b.cents);

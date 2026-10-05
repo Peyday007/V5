@@ -5856,6 +5856,54 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   test journeys had recorded the money unattributed, or after collecting; they
   were wrong about the order and are corrected rather than the guard loosened.
 
+- **Every walk that reached READY did it with a person typing the card, so
+  "Brain prepares things worth testing by itself" had never been shown — and
+  driving it without the person found two writers that did not exist.** The
+  load-bearing `exposure` field (`peak_funding_cents`) was owned by
+  `BRAIN_RESEARCH`, `reconcileDiscoverableGaps` raised a need for it, and
+  `applyOne` then returned false because `COLUMN` had no entry for it: the need
+  sat open beside a finished mission for ever and every autonomous piece stopped
+  at QUALIFIED. And a researched `price` wrote the claim's *sentence* into the
+  integer `price_cents` — stored as text on SQLite, refused by Postgres, which
+  throws out of `applyResearchAnswers` and stops every pass after it in the
+  operating step. Both are one rule now: a money field is read through
+  `readMoneyFigures` (`MONEY_FIELD`, `figureFor` in `answers.ts`), taking the
+  unfavourable end — the lowest published price, the highest published cost —
+  and a claim with no figure answers nothing and is reported as such. The
+  exposure is also proposed from published direct costs that state a figure,
+  and never from a cost sentence that does not. `tests/cashAutonomousFunnel`
+  walks an ACTIVE sprint with no handcrafted opportunity from discovery to
+  READY_TO_TEST with no `PERSON` fact on the card, and fails at QUALIFIED,
+  naming `exposure`, against the code it replaced — on both backends.
+  The same suite holds the refusals rather than only the success: no payer
+  leaves a SIGNAL, a short thesis stops below QUALIFIED, a price or a cost
+  stated only in words leaves the column null and the need open, a price
+  mission's figures never reach the exposure, and a replay or a restart writes
+  no second fact. **A need is answered by its own mission and by nothing
+  else**, which is what keeps one field's research out of another's column —
+  and, said plainly, within that mission the first claim stating a figure
+  answers, so a mission that returns several figures for different things is
+  read at the unfavourable end of whichever claim the gate put first.
+  **Reading a figure into an integer column is a sharper act than quoting a
+  sentence, and the independent review of the port found three ways it
+  invented one.** `readMoneyFigures` read `C$1,200`, `A$5,000` and `HK$900` as
+  dollars, because the `$` pattern had no left boundary, and `$1,200 million`
+  as 1,200; both are refused now — a symbol glued to a letter belongs to
+  another currency, and a spelled-out scale is shorthand by another name. A
+  figure stated *per* something (`$25 per hour`, `$49/mo`) is reported as a
+  rate and `figureFor` does not take it as a card total. A figure above
+  `MAX_COLUMN_CENTS` — Postgres's `INTEGER`, which SQLite does not enforce — is
+  unanswerable rather than clipped, because the write it would make is the
+  same throw this change exists to remove. And a proposed exposure replaces
+  only a proposal: a figure on the column with no card fact, or with a source
+  or a person behind it, is left alone, and the margin is computed against
+  whatever the card will actually hold.
+  Staleness, early retirement, target replenishment, configurable portfolio
+  concurrency, the software-need handoff to the Factory and a funnel reading
+  are **not built**; they were drafted as unapproved objective specifications
+  on `claude/autonomous-opportunity-pipeline-6ph954` and are not in
+  `objectives/`, because that directory holds what a person approved.
+
 **Brain performs a commercial action only through `cash/perform.ts`.** The
 tick's contact, a person's *Have Brain do it* and a person settling an unknown
 outcome all reach `applyEffectOutcome`. A receipt records the action. An
