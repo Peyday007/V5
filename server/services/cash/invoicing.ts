@@ -480,6 +480,23 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
           `The provider says this was paid and it could not be recorded: ${payment.ok ? 'it belongs to another piece' : payment.reason}`,
           pass,
         );
+        // Held is only honest if somebody is asked: the answer is attributing
+        // a hand-recorded payment to this invoice, or the agreement for more.
+        await raiseNeed({
+          projectId,
+          opportunityId: current.opportunityId,
+          actorRef: BRAIN,
+          blockedAction: `Record invoice ${current.id}'s payment`,
+          whyItMatters:
+            'The provider says the buyer paid this invoice, and Brain will not record it beside a payment that may be the same money.',
+          recommendedPath:
+            'If a payment you recorded by hand is this invoice’s, attribute it to the invoice; otherwise record the agreement the extra money is for.',
+          setupEffort: 'A minute.',
+          nextStep: payment.ok ? 'Check which piece this invoice belongs to.' : payment.reason,
+          completionCondition: 'The invoice names its payment.',
+          blocksState: null,
+          requestKey: `invoice-payment-held:${current.id}`,
+        });
         await moveInvoice({ id: current.id, from: 'ISSUED', to: 'ISSUED', patch: { lastReadAt: readAt } });
         continue;
       }

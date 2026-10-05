@@ -98,6 +98,7 @@ import {
   fillCard,
   markReady,
   recordMoneyEvent,
+  attributePayment,
   reoffer,
   settleSpend,
 } from '../services/cash/opportunities.ts';
@@ -974,6 +975,18 @@ cashRouter.post(
           }),
         );
         return { agreement: value, message };
+      }
+      case 'attribute-payment': {
+        const { value, message } = taken(
+          await attributePayment({
+            projectId: opportunity.projectId,
+            opportunityId: opportunity.id,
+            entryId: requiredString(body['entryId'], 'entryId'),
+            invoiceId: requiredString(body['invoiceId'], 'invoiceId'),
+            actorRef: principal.id,
+          }),
+        );
+        return { attributed: value, message };
       }
       case 'release-agreement': {
         const agreementId = requiredString(body['agreementId'], 'agreementId');

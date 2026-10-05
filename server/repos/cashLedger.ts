@@ -342,3 +342,21 @@ export async function totalsByKind(input: {
   for (const row of rows) out[row.kind as CashMoneyKind] = Number(row.total ?? 0);
   return out;
 }
+
+/**
+ * Payments a person recorded on a piece that no invoice names. Brain's own
+ * entries are excluded: those are provider facts, each tied to what produced it.
+ */
+export async function unattributedPersonPayments(
+  opportunityId: string,
+  currency: string,
+): Promise<{ id: string; amountCents: number; reference: string | null }[]> {
+  const rows = await getDb().all<{ id: string; amount_cents: number; verified_reference: string | null }>(
+    `SELECT e.id, e.amount_cents, e.verified_reference FROM cash_money_entries e
+       WHERE e.opportunity_id = ? AND e.kind = 'CUSTOMER_PAYMENT' AND e.currency = ? AND e.recorded_by <> 'BRAIN'
+         AND NOT EXISTS (SELECT 1 FROM cash_invoices i WHERE i.payment_entry_id = e.id)
+       ORDER BY e.id`,
+    [opportunityId, currency],
+  );
+  return rows.map((one) => ({ id: one.id, amountCents: Number(one.amount_cents), reference: one.verified_reference }));
+}

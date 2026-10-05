@@ -22,7 +22,7 @@
  * settled reads as `unsettledCents`, and a settlement is never a second sale —
  * contribution is read from payments, never from settlements.
  */
-import { moneyEntryByKey, totalsByKind } from '../../../repos/cashLedger.ts';
+import { moneyEntryByKey, totalsByKind, unattributedPersonPayments } from '../../../repos/cashLedger.ts';
 import { listInvoices } from '../../../repos/cashInvoices.ts';
 import { listCommitments } from '../../../repos/cashAuthority.ts';
 import { actionsFor } from '../../../repos/cashActions.ts';
@@ -160,6 +160,8 @@ export interface DealPosition {
   pnl: DealPnl;
   agreements: CashAgreement[];
   invoices: CashInvoice[];
+  /** Payments a person recorded that no invoice names: what `attribute-payment` can tie to one. */
+  unattributedPayments: { id: string; amountCents: number; reference: string | null }[];
   /** Each agreement's obligation, as `fulfillment.ts` reads it. */
   obligations: ObligationReading[];
   observations: CashObservation[];
@@ -236,8 +238,10 @@ export async function dealPosition(input: {
   const paidAgainstInvoices = ours
     .filter((one) => one.paymentEntryId && BILLED_INVOICE_STATES.includes(one.state))
     .reduce((sum, one) => sum + one.amountCents, 0);
-  // Every payment against an invoice names it (a person recording one by hand
-  // must say which), so what is left arrived outside every invoice.
+  // A payment against an invoice names it: the provider's read, Brain's own
+  // take-payment for that amount, a person who said which, or a person's later
+  // attribution. A hand payment nobody tied stays here, and a provider read
+  // beside one is held rather than counted twice.
   const paidOutsideInvoices = Math.max(0, payments - paidAgainstInvoices);
   const invoiceable = Math.max(0, agreedRevenue - invoiced - pendingInvoice - paidOutsideInvoices);
   const paymentInFlight = operations.some(
@@ -297,6 +301,7 @@ export async function dealPosition(input: {
     },
     agreements,
     invoices,
+    unattributedPayments: await unattributedPersonPayments(opportunity.id, currency),
     obligations,
     observations,
     contacted,

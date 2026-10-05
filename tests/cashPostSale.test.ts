@@ -33,6 +33,7 @@ import {
   fillCard,
   markReady,
   recordMoneyEvent,
+  attributePayment,
 } from '../server/services/cash/opportunities.ts';
 import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
 import { cashPosition, contributionFrom } from '../server/services/cash/money.ts';
@@ -535,11 +536,11 @@ describe('agreement and invoice', () => {
     expect(await ledgerCount(id, 'CUSTOMER_PAYMENT')).toBe(1);
   });
 
-  it('a payment the provider confirmed is recorded even past the agreed total, so its invoice can settle', async () => {
+  it('a provider read beside an unattributed hand payment is held until a person ties the two, then counted once', async () => {
     const id = await executing();
     await agree(id, 100_000);
     const invoice = await issuedInvoice(id, 'in_B');
-    // A person records a transfer they say arrived outside the invoice.
+    // A person records a transfer, saying it arrived outside the invoice.
     const outside = await recordMoneyEvent({
       projectId,
       opportunityId: id,
@@ -552,14 +553,29 @@ describe('agreement and invoice', () => {
       appliesTo: 'OUTSIDE_INVOICES',
     });
     expect(outside.ok).toBe(true);
-    // The buyer also paid the invoice: real money, recorded and visible as an overpayment.
-    const read = await providerRead(id, invoice.id, 100_000, 'ch_B');
-    expect(read.ok).toBe(true);
-    const [paid] = await listInvoices({ projectId, opportunityId: id });
-    expect(paid!.state).toBe('PAID');
-    expect((await position(id)).pnl.customerPaymentsCents).toBe(200_000);
-    // A second hand entry past the agreed total is still refused.
-    expect((await money(id, 'CUSTOMER_PAYMENT', 1_000, 'bank-2')).ok).toBe(false);
+    // The provider then reads the invoice paid: most likely the same money.
+    const held = await providerRead(id, invoice.id, 100_000, 'ch_B');
+    expect(held.ok).toBe(false);
+    expect(held.ok ? '' : held.reason).toMatch(/not tied to any invoice/);
+    expect((await position(id)).unattributedPayments).toHaveLength(1);
+    // The person says it was: the invoice names it, and the read writes nothing.
+    const entryId = (await position(id)).unattributedPayments[0]!.id;
+    expect((await attributePayment({ projectId, opportunityId: id, entryId, invoiceId: invoice.id, actorRef: userId })).ok).toBe(true);
+    expect((await providerRead(id, invoice.id, 100_000, 'ch_B')).ok).toBe(true);
+    expect(await ledgerCount(id, 'CUSTOMER_PAYMENT')).toBe(1);
+    expect((await position(id)).unattributedPayments).toHaveLength(0);
+  });
+
+  it('a provider-confirmed payment with nothing unattributed beside it is recorded even past the agreed total', async () => {
+    const id = await executing();
+    await agree(id, 100_000, 'First half');
+    await agree(id, 100_000, 'Second half');
+    const invoice = await issuedInvoice(id, 'in_C');
+    // The second agreement released after the buyer had already paid in full.
+    const [, second] = (await getDb().all<{ id: string }>('SELECT id FROM cash_agreements WHERE opportunity_id = ? ORDER BY created_at, id', [id]));
+    expect((await releaseAgreement({ agreementId: second!.id, reason: 'Scope cut.', actorRef: userId })).ok).toBe(true);
+    expect((await providerRead(id, invoice.id, 150_000, 'ch_C')).ok).toBe(true);
+    expect((await position(id)).pnl.customerPaymentsCents).toBe(150_000);
   });
 
   it('an agreement released while its invoice was being sent leaves the provider’s invoice visible, not void', async () => {

@@ -655,6 +655,33 @@ describe('failure, refund and partial paths', () => {
     expect(await moneyCount(piece.id)).toEqual({ PIPELINE_AGREED: 1 });
   });
 
+  it('F05b: Brain’s own take-payment pays the open invoice it charged for, and asks for that invoice to be closed', async () => {
+    await granted();
+    provider('CONTACT_BUYER', 'msg');
+    provider('QUOTE_AND_INVOICE', 'inv');
+    provider('ACCEPT_PAYMENT', 'pay');
+    paymentReader();
+    const piece = await qualified();
+    await advanceWithinAuthority(projectId);
+    await agree(piece.id, 100_000);
+    expect((await requestInvoice(piece.id)).status).toBe(200);
+    await tick();
+    const occ = (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id].nextOccurrence;
+    const taken = await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: occ });
+    expect(taken.status).toBe(200);
+    const [invoice] = await listInvoices({ projectId, opportunityId: piece.id });
+    expect(invoice!.state).toBe('PAID');
+    expect(invoice!.paymentEntryId).not.toBeNull();
+    const needs = await getDb().all<{ request_key: string }>("SELECT request_key FROM cash_needs WHERE project_id = ? AND state = 'OPEN'", [projectId]);
+    expect(needs.map((one) => one.request_key)).toContain(`void-paid-elsewhere:${invoice!.id}`);
+    // The next agreement is still billable: the take-payment is not read as
+    // money that arrived outside every invoice.
+    await agree(piece.id, 50_000);
+    const deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
+    expect(deal.pnl.invoiceableCents).toBe(50_000);
+    expect(await moneyCount(piece.id)).toMatchObject({ CUSTOMER_PAYMENT: 1 });
+  });
+
   it('F06: the invoice outcome is unknown — no resend across a restart, then the provider confirms it once', async () => {
     await granted();
     provider('CONTACT_BUYER', 'msg');

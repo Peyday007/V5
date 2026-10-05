@@ -148,6 +148,28 @@ export function DealJourney({
           {deal.invoices.map((one) => `${one.providerNumber ?? one.providerInvoiceId ?? 'draft'} ${money(one.amountCents, currency)} (${one.state.toLowerCase()}${one.state === 'ISSUED' ? `, due ${one.dueDate}` : ''})`).join('; ')}
         </p>
       ) : null}
+      {mayAct
+        ? deal.invoices
+            .filter((invoice) => invoice.state === 'ISSUED' && !invoice.paymentEntryId)
+            .flatMap((invoice) =>
+              (deal.unattributedPayments ?? [])
+                .filter((payment) => payment.amountCents === invoice.amountCents)
+                .map((payment) => (
+                  <p key={`${invoice.id}:${payment.id}`} className="rs-item-meta">
+                    A payment you recorded ({payment.reference ?? payment.id}, {money(payment.amountCents, currency)}) is not
+                    tied to any invoice.{' '}
+                    <button
+                      type="button"
+                      className="rs-button-quiet"
+                      disabled={busy}
+                      onClick={() => void submit('attribute-payment', { entryId: payment.id, invoiceId: invoice.id })}
+                    >
+                      It paid invoice {invoice.providerNumber ?? invoice.providerInvoiceId ?? invoice.id}
+                    </button>
+                  </p>
+                )),
+            )
+        : null}
       {deal.obligations.map((one) => (
         <Obligation
           key={one.agreement.id}

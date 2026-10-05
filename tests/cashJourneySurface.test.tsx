@@ -40,6 +40,7 @@ const DEAL: DealView = {
   },
   agreements: [],
   invoices: [],
+  unattributedPayments: [],
   obligations: [],
   observations: [
     {

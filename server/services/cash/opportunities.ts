@@ -41,10 +41,11 @@ import { countActions, recordAction } from '../../repos/cashActions.ts';
 import { cardFact, cardFactsFor, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { getMoneyEntry, moneyEntryByKey, recordMoney, totalsByKind } from '../../repos/cashLedger.ts';
+import { getMoneyEntry, moneyEntryByKey, recordMoney, totalsByKind, unattributedPersonPayments } from '../../repos/cashLedger.ts';
 import { agreementsFor, getAgreement } from '../../repos/cashJourney.ts';
 import { unresolvedRefundCents } from '../../repos/cashFulfillment.ts';
 import { getInvoice, listInvoices, moveInvoice } from '../../repos/cashInvoices.ts';
+import { raiseNeed } from './needs.ts';
 import { collectable, dealPosition } from './journey/position.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { getOperation } from '../../repos/idempotency.ts';
@@ -1187,6 +1188,10 @@ export async function recordMoneyEvent(input: {
 
   // A payment the provider itself confirmed, rather than one a person typed.
   let providerFact = false;
+  // Brain's own take-payment, confirmed by its receipt.
+  let takenByBrain = false;
+  // The provider reading the payment of one of this piece's invoices.
+  let readOfInvoice = false;
   if (input.kind === 'CUSTOMER_PAYMENT') {
     const backing = input.confirmedEffectOperationId
       ? await getOperation(input.confirmedEffectOperationId)
@@ -1209,6 +1214,8 @@ export async function recordMoneyEvent(input: {
       invoice.providerInvoiceId !== null &&
       (invoice.state === 'ISSUED' || invoice.state === 'PAID' || invoice.state === 'SETTLED');
     providerFact = confirmed || paidInvoice;
+    takenByBrain = confirmed && !paidInvoice;
+    readOfInvoice = paidInvoice;
     if (!confirmed && !paidInvoice) {
       const decision = await checkCommercialAuthority({
         projectId: input.projectId,
@@ -1361,16 +1368,33 @@ export async function recordMoneyEvent(input: {
           paysInvoice = target;
         }
       }
+      if (takenByBrain && !paysInvoice) {
+        /*
+         * Brain charged what was owed; where exactly one unpaid issued invoice
+         * is for that amount, it is that invoice's payment. Left unnamed, the
+         * money would read as paid outside every invoice and the next
+         * agreement would never be billed.
+         */
+        const matching = (
+          await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId, states: ['ISSUED'] })
+        ).filter((one) => !one.paymentEntryId && one.currency === input.currency && one.amountCents === input.amountCents);
+        if (matching.length === 1) paysInvoice = matching[0]!;
+      }
     }
     /*
      * The cap is on what a person types. A payment the provider confirmed is
      * money that arrived, and refusing it would leave real money unrecorded
      * and its invoice unable to settle; an overpayment is then visible as one.
      */
+    const unattributed =
+      input.kind === 'CUSTOMER_PAYMENT' && input.opportunityId && readOfInvoice
+        ? await unattributedPersonPayments(input.opportunityId, input.currency)
+        : [];
     if (
       input.kind === 'CUSTOMER_PAYMENT' &&
       input.opportunityId &&
-      !providerFact &&
+      (!providerFact || unattributed.length > 0) &&
+      !takenByBrain &&
       !(await moneyEntryByKey(input.projectId, input.idempotencyKey))
     ) {
       const live = (await agreementsFor(input.opportunityId)).filter(
@@ -1385,6 +1409,23 @@ export async function recordMoneyEvent(input: {
         });
         // Net of refunds: money paid back may be paid again.
         const paid = Number(totals.CUSTOMER_PAYMENT ?? 0) - Number(totals.REFUND ?? 0);
+        if (paid + input.amountCents > agreed && readOfInvoice) {
+          /*
+           * A person recorded money nobody tied to an invoice, and the
+           * provider now reads a payment that would take the piece past what
+           * was agreed: most likely the same money twice. Not recorded until a
+           * person says which — `attributePayment` is that answer.
+           */
+          return {
+            ok: false as const,
+            entry: null,
+            replayed: false,
+            reason:
+              `The provider reads ${input.amountCents} cents paid on this invoice, and a payment recorded by hand ` +
+              `(${unattributed.map((one) => one.id).join(', ')}) is not tied to any invoice. If it is this ` +
+              'invoice\'s payment, attribute it to the invoice; otherwise record the agreement the extra money is for.',
+          };
+        }
         if (paid + input.amountCents > agreed) {
           return {
             ok: false as const,
@@ -1444,9 +1485,32 @@ export async function recordMoneyEvent(input: {
         patch: {
           paymentEntryId: recorded.entry.id,
           paidAt: recorded.entry.occurredAt,
-          ...(providerFact ? { providerStatus: 'paid', stateReason: null } : { stateReason: 'Paid outside the provider; recorded by a person.' }),
+          ...(readOfInvoice
+            ? { providerStatus: 'paid', stateReason: null }
+            : { stateReason: takenByBrain ? 'Paid through Brain’s own payment, not this invoice’s page.' : 'Paid outside the provider; recorded by a person.' }),
         },
       });
+      if (!readOfInvoice) {
+        /*
+         * Paid some other way, so the invoice itself is still open at the
+         * provider and the buyer can be asked for the money again.
+         */
+        await raiseNeed({
+          projectId: input.projectId,
+          opportunityId: input.opportunityId ?? null,
+          actorRef: 'BRAIN',
+          blockedAction: `Void invoice ${paysInvoice.id} at the provider`,
+          whyItMatters:
+            'It was paid outside the invoice, and the provider still holds it open: the buyer can be chased ' +
+            'for, or pay, the same amount again.',
+          recommendedPath: 'Void or mark the invoice paid at the invoicing provider.',
+          setupEffort: 'A minute.',
+          nextStep: `Close ${paysInvoice.providerInvoiceId ?? paysInvoice.id} at the provider.`,
+          completionCondition: 'The provider no longer holds the invoice open.',
+          blocksState: null,
+          requestKey: `void-paid-elsewhere:${paysInvoice.id}`,
+        });
+      }
     }
     return recorded;
   });
@@ -1568,4 +1632,55 @@ export async function authorityFor(projectId: string) {
   const mode = await getCashMode(projectId);
   const authority = await liveAuthority(projectId);
   return { mode, authority };
+}
+
+
+/**
+ * The answer to a provider payment held beside an unattributed hand entry: the
+ * person says the entry they recorded *is* that invoice's payment. The invoice
+ * then names it, so the provider's reading of the same money writes nothing.
+ * Whole amounts only, one piece, one currency, under the cash lock.
+ */
+export async function attributePayment(input: {
+  projectId: string;
+  opportunityId: string;
+  entryId: string;
+  invoiceId: string;
+  actorRef: string;
+}): Promise<Outcome<{ invoiceId: string; entryId: string }>> {
+  const mode = await getCashMode(input.projectId);
+  if (!mode) return refuse('Cash Mode has not been activated for this project.');
+  const done = await serializeCash(input.projectId, mode.currency, async () => {
+    const entry = await getMoneyEntry(input.entryId);
+    const invoice = await getInvoice(input.invoiceId);
+    if (!entry || entry.kind !== 'CUSTOMER_PAYMENT' || entry.opportunityId !== input.opportunityId || entry.projectId !== input.projectId) {
+      return 'No payment with that id on this piece.';
+    }
+    if (!invoice || invoice.opportunityId !== input.opportunityId || invoice.state !== 'ISSUED' || invoice.paymentEntryId) {
+      return 'That is not an unpaid issued invoice on this piece.';
+    }
+    if (!(await unattributedPersonPayments(input.opportunityId, invoice.currency)).some((one) => one.id === entry.id)) {
+      return 'That payment is already tied to an invoice, or was not recorded by a person.';
+    }
+    if (entry.amountCents !== invoice.amountCents || entry.currency !== invoice.currency) {
+      return `That payment is ${entry.amountCents} ${entry.currency} and the invoice is ${invoice.amountCents} ${invoice.currency}.`;
+    }
+    const moved = await moveInvoice({
+      id: invoice.id,
+      from: 'ISSUED',
+      to: 'PAID',
+      patch: { paymentEntryId: entry.id, paidAt: entry.occurredAt, stateReason: 'A person attributed a recorded payment to it.' },
+    });
+    return moved ? null : 'The invoice moved while this was being decided; read it again.';
+  });
+  if (done) return refuse(done);
+  await recordCashEvent({
+    projectId: input.projectId,
+    opportunityId: input.opportunityId,
+    kind: 'CASH_MONEY_RECORDED',
+    actorRef: input.actorRef,
+    summary: `Payment ${input.entryId} attributed to invoice ${input.invoiceId}.`,
+    detail: { entryId: input.entryId, invoiceId: input.invoiceId },
+  });
+  return { ok: true, value: { invoiceId: input.invoiceId, entryId: input.entryId }, message: 'Attributed.' };
 }
