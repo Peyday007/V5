@@ -28,6 +28,7 @@ import { useState } from 'react';
 import { useAsync } from './useAsync.ts';
 import { cashPage, modeState, type CashPage } from './cashPage.ts';
 import { Api } from '../lib/api.ts';
+import { DealJourney, JourneyTotals } from './CashJourney.tsx';
 import type { Project } from '../../../server/domain/types.ts';
 import {
   CashApi,
@@ -1945,6 +1946,9 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
             )} — an arithmetic illustration from quoted prices, not a bank balance.`
           : ''}
       </p>
+      {work.journey && work.journey.deals.length > 0 ? (
+        <JourneyTotals journey={work.journey} currency={view.myCash.position.currency} />
+      ) : null}
       <ul className="rs-list">
         {[...acting, ...held].map((placement) => (
           <li key={placement.opportunity.id} className="rs-group">
@@ -1976,6 +1980,20 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
                 onChanged={onChanged}
               />
             ) : null}
+            {page.capabilities.mayViewPrivateJob
+              ? (() => {
+                  const deal = work.journey?.deals.find((one) => one.opportunityId === placement.opportunity.id);
+                  return deal ? (
+                    <DealJourney
+                      deal={deal}
+                      currency={view.myCash.position.currency}
+                      projectId={view.mode?.projectId}
+                      mayAct={page.capabilities.mayActOnJob}
+                      onChanged={onChanged}
+                    />
+                  ) : null;
+                })()
+              : null}
             {page.capabilities.mayActOnJob &&
             view.mode &&
             (placement.opportunity.state === 'EXECUTING' ||
@@ -2314,16 +2332,6 @@ function OpportunityMoney({
       {done ? <p className="rs-state rs-state-ok">{done}</p> : null}
       {kind === null ? (
         <>
-          <button
-            type="button"
-            className="rs-button-quiet"
-            onClick={() => {
-              setKind('PIPELINE_AGREED');
-              setDone(null);
-            }}
-          >
-            Record the agreed amount
-          </button>
           <button
             type="button"
             className="rs-button-quiet"
@@ -3195,7 +3203,8 @@ function Actions({
       disabledReason: blocked ? noAuthorityReason : undefined,
     });
   }
-  if (state === 'EXECUTING') available.push({ action: 'deliver', label: 'Delivering' });
+  // DELIVERING is not a button: it follows from work existing (the fulfilment
+  // on this piece's journey panel), so pressing it could only ever be refused.
   if (state === 'EXECUTING' || state === 'DELIVERING') {
     available.push({ action: 'collect', label: 'Money is in' });
   }

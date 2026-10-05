@@ -1,0 +1,39 @@
+{
+  "objective": "When a missing software capability blocks revenue, hand it to the Software Factory through the existing bridge instead of leaving a need nobody acts on. (1) server/services/cash/factoryHandoff.ts: for each OPEN capability need (requestKey 'capability:<id>') whose blocked opportunity is READY or QUALIFIED and whose capability readCapability reports MISSING with a named integration, and whose project has an onboarded Factory repository (factory readiness READY or WAITING_FOR_CAPACITY), compose an ObjectiveSubmission from the need's own rows (blocked action, recommended path, completion condition as the acceptance statement) and submit it with the existing submitObjective under a submission key derived from the need id, so retries produce one change request. It never approves: approval stays the person-only decision on Build. Record CASH_NEED_HANDED_TO_FACTORY with the change request id; the need stays OPEN until its completion condition holds, read as it is now. (2) Where no repository is onboarded, the need's next step says so in words; nothing is submitted. (3) Bounded: at most one submission per tick per project. (4) tests/cashFactoryHandoff.test.ts: a blocking MISSING capability yields exactly one PROPOSED change request across repeated ticks; no repository yields none and the sentence; approval is never performed; the need closes only when the capability reads PRESENT.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "claude/autonomous-opportunity-pipeline-6ph954",
+  "expectedOutcome": "A software gap between Brain and revenue becomes a Factory change request awaiting one approval, automatically.",
+  "nonGoals": [
+    "A second opportunity pipeline, queue, scheduler or polling loop beside the durable Russell tick and operate()",
+    "Changing the evidence gate, verification, audit roles or approval envelopes",
+    "Editing server/services/identity/** or server/services/research/approvalEnvelope.ts",
+    "A full-table read on every tick; every new read is narrow, indexed and bounded"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/cashFactoryHandoff.test.ts passes on SQLite and Postgres",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/cash/factoryHandoff.ts",
+    "server/services/cash/operate.ts",
+    "server/services/cash/capabilities.ts",
+    "tests/**",
+    "docs/CASH.md",
+    "CLAUDE.md"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Revert the commits; any migration only adds columns with defaults or a nullable column."
+}

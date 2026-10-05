@@ -1,0 +1,47 @@
+{
+  "objective": "Explicit staleness for time-sensitive Cash card facts, so old buying evidence becomes an unanswered task instead of silently staying current. (1) server/services/cash/staleness.ts exports a reviewed constant STALENESS_POLICY: Record<CardFieldKey | EngineFieldKey, { maxAgeDays: number } | null> \u2014 buyingEvidence (read from signal_observed_at) 30 days, revenueRange/directCosts/price from the source_date of the claim behind the card fact 90 days, everything immutable (payer identity, eligibility rule text) null \u2014 and a pure staleFields(opportunity, facts, now) that names each stale field with its observed date. `now` is always injected; nothing in the module reads the clock. (2) evidenceCard and cashEngineCard take an optional `now`; a stale field reads value null with a task beginning 'Refresh:' and the original value kept in a `staleValue` property, so the tier, markReady and the gaps pass all see it as unanswered through the one reader they already use. (3) applyOne in server/services/cash/answers.ts refuses a claim whose own source_date is already past the policy window, so research that only finds the old page does not re-close the need and loop; the need stays open and assessResearch reports it as NO_SUPPORT with that reason. (4) operate() passes its `now` to every card read. (5) Rebase every test fixture date that would cross a window as real time passes (signal_observed_at, source_date, signalObservedAt in tests/**) to dates computed relative to the test's own clock, so the suite carries no time bomb; add tests/cashStaleness.test.ts proving: a 40-day-old signal drops a READY_TO_TEST piece to QUALIFIED and raises exactly one refresh need; a fresh dated claim answers it and the tier returns; a stale claim does not; an immutable field never goes stale; a READY piece is not moved out of READY by the derivation (state is untouched, only the tier reading changes).",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "claude/autonomous-opportunity-pipeline-6ph954",
+  "expectedOutcome": "Old market facts reappear as research tasks automatically; nothing stale reads as current; no test depends on the wall clock.",
+  "nonGoals": [
+    "A second opportunity pipeline, queue, scheduler or polling loop beside the durable Russell tick and operate()",
+    "Changing the evidence gate, verification, audit roles or approval envelopes",
+    "Editing server/services/identity/** or server/services/research/approvalEnvelope.ts",
+    "A full-table read on every tick; every new read is narrow, indexed and bounded"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/cashStaleness.test.ts passes on SQLite and Postgres",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "tests/cashAutonomousFunnel.test.ts still reaches READY_TO_TEST",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/cash/staleness.ts",
+    "server/services/cash/card.ts",
+    "server/services/cash/engineCard.ts",
+    "server/services/cash/answers.ts",
+    "server/services/cash/operate.ts",
+    "server/services/cash/tier.ts",
+    "tests/**",
+    "docs/CASH.md",
+    "CLAUDE.md"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Revert the commits; any migration only adds columns with defaults or a nullable column."
+}

@@ -41,7 +41,8 @@ import { countActions, recordAction } from '../../repos/cashActions.ts';
 import { cardFact, cardFactsFor, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { recordMoney, totalsByKind } from '../../repos/cashLedger.ts';
+import { moneyEntryByKey, recordMoney, totalsByKind } from '../../repos/cashLedger.ts';
+import { collectable, dealPosition } from './journey/position.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { getOperation } from '../../repos/idempotency.ts';
 import { COMMERCIAL_EFFECTS } from './effects.ts';
@@ -726,14 +727,30 @@ export async function advance(input: {
    * asked for, attributed to *this* opportunity and net of refunds. Nothing is
    * written on a refusal, and the remedy is named.
    */
+  /*
+   * Neither state may be claimed from an intention. DELIVERING means work to
+   * deliver an agreement exists (`journey/deal.ts` creates it and moves the
+   * piece itself); COLLECTED means every live agreement is paid, the payment
+   * has settled, and the buyer accepted the work — the one predicate the
+   * journey tick also asks, so a button and the tick cannot disagree. "The
+   * money is in" is still a statement about the ledger first (invariant 37):
+   * a SETTLEMENT is the one entry that is cash. Nothing is written on a
+   * refusal, and the remedy is named.
+   */
+  const mode = await getCashMode(opportunity.projectId);
+  if (!mode) return refuse('Cash Mode has not been activated for this project.');
+  const position = await dealPosition({ opportunity, currency: mode.currency });
+  if (input.to === 'DELIVERING') {
+    const live = position.fulfilments.some((one) => one.state !== 'FAILED' && one.state !== 'CANCELLED');
+    if (!live) {
+      return refuse(
+        'No work exists to deliver this, so it is not being delivered. Record the agreement and ' +
+          'create the fulfilment — the work in the machinery that does it.',
+      );
+    }
+  }
   if (input.to === 'COLLECTED') {
-    const mode = await getCashMode(opportunity.projectId);
-    const totals = await totalsByKind({
-      projectId: opportunity.projectId,
-      opportunityId: opportunity.id,
-      currency: mode?.currency,
-    });
-    const settled = Number(totals.SETTLEMENT ?? 0) - Number(totals.REFUND ?? 0);
+    const settled = position.pnl.settledCashCents;
     if (settled <= 0) {
       return refuse(
         'Nothing has settled against this opportunity yet, so Brain cannot record that the money ' +
@@ -741,6 +758,8 @@ export async function advance(input: {
           'each with the provider or bank reference that makes it verifiable.',
       );
     }
+    const ready = collectable(position);
+    if (!ready.ok) return refuse(ready.reason);
   }
   const from = input.to === 'DELIVERING' ? (['EXECUTING'] as const) : (['EXECUTING', 'DELIVERING'] as const);
   const moved = await transitionOpportunity({
@@ -1135,8 +1154,58 @@ export async function recordMoneyEvent(input: {
    * number one is checked against. A settlement landing between a commitment's
    * insert and its sum would make that sum true of neither moment.
    */
-  const written = await serializeCash(input.projectId, input.currency, () =>
-    recordMoney({
+  if (input.kind === 'PIPELINE_AGREED' && !input.idempotencyKey.startsWith('agreement:')) {
+    return refuse(
+      'Agreed work is recorded as an agreement — the amount, what is delivered, what counts as ' +
+        'acceptance and the evidence the buyer agreed — which writes this entry itself. A bare ' +
+        'amount is never billed, so it is not recorded on its own.',
+    );
+  }
+  if (input.kind === 'PIPELINE_RELEASED' && !input.idempotencyKey.startsWith('agreement-released:')) {
+    return refuse(
+      'Agreed work is released by releasing its agreement, which keeps the agreement and voids ' +
+        'what was billed against it in the same pass.',
+    );
+  }
+
+  const written = await serializeCash(input.projectId, input.currency, async () => {
+    /*
+     * A settlement is the money a payment became, never a second sale, and a
+     * refund returns money that was paid — so neither may exceed what was paid
+     * on this piece. Asked under the lock, and skipped for a replay, which is
+     * the same entry again rather than more money.
+     */
+    if (
+      input.opportunityId &&
+      (input.kind === 'SETTLEMENT' || input.kind === 'REFUND') &&
+      !(await moneyEntryByKey(input.projectId, input.idempotencyKey))
+    ) {
+      const totals = await totalsByKind({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId,
+        currency: input.currency,
+      });
+      const paid = Number(totals.CUSTOMER_PAYMENT ?? 0);
+      const room =
+        input.kind === 'SETTLEMENT'
+          ? paid - Number(totals.REFUND ?? 0) - Number(totals.SETTLEMENT ?? 0)
+          : paid - Number(totals.REFUND ?? 0);
+      if (input.amountCents > room) {
+        return {
+          ok: false as const,
+          entry: null,
+          replayed: false,
+          reason:
+            input.kind === 'SETTLEMENT'
+              ? `Only ${Math.max(0, room)} cents paid on this piece has not settled, and this settlement is ` +
+                `for ${input.amountCents}. A settlement is a payment becoming usable, never a second sale — ` +
+                'record the payment first.'
+              : `Only ${Math.max(0, room)} cents has been paid on this piece, so a refund of ` +
+                `${input.amountCents} would return money that never arrived.`,
+        };
+      }
+    }
+    return await recordMoney({
       projectId: input.projectId,
       opportunityId: input.opportunityId ?? null,
       commitmentId: input.commitmentId ?? null,
@@ -1149,8 +1218,8 @@ export async function recordMoneyEvent(input: {
       note: input.note ?? null,
       recordedBy: input.actorRef,
       idempotencyKey: input.idempotencyKey,
-    }),
-  );
+    });
+  });
   if (!written.ok || !written.entry) return refuse(written.reason);
 
   if (!written.replayed) {

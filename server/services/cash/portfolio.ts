@@ -133,6 +133,8 @@ export interface PortfolioInput {
   maxConcurrent: number;
   /** Whether new discovery is allowed — the cash mode's own state. */
   discoveryOpen: boolean;
+  /** Measured contribution per contact by mechanism; see `rank`. */
+  measured?: Record<string, number>;
 }
 
 /**
@@ -149,7 +151,7 @@ export function placements(input: PortfolioInput): Placement[] {
 
   // Ready pieces compete for the headroom in rank order, so which of them is
   // told to wait is a property of the ranking rather than of insertion order.
-  const ranked = rank(input.opportunities, input.tiers);
+  const ranked = rank(input.opportunities, input.tiers, input.measured ?? {});
   const startable = new Set<string>();
   let remaining = headroom;
   for (const candidate of ranked) {
@@ -324,6 +326,12 @@ function dependencyBlocker(
 export function rank(
   opportunities: CashOpportunity[],
   tiers: Record<string, TierReading> = {},
+  /**
+   * Realized contribution per contact, by mechanism, from finished commercial
+   * tests (`journey/learning.ts`). Present only where enough contacts stand
+   * behind it, and read only as a late tie-break: one result is not a market.
+   */
+  measured: Record<string, number> = {},
 ): CashOpportunity[] {
   const tierOf = (o: CashOpportunity): CashTier => tiers[o.id]?.tier ?? 'SIGNAL';
   return [...opportunities].sort((a, b) => {
@@ -371,6 +379,12 @@ export function rank(
 
     const expiry = compareDates(a.expiresAt, b.expiresAt);
     if (expiry !== 0) return expiry;
+
+    // What this kind of work has actually returned before, where it has been
+    // measured. An unmeasured mechanism is unknown and sorts after a measured
+    // one that earned anything, never ahead of it.
+    const learned = (measured[b.mechanism] ?? Number.NEGATIVE_INFINITY) - (measured[a.mechanism] ?? Number.NEGATIVE_INFINITY);
+    if (Number.isFinite(learned) && learned !== 0) return learned;
 
     if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;

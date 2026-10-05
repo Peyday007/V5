@@ -15,6 +15,8 @@
  * usable, and a refund takes back from both — collapsing any two of them is
  * how a sprint comes to believe it has money it has not got.
  */
+import { listInvoices } from '../../repos/cashInvoices.ts';
+import { usableAdapter } from './effects.ts';
 import { actionsFor } from '../../repos/cashActions.ts';
 import { listMoneyEntries, totalsByKind } from '../../repos/cashLedger.ts';
 import { checkCommercialAuthority } from './authority.ts';
@@ -106,7 +108,7 @@ export async function executionRecord(input: {
     opportunityId: opportunity.id,
     currency,
   });
-  const agreed = Number(totals.PIPELINE_AGREED ?? 0);
+  const agreed = Math.max(0, Number(totals.PIPELINE_AGREED ?? 0) - Number(totals.PIPELINE_RELEASED ?? 0));
   const payments = Number(totals.CUSTOMER_PAYMENT ?? 0);
   const settlements = Number(totals.SETTLEMENT ?? 0);
   const refunds = Number(totals.REFUND ?? 0);
@@ -149,6 +151,22 @@ export async function executionRecord(input: {
       // offers a press the server would refuse.
       const gate = await sendGate(opportunity, action);
       if (!gate.ok) reason = gate.reason;
+    }
+    // An invoice leaves Brain only as a drafted `cash_invoices` row (its terms
+    // are a person's), and a payment is charged only through a charge adapter —
+    // a payment reader means the buyer pays the invoice's own page.
+    if (reason === null && action === 'QUOTE_AND_INVOICE' && agreed > 0) {
+      const pending = await listInvoices({
+        projectId: opportunity.projectId,
+        opportunityId: opportunity.id,
+        states: ['DRAFTED', 'UNCERTAIN'],
+      });
+      if (pending.length === 0) {
+        reason = 'No invoice is drafted. Request one with who is billed, the tax treatment and the due date.';
+      }
+    }
+    if (reason === null && action === 'ACCEPT_PAYMENT' && !usableAdapter(effect.namespace)) {
+      reason = 'The buyer pays the invoice through the provider’s own page; Brain reads the payment rather than charging it.';
     }
     if (reason === null && action !== 'CONTACT_BUYER' && agreed <= 0) {
       reason = 'No amount is recorded as agreed, so there is nothing to bill or collect.';

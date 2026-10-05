@@ -938,7 +938,29 @@ describe('one sprint, from activation to money in and winding down', () => {
      * 9. Delivery, then money. Only a settlement is cash.
      * ------------------------------------------------------------------ */
     await withCashRoutes(async (call) => {
-      expect((await call('POST', `/cash/opportunities/${piece.id}/deliver`, {})).status).toBe(200);
+      // Agreed with evidence, then work that exists, was performed and was
+      // accepted — delivery is never a button (`journey/deal.ts`).
+      const at = (name: string, body: unknown) => call('POST', `/cash/opportunities/${piece.id}/${name}`, body);
+      const agreed: any = await at('agree', {
+        amountCents: 120_000,
+        deliverable: 'The work the notice asked for.',
+        acceptanceCondition: 'The requester confirms it in writing.',
+        evidenceKind: 'WRITTEN_ACCEPTANCE',
+        evidenceRef: 'notice-2026-441-reply',
+      });
+      expect(agreed.status).toBe(200);
+      const work: any = await at('fulfil', {
+        agreementId: agreed.body.agreement.id,
+        path: 'PERSON',
+        workKind: 'EXTERNAL',
+        workRef: 'the operator delivers it',
+      });
+      expect(work.status).toBe(200);
+      expect((await at('performed', { fulfilmentId: work.body.fulfilment.id, evidence: 'delivered.pdf' })).status).toBe(200);
+      const seen: any = await at('observe', { kind: 'DELIVERY_ACCEPTED', evidenceRef: 'requester-signoff' });
+      expect(
+        (await at('accept-delivery', { fulfilmentId: work.body.fulfilment.id, observationId: seen.body.observation.id })).status,
+      ).toBe(200);
       expect(
         (
           await call('POST', `/projects/${projectId}/cash/money`, {

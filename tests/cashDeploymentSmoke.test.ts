@@ -653,11 +653,40 @@ describe('the deployable artifact', () => {
      * ending is not a customer's obligation ending. Delivery, collection and
      * the money all still work.
      */
-    const delivering = await call('POST', `/api/cash/opportunities/${other}/deliver`, {
-      cookie: admin,
-      body: {},
+    const at = (name: string, body: unknown) =>
+      call('POST', `/api/cash/opportunities/${other}/${name}`, { cookie: admin, body });
+    const agreed = await at('agree', {
+      amountCents: 60_000,
+      deliverable: 'The work the notice asked for.',
+      acceptanceCondition: 'The requester confirms it in writing.',
+      evidenceKind: 'WRITTEN_ACCEPTANCE',
+      evidenceRef: 'smoke-notice-1-reply',
     });
-    expect(delivering.status).toBe(200);
+    expect(agreed.status).toBe(200);
+    const work = await at('fulfil', {
+      agreementId: agreed.body.agreement.id,
+      path: 'PERSON',
+      workKind: 'EXTERNAL',
+      workRef: 'the operator delivers it',
+    });
+    expect(work.status).toBe(200);
+    expect((await at('performed', { fulfilmentId: work.body.fulfilment.id, evidence: 'delivered.pdf' })).status).toBe(200);
+    const seen = await at('observe', { kind: 'DELIVERY_ACCEPTED', evidenceRef: 'requester-signoff' });
+    expect(
+      (await at('accept-delivery', { fulfilmentId: work.body.fulfilment.id, observationId: seen.body.observation.id })).status,
+    ).toBe(200);
+    const paid = await call('POST', `/api/projects/${project}/cash/money`, {
+      cookie: admin,
+      body: {
+        opportunityId: other,
+        kind: 'CUSTOMER_PAYMENT',
+        amountCents: 60_000,
+        currency: 'USD',
+        verifiedReference: 'smoke-pay-0001',
+        idempotencyKey: 'payment:smoke-pay-0001',
+      },
+    });
+    expect(paid.status).toBe(200);
 
     const settled = await call('POST', `/api/projects/${project}/cash/money`, {
       cookie: admin,

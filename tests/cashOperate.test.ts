@@ -1186,6 +1186,7 @@ describe('the operating pass as the tick calls it', () => {
       // No sprint, no commercial operation, so nothing to finish recording.
       effects: [],
       authority: { took: [], withheld: [] },
+      invoicing: { issued: [], uncertain: [], failed: [], withheld: [], paid: [], settled: [], voided: [] },
       /*
        * The possibility ledger reports nothing too, and that is the assertion
        * rather than an addition to it: `enumeratePossibilities` and

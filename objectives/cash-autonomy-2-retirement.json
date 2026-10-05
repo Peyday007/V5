@@ -1,0 +1,53 @@
+{
+  "objective": "Stop spending research capacity on dead opportunities early, preserving everything. (1) server/services/cash/retirement.ts exports a pure deadThesis(opportunity, facts, needsAssessment, signal) returning null or one reason from a closed set: NO_PAYER (both bounded deep dives spent, MAX_VALIDATION_ROUNDS, and every capture-input need's research finished NO_SUPPORT), NO_ACCESS (access need researched to NO_SUPPORT twice), INELIGIBLE (an EVIDENCE eligibility or disqualifier fact whose gated claim was declared by the worker as establishing ineligibility \u2014 add a closed `eligibility_verdict` declaration on brain_submit_claims, validated at both submission doors like opportunity_signal; never read from prose), NEGATIVE_MARGIN (proposed economics term negative from published figures only), FULFILMENT_UNAVAILABLE (a capability MISSING with no integration path), PROHIBITED (the only route needs an ALWAYS_PROHIBITED_COMMERCIAL action). An unknown never kills: every reason requires positive rows. (2) Derived, not stored: reconcileDiscoverableGaps, startValidations (via whyNotDiving: new DiveRefusal kind THESIS_DEAD) and the monetization commissioning allocator skip a dead piece; no state column moves and nothing is archived or deleted. (3) A CASH_THESIS_RETIRED event is appended once per (opportunity, reason) so the history says when spending stopped and why; if the rows change so the reason no longer holds the piece is live again with no write. (4) tests/cashRetirement.test.ts: each reason from rows; an unknown never retires; a retired piece raises no need, no dive, no commission across ten ticks; evidence and claims are unchanged; reversal on new evidence.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "claude/autonomous-opportunity-pipeline-6ph954",
+  "expectedOutcome": "Research capacity flows to live opportunities; dead theses are visible with their reason and never re-researched forever.",
+  "nonGoals": [
+    "A second opportunity pipeline, queue, scheduler or polling loop beside the durable Russell tick and operate()",
+    "Changing the evidence gate, verification, audit roles or approval envelopes",
+    "Editing server/services/identity/** or server/services/research/approvalEnvelope.ts",
+    "A full-table read on every tick; every new read is narrow, indexed and bounded"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "tests/cashRetirement.test.ts passes on SQLite and Postgres",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "whyNotDiving and refinement-report print THESIS_DEAD with the reason",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/cash/retirement.ts",
+    "server/services/cash/operate.ts",
+    "server/services/cash/validation.ts",
+    "server/services/cash/monetization/commission.ts",
+    "server/domain/opportunitySignals.ts",
+    "server/mcp/tools.ts",
+    "server/services/research/submission.ts",
+    "server/db/migrations/",
+    "server/db/pg-migrations/",
+    "server/domain/types.ts",
+    "server/repos/research.ts",
+    "scripts/refinement-report.ts",
+    "tests/**",
+    "docs/CASH.md",
+    "CLAUDE.md"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Revert the commits; any migration only adds columns with defaults or a nullable column."
+}

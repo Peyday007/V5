@@ -150,6 +150,37 @@ export function contactBuyerAdapter(): EffectAdapter | null {
 }
 
 /**
+ * Whether an operation can actually be performed now: an adapter is
+ * registered for it **and** that adapter's own configuration reads usable.
+ *
+ * Both halves, because registration says which provider was chosen and
+ * `health` says whether its key and settings are present *now* — a deployment
+ * whose secret was removed still has the adapter registered, and must not read
+ * as able to send. A test double with no `health` is usable by being
+ * registered, which is the only kind of adapter that lacks one.
+ */
+export function usableAdapter(namespace: OperationNamespace): EffectAdapter | null {
+  const adapter = listAdapters().find((one) => one.namespace === namespace.name) ?? null;
+  if (!adapter) return null;
+  if (adapter.health && !adapter.health().usable) return null;
+  return adapter;
+}
+
+/** Why an operation is or is not usable, in words that name no secret. */
+export function adapterStatus(namespace: OperationNamespace): {
+  adapter: string | null;
+  usable: boolean;
+  reason: string;
+} {
+  const adapter = listAdapters().find((one) => one.namespace === namespace.name) ?? null;
+  if (!adapter) {
+    return { adapter: null, usable: false, reason: 'No provider adapter is registered for this.' };
+  }
+  const health = adapter.health ? adapter.health() : { usable: true, reason: 'registered' };
+  return { adapter: adapter.name, usable: health.usable, reason: health.reason };
+}
+
+/**
  * The idempotency key for one attempt, built from server facts only.
  *
  * An idempotency key may hold only letters, digits and `. _ ~ -`
@@ -280,6 +311,12 @@ export interface EffectIntent {
   amountCents: number | null;
   /** The piece's state when it was sent, so a later mismatch can be named. */
   stateAtSend: string;
+  /**
+   * The journey row the send was for — the agreement an invoice bills — read
+   * back when the receipt is recorded rather than re-chosen then, because the
+   * agreement with room on it later may not be the one billed.
+   */
+  subjectRef: string | null;
   at: string;
 }
 
@@ -301,6 +338,7 @@ export async function intentFor(
       authorityId: detail.authorityId,
       amountCents: typeof detail.amountCents === 'number' ? detail.amountCents : null,
       stateAtSend: String(detail.stateAtSend ?? ''),
+      subjectRef: typeof detail.subjectRef === 'string' ? detail.subjectRef : null,
       at: event.createdAt,
     };
   }
@@ -327,6 +365,8 @@ export interface CommercialEffectRequest {
   amountCents: number | null;
   /** The piece's state at the moment of sending. */
   stateAtSend: string;
+  /** See `EffectIntent.subjectRef`. */
+  subjectRef?: string | null;
 }
 
 /**
@@ -339,7 +379,7 @@ export interface CommercialEffectRequest {
  */
 export async function sendCommercialEffect(input: CommercialEffectRequest): Promise<ExternalOutcome> {
   const effect = COMMERCIAL_EFFECTS[input.action];
-  const adapter = adapterFor(input.action);
+  const adapter = usableAdapter(effect.namespace);
   if (!adapter) {
     throw new Error(
       `No effect adapter is registered for "${effect.namespace.name}", so ` +
@@ -370,20 +410,25 @@ export async function sendCommercialEffect(input: CommercialEffectRequest): Prom
         authorityId: input.authorityId,
         amountCents: input.amountCents,
         stateAtSend: input.stateAtSend,
+        subjectRef: input.subjectRef ?? null,
       },
     });
   }
+  const key = commercialEffectKey(input.action, input.opportunityId, input.occurrence, input.retry ?? 0);
   return await runExternalEffect({
     adapter,
     namespace: effect.namespace,
     projectId: input.projectId,
-    key: commercialEffectKey(input.action, input.opportunityId, input.occurrence, input.retry ?? 0),
+    key,
     // The identity of this one effect, not of the piece it is for: a
     // reconcile asked by opportunity would answer a timed-out second payment
     // with the first payment's receipt, and record a charge that may have
     // happened as one that already had.
     businessId: correlationId,
-    payload: input.payload,
+    // A messaging provider is handed the same key as its own Idempotency-Key,
+    // so a lost response retried under this key is one email at the provider
+    // as well as one operation here.
+    payload: input.action === 'CONTACT_BUYER' ? { ...input.payload, requestKey: key } : input.payload,
     principalType: 'SYSTEM',
     principalId: principalIdFor(input.action),
     correlationId,
@@ -414,9 +459,11 @@ export interface ContactBuyerRequest {
   channel: string;
   authorityId: string;
   stateAtSend: string;
+  /** The message composed from the card (`outreach.ts`): one address, never invented. */
+  message?: { to: string; subject: string; text: string };
 }
 
-/** Reaching the buyer, kept as its own entry point for the tick. */
+/** Reaching the buyer, kept as its own entry point. */
 export async function sendContactBuyer(input: ContactBuyerRequest): Promise<ExternalOutcome> {
   return await sendCommercialEffect({
     action: 'CONTACT_BUYER',
@@ -424,9 +471,72 @@ export async function sendContactBuyer(input: ContactBuyerRequest): Promise<Exte
     opportunityId: input.opportunityId,
     occurrence: input.occurrence,
     retry: input.retry ?? 0,
-    payload: { payer: input.payer, channel: input.channel },
+    payload: { payer: input.payer, channel: input.channel, ...(input.message ?? {}) },
     authorityId: input.authorityId,
     amountCents: null,
     stateAtSend: input.stateAtSend,
+  });
+}
+
+/* ------------------------------------------------------------------------- */
+/* Issuing an invoice                                                         */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * The operation of issuing one invoice for one agreed amount — the same
+ * namespace `QUOTE_AND_INVOICE` declares, so one adapter serves it.
+ *
+ * Its business identity is Brain's own `cash_invoices` row id, which exists
+ * before anything is sent and is the one value the provider can be asked about
+ * afterwards (`metadata[brain_invoice]`). That is what makes the adapter
+ * reconcilable rather than opaque. **There is exactly one key per invoice**:
+ * a person's "have Brain do it" and the tick's issue pass both send under
+ * `issueInvoiceKey(invoice.id)` (`invoicing.ts`), so a press and a tick racing
+ * are one operation rather than two invoices.
+ */
+export const ISSUE_INVOICE_NAMESPACE: OperationNamespace = COMMERCIAL_EFFECTS.QUOTE_AND_INVOICE.namespace;
+
+export function issueInvoiceKey(invoiceId: string): string {
+  return `issue-invoice.${invoiceId}`;
+}
+
+export interface IssueInvoiceRequest {
+  projectId: string;
+  invoiceId: string;
+  amountCents: number;
+  currency: string;
+  customerEmail: string;
+  customerName: string;
+  taxTreatment: string;
+  dueDate: string;
+  description: string;
+}
+
+export async function sendIssueInvoice(input: IssueInvoiceRequest): Promise<ExternalOutcome> {
+  const adapter = usableAdapter(ISSUE_INVOICE_NAMESPACE);
+  if (!adapter) {
+    throw new Error(
+      `No usable effect adapter is registered for "${ISSUE_INVOICE_NAMESPACE.name}", so ` +
+        'ISSUE_AN_INVOICE should not have read PRESENT.',
+    );
+  }
+  return await runExternalEffect({
+    adapter,
+    namespace: ISSUE_INVOICE_NAMESPACE,
+    projectId: input.projectId,
+    // One invoice row is one invoice, for ever: the key is the row.
+    key: issueInvoiceKey(input.invoiceId),
+    businessId: input.invoiceId,
+    payload: {
+      amountCents: input.amountCents,
+      currency: input.currency,
+      customerEmail: input.customerEmail,
+      customerName: input.customerName,
+      taxTreatment: input.taxTreatment,
+      dueDate: input.dueDate,
+      description: input.description,
+    },
+    principalType: 'SYSTEM',
+    principalId: 'cash-issue-invoice',
   });
 }
