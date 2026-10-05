@@ -254,6 +254,42 @@ describe('A — a dependent may not own what its dependency needs to finish', ()
     expect((await listUnits(campaign.id)).map((u) => u.unitKey)).toEqual(['change-impl']);
   });
 
+  it('catches the production shape: a test in tests/ with the source file\'s stem', async () => {
+    // fcp_5b8378e0bd3f4920bb85: the unit changing startPacket.ts could not pass
+    // typecheck without tests/startPacket.test.ts, which a unit depending on it owned.
+    const changeRequest = await approved(['server/**', 'tests/**']);
+    const validation = validatePlan(
+      {
+        units: [
+          unit({ key: 'start-packet', ownedPaths: ['server/services/research/startPacket.ts'] }),
+          unit({ key: 'packet-runner', ownedPaths: ['server/services/research/packetRunner.ts'], dependsOn: ['start-packet'] }),
+          unit({
+            key: 'start-packet-tests',
+            kind: 'TEST',
+            ownedPaths: ['tests/startPacket.test.ts', 'tests/goalBudgetStartPacket.test.ts'],
+            dependsOn: ['start-packet', 'packet-runner'],
+          }),
+        ],
+      },
+      changeRequest,
+    );
+    expect(validation.ok).toBe(true);
+    expect(validation.rewrites[0]).toMatchObject({
+      action: 'MOVE_PATH',
+      paths: ['tests/startPacket.test.ts'],
+      from: 'start-packet-tests',
+      to: 'start-packet',
+    });
+    expect(validation.units.find((u) => u.key === 'start-packet')?.ownedPaths).toEqual([
+      'server/services/research/startPacket.ts',
+      'tests/startPacket.test.ts',
+    ]);
+    // The rest of the test unit keeps its own work and its ordering.
+    expect(validation.units.find((u) => u.key === 'start-packet-tests')?.ownedPaths).toEqual([
+      'tests/goalBudgetStartPacket.test.ts',
+    ]);
+  });
+
   it('refuses a true dependency cycle rather than rewriting it', async () => {
     const changeRequest = await approved();
     const validation = validatePlan(
