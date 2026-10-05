@@ -2592,6 +2592,48 @@ winning.
   reviewer's hint held against the approved scope — a hint can narrow a repair's
   reach and can never widen it. A finding is REPAIRED when its unit integrated
   and the verification passed, never because a worker said so.
+- **Every unit can finish, and that is decided before anybody runs it.** Two
+  production shapes broke it while every row read healthy. A plan put the test
+  an implementation's own verification runs into a unit that *depended on* the
+  implementation — unit 1 could not integrate without the test change, unit 2
+  could not start until unit 1 integrated, and the campaign sat EXECUTING over a
+  small change nobody could land. And a repair was given exactly the file the
+  reviewer named, which was the test the defect *showed* in, so the only change
+  integration would accept was weakening the test. **Where a defect is detected
+  is not where it must be repaired**, and **a dependent may not own what its
+  dependency needs to finish.**
+
+  `services/factory/ownership.ts` is one validator and the only one:
+  `validatePlan`, `installPlan` and `queueRepairs` all call `validateUnitGraph`,
+  and every replan reaches it through `validatePlan` — three readers that agree
+  today would be three rules soon. Its reasons are a closed set
+  (`DEPENDENCY_CYCLE`, `UNKNOWN_DEPENDENCY`, `MUTATION_OWNED_BY_DEPENDENT`,
+  `REQUIRED_FILE_NOT_WRITABLE`, `REPAIR_SCOPE_INSUFFICIENT`,
+  `OVERLAPPING_MUTATION_SCOPE`, `OWNERSHIP_OUTSIDE_REPOSITORY`), and overlap is
+  the one non-fatal answer, because the claim loop already serialises it. A
+  fixable deadlock is **rewritten, not refused**: the file moves to the unit that
+  needs it, or the two units merge when what is left could not stand alone, and
+  each change is a `PLAN_REWRITTEN` row written when the plan is installed. A
+  cycle is refused, because guessing which edge to drop would be inventing the
+  plan. A planner-created rewrite charges nobody an attempt, and `installPlan`
+  refuses an invalid graph from a caller that skipped validation, so a retry
+  carrying the raw proposal cannot put the deadlock back.
+
+  A repair's scope separates **evidence**, **root cause** and **verification**
+  files. A named test resolves to the file it tests — the sibling, the graph's
+  own same-stem file, or the single source file its unit or that unit's
+  dependencies own — and every file must be **anchored** in something the factory
+  holds: a unit's ownership, an exact entry a person wrote in the mutation scope,
+  or a line the finding cites. A free-form suggestion nothing anchors is recorded
+  as a rejected hint and left out, so a reviewer can narrow a repair and never
+  widen one. A root cause that cannot be established is
+  `REPAIR_OWNERSHIP_UNRESOLVED` with **no bin**, answered by a person naming the
+  file exactly in the scope; the old fallback to the whole mutation scope — a
+  repair that could write anywhere the contract could — is gone. The pairing is
+  a convention rather than a call graph, so it can merge a test into a unit that
+  did not strictly need it; that costs parallelism the two serial units never
+  had, and missing a deadlock costs the campaign. `tests/factoryOwnership.test.ts`
+  reproduces both shapes and was run with each fix removed to watch it fail.
 - **Adding a worker is a row.** `factory_workers.kind` selects an executor that
   already exists, and a kind nothing implements is refused at registration rather
   than discovered at dispatch. Scaling the fleet is never a factory code change.
@@ -5855,6 +5897,54 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   refusal with no control beside it is §24's escalation with no answer. Three
   test journeys had recorded the money unattributed, or after collecting; they
   were wrong about the order and are corrected rather than the guard loosened.
+
+- **Every walk that reached READY did it with a person typing the card, so
+  "Brain prepares things worth testing by itself" had never been shown — and
+  driving it without the person found two writers that did not exist.** The
+  load-bearing `exposure` field (`peak_funding_cents`) was owned by
+  `BRAIN_RESEARCH`, `reconcileDiscoverableGaps` raised a need for it, and
+  `applyOne` then returned false because `COLUMN` had no entry for it: the need
+  sat open beside a finished mission for ever and every autonomous piece stopped
+  at QUALIFIED. And a researched `price` wrote the claim's *sentence* into the
+  integer `price_cents` — stored as text on SQLite, refused by Postgres, which
+  throws out of `applyResearchAnswers` and stops every pass after it in the
+  operating step. Both are one rule now: a money field is read through
+  `readMoneyFigures` (`MONEY_FIELD`, `figureFor` in `answers.ts`), taking the
+  unfavourable end — the lowest published price, the highest published cost —
+  and a claim with no figure answers nothing and is reported as such. The
+  exposure is also proposed from published direct costs that state a figure,
+  and never from a cost sentence that does not. `tests/cashAutonomousFunnel`
+  walks an ACTIVE sprint with no handcrafted opportunity from discovery to
+  READY_TO_TEST with no `PERSON` fact on the card, and fails at QUALIFIED,
+  naming `exposure`, against the code it replaced — on both backends.
+  The same suite holds the refusals rather than only the success: no payer
+  leaves a SIGNAL, a short thesis stops below QUALIFIED, a price or a cost
+  stated only in words leaves the column null and the need open, a price
+  mission's figures never reach the exposure, and a replay or a restart writes
+  no second fact. **A need is answered by its own mission and by nothing
+  else**, which is what keeps one field's research out of another's column —
+  and, said plainly, within that mission the first claim stating a figure
+  answers, so a mission that returns several figures for different things is
+  read at the unfavourable end of whichever claim the gate put first.
+  **Reading a figure into an integer column is a sharper act than quoting a
+  sentence, and the independent review of the port found three ways it
+  invented one.** `readMoneyFigures` read `C$1,200`, `A$5,000` and `HK$900` as
+  dollars, because the `$` pattern had no left boundary, and `$1,200 million`
+  as 1,200; both are refused now — a symbol glued to a letter belongs to
+  another currency, and a spelled-out scale is shorthand by another name. A
+  figure stated *per* something (`$25 per hour`, `$49/mo`) is reported as a
+  rate and `figureFor` does not take it as a card total. A figure above
+  `MAX_COLUMN_CENTS` — Postgres's `INTEGER`, which SQLite does not enforce — is
+  unanswerable rather than clipped, because the write it would make is the
+  same throw this change exists to remove. And a proposed exposure replaces
+  only a proposal: a figure on the column with no card fact, or with a source
+  or a person behind it, is left alone, and the margin is computed against
+  whatever the card will actually hold.
+  Staleness, early retirement, target replenishment, configurable portfolio
+  concurrency, the software-need handoff to the Factory and a funnel reading
+  are **not built**; they were drafted as unapproved objective specifications
+  on `claude/autonomous-opportunity-pipeline-6ph954` and are not in
+  `objectives/`, because that directory holds what a person approved.
 
 **Brain performs a commercial action only through `cash/perform.ts`.** The
 tick's contact, a person's *Have Brain do it* and a person settling an unknown
@@ -12275,6 +12365,7 @@ server/
       forbidden.ts      what no unit may change, refused at the plan and on the diff
       review.ts         the independent verdict, and the lineage that makes it one
       repair.ts         a finding becomes work, exactly once
+      ownership.ts      the one pre-dispatch check: every unit and repair can finish
       regrant.ts        the answer to a unit that ran out of attempts
       assemble.ts       the reviewable artifact, and the publishing it refuses
       metrics.ts        throughput from the ledger, with an evidence class
@@ -12661,6 +12752,7 @@ tests/                  Vitest suites
   bridgeHttp.test.ts         the door: a worker refused by type, and one body for two refusals
   intakeToResult.test.ts     a transcript from outside, to a pull request, and back out
   factoryUnblock.test.ts     where a blocked campaign resumes, derived from its own rows
+  factoryOwnership.test.ts   the deadlock and the test-only repair, reproduced and refused
   webauthn.test.ts           a real P-256 credential, and every refusal that would not have been one
   passkeyEnrollment.test.ts  a link spent once, a recovery that retires, a count that waits
   passkeyHttp.test.ts        the door, over a socket: five ways in and nothing else new

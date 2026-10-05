@@ -113,6 +113,31 @@ no healthy execution surface, no eligible reviewer, a dependency cycle, a base
 that went stale, a unit that exhausted its attempts — each with a remedy a
 person can actually act on.
 
+## 1a. Every unit can finish before anything is dispatched
+
+`server/services/factory/ownership.ts` holds the one validator the planner,
+plan installation and repair creation all call. It answers whether each unit can
+reach its completion condition with its own writable scope, its integrated
+dependencies and read-only repository state, and says why not from a closed set:
+`DEPENDENCY_CYCLE`, `UNKNOWN_DEPENDENCY`, `MUTATION_OWNED_BY_DEPENDENT`,
+`REQUIRED_FILE_NOT_WRITABLE`, `REPAIR_SCOPE_INSUFFICIENT`,
+`OVERLAPPING_MUTATION_SCOPE` (reported, and serialised by the claim loop) and
+`OWNERSHIP_OUTSIDE_REPOSITORY`.
+
+- A unit needs the tests its verification runs against the files it owns (by
+  the `x.ts` / `x.test.ts` convention, or a unique same-stem test in the graph)
+  and any file its acceptance statements name. When a unit that **waits for it**
+  owns one of those, the plan is rewritten: the file moves to the unit that needs
+  it, and a unit left owning nothing is merged in. Each change is a
+  `PLAN_REWRITTEN` event. Cycles are refused, never rewritten.
+- A repair's writable scope is the finding's anchored evidence files plus their
+  root cause — a named test resolves to the file it tests — and nothing else. A
+  hint nothing anchors (no unit owns it, the scope does not name it exactly, the
+  finding does not cite it at a line) is recorded as rejected. When the root
+  cause cannot be established the campaign blocks `REPAIR_OWNERSHIP_UNRESOLVED`
+  with a `REPAIR_OWNERSHIP_BLOCKED` event and no repair bin; naming the file
+  exactly in the mutation scope answers it on the next tick.
+
 ## 2. What makes a worker's summary not count as evidence
 
 A worker returns from an attempt with two things: a diff, and prose about the

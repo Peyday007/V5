@@ -125,7 +125,7 @@ function term(terms: ProposedTerm[], field: string): ProposedTerm | undefined {
 describe('a money figure is read from a source', () => {
   it('reads a figure the text actually marks with this currency', () => {
     expect(readMoneyFigures('Budget is $1,200 for the work.', 'USD')).toEqual([
-      { cents: 120_000, currency: 'USD', text: '$1,200' },
+      { cents: 120_000, currency: 'USD', text: '$1,200', perUnit: false },
     ]);
     expect(readMoneyFigures('We pay 1,200 USD on delivery.', 'USD')[0]?.cents).toBe(120_000);
     expect(readMoneyFigures('Fee: USD 950.50', 'USD')[0]?.cents).toBe(95_050);

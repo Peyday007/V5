@@ -1,0 +1,34 @@
+{
+  "objective": "server/domain/version.ts maxVersion() sorts with sortVersions(), and parseVersion() gives a string that is not a version the sortKey 9999.9999.9999.<raw>, so maxVersion(['v2', 'draft']) returns 'draft' — an unparseable string reported as the newest version. stateEngine.ts, auditEngine.ts and promptCompiler.ts all read the current version through it. Fix: maxVersion considers only strings parseVersion() accepts as valid and returns null when none is; sortVersions and compareVersions are unchanged. PLANNING NOTE (this objective doubles as a live check of the Factory's planner): propose exactly two units — (1) an IMPLEMENTATION unit owning server/domain/version.ts, and (2) a TEST unit owning tests/version.test.ts that depends on (1) and adds the regression. Brain decides whether that decomposition can finish and may rewrite it; do not pre-empt that decision by merging them yourself.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "maxVersion ignores strings that are not versions, with a regression in tests/version.test.ts.",
+  "nonGoals": [
+    "Changing how sortVersions orders invalid strings",
+    "Changing parseVersion"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "maxVersion(['v2', 'draft']) is 'v2' and maxVersion(['draft']) is null, asserted in tests/version.test.ts by a test that fails before the fix",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "typecheck passes",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/domain/version.ts",
+    "tests/version.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the commit; no schema or data change.",
+  "submissionKey": "version-max-ignores-invalid"
+}

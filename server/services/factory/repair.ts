@@ -12,10 +12,13 @@
  *   * **One finding, one repair.** `attachRepair` is a guarded update, so a tick
  *     that runs twice over the same finding queues one unit. A second repair for
  *     one defect is two workers editing the same thing.
- *   * **A repair's ownership comes from the contract, not from the reviewer.** The
- *     paths a reviewer suggests are a hint; what a repair may touch is the
- *     intersection of that hint with the approved mutation scope, and a hint that
- *     reaches outside it is discarded rather than honoured.
+ *   * **A repair's ownership comes from the factory, not from the reviewer.** The
+ *     paths a reviewer names are evidence of where the defect *showed*; where it
+ *     must be *fixed* is resolved by `ownership.ts` — a named test resolves to the
+ *     file it tests — and every file is anchored in something the factory holds
+ *     (a unit's ownership, a file a person named in the scope, a line the finding
+ *     cites) and held to the approved scope. A hint nothing anchors is recorded
+ *     and left out; a repair that could not reach its root cause is not created.
  *   * **A repair is a planned second attempt, not a retry.** It carries the
  *     finding's statement and evidence, and the assignment tells the worker what
  *     earlier attempts already tried — so the same failing strategy is not run
@@ -28,17 +31,24 @@ import type {
   FactoryRiskClass,
   FactoryWorkUnit,
 } from '../../domain/factory.ts';
-import { ensureUnit, getUnit, listUnits, promoteReadyUnits } from '../../repos/factory.ts';
+import { ensureUnit, getUnit, listDependencies, listUnits, promoteReadyUnits } from '../../repos/factory.ts';
 import {
   attachRepair,
+  listFactoryEvents,
   listOpenFindings,
   listUnqueuedFindings,
   recordFactoryEvent,
   resolveFinding,
 } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
-import { matchesGlob } from './integrate.ts';
-import { forbiddenIn, forbiddenPathsFor } from './forbidden.ts';
+import { forbiddenPathsFor } from './forbidden.ts';
+import {
+  graphFromRows,
+  pathsNamedIn as namedIn,
+  resolveRepairScope,
+  validateUnitGraph,
+  type RepairScope,
+} from './ownership.ts';
 
 /** A finding severity that has to be repaired before the campaign can finish. */
 export const GATING_SEVERITIES = new Set(['BLOCKER', 'MAJOR']);
@@ -69,14 +79,7 @@ export function suggestedPathsFrom(finding: FactoryFinding): string[] {
  * that nobody has to change.
  */
 export function pathsNamedIn(text: string): string[] {
-  const out = new Set<string>();
-  const pattern = /(?:^|[\s`'"(\[])((?:[\w.-]+\/)+[\w.-]+\.[A-Za-z0-9]+)(?::\d+)?/g;
-  for (const match of text.matchAll(pattern)) {
-    const path = match[1]!;
-    if (path.startsWith('/') || path.split('/').includes('..') || path.includes('://')) continue;
-    out.add(path);
-  }
-  return [...out];
+  return namedIn(text);
 }
 
 /**
@@ -90,38 +93,25 @@ export function requiredPathsFor(finding: FactoryFinding): string[] {
   return suggested.length > 0 ? suggested : pathsNamedIn(finding.statement);
 }
 
-export type RepairOwnership =
-  | {
-      ok: true;
-      ownedPaths: string[];
-      derivedFrom: 'REQUIRED_FILES' | 'UNIT_OWNERSHIP' | 'CAMPAIGN_SCOPE';
-      /** Required files no unit of this campaign owned — the widening, named. */
-      beyondUnits: string[];
-    }
-  | {
-      ok: false;
-      required: string[];
-      /** Required files the approved mutation scope does not cover. */
-      outsideScope: string[];
-      /** Required files no contract may grant, because the repository forbids them. */
-      forbidden: string[];
-    };
+export type RepairOwnership = RepairScope;
 
 /**
- * What a repair unit is allowed to touch.
+ * What a repair unit is allowed to touch: the minimum sufficient scope.
  *
- * Exactly the files the finding requires, when the approved scope covers every
- * one of them — including files no unit of the campaign owned, because a
- * repair that cannot reach the file the defect is in is a bin that can only
- * BLOCK, attempt after attempt. Nothing broader: never the campaign's whole
- * scope, never the units' union on top.
+ * `ownership.ts` decides, from the finding's evidence and the campaign's own
+ * units (their ownership and what each waits for); this reads the hint out of
+ * the evidence and hands over the rows. Three outcomes:
  *
- * When any required file is outside the approved scope the answer is a refusal
- * naming it. Dropping it and repairing with what is left was the old behaviour,
- * and it produced exactly that impossible bin. Widening a scope is a person's
- * amendment; the factory may not grant itself authority (§27).
+ *   * the evidence files, their root cause and the tests that verify it — never
+ *     the campaign's whole scope, never the units' union on top;
+ *   * `REQUIRED_FILE_NOT_WRITABLE` — a named file the approved scope does not
+ *     cover, or the repository forbids. Widening a scope is a person's amendment;
+ *     the factory may not grant itself authority (§27);
+ *   * `REPAIR_SCOPE_INSUFFICIENT` — the file the defect must be fixed in cannot
+ *     be established. Dispatching the repair anyway was the old behaviour, and it
+ *     produced a bin that could only weaken a test or BLOCK.
  *
- * A finding that names no file falls back to the units' own paths, which
+ * A finding that names no file at all falls back to the units' own paths, which
  * serialises the repair against those units rather than letting it roam.
  */
 export function ownershipForRepair(
@@ -129,30 +119,29 @@ export function ownershipForRepair(
   changeRequest: FactoryChangeRequest,
   units: FactoryWorkUnit[],
   forbiddenPaths: string[] = [],
+  dependsOn: Map<string, string[]> = new Map(),
 ): RepairOwnership {
-  const required = requiredPathsFor(finding);
-  if (required.length > 0) {
-    const forbidden = forbiddenIn(required, forbiddenPaths);
-    const outsideScope = required.filter(
-      (path) =>
-        !forbidden.includes(path) &&
-        !changeRequest.mutationScope.some((glob) => matchesGlob(path, glob)),
-    );
-    if (outsideScope.length > 0 || forbidden.length > 0) {
-      return { ok: false, required, outsideScope, forbidden };
-    }
-    const owned = new Set(units.flatMap((unit) => unit.ownedPaths));
-    const beyondUnits = required.filter(
-      (path) => !owned.has(path) && !units.some((unit) => unit.ownedPaths.some((g) => matchesGlob(path, g))),
-    );
-    return { ok: true, ownedPaths: required, derivedFrom: 'REQUIRED_FILES', beyondUnits };
-  }
+  return resolveRepairScope({
+    suggested: suggestedPathsFrom(finding),
+    statement: finding.statement,
+    evidence: finding.evidence,
+    category: finding.category,
+    mutationScope: changeRequest.mutationScope,
+    forbiddenPaths,
+    units: units
+      // Earlier repairs included: a file only a previous repair owned is still
+      // something this campaign has already been trusted to change.
+      .filter((unit) => unit.state !== 'CANCELLED' && unit.state !== 'SUPERSEDED')
+      .map((unit) => ({ unitKey: unit.unitKey, ownedPaths: unit.ownedPaths, dependsOn: dependsOn.get(unit.unitKey) ?? [] })),
+  });
+}
 
-  const unionOfUnits = [...new Set(units.flatMap((unit) => unit.ownedPaths))];
-  if (unionOfUnits.length > 0) {
-    return { ok: true, ownedPaths: unionOfUnits, derivedFrom: 'UNIT_OWNERSHIP', beyondUnits: [] };
-  }
-  return { ok: true, ownedPaths: changeRequest.mutationScope, derivedFrom: 'CAMPAIGN_SCOPE', beyondUnits: [] };
+/** The blocker sentence for findings whose repair could not be given a sufficient scope. */
+export function ownershipBlockedDetail(needs: RepairResult['ownershipBlocked']): string {
+  return (
+    needs.map((need) => `${need.findingKey}: ${need.detail}`).join(' — ') +
+    ' A repair is not created that could not reach the file the defect must be fixed in.'
+  );
 }
 
 /** The blocker sentence for findings whose repair needs a person's amendment first. */
@@ -188,6 +177,11 @@ export interface RepairResult {
   skipped: { findingId: string; reason: string }[];
   /** Findings left unqueued because a file they require is outside the approved scope. */
   needsAmendment: { findingId: string; findingKey: string; outsideScope: string[]; forbidden: string[] }[];
+  /**
+   * Findings left unqueued because the file their repair must change could not be
+   * established, or the repair failed the canonical validator. No bin exists for them.
+   */
+  ownershipBlocked: { findingId: string; findingKey: string; reason: string; detail: string }[];
 }
 
 /**
@@ -206,21 +200,74 @@ export async function queueRepairs(
   // second repair unit, and `attachRepair` would refuse one anyway.
   const findings = await listUnqueuedFindings(campaign.id);
   const units = await listUnits(campaign.id);
-  const result: RepairResult = { queued: [], skipped: [], needsAmendment: [] };
-  const forbiddenPaths = changeRequest.repository ? forbiddenPathsFor(changeRequest.repository) : [];
+  const dependencies = await listDependencies(campaign.id);
+  const result: RepairResult = { queued: [], skipped: [], needsAmendment: [], ownershipBlocked: [] };
+  const forbiddenPaths = forbiddenPathsFor(changeRequest.repository);
+  const graph = graphFromRows(units, dependencies);
+  const dependsOn = new Map(graph.map((unit) => [unit.key, unit.dependsOn]));
+  const alreadyBlocked = new Set(
+    findings.length === 0
+      ? []
+      : (await listFactoryEvents(campaign.id, { kinds: [FACTORY_EVENT_KINDS.repairOwnershipBlocked] }))
+          .map((event) => `${String(event.detail['findingId'])}:${String(event.detail['reason'])}`),
+  );
+
+  const blockOwnership = async (finding: FactoryFinding, reason: string, detail: string, extra: Record<string, unknown>) => {
+    result.ownershipBlocked.push({ findingId: finding.id, findingKey: finding.findingKey, reason, detail });
+    if (alreadyBlocked.has(`${finding.id}:${reason}`)) return;
+    alreadyBlocked.add(`${finding.id}:${reason}`);
+    await recordFactoryEvent({
+      campaignId: campaign.id,
+      kind: FACTORY_EVENT_KINDS.repairOwnershipBlocked,
+      evidenceClass: 'DERIVED',
+      detail: { findingId: finding.id, findingKey: finding.findingKey, reason, detail, ...extra },
+    });
+  };
 
   for (const finding of findings) {
-    const ownership = ownershipForRepair(finding, changeRequest, units, forbiddenPaths);
+    const ownership = ownershipForRepair(finding, changeRequest, units, forbiddenPaths, dependsOn);
     if (!ownership.ok) {
-      result.needsAmendment.push({
-        findingId: finding.id,
-        findingKey: finding.findingKey,
-        outsideScope: ownership.outsideScope,
-        forbidden: ownership.forbidden,
-      });
+      if (ownership.reason === 'REQUIRED_FILE_NOT_WRITABLE') {
+        result.needsAmendment.push({
+          findingId: finding.id,
+          findingKey: finding.findingKey,
+          outsideScope: ownership.outsideScope,
+          forbidden: ownership.forbidden,
+        });
+      } else {
+        await blockOwnership(finding, ownership.reason, ownership.detail, {
+          evidenceFiles: ownership.evidenceFiles,
+          rejectedHints: ownership.rejectedHints,
+        });
+      }
       continue;
     }
     const unitKey = `repair-${finding.findingKey}`.slice(0, 60);
+
+    /*
+     * The same validator the planner uses, over the campaign as installed plus
+     * this repair. Only an issue naming the repair stops it: a legacy graph's
+     * own problems are that graph's, and must not strand a repair that is fine.
+     */
+    const verdict = validateUnitGraph(
+      [
+        ...graph.filter((unit) => unit.key !== unitKey),
+        {
+          key: unitKey,
+          kind: 'REPAIR',
+          ownedPaths: ownership.ownedPaths,
+          dependsOn: [],
+          acceptance: [],
+          mustReach: ownership.rootCauseFiles,
+        },
+      ],
+      { mutationScope: changeRequest.mutationScope, forbiddenPaths },
+    );
+    const refusal = verdict.issues.find((issue) => issue.fatal && issue.units.includes(unitKey));
+    if (refusal) {
+      await blockOwnership(finding, refusal.reason, refusal.detail, { ownedPaths: ownership.ownedPaths });
+      continue;
+    }
 
     const { unit } = await ensureUnit({
       campaignId: campaign.id,
@@ -278,6 +325,10 @@ export async function queueRepairs(
         ownedPaths: ownership.ownedPaths.slice(0, 20),
         ownershipDerivedFrom: ownership.derivedFrom,
         widenedBeyondUnits: ownership.beyondUnits,
+        evidenceFiles: ownership.evidenceFiles,
+        rootCauseFiles: ownership.rootCauseFiles,
+        verificationFiles: ownership.verificationFiles,
+        rejectedHints: ownership.rejectedHints,
         gating: GATING_SEVERITIES.has(finding.severity),
       },
     });
@@ -305,11 +356,37 @@ export async function queueVerificationRepair(
   campaign: FactoryCampaign,
   changeRequest: FactoryChangeRequest,
   failure: { command: string; exitCode: number; tail: string },
-): Promise<{ unitId: string; unitKey: string; created: boolean }> {
+): Promise<
+  | { ok: true; unitId: string; unitKey: string; created: boolean }
+  | { ok: false; unitKey: string; reason: string; detail: string }
+> {
   const slug = failure.command.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const unitKey = `repair-verification-${slug}`.slice(0, 60);
   const units = await listUnits(campaign.id);
-  const ownedPaths = [...new Set(units.flatMap((unit) => unit.ownedPaths))];
+  const live = units.filter((unit) => unit.state !== 'CANCELLED' && unit.state !== 'SUPERSEDED');
+  /*
+   * The campaign's own work, and never the mutation scope: two units broke each
+   * other, so the fix is inside what they owned. The old fallback to the whole
+   * scope was a repair that could write anywhere the contract could. Held to the
+   * same validator as every other unit.
+   */
+  const ownedPaths = [...new Set(live.flatMap((unit) => unit.ownedPaths))];
+  const forbiddenPaths = forbiddenPathsFor(changeRequest.repository);
+  if (ownedPaths.length === 0) {
+    return {
+      ok: false, unitKey, reason: 'REPAIR_SCOPE_INSUFFICIENT',
+      detail: `\`${failure.command}\` fails and the campaign has no unit whose work the fix could be in.`,
+    };
+  }
+  const verdict = validateUnitGraph(
+    [
+      ...graphFromRows(units, await listDependencies(campaign.id)).filter((unit) => unit.key !== unitKey),
+      { key: unitKey, kind: 'REPAIR', ownedPaths, dependsOn: [], acceptance: [] },
+    ],
+    { mutationScope: changeRequest.mutationScope, forbiddenPaths },
+  );
+  const refusal = verdict.issues.find((issue) => issue.fatal && issue.units.includes(unitKey));
+  if (refusal) return { ok: false, unitKey, reason: refusal.reason, detail: refusal.detail };
 
   const { unit, created } = await ensureUnit({
     campaignId: campaign.id,
@@ -327,7 +404,7 @@ export async function queueVerificationRepair(
       `\`${failure.command}\` exits 0 on the merged tree`,
       'no test was weakened, skipped or deleted to achieve it',
     ],
-    ownedPaths: ownedPaths.length > 0 ? ownedPaths : changeRequest.mutationScope,
+    ownedPaths,
     requiredContext: [],
     verification: [failure.command],
     expectedArtifact: 'a commit that makes the command pass',
@@ -354,7 +431,7 @@ export async function queueVerificationRepair(
     });
   }
   await promoteReadyUnits(campaign.id);
-  return { unitId: unit.id, unitKey, created };
+  return { ok: true, unitId: unit.id, unitKey, created };
 }
 
 /**

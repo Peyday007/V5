@@ -62,6 +62,11 @@ export const FACTORY_BLOCKER_KINDS = [
   'EXTERNAL_CREDENTIAL_REQUIRED',
   /** A repair needs a file the approved mutation scope does not cover. */
   'SCOPE_AMENDMENT_REQUIRED',
+  /**
+   * A repair's root cause could not be established from the campaign, so no
+   * repair bin was created rather than one that could only weaken a test.
+   */
+  'REPAIR_OWNERSHIP_UNRESOLVED',
 ] as const;
 export type FactoryBlockerKind = (typeof FACTORY_BLOCKER_KINDS)[number];
 
