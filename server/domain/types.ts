@@ -6081,6 +6081,9 @@ export interface RussellGoalRow {
   /** What a research goal is for, and the layer its packets file under. */
   research_assignment?: string | null;
   research_layer_id?: string | null;
+  /** When the continuation pass last looked at this goal, and what the archive looked like when it answered it. */
+  research_considered_at?: string | null;
+  research_archive_marker?: string | null;
   max_external_spend: number;
   starts_at: string;
   expires_at: string | null;
@@ -6403,6 +6406,10 @@ export interface RussellGoal {
   researchAssignment?: string | null;
   /** The layer a research goal's packets file under; null when none was named. */
   researchLayerId?: string | null;
+  /** When the continuation pass last considered this goal; null if never. */
+  researchConsideredAt?: string | null;
+  /** The archive marker the pass found this goal answered against; null if none. */
+  researchArchiveMarker?: string | null;
   maxExternalSpend: number;
   startsAt: string;
   expiresAt: string | null;

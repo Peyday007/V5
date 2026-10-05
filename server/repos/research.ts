@@ -20,6 +20,7 @@ import type { DealFinding, PuzzleFinding, PuzzleProductClass } from '../domain/t
 import type { OpportunitySignal } from '../domain/types.ts';
 import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
+import { touchSharedFindingForClaim, touchSharedFindingsForFragment } from './sharedFindings.ts';
 import { bindPacketToGoal, chargeFragments, reserveGoalPacket, settleReservation } from './russellAuthority.ts';
 import {
   parseDependencies,
@@ -733,6 +734,8 @@ export async function updateFragment(id: string, patch: UpdateFragmentInput): Pr
     nowIso(),
     id,
   ]);
+  // A fragment's status is part of what makes its claims' shared findings eligible.
+  if (patch.status !== undefined) await touchSharedFindingsForFragment(id);
   return getFragment(id);
 }
 
@@ -1452,6 +1455,8 @@ export async function decideClaim(
     [fromBool(input.accepted), input.rejectionReason ?? null,
       input.scopeMatch === undefined ? null : toJson(input.scopeMatch), id],
   );
+  // accepted is part of what makes a shared finding eligible.
+  await touchSharedFindingForClaim(id);
   return getClaim(id);
 }
 
@@ -1502,5 +1507,7 @@ export async function markContradiction(
     'UPDATE research_claims SET contradiction_state = ?, contradiction_note = ? WHERE id = ?',
     [state, note, id],
   );
+  // contradiction_state is part of what makes a shared finding eligible.
+  await touchSharedFindingForClaim(id);
   return getClaim(id);
 }

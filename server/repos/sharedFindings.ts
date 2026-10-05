@@ -447,3 +447,22 @@ export async function setFindingHorizon(input: {
   if ((result.changes ?? 0) === 0) return null;
   return getFinding(input.id);
 }
+
+/**
+ * Note that something `ELIGIBLE_SQL` reads about a claim changed, so anything
+ * keyed on the shared pool's `updated_at` (the continuation pass's archive
+ * marker) sees it. One indexed write on the unique `claim_id`; a no-op for a
+ * claim that was never promoted.
+ */
+export async function touchSharedFindingForClaim(claimId: string): Promise<void> {
+  await getDb().run('UPDATE shared_findings SET updated_at = ? WHERE claim_id = ?', [nowIso(), claimId]);
+}
+
+/** The same, for every finding whose claim belongs to a fragment (its status is read by `ELIGIBLE_SQL`). */
+export async function touchSharedFindingsForFragment(fragmentId: string): Promise<void> {
+  await getDb().run(
+    `UPDATE shared_findings SET updated_at = ?
+      WHERE claim_id IN (SELECT id FROM research_claims WHERE fragment_id = ?)`,
+    [nowIso(), fragmentId],
+  );
+}
