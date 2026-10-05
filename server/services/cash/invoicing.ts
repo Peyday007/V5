@@ -44,14 +44,14 @@ import { checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
 import { ISSUE_INVOICE_NAMESPACE, sendIssueInvoice, adapterStatus } from './effects.ts';
 import { raiseNeed } from './needs.ts';
-import { recordMoneyEvent } from './opportunities.ts';
+import { recordMoneyEvent, voidUncoveredDrafts } from './opportunities.ts';
 import { usablePaymentReader } from './providers/payments.ts';
 import { ADDRESS } from './providers/config.ts';
 import { TAX_TREATMENTS, dueDateSeconds } from './providers/stripe.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import type { CashInvoice } from '../../domain/types.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { customerPaymentByReference } from '../../repos/cashLedger.ts';
+import { customerPaymentByReference, getMoneyEntry } from '../../repos/cashLedger.ts';
 
 const BRAIN = 'BRAIN';
 const INVOICE_ACTION = 'QUOTE_AND_INVOICE';
@@ -384,6 +384,22 @@ export async function issueOne(invoice: CashInvoice, pass: InvoicingPass): Promi
       );
       return;
     }
+    /*
+     * The amount was what was owed when it was drafted. Money that arrived
+     * another way since then makes part of it money the buyer already paid,
+     * so it is checked again immediately before the send, under the cash lock,
+     * and a draft the ledger has overtaken is voided rather than billed.
+     */
+    const voided = await serializeCash(projectId, invoice.currency, () =>
+      voidUncoveredDrafts({
+        projectId,
+        opportunityId: invoice.opportunityId,
+        currency: invoice.currency,
+        because: 'Paid another way before it was sent; voided rather than billed twice.',
+      }),
+    );
+    if (voided.length > 0) pass.voided.push(...voided);
+    if ((await getInvoice(invoice.id))?.state !== 'DRAFTED') return;
   } else if (invoice.state === 'UNCERTAIN') {
     // An UNCERTAIN invoice is only ever *asked about*, and asking needs the
     // provider too. Without one it stays exactly as unknown as it was.
@@ -471,9 +487,18 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
        * ISSUED for ever: one reference is one payment (§30), and the
        * settlement and the fee still have to be read.
        */
-      const entry = payment.ok
-        ? payment.value
+      const adopted = payment.ok
+        ? null
         : await customerPaymentByReference(projectId, reading.chargeId ?? current.providerInvoiceId ?? '');
+      // A payment another invoice already names is that invoice's money, never
+      // this one's too: one payment counted against two invoices is money
+      // counted twice.
+      const namedElsewhere =
+        adopted !== null &&
+        (await listInvoices({ projectId, opportunityId: current.opportunityId })).some(
+          (one) => one.id !== current.id && one.paymentEntryId === adopted.id,
+        );
+      const entry = payment.ok ? payment.value : namedElsewhere ? null : adopted;
       if (!entry || entry.opportunityId !== current.opportunityId) {
         await holdWithReason(
           current,
@@ -508,6 +533,50 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
       }
       pass.paid.push(current.id);
       current = (await getInvoice(current.id)) ?? current;
+    }
+
+    /*
+     * An invoice already PAID by money that arrived another way — Brain's own
+     * charge, or a person's attributed payment — that the provider now *also*
+     * reads as paid, under a different charge, is the buyer paying twice.
+     * Settling it would absorb the second payment into the first one's
+     * settlement room and hide the refund that is owed, so it is held and a
+     * person is asked.
+     */
+    if (invoice.state === 'PAID' && reading.status === 'paid' && reading.amountPaidCents > 0 && current.paymentEntryId) {
+      const named = await getMoneyEntry(current.paymentEntryId);
+      const sameMoney =
+        named !== null &&
+        (named.idempotencyKey === `invoice-payment:${current.id}` ||
+          (named.verifiedReference !== null &&
+            named.verifiedReference === (reading.chargeId ?? current.providerInvoiceId)));
+      if (!sameMoney) {
+        await holdWithReason(
+          current,
+          'The provider says the buyer paid this invoice, and it was already paid another way: the buyer may have paid twice.',
+          pass,
+        );
+        await raiseNeed({
+          projectId,
+          opportunityId: current.opportunityId,
+          actorRef: BRAIN,
+          blockedAction: `Settle invoice ${current.id}`,
+          whyItMatters:
+            'The invoice was marked paid by a payment made another way, and the provider now reads the buyer ' +
+            'paying the invoice itself too. Brain records neither the second payment nor its settlement until a ' +
+            'person says whether the buyer paid twice.',
+          recommendedPath:
+            'Check the provider: if the buyer paid twice, refund one payment; if the payment recorded against this ' +
+            'invoice was this same money under another reference, correct the record.',
+          setupEffort: 'A few minutes.',
+          nextStep: `Compare ${reading.chargeId ?? current.providerInvoiceId} with ${named?.verifiedReference ?? current.paymentEntryId}.`,
+          completionCondition: 'A person has said whether the buyer paid twice.',
+          blocksState: null,
+          requestKey: `invoice-paid-twice:${current.id}`,
+        });
+        await moveInvoice({ id: current.id, from: 'PAID', to: 'PAID', patch: { providerStatus: reading.status, lastReadAt: readAt } });
+        continue;
+      }
     }
 
     // PAID: settled only when the provider says the funds are usable.

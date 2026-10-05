@@ -12365,6 +12365,13 @@ table are unchanged in kind.
   invoice needs no second grant. The grant was checked when the invoice was
   issued, and refusing what Stripe says was paid would leave money that arrived
   unrecorded.
+  A drafted invoice the ledger has overtaken is voided rather than sent — by
+  the payment that overtook it, and again under the lock immediately before
+  any send. And there is never a second way to pay one bill: Brain does not
+  charge while an invoice is open for the money, a hand payment must say what
+  it pays while one is drafted, unknown or unpaid, and an invoice paid another
+  way that the provider *also* reads paid is held (`invoice-paid-twice:`)
+  rather than settled into the first payment.
 - **A refund is a state machine bounded by money that has not left.**
   - Authorization happens under the cash lock, against
     `paid − refunded − unresolved`.

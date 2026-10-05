@@ -15,7 +15,8 @@
  * invoicing and taking a payment could never be performed by Brain at all.
  *
  *   J01 — READY → Brain contacts (CONFIRMED) → agreed amount → Brain invoices
- *         → a second press is refused, not a second invoice → Brain takes the
+ *         → a second press is refused, not a second invoice → a charge beside
+ *         the open invoice is refused → voided, Brain takes the
  *         payment → "money is in" refused until a settlement → settlement →
  *         COLLECTED, with every Cash figure derived from server rows.
  *   J02 — an ambiguous send: no action, no resend on the next pass, then the
@@ -52,6 +53,7 @@ import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { getOpportunity, listNeeds } from '../server/repos/cashPortfolio.ts';
 import { actionsFor } from '../server/repos/cashActions.ts';
 import { listMoneyEntries } from '../server/repos/cashLedger.ts';
+import { listInvoices, moveInvoice } from '../server/repos/cashInvoices.ts';
 import { readCapability } from '../server/services/cash/capabilities.ts';
 import { COMMERCIAL_EFFECTS, commercialOperationsFor } from '../server/services/cash/effects.ts';
 import {
@@ -407,6 +409,19 @@ describe('J01: READY to settled, through the real routes', () => {
     expect(again.status).toBe(422);
     expect(invoice.sends).toHaveLength(1);
 
+    // While the invoice is open the buyer pays it there: Brain does not also
+    // charge them, and does not offer to.
+    rec = await record(piece.id);
+    expect(rec.performable.find((one) => one.action === 'ACCEPT_PAYMENT')!.available).toBe(false);
+    const beside = await act_(piece.id, 'perform', {
+      action: 'ACCEPT_PAYMENT',
+      expectedOccurrence: rec.nextOccurrence,
+    });
+    expect(beside.status).toBe(422);
+    expect(payment.sends).toHaveLength(0);
+    // Voided at the provider, Brain may take the payment directly instead.
+    const [open] = await listInvoices({ projectId, opportunityId: piece.id });
+    expect(await moveInvoice({ id: open!.id, from: 'ISSUED', to: 'VOID', patch: { stateReason: 'Voided at the provider.' } })).toBe(true);
     rec = await record(piece.id);
     const paid = await act_(piece.id, 'perform', {
       action: 'ACCEPT_PAYMENT',
@@ -414,7 +429,7 @@ describe('J01: READY to settled, through the real routes', () => {
     });
     expect(paid.status).toBe(200);
     expect(payment.sends).toEqual([
-      expect.objectContaining({ amountCents: 120_000, invoiceReference: 'inv-1' }),
+      expect.objectContaining({ amountCents: 120_000, invoiceReference: null }),
     ]);
     const entries = await listMoneyEntries({ projectId, currency: 'USD', limit: 50 });
     const payments = entries.filter((one) => one.kind === 'CUSTOMER_PAYMENT');

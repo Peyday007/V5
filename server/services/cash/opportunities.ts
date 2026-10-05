@@ -1115,6 +1115,41 @@ async function agreementBehind(input: {
  * currency, and — for a customer payment — the authority to accept one. The key
  * is what makes a retry a retry rather than a second $750.
  */
+/**
+ * Drafts the money already on the ledger has overtaken: paid another way after
+ * they were drafted, so sending one would bill the buyer for money they have
+ * already paid. Voided newest first until what is still drafted fits what is
+ * still owed — never sent, so nothing reached the provider and a void here is
+ * the whole of it. A new draft can be requested for whatever genuinely
+ * remains. Called under `serializeCash`, by the payment that overtook them and
+ * by the issuing pass immediately before a send.
+ */
+export async function voidUncoveredDrafts(input: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+  because: string;
+}): Promise<string[]> {
+  const opportunity = await getOpportunity(input.opportunityId);
+  if (!opportunity) return [];
+  let uncovered = (await dealPosition({ opportunity, currency: input.currency })).pnl.uncoveredPendingCents;
+  if (uncovered <= 0) return [];
+  const drafts = (
+    await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId, states: ['DRAFTED'] })
+  )
+    .filter((one) => one.currency === input.currency)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  const voided: string[] = [];
+  for (const draft of drafts) {
+    if (uncovered <= 0) break;
+    if (await moveInvoice({ id: draft.id, from: 'DRAFTED', to: 'VOID', patch: { stateReason: input.because } })) {
+      voided.push(draft.id);
+      uncovered -= draft.amountCents;
+    }
+  }
+  return voided;
+}
+
 export async function recordMoneyEvent(input: {
   projectId: string;
   opportunityId?: string | null;
@@ -1340,16 +1375,34 @@ export async function recordMoneyEvent(input: {
         const unpaid = (
           await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId, states: ['ISSUED'] })
         ).filter((one) => !one.paymentEntryId && one.currency === input.currency);
+        // Drafted (not sent yet) or of unknown outcome (may be live): money
+        // recorded by hand beside one could be the same money it bills.
+        const pending = (
+          await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId, states: ['DRAFTED', 'UNCERTAIN'] })
+        ).filter((one) => one.currency === input.currency);
         const applies = input.appliesTo ?? null;
-        if (unpaid.length > 0 && applies === null) {
+        if ((unpaid.length > 0 || pending.length > 0) && applies === null) {
           return {
             ok: false as const,
             entry: null,
             replayed: false,
             reason:
-              `This piece has ${unpaid.length === 1 ? 'an issued invoice' : `${unpaid.length} issued invoices`} still ` +
-              'unpaid. Say whether this payment pays one of them or arrived outside every invoice — Brain ' +
-              'cannot tell a payment you record by hand from the provider later reporting the same money.',
+              `This piece has ${unpaid.length + pending.length === 1 ? 'an invoice' : `${unpaid.length + pending.length} invoices`} ` +
+              'issued, drafted or of unknown outcome and not yet paid. Say whether this payment pays an issued ' +
+              'one or arrived outside every invoice — Brain cannot tell a payment you record by hand from the ' +
+              'provider later reporting the same money.',
+          };
+        }
+        const unknown = pending.filter((one) => one.state === 'UNCERTAIN');
+        if (applies === 'OUTSIDE_INVOICES' && unknown.length > 0) {
+          return {
+            ok: false as const,
+            entry: null,
+            replayed: false,
+            reason:
+              `Whether invoice ${unknown.map((one) => one.id).join(', ')} reached the buyer is still unknown, and ` +
+              'if it did, this payment may be its money. Record it once Brain has learned what that invoice is, ' +
+              'or once a person has recorded that it was never created.',
           };
         }
         if (applies !== null && applies !== 'OUTSIDE_INVOICES') {
@@ -1473,6 +1526,26 @@ export async function recordMoneyEvent(input: {
       recordedBy: input.actorRef,
       idempotencyKey: input.idempotencyKey,
     });
+    /*
+     * Money that paid no invoice may overtake an invoice still only drafted;
+     * that draft is voided now, under the same lock, rather than sent later
+     * to a buyer who has already paid.
+     */
+    if (
+      recorded.ok &&
+      recorded.entry &&
+      !recorded.replayed &&
+      !paysInvoice &&
+      input.kind === 'CUSTOMER_PAYMENT' &&
+      input.opportunityId
+    ) {
+      await voidUncoveredDrafts({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId,
+        currency: input.currency,
+        because: `Paid another way (${recorded.entry.id}) before it was sent; voided rather than billed twice.`,
+      });
+    }
     /*
      * The invoice names the entry in the same transaction, so a later reading
      * of the same money — by a person or by the provider — finds it paid.

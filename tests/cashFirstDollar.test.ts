@@ -655,7 +655,7 @@ describe('failure, refund and partial paths', () => {
     expect(await moneyCount(piece.id)).toEqual({ PIPELINE_AGREED: 1 });
   });
 
-  it('F05b: Brain’s own take-payment pays the open invoice it charged for, and asks for that invoice to be closed', async () => {
+  it('F05b: Brain never charges beside an open invoice; once it is voided, the charge is the only payment', async () => {
     await granted();
     provider('CONTACT_BUYER', 'msg');
     provider('QUOTE_AND_INVOICE', 'inv');
@@ -666,20 +666,26 @@ describe('failure, refund and partial paths', () => {
     await agree(piece.id, 100_000);
     expect((await requestInvoice(piece.id)).status).toBe(200);
     await tick();
-    const occ = (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id].nextOccurrence;
-    const taken = await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: occ });
+    const [issued] = await listInvoices({ projectId, opportunityId: piece.id });
+    expect(issued!.state).toBe('ISSUED');
+    const record = async () => (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id];
+    // Not offered, and refused if pressed anyway: the buyer pays the invoice.
+    expect((await record()).brainCanDoNow).not.toContain('ACCEPT_PAYMENT');
+    const refused = await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: (await record()).nextOccurrence });
+    expect(refused.status).toBe(422);
+    expect(outside.ACCEPT_PAYMENT ?? []).toHaveLength(0);
+    // The invoice is voided at the provider; now Brain may charge directly.
+    providerSays(issued!.providerInvoiceId!, 'void');
+    await tick();
+    expect((await listInvoices({ projectId, opportunityId: piece.id }))[0]!.state).toBe('VOID');
+    const taken = await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: (await record()).nextOccurrence });
     expect(taken.status).toBe(200);
-    const [invoice] = await listInvoices({ projectId, opportunityId: piece.id });
-    expect(invoice!.state).toBe('PAID');
-    expect(invoice!.paymentEntryId).not.toBeNull();
-    const needs = await getDb().all<{ request_key: string }>("SELECT request_key FROM cash_needs WHERE project_id = ? AND state = 'OPEN'", [projectId]);
-    expect(needs.map((one) => one.request_key)).toContain(`void-paid-elsewhere:${invoice!.id}`);
-    // The next agreement is still billable: the take-payment is not read as
-    // money that arrived outside every invoice.
+    expect(outside.ACCEPT_PAYMENT!).toHaveLength(1);
+    expect(await moneyCount(piece.id)).toMatchObject({ CUSTOMER_PAYMENT: 1 });
+    // Paid outside every invoice: the next agreement alone is billable.
     await agree(piece.id, 50_000);
     const deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
     expect(deal.pnl.invoiceableCents).toBe(50_000);
-    expect(await moneyCount(piece.id)).toMatchObject({ CUSTOMER_PAYMENT: 1 });
   });
 
   it('F06: the invoice outcome is unknown — no resend across a restart, then the provider confirms it once', async () => {

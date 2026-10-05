@@ -151,6 +151,12 @@ export interface DealPnl {
   owedByBuyerCents: number;
   /** Agreed and not yet billed — what a next invoice may be for. */
   invoiceableCents: number;
+  /**
+   * Drafted or unknown invoices no longer covered by what is still owed: money
+   * arrived another way after they were drafted. A drafted one is voided rather
+   * than sent; an unknown one is held until the provider says what it is.
+   */
+  uncoveredPendingCents: number;
 }
 
 export interface DealPosition {
@@ -244,6 +250,10 @@ export async function dealPosition(input: {
   // beside one is held rather than counted twice.
   const paidOutsideInvoices = Math.max(0, payments - paidAgainstInvoices);
   const invoiceable = Math.max(0, agreedRevenue - invoiced - pendingInvoice - paidOutsideInvoices);
+  const uncoveredPending = Math.max(
+    0,
+    pendingInvoice - Math.max(0, agreedRevenue - invoiced - paidOutsideInvoices),
+  );
   const paymentInFlight = operations.some(
     (one) =>
       one.action === 'ACCEPT_PAYMENT' &&
@@ -298,6 +308,7 @@ export async function dealPosition(input: {
       contributionCents: contributionFrom({ payments, refunds, costs, unpaidCommitments: unpaid }),
       owedByBuyerCents: owed,
       invoiceableCents: invoiceable,
+      uncoveredPendingCents: uncoveredPending,
     },
     agreements,
     invoices,

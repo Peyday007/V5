@@ -2006,6 +2006,11 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
                 unpaidInvoices={(
                   work.journey?.deals.find((one) => one.opportunityId === placement.opportunity.id)?.invoices ?? []
                 ).filter((one) => one.state === 'ISSUED' && !one.paymentEntryId)}
+                draftedOrUnknownInvoices={
+                  (work.journey?.deals.find((one) => one.opportunityId === placement.opportunity.id)?.invoices ?? []).filter(
+                    (one) => one.state === 'DRAFTED' || one.state === 'UNCERTAIN',
+                  ).length
+                }
                 onChanged={onChanged}
               />
             ) : null}
@@ -2301,6 +2306,7 @@ function OpportunityMoney({
   opportunityId,
   currency,
   unpaidInvoices = [],
+  draftedOrUnknownInvoices = 0,
   onChanged,
 }: {
   projectId: string;
@@ -2308,6 +2314,8 @@ function OpportunityMoney({
   currency: string;
   /** Issued and unpaid: a payment recorded by hand must say whether it pays one. */
   unpaidInvoices?: { id: string; amountCents: number; providerNumber: string | null }[];
+  /** Drafted or of unknown outcome: the payment must still say it paid none of them. */
+  draftedOrUnknownInvoices?: number;
   onChanged(): void;
 }): JSX.Element {
   const [kind, setKind] = useState<'CUSTOMER_PAYMENT' | 'SETTLEMENT' | null>(
@@ -2315,7 +2323,8 @@ function OpportunityMoney({
   );
   // '' until chosen; 'OUTSIDE' or an invoice id.
   const [appliesTo, setAppliesTo] = useState('');
-  const mustAttribute = kind === 'CUSTOMER_PAYMENT' && unpaidInvoices.length > 0;
+  const mustAttribute =
+    kind === 'CUSTOMER_PAYMENT' && (unpaidInvoices.length > 0 || draftedOrUnknownInvoices > 0);
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);

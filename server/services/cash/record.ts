@@ -163,6 +163,16 @@ export async function executionRecord(input: {
         reason = 'No invoice is drafted. Request one with who is billed, the tax treatment and the due date.';
       }
     }
+    if (reason === null && action === 'ACCEPT_PAYMENT') {
+      // perform.ts refuses a charge beside an open invoice; never offer one.
+      const open = (await listInvoices({ projectId: opportunity.projectId, opportunityId: opportunity.id })).filter(
+        (one) =>
+          one.state === 'DRAFTED' || one.state === 'UNCERTAIN' || (one.state === 'ISSUED' && !one.paymentEntryId),
+      );
+      if (open.length > 0) {
+        reason = `Invoice ${open.map((one) => one.id).join(', ')} is open for this money; the buyer pays it there.`;
+      }
+    }
     if (reason === null && action === 'ACCEPT_PAYMENT' && !usableAdapter(effect.namespace)) {
       reason = 'The buyer pays the invoice through the provider’s own page; Brain reads the payment rather than charging it.';
     }

@@ -53,6 +53,7 @@ import { collectable, dealPosition } from '../server/services/cash/journey/posit
 import { advanceJourney } from '../server/services/cash/journey/tick.ts';
 import { cashOutcomeLessons, LESSON_MIN_SAMPLE, measuredByMechanism } from '../server/services/cash/journey/learning.ts';
 import { requestInvoice, runInvoicing } from '../server/services/cash/invoicing.ts';
+import { clearPaymentReader, registerPaymentReader } from '../server/services/cash/providers/payments.ts';
 import { readCapability } from '../server/services/cash/capabilities.ts';
 import { ISSUE_INVOICE_NAMESPACE, REFUND_NAMESPACE } from '../server/services/cash/effects.ts';
 import { clearAdapters, registerAdapter, type SendOutcome } from '../server/services/effects/adapter.ts';
@@ -178,6 +179,7 @@ async function money(
   kind: 'CUSTOMER_PAYMENT' | 'SETTLEMENT' | 'REFUND',
   amountCents: number,
   reference: string,
+  appliesTo: 'OUTSIDE_INVOICES' | null = null,
 ): Promise<{ ok: boolean; reason?: string }> {
   const written = await recordMoneyEvent({
     projectId,
@@ -188,6 +190,7 @@ async function money(
     verifiedReference: reference,
     idempotencyKey: `${kind}:${opportunityId}:${reference}`,
     actorRef: userId,
+    appliesTo,
   });
   return written.ok ? { ok: true } : { ok: false, reason: written.reason };
 }
@@ -291,8 +294,12 @@ describe('the canonical journey: agreement → invoice → payment → fulfillme
 
     await restartDatabase();
 
-    // Payment: earned, not cash; partial keeps the rest outstanding.
-    expect((await money(id, 'CUSTOMER_PAYMENT', 30_000, 'ch_part')).ok).toBe(true);
+    // Payment: earned, not cash; partial keeps the rest outstanding. Paid by
+    // transfer rather than through the draft, the person says so — and the
+    // draft, now billing money already paid, is voided rather than sent.
+    expect((await money(id, 'CUSTOMER_PAYMENT', 30_000, 'ch_part')).ok).toBe(false);
+    expect((await money(id, 'CUSTOMER_PAYMENT', 30_000, 'ch_part', 'OUTSIDE_INVOICES')).ok).toBe(true);
+    expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('VOID');
     let deal = await position(id);
     expect(deal.paymentState).toBe('PARTIALLY_PAID');
     expect((await cashPosition({ projectId, currency: 'USD' })).availableFundsCents).toBe(0);
@@ -427,8 +434,10 @@ describe('agreement and invoice', () => {
     expect(second.ok && second.value.amountCents).toBe(30_000);
     expect(await listInvoices({ projectId, opportunityId: id })).toHaveLength(2);
     // Everything paid: nothing to invoice.
-    expect((await money(id, 'CUSTOMER_PAYMENT', 30_000, 'bank-30')).ok).toBe(true);
-    if (second.ok) await moveInvoice({ id: second.value.id, from: 'DRAFTED', to: 'VOID', patch: { stateReason: 'paid by bank' } });
+    // Paid by bank while the draft waited: the draft is voided, never sent.
+    expect((await money(id, 'CUSTOMER_PAYMENT', 30_000, 'bank-30')).ok).toBe(false);
+    expect((await money(id, 'CUSTOMER_PAYMENT', 30_000, 'bank-30', 'OUTSIDE_INVOICES')).ok).toBe(true);
+    expect((await listInvoices({ projectId, opportunityId: id })).every((one) => one.state === 'VOID')).toBe(true);
     expect((await requestInvoice(terms)).ok).toBe(false);
   });
 
@@ -512,7 +521,7 @@ describe('agreement and invoice', () => {
     // Unattributed while the invoice is unpaid: refused, naming why.
     const bare = await money(id, 'CUSTOMER_PAYMENT', 100_000, 'bank-xyz');
     expect(bare.ok).toBe(false);
-    expect(bare.reason).toMatch(/issued invoice still unpaid/);
+    expect(bare.reason).toMatch(/issued, drafted or of unknown outcome and not yet paid/);
     const named = await recordMoneyEvent({
       projectId,
       opportunityId: id,
@@ -564,6 +573,161 @@ describe('agreement and invoice', () => {
     expect((await providerRead(id, invoice.id, 100_000, 'ch_B')).ok).toBe(true);
     expect(await ledgerCount(id, 'CUSTOMER_PAYMENT')).toBe(1);
     expect((await position(id)).unattributedPayments).toHaveLength(0);
+  });
+
+  /** A drafted invoice for the first live agreement, left unsent. */
+  async function draftedInvoice(id: string) {
+    const [first] = await getDb().all<{ id: string }>(
+      "SELECT id FROM cash_money_entries WHERE opportunity_id = ? AND kind = 'PIPELINE_AGREED' ORDER BY created_at, id",
+      [id],
+    );
+    const drafted = await requestInvoice({
+      projectId,
+      opportunityId: id,
+      pipelineEntryId: first!.id,
+      customerName: 'Owner',
+      customerEmail: 'owner@buyer.example',
+      taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31',
+      actorRef: userId,
+    });
+    if (!drafted.ok) throw new Error(drafted.reason);
+    return drafted.value;
+  }
+
+  const handPayment = (id: string, amountCents: number, reference: string, appliesTo: { invoiceId: string } | 'OUTSIDE_INVOICES' | null) =>
+    recordMoneyEvent({
+      projectId,
+      opportunityId: id,
+      kind: 'CUSTOMER_PAYMENT',
+      amountCents,
+      currency: 'USD',
+      verifiedReference: reference,
+      idempotencyKey: `payment:${id}:${reference}`,
+      actorRef: userId,
+      appliesTo,
+    });
+
+  it('a draft overtaken by money paid another way is voided, never sent', async () => {
+    const id = await executing();
+    await agree(id, 75_000);
+    const draft = await draftedInvoice(id);
+    // The person must say what the payment pays while a draft is waiting.
+    const bare = await handPayment(id, 75_000, 'bank-75', null);
+    expect(bare.ok).toBe(false);
+    const outside = await handPayment(id, 75_000, 'bank-75', 'OUTSIDE_INVOICES');
+    expect(outside.ok).toBe(true);
+    const [after] = await listInvoices({ projectId, opportunityId: id });
+    expect(after!.state).toBe('VOID');
+    // And nothing reaches the provider, even with one connected.
+    let sends = 0;
+    registerAdapter({
+      name: 'test.invoice',
+      effectClass: 'EXTERNAL_OPAQUE',
+      namespace: ISSUE_INVOICE_NAMESPACE.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async () => {
+        sends += 1;
+        return { kind: 'CONFIRMED', receiptRef: 'in_never' };
+      },
+    });
+    await runInvoicing(projectId);
+    expect(sends).toBe(0);
+    expect(draft.id).toBe(after!.id);
+  });
+
+  it('a draft is checked again immediately before it is sent, whatever wrote the money', async () => {
+    const id = await executing();
+    await agree(id, 75_000);
+    await draftedInvoice(id);
+    // Money that reached the ledger by a path that did not void the draft.
+    await getDb().run(
+      `INSERT INTO cash_money_entries (id, project_id, opportunity_id, kind, amount_cents, currency,
+         verified_reference, funds_available_at, occurred_at, note, recorded_by, created_at,
+         idempotency_key, payload_fingerprint, commitment_id)
+       VALUES ('cme_race', ?, ?, 'CUSTOMER_PAYMENT', 75000, 'USD', 'bank-race', NULL, ?, NULL, ?, ?, 'payment:race', NULL, NULL)`,
+      [projectId, id, new Date().toISOString(), userId, new Date().toISOString()],
+    );
+    let sends = 0;
+    registerAdapter({
+      name: 'test.invoice',
+      effectClass: 'EXTERNAL_OPAQUE',
+      namespace: ISSUE_INVOICE_NAMESPACE.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async () => {
+        sends += 1;
+        return { kind: 'CONFIRMED', receiptRef: 'in_never' };
+      },
+    });
+    const pass = await runInvoicing(projectId);
+    expect(sends).toBe(0);
+    expect(pass.voided).toHaveLength(1);
+    expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('VOID');
+  });
+
+  it('money recorded by hand waits while an invoice\'s outcome is unknown', async () => {
+    const id = await executing();
+    await agree(id, 75_000);
+    const draft = await draftedInvoice(id);
+    expect(await moveInvoice({ id: draft.id, from: 'DRAFTED', to: 'UNCERTAIN', patch: { stateReason: 'reset' } })).toBe(true);
+    const outside = await handPayment(id, 75_000, 'bank-u', 'OUTSIDE_INVOICES');
+    expect(outside.ok).toBe(false);
+    expect(outside.ok ? '' : outside.reason).toMatch(/still unknown/);
+    expect(await ledgerCount(id, 'CUSTOMER_PAYMENT')).toBe(0);
+  });
+
+  it('an invoice paid another way that the provider also reads paid is held, never settled into the first payment', async () => {
+    const id = await executing();
+    await agree(id, 100_000);
+    const invoice = await issuedInvoice(id, 'in_twice');
+    await moveInvoice({ id: invoice.id, from: 'ISSUED', to: 'ISSUED', patch: { provider: 'sandbox' } });
+    expect((await handPayment(id, 100_000, 'bank-twice', { invoiceId: invoice.id })).ok).toBe(true);
+    registerPaymentReader({
+      name: 'sandbox.reader',
+      provider: 'sandbox',
+      health: () => ({ usable: true, reason: 'sandbox' }),
+      read: async () => ({
+        kind: 'READ', status: 'paid', hostedUrl: null, number: 'N-1', amountPaidCents: 100_000, currency: 'USD',
+        chargeId: 'ch_second', paidAt: new Date().toISOString(),
+        balance: { id: 'txn_second', status: 'available', currency: 'USD', amountCents: 100_000, feeCents: 300, availableOn: new Date().toISOString() },
+      }),
+    });
+    try {
+      await runInvoicing(projectId);
+      expect(await ledgerCount(id, 'SETTLEMENT')).toBe(0);
+      expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('PAID');
+      const needs = await listNeeds({ projectId });
+      expect(needs.map((one) => one.requestKey)).toContain(`invoice-paid-twice:${invoice.id}`);
+    } finally {
+      clearPaymentReader();
+    }
+  });
+
+  it('the provider reading the very payment a person attributed settles it once', async () => {
+    const id = await executing();
+    await agree(id, 100_000);
+    const invoice = await issuedInvoice(id, 'in_same');
+    await moveInvoice({ id: invoice.id, from: 'ISSUED', to: 'ISSUED', patch: { provider: 'sandbox' } });
+    expect((await handPayment(id, 100_000, 'ch_same', { invoiceId: invoice.id })).ok).toBe(true);
+    registerPaymentReader({
+      name: 'sandbox.reader',
+      provider: 'sandbox',
+      health: () => ({ usable: true, reason: 'sandbox' }),
+      read: async () => ({
+        kind: 'READ', status: 'paid', hostedUrl: null, number: 'N-2', amountPaidCents: 100_000, currency: 'USD',
+        chargeId: 'ch_same', paidAt: new Date().toISOString(),
+        balance: { id: 'txn_same', status: 'available', currency: 'USD', amountCents: 100_000, feeCents: 300, availableOn: new Date().toISOString() },
+      }),
+    });
+    try {
+      await runInvoicing(projectId);
+      expect(await ledgerCount(id, 'SETTLEMENT')).toBe(1);
+      expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('SETTLED');
+    } finally {
+      clearPaymentReader();
+    }
   });
 
   it('a provider-confirmed payment with nothing unattributed beside it is recorded even past the agreed total', async () => {

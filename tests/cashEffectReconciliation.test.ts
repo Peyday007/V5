@@ -23,6 +23,7 @@
  *       and repeated passes change no figure.
  *   F — a second recovery pass writes nothing at all.
  */
+import { listInvoices, moveInvoice } from '../server/repos/cashInvoices.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import type { AddressInfo } from 'node:net';
@@ -791,10 +792,17 @@ describe('J: the execution record is the server’s answer', () => {
       ).status,
     ).toBe(200);
     record = await recordOnPage(piece.id);
-    expect(record.brainCanDoNow).toEqual(['QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT']);
+    // A drafted invoice is open for this money, so Brain does not also offer
+    // to charge for it.
+    expect(record.brainCanDoNow).toEqual(['QUOTE_AND_INVOICE']);
+    expect(record.performable.find((one: any) => one.action === 'ACCEPT_PAYMENT').reason).toMatch(/open for this money/);
     expect(record.blocker).toBeNull();
 
     await act_(piece.id, 'perform', { action: 'QUOTE_AND_INVOICE', expectedOccurrence: await nextOccurrence(piece.id) });
+    // Voided at the provider: now the charge is Brain's to take.
+    const [open] = await listInvoices({ projectId, opportunityId: piece.id });
+    expect(await moveInvoice({ id: open!.id, from: 'ISSUED', to: 'VOID', patch: { stateReason: 'Voided at the provider.' } })).toBe(true);
+    expect((await recordOnPage(piece.id)).brainCanDoNow).toEqual(['ACCEPT_PAYMENT']);
     await act_(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: await nextOccurrence(piece.id) });
     const settled = await call('POST', `/api/projects/${projectId}/cash/money`, {
       kind: 'SETTLEMENT',

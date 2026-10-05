@@ -794,6 +794,24 @@ export async function prepare(
         : 'No agreement is recorded for this piece, so nothing is owed to collect.',
     );
   }
+  /*
+   * An invoice open for this money is how the buyer pays it. Charging beside
+   * one — drafted and about to be sent, of unknown outcome, or issued and
+   * payable on the provider's own page — is how a buyer pays twice, and the
+   * provider's later reading of the invoice could not be told apart from
+   * Brain's charge. So Brain takes payment directly only when no invoice is
+   * open; voiding one is the way to take it instead.
+   */
+  const openInvoices = position.invoices.filter(
+    (one) =>
+      one.state === 'DRAFTED' || one.state === 'UNCERTAIN' || (one.state === 'ISSUED' && !one.paymentEntryId),
+  );
+  if (openInvoices.length > 0) {
+    return refuse(
+      `Invoice ${openInvoices.map((one) => one.id).join(', ')} is open for this money, so the buyer pays it ` +
+        'there. Brain does not also charge them; void the invoice first to take payment directly.',
+    );
+  }
   const outstanding =
     p.invoicedCents > 0
       ? p.owedByBuyerCents
