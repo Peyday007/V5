@@ -667,23 +667,33 @@ describe('agreement and invoice', () => {
     expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('VOID');
   });
 
-  it('money recorded by hand waits while an invoice\'s outcome is unknown', async () => {
+  it('money recorded by hand beside an invoice of unknown outcome is recorded, and a person is asked to void it if it was issued', async () => {
     const id = await executing();
     await agree(id, 75_000);
     const draft = await draftedInvoice(id);
     expect(await moveInvoice({ id: draft.id, from: 'DRAFTED', to: 'UNCERTAIN', patch: { stateReason: 'reset' } })).toBe(true);
+    expect((await handPayment(id, 75_000, 'bank-u', null)).ok).toBe(false);
     const outside = await handPayment(id, 75_000, 'bank-u', 'OUTSIDE_INVOICES');
-    expect(outside.ok).toBe(false);
-    expect(outside.ok ? '' : outside.reason).toMatch(/still unknown/);
-    expect(await ledgerCount(id, 'CUSTOMER_PAYMENT')).toBe(0);
+    expect(outside.ok).toBe(true);
+    expect(await ledgerCount(id, 'CUSTOMER_PAYMENT')).toBe(1);
+    const needs = await listNeeds({ projectId });
+    expect(needs.map((one) => one.requestKey)).toContain(`void-if-issued:${draft.id}`);
   });
 
-  it('an invoice paid another way that the provider also reads paid is held, never settled into the first payment', async () => {
+  it('the buyer paying an invoice Brain already charged them for is a second payment on the record, not absorbed', async () => {
     const id = await executing();
     await agree(id, 100_000);
     const invoice = await issuedInvoice(id, 'in_twice');
-    await moveInvoice({ id: invoice.id, from: 'ISSUED', to: 'ISSUED', patch: { provider: 'sandbox' } });
-    expect((await handPayment(id, 100_000, 'bank-twice', { invoiceId: invoice.id })).ok).toBe(true);
+    // Brain's own charge, marked as this invoice's payment.
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO cash_money_entries (id, project_id, opportunity_id, kind, amount_cents, currency,
+         verified_reference, funds_available_at, occurred_at, note, recorded_by, created_at,
+         idempotency_key, payload_fingerprint, commitment_id)
+       VALUES ('cme_brain_charge', ?, ?, 'CUSTOMER_PAYMENT', 100000, 'USD', 'pay_brain', NULL, ?, NULL, 'BRAIN', ?, 'cash:brain-charge', NULL, NULL)`,
+      [projectId, id, at, at],
+    );
+    expect(await moveInvoice({ id: invoice.id, from: 'ISSUED', to: 'PAID', patch: { provider: 'sandbox', paymentEntryId: 'cme_brain_charge', paidAt: at } })).toBe(true);
     registerPaymentReader({
       name: 'sandbox.reader',
       provider: 'sandbox',
@@ -696,10 +706,13 @@ describe('agreement and invoice', () => {
     });
     try {
       await runInvoicing(projectId);
-      expect(await ledgerCount(id, 'SETTLEMENT')).toBe(0);
-      expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('PAID');
+      await runInvoicing(projectId, new Date(Date.now() + 3_600_000));
+      // Both payments are money that arrived; the second is not hidden.
+      expect(await ledgerCount(id, 'CUSTOMER_PAYMENT')).toBe(2);
+      expect((await position(id)).pnl.customerPaymentsCents).toBe(200_000);
       const needs = await listNeeds({ projectId });
       expect(needs.map((one) => one.requestKey)).toContain(`invoice-paid-twice:${invoice.id}`);
+      expect(await ledgerCount(id, 'SETTLEMENT')).toBe(1);
     } finally {
       clearPaymentReader();
     }

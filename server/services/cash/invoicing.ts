@@ -160,6 +160,12 @@ export async function requestInvoice(input: {
    */
   const drafted = await serializeCash(input.projectId, mode.currency, async (): Promise<Outcome<{ invoice: CashInvoice; created: boolean }>> => {
   const position = await dealPosition({ opportunity, currency: mode.currency });
+  if (position.paymentState === 'PAYMENT_PENDING') {
+    return refuse(
+      'Brain’s own charge for this piece is still unresolved, and if it went through the buyer has paid. ' +
+        'An invoice is requested once the provider has answered.',
+    );
+  }
   const amountCents = Math.min(entry.amountCents, position.pnl.invoiceableCents);
   if (amountCents <= 0) {
     return refuse(
@@ -400,6 +406,15 @@ export async function issueOne(invoice: CashInvoice, pass: InvoicingPass): Promi
     );
     if (voided.length > 0) pass.voided.push(...voided);
     if ((await getInvoice(invoice.id))?.state !== 'DRAFTED') return;
+    const opportunity = await getOpportunity(invoice.opportunityId);
+    if (opportunity && (await dealPosition({ opportunity, currency: invoice.currency })).paymentState === 'PAYMENT_PENDING') {
+      await holdWithReason(
+        invoice,
+        'Brain’s own charge for this piece is still unresolved; the invoice is sent once the provider has answered, or voided if it went through.',
+        pass,
+      );
+      return;
+    }
   } else if (invoice.state === 'UNCERTAIN') {
     // An UNCERTAIN invoice is only ever *asked about*, and asking needs the
     // provider too. Without one it stays exactly as unknown as it was.
@@ -536,46 +551,58 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
     }
 
     /*
-     * An invoice already PAID by money that arrived another way — Brain's own
-     * charge, or a person's attributed payment — that the provider now *also*
-     * reads as paid, under a different charge, is the buyer paying twice.
-     * Settling it would absorb the second payment into the first one's
-     * settlement room and hide the refund that is owed, so it is held and a
-     * person is asked.
+     * An invoice Brain marked PAID with its *own* charge, that the provider now
+     * also reads paid under a different charge, is the buyer paying twice:
+     * Brain charged them and they paid the invoice's page too. That second
+     * payment is real money that arrived, so it is recorded — not absorbed
+     * into the first payment's settlement room, which would hide the refund
+     * that is owed — and a person is told to refund one. A payment a *person*
+     * attributed to this invoice is their statement that it is this invoice's
+     * money, so the provider's reading of it is the same money and settles.
      */
     if (invoice.state === 'PAID' && reading.status === 'paid' && reading.amountPaidCents > 0 && current.paymentEntryId) {
       const named = await getMoneyEntry(current.paymentEntryId);
-      const sameMoney =
+      const providerRef = reading.chargeId ?? current.providerInvoiceId;
+      const brainCharge =
         named !== null &&
-        (named.idempotencyKey === `invoice-payment:${current.id}` ||
-          (named.verifiedReference !== null &&
-            named.verifiedReference === (reading.chargeId ?? current.providerInvoiceId)));
-      if (!sameMoney) {
-        await holdWithReason(
-          current,
-          'The provider says the buyer paid this invoice, and it was already paid another way: the buyer may have paid twice.',
-          pass,
-        );
+        named.recordedBy === BRAIN &&
+        named.idempotencyKey !== `invoice-payment:${current.id}` &&
+        named.verifiedReference !== providerRef;
+      if (brainCharge) {
+        const second = await recordMoneyEvent({
+          projectId,
+          opportunityId: current.opportunityId,
+          kind: 'CUSTOMER_PAYMENT',
+          amountCents: reading.amountPaidCents,
+          currency: reading.currency,
+          verifiedReference: providerRef,
+          occurredAt: reading.paidAt ?? readAt,
+          note: `The buyer also paid invoice ${current.providerNumber ?? current.providerInvoiceId} after Brain charged them.`,
+          idempotencyKey: `invoice-payment:${current.id}`,
+          actorRef: BRAIN,
+          paidInvoiceId: current.id,
+          besideBrainCharge: true,
+        });
         await raiseNeed({
           projectId,
           opportunityId: current.opportunityId,
           actorRef: BRAIN,
-          blockedAction: `Settle invoice ${current.id}`,
+          blockedAction: `Refund the second payment of invoice ${current.id}`,
           whyItMatters:
-            'The invoice was marked paid by a payment made another way, and the provider now reads the buyer ' +
-            'paying the invoice itself too. Brain records neither the second payment nor its settlement until a ' +
-            'person says whether the buyer paid twice.',
-          recommendedPath:
-            'Check the provider: if the buyer paid twice, refund one payment; if the payment recorded against this ' +
-            'invoice was this same money under another reference, correct the record.',
+            'Brain charged the buyer and the buyer also paid this invoice on the provider’s page: they paid ' +
+            'the same amount twice. Both payments are on the record, so a refund of one is bounded correctly.',
+          recommendedPath: 'Refund one of the two payments through the deal’s obligation.',
           setupEffort: 'A few minutes.',
-          nextStep: `Compare ${reading.chargeId ?? current.providerInvoiceId} with ${named?.verifiedReference ?? current.paymentEntryId}.`,
-          completionCondition: 'A person has said whether the buyer paid twice.',
+          nextStep: `Refund ${providerRef ?? 'the invoice payment'} or ${named?.verifiedReference ?? 'Brain’s charge'}.`,
+          completionCondition: 'One of the two payments is refunded.',
           blocksState: null,
           requestKey: `invoice-paid-twice:${current.id}`,
         });
-        await moveInvoice({ id: current.id, from: 'PAID', to: 'PAID', patch: { providerStatus: reading.status, lastReadAt: readAt } });
-        continue;
+        if (!second.ok) {
+          await holdWithReason(current, `The buyer paid this invoice as well as Brain's charge, and it could not be recorded: ${second.reason}`, pass);
+          await moveInvoice({ id: current.id, from: 'PAID', to: 'PAID', patch: { lastReadAt: readAt } });
+          continue;
+        }
       }
     }
 

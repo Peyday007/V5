@@ -688,6 +688,26 @@ describe('failure, refund and partial paths', () => {
     expect(deal.pnl.invoiceableCents).toBe(50_000);
   });
 
+  it('F05c: no invoice is requested or sent while Brain’s own charge is unresolved', async () => {
+    await granted();
+    provider('CONTACT_BUYER', 'msg');
+    provider('QUOTE_AND_INVOICE', 'inv');
+    const pay = provider('ACCEPT_PAYMENT', 'pay', 'EXTERNAL_RECONCILABLE');
+    pay.onSend = async () => ({ kind: 'UNCERTAIN', reason: 'the connection reset after the charge left' });
+    paymentReader();
+    const piece = await qualified();
+    await advanceWithinAuthority(projectId);
+    await agree(piece.id, 100_000);
+    const occ = (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id].nextOccurrence;
+    const charged = await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: occ });
+    expect(charged.body.result.kind).toBe('UNCERTAIN');
+    const asked = await requestInvoice(piece.id);
+    expect(asked.status).toBe(422);
+    expect(asked.body.error ?? JSON.stringify(asked.body)).toMatch(/still unresolved/);
+    expect(await listInvoices({ projectId, opportunityId: piece.id })).toHaveLength(0);
+    expect(outside.QUOTE_AND_INVOICE ?? []).toHaveLength(0);
+  });
+
   it('F06: the invoice outcome is unknown — no resend across a restart, then the provider confirms it once', async () => {
     await granted();
     provider('CONTACT_BUYER', 'msg');

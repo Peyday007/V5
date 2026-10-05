@@ -1198,6 +1198,12 @@ export async function recordMoneyEvent(input: {
    * provider's own reading of the same money.
    */
   appliesTo?: { invoiceId: string } | 'OUTSIDE_INVOICES' | null;
+  /**
+   * Internal: the provider reads an invoice paid that Brain's own charge
+   * already marked PAID, under a different charge — a second, real payment
+   * (`invoicing.ts`). Only that pass passes it, and no route reads it.
+   */
+  besideBrainCharge?: boolean;
 }): Promise<Outcome<CashMoneyEntry>> {
   const check = checkMoneyEntry({
     kind: input.kind,
@@ -1365,7 +1371,7 @@ export async function recordMoneyEvent(input: {
          * under this same lock, and this read arrives after.
          */
         const current = await getInvoice(input.paidInvoiceId);
-        if (current?.paymentEntryId) {
+        if (current?.paymentEntryId && !input.besideBrainCharge) {
           const existing = await getMoneyEntry(current.paymentEntryId);
           if (existing) return { ok: true as const, entry: existing, replayed: true, reason: 'This payment is already recorded against that invoice.' };
         }
@@ -1391,18 +1397,6 @@ export async function recordMoneyEvent(input: {
               'issued, drafted or of unknown outcome and not yet paid. Say whether this payment pays an issued ' +
               'one or arrived outside every invoice — Brain cannot tell a payment you record by hand from the ' +
               'provider later reporting the same money.',
-          };
-        }
-        const unknown = pending.filter((one) => one.state === 'UNCERTAIN');
-        if (applies === 'OUTSIDE_INVOICES' && unknown.length > 0) {
-          return {
-            ok: false as const,
-            entry: null,
-            replayed: false,
-            reason:
-              `Whether invoice ${unknown.map((one) => one.id).join(', ')} reached the buyer is still unknown, and ` +
-              'if it did, this payment may be its money. Record it once Brain has learned what that invoice is, ' +
-              'or once a person has recorded that it was never created.',
           };
         }
         if (applies !== null && applies !== 'OUTSIDE_INVOICES') {
@@ -1545,6 +1539,34 @@ export async function recordMoneyEvent(input: {
         currency: input.currency,
         because: `Paid another way (${recorded.entry.id}) before it was sent; voided rather than billed twice.`,
       });
+      /*
+       * An invoice whose issue is unknown may already be with the buyer, and
+       * this money may be its payment. Brain cannot void what it cannot see,
+       * so a person is asked to check; if it did reach the buyer and they pay
+       * it, the provider's read is held beside this unattributed payment until
+       * a person ties the two (`attributePayment`).
+       */
+      for (const unknown of await listInvoices({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId,
+        states: ['UNCERTAIN'],
+      })) {
+        await raiseNeed({
+          projectId: input.projectId,
+          opportunityId: input.opportunityId,
+          actorRef: 'BRAIN',
+          blockedAction: `Void invoice ${unknown.id} if it reached the buyer`,
+          whyItMatters:
+            'A payment was recorded outside every invoice while this invoice’s outcome is unknown. If it was ' +
+            'issued, the buyer can be billed for money they have already paid.',
+          recommendedPath: `Search the provider for metadata brain_invoice=${unknown.id}; void it there if it exists.`,
+          setupEffort: 'A few minutes.',
+          nextStep: `Look up invoice ${unknown.id} at the provider.`,
+          completionCondition: 'The invoice is void at the provider, or it was never created.',
+          blocksState: null,
+          requestKey: `void-if-issued:${unknown.id}`,
+        });
+      }
     }
     /*
      * The invoice names the entry in the same transaction, so a later reading
