@@ -351,6 +351,12 @@ export const BLOCKER_WAIT: Record<FactoryBlockerKind, { wait: 'AUTOMATIC' | 'PER
       'A repair needs a file the approved scope does not cover. Amend mutation_scope to add ' +
       'exactly the files named; the next tick queues the repair.',
   },
+  REPAIR_OWNERSHIP_UNRESOLVED: {
+    wait: 'PERSON',
+    remedy:
+      'The file a repair must change could not be established. Name it exactly in mutation_scope, ' +
+      'or retire the finding; the next tick queues the repair.',
+  },
 };
 
 export interface LineCampaign {

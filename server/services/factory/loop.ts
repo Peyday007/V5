@@ -75,6 +75,7 @@ import {
 import { reviewCampaign } from './review.ts';
 import {
   gatingFindings,
+  ownershipBlockedDetail,
   queueRepairs,
   queueVerificationRepair,
   reconcileRepairs,
@@ -1140,6 +1141,17 @@ async function actOnVerdict(
     });
   }
 
+  const unresolved = repairs.ownershipBlocked.filter((need) =>
+    gating.some((finding) => finding.id === need.findingId),
+  );
+  if (repairs.queued.length === 0 && unresolved.length > 0) {
+    // A repair whose root cause could not be established would be a bin that can
+    // only weaken a test or BLOCK. None is created; the same re-ask answers it.
+    return await block(report, campaign, 'REPAIR_OWNERSHIP_UNRESOLVED', {
+      detail: ownershipBlockedDetail(unresolved),
+    });
+  }
+
   if (repairs.queued.length === 0 && gating.length > 0) {
     // Every gating finding already has a repair, and they are not landing.
     const exhausted = await reconcileRepairs(campaign.id);
@@ -1199,6 +1211,20 @@ async function verifyStage(
       exitCode: failed?.exitCode ?? -1,
       tail: failed?.tail ?? '',
     });
+    if (!repair.ok) {
+      /*
+       * The units' own paths no longer fit the contract (a scope narrowed below
+       * installed work), or there are none. Not REPAIR_OWNERSHIP_UNRESOLVED: that
+       * kind is answered by re-asking the review findings, and a verification
+       * failure has none, so it would walk straight back here every few ticks.
+       * The contract and the work disagree, and only a person's amendment settles it.
+       */
+      return await block(report, campaign, 'CONTRADICTORY_CONTRACT', {
+        detail:
+          `\`${failed?.command ?? '(unknown)'}\` fails on the merged tree and no repair can be created: ` +
+          `${repair.reason}: ${repair.detail}`,
+      });
+    }
     report.repairsQueued = repair.created ? 1 : 0;
     report.notes.push(
       repair.created
@@ -1373,7 +1399,8 @@ async function unblockStage(
       }
       return await advance(report, campaign, 'EXECUTING', 'a unit became movable again');
     }
-    case 'SCOPE_AMENDMENT_REQUIRED': {
+    case 'SCOPE_AMENDMENT_REQUIRED':
+    case 'REPAIR_OWNERSHIP_UNRESOLVED': {
       // Answered by an amendment, re-read here: `queueRepairs` looks only at
       // findings with no repair yet, so this queues exactly what was waiting.
       const repairs = await queueRepairs(campaign, changeRequest);
@@ -1381,8 +1408,21 @@ async function unblockStage(
       const stranded = repairs.needsAmendment.filter((need) =>
         gating.some((finding) => finding.id === need.findingId),
       );
-      if (stranded.length > 0) {
-        report.blocker = { kind: campaign.blockerKind, detail: amendmentNeededDetail(stranded, changeRequest.id) };
+      const unresolved = repairs.ownershipBlocked.filter((need) =>
+        gating.some((finding) => finding.id === need.findingId),
+      );
+      const still: { kind: 'SCOPE_AMENDMENT_REQUIRED' | 'REPAIR_OWNERSHIP_UNRESOLVED'; detail: string } | null =
+        stranded.length > 0
+          ? { kind: 'SCOPE_AMENDMENT_REQUIRED', detail: amendmentNeededDetail(stranded, changeRequest.id) }
+          : unresolved.length > 0
+            ? { kind: 'REPAIR_OWNERSHIP_UNRESOLVED', detail: ownershipBlockedDetail(unresolved) }
+            : null;
+      if (still) {
+        // The row says what the report says: one condition can give way to the other.
+        if (still.kind !== campaign.blockerKind || still.detail !== campaign.blockerDetail) {
+          await patchCampaign(campaign.id, { blockerKind: still.kind, blockerDetail: still.detail });
+        }
+        report.blocker = still;
         return report;
       }
       report.repairsQueued = repairs.queued.length;
