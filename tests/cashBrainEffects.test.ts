@@ -38,7 +38,6 @@ import { actionsFor } from '../server/repos/cashActions.ts';
 import { readCapability } from '../server/services/cash/capabilities.ts';
 import {
   CONTACT_BUYER_NAMESPACE,
-  contactBuyerKey,
   sendContactBuyer,
 } from '../server/services/cash/effects.ts';
 import {
@@ -214,7 +213,8 @@ describe('A02: a CONFIRMED adapter', () => {
     expect(actions).toHaveLength(1);
     expect(actions[0]!.action).toBe('CONTACT_BUYER');
     expect(actions[0]!.performedBy).toBe('BRAIN');
-    expect(actions[0]!.reference).toBe(`rcpt_${piece.id}`);
+    // The provider is told the identity of this one effect, never only the piece.
+    expect(actions[0]!.reference).toBe(`rcpt_cash:${piece.id}:CONTACT_BUYER:1`);
   });
 
   it('run twice: the identical attempt replays rather than sending again', async () => {
@@ -226,11 +226,13 @@ describe('A02: a CONFIRMED adapter', () => {
       }),
     );
     const request = {
-      key: contactBuyerKey('opp_fixed', '1'),
+      occurrence: '1',
       projectId,
       opportunityId: 'opp_fixed',
       payer: 'Somebody',
       channel: 'Their address',
+      authorityId: 'cau_fixed',
+      stateAtSend: 'READY',
     };
 
     const first = await sendContactBuyer(request);

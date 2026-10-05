@@ -1183,6 +1183,8 @@ describe('the operating pass as the tick calls it', () => {
       continuations: [],
       dependentWork: [],
       validations: { started: [], settled: [] },
+      // No sprint, no commercial operation, so nothing to finish recording.
+      effects: [],
       authority: { took: [], withheld: [] },
       /*
        * The possibility ledger reports nothing too, and that is the assertion
