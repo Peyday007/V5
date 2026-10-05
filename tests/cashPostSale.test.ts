@@ -904,6 +904,11 @@ describe('agreement and invoice', () => {
     // The process died after the refusal was recorded and before the row went
     // back to DRAFTED: the engine holds an open, reserved operation.
     expect(await moveInvoice({ id: drafted.value.id, from: 'DRAFTED', to: 'UNCERTAIN', patch: {} })).toBe(true);
+    // While young it is left alone: its claimer may still be inside the send.
+    await runInvoicing(projectId);
+    expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('UNCERTAIN');
+    expect(sent).toBe(1);
+    await getDb().run('UPDATE cash_invoices SET updated_at = ? WHERE id = ?', ['2020-01-01T00:00:00.000Z', drafted.value.id]);
     expect(
       (
         await recordMoneyEvent({
@@ -924,6 +929,55 @@ describe('agreement and invoice', () => {
     await runInvoicing(projectId);
     // Returned to DRAFTED and voided by the coverage check; nothing sent.
     expect(sent).toBe(1);
+    expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('VOID');
+  });
+
+  it('a send reserved and never attempted is drafted again, not sent from UNCERTAIN once the engine lease lapses', async () => {
+    const id = await executing();
+    await agree(id, 40_000);
+    let sent = 0;
+    let refuse = true;
+    registerAdapter({
+      name: 'test.invoice',
+      effectClass: 'EXTERNAL_OPAQUE',
+      namespace: ISSUE_INVOICE_NAMESPACE.name,
+      validate: (payload) => payload as Record<string, unknown>,
+      fingerprintInputs: (payload) => payload,
+      send: async (): Promise<SendOutcome> => {
+        sent += 1;
+        return refuse
+          ? { kind: 'REJECTED', category: 'DEPENDENCY_UNAVAILABLE', retryable: true, detail: '429' }
+          : { kind: 'CONFIRMED', receiptRef: `in_${sent}` };
+      },
+    });
+    const drafted = await draftFor(id);
+    expect(drafted.ok).toBe(true);
+    if (!drafted.ok) return;
+    await runInvoicing(projectId);
+    // Shape the crash: the operation reserved, no attempt ever opened, the
+    // engine's lease long gone, the claim long gone.
+    const [op] = await getDb().all<{ id: string }>(
+      "SELECT id FROM idempotency_operations WHERE project_id = ? AND namespace = ?",
+      [projectId, ISSUE_INVOICE_NAMESPACE.name],
+    );
+    await getDb().run('DELETE FROM effect_attempts WHERE operation_id = ?', [op!.id]);
+    await getDb().run("UPDATE idempotency_operations SET failure_category = NULL, recover_after = '2020-01-01T00:00:00.000Z' WHERE id = ?", [op!.id]);
+    await getDb().run("UPDATE cash_invoices SET state = 'UNCERTAIN', updated_at = '2020-01-01T00:00:00.000Z' WHERE id = ?", [drafted.value.id]);
+    sent = 0;
+    refuse = false;
+    // Paid another way in the meantime.
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId, opportunityId: id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, currency: 'USD',
+          verifiedReference: 'bank-never-attempted', idempotencyKey: `pay:${id}:never-attempted`, actorRef: userId,
+          appliesTo: 'OUTSIDE_INVOICES',
+        })
+      ).ok,
+    ).toBe(true);
+    await runInvoicing(projectId);
+    await runInvoicing(projectId);
+    expect(sent).toBe(0);
     expect((await listInvoices({ projectId, opportunityId: id }))[0]!.state).toBe('VOID');
   });
 

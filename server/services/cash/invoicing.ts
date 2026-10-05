@@ -260,7 +260,7 @@ async function settleIssue(
   if (outcome.status === 'UNCERTAIN') {
     let moved =
       invoice.state === 'UNCERTAIN' ||
-      (await moveInvoice({
+      (invoice.state !== 'VOID' && await moveInvoice({
         id: invoice.id,
         from: invoice.state,
         to: 'UNCERTAIN',
@@ -345,7 +345,8 @@ async function settleIssue(
     issuedAt: new Date().toISOString(),
     stateReason: null as string | null,
   };
-  let moved = await moveInvoice({ id: invoice.id, from: invoice.state, to: 'ISSUED', patch });
+  // A row voided under the send is handled below, with its need; never moved straight to ISSUED.
+  let moved = invoice.state !== 'VOID' && (await moveInvoice({ id: invoice.id, from: invoice.state, to: 'ISSUED', patch }));
   if (!moved) {
     /*
      * Released while the send was in flight: the agreement's release voided a
@@ -474,19 +475,33 @@ export async function issueOne(invoice: CashInvoice, pass: InvoicingPass): Promi
      * own recovery to ask the provider rather than send.
      */
     const operation = await issueInvoiceOperation(projectId, invoice.id);
+    // Young means its claimer may still be inside the send: only the owner of
+    // a send decides about it then (`settleIssue`), never a second pass.
     const old = Date.now() - Date.parse(invoice.updatedAt) > ABANDONED_CLAIM_MS;
-    const refusedUnprocessed =
-      operation !== null &&
-      operation.state === 'RESERVED' &&
-      operation.failureCategory !== null &&
-      (await listAttempts(operation.id)).every((attempt) => attempt.endedAt !== null);
-    if (!operation || refusedUnprocessed) {
-      if (operation || old) {
-        await moveInvoice({ id: invoice.id, from: 'UNCERTAIN', to: 'DRAFTED', patch: { stateReason: null } });
+    // Reserved with no attempt open: nothing is in flight and nothing is
+    // unknown at the provider — refused unprocessed, or never attempted. The
+    // engine would *send* on re-entry, so the row goes back to DRAFTED and
+    // meets every check first, guarded on the very row this pass read so a
+    // claim made since cannot be undone by it.
+    const nothingInFlight =
+      operation === null ||
+      (operation.state === 'RESERVED' &&
+        (await listAttempts(operation.id)).every((attempt) => attempt.endedAt !== null));
+    if (nothingInFlight) {
+      if (old) {
+        await moveInvoice({
+          id: invoice.id,
+          from: 'UNCERTAIN',
+          to: 'DRAFTED',
+          patch: { stateReason: null },
+          updatedAt: invoice.updatedAt,
+        });
       }
       return;
     }
-    if (operation.state === 'RESERVED' && !old) return;
+    // A send interrupted mid-attempt is re-entered only once it is old, when
+    // the engine's own recovery asks the provider rather than sending.
+    if (operation!.state === 'RESERVED' && !old) return;
     // An UNCERTAIN invoice is only ever *asked about*, and asking needs the
     // provider too. Without one it stays exactly as unknown as it was.
     if ((await readCapability('ISSUE_AN_INVOICE')).state !== 'PRESENT') return;

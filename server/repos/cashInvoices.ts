@@ -166,6 +166,8 @@ export async function moveInvoice(input: {
   from: CashInvoiceState;
   to: CashInvoiceState;
   patch?: InvoicePatch;
+  /** Also require the row to be exactly as last read: no write since. */
+  updatedAt?: string;
 }): Promise<boolean> {
   const sets = ['state = ?', 'updated_at = ?'];
   const params: (string | number | null)[] = [input.to, nowIso()];
@@ -175,8 +177,9 @@ export async function moveInvoice(input: {
     params.push(value as string | null);
   }
   params.push(input.id, input.from);
+  if (input.updatedAt !== undefined) params.push(input.updatedAt);
   const result = await getDb().run(
-    `UPDATE cash_invoices SET ${sets.join(', ')} WHERE id = ? AND state = ?`,
+    `UPDATE cash_invoices SET ${sets.join(', ')} WHERE id = ? AND state = ?${input.updatedAt !== undefined ? ' AND updated_at = ?' : ''}`,
     params,
   );
   return result.changes > 0;
