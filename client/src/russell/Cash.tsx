@@ -1989,6 +1989,7 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
                       currency={view.myCash.position.currency}
                       projectId={view.mode?.projectId}
                       mayAct={page.capabilities.mayActOnJob}
+                      mayRefund={page.capabilities.mayAdminister}
                       onChanged={onChanged}
                     />
                   ) : null;
@@ -2008,6 +2009,37 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
           </li>
         ))}
       </ul>
+      {page.capabilities.mayViewPrivateJob && work.journey
+        ? (() => {
+            /*
+             * A deal that finished leaves the work list but not its obligations:
+             * a refund or a supplier cost can still land after collection, and
+             * the control for it has to be somewhere a person can reach.
+             */
+            const listed = new Set([...acting, ...held].map((one) => one.opportunity.id));
+            const finished = work.journey.deals.filter((one) => !listed.has(one.opportunityId));
+            return finished.length > 0 ? (
+              <details className="rs-cash-finished-deals">
+                <summary>Finished deals ({finished.length})</summary>
+                <ul className="rs-list">
+                  {finished.map((deal) => (
+                    <li key={deal.opportunityId} className="rs-group">
+                      <p className="rs-item-title">{deal.title}</p>
+                      <DealJourney
+                        deal={deal}
+                        currency={view.myCash.position.currency}
+                        projectId={view.mode?.projectId}
+                        mayAct={page.capabilities.mayActOnJob}
+                        mayRefund={page.capabilities.mayAdminister}
+                        onChanged={onChanged}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null;
+          })()
+        : null}
     </section>
   );
 }
@@ -2272,7 +2304,7 @@ function OpportunityMoney({
   currency: string;
   onChanged(): void;
 }): JSX.Element {
-  const [kind, setKind] = useState<'PIPELINE_AGREED' | 'CUSTOMER_PAYMENT' | 'SETTLEMENT' | null>(
+  const [kind, setKind] = useState<'CUSTOMER_PAYMENT' | 'SETTLEMENT' | null>(
     null,
   );
   const [amount, setAmount] = useState('');
@@ -2284,10 +2316,9 @@ function OpportunityMoney({
   const amountCents = centsFromAmount(amount);
 
   async function run(): Promise<void> {
-    // An agreed amount needs no provider reference — it is pipeline, not cash —
-    // and the server says so; a payment and a settlement each need one.
-    const needsReference = kind !== 'PIPELINE_AGREED';
-    if (!kind || amountCents === null || (needsReference && !reference.trim())) return;
+    // A payment and a settlement each need the provider's reference. What was
+    // agreed is recorded as an agreement on the deal's journey, never here.
+    if (!kind || amountCents === null || !reference.trim()) return;
     setBusy(true);
     setProblem(null);
     try {
@@ -2299,22 +2330,14 @@ function OpportunityMoney({
         opportunityId,
         /*
          * Built from the kind, the piece and what was typed, never a clock: a
-         * retry after a lost response is the same entry once. An agreed amount
-         * with no reference is keyed by its amount, so agreeing a second,
-         * different figure is a second entry and resubmitting the same one is
-         * not.
+         * retry after a lost response is the same entry once.
          */
-        idempotencyKey:
-          kind === 'PIPELINE_AGREED'
-            ? `agreed:${opportunityId}:${amountCents}:${reference.trim()}`
-            : `${kind === 'SETTLEMENT' ? 'settlement' : 'payment'}:${opportunityId}:${reference.trim()}`,
+        idempotencyKey: `${kind === 'SETTLEMENT' ? 'settlement' : 'payment'}:${opportunityId}:${reference.trim()}`,
       });
       setDone(
         kind === 'SETTLEMENT'
-          ? 'Settlement recorded. It now counts as available funds, and “Money is in” can be recorded.'
-          : kind === 'PIPELINE_AGREED'
-            ? 'Agreed amount recorded. It is pipeline: nothing has been paid, and it is not cash.'
-            : 'Payment recorded. It is not available funds until it settles.',
+          ? 'Settlement recorded. It now counts as available funds.'
+          : 'Payment recorded. It is not available funds until it settles.',
       );
       setKind(null);
       setAmount('');
@@ -2356,10 +2379,7 @@ function OpportunityMoney({
       ) : (
         <>
           <p className="rs-hint">
-            {kind === 'PIPELINE_AGREED'
-              ? 'What the customer agreed to pay for this work. It is pipeline, not cash, and it is ' +
-                'what an invoice is issued for. A reference — a quote or agreement number — is optional.'
-              : kind === 'SETTLEMENT'
+            {kind === 'SETTLEMENT'
               ? 'The money reached the account and is usable. Use the payout or bank reference.'
               : 'The customer paid. Use the payment provider’s or bank’s reference — a payment nobody can trace is pipeline, not cash.'}
           </p>
@@ -2386,7 +2406,7 @@ function OpportunityMoney({
             disabled={
               busy ||
               amountCents === null ||
-              (kind !== 'PIPELINE_AGREED' && reference.trim().length === 0)
+              reference.trim().length === 0
             }
             onClick={() => void run()}
           >
