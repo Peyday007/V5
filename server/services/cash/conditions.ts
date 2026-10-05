@@ -36,6 +36,8 @@
 import { getOpportunity } from '../../repos/cashPortfolio.ts';
 import { readCapability } from './capabilities.ts';
 import { evidenceCard } from './card.ts';
+import { getOperation } from '../../repos/idempotency.ts';
+import { actionsFor } from '../../repos/cashActions.ts';
 import type { CashNeed } from '../../domain/types.ts';
 
 export interface NeedVerification {
@@ -99,6 +101,79 @@ export async function readNeedCondition(need: CashNeed): Promise<NeedVerificatio
       };
     }
     return null;
+  }
+
+  /*
+   * The two needs a commercial effect raises (`perform.ts`). Brain wrote both
+   * keys, so the operation is read back by id rather than by anything typed.
+   * An unknown outcome is settled the moment the operation stops being
+   * UNCERTAIN — by reconciliation or by a person — and a refusal is answered
+   * once the same action is on the record after it, by whoever did it.
+   */
+  if (need.requestKey.startsWith('effect-uncertain:')) {
+    const operationId = need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1);
+    const operation = await getOperation(operationId);
+    if (!operation) return null;
+    return {
+      holds: operation.state !== 'UNCERTAIN',
+      reading:
+        operation.state === 'UNCERTAIN'
+          ? 'The outcome of that attempt is still unknown.'
+          : `That attempt is now ${operation.state.toLowerCase()}.`,
+    };
+  }
+
+  if (need.requestKey.startsWith('effect-failed:') && need.opportunityId) {
+    const [, , action, operationId] = need.requestKey.split(':');
+    if (!action || !operationId) return null;
+    const operation = await getOperation(operationId);
+    if (!operation) return null;
+    const since = operation.completedAt ?? operation.updatedAt;
+    const later = (await actionsFor(need.opportunityId)).some(
+      (one) => one.action === action && one.createdAt >= since,
+    );
+    return {
+      holds: later,
+      reading: later
+        ? `A ${action} is on the record after the refusal.`
+        : `No ${action} has been recorded since the refusal.`,
+    };
+  }
+
+  /*
+   * A confirmed effect recorded against a piece it no longer fitted
+   * (`recordConfirmedEffect`). A contact on a piece that stayed READY is
+   * answered once execution has begun — by Brain from the recorded contact,
+   * or by anybody. What an invoice or a payment means for a piece that has
+   * since been archived is a person's judgement, so that one has no reading.
+   */
+  if (need.requestKey.startsWith('effect-unapplied:') && need.opportunityId) {
+    const [, , action] = need.requestKey.split(':');
+    if (action !== 'CONTACT_BUYER') return null;
+    const opportunity = await getOpportunity(need.opportunityId);
+    if (!opportunity) return null;
+    const begun = ['EXECUTING', 'DELIVERING', 'COLLECTED'].includes(opportunity.state);
+    return {
+      holds: begun,
+      reading: begun
+        ? `Execution has begun: this is ${opportunity.state.toLowerCase()}.`
+        : `This is still ${opportunity.state.toLowerCase()}.`,
+    };
+  }
+
+  /* A confirmed effect no grant could be named for: settled once its receipt is recorded. */
+  if (need.requestKey.startsWith('effect-unattributed:') && need.opportunityId) {
+    const operationId = need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1);
+    const operation = await getOperation(operationId);
+    if (!operation?.resultRef) return null;
+    const receipt = operation.resultRef;
+    const recorded = (await actionsFor(need.opportunityId)).some((one) => one.reference === receipt);
+    return {
+      holds: recorded,
+      reading: recorded
+        ? `An action carrying ${receipt} is on the record.`
+        : `Nothing carrying ${receipt} is on the record yet.`,
+    };
   }
 
   return null;

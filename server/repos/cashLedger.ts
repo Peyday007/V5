@@ -124,6 +124,42 @@ export async function recordMoney(input: MoneyWrite): Promise<MoneyOutcome> {
   const at = ledgerNow();
   const fingerprint = moneyFingerprint(input);
 
+  /*
+   * One provider payment reference is one customer payment, whatever key it
+   * arrives under. The idempotency key alone cannot say so: Brain's own
+   * take-payment keys a receipt by the piece it was taken for, and a person
+   * recording the same receipt by hand, or against another piece, would
+   * otherwise be a second payment of money that arrived once — earned twice
+   * and, once it settles, counted as usable twice.
+   *
+   * A read, not a constraint, because every writer of this table already
+   * holds the project's cash lock (`serializeCash`) for the currency it
+   * writes, and a sprint keeps one currency: two payments cannot interleave
+   * between this read and the insert below. The same key is let through to
+   * the insert so a retry still replays rather than being refused.
+   */
+  const reference = input.verifiedReference?.trim() ?? '';
+  if (input.kind === 'CUSTOMER_PAYMENT' && reference) {
+    const taken = await getDb().all<{ id: string }>(
+      `SELECT id FROM cash_money_entries
+        WHERE project_id = ? AND kind = 'CUSTOMER_PAYMENT'
+          AND TRIM(verified_reference) = ? AND idempotency_key <> ?
+        LIMIT 1`,
+      [input.projectId, reference, input.idempotencyKey],
+    );
+    if (taken.length > 0) {
+      return {
+        ok: false,
+        entry: null,
+        reason:
+          `a customer payment with the provider reference ${reference} is already on the ` +
+          'ledger. One provider payment is one entry; if this is a different payment it ' +
+          'carries a different reference.',
+        replayed: false,
+      };
+    }
+  }
+
   await getDb().run(
     `INSERT INTO cash_money_entries
        (id, project_id, opportunity_id, commitment_id, idempotency_key, payload_fingerprint,
@@ -173,6 +209,36 @@ export async function recordMoney(input: MoneyWrite): Promise<MoneyOutcome> {
     };
   }
   return { ok: true, entry: mapEntry(existing), reason: 'already recorded', replayed: true };
+}
+
+/**
+ * The customer payment carrying one provider reference, whatever key wrote it.
+ * `recordMoney` keeps there from being more than one.
+ */
+export async function customerPaymentByReference(
+  projectId: string,
+  reference: string,
+): Promise<CashMoneyEntry | null> {
+  const rows = await getDb().all<CashMoneyEntryRow>(
+    `SELECT * FROM cash_money_entries
+      WHERE project_id = ? AND kind = 'CUSTOMER_PAYMENT' AND TRIM(verified_reference) = ?
+      ORDER BY created_at, id
+      LIMIT 1`,
+    [projectId, reference.trim()],
+  );
+  return rows[0] ? mapEntry(rows[0]) : null;
+}
+
+/** The entry one idempotency key wrote, or none — read without writing. */
+export async function moneyEntryByKey(
+  projectId: string,
+  idempotencyKey: string,
+): Promise<CashMoneyEntry | null> {
+  const rows = await getDb().all<CashMoneyEntryRow>(
+    'SELECT * FROM cash_money_entries WHERE project_id = ? AND idempotency_key = ?',
+    [projectId, idempotencyKey],
+  );
+  return rows[0] ? mapEntry(rows[0]) : null;
 }
 
 export async function getMoneyEntry(id: string): Promise<CashMoneyEntry | null> {

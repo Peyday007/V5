@@ -64,7 +64,9 @@ import {
   INVITATION_TTL_MS,
 } from '../repos/invitations.ts';
 import type { Principal, Worker, WorkerInvitation } from '../domain/types.ts';
-import { attachClient, connectorClient, endpointOf, getConnector } from '../repos/connectors.ts';
+import { attachClient, connectorClient, endpointOf, getConnector, repointConnectorWorker } from '../repos/connectors.ts';
+import { reconnectTargetById, reconnectTargets, type ReconnectTarget } from '../services/fleet/connectorContinuity.ts';
+import { forgetRoutingHealth } from '../services/fleet/connectorHealth.ts';
 import { touchConnectorRoutines } from '../services/fleet/connectorBinding.ts';
 import {
   MEMBER_RECONNECT_SENTENCE,
@@ -696,13 +698,16 @@ export function oauthRouter(): Router {
          * the one that counts.
          */
         const bound = await boundWorkerFor(req, params.clientId, params.resource);
+        // An unattributed client at an endpoint where connectors already exist
+        // is offered those connectors to reconnect — never a bare worker list.
+        const targets = bound ? [] : await reconnectTargets(params.resource);
         await auditAuthorizePage(req, {
           clientId: params.clientId,
           resource: params.resource,
           shown: bound ? 'ADMIN_BOUND' : 'ADMIN_CHOOSER',
-          connectorIds: bound?.connectorId ? [bound.connectorId] : [],
+          connectorIds: bound?.connectorId ? [bound.connectorId] : targets.map((one) => one.connector.id),
         });
-        res.type('html').send(await consentPage(req, params, client.clientName, person, null, bound));
+        res.type('html').send(await consentPage(req, params, client.clientName, person, null, bound, targets));
         return;
       }
 
@@ -907,7 +912,51 @@ export function oauthRouter(): Router {
         return;
       }
 
-      const workerId = typeof body['worker_id'] === 'string' ? body['worker_id'] : '';
+      const postedWorkerId = typeof body['worker_id'] === 'string' ? body['worker_id'] : '';
+      const choice = typeof body['target'] === 'string' ? body['target'] : '';
+
+      /*
+       * An administrator reconnecting an existing logical connector chose the
+       * *connector*; the worker is the connector's — the one its Routines are
+       * registered for — and never what the form says. Production, 2026-10-03:
+       * a reconnect of the Brain Research A research connector was approved as
+       * another member's worker from a bare worker list, and every later token
+       * authenticated as the wrong identity. A posted worker that disagrees is
+       * refused, not quietly corrected.
+       */
+      let reconnecting: ReconnectTarget | null = null;
+      if (choice.startsWith('cnr_')) {
+        reconnecting = person ? await reconnectTargetById(choice, params.resource) : null;
+        const attachedTo = await connectorClient(params.clientId);
+        if (
+          !reconnecting ||
+          (postedWorkerId && postedWorkerId !== reconnecting.worker.id) ||
+          (attachedTo && attachedTo.connectorId !== reconnecting.connector.id)
+        ) {
+          await audit({
+            action: 'OAUTH_AUTHORIZE',
+            actor: person,
+            targetId: params.clientId,
+            result: 'DENIED',
+            metadata: {
+              reason: !reconnecting ? 'RECONNECT_TARGET_UNAVAILABLE' : attachedTo ? 'CLIENT_ATTACHED_ELSEWHERE' : 'RECONNECT_WORKER_MISMATCH',
+              clientId: params.clientId,
+              connectorId: choice,
+              endpoint: endpointOf(params.resource),
+            },
+          });
+          errorPage(
+            res,
+            403,
+            'Not authorized',
+            reconnecting
+              ? `Reconnecting this connector keeps its worker, ${workerIdentity(reconnecting.worker)}.`
+              : 'That connector cannot be reconnected from this request.',
+          );
+          return;
+        }
+      }
+      const workerId = reconnecting ? reconnecting.worker.id : choice.startsWith('wkr_') ? choice : postedWorkerId;
 
       // The invitation names the worker. The form is a form, and a form can be
       // edited — so on the invited path the posted id is checked against the
@@ -1001,7 +1050,8 @@ export function oauthRouter(): Router {
           // Same chooser, same preselection: a re-render that lost it would
           // make an administrator's second attempt harder than their first.
           const bound = await boundWorkerFor(req, params.clientId, params.resource);
-          res.status(400).type('html').send(await consentPage(req, params, client.clientName, person, detail, bound));
+          const targets = bound ? [] : await reconnectTargets(params.resource);
+          res.status(400).type('html').send(await consentPage(req, params, client.clientName, person, detail, bound, targets));
           return;
         }
         errorPage(res, 400, 'This connection cannot be completed', detail);
@@ -1089,6 +1139,27 @@ export function oauthRouter(): Router {
        * that has just been re-authorized are touched, so dispatch intents
        * deferred while it could not authenticate are re-armed now.
        */
+      if (reconnecting) {
+        const connector = reconnecting.connector;
+        // The one place a reconnect may move a connector's worker: back to the
+        // worker its Routines are registered for, which the screen named.
+        if (reconnecting.restoresFrom) {
+          await repointConnectorWorker({ connectorId: connector.id, from: reconnecting.restoresFrom, to: worker.id });
+          forgetRoutingHealth();
+        }
+        const now = await getConnector(connector.id);
+        const outcome =
+          now?.workerId !== worker.id
+            ? 'CONFLICT'
+            : await attachClient({
+          clientId: params.clientId,
+          connectorId: connector.id,
+          source: 'OPERATOR',
+          evidence: `administrator reconnect by ${person!.id}${reconnecting.restoresFrom ? `; worker restored from ${reconnecting.restoresFrom}` : ''}`,
+        });
+        if (outcome !== 'CONFLICT') await touchConnectorRoutines(connector.id);
+      }
+
       const bound = binding ?? (await boundWorkerFor(req, params.clientId, params.resource));
       // A member reconnect is attached at redemption (see the token endpoint).
       const restoringId = restoring ? null : (bound?.connectorId ?? null);
@@ -1122,6 +1193,13 @@ export function oauthRouter(): Router {
           workerName: worker.name,
           endpoint: endpointOf(params.resource),
           ...(invited ? { via: 'INVITATION', invitationId: invited.invitation.id } : {}),
+          ...(reconnecting
+            ? {
+                via: 'ADMIN_RECONNECT',
+                connectorId: reconnecting.connector.id,
+                restoredFrom: reconnecting.restoresFrom,
+              }
+            : {}),
           ...(restoring
             ? {
                 via: 'MEMBER_RECONNECT',
@@ -1570,6 +1648,8 @@ async function consentPage(
    * what this screen runs on, and it is not spent by connecting from here.
    */
   bound: { worker: Worker; why: string } | null = null,
+  /** Existing connectors at this endpoint: a reconnect chooses one of these, and keeps its worker. */
+  targets: ReconnectTarget[] = [],
 ): Promise<string> {
   const heldInvitationFor = bound?.worker ?? null;
   /**
@@ -1620,6 +1700,32 @@ async function consentPage(
 
   // Named rather than merely preselected, because "why am I being shown a list"
   // is the question this screen was quietly failing to answer.
+  /*
+   * Nothing is preselected. A preselected worker on a list that offers every
+   * identity in the Brain is how a reconnect lands on someone else's worker
+   * without anybody deciding it.
+   */
+  const placeholder = bound ? '' : '<option value="" selected disabled>Choose…</option>';
+  const reconnectOptions = targets
+    .map(
+      (t) =>
+        `<option value="${esc(t.connector.id)}">Reconnect ${esc(t.accountName)} — keeps ${esc(workerIdentity(t.worker))}${
+          t.routineNames.length > 0 ? ` (${esc(t.routineNames.join(', '))})` : ''
+        }${t.restoresFrom ? ` — restores it from ${esc(t.restoresFrom)}, which its Routines are not registered for` : ''}</option>`,
+    )
+    .join('');
+  const selectHtml =
+    targets.length > 0
+      ? `<label for="target">Connect as</label>
+       <select id="target" name="target" required>${placeholder}
+         <optgroup label="Reconnect an existing connector (its worker does not change)">${reconnectOptions}</optgroup>
+         <optgroup label="Connect a different worker as a NEW connector">${options}</optgroup>
+       </select>
+       <div class="err">Reconnecting? Choose your connector above, not a worker. A new connector
+         authenticates as the worker you pick, and does not replace an existing one.</div>`
+      : `<label for="worker_id">Connect as</label>
+       <select id="worker_id" name="worker_id" required>${placeholder}${options}</select>`;
+
   const invitationNote = bound
     ? `<div class="grant"><dt>Connecting as</dt><dd><code>${esc(workerIdentity(bound.worker))}</code> —
        ${esc(bound.why)}, so no other worker is offered.</dd></div>`
@@ -1650,8 +1756,7 @@ async function consentPage(
            : `<div class="err">This Brain has no workers yet. Create one first.</div>`
          : `<form method="post" action="${OAUTH_BASE}/authorize/approve">
        ${hiddenFields(params)}
-       <label for="worker_id">Connect as</label>
-       <select id="worker_id" name="worker_id" required>${options}</select>
+       ${selectHtml}
        <div class="grant"><dl>${grants || '<dt>No access</dt><dd>None of these workers has a project yet.</dd>'}</dl></div>
        <button type="submit">Approve</button>
      </form>`
