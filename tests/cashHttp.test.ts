@@ -1062,6 +1062,26 @@ describe('one account’s whole journey', () => {
       expect(step.status, JSON.stringify(step.body)).toBe(200);
     }
 
+    // An agreement is resolved against this piece, so an id from nowhere
+    // reaches no obligation.
+    const foreign = await op('obligation-event', {
+      agreementId: 'agr_not_on_this_piece',
+      kind: 'DELIVERED',
+      detail: 'x',
+      evidenceRef: 'x',
+    });
+    expect(foreign.status).toBe(422);
+
+    // Paying money back is the administrator's: a member gets the same 404 the
+    // other administrator-only routes give, for both halves of the machine.
+    for (const action of ['refund', 'refund-answer']) {
+      const refused = await call('POST', `/api/cash/opportunities/${opportunityId}/${action}`, {
+        cookie: memberCookie,
+        body: { agreementId, amountCents: 1, reason: 'a member trying' },
+      });
+      expect(refused.status, action).toBe(404);
+    }
+
     const collected = await call('POST', `/api/cash/opportunities/${opportunityId}/collect`, {
       cookie: adminCookie,
       body: { outcome: 'Delivered and paid.' },
