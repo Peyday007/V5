@@ -191,14 +191,14 @@ async function noShowEvents(routineId: string): Promise<number> {
 const later = (): number => Date.now() + RECOVERY_PROBE_WINDOW_MS + 1_000;
 
 describe('a recovery probe establishes attribution from its own fire', () => {
-  it('a healthy connector that authorizes as another worker proves the connector and does not lift the quarantine', async () => {
+  it('a healthy connector that authorizes as another worker is never adopted and does not lift the quarantine', async () => {
     // Production, 2026-10-04: Brain Research A is bound to the research worker
     // on Cash Mode 1, and its Claude connector had been approved as a different
     // worker. The probe arrived healthy and the quarantine was lifted, so the
     // router went back to firing that worker's bins at a session handed none.
     const airyn = await account('airyn');
     const stranger = await createWorker({ name: 'somebody-else', createdByType: 'SYSTEM', createdById: 'test' });
-    const scopes = ['project:read', 'queue:claim', 'queue:complete'];
+    const scopes: Parameters<typeof grantMembership>[0]['scopes'] = ['project:read', 'queue:claim', 'queue:complete'];
     await grantMembership({ projectId, principalType: 'WORKER', principalId: stranger.id, role: 'MEMBER', scopes, grantedByType: 'SYSTEM', grantedById: 'test' });
     await setWorkerRouting({ workerId: stranger.id, families: ['FACTORY'], repositories: ['owner/fixture'], capabilities: [], reason: 'test', setBy: 'test' });
     const minted = await issueGrant({ clientId: airyn.clientId, workerId: stranger.id, scope: '', resource: RESOURCE, now: Date.now() - 60_000 });
@@ -228,13 +228,11 @@ describe('a recovery probe establishes attribution from its own fire', () => {
     await settleRecoveryProbes();
     await settleRecoveryProbes(later());
     const settled = (await getRecoveryProbe(probe.id))!;
-    // What the fire established about the connector is recorded as it was.
-    expect(settled.state).toBe('HEALTHY');
-    expect(settled.nextAction).toContain(workerId);
-    // And the surface it was fired for stays out of routing.
-    const routine = (await getRoutine(airyn.routineId))!;
-    expect(routine.state).toBe('QUARANTINED');
-    expect(settled.outcome).toContain('stays quarantined');
+    // The arrival contradicts the Routine's registered worker, so nothing is
+    // attached and the surface it was fired for stays out of routing.
+    expect(settled.state).toBe('AMBIGUOUS');
+    expect(settled.connectorId).toBeNull();
+    expect((await getRoutine(airyn.routineId))!.state).toBe('QUARANTINED');
   });
 
   it('A/B: probes Airyn on a shared worker, binds only Airyn, and lifts the quarantine by itself', async () => {

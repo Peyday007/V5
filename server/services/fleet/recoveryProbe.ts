@@ -271,34 +271,6 @@ export async function startRecoveryProbe(input: {
   return (await getRecoveryProbe(probe.id))!;
 }
 
-/**
- * Why a healthy arrival does not heal this Routine, or null when it does.
- *
- * A Routine is fired for the work its *bound* worker may claim. A session that
- * authenticated as some other worker cannot claim that work, so a healthy
- * connector behind it proves the connector and disproves nothing about the
- * surface: lifting the quarantine would route the bound worker's bins at a
- * session that is handed none of them, an activation each time. Production,
- * 2026-10-04: Brain Research A's probe arrived as wkr_1db1193… while the Routine
- * serves wkr_1cdd82…, the only research worker on Cash Mode 1, and was
- * re-enabled. Unknown either side is not a mismatch here, because the
- * attribution that produced the connector already failed closed on unknowns.
- */
-async function misboundReason(
-  routine: { workerId: string | null; routineRef: string },
-  connectorId: string,
-  arrivedAs: string | null,
-): Promise<string | null> {
-  const connector = await getConnector(connectorId);
-  const authorizesAs = arrivedAs ?? connector?.workerId ?? null;
-  if (!routine.workerId || !authorizesAs || authorizesAs === routine.workerId) return null;
-  return (
-    `its connector ${connectorId} authorizes as ${authorizesAs}, but the Routine is bound to ${routine.workerId}, ` +
-    'so this arrival could claim none of the work the Routine is fired for. Reconnect that Claude account’s connector ' +
-    `approving ${routine.workerId}, or repoint the Routine (\`fleet repoint-worker\`) if ${authorizesAs} is the intended worker.`
-  );
-}
-
 /** A quarantine this probe's fire and arrival disprove, and so may lift. */
 export function liftableQuarantine(reason: string | null): boolean {
   if (!reason) return false;
@@ -403,22 +375,19 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
       const proven = `Proven: session ${arrival.sessionRef} authenticated as client ${attribution.clientId} -> connector ${attribution.connectorId}.`;
       // The settlement is claimed first; only the winner applies its effects,
       // so two settlers cannot both lift and the record never contradicts the surface.
-      const misbound = await misboundReason(routine, attribution.connectorId, arrival.workerId);
       const won = await settleRecoveryProbe(probe.id, 'FIRED', {
         to: 'HEALTHY',
         connectorId: attribution.connectorId,
         clientId: attribution.clientId,
         health: `${health.state} ${health.reason}`,
         outcome: proven,
-        nextAction: misbound,
+        nextAction: null,
       });
       if (!won) return false;
-      let lifted = misbound ? `It was not lifted: ${misbound}` : 'It was not quarantined.';
+      let lifted = 'It was not quarantined.';
       const current = (await getRoutine(routine.id)) ?? routine;
       if (current.state === 'QUARANTINED') {
-        if (misbound) {
-          lifted = `It stays quarantined: ${misbound}`;
-        } else if (liftableQuarantine(current.stateReason)) {
+        if (liftableQuarantine(current.stateReason)) {
           const moved = await setRoutineState({
             routineId: routine.id,
             from: 'QUARANTINED',
@@ -530,7 +499,6 @@ export async function settleRecoveryProbes(now = Date.now()): Promise<{ settled:
     if (!routine || routine.state !== 'QUARANTINED' || !probe.arrivedAt) continue;
     if (!liftableQuarantine(routine.stateReason) || routine.updatedAt > probe.arrivedAt) continue;
     if (routine.connectorId !== probe.connectorId) continue;
-    if (probe.connectorId && (await misboundReason(routine, probe.connectorId, null))) continue;
     const moved = await setRoutineState({
       routineId: routine.id,
       from: 'QUARANTINED',

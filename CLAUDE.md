@@ -12134,19 +12134,15 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   and Factory connectors separate. `admin connectors probe` prints the whole
   chain.
 - **A healthy connector is not a healed Routine.** A Routine is fired for the
-  work its *bound* worker may claim, so a probe whose session authenticated as
-  another worker proves the connector and disproves nothing about the surface.
-  Production, 2026-10-04: Brain Research A, bound to `wkr_1cdd82…` — the only
-  research worker on Cash Mode 1 — was probed, arrived HEALTHY as
-  `wkr_1db1193…` (a worker with no membership there), and had its quarantine
-  lifted; the router fired it once more before it was re-quarantined by hand.
-  The probe still settles HEALTHY, because that is what the fire established
-  about the connector, but the lift (and the tick's backstop lift) is withheld
-  and `nextAction` names the two remedies: reconnect that Claude account's
-  connector approving the bound worker, or repoint the Routine if the other
-  worker was intended. Granting the other worker the project instead would
-  widen one person's identity into another's private operation, so it is not
-  offered.
+  work its *bound* worker may claim, so an arrival authenticated as another
+  worker disproves nothing about the surface. Production, 2026-10-04: Brain
+  Research A (bound to worker-05, the only research worker on Cash Mode 1) was
+  probed, arrived as worker-04, and had its quarantine lifted. `dec6d83` closed
+  it where it belongs — `attributeArrival` refuses an arrival contradicting the
+  fired Routine's registered worker, so the probe settles AMBIGUOUS and lifts
+  nothing. A second guard I had written in `recoveryProbe.ts` was removed when
+  the two met, because it had become unreachable; the regression in
+  `connectorRecoveryProbe` pins the behaviour rather than either mechanism.
 - **What it cannot fix is named.** A refresh that never reached Brain is silence,
   indistinguishable from a Routine not starting; Claude's own needs-auth state
   clears only by consent in Claude. Brain answers every retry correctly and
