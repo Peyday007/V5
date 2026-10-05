@@ -60,7 +60,7 @@ import {
   supplyAcceptanceCondition,
 } from '../../repos/cashFulfillment.ts';
 import { getDb } from '../../db/database.ts';
-import { getCashMode, listCashEventsFor, recordCashEvent } from '../../repos/cashMode.ts';
+import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { totalsByKind } from '../../repos/cashLedger.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
 import {
@@ -1694,10 +1694,15 @@ async function createWork(
 }
 
 async function workAttempt(fulfillment: CashFulfillment): Promise<number> {
-  const events = await listCashEventsFor(fulfillment.opportunityId, 500);
-  return events.filter(
-    (one) => one.kind === 'CASH_FULFILLMENT_WORK_RETRIED' && one.detail.fulfillmentId === fulfillment.id,
-  ).length;
+  // Counted from the whole history by kind, never from a page of recent
+  // events: an attempt number that went back down would collide with the
+  // failed attempt's own Factory key.
+  const row = await getDb().get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM cash_events
+      WHERE project_id = ? AND opportunity_id = ? AND kind = 'CASH_FULFILLMENT_WORK_RETRIED'`,
+    [fulfillment.projectId, fulfillment.opportunityId],
+  );
+  return Number(row?.n ?? 0);
 }
 
 /**
@@ -1739,7 +1744,9 @@ export async function retryWork(input: {
     summary: `The work for "${opportunity.title}" failed and is being created again: ${reason}`,
     detail: { fulfillmentId: fulfillment.id, previousRef: fulfillment.workRef, failure: reading.failure.reason, reason },
   });
-  await releaseFulfillmentWork(fulfillment.id, fulfillment.workRef);
+  if (!(await releaseFulfillmentWork(fulfillment.id, fulfillment.workRef))) {
+    return refuse('Somebody else retried this work a moment ago. It is already being created again.');
+  }
   return {
     ok: true,
     value: (await readFulfillment(opportunity))!,
@@ -1863,8 +1870,9 @@ async function observe(reading: FulfillmentReading, opportunity: CashOpportunity
       'REFUND',
       marker,
       'REALIZED_CONTRIBUTION',
-      `${reading.money.contributionCents} cents realized after the refund`,
-      reading.money.contributionCents,
+      `${reading.money.contributionCents - reading.money.unpaidCommitmentCents} cents realized after the ` +
+        `refund, net of ${reading.money.unpaidCommitmentCents} still owed to the supplier`,
+      reading.money.contributionCents - reading.money.unpaidCommitmentCents,
     );
   }
   return written;
