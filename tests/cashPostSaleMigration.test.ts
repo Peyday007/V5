@@ -1,5 +1,5 @@
 /**
- * The post-sale migrations (104/105, pg 095/096) over a Brain that already has
+ * The post-sale migrations (107/108, pg 098/099) over a Brain that already has
  * money in it, on whichever backend the suite runs against.
  *
  * 105 rebuilds `cash_money_entries` on SQLite to widen its kind CHECK, and a

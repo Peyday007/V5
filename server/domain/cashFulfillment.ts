@@ -7,7 +7,7 @@
  * of one promise is how the card, the agreement and the obligation came to
  * disagree in the two branches this replaced (docs/POST-SALE.md).
  *
- * Every `*Row` type is the shape `migrations/105_cash_post_sale.sql` holds,
+ * Every `*Row` type is the shape `migrations/108_cash_post_sale.sql` holds,
  * every view type is what the repository hands upward, and
  * `repos/cashFulfillment.ts` is the only place the two meet.
  */

@@ -682,7 +682,7 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
   };
 
   /*
-   * The commercial providers this deployment selected (§52). Registering one
+   * The commercial providers this deployment selected (§53). Registering one
    * reads only whether it was chosen; whether it is usable is asked again on
    * every capability reading, and nothing here touches the network.
    */

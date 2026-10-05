@@ -42,7 +42,7 @@
  * so the moment a messaging integration exists is the moment it can be checked
  * rather than assumed. `ISSUE_AN_INVOICE` and `TAKE_A_PAYMENT` read the same
  * way, from the invoice adapter and the payment reader `providers/register.ts`
- * registers when the deployment selects a provider (§52). With none selected,
+ * registers when the deployment selects a provider (§53). With none selected,
  * which is a deployment whose owner has not supplied a key, all three read
  * exactly as they did when they were `read: null`.
  *

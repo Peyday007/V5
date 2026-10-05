@@ -5898,6 +5898,54 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   test journeys had recorded the money unattributed, or after collecting; they
   were wrong about the order and are corrected rather than the guard loosened.
 
+- **Every walk that reached READY did it with a person typing the card, so
+  "Brain prepares things worth testing by itself" had never been shown — and
+  driving it without the person found two writers that did not exist.** The
+  load-bearing `exposure` field (`peak_funding_cents`) was owned by
+  `BRAIN_RESEARCH`, `reconcileDiscoverableGaps` raised a need for it, and
+  `applyOne` then returned false because `COLUMN` had no entry for it: the need
+  sat open beside a finished mission for ever and every autonomous piece stopped
+  at QUALIFIED. And a researched `price` wrote the claim's *sentence* into the
+  integer `price_cents` — stored as text on SQLite, refused by Postgres, which
+  throws out of `applyResearchAnswers` and stops every pass after it in the
+  operating step. Both are one rule now: a money field is read through
+  `readMoneyFigures` (`MONEY_FIELD`, `figureFor` in `answers.ts`), taking the
+  unfavourable end — the lowest published price, the highest published cost —
+  and a claim with no figure answers nothing and is reported as such. The
+  exposure is also proposed from published direct costs that state a figure,
+  and never from a cost sentence that does not. `tests/cashAutonomousFunnel`
+  walks an ACTIVE sprint with no handcrafted opportunity from discovery to
+  READY_TO_TEST with no `PERSON` fact on the card, and fails at QUALIFIED,
+  naming `exposure`, against the code it replaced — on both backends.
+  The same suite holds the refusals rather than only the success: no payer
+  leaves a SIGNAL, a short thesis stops below QUALIFIED, a price or a cost
+  stated only in words leaves the column null and the need open, a price
+  mission's figures never reach the exposure, and a replay or a restart writes
+  no second fact. **A need is answered by its own mission and by nothing
+  else**, which is what keeps one field's research out of another's column —
+  and, said plainly, within that mission the first claim stating a figure
+  answers, so a mission that returns several figures for different things is
+  read at the unfavourable end of whichever claim the gate put first.
+  **Reading a figure into an integer column is a sharper act than quoting a
+  sentence, and the independent review of the port found three ways it
+  invented one.** `readMoneyFigures` read `C$1,200`, `A$5,000` and `HK$900` as
+  dollars, because the `$` pattern had no left boundary, and `$1,200 million`
+  as 1,200; both are refused now — a symbol glued to a letter belongs to
+  another currency, and a spelled-out scale is shorthand by another name. A
+  figure stated *per* something (`$25 per hour`, `$49/mo`) is reported as a
+  rate and `figureFor` does not take it as a card total. A figure above
+  `MAX_COLUMN_CENTS` — Postgres's `INTEGER`, which SQLite does not enforce — is
+  unanswerable rather than clipped, because the write it would make is the
+  same throw this change exists to remove. And a proposed exposure replaces
+  only a proposal: a figure on the column with no card fact, or with a source
+  or a person behind it, is left alone, and the margin is computed against
+  whatever the card will actually hold.
+  Staleness, early retirement, target replenishment, configurable portfolio
+  concurrency, the software-need handoff to the Factory and a funnel reading
+  are **not built**; they were drafted as unapproved objective specifications
+  on `claude/autonomous-opportunity-pipeline-6ph954` and are not in
+  `objectives/`, because that directory holds what a person approved.
+
 **Brain performs a commercial action only through `cash/perform.ts`.** The
 tick's contact, a person's *Have Brain do it* and a person settling an unknown
 outcome all reach `applyEffectOutcome`. A receipt records the action. An
@@ -5958,7 +6006,7 @@ named, and none of them has a reader, because there is nothing to read. Nothing
 here forms a view about what settling a question is worth, for the same reason
 `judgment.ts` does not.
 
-**That paragraph was true when it was written and is corrected in §52 rather
+**That paragraph was true when it was written and is corrected in §53 rather
 than edited here.** Three of those capabilities now have readers: a deployment
 that sets the messaging and billing secrets can write to a buyer, issue an
 invoice and read its payment and settlement back. One that does not reads
@@ -12131,7 +12179,32 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   clears only by consent in Claude. Brain answers every retry correctly and
   fast; it cannot make a client retry.
 
-## 52. A provider is a deployment secret and an effect class, never a boolean.
+## 52. A research goal is approved once, and its ceilings are what remain.
+
+A research goal (`docs/GOAL-BUDGET.md`) is a `russell_goals` row with `purpose`
+`RESEARCH_GOAL` and `work_policy` `CAPPED`. **This is a recorded correction to
+§24**, which says `CAPPED` is offered by no live grant: that stays true of a
+standing grant, and a research goal is the one live row that carries it, because
+a bounded experiment is exactly what `CAPPED` was kept for. It is invisible to
+every standing-authority reader, so it never becomes Russell's grant.
+
+- **Packets reserve as kind `MISSION`.** A new reservation kind would be a
+  second vocabulary for one count. The key is
+  `research:packet:<goalId>:<packetKey>`, so a replay is the same packet and is
+  charged once.
+- **Fragments are settled at creation**, across every packet of the goal, from
+  `research_orchestrations.goal_id`.
+- **The deadline is judged on Brain's clock.** After it no new packet or
+  fragment is created; work already queued may finish, and nothing written is
+  touched.
+- **Money stays zero.** No input raises it (invariant 18).
+- **Continuation is derived, not scheduled.** `advanceResearchGoals` runs once
+  per Russell tick, asks the archive first (§13), and starts `round-<n>` only
+  when no packet is live and the last one left a mandatory requirement
+  unresolved. The key makes two passes one packet. A ceiling that stops it
+  raises exactly one request for a person and never raises the ceiling itself.
+
+## 53. A provider is a deployment secret and an effect class, never a boolean.
 
 `SEND_A_MESSAGE`, `ISSUE_AN_INVOICE` and `TAKE_A_PAYMENT` read MISSING because
 nothing implemented them. `server/services/cash/providers/` and
@@ -12173,14 +12246,14 @@ a second credential framework or a second idempotency mechanism.
   each keyed on the invoice so a re-read records nothing. A payment outside
   Stripe is settled by a person, because Stripe holds no balance for it.
 
-**What is true today:** the adapters, the invoice table (`104_cash_invoices.sql`
-/ pg `095_cash_invoices.sql`), the tick pass and the status surface exist and
+**What is true today:** the adapters, the invoice table (`107_cash_invoices.sql`
+/ pg `098_cash_invoices.sql`), the tick pass and the status surface exist and
 are tested against fake providers (`tests/commercialProviders.test.ts`). No
 real buyer has been written to, no real invoice issued and no real money moved,
 and no provider secret has been set on the deployment — so all three still read
 MISSING in production until the owner sets them.
 
-## 53. After the buyer says yes there is one model, and each fact has one owner.
+## 54. After the buyer says yes there is one model, and each fact has one owner.
 
 Money Builds 1 to 3 each built a stretch of the road. Build 1 made a commercial
 effect safe to attempt. Build 2 made sending a message, issuing an invoice and
@@ -12473,7 +12546,7 @@ server/
       commission.ts     every commissioning step in order, and one READY / NOT READY answer
       lab.ts            the eight test modes, and the five this version refuses to run
     cash/
-      providers/        Resend and Stripe adapters, their config and status (§52)
+      providers/        Resend and Stripe adapters, their config and status (§53)
       invoicing.ts      an agreed amount invoiced, paid and settled — two entries
       journey/
         position.ts     where one deal stands, and its P&L, derived from the ledger

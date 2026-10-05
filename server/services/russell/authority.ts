@@ -22,10 +22,21 @@
  * through `reserve`'s compare-and-swap. This module composes sentences and
  * counts rows. It decides nothing.
  */
-import { listGoals, spendTotals } from '../../repos/russellAuthority.ts';
+import {
+  bindPacketToGoal,
+  createResearchGoal,
+  getGoal,
+  goalBudgetStatus,
+  reserveGoalPacket,
+  listGoals,
+  spendTotals,
+} from '../../repos/russellAuthority.ts';
+import type { GoalBudgetStatus, GoalPacketOutcome } from '../../repos/russellAuthority.ts';
+import { decideProjectAccess } from '../identity/policy.ts';
+import type { AccessLevel } from '../identity/policy.ts';
 import { getUser } from '../../repos/identity.ts';
 import { getProject } from '../../repos/projects.ts';
-import type { RussellGoal } from '../../domain/types.ts';
+import type { Principal, RussellGoal } from '../../domain/types.ts';
 
 /** The one class of work a grant made here authorizes. */
 export const RESEARCH_WORK = 'RESEARCH';
@@ -365,4 +376,79 @@ export async function authorityFor(input: {
     suggested,
     suggestedApproval,
   };
+}
+
+
+/**
+ * The entrance to a research goal's budget (the GOAL_BUDGET foundation).
+ *
+ * Every function here is a thin wrapper: the ceilings, the deadline and the
+ * idempotent charge are `repos/russellAuthority.ts`'s and nothing here
+ * re-decides them. What the wrapper adds is the half the repository cannot
+ * know — who is asking. The principal is re-decided against the project with
+ * `decideProjectAccess`, a worker is refused by type (a machine must not size
+ * its own budget, §22), and a refusal is one answer whether the project is
+ * absent or merely not the caller's (invariant 23).
+ */
+export type ResearchGoalRefusal = { ok: false; reason: string };
+
+function allowed(principal: Principal | null, projectId: string, level: AccessLevel): boolean {
+  if (!principal || principal.type !== 'HUMAN') return false;
+  return decideProjectAccess(principal, projectId, level).allowed;
+}
+
+const NOT_AVAILABLE: ResearchGoalRefusal = { ok: false, reason: 'There is nothing here for you to see.' };
+
+/** A person opens a research goal; `owner` and `createdBy` are the principal, never a field. */
+export async function openResearchGoal(
+  principal: Principal | null,
+  input: { projectId: string; name: string; maxPackets: number; maxFragments: number; deadline: string },
+): Promise<{ ok: true; goalId: string } | ResearchGoalRefusal> {
+  if (!principal || !allowed(principal, input.projectId, 'ADMIN')) return NOT_AVAILABLE;
+  try {
+    const goal = await createResearchGoal({
+      projectId: input.projectId,
+      ownerUserId: principal.id,
+      createdByUserId: principal.id,
+      name: input.name,
+      maxPackets: input.maxPackets,
+      maxFragments: input.maxFragments,
+      deadline: input.deadline,
+    });
+    return { ok: true, goalId: goal.id };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : 'The research goal could not be opened.' };
+  }
+}
+
+/** Reserve a packet, and once its orchestration exists bind it so the charge is settled. */
+export async function reserveResearchPacket(
+  principal: Principal | null,
+  input: { projectId: string; goalId: string; packetKey: string; orchestrationId?: string },
+): Promise<GoalPacketOutcome | ResearchGoalRefusal> {
+  if (!principal || !allowed(principal, input.projectId, 'WRITE')) return NOT_AVAILABLE;
+  const outcome = await reserveGoalPacket({
+    goalId: input.goalId,
+    packetKey: input.packetKey,
+    projectId: input.projectId,
+  });
+  if (outcome.ok && input.orchestrationId) {
+    await bindPacketToGoal({
+      orchestrationId: input.orchestrationId,
+      goalId: input.goalId,
+      packetKey: input.packetKey,
+    });
+  }
+  return outcome;
+}
+
+/** Where a research goal stands; null is the same answer for absent and not yours. */
+export async function researchGoalStatus(
+  principal: Principal | null,
+  input: { projectId: string; goalId: string },
+): Promise<GoalBudgetStatus | null> {
+  if (!principal || !allowed(principal, input.projectId, 'READ')) return null;
+  const goal = await getGoal(input.goalId);
+  if (!goal || goal.projectId !== input.projectId) return null;
+  return goalBudgetStatus(goal.id);
 }

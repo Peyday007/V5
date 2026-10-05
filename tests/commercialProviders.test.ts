@@ -1,6 +1,6 @@
 /**
  * The three commercial providers, against fake provider endpoints — never a
- * real buyer and never real money (§52).
+ * real buyer and never real money (§53).
  *
  * Every adapter here is the production adapter, built with an injected
  * `fetch` that plays the provider. So what is tested is the request Brain

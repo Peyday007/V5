@@ -1,6 +1,6 @@
 # Commercial providers: messaging, invoices, payments
 
-CLAUDE.md §52 is the reasoning. This is the setup.
+CLAUDE.md §53 is the reasoning. This is the setup.
 
 ## What each one does
 

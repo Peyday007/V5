@@ -1,5 +1,5 @@
--- The post-sale model (SQLite 105_cash_post_sale.sql), on the Postgres chain.
--- docs/POST-SALE.md is the ownership matrix; CLAUDE.md §53 says why.
+-- The post-sale model (SQLite 108_cash_post_sale.sql), on the Postgres chain.
+-- docs/POST-SALE.md is the ownership matrix; CLAUDE.md §54 says why.
 --
 -- The ledger's inline CHECK is widened in place, which Postgres can do; the
 -- constraint is named as Postgres names an inline column CHECK and dropped

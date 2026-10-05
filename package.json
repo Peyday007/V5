@@ -27,6 +27,7 @@
     "authorize:gap-policy": "tsx scripts/authorize-gap-policy.ts",
     "connect:report": "tsx scripts/connect-report.ts",
     "admin": "tsx scripts/admin.ts",
+    "goal-budget-proof": "tsx scripts/goal-budget-proof.ts",
     "engineering": "tsx scripts/engineering.ts",
     "goals": "tsx scripts/goals.ts",
     "report:packet": "tsx scripts/packet-report.ts",

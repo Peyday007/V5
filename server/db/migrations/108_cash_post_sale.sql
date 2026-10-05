@@ -6,7 +6,7 @@
 --
 -- Two branches modelled this independently (the first-dollar journey and the
 -- fulfillment/refund work). This migration is the one model that survived; the
--- ownership matrix is docs/POST-SALE.md, and CLAUDE.md §53 says why each owner
+-- ownership matrix is docs/POST-SALE.md, and CLAUDE.md §54 says why each owner
 -- won. In one line each:
 --
 --   cash_observations       what a buyer (or the channel) said, as evidence
