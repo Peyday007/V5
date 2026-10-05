@@ -17,6 +17,7 @@
  */
 import { actionsFor } from '../../../repos/cashActions.ts';
 import { insertOutcome, outcomesFor } from '../../../repos/cashJourney.ts';
+import { listMoneyEntries } from '../../../repos/cashLedger.ts';
 import { dealPosition } from './position.ts';
 import type { CashOpportunity } from '../../../domain/types.ts';
 import type { CashOutcome, OutcomeKind } from '../../../domain/cashJourney.ts';
@@ -142,7 +143,7 @@ export async function recordOutcomes(opportunity: CashOpportunity, currency: str
     const suffix = opportunity.state;
     const cost = p.incrementalCostsCents + p.unpaidCommitmentsCents;
     await write('ACTUAL_COST', suffix, { cents: cost }, 'ledger: COST + outstanding UNPAID_COMMITMENT');
-    await write('REFUNDED', suffix, { cents: p.refundsCents }, 'ledger: REFUND');
+    if (p.refundsCents > 0) await write('REFUNDED', suffix, { cents: p.refundsCents }, 'ledger: REFUND');
     await write('REALIZED_CONTRIBUTION', suffix, { cents: p.contributionCents }, 'money.ts contributionFrom: payments − refunds − costs − owed');
     if (opportunity.state !== 'COLLECTED') {
       await write(
@@ -152,15 +153,23 @@ export async function recordOutcomes(opportunity: CashOpportunity, currency: str
         `opportunity ended ${suffix.toLowerCase()}`,
       );
     }
-    const refundedBefore = (await outcomesFor({ projectId: opportunity.projectId, opportunityId: opportunity.id }))
-      .filter((one) => one.kind === 'REFUNDED')
-      .reduce((most, one) => Math.max(most, one.valueCents ?? 0), 0);
-    // Refunds only ever add up, so a running total larger than any learned is
-    // new terminal evidence, and the total itself names it exactly once.
-    if (p.refundsCents > refundedBefore) {
-      const marker = `after-refunds-${p.refundsCents}`;
-      await write('REFUNDED', marker, { cents: p.refundsCents }, 'ledger: REFUND, confirmed after the deal ended');
-      await write('REALIZED_CONTRIBUTION', marker, { cents: p.contributionCents }, 'money.ts contributionFrom, after the refund');
+    /*
+     * A refund or a cost can still land after the deal ended. Each is terminal
+     * evidence of its own: when the figures no longer match what was learned,
+     * one row per figure is written beside (never over) the earlier ones,
+     * keyed by the newest ledger entry for this deal — so the same evidence
+     * writes once, however many passes ask. Readers take the latest per deal.
+     */
+    const learned = (await outcomesFor({ projectId: opportunity.projectId, opportunityId: opportunity.id }))
+      .filter((one) => one.kind === 'REALIZED_CONTRIBUTION');
+    const latest = learned.at(-1);
+    if (latest && latest.valueCents !== p.contributionCents) {
+      const newest = (await listMoneyEntries({ projectId: opportunity.projectId, opportunityId: opportunity.id, currency }))
+        .reduce<string | null>((most, one) => (most === null || one.createdAt >= most.split('|')[0]! ? `${one.createdAt}|${one.id}` : most), null);
+      const marker = `after-${newest?.split('|')[1] ?? 'ledger'}`;
+      await write('ACTUAL_COST', marker, { cents: cost }, 'ledger, after the deal ended');
+      if (p.refundsCents > 0) await write('REFUNDED', marker, { cents: p.refundsCents }, 'ledger: REFUND, after the deal ended');
+      await write('REALIZED_CONTRIBUTION', marker, { cents: p.contributionCents }, 'money.ts contributionFrom, after the deal ended');
     }
   }
   return created;

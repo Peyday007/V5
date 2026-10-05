@@ -57,13 +57,12 @@ import { cashPosition } from '../server/services/cash/money.ts';
 import { advanceJourney, RESPONSE_WINDOW_MS } from '../server/services/cash/journey/tick.ts';
 import { dealPosition } from '../server/services/cash/journey/position.ts';
 import { cashOutcomeLessons } from '../server/services/cash/journey/learning.ts';
-import { recordPerformed } from '../server/services/cash/journey/deal.ts';
-import { agreementsFor, fulfilmentsFor, observationsFor, outcomesFor } from '../server/repos/cashJourney.ts';
+import { readObligations } from '../server/services/cash/journey/fulfillment.ts';
+import { agreementsFor, observationsFor, outcomesFor } from '../server/repos/cashJourney.ts';
 import { listInvoices } from '../server/repos/cashInvoices.ts';
 import { clearPaymentReader, registerPaymentReader } from '../server/services/cash/providers/payments.ts';
 import type { InvoiceReading } from '../server/services/cash/providers/stripe.ts';
-import { createCandidate } from '../server/repos/russellCandidates.ts';
-import { launchMission, transitionMission } from '../server/repos/russellMissions.ts';
+import { launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
 import { COMMERCIAL_EFFECTS } from '../server/services/cash/effects.ts';
 import {
   clearAdapters,
@@ -346,17 +345,17 @@ async function agree(pieceId: string, amountCents: number, observationId?: strin
 }
 
 async function fulfilAndAccept(pieceId: string, agreementId: string): Promise<string> {
-  const work = await act(pieceId, 'fulfil', {
-    agreementId,
-    path: 'PERSON',
-    workKind: 'EXTERNAL',
-    workRef: 'the operator repairs the form',
-  });
+  const work = await act(pieceId, 'fulfil', { agreementId, kind: 'PERSON', performer: 'The operator' });
   expect(work.status).toBe(200);
-  const fulfilmentId = work.body.fulfilment.id as string;
-  expect((await act(pieceId, 'performed', { fulfilmentId, evidence: 'form fixed; three test submissions sent' })).status).toBe(200);
-  expect((await act(pieceId, 'observe', { kind: 'DELIVERY_ACCEPTED', evidenceRef: 'buyer reply: all three arrived' })).status).toBe(200);
-  return fulfilmentId;
+  for (const [kind, evidenceRef] of [
+    ['WORK_COMPLETE', 'form fixed; three test submissions sent'],
+    ['DELIVERED', 'the repaired form, live'],
+    ['ACCEPTED', 'buyer reply: all three arrived'],
+  ] as const) {
+    const done = await act(pieceId, 'obligation-event', { agreementId, kind, detail: kind.toLowerCase(), evidenceRef });
+    expect(done.status, JSON.stringify(done.body)).toBe(200);
+  }
+  return work.body.obligation.id as string;
 }
 
 describe('F01: the sandbox first-dollar journey', () => {
@@ -447,7 +446,7 @@ describe('F01: the sandbox first-dollar journey', () => {
     await fulfilAndAccept(piece.id, agreement.id);
     expect((await getOpportunity(piece.id))!.state).toBe('DELIVERING');
     await tick();
-    expect((await fulfilmentsFor(piece.id))[0]!.state).toBe('DELIVERED');
+    expect((await readObligations(piece.id))[0]!.complete).toBe(true);
     // Not collected: the payment has not settled.
     expect((await getOpportunity(piece.id))!.state).toBe('DELIVERING');
 
@@ -519,13 +518,13 @@ describe('F01: the sandbox first-dollar journey', () => {
     expect(await listInvoices({ projectId, opportunityId: piece.id })).toEqual([
       expect.objectContaining({ state: 'SETTLED' }),
     ]);
-    expect(await fulfilmentsFor(piece.id)).toHaveLength(1);
+    expect((await readObligations(piece.id)).filter((one) => one.fulfillment)).toHaveLength(1);
     expect((await actionsFor(piece.id)).map((one) => one.action)).toEqual(['CONTACT_BUYER', 'QUOTE_AND_INVOICE']);
 
     // What it taught, measured, and labelled as one result.
     const learned = await outcomesFor({ projectId, opportunityId: piece.id });
     expect([...new Set(learned.map((one) => one.kind))].sort()).toEqual(
-      ['ACCEPTED_PRICE', 'ACTUAL_COST', 'CONTACT_RESULT', 'FULFILMENT_DURATION', 'OFFERED_PRICE', 'REALIZED_CONTRIBUTION', 'TIME_TO_AGREEMENT'].sort(),
+      ['ACCEPTED_PRICE', 'ACTUAL_COST', 'CONTACT_RESULT', 'FULFILLMENT_DURATION', 'OFFERED_PRICE', 'REALIZED_CONTRIBUTION', 'TIME_TO_AGREEMENT'].sort(),
     );
     expect(learned.find((one) => one.kind === 'CONTACT_RESULT')!.valueText).toBe('BUYER_ACCEPTED');
     // The plugin cost landed after the deal collected: the first reading is
@@ -568,7 +567,16 @@ describe('failure, refund and partial paths', () => {
     expect(silent[0]!.source).toBe('BRAIN');
     // A person cannot assert silence; Brain derives it.
     expect((await act(piece.id, 'observe', { kind: 'BUYER_SILENT', evidenceRef: 'nothing' })).status).toBe(422);
-    expect((await outcomesFor({ projectId, opportunityId: piece.id })).find((one) => one.kind === 'CONTACT_RESULT')!.valueText).toBe('BUYER_SILENT');
+    // Silence is not terminal: nothing is learned from it while the deal is
+    // open, so a late reply is learned as the reply rather than contradicting
+    // a silence already written down.
+    const contactResults = async () =>
+      (await outcomesFor({ projectId, opportunityId: piece.id })).filter((one) => one.kind === 'CONTACT_RESULT');
+    expect(await contactResults()).toHaveLength(0);
+    expect((await act(piece.id, 'observe', { kind: 'BUYER_REPLIED', evidenceRef: 'late reply, day 9' })).status).toBe(200);
+    await advanceJourney(projectId, later);
+    await advanceJourney(projectId, later);
+    expect((await contactResults()).map((one) => one.valueText)).toEqual(['BUYER_REPLIED']);
     const page = (await call('GET', `/api/projects/${projectId}/cash`)).body;
     const deal = page.myCurrentWork.journey.deals.find((one: any) => one.opportunityId === piece.id);
     expect(deal.next[0]).toMatchObject({ owner: 'PERSON' });
@@ -706,9 +714,14 @@ describe('failure, refund and partial paths', () => {
     expect(deal.pnl).toMatchObject({ agreedRevenueCents: 40_000, owedByBuyerCents: 0, invoiceableCents: 0 });
     expect(deal.paymentState).toBe('PAID_UNSETTLED');
 
-    // A refund of part of it: never more than was paid.
-    expect((await money({ opportunityId: piece.id, kind: 'REFUND', amountCents: 50_000, verifiedReference: 're-50', idempotencyKey: `refund:${piece.id}:re-50` })).status).toBe(422);
-    expect((await money({ opportunityId: piece.id, kind: 'REFUND', amountCents: 10_000, verifiedReference: 're-10', idempotencyKey: `refund:${piece.id}:re-10` })).status).toBe(200);
+    // A refund of part of it goes through the obligation it pays back — never
+    // the bare money route — and is never more than was paid.
+    expect((await money({ opportunityId: piece.id, kind: 'REFUND', amountCents: 10_000, verifiedReference: 're-10', idempotencyKey: `refund:${piece.id}:re-10` })).status).toBe(422);
+    expect((await act(piece.id, 'refund', { agreementId: part.id, amountCents: 50_000, reason: 'Goodwill' })).status).toBe(422);
+    const refunded = await act(piece.id, 'refund', { agreementId: part.id, amountCents: 10_000, reason: 'One form arrived late' });
+    expect(refunded.status).toBe(200);
+    const [refundKey] = refunded.body.obligation.refunds.map((one: { refundKey: string }) => one.refundKey);
+    expect((await act(piece.id, 'refund-answer', { agreementId: part.id, refundKey, answer: 'confirm', reference: 're-10' })).status).toBe(200);
     expect((await money({ opportunityId: piece.id, kind: 'SETTLEMENT', amountCents: 40_000, verifiedReference: 'po-40', idempotencyKey: `settlement:${piece.id}:po-40` })).status).toBe(422);
     expect((await money({ opportunityId: piece.id, kind: 'SETTLEMENT', amountCents: 30_000, verifiedReference: 'po-30', idempotencyKey: `settlement:${piece.id}:po-30` })).status).toBe(200);
     deal = await dealPosition({ opportunity: (await getOpportunity(piece.id))!, currency: 'USD' });
@@ -719,23 +732,27 @@ describe('failure, refund and partial paths', () => {
     expect((await cashPosition({ projectId, currency: 'USD' })).availableFundsCents).toBe(20_000);
   });
 
-  it('F08: fulfilment fails — the buyer rejects the work and nothing collects', async () => {
+  it('F08: fulfilment fails — the buyer rejects the work, nothing collects, and a failure is learned', async () => {
     await granted();
     provider('CONTACT_BUYER', 'msg');
     const piece = await qualified();
     await advanceWithinAuthority(projectId);
     const agreement = await agree(piece.id, 30_000);
-    const work = await act(piece.id, 'fulfil', { agreementId: agreement.id, path: 'CONTRACTOR', workKind: 'EXTERNAL', workRef: 'subcontractor job 12' });
-    expect((await act(piece.id, 'performed', { fulfilmentId: work.body.fulfilment.id, evidence: 'the contractor says it is done' })).status).toBe(200);
-    expect((await act(piece.id, 'observe', { kind: 'DELIVERY_REJECTED', evidenceRef: 'buyer: submissions still bounce' })).status).toBe(200);
+    const step = (kind: string, evidenceRef: string) =>
+      act(piece.id, 'obligation-event', { agreementId: agreement.id, kind, detail: kind.toLowerCase(), evidenceRef });
+    expect((await act(piece.id, 'fulfil', { agreementId: agreement.id, kind: 'SUPPLIER', performer: 'Subcontractor', supplierName: 'Subcontractor Ltd' })).status).toBe(200);
+    expect((await step('WORK_COMPLETE', 'the contractor says it is done')).status).toBe(200);
+    expect((await step('DELIVERED', 'handed to the buyer')).status).toBe(200);
+    expect((await step('REJECTED', 'buyer: submissions still bounce')).status).toBe(200);
     await advanceJourney(projectId);
-    expect((await fulfilmentsFor(piece.id))[0]).toMatchObject({ state: 'FAILED' });
+    expect((await readObligations(piece.id))[0]).toMatchObject({ stage: 'REJECTED', complete: false });
     expect((await act(piece.id, 'collect')).status).toBe(422);
+    // The supplier gives up: a recorded failure is final, and is learned once.
+    expect((await step('SUPPLIER_FAILED', 'contractor withdrew')).status).toBe(200);
+    expect((await step('DELIVERED', 'a second try')).status).toBe(422);
     await advanceJourney(projectId);
-    expect((await outcomesFor({ projectId, opportunityId: piece.id })).some((one) => one.kind === 'FAILURE_REASON')).toBe(true);
-    // A second attempt is a new fulfilment, and the failure stays on the record.
-    expect((await act(piece.id, 'fulfil', { agreementId: agreement.id, path: 'PERSON', workKind: 'EXTERNAL', workRef: 'the operator redoes it' })).status).toBe(200);
-    expect(await fulfilmentsFor(piece.id)).toHaveLength(2);
+    await advanceJourney(projectId);
+    expect((await outcomesFor({ projectId, opportunityId: piece.id })).filter((one) => one.kind === 'FAILURE_REASON')).toHaveLength(1);
   });
 
   it('F09: the supplier cost changes — the extra is a second commitment, each cost once', async () => {
@@ -749,7 +766,6 @@ describe('failure, refund and partial paths', () => {
       commitSpend({ projectId, opportunityId: piece.id, action: 'ENGAGE_CONTRACTOR', amountCents, purpose: 'The contractor who repairs it', expectedResult: 'The repair', stopCondition: 'This job only', idempotencyKey: key, actorRef: userId });
     const first = await commit(20_000, 'contractor-1');
     expect(first.ok).toBe(true);
-    expect((await act(piece.id, 'observe', { kind: 'SUPPLIER_COST_CHANGED', amountCents: 25_000, evidenceRef: 'contractor revised quote' })).status).toBe(200);
     if (!first.ok) return;
     // Spending more than was held is a new commitment, not this one.
     expect((await settleSpend({ commitmentId: first.value.id, spentCents: 25_000, actorRef: userId })).ok).toBe(false);
@@ -766,23 +782,24 @@ describe('failure, refund and partial paths', () => {
     expect(position.heldCommitmentsCents).toBe(0);
   });
 
-  it('F10: Brain-delivered research is read as performed from its mission, never attested', async () => {
+  it('F10: Brain-delivered research is read as complete from its mission, never attested', async () => {
     await granted();
     provider('CONTACT_BUYER', 'msg');
     const piece = await qualified();
     await advanceWithinAuthority(projectId);
     const agreement = await agree(piece.id, 20_000);
-    const idea = await createCandidate({ projectId, title: 'The answer the buyer is paying for', statement: 'Establish it from published sources.' });
-    const work = await act(piece.id, 'fulfil', { agreementId: agreement.id, path: 'BRAIN_RESEARCH', workKind: 'RUSSELL_CANDIDATE', workRef: idea.id });
-    expect(work.status).toBe(200);
+    expect((await act(piece.id, 'fulfil', { agreementId: agreement.id, kind: 'RESEARCH', performer: 'Brain research' })).status).toBe(200);
+    await advanceJourney(projectId);
+    const [obligation] = await readObligations(piece.id);
+    const idea = obligation!.work.ref!;
+    expect(idea).toMatch(/^rcn_/);
     // Not attested by a person.
-    expect((await recordPerformed({ fulfilmentId: work.body.fulfilment.id, evidence: 'trust me', actorRef: userId })).ok).toBe(false);
-    // Nothing performed while the mission runs.
-    const { mission } = await launchMission({ projectId, visibility: 'SHARED', objective: 'Answer it', whyNow: 'A customer paid for it', idempotencyKey: `mission:${idea.id}`, candidateId: idea.id });
-    await advanceJourney(projectId);
-    expect((await fulfilmentsFor(piece.id))[0]!.state).toBe('CREATED');
+    expect((await act(piece.id, 'obligation-event', { agreementId: agreement.id, kind: 'WORK_COMPLETE', detail: 'trust me', evidenceRef: 'x' })).status).toBe(422);
+    // Nothing complete while the mission runs.
+    const { mission } = await launchMission({ projectId, visibility: 'SHARED', objective: 'Answer it', whyNow: 'A customer paid for it', idempotencyKey: `mission:${idea}`, candidateId: idea });
+    expect((await readObligations(piece.id))[0]!.work.state).toBe('IN_PROGRESS');
+    await linkMission({ missionId: mission.id, documentId: 'doc_answer', auditId: 'aud_answer' });
     expect(await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'DONE' })).toBe(true);
-    await advanceJourney(projectId);
-    expect((await fulfilmentsFor(piece.id))[0]).toMatchObject({ state: 'PERFORMED', performedEvidence: expect.stringContaining(mission.id) });
+    expect((await readObligations(piece.id))[0]!.work).toMatchObject({ state: 'COMPLETE', artifact: 'doc_answer' });
   });
 });

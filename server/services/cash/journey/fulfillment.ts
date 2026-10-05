@@ -203,10 +203,20 @@ export async function declare(input: {
     summary: `${input.kind.toLowerCase()} fulfillment by ${performer}: ${agreement.deliverable}`,
     detail: { fulfillmentId: declared.fulfillment.id, agreementId: agreement.id, kind: input.kind },
   });
+  // A person's or a supplier's work has nothing for Brain to create, so it is
+  // opened now rather than on the next pass; the guarded claim makes the tick
+  // doing it too a no-op.
+  if (input.kind === 'PERSON' || input.kind === 'SUPPLIER') {
+    const pass: FulfillmentPass = { workCreated: [], needsRaised: [], needsSettled: [], refundsSettled: [] };
+    await createWork(pass, declared.fulfillment, agreement, opportunity);
+  }
+  const after = (await getFulfillment(declared.fulfillment.id))!;
   return {
     ok: true,
-    value: declared.fulfillment,
-    message: 'Recorded. Brain creates the work for it on the next pass.',
+    value: after,
+    message: after.workCreatedAt
+      ? `Recorded. Waiting on ${after.performer} to do the work.`
+      : 'Recorded. Brain creates the work for it on the next pass.',
   };
 }
 

@@ -40,7 +40,7 @@ const DEAL: DealView = {
   },
   agreements: [],
   invoices: [],
-  fulfilments: [],
+  obligations: [],
   observations: [
     {
       id: 'cob_1',
@@ -76,7 +76,101 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const AGREEMENT = {
+  id: 'cag_1',
+  projectId: 'prj_1',
+  opportunityId: 'cop_1',
+  amountCents: 120_000,
+  currency: 'USD',
+  deliverable: 'Repair the form',
+  acceptanceCondition: 'Three submissions arrive',
+  evidenceKind: 'WRITTEN_ACCEPTANCE' as const,
+  evidenceRef: 'buyer email',
+  observationId: null,
+  state: 'AGREED' as const,
+  releasedReason: null,
+  releasedBy: null,
+  releasedAt: null,
+  requestKey: 'k',
+  recordedBy: 'usr_1',
+  createdAt: '2026-10-04T10:00:00.000Z',
+  updatedAt: '2026-10-04T10:00:00.000Z',
+};
+
+const DELIVERED_UNACCEPTED: DealView = {
+  ...DEAL,
+  stage: 'FULFILLING',
+  agreements: [AGREEMENT],
+  obligations: [
+    {
+      opportunityId: 'cop_1',
+      agreement: AGREEMENT,
+      fulfillment: {
+        id: 'cff_1',
+        projectId: 'prj_1',
+        opportunityId: 'cop_1',
+        agreementId: 'cag_1',
+        kind: 'PERSON',
+        performer: 'The operator',
+        repositoryRemote: null,
+        repositoryRoot: null,
+        baseBranch: null,
+        mutationScope: [],
+        supplierName: null,
+        workRef: null,
+        workCreatedAt: '2026-10-04T10:00:00.000Z',
+        workAttempt: 0,
+        declaredBy: 'usr_1',
+        createdAt: '2026-10-04T10:00:00.000Z',
+        updatedAt: '2026-10-04T10:00:00.000Z',
+      },
+      work: { state: 'COMPLETE', ref: null, artifact: 'form-fixed', detail: 'Fixed.' },
+      delivery: { state: 'DELIVERED', portions: [], evidence: 'live form', deliveredAt: '2026-10-04T11:00:00.000Z' },
+      acceptance: { state: 'AWAITING_ACCEPTANCE', condition: 'Three submissions arrive', evidence: null, reason: null },
+      refunds: [],
+      failure: null,
+      stage: 'DELIVERED',
+      complete: false,
+      outstanding: ['the buyer has not accepted it against the agreed condition'],
+      brainNext: [],
+      personNext: ['Record the buyer’s acceptance, or rejection, with their evidence.'],
+    },
+  ],
+};
+
 describe('the deal journey panel', () => {
+  it('shows delivered and accepted as two facts, and records acceptance against the agreement', async () => {
+    const posted: { url: string; body: unknown }[] = [];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      posted.push({ url, body: JSON.parse(String(init?.body ?? '{}')) });
+      return new Response(JSON.stringify({ obligation: {}, message: 'Recorded.' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    const changed = vi.fn();
+    render(<DealJourney deal={DELIVERED_UNACCEPTED} currency="USD" mayAct onChanged={changed} />);
+    expect(screen.getByText(/Delivered, not yet accepted/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Record what happened' }));
+    fireEvent.change(screen.getByLabelText('What happened'), { target: { value: 'ACCEPTED' } });
+    fireEvent.change(screen.getByLabelText('What happened, in words somebody can check'), { target: { value: 'Buyer confirmed' } });
+    fireEvent.change(screen.getByLabelText('Evidence (a delivery, the buyer’s message, a document)'), { target: { value: 'reply 7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(changed).toHaveBeenCalled());
+    expect(posted[0]).toEqual({
+      url: '/api/cash/opportunities/cop_1/obligation-event',
+      body: { agreementId: 'cag_1', kind: 'ACCEPTED', detail: 'Buyer confirmed', evidenceRef: 'reply 7' },
+    });
+  });
+
+  it('offers a refund only to whoever may authorize one', () => {
+    render(<DealJourney deal={DELIVERED_UNACCEPTED} currency="USD" mayAct onChanged={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Authorize a refund' })).toBeNull();
+    cleanup();
+    render(<DealJourney deal={DELIVERED_UNACCEPTED} currency="USD" mayAct mayRefund onChanged={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Authorize a refund' })).toBeTruthy();
+  });
+
   it('names who does the next step and offers no control that writes delivered or collected', () => {
     render(<DealJourney deal={DEAL} currency="USD" mayAct onChanged={() => {}} />);
     expect(screen.getByText('Buyer answered')).toBeTruthy();
