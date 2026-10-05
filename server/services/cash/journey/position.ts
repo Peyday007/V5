@@ -193,6 +193,40 @@ export interface DealPosition {
   paymentInFlight: boolean;
 }
 
+/** Invoices for a live agreement, and what was paid on a released one's invoices. */
+async function splitByLiveAgreement(
+  live: CashAgreement[],
+  invoices: CashInvoice[],
+  currency: string,
+): Promise<{ ours: CashInvoice[]; paidOnReleased: number }> {
+  const liveEntryIds = new Set([...(await entriesFor(live)).values()].map((one) => one.id));
+  const allOurs = invoices.filter((one) => one.currency === currency);
+  const ours = allOurs.filter((one) => one.pipelineEntryId !== null && liveEntryIds.has(one.pipelineEntryId));
+  const paidOnReleased = allOurs
+    .filter((one) => !ours.includes(one) && one.paymentEntryId && BILLED_INVOICE_STATES.includes(one.state))
+    .reduce((sum, one) => sum + one.amountCents, 0);
+  return { ours, paidOnReleased };
+}
+
+/**
+ * Money on this piece that is owed back to the buyer rather than payment
+ * toward any live agreement: a second payment of an already-paid invoice, and
+ * what was paid on an agreement since released. Before refunds. The one sum
+ * `dealPosition` and the hand-payment cap both read, so the two cannot drift.
+ */
+export async function owedBackGrossCents(input: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+}): Promise<number> {
+  const live = (await agreementsFor(input.opportunityId)).filter(
+    (one) => one.state === 'AGREED' && one.currency === input.currency,
+  );
+  const invoices = await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId });
+  const { paidOnReleased } = await splitByLiveAgreement(live, invoices, input.currency);
+  return (await invoiceOverpaymentCents(input.opportunityId, input.currency)) + paidOnReleased;
+}
+
 const num = (t: Partial<Record<CashMoneyKind, number>>, k: CashMoneyKind): number => Number(t[k] ?? 0);
 
 export async function dealPosition(input: {
@@ -220,12 +254,7 @@ export async function dealPosition(input: {
   // released agreement's invoice is history: what it billed is not owed, and
   // what was paid on it is owed back below, never credit toward another
   // agreement.
-  const liveEntryIds = new Set([...(await entriesFor(live)).values()].map((one) => one.id));
-  const allOurs = invoices.filter((one) => one.currency === currency);
-  const ours = allOurs.filter((one) => one.pipelineEntryId !== null && liveEntryIds.has(one.pipelineEntryId));
-  const paidOnReleased = allOurs
-    .filter((one) => !ours.includes(one) && one.paymentEntryId && BILLED_INVOICE_STATES.includes(one.state))
-    .reduce((sum, one) => sum + one.amountCents, 0);
+  const { ours, paidOnReleased } = await splitByLiveAgreement(live, invoices, currency);
   const invoiced = ours
     .filter((one) => BILLED_INVOICE_STATES.includes(one.state))
     .reduce((sum, one) => sum + one.amountCents, 0);
@@ -254,6 +283,7 @@ export async function dealPosition(input: {
   // Owed back: a second payment of an already-paid invoice, and money paid on
   // an agreement that was since released.
   const overpaidInvoices = (await invoiceOverpaymentCents(opportunity.id, currency)) + paidOnReleased;
+  // (`owedBackGrossCents` below is the same sum for a reader without a position.)
   const credited = Math.max(0, payments - overpaidInvoices);
   const creditedNet = Math.max(0, payments - Math.max(overpaidInvoices, refunds));
   const owedBack = Math.max(0, overpaidInvoices - refunds);

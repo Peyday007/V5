@@ -1168,6 +1168,34 @@ describe('agreement and invoice', () => {
     expect(deal.pnl.owedBackCents).toBe(0);
   });
 
+  it('the next agreement’s real payment is recorded while a released agreement’s money is still owed back', async () => {
+    const id = await executing();
+    const first = await agree(id, 40_000);
+    const drafted = await draftFor(id);
+    if (!drafted.ok) throw new Error('not drafted');
+    expect(await moveInvoice({ id: drafted.value.id, from: 'DRAFTED', to: 'ISSUED', patch: { providerInvoiceId: 'in_released_2' } })).toBe(true);
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId, opportunityId: id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_000, currency: 'USD',
+          verifiedReference: 'bank-a', idempotencyKey: `pay:${id}:a`, actorRef: userId,
+          appliesTo: { invoiceId: drafted.value.id },
+        })
+      ).ok,
+    ).toBe(true);
+    expect((await releaseAgreement({ agreementId: first.id, reason: 'The buyer cancelled.', actorRef: userId })).ok).toBe(true);
+    await agree(id, 40_000 + 1);
+    // B's money arrives by bank transfer. It is not "more than agreed": A's is owed back.
+    const paidB = await recordMoneyEvent({
+      projectId, opportunityId: id, kind: 'CUSTOMER_PAYMENT', amountCents: 40_001, currency: 'USD',
+      verifiedReference: 'bank-b', idempotencyKey: `pay:${id}:b`, actorRef: userId,
+      appliesTo: 'OUTSIDE_INVOICES',
+    });
+    expect(paidB.ok, paidB.ok ? '' : paidB.reason).toBe(true);
+    const deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
+    expect(deal.pnl).toMatchObject({ creditedPaymentsCents: 40_001, owedBackCents: 40_000, invoiceableCents: 0 });
+  });
+
   it('an agreement answers only the latest contact before it, and never a contact the buyer already ignored', () => {
     const at = (iso: string) => ({ createdAt: iso });
     const first = at('2026-10-01T00:00:00.000Z');
