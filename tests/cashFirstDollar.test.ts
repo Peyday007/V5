@@ -746,6 +746,43 @@ describe('failure, refund and partial paths', () => {
     expect(deal.pnl.invoiceableCents).toBe(50_000);
   });
 
+  it('F05e: an invoice marked paid out of band is not a second payment; an unrelated hand payment does not block a real one', async () => {
+    await granted();
+    provider('CONTACT_BUYER', 'msg');
+    provider('QUOTE_AND_INVOICE', 'inv');
+    provider('ACCEPT_PAYMENT', 'pay');
+    paymentReader();
+    const piece = await qualified();
+    await advanceWithinAuthority(projectId);
+    await agree(piece.id, 100_000);
+    const occ = (await call('GET', `/api/projects/${projectId}/cash`)).body.myCurrentWork.records[piece.id].nextOccurrence;
+    expect((await act(piece.id, 'perform', { action: 'ACCEPT_PAYMENT', expectedOccurrence: occ })).status).toBe(200);
+    const [charge] = await getDb().all<{ id: string; pipeline: string }>(
+      "SELECT e.id, (SELECT p.id FROM cash_money_entries p WHERE p.opportunity_id = e.opportunity_id AND p.kind = 'PIPELINE_AGREED') AS pipeline FROM cash_money_entries e WHERE e.opportunity_id = ? AND e.kind = 'CUSTOMER_PAYMENT'",
+      [piece.id],
+    );
+    const { invoice } = await draftInvoice({
+      projectId, opportunityId: piece.id, pipelineEntryId: charge!.pipeline, amountCents: 100_000, currency: 'USD',
+      customerName: 'Intake Buyer Ltd', customerEmail: 'accounts@intake-buyer.example', taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31', description: 'raced', requestedBy: 'test',
+    });
+    expect(await moveInvoice({ id: invoice.id, from: 'DRAFTED', to: 'ISSUED', patch: { provider: 'sandbox', providerInvoiceId: 'inv-oob' } })).toBe(true);
+    expect(await moveInvoice({ id: invoice.id, from: 'ISSUED', to: 'PAID', patch: { paymentEntryId: charge!.id, paidAt: new Date().toISOString() } })).toBe(true);
+    // A second agreement, paid by bank outside every invoice.
+    await agree(piece.id, 50_000);
+    expect((await money({ opportunityId: piece.id, kind: 'CUSTOMER_PAYMENT', amountCents: 50_000, verifiedReference: 'bank-50', idempotencyKey: `payment:${piece.id}:bank-50`, outsideInvoices: true })).status).toBe(200);
+    // Marked paid at the provider, as the void-paid-elsewhere need allows: no charge.
+    ledger['inv-oob'] = { kind: 'READ', status: 'paid', hostedUrl: null, number: 'N-oob', amountPaidCents: 100_000, currency: 'USD', chargeId: null, paidAt: new Date().toISOString(), balance: null };
+    await tick();
+    expect(await moneyCount(piece.id)).toMatchObject({ CUSTOMER_PAYMENT: 2 });
+    // Then the buyer really pays the page too: recorded, despite the bank payment.
+    buyerPays('inv-oob', 100_000);
+    await tick();
+    expect(await moneyCount(piece.id)).toMatchObject({ CUSTOMER_PAYMENT: 3 });
+    const needs = await getDb().all<{ request_key: string }>("SELECT request_key FROM cash_needs WHERE project_id = ?", [projectId]);
+    expect(needs.filter((one) => one.request_key === `invoice-paid-twice:${invoice.id}`)).toHaveLength(1);
+  });
+
   it('F06: the invoice outcome is unknown — no resend across a restart, then the provider confirms it once', async () => {
     await granted();
     provider('CONTACT_BUYER', 'msg');

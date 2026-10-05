@@ -36,7 +36,7 @@
  * them apart: a payment is not funds until the provider says it is.
  */
 import { dealPosition, invoiceableAgreements } from './journey/position.ts';
-import { getOpportunity } from '../../repos/cashPortfolio.ts';
+import { getOpportunity, needForKey } from '../../repos/cashPortfolio.ts';
 import { draftInvoice, getInvoice, listInvoices, moveInvoice } from '../../repos/cashInvoices.ts';
 import { recordAction } from '../../repos/cashActions.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -51,7 +51,7 @@ import { TAX_TREATMENTS, dueDateSeconds } from './providers/stripe.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import type { CashInvoice } from '../../domain/types.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { customerPaymentByReference, getMoneyEntry, moneyEntryByKey } from '../../repos/cashLedger.ts';
+import { customerPaymentByReference, getMoneyEntry } from '../../repos/cashLedger.ts';
 
 const BRAIN = 'BRAIN';
 const INVOICE_ACTION = 'QUOTE_AND_INVOICE';
@@ -565,11 +565,15 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
       const providerRef = reading.chargeId ?? current.providerInvoiceId;
       // Brain's charge is known by its provenance — the receipt of a
       // SUCCEEDED take-payment for this piece — never by who pressed for it.
+      // A second payment is a *charge* the provider holds: an invoice marked
+      // paid out of band (as the void-paid-elsewhere need allows) reads paid
+      // with no charge, and that is the first payment acknowledged, not money.
       const brainCharge =
+        reading.chargeId !== null &&
         named !== null &&
         named.idempotencyKey !== `invoice-payment:${current.id}` &&
         named.verifiedReference !== null &&
-        named.verifiedReference !== providerRef &&
+        named.verifiedReference !== reading.chargeId &&
         (await commercialOperationsFor(projectId, current.opportunityId)).some(
           (one) =>
             one.action === 'ACCEPT_PAYMENT' &&
@@ -577,8 +581,12 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
             one.operation.resultRef === named.verifiedReference,
         );
       if (brainCharge) {
-        const firstReading = !(await moneyEntryByKey(projectId, `invoice-payment:${current.id}`));
-        const second = await recordMoneyEvent({
+        // A person may already have recorded that charge by hand; one
+        // reference is one payment, so it is not written again.
+        const known = await customerPaymentByReference(projectId, reading.chargeId!);
+        const second = known && known.opportunityId === current.opportunityId
+          ? { ok: true as const, value: known, message: '' }
+          : await recordMoneyEvent({
           projectId,
           opportunityId: current.opportunityId,
           kind: 'CUSTOMER_PAYMENT',
@@ -599,7 +607,7 @@ async function paymentPass(projectId: string, pass: InvoicingPass, now: Date): P
         }
         // Asked once, when the second payment is first recorded: a need a
         // person closed is not reopened by the next read of the same money.
-        if (firstReading) await raiseNeed({
+        if (!(await needForKey(projectId, `invoice-paid-twice:${current.id}`))) await raiseNeed({
           projectId,
           opportunityId: current.opportunityId,
           actorRef: BRAIN,

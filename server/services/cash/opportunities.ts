@@ -1433,8 +1433,11 @@ export async function recordMoneyEvent(input: {
      * money that arrived, and refusing it would leave real money unrecorded
      * and its invoice unable to settle; an overpayment is then visible as one.
      */
+    // A second charge of an invoice Brain's charge already paid is checked by
+    // reference before it gets here; an unrelated hand payment is not a reason
+    // to refuse money the provider holds.
     const unattributed =
-      input.kind === 'CUSTOMER_PAYMENT' && input.opportunityId && readOfInvoice
+      input.kind === 'CUSTOMER_PAYMENT' && input.opportunityId && readOfInvoice && !input.besideBrainCharge
         ? await unattributedPersonPayments(input.opportunityId, input.currency)
         : [];
     if (
