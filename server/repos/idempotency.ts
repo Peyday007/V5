@@ -176,6 +176,42 @@ export async function operationsForWorkItems(
   return rows.map(mapOperation);
 }
 
+/**
+ * Every operation in one project whose correlation id begins with a prefix,
+ * newest first, restricted to the namespaces named.
+ *
+ * For a caller that wrote the correlation id itself and so knows its shape —
+ * Cash Mode's commercial effects tag each operation with the opportunity it
+ * was performed for, because the key is stored only as a digest and cannot be
+ * read back. The namespace list is required so a prefix can never reach an
+ * operation some other subsystem happened to correlate the same way.
+ */
+export async function operationsByCorrelation(input: {
+  projectId: string;
+  namespaces: readonly string[];
+  correlationPrefix: string;
+  limit?: number;
+}): Promise<IdempotencyOperation[]> {
+  if (input.namespaces.length === 0) return [];
+  const limit = Math.min(500, Math.max(1, input.limit ?? 100));
+  const rows = await getDb().all<IdempotencyOperationRow>(
+    `SELECT * FROM idempotency_operations
+      WHERE project_id = ?
+        AND namespace IN (${input.namespaces.map(() => '?').join(', ')})
+        AND correlation_id IS NOT NULL
+        AND SUBSTR(correlation_id, 1, ?) = ?
+      ORDER BY created_at DESC, id
+      LIMIT ${limit}`,
+    [
+      input.projectId,
+      ...input.namespaces,
+      input.correlationPrefix.length,
+      input.correlationPrefix,
+    ],
+  );
+  return rows.map(mapOperation);
+}
+
 /* ------------------------------------------------------------------------- */
 /* Reserving                                                                  */
 /* ------------------------------------------------------------------------- */
@@ -194,6 +230,13 @@ export interface ReserveInput {
   workItemId?: string | null;
   leaseGeneration?: number | null;
   retentionClass?: RetentionClass;
+  /**
+   * Armed in the same statement as the reservation, for an external effect:
+   * a process that dies between reserving and arming would otherwise leave a
+   * row that reads IN_PROGRESS for ever. Nothing was sent at that point, so a
+   * take-over finds no attempt and simply makes the first one.
+   */
+  recoverAfter?: string | null;
 }
 
 /**
@@ -247,7 +290,7 @@ async function tryReserve(input: ReserveInput): Promise<ReserveOutcome | null> {
        result_ref, result_status, result_summary, retention_class,
        reserved_at, started_at, completed_at, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-             'RESERVED', 0, NULL, NULL, NULL,
+             'RESERVED', 0, NULL, NULL, ?,
              NULL, NULL, NULL, ?, ?, NULL, NULL, ?, ?)
      ON CONFLICT (scope_hash, key_fingerprint) DO NOTHING`,
     [
@@ -264,6 +307,7 @@ async function tryReserve(input: ReserveInput): Promise<ReserveOutcome | null> {
       input.leaseGeneration ?? null,
       input.requestFingerprint,
       input.fingerprintVersion,
+      input.recoverAfter ?? null,
       input.retentionClass ?? 'STANDARD',
       at,
       at,
@@ -319,13 +363,47 @@ async function tryReserve(input: ReserveInput): Promise<ReserveOutcome | null> {
 export async function takeOverOperation(
   operationId: string,
   recoverAfter: string,
+  /**
+   * The new holder's own lease, set in the same compare-and-swap. An external
+   * effect passes one: cleared to NULL, a take-over that then died while it
+   * asked the provider or sent left a row every later reader took for live,
+   * for ever. Internal effects keep NULL, which is what the factory's
+   * abandoned-reservation reading relies on.
+   */
+  nextRecoverAfter: string | null = null,
 ): Promise<boolean> {
   const result = await getDb().run(
-    `UPDATE idempotency_operations SET recover_after = NULL, updated_at = ?
+    `UPDATE idempotency_operations SET recover_after = ?, updated_at = ?
       WHERE id = ? AND state = 'RESERVED' AND recover_after = ?`,
-    [operationNow(), operationId, recoverAfter],
+    [nextRecoverAfter, operationNow(), operationId, recoverAfter],
   );
   return result.changes === 1;
+}
+
+/**
+ * Make a live external attempt recoverable if its executor dies.
+ *
+ * `runExternalEffect` holds no transaction across the provider call, so an
+ * executor killed mid-send leaves the operation `RESERVED` — and with
+ * `recover_after` still `NULL` that is read as `IN_PROGRESS` by every later
+ * caller, for ever: the crash-after-send reconciliation in `resumeAfterCrash`
+ * could only be reached by a test that wrote the column by hand. Arming it
+ * when the attempt begins is the same write `failOperation`'s non-terminal
+ * path already makes. A live executor clears it by finishing, failing or
+ * marking the operation uncertain; one that outlives it is taken over through
+ * `takeOverOperation`'s compare-and-swap, and the take-over asks the provider
+ * rather than sending again.
+ */
+export async function armRecovery(operationId: string, recoverAfter: string): Promise<boolean> {
+  // A new attempt is not the refusal the last one met: an earlier retryable
+  // refusal's category, left on the row, made this live attempt read as idle
+  // to every reader that asks whether an effect is under way.
+  const updated = await getDb().run(
+    `UPDATE idempotency_operations SET recover_after = ?, failure_category = NULL, updated_at = ?
+      WHERE id = ? AND state = 'RESERVED'`,
+    [recoverAfter, operationNow(), operationId],
+  );
+  return updated.changes === 1;
 }
 
 /** Mark an execution as started, and count the attempt. */
