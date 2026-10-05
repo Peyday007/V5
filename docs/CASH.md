@@ -419,10 +419,17 @@ with no figure in the sprint's currency answers neither. Before this, a
 researched exposure had no column to land in (every autonomous piece stopped at
 QUALIFIED) and a researched price wrote a sentence into an integer column.
 
+The same file holds the refusals: a payer nothing establishes leaves the piece a
+SIGNAL, a deep dive that leaves the thesis short stops it below QUALIFIED, a
+price or a cost stated only in words leaves the column null and its need open,
+and a replay or a restart writes no second fact.
+
 The rest of the autonomous loop — staleness, early retirement, replenishment to
 a target, configurable portfolio concurrency, handing a blocking software need
-to the Factory, and a funnel reading — is specified in
-`objectives/cash-autonomy-1…6.json`.
+to the Factory, and a funnel reading — is **not built**. It was drafted as six
+objective specifications on `claude/autonomous-opportunity-pipeline-6ph954`
+(`cash-autonomy-1…6.json`), which no person has approved and which are
+deliberately not in `objectives/`.
 
 ---
 

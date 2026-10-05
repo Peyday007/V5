@@ -959,6 +959,33 @@ export async function reofferRequest(input: {
 }
 
 /**
+ * Ask a withdrawn question again, because the stop it was about came back.
+ *
+ * A park's request is keyed on its mission and packet, so the same stop asked
+ * twice is one row. Brain withdraws that row when it repairs the cause of the
+ * stop itself (a synthesis it could not file); if the packet then stops for a
+ * person again, the insert finds the withdrawn row and the mission would sit at
+ * NEEDS_HUMAN with nothing in Needs You. This reopens it with the words and
+ * choices of the new stop. Guarded on `WITHDRAWN`, so an answered request is
+ * never reached and two parks reopen it once.
+ */
+export async function reopenWithdrawnRequest(input: {
+  requestId: string;
+  choices: HumanRequestChoice[];
+  authorityNeeded: string;
+  whyNotRussell: string;
+}): Promise<boolean> {
+  if (input.choices.length === 0) return false;
+  const result = await getDb().run(
+    `UPDATE russell_human_requests
+        SET state = 'OPEN', choices = ?, authority_needed = ?, why_not_russell = ?, updated_at = ?
+      WHERE id = ? AND state = 'WITHDRAWN'`,
+    [toJson(input.choices), input.authorityNeeded, input.whyNotRussell, nowIso(), input.requestId],
+  );
+  return result.changes === 1;
+}
+
+/**
  * Mark an answered request as having been acted on.
  *
  * Guarded on `ANSWERED`, so the resume runs once however many observers notice

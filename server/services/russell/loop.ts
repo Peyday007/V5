@@ -156,6 +156,7 @@ import { advanceSources } from '../capability/extraction.ts';
 import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { advanceGoals, type GoalTickReport } from '../goals/tick.ts';
+import { advanceResearchGoals, type GoalContinuationReport } from '../research/goalContinuation.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 import { watchIdleOnTick } from '../engineering/watchdog.ts';
 
@@ -166,6 +167,8 @@ export interface TickReport {
    * could not read the goals leaves it out rather than reporting zeros.
    */
   goals?: GoalTickReport;
+  /** What the research-goal continuation pass did; absent when it could not run. */
+  researchGoals?: GoalContinuationReport;
   ran: boolean;
   /** Why it did not run, when it did not. An ordinary outcome, not an error. */
   skipped: string | null;
@@ -1076,6 +1079,21 @@ export async function tick(owner: string): Promise<TickReport> {
       report.goals = await advanceGoals();
     } catch {
       /* goals that could not be read are left exactly as they were */
+    }
+
+    /*
+     * And the packets a research goal still needs, once per tick.
+     *
+     * A person approved the goal once; this is what makes that approval enough.
+     * Derived from rows and idempotent by the packet key it computes, so a
+     * restart or a second instance produces one packet, and bounded to a few
+     * goals a pass. Swallowed for `advanceGoals`' reason: a goal that could not
+     * be advanced must never stop Russell writing back a mission.
+     */
+    try {
+      report.researchGoals = await advanceResearchGoals();
+    } catch {
+      /* a goal that could not be advanced is left exactly as it was */
     }
 
     /*

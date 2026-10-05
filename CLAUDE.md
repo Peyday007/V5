@@ -5917,9 +5917,34 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   walks an ACTIVE sprint with no handcrafted opportunity from discovery to
   READY_TO_TEST with no `PERSON` fact on the card, and fails at QUALIFIED,
   naming `exposure`, against the code it replaced — on both backends.
+  The same suite holds the refusals rather than only the success: no payer
+  leaves a SIGNAL, a short thesis stops below QUALIFIED, a price or a cost
+  stated only in words leaves the column null and the need open, a price
+  mission's figures never reach the exposure, and a replay or a restart writes
+  no second fact. **A need is answered by its own mission and by nothing
+  else**, which is what keeps one field's research out of another's column —
+  and, said plainly, within that mission the first claim stating a figure
+  answers, so a mission that returns several figures for different things is
+  read at the unfavourable end of whichever claim the gate put first.
+  **Reading a figure into an integer column is a sharper act than quoting a
+  sentence, and the independent review of the port found three ways it
+  invented one.** `readMoneyFigures` read `C$1,200`, `A$5,000` and `HK$900` as
+  dollars, because the `$` pattern had no left boundary, and `$1,200 million`
+  as 1,200; both are refused now — a symbol glued to a letter belongs to
+  another currency, and a spelled-out scale is shorthand by another name. A
+  figure stated *per* something (`$25 per hour`, `$49/mo`) is reported as a
+  rate and `figureFor` does not take it as a card total. A figure above
+  `MAX_COLUMN_CENTS` — Postgres's `INTEGER`, which SQLite does not enforce — is
+  unanswerable rather than clipped, because the write it would make is the
+  same throw this change exists to remove. And a proposed exposure replaces
+  only a proposal: a figure on the column with no card fact, or with a source
+  or a person behind it, is left alone, and the margin is computed against
+  whatever the card will actually hold.
   Staleness, early retirement, target replenishment, configurable portfolio
   concurrency, the software-need handoff to the Factory and a funnel reading
-  are not built here; they are `objectives/cash-autonomy-*.json`.
+  are **not built**; they were drafted as unapproved objective specifications
+  on `claude/autonomous-opportunity-pipeline-6ph954` and are not in
+  `objectives/`, because that directory holds what a person approved.
 
 **Brain performs a commercial action only through `cash/perform.ts`.** The
 tick's contact, a person's *Have Brain do it* and a person settling an unknown
@@ -10805,7 +10830,25 @@ through the guarded raise with `FILING_REGRANT_REASON` on its history, and one
 packet is recovered automatically at most once: a replacement refused by the
 store again means the defect is not historical and a person should look.
 Nothing is re-researched; the synthesis is re-run because its text rolled back
-with the failed filing.
+with the failed filing. **It never undoes a person's STOP**: a packet whose
+mission is CANCELLED or FAILED is refused by name and left to the operator,
+because the targeted recovery would move that mission back to RUNNING. It takes
+one place per packet and remembers the refusals no tick can change, so a
+packet that can never be recovered cannot hold the front of the queue. And a card
+about the park is the person's: an answered one leaves the packet alone, and an
+open one is withdrawn first with the reason on the row — a STOP answered later
+on a card about a packet that is running again would cancel the mission and
+leave the packet working. If the same stop comes back, the park reopens that
+withdrawn card rather than finding it and showing nothing.
+
+**A session id that is a variable's name is refused at check-in.** The probe
+fired at Brain Research A on 2026-10-05 started a session that checked in with
+the literal `$CLAUDE_CODE_REMOTE_SESSION_ID`, was handed two Cash Mode 1 bins
+and filed a synthesis — and the probe, comparing that literal against the
+session it fired, recorded NO_MCP. The same literal from every worker would also
+be one "session" to the audit-independence floor. No provider session id
+contains `$`, so `brain_check_in` refuses one that does, names the remedy and
+assigns nothing; leaving the field out still works.
 
 ### Two things the gates found that reading did not.
 
@@ -12189,6 +12232,31 @@ usable Brain connector, no-shows, a quarantine, a person reconnecting, and again
   indistinguishable from a Routine not starting; Claude's own needs-auth state
   clears only by consent in Claude. Brain answers every retry correctly and
   fast; it cannot make a client retry.
+
+## 52. A research goal is approved once, and its ceilings are what remain.
+
+A research goal (`docs/GOAL-BUDGET.md`) is a `russell_goals` row with `purpose`
+`RESEARCH_GOAL` and `work_policy` `CAPPED`. **This is a recorded correction to
+§24**, which says `CAPPED` is offered by no live grant: that stays true of a
+standing grant, and a research goal is the one live row that carries it, because
+a bounded experiment is exactly what `CAPPED` was kept for. It is invisible to
+every standing-authority reader, so it never becomes Russell's grant.
+
+- **Packets reserve as kind `MISSION`.** A new reservation kind would be a
+  second vocabulary for one count. The key is
+  `research:packet:<goalId>:<packetKey>`, so a replay is the same packet and is
+  charged once.
+- **Fragments are settled at creation**, across every packet of the goal, from
+  `research_orchestrations.goal_id`.
+- **The deadline is judged on Brain's clock.** After it no new packet or
+  fragment is created; work already queued may finish, and nothing written is
+  touched.
+- **Money stays zero.** No input raises it (invariant 18).
+- **Continuation is derived, not scheduled.** `advanceResearchGoals` runs once
+  per Russell tick, asks the archive first (§13), and starts `round-<n>` only
+  when no packet is live and the last one left a mandatory requirement
+  unresolved. The key makes two passes one packet. A ceiling that stops it
+  raises exactly one request for a person and never raises the ceiling itself.
 
 ## Repository map
 

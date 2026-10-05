@@ -27,7 +27,7 @@
  * test only ever answers candidates Brain created.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { freshProject } from './helpers.ts';
+import { freshProject, restartDatabase } from './helpers.ts';
 import { createUser, createWorker, grantMembership } from '../server/repos/identity.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration } from '../server/repos/research.ts';
@@ -48,7 +48,12 @@ import { activate } from '../server/services/cash/lifecycle.ts';
 import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
 import { evidenceCard } from '../server/services/cash/card.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
-import { cashTier, type TierReading } from '../server/services/cash/tier.ts';
+import {
+  CAPTURE_KEY,
+  cashTier,
+  UNIVERSAL_QUALIFICATION,
+  type TierReading,
+} from '../server/services/cash/tier.ts';
 import type {
   CashOpportunity,
   ClaimedWork,
@@ -403,70 +408,103 @@ async function readingOf(opportunity: CashOpportunity): Promise<TierReading> {
   });
 }
 
-describe('an ACTIVE sprint with nothing handcrafted reaches READY_TO_TEST by itself', () => {
-  it('discovers, qualifies and readies an opening with no person answering a fact', async () => {
-    // The one decision that is a person's: Start. Nothing else is granted by hand.
-    const activated = await activate({
-      projectId,
-      ownerUserId: userId,
-      actorUserId: userId,
-      objective: 'Maximize additional usable cash over the next few weeks.',
-    });
-    expect(activated.ok).toBe(true);
-    expect(await listOpportunities({ projectId })).toEqual([]);
+interface Journey {
+  final: CashOpportunity;
+  reading: TierReading;
+  /** Every tier the piece was observed at, in order, with the card then. */
+  observed: { tier: string; fields: string[] }[];
+}
 
-    await tick('autonomous');
-    const bucket = (await listCandidates({ projectId })).find(
-      (one) => one.title === SEARCH_BUCKETS[0]!.title,
-    );
-    expect(bucket, 'discovery opened a bucket round on its own').toBeDefined();
+interface Variation {
+  /** Replaces the discovery claim, e.g. to take the budget figure out of it. */
+  discovery?: string;
+  /** Replaces the deep dive's answers. */
+  deepDive?: Found[];
+  /** Per card field: what research finds, or null for nothing found. */
+  field?: Record<string, Found[] | null>;
+}
 
-    // Discovery: a dated published request, typed as an opening by the reader.
-    await answer(bucket!.id, bucket!.statement, [
-      {
-        claim:
-          'The Westfield drainage authority published request 2026-441 for ownership research ' +
+/**
+ * Drive one ACTIVE sprint from Start, answering only what Brain itself asked.
+ *
+ * Everything that varies between the tests below is what the open web says;
+ * the person's part is always the same single decision.
+ */
+async function drive(variation: Variation = {}): Promise<Journey> {
+  const activated = await activate({
+    projectId,
+    ownerUserId: userId,
+    actorUserId: userId,
+    objective: 'Maximize additional usable cash over the next few weeks.',
+  });
+  expect(activated.ok).toBe(true);
+  expect(await listOpportunities({ projectId })).toEqual([]);
+
+  await tick('autonomous');
+  const bucket = (await listCandidates({ projectId })).find(
+    (one) => one.title === SEARCH_BUCKETS[0]!.title,
+  );
+  expect(bucket, 'discovery opened a bucket round on its own').toBeDefined();
+
+  // Discovery: a dated published request, typed as an opening by the reader.
+  await answer(bucket!.id, bucket!.statement, [
+    {
+      claim:
+        variation.discovery ??
+        'The Westfield drainage authority published request 2026-441 for ownership research ' +
           'on twenty parcels, with a stated budget of USD 2,000, closing 30 October 2026.',
-        lane: 'demand_signal',
-        sourceUrl: SOURCE,
-        signal: 'ACTIVE_BUYER_DEMAND',
-      },
-    ]);
+      lane: 'demand_signal',
+      sourceUrl: SOURCE,
+      signal: 'ACTIVE_BUYER_DEMAND',
+    },
+  ]);
 
-    const tiers: string[] = [];
-    const answered = new Set<string>();
-    let piece: CashOpportunity | null = null;
-    for (let pass = 0; pass < 12; pass += 1) {
-      await tick('autonomous');
-      const pieces = await listOpportunities({ projectId });
-      piece = pieces[0] ?? null;
-      if (!piece) continue;
-      const reading = await readingOf(piece);
-      if (tiers[tiers.length - 1] !== reading.tier) tiers.push(reading.tier);
-      if (reading.tier === 'READY_TO_TEST') break;
+  const observed: Journey['observed'] = [];
+  const answered = new Set<string>();
+  let piece: CashOpportunity | null = null;
+  for (let pass = 0; pass < 12; pass += 1) {
+    await tick('autonomous');
+    const pieces = await listOpportunities({ projectId });
+    piece = pieces[0] ?? null;
+    if (!piece) continue;
+    const reading = await readingOf(piece);
+    if (observed[observed.length - 1]?.tier !== reading.tier) {
+      observed.push({
+        tier: reading.tier,
+        fields: (await cardFactsFor(piece.id)).map((one) => one.field),
+      });
+    }
+    if (reading.tier === 'READY_TO_TEST') break;
 
-      // Answer only what Brain itself asked: the deep dive...
-      if (piece.validationState === 'PENDING' && piece.candidateId && !answered.has(piece.candidateId)) {
-        if (!(await latestMissionForCandidate(piece.candidateId))) {
-          answered.add(piece.candidateId);
-          await answer(piece.candidateId, `Qualify: ${piece.title}`, DEEP_DIVE);
-        }
-      }
-      // ...and the card needs it raised for researchable blanks.
-      for (const need of await listNeeds({ projectId, states: ['OPEN'] })) {
-        if (!need.candidateId || answered.has(need.candidateId)) continue;
-        if (await latestMissionForCandidate(need.candidateId)) continue;
-        const field = need.requestKey?.split(':').pop() ?? '';
-        const found = forField(field);
-        if (!found) continue;
-        answered.add(need.candidateId);
-        await answer(need.candidateId, need.nextStep, found);
+    // Answer only what Brain itself asked: the deep dive...
+    if (piece.validationState === 'PENDING' && piece.candidateId && !answered.has(piece.candidateId)) {
+      if (!(await latestMissionForCandidate(piece.candidateId))) {
+        answered.add(piece.candidateId);
+        await answer(piece.candidateId, `Qualify: ${piece.title}`, variation.deepDive ?? DEEP_DIVE);
       }
     }
+    // ...and the card needs it raised for researchable blanks.
+    for (const need of await listNeeds({ projectId, states: ['OPEN'] })) {
+      if (!need.candidateId || answered.has(need.candidateId)) continue;
+      if (await latestMissionForCandidate(need.candidateId)) continue;
+      const field = need.requestKey?.split(':').pop() ?? '';
+      const found =
+        variation.field && field in variation.field ? variation.field[field]! : forField(field);
+      if (!found) continue;
+      answered.add(need.candidateId);
+      await answer(need.candidateId, need.nextStep, found);
+    }
+  }
 
-    expect(piece).not.toBeNull();
-    const final = (await getOpportunity(piece!.id))!;
-    const reading = await readingOf(final);
+  expect(piece).not.toBeNull();
+  const final = (await getOpportunity(piece!.id))!;
+  return { final, reading: await readingOf(final), observed };
+}
+
+describe('an ACTIVE sprint with nothing handcrafted reaches READY_TO_TEST by itself', () => {
+  it('discovers, qualifies and readies an opening with no person answering a fact', async () => {
+    const { final, reading, observed } = await drive();
+    const tiers = observed.map((one) => one.tier);
     // Where it stopped, if it did, is the first real blocker.
     expect(
       { tier: reading.tier, toAdvance: reading.toAdvance.map((one) => one.key) },
@@ -490,8 +528,241 @@ describe('an ACTIVE sprint with nothing handcrafted reaches READY_TO_TEST by its
 
     // And Brain declared it ready itself; nobody pressed the button.
     expect(final.state).toBe('READY');
+
+    // Replaying the whole operating step changes nothing: no second fact, no
+    // second answer event, no reopened need. Idempotent by the need's own
+    // closure, not by a flag.
+    const factsBefore = (await cardFactsFor(final.id)).length;
+    const answeredBefore = await answerEvents(final.id);
+    for (let again = 0; again < 3; again += 1) await tick('autonomous');
+    const { applyResearchAnswers } = await import('../server/services/cash/answers.ts');
+    expect((await applyResearchAnswers(projectId)).applied).toEqual([]);
+    expect((await cardFactsFor(final.id)).length).toBe(factsBefore);
+    expect(await answerEvents(final.id)).toBe(answeredBefore);
+
+    // A restart holds no memory to lose: the facts and the tier are rows.
+    await restartDatabase();
+    const reread = (await getOpportunity(final.id))!;
+    expect(reread.priceCents).toBe(200_000);
+    expect(reread.peakFundingCents).toBe(30_000);
+    expect((await cardFactsFor(final.id)).length).toBe(factsBefore);
+    expect((await readingOf(reread)).tier).toBe('READY_TO_TEST');
+  }, 120_000);
+
+  it('reaches each tier only once the facts it is derived from are on the card', async () => {
+    const { observed } = await drive();
+    // A tier can be passed through inside one tick, so every observation is
+    // held against what its own tier is derived from, rather than expecting to
+    // see each rung.
+    const rank = (tier: string) => ['SIGNAL', 'CANDIDATE', 'QUALIFIED', 'READY_TO_TEST'].indexOf(tier);
+    expect(observed[0]!.tier).toBe('SIGNAL');
+    expect(observed[0]!.fields).not.toContain('payer');
+    for (const { tier, fields } of observed) {
+      if (rank(tier) >= rank('CANDIDATE')) {
+        expect(fields, `${tier} without a payer and a capture mechanism`).toEqual(
+          expect.arrayContaining(['payer', CAPTURE_KEY]),
+        );
+      }
+      if (rank(tier) >= rank('QUALIFIED')) {
+        for (const key of UNIVERSAL_QUALIFICATION) {
+          expect(fields, `${tier} without ${key}`).toContain(key);
+        }
+      }
+      if (rank(tier) >= rank('READY_TO_TEST')) {
+        expect(fields, `${tier} without the bounded-test money`).toEqual(
+          expect.arrayContaining(['price', 'exposure']),
+        );
+      }
+    }
+    expect(observed.map((one) => one.tier)).toContain('READY_TO_TEST');
   }, 120_000);
 });
+
+describe('the autonomous funnel cannot skip evidence it does not have', () => {
+  it('stays a SIGNAL when nothing establishes who pays', async () => {
+    const { final, reading } = await drive({
+      field: { payer: null },
+      deepDive: DEEP_DIVE.filter((one) => one.lane !== 'payer'),
+    });
+    expect(reading.tier).toBe('SIGNAL');
+    expect(final.payer).toBeNull();
+    expect(final.state).not.toBe('READY');
+  }, 120_000);
+
+  it('stops short of QUALIFIED when the deep dive leaves part of the thesis unanswered', async () => {
+    const { final, reading } = await drive({
+      deepDive: DEEP_DIVE.filter((one) => one.lane !== 'disqualifier' && one.lane !== 'eligibility'),
+    });
+    expect(['SIGNAL', 'CANDIDATE']).toContain(reading.tier);
+    expect(reading.toAdvance.map((one) => one.key)).toEqual(
+      expect.arrayContaining(['disqualifiers']),
+    );
+    expect(final.state).not.toBe('READY');
+  }, 120_000);
+
+  it('leaves the exposure unknown when no research states a cost, and price research cannot fill it', async () => {
+    const { final, reading } = await drive({
+      // The deep dive's cost answer is prose, so nothing proposes an exposure...
+      deepDive: DEEP_DIVE.map((one) =>
+        one.lane === 'cost_evidence'
+          ? { ...one, claim: 'The county recorder publishes title-search fees on request.' }
+          : one,
+      ),
+      // ...and the exposure question itself comes back with no figure.
+      field: {
+        exposure: [
+          {
+            claim: 'The notice says nothing has to be bought before the work is delivered.',
+            lane: 'demand_signal',
+            sourceUrl: SOURCE,
+          },
+        ],
+      },
+    });
+    // The price research did state figures; none of them reached the exposure.
+    expect(final.priceCents).toBe(200_000);
+    expect(final.peakFundingCents).toBeNull();
+    expect(reading.tier).not.toBe('READY_TO_TEST');
+    expect(final.state).not.toBe('READY');
+    // The need is still open and says why, rather than closing on prose.
+    const exposureNeed = (await listNeeds({ projectId, states: ['OPEN'] })).find(
+      (need) => need.requestKey?.endsWith(':exposure'),
+    );
+    expect(exposureNeed, 'the exposure question stays open').toBeDefined();
+    expect((await cardFactsFor(final.id)).some((one) => one.field === 'exposure')).toBe(false);
+  }, 120_000);
+
+  it('writes a researched price as cents, and refuses a price stated only in prose', async () => {
+    // The discovery and the deep dive state no figure, so the only way a price
+    // reaches the card is the card question's own research — the writer that
+    // put the claim sentence into the integer column.
+    const noFigures = {
+      discovery:
+        'The Westfield drainage authority published request 2026-441 for ownership research ' +
+        'on twenty parcels, closing 30 October 2026.',
+      deepDive: DEEP_DIVE.map((one) =>
+        one.lane === 'price_evidence'
+          ? { ...one, claim: 'Comparable parcel-ownership research engagements are quoted on request.' }
+          : one,
+      ),
+    };
+    const priced = await drive({
+      ...noFigures,
+      field: {
+        price: [
+          {
+            claim:
+              'The authority awarded the last comparable parcel-ownership review for USD 1,850 ' +
+              'and the one before it for USD 2,100.',
+            lane: 'demand_signal',
+            sourceUrl: 'https://example.test/westfield/awards',
+          },
+        ],
+      },
+    });
+    expect(typeof priced.final.priceCents).toBe('number');
+    expect(priced.final.priceCents).toBe(185_000);
+    const fact = (await cardFactsFor(priced.final.id)).find((one) => one.field === 'price');
+    expect(fact?.kind).toBe('EVIDENCE');
+    expect(fact?.claimId).toBeTruthy();
+    expect(fact?.value).toContain('USD 1,850');
+  }, 120_000);
+
+  it('leaves the price unknown when research states it only in words', async () => {
+    const { final, reading } = await drive({
+      discovery:
+        'The Westfield drainage authority published request 2026-441 for ownership research ' +
+        'on twenty parcels, closing 30 October 2026.',
+      deepDive: DEEP_DIVE.map((one) =>
+        one.lane === 'price_evidence'
+          ? { ...one, claim: 'Comparable parcel-ownership research engagements are quoted on request.' }
+          : one,
+      ),
+      field: {
+        price: [
+          {
+            claim: 'The authority pays roughly two thousand for work of this kind.',
+            lane: 'demand_signal',
+            sourceUrl: 'https://example.test/westfield/awards',
+          },
+        ],
+      },
+    });
+    expect(final.priceCents).toBeNull();
+    expect(reading.tier).not.toBe('READY_TO_TEST');
+    expect((await cardFactsFor(final.id)).some((one) => one.field === 'price' && one.kind === 'EVIDENCE')).toBe(false);
+  }, 120_000);
+});
+
+describe('a proposed exposure never replaces a figure that is not a proposal', () => {
+  it('leaves a column set by anything else alone, and computes the margin from what the card holds', async () => {
+    const { createOpportunity, updateOpportunity } = await import('../server/repos/cashPortfolio.ts');
+    const { recordCardFact } = await import('../server/repos/cashCardFacts.ts');
+    const { getCashMode } = await import('../server/repos/cashMode.ts');
+    const { proposeTerms, applyProposal } = await import('../server/services/cash/answers.ts');
+    await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash.' });
+    const piece = await createOpportunity({
+      projectId,
+      cashModeId: (await getCashMode(projectId))!.id,
+      ownerUserId: userId,
+      title: 'A published request for parcel research',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      source: 'RESEARCH',
+      currency: 'USD',
+      sourceClaimId: 'clm_fixture',
+    } as never);
+    await recordCardFact({
+      projectId,
+      opportunityId: piece.id,
+      field: 'directCosts',
+      kind: 'EVIDENCE',
+      value: 'The county recorder publishes title-search fees totalling USD 300.',
+      decidedBy: 'BRAIN',
+    } as never);
+
+    await updateOpportunity(piece.id, {
+      buying_signal: 'The authority published request 2026-441 for ownership research, budget USD 2,000.',
+      signal_observed_at: '2026-09-28',
+    } as never);
+
+    // A column written by some other path, with no card fact behind it.
+    await updateOpportunity(piece.id, { peak_funding_cents: 75_000, price_cents: 200_000 } as never);
+    const held = (await getOpportunity(piece.id))!;
+    const proposal = await proposeTerms(held);
+    // Not vacuous: the proposal did run, and proposed something.
+    expect(proposal.terms.length).toBeGreaterThan(0);
+    expect(proposal.terms.some((term) => term.field === 'exposure')).toBe(false);
+    await applyProposal({ opportunity: held, proposal });
+    expect((await getOpportunity(piece.id))!.peakFundingCents).toBe(75_000);
+    // The margin is against the 750 the card holds, not the 300 it might have proposed.
+    const economics = proposal.terms.find((term) => term.field === 'economics');
+    expect(economics?.value).toContain('1,250.00');
+
+    // With nothing on the column, the published cost is proposed and written.
+    await updateOpportunity(piece.id, { peak_funding_cents: null } as never);
+    const blank = (await getOpportunity(piece.id))!;
+    const proposed = await proposeTerms(blank);
+    expect(proposed.terms.find((term) => term.field === 'exposure')?.cents).toBe(30_000);
+    await applyProposal({ opportunity: blank, proposal: proposed });
+    expect((await getOpportunity(piece.id))!.peakFundingCents).toBe(30_000);
+
+    // The proposal path applies the writer's rule too: a rate is not a price,
+    // and a figure Postgres's INTEGER cannot hold is not proposed.
+    for (const signal of [
+      'The authority pays $25 per hour for ownership research.',
+      'The authority budgets $30,000,000 for the programme.',
+    ]) {
+      await updateOpportunity(piece.id, { buying_signal: signal, price_cents: null } as never);
+      const again = await proposeTerms((await getOpportunity(piece.id))!);
+      expect(again.terms.some((term) => term.field === 'price'), signal).toBe(false);
+    }
+  });
+});
+
+async function answerEvents(opportunityId: string): Promise<number> {
+  const { cashEventsOfKind } = await import('../server/repos/cashMode.ts');
+  return (await cashEventsOfKind(opportunityId, 'CASH_CARD_ANSWERED')).length;
+}
 
 describe('a money field is read from a figure, never from a sentence', () => {
   it('takes the low end of a price and the high end of a cost, and refuses prose', async () => {
@@ -507,5 +778,27 @@ describe('a money field is read from a figure, never from a sentence', () => {
     expect(figureFor('payer', 'USD 300', 'USD')).toBeNull();
     // And the exposure finally has somewhere to land.
     expect(COLUMN['exposure']).toBe('peak_funding_cents');
+  });
+
+  it('refuses a figure that is ambiguous, in another currency, a rate, or too large for the column', async () => {
+    const { figureFor, MAX_COLUMN_CENTS } = await import('../server/services/cash/answers.ts');
+    // Ambiguous: no currency marker, shorthand, a spelled-out scale, a percentage.
+    expect(figureFor('price', 'Comparable work pays 1,800 to 2,400.', 'USD')).toBeNull();
+    expect(figureFor('price', 'Comparable work pays $1.8k.', 'USD')).toBeNull();
+    expect(figureFor('price', 'The programme is $1,200 million.', 'USD')).toBeNull();
+    expect(figureFor('price', 'A fee of 15% of $ value.', 'USD')).toBeNull();
+    // Another currency's dollar sign is not this currency's.
+    expect(figureFor('price', 'Quoted at C$1,200.', 'USD')).toBeNull();
+    expect(figureFor('exposure', 'Fees are HK$900 and A$5,000.', 'USD')).toBeNull();
+    // US$ is still dollars.
+    expect(figureFor('price', 'Quoted at US$1,200.', 'USD')).toBe(120_000);
+    // A rate is not a total, so it answers neither field...
+    expect(figureFor('price', 'Paid at $25 per hour.', 'USD')).toBeNull();
+    expect(figureFor('exposure', 'Software at $49/mo.', 'USD')).toBeNull();
+    // ...but a total beside it still does.
+    expect(figureFor('price', 'Paid at $25 per hour, capped at $2,000.', 'USD')).toBe(200_000);
+    // Above what Postgres's INTEGER column holds: unanswerable, never clipped.
+    expect(figureFor('exposure', 'A $30,000,000 machine is required.', 'USD')).toBeNull();
+    expect(MAX_COLUMN_CENTS).toBe(2_147_483_647);
   });
 });

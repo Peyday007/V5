@@ -132,11 +132,29 @@ export const MONEY_FIELD: Readonly<Record<string, 'LOW' | 'HIGH'>> = Object.free
   exposure: 'HIGH',
 });
 
-/** The figure a sentence states for a money field, or null when it states none. */
+/**
+ * The largest amount the two integer columns hold on Postgres.
+ *
+ * `price_cents` and `peak_funding_cents` are `INTEGER` there and unbounded on
+ * SQLite, so a figure above this would be stored by one backend and refused by
+ * the other — the same throw out of `applyResearchAnswers` this module exists to
+ * prevent. Such a figure answers nothing rather than being clipped.
+ */
+export const MAX_COLUMN_CENTS = 2_147_483_647;
+
+/**
+ * The figure a sentence states for a money field, or null when it states none.
+ *
+ * A figure stated per something — an hour, a word, a month — is not a total and
+ * is left out, because a rate read as a price or an exposure is wrong by however
+ * many units the work takes.
+ */
 export function figureFor(field: string, text: string, currency: string): number | null {
   const end = MONEY_FIELD[field];
   if (!end) return null;
-  const figures = readMoneyFigures(text, currency);
+  const figures = readMoneyFigures(text, currency).filter(
+    (figure) => !figure.perUnit && figure.cents <= MAX_COLUMN_CENTS,
+  );
   if (figures.length === 0) return null;
   return end === 'LOW' ? figures[0]!.cents : figures[figures.length - 1]!.cents;
 }
@@ -553,11 +571,16 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
     sources.push({ text: opportunity.buyingSignal, claimId: null });
   }
 
+  // The same predicate research's writer applies, so the two writers of
+  // `price_cents` cannot disagree: a rate is not a price, and a figure the
+  // Postgres column cannot hold is not proposed at all.
   const figures = sources.flatMap((source) =>
-    readMoneyFigures(source.text, opportunity.currency).map((figure) => ({
-      ...figure,
-      claimId: source.claimId,
-    })),
+    readMoneyFigures(source.text, opportunity.currency)
+      .filter((figure) => !figure.perUnit && figure.cents <= MAX_COLUMN_CENTS)
+      .map((figure) => ({
+        ...figure,
+        claimId: source.claimId,
+      })),
   );
   const cited = [...new Set(figures.map((one) => one.claimId).filter((one) => one !== null))];
   const low = figures[0];
@@ -612,14 +635,24 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
   const costs = await cardFact(opportunity.id, 'directCosts');
   const costCents =
     costs && costs.kind === 'EVIDENCE' ? figureFor('exposure', costs.value, opportunity.currency) : null;
-  let exposureCents = opportunity.peakFundingCents;
-  if (costCents !== null) {
-    exposureCents = exposureCents ?? costCents;
+  /*
+   * Only a proposal may replace a proposal. A figure already on the column with
+   * no card fact behind it, or behind a source or a person, is left exactly as
+   * it is — and the margin below is computed against whichever value the card
+   * will actually hold after this pass, so the economics sentence and
+   * `peak_funding_cents` can never disagree.
+   */
+  const exposureFact = await cardFact(opportunity.id, 'exposure');
+  const mayPropose =
+    costCents !== null &&
+    (exposureFact ? exposureFact.kind === 'RECOMMENDATION' : opportunity.peakFundingCents === null);
+  const exposureCents = mayPropose ? costCents : opportunity.peakFundingCents;
+  if (mayPropose) {
     out.terms.push({
       field: 'exposure',
-      cents: costCents,
+      cents: costCents!,
       value:
-        `At most ${formatMoney(costCents, opportunity.currency)} out before the buyer pays — ` +
+        `At most ${formatMoney(costCents!, opportunity.currency)} out before the buyer pays — ` +
         'the highest direct cost the sources publish.',
       basis: `The published direct costs${costs!.claimId ? ` (claim ${costs!.claimId})` : ''}: ` +
         `${clamp(costs!.value, 200)}.`,
@@ -667,7 +700,10 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
   // ---------------------------------------------------------------------
   // The margin, which needs both halves
   // ---------------------------------------------------------------------
-  const price = low?.cents ?? opportunity.priceCents;
+  // The price the card will actually hold after this pass: the proposal only
+  // where `applyProposal` would write it, otherwise what is already there.
+  const priceProposable = mayReplace(await cardFact(opportunity.id, 'price'), 'RECOMMENDATION');
+  const price = (priceProposable ? low?.cents : undefined) ?? opportunity.priceCents;
   const exposure = exposureCents;
   if (price !== null && price !== undefined && exposure !== null) {
     const margin = price - exposure;

@@ -68,3 +68,24 @@ export function sameProviderSession(
   if (left === null || right === null) return false;
   return left === right;
 }
+
+/**
+ * A `session_ref` that is a shell variable nobody expanded, not a session.
+ *
+ * The check-in contract tells a worker to send the value of
+ * `CLAUDE_CODE_REMOTE_SESSION_ID`. Production, 2026-10-05 10:22Z: the recovery
+ * probe's own session (`cse_01QREme3…`) checked in with the literal string
+ * `$CLAUDE_CODE_REMOTE_SESSION_ID`. Compared whole — which `normalizeSessionRef`
+ * correctly does for a value with no known prefix — it matched nothing, so the
+ * probe recorded NO_MCP about a session that had arrived and worked two bins.
+ * And every worker sending the same literal would be one "session" to the
+ * audit-independence floor, which would then refuse every role after the first.
+ *
+ * No spelling of a provider session contains `$`, so a value that does is a
+ * placeholder rather than an identity, and is refused at the door rather than
+ * stored: the worker can send the real value, or omit the field and let Brain
+ * use the session it recorded when it fired.
+ */
+export function isUnexpandedSessionRef(value: string | null | undefined): boolean {
+  return typeof value === 'string' && value.includes('$');
+}
