@@ -512,7 +512,7 @@ researchRouter.get(
  * project is WRITE. A worker is refused by type, and a goal that is absent, in
  * another project, or not a research goal is one 404 with one body.
  */
-const RESEARCH_GOAL_FIELDS = new Set(['name', 'maxPackets', 'maxFragments', 'deadline']);
+const RESEARCH_GOAL_FIELDS = new Set(['name', 'maxPackets', 'maxFragments', 'deadline', 'assignment', 'layerId']);
 const REFUSED_MONEY_FIELDS = new Set([
   'externalSpendCents',
   'paidOveragesEnabled',
@@ -558,6 +558,11 @@ researchRouter.post(
     const maxPackets = wholeNumber(body['maxPackets'], 'maxPackets');
     const maxFragments = wholeNumber(body['maxFragments'], 'maxFragments');
     const deadline = requiredString(body['deadline'], 'deadline');
+    // What the goal researches, and where it files. Both or neither: with both,
+    // Brain continues the goal on its own inside the ceilings; with neither, a
+    // person starts each packet. Which layer is checked against this project.
+    const assignment = body['assignment'] === undefined ? null : requiredString(body['assignment'], 'assignment');
+    const layerId = body['layerId'] === undefined ? null : requiredString(body['layerId'], 'layerId');
     let goalId: string;
     try {
       const goal = await createResearchGoal({
@@ -568,6 +573,8 @@ researchRouter.post(
         maxPackets,
         maxFragments,
         deadline,
+        researchAssignment: assignment,
+        researchLayerId: layerId,
       });
       goalId = goal.id;
     } catch (error) {

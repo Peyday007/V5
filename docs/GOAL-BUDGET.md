@@ -14,6 +14,15 @@ it never becomes Russell's standing grant. It carries what it is for:
 
 Both are set by `createResearchGoal`'s optional inputs and are NULL on a
 standing grant. A goal with no assignment, or no layer, is never continued.
+They are both-or-neither, and the layer must be the goal's own project's.
+
+A person sets them through the two doors that open a goal:
+`POST /api/projects/:id/research-goals` takes `assignment` and `layerId`, and
+`npm run admin -- research goal create … --assignment "…" --layer <name|id>`.
+Without them a person starts each packet with `research start --goal`. Until
+these two doors took the fields, nothing outside the tests could open a goal
+that continues by itself, so the continuation pass was reachable by no shipped
+entrance.
 
 ## The ceilings, and who enforces each
 

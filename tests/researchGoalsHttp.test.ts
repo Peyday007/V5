@@ -15,10 +15,14 @@ import { createUser, createWorker, grantMembership } from '../server/repos/ident
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
 import { researchRouter } from '../server/routes/research.ts';
 import { reserve, reserveGoalPacket } from '../server/repos/russellAuthority.ts';
+import { getDb } from '../server/db/database.ts';
+import { createLayer } from '../server/repos/layers.ts';
+import { advanceResearchGoals } from '../server/services/research/goalContinuation.ts';
 import { goalBudgetViewFor, stoppingReason } from '../server/services/research/goalBudgetView.ts';
 import type { Principal, ProjectRole } from '../server/domain/types.ts';
 
 let projectId = '';
+let layerId = '';
 let otherProjectId = '';
 let userId = '';
 let workerId = '';
@@ -93,7 +97,9 @@ async function call(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unkno
 }
 
 beforeEach(async () => {
-  projectId = (await freshProject()).project.id;
+  const fresh = await freshProject();
+  projectId = fresh.project.id;
+  layerId = fresh.layers[0]!.id;
   otherProjectId = (await createProject({ name: `Somebody else ${Math.random().toString(36).slice(2, 7)}` })).id;
   userId = (
     await createUser({
@@ -190,6 +196,37 @@ describe('the research goals door', () => {
     expect(forbidden.text).toBe(absent.text);
     expect((await goalBudgetViewFor(theirs))?.state).toBe('ACTIVE');
     expect((await call('GET', list())).text).not.toContain(theirs);
+  });
+
+  it('opens a goal Brain continues by itself when it names an assignment and a layer', async () => {
+    // The continuation pass reads only goals with an assignment, so a door that
+    // could not set one would leave continuation reachable from tests alone.
+    const assignment = 'How many people work in outsourced telemarketing, and where.';
+    const created = await call('POST', list(), { ...base0(), assignment, layerId });
+    expect(created.status).toBe(200);
+    const id = created.body.goal.goalId;
+    const row = await getDb().get<{ research_assignment: string | null; research_layer_id: string | null }>(
+      'SELECT research_assignment, research_layer_id FROM russell_goals WHERE id = ?',
+      [id],
+    );
+    expect(row).toEqual({ research_assignment: assignment, research_layer_id: layerId });
+    const report = await advanceResearchGoals();
+    expect(report.considered).toBe(1);
+    expect(report.skipped.find((one) => one.goalId === id)?.reason ?? '').not.toMatch(/no layer/);
+  });
+
+  it('refuses half of an assignment, and another project\u2019s layer', async () => {
+    const theirLayer = await createLayer({ projectId: otherProjectId, name: 'Theirs', orderIndex: 0 });
+    for (const extra of [
+      { assignment: 'A question' },
+      { layerId },
+      { assignment: 'A question', layerId: theirLayer.id },
+      { assignment: '', layerId },
+    ]) {
+      const result = await call('POST', list(), { ...base0(), ...extra });
+      expect(result.status, JSON.stringify(extra)).toBe(400);
+    }
+    expect((await call('GET', list())).body.goals).toHaveLength(0);
   });
 
   it('revokes at ADMIN only, and says REVOKED afterwards', async () => {

@@ -1054,6 +1054,23 @@ export async function createResearchGoal(input: {
   const deadline = new Date(deadlineMs).toISOString();
   if (deadline <= at) throw new Error('A research goal needs a deadline that has not already passed.');
 
+  // The continuation pass researches the assignment and files under the layer,
+  // so a goal that names one must name both, and the layer must be this
+  // project's: a layer read from another project would file one person's
+  // research under somebody else's heading.
+  const assignment = input.researchAssignment?.trim() || null;
+  const layerId = input.researchLayerId || null;
+  if ((assignment === null) !== (layerId === null)) {
+    throw new Error('A research goal that continues on its own needs both an assignment and a layer to file under.');
+  }
+  if (layerId !== null) {
+    const layer = await getDb().get<{ id: string }>(
+      'SELECT id FROM layers WHERE id = ? AND project_id = ?',
+      [layerId, input.projectId],
+    );
+    if (!layer) throw new Error('That layer is not one of this project\'s layers.');
+  }
+
   const id = newId('rgl');
   await getDb().run(
     `INSERT INTO russell_goals
@@ -1074,8 +1091,8 @@ export async function createResearchGoal(input: {
       input.maxPackets,
       input.maxFragments,
       input.maxPackets,
-      input.researchAssignment?.trim() || null,
-      input.researchLayerId || null,
+      assignment,
+      layerId,
       at,
       deadline,
       input.createdByUserId,

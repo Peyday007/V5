@@ -38,7 +38,7 @@
  *   npm run admin -- workers archive <name> --admin someone@example.com
  *   npm run admin -- research start <project> --admin someone@example.com
  *   npm run admin -- research start <project> --goal <goalId> --packet-key <key> [--bucket <id>] --admin someone@example.com
- *   npm run admin -- research goal create <project> --name "…" --max-packets N --max-fragments N --deadline ISO --admin someone@example.com
+ *   npm run admin -- research goal create <project> --name "…" --max-packets N --max-fragments N --deadline ISO [--assignment "…" --layer <name|id>] --admin someone@example.com
  *   npm run admin -- research goal show <goalId>
  *   npm run admin -- research goal list <project>
  *   npm run admin -- projects list
@@ -1253,6 +1253,14 @@ async function main(): Promise<void> {
         // The ledger needs a real deadline and the route requires one, so the terminal does too:
         // a ceiling nobody chose is not one the person set.
         const deadline = flag('deadline') ?? fail('Pass --deadline ISO: a research goal needs a date it ends.');
+        // With an assignment and a layer, Brain continues the goal by itself on
+        // the tick; without them a person starts each packet with research start.
+        const assignment = flag('assignment') ?? null;
+        const layerRef = flag('layer');
+        const layer = layerRef
+          ? (await listLayers(project.id)).find((one) => one.id === layerRef || one.name === layerRef) ??
+            fail(`No layer "${layerRef}" in this project.`)
+          : null;
         let goalId: string;
         try {
           goalId = (
@@ -1264,6 +1272,8 @@ async function main(): Promise<void> {
               maxPackets,
               maxFragments,
               deadline,
+              researchAssignment: assignment,
+              researchLayerId: layer?.id ?? null,
             })
           ).id;
         } catch (error) {
