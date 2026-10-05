@@ -58,6 +58,7 @@ import { cashTier } from './tier.ts';
 import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
+import { researchMissionSlotsFull } from '../russell/launch.ts';
 import type { CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
 
 /** How many deep dives one project may have in flight. Provider capacity. */
@@ -559,6 +560,23 @@ export async function settleValidations(projectId: string): Promise<
        */
       const launchedAt = opportunity.validationStartedAt;
       if (launchedAt && Date.now() - Date.parse(launchedAt) > VALIDATION_STALL_MS) {
+        /*
+         * Not while the only thing in the way is a full mission slot.
+         *
+         * Production, 2026-10-04: the research grant's six slots were held by
+         * missions whose packets had no worker to run on — every research
+         * surface was quarantined — so no idea could launch. This backstop
+         * closed each waiting dive at six hours anyway, the next dive took the
+         * freed dive slot and could not launch either, and twenty-four of forty
+         * openings ended `ROUNDS_SPENT` with no research ever having run. An
+         * idea refused `AT_ONCE` is queued, not stalled: `launch()` itself
+         * treats that refusal as an ordinary wait. So the dive keeps its slot
+         * and its round, and launches the moment a mission slot frees. Any
+         * other reason it has not launched is still closed at six hours.
+         */
+        if (candidate.state === 'QUEUED' && (await researchMissionSlotsFull(projectId)) === true) {
+          continue;
+        }
         const hours = Math.floor((Date.now() - Date.parse(launchedAt)) / (60 * 60 * 1000));
         await settle(
           projectId,
@@ -793,13 +811,25 @@ export async function resumeUnlaunchedDives(projectId: string): Promise<string[]
     const events = await listCashEventsFor(opportunity.id, 500);
     const candidateOf = (detail: Record<string, unknown> | null | undefined) =>
       typeof detail?.['candidateId'] === 'string' ? (detail['candidateId'] as string) : null;
-    if (
-      events.some(
-        (event) => event.kind === 'CASH_VALIDATION_RESUMED' && candidateOf(event.detail) === current.id,
-      )
-    ) {
-      continue;
-    }
+    /*
+     * Twice per idea, never more — and the second only for an idea that was
+     * always launchable.
+     *
+     * The first bound was once, ever, so that an idea which cannot launch for
+     * some reason of its own stalls once more and stays `BLOCKED`. Production
+     * found the case that bound was not written for: ideas with a compiled
+     * specification, stalled twice only because every mission slot was held
+     * by missions with no worker, each resume spent before the stall backstop
+     * knew to wait (see `settleValidations`). That backstop now waits on a
+     * full slot, so a launchable idea resumed a second time cannot be closed
+     * again by the same cause, and the cap of two still ends a loop for any
+     * other one.
+     */
+    const resumes = events.filter(
+      (event) => event.kind === 'CASH_VALIDATION_RESUMED' && candidateOf(event.detail) === current.id,
+    ).length;
+    if (resumes >= 2) continue;
+    if (resumes === 1 && !hasCompiledSpecification(current.judgment)) continue;
     const started = [
       ...new Set(
         events
@@ -858,6 +888,31 @@ export async function resumeUnlaunchedDives(projectId: string): Promise<string[]
     room -= 1;
   }
   return out;
+}
+
+/**
+ * Whether the compiler has written a launchable specification for this idea.
+ *
+ * The same test `nextLaunchable` applies (`judgment LIKE '%"missionSpec"%'`),
+ * read from the parsed judgment rather than by pattern.
+ */
+function hasCompiledSpecification(judgment: unknown): boolean {
+  const parsed =
+    typeof judgment === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(judgment) as unknown;
+          } catch {
+            return null;
+          }
+        })()
+      : judgment;
+  return (
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    typeof (parsed as Record<string, unknown>)['missionSpec'] === 'object' &&
+    (parsed as Record<string, unknown>)['missionSpec'] !== null
+  );
 }
 
 /** Both halves, for the tick. */

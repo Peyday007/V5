@@ -10800,6 +10800,56 @@ asserted. Reporting `passes 0/0` would have said none of that, and the shape a
 reader would have taken from it — *everything is blocked on the owner* — is the
 opposite of what the rows say.
 
+**And the backstop that freed those slots spent the rounds it was protecting.
+The correction is recorded rather than quietly applied.** On 2026-10-04 the
+same sprint read `BLOCKED=31`, twenty-four of them `ROUNDS_SPENT`, every one
+`candidate=QUEUED mission=— passes 0/0`: no research had run on any of them.
+Every research Routine was quarantined, so the grant's six mission slots were
+held by missions whose packets had no worker; no deep-dive idea could launch;
+the six-hour backstop closed each waiting dive, the next took the freed dive
+slot and could not launch either, and `resumeUnlaunchedDives` — one resume per
+idea, ever — was spent on the same cause. An idea `launch()` would refuse
+`AT_ONCE` is queued rather than stalled, which is what `launch()` itself says
+about that refusal. So the backstop now asks `researchMissionSlotsFull` — the
+grant `launch()` resolves and the live-hold arithmetic `reserve` enforces — and
+waits while it is true; any other reason a dive has not launched is still
+closed at six hours. A launchable idea may be resumed a second time, never a
+third, which reaches the openings already stranded without reopening the loop
+the first bound was written against.
+
+**A synthesis Brain could not file is reissued by Brain.** The filing defect
+§33 repaired left packets holding accepted research, no report, a bin whose
+budget was spent fetching syntheses the store refused, and a mission parked or
+holding a slot — and `recoverFailedSynthesis` was operator-only, so nothing ever
+reissued them. `recoverFilingFailures` runs on the tick, throttled to every ten
+minutes, and selects only an item **whose own effect ledger records the
+document store refusing or not answering an upload** — Brain's words about
+Brain's half, never a worker's failure. Everything after selection is the
+targeted recovery's assessment unchanged, an exhausted bin is regranted once
+through the guarded raise with `FILING_REGRANT_REASON` on its history, and one
+packet is recovered automatically at most once: a replacement refused by the
+store again means the defect is not historical and a person should look.
+Nothing is re-researched; the synthesis is re-run because its text rolled back
+with the failed filing. **It never undoes a person's STOP**: a packet whose
+mission is CANCELLED or FAILED is refused by name and left to the operator,
+because the targeted recovery would move that mission back to RUNNING. It takes
+one place per packet and remembers the refusals no tick can change, so a
+packet that can never be recovered cannot hold the front of the queue. And a card
+about the park is the person's: an answered one leaves the packet alone, and an
+open one is withdrawn first with the reason on the row — a STOP answered later
+on a card about a packet that is running again would cancel the mission and
+leave the packet working. If the same stop comes back, the park reopens that
+withdrawn card rather than finding it and showing nothing.
+
+**A session id that is a variable's name is refused at check-in.** The probe
+fired at Brain Research A on 2026-10-05 started a session that checked in with
+the literal `$CLAUDE_CODE_REMOTE_SESSION_ID`, was handed two Cash Mode 1 bins
+and filed a synthesis — and the probe, comparing that literal against the
+session it fired, recorded NO_MCP. The same literal from every worker would also
+be one "session" to the audit-independence floor. No provider session id
+contains `$`, so `brain_check_in` refuses one that does, names the remedy and
+assigns nothing; leaving the field out still works.
+
 ### Two things the gates found that reading did not.
 
 **A placeholder tested only for nullity has no type on one of the two

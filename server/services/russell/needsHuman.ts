@@ -34,6 +34,7 @@ import {
   listOpenRequests,
   openRequestFor,
   reofferRequest,
+  reopenWithdrawnRequest,
   reopenRequest,
   transitionMission,
   withdrawRequest,
@@ -540,7 +541,15 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
       resumeKey: `russell:needs-human:${mission.id}:${orchestration.id}`,
     });
 
-    if (created || request.state === 'OPEN') {
+    let reopened = false;
+    if (!created && request.state === 'WITHDRAWN') {
+      reopened = await reopenWithdrawnRequest({
+        requestId: request.id,
+        choices: choicesFor(shape),
+        ...stopWords(shape, awaiting, waitingOn),
+      });
+    }
+    if (created || reopened || request.state === 'OPEN') {
       parked.push({ missionId: mission.id, requestId: request.id, waitingOn });
     }
   }
