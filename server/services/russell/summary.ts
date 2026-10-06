@@ -118,6 +118,9 @@ async function buildLine(projectId: string): Promise<SummaryLine> {
   if (waiting) parts.push(`${waiting} waiting for your release`);
   if (blocked) parts.push(`${blocked} stopped`);
   if (done) parts.push(`${done} complete`);
+  if (parts.length === 0) {
+    return { sentence: 'No build is active in this project.', detail: null, retrying: false };
+  }
   return { sentence: `${parts.join(', ')}.`, detail: null, retrying: false };
 }
 

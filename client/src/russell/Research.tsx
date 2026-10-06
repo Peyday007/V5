@@ -11,6 +11,8 @@
  * Every sentence is the server's. Packet ids and raw statuses are behind
  * Details, because a person follows research by its questions, not its rows.
  */
+import { useState } from 'react';
+import { ApiError } from '../lib/api.ts';
 import { useAsync } from './useAsync.ts';
 import { listState } from './present.ts';
 import { humanWhen } from './present.ts';
@@ -83,7 +85,9 @@ export function ResearchView({
         </p>
       ) : null}
 
-      {overview?.goals.map((goal) => <Goal key={goal.budget.goalId} goal={goal} />)}
+      {overview?.goals.map((goal) => (
+        <Goal key={goal.budget.goalId} goal={goal} projectId={projectId} onChanged={query.reload} />
+      ))}
 
       {overview && overview.other.length > 0 ? (
         <section className="rs-card rs-research-other" aria-label="Research not under a goal">
@@ -95,6 +99,9 @@ export function ResearchView({
         </section>
       ) : null}
 
+      {overview && overview.olderNotShown > 0 ? (
+        <p className="rs-hint">{overview.olderNotShown} older research runs are not listed here.</p>
+      ) : null}
       {overview && overview.technicalHidden > 0 ? (
         <p className="rs-hint">
           {overview.technicalHidden} technical {overview.technicalHidden === 1 ? 'run is' : 'runs are'} not
@@ -105,7 +112,15 @@ export function ResearchView({
   );
 }
 
-function Goal({ goal }: { goal: GoalReading }): JSX.Element {
+function Goal({
+  goal,
+  projectId,
+  onChanged,
+}: {
+  goal: GoalReading;
+  projectId: string | null;
+  onChanged(): void;
+}): JSX.Element {
   const { budget } = goal;
   const packetsHeld = Math.max(budget.packets.used, budget.packets.reserved);
   return (
@@ -123,6 +138,10 @@ function Goal({ goal }: { goal: GoalReading }): JSX.Element {
         <dd>{budget.authorizedByName}</dd>
       </dl>
       <p className={budget.stoppedBy ? 'rs-state rs-state-stale' : 'rs-hint'}>{budget.stoppingSentence}</p>
+      {projectId &&
+      (budget.stoppedBy === 'PACKETS' || budget.stoppedBy === 'FRAGMENTS' || budget.stoppedBy === 'DEADLINE') ? (
+        <Successor goal={goal} projectId={projectId} onChanged={onChanged} />
+      ) : null}
       {goal.packets.length > 0 ? (
         <Packets packets={goal.packets} />
       ) : (
@@ -169,6 +188,7 @@ function Packet({ packet }: { packet: PacketReading }): JSX.Element {
         <p className="rs-hint">
           {q.answered} of {q.total} {q.total === 1 ? 'question' : 'questions'} answered
           {q.open ? `, ${q.open} still open` : ''}
+          {q.stuck ? `, ${q.stuck} stuck` : ''}
           {q.refused ? `, ${q.refused} could not be answered` : ''}
           {packet.acceptedClaims > 0
             ? ` · ${packet.acceptedClaims} ${packet.acceptedClaims === 1 ? 'fact' : 'facts'} established from sources`
@@ -194,5 +214,101 @@ function Packet({ packet }: { packet: PacketReading }): JSX.Element {
         </p>
       </details>
     </article>
+  );
+}
+
+/**
+ * The answer to a research goal that reached its ceiling (Integration 3).
+ *
+ * A ceiling is never raised in place — the server's own sentence says so — so
+ * the answer is a successor goal carrying on the same question, proposed rather
+ * than asked for: twice the ceiling that stopped it and thirty more days, which
+ * a person may change before deciding. Opening it is project ADMIN on the
+ * server; anybody else is refused there, and the refusal is shown.
+ */
+function Successor({
+  goal,
+  projectId,
+  onChanged,
+}: {
+  goal: GoalReading;
+  projectId: string;
+  onChanged(): void;
+}): JSX.Element {
+  const { budget } = goal;
+  const later = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+  const [packets, setPackets] = useState(String(budget.packets.ceiling * 2));
+  const [fragments, setFragments] = useState(String(budget.fragments.ceiling * 2));
+  const [deadline, setDeadline] = useState(later);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function open(): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await ResearchGoalsApi.open(projectId, {
+        name: `${budget.name} (continued)`,
+        maxPackets: Number(packets),
+        maxFragments: Number(fragments),
+        deadline: new Date(`${deadline}T23:59:59.000Z`).toISOString(),
+        ...(budget.researchAssignment && budget.researchLayerId
+          ? { assignment: budget.researchAssignment, layerId: budget.researchLayerId }
+          : {}),
+      });
+      setDone(true);
+      onChanged();
+    } catch (error) {
+      setProblem(
+        error instanceof ApiError && error.status === 404
+          ? 'Only an administrator of this project can open a research goal.'
+          : error instanceof Error
+            ? error.message
+            : 'That did not work.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (done) return <p className="rs-state rs-state-ready">The new goal is open. Brain carries on under it.</p>;
+  return (
+    <form
+      className="rs-research-successor"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void open();
+      }}
+    >
+      <p className="rs-card-title">Carry on with a new goal</p>
+      <p className="rs-hint">
+        Brain proposes the same question with room for {packets} research runs and {fragments} questions, until{' '}
+        {deadline}. Nothing here spends money.
+      </p>
+      <details className="rs-details">
+        <summary>Change details</summary>
+        <label>
+          Research runs
+          <input type="number" min={1} value={packets} onChange={(event) => setPackets(event.target.value)} />
+        </label>
+        <label>
+          Questions
+          <input type="number" min={1} value={fragments} onChange={(event) => setFragments(event.target.value)} />
+        </label>
+        <label>
+          Until
+          <input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
+        </label>
+      </details>
+      <button type="submit" className="rs-primary" disabled={busy}>
+        {busy ? 'Opening…' : 'Open the new goal'}
+      </button>
+      {problem ? (
+        <p className="rs-state rs-state-error" role="alert">
+          {problem}
+        </p>
+      ) : null}
+    </form>
   );
 }

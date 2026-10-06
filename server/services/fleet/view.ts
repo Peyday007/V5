@@ -267,7 +267,7 @@ export function usability(
       };
     }
     if (ineligible !== null) {
-      return { usable: false, reason: `Brain does not fire it right now (${ineligible}).`, recorded };
+      return { usable: false, reason: 'Brain does not fire it right now.', recorded };
     }
   }
   const waitUntil =

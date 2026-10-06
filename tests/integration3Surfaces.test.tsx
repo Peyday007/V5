@@ -292,6 +292,61 @@ describe('Research is followed by its questions, not its rows', () => {
   });
 });
 
+describe('a research goal that reached its ceiling has a way forward', () => {
+  it('proposes a successor goal and opens it through the existing route', async () => {
+    let posted: unknown = null;
+    const stopped = {
+      goalId: 'rgl_1',
+      name: 'Who buys county records',
+      state: 'ACTIVE',
+      packets: { used: 3, reserved: 0, ceiling: 3 },
+      fragments: { committed: 4, ceiling: 10 },
+      deadline: '2026-12-01T00:00:00.000Z',
+      authorizedBy: 'usr_1',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      authorizedByName: 'Ada',
+      stoppedBy: 'PACKETS',
+      stoppingSentence: 'Stopped by the packet ceiling: 3 of 3 packets are used.',
+      researchAssignment: 'Which county offices sell assessment rolls.',
+      researchLayerId: 'lay_1',
+    };
+    baseRoutes({
+      'GET /api/projects/prj_1/research/overview': {
+        body: {
+          overview: {
+            goals: [{ budget: stopped, packets: [], counts: {} }],
+            other: [],
+            counts: { RUNNING: 0, WAITING: 0, RETRYING: 0, NEEDS_YOU: 0, STOPPED: 0, DONE: 0 },
+            technicalHidden: 0,
+            olderNotShown: 0,
+            headline: 'A research goal is set, and no research has started under it yet.',
+          },
+        },
+      },
+    });
+    routes['POST /api/projects/prj_1/research-goals'] = () => ({ body: { goal: stopped } });
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') posted = JSON.parse(String(init.body));
+      return realFetch(input, init);
+    });
+    window.history.pushState({}, '', '/research');
+    await mount();
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Open the new goal' }));
+    });
+    await waitFor(() => expect(posted).toBeTruthy());
+    expect(posted).toMatchObject({
+      name: 'Who buys county records (continued)',
+      maxPackets: 6,
+      maxFragments: 20,
+      assignment: 'Which county offices sell assessment rolls.',
+      layerId: 'lay_1',
+    });
+    expect(await screen.findByText(/The new goal is open/)).toBeTruthy();
+  });
+});
+
 describe('Needs you holds what genuinely needs a person, grouped by kind', () => {
   it('groups by kind, says why, what happens if ignored and what to do, and its action is real', async () => {
     baseRoutes({

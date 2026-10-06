@@ -45,11 +45,22 @@ export function useAsync<T>(load: () => Promise<T>, deps: readonly unknown[]): A
   /** Automatic retries spent since the last success or the last manual reload. */
   const retries = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** True only for a run the retry timer started. */
+  const automatic = useRef(false);
 
   useEffect(() => {
     const mine = ++generation.current;
-    setLoading(true);
-    setError(null);
+    // A new subject (deps changed) or a person pressing Try again gets a fresh
+    // retry budget; an automatic retry spends the one it has. And an automatic
+    // retry keeps the "retrying" state on screen rather than flickering to
+    // "loading" and back every few seconds.
+    if (automatic.current) {
+      automatic.current = false;
+    } else {
+      retries.current = 0;
+      setLoading(true);
+      setError(null);
+    }
     load().then(
       (value) => {
         if (generation.current !== mine) return;
@@ -76,7 +87,10 @@ export function useAsync<T>(load: () => Promise<T>, deps: readonly unknown[]): A
         const delay = RETRY_DELAYS_MS[retries.current];
         if (next.retryable && delay !== undefined) {
           retries.current += 1;
-          timer.current = setTimeout(() => setNonce((value) => value + 1), delay);
+          timer.current = setTimeout(() => {
+            automatic.current = true;
+            setNonce((value) => value + 1);
+          }, delay);
         }
       },
     );
@@ -89,7 +103,7 @@ export function useAsync<T>(load: () => Promise<T>, deps: readonly unknown[]): A
   }, [...deps, nonce]);
 
   const reload = useCallback(() => {
-    retries.current = 0;
+    automatic.current = false;
     setNonce((value) => value + 1);
   }, []);
   return { data, loading, error, reload };

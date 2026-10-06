@@ -784,7 +784,11 @@ const JOURNEY_DECISION: JourneyStep[] = [
     })()`,
     // The card is gone because the list re-read from the server, not because
     // anything here hid it — `NeedsYouView` takes no optimistic update.
-    until: "document.querySelector('.rs-decision-what') === null",
+    // The answered card, not every card: since Integration 3 Needs you also
+    // shows a seeded software change in the same decision-card shape, and that
+    // one is correctly still waiting.
+    until:
+      "![...document.querySelectorAll('.rs-choice')].some((el) => /authorize this plan/i.test(el.textContent || ''))",
     patience: 30_000,
     read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 90)",
   },

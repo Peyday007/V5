@@ -14,7 +14,7 @@
  */
 import { getDb } from '../../db/database.ts';
 import { getUser } from '../../repos/identity.ts';
-import { goalBudgetStatus } from '../../repos/russellAuthority.ts';
+import { getGoal, goalBudgetStatus } from '../../repos/russellAuthority.ts';
 import type { GoalBudgetStatus } from '../../repos/russellAuthority.ts';
 
 export type StoppingCeiling = 'REVOKED' | 'PAUSED' | 'DEADLINE' | 'PACKETS' | 'FRAGMENTS';
@@ -26,6 +26,13 @@ export interface GoalBudgetView extends GoalBudgetStatus {
   stoppedBy: StoppingCeiling | null;
   /** The server's own sentence; clients render it and compose none of their own. */
   stoppingSentence: string;
+  /**
+   * What the goal researches and where it files, so a person can open a
+   * successor goal that carries on the same question with a higher ceiling —
+   * the only way a ceiling is ever raised (Integration 3).
+   */
+  researchAssignment: string | null;
+  researchLayerId: string | null;
 }
 
 /** Pure: which ceiling stops this goal now, and the sentence a person reads. */
@@ -66,9 +73,11 @@ export async function goalBudgetViewFor(goalId: string, at?: string): Promise<Go
   const status = await goalBudgetStatus(goalId, at);
   if (!status) return null;
   const { stoppedBy, sentence } = stoppingReason(status);
-  const user = await getUser(status.authorizedBy);
+  const [user, goal] = await Promise.all([getUser(status.authorizedBy), getGoal(goalId)]);
   return {
     ...status,
+    researchAssignment: goal?.researchAssignment ?? null,
+    researchLayerId: goal?.researchLayerId ?? null,
     authorizedByName: user?.displayName || status.authorizedBy,
     stoppedBy,
     stoppingSentence: sentence,

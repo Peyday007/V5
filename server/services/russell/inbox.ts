@@ -32,6 +32,7 @@
  */
 import type { Principal } from '../../domain/types.ts';
 import { classifyInfraFailure } from '../../db/infra.ts';
+import { getDb } from '../../db/database.ts';
 import { authorityFor } from './authority.ts';
 import { listOpenRequests } from '../../repos/russellMissions.ts';
 import { softwareNeedingPerson } from './software.ts';
@@ -44,6 +45,7 @@ import { decideCashRead } from '../cash/access.ts';
 import { cashView } from '../cash/view.ts';
 import { listGoalBudgetViews } from '../research/goalBudgetView.ts';
 import { connectionView } from '../capacity/connection.ts';
+import { connectionForUser } from '../../repos/capacityConnections.ts';
 import { getUser } from '../../repos/identity.ts';
 import type { JourneyStepKind } from '../cash/journey/view.ts';
 
@@ -122,6 +124,22 @@ export interface Inbox {
 }
 
 const CONTINUING = 'Brain carries on with everything else meanwhile.';
+
+/**
+ * The blocker kinds a person can answer. The others — nowhere to run it, no
+ * independent reviewer yet, a base that moved — Brain resolves by itself, and
+ * the projection marks them `personNeeded` only because somebody may want to
+ * know. An inbox that held them would teach a person to stop reading it.
+ */
+const PERSON_BLOCKERS = new Set([
+  'AWAITING_HUMAN_RELEASE',
+  'EXTERNAL_CREDENTIAL_REQUIRED',
+  'SCOPE_AMENDMENT_REQUIRED',
+  'REPAIR_OWNERSHIP_UNRESOLVED',
+  'CONTRADICTORY_CONTRACT',
+  'UNIT_EXHAUSTED_ATTEMPTS',
+  'DEPENDENCY_CYCLE',
+]);
 
 /** Which inbox category a person-owned cash journey step belongs to. Pure. */
 export function categoryOfJourneyStep(kind: JourneyStepKind): InboxCategory {
@@ -207,7 +225,28 @@ export async function inboxFor(input: {
   }
 
   /* Questions Russell parked for a person. */
+  /*
+   * A PRIVATE request belongs in its owner's own Needs you (§50): the owner of
+   * the conversation it came from. One without a conversation stays with the
+   * project, as it always has.
+   */
+  const privateOwners = new Map<string, string>();
+  const privateIds = (requests ?? []).filter((r) => r.visibility === 'PRIVATE' && r.conversationId);
+  if (privateIds.length > 0) {
+    const rows = await getDb().all<{ id: string; owner_user_id: string }>(
+      `SELECT id, owner_user_id FROM russell_conversations WHERE id IN (${privateIds.map(() => '?').join(', ')})`,
+      privateIds.map((r) => r.conversationId!),
+    );
+    for (const row of rows) privateOwners.set(row.id, row.owner_user_id);
+  }
   for (const request of requests ?? []) {
+    if (
+      request.visibility === 'PRIVATE' &&
+      request.conversationId &&
+      privateOwners.get(request.conversationId) !== input.principal.id
+    ) {
+      continue;
+    }
     items.push({
       id: `request:${request.id}`,
       category: request.missionId ? 'RESEARCH_JUDGMENT' : 'JUDGMENT',
@@ -252,7 +291,12 @@ export async function inboxFor(input: {
         since: entry.request.createdAt,
         action: { type: 'SOFTWARE', requestId: entry.request.id },
       });
-    } else if (entry.awaitingPerson) {
+    } else if (
+      entry.awaitingPerson &&
+      (entry.campaign?.personNeeded.needed !== true ||
+        entry.campaign.personNeeded.kind === 'RELEASE_APPROVAL' ||
+        PERSON_BLOCKERS.has(entry.campaign.blocker?.kind ?? ''))
+    ) {
       items.push({
         id: `software:${entry.request.id}`,
         category: 'RELEASE',
@@ -316,12 +360,12 @@ export async function inboxFor(input: {
     items.push({
       id: `pull-request:${decision.ref}`,
       category: 'RELEASE',
-      title: decision.question,
-      reason: decision.proposedAction,
+      title: 'Merge a finished build’s pull request',
+      reason: 'The build passed its independent review and its pull request is open. Brain never merges; that step is yours.',
       ifIgnored: `Waiting on this: ${decision.waitingWork.join('; ') || 'the goal it belongs to'}.`,
-      requestedAction: 'Review and merge it on GitHub.',
+      requestedAction: 'Read the pull request and merge it on GitHub if it is right.',
       affects: decision.goalTitle,
-      continuing: decision.afterAnswer,
+      continuing: CONTINUING,
       urgency: 'BLOCKING',
       since: decision.since,
       action: /^https?:\/\//.test(decision.ref)
@@ -340,7 +384,7 @@ export async function inboxFor(input: {
       title: `Research goal “${budget.name}” has reached its limit`,
       reason: budget.stoppingSentence,
       ifIgnored: 'Research already done is kept; nothing new starts under this goal.',
-      requestedAction: 'Decide whether to open a new goal with a higher ceiling or a later deadline.',
+      requestedAction: 'Open Research and approve the proposed successor goal, or change its limits first.',
       affects: budget.name,
       continuing: CONTINUING,
       urgency: 'WHENEVER',
@@ -382,7 +426,7 @@ export async function inboxFor(input: {
           title: step.step,
           reason: step.why,
           ifIgnored: 'This deal waits here.',
-          requestedAction: step.step,
+          requestedAction: 'Open the deal in Cash and record it there.',
           affects: deal.title,
           continuing: CONTINUING,
           urgency: step.kind === 'PAYMENT_UNKNOWN' || step.kind === 'OVERDUE' ? 'URGENT' : 'BLOCKING',
@@ -395,6 +439,13 @@ export async function inboxFor(input: {
 
   /* This person's own Claude connection, only when authorization is genuinely gone. */
   const connection = await source('your Claude connection', unreadable, async () => {
+    /*
+     * Only a connection that already exists. `connectionView` creates the row
+     * that assigns a member their names, which is right on their own page and
+     * wrong here: opening the shell must not start a connection journey for
+     * somebody who has never asked for one (§44).
+     */
+    if (!(await connectionForUser(input.principal.id))) return null;
     const user = await getUser(input.principal.id);
     return user ? connectionView({ user, origin: input.origin }) : null;
   });

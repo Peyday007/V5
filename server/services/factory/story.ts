@@ -68,8 +68,10 @@ export async function campaignStory(input: {
     origin = 'A Cash opportunity that reached “ready to test” needs software, so Brain handed it to the Factory.';
     try {
       const opportunity = await getOpportunity(opportunityId);
-      // The title is a private commercial term (§34): named only to somebody
-      // who may read the sprint in full.
+      // The title is a private commercial term (§34). Any reader of this
+      // campaign already holds READ on the project, which is what makes a
+      // Cash read FULL, so this check is belt-and-braces rather than the
+      // boundary — the boundary is the factory route's own project check.
       if (opportunity && (await decideCashRead(opportunity.projectId)).scope === 'FULL') {
         origin = `Built to test the Cash opportunity “${opportunity.title}”, which reached “ready to test”.`;
       }

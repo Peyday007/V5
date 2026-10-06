@@ -190,6 +190,7 @@ export function RussellShell({
   const { route, go } = navigation;
   const mode = navigationMode(useViewportWidth());
   const [menuOpen, setMenuOpen] = useState(false);
+  const [operatorOpen, setOperatorOpen] = useState(false);
   const [depth, setDepth] = useDepth();
 
   const projects = useAsync(() => Api.projects(), []);
@@ -531,9 +532,10 @@ export function RussellShell({
             <ConnectionsPanel onOpenPeople={() => go({ name: 'PEOPLE' })} />
             <ClaudeConnectionCard />
             <WhoView projectId={projectId} />
-            <details className="rs-details rs-panel">
+            {/* Mounted only while open, so its reads are not spent on every visit. */}
+            <details className="rs-details rs-panel" onToggle={(event) => setOperatorOpen(event.currentTarget.open)}>
               <summary>Capacity and routing — the operator view</summary>
-              <FleetCentre projectId={projectId} />
+              {operatorOpen ? <FleetCentre projectId={projectId} /> : null}
             </details>
           </>
         ) : null}
@@ -561,7 +563,7 @@ export function RussellShell({
           />
         ) : null}
         {route.name === 'NEEDS_YOU' ? (
-          <NeedsYouView projectId={projectId} onAnswered={inbox.reload} go={go} />
+          <NeedsYouView projectId={projectId} onAnswered={inbox.reload} go={go} shared={inbox} />
         ) : null}
         {route.name === 'NOT_FOUND' ? (
           <p className="rs-state rs-state-empty">

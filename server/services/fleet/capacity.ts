@@ -111,11 +111,18 @@ export function surfaceConnectionState(input: {
   rateLimited: boolean;
   proven: boolean;
 }): SurfaceConnectionState {
+  /*
+   * Re-authorization first: a surface quarantined for unanswered fires because
+   * its connector lost consent is lifted by the account owner reconnecting
+   * (§51), so "an operator looks at it" would name the wrong person.
+   */
+  if (input.connectorAuthState === 'HUMAN_REAUTH_REQUIRED' && input.routineState !== 'RETIRED') {
+    return 'REAUTH_REQUIRED';
+  }
   if (input.routineState === 'QUARANTINED' || input.accountState === 'QUARANTINED') return 'QUARANTINED';
   if (input.routineState !== 'ENABLED' || input.accountState !== 'ENABLED' || !input.workerActive) {
     return 'DISABLED';
   }
-  if (input.connectorAuthState === 'HUMAN_REAUTH_REQUIRED') return 'REAUTH_REQUIRED';
   if (!input.secretPresent) return 'SETTING_UP';
   if (input.rateLimited || input.connectorAuthState === 'REFRESH_RECOVERABLE') return 'RETRYING';
   return input.proven ? 'HEALTHY' : 'SETTING_UP';
@@ -319,7 +326,7 @@ function unavailableBecause(
       'handed to it. Brain does not fire it.'
     );
   }
-  return `Brain does not fire it right now (${verdict}).`;
+  return 'Brain does not fire it right now; the operator view says why.';
 }
 
 export async function capacityReading(

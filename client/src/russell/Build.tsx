@@ -1031,7 +1031,13 @@ function Campaigns({
   error: { status: number; message: string } | null;
   onReload(): void;
 }): JSX.Element {
-  const state = listState({ loading, error, items: campaigns, noun: 'campaigns' });
+  const state = listState({
+    loading,
+    error,
+    items: campaigns,
+    noun: 'campaigns',
+    explanation: 'Nothing is being built yet. Say what should become true below and the factory starts.',
+  });
   return (
     <div className="rs-build-campaigns">
       <h3>What the factory is doing</h3>
@@ -1116,6 +1122,15 @@ const UNIT_WORDS: Record<string, string> = {
   SUPERSEDED: 'replaced by a later plan',
 };
 
+/**
+ * An objective as a heading: the first sentence-sized line, with any trailing
+ * row id — `(cop_…)`, `(rcn_…)` — left for Details rather than the heading.
+ */
+function plainObjective(objective: string): string {
+  const first = objective.split('\n')[0] ?? objective;
+  return first.replace(/\s*\((?:cop|rcn|orc|fcp|rsw)_[a-z0-9]+\)/gi, '').trim();
+}
+
 function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
   const detail = useAsync(() => FactoryApi.campaign(campaign.id), [campaign.id]);
   const view = detail.data;
@@ -1127,19 +1142,35 @@ function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
 
   return (
     <li className="rs-card rs-build-campaign">
-      <h4>{view?.objective ?? 'Loading the build…'}</h4>
+      <h4>
+        {view
+          ? plainObjective(view.objective)
+          : detail.error
+            ? 'Brain could not read this build just now.'
+            : 'Loading the build…'}
+      </h4>
+      {detail.error ? (
+        <p className={`rs-state rs-state-${detail.error.retryable ? 'retrying' : 'error'}`}>
+          {detail.error.retryable
+            ? 'This is temporary; it will be read again by itself.'
+            : detail.error.message}{' '}
+          <button type="button" className="rs-retry" onClick={detail.reload}>
+            Try again
+          </button>
+        </p>
+      ) : null}
       {story ? <p className="rs-hint">{story.origin}</p> : null}
 
-      <ol className="rs-steps" aria-label="Where this build is">
+      <ol className="rs-build-steps" aria-label="Where this build is">
         {CAMPAIGN_STEPS.map((step, index) => (
           <li
             key={step.key}
             className={
               index < at || state === 'COMPLETE'
-                ? 'rs-step rs-step-done'
+                ? 'rs-build-step rs-build-step-done'
                 : index === at
-                  ? 'rs-step rs-step-now'
-                  : 'rs-step'
+                  ? 'rs-build-step rs-build-step-now'
+                  : 'rs-build-step'
             }
             aria-current={index === at && state !== 'COMPLETE' ? 'step' : undefined}
           >

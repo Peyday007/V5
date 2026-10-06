@@ -103,6 +103,10 @@ describe('a surface gets one connection word, and only token rows ask for a reco
 
   it('asks for a reconnect only when the connector’s own health says authorization is gone', () => {
     expect(surfaceConnectionState({ ...base, connectorAuthState: 'HUMAN_REAUTH_REQUIRED' })).toBe('REAUTH_REQUIRED');
+    // Quarantined because it lost consent: the owner reconnecting is the remedy.
+    expect(
+      surfaceConnectionState({ ...base, routineState: 'QUARANTINED', connectorAuthState: 'HUMAN_REAUTH_REQUIRED' }),
+    ).toBe('REAUTH_REQUIRED');
     // Unknown health — a read that did not happen — is never a reconnect.
     for (const state of [null, 'UNKNOWN', 'HEALTHY', 'REFRESH_RECOVERABLE', 'DISABLED']) {
       expect(surfaceConnectionState({ ...base, connectorAuthState: state })).not.toBe('REAUTH_REQUIRED');

@@ -32,6 +32,9 @@ import { getDb } from '../../db/database.ts';
 import type { OrchestrationStatus } from '../../domain/types.ts';
 import { listGoalBudgetViews, type GoalBudgetView } from './goalBudgetView.ts';
 
+/** The most recent packets listed; older ones are counted rather than drawn. */
+const PACKET_LIMIT = 200;
+
 export const PACKET_KINDS = ['RUNNING', 'WAITING', 'RETRYING', 'NEEDS_YOU', 'STOPPED', 'DONE'] as const;
 export type PacketKind = (typeof PACKET_KINDS)[number];
 
@@ -46,7 +49,8 @@ export interface PacketReading {
   phase: string;
   /** The recorded reason, verbatim, when the packet stopped or is waiting on something. */
   reason: string | null;
-  questions: { total: number; answered: number; open: number; refused: number };
+  /** `stuck` is blocked or waiting on a person; `open` is still being worked or queued. */
+  questions: { total: number; answered: number; open: number; stuck: number; refused: number };
   acceptedClaims: number;
   /** True when a report was filed. */
   filed: boolean;
@@ -70,6 +74,8 @@ export interface ResearchOverview {
   counts: Record<PacketKind, number>;
   /** How many fixture or harness packets were left out, so "nothing" is never ambiguous. */
   technicalHidden: number;
+  /** How many older packets are not listed, when there are more than the list holds. */
+  olderNotShown: number;
   /** The one sentence a person reads first. */
   headline: string;
 }
@@ -206,9 +212,9 @@ export async function researchOverview(projectId: string): Promise<ResearchOverv
       `SELECT id, title, goal_id, status, failure_reason, cancel_reason, repair_reason,
               document_id, verdict, attempt, fixture, updated_at
          FROM research_orchestrations
-        WHERE project_id = ?
+        WHERE project_id = ? AND fixture = 0
         ORDER BY updated_at DESC
-        LIMIT 200`,
+        LIMIT ${PACKET_LIMIT}`,
       [projectId],
     ),
     db.all<{ orchestration_id: string; status: string; n: number }>(
@@ -236,27 +242,30 @@ export async function researchOverview(projectId: string): Promise<ResearchOverv
     ),
     listGoalBudgetViews(projectId),
   ]);
+  const totals = await db.all<{ fixture: number; n: number }>(
+    'SELECT fixture, COUNT(*) AS n FROM research_orchestrations WHERE project_id = ? GROUP BY fixture',
+    [projectId],
+  );
+  const hidden = totals.filter((row) => Number(row.fixture) !== 0).reduce((sum, row) => sum + Number(row.n), 0);
+  const all = totals.filter((row) => Number(row.fixture) === 0).reduce((sum, row) => sum + Number(row.n), 0);
 
-  const fragments = new Map<string, { total: number; answered: number; open: number; refused: number }>();
+  const fragments = new Map<string, PacketReading['questions']>();
   for (const row of fragmentRows) {
-    const entry = fragments.get(row.orchestration_id) ?? { total: 0, answered: 0, open: 0, refused: 0 };
+    const entry = fragments.get(row.orchestration_id) ?? { total: 0, answered: 0, open: 0, stuck: 0, refused: 0 };
     const n = Number(row.n);
     entry.total += n;
     if (row.status === 'ACCEPTED') entry.answered += n;
     else if (row.status === 'REJECTED' || row.status === 'CANCELLED') entry.refused += n;
+    else if (row.status === 'BLOCKED' || row.status === 'NEEDS_HUMAN') entry.stuck += n;
     else entry.open += n;
     fragments.set(row.orchestration_id, entry);
   }
   const claims = new Map(claimRows.map((row) => [row.orchestration_id, Number(row.n)]));
   const decided = new Set(decisionRows.map((row) => row.orchestration_id));
 
-  let technicalHidden = 0;
+  const technicalHidden = hidden;
   const packets: PacketReading[] = [];
   for (const row of rows) {
-    if (row.fixture) {
-      technicalHidden += 1;
-      continue;
-    }
     const placed = classifyPacket({
       status: row.status,
       openDecision: decided.has(row.id),
@@ -273,7 +282,7 @@ export async function researchOverview(projectId: string): Promise<ResearchOverv
       kind: placed.kind,
       phase: placed.phase,
       reason: placed.reason,
-      questions: fragments.get(row.id) ?? { total: 0, answered: 0, open: 0, refused: 0 },
+      questions: fragments.get(row.id) ?? { total: 0, answered: 0, open: 0, stuck: 0, refused: 0 },
       acceptedClaims: claims.get(row.id) ?? 0,
       filed: row.document_id !== null,
       documentId: row.document_id,
@@ -304,6 +313,7 @@ export async function researchOverview(projectId: string): Promise<ResearchOverv
     other,
     counts,
     technicalHidden,
+    olderNotShown: Math.max(0, all - rows.length),
     headline: researchHeadline(counts, goals.length),
   };
 }

@@ -18,7 +18,8 @@ import { Maps } from './Maps.tsx';
 import { freshnessLabel, humanWhen, listState, priorityTone, readingState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { RussellApi } from '../lib/russellApi.ts';
-import type { InboxItem } from '../lib/russellApi.ts';
+import type { Inbox, InboxItem } from '../lib/russellApi.ts';
+import type { AsyncResult } from './useAsync.ts';
 import type { Route } from '../lib/router.ts';
 import type { ConnectSiteResult, SiteConnectionState } from '../lib/russellApi.ts';
 import type {
@@ -2020,19 +2021,32 @@ export function NeedsYouView({
   projectId,
   onAnswered,
   go,
+  shared,
 }: {
   projectId: string | null;
   onAnswered?: () => void;
   go?: (route: Route) => void;
+  /**
+   * The shell's own inbox reading, when it has one. The badge and the page are
+   * one reading rather than two requests for the same expensive answer — and
+   * answering re-reads it once, through the shell, rather than three times.
+   */
+  shared?: AsyncResult<Inbox>;
 }): JSX.Element {
-  const inbox = useAsync(() => RussellApi.inbox(projectId), [projectId]);
-  /* Software authorization needs the repository choices that come with it. */
+  const own = useAsync(
+    () => (shared ? Promise.resolve(null as Inbox | null) : RussellApi.inbox(projectId)),
+    [projectId, shared === undefined],
+  );
+  const inbox: { data: Inbox | null; loading: boolean; error: AsyncResult<Inbox>['error']; reload(): void } =
+    shared ?? own;
+  const needsSoftware = (inbox.data?.items ?? []).some((one) => one.action.type === 'SOFTWARE');
+  /* The software card needs the repository choices that come with it — read only when one is shown. */
   const legacy = useAsync(
     () =>
-      projectId
+      projectId && needsSoftware
         ? RussellApi.needsYou(projectId)
         : Promise.resolve({ requests: [], software: [], repositories: [] }),
-    [projectId],
+    [projectId, needsSoftware],
   );
   const data = inbox.data ?? null;
   const items = data?.items ?? null;
@@ -2044,9 +2058,13 @@ export function NeedsYouView({
   });
 
   const refresh = (): void => {
-    inbox.reload();
-    legacy.reload();
-    onAnswered?.();
+    // The shell's reload is the inbox's reload when the reading is shared.
+    if (shared) onAnswered?.();
+    else {
+      inbox.reload();
+      onAnswered?.();
+    }
+    if (needsSoftware) legacy.reload();
   };
 
   async function answer(requestId: string, choice: string): Promise<void> {
@@ -2151,6 +2169,8 @@ function NeedCard({
   go?: (route: Route) => void;
 }): JSX.Element {
   const action = item.action;
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   if (action.type === 'GRANT_RESEARCH_AUTHORITY') {
     // The permission card is its own complete decision, with its limits.
     return <AuthorityPanel key={projectId} projectId={projectId} onChanged={onChanged} />;
@@ -2185,8 +2205,18 @@ function NeedCard({
                 <button
                   type="button"
                   className="rs-button"
+                  disabled={busy}
                   onClick={() => {
-                    void onAnswer(action.requestId, choice.key);
+                    setBusy(true);
+                    setProblem(null);
+                    onAnswer(action.requestId, choice.key).then(
+                      () => setBusy(false),
+                      (error: unknown) => {
+                        // A refused answer says so rather than appearing to work.
+                        setBusy(false);
+                        setProblem(error instanceof Error ? error.message : 'That answer was not recorded.');
+                      },
+                    );
                   }}
                 >
                   Choose this
@@ -2194,6 +2224,11 @@ function NeedCard({
               </li>
             ))}
           </ul>
+          {problem ? (
+            <p className="rs-state rs-state-error" role="alert">
+              {problem}
+            </p>
+          ) : null}
         </>
       ) : null}
       {action.type === 'SOFTWARE' ? (
