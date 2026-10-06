@@ -9,7 +9,7 @@
  * Every one of them renders through `listState`, so loading, empty, forbidden
  * and error are decided in one tested place rather than five untested ones.
  */
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { Constellation } from './Constellation.tsx';
 import { Register } from './Register.tsx';
 import { Goals } from './Goals.tsx';
@@ -2039,6 +2039,16 @@ export function NeedsYouView({
   );
   const inbox: { data: Inbox | null; loading: boolean; error: AsyncResult<Inbox>['error']; reload(): void } =
     shared ?? own;
+  /*
+   * Opening the page re-reads the shared inbox. The shell read it when the app
+   * loaded, and a decision parked since then must be on this page when a
+   * person comes to answer it — found by the phone journey, which parked one
+   * and then found nothing to press.
+   */
+  const reloadShared = shared?.reload;
+  useEffect(() => {
+    reloadShared?.();
+  }, [reloadShared]);
   const needsSoftware = (inbox.data?.items ?? []).some((one) => one.action.type === 'SOFTWARE');
   /* The software card needs the repository choices that come with it — read only when one is shown. */
   const legacy = useAsync(

@@ -100,7 +100,7 @@ export function ConnectionsPanel({ onOpenPeople }: { onOpenPeople?: () => void }
   return (
     <section className="rs-panel rs-connections" aria-labelledby="rs-connections-title">
       <h2 id="rs-connections-title">Connections</h2>
-      {data ? (
+      {data && surfaces.length > 0 ? (
         <p className="rs-lede">
           {surfaces.filter((one) => connectionOf(one) === 'HEALTHY').length} of {surfaces.length} Claude{' '}
           {surfaces.length === 1 ? 'connection is' : 'connections are'} healthy

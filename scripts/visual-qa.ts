@@ -756,10 +756,13 @@ const JOURNEY_DECISION: JourneyStep[] = [
       'The decision Russell could not take: its packet stopped outside what was preauthorized, ' +
       'and the card carries the packet’s own recorded reason and the answers that can act on it.',
     act: railPress('Needs you'),
-    until: "document.querySelector('.rs-decision-what') !== null",
+    // The parked decision's own card — the one with answers — rather than any
+    // card: Needs you also shows the seeded software change, which has none.
+    until: "document.querySelector('.rs-choice') !== null",
     patience: 30_000,
     read: `(() => {
-      const what = document.querySelector('.rs-decision-what');
+      const card = document.querySelector('.rs-choice')?.closest('.rs-decision');
+      const what = card ? card.querySelector('.rs-decision-what') : null;
       const choices = [...document.querySelectorAll('.rs-choice strong')]
         .map((el) => (el.textContent || '').trim());
       return (what ? (what.textContent || '').trim().slice(0, 60) : 'no decision on the page') +

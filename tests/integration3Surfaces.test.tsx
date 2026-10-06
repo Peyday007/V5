@@ -385,6 +385,28 @@ describe('Needs you holds what genuinely needs a person, grouped by kind', () =>
     expect(window.location.pathname).toBe('/build');
   });
 
+  it('re-reads when opened, so a decision parked after the app loaded is there to answer', async () => {
+    let parked = false;
+    baseRoutes({
+      [INBOX]: () => ({
+        body: {
+          items: parked ? [item({ id: 'late', title: 'Approve the plan Russell could not approve' })] : [],
+          categories: CATEGORIES,
+          unreadable: [],
+        },
+      }),
+      'GET /api/russell/projects/prj_1/needs-you': { body: { requests: [], software: [], repositories: [] } },
+      'GET /api/russell/projects/prj_1/authority': { status: 404, body: { error: 'x' } },
+    });
+    await mount();
+    await screen.findByText(/Nothing needs your decision\. Brain carries on by itself\./);
+    parked = true;
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Needs you/ }));
+    });
+    expect(await screen.findByText('Approve the plan Russell could not approve')).toBeTruthy();
+  });
+
   it('reads as settled when nothing needs a person', async () => {
     baseRoutes({
       'GET /api/russell/projects/prj_1/needs-you': { body: { requests: [], software: [], repositories: [] } },
