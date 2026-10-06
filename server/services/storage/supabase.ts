@@ -50,7 +50,7 @@ interface SupabaseListEntry {
  * A 404 is an answer — the object is not there — and must never be retried.
  * These are the bucket declining to serve a request it would otherwise serve.
  */
-const TRANSIENT_READ_STATUSES = new Set([429, 500, 502, 503, 504]);
+const TRANSIENT_READ_STATUSES = new Set([429, 500, 502, 503, 504, 544]);
 
 const READ_ATTEMPTS = 3;
 
@@ -171,18 +171,30 @@ export class SupabaseStorageProvider implements StorageProvider {
    * consequence; an upload is not, and is deliberately left alone.
    */
   async #getWithRetry(key: string, purpose: string): Promise<Response> {
+    return this.#readWithRetry(
+      () => this.#request(this.#objectUrl(key), { method: 'GET', headers: this.#headers() }, purpose),
+    );
+  }
+
+  /**
+   * The retry loop every read shares. A listing is a read too — it is a POST
+   * only because Supabase takes its query as a body — and for a while it was
+   * the one read that was not retried: deploy 403's post-restart gate died on
+   * `refused a listing (HTTP 429)` inside `storeFile`'s collision check, the
+   * same 429 this loop already absorbed for a GET, one call along.
+   */
+  async #readWithRetry(send: () => Promise<Response>): Promise<Response> {
     let last: Response | null = null;
     for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
-      const response = await this.#request(
-        this.#objectUrl(key),
-        { method: 'GET', headers: this.#headers() },
-        purpose,
-      );
+      const response = await send();
       if (response.status === 404 || response.ok) return response;
       if (!TRANSIENT_READ_STATUSES.has(response.status) || attempt === READ_ATTEMPTS) {
         return response;
       }
       last = response;
+      // Release the refused response's body before asking again, rather than
+      // leaving its connection to the garbage collector.
+      await response.body?.cancel().catch(() => undefined);
       await new Promise((resolve) => setTimeout(resolve, retryAfterMs(response, attempt)));
     }
     // Unreachable: the loop returns on its last attempt.
@@ -197,6 +209,7 @@ export class SupabaseStorageProvider implements StorageProvider {
         `The document store refused a read (HTTP ${response.status}) after ${READ_ATTEMPTS} ` +
           'attempts. This is the store declining, not a statement about the document.',
         await safeBody(response),
+        response.status,
       );
     }
     return Buffer.from(await response.arrayBuffer());
@@ -215,6 +228,7 @@ export class SupabaseStorageProvider implements StorageProvider {
       throw new StorageConfigurationError(
         `The document store refused a read (HTTP ${response.status}).`,
         await safeBody(response),
+        response.status,
       );
     }
     return {
@@ -318,25 +332,28 @@ export class SupabaseStorageProvider implements StorageProvider {
 
   /** One page of a listing. Supabase's list is POST with a JSON body. */
   async #listRaw(prefix: string, search?: string): Promise<SupabaseListEntry[]> {
-    const response = await this.#request(
-      `${this.#base}/storage/v1/object/list/${encodeURIComponent(this.#bucket)}`,
-      {
-        method: 'POST',
-        headers: this.#headers({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
-          prefix,
-          limit: 1000,
-          offset: 0,
-          ...(search ? { search } : {}),
-          sortBy: { column: 'name', order: 'asc' },
-        }),
-      },
-      'list documents',
+    const response = await this.#readWithRetry(() =>
+      this.#request(
+        `${this.#base}/storage/v1/object/list/${encodeURIComponent(this.#bucket)}`,
+        {
+          method: 'POST',
+          headers: this.#headers({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            prefix,
+            limit: 1000,
+            offset: 0,
+            ...(search ? { search } : {}),
+            sortBy: { column: 'name', order: 'asc' },
+          }),
+        },
+        'list documents',
+      ),
     );
     if (!response.ok) {
       throw new StorageConfigurationError(
         `The document store refused a listing (HTTP ${response.status}).`,
         await safeBody(response),
+        response.status,
       );
     }
     const body = (await response.json()) as SupabaseListEntry[] | { error?: string };
@@ -381,6 +398,7 @@ export class SupabaseStorageProvider implements StorageProvider {
       throw new StorageConfigurationError(
         `The document store could not be checked (HTTP ${response.status}).`,
         await safeBody(response),
+        response.status,
       );
     }
   }

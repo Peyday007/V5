@@ -15,6 +15,7 @@ import { findTool, type McpTool, type ToolContext } from './tools.ts';
 import { asControlPlane, asWorkload, classifyInfraFailure, noteInfraFailure, noteLatency } from '../db/infra.ts';
 import { outsideTransaction } from '../db/database.ts';
 import { failureDetail } from '../services/effects/failureDetail.ts';
+import { isStoreCapacityRefusal } from '../services/storage/types.ts';
 
 export interface CallInput {
   toolName: string;
@@ -313,6 +314,26 @@ async function runTool(tool: McpTool, input: CallInput): Promise<CallOutput> {
       })));
       return { result: infraResult(input.requestId) };
     }
+    /*
+     * The document store declining a *read* for now (a rate limit, a 5xx,
+     * Supabase's own 544) is the same shape one subsystem along: the provider's
+     * own retries are spent, Brain's rows rolled back with the effect's
+     * transaction, and the call is idempotent by its work item. Deploy 403's
+     * post-restart gate reported exactly this as "could not be completed",
+     * which a worker cannot tell from a fault. The bucket is not inside that
+     * transaction, so a file written earlier in the same call may remain there
+     * — the message says so rather than claiming nothing happened — and a
+     * refused *write* is never classified here, because its outcome is unknown.
+     */
+    if (isStoreCapacityRefusal(error)) {
+      void outsideTransaction(() => asWorkload(() => audit({
+        call: input,
+        projectId: null,
+        result: 'FAILED',
+        metadata: { category: 'RATE_OR_CAPACITY_RETRYABLE', detail: failureDetail(error) },
+      })));
+      return { result: capacityResult(input.requestId) };
+    }
     // eslint-disable-next-line no-console
     console.error('[mcp] tool call failed', input.toolName, input.requestId, error);
     await audit({
@@ -326,6 +347,21 @@ async function runTool(tool: McpTool, input: CallInput): Promise<CallOutput> {
     });
     return { result: internalResult(input.requestId) };
   }
+}
+
+/** The answer when Brain's document store declined for now. Retryable. */
+function capacityResult(requestId: string): CallToolBody {
+  const message =
+    "Brain's document store is temporarily refusing reads (rate limited or busy). Nothing was " +
+    "committed to Brain's records and nothing was refused, though the store may still hold a file " +
+    `written earlier in this call: send the same call again shortly. Reference ${requestId}.`;
+  return {
+    content: [{ type: 'text', text: message }],
+    structuredContent: {
+      error: { category: 'UNAVAILABLE', message, requestId, retryable: true, kind: 'RATE_OR_CAPACITY_RETRYABLE' },
+    },
+    isError: true,
+  };
 }
 
 /**
