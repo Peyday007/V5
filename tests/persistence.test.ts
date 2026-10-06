@@ -729,6 +729,10 @@ onPostgres('against a real Postgres', () => {
         // had been added to both chains correctly.
         'worker_invitations(token_prefix)',
         'project_invitations(token_prefix)',
+        // §52. One packet key is one orchestration of a research goal, so a
+        // retried start cannot open a second packet and spend the budget twice.
+        // Both chains carry it as a named `uq_` index.
+        'research_orchestrations(goal_id,goal_packet_key)',
       ].sort(),
     );
   });
