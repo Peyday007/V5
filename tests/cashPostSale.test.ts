@@ -1256,6 +1256,32 @@ describe('agreement and invoice', () => {
     expect(deal.pnl).toMatchObject({ owedBackCents: 0, creditedPaymentsCents: 30_000, contributionCents: 30_000 });
   });
 
+  it('owed-back money is refunded once whichever route goes first, counting refunds still pending', async () => {
+    for (const order of ['obligation-first', 'money-route-first'] as const) {
+      const id = await executing(`Piece ${order}`);
+      const cancelled = await paidOnInvoice(id, 10_000, `${order}-a`);
+      expect((await declare({ projectId, agreementId: cancelled.id, kind: 'PERSON', performer: 'The operator', actorRef: userId })).ok).toBe(true);
+      const kept = await paidOnInvoice(id, 10_001, `${order}-b`);
+      expect((await releaseAgreement({ agreementId: cancelled.id, reason: 'The buyer cancelled it.', actorRef: userId })).ok).toBe(true);
+      expect(kept.state).toBe('AGREED');
+      const viaMoney = () =>
+        recordMoneyEvent({
+          projectId, opportunityId: id, kind: 'REFUND', amountCents: 10_000, currency: 'USD',
+          verifiedReference: `refund-${order}`, idempotencyKey: `refund:${id}:${order}`, actorRef: userId,
+        });
+      const viaObligation = () =>
+        authorizeRefund({ projectId, agreementId: cancelled.id, amountCents: 10_000, reason: 'Cancelled.', actorRef: userId });
+      if (order === 'obligation-first') {
+        // Authorized and still pending: no refund adapter, no ledger entry yet.
+        expect((await viaObligation()).ok).toBe(true);
+        expect((await viaMoney()).ok).toBe(false);
+      } else {
+        expect((await viaMoney()).ok).toBe(true);
+        expect((await viaObligation()).ok).toBe(false);
+      }
+    }
+  });
+
   it('money paid on an agreement released for a replacement stays paid, and the replacement is never billed again', async () => {
     const id = await executing();
     const first = await paidOnInvoice(id, 40_000, 'replaced');

@@ -46,7 +46,7 @@ import { agreementsFor, getAgreement } from '../../repos/cashJourney.ts';
 import { fulfillmentsForOpportunity, unresolvedRefundCents } from '../../repos/cashFulfillment.ts';
 import { getInvoice, listInvoices, moveInvoice } from '../../repos/cashInvoices.ts';
 import { raiseNeed } from './needs.ts';
-import { collectable, dealPosition, owedBackReading } from './journey/position.ts';
+import { collectable, dealPosition, owedBackReading, owedBackUnclaimedCents } from './journey/position.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { getOperation } from '../../repos/idempotency.ts';
 import { COMMERCIAL_EFFECTS } from './effects.ts';
@@ -1314,9 +1314,11 @@ export async function recordMoneyEvent(input: {
 
   const written = await serializeCash(input.projectId, input.currency, async () => {
     if (refundOnlyOwedBack && input.opportunityId && !(await moneyEntryByKey(input.projectId, input.idempotencyKey))) {
-      const owedBack = (
-        await owedBackReading({ projectId: input.projectId, opportunityId: input.opportunityId, currency: input.currency })
-      ).owedBackCents;
+      const owedBack = await owedBackUnclaimedCents({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId,
+        currency: input.currency,
+      });
       if (input.amountCents > owedBack) {
         return {
           ok: false as const,

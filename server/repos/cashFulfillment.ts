@@ -290,6 +290,8 @@ export async function unresolvedRefundCents(input: {
   opportunityId: string;
   /** `<fulfillmentId>:<refundKey>` of the refund being confirmed, left out. */
   except?: string | null;
+  /** Only refunds on these obligations; all of the piece's when absent. */
+  fulfillmentIds?: readonly string[];
 }): Promise<number> {
   const rows = await getDb().all<{
     fulfillment_id: string;
@@ -309,5 +311,7 @@ export async function unresolvedRefundCents(input: {
     else if (row.kind === 'REFUND_CONFIRMED' || row.kind === 'REFUND_FAILED') open.delete(key);
   }
   if (input.except) open.delete(input.except);
-  return [...open.values()].reduce((total, one) => total + one, 0);
+  return [...open.entries()]
+    .filter(([key]) => !input.fulfillmentIds || input.fulfillmentIds.includes(key.split(':')[0]!))
+    .reduce((total, [, one]) => total + one, 0);
 }

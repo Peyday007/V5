@@ -22,7 +22,7 @@
  * settled reads as `unsettledCents`, and a settlement is never a second sale —
  * contribution is read from payments, never from settlements.
  */
-import { fulfillmentsForOpportunity } from '../../../repos/cashFulfillment.ts';
+import { fulfillmentsForOpportunity, unresolvedRefundCents } from '../../../repos/cashFulfillment.ts';
 import { entriesOfKinds, moneyEntryByKey, totalsByKind, unattributedPersonPayments } from '../../../repos/cashLedger.ts';
 import { listInvoices } from '../../../repos/cashInvoices.ts';
 import { listCommitments } from '../../../repos/cashAuthority.ts';
@@ -394,6 +394,32 @@ export async function owedBackReading(input: {
 }
 
 const num = (t: Partial<Record<CashMoneyKind, number>>, k: CashMoneyKind): number => Number(t[k] ?? 0);
+
+/**
+ * Owed-back money no refund has yet claimed: what is owed back, less refunds
+ * already authorized on a released agreement's obligation and still pending
+ * or unknown — those are on their way out and have no ledger entry yet. The
+ * bound both refund routes check under the cash lock, so a refund of
+ * owed-back money is never authorized twice, whichever route goes first.
+ */
+export async function owedBackUnclaimedCents(input: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+}): Promise<number> {
+  const reading = await owedBackReading(input);
+  const released = new Set(
+    (await agreementsFor(input.opportunityId)).filter((one) => one.state !== 'AGREED').map((one) => one.id),
+  );
+  const fulfillmentIds = (await fulfillmentsForOpportunity(input.projectId, input.opportunityId))
+    .filter((one) => released.has(one.agreementId))
+    .map((one) => one.id);
+  const pending =
+    fulfillmentIds.length === 0
+      ? 0
+      : await unresolvedRefundCents({ projectId: input.projectId, opportunityId: input.opportunityId, fulfillmentIds });
+  return Math.max(0, reading.owedBackCents - pending);
+}
 
 /**
  * Money owed back across a project (or one piece): each piece's owed-back sum

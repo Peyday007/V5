@@ -918,6 +918,25 @@ export async function authorizeRefund(input: {
       const failedBefore = refunds.filter((one) => one.state === 'FAILED' && one.amountCents === amount && one.reason === reason).length;
       const refundKey = failedBefore === 0 ? digest('refund', amount, reason) : digest('refund', amount, reason, failedBefore);
       if (refunds.some((one) => one.refundKey === refundKey)) return { refundKey, created: false };
+      // On a released agreement, what may be refunded is the money still owed
+      // back that no other refund has claimed — the bound the money route
+      // checks too, so the same money is never paid back by both.
+      if (agreement.state !== 'AGREED') {
+        // Imported here: position.ts reads obligations from this module.
+        const { owedBackUnclaimedCents } = await import('./position.ts');
+        const owedBack = await owedBackUnclaimedCents({
+          projectId: input.projectId,
+          opportunityId: agreement.opportunityId,
+          currency: mode.currency,
+        });
+        if (amount > owedBack) {
+          return {
+            refused:
+              `${owedBack} cents is owed back on this released agreement and not already being refunded, ` +
+              'so a larger refund is not this agreement’s to make.',
+          };
+        }
+      }
       const room = await refundableCents(input.projectId, agreement.opportunityId, mode.currency);
       if (amount > room.refundable) {
         return {
