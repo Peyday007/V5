@@ -1353,6 +1353,26 @@ describe('a worker that finishes a factory bin has its report read from rows', (
     expect(report.ingested.some((entry) => entry.startsWith('plan:'))).toBe(true);
     const units = await listUnits(campaign.id);
     expect(units.map((unit) => unit.unitKey)).toEqual(['form-contract']);
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    expect(await listFactoryEvents(campaign.id, { kinds: ['PLAN_INSTALLED'] })).toHaveLength(1);
+
+    /*
+     * A tick that died part-way through `installPlan` left units BLOCKED with
+     * no promotion — and the ingest skipped any campaign holding a unit, so it
+     * never finished. Reproduce exactly that shape: the install marker gone,
+     * the unit put back to BLOCKED. The next tick finishes it.
+     */
+    await getDb().run("DELETE FROM factory_events WHERE campaign_id = ? AND kind = 'PLAN_INSTALLED'", [campaign.id]);
+    await getDb().run("UPDATE factory_work_units SET state = 'BLOCKED' WHERE campaign_id = ?", [campaign.id]);
+    const resumed = await tickRemoteCampaign(campaign.id);
+    expect(resumed.ingested.some((entry) => entry.startsWith('plan:'))).toBe(true);
+    const after = await listUnits(campaign.id);
+    expect(after).toHaveLength(1);
+    expect(after[0]!.state).not.toBe('BLOCKED');
+    expect(await listFactoryEvents(campaign.id, { kinds: ['PLAN_INSTALLED'] })).toHaveLength(1);
+    // And once finished, the next tick does not install it again.
+    const quiet = await tickRemoteCampaign(campaign.id);
+    expect(quiet.ingested.some((entry) => entry.startsWith('plan:'))).toBe(false);
   });
 });
 

@@ -12576,6 +12576,74 @@ the opening the funnel found needs money out before money comes back, and with
 nothing deployable Brain contacts the buyer and correctly declines to begin
 execution.
 
+## 56. One autonomous chain, and every link of it has one owner.
+
+A person approves a goal or a sprint once, and a standing grant once. After
+that, ordinary progress — the next research packet, its bin, the evidence on
+the card, the tier, the Factory campaign, its plan, its units, its review and
+its repair — needs nobody. A person is needed at the intentional gates only:
+granting authority or budget, a judgement only they hold, a ceiling reached,
+and merging or deploying what the Factory produced. Tracing the real runtime
+path rather than the documents found the chain broken in seven places, every
+one of them with healthy rows on both sides.
+
+- **One failed pass froze every pass after it.** The Russell tick ran in one
+  `try`; a statement timeout in its first pass, the shared-findings promotion,
+  ended every tick at step 0 for as long as the database was slow, so the
+  research-goal pass, the launch step and every reconciliation never ran.
+  `runPass` makes each pass its own failure domain, records the failure on the
+  report and on the cycle row, and lets the passes after it run. It does not
+  race a pass against a timer: an abandoned pass would keep its connection and
+  write beside the next one. `tests/russellPassIsolation.test.ts`.
+- **An outage was read as an empty archive, and the archive was then
+  researched.** `askStore` answered "absent" for a store that did not answer,
+  so during the bucket's `544 DatabaseTimeout` the file-state pass flagged
+  documents missing, `inventoryProject` dropped them, and five research goals
+  the archive answered started packets — measured in production: created
+  13:34, packets 14:09–14:24, `explain` reading SATISFIED for all five a day
+  later. `objectExistence` keeps the third answer and UNKNOWN moves no row; and
+  the goal pass does not judge an archive while a document is still being read.
+- **A goal froze behind its own packet.** Its first bin spent and the packet
+  still live, nothing made another — the launch's replacement rule reaches
+  missions, and a goal packet has none. The same rule (`packetMayHaveAnotherBin`)
+  now applies to a goal packet, bounded by `MAX_GOAL_PACKET_BINS`. And a round
+  that FAILED before writing a requirement read as "left nothing unresolved",
+  ending the goal silently; a FAILED round now continues, bounded by the packet
+  ceiling that asks a person.
+- **READY_TO_TEST reached nothing.** `services/cash/factoryHandoff.ts` is the
+  one owner: a READY opening at tier READY_TO_TEST whose card declares
+  `BUILD_SOFTWARE`, in an ACTIVE sprint, with the grant's `BUILD_A_TEST` and
+  exactly one onboarded repository, becomes one objective composed from the
+  card, approved on the standing authority (`approved_via =
+  'STANDING_AUTHORITY'`, the grant id on the change request — §16's rule that a
+  plan may be approved without a person only inside limits a person set
+  first), started through the one `approveAndStartCampaign`, and ticked once so
+  its plan bin exists at once. Two repositories is a need, not a choice Brain
+  makes. It contacts nobody, spends nothing and merges nothing.
+- **A dispatch that gave up was permanent.** Five unanswered fires abandoned
+  the intent while the bin stayed READY at the same generation, and nothing
+  could fire for it again — a Factory plan bin sat that way while
+  `reconcileBins` called it healthy. `reviveAbandonedNoShowDispatches` asks once
+  more after a cool-off, at most `MAX_ABANDONED_REVIVALS` times per generation,
+  raising the ceiling rather than resetting it; past that `reconcileBins` names
+  the bin `DISPATCH_EXHAUSTED` instead of counting it healthy.
+- **A plan installed halfway stayed halfway.** `installPlan` is keyed but not
+  transactional, and the ingest skipped any campaign holding a unit, so a tick
+  that died after the first unit row left every unit BLOCKED for ever.
+  `PLAN_INSTALLED` now says the install finished; until it exists the next tick
+  installs again, which converges.
+- **A slow boot step decided whether the loops ever started.** The
+  dispatcher, the Factory loop and Russell start after boot steps that had no
+  bound, so one hanging on a starved pool left a hosted campaign in PLANNING
+  until somebody ran `remote-tick`. Each step now holds the boot back at most
+  `BOOT_STEP_WAIT_MS` and finishes beside the loops.
+
+**`factory allocation` with one connection was measured rather than assumed.**
+On a real one-connection Postgres pool it answers in two seconds: nothing in it
+waits on itself, so the production hang was the pooler's checkout, not the
+code. The one amplification it had — a fleet snapshot per project — is one
+snapshot now. `tests/factoryAllocationPool.test.ts`.
+
 ## Repository map
 
 ```
@@ -12783,6 +12851,7 @@ server/
         learning.ts     measured outcomes, and lessons with their sample shown
         view.ts         every next step, and who takes it
       outreach.ts       the message a buyer is sent, composed from the card
+      factoryHandoff.ts READY_TO_TEST to the Software Factory, under the standing grant
       access.ts         where the shared frontier ends and a private job begins
       shared.ts         what every member may read, built from the columns it names
       lifecycle.ts      activating a sprint, giving it somewhere to file, winding it down
@@ -13154,6 +13223,8 @@ tests/                  Vitest suites
   connectorLifecycle.test.ts two accounts on one worker, an auth no-show, and a recovery nobody pressed
   connectorRecoveryProbe.test.ts  a quarantined, unattributed Routine proving its own connector
   connectionReliability.test.ts  the whole chain with the database failing on purpose
+  russellPassIsolation.test.ts   one pass that throws, and every pass after it still runs
+  autonomyChain.test.ts      discovery to READY_TO_TEST to a Factory campaign to COMPLETE, no manual tick
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```

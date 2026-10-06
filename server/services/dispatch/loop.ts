@@ -65,6 +65,7 @@ import {
   recordBinEvent,
   supersedeStaleIntents,
   reopenNoShowDispatches,
+  reviveAbandonedNoShowDispatches,
 } from '../../repos/bins.ts';
 import {
   fireConfig,
@@ -151,6 +152,8 @@ export interface TickResult {
   /** Fires nobody answered, put back in the queue or given up on. */
   reopenedNoShows: number;
   abandonedNoShows: number;
+  /** Abandoned intents asked once more after their cool-off (bounded per bin). */
+  revivedAbandoned: number;
   /** Surfaces taken out of routing this tick for not answering their fires. */
   quarantinedForNoShow: string[];
   /** Surfaces put back after their connector was re-authorized. */
@@ -189,6 +192,7 @@ export async function dispatchTick(
     rearmed: 0,
     reopenedNoShows: 0,
     abandonedNoShows: 0,
+    revivedAbandoned: 0,
     quarantinedForNoShow: [],
     recoveredAfterReauth: [],
     intentsCreated: 0,
@@ -300,6 +304,15 @@ export async function dispatchTick(
     if (entry.outcome === 'REOPENED') result.reopenedNoShows += 1;
     else result.abandonedNoShows += 1;
   }
+  /*
+   * And an intent that gave up is asked again, a bounded number of times,
+   * after a cool-off. Abandonment used to be permanent while the bin stayed
+   * READY at the same generation — so nothing could ever fire for it again,
+   * which is how a Factory plan bin sat for hours with a healthy fleet beside
+   * it. The surfaces that did not answer have usually been quarantined since,
+   * so the revived intent is routed somewhere else, or deferred uncharged.
+   */
+  result.revivedAbandoned = (await reviveAbandonedNoShowDispatches(20)).length;
 
   /*
    * And a surface that has stopped answering stops being chosen.

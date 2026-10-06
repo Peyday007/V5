@@ -116,9 +116,17 @@ export async function inventoryProject(projectId: string): Promise<{
   claims: ExistingClaim[];
   documentsRead: number;
   documentsUnreadable: number;
+  /**
+   * Documents that are unreadable *for now*: never extracted, or mid-way
+   * through an extraction. Counted apart because "the archive does not answer
+   * this" is only true of an archive that was read — a caller that decides to
+   * spend on research may not decide it over documents still being read.
+   */
+  documentsPending: number;
 }> {
   let read = 0;
   let unreadable = 0;
+  let pending = 0;
   const claims: ExistingClaim[] = [];
 
   for (const document of await listDocuments(projectId)) {
@@ -126,13 +134,14 @@ export async function inventoryProject(projectId: string): Promise<{
     const run = await getCurrentExtractionRun(document.id);
     if (!run || (run.status !== 'READY' && run.status !== 'READY_WITH_WARNINGS')) {
       unreadable += 1;
+      if (!run || (run.status !== 'BLOCKED' && run.status !== 'FAILED')) pending += 1;
       continue;
     }
     read += 1;
     claims.push(...await claimsForDocument(document.id));
   }
 
-  return { claims, documentsRead: read, documentsUnreadable: unreadable };
+  return { claims, documentsRead: read, documentsUnreadable: unreadable, documentsPending: pending };
 }
 
 export interface ReconciliationResult {

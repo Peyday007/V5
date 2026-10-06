@@ -133,8 +133,12 @@ async function main(): Promise<void> {
       const only = flagString(flags, 'project');
       const projects = (await listProjects()).filter((project) => !only || project.id === only);
       if (only && projects.length === 0) fail(`No project ${only}.`);
+      // One fleet snapshot for every project, rather than one per project: the
+      // reading is the same and an operator door runs on one connection.
+      const { fleetSnapshot } = await import('../server/services/dispatch/candidates.ts');
+      const snapshot = await fleetSnapshot();
       for (const project of projects) {
-        const view = await factoryAllocation({ projectId: project.id, canReport: false });
+        const view = await factoryAllocation({ projectId: project.id, canReport: false, snapshot });
         const repos = view.repositories.filter((repo) => only || repo.accounts.length > 0);
         if (repos.length === 0) continue;
         process.stdout.write(`project ${project.id} (${project.name})\n`);

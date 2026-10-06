@@ -38,6 +38,7 @@ import { inventoryProject } from '../reconcile/plan.ts';
 import { TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { GoalBudgetExhausted, startPacket } from './startPacket.ts';
 import { binForOrchestration, createBin } from '../../repos/bins.ts';
+import { packetMayHaveAnotherBin } from '../russell/launch.ts';
 
 /** How many goals one pass looks at. A pass is bounded; the next tick takes the rest. */
 export const MAX_GOALS_PER_PASS = 5;
@@ -77,6 +78,14 @@ interface PacketRow {
 const SPENT_BIN = new Set(['COMPLETE', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN']);
 
 /**
+ * How many bins one goal packet may ever be given. A replacement is made only
+ * while the packet holds claimable work, so this bounds the case where bins
+ * keep being spent without the items moving: past it the packet waits for
+ * `concludeUnworkablePackets` or a person rather than earning more fires.
+ */
+export const MAX_GOAL_PACKET_BINS = 4;
+
+/**
  * The bin that carries a goal's packet to a worker.
  *
  * A packet's work reaches a worker inside a bin (§24): `startPacket` queues the
@@ -84,9 +93,9 @@ const SPENT_BIN = new Set(['COMPLETE', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN']);
  * a packet this pass started with no bin sat at PLANNING for ever with its plan
  * item claimable and nobody sent for it — every row healthy, which is how
  * production held seven of them for seventeen hours. This is the same bin the
- * Russell launch builds for a mission, and only ever a first one: a bin that
- * has been spent is left alone, because a replacement is the launch's
- * `packetMayHaveAnotherBin` decision and not this pass's.
+ * Russell launch builds for a mission. A spent bin is replaced only under the
+ * launch's own `packetMayHaveAnotherBin` rule, because a goal packet has no
+ * mission for the launch to replace it through.
  *
  * Idempotent by the packet's own rows, never by a flag: a pass that finds a
  * bin already there creates nothing, and two passes that both find none make
@@ -94,7 +103,28 @@ const SPENT_BIN = new Set(['COMPLETE', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN']);
  */
 async function ensurePacketBin(goal: GoalRow, orchestrationId: string, title: string): Promise<string | null> {
   if (!goal.research_layer_id) return null;
-  if (await binForOrchestration(orchestrationId)) return null;
+  const existing = await binForOrchestration(orchestrationId);
+  if (existing) {
+    // A deliverable bin is the answer; nothing to do.
+    if (!SPENT_BIN.has(existing.state)) return null;
+    /*
+     * Every bin this packet had is spent, and the packet is still live. A goal
+     * packet has no mission, so `completeLaunch`'s replacement — the only
+     * other place a spent bin is answered — never reaches it, and the goal sat
+     * behind "a packet of this goal is still live" for ever. The same rule
+     * the launch applies is applied here: a replacement only for a working
+     * packet holding something a worker can claim, so a drained or parked
+     * packet earns no fire. Bounded by `MAX_GOAL_PACKET_BINS`, and beneath that
+     * by the work items' own attempt ceilings, which retire an item no worker
+     * can finish and let the packet go terminal.
+     */
+    if (!(await packetMayHaveAnotherBin(orchestrationId))) return null;
+    const spent = await getDb().all<{ n: number | string }>(
+      'SELECT COUNT(*) AS n FROM bins WHERE orchestration_id = ?',
+      [orchestrationId],
+    );
+    if (Number(spent[0]?.n ?? 0) >= MAX_GOAL_PACKET_BINS) return null;
+  }
   const objective =
     'Carry this research packet from its plan to a filed, audited report, inside the ' +
     'ceilings its goal was approved with, and stop. Read published sources only.';
@@ -149,7 +179,8 @@ async function ensurePacketBin(goal: GoalRow, orchestrationId: string, title: st
   }).catch(async (error: unknown) => {
     // `idx_bins_goal_packet_live` refused a second live bin: another pass made
     // it first, and that bin is the answer. Anything else is a real failure.
-    if (await binForOrchestration(orchestrationId)) return null;
+    const winner = await binForOrchestration(orchestrationId);
+    if (winner && !SPENT_BIN.has(winner.state)) return null;
     throw error;
   });
   return created?.id ?? null;
@@ -168,6 +199,14 @@ const SETTLED_COVERAGE = new Set(['SATISFIED', 'NOT_REQUIRED', 'OWNED_ELSEWHERE'
  */
 async function leftUnresolved(packet: PacketRow): Promise<boolean> {
   if (packet.status === 'COMPLETE_WITH_GAPS') return true;
+  /*
+   * A round that FAILED answered nothing. It used to fall through to the
+   * requirement check, and a packet that failed before its requirements were
+   * written has none, so it read as "left nothing unresolved" and the goal
+   * stopped for ever with nothing said. The next round is bounded by the
+   * goal's own packet ceiling, which asks a person when it is reached.
+   */
+  if (packet.status === 'FAILED') return true;
   const [requirements, coverage] = await Promise.all([
     listRequirements(packet.id),
     listCoverage(packet.id),
@@ -363,6 +402,24 @@ async function advanceOne(goal: GoalRow, report: GoalContinuationReport): Promis
     // during it is seen again on the next pass rather than absorbed.
     await recordArchiveMarker(goal.id, current.marker);
     report.answeredByArchive.push(goal.id);
+    return;
+  }
+  /*
+   * "The archive does not answer this" is only true of an archive that was
+   * read. A document never extracted, or mid-way through an extraction, is
+   * absent from `inventory.claims` for now — and production started packets
+   * for five goals the archive answered, during an outage that made documents
+   * look unreadable, which spent the goal's budget learning what the project
+   * knew. So the pass waits for the reading rather than deciding over a partial
+   * archive; nothing is recorded, so the next pass asks again. Bounded by the
+   * extraction itself: a run that cannot finish ends BLOCKED or FAILED, which
+   * this does not wait for.
+   */
+  if (inventory.documentsPending > 0) {
+    report.skipped.push({
+      goalId: goal.id,
+      reason: `${inventory.documentsPending} document(s) are still being read; the archive is not judged until they are`,
+    });
     return;
   }
   if (goal.research_archive_marker !== null) await recordArchiveMarker(goal.id, null);

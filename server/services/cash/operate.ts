@@ -46,6 +46,7 @@
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { handOffReadyTests, type FactoryHandoffPass } from './factoryHandoff.ts';
 import { advanceJourney, type JourneyTickReport } from './journey/tick.ts';
 import {
   getOpportunity,
@@ -907,6 +908,8 @@ export async function operate(
   invoicing: InvoicingPass;
   /** The first-dollar journey advanced from rows; absent when Cash Mode is not active here. */
   journey?: JourneyTickReport;
+  /** READY_TO_TEST openings handed to the Software Factory (`factoryHandoff.ts`). */
+  factory?: FactoryHandoffPass;
 }> {
   if (!(await getCashMode(projectId))) {
     return {
@@ -991,6 +994,19 @@ export async function operate(
    */
   const authority = await advanceWithinAuthority(projectId);
   /*
+   * And a READY_TO_TEST opening whose test is software goes to the Factory,
+   * under the standing grant's BUILD_A_TEST. After the readiness pass above,
+   * because that is what moves a piece to READY in this same pass.
+   */
+  // Its own failure domain: a Factory that cannot be reached must not stop
+  // invoicing, the journey or the ledger below; the next pass asks again.
+  const factory = await handOffReadyTests(projectId).catch(
+    (error: unknown): FactoryHandoffPass => ({
+      handedOff: [],
+      waiting: [{ opportunityId: '', reason: error instanceof Error ? error.message.slice(0, 200) : 'failed' }],
+    }),
+  );
+  /*
    * Invoices a person asked for, issued under QUOTE_AND_INVOICE while an
    * invoicing provider is usable, and the provider's answers about payment and
    * settlement read back into the ledger as two separate entries (§54). After
@@ -1030,6 +1046,7 @@ export async function operate(
     invoicing,
     monetization,
     journey,
+    factory,
   };
 }
 

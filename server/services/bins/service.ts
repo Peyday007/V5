@@ -55,6 +55,7 @@ import {
   terminateUnleasedBin,
   type BinProof,
   type ReopenOutcome,
+  dispatchExhaustedFor,
 } from '../../repos/bins.ts';
 import { getOrchestration } from '../../repos/research.ts';
 import { recordWorkerArrival } from '../../repos/fleet.ts';
@@ -1314,6 +1315,23 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
     // budget is what bounds it. Either is a healthy answer.
     const assignable = bin.attemptCount < bin.maxAttempts;
     if (bin.state === 'READY' && assignable) {
+      /*
+       * Assignable is not the same fact as reachable. A READY bin whose intent
+       * gave up on unanswered fires and has spent its revivals will never be
+       * fired again, so it is not healthy — it is reported by name, and left
+       * READY so a worker that checks in on its own can still take it.
+       */
+      if (await dispatchExhaustedFor(bin.id, bin.leaseGeneration)) {
+        report.details.push({
+          binId: bin.id,
+          disposition: 'DISPATCH_EXHAUSTED',
+          reason:
+            'Brain fired for this bin and nothing answered, through every revival it allows. ' +
+            'Check the fleet with `npm run fleet -- show`; a surface that is repaired is fired ' +
+            'at by the next intent this bin earns.',
+        });
+        continue;
+      }
       report.healthy += 1;
       continue;
     }

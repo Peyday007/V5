@@ -130,3 +130,27 @@ describe('a recompute and the document store', () => {
     expect(counting.asked.get(keys[0]!)).toBe(2);
   });
 });
+
+describe('a store that does not answer', () => {
+  it('flags nothing missing, because an outage is not evidence that a file is gone', async () => {
+    // The production shape: Supabase Storage answering 544 DatabaseTimeout.
+    resetStorage();
+    await initStorage({
+      config: {
+        provider: 'supabase',
+        supabaseUrl: 'https://example.supabase.co',
+        serviceRoleKey: 'service-role',
+        bucket: 'brain',
+      },
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ statusCode: '544', error: 'DatabaseTimeout' }), {
+          status: 544,
+          headers: { 'Content-Type': 'application/json' },
+        })) as unknown as typeof fetch,
+      verify: false,
+    });
+    await recomputeProject(projectId);
+    const { listDocuments } = await import('../server/repos/documents.ts');
+    expect((await listDocuments(projectId)).filter((document) => document.fileMissing)).toEqual([]);
+  });
+});

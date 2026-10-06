@@ -46,15 +46,27 @@ export type StartCampaignOutcome =
  * database — so a person pressing the button twice, a retried request and a
  * redelivered event all join the campaign that exists rather than forking it.
  */
-export async function approveAndStartCampaign(input: {
-  changeRequestId: string;
-  userId: string;
-}): Promise<StartCampaignOutcome> {
-  const approval = await approveObjective({
-    changeRequestId: input.changeRequestId,
-    via: 'PERSON',
-    userId: input.userId,
-  });
+export async function approveAndStartCampaign(
+  input:
+    | { changeRequestId: string; userId: string }
+    /**
+     * Approved on a standing authority a person granted first — §16's rule that
+     * a plan may be approved without a person only inside limits a person set.
+     * The authority is recorded on the change request, so "Brain approved this"
+     * says under which grant. Only `services/cash/factoryHandoff.ts` passes it.
+     */
+    | { changeRequestId: string; standingAuthorityId: string },
+): Promise<StartCampaignOutcome> {
+  const approval = await approveObjective(
+    'standingAuthorityId' in input
+      ? {
+          changeRequestId: input.changeRequestId,
+          via: 'STANDING_AUTHORITY',
+          userId: null,
+          authorityId: input.standingAuthorityId,
+        }
+      : { changeRequestId: input.changeRequestId, via: 'PERSON', userId: input.userId },
+  );
   if (!approval.ok) {
     return {
       ok: false,

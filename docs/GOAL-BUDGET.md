@@ -128,8 +128,10 @@ impossible for the old reason: `startPacket` replays `round-<n>` on
 A packet's work reaches a worker inside a bin, and `startPacket` makes none.
 So the pass gives every live packet of a goal its first `RESEARCH_PACKET` bin
 — `RESEARCH_PACKET_V1`, workload class `RESEARCH`, READY — the same shape the
-Russell launch builds for a mission. It is only ever a first bin: a spent one
-is left alone. Two passes that both find none make one, because
+Russell launch builds for a mission. A spent one is replaced only under the
+launch's own rule — the packet is still working and holds something a worker
+can claim — and at most `MAX_GOAL_PACKET_BINS` times, because a goal packet
+has no mission for the launch to replace it through. Two passes that both find none make one, because
 `idx_bins_goal_packet_live` (migration 110 / pg 101) refuses a second live bin
 for one packet and the loser reads back the winner's.
 
@@ -137,3 +139,21 @@ Found on production on 2026-10-06: the first seven packets the pass started
 had no bin, so nothing was ever fired for them and all seven sat at PLANNING
 for seventeen hours with their plan item claimable — every row healthy. The
 next pass gives each its bin.
+
+### Corrections from the autonomy integration (§56)
+
+- **A spent bin no longer freezes the goal.** Before, a goal whose packet's only
+  bin was spent while the packet stayed live was skipped for ever behind "a
+  packet of this goal is still live".
+- **A FAILED round continues.** It used to read as "left nothing unresolved"
+  when it failed before writing a requirement, and the goal stopped silently.
+  The next round is bounded by the packet ceiling, which asks a person.
+- **The archive is judged only once it has been read.** The five proof goals the
+  archive answered started packets on 2026-10-05 because the bucket's outage
+  made their documents read as missing; `explain` read SATISFIED for all five
+  the next day. The pass now waits while any document is still being read, and
+  a store that does not answer no longer flags a file missing.
+- **The pass ran at all only when every earlier pass of the tick succeeded.**
+  Each pass is now its own failure domain (`runPass`).
+- `report` prints each packet's bins, because a live packet with no live bin
+  is the stranded state.

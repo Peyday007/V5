@@ -65,6 +65,16 @@ export const FACTORY_EVENT_KINDS = {
    * units rather than only a tick note that lives as long as the process.
    */
   planNotInstalled: 'PLAN_NOT_INSTALLED',
+  /**
+   * A completed plan bin's units, edges, rewrites and promotion were all written.
+   *
+   * `installPlan` is idempotent but not transactional, so a tick that died after
+   * the first unit row left a campaign with units and nothing else — and the
+   * ingest used to skip any campaign holding a unit, so it never finished. This
+   * row is what says the install finished; until it exists the next tick
+   * installs again, which converges because every step is keyed.
+   */
+  planInstalled: 'PLAN_INSTALLED',
   unitReady: 'UNIT_READY',
   unitClaimed: 'UNIT_CLAIMED',
   unitTakeover: 'UNIT_TAKEOVER',

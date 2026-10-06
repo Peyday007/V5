@@ -170,7 +170,19 @@ async function ingestPlanBin(
   report: RemoteTickReport,
 ): Promise<boolean> {
   const existing = await listUnits(campaign.id);
-  if (existing.length > 0) return false;
+  if (existing.length > 0) {
+    /*
+     * Units exist. Either the install finished — the PLAN_INSTALLED row says so,
+     * or for a campaign installed before that row existed, a unit has already
+     * moved past BLOCKED — or a tick died part-way through `installPlan` and the
+     * units sit BLOCKED with their edges and promotion never written. The first
+     * is done; the second is finished here, because every step of the install
+     * is keyed and converges.
+     */
+    const installed = await listFactoryEvents(campaign.id, { kinds: [FACTORY_EVENT_KINDS.planInstalled] });
+    if (installed.length > 0) return false;
+    if (existing.some((unit) => unit.state !== 'BLOCKED')) return false;
+  }
 
   const proposal = await readPlanProposal(bin.id);
   if (proposal === null) {
@@ -206,21 +218,15 @@ async function ingestPlanBin(
     }
     return false;
   }
-  for (const unit of validation.units) {
-    await recordFactoryEvent({
-      campaignId: campaign.id,
-      kind: FACTORY_EVENT_KINDS.unitPlanned,
-      evidenceClass: 'MEASURED',
-      detail: {
-        unitKey: unit.key,
-        kind: unit.kind,
-        ownedPaths: unit.ownedPaths,
-        dependsOn: unit.dependsOn,
-        serves: unit.serves,
-      },
-    });
-  }
+  // `installPlan` already wrote one UNIT_PLANNED per new unit; a second one per
+  // unit here was a duplicate in the ledger.
   await promoteReadyUnits(campaign.id);
+  await recordFactoryEvent({
+    campaignId: campaign.id,
+    kind: FACTORY_EVENT_KINDS.planInstalled,
+    evidenceClass: 'MEASURED',
+    detail: { binId: bin.id, units: validation.units.length, created: installed.created },
+  });
   report.ingested.push(`plan:${bin.id}`);
   report.notes.push(`${installed.created} unit(s) installed from the plan.`);
   return true;

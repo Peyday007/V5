@@ -542,7 +542,7 @@ const WORKING_ORCHESTRATION = [
  * a person has its own answering transition, and sending a worker to be told
  * that again spends a fire to learn nothing.
  */
-async function packetMayHaveAnotherBin(orchestrationId: string | null): Promise<boolean> {
+export async function packetMayHaveAnotherBin(orchestrationId: string | null): Promise<boolean> {
   if (!orchestrationId) return false;
   const orchestration = await getOrchestration(orchestrationId);
   // A packet Brain cannot read is not one it may spend a fire on either.
