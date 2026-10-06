@@ -48,7 +48,7 @@ import {
   documentPresence,
   refreshProjectDependencies,
 } from './dependencies.ts';
-import { objectExists, prefetchExistence, storageKeyOf, withExistenceMemo } from './storage.ts';
+import { objectExistence, objectExists, prefetchExistence, storageKeyOf, withExistenceMemo } from './storage.ts';
 import { writeProjectState } from './runtimeState.ts';
 
 /** Runs that still owe the project something, and therefore shape layer state. */
@@ -640,7 +640,11 @@ export async function recomputeDocumentFileState(projectId: string): Promise<{
       // No recorded path means nothing was ever stored for this row (an
       // expected document); there is no file to have lost.
       if (!document.filesystemPath) continue;
-      const onDisk = await objectExists(storageKeyOf(document));
+      const existence = await objectExistence(storageKeyOf(document));
+      // A store that did not answer says nothing about the file, so it moves
+      // nothing — in either direction.
+      if (existence === 'UNKNOWN') continue;
+      const onDisk = existence === 'PRESENT';
       if (!onDisk && !document.fileMissing) {
         await updateDocument(document.id, { fileMissing: true });
         await recordEvent({

@@ -210,7 +210,24 @@ export function storageKeyOf(
 }
 
 export async function objectExists(key: string | null | undefined): Promise<boolean> {
-  if (!key) return false;
+  return (await objectExistence(key)) === 'PRESENT';
+}
+
+/**
+ * The same question, with the third answer kept.
+ *
+ * `objectExists` reads a store that did not answer as "absent", which is the
+ * safe direction for most of its callers and the dangerous one for anything
+ * that *records* absence. The file-state pass did exactly that: during a
+ * bucket outage (`544 DatabaseTimeout`) every document read as missing, was
+ * flagged `file_missing`, and dropped out of the archive the coverage check
+ * reads — so research goals the archive answered started packets. A store
+ * that did not answer is UNKNOWN, and UNKNOWN changes no row.
+ */
+export async function objectExistence(
+  key: string | null | undefined,
+): Promise<'PRESENT' | 'ABSENT' | 'UNKNOWN'> {
+  if (!key) return 'ABSENT';
   const memo = existenceMemo.getStore();
   if (memo) {
     const known = memo.get(key);
@@ -222,11 +239,11 @@ export async function objectExists(key: string | null | undefined): Promise<bool
   return await askStore(key);
 }
 
-async function askStore(key: string): Promise<boolean> {
+async function askStore(key: string): Promise<'PRESENT' | 'ABSENT' | 'UNKNOWN'> {
   try {
-    return await getStorage().exists(key);
+    return (await getStorage().exists(key)) ? 'PRESENT' : 'ABSENT';
   } catch {
-    return false;
+    return 'UNKNOWN';
   }
 }
 
@@ -247,7 +264,7 @@ async function askStore(key: string): Promise<boolean> {
  * pass that took it. It stores the pending promise, so two callers asking at
  * the same moment share one request.
  */
-const existenceMemo = new AsyncLocalStorage<Map<string, Promise<boolean>>>();
+const existenceMemo = new AsyncLocalStorage<Map<string, Promise<'PRESENT' | 'ABSENT' | 'UNKNOWN'>>>();
 
 /** Run `work` with existence answers de-duplicated inside it. Nested calls share the outer memo. */
 export async function withExistenceMemo<T>(work: () => Promise<T>): Promise<T> {

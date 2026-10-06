@@ -573,14 +573,43 @@ async function main(): Promise<void> {
  * stay exactly as the next tick or completion will find them — and never a
  * reason to stop the steps after it.
  */
+/**
+ * How long a boot step that stands in front of a loop may hold that loop back.
+ *
+ * Every step below is a derivation the loops would reach on their own, so a
+ * step that is merely slow must not decide whether the dispatcher, the factory
+ * loop or Russell ever start: on a starved pool one of them hung, nothing after
+ * it ran, and a hosted campaign sat in PLANNING until somebody ran a manual
+ * `remote-tick`. Past the bound the step keeps running in the background — it
+ * is keyed by its rows, so finishing beside a loop converges — and the boot
+ * moves on.
+ */
+const BOOT_STEP_WAIT_MS = 90_000;
+
 async function afterListenStep<T>(name: string, run: () => Promise<T>): Promise<T | null> {
   const started = Date.now();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let movedOn = false;
   try {
-    return await run();
+    const step = run();
+    // A failure after the boot moved on is still logged, and never unhandled.
+    step.catch((error: unknown) => {
+      if (movedOn) console.error(`[brain] boot step "${name}" failed after the boot moved on:`, error);
+    });
+    const bound = new Promise<null>((resolve) => {
+      timer = setTimeout(() => {
+        movedOn = true;
+        console.warn(`[brain] boot step "${name}" still running after ${BOOT_STEP_WAIT_MS / 1000}s; continuing the boot beside it`);
+        resolve(null);
+      }, BOOT_STEP_WAIT_MS);
+      timer.unref?.();
+    });
+    return await Promise.race([step, bound]);
   } catch (error) {
     console.error(`[brain] boot step "${name}" failed; serving on:`, error);
     return null;
   } finally {
+    if (timer) clearTimeout(timer);
     const seconds = (Date.now() - started) / 1000;
     if (seconds >= 1) console.log(`  boot: ${name} took ${seconds.toFixed(1)}s`);
   }

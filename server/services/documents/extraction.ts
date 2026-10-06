@@ -33,7 +33,7 @@ import {
   updateExtractionRun,
   type InsertBlockInput,
 } from '../../repos/extraction.ts';
-import { objectExists, readObject, storageKeyOf} from '../storage.ts';
+import { objectExistence, objectExists, readObject, storageKeyOf} from '../storage.ts';
 import { detectFormat } from './formats.ts';
 import { extractDocx, DocxUnreadableError } from './docx.ts';
 import { extractPdf, PdfUnreadableError, type ExtractedBlock, type ExtractedPage } from './pdf.ts';
@@ -277,7 +277,21 @@ export async function extractDocument(
   const document = await getDocument(documentId);
   if (!document) throw new Error(`Cannot extract: unknown document ${documentId}`);
   const storageKey = storageKeyOf(document);
-  if (!storageKey || !await objectExists(storageKey)) {
+  const existence = await objectExistence(storageKey);
+  if (existence === 'UNKNOWN') {
+    /*
+     * The store did not answer, which says nothing about the file. A reading
+     * that already stands is kept rather than superseded by a BLOCKED run — that
+     * dropped documents from the archive for the length of an outage, and the
+     * coverage check then researched what the project already knew. With no
+     * reading to keep, the BLOCKED run below is recorded as before.
+     */
+    const standing = await getCurrentExtractionRun(document.id);
+    if (standing && (standing.status === 'READY' || standing.status === 'READY_WITH_WARNINGS')) {
+      return { run: standing, quality: qualityOf(standing), document };
+    }
+  }
+  if (!storageKey || existence !== 'PRESENT') {
     // Invariant 9 territory: a row whose file is gone is not evidence.
     const run = await createExtractionRun({
       documentId: document.id,

@@ -535,6 +535,58 @@ describe('a fire nobody answered', () => {
     expect(await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10)).toEqual([]);
   });
 
+  it('is revived after a cool-off a bounded number of times, then reported rather than called healthy', async () => {
+    const { reviveAbandonedNoShowDispatches, MAX_ABANDONED_REVIVALS, ABANDONED_REVIVE_AFTER_MS } =
+      await import('../server/repos/bins.ts');
+    const { reconcileBins } = await import('../server/services/bins/service.ts');
+    const binId = await aReadyBin();
+    await aFleet();
+    const intentId = await aFireThatWentUnanswered(binId, { attempts: 5 });
+    await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10);
+
+    // Inside the cool-off nothing happens.
+    expect(await reviveAbandonedNoShowDispatches(10)).toEqual([]);
+
+    const age = async () =>
+      getDb().run('UPDATE bin_dispatch SET updated_at = ? WHERE id = ?', [
+        new Date(Date.now() - ABANDONED_REVIVE_AFTER_MS - 60_000).toISOString(),
+        intentId,
+      ]);
+    for (let i = 0; i < MAX_ABANDONED_REVIVALS; i += 1) {
+      await age();
+      const revived = await reviveAbandonedNoShowDispatches(10);
+      expect(revived.map((r) => r.binId)).toEqual([binId]);
+      const [intent] = await listDispatchesForBin(binId);
+      expect(intent!.state).toBe('PENDING');
+      // The ceiling is raised, never reset: the history stays readable.
+      expect(intent!.attemptCount).toBe(5);
+      // Spend the revival the way production would: fired and unanswered again.
+      await getDb().run(
+        "UPDATE bin_dispatch SET state = 'ABANDONED', last_error_kind = 'NO_SHOW' WHERE id = ?",
+        [intentId],
+      );
+    }
+    await age();
+    expect(await reviveAbandonedNoShowDispatches(10)).toEqual([]);
+
+    // An intent with no revival left is never selected, so it cannot crowd out
+    // one abandoned after it even when the page holds a single row.
+    const later = await aReadyBin();
+    const laterIntent = await aFireThatWentUnanswered(later, { attempts: 5 });
+    await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10);
+    await getDb().run('UPDATE bin_dispatch SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - ABANDONED_REVIVE_AFTER_MS - 30_000).toISOString(),
+      laterIntent,
+    ]);
+    await age();
+    expect((await reviveAbandonedNoShowDispatches(1)).map((r) => r.binId)).toEqual([later]);
+
+    // And the bin it can no longer fire for is named, not counted as healthy.
+    const reconciled = await reconcileBins();
+    expect(reconciled.details.find((d) => d.binId === binId)?.disposition).toBe('DISPATCH_EXHAUSTED');
+    expect((await getBin(binId))!.state).toBe('READY');
+  });
+
   /*
    * The production shape this read could not see, built the way production
    * built it: a worker *arrives*, takes the lease, and then its session ends

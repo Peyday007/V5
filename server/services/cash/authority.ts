@@ -66,6 +66,14 @@ export const COMMERCIAL_ACTIONS = [
   'RUN_PAID_TEST',
   /** Record and accept a customer payment against an agreed scope. */
   'ACCEPT_PAYMENT',
+  /**
+   * Have the Software Factory build the bounded test a READY_TO_TEST card
+   * declares it needs, inside the repository and paths a person already
+   * onboarded for this project. It spends nothing: the Factory runs on the
+   * fixed subscription. It merges nothing, deploys nothing and contacts
+   * nobody — the pull request stays a person's to merge.
+   */
+  'BUILD_A_TEST',
 ] as const;
 
 export type CommercialAction = (typeof COMMERCIAL_ACTIONS)[number];

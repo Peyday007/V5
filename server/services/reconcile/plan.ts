@@ -112,13 +112,24 @@ export async function persistPlan(input: PlanInput): Promise<{
  * not evidence, and pretending otherwise is the failure the extraction gate
  * exists to prevent.
  */
+/** How long a document still being read holds back a decision about research. */
+export const PENDING_READ_WINDOW_MS = 60 * 60_000;
+
 export async function inventoryProject(projectId: string): Promise<{
   claims: ExistingClaim[];
   documentsRead: number;
   documentsUnreadable: number;
+  /**
+   * Documents that are unreadable *for now*: never extracted, or mid-way
+   * through an extraction. Counted apart because "the archive does not answer
+   * this" is only true of an archive that was read — a caller that decides to
+   * spend on research may not decide it over documents still being read.
+   */
+  documentsPending: number;
 }> {
   let read = 0;
   let unreadable = 0;
+  let pending = 0;
   const claims: ExistingClaim[] = [];
 
   for (const document of await listDocuments(projectId)) {
@@ -126,13 +137,21 @@ export async function inventoryProject(projectId: string): Promise<{
     const run = await getCurrentExtractionRun(document.id);
     if (!run || (run.status !== 'READY' && run.status !== 'READY_WITH_WARNINGS')) {
       unreadable += 1;
+      // Pending only while a reading could plausibly still finish: an
+      // INTERRUPTED run, or one that has sat for longer than a reading takes,
+      // is requeued at boot rather than by anything a caller could wait on.
+      const since = run ? run.updatedAt : document.createdAt;
+      const recent = Date.now() - Date.parse(since) < PENDING_READ_WINDOW_MS;
+      if (recent && (!run || (run.status !== 'BLOCKED' && run.status !== 'FAILED' && run.status !== 'INTERRUPTED'))) {
+        pending += 1;
+      }
       continue;
     }
     read += 1;
     claims.push(...await claimsForDocument(document.id));
   }
 
-  return { claims, documentsRead: read, documentsUnreadable: unreadable };
+  return { claims, documentsRead: read, documentsUnreadable: unreadable, documentsPending: pending };
 }
 
 export interface ReconciliationResult {

@@ -126,6 +126,7 @@ import {
 } from './planning.ts';
 import { resumeParkedAcrossProjects } from './resumeParked.ts';
 import { promoteEligibleClaims } from '../../repos/sharedFindings.ts';
+import { classifyInfraFailure } from '../../db/infra.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
 import {
@@ -170,6 +171,20 @@ export interface TickReport {
   /** What the research-goal continuation pass did; absent when it could not run. */
   researchGoals?: GoalContinuationReport;
   ran: boolean;
+  /**
+   * Every pass that threw on this tick, by name, with what it threw.
+   *
+   * A pass is its own failure domain. The tick used to run every pass inside
+   * one `try`, so a statement timeout in the first one — the shared-findings
+   * promotion, on a busy database — ended the tick before anything after it
+   * ran, and because the next tick began at the same pass, the research-goal
+   * continuation, the launch step and every reconciliation below it never ran
+   * again. One slow pass froze the whole chain. Now a failure is recorded
+   * here and on the cycle row, and every independent pass after it still
+   * gets its turn; the failed one is simply asked again next tick, because
+   * every pass derives from rows and is idempotent by them.
+   */
+  passFailures: { pass: string; error: string }[];
   /** Why it did not run, when it did not. An ordinary outcome, not an error. */
   skipped: string | null;
   generation: number | null;
@@ -600,8 +615,62 @@ export interface TickReport {
   bounded: boolean;
 }
 
+/**
+ * Run one pass as its own failure domain.
+ *
+ * Every pass on this tick derives from rows and is idempotent by them, so a
+ * pass that throws loses nothing by being asked again next tick — and the
+ * passes after it lose everything if its throw ends the tick. That is what
+ * production did: a statement timeout in the shared-findings promotion, the
+ * first pass, ended every tick at step 0, and the research-goal continuation,
+ * the launch step and every reconciliation below it never ran again. The
+ * failure is recorded rather than swallowed, on the report and on the cycle
+ * row, so a pass that keeps failing is visible rather than silent.
+ *
+ * It deliberately does not race a pass against a timer: a pass abandoned
+ * mid-flight would still hold its connection and keep writing beside the next
+ * one. Each statement is bounded by the database's own statement timeout and
+ * the pool's checkout timeout, which is what bounds a pass.
+ */
+/** Marks a cycle error that is per-pass failures rather than a failed tick. */
+export const PASS_FAILURE_PREFIX = 'passes: ';
+
+export async function runPass(
+  report: Pick<TickReport, 'passFailures'>,
+  name: string,
+  fn: () => Promise<unknown>,
+): Promise<boolean> {
+  /*
+   * Isolating passes must not turn a database outage into forty-five timeouts
+   * in a row: once three passes on this tick have failed because the database
+   * could not answer, the rest are skipped and recorded, and the next tick asks
+   * again. That keeps the tick inside its lease and off a database that is
+   * already struggling, without one *ordinary* failure stopping anything.
+   */
+  const infra = report.passFailures.filter((f) => f.error.startsWith(INFRA_MARK)).length;
+  if (infra >= MAX_INFRA_FAILURES_PER_TICK) {
+    report.passFailures.push({ pass: name, error: 'skipped: the database is not answering this tick' });
+    return false;
+  }
+  try {
+    await fn();
+    return true;
+  } catch (error) {
+    const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+    report.passFailures.push({
+      pass: name,
+      error: classifyInfraFailure(error) ? `${INFRA_MARK}${message}` : message,
+    });
+    return false;
+  }
+}
+
+const INFRA_MARK = 'infra: ';
+export const MAX_INFRA_FAILURES_PER_TICK = 3;
+
 const EMPTY: TickReport = {
   ran: false,
+  passFailures: [],
   skipped: null,
   generation: null,
   wroteBack: [],
@@ -683,6 +752,7 @@ export async function tick(owner: string): Promise<TickReport> {
   const report: TickReport = {
     ...EMPTY,
     ran: true,
+    passFailures: [],
     generation: claim.generation,
     wroteBack: [],
     recovered: [],
@@ -767,67 +837,71 @@ export async function tick(owner: string): Promise<TickReport> {
      * It creates no work, spends nothing, and moves no project state. It
      * writes one pointer per already-gated claim.
      */
-    report.sharedPromoted = await promoteEligibleClaims();
+    await runPass(report, 'shared-findings', async () => {
+      report.sharedPromoted = await promoteEligibleClaims();
+    });
 
     // 1. Finish what ended — but only where the loop can say something true.
-    for (const raw of await missionsAwaitingWriteback(cycle.maxEventsPerCycle)) {
-      const outcome = await outcomeOf(raw);
-      if (!outcome) continue;
+    await runPass(report, 'writeback', async () => {
+      for (const raw of await missionsAwaitingWriteback(cycle.maxEventsPerCycle)) {
+        const outcome = await outcomeOf(raw);
+        if (!outcome) continue;
 
-      /*
-       * Tell the mission what its own packet produced.
-       *
-       * This is the connection that was missing, and it made two conditions
-       * unreachable rather than merely untested. `linkMission` was called with
-       * an orchestration and a bin at launch and **never with a document or an
-       * audit** — nothing anywhere set `russell_missions.document_id`. The
-       * guard immediately below skips any non-failed mission without one, so a
-       * packet that filed a real report would have been pushed onto
-       * `awaitingFiling` on every tick, for ever. And `followOnsToCreate`
-       * requires `writeback_at IS NOT NULL`, so the automatic follow-on sat
-       * behind the same wall.
-       *
-       * Read from the orchestration and from the audit rows — Brain's own
-       * records of what the pipeline did — never from anything a worker said
-       * about itself. `linkMission` is a plain update on columns that are null
-       * until the pipeline fills them, so a redelivery writes the same ids.
-       */
-      const mission = await linkFiledWork(raw);
+        /*
+         * Tell the mission what its own packet produced.
+         *
+         * This is the connection that was missing, and it made two conditions
+         * unreachable rather than merely untested. `linkMission` was called with
+         * an orchestration and a bin at launch and **never with a document or an
+         * audit** — nothing anywhere set `russell_missions.document_id`. The
+         * guard immediately below skips any non-failed mission without one, so a
+         * packet that filed a real report would have been pushed onto
+         * `awaitingFiling` on every tick, for ever. And `followOnsToCreate`
+         * requires `writeback_at IS NOT NULL`, so the automatic follow-on sat
+         * behind the same wall.
+         *
+         * Read from the orchestration and from the audit rows — Brain's own
+         * records of what the pipeline did — never from anything a worker said
+         * about itself. `linkMission` is a plain update on columns that are null
+         * until the pipeline fills them, so a redelivery writes the same ids.
+         */
+        const mission = await linkFiledWork(raw);
 
-      /*
-       * The loop must not spend the writeback on a placeholder.
-       *
-       * `claimWriteback` is once-only, which is what makes the effects
-       * exactly-once — and it means whoever writes back *first* decides what
-       * the project ends up believing. A tick that fired before the filed
-       * document was linked would therefore promote a sentence assembled from
-       * the mission row, permanently, and the real conclusion could never land.
-       *
-       * So an accepted packet with nothing filed yet is left alone and picked
-       * up on a later tick. A failed one is safe to finish immediately, because
-       * nothing is promoted from a run that did not finish and there is no
-       * conclusion to lose.
-       */
-      if (outcome !== 'FAILED' && !mission.documentId) {
-        report.awaitingFiling.push(mission.id);
-        continue;
+        /*
+         * The loop must not spend the writeback on a placeholder.
+         *
+         * `claimWriteback` is once-only, which is what makes the effects
+         * exactly-once — and it means whoever writes back *first* decides what
+         * the project ends up believing. A tick that fired before the filed
+         * document was linked would therefore promote a sentence assembled from
+         * the mission row, permanently, and the real conclusion could never land.
+         *
+         * So an accepted packet with nothing filed yet is left alone and picked
+         * up on a later tick. A failed one is safe to finish immediately, because
+         * nothing is promoted from a run that did not finish and there is no
+         * conclusion to lose.
+         */
+        if (outcome !== 'FAILED' && !mission.documentId) {
+          report.awaitingFiling.push(mission.id);
+          continue;
+        }
+
+        const result = await writeBack({
+          missionId: mission.id,
+          outcome,
+          conclusion:
+            outcome === 'FAILED'
+              ? ''
+              : `${mission.objective} — filed and audited through the existing pipeline.`,
+          provenance: {
+            orchestrationId: mission.orchestrationId,
+            documentId: mission.documentId,
+            auditId: mission.auditId,
+          },
+        });
+        if (result.ok && !result.alreadyDone) report.wroteBack.push(mission.id);
       }
-
-      const result = await writeBack({
-        missionId: mission.id,
-        outcome,
-        conclusion:
-          outcome === 'FAILED'
-            ? ''
-            : `${mission.objective} — filed and audited through the existing pipeline.`,
-        provenance: {
-          orchestrationId: mission.orchestrationId,
-          documentId: mission.documentId,
-          auditId: mission.auditId,
-        },
-      });
-      if (result.ok && !result.alreadyDone) report.wroteBack.push(mission.id);
-    }
+    });
 
     /*
      * 1a-ii. Turn a finished mission's declared follow-on into an idea.
@@ -848,19 +922,21 @@ export async function tick(owner: string): Promise<TickReport> {
      * otherwise lose the follow-on permanently, with nothing left to notice it.
      * Here the same query asks again on every tick until it succeeds.
      */
-    for (const entry of await followOnsToCreate(cycle.maxEventsPerCycle)) {
-      const created = await createCandidate({
-        title: entry.followOn.title,
-        statement: entry.followOn.question,
-        projectId: entry.projectId,
-        // The parent's scope, not the project's. A follow-on to a private
-        // mission is private, for the reason every other inheritance here is.
-        visibility: entry.visibility,
-        conversationId: entry.conversationId,
-        followOnOfMissionId: entry.missionId,
-      });
-      report.followOns.push({ missionId: entry.missionId, candidateId: created.id });
-    }
+    await runPass(report, 'follow-ons', async () => {
+      for (const entry of await followOnsToCreate(cycle.maxEventsPerCycle)) {
+        const created = await createCandidate({
+          title: entry.followOn.title,
+          statement: entry.followOn.question,
+          projectId: entry.projectId,
+          // The parent's scope, not the project's. A follow-on to a private
+          // mission is private, for the reason every other inheritance here is.
+          visibility: entry.visibility,
+          conversationId: entry.conversationId,
+          followOnOfMissionId: entry.missionId,
+        });
+        report.followOns.push({ missionId: entry.missionId, candidateId: created.id });
+      }
+    });
 
     /*
      * 1a-iii. Repoint a finished mission that cites a superseded audit round.
@@ -878,14 +954,16 @@ export async function tick(owner: string): Promise<TickReport> {
      * corrected links no longer match the selection. It creates no work, spends
      * nothing, promotes nothing and supersedes nothing.
      */
-    for (const missionId of await missionsWithStaleLinks(cycle.maxEventsPerCycle)) {
-      const outcome = await reconcileCompletedMission(missionId);
-      if (outcome.ok && outcome.corrections.length > 0) {
-        report.linksReconciled.push({ missionId, corrections: outcome.detail });
-      } else if (!outcome.ok) {
-        report.linksUnreconciled.push({ missionId, refusal: outcome.refusal ?? 'refused' });
+    await runPass(report, 'stale-links', async () => {
+      for (const missionId of await missionsWithStaleLinks(cycle.maxEventsPerCycle)) {
+        const outcome = await reconcileCompletedMission(missionId);
+        if (outcome.ok && outcome.corrections.length > 0) {
+          report.linksReconciled.push({ missionId, corrections: outcome.detail });
+        } else if (!outcome.ok) {
+          report.linksUnreconciled.push({ missionId, refusal: outcome.refusal ?? 'refused' });
+        }
       }
-    }
+    });
 
     /*
      * 1a-iii-b. Finish a park whose mission has already gone.
@@ -904,9 +982,11 @@ export async function tick(owner: string): Promise<TickReport> {
      * where a hook at the moment is immediate and reaches only the entrance it
      * was written on.
      */
-    for (const entry of await concludeAbandonedParks(cycle.maxEventsPerCycle)) {
-      report.abandonedParks.push(entry);
-    }
+    await runPass(report, 'abandoned-parks', async () => {
+      for (const entry of await concludeAbandonedParks(cycle.maxEventsPerCycle)) {
+        report.abandonedParks.push(entry);
+      }
+    });
 
     /*
      * And put back the ones cancelled before that rule knew a reopen is an
@@ -916,9 +996,11 @@ export async function tick(owner: string): Promise<TickReport> {
      * restored packet is `NEEDS_HUMAN`, which the sweep above no longer
      * matches, so the two cannot trade a row back and forth.
      */
-    for (const entry of await restoreWronglyConcludedParks(cycle.maxEventsPerCycle)) {
-      report.restoredParks.push(entry);
-    }
+    await runPass(report, 'restored-parks', async () => {
+      for (const entry of await restoreWronglyConcludedParks(cycle.maxEventsPerCycle)) {
+        report.restoredParks.push(entry);
+      }
+    });
 
     /*
      * 1a-iv. Take live work off a packet that has already finished.
@@ -936,9 +1018,11 @@ export async function tick(owner: string): Promise<TickReport> {
      * durable loop rather than Russell's — it already reconciles bins here for
      * the same reason.
      */
-    for (const entry of await reconcileTerminalPackets(cycle.maxEventsPerCycle)) {
-      report.retiredPacketWork.push(entry);
-    }
+    await runPass(report, 'terminal-packets', async () => {
+      for (const entry of await reconcileTerminalPackets(cycle.maxEventsPerCycle)) {
+        report.retiredPacketWork.push(entry);
+      }
+    });
 
     /*
      * 1a-iv-b. Write the lessons a finished campaign's rows already support.
@@ -950,9 +1034,11 @@ export async function tick(owner: string): Promise<TickReport> {
      * and then finds nothing, and no provider is called — every lesson is a
      * count of rows.
      */
-    for (const entry of await reconcileRetrospectives(cycle.maxEventsPerCycle)) {
-      report.researchLessons.push(entry);
-    }
+    await runPass(report, 'retrospectives', async () => {
+      for (const entry of await reconcileRetrospectives(cycle.maxEventsPerCycle)) {
+        report.researchLessons.push(entry);
+      }
+    });
 
     /*
      * 1a-iv-b. And take dead work off a packet that has *not* finished.
@@ -967,9 +1053,11 @@ export async function tick(owner: string): Promise<TickReport> {
      * It performs no dispatch: a worker fired at an item already past its
      * ceiling spends an activation to learn what the rows already say.
      */
-    for (const entry of await concludeUnworkablePackets(cycle.maxEventsPerCycle)) {
-      report.retiredPacketWork.push(entry);
-    }
+    await runPass(report, 'unworkable-packets', async () => {
+      for (const entry of await concludeUnworkablePackets(cycle.maxEventsPerCycle)) {
+        report.retiredPacketWork.push(entry);
+      }
+    });
 
     /*
      * 1a-iv-b'. And reissue a synthesis whose only failure was Brain's own filing.
@@ -981,7 +1069,9 @@ export async function tick(owner: string): Promise<TickReport> {
      * every refusal of the targeted recovery still applying. Throttled inside:
      * it is a backlog, not a ten-second concern.
      */
-    report.filingRecoveries = await recoverFilingFailures(cycle.maxEventsPerCycle);
+    await runPass(report, 'filing-recoveries', async () => {
+      report.filingRecoveries = await recoverFilingFailures(cycle.maxEventsPerCycle);
+    });
 
     /*
      * 1a-iv-c. Settle the integrity reopens whose condition has stopped holding.
@@ -994,12 +1084,14 @@ export async function tick(owner: string): Promise<TickReport> {
      * about is superseded rather than answered, because nothing re-audited
      * anything.
      */
-    {
-      const settled = await reconcileIntegrityReopens(
-        await listOpenReopens(cycle.maxEventsPerCycle),
-      );
-      report.integrityReopens = settled;
-    }
+    await runPass(report, 'integrity-reopens', async () => {
+      {
+        const settled = await reconcileIntegrityReopens(
+          await listOpenReopens(cycle.maxEventsPerCycle),
+        );
+        report.integrityReopens = settled;
+      }
+    });
 
     /*
      * 1a-iv-d. Advance the self-expansion kernel, fleet-wide.
@@ -1021,16 +1113,14 @@ export async function tick(owner: string): Promise<TickReport> {
      * reconciling a stranded lease — it is a reading about Brain, never a
      * precondition of Brain.
      */
-    try {
+    await runPass(report, 'capability-sources', async () => {
       const advanced = await advanceSources();
       report.capability.dispatched = advanced.dispatched;
       report.capability.settled = advanced.settled;
       report.capability.audited = advanced.audited;
       report.capability.promoted = advanced.promoted;
       report.capability.recovered = advanced.recovered;
-    } catch {
-      /* a kernel that could not advance is left exactly as it was */
-    }
+    });
 
     /*
      * And the packets the registry produced, one step each.
@@ -1048,7 +1138,7 @@ export async function tick(owner: string): Promise<TickReport> {
      * already exists, and the packet waits. Swallowed for `advanceSources`'
      * reason — a reading about Brain is never a precondition of Brain.
      */
-    try {
+    await runPass(report, 'capability-packets', async () => {
       const packets = await advanceCapabilityPackets(cycle.maxEventsPerCycle);
       if (packets.opened) report.capability.packets.opened.push(packets.opened.packetId);
       report.capability.packets.considered = packets.considered;
@@ -1060,9 +1150,7 @@ export async function tick(owner: string): Promise<TickReport> {
           report.capability.packets.changeRequests.push(advance.changeRequestId);
         }
       }
-    } catch {
-      /* a packet that could not be walked is left exactly as it was */
-    }
+    });
 
     /*
      * And every goal a person has set, fleet-wide.
@@ -1075,11 +1163,9 @@ export async function tick(owner: string): Promise<TickReport> {
      * completes. Swallowed for `advanceSources`' reason: a goal that could not
      * be read must never stop Russell writing back a mission.
      */
-    try {
+    await runPass(report, 'goals', async () => {
       report.goals = await advanceGoals();
-    } catch {
-      /* goals that could not be read are left exactly as they were */
-    }
+    });
 
     /*
      * And the packets a research goal still needs, once per tick.
@@ -1090,11 +1176,9 @@ export async function tick(owner: string): Promise<TickReport> {
      * goals a pass. Swallowed for `advanceGoals`' reason: a goal that could not
      * be advanced must never stop Russell writing back a mission.
      */
-    try {
+    await runPass(report, 'research-goals', async () => {
       report.researchGoals = await advanceResearchGoals();
-    } catch {
-      /* a goal that could not be advanced is left exactly as it was */
-    }
+    });
 
     /*
      * Rule 9 of the engineering policy: executable work beside idle capacity is
@@ -1102,11 +1186,9 @@ export async function tick(owner: string): Promise<TickReport> {
      * this loop is the continuation path and is already running — and read at
      * most every few minutes, because the capacity reading is not free.
      */
-    try {
+    await runPass(report, 'idle-watch', async () => {
       await watchIdleOnTick();
-    } catch {
-      /* a reading that could not be taken records nothing */
-    }
+    });
 
     /*
      * And the self-model, when the last reading has stopped being about this
@@ -1119,12 +1201,10 @@ export async function tick(owner: string): Promise<TickReport> {
      * what keeps a long-running instance from carrying a reading taken before
      * the last four migrations.
      */
-    try {
+    await runPass(report, 'self-model', async () => {
       const scan = await scanIfStale();
       if (scan) report.capability.selfModelDrift = scan.drift.length;
-    } catch {
-      /* a reading that could not be taken is not a reason to stop the tick */
-    }
+    });
 
     /*
      * 1a-iv-f. Advance the design kernel, fleet-wide.
@@ -1149,7 +1229,7 @@ export async function tick(owner: string): Promise<TickReport> {
      * threw must not stop Russell writing back a mission or reconciling a
      * stranded lease.
      */
-    try {
+    await runPass(report, 'design-kernel', async () => {
       const design = await runDesignKernel();
       report.design.ingested = design.ingested.length;
       report.design.learned =
@@ -1158,9 +1238,7 @@ export async function tick(owner: string): Promise<TickReport> {
       report.design.expansionsOpened = design.expansion?.opened.length ?? 0;
       report.design.expansionsSettled = design.expansion?.settled.length ?? 0;
       report.design.problems = design.problems;
-    } catch {
-      /* a design pass that could not run leaves the kernel exactly as it was */
-    }
+    });
 
     /*
      * 1a-v. Recover the surface a past audit session came from.
@@ -1189,22 +1267,28 @@ export async function tick(owner: string): Promise<TickReport> {
      * argued one role three times while the judge waited, and the fix could not
      * reach it because nothing was advancing the packet.
      */
-    for (const entry of await reconcileArguedAuditRoles(cycle.maxEventsPerCycle)) {
-      report.retiredPacketWork.push(entry);
-    }
+    await runPass(report, 'argued-audit-roles', async () => {
+      for (const entry of await reconcileArguedAuditRoles(cycle.maxEventsPerCycle)) {
+        report.retiredPacketWork.push(entry);
+      }
+    });
 
-    const lineage = await recoverExecutionLineage(cycle.maxEventsPerCycle);
-    report.lineageRecovered.push(...lineage.passes);
-    report.lineageUnresolved.push(...lineage.unresolved);
+    await runPass(report, 'execution-lineage', async () => {
+      const lineage = await recoverExecutionLineage(cycle.maxEventsPerCycle);
+      report.lineageRecovered.push(...lineage.passes);
+      report.lineageUnresolved.push(...lineage.unresolved);
+    });
 
     // 1b. Apply the answers workers have sent back.
     //
     // Before resuming and before launching, because a turn that has landed may
     // be the very thing that produced the candidate the launch step then reads.
-    for (const binId of await answeredTurnBins(cycle.maxEventsPerCycle)) {
-      const applied = await applyTurn(binId);
-      if (applied.ok && !applied.alreadyAnswered) report.answered.push(binId);
-    }
+    await runPass(report, 'answered-turns', async () => {
+      for (const binId of await answeredTurnBins(cycle.maxEventsPerCycle)) {
+        const applied = await applyTurn(binId);
+        if (applied.ok && !applied.alreadyAnswered) report.answered.push(binId);
+      }
+    });
 
     /*
      * 1c. Recover an idea whose mission came from the retired planning subsystem.
@@ -1222,16 +1306,18 @@ export async function tick(owner: string): Promise<TickReport> {
      * every reason stays, and `launch()` counts specifications rather than
      * rows, so recovering costs the idea nothing.
      */
-    for (const stale of await retiredPlanning(cycle.maxLaunchesPerCycle)) {
-      const retired = await retirePlanningDefect(stale);
-      if (!retired) continue;
-      report.recovered.push({ missionId: stale.missionId, candidateId: stale.candidateId });
-      const outcome = await judgeCandidate(stale.candidateId, {
-        afterRetiredPlanning: { missionId: stale.missionId, reason: stale.reason },
-      });
-      if (outcome.answeredByArchive) report.answeredByArchive.push(stale.candidateId);
-      else if (outcome.ok) report.planning.push(stale.candidateId);
-    }
+    await runPass(report, 'retired-planning', async () => {
+      for (const stale of await retiredPlanning(cycle.maxLaunchesPerCycle)) {
+        const retired = await retirePlanningDefect(stale);
+        if (!retired) continue;
+        report.recovered.push({ missionId: stale.missionId, candidateId: stale.candidateId });
+        const outcome = await judgeCandidate(stale.candidateId, {
+          afterRetiredPlanning: { missionId: stale.missionId, reason: stale.reason },
+        });
+        if (outcome.answeredByArchive) report.answeredByArchive.push(stale.candidateId);
+        else if (outcome.ok) report.planning.push(stale.candidateId);
+      }
+    });
 
     /*
      * 1c-ii. Act on a handoff the audit already decided.
@@ -1251,21 +1337,23 @@ export async function tick(owner: string): Promise<TickReport> {
      * recorded before this code existed as readily as one recorded a second
      * ago, and performing the routing is what stops it being selected again.
      */
-    for (const auditId of await handoffCandidates(cycle.maxLaunchesPerCycle)) {
-      const routed = await routeAuditedDocument({ auditId });
-      if (!routed.ok) {
-        if (routed.refusal) report.handoffRefused.push({ auditId, refusal: routed.refusal });
-        continue;
+    await runPass(report, 'audit-handoffs', async () => {
+      for (const auditId of await handoffCandidates(cycle.maxLaunchesPerCycle)) {
+        const routed = await routeAuditedDocument({ auditId });
+        if (!routed.ok) {
+          if (routed.refusal) report.handoffRefused.push({ auditId, refusal: routed.refusal });
+          continue;
+        }
+        report.handedOff.push({
+          auditId,
+          documentId: routed.documentId!,
+          toLayerId: routed.toLayerId!,
+          canonicalName: routed.canonicalName!,
+        });
+        const stuck = await reopenAuditRound(routed);
+        if (stuck) report.binReopenRefused.push(stuck);
       }
-      report.handedOff.push({
-        auditId,
-        documentId: routed.documentId!,
-        toLayerId: routed.toLayerId!,
-        canonicalName: routed.canonicalName!,
-      });
-      const stuck = await reopenAuditRound(routed);
-      if (stuck) report.binReopenRefused.push(stuck);
-    }
+    });
 
     /*
      * 1c-iii. Give a park for missing authority a way back, on every project.
@@ -1288,9 +1376,11 @@ export async function tick(owner: string): Promise<TickReport> {
      * Ahead of `unjudged()` rather than after it, so a candidate this step
      * resumes is judged again in this same tick rather than the next one.
      */
-    for (const one of await resumeParkedAcrossProjects(cycle.maxLaunchesPerCycle)) {
-      report.authorityResumed.push(one);
-    }
+    await runPass(report, 'authority-resumed', async () => {
+      for (const one of await resumeParkedAcrossProjects(cycle.maxLaunchesPerCycle)) {
+        report.authorityResumed.push(one);
+      }
+    });
 
     /*
      * 1d. Judge what has been captured and never judged.
@@ -1323,15 +1413,19 @@ export async function tick(owner: string): Promise<TickReport> {
      * left them, and `attachMissionSpec` refuses anything that is not already
      * `QUEUED` by a named person.
      */
-    for (const waiting of await overriddenWithoutSpec(cycle.maxLaunchesPerCycle)) {
-      if (await specifyOverriddenCandidate(waiting.id)) report.planning.push(waiting.id);
-    }
+    await runPass(report, 'overridden', async () => {
+      for (const waiting of await overriddenWithoutSpec(cycle.maxLaunchesPerCycle)) {
+        if (await specifyOverriddenCandidate(waiting.id)) report.planning.push(waiting.id);
+      }
+    });
 
-    for (const candidate of await unjudged(cycle.maxLaunchesPerCycle)) {
-      const outcome = await judgeCandidate(candidate.id);
-      if (outcome.answeredByArchive) report.answeredByArchive.push(candidate.id);
-      else if (outcome.ok) report.planning.push(candidate.id);
-    }
+    await runPass(report, 'judge-unjudged', async () => {
+      for (const candidate of await unjudged(cycle.maxLaunchesPerCycle)) {
+        const outcome = await judgeCandidate(candidate.id);
+        if (outcome.answeredByArchive) report.answeredByArchive.push(candidate.id);
+        else if (outcome.ok) report.planning.push(candidate.id);
+      }
+    });
 
     /*
      * 1e. Decide what the cheap look was for.
@@ -1348,11 +1442,13 @@ export async function tick(owner: string): Promise<TickReport> {
      * "look at this first". Brain forces `cheapToReduce` false on that pass, so
      * it terminates rather than sending the idea back round.
      */
-    for (const settled of await probedAwaitingDecision(cycle.maxLaunchesPerCycle)) {
-      const outcome = await judgeCandidate(settled.candidateId, { afterProbe: settled.probe });
-      if (outcome.answeredByArchive) report.answeredByArchive.push(settled.candidateId);
-      else if (outcome.ok) report.planning.push(settled.candidateId);
-    }
+    await runPass(report, 'judge-probed', async () => {
+      for (const settled of await probedAwaitingDecision(cycle.maxLaunchesPerCycle)) {
+        const outcome = await judgeCandidate(settled.candidateId, { afterProbe: settled.probe });
+        if (outcome.answeredByArchive) report.answeredByArchive.push(settled.candidateId);
+        else if (outcome.ok) report.planning.push(settled.candidateId);
+      }
+    });
 
     /*
      * 1e-ii. Keep a live mission's reservation from expiring underneath it.
@@ -1362,9 +1458,11 @@ export async function tick(owner: string): Promise<TickReport> {
      * spend that never happened, and the launch step would hand out a slot the
      * owner had already committed.
      */
-    for (const id of await renewLiveMissionReservations(cycle.maxEventsPerCycle)) {
-      report.renewedReservations.push(id);
-    }
+    const renewed = await runPass(report, 'renew-reservations', async () => {
+      for (const id of await renewLiveMissionReservations(cycle.maxEventsPerCycle)) {
+        report.renewedReservations.push(id);
+      }
+    });
 
     /*
      * 1e-iii. Re-read where each project's understanding runs out.
@@ -1378,428 +1476,432 @@ export async function tick(owner: string): Promise<TickReport> {
      * Failures here are contained to the project: a frontier is a reading, and
      * losing one must never stop the tick from finishing missions.
      */
-    for (const project of await listProjects()) {
-      try {
-        /*
-         * On the frontier's own cadence rather than the loop's.
-         *
-         * Observing an item touches its `last_seen_at`, so refreshing every
-         * project every thirty seconds would rewrite every frontier row twice
-         * a minute for ever. Whether a project is due is read from those same
-         * rows, so it survives a restart without any in-process state — and a
-         * person opening the page still gets a reading of now, because the
-         * read path refreshes unconditionally.
-         */
-        if (!(await frontierIsDue(project.id))) continue;
-        const counts = await refreshFrontier(project.id);
-        if (counts.observed > 0 || counts.resolved > 0) {
-          report.frontier.push({
-            projectId: project.id,
-            observed: counts.observed,
-            resolved: counts.resolved,
-          });
-        }
-      } catch {
-        /* a project whose frontier could not be read is left as it was */
-      }
-    }
-
-    /*
-     * 1e-iii-b. Start each active sprint's discovery, and file what it found.
-     *
-     * Activating a sprint used to write a mode row and nothing else: no goal,
-     * no candidate, no mission, no queued job. A freshly activated sprint could
-     * therefore sit empty beside a perfectly healthy fleet while the screen said
-     * discovery had started — §24's "waiting nobody can resolve" arriving at a
-     * section rather than at a state machine.
-     *
-     * Both halves are idempotent by rows rather than by a flag, so a restart
-     * mid-tick resumes rather than repeating: a bucket is opened once because
-     * its `CASH_DISCOVERY_OPENED` event says so, and a claim becomes an
-     * opportunity once because of the unique index on `(project, claim)`.
-     *
-     * `openDiscovery` is gated by the sprint's own lifecycle and `harvest` is
-     * deliberately not: winding down stops new discovery and never stops the
-     * answers to what already ran arriving. Opening is bounded to one bucket
-     * per project per tick, because five simultaneous missions on activation is
-     * five simultaneous activations — the same bound the lens dispatch takes.
-     *
-     * Nothing here bypasses anything: what it creates is a candidate, which
-     * still goes through the archive check, the judgment pass, the mission
-     * compiler, the approval envelope, the evidence gate and all three audit
-     * roles before a single claim can be harvested from it.
-     */
-    for (const project of await listProjects()) {
-      try {
-        const run = await runDiscovery(project.id);
-        /*
-         * Reported when anything happened at all, which now includes the two
-         * things reconciliation does.
-         *
-         * `runDiscovery` has always returned four facts and this read two of
-         * them — the same shape as destructuring `{ audits }` and dropping the
-         * synthesis beside it. A grant written and ten ideas put back are
-         * exactly what somebody watching a repaired sprint needs to see, and a
-         * tick that did both while opening nothing would have reported
-         * silence.
-         */
-        if (
-          run.opened.length > 0 ||
-          run.harvested.length > 0 ||
-          run.authorized ||
-          run.resumed.length > 0 ||
-          run.signalled.length > 0
-        ) {
-          report.cashDiscovery.push({
-            projectId: project.id,
-            opened: run.opened.map((one) => one.bucketId),
-            harvested: run.harvested.map((one) => one.opportunity.id),
-            authorized: run.authorized,
-            resumed: run.resumed,
-            signalled: run.signalled,
-          });
-        }
-      } catch {
-        /* a sprint whose discovery could not run is left as it was */
-      }
-
-      try {
-        /*
-         * And the axis the ten buckets never had: *where* to look.
-         *
-         * The buckets are ten mechanisms — who published a paid request, where
-         * one deliverable has two prices, who has sold more than they can
-         * deliver — and not one of them says which part of the economy to ask.
-         * So production discovery searched an undifferentiated one: thirty-one
-         * openings across transcription, stock photography, ticket resale,
-         * sneakers and domains, with nothing saying which industries Brain had
-         * looked at or what lived underneath any of them.
-         *
-         * Its own `try`, for the reason the block below has one: a kernel pass
-         * that threw must not stop a sprint settling a need or harvesting what
-         * already ran. It is derived from rows on every tick, so a sprint that
-         * predates it gets a map with nobody pressing anything, and it is
-         * bounded by how many questions may be open at once rather than by any
-         * lifetime count — §24's correction, which this kernel does not undo.
-         *
-         * Nothing it creates bypasses anything. A kernel round is a Russell
-         * candidate, and it goes through the archive check, the judgment pass,
-         * the compiler, the approval envelope, the evidence gate and all three
-         * audit roles exactly as a bucket does.
-         */
-        const kernel = await runIndustryKernel(project.id);
-        if (
-          kernel.opened.length > 0 ||
-          kernel.absorbed.nodes.length > 0 ||
-          kernel.absorbed.constraints.length > 0 ||
-          kernel.absorbed.capital.length > 0 ||
-          kernel.absorbed.settled.length > 0
-        ) {
-          report.industryKernel.push({
-            projectId: project.id,
-            opened: kernel.opened.map((one) => ({
-              purpose: one.purpose,
-              roundId: one.roundId,
-              why: one.why,
-            })),
-            subjects: kernel.absorbed.nodes.map((one) => one.id),
-            constraints: kernel.absorbed.constraints.map((one) => one.id),
-            capital: kernel.absorbed.capital.map((one) => one.id),
-            settled: kernel.absorbed.settled.map((one) => one.roundId),
-          });
-        }
-      } catch {
-        /* a map that could not be advanced is left exactly as it was */
-      }
-
-      try {
-        /*
-         * And the axis that says who or what actually produces the work.
-         *
-         * §38's kernel says *where* to look; this one says *by whom it is
-         * done*. Brain knew what it wanted to produce and held no row saying
-         * who produced it — the nearest thing was one free-text line per
-         * opening, with no vocabulary, no test and no way to ask the question
-         * across a portfolio.
-         *
-         * Its own `try`, for the reason the block above has one: a labor pass
-         * that threw must not stop a sprint harvesting or settling a need. It
-         * is derived from rows on every tick, so a portfolio qualified before
-         * it existed gets a labor map with nobody pressing anything, and it is
-         * bounded by how many questions may be open at once rather than by any
-         * lifetime count.
-         *
-         * Nothing it creates bypasses anything, and nothing it decides engages
-         * anybody: a labor round is a Russell candidate that goes through the
-         * archive check, the compiler, the approval envelope, the evidence
-         * gate and all three audit roles, and its envelope forbids contacting,
-         * quoting for or hiring anyone by name.
-         */
-        const labor = await runLaborKernel(project.id);
-        if (
-          labor.opened.length > 0 ||
-          labor.decided.length > 0 ||
-          labor.derived.workflows.length > 0 ||
-          labor.derived.tasks.length > 0 ||
-          labor.absorbed.answers.length > 0 ||
-          labor.absorbed.options.length > 0 ||
-          labor.absorbed.settled.length > 0
-        ) {
-          report.laborKernel.push({
-            projectId: project.id,
-            opened: labor.opened.map((one) => ({
-              purpose: one.purpose,
-              roundId: one.roundId,
-              why: one.why,
-            })),
-            workflows: labor.derived.workflows.map((one) => one.id),
-            tasks: labor.derived.tasks.map((one) => one.id),
-            decided: labor.decided.map((one) => ({
-              taskId: one.taskId,
-              layer: one.productionLayer,
-              reason: one.necessityReason,
-            })),
-            answers: labor.absorbed.answers.map((one) => one.id),
-            options: labor.absorbed.options.map((one) => one.id),
-            settled: labor.absorbed.settled.map((one) => one.roundId),
-          });
-        }
-      } catch {
-        /* a labor map that could not be advanced is left exactly as it was */
-      }
-
-      try {
-        /*
-         * 1a-iv-f. The cross-border dealflow kernel.
-         *
-         * §38's kernel added *where* in the economy to look. This one adds the
-         * axis a cross-border equipment transaction needs and nothing above it
-         * can express: a deal has two sides, and everything hard about it —
-         * whether the goods may lawfully enter that market, what it costs to
-         * land them, how the trade pays somebody in the middle — lives between
-         * them.
-         *
-         * Its own `try`, for the reason every block around it has one: a
-         * dealflow pass that threw must not stop a sprint settling a need,
-         * harvesting what already ran, or advancing its map.
-         *
-         * Nothing it creates bypasses anything. A round is a Russell
-         * candidate, and it goes through the archive check, the judgment pass,
-         * the compiler, the approval envelope, the evidence gate and all three
-         * audit roles exactly as a bucket does. A deal that becomes real is
-         * promoted into a `cash_opportunities` row and pursued by the
-         * machinery Cash Mode already has, so there is no second lifecycle
-         * here and no second work queue.
-         */
-        const dealflow = await runDealflowKernel(project.id);
-        if (
-          dealflow.opened.length > 0 ||
-          dealflow.paired.length > 0 ||
-          dealflow.promoted.length > 0 ||
-          dealflow.filed.parties.length > 0 ||
-          dealflow.filed.requirements.length > 0 ||
-          dealflow.filed.costs.length > 0 ||
-          dealflow.filed.structures.length > 0 ||
-          dealflow.filed.settled.length > 0
-        ) {
-          report.dealflowKernel.push({
-            projectId: project.id,
-            opened: dealflow.opened.map((one) => ({
-              purpose: one.purpose,
-              roundId: one.roundId,
-              why: one.why,
-            })),
-            parties: dealflow.filed.parties.map((one) => one.id),
-            requirements: dealflow.filed.requirements.map((one) => one.id),
-            costs: dealflow.filed.costs.map((one) => one.id),
-            structures: dealflow.filed.structures.map((one) => one.id),
-            paired: dealflow.paired.map((one) => one.id),
-            promoted: dealflow.promoted.map((one) => one.dealId),
-            settled: dealflow.filed.settled.map((one) => one.roundId),
-          });
-        }
-      } catch {
-        /* a dealflow pass that could not run leaves every row exactly as it was */
-      }
-
-      try {
-        /*
-         * 1a-iv-g. The puzzle products and production kernel.
-         *
-         * The first kernel here that holds an artifact Brain **made** rather
-         * than facts it read somewhere. A puzzle is the one thing in this
-         * repository Brain can both produce and prove — it can generate a
-         * sudoku and then demonstrate, from the printed grid alone, that it
-         * has exactly one solution — and the pass turns that into a catalog,
-         * products compiled from it, and the research about who buys them.
-         *
-         * Its own `try`, for the reason every block around it has one: a
-         * puzzle pass that threw must not stop a sprint settling a need,
-         * harvesting what already ran, or advancing its map.
-         *
-         * Nothing it creates bypasses anything. A round is a Russell
-         * candidate, and it goes through the archive check, the judgment pass,
-         * the compiler, the approval envelope, the evidence gate and all three
-         * audit roles exactly as a bucket does. A product that becomes
-         * sellable is promoted into a `cash_opportunities` row and pursued by
-         * the machinery Cash Mode already has, so there is no second lifecycle
-         * here and no second work queue.
-         */
-        const puzzle = await runPuzzleKernel(project.id);
-        if (
-          puzzle.opened.length > 0 ||
-          puzzle.systems.length > 0 ||
-          puzzle.batches.length > 0 ||
-          puzzle.compiled.length > 0 ||
-          puzzle.promoted.length > 0 ||
-          puzzle.filed.formats.length > 0 ||
-          puzzle.filed.demand.length > 0 ||
-          puzzle.filed.routes.length > 0 ||
-          puzzle.filed.economics.length > 0 ||
-          puzzle.filed.constraints.length > 0 ||
-          puzzle.filed.settled.length > 0
-        ) {
-          report.puzzleKernel.push({
-            projectId: project.id,
-            opened: puzzle.opened.map((one) => ({
-              purpose: one.purpose,
-              roundId: one.roundId,
-              why: one.why,
-            })),
-            formats: puzzle.filed.formats.map((one) => one.id),
-            demand: puzzle.filed.demand.map((one) => one.id),
-            routes: puzzle.filed.routes.map((one) => one.id),
-            economics: puzzle.filed.economics.map((one) => one.id),
-            constraints: puzzle.filed.constraints.map((one) => one.id),
-            systems: puzzle.systems.map((one) => one.id),
+    await runPass(report, 'project-kernels', async () => {
+      await runPass(report, 'frontier', async () => {
+      for (const project of await listProjects()) {
+          try {
             /*
-             * What was made and what was refused, both. A batch that produced
-             * nothing because its generator is failing is the more useful
-             * half, and reporting only the successes would hide exactly the
-             * condition the defect ceiling exists to catch.
+             * On the frontier's own cadence rather than the loop's.
+             *
+             * Observing an item touches its `last_seen_at`, so refreshing every
+             * project every thirty seconds would rewrite every frontier row twice
+             * a minute for ever. Whether a project is due is read from those same
+             * rows, so it survives a restart without any in-process state — and a
+             * person opening the page still gets a reading of now, because the
+             * read path refreshes unconditionally.
              */
-            made: puzzle.batches.reduce((sum, one) => sum + one.made.length, 0),
-            refused: puzzle.batches.reduce((sum, one) => sum + one.invalid.length, 0),
-            blocked: puzzle.batches
-              .filter((one) => one.blocked !== null)
-              .map((one) => ({ masterId: one.masterId, why: one.blocked as string })),
-            compiled: puzzle.compiled.map((one) => one.id),
-            promoted: puzzle.promoted.map((one) => one.productId),
-            settled: puzzle.filed.settled.map((one) => one.roundId),
-          });
+            if (!(await frontierIsDue(project.id))) continue;
+            const counts = await refreshFrontier(project.id);
+            if (counts.observed > 0 || counts.resolved > 0) {
+              report.frontier.push({
+                projectId: project.id,
+                observed: counts.observed,
+                resolved: counts.resolved,
+              });
+            }
+          } catch {
+            /* a project whose frontier could not be read is left as it was */
+          }
         }
-      } catch {
-        /* a puzzle pass that could not run leaves every row exactly as it was */
-      }
+      });
 
-      try {
-        /*
-         * And the long-horizon question the sprints run underneath.
-         *
-         * §38's kernel answers *where in the economy money is reachable*; this
-         * one answers *which machine to build next, and what building it makes
-         * possible*. They are independent on purpose — a project may run either,
-         * both or neither — so this pass asks about every project rather than
-         * only the ones holding a sprint, and one read of
-         * `manufacturing_programs` answers it for the many that hold neither.
-         *
-         * Its own `try`, for the reason every block around it has one: a kernel
-         * pass that threw must not stop a sprint settling a need or harvesting
-         * what already ran.
-         *
-         * Nothing it creates bypasses anything. A programme round is a Russell
-         * candidate, and it goes through the archive check, the judgment pass,
-         * the compiler, the approval envelope, the evidence gate and all three
-         * audit roles exactly as a bucket does. And nothing it does can record
-         * that this company holds a capability: that is a person's, and there
-         * is no path to it from here.
-         */
-        const programme = await runManufacturingKernel(project.id);
-        if (
-          programme.opened.length > 0 ||
-          programme.absorbed.categories.length > 0 ||
-          programme.absorbed.capabilities.length > 0 ||
-          programme.absorbed.edges.length > 0 ||
-          programme.absorbed.evidence.length > 0 ||
-          programme.absorbed.settled.length > 0
-        ) {
-          report.manufacturingKernel.push({
-            projectId: project.id,
-            opened: programme.opened.map((one) => ({
-              purpose: one.purpose,
-              roundId: one.roundId,
-              why: one.why,
-            })),
-            categories: programme.absorbed.categories.map((one) => one.id),
-            capabilities: programme.absorbed.capabilities.map((one) => one.id),
-            edges: programme.absorbed.edges.map((one) => one.id),
-            evidence: programme.absorbed.evidence.map((one) => one.id),
-            settled: programme.absorbed.settled.map((one) => one.roundId),
-          });
+      /*
+       * 1e-iii-b. Start each active sprint's discovery, and file what it found.
+       *
+       * Activating a sprint used to write a mode row and nothing else: no goal,
+       * no candidate, no mission, no queued job. A freshly activated sprint could
+       * therefore sit empty beside a perfectly healthy fleet while the screen said
+       * discovery had started — §24's "waiting nobody can resolve" arriving at a
+       * section rather than at a state machine.
+       *
+       * Both halves are idempotent by rows rather than by a flag, so a restart
+       * mid-tick resumes rather than repeating: a bucket is opened once because
+       * its `CASH_DISCOVERY_OPENED` event says so, and a claim becomes an
+       * opportunity once because of the unique index on `(project, claim)`.
+       *
+       * `openDiscovery` is gated by the sprint's own lifecycle and `harvest` is
+       * deliberately not: winding down stops new discovery and never stops the
+       * answers to what already ran arriving. Opening is bounded to one bucket
+       * per project per tick, because five simultaneous missions on activation is
+       * five simultaneous activations — the same bound the lens dispatch takes.
+       *
+       * Nothing here bypasses anything: what it creates is a candidate, which
+       * still goes through the archive check, the judgment pass, the mission
+       * compiler, the approval envelope, the evidence gate and all three audit
+       * roles before a single claim can be harvested from it.
+       */
+      for (const project of await listProjects()) {
+        try {
+          const run = await runDiscovery(project.id);
+          /*
+           * Reported when anything happened at all, which now includes the two
+           * things reconciliation does.
+           *
+           * `runDiscovery` has always returned four facts and this read two of
+           * them — the same shape as destructuring `{ audits }` and dropping the
+           * synthesis beside it. A grant written and ten ideas put back are
+           * exactly what somebody watching a repaired sprint needs to see, and a
+           * tick that did both while opening nothing would have reported
+           * silence.
+           */
+          if (
+            run.opened.length > 0 ||
+            run.harvested.length > 0 ||
+            run.authorized ||
+            run.resumed.length > 0 ||
+            run.signalled.length > 0
+          ) {
+            report.cashDiscovery.push({
+              projectId: project.id,
+              opened: run.opened.map((one) => one.bucketId),
+              harvested: run.harvested.map((one) => one.opportunity.id),
+              authorized: run.authorized,
+              resumed: run.resumed,
+              signalled: run.signalled,
+            });
+          }
+        } catch {
+          /* a sprint whose discovery could not run is left as it was */
         }
-      } catch {
-        /* a ladder that could not be advanced is left exactly as it was */
-      }
 
-      try {
-        /*
-         * And the part where Brain acts on what a piece says it needs.
-         *
-         * Its own `try`, because the two are separate answers with separate
-         * remedies: a harvest that threw must not also stop Brain settling a
-         * need whose capability has arrived, and the pass that raises needs
-         * runs whether or not anything new was discovered this tick.
-         *
-         * `required_capabilities` was written by the card and read by nothing,
-         * so a piece could declare that collecting its money needs a payment
-         * processor and reach READY against a Brain that has none and had
-         * never been asked. `closeNeed` set a status and resumed nothing,
-         * because nothing recorded what had been waiting — a person could
-         * answer the same need repeatedly and never learn their answer was
-         * recorded and ignored.
-         *
-         * Derived from rows on every tick rather than hooked to the moment a
-         * card changed, which is what reaches the pieces already stranded. It
-         * gates nothing: an open need is a valid execution state and Brain
-         * carries on around it.
-         */
-        const operated = await operate(project.id);
-        const raised = [
-          ...operated.capabilities.raised,
-          ...operated.gaps.map((one) => one.needId),
-        ];
-        if (
-          raised.length > 0 ||
-          operated.capabilities.settled.length > 0 ||
-          operated.continuations.length > 0 ||
-          operated.dependentWork.length > 0 ||
-          operated.research.applied.length > 0 ||
-          operated.proposed.length > 0 ||
-          operated.validations.started.length > 0 ||
-          operated.validations.settled.length > 0 ||
-          operated.monetization.pathsAdded.length > 0 ||
-          operated.monetization.moved > 0
-        ) {
-          report.cashOperations.push({
-            projectId: project.id,
-            needsRaised: raised,
-            needsSettled: operated.capabilities.settled,
-            resumed: operated.continuations.filter((one) => one.resumed).map((one) => one.needId),
-            dependentWork: operated.dependentWork.map((one) => one.candidateId),
-            cardsAnswered: operated.research.applied.map((one) => one.needId),
-            termsProposed: operated.proposed.map((one) => one.opportunityId),
-            validationsStarted: operated.validations.started.map((one) => one.opportunityId),
-            validationsSettled: operated.validations.settled.map(
-              (one) => `${one.opportunityId}=${one.to}`,
-            ),
-            monetizationPathsAdded: operated.monetization.pathsAdded,
-            monetizationMoved: operated.monetization.moved,
-          });
+        try {
+          /*
+           * And the axis the ten buckets never had: *where* to look.
+           *
+           * The buckets are ten mechanisms — who published a paid request, where
+           * one deliverable has two prices, who has sold more than they can
+           * deliver — and not one of them says which part of the economy to ask.
+           * So production discovery searched an undifferentiated one: thirty-one
+           * openings across transcription, stock photography, ticket resale,
+           * sneakers and domains, with nothing saying which industries Brain had
+           * looked at or what lived underneath any of them.
+           *
+           * Its own `try`, for the reason the block below has one: a kernel pass
+           * that threw must not stop a sprint settling a need or harvesting what
+           * already ran. It is derived from rows on every tick, so a sprint that
+           * predates it gets a map with nobody pressing anything, and it is
+           * bounded by how many questions may be open at once rather than by any
+           * lifetime count — §24's correction, which this kernel does not undo.
+           *
+           * Nothing it creates bypasses anything. A kernel round is a Russell
+           * candidate, and it goes through the archive check, the judgment pass,
+           * the compiler, the approval envelope, the evidence gate and all three
+           * audit roles exactly as a bucket does.
+           */
+          const kernel = await runIndustryKernel(project.id);
+          if (
+            kernel.opened.length > 0 ||
+            kernel.absorbed.nodes.length > 0 ||
+            kernel.absorbed.constraints.length > 0 ||
+            kernel.absorbed.capital.length > 0 ||
+            kernel.absorbed.settled.length > 0
+          ) {
+            report.industryKernel.push({
+              projectId: project.id,
+              opened: kernel.opened.map((one) => ({
+                purpose: one.purpose,
+                roundId: one.roundId,
+                why: one.why,
+              })),
+              subjects: kernel.absorbed.nodes.map((one) => one.id),
+              constraints: kernel.absorbed.constraints.map((one) => one.id),
+              capital: kernel.absorbed.capital.map((one) => one.id),
+              settled: kernel.absorbed.settled.map((one) => one.roundId),
+            });
+          }
+        } catch {
+          /* a map that could not be advanced is left exactly as it was */
         }
-      } catch {
-        /* a sprint whose operating pass could not run is left as it was */
+
+        try {
+          /*
+           * And the axis that says who or what actually produces the work.
+           *
+           * §38's kernel says *where* to look; this one says *by whom it is
+           * done*. Brain knew what it wanted to produce and held no row saying
+           * who produced it — the nearest thing was one free-text line per
+           * opening, with no vocabulary, no test and no way to ask the question
+           * across a portfolio.
+           *
+           * Its own `try`, for the reason the block above has one: a labor pass
+           * that threw must not stop a sprint harvesting or settling a need. It
+           * is derived from rows on every tick, so a portfolio qualified before
+           * it existed gets a labor map with nobody pressing anything, and it is
+           * bounded by how many questions may be open at once rather than by any
+           * lifetime count.
+           *
+           * Nothing it creates bypasses anything, and nothing it decides engages
+           * anybody: a labor round is a Russell candidate that goes through the
+           * archive check, the compiler, the approval envelope, the evidence
+           * gate and all three audit roles, and its envelope forbids contacting,
+           * quoting for or hiring anyone by name.
+           */
+          const labor = await runLaborKernel(project.id);
+          if (
+            labor.opened.length > 0 ||
+            labor.decided.length > 0 ||
+            labor.derived.workflows.length > 0 ||
+            labor.derived.tasks.length > 0 ||
+            labor.absorbed.answers.length > 0 ||
+            labor.absorbed.options.length > 0 ||
+            labor.absorbed.settled.length > 0
+          ) {
+            report.laborKernel.push({
+              projectId: project.id,
+              opened: labor.opened.map((one) => ({
+                purpose: one.purpose,
+                roundId: one.roundId,
+                why: one.why,
+              })),
+              workflows: labor.derived.workflows.map((one) => one.id),
+              tasks: labor.derived.tasks.map((one) => one.id),
+              decided: labor.decided.map((one) => ({
+                taskId: one.taskId,
+                layer: one.productionLayer,
+                reason: one.necessityReason,
+              })),
+              answers: labor.absorbed.answers.map((one) => one.id),
+              options: labor.absorbed.options.map((one) => one.id),
+              settled: labor.absorbed.settled.map((one) => one.roundId),
+            });
+          }
+        } catch {
+          /* a labor map that could not be advanced is left exactly as it was */
+        }
+
+        try {
+          /*
+           * 1a-iv-f. The cross-border dealflow kernel.
+           *
+           * §38's kernel added *where* in the economy to look. This one adds the
+           * axis a cross-border equipment transaction needs and nothing above it
+           * can express: a deal has two sides, and everything hard about it —
+           * whether the goods may lawfully enter that market, what it costs to
+           * land them, how the trade pays somebody in the middle — lives between
+           * them.
+           *
+           * Its own `try`, for the reason every block around it has one: a
+           * dealflow pass that threw must not stop a sprint settling a need,
+           * harvesting what already ran, or advancing its map.
+           *
+           * Nothing it creates bypasses anything. A round is a Russell
+           * candidate, and it goes through the archive check, the judgment pass,
+           * the compiler, the approval envelope, the evidence gate and all three
+           * audit roles exactly as a bucket does. A deal that becomes real is
+           * promoted into a `cash_opportunities` row and pursued by the
+           * machinery Cash Mode already has, so there is no second lifecycle
+           * here and no second work queue.
+           */
+          const dealflow = await runDealflowKernel(project.id);
+          if (
+            dealflow.opened.length > 0 ||
+            dealflow.paired.length > 0 ||
+            dealflow.promoted.length > 0 ||
+            dealflow.filed.parties.length > 0 ||
+            dealflow.filed.requirements.length > 0 ||
+            dealflow.filed.costs.length > 0 ||
+            dealflow.filed.structures.length > 0 ||
+            dealflow.filed.settled.length > 0
+          ) {
+            report.dealflowKernel.push({
+              projectId: project.id,
+              opened: dealflow.opened.map((one) => ({
+                purpose: one.purpose,
+                roundId: one.roundId,
+                why: one.why,
+              })),
+              parties: dealflow.filed.parties.map((one) => one.id),
+              requirements: dealflow.filed.requirements.map((one) => one.id),
+              costs: dealflow.filed.costs.map((one) => one.id),
+              structures: dealflow.filed.structures.map((one) => one.id),
+              paired: dealflow.paired.map((one) => one.id),
+              promoted: dealflow.promoted.map((one) => one.dealId),
+              settled: dealflow.filed.settled.map((one) => one.roundId),
+            });
+          }
+        } catch {
+          /* a dealflow pass that could not run leaves every row exactly as it was */
+        }
+
+        try {
+          /*
+           * 1a-iv-g. The puzzle products and production kernel.
+           *
+           * The first kernel here that holds an artifact Brain **made** rather
+           * than facts it read somewhere. A puzzle is the one thing in this
+           * repository Brain can both produce and prove — it can generate a
+           * sudoku and then demonstrate, from the printed grid alone, that it
+           * has exactly one solution — and the pass turns that into a catalog,
+           * products compiled from it, and the research about who buys them.
+           *
+           * Its own `try`, for the reason every block around it has one: a
+           * puzzle pass that threw must not stop a sprint settling a need,
+           * harvesting what already ran, or advancing its map.
+           *
+           * Nothing it creates bypasses anything. A round is a Russell
+           * candidate, and it goes through the archive check, the judgment pass,
+           * the compiler, the approval envelope, the evidence gate and all three
+           * audit roles exactly as a bucket does. A product that becomes
+           * sellable is promoted into a `cash_opportunities` row and pursued by
+           * the machinery Cash Mode already has, so there is no second lifecycle
+           * here and no second work queue.
+           */
+          const puzzle = await runPuzzleKernel(project.id);
+          if (
+            puzzle.opened.length > 0 ||
+            puzzle.systems.length > 0 ||
+            puzzle.batches.length > 0 ||
+            puzzle.compiled.length > 0 ||
+            puzzle.promoted.length > 0 ||
+            puzzle.filed.formats.length > 0 ||
+            puzzle.filed.demand.length > 0 ||
+            puzzle.filed.routes.length > 0 ||
+            puzzle.filed.economics.length > 0 ||
+            puzzle.filed.constraints.length > 0 ||
+            puzzle.filed.settled.length > 0
+          ) {
+            report.puzzleKernel.push({
+              projectId: project.id,
+              opened: puzzle.opened.map((one) => ({
+                purpose: one.purpose,
+                roundId: one.roundId,
+                why: one.why,
+              })),
+              formats: puzzle.filed.formats.map((one) => one.id),
+              demand: puzzle.filed.demand.map((one) => one.id),
+              routes: puzzle.filed.routes.map((one) => one.id),
+              economics: puzzle.filed.economics.map((one) => one.id),
+              constraints: puzzle.filed.constraints.map((one) => one.id),
+              systems: puzzle.systems.map((one) => one.id),
+              /*
+               * What was made and what was refused, both. A batch that produced
+               * nothing because its generator is failing is the more useful
+               * half, and reporting only the successes would hide exactly the
+               * condition the defect ceiling exists to catch.
+               */
+              made: puzzle.batches.reduce((sum, one) => sum + one.made.length, 0),
+              refused: puzzle.batches.reduce((sum, one) => sum + one.invalid.length, 0),
+              blocked: puzzle.batches
+                .filter((one) => one.blocked !== null)
+                .map((one) => ({ masterId: one.masterId, why: one.blocked as string })),
+              compiled: puzzle.compiled.map((one) => one.id),
+              promoted: puzzle.promoted.map((one) => one.productId),
+              settled: puzzle.filed.settled.map((one) => one.roundId),
+            });
+          }
+        } catch {
+          /* a puzzle pass that could not run leaves every row exactly as it was */
+        }
+
+        try {
+          /*
+           * And the long-horizon question the sprints run underneath.
+           *
+           * §38's kernel answers *where in the economy money is reachable*; this
+           * one answers *which machine to build next, and what building it makes
+           * possible*. They are independent on purpose — a project may run either,
+           * both or neither — so this pass asks about every project rather than
+           * only the ones holding a sprint, and one read of
+           * `manufacturing_programs` answers it for the many that hold neither.
+           *
+           * Its own `try`, for the reason every block around it has one: a kernel
+           * pass that threw must not stop a sprint settling a need or harvesting
+           * what already ran.
+           *
+           * Nothing it creates bypasses anything. A programme round is a Russell
+           * candidate, and it goes through the archive check, the judgment pass,
+           * the compiler, the approval envelope, the evidence gate and all three
+           * audit roles exactly as a bucket does. And nothing it does can record
+           * that this company holds a capability: that is a person's, and there
+           * is no path to it from here.
+           */
+          const programme = await runManufacturingKernel(project.id);
+          if (
+            programme.opened.length > 0 ||
+            programme.absorbed.categories.length > 0 ||
+            programme.absorbed.capabilities.length > 0 ||
+            programme.absorbed.edges.length > 0 ||
+            programme.absorbed.evidence.length > 0 ||
+            programme.absorbed.settled.length > 0
+          ) {
+            report.manufacturingKernel.push({
+              projectId: project.id,
+              opened: programme.opened.map((one) => ({
+                purpose: one.purpose,
+                roundId: one.roundId,
+                why: one.why,
+              })),
+              categories: programme.absorbed.categories.map((one) => one.id),
+              capabilities: programme.absorbed.capabilities.map((one) => one.id),
+              edges: programme.absorbed.edges.map((one) => one.id),
+              evidence: programme.absorbed.evidence.map((one) => one.id),
+              settled: programme.absorbed.settled.map((one) => one.roundId),
+            });
+          }
+        } catch {
+          /* a ladder that could not be advanced is left exactly as it was */
+        }
+
+        try {
+          /*
+           * And the part where Brain acts on what a piece says it needs.
+           *
+           * Its own `try`, because the two are separate answers with separate
+           * remedies: a harvest that threw must not also stop Brain settling a
+           * need whose capability has arrived, and the pass that raises needs
+           * runs whether or not anything new was discovered this tick.
+           *
+           * `required_capabilities` was written by the card and read by nothing,
+           * so a piece could declare that collecting its money needs a payment
+           * processor and reach READY against a Brain that has none and had
+           * never been asked. `closeNeed` set a status and resumed nothing,
+           * because nothing recorded what had been waiting — a person could
+           * answer the same need repeatedly and never learn their answer was
+           * recorded and ignored.
+           *
+           * Derived from rows on every tick rather than hooked to the moment a
+           * card changed, which is what reaches the pieces already stranded. It
+           * gates nothing: an open need is a valid execution state and Brain
+           * carries on around it.
+           */
+          const operated = await operate(project.id);
+          const raised = [
+            ...operated.capabilities.raised,
+            ...operated.gaps.map((one) => one.needId),
+          ];
+          if (
+            raised.length > 0 ||
+            operated.capabilities.settled.length > 0 ||
+            operated.continuations.length > 0 ||
+            operated.dependentWork.length > 0 ||
+            operated.research.applied.length > 0 ||
+            operated.proposed.length > 0 ||
+            operated.validations.started.length > 0 ||
+            operated.validations.settled.length > 0 ||
+            operated.monetization.pathsAdded.length > 0 ||
+            operated.monetization.moved > 0
+          ) {
+            report.cashOperations.push({
+              projectId: project.id,
+              needsRaised: raised,
+              needsSettled: operated.capabilities.settled,
+              resumed: operated.continuations.filter((one) => one.resumed).map((one) => one.needId),
+              dependentWork: operated.dependentWork.map((one) => one.candidateId),
+              cardsAnswered: operated.research.applied.map((one) => one.needId),
+              termsProposed: operated.proposed.map((one) => one.opportunityId),
+              validationsStarted: operated.validations.started.map((one) => one.opportunityId),
+              validationsSettled: operated.validations.settled.map(
+                (one) => `${one.opportunityId}=${one.to}`,
+              ),
+              monetizationPathsAdded: operated.monetization.pathsAdded,
+              monetizationMoved: operated.monetization.moved,
+            });
+          }
+        } catch {
+          /* a sprint whose operating pass could not run is left as it was */
+        }
       }
-    }
+    });
 
     /*
      * 1e-iv. Carry asked lenses to a worker, and read the answers back.
@@ -1815,22 +1917,24 @@ export async function tick(owner: string): Promise<TickReport> {
      * `dispatchInquiry` claims with a guarded UPDATE before it creates the bin,
      * so a redelivered tick cannot produce two bins for one question.
      */
-    for (const inquiry of await pendingInquiries(3)) {
-      try {
-        await dispatchInquiry(inquiry);
-        report.lensInquiries.dispatched += 1;
-      } catch {
-        /* a lens that could not be dispatched stays REQUESTED and is retried */
+    await runPass(report, 'lens-inquiries', async () => {
+      for (const inquiry of await pendingInquiries(3)) {
+        try {
+          await dispatchInquiry(inquiry);
+          report.lensInquiries.dispatched += 1;
+        } catch {
+          /* a lens that could not be dispatched stays REQUESTED and is retried */
+        }
       }
-    }
-    for (const inquiry of await runningInquiries(10)) {
-      try {
-        const settled = await settleInquiry(inquiry);
-        if (settled.state !== 'RUNNING') report.lensInquiries.settled += 1;
-      } catch {
-        /* an inquiry whose bin could not be read stays RUNNING */
+      for (const inquiry of await runningInquiries(10)) {
+        try {
+          const settled = await settleInquiry(inquiry);
+          if (settled.state !== 'RUNNING') report.lensInquiries.settled += 1;
+        } catch {
+          /* an inquiry whose bin could not be read stays RUNNING */
+        }
       }
-    }
+    });
 
     /*
      * 1f. Park what the packet stopped on.
@@ -1840,9 +1944,11 @@ export async function tick(owner: string): Promise<TickReport> {
      * whose mission is waiting on a person does not start another one in front
      * of it.
      */
-    for (const parked of await parkStoppedMissions(cycle.maxEventsPerCycle)) {
-      report.needsHuman.push(parked);
-    }
+    const parkedStopped = await runPass(report, 'park-stopped', async () => {
+      for (const parked of await parkStoppedMissions(cycle.maxEventsPerCycle)) {
+        report.needsHuman.push(parked);
+      }
+    });
 
     /*
      * 2. Carry out what a person answered.
@@ -1865,25 +1971,29 @@ export async function tick(owner: string): Promise<TickReport> {
      * undoes the answer and narrows the choices to the ones that can still act,
      * so what comes back is a card whose remaining options are true.
      */
-    for (const request of await listAnsweredRequests(cycle.maxEventsPerCycle)) {
-      const outcome = await resumeAnsweredRequest(request);
-      if (!outcome.settled) {
-        report.unresolvedAnswers.push({ requestId: request.id, reason: outcome.reason });
-        await reopenAnswered(request, outcome.reason);
-        continue;
+    await runPass(report, 'answered-requests', async () => {
+      for (const request of await listAnsweredRequests(cycle.maxEventsPerCycle)) {
+        const outcome = await resumeAnsweredRequest(request);
+        if (!outcome.settled) {
+          report.unresolvedAnswers.push({ requestId: request.id, reason: outcome.reason });
+          await reopenAnswered(request, outcome.reason);
+          continue;
+        }
+        if (await markResumed(request.id)) report.resumed.push(request.id);
       }
-      if (await markResumed(request.id)) report.resumed.push(request.id);
-    }
+    });
 
     // 3. Recover what a deadline passed.
-    for (const probe of await listExpiredProbes(cycleNow())) {
-      const ended = await completeProbe({
-        probeId: probe.id,
-        outcome: 'UNKNOWN',
-        explanation: 'the probe reached its deadline before it could settle the question',
-      });
-      if (ended) report.expiredProbes.push(probe.id);
-    }
+    await runPass(report, 'expired-probes', async () => {
+      for (const probe of await listExpiredProbes(cycleNow())) {
+        const ended = await completeProbe({
+          probeId: probe.id,
+          outcome: 'UNKNOWN',
+          explanation: 'the probe reached its deadline before it could settle the question',
+        });
+        if (ended) report.expiredProbes.push(probe.id);
+      }
+    });
 
     /*
      * 3b. Take the cheap look before committing capacity.
@@ -1894,24 +2004,28 @@ export async function tick(owner: string): Promise<TickReport> {
      * no model; what it buys is the right to *not* spend the allowance a full
      * mission would.
      */
-    for (const candidate of await exploring(1)) {
-      const opened = await openProbe({
-        candidateId: candidate.id,
-        question: candidate.statement,
-        maxLookups: GENERAL_LIGHT_PROBE_V1.maxLookups,
-      });
-      if (!opened.ok || !opened.probe) continue;
-      // A probe already settled is not run again; `runProbe` is re-entrant and
-      // `completeProbe` is guarded, so this is belt and braces rather than the
-      // guarantee.
-      if (opened.probe.state === 'COMPLETE' || opened.probe.state === 'FAILED') continue;
-      const ran = await runProbe({ probeId: opened.probe.id });
-      if (ran.ok) report.probed.push(opened.probe.id);
-    }
+    await runPass(report, 'probes', async () => {
+      for (const candidate of await exploring(1)) {
+        const opened = await openProbe({
+          candidateId: candidate.id,
+          question: candidate.statement,
+          maxLookups: GENERAL_LIGHT_PROBE_V1.maxLookups,
+        });
+        if (!opened.ok || !opened.probe) continue;
+        // A probe already settled is not run again; `runProbe` is re-entrant and
+        // `completeProbe` is guarded, so this is belt and braces rather than the
+        // guarantee.
+        if (opened.probe.state === 'COMPLETE' || opened.probe.state === 'FAILED') continue;
+        const ran = await runProbe({ probeId: opened.probe.id });
+        if (ran.ok) report.probed.push(opened.probe.id);
+      }
+    });
 
     // A launch that crashed between its steps is finished here rather than at
     // boot only, so a mission half-built at 3am does not wait for a restart.
-    await repairLaunches();
+    await runPass(report, 'repair-launches', async () => {
+      await repairLaunches();
+    });
 
     /*
      * Rank what was judged before its envelope declared a rank.
@@ -1923,90 +2037,106 @@ export async function tick(owner: string): Promise<TickReport> {
      * for ever, which is the whole reason this exists rather than the judgment
      * being enough on its own.
      */
-    for (const id of await applyDeclaredLaunchOrdinals(cycle.maxEventsPerCycle)) {
-      report.ranked.push(id);
-    }
+    await runPass(report, 'launch-ordinals', async () => {
+      for (const id of await applyDeclaredLaunchOrdinals(cycle.maxEventsPerCycle)) {
+        report.ranked.push(id);
+      }
+    });
 
     // 4. Start at most one thing.
-    const launchable = await nextLaunchable(cycle.maxEventsPerCycle);
-    let started = 0;
-    for (const entry of launchable) {
-      if (started >= cycle.maxLaunchesPerCycle) {
-        // The bound stopped the tick, and the rest stay queued for the next
-        // one. Preserved rather than dropped: a candidate that lost a race for
-        // a slot has not been decided against.
-        report.bounded = true;
-        break;
-      }
-      const outcome = await launch({ ...entry.spec, candidateId: entry.candidateId });
-      if (outcome.ok && !outcome.replayed) {
-        report.launched.push(outcome.mission!.id);
-        started += 1;
-        /*
-         * And now the parent can be told, because only now does the follow-on
-         * have a mission id.
-         *
-         * `setNextMission` is guarded on `next_mission_id IS NULL`, so a
-         * redelivery, a second candidate somebody created by hand, or a replay
-         * links nothing: the first one wins and the rest are ordinary
-         * no-answers. That guard is what makes "exactly one" a property of the
-         * database rather than of this loop running exactly once.
-         */
-        if (entry.followOnOfMissionId) {
-          const linked = await setNextMission({
-            missionId: entry.followOnOfMissionId,
-            nextMissionId: outcome.mission!.id,
-          });
-          if (linked) {
-            report.linkedNext.push({
+    /*
+     * Launch is the one pass that must not run after its guards failed. A
+     * lapsed hold reads to `reserve` as a free slot, so launching after the
+     * renewal failed could start a mission over the grant's concurrency; and a
+     * mission waiting on a person must be parked before another is started in
+     * front of it. Skipped this tick, recorded, and asked again next tick.
+     */
+    if (!renewed || !parkedStopped) {
+      report.passFailures.push({
+        pass: 'launch',
+        error: 'skipped: a pass it depends on (renew-reservations or park-stopped) failed this tick',
+      });
+    } else await runPass(report, 'launch', async () => {
+      const launchable = await nextLaunchable(cycle.maxEventsPerCycle);
+      let started = 0;
+      for (const entry of launchable) {
+        if (started >= cycle.maxLaunchesPerCycle) {
+          // The bound stopped the tick, and the rest stay queued for the next
+          // one. Preserved rather than dropped: a candidate that lost a race for
+          // a slot has not been decided against.
+          report.bounded = true;
+          break;
+        }
+        const outcome = await launch({ ...entry.spec, candidateId: entry.candidateId });
+        if (outcome.ok && !outcome.replayed) {
+          report.launched.push(outcome.mission!.id);
+          started += 1;
+          /*
+           * And now the parent can be told, because only now does the follow-on
+           * have a mission id.
+           *
+           * `setNextMission` is guarded on `next_mission_id IS NULL`, so a
+           * redelivery, a second candidate somebody created by hand, or a replay
+           * links nothing: the first one wins and the rest are ordinary
+           * no-answers. That guard is what makes "exactly one" a property of the
+           * database rather than of this loop running exactly once.
+           */
+          if (entry.followOnOfMissionId) {
+            const linked = await setNextMission({
               missionId: entry.followOnOfMissionId,
               nextMissionId: outcome.mission!.id,
             });
+            if (linked) {
+              report.linkedNext.push({
+                missionId: entry.followOnOfMissionId,
+                nextMissionId: outcome.mission!.id,
+              });
+            }
           }
+        } else if (!outcome.ok && outcome.kind === 'ALREADY_RESEARCHED') {
+          /*
+           * The answering transition for an idea that has nowhere left to go.
+           *
+           * There used to be a redo step here: a mission that produced nothing
+           * sent its idea back to a worker for a different specification. With a
+           * compiled specification there is no different one to write, so a redo
+           * would be the same search twice — which is exactly what §15 forbids
+           * and exactly what production did, three times, in four minutes.
+           *
+           * So the idea is parked with the run's own recorded reason instead of
+           * sitting `QUEUED` while `launch()` refuses it every thirty seconds in
+           * silence. `PARKED` has a person's override as its way back, and a
+           * compiler change legitimately produces a new specification, which is
+           * the other way out. Neither of them is a button somebody has to press
+           * to keep the loop honest.
+           */
+          const parked = await parkResearchedIdea(entry.candidateId, outcome.reason);
+          if (parked) report.parked.push({ candidateId: entry.candidateId, reason: parked });
+        } else if (!outcome.ok && outcome.refusedBy === 'IN_TOTAL') {
+          /*
+           * A wall, not a queue, and the difference decides whether a person
+           * hears about it.
+           *
+           * This branch did not exist. A cumulative refusal's reason matches
+           * neither prefix below, so it fell through every case and was dropped
+           * from the report — a queued idea sat behind a spent ceiling in total
+           * silence, on every tick, with the briefing saying nobody was needed.
+           *
+           * `AT_ONCE` deliberately still falls through: something is running and
+           * this starts when it finishes. Reporting that as a blocker would
+           * teach a person to ignore the one that is.
+           */
+          report.parked.push({ candidateId: entry.candidateId, reason: outcome.reason });
+        } else if (!outcome.ok && outcome.reason.startsWith('INSUFFICIENT_')) {
+          // Reported rather than counted against the launch bound: a parked
+          // mission consumed no slot, and a fleet short of a capability must not
+          // starve the missions that never asked for it.
+          report.parked.push({ candidateId: entry.candidateId, reason: outcome.reason });
+        } else if (!outcome.ok && outcome.reason.startsWith('NO_HEALTHY_EXECUTION_SURFACE')) {
+          report.parked.push({ candidateId: entry.candidateId, reason: outcome.reason });
         }
-      } else if (!outcome.ok && outcome.kind === 'ALREADY_RESEARCHED') {
-        /*
-         * The answering transition for an idea that has nowhere left to go.
-         *
-         * There used to be a redo step here: a mission that produced nothing
-         * sent its idea back to a worker for a different specification. With a
-         * compiled specification there is no different one to write, so a redo
-         * would be the same search twice — which is exactly what §15 forbids
-         * and exactly what production did, three times, in four minutes.
-         *
-         * So the idea is parked with the run's own recorded reason instead of
-         * sitting `QUEUED` while `launch()` refuses it every thirty seconds in
-         * silence. `PARKED` has a person's override as its way back, and a
-         * compiler change legitimately produces a new specification, which is
-         * the other way out. Neither of them is a button somebody has to press
-         * to keep the loop honest.
-         */
-        const parked = await parkResearchedIdea(entry.candidateId, outcome.reason);
-        if (parked) report.parked.push({ candidateId: entry.candidateId, reason: parked });
-      } else if (!outcome.ok && outcome.refusedBy === 'IN_TOTAL') {
-        /*
-         * A wall, not a queue, and the difference decides whether a person
-         * hears about it.
-         *
-         * This branch did not exist. A cumulative refusal's reason matches
-         * neither prefix below, so it fell through every case and was dropped
-         * from the report — a queued idea sat behind a spent ceiling in total
-         * silence, on every tick, with the briefing saying nobody was needed.
-         *
-         * `AT_ONCE` deliberately still falls through: something is running and
-         * this starts when it finishes. Reporting that as a blocker would
-         * teach a person to ignore the one that is.
-         */
-        report.parked.push({ candidateId: entry.candidateId, reason: outcome.reason });
-      } else if (!outcome.ok && outcome.reason.startsWith('INSUFFICIENT_')) {
-        // Reported rather than counted against the launch bound: a parked
-        // mission consumed no slot, and a fleet short of a capability must not
-        // starve the missions that never asked for it.
-        report.parked.push({ candidateId: entry.candidateId, reason: outcome.reason });
-      } else if (!outcome.ok && outcome.reason.startsWith('NO_HEALTHY_EXECUTION_SURFACE')) {
-        report.parked.push({ candidateId: entry.candidateId, reason: outcome.reason });
       }
-    }
+    });
 
     /*
      * Last: every nonterminal bin must have claimable work, live work, a
@@ -2020,11 +2150,13 @@ export async function tick(owner: string): Promise<TickReport> {
      * never completes — so putting it on the tick adds a producer for an
      * existing escalation rather than a new decision.
      */
-    const reconciled = await reconcileBins();
-    report.escalatedBins = reconciled.details.map((detail) => ({
-      binId: detail.binId,
-      reason: detail.reason,
-    }));
+    await runPass(report, 'reconcile-bins', async () => {
+      const reconciled = await reconcileBins();
+      report.escalatedBins = reconciled.details.map((detail) => ({
+        binId: detail.binId,
+        reason: detail.reason,
+      }));
+    });
 
     /*
      * And whose capacity each worker is, where a row can prove it.
@@ -2036,13 +2168,25 @@ export async function tick(owner: string): Promise<TickReport> {
      * nothing and is wrapped for the same reason the rest of this block is —
      * metadata must never stop a mission writing back.
      */
-    try {
+    await runPass(report, 'worker-ownership', async () => {
       await reconcileWorkerOwnership();
-    } catch {
-      // A reading that could not be taken is not a reason to fail the tick.
-    }
+    });
 
-    await completeCycle({ owner, generation: claim.generation, cursorAt: cycleNow() });
+    await completeCycle({
+      owner,
+      generation: claim.generation,
+      cursorAt: cycleNow(),
+      // Recorded on the row, so a pass that keeps failing is a reading
+      // somebody can take rather than something only the process saw.
+      // Prefixed so the projections that turn a failed *tick* into a DEGRADED
+      // status on every project's Home can tell it apart: a pass that failed
+      // is retried next tick, and its error text is an operator's reading,
+      // not something to show every member of every project.
+      error:
+        report.passFailures.length > 0
+          ? `${PASS_FAILURE_PREFIX}${report.passFailures.map((f) => `${f.pass}: ${f.error}`).join(' | ')}`.slice(0, 2000)
+          : null,
+    });
     return report;
   } catch (error) {
     await completeCycle({

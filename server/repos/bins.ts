@@ -3223,6 +3223,116 @@ export async function reopenNoShowDispatches(
   return out;
 }
 
+/**
+ * How long an intent that gave up on unanswered fires waits before Brain asks
+ * once more, and how many times it may.
+ */
+export const ABANDONED_REVIVE_AFTER_MS = 2 * 3_600_000;
+export const MAX_ABANDONED_REVIVALS = 2;
+/** What one revival adds to the intent's ceiling: one more intent's worth of fires. */
+const REVIVAL_STEP = 5;
+/** `ensureDispatchIntent` creates every intent at 5; past this it has no revival left. */
+const REVIVED_CEILING = 5 + REVIVAL_STEP * MAX_ABANDONED_REVIVALS;
+
+/**
+ * Give an intent that gave up on unanswered fires a bounded second life.
+ *
+ * `reopenNoShowDispatches` abandons an intent after five unanswered fires, and
+ * that used to be the end: the bin stayed READY at the same generation, the
+ * intent is unique per (bin, generation), and nothing could ever fire for it
+ * again — while `reconcileBins` counted a READY bin with attempts left as
+ * healthy. A Factory plan bin sat like that indefinitely. Five unanswered fires
+ * are usually a surface that has since been quarantined, so the next fire goes
+ * to a different one, or to none and is deferred uncharged.
+ *
+ * Bounded twice: a cool-off, and `MAX_ABANDONED_REVIVALS` per (bin, generation)
+ * counted from the append-only `DISPATCH_REVIVED` rows. The ceiling is raised,
+ * never reset, so the attempt history stays readable. Past the bound the bin
+ * is escalated by `reconcileBins` as the one decision it now is.
+ */
+export async function reviveAbandonedNoShowDispatches(
+  limit: number,
+  afterMs: number = ABANDONED_REVIVE_AFTER_MS,
+): Promise<{ dispatchId: string; binId: string }[]> {
+  const now = binNow();
+  const before = new Date(Date.parse(now) - Math.max(0, afterMs)).toISOString();
+  const rows = await getDb().all<{
+    id: string;
+    bin_id: string;
+    project_id: string;
+    lease_generation: number;
+  }>(
+    `SELECT d.id AS id, d.bin_id AS bin_id, b.project_id AS project_id,
+            d.lease_generation AS lease_generation
+       FROM bin_dispatch d
+       JOIN bins b ON b.id = d.bin_id
+      WHERE d.state = 'ABANDONED'
+        AND d.last_error_kind = 'NO_SHOW'
+        AND d.updated_at <= ?
+        AND ${claimableStateSql('b.')}
+        AND b.attempt_count < b.max_attempts
+        AND b.lease_generation = d.lease_generation
+        -- The bound is in the selection, on the column the revival itself
+        -- raises: an intent with no revival left is never selected, so it
+        -- cannot crowd the page and starve one abandoned after it, and the
+        -- bound does not rest on an event write that may be swallowed.
+        AND d.max_attempts < ?
+        AND NOT EXISTS (SELECT 1 FROM connector_recovery_probes p WHERE p.bin_id = b.id)
+      ORDER BY d.updated_at, d.id
+      LIMIT ?`,
+    [before, now, REVIVED_CEILING, Math.max(1, limit)] as never[],
+  );
+  const out: { dispatchId: string; binId: string }[] = [];
+  for (const row of rows) {
+    const result = await getDb().run(
+      `UPDATE bin_dispatch
+          SET state = 'PENDING', max_attempts = max_attempts + ?, next_attempt_at = ?, updated_at = ?,
+              last_error = 'Revived after unanswered fires: the surfaces that did not answer may since have been taken out of routing.'
+        WHERE id = ? AND state = 'ABANDONED' AND max_attempts < ?`,
+      [REVIVAL_STEP, now, now, row.id, REVIVED_CEILING] as never[],
+    );
+    if (result.changes !== 1) continue;
+    await recordBinEvent({
+      eventType: 'DISPATCH_REVIVED',
+      binId: row.bin_id,
+      projectId: row.project_id,
+      leaseGeneration: row.lease_generation,
+      outcome: 'PENDING',
+      reason: 'An intent abandoned on unanswered fires, asked once more after a cool-off.',
+    });
+    out.push({ dispatchId: row.id, binId: row.bin_id });
+  }
+  return out;
+}
+
+/** How many times the intent for this (bin, generation) has been revived. */
+export async function abandonedRevivals(binId: string, leaseGeneration: number): Promise<number> {
+  const row = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM bin_events
+      WHERE bin_id = ? AND lease_generation = ? AND event_type = 'DISPATCH_REVIVED'`,
+    [binId, leaseGeneration],
+  );
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * Whether this bin's intent at its current generation gave up and has no
+ * revival left — the state in which nothing will ever fire for it again.
+ */
+export async function dispatchExhaustedFor(binId: string, leaseGeneration: number): Promise<boolean> {
+  const row = await getDb().get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM bin_dispatch
+      WHERE bin_id = ? AND lease_generation = ? AND state = 'ABANDONED'`,
+    [binId, leaseGeneration],
+  );
+  if (Number(row?.n ?? 0) === 0) return false;
+  const ceiling = await getDb().get<{ m: number | string | null }>(
+    `SELECT MAX(max_attempts) AS m FROM bin_dispatch WHERE bin_id = ? AND lease_generation = ?`,
+    [binId, leaseGeneration],
+  );
+  return Number(ceiling?.m ?? 0) >= REVIVED_CEILING;
+}
+
 /** How many times one intent's attempt is refunded for Brain's own outage. */
 export const MAX_INFRA_REFUNDS = 3;
 

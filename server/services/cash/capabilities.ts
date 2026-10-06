@@ -59,6 +59,7 @@ import {
   usableAdapter,
 } from './effects.ts';
 import { usablePaymentReader } from './providers/payments.ts';
+import { listRoutines } from '../../repos/fleet.ts';
 
 export type CapabilityState = 'PRESENT' | 'MISSING' | 'UNKNOWN';
 
@@ -156,6 +157,24 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
     // `PRESENT` only when a real, healthy adapter is registered — the same
     // reading `journey/fulfillment.ts` uses to decide whether to send one.
     read: async () => refundAdapter() !== null,
+  },
+  {
+    id: 'BUILD_SOFTWARE',
+    does:
+      'Build and verify the software a bounded test needs, through the Software Factory, as a ' +
+      'reviewable pull request a person merges.',
+    requires:
+      'An enabled Routine that declares `repository-write`, and a repository onboarded for this ' +
+      'project on Build.',
+    nextStep:
+      'Register a Factory surface with `npm run fleet -- register-routine` declaring ' +
+      '`repository-write`, and onboard the repository on Build → Repositories.',
+    // The fleet half only: which repository a project may change is decided per
+    // project by the handoff, from the onboarding rows.
+    read: async () =>
+      (await listRoutines()).some(
+        (routine) => routine.state === 'ENABLED' && routine.capabilities.includes('repository-write'),
+      ),
   },
   {
     id: 'PUBLISH_A_LISTING',

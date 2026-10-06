@@ -178,7 +178,16 @@ async function report(projectRef: string): Promise<void> {
     console.log(`    ceilings packets=${goal.max_missions} fragments=${goal.max_fragments}  created ${goal.created_at}`);
     console.log(`    considered ${goal.research_considered_at ?? 'never'}  archive-answered ${goal.research_archive_marker ? 'yes' : 'no'}`);
     console.log(`    packets ${packets.length}  fragments ${Number(fragments[0]?.n ?? 0)}`);
-    for (const packet of packets) console.log(`      ${packet.goal_packet_key}  ${packet.id}  ${packet.status}  ${packet.created_at}`);
+    for (const packet of packets) {
+      console.log(`      ${packet.goal_packet_key}  ${packet.id}  ${packet.status}  ${packet.created_at}`);
+      // The bin is what a worker is sent for; a live packet with no live bin is stranded.
+      const bins = await db.all<{ id: string; state: string; attempt_count: number; max_attempts: number }>(
+        'SELECT id, state, attempt_count, max_attempts FROM bins WHERE orchestration_id = ? ORDER BY created_at, id',
+        [packet.id],
+      );
+      for (const bin of bins) console.log(`        bin ${bin.id}  ${bin.state}  attempts ${bin.attempt_count}/${bin.max_attempts}`);
+      if (bins.length === 0) console.log('        bin none');
+    }
     for (const request of requests) console.log(`    ceiling request ${request.state}  ${request.resume_key}`);
   }
   const duplicates = await db.all<{ goal_id: string; goal_packet_key: string; n: number | string }>(

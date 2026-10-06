@@ -41,7 +41,7 @@ import {
   listFindings,
 } from '../server/repos/sharedFindings.ts';
 import { inventoryProject } from '../server/services/reconcile/plan.ts';
-import { MAX_GOALS_PER_PASS, advanceResearchGoals } from '../server/services/research/goalContinuation.ts';
+import { MAX_GOALS_PER_PASS, MAX_GOAL_PACKET_BINS, advanceResearchGoals } from '../server/services/research/goalContinuation.ts';
 import type { Layer } from '../server/domain/types.ts';
 
 const DAY = 86_400_000;
@@ -377,5 +377,90 @@ describe('a packet the goal starts is one a worker can be sent for', () => {
     const bins = await binsOf(goal.id);
     expect(bins.map((bin) => bin.state)).toEqual(['READY']);
     expect(repaired.binned.map((one) => one.binId)).toEqual([bins[0]!.id]);
+  });
+});
+
+describe('a goal never freezes behind a packet it cannot advance', () => {
+  const binsOf = async (goalId: string) =>
+    getDb().all<{ id: string; state: string }>(
+      `SELECT b.id, b.state FROM bins b JOIN research_orchestrations o ON o.id = b.orchestration_id
+        WHERE o.goal_id = ? ORDER BY b.created_at, b.id`,
+      [goalId],
+    );
+  const spendAll = async (goalId: string) =>
+    getDb().run(
+      `UPDATE bins SET state = 'FAILED' WHERE orchestration_id IN
+         (SELECT id FROM research_orchestrations WHERE goal_id = ?)`,
+      [goalId],
+    );
+
+  it('replaces a spent bin while the live packet still holds claimable work, and only up to the bound', async () => {
+    const goal = await newGoal(OTHER);
+    await advanceResearchGoals();
+    expect((await binsOf(goal.id)).map((b) => b.state)).toEqual(['READY']);
+
+    // The state that froze a goal: its packet live, its only bin spent.
+    await spendAll(goal.id);
+    const repaired = await advanceResearchGoals();
+    expect(repaired.binned).toHaveLength(1);
+    expect((await binsOf(goal.id)).map((b) => b.state)).toEqual(['FAILED', 'READY']);
+    // A second pass with a live replacement adds nothing.
+    expect((await advanceResearchGoals()).binned).toEqual([]);
+
+    // And the bound holds however many times bins are spent.
+    for (let i = 0; i < 6; i += 1) {
+      await spendAll(goal.id);
+      await advanceResearchGoals();
+    }
+    expect((await binsOf(goal.id)).length).toBe(MAX_GOAL_PACKET_BINS);
+  });
+
+  it('does not replace a spent bin over a packet with nothing a worker could claim', async () => {
+    const goal = await newGoal(OTHER);
+    await advanceResearchGoals();
+    await spendAll(goal.id);
+    await getDb().run(
+      `UPDATE work_items SET state = 'CANCELLED' WHERE orchestration_id IN
+         (SELECT id FROM research_orchestrations WHERE goal_id = ?)`,
+      [goal.id],
+    );
+    const pass = await advanceResearchGoals();
+    expect(pass.binned).toEqual([]);
+    expect((await binsOf(goal.id)).map((b) => b.state)).toEqual(['FAILED']);
+  });
+
+  it('continues after a round that FAILED before writing any requirement', async () => {
+    const goal = await newGoal(OTHER);
+    await advanceResearchGoals();
+    await getDb().run(
+      `UPDATE research_orchestrations SET status = 'FAILED' WHERE goal_id = ?`,
+      [goal.id],
+    );
+    const next = await advanceResearchGoals();
+    expect(next.started.map((one) => one.packetKey)).toEqual(['round-2']);
+  });
+});
+
+describe('the archive is judged only once it has been read', () => {
+  it('starts no packet while a document is still being read, and starts one once it is', async () => {
+    const goal = await newGoal(OTHER);
+    // The state an outage or a re-extraction leaves: a registered document
+    // whose current reading is not finished.
+    await getDb().run(
+      `UPDATE extraction_runs SET status = 'QUEUED'
+        WHERE document_id IN (SELECT id FROM documents WHERE project_id = ?)`,
+      [fixture.project.id],
+    );
+    const waiting = await advanceResearchGoals();
+    expect(waiting.started).toEqual([]);
+    expect(waiting.skipped.find((one) => one.goalId === goal.id)?.reason).toMatch(/still being read/);
+
+    await getDb().run(
+      `UPDATE extraction_runs SET status = 'READY'
+        WHERE document_id IN (SELECT id FROM documents WHERE project_id = ?)`,
+      [fixture.project.id],
+    );
+    const read = await advanceResearchGoals();
+    expect(read.started.map((one) => one.goalId)).toEqual([goal.id]);
   });
 });
