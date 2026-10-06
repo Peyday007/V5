@@ -33,6 +33,7 @@ import {
   type RequestContext,
 } from '../services/identity/context.ts';
 import { answerEscapedFailure } from './escape.ts';
+import { CREDENTIAL_NOT_CHECKED, prepareUnavailable } from './unavailable.ts';
 
 /**
  * Reachable with no credentials at all.
@@ -227,11 +228,19 @@ export function requireAuthentication(): RequestHandler {
       let outcome: Awaited<ReturnType<typeof authenticateRequest>>;
       try {
         outcome = await authenticateRequest(req);
-      } catch {
+      } catch (error) {
         // Fail closed. An unreachable database means we cannot tell who this is,
-        // and "cannot tell" is not "allow".
-        await auditDenial(req, context, 'INTERNAL_ERROR');
-        refuse(res, 503);
+        // and "cannot tell" is not "allow" — but it is not "Not authorized"
+        // either, which is what this used to say. No audit row is attempted: the
+        // database that could not authenticate the request cannot record it,
+        // and waiting a connection timeout to find that out only lengthens the
+        // outage for the caller. The incident is counted where it was felt.
+        if (!prepareUnavailable(res, 'http:auth', error)) {
+          // Not infrastructure, so the database is probably answering: keep the
+          // denial on the record as it always was.
+          await auditDenial(req, context, 'INTERNAL_ERROR');
+        }
+        res.status(503).json({ error: 'temporarily_unavailable', message: CREDENTIAL_NOT_CHECKED, retryable: true });
         return;
       }
 

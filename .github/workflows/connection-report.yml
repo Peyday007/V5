@@ -1,0 +1,41 @@
+# The connection system's truth, read from production: pools, infrastructure
+# incidents, real auth refusals, misses by cause, and every logical connector
+# with whether a person must act. Read-only: it runs scripts/connection-report.sh
+# inside the released container and changes nothing.
+name: Connection report
+
+on:
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: 'How many hours back to read (1-168).'
+        required: false
+        default: '24'
+
+concurrency:
+  group: brain-console-connection-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Read the connection system
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: ./.github/actions/await-release
+      - name: Report
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          HOURS: ${{ inputs.hours }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          case "$HOURS" in
+            ''|*[!0-9]*) HOURS=24 ;;
+          esac
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/connection-report.sh --hours $HOURS" \
+            2>&1 | tee connection-report.txt
+          set -e
+          grep -q '^CONNECTION-REPORT: OK' connection-report.txt

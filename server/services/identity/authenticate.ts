@@ -37,7 +37,10 @@ import {
   parseWorkerCredential,
 } from './secrets.ts';
 import { markBridgeCredentialUsed, resolveBridgeCredential } from '../../repos/bridge.ts';
-import { findLiveToken, touchToken } from '../../repos/oauth.ts';
+import { findLiveToken } from '../../repos/oauth.ts';
+import { recordTokenUse } from './tokenTouch.ts';
+import { asControlPlane, asWorkload, noteLatency } from '../../db/infra.ts';
+import { outsideTransaction } from '../../db/database.ts';
 
 /** The cookie a signed-in person carries. */
 export const SESSION_COOKIE = 'brain_session';
@@ -186,6 +189,31 @@ async function membershipsFor(
  * malformed header are all `INVALID_CREDENTIALS`.
  */
 export async function authenticateRequest(req: Request): Promise<AuthOutcome> {
+  /*
+   * On the control plane (`server/db/infra.ts`): a handful of indexed lookups
+   * that must not queue behind research audits and factory ticks for the last
+   * connection. A throw from here is a database that could not answer, never a
+   * verdict on the credential — every caller says so in those words.
+   */
+  const started = Date.now();
+  try {
+    return await asControlPlane(() => authenticateOnControlPlane(req));
+  } finally {
+    noteLatency('authenticate', Date.now() - started);
+  }
+}
+
+/**
+ * A bookkeeping write an authentication triggers, sent off the control plane.
+ * A browser polling the API must not spend the two connections MCP
+ * authentication is reserved; a lost "last used" stamp on a session or a
+ * worker credential decides nothing.
+ */
+function inBackground(write: () => Promise<unknown>): void {
+  void outsideTransaction(() => asWorkload(write)).catch(() => undefined);
+}
+
+async function authenticateOnControlPlane(req: Request): Promise<AuthOutcome> {
   if (hasCredentialInQuery(req)) return { ok: false, reason: 'UNSAFE_TRANSPORT' };
 
   const bearer = bearerToken(req);
@@ -219,7 +247,7 @@ async function authenticateHuman(secret: string, req: Request): Promise<AuthOutc
   if (!user) return { ok: false, reason: 'INVALID_CREDENTIALS' };
   if (user.disabled) return { ok: false, reason: 'PRINCIPAL_DISABLED' };
 
-  void touchSession(session.id);
+  inBackground(() => touchSession(session.id));
 
   return {
     ok: true,
@@ -272,7 +300,7 @@ async function authenticateBridge(presented: string): Promise<AuthOutcome> {
   if (!user) return { ok: false, reason: 'INVALID_CREDENTIALS' };
   if (user.disabled) return { ok: false, reason: 'PRINCIPAL_DISABLED' };
 
-  void markBridgeCredentialUsed(credential.id);
+  inBackground(() => markBridgeCredentialUsed(credential.id));
 
   return {
     ok: true,
@@ -319,7 +347,7 @@ async function authenticateWorker(presented: string, _req: Request): Promise<Aut
   // only one — but a race between the two must fail closed.
   if (worker.disabled) return { ok: false, reason: 'PRINCIPAL_DISABLED' };
 
-  void markCredentialUsed(credential.id);
+  inBackground(() => markCredentialUsed(credential.id));
 
   return {
     ok: true,
@@ -367,7 +395,7 @@ async function authenticateOAuth(presented: string): Promise<AuthOutcome> {
   if (!worker) return { ok: false, reason: 'INVALID_CREDENTIALS' };
   if (worker.disabled) return { ok: false, reason: 'PRINCIPAL_DISABLED' };
 
-  void touchToken(token.id);
+  recordTokenUse(token.id);
 
   return {
     ok: true,

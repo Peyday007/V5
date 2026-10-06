@@ -117,6 +117,9 @@ const checkInTool: McpTool = {
     additionalProperties: false,
   },
   annotations: { title: 'Check in for work', ...MUTATING },
+  // Establishing the session is control plane; choosing work steps back out
+  // to the workload pool inside `checkIn`.
+  plane: 'CONTROL',
   run: async (args, { principal }) => {
     const workerId = workerOnly(principal);
     if (isUnexpandedSessionRef(optionalString(args, 'session_ref'))) {
@@ -132,6 +135,21 @@ const checkInTool: McpTool = {
       leaseMs: optionalInteger(args, 'lease_ms') ?? undefined,
     });
 
+    if (!result.assigned && result.reason === 'RETRY_LATER') {
+      return {
+        value: {
+          assigned: false,
+          reason: result.reason,
+          retryable: true,
+          message:
+            'You are checked in, and Brain could not finish choosing your work just now (its database ' +
+            'was busy). This is not an authorization problem and nothing was refused. Wait about ten ' +
+            'seconds and call brain_check_in again; if it says this three times in a row, end the ' +
+            'session — Brain fires another when it can.',
+        },
+        projectId: null,
+      };
+    }
     if (!result.assigned) {
       return {
         value: {

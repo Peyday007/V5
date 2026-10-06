@@ -61,6 +61,15 @@ export class SqliteAdapter implements Database {
     }
   }
 
+  /**
+   * Run `fn` outside whatever transaction the calling context carries, so a
+   * background write scheduled from inside one takes the lock like any other
+   * caller instead of skipping it into somebody else's BEGIN.
+   */
+  detached<T>(fn: () => Promise<T>): Promise<T> {
+    return this.#transactions.exit(fn);
+  }
+
   async exec(sql: string): Promise<void> {
     await this.#withConnection(() => this.#driver.exec(sql));
   }

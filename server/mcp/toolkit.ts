@@ -70,6 +70,14 @@ export interface McpTool {
     openWorldHint: boolean;
   };
   run(args: Record<string, unknown>, context: ToolContext): Promise<ToolOutcome>;
+  /**
+   * `CONTROL` for the two calls a session's liveness rests on — whoami and the
+   * establishing half of check-in. They run on the control-plane connections
+   * (`server/db/infra.ts`), so a worker proving it is here never waits behind
+   * research for a connection. Anything heavy a control tool does must step
+   * back out with `asWorkload`. Absent means ordinary work.
+   */
+  plane?: 'CONTROL';
 }
 
 /* ------------------------------------------------------------------------ */

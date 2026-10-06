@@ -1921,8 +1921,33 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
 
       if (result.changes !== 1) continue; // Somebody else won it. Ordinary.
 
-      const bin = await getBin(row.id);
-      if (!bin) continue;
+      /*
+       * The lease is committed. From here nothing may turn the assignment into
+       * an error, because the caller would then tell the worker it was given
+       * nothing while the bin sits LEASED to it with an attempt spent, stranded
+       * until the lease expires. The re-read falls back to the row this pass
+       * already holds with the lease written onto it, and the event and the
+       * arrival credit are best effort: losing a ledger row to a database that
+       * did not answer is a smaller harm than losing the bin.
+       */
+      let bin: Bin | null = null;
+      try {
+        bin = await getBin(row.id);
+      } catch (error) {
+        console.warn('[bins] assigned, and the re-read failed; answering from the claimed row:', (error as Error).message);
+      }
+      bin ??= mapBin({
+        ...row,
+        state: 'LEASED',
+        lease_generation: nextGeneration,
+        lease_id: leaseId,
+        worker_id: input.workerId,
+        lease_credential_id: input.credentialId ?? null,
+        leased_at: at,
+        heartbeat_at: at,
+        lease_expires_at: expires,
+        attempt_count: row.attempt_count + 1,
+      } as BinRow);
 
       await recordBinEvent({
         eventType: takeover ? 'BIN_TAKEOVER' : 'BIN_ASSIGNED',
@@ -1945,6 +1970,8 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
           credentialId: input.credentialId ?? null,
         },
         outcome: takeover ? 'TAKEOVER' : 'ASSIGNED',
+      }).catch((error: unknown) => {
+        console.warn('[bins] assigned, and the assignment event could not be written:', (error as Error).message);
       });
 
       await creditDispatchArrival(
@@ -1953,7 +1980,9 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
         input.workerId,
         input.credentialId ?? null,
         input.sessionRef ?? null,
-      );
+      ).catch((error: unknown) => {
+        console.warn('[bins] assigned, and the arrival credit could not be written:', (error as Error).message);
+      });
 
       return { bin, leaseId, leaseGeneration: nextGeneration, leaseExpiresAt: expires, takeover };
     }
@@ -2923,7 +2952,7 @@ export async function reopenNoShowDispatches(
      */
     const dispatchSpent = row.attempt_count >= row.max_attempts;
     const binSpent = row.bin_attempt_count >= row.bin_max_attempts;
-    const exhausted = dispatchSpent || binSpent;
+    let exhausted = dispatchSpent || binSpent;
     /*
      * The session arrived and Brain refused it the bin — that is not a no-show.
      *
@@ -2963,6 +2992,106 @@ export async function reopenNoShowDispatches(
         row.session_ref?.startsWith('cse_') ? `session_${row.session_ref.slice(4)}` : (row.session_ref ?? ''),
       ] as never[],
     );
+    /*
+     * Brain's own outage is not the surface's no-show, nor the connector's.
+     *
+     * A session that could not authenticate because the database did not
+     * answer, that checked in and could not be served, or that arrived while
+     * the machine was being replaced never claims its bin — and every one of
+     * those used to be written here as DISPATCH_NO_SHOW, three of which
+     * quarantine a healthy Routine. When an arrival-path incident
+     * (`services/infra/incidents.ts`) overlaps the window this fire's session
+     * had to arrive in, the miss is DISPATCH_INFRA_NO_SHOW — counted by neither
+     * the quarantine nor the connector's auth health — and the fire's own
+     * attempt is refunded, because the attempt was spent on Brain's outage.
+     */
+    let infraIncident: { id: string; kind: string } | null = null;
+    let refund = false;
+    /*
+     * Reopened with no charge at all: the pass could not read its evidence for
+     * longer than it is willing to wait. Deferring for ever would strand the bin
+     * (the intent is unique per generation) and, fifty such rows later, block
+     * every newer row from being judged.
+     */
+    let unjudged = false;
+    const deferLimit = new Date(Date.parse(now) - 2 * Math.max(0, staleAfterMs)).toISOString();
+    if (row.routine_id && !refusedOnArrival) {
+      const { arrivalIncidentDuring, heldArrivalEvidence, unservedArrivalFor } = await import(
+        '../services/infra/incidents.ts'
+      );
+      const { classifyInfraFailure } = await import('../db/infra.ts');
+      // What this process already knows, before any read that could fail.
+      infraIncident = heldArrivalEvidence(row.session_ref, row.sent_at);
+      const heldInMemory = infraIncident !== null;
+      try {
+        if (!infraIncident) {
+          // This fire's own session arriving and going unserved is the most
+          // direct evidence; a fleet-wide authentication outage or a restart is
+          // the other.
+          const firedWorker = (await getRoutine(row.routine_id))?.workerId ?? null;
+          infraIncident =
+            (await unservedArrivalFor(row.session_ref, row.sent_at, firedWorker)) ??
+            (await arrivalIncidentDuring(row.sent_at));
+        }
+        if (infraIncident) {
+          /*
+           * Refunded a bounded number of times. Without a bound an intent
+           * re-fires every window for as long as Brain is having a bad day,
+           * each fire a real activation out of a fixed allowance; after three
+           * the dispatch budget applies as usual — still never charged to the
+           * surface — and an exhausted intent leaves the bin to the decision
+           * `reconcileBins` makes of it.
+           */
+          const prior = await getDb().get<{ n: number }>(
+            `SELECT COUNT(*) AS n FROM bin_events
+              WHERE event_type = 'DISPATCH_INFRA_NO_SHOW' AND bin_id = ? AND lease_generation = ?`,
+            [row.bin_id, row.lease_generation],
+          );
+          refund = Number(prior?.n ?? 0) < MAX_INFRA_REFUNDS;
+        }
+      } catch (error) {
+        /*
+         * The pass cannot read its own evidence because the database is
+         * failing. Judging now would charge a surface for exactly the pressure
+         * it cannot see, so the row is left SENT and asked again next tick.
+         * Anything that is not infrastructure is charged as before, so a dead
+         * surface cannot hide behind a broken query.
+         */
+        if (classifyInfraFailure(error)) {
+          if (row.sent_at > deferLimit) {
+            console.warn(`[dispatch] no-show of ${row.id} left unjudged: its evidence could not be read`);
+            continue;
+          }
+          unjudged = true;
+        }
+        // Evidence already found in memory stands; only the refund is lost.
+        if (!heldInMemory) infraIncident = null;
+        refund = false;
+      }
+    }
+    let chargedToAuth = false;
+    if (row.routine_id && !refusedOnArrival && !infraIncident && !unjudged) {
+      try {
+        const fired = await getRoutine(row.routine_id);
+        chargedToAuth = fired?.connectorId ? chargesToAuth(await connectorHealth(fired.connectorId)) : false;
+      } catch (error) {
+        // Read before the intent moves, so a health read the database could
+        // not answer leaves the row SENT for the next tick rather than charging
+        // the surface; anything else charges the surface, as before.
+        const { classifyInfraFailure } = await import('../db/infra.ts');
+        if (classifyInfraFailure(error)) {
+          if (row.sent_at > deferLimit) continue;
+          unjudged = true;
+        }
+        chargedToAuth = false;
+      }
+    }
+    // A refunded infra miss never exhausts the *dispatch*: only the bin's own
+    // budget can still end it.
+    if (refund) exhausted = binSpent;
+    // The refund rides in the reopening statement itself, so no concurrent
+    // claim can land between the two and have its real fire's attempt undone.
+    const refundSql = refund ? ', attempt_count = CASE WHEN attempt_count > 0 THEN attempt_count - 1 ELSE 0 END' : '';
     const result = await getDb().run(
       exhausted
         ? `UPDATE bin_dispatch SET state = 'ABANDONED', updated_at = ?,
@@ -2971,7 +3100,7 @@ export async function reopenNoShowDispatches(
             WHERE id = ? AND state = 'SENT'`
         : `UPDATE bin_dispatch SET state = 'PENDING', next_attempt_at = ?, updated_at = ?,
              last_error_kind = 'NO_SHOW',
-             last_error = 'Fired, and no worker ever claimed the bin before the in-flight window closed.'
+             last_error = 'Fired, and no worker ever claimed the bin before the in-flight window closed.'${refundSql}
             WHERE id = ? AND state = 'SENT'`,
       (exhausted
         ? [
@@ -3017,16 +3146,23 @@ export async function reopenNoShowDispatches(
      * written as DISPATCH_AUTH_NO_SHOW, which the quarantine count does not
      * read and the connector's own health does.
      */
-    let chargedToAuth = false;
-    if (row.routine_id && !refusedOnArrival) {
-      try {
-        const fired = await getRoutine(row.routine_id);
-        chargedToAuth = fired?.connectorId ? chargesToAuth(await connectorHealth(fired.connectorId)) : false;
-      } catch {
-        chargedToAuth = false;
-      }
+    if (infraIncident) {
+      await recordBinEvent({
+        eventType: 'DISPATCH_INFRA_NO_SHOW',
+        binId: row.bin_id,
+        projectId: row.project_id,
+        leaseGeneration: row.lease_generation,
+        routineRef: row.routine_ref,
+        routineId: row.routine_id,
+        workloadClass: row.workload_class,
+        evidenceClass: 'MEASURED',
+        outcome: exhausted ? 'ABANDONED' : 'PENDING',
+        reason:
+          `Brain fired this surface and no session claimed the bin, during Brain's own infrastructure incident ` +
+          `${infraIncident.id} (${infraIncident.kind}). Charged to neither the surface nor its connector.`,
+      });
     }
-    if (row.routine_id && !refusedOnArrival && chargedToAuth) {
+    if (row.routine_id && !refusedOnArrival && !infraIncident && !unjudged && chargedToAuth) {
       await recordBinEvent({
         eventType: 'DISPATCH_AUTH_NO_SHOW',
         binId: row.bin_id,
@@ -3042,7 +3178,7 @@ export async function reopenNoShowDispatches(
           'Charged to the connector, not to the surface.',
       });
     }
-    if (row.routine_id && !refusedOnArrival && !chargedToAuth) {
+    if (row.routine_id && !refusedOnArrival && !infraIncident && !unjudged && !chargedToAuth) {
       await recordBinEvent({
         eventType: 'DISPATCH_NO_SHOW',
         binId: row.bin_id,
@@ -3067,8 +3203,10 @@ export async function reopenNoShowDispatches(
       routineId: row.routine_id,
       outcome: exhausted ? 'ABANDONED' : 'PENDING',
       measures: {
-        noShow: !refusedOnArrival && !chargedToAuth,
+        noShow: !refusedOnArrival && !chargedToAuth && !infraIncident && !unjudged,
+        ...(unjudged ? { unjudged: true } : {}),
         ...(chargedToAuth ? { chargedToAuth: true } : {}),
+        ...(infraIncident ? { infraIncident: infraIncident.id } : {}),
         ...(refusedOnArrival ? { refusedOnArrival: true } : {}),
         attempt: row.attempt_count,
         maxAttempts: row.max_attempts,
@@ -3084,6 +3222,9 @@ export async function reopenNoShowDispatches(
   }
   return out;
 }
+
+/** How many times one intent's attempt is refunded for Brain's own outage. */
+export const MAX_INFRA_REFUNDS = 3;
 
 export async function getDispatch(id: string): Promise<BinDispatch | null> {
   const row = await getDb().get<BinDispatchRow>(`SELECT * FROM bin_dispatch WHERE id = ?`, [id]);
