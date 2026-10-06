@@ -377,3 +377,21 @@ export async function invoiceOverpaymentCents(opportunityId: string, currency: s
   );
   return Number(row?.n ?? 0);
 }
+
+/** Every entry of these kinds on one piece in one currency, unlimited, oldest first. */
+export async function entriesOfKinds(input: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+  kinds: readonly CashMoneyKind[];
+}): Promise<CashMoneyEntry[]> {
+  if (input.kinds.length === 0) return [];
+  const rows = await getDb().all<CashMoneyEntryRow>(
+    `SELECT * FROM cash_money_entries
+      WHERE project_id = ? AND opportunity_id = ? AND currency = ?
+        AND kind IN (${input.kinds.map(() => '?').join(', ')})
+      ORDER BY occurred_at, id`,
+    [input.projectId, input.opportunityId, input.currency, ...input.kinds],
+  );
+  return rows.map(mapEntry);
+}

@@ -12385,10 +12385,18 @@ table are unchanged in kind.
   `owedBackCents` is what is still to be paid back — and every comparison with
   what was agreed or billed reads those. A deal with money owed back is not
   collectable however the rest reads. Money paid on an agreement that was
-  later released is the same fact one door along and is counted the same way:
-  only invoices for a *live* agreement bill anything, and what was paid on a
-  released one is owed back. Before that, a released agreement's paid invoice
-  made the next agreement read paid and unbillable. And that money had no way
+  later released is the same fact one door along: only invoices for a *live*
+  agreement bill anything. What was paid on a released one **carries** to the
+  piece's live agreements, oldest released first, up to what they still need —
+  `releaseAgreement` promises that money already paid stays paid when a new
+  agreement replaces the old — and only what no live agreement takes is owed
+  back, which is what a cancellation leaves. The first version made all of it
+  owed back, which billed a replacement agreement the buyer had already paid
+  for; the version before that made all of it credit, which collected a
+  cancelled deal's money as revenue. `owedBackReading` is the one reader, and
+  it attributes refunds too: a refund on an agreement's obligation repays that
+  agreement's owed-back money and nothing else's, so a refund for one
+  agreement's failed work cannot make another's owed-back money disappear. And that money had no way
   back: a refund on an agreed deal belongs to the obligation, `declare`
   refuses a released agreement, so with no obligation declared the refund was
   refused everywhere. The money route now records it where no obligation

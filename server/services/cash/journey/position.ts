@@ -22,7 +22,8 @@
  * settled reads as `unsettledCents`, and a settlement is never a second sale —
  * contribution is read from payments, never from settlements.
  */
-import { invoiceOverpaymentCents, moneyEntryByKey, totalsByKind, unattributedPersonPayments } from '../../../repos/cashLedger.ts';
+import { fulfillmentsForOpportunity } from '../../../repos/cashFulfillment.ts';
+import { entriesOfKinds, moneyEntryByKey, totalsByKind, unattributedPersonPayments } from '../../../repos/cashLedger.ts';
 import { listInvoices } from '../../../repos/cashInvoices.ts';
 import { listCommitments } from '../../../repos/cashAuthority.ts';
 import { actionsFor } from '../../../repos/cashActions.ts';
@@ -219,23 +220,134 @@ async function splitByLiveAgreement(
   return { ours, paidOnReleased };
 }
 
+export interface OwedBackReading {
+  /** Owed back before any refund: duplicates, and released money no live agreement takes. */
+  grossCents: number;
+  /** Owed back and not yet refunded. */
+  owedBackCents: number;
+  /** Refunds that repaid something other than owed-back money. */
+  otherRefundsCents: number;
+  /** Payments toward live agreements, before those other refunds. */
+  creditedGrossCents: number;
+  /** Payments toward live agreements, net of those other refunds. */
+  creditedNetCents: number;
+}
+
 /**
- * Money on this piece that is owed back to the buyer rather than payment
- * toward any live agreement: a second payment of an already-paid invoice, and
- * what was paid on an agreement since released. Before refunds. The one sum
- * `dealPosition` and the hand-payment cap both read, so the two cannot drift.
+ * The one reading of money on a piece that is not payment toward its live
+ * agreements, every consumer's — `dealPosition`, the project's cash position,
+ * and the hand-payment cap — so no two of them can count it differently.
+ *
+ * Attributed rather than pooled, from rows that already say whose money is
+ * whose:
+ * - A second payment of an already-paid invoice belongs to that invoice's
+ *   agreement and is owed back.
+ * - Money paid on an agreement since released **carries** to the piece's live
+ *   agreements, oldest released first, up to what they still need — a release
+ *   for a replacement keeps money already paid as paid, which is what
+ *   `releaseAgreement` promises; billing the replacement again would charge
+ *   the buyer twice. Only what no live agreement takes is owed back, which is
+ *   what a cancellation leaves.
+ * - A refund recorded on an agreement's obligation (`refund:<fulfillment>:…`)
+ *   repays that agreement's owed-back money first and nothing else's; a refund
+ *   with no obligation behind it repays whatever is still owed back. So a
+ *   refund for one agreement's failed work never makes another agreement's
+ *   owed-back money disappear.
  */
-export async function owedBackGrossCents(input: {
+export async function owedBackReading(input: {
   projectId: string;
   opportunityId: string;
   currency: string;
-}): Promise<number> {
-  const live = (await agreementsFor(input.opportunityId)).filter(
-    (one) => one.state === 'AGREED' && one.currency === input.currency,
+}): Promise<OwedBackReading> {
+  const agreements = (await agreementsFor(input.opportunityId)).filter((one) => one.currency === input.currency);
+  const live = agreements.filter((one) => one.state === 'AGREED');
+  const entries = await entriesFor(agreements);
+  const agreementOfEntry = new Map<string, CashAgreement>();
+  for (const agreement of agreements) {
+    const entry = entries.get(agreement.id);
+    if (entry) agreementOfEntry.set(entry.id, agreement);
+  }
+  const invoices = (await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId })).filter(
+    (one) => one.currency === input.currency,
   );
-  const invoices = await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId });
-  const { paidOnReleased } = await splitByLiveAgreement(live, invoices, input.currency);
-  return (await invoiceOverpaymentCents(input.opportunityId, input.currency)) + paidOnReleased;
+  const money = await entriesOfKinds({ ...input, kinds: ['CUSTOMER_PAYMENT', 'REFUND'] });
+  const payments = money.filter((one) => one.kind === 'CUSTOMER_PAYMENT');
+  const refunds = money.filter((one) => one.kind === 'REFUND');
+  const paid = payments.reduce((sum, one) => sum + one.amountCents, 0);
+
+  const owedByAgreement = new Map<string, number>();
+  const owe = (agreementId: string, cents: number) =>
+    owedByAgreement.set(agreementId, (owedByAgreement.get(agreementId) ?? 0) + cents);
+
+  // Second payments of an already-paid invoice.
+  let duplicates = 0;
+  for (const entry of payments) {
+    if (!entry.idempotencyKey?.startsWith('invoice-payment:')) continue;
+    const invoice = invoices.find((one) => `invoice-payment:${one.id}` === entry.idempotencyKey);
+    if (!invoice || !invoice.paymentEntryId || invoice.paymentEntryId === entry.id) continue;
+    duplicates += entry.amountCents;
+    owe(agreementOfEntry.get(invoice.pipelineEntryId ?? '')?.id ?? `invoice:${invoice.id}`, entry.amountCents);
+  }
+
+  // Money paid on released agreements' invoices, carried to live ones first.
+  const releasedPaid = agreements
+    .filter((one) => one.state !== 'AGREED')
+    .map((agreement) => ({
+      agreement,
+      cents: invoices
+        .filter(
+          (one) =>
+            one.pipelineEntryId === entries.get(agreement.id)?.id &&
+            one.paymentEntryId &&
+            BILLED_INVOICE_STATES.includes(one.state),
+        )
+        .reduce((sum, one) => sum + one.amountCents, 0),
+    }))
+    .filter((one) => one.cents > 0)
+    .sort((a, b) => (a.agreement.createdAt < b.agreement.createdAt ? -1 : 1));
+  const releasedTotal = releasedPaid.reduce((sum, one) => sum + one.cents, 0);
+  const agreedLive = live.reduce((sum, one) => sum + one.amountCents, 0);
+  let room = Math.max(0, agreedLive - (paid - duplicates - releasedTotal));
+  for (const { agreement, cents } of releasedPaid) {
+    const carried = Math.min(cents, room);
+    room -= carried;
+    if (cents - carried > 0) owe(agreement.id, cents - carried);
+  }
+
+  // Refunds: an obligation's repays its own agreement's owed-back money first.
+  const fulfillments = await fulfillmentsForOpportunity(input.projectId, input.opportunityId);
+  const agreementOfFulfillment = new Map<string, string>(
+    fulfillments.map((one): [string, string] => [one.id, one.agreementId]),
+  );
+  const left = new Map(owedByAgreement);
+  let toOwed = 0;
+  let unattributed = 0;
+  for (const refund of refunds) {
+    const match = /^refund:([^:]+):/.exec(refund.idempotencyKey ?? '');
+    const agreementId = match ? agreementOfFulfillment.get(match[1]!) : undefined;
+    if (!agreementId) {
+      unattributed += refund.amountCents;
+      continue;
+    }
+    const owedHere = left.get(agreementId) ?? 0;
+    const repaid = Math.min(owedHere, refund.amountCents);
+    left.set(agreementId, owedHere - repaid);
+    toOwed += repaid;
+  }
+  const stillOwed = [...left.values()].reduce((sum, one) => sum + one, 0);
+  const unattributedToOwed = Math.min(unattributed, stillOwed);
+  toOwed += unattributedToOwed;
+
+  const gross = [...owedByAgreement.values()].reduce((sum, one) => sum + one, 0);
+  const refunded = refunds.reduce((sum, one) => sum + one.amountCents, 0);
+  const other = refunded - toOwed;
+  return {
+    grossCents: gross,
+    owedBackCents: stillOwed - unattributedToOwed,
+    otherRefundsCents: other,
+    creditedGrossCents: Math.max(0, paid - gross),
+    creditedNetCents: Math.max(0, paid - gross - other),
+  };
 }
 
 const num = (t: Partial<Record<CashMoneyKind, number>>, k: CashMoneyKind): number => Number(t[k] ?? 0);
@@ -260,18 +372,17 @@ export async function owedBackForProject(input: {
   let owedBack = 0;
   let inAccount = 0;
   for (const opportunityId of ids) {
-    const gross = await owedBackGrossCents({ projectId: input.projectId, opportunityId, currency: input.currency });
-    if (gross <= 0) continue;
+    const reading = await owedBackReading({ projectId: input.projectId, opportunityId, currency: input.currency });
+    if (reading.owedBackCents <= 0) continue;
     const totals = await totalsByKind({ projectId: input.projectId, opportunityId, currency: input.currency });
-    const here = Math.max(0, gross - num(totals, 'REFUND'));
-    owedBack += here;
+    owedBack += reading.owedBackCents;
     // Only settled money is in the account to be held back. Which payment a
     // settlement was cannot be told from the ledger — the provider's key names
     // the invoice, and a duplicate shares it — so this takes the bound that
     // cannot over-commit: as much of the piece's settled money as is owed
     // back. Its cost is a deployable figure that reads low while a duplicate
     // is unsettled beside a settled original, until the duplicate settles.
-    inAccount += Math.min(here, num(totals, 'SETTLEMENT'));
+    inAccount += Math.min(reading.owedBackCents, num(totals, 'SETTLEMENT'));
   }
   return { owedBack, inAccount };
 }
@@ -331,11 +442,11 @@ export async function dealPosition(input: {
   // three, so no reader can count the owed-back money as payment.
   // Owed back: a second payment of an already-paid invoice, and money paid on
   // an agreement that was since released.
-  const overpaidInvoices = (await invoiceOverpaymentCents(opportunity.id, currency)) + paidOnReleased;
-  // (`owedBackGrossCents` below is the same sum for a reader without a position.)
-  const credited = Math.max(0, payments - overpaidInvoices);
-  const creditedNet = Math.max(0, payments - Math.max(overpaidInvoices, refunds));
-  const owedBack = Math.max(0, overpaidInvoices - refunds);
+  const reading = await owedBackReading({ projectId: opportunity.projectId, opportunityId: opportunity.id, currency });
+  const overpaidInvoices = reading.grossCents;
+  const credited = reading.creditedGrossCents;
+  const creditedNet = reading.creditedNetCents;
+  const owedBack = reading.owedBackCents;
   // A payment the buyer made reduces what they owe; a refund Brain paid back
   // does not make them owe it again.
   const owed = Math.max(0, invoiced - credited);
