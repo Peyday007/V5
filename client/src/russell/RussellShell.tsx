@@ -38,6 +38,7 @@ import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
 import { MachinesView } from './Machines.tsx';
 import { LaborView } from './Labor.tsx';
+import { IndustryView } from './Industry.tsx';
 import {
   FleetView,
   ProjectView,
@@ -100,6 +101,14 @@ const SECTIONS = [
    * here.
    */
   { name: 'LABOR' as const, label: 'Labor', primary: false },
+  /*
+   * Industries is secondary for the same reason as its two neighbours: what
+   * the economy looks like is a question about where to look rather than a
+   * destination somebody steers from hourly, and its horizon outlives any one
+   * sprint. Promoting it would rebuild the thumb bar around one map in a
+   * Brain that does research, software and everything else.
+   */
+  { name: 'INDUSTRIES' as const, label: 'Industries', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -563,6 +572,7 @@ export function RussellShell({
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
         {route.name === 'MACHINES' ? <MachinesView projectId={projectId} /> : null}
         {route.name === 'LABOR' ? <LaborView projectId={projectId} /> : null}
+        {route.name === 'INDUSTRIES' ? <IndustryView projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (
