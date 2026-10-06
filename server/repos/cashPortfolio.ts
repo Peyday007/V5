@@ -657,10 +657,21 @@ export async function openNeedForKey(
   return rows[0] ? mapNeed(rows[0]) : null;
 }
 
-/** How many times this blockage has been raised, so the next one is the next. */
+/**
+ * The highest occurrence of this blockage that has been closed, so the next
+ * raise is the one after it.
+ *
+ * It counts closed rows only, and that is what makes the unique index the
+ * arbiter. Counting every row was a read-then-write: two ticks that both found
+ * nothing open would read 0 and 1 around each other's insert and write
+ * occurrences 1 and 2 — two OPEN rows for one condition, which the Postgres
+ * suite caught as two review entries. Counting closed rows, both compute the
+ * same next occurrence and `ON CONFLICT` lets exactly one land.
+ */
 export async function occurrencesOf(projectId: string, requestKey: string): Promise<number> {
   const rows = await getDb().all<{ highest: number | null }>(
-    'SELECT MAX(occurrence) AS highest FROM cash_needs WHERE project_id = ? AND request_key = ?',
+    `SELECT MAX(occurrence) AS highest FROM cash_needs
+      WHERE project_id = ? AND request_key = ? AND state <> 'OPEN'`,
     [projectId, requestKey],
   );
   return Number(rows[0]?.highest ?? 0);
