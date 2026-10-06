@@ -729,6 +729,10 @@ onPostgres('against a real Postgres', () => {
         // had been added to both chains correctly.
         'worker_invitations(token_prefix)',
         'project_invitations(token_prefix)',
+        // A research goal's packet key is one orchestration (§52): two passes
+        // starting `round-<n>` at once must produce one packet, and this index
+        // is what refuses the second. Both chains carry it (104 / pg 095).
+        'research_orchestrations(goal_id,goal_packet_key)',
       ].sort(),
     );
   });
