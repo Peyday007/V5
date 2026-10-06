@@ -28,6 +28,7 @@ import { useState } from 'react';
 import { useAsync } from './useAsync.ts';
 import { cashPage, modeState, type CashPage } from './cashPage.ts';
 import { Api } from '../lib/api.ts';
+import { DealJourney, JourneyTotals } from './CashJourney.tsx';
 import type { Project } from '../../../server/domain/types.ts';
 import {
   CashApi,
@@ -1945,6 +1946,9 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
             )} — an arithmetic illustration from quoted prices, not a bank balance.`
           : ''}
       </p>
+      {work.journey && work.journey.deals.length > 0 ? (
+        <JourneyTotals journey={work.journey} currency={view.myCash.position.currency} />
+      ) : null}
       <ul className="rs-list">
         {[...acting, ...held].map((placement) => (
           <li key={placement.opportunity.id} className="rs-group">
@@ -1976,6 +1980,21 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
                 onChanged={onChanged}
               />
             ) : null}
+            {page.capabilities.mayViewPrivateJob
+              ? (() => {
+                  const deal = work.journey?.deals.find((one) => one.opportunityId === placement.opportunity.id);
+                  return deal ? (
+                    <DealJourney
+                      deal={deal}
+                      currency={view.myCash.position.currency}
+                      projectId={view.mode?.projectId}
+                      mayAct={page.capabilities.mayActOnJob}
+                      mayRefund={page.capabilities.mayAdminister}
+                      onChanged={onChanged}
+                    />
+                  ) : null;
+                })()
+              : null}
             {page.capabilities.mayActOnJob &&
             view.mode &&
             (placement.opportunity.state === 'EXECUTING' ||
@@ -1984,12 +2003,51 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
                 projectId={view.mode.projectId}
                 opportunityId={placement.opportunity.id}
                 currency={view.myCash.position.currency}
+                unpaidInvoices={(
+                  work.journey?.deals.find((one) => one.opportunityId === placement.opportunity.id)?.invoices ?? []
+                ).filter((one) => one.state === 'ISSUED' && !one.paymentEntryId)}
+                draftedOrUnknownInvoices={
+                  (work.journey?.deals.find((one) => one.opportunityId === placement.opportunity.id)?.invoices ?? []).filter(
+                    (one) => one.state === 'DRAFTED' || one.state === 'UNCERTAIN',
+                  ).length
+                }
                 onChanged={onChanged}
               />
             ) : null}
           </li>
         ))}
       </ul>
+      {page.capabilities.mayViewPrivateJob && work.journey
+        ? (() => {
+            /*
+             * A deal that finished leaves the work list but not its obligations:
+             * a refund or a supplier cost can still land after collection, and
+             * the control for it has to be somewhere a person can reach.
+             */
+            const listed = new Set([...acting, ...held].map((one) => one.opportunity.id));
+            const finished = work.journey.deals.filter((one) => !listed.has(one.opportunityId));
+            return finished.length > 0 ? (
+              <details className="rs-cash-finished-deals">
+                <summary>Finished deals ({finished.length})</summary>
+                <ul className="rs-list">
+                  {finished.map((deal) => (
+                    <li key={deal.opportunityId} className="rs-group">
+                      <p className="rs-item-title">{deal.title}</p>
+                      <DealJourney
+                        deal={deal}
+                        currency={view.myCash.position.currency}
+                        projectId={view.mode?.projectId}
+                        mayAct={page.capabilities.mayActOnJob}
+                        mayRefund={page.capabilities.mayAdminister}
+                        onChanged={onChanged}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null;
+          })()
+        : null}
     </section>
   );
 }
@@ -2247,16 +2305,26 @@ function OpportunityMoney({
   projectId,
   opportunityId,
   currency,
+  unpaidInvoices = [],
+  draftedOrUnknownInvoices = 0,
   onChanged,
 }: {
   projectId: string;
   opportunityId: string;
   currency: string;
+  /** Issued and unpaid: a payment recorded by hand must say whether it pays one. */
+  unpaidInvoices?: { id: string; amountCents: number; providerNumber: string | null }[];
+  /** Drafted or of unknown outcome: the payment must still say it paid none of them. */
+  draftedOrUnknownInvoices?: number;
   onChanged(): void;
 }): JSX.Element {
-  const [kind, setKind] = useState<'PIPELINE_AGREED' | 'CUSTOMER_PAYMENT' | 'SETTLEMENT' | null>(
+  const [kind, setKind] = useState<'CUSTOMER_PAYMENT' | 'SETTLEMENT' | null>(
     null,
   );
+  // '' until chosen; 'OUTSIDE' or an invoice id.
+  const [appliesTo, setAppliesTo] = useState('');
+  const mustAttribute =
+    kind === 'CUSTOMER_PAYMENT' && (unpaidInvoices.length > 0 || draftedOrUnknownInvoices > 0);
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
@@ -2266,10 +2334,9 @@ function OpportunityMoney({
   const amountCents = centsFromAmount(amount);
 
   async function run(): Promise<void> {
-    // An agreed amount needs no provider reference — it is pipeline, not cash —
-    // and the server says so; a payment and a settlement each need one.
-    const needsReference = kind !== 'PIPELINE_AGREED';
-    if (!kind || amountCents === null || (needsReference && !reference.trim())) return;
+    // A payment and a settlement each need the provider's reference. What was
+    // agreed is recorded as an agreement on the deal's journey, never here.
+    if (!kind || amountCents === null || !reference.trim()) return;
     setBusy(true);
     setProblem(null);
     try {
@@ -2281,26 +2348,24 @@ function OpportunityMoney({
         opportunityId,
         /*
          * Built from the kind, the piece and what was typed, never a clock: a
-         * retry after a lost response is the same entry once. An agreed amount
-         * with no reference is keyed by its amount, so agreeing a second,
-         * different figure is a second entry and resubmitting the same one is
-         * not.
+         * retry after a lost response is the same entry once.
          */
-        idempotencyKey:
-          kind === 'PIPELINE_AGREED'
-            ? `agreed:${opportunityId}:${amountCents}:${reference.trim()}`
-            : `${kind === 'SETTLEMENT' ? 'settlement' : 'payment'}:${opportunityId}:${reference.trim()}`,
+        idempotencyKey: `${kind === 'SETTLEMENT' ? 'settlement' : 'payment'}:${opportunityId}:${reference.trim()}`,
+        ...(mustAttribute
+          ? appliesTo === 'OUTSIDE'
+            ? { outsideInvoices: true }
+            : { paysInvoiceId: appliesTo }
+          : {}),
       });
       setDone(
         kind === 'SETTLEMENT'
-          ? 'Settlement recorded. It now counts as available funds, and “Money is in” can be recorded.'
-          : kind === 'PIPELINE_AGREED'
-            ? 'Agreed amount recorded. It is pipeline: nothing has been paid, and it is not cash.'
-            : 'Payment recorded. It is not available funds until it settles.',
+          ? 'Settlement recorded. It now counts as available funds.'
+          : 'Payment recorded. It is not available funds until it settles.',
       );
       setKind(null);
       setAmount('');
       setReference('');
+      setAppliesTo('');
       onChanged();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
@@ -2314,16 +2379,6 @@ function OpportunityMoney({
       {done ? <p className="rs-state rs-state-ok">{done}</p> : null}
       {kind === null ? (
         <>
-          <button
-            type="button"
-            className="rs-button-quiet"
-            onClick={() => {
-              setKind('PIPELINE_AGREED');
-              setDone(null);
-            }}
-          >
-            Record the agreed amount
-          </button>
           <button
             type="button"
             className="rs-button-quiet"
@@ -2348,10 +2403,7 @@ function OpportunityMoney({
       ) : (
         <>
           <p className="rs-hint">
-            {kind === 'PIPELINE_AGREED'
-              ? 'What the customer agreed to pay for this work. It is pipeline, not cash, and it is ' +
-                'what an invoice is issued for. A reference — a quote or agreement number — is optional.'
-              : kind === 'SETTLEMENT'
+            {kind === 'SETTLEMENT'
               ? 'The money reached the account and is usable. Use the payout or bank reference.'
               : 'The customer paid. Use the payment provider’s or bank’s reference — a payment nobody can trace is pipeline, not cash.'}
           </p>
@@ -2372,13 +2424,34 @@ function OpportunityMoney({
             value={reference}
             onChange={(event) => setReference(event.target.value)}
           />
+          {mustAttribute ? (
+            <>
+              <label className="rs-field-label" htmlFor={`cash-om-applies-${opportunityId}`}>
+                What does this payment pay?
+              </label>
+              <select
+                id={`cash-om-applies-${opportunityId}`}
+                value={appliesTo}
+                onChange={(event) => setAppliesTo(event.target.value)}
+              >
+                <option value="">Choose one</option>
+                {unpaidInvoices.map((one) => (
+                  <option key={one.id} value={one.id}>
+                    Invoice {one.providerNumber ?? one.id} ({(one.amountCents / 100).toFixed(2)} {currency})
+                  </option>
+                ))}
+                <option value="OUTSIDE">None of these invoices</option>
+              </select>
+            </>
+          ) : null}
           <button
             type="button"
             className="rs-button-quiet"
             disabled={
               busy ||
               amountCents === null ||
-              (kind !== 'PIPELINE_AGREED' && reference.trim().length === 0)
+              reference.trim().length === 0 ||
+              (mustAttribute && appliesTo === '')
             }
             onClick={() => void run()}
           >
@@ -3195,7 +3268,8 @@ function Actions({
       disabledReason: blocked ? noAuthorityReason : undefined,
     });
   }
-  if (state === 'EXECUTING') available.push({ action: 'deliver', label: 'Delivering' });
+  // DELIVERING is not a button: it follows from work existing (the fulfilment
+  // on this piece's journey panel), so pressing it could only ever be refused.
   if (state === 'EXECUTING' || state === 'DELIVERING') {
     available.push({ action: 'collect', label: 'Money is in' });
   }

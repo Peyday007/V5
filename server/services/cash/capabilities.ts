@@ -38,21 +38,27 @@
  * same reading `auditAdmission` uses, so the two cannot disagree about whether
  * this Brain can do research today. `SEND_A_MESSAGE` is `PRESENT` only when a
  * real effect adapter is registered for it (`effects.ts`'s
- * `adapterFor`), so the moment a messaging integration exists is the
- * moment it can be checked rather than assumed — and on this Brain, with none
- * registered, it reads exactly as it did when this was `read: null`.
+ * `usableAdapter`) **and** that adapter's own configuration reads usable now,
+ * so the moment a messaging integration exists is the moment it can be checked
+ * rather than assumed. `ISSUE_AN_INVOICE` and `TAKE_A_PAYMENT` read the same
+ * way, from the invoice adapter and the payment reader `providers/register.ts`
+ * registers when the deployment selects a provider (§54). With none selected,
+ * which is a deployment whose owner has not supplied a key, all three read
+ * exactly as they did when they were `read: null`.
  *
- * `ISSUE_AN_INVOICE` and `TAKE_A_PAYMENT` follow the same rule against their
- * own operation namespaces (`effects.ts`' `COMMERCIAL_EFFECTS`): an interface
- * existing is not an integration, so with no adapter registered — every
- * deployment today — they read `MISSING` exactly as `read: null` did. The rest
- * of the vocabulary has nothing to read and is declared `MISSING` with the
- * integration it needs named. Making any of those report `PRESENT` without a
- * registered adapter would be the invented measurement this file exists to
- * refuse.
+ * Everything else in the vocabulary is declared `MISSING` with the integration
+ * it needs named. Making any of those report `PRESENT` would be the invented
+ * measurement this file exists to refuse.
  */
 import { separationCapacity } from '../research/auditAdmission.ts';
-import { adapterFor } from './effects.ts';
+import {
+  COMMERCIAL_EFFECTS,
+  CONTACT_BUYER_NAMESPACE,
+  ISSUE_INVOICE_NAMESPACE,
+  refundAdapter,
+  usableAdapter,
+} from './effects.ts';
+import { usablePaymentReader } from './providers/payments.ts';
 
 export type CapabilityState = 'PRESENT' | 'MISSING' | 'UNKNOWN';
 
@@ -99,35 +105,57 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
   {
     id: 'SEND_A_MESSAGE',
     does: 'Deliver a message to a buyer at an address or number they published.',
-    requires: 'An outbound messaging integration connected to this Brain.',
+    requires:
+      'An outbound messaging integration connected to this Brain: BRAIN_MESSAGING_PROVIDER=resend, ' +
+      'RESEND_API_KEY and BRAIN_MESSAGING_FROM set on the deployment.',
     nextStep:
-      'Until one exists, the message is sent by a person and the send is recorded as a confirmed ' +
-      'action on the opportunity.',
-    // `PRESENT` means a real effect adapter is registered for this operation —
-    // never a boolean somebody flipped. With none registered, which is every
-    // deployment of this Brain today, this reads MISSING exactly as it did
-    // when `read` was `null`.
-    read: async () => adapterFor('CONTACT_BUYER') !== null,
+      'Set the three messaging secrets on the deployment and restart. Until then, the message is ' +
+      'sent by a person and the send is recorded as a confirmed action on the opportunity.',
+    // `PRESENT` means a real effect adapter is registered for this operation
+    // and its configuration reads usable now — never a boolean somebody
+    // flipped.
+    read: async () => usableAdapter(CONTACT_BUYER_NAMESPACE) !== null,
   },
   {
     id: 'ISSUE_AN_INVOICE',
     does: 'Produce and send an invoice a buyer can pay.',
-    requires: 'An invoicing integration, and the account details it bills from.',
+    requires:
+      'An invoicing integration: BRAIN_BILLING_PROVIDER=stripe and STRIPE_SECRET_KEY set on the ' +
+      'deployment.',
     nextStep:
-      'Until one exists, the invoice is issued outside Brain and the settlement is recorded ' +
-      'against its own reference.',
-    // The same rule as messaging: a registered adapter for `cash.issue_invoice`
-    // is what makes this PRESENT, and no deployment registers one today.
-    read: async () => adapterFor('QUOTE_AND_INVOICE') !== null,
+      'Set the two billing secrets on the deployment and restart. Until then, the invoice is ' +
+      'issued outside Brain and the settlement is recorded against its own reference.',
+    read: async () => usableAdapter(ISSUE_INVOICE_NAMESPACE) !== null,
   },
   {
     id: 'TAKE_A_PAYMENT',
     does: 'Accept money from a buyer.',
-    requires: 'A payment processor connected to this Brain.',
+    requires:
+      'A payment processor connected to this Brain: the same Stripe configuration that issues ' +
+      "invoices, whose hosted page takes the buyer's payment.",
     nextStep:
-      'Until one exists, payment is taken outside Brain and reaches the ledger as a SETTLEMENT ' +
-      'carrying a verifiable reference.',
-    read: async () => adapterFor('ACCEPT_PAYMENT') !== null,
+      'Set the two billing secrets on the deployment and restart. Until then, payment is taken ' +
+      'outside Brain and reaches the ledger as a SETTLEMENT carrying a verifiable reference.',
+    // Collection is the invoice's hosted page plus reading what Stripe says
+    // happened to it, so it is present exactly when a payment reader is
+    // registered and configured.
+    // A take-payment adapter (`cash.take_payment`, a charge Brain performs)
+    // counts too: either is a real way money reaches the ledger with a
+    // provider's reference, and neither is assumed.
+    read: async () =>
+      usablePaymentReader() !== null ||
+      usableAdapter(COMMERCIAL_EFFECTS.ACCEPT_PAYMENT.namespace) !== null,
+  },
+  {
+    id: 'ISSUE_A_REFUND',
+    does: 'Pay a buyer back through the provider that took their money.',
+    requires: 'A usable refund effect adapter registered for "cash.refund".',
+    nextStep:
+      'Until one exists, an authorized refund is paid out by a person and confirmed on the ' +
+      'obligation with the provider or bank reference, which is what writes the REFUND entry.',
+    // `PRESENT` only when a real, healthy adapter is registered — the same
+    // reading `journey/fulfillment.ts` uses to decide whether to send one.
+    read: async () => refundAdapter() !== null,
   },
   {
     id: 'PUBLISH_A_LISTING',

@@ -53,6 +53,9 @@ import { composeLedger } from '../server/services/cash/monetization/ledger.ts';
 import { listCommissions } from '../server/repos/monetization.ts';
 import { WORK_ITEM_STATES } from '../server/domain/types.ts';
 import type { WorkItem } from '../server/domain/types.ts';
+import { registerCommercialProviders } from '../server/services/cash/providers/register.ts';
+import { commercialProviderStatus, probeProviders } from '../server/services/cash/providers/status.ts';
+import { listInvoices } from '../server/repos/cashInvoices.ts';
 import { latestMissionForCandidate, listMissions } from '../server/repos/russellMissions.ts';
 
 function flag(name: string): string | null {
@@ -144,6 +147,34 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       ? `  commercial  PRESENT ${commercial.id} committed_ceiling=${commercial.maxCommittedCents} per_action=${commercial.maxPerActionCents} actions=${commercial.allowedActions.join(',')}`
       : '  commercial  ABSENT — nothing here may contact, buy, spend, commit or publish',
   );
+
+  // --- Commercial providers (§52) ----------------------------------------
+  // Registered here exactly as the server registers them at boot, so this
+  // reading inside the released container is the reading the tick acts on.
+  registerCommercialProviders();
+  console.log('');
+  console.log('COMMERCIAL PROVIDERS');
+  for (const line of await commercialProviderStatus()) {
+    console.log(
+      `  ${line.area.padEnd(10)} ${line.state.padEnd(9)} ${line.capability.padEnd(17)} ` +
+        `${line.provider ?? '—'}${line.mode ? ` (${line.mode})` : ''}`,
+    );
+    console.log(`      ${trim(line.detail)}`);
+    if (line.state === 'MISSING') console.log(`      next: ${trim(line.nextAction, 160)}`);
+  }
+  if (process.argv.includes('--probe')) {
+    const probe = await probeProviders();
+    console.log(`  probe      messaging ${trim(probe.messaging)}`);
+    console.log(`  probe      billing   ${trim(probe.billing)}`);
+  }
+  const invoices = await listInvoices({ projectId });
+  console.log(`  invoices   ${invoices.length} — ${tally(invoices, (one) => one.state) || 'none'}`);
+  for (const invoice of invoices.slice(-10)) {
+    console.log(
+      `    ${invoice.id} ${invoice.state} ${invoice.amountCents} ${invoice.currency} due ${invoice.dueDate} ` +
+        `provider=${invoice.providerInvoiceId ?? '—'} ${trim(invoice.stateReason, 60)}`,
+    );
+  }
 
   // --- Where the ideas are ------------------------------------------------
   const candidates = await listCandidates({ projectId });

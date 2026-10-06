@@ -13,6 +13,7 @@
  * delivery still runs would also pass in a Brain where the *whole tick* had
  * been paused and nothing else was running either.
  */
+import { agreeAndDeliver, refundConfirmed } from './helpers/cashDeal.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -283,10 +284,11 @@ describe('winding down stops new discovery and nothing else', () => {
     const paid = await recordMoneyEvent({
       projectId,
       opportunityId: id,
-      kind: 'PIPELINE_AGREED',
+      kind: 'COST',
       amountCents: 75_000,
       currency: 'USD',
-      idempotencyKey: 'agreed-1',
+      verifiedReference: 'supplier-bill-1',
+      idempotencyKey: 'cost-archived-1',
       actorRef: userId,
     });
     expect(paid.ok).toBe(true);
@@ -430,7 +432,23 @@ describe('winding down stops new discovery and nothing else', () => {
     expect(await launchableUnderCashMode({ candidateId: support.id, mode: wound })).toBe(true);
 
     // And it stays true once the money is in but the record is still open.
-    await advance({ opportunityId: captured.value.id, to: 'DELIVERING', actorRef: userId });
+    // Delivery is work that exists and was accepted, never a button.
+    await agreeAndDeliver(captured.value.id, 40_000, userId);
+    expect((await getOpportunity(captured.value.id))!.state).toBe('DELIVERING');
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId,
+          opportunityId: captured.value.id,
+          kind: 'CUSTOMER_PAYMENT',
+          amountCents: 40_000,
+          currency: 'USD',
+          verifiedReference: 'pay-ref-1',
+          idempotencyKey: 'paid-1',
+          actorRef: userId,
+        })
+      ).ok,
+    ).toBe(true);
     // "The money is in" is something the ledger has to say first.
     expect(
       (
@@ -858,7 +876,10 @@ describe('the money is in only when the ledger says so', () => {
   it('does not count a settlement recorded against nothing, or against another opportunity', async () => {
     const id = await executing('Owed the money');
     const other = await executing('Somebody else’s sale');
+    await agreeAndDeliver(id, 50_000, userId);
+    await agreeAndDeliver(other, 50_000, userId);
     await money(null, 'SETTLEMENT', 'unattributed');
+    await money(other, 'CUSTOMER_PAYMENT', 'other-paid');
     await money(other, 'SETTLEMENT', 'other');
     expect((await advance({ opportunityId: id, to: 'COLLECTED', actorRef: userId })).ok).toBe(false);
     expect((await advance({ opportunityId: other, to: 'COLLECTED', actorRef: userId })).ok).toBe(true);
@@ -866,13 +887,16 @@ describe('the money is in only when the ledger says so', () => {
 
   it('does not count a settlement that was refunded in full', async () => {
     const id = await executing('Refunded');
+    const agreement = await agreeAndDeliver(id, 50_000, userId);
+    await money(id, 'CUSTOMER_PAYMENT', 'paid');
     await money(id, 'SETTLEMENT', 'settled');
-    await money(id, 'REFUND', 'refunded');
+    await refundConfirmed(agreement, 50_000, 'refunded', userId);
     expect((await advance({ opportunityId: id, to: 'COLLECTED', actorRef: userId })).ok).toBe(false);
   });
 
   it('records it once the settlement is on this opportunity', async () => {
     const id = await executing('Settled');
+    await agreeAndDeliver(id, 50_000, userId);
     await money(id, 'CUSTOMER_PAYMENT', 'paid');
     await money(id, 'SETTLEMENT', 'settled-here');
     const moved = await advance({ opportunityId: id, to: 'COLLECTED', actorRef: userId });

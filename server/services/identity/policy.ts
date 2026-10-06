@@ -350,6 +350,14 @@ const OVERRIDES: Override[] = [
   // entry that could drift.
   { pattern: /^\/api\/projects\/[^/]+\/cash\/mode$/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/cash\/authority/, level: 'ADMIN' },
+  // A refund pays money out of the account, so authorizing one and answering
+  // its outcome are decisions *about* the operation's money, at the level the
+  // grant that says what Brain may spend already carries.
+  {
+    pattern: /^\/api\/cash\/opportunities\/[^/]+\/(refund|refund-answer)$/,
+    method: 'POST',
+    level: 'ADMIN',
+  },
 
   // ---------------------------------------------------------------------
   // The industry kernel's map (§38)

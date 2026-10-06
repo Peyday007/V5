@@ -11,6 +11,7 @@
  * explicitly: instead of a dead port, a minimal app answers every `/api` request
  * with the reason it could not start.
  */
+import { registerCommercialProviders } from './services/cash/providers/register.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Server } from 'node:http';
@@ -680,6 +681,17 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
     bootstrapReset: bootstrap.reset ? bootstrap.email : null,
     bootstrapNote: bootstrap.created || bootstrap.reset ? null : bootstrap.reason,
   };
+
+  /*
+   * The commercial providers this deployment selected (§54). Registering one
+   * reads only whether it was chosen; whether it is usable is asked again on
+   * every capability reading, and nothing here touches the network.
+   */
+  const providers = registerCommercialProviders();
+  console.log(
+    `  boot: commercial providers — messaging ${providers.messaging ?? 'none selected'}, ` +
+      `billing ${providers.billing ?? 'none selected'}`,
+  );
 
   console.log(`  boot: opening the port ${((Date.now() - bootStarted) / 1000).toFixed(1)}s after the cloud answered`);
   const server = buildApp(gate).listen(PORT, () => logBanner(migrations, gate, identity));

@@ -560,6 +560,23 @@ export async function createNeed(input: {
   requestKey?: string | null;
   occurrence?: number;
 }): Promise<CashNeed> {
+  return (await createNeedOnce(input)).need;
+}
+
+/**
+ * Write one need, once per (key, occurrence), and say whether this call did.
+ *
+ * `raiseNeed` asks whether a need is open and then writes one, which two ticks
+ * running at once both answer "no" to — and the second insert used to throw a
+ * unique-constraint error out of the tick. The arbiter is the unique index on
+ * `(project_id, request_key, occurrence)`: exactly one insert lands, and the
+ * other reads back the row it collided with. A need with no key has nothing to
+ * collide on. (Ported from the fulfillment branch, PR #124.)
+ */
+export async function createNeedOnce(input: Parameters<typeof createNeed>[0]): Promise<{
+  need: CashNeed;
+  created: boolean;
+}> {
   const id = newId('cnd');
   const at = portfolioNow();
   await getDb().run(
@@ -568,7 +585,8 @@ export async function createNeed(input: {
         expected_cost_cents, setup_effort, next_step, completion_condition, occurrence,
         blocks_state, candidate_id, request_key, continued_at, continuation_note, state,
         resolution, resolved_by_user_id, resolved_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'OPEN', NULL, NULL, NULL, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'OPEN', NULL, NULL, NULL, ?, ?)
+     ON CONFLICT (project_id, request_key, occurrence) DO NOTHING`,
     [
       id,
       input.projectId,
@@ -589,8 +607,13 @@ export async function createNeed(input: {
     ],
   );
   const created = await getNeed(id);
-  if (!created) throw new Error('The need disappeared immediately after being written.');
-  return created;
+  if (created) return { need: created, created: true };
+  const rows = await getDb().all<CashNeedRow>(
+    'SELECT * FROM cash_needs WHERE project_id = ? AND request_key = ? AND occurrence = ?',
+    [input.projectId, input.requestKey ?? null, Math.max(1, Math.trunc(input.occurrence ?? 1))],
+  );
+  if (!rows[0]) throw new Error('The need disappeared immediately after being written.');
+  return { need: mapNeed(rows[0]), created: false };
 }
 
 /**

@@ -342,3 +342,56 @@ export async function totalsByKind(input: {
   for (const row of rows) out[row.kind as CashMoneyKind] = Number(row.total ?? 0);
   return out;
 }
+
+/**
+ * Payments a person recorded on a piece that no invoice names. Brain's own
+ * entries are excluded: those are provider facts, each tied to what produced it.
+ */
+export async function unattributedPersonPayments(
+  opportunityId: string,
+  currency: string,
+): Promise<{ id: string; amountCents: number; reference: string | null }[]> {
+  const rows = await getDb().all<{ id: string; amount_cents: number; verified_reference: string | null }>(
+    `SELECT e.id, e.amount_cents, e.verified_reference FROM cash_money_entries e
+       WHERE e.opportunity_id = ? AND e.kind = 'CUSTOMER_PAYMENT' AND e.currency = ? AND e.recorded_by <> 'BRAIN'
+         AND NOT EXISTS (SELECT 1 FROM cash_invoices i WHERE i.payment_entry_id = e.id)
+       ORDER BY e.id`,
+    [opportunityId, currency],
+  );
+  return rows.map((one) => ({ id: one.id, amountCents: Number(one.amount_cents), reference: one.verified_reference }));
+}
+
+/**
+ * Payments the provider read on an invoice that another payment had already
+ * paid — the buyer paying twice (`invoicing.ts`). They are money against that
+ * invoice, owed back rather than credit for other agreements, so they never
+ * count as paid outside every invoice.
+ */
+export async function invoiceOverpaymentCents(opportunityId: string, currency: string): Promise<number> {
+  const row = await getDb().get<{ n: number | null }>(
+    `SELECT SUM(e.amount_cents) AS n FROM cash_money_entries e
+       JOIN cash_invoices i ON e.idempotency_key = 'invoice-payment:' || i.id
+      WHERE e.opportunity_id = ? AND e.kind = 'CUSTOMER_PAYMENT' AND e.currency = ?
+        AND i.payment_entry_id IS NOT NULL AND i.payment_entry_id <> e.id`,
+    [opportunityId, currency],
+  );
+  return Number(row?.n ?? 0);
+}
+
+/** Every entry of these kinds on one piece in one currency, unlimited, oldest first. */
+export async function entriesOfKinds(input: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+  kinds: readonly CashMoneyKind[];
+}): Promise<CashMoneyEntry[]> {
+  if (input.kinds.length === 0) return [];
+  const rows = await getDb().all<CashMoneyEntryRow>(
+    `SELECT * FROM cash_money_entries
+      WHERE project_id = ? AND opportunity_id = ? AND currency = ?
+        AND kind IN (${input.kinds.map(() => '?').join(', ')})
+      ORDER BY occurred_at, id`,
+    [input.projectId, input.opportunityId, input.currency, ...input.kinds],
+  );
+  return rows.map(mapEntry);
+}

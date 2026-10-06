@@ -19,7 +19,7 @@
  */
 import {
   claimNeedContinuation,
-  createNeed,
+  createNeedOnce,
   getNeed,
   getOpportunity,
   listNeeds,
@@ -133,7 +133,7 @@ export async function raiseNeed(input: {
     occurrence = (await occurrencesOf(input.projectId, key)) + 1;
   }
 
-  const need = await createNeed({
+  const { need, created } = await createNeedOnce({
     projectId: input.projectId,
     opportunityId: input.opportunityId ?? null,
     ...fields,
@@ -143,6 +143,11 @@ export async function raiseNeed(input: {
     requestKey: key,
     occurrence,
   });
+  if (!created) {
+    // Another pass raised the same condition at the same moment. One entry in
+    // the review, one event on the history.
+    return { ok: true, value: need, message: 'This need was already raised. Nothing was added.' };
+  }
 
   await recordCashEvent({
     projectId: input.projectId,

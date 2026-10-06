@@ -104,7 +104,9 @@ async function readyToTest(): Promise<CashOpportunity> {
     actorRef: 'BRAIN',
     patch: {
       payer: 'The operations manager, who signs',
-      reachableChannel: 'The address on the notice',
+      // One published address: Brain writes to exactly the address the buyer
+      // published, and refuses a channel that names none (§52).
+      reachableChannel: 'ops@intake-repair.example — the address on the notice',
       buyingSignal: 'Wanted: intake repair. Budget $1,200.',
       signalObservedAt: '2026-09-15T09:00:00.000Z',
       peakFundingCents: 0,
@@ -230,7 +232,7 @@ describe('A02: a CONFIRMED adapter', () => {
       projectId,
       opportunityId: 'opp_fixed',
       payer: 'Somebody',
-      channel: 'Their address',
+      channel: 'their@address.example',
       authorityId: 'cau_fixed',
       stateAtSend: 'READY',
     };

@@ -103,6 +103,24 @@ export interface EffectAdapter {
 
   /** Strip anything unsafe before a receipt is stored. */
   redactReceipt?(meta: Record<string, unknown>): Record<string, unknown>;
+
+  /**
+   * Whether this adapter can be used right now, from its configuration.
+   *
+   * Asked by a capability reading, never by the engine: registering an adapter
+   * says which operation it serves, and this says whether the credential and
+   * settings it needs are present and well-formed *now*, re-read on every call
+   * so a removed secret reads as unusable without a restart. It never sends
+   * anything and its reason never contains a credential. An adapter without
+   * one is a test double, and is usable by being registered.
+   */
+  health?(): AdapterHealth;
+}
+
+export interface AdapterHealth {
+  usable: boolean;
+  /** Safe to show a person: names settings, never their values. */
+  reason: string;
 }
 
 export class AdapterContractError extends Error {

@@ -15,8 +15,11 @@
  * usable, and a refund takes back from both — collapsing any two of them is
  * how a sprint comes to believe it has money it has not got.
  */
+import { listInvoices } from '../../repos/cashInvoices.ts';
+import { dealPosition } from './journey/position.ts';
+import { usableAdapter } from './effects.ts';
 import { actionsFor } from '../../repos/cashActions.ts';
-import { listMoneyEntries, totalsByKind } from '../../repos/cashLedger.ts';
+import { listMoneyEntries } from '../../repos/cashLedger.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { readCapability } from './capabilities.ts';
 import { COMMERCIAL_EFFECTS, PERFORMABLE_ACTIONS, type PerformableAction } from './effects.ts';
@@ -34,11 +37,11 @@ export interface ExecutionRecord {
   }[];
   money: {
     currency: string;
-    /** `PIPELINE_AGREED`: what was agreed. Not cash. */
+    /** Live agreements' amounts: what was agreed. Not cash. */
     agreedCents: number;
     /** `CUSTOMER_PAYMENT` net of refunds: earned, not usable until it settles. */
     paidCents: number;
-    /** `SETTLEMENT` net of refunds: usable. */
+    /** Settled and usable, never more than was paid net of refunds. */
     settledCents: number;
     refundedCents: number;
     /** Agreed and not yet paid. Zero when nothing was agreed. */
@@ -101,16 +104,17 @@ export async function executionRecord(input: {
 }): Promise<ExecutionRecord> {
   const { opportunity, currency } = input;
   const actions = await actionsFor(opportunity.id);
-  const totals = await totalsByKind({
-    projectId: opportunity.projectId,
-    opportunityId: opportunity.id,
-    currency,
-  });
-  const agreed = Number(totals.PIPELINE_AGREED ?? 0);
-  const payments = Number(totals.CUSTOMER_PAYMENT ?? 0);
-  const settlements = Number(totals.SETTLEMENT ?? 0);
-  const refunds = Number(totals.REFUND ?? 0);
-  const paid = Math.max(0, payments - refunds);
+  // The deal's figures are `position.ts`'s, the one derivation of a deal's
+  // money; this record shows them beside the actions and attempts rather than
+  // computing a second set that could disagree.
+  const { pnl } = await dealPosition({ opportunity, currency });
+  const agreed = pnl.agreedRevenueCents;
+  const refunds = pnl.refundsCents;
+  // Credited, not gross: a second payment owed back is not money toward the agreement.
+  const paid = pnl.creditedPaymentsCents;
+  // What is left to collect: credited before refunds, the rule `prepare` and
+  // the invoice path's `owed` both apply — a refund never makes it owed again.
+  const outstanding = Math.max(0, agreed - pnl.creditedGrossCents);
 
   const attempts = await effectAttemptsFor(opportunity.projectId, opportunity.id);
   const nextOccurrence = String(actions.length + 1);
@@ -150,9 +154,35 @@ export async function executionRecord(input: {
       const gate = await sendGate(opportunity, action);
       if (!gate.ok) reason = gate.reason;
     }
+    // An invoice leaves Brain only as a drafted `cash_invoices` row (its terms
+    // are a person's), and a payment is charged only through a charge adapter —
+    // a payment reader means the buyer pays the invoice's own page.
+    if (reason === null && action === 'QUOTE_AND_INVOICE' && agreed > 0) {
+      const pending = await listInvoices({
+        projectId: opportunity.projectId,
+        opportunityId: opportunity.id,
+        states: ['DRAFTED', 'UNCERTAIN'],
+      });
+      if (pending.length === 0) {
+        reason = 'No invoice is drafted. Request one with who is billed, the tax treatment and the due date.';
+      }
+    }
+    if (reason === null && action === 'ACCEPT_PAYMENT') {
+      // perform.ts refuses a charge beside an open invoice; never offer one.
+      const open = (await listInvoices({ projectId: opportunity.projectId, opportunityId: opportunity.id })).filter(
+        (one) =>
+          one.state === 'DRAFTED' || one.state === 'UNCERTAIN' || (one.state === 'ISSUED' && !one.paymentEntryId),
+      );
+      if (open.length > 0) {
+        reason = `Invoice ${open.map((one) => one.id).join(', ')} is open for this money; the buyer pays it there.`;
+      }
+    }
+    if (reason === null && action === 'ACCEPT_PAYMENT' && !usableAdapter(effect.namespace)) {
+      reason = 'The buyer pays the invoice through the provider’s own page; Brain reads the payment rather than charging it.';
+    }
     if (reason === null && action !== 'CONTACT_BUYER' && agreed <= 0) {
       reason = 'No amount is recorded as agreed, so there is nothing to bill or collect.';
-    } else if (reason === null && action === 'ACCEPT_PAYMENT' && agreed - paid <= 0) {
+    } else if (reason === null && action === 'ACCEPT_PAYMENT' && outstanding <= 0) {
       reason = 'Everything agreed has already been paid.';
     }
     performable.push({
@@ -178,9 +208,9 @@ export async function executionRecord(input: {
       currency,
       agreedCents: agreed,
       paidCents: paid,
-      settledCents: Math.max(0, settlements - refunds),
+      settledCents: pnl.settledCashCents,
       refundedCents: refunds,
-      outstandingCents: Math.max(0, agreed - paid),
+      outstandingCents: outstanding,
     },
     payments: lines('CUSTOMER_PAYMENT'),
     settlements: lines('SETTLEMENT'),

@@ -7108,16 +7108,96 @@ export const CASH_MONEY_KINDS = [
   'CAPITAL_IN',
   'CAPITAL_OUT',
   'PIPELINE_AGREED',
+  /** Agreed work that will no longer be billed: the append-only undo of an agreement. */
+  'PIPELINE_RELEASED',
   'CUSTOMER_PAYMENT',
   'SETTLEMENT',
   'REFUND',
   'COST',
   'UNPAID_COMMITMENT',
   'COMMITMENT_PAID',
+  /** A supplier liability that shrank before it was paid: owed no longer, never a cost. */
+  'COMMITMENT_RELEASED',
   'RESERVE',
   'RESERVE_RELEASE',
 ] as const;
 export type CashMoneyKind = (typeof CASH_MONEY_KINDS)[number];
+
+export const CASH_INVOICE_STATES = [
+  'DRAFTED',
+  'ISSUED',
+  'UNCERTAIN',
+  'FAILED',
+  'PAID',
+  'SETTLED',
+  'VOID',
+] as const;
+export type CashInvoiceState = (typeof CASH_INVOICE_STATES)[number];
+
+export interface CashInvoiceRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string;
+  pipeline_entry_id: string;
+  amount_cents: number;
+  currency: string;
+  customer_name: string;
+  customer_email: string;
+  tax_treatment: string;
+  due_date: string;
+  description: string;
+  provider: string | null;
+  state: string;
+  state_reason: string | null;
+  provider_invoice_id: string | null;
+  provider_status: string | null;
+  provider_number: string | null;
+  hosted_url: string | null;
+  payment_entry_id: string | null;
+  settlement_entry_id: string | null;
+  issued_at: string | null;
+  paid_at: string | null;
+  settled_at: string | null;
+  last_read_at: string | null;
+  requested_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * One invoice for one agreed amount (§54). The amount and currency are the
+ * PIPELINE_AGREED entry's; the customer, tax treatment and due date are what a
+ * person recorded. Brain chooses none of them.
+ */
+export interface CashInvoice {
+  id: string;
+  projectId: string;
+  opportunityId: string;
+  pipelineEntryId: string;
+  amountCents: number;
+  currency: string;
+  customerName: string;
+  customerEmail: string;
+  taxTreatment: string;
+  dueDate: string;
+  description: string;
+  provider: string | null;
+  state: CashInvoiceState;
+  stateReason: string | null;
+  providerInvoiceId: string | null;
+  providerStatus: string | null;
+  providerNumber: string | null;
+  hostedUrl: string | null;
+  paymentEntryId: string | null;
+  settlementEntryId: string | null;
+  issuedAt: string | null;
+  paidAt: string | null;
+  settledAt: string | null;
+  lastReadAt: string | null;
+  requestedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export const CASH_NEED_STATES = ['OPEN', 'RESOLVED', 'WITHDRAWN'] as const;
 export type CashNeedState = (typeof CASH_NEED_STATES)[number];

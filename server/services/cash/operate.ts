@@ -46,6 +46,7 @@
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { advanceJourney, type JourneyTickReport } from './journey/tick.ts';
 import {
   getOpportunity,
   listNeeds,
@@ -74,7 +75,9 @@ import { recordWorkModelReclassification, type Reclassification } from './reclas
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
-import { commercialOperationsFor, sendContactBuyer } from './effects.ts';
+import { commercialOperationsFor, sendCommercialEffect } from './effects.ts';
+import { composeBuyerMessage } from './outreach.ts';
+import { runInvoicing, type InvoicingPass } from './invoicing.ts';
 import {
   alreadyContacted,
   applyEffectOutcome,
@@ -82,6 +85,7 @@ import {
   recoverAbandonedEffects,
   sendGate,
   type ReconciledEffect,
+  prepare,
 } from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
@@ -576,10 +580,14 @@ export interface AuthorityAdvance {
  * contacted somebody would be the one lie this section could tell that costs
  * real money.
  */
+/** How many buyers one pass may write to. See the loop below. */
+export const MAX_CONTACTS_PER_PASS = 3;
+
 export async function advanceWithinAuthority(projectId: string): Promise<AuthorityAdvance> {
   const out: AuthorityAdvance = { took: [], withheld: [] };
   const mode = await getCashMode(projectId);
   if (!mode) return out;
+  let sentThisPass = 0;
 
   /*
    * Only while the sprint is running, and this is the one place in Cash Mode
@@ -682,6 +690,50 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
     }
 
     /*
+     * The message, composed from the card and nothing else. A card whose
+     * published channel names no single address cannot be written to, and
+     * that is a need with a remedy rather than a guess at an address.
+     */
+    const message = composeBuyerMessage(opportunity);
+    if (!message.ok) {
+      await raiseNeed({
+        projectId: opportunity.projectId,
+        opportunityId: opportunity.id,
+        actorRef: BRAIN,
+        blockedAction: `Write to ${opportunity.payer ?? 'the payer'} about "${opportunity.title}"`,
+        whyItMatters:
+          `Brain may reach this buyer and has a messaging provider, but ${message.reason}. ` +
+          'Brain does not invent an address or an offer to send.',
+        recommendedPath:
+          'Record the single email address the buyer published, or the offer and price, on the card.',
+        setupEffort: 'A minute, if the address or offer is known.',
+        nextStep: `Fill ${message.missing} on the card.`,
+        completionCondition: 'The card names one published email address, an offer and a price.',
+        blocksState: 'EXECUTING',
+        requestKey: `contact-uncomposable:${opportunity.id}:${message.missing}`,
+      });
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because: `No message was sent: ${message.reason}. An open need names what is missing.`,
+      });
+      continue;
+    }
+
+    /*
+     * A bound on how many buyers one pass may write to. Not a quota — the next
+     * pass continues — but it is what stops a portfolio that reached READY all
+     * at once becoming a burst of outbound mail nobody watched leave.
+     */
+    if (sentThisPass >= MAX_CONTACTS_PER_PASS) {
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because: `${MAX_CONTACTS_PER_PASS} buyers were already written to this pass; this one waits for the next.`,
+      });
+      continue;
+    }
+    sentThisPass += 1;
+
+    /*
      * The same gate a person's press reads: nothing under way, nothing that
      * happened and is not yet recorded, no unknown waiting on a person — and
      * the retry counted the same way, so a contact a person established did
@@ -720,17 +772,30 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
       continue;
     }
 
+    /*
+     * The same payload a person's "have Brain do it" sends (`perform.ts`
+     * `prepare`): the exact offer text and its version, so the record of what
+     * reached the buyer names the words that reached them. A card whose offer
+     * cannot be drafted is not contacted at all.
+     */
+    const prepared = await prepare(CONTACT_ACTION, opportunity);
+    if (!prepared.ok) {
+      out.withheld.push({ opportunityId: opportunity.id, because: prepared.reason });
+      continue;
+    }
     let outcome: ExternalOutcome;
     try {
-      outcome = await sendContactBuyer({
+      outcome = await sendCommercialEffect({
+        action: CONTACT_ACTION,
         occurrence,
         retry,
         projectId: opportunity.projectId,
         opportunityId: opportunity.id,
-        payer: opportunity.payer ?? 'the payer',
-        channel: opportunity.reachableChannel ?? 'the recorded channel',
+        payload: prepared.value.payload,
         authorityId: decision.authority!.id,
+        amountCents: null,
         stateAtSend: opportunity.state,
+        subjectRef: prepared.value.subjectRef,
       });
     } catch (error) {
       out.withheld.push({
@@ -838,6 +903,10 @@ export async function operate(
   effects: ReconciledEffect[];
   authority: AuthorityAdvance;
   monetization: MonetizationPass;
+  /** Invoices issued, and the provider's payment and settlement answers read back (§54). */
+  invoicing: InvoicingPass;
+  /** The first-dollar journey advanced from rows; absent when Cash Mode is not active here. */
+  journey?: JourneyTickReport;
 }> {
   if (!(await getCashMode(projectId))) {
     return {
@@ -851,6 +920,7 @@ export async function operate(
       validations: { started: [], settled: [] },
       effects: [],
       authority: { took: [], withheld: [] },
+      invoicing: { issued: [], uncertain: [], failed: [], withheld: [], paid: [], settled: [], voided: [] },
       monetization: {
         pathsAdded: [],
         figuresCarried: [],
@@ -913,7 +983,22 @@ export async function operate(
    */
   const recovered = await recoverAbandonedEffects(projectId);
   const effects = [...recovered, ...(await reconcileConfirmedEffects(projectId))];
+  /*
+   * Then the journey after the first action, from rows: ledger entries for
+   * agreements, Brain's own fulfilment work read back, acceptance applied,
+   * silence recorded, the state moved, and what finished deals taught. It
+   * sends nothing.
+   */
   const authority = await advanceWithinAuthority(projectId);
+  /*
+   * Invoices a person asked for, issued under QUOTE_AND_INVOICE while an
+   * invoicing provider is usable, and the provider's answers about payment and
+   * settlement read back into the ledger as two separate entries (§54). After
+   * the contact pass because nothing here depends on it, and before the
+   * journey because the journey reads money this may have just recorded.
+   */
+  const invoicing = await runInvoicing(projectId, now ? new Date(now) : new Date());
+  const journey = await advanceJourney(projectId, now ? new Date(now) : new Date());
   /*
    * And the possibility ledger, last, reading everything the passes above
    * wrote.
@@ -942,7 +1027,9 @@ export async function operate(
     validations,
     effects,
     authority,
+    invoicing,
     monetization,
+    journey,
   };
 }
 

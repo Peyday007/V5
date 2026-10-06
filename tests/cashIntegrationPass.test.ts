@@ -938,7 +938,26 @@ describe('one sprint, from activation to money in and winding down', () => {
      * 9. Delivery, then money. Only a settlement is cash.
      * ------------------------------------------------------------------ */
     await withCashRoutes(async (call) => {
-      expect((await call('POST', `/cash/opportunities/${piece.id}/deliver`, {})).status).toBe(200);
+      // Agreed with evidence, then work that exists, was performed and was
+      // accepted — delivery is never a button (`journey/deal.ts`).
+      const at = (name: string, body: unknown) => call('POST', `/cash/opportunities/${piece.id}/${name}`, body);
+      const agreed: any = await at('agree', {
+        amountCents: 120_000,
+        deliverable: 'The work the notice asked for.',
+        acceptanceCondition: 'The requester confirms it in writing.',
+        evidenceKind: 'WRITTEN_ACCEPTANCE',
+        evidenceRef: 'notice-2026-441-reply',
+      });
+      expect(agreed.status).toBe(200);
+      const agreementId = agreed.body.agreement.id;
+      expect((await at('fulfil', { agreementId, kind: 'PERSON', performer: 'The operator' })).status).toBe(200);
+      for (const [kind, evidenceRef] of [
+        ['WORK_COMPLETE', 'delivered.pdf'],
+        ['DELIVERED', 'delivered.pdf, sent'],
+        ['ACCEPTED', 'requester-signoff'],
+      ] as const) {
+        expect((await at('obligation-event', { agreementId, kind, detail: kind.toLowerCase(), evidenceRef })).status).toBe(200);
+      }
       expect(
         (
           await call('POST', `/projects/${projectId}/cash/money`, {
@@ -947,7 +966,7 @@ describe('one sprint, from activation to money in and winding down', () => {
             amountCents: 120_000,
             currency: 'USD',
             verifiedReference: 'stripe-pi-88412',
-            idempotencyKey: `payment:${piece.id}`,
+            idempotencyKey: `manual-payment:${piece.id}`,
           })
         ).status,
       ).toBe(200);

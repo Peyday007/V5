@@ -41,7 +41,12 @@ import { countActions, recordAction } from '../../repos/cashActions.ts';
 import { cardFact, cardFactsFor, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { recordMoney, totalsByKind } from '../../repos/cashLedger.ts';
+import { getMoneyEntry, moneyEntryByKey, recordMoney, totalsByKind, unattributedPersonPayments } from '../../repos/cashLedger.ts';
+import { agreementsFor, getAgreement } from '../../repos/cashJourney.ts';
+import { fulfillmentsForOpportunity, unresolvedRefundCents } from '../../repos/cashFulfillment.ts';
+import { getInvoice, listInvoices, moveInvoice } from '../../repos/cashInvoices.ts';
+import { raiseNeed } from './needs.ts';
+import { collectable, dealPosition, owedBackReading, owedBackUnclaimedCents } from './journey/position.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { getOperation } from '../../repos/idempotency.ts';
 import { COMMERCIAL_EFFECTS } from './effects.ts';
@@ -543,7 +548,10 @@ export async function beginExecution(input: {
     );
   }
 
-  const position = await cashPosition({ projectId: opportunity.projectId });
+  // In the sprint's own currency: unscoped, the ledger sums every currency
+  // while the per-currency terms (held, owed back) read only one.
+  const sprint = await getCashMode(opportunity.projectId);
+  const position = await cashPosition({ projectId: opportunity.projectId, currency: sprint?.currency ?? 'USD' });
   const needed = opportunity.peakFundingCents ?? 0;
   if (needed > position.deployableCents) {
     return refuse(
@@ -726,14 +734,33 @@ export async function advance(input: {
    * asked for, attributed to *this* opportunity and net of refunds. Nothing is
    * written on a refusal, and the remedy is named.
    */
+  /*
+   * Neither state may be claimed from an intention. DELIVERING means something
+   * agreed has been delivered (`journey/fulfillment.ts` records it and moves
+   * the piece itself); COLLECTED means every live agreement's obligation is
+   * complete — accepted, nothing failed, every refund resolved — and the money
+   * is paid and settled — the one predicate the
+   * journey tick also asks, so a button and the tick cannot disagree. "The
+   * money is in" is still a statement about the ledger first (invariant 37):
+   * a SETTLEMENT is the one entry that is cash. Nothing is written on a
+   * refusal, and the remedy is named.
+   */
+  const mode = await getCashMode(opportunity.projectId);
+  if (!mode) return refuse('Cash Mode has not been activated for this project.');
+  const position = await dealPosition({ opportunity, currency: mode.currency });
+  if (input.to === 'DELIVERING') {
+    const begun = position.obligations.some(
+      (one) => one.agreement.state === 'AGREED' && one.delivery.state !== 'NOT_DELIVERED',
+    );
+    if (!begun) {
+      return refuse(
+        'Nothing agreed has been delivered yet, so this is not being delivered. Record the delivery ' +
+          'on the agreement’s obligation; that moves the piece itself.',
+      );
+    }
+  }
   if (input.to === 'COLLECTED') {
-    const mode = await getCashMode(opportunity.projectId);
-    const totals = await totalsByKind({
-      projectId: opportunity.projectId,
-      opportunityId: opportunity.id,
-      currency: mode?.currency,
-    });
-    const settled = Number(totals.SETTLEMENT ?? 0) - Number(totals.REFUND ?? 0);
+    const settled = position.pnl.settledCashCents;
     if (settled <= 0) {
       return refuse(
         'Nothing has settled against this opportunity yet, so Brain cannot record that the money ' +
@@ -741,6 +768,8 @@ export async function advance(input: {
           'each with the provider or bank reference that makes it verifiable.',
       );
     }
+    const ready = collectable(position);
+    if (!ready.ok) return refuse(ready.reason);
   }
   const from = input.to === 'DELIVERING' ? (['EXECUTING'] as const) : (['EXECUTING', 'DELIVERING'] as const);
   const moved = await transitionOpportunity({
@@ -1044,6 +1073,44 @@ export async function commitSpend(input: {
 }
 
 /**
+ * Whether a PIPELINE_AGREED / PIPELINE_RELEASED entry is the one its agreement
+ * implies: the key names an agreement on this project, the agreement is on the
+ * same opportunity in the same currency for the same amount, and a release is
+ * of an agreement that was released.
+ */
+async function agreementBehind(input: {
+  projectId: string;
+  opportunityId?: string | null;
+  kind: CashMoneyKind;
+  amountCents: number;
+  currency: string;
+  idempotencyKey: string;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const prefix = input.kind === 'PIPELINE_AGREED' ? 'agreement:' : 'agreement-released:';
+  const agreement = input.idempotencyKey.startsWith(prefix)
+    ? await getAgreement(input.idempotencyKey.slice(prefix.length))
+    : null;
+  const matches =
+    agreement !== null &&
+    agreement.projectId === input.projectId &&
+    agreement.opportunityId === (input.opportunityId ?? null) &&
+    agreement.amountCents === input.amountCents &&
+    agreement.currency === input.currency &&
+    (input.kind === 'PIPELINE_AGREED' || agreement.state === 'RELEASED');
+  if (matches) return { ok: true };
+  return {
+    ok: false,
+    reason:
+      input.kind === 'PIPELINE_AGREED'
+        ? 'Agreed work is recorded as an agreement — the amount, what is delivered, what counts as ' +
+          'acceptance and the evidence the buyer agreed — which writes this entry itself. A bare ' +
+          'amount is never billed, so it is not recorded on its own.'
+        : 'Agreed work is released by releasing its agreement, which keeps the agreement and voids ' +
+          'what was billed against it in the same pass.',
+  };
+}
+
+/**
  * Write one money event. Append-only, once per key, in the sprint's currency.
  *
  * Three things are checked before anything is written, and each exists because
@@ -1051,6 +1118,41 @@ export async function commitSpend(input: {
  * currency, and — for a customer payment — the authority to accept one. The key
  * is what makes a retry a retry rather than a second $750.
  */
+/**
+ * Drafts the money already on the ledger has overtaken: paid another way after
+ * they were drafted, so sending one would bill the buyer for money they have
+ * already paid. Voided newest first until what is still drafted fits what is
+ * still owed — never sent, so nothing reached the provider and a void here is
+ * the whole of it. A new draft can be requested for whatever genuinely
+ * remains. Called under `serializeCash`, by the payment that overtook them and
+ * by the issuing pass immediately before a send.
+ */
+export async function voidUncoveredDrafts(input: {
+  projectId: string;
+  opportunityId: string;
+  currency: string;
+  because: string;
+}): Promise<string[]> {
+  const opportunity = await getOpportunity(input.opportunityId);
+  if (!opportunity) return [];
+  let uncovered = (await dealPosition({ opportunity, currency: input.currency })).pnl.uncoveredPendingCents;
+  if (uncovered <= 0) return [];
+  const drafts = (
+    await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId, states: ['DRAFTED'] })
+  )
+    .filter((one) => one.currency === input.currency)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  const voided: string[] = [];
+  for (const draft of drafts) {
+    if (uncovered <= 0) break;
+    if (await moveInvoice({ id: draft.id, from: 'DRAFTED', to: 'VOID', patch: { stateReason: input.because } })) {
+      voided.push(draft.id);
+      uncovered -= draft.amountCents;
+    }
+  }
+  return voided;
+}
+
 export async function recordMoneyEvent(input: {
   projectId: string;
   opportunityId?: string | null;
@@ -1077,6 +1179,34 @@ export async function recordMoneyEvent(input: {
    * on the caller's word, and anything else still meets the grant.
    */
   confirmedEffectOperationId?: string | null;
+  /**
+   * The authorized refund this REFUND entry confirms. Internal: only the
+   * obligation's refund path (`journey/fulfillment.ts`) passes it, and no
+   * route reads it from a body.
+   */
+  confirmsRefund?: { fulfillmentId: string; refundKey: string } | null;
+  /**
+   * The invoice a provider says this payment paid. Internal, like
+   * `confirmedEffectOperationId` and for its reason: the invoice was issued
+   * under QUOTE_AND_INVOICE and the buyer paid it on the provider's own page,
+   * so the money arrived whatever has happened to a grant since. Read back
+   * from the database, never taken on the caller's word.
+   */
+  paidInvoiceId?: string | null;
+  /**
+   * What a payment a **person** records pays, while this piece has an issued
+   * invoice still unpaid: that invoice, or money that arrived outside every
+   * invoice. Required in exactly that case, because a payment nobody
+   * attributed is the one thing that cannot later be told apart from the
+   * provider's own reading of the same money.
+   */
+  appliesTo?: { invoiceId: string } | 'OUTSIDE_INVOICES' | null;
+  /**
+   * Internal: the provider reads an invoice paid that Brain's own charge
+   * already marked PAID, under a different charge — a second, real payment
+   * (`invoicing.ts`). Only that pass passes it, and no route reads it.
+   */
+  besideBrainCharge?: boolean;
 }): Promise<Outcome<CashMoneyEntry>> {
   const check = checkMoneyEntry({
     kind: input.kind,
@@ -1100,6 +1230,12 @@ export async function recordMoneyEvent(input: {
     );
   }
 
+  // A payment the provider itself confirmed, rather than one a person typed.
+  let providerFact = false;
+  // Brain's own take-payment, confirmed by its receipt.
+  let takenByBrain = false;
+  // The provider reading the payment of one of this piece's invoices.
+  let readOfInvoice = false;
   if (input.kind === 'CUSTOMER_PAYMENT') {
     const backing = input.confirmedEffectOperationId
       ? await getOperation(input.confirmedEffectOperationId)
@@ -1114,7 +1250,17 @@ export async function recordMoneyEvent(input: {
       // and taken for this piece, by the correlation Brain composed at send
       (input.opportunityId == null ||
         (backing.correlationId ?? '').startsWith(`cash:${input.opportunityId}:`));
-    if (!confirmed) {
+    const invoice = input.paidInvoiceId ? await getInvoice(input.paidInvoiceId) : null;
+    const paidInvoice =
+      invoice !== null &&
+      invoice.projectId === input.projectId &&
+      invoice.opportunityId === (input.opportunityId ?? null) &&
+      invoice.providerInvoiceId !== null &&
+      (invoice.state === 'ISSUED' || invoice.state === 'PAID' || invoice.state === 'SETTLED');
+    providerFact = confirmed || paidInvoice;
+    takenByBrain = confirmed && !paidInvoice;
+    readOfInvoice = paidInvoice;
+    if (!confirmed && !paidInvoice) {
       const decision = await checkCommercialAuthority({
         projectId: input.projectId,
         action: 'ACCEPT_PAYMENT',
@@ -1135,8 +1281,272 @@ export async function recordMoneyEvent(input: {
    * number one is checked against. A settlement landing between a commitment's
    * insert and its sum would make that sum true of neither moment.
    */
-  const written = await serializeCash(input.projectId, input.currency, () =>
-    recordMoney({
+  /*
+   * Agreed work, its release and a refund on an agreed deal each have exactly
+   * one writer in the post-sale model (docs/POST-SALE.md), and the check is on
+   * a server fact rather than the shape of a key the caller supplied: a key
+   * prefix is a string anybody can type into `POST /cash/money`.
+   */
+  if (input.kind === 'PIPELINE_AGREED' || input.kind === 'PIPELINE_RELEASED') {
+    const backing = await agreementBehind(input);
+    if (!backing.ok) return refuse(backing.reason);
+  }
+  let refundOnlyOwedBack = false;
+  if (input.kind === 'REFUND' && input.opportunityId && !input.confirmsRefund) {
+    /*
+     * On an agreed deal a refund belongs to the obligation it pays back. Where
+     * no obligation exists and none can be declared — every agreement
+     * released, or the piece no longer being performed — that route does not
+     * exist, and refusing here would leave money owed back with no way to
+     * record it being paid. It is bounded below under the lock either way.
+     */
+    const agreements = await agreementsFor(input.opportunityId);
+    const piece = await getOpportunity(input.opportunityId);
+    const performing = piece !== null && (piece.state === 'EXECUTING' || piece.state === 'DELIVERING');
+    const obligationPossible =
+      (await fulfillmentsForOpportunity(input.projectId, input.opportunityId)).length > 0 ||
+      (performing && agreements.some((one) => one.state === 'AGREED'));
+    // Where an obligation can carry it, this route still records money that
+    // no obligation can: what is owed back on an agreement that never had
+    // one — bounded, under the lock below, by exactly what is owed back.
+    refundOnlyOwedBack = agreements.length > 0 && obligationPossible;
+  }
+
+  const written = await serializeCash(input.projectId, input.currency, async () => {
+    if (refundOnlyOwedBack && input.opportunityId && !(await moneyEntryByKey(input.projectId, input.idempotencyKey))) {
+      const owedBack = await owedBackUnclaimedCents({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId,
+        currency: input.currency,
+      });
+      if (input.amountCents > owedBack) {
+        return {
+          ok: false as const,
+          entry: null,
+          replayed: false,
+          reason:
+            owedBack > 0
+              ? `Only ${owedBack} cents is owed back on this piece outside any obligation, so a refund of ` +
+                `${input.amountCents} is recorded on the obligation it pays back instead.`
+              : 'A refund on an agreed deal is authorized on the obligation it pays back, which bounds it ' +
+                'against every refund still pending or unknown and sends it once. Record it there.',
+        };
+      }
+    }
+    /*
+     * A settlement is the money a payment became, never a second sale, and a
+     * refund returns money that was paid — so neither may exceed what was paid
+     * on this piece. Asked under the lock, and skipped for a replay, which is
+     * the same entry again rather than more money.
+     */
+    if (
+      input.opportunityId &&
+      (input.kind === 'SETTLEMENT' || input.kind === 'REFUND') &&
+      !(await moneyEntryByKey(input.projectId, input.idempotencyKey))
+    ) {
+      // A refund still pending or unknown may already have left the account,
+      // so it counts against what may be refunded — except the one this entry
+      // confirms.
+      const unresolved =
+        input.kind === 'REFUND'
+          ? await unresolvedRefundCents({
+              projectId: input.projectId,
+              opportunityId: input.opportunityId,
+              except: input.confirmsRefund
+                ? `${input.confirmsRefund.fulfillmentId}:${input.confirmsRefund.refundKey}`
+                : null,
+            })
+          : 0;
+      const totals = await totalsByKind({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId,
+        currency: input.currency,
+      });
+      const paid = Number(totals.CUSTOMER_PAYMENT ?? 0);
+      const room =
+        input.kind === 'SETTLEMENT'
+          ? paid - Number(totals.REFUND ?? 0) - Number(totals.SETTLEMENT ?? 0)
+          : paid - Number(totals.REFUND ?? 0) - unresolved;
+      if (input.amountCents > room) {
+        return {
+          ok: false as const,
+          entry: null,
+          replayed: false,
+          reason:
+            input.kind === 'SETTLEMENT'
+              ? `Only ${Math.max(0, room)} cents paid on this piece has not settled, and this settlement is ` +
+                `for ${input.amountCents}. A settlement is a payment becoming usable, never a second sale — ` +
+                'record the payment first.'
+              : `Only ${Math.max(0, room)} cents paid on this piece is not already refunded or in a ` +
+                `refund still unresolved, so a refund of ${input.amountCents} would return money that ` +
+                'never arrived — or that may already have gone back.',
+        };
+      }
+    }
+    /*
+     * A payment on an agreed deal is never more than was agreed. One payment
+     * can reach the ledger two ways — read from the provider under its own
+     * reference, and recorded by a person under whatever reference they had —
+     * and the reference check in `recordMoney` cannot see that two different
+     * references are one payment. Counted twice it would inflate everything
+     * read from it: what may be settled, what may be refunded, and the
+     * contribution. So the total is held to the live agreements, and the second
+     * reading is refused naming the likely cause rather than recorded.
+     */
+    let paysInvoice: Awaited<ReturnType<typeof getInvoice>> = null;
+    if (
+      input.kind === 'CUSTOMER_PAYMENT' &&
+      input.opportunityId &&
+      !(await moneyEntryByKey(input.projectId, input.idempotencyKey))
+    ) {
+      if (input.paidInvoiceId) {
+        /*
+         * The provider's reading of an invoice a person already attributed a
+         * payment to is that payment, not a second one: the person said so
+         * under this same lock, and this read arrives after.
+         */
+        const current = await getInvoice(input.paidInvoiceId);
+        if (current?.paymentEntryId && !input.besideBrainCharge) {
+          const existing = await getMoneyEntry(current.paymentEntryId);
+          if (existing) return { ok: true as const, entry: existing, replayed: true, reason: 'This payment is already recorded against that invoice.' };
+        }
+        if (current && current.state === 'ISSUED') paysInvoice = current;
+      }
+      if (!providerFact) {
+        const unpaid = (
+          await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId, states: ['ISSUED'] })
+        ).filter((one) => !one.paymentEntryId && one.currency === input.currency);
+        // Drafted (not sent yet) or of unknown outcome (may be live): money
+        // recorded by hand beside one could be the same money it bills.
+        const pending = (
+          await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId, states: ['DRAFTED', 'UNCERTAIN'] })
+        ).filter((one) => one.currency === input.currency);
+        const applies = input.appliesTo ?? null;
+        if ((unpaid.length > 0 || pending.length > 0) && applies === null) {
+          return {
+            ok: false as const,
+            entry: null,
+            replayed: false,
+            reason:
+              `This piece has ${unpaid.length + pending.length === 1 ? 'an invoice' : `${unpaid.length + pending.length} invoices`} ` +
+              'issued, drafted or of unknown outcome and not yet paid. Say whether this payment pays an issued ' +
+              'one or arrived outside every invoice — Brain cannot tell a payment you record by hand from the ' +
+              'provider later reporting the same money.',
+          };
+        }
+        if (applies !== null && applies !== 'OUTSIDE_INVOICES') {
+          const target = unpaid.find((one) => one.id === applies.invoiceId) ?? null;
+          if (!target) {
+            return { ok: false as const, entry: null, replayed: false, reason: 'That is not an unpaid issued invoice on this piece.' };
+          }
+          if (target.amountCents !== input.amountCents) {
+            return {
+              ok: false as const,
+              entry: null,
+              replayed: false,
+              reason: `That invoice is for ${target.amountCents} cents and this payment is ${input.amountCents}. Record a payment against it only for its whole amount.`,
+            };
+          }
+          paysInvoice = target;
+        }
+      }
+      if (takenByBrain && !paysInvoice) {
+        /*
+         * Brain charged what was owed; where exactly one unpaid issued invoice
+         * is for that amount, it is that invoice's payment. Left unnamed, the
+         * money would read as paid outside every invoice and the next
+         * agreement would never be billed.
+         */
+        const matching = (
+          await listInvoices({ projectId: input.projectId, opportunityId: input.opportunityId, states: ['ISSUED'] })
+        ).filter((one) => !one.paymentEntryId && one.currency === input.currency && one.amountCents === input.amountCents);
+        if (matching.length === 1) paysInvoice = matching[0]!;
+      }
+    }
+    /*
+     * The cap is on what a person types. A payment the provider confirmed is
+     * money that arrived, and refusing it would leave real money unrecorded
+     * and its invoice unable to settle; an overpayment is then visible as one.
+     */
+    // A second charge of an invoice Brain's charge already paid is checked by
+    // reference before it gets here; an unrelated hand payment is not a reason
+    // to refuse money the provider holds.
+    const unattributed =
+      input.kind === 'CUSTOMER_PAYMENT' && input.opportunityId && readOfInvoice && !input.besideBrainCharge
+        ? await unattributedPersonPayments(input.opportunityId, input.currency)
+        : [];
+    if (
+      input.kind === 'CUSTOMER_PAYMENT' &&
+      input.opportunityId &&
+      (!providerFact || unattributed.length > 0) &&
+      !takenByBrain &&
+      !(await moneyEntryByKey(input.projectId, input.idempotencyKey))
+    ) {
+      const live = (await agreementsFor(input.opportunityId)).filter(
+        (one) => one.state === 'AGREED' && one.currency === input.currency,
+      );
+      if (live.length > 0) {
+        const agreed = live.reduce((sum, one) => sum + one.amountCents, 0);
+        // Payments toward the live agreements, net of refunds that repaid
+        // them — the reading `journey/position.ts` uses, never a copy of it.
+        const paid = (
+          await owedBackReading({
+            projectId: input.projectId,
+            opportunityId: input.opportunityId,
+            currency: input.currency,
+          })
+        ).creditedNetCents;
+        if (paid + input.amountCents > agreed && readOfInvoice) {
+          /*
+           * A person recorded money nobody tied to an invoice, and the
+           * provider now reads a payment that would take the piece past what
+           * was agreed: most likely the same money twice. Not recorded until a
+           * person says which — `attributePayment` is that answer.
+           */
+          return {
+            ok: false as const,
+            entry: null,
+            replayed: false,
+            reason:
+              `The provider reads ${input.amountCents} cents paid on this invoice, and a payment recorded by hand ` +
+              `(${unattributed.map((one) => one.id).join(', ')}) is not tied to any invoice. If it is this ` +
+              'invoice\'s payment, attribute it to the invoice; otherwise record the agreement the extra money is for.',
+          };
+        }
+        if (paid + input.amountCents > agreed) {
+          return {
+            ok: false as const,
+            entry: null,
+            replayed: false,
+            reason:
+              `${paid} cents is already recorded as paid against ${agreed} agreed, so ${input.amountCents} more ` +
+              'would be more than the buyer agreed to pay. If this is the same money recorded another way ' +
+              '(a provider-read invoice payment and a manual entry), it is already counted; if the buyer ' +
+              'really paid more, record the agreement for it first.',
+          };
+        }
+      }
+    }
+    if (input.kind === 'COMMITMENT_RELEASED' && !(await moneyEntryByKey(input.projectId, input.idempotencyKey))) {
+      const totals = await totalsByKind({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId ?? undefined,
+        currency: input.currency,
+      });
+      const owed =
+        Number(totals.UNPAID_COMMITMENT ?? 0) -
+        Number(totals.COMMITMENT_PAID ?? 0) -
+        Number(totals.COMMITMENT_RELEASED ?? 0);
+      if (input.amountCents > owed) {
+        return {
+          ok: false as const,
+          entry: null,
+          replayed: false,
+          reason: `Only ${Math.max(0, owed)} cents is owed, so ${input.amountCents} cannot stop being owed.`,
+        };
+      }
+    }
+    const recorded = await recordMoney({
       projectId: input.projectId,
       opportunityId: input.opportunityId ?? null,
       commitmentId: input.commitmentId ?? null,
@@ -1149,8 +1559,96 @@ export async function recordMoneyEvent(input: {
       note: input.note ?? null,
       recordedBy: input.actorRef,
       idempotencyKey: input.idempotencyKey,
-    }),
-  );
+    });
+    /*
+     * Money that paid no invoice may overtake an invoice still only drafted;
+     * that draft is voided now, under the same lock, rather than sent later
+     * to a buyer who has already paid.
+     */
+    if (
+      recorded.ok &&
+      recorded.entry &&
+      !recorded.replayed &&
+      !paysInvoice &&
+      input.kind === 'CUSTOMER_PAYMENT' &&
+      input.opportunityId
+    ) {
+      await voidUncoveredDrafts({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId,
+        currency: input.currency,
+        because: `Paid another way (${recorded.entry.id}) before it was sent; voided rather than billed twice.`,
+      });
+      /*
+       * An invoice whose issue is unknown may already be with the buyer, and
+       * this money may be its payment. Brain cannot void what it cannot see,
+       * so a person is asked to check; if it did reach the buyer and they pay
+       * it, the provider's read is held beside this unattributed payment until
+       * a person ties the two (`attributePayment`).
+       */
+      for (const unknown of await listInvoices({
+        projectId: input.projectId,
+        opportunityId: input.opportunityId,
+        states: ['UNCERTAIN'],
+      })) {
+        await raiseNeed({
+          projectId: input.projectId,
+          opportunityId: input.opportunityId,
+          actorRef: 'BRAIN',
+          blockedAction: `Void invoice ${unknown.id} if it reached the buyer`,
+          whyItMatters:
+            'A payment was recorded outside every invoice while this invoice’s outcome is unknown. If it was ' +
+            'issued, the buyer can be billed for money they have already paid.',
+          recommendedPath: `Search the provider for metadata brain_invoice=${unknown.id}; void it there if it exists.`,
+          setupEffort: 'A few minutes.',
+          nextStep: `Look up invoice ${unknown.id} at the provider.`,
+          completionCondition: 'The invoice is void at the provider, or it was never created.',
+          blocksState: null,
+          requestKey: `void-if-issued:${unknown.id}`,
+        });
+      }
+    }
+    /*
+     * The invoice names the entry in the same transaction, so a later reading
+     * of the same money — by a person or by the provider — finds it paid.
+     */
+    if (recorded.ok && recorded.entry && !recorded.replayed && paysInvoice) {
+      await moveInvoice({
+        id: paysInvoice.id,
+        from: 'ISSUED',
+        to: 'PAID',
+        patch: {
+          paymentEntryId: recorded.entry.id,
+          paidAt: recorded.entry.occurredAt,
+          ...(readOfInvoice
+            ? { providerStatus: 'paid', stateReason: null }
+            : { stateReason: takenByBrain ? 'Paid through Brain’s own payment, not this invoice’s page.' : 'Paid outside the provider; recorded by a person.' }),
+        },
+      });
+      if (!readOfInvoice) {
+        /*
+         * Paid some other way, so the invoice itself is still open at the
+         * provider and the buyer can be asked for the money again.
+         */
+        await raiseNeed({
+          projectId: input.projectId,
+          opportunityId: input.opportunityId ?? null,
+          actorRef: 'BRAIN',
+          blockedAction: `Void invoice ${paysInvoice.id} at the provider`,
+          whyItMatters:
+            'It was paid outside the invoice, and the provider still holds it open: the buyer can be chased ' +
+            'for, or pay, the same amount again.',
+          recommendedPath: 'Void or mark the invoice paid at the invoicing provider.',
+          setupEffort: 'A minute.',
+          nextStep: `Close ${paysInvoice.providerInvoiceId ?? paysInvoice.id} at the provider.`,
+          completionCondition: 'The provider no longer holds the invoice open.',
+          blocksState: null,
+          requestKey: `void-paid-elsewhere:${paysInvoice.id}`,
+        });
+      }
+    }
+    return recorded;
+  });
   if (!written.ok || !written.entry) return refuse(written.reason);
 
   if (!written.replayed) {
@@ -1269,4 +1767,55 @@ export async function authorityFor(projectId: string) {
   const mode = await getCashMode(projectId);
   const authority = await liveAuthority(projectId);
   return { mode, authority };
+}
+
+
+/**
+ * The answer to a provider payment held beside an unattributed hand entry: the
+ * person says the entry they recorded *is* that invoice's payment. The invoice
+ * then names it, so the provider's reading of the same money writes nothing.
+ * Whole amounts only, one piece, one currency, under the cash lock.
+ */
+export async function attributePayment(input: {
+  projectId: string;
+  opportunityId: string;
+  entryId: string;
+  invoiceId: string;
+  actorRef: string;
+}): Promise<Outcome<{ invoiceId: string; entryId: string }>> {
+  const mode = await getCashMode(input.projectId);
+  if (!mode) return refuse('Cash Mode has not been activated for this project.');
+  const done = await serializeCash(input.projectId, mode.currency, async () => {
+    const entry = await getMoneyEntry(input.entryId);
+    const invoice = await getInvoice(input.invoiceId);
+    if (!entry || entry.kind !== 'CUSTOMER_PAYMENT' || entry.opportunityId !== input.opportunityId || entry.projectId !== input.projectId) {
+      return 'No payment with that id on this piece.';
+    }
+    if (!invoice || invoice.opportunityId !== input.opportunityId || invoice.state !== 'ISSUED' || invoice.paymentEntryId) {
+      return 'That is not an unpaid issued invoice on this piece.';
+    }
+    if (!(await unattributedPersonPayments(input.opportunityId, invoice.currency)).some((one) => one.id === entry.id)) {
+      return 'That payment is already tied to an invoice, or was not recorded by a person.';
+    }
+    if (entry.amountCents !== invoice.amountCents || entry.currency !== invoice.currency) {
+      return `That payment is ${entry.amountCents} ${entry.currency} and the invoice is ${invoice.amountCents} ${invoice.currency}.`;
+    }
+    const moved = await moveInvoice({
+      id: invoice.id,
+      from: 'ISSUED',
+      to: 'PAID',
+      patch: { paymentEntryId: entry.id, paidAt: entry.occurredAt, stateReason: 'A person attributed a recorded payment to it.' },
+    });
+    return moved ? null : 'The invoice moved while this was being decided; read it again.';
+  });
+  if (done) return refuse(done);
+  await recordCashEvent({
+    projectId: input.projectId,
+    opportunityId: input.opportunityId,
+    kind: 'CASH_MONEY_RECORDED',
+    actorRef: input.actorRef,
+    summary: `Payment ${input.entryId} attributed to invoice ${input.invoiceId}.`,
+    detail: { entryId: input.entryId, invoiceId: input.invoiceId },
+  });
+  return { ok: true, value: { invoiceId: input.invoiceId, entryId: input.entryId }, message: 'Attributed.' };
 }

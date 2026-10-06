@@ -50,6 +50,8 @@ import { composeLedger } from './monetization/ledger.ts';
 import { composeSurface, type MonetizationSurface } from './monetization/surface.ts';
 import { commissionView, type CommissionView } from './monetization/inFlight.ts';
 import { MAX_OPEN_COMMISSIONS } from './monetization/commission.ts';
+import { journeyView, type JourneyView } from './journey/view.ts';
+import { cashOutcomeLessons, measuredByMechanism } from './journey/learning.ts';
 
 /** The states a piece has been decided on, so it has a record worth reading. */
 const RECORD_STATES = new Set(['READY', 'EXECUTING', 'DELIVERING', 'COLLECTED']);
@@ -128,6 +130,12 @@ export interface CashView {
      * perform itself. Owner view only — every figure is private (§34).
      */
     records: Record<string, ExecutionRecord>;
+    /**
+     * The first-dollar journey per deal — agreement, invoices, payment state,
+     * fulfilment, P&L and what happens next and who does it — and the lessons
+     * finished deals taught. Owner view only, for the reason `records` is.
+     */
+    journey: JourneyView;
     /** The load-bearing blanks per opportunity, so a card renders without a second call. */
     cards: Record<string, { ready: boolean; missing: string[]; summary: string }>;
     /**
@@ -291,9 +299,11 @@ export async function cashView(input: {
     });
   }
 
+  const lessons = await cashOutcomeLessons(input.projectId);
   const plan = assemble({
     opportunities,
     tiers,
+    measured: measuredByMechanism(lessons),
     deployableCents: position.deployableCents,
     // With no grant there is no authorized concurrency, which is the honest
     // answer rather than a default: the portfolio still assembles and every
@@ -432,6 +442,7 @@ export async function cashView(input: {
       executionPaths,
       offers,
       records,
+      journey: await journeyView({ opportunities, records, currency, lessons }),
     },
     whatBrainHasDone: await listCashEvents(input.projectId, 40),
     whatBrainNeeds: needs.map((one) => ({

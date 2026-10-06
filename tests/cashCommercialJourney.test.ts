@@ -15,7 +15,8 @@
  * invoicing and taking a payment could never be performed by Brain at all.
  *
  *   J01 — READY → Brain contacts (CONFIRMED) → agreed amount → Brain invoices
- *         → a second press is refused, not a second invoice → Brain takes the
+ *         → a second press is refused, not a second invoice → a charge beside
+ *         the open invoice is refused → voided, Brain takes the
  *         payment → "money is in" refused until a settlement → settlement →
  *         COLLECTED, with every Cash figure derived from server rows.
  *   J02 — an ambiguous send: no action, no resend on the next pass, then the
@@ -52,6 +53,7 @@ import { recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { getOpportunity, listNeeds } from '../server/repos/cashPortfolio.ts';
 import { actionsFor } from '../server/repos/cashActions.ts';
 import { listMoneyEntries } from '../server/repos/cashLedger.ts';
+import { listInvoices, moveInvoice } from '../server/repos/cashInvoices.ts';
 import { readCapability } from '../server/services/cash/capabilities.ts';
 import { COMMERCIAL_EFFECTS, commercialOperationsFor } from '../server/services/cash/effects.ts';
 import {
@@ -259,7 +261,7 @@ async function qualified(): Promise<CashOpportunity> {
     actorRef: 'BRAIN',
     patch: {
       payer: 'The operations manager, who signs',
-      reachableChannel: 'The address on the notice',
+      reachableChannel: 'ops@intake-buyer.example — the address on the notice',
       buyingSignal: 'Wanted: intake repair. Budget $1,200.',
       signalObservedAt: '2026-09-15T09:00:00.000Z',
       peakFundingCents: 0,
@@ -366,16 +368,28 @@ describe('J01: READY to settled, through the real routes', () => {
     expect(invoice.sends).toHaveLength(0);
 
     // A person records what was agreed. Pipeline, not cash.
-    const agreed = await call('POST', `/api/projects/${projectId}/cash/money`, {
-      kind: 'PIPELINE_AGREED',
+    // An agreement, not a bare amount: the deliverable, the acceptance
+    // condition and the evidence the buyer agreed.
+    const agreed = await act_(piece.id, 'agree', {
       amountCents: 120_000,
-      opportunityId: piece.id,
-      idempotencyKey: `agreed:${piece.id}:120000:`,
+      deliverable: 'The work on the card.',
+      acceptanceCondition: 'The buyer confirms it in writing.',
+      evidenceKind: 'WRITTEN_ACCEPTANCE',
+      evidenceRef: 'buyer-reply-1',
     });
     expect(agreed.status).toBe(200);
 
     rec = await record(piece.id);
     expect(rec.money).toMatchObject({ agreedCents: 120_000, paidCents: 0, outstandingCents: 120_000 });
+    // An invoice is drafted with the terms only a person holds, then Brain
+    // issues that one row — the press and the tick share one key.
+    const drafted = await call('POST', `/api/projects/${projectId}/cash/opportunities/${piece.id}/invoice`, {
+      customerName: 'Intake Buyer Ltd',
+      customerEmail: 'accounts@intake-buyer.example',
+      taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31',
+    });
+    expect(drafted.status).toBe(200);
     const invoiced = await act_(piece.id, 'perform', {
       action: 'QUOTE_AND_INVOICE',
       expectedOccurrence: rec.nextOccurrence,
@@ -383,7 +397,7 @@ describe('J01: READY to settled, through the real routes', () => {
     expect(invoiced.status).toBe(200);
     expect(invoiced.body.result.kind).toBe('RECORDED');
     expect(invoice.sends).toEqual([
-      expect.objectContaining({ amountCents: 120_000, currency: 'USD' }),
+      expect.objectContaining({ amountCents: 120_000, currency: 'USD', customerEmail: 'accounts@intake-buyer.example' }),
     ]);
 
     // The same press again — a double click, a retry after a lost response —
@@ -395,6 +409,19 @@ describe('J01: READY to settled, through the real routes', () => {
     expect(again.status).toBe(422);
     expect(invoice.sends).toHaveLength(1);
 
+    // While the invoice is open the buyer pays it there: Brain does not also
+    // charge them, and does not offer to.
+    rec = await record(piece.id);
+    expect(rec.performable.find((one) => one.action === 'ACCEPT_PAYMENT')!.available).toBe(false);
+    const beside = await act_(piece.id, 'perform', {
+      action: 'ACCEPT_PAYMENT',
+      expectedOccurrence: rec.nextOccurrence,
+    });
+    expect(beside.status).toBe(422);
+    expect(payment.sends).toHaveLength(0);
+    // Voided at the provider, Brain may take the payment directly instead.
+    const [open] = await listInvoices({ projectId, opportunityId: piece.id });
+    expect(await moveInvoice({ id: open!.id, from: 'ISSUED', to: 'VOID', patch: { stateReason: 'Voided at the provider.' } })).toBe(true);
     rec = await record(piece.id);
     const paid = await act_(piece.id, 'perform', {
       action: 'ACCEPT_PAYMENT',
@@ -402,7 +429,7 @@ describe('J01: READY to settled, through the real routes', () => {
     });
     expect(paid.status).toBe(200);
     expect(payment.sends).toEqual([
-      expect.objectContaining({ amountCents: 120_000, invoiceReference: 'inv-1' }),
+      expect.objectContaining({ amountCents: 120_000, invoiceReference: null }),
     ]);
     const entries = await listMoneyEntries({ projectId, currency: 'USD', limit: 50 });
     const payments = entries.filter((one) => one.kind === 'CUSTOMER_PAYMENT');
@@ -410,7 +437,20 @@ describe('J01: READY to settled, through the real routes', () => {
     expect(payments[0]).toMatchObject({ amountCents: 120_000, verifiedReference: 'pay-1' });
 
     // A payment is not settled money, so "money is in" is refused until it is.
-    expect((await act_(piece.id, 'deliver')).status).toBe(200);
+    // Delivering is work that exists; collecting needs it accepted as well.
+    expect((await act_(piece.id, 'deliver')).status).toBe(422);
+    const agreementId = agreed.body.agreement.id;
+    expect((await act_(piece.id, 'fulfil', { agreementId, kind: 'PERSON', performer: 'The operator' })).status).toBe(200);
+    // Declaring who performs it is not delivery; delivering something is.
+    expect((await getOpportunity(piece.id))!.state).toBe('EXECUTING');
+    for (const [kind, evidenceRef] of [
+      ['WORK_COMPLETE', 'delivered.zip'],
+      ['DELIVERED', 'delivered.zip, sent'],
+      ['ACCEPTED', 'buyer-signoff'],
+    ] as const) {
+      expect((await act_(piece.id, 'obligation-event', { agreementId, kind, detail: kind.toLowerCase(), evidenceRef })).status).toBe(200);
+    }
+    expect((await getOpportunity(piece.id))!.state).toBe('DELIVERING');
     expect((await act_(piece.id, 'collect')).status).toBe(422);
     const settled = await call('POST', `/api/projects/${projectId}/cash/money`, {
       kind: 'SETTLEMENT',

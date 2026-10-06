@@ -218,6 +218,11 @@ describe('who can reach any of this', () => {
     { method: 'POST', route: `${CASH()}/money` },
     { method: 'POST', route: `${CASH()}/commitments` },
     { method: 'POST', route: `${CASH()}/needs` },
+    // Commercial providers and invoices (§52): status and invoices are any
+    // member's to read, a request is a person's, and none is a machine's.
+    { method: 'GET', route: `${CASH()}/providers` },
+    { method: 'GET', route: `${CASH()}/invoices` },
+    { method: 'POST', route: `${CASH()}/opportunities/cop_any/invoice` },
     // The dealflow kernel's door. Reading it is any member's; seeding a party,
     // retiring one and recording what an attempt taught are ADMIN — and none
     // of them is reachable by a machine at all.
@@ -663,6 +668,71 @@ describe('one account’s whole journey', () => {
     expect(view.body.myCash.position.availableFundsCents).toBe(0);
   });
 
+  it('says which commercial providers are connected, naming settings and never values', async () => {
+    const status = await call<{ providers: { area: string; state: string; nextAction: string }[] }>(
+      'GET',
+      `${CASH()}/providers`,
+      { cookie: memberCookie },
+    );
+    expect(status.status).toBe(200);
+    // Nothing is configured on this server, so all three are MISSING with
+    // the exact settings to supply.
+    expect(status.body.providers.map((one) => [one.area, one.state])).toEqual([
+      ['MESSAGING', 'MISSING'],
+      ['INVOICES', 'MISSING'],
+      ['PAYMENTS', 'MISSING'],
+    ]);
+    expect(status.body.providers[0]!.nextAction).toContain('RESEND_API_KEY');
+    expect(status.body.providers[1]!.nextAction).toContain('STRIPE_SECRET_KEY');
+  });
+
+  it('refuses to invoice an amount nobody agreed, and never bills money already paid', async () => {
+    const terms = {
+      customerName: 'Buyer Ltd',
+      customerEmail: 'accounts@buyer.example',
+      taxTreatment: 'NO_TAX_CHARGED',
+      dueDate: '2099-01-31',
+    };
+    const refused = await call<{ error: string }>('POST', `${CASH()}/opportunities/${opportunityId}/invoice`, {
+      cookie: adminCookie,
+      body: terms,
+    });
+    expect(refused.status).toBe(422);
+    expect(refused.text).toContain('Record the agreement');
+
+    // An agreement, not a bare amount: a bare PIPELINE_AGREED is never billed.
+    const bare = await call('POST', `${CASH()}/money`, {
+      cookie: adminCookie,
+      body: { opportunityId, kind: 'PIPELINE_AGREED', amountCents: 75_000, idempotencyKey: 'journey-agreed' },
+    });
+    expect(bare.status).toBe(422);
+    const agreed = await call('POST', `/api/cash/opportunities/${opportunityId}/agree`, {
+      cookie: adminCookie,
+      body: {
+        amountCents: 75_000,
+        deliverable: 'One afternoon of configuration',
+        acceptanceCondition: 'The owner signs off the configured system.',
+        evidenceKind: 'WRITTEN_ACCEPTANCE',
+        evidenceRef: 'msg-8841-reply',
+      },
+    });
+    expect(agreed.status).toBe(200);
+
+    // The buyer already paid the whole 75,000 (the payment above), so an
+    // invoice for the agreed amount would bill money already received — and is
+    // refused, whatever figure a caller sends.
+    const drafted = await call<{ error: string }>(
+      'POST',
+      `${CASH()}/opportunities/${opportunityId}/invoice`,
+      { cookie: adminCookie, body: { ...terms, amountCents: 1 } },
+    );
+    expect(drafted.status).toBe(422);
+    expect(drafted.text).toContain('already billed or paid');
+
+    const listed = await call<{ invoices: { id: string }[] }>('GET', `${CASH()}/invoices`, { cookie: memberCookie });
+    expect(listed.body.invoices).toEqual([]);
+  });
+
   it('refuses a commitment the account cannot cover', async () => {
     /*
      * The payment is earned and has not settled, so there is nothing deployable
@@ -968,6 +1038,65 @@ describe('one account’s whole journey', () => {
       },
     });
     expect(settled.status).toBe(200);
+
+    // And the work was agreed, done and accepted: "the money is in and the
+    // delivery is done" needs both halves (`journey/position.ts`).
+    const op = (name: string, body: Record<string, unknown>) =>
+      call<any>('POST', `/api/cash/opportunities/${opportunityId}/${name}`, { cookie: adminCookie, body });
+    const agreed = await op('agree', {
+      amountCents: 75_000,
+      deliverable: 'One afternoon of configuration',
+      acceptanceCondition: 'The owner signs off the configured system.',
+      evidenceKind: 'WRITTEN_ACCEPTANCE',
+      evidenceRef: 'msg-8841-reply',
+    });
+    expect(agreed.status).toBe(200);
+    const agreementId = agreed.body.agreement.id;
+    expect((await op('fulfil', { agreementId, kind: 'PERSON', performer: 'The operator' })).status).toBe(200);
+    for (const [kind, evidenceRef] of [
+      ['WORK_COMPLETE', 'configuration notes'],
+      ['DELIVERED', 'operator calendar, the afternoon held'],
+      ['ACCEPTED', 'owner sign-off email'],
+    ] as const) {
+      const step = await op('obligation-event', { agreementId, kind, detail: kind.toLowerCase(), evidenceRef });
+      expect(step.status, JSON.stringify(step.body)).toBe(200);
+    }
+
+    // A key in a namespace Brain writes from its own rows is refused, so a
+    // caller cannot occupy the entry Brain will write later.
+    const squatted = await call('POST', `${CASH()}/money`, {
+      cookie: memberCookie,
+      body: { opportunityId, kind: 'COST', amountCents: 1, idempotencyKey: 'refund:anything' },
+    });
+    expect(squatted.status).toBe(422);
+    // The page's own payment control keys an entry `payment:<piece>:<ref>`,
+    // the key Brain's own take-payment converges on — so it is not reserved.
+    const pageKey = await call('POST', `${CASH()}/money`, {
+      cookie: memberCookie,
+      // A settlement nothing was paid for: refused for its amount, never for its key.
+      body: { opportunityId, kind: 'SETTLEMENT', amountCents: 1, verifiedReference: 'x', idempotencyKey: `payment:${opportunityId}:x` },
+    });
+    expect(JSON.stringify(pageKey.body)).not.toMatch(/written by Brain itself/);
+
+    // An agreement is resolved against this piece, so an id from nowhere
+    // reaches no obligation.
+    const foreign = await op('obligation-event', {
+      agreementId: 'agr_not_on_this_piece',
+      kind: 'DELIVERED',
+      detail: 'x',
+      evidenceRef: 'x',
+    });
+    expect(foreign.status).toBe(422);
+
+    // Paying money back is the administrator's: a member gets the same 404 the
+    // other administrator-only routes give, for both halves of the machine.
+    for (const action of ['refund', 'refund-answer']) {
+      const refused = await call('POST', `/api/cash/opportunities/${opportunityId}/${action}`, {
+        cookie: memberCookie,
+        body: { agreementId, amountCents: 1, reason: 'a member trying' },
+      });
+      expect(refused.status, action).toBe(404);
+    }
 
     const collected = await call('POST', `/api/cash/opportunities/${opportunityId}/collect`, {
       cookie: adminCookie,

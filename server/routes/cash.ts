@@ -98,11 +98,30 @@ import {
   fillCard,
   markReady,
   recordMoneyEvent,
+  attributePayment,
   reoffer,
   settleSpend,
 } from '../services/cash/opportunities.ts';
 import { recordFurtherAction } from '../services/cash/actions.ts';
+import {
+  agreementsFor,
+  recordAgreement,
+  recordObservation,
+  releaseAgreement,
+} from '../services/cash/journey/deal.ts';
+import {
+  answerRefund,
+  authorizeRefund,
+  declare as declareFulfillment,
+  recordCost as recordObligationCost,
+  recordEvent as recordObligationEvent,
+  retryWork as retryObligationWork,
+} from '../services/cash/journey/fulfillment.ts';
 import { performCommercialAction, resolveCommercialEffect } from '../services/cash/perform.ts';
+import { requestInvoice } from '../services/cash/invoicing.ts';
+import { listInvoices } from '../repos/cashInvoices.ts';
+import { commercialProviderStatus } from '../services/cash/providers/status.ts';
+import { TAX_TREATMENTS } from '../services/cash/providers/stripe.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
 import { cashView } from '../services/cash/view.ts';
 import { cashCapabilities, decideCashRead } from '../services/cash/access.ts';
@@ -160,6 +179,18 @@ import {
   CASH_MONEY_KINDS,
   type CashMoneyKind,
 } from '../domain/types.ts';
+
+/** Ledger key namespaces Brain writes from its own rows, never a caller's. */
+const SERVER_LEDGER_KEY_PREFIXES = [
+  'agreement:',
+  'agreement-released:',
+  'refund:',
+  'fulfillment-cost:',
+  'invoice-payment:',
+  'invoice-settlement:',
+  'invoice-fee:',
+  'settle:',
+] as const;
 import type { Outcome } from '../services/cash/opportunities.ts';
 
 export const cashRouter: Router = Router();
@@ -908,6 +939,152 @@ cashRouter.post(
         );
         return { result: value, message };
       }
+      /*
+       * The deal after the first real action (`services/cash/journey/deal.ts`):
+       * what the buyer said and what was agreed. Every id a body names is resolved
+       * against *this* piece, so a call can never reach another piece's row.
+       */
+      case 'observe': {
+        const kind = requiredString(body['kind'], 'kind');
+        const { value, message } = taken(
+          await recordObservation({
+            opportunityId: opportunity.id,
+            kind,
+            source: 'PERSON',
+            evidenceRef: requiredString(body['evidenceRef'], 'evidenceRef'),
+            amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 0 }) ?? null,
+            note: optionalString(body['note'], 'note') ?? null,
+            actorRef: principal.id,
+          }),
+        );
+        return { observation: value, message };
+      }
+      case 'agree': {
+        const mode = await getCashMode(opportunity.projectId);
+        const { value, message } = taken(
+          await recordAgreement({
+            opportunityId: opportunity.id,
+            amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 1 }) ?? 0,
+            currency: optionalString(body['currency'], 'currency') ?? mode?.currency ?? '',
+            deliverable: requiredString(body['deliverable'], 'deliverable'),
+            acceptanceCondition: requiredString(body['acceptanceCondition'], 'acceptanceCondition'),
+            evidenceKind: requiredString(body['evidenceKind'], 'evidenceKind'),
+            evidenceRef: requiredString(body['evidenceRef'], 'evidenceRef'),
+            observationId: optionalString(body['observationId'], 'observationId') ?? null,
+            actorRef: principal.id,
+          }),
+        );
+        return { agreement: value, message };
+      }
+      case 'attribute-payment': {
+        const { value, message } = taken(
+          await attributePayment({
+            projectId: opportunity.projectId,
+            opportunityId: opportunity.id,
+            entryId: requiredString(body['entryId'], 'entryId'),
+            invoiceId: requiredString(body['invoiceId'], 'invoiceId'),
+            actorRef: principal.id,
+          }),
+        );
+        return { attributed: value, message };
+      }
+      case 'release-agreement': {
+        const agreementId = requiredString(body['agreementId'], 'agreementId');
+        const owned = (await agreementsFor(opportunity.id)).some((one) => one.id === agreementId);
+        if (!owned) throw unprocessable('No agreement with that id on this piece.');
+        const { value, message } = taken(
+          await releaseAgreement({
+            agreementId,
+            reason: requiredString(body['reason'], 'reason'),
+            actorRef: principal.id,
+          }),
+        );
+        return { agreement: value, message };
+      }
+      /*
+       * The obligation an agreement creates (`journey/fulfillment.ts`). The
+       * agreement a body names is resolved against *this* piece first, so a
+       * call can never reach another piece's obligation.
+       */
+      case 'fulfil':
+      case 'obligation-event':
+      case 'obligation-cost':
+      case 'obligation-retry':
+      case 'refund':
+      case 'refund-answer': {
+        const agreementId = requiredString(body['agreementId'], 'agreementId');
+        const owned = (await agreementsFor(opportunity.id)).some((one) => one.id === agreementId);
+        if (!owned) throw unprocessable('No agreement with that id on this piece.');
+        const projectId = opportunity.projectId;
+        let outcome: Outcome<unknown>;
+        if (action === 'fulfil') {
+          const scope = body['mutationScope'];
+          if (scope !== undefined && (!Array.isArray(scope) || scope.some((one) => typeof one !== 'string'))) {
+            throw badRequest('"mutationScope" is a list of paths.');
+          }
+          outcome = await declareFulfillment({
+            projectId,
+            agreementId,
+            kind: requiredString(body['kind'], 'kind'),
+            performer: requiredString(body['performer'], 'performer'),
+            // A remote, never a root: a filesystem path from a browser is a
+            // caller choosing where the Factory works (§27).
+            repositoryRemote: optionalString(body['repositoryRemote'], 'repositoryRemote') ?? null,
+            baseBranch: optionalString(body['baseBranch'], 'baseBranch') ?? null,
+            mutationScope: (scope as string[] | undefined) ?? [],
+            supplierName: optionalString(body['supplierName'], 'supplierName') ?? null,
+            actorRef: principal.id,
+          });
+        } else if (action === 'obligation-event') {
+          outcome = await recordObligationEvent({
+            projectId,
+            agreementId,
+            kind: requiredString(body['kind'], 'kind'),
+            detail: requiredString(body['detail'], 'detail'),
+            evidenceRef: optionalString(body['evidenceRef'], 'evidenceRef') ?? null,
+            actorRef: principal.id,
+          });
+        } else if (action === 'obligation-cost') {
+          outcome = await recordObligationCost({
+            projectId,
+            agreementId,
+            kind: requiredString(body['kind'], 'kind'),
+            amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 1 }) ?? 0,
+            detail: requiredString(body['detail'], 'detail'),
+            reference: optionalString(body['reference'], 'reference') ?? null,
+            actorRef: principal.id,
+          });
+        } else if (action === 'obligation-retry') {
+          outcome = await retryObligationWork({
+            projectId,
+            agreementId,
+            reason: requiredString(body['reason'], 'reason'),
+            actorRef: principal.id,
+          });
+        } else if (action === 'refund') {
+          // ADMIN, by the policy override: a refund pays money out.
+          outcome = await authorizeRefund({
+            projectId,
+            agreementId,
+            amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 1 }) ?? 0,
+            reason: requiredString(body['reason'], 'reason'),
+            actorRef: principal.id,
+          });
+        } else {
+          const answer = requiredString(body['answer'], 'answer');
+          if (answer !== 'confirm' && answer !== 'not-sent') throw badRequest('"answer" is confirm or not-sent.');
+          outcome = await answerRefund({
+            projectId,
+            agreementId,
+            refundKey: requiredString(body['refundKey'], 'refundKey'),
+            answer,
+            reference: requiredString(body['reference'], 'reference'),
+            actorRef: principal.id,
+          });
+        }
+        const { value, message } = taken(outcome);
+        return { obligation: value, message };
+      }
       case 'deliver':
       case 'collect': {
         const { value, message } = taken(
@@ -1008,6 +1185,20 @@ cashRouter.post(
      * believing they have a property they do not — and it is the same rule
      * here with money on the other side of it.
      */
+    /*
+     * Brain writes some ledger entries under keys it derives from its own rows
+     * (an agreement, a refund, a supplier cost, a provider-read payment). A key
+     * a caller chose in one of those namespaces could occupy the entry Brain
+     * will write later, so its real write would replay the caller's or be
+     * refused as a conflict. Refused by name rather than renamed.
+     */
+    const callerKey = String(body['idempotencyKey'] ?? '').trim();
+    const reserved = SERVER_LEDGER_KEY_PREFIXES.find((prefix) => callerKey.startsWith(prefix));
+    if (reserved) {
+      throw unprocessable(
+        `Keys beginning "${reserved}" are written by Brain itself from its own rows. Choose another key.`,
+      );
+    }
     const stated = optionalString(body['currency'], 'currency');
     if (stated && stated !== mode.currency) {
       throw unprocessable(
@@ -1032,9 +1223,73 @@ cashRouter.post(
         note: optionalString(body['note'], 'note') ?? null,
         idempotencyKey: requiredString(body['idempotencyKey'], 'idempotencyKey'),
         actorRef: principal.id,
+        appliesTo: (() => {
+          const invoiceId = optionalString(body['paysInvoiceId'], 'paysInvoiceId');
+          if (invoiceId && body['outsideInvoices'] === true) {
+            throw unprocessable('A payment pays one invoice or arrived outside every invoice, not both.');
+          }
+          if (invoiceId) return { invoiceId };
+          return body['outsideInvoices'] === true ? 'OUTSIDE_INVOICES' : null;
+        })(),
       }),
     );
     return { entry: value, message };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Commercial providers and invoices (§54)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Messaging, invoices and payments: CONNECTED or MISSING, with the exact next
+ * action. Names settings, never values, so any project member may read it.
+ */
+cashRouter.get(
+  '/projects/:projectId/cash/providers',
+  handler(async (req) => {
+    requirePerson();
+    await requireProject(pathId(req, 'projectId'));
+    return { providers: await commercialProviderStatus(), taxTreatments: TAX_TREATMENTS };
+  }),
+);
+
+cashRouter.get(
+  '/projects/:projectId/cash/invoices',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { invoices: await listInvoices({ projectId: project.id }) };
+  }),
+);
+
+/**
+ * A person's request to invoice an agreed amount.
+ *
+ * Records a draft and sends nothing: the tick issues it under the standing
+ * QUOTE_AND_INVOICE authority once an invoicing provider is usable. The amount
+ * and currency are the agreed ledger entry's; the customer, tax treatment and
+ * due date are this person's — Brain supplies none of them.
+ */
+cashRouter.post(
+  '/projects/:projectId/cash/opportunities/:opportunityId/invoice',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const { value, message } = taken(
+      await requestInvoice({
+        projectId: project.id,
+        opportunityId: pathId(req, 'opportunityId'),
+        pipelineEntryId: optionalString(body['pipelineEntryId'], 'pipelineEntryId') ?? null,
+        customerName: requiredString(body['customerName'], 'customerName'),
+        customerEmail: requiredString(body['customerEmail'], 'customerEmail'),
+        taxTreatment: requiredString(body['taxTreatment'], 'taxTreatment'),
+        dueDate: requiredString(body['dueDate'], 'dueDate'),
+        actorRef: principal.id,
+      }),
+    );
+    return { invoice: value, message };
   }),
 );
 

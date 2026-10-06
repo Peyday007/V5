@@ -6006,6 +6006,12 @@ named, and none of them has a reader, because there is nothing to read. Nothing
 here forms a view about what settling a question is worth, for the same reason
 `judgment.ts` does not.
 
+**That paragraph was true when it was written and is corrected in §53 rather
+than edited here.** Three of those capabilities now have readers: a deployment
+that sets the messaging and billing secrets can write to a buyer, issue an
+invoice and read its payment and settlement back. One that does not reads
+exactly as this paragraph describes.
+
 
 ## 31. A validated finding belongs to the Brain. Everything else belongs to its project.
 
@@ -12342,6 +12348,234 @@ client that stopped retrying after a *real* auth anomaly. What Brain still canno
 fix is a refresh that never reached it and Claude's own needs-auth state, which
 §51 already names.
 
+## 54. A provider is a deployment secret and an effect class, never a boolean.
+
+`SEND_A_MESSAGE`, `ISSUE_AN_INVOICE` and `TAKE_A_PAYMENT` read MISSING because
+nothing implemented them. `server/services/cash/providers/` and
+`services/cash/invoicing.ts` are the adapters, and `docs/CASH-PROVIDERS.md` is
+the setup. Everything here is an entrance to Step 6's effects engine; nothing is
+a second credential framework or a second idempotency mechanism.
+
+- **The credential is a deployment secret, exactly like a Routine's bearer.**
+  `BRAIN_MESSAGING_PROVIDER` / `RESEND_API_KEY` / `BRAIN_MESSAGING_FROM` and
+  `BRAIN_BILLING_PROVIDER` / `STRIPE_SECRET_KEY`, read per call and never
+  stored, logged, put in a URL or returned. A provider error body is reduced to
+  its type and code, because provider messages echo requests; the suite asserts
+  the key appears in no stored row after a 401 that echoed it.
+- **PRESENT is registered *and* usable now.** Boot registers only the provider a
+  deployment selected; `health()` re-reads its configuration on every capability
+  reading, so a removed secret reads MISSING without a restart. A live key check
+  sends nothing and is the operator's (`cash-report --probe`), never the tick's.
+- **Each adapter declares the class it can honestly keep.** Resend is
+  `EXTERNAL_OPAQUE`: its idempotency key lives twenty-four hours and an email
+  cannot be looked up by Brain's identity, so a timeout stops at UNCERTAIN with
+  a need and is never resent — the key is still sent, inside its window. Stripe
+  is `EXTERNAL_RECONCILABLE`: five keyed requests, every object tagged
+  `metadata[brain_invoice]`, and after an ambiguous send the engine *searches*
+  instead of sending. Stripe's search lags, so an empty search is INCONCLUSIVE
+  and never ABSENT — ABSENT would license a second invoice.
+- **A 5xx, a reset, a timeout or an unreadable 2xx is UNCERTAIN; only a
+  documented "not processed" is a refusal, and only a 429 is a retryable one**
+  (invariant 26). A retryable refusal leaves the operation open, so a draft stays
+  a draft rather than becoming FAILED.
+- **Brain supplies no term.** The recipient is the one address the buyer's
+  published channel names — none or two is a need, never a pick. The message is
+  the card's offer in a fixed template with an opt-out, at most three per pass,
+  one recipient each. An invoice's amount and currency are a `PIPELINE_AGREED`
+  entry; its customer, tax treatment (`NO_TAX_CHARGED`, `TAX_EXEMPT`,
+  `REVERSE_CHARGE` — Brain computes no tax) and due date are a person's.
+- **Paid and settled are two readings and two entries.** `CUSTOMER_PAYMENT` when
+  Stripe says an invoice issued under `QUOTE_AND_INVOICE` is paid, `SETTLEMENT` for the
+  gross and a `COST` for the fee when its balance transaction is `available`,
+  each keyed on the invoice so a re-read records nothing. A payment outside
+  Stripe is settled by a person, because Stripe holds no balance for it.
+
+**What is true today:** the adapters, the invoice table (`108_cash_invoices.sql`
+/ pg `099_cash_invoices.sql`), the tick pass and the status surface exist and
+are tested against fake providers (`tests/commercialProviders.test.ts`). No
+real buyer has been written to, no real invoice issued and no real money moved,
+and no provider secret has been set on the deployment — so all three still read
+MISSING in production until the owner sets them.
+
+## 55. After the buyer says yes there is one model, and each fact has one owner.
+
+Money Builds 1 to 3 each built a stretch of the road. Build 1 made a commercial
+effect safe to attempt. Build 2 made sending a message, issuing an invoice and
+reading a payment real. Build 3 made discovery fill the card. Nothing connected
+the stretches after the sale. Two branches then built that connection
+independently: the first-dollar journey and PR #124's fulfillment and refunds.
+Each owned the same facts twice. There were two fulfilment tables, two
+acceptance records, two refund paths, two outcome stores and two contribution
+formulas.
+
+Keeping both would be the defect this file records more than any other: two
+readers of one fact. So each fact went to whichever model had the stronger
+invariant, and the other owner was **deleted rather than kept beside it**.
+`docs/POST-SALE.md` holds the ownership matrix, fact by fact, with its writers
+and readers. `server/services/cash/journey/`, `server/repos/cashJourney.ts`,
+`server/repos/cashFulfillment.ts`, `server/domain/cashJourney.ts` and
+`server/domain/cashFulfillment.ts` implement it. They add no second lifecycle.
+The opportunity state machine, the ledger, the effects engine and the invoice
+table are unchanged in kind.
+
+- **An agreement is evidence, not an amount, and the amount is written in the
+  same transaction.** `recordAgreement` requires:
+  - a deliverable;
+  - an acceptance condition;
+  - one of four evidence kinds, with a reference;
+  - the sprint's currency;
+  - a matching BUYER_ACCEPTED or BUYER_COUNTERED observation, wherever one is
+    named.
+
+  It writes the agreement and its `PIPELINE_AGREED` under one `serializeCash`.
+  `recordMoneyEvent` refuses that kind, and `PIPELINE_RELEASED`, unless the key
+  names a **real agreement** with the same opportunity, amount and currency.
+  The first version checked a key *prefix* that anyone could type, which is a
+  guard on a value the claimant supplies.
+- **One obligation per agreement.** `cash_fulfillments.agreement_id` is UNIQUE.
+  The promise and the acceptance condition are read from the agreement and are
+  never copied onto the obligation. Per-opportunity acceptance was the defect
+  that grain removes: one buyer's acceptance completed every agreement on the
+  piece.
+- **Work, delivery, acceptance and completion are four facts.** Brain's own work
+  reads complete from its own rows: a Factory campaign COMPLETE, or a Russell
+  mission DONE with a document. A person or supplier records `WORK_COMPLETE`
+  with evidence. Rules:
+  - `DELIVERED` needs the work complete;
+  - `ACCEPTED` needs a full delivery;
+  - `PARTIALLY_DELIVERED` never completes the obligation;
+  - a rejection reopens delivery as a new round with its own key, so an
+    identical redelivery is not swallowed;
+  - nothing is accepted after the obligation completes, or after a release or a
+    recorded failure.
+
+  A retry releases the failed work and advances `work_attempt` in one guarded
+  `UPDATE`, so two retries cannot both create attempt N+1. Every failed attempt
+  keeps its rows.
+- **An invoice bills what is still owed.** Only a *live* invoice is unique per
+  agreement, through a partial index, so a VOID or FAILED invoice can be billed
+  again. The amount is `min(agreed, invoiceable)`, so money already paid is
+  never billed a second time. A payment read from the provider against an issued
+  invoice needs no second grant. The grant was checked when the invoice was
+  issued, and refusing what Stripe says was paid would leave money that arrived
+  unrecorded.
+  A drafted invoice the ledger has overtaken is voided rather than sent — by
+  the payment that overtook it, and again under the lock immediately before
+  any send. And there is never a second way to pay one bill: Brain does not
+  charge while an invoice is open for the money, no invoice is drafted or sent
+  while Brain's own charge is unresolved, a hand payment must say what it pays
+  while one is drafted, unknown or unpaid, and a buyer who pays an invoice
+  Brain's charge already covered has the second payment *recorded*, with
+  `invoice-paid-twice:` asking for a refund — never absorbed into the first
+  payment's settlement, which would hide the refund that is owed.
+  **That second payment was still credit by every other reading, and the final
+  review of the integration found it.** `invoiceable` subtracted it and
+  nothing else did, so `owed`, the payment state, `collectable()`, the
+  execution record's outstanding figure and the hand-payment cap all read the
+  gross amount: a second agreement read paid, an unpaid invoice for it read
+  owed nothing, and the deal could reach COLLECTED on money owed back to the
+  buyer. `dealPosition` now computes it once — `creditedPaymentsCents` is
+  payments less the larger of the owed-back money and refunds, and
+  `owedBackCents` is what is still to be paid back — and every comparison with
+  what was agreed or billed reads those. A deal with money owed back is not
+  collectable however the rest reads. Money paid on an agreement that was
+  later released is the same fact one door along: only invoices for a *live*
+  agreement bill anything. What was paid on a released one **carries** to the
+  piece's live agreements, oldest released first, up to what they still need —
+  `releaseAgreement` promises that money already paid stays paid when a new
+  agreement replaces the old — and only what no live agreement takes is owed
+  back, which is what a cancellation leaves. The first version made all of it
+  owed back, which billed a replacement agreement the buyer had already paid
+  for; the version before that made all of it credit, which collected a
+  cancelled deal's money as revenue. `owedBackReading` is the one reader, and
+  it attributes refunds too: a refund on an agreement's obligation repays that
+  agreement's owed-back money and nothing else's, so a refund for one
+  agreement's failed work cannot make another's owed-back money disappear.
+  The same holds for money that reached an agreement with no invoice — a hand
+  payment outside every invoice, or Brain's own charge: it pays what the live
+  agreements still need, and on a piece that has agreements the rest is owed
+  back. A piece with no agreement at all is a one-sided record from before
+  agreements existed, and its payments are left exactly as they were. And that money had no way
+  back: a refund on an agreed deal belongs to the obligation, `declare`
+  refuses a released agreement, so with no obligation declared the refund was
+  refused everywhere. The money route now records it where no obligation
+  exists and none can be declared, bounded under the same lock.
+  **Owed-back money is a liability everywhere it is counted.** It is a term of
+  the one contribution formula (per deal, per project, and the realized
+  contribution learning writes), and deployable cash holds back the part of it
+  that has settled into the account. Which payment a settlement was cannot be
+  read from the ledger — the provider's key names the invoice and a duplicate
+  shares it — so the hold is the bound that cannot over-commit:
+  `min(owed back, settled)`. Its cost is stated rather than hidden: while a
+  duplicate is unsettled beside a settled original, deployable reads low until
+  the duplicate settles. A narrower formula that assumed an order of
+  settlement was tried and over-stated deployable in the ordinary order.
+- **An invoice is claimed before it is sent, never checked and then sent.**
+  The coverage check, the check that Brain's own charge is not in flight and
+  the move `DRAFTED → UNCERTAIN` are one decision under the cash lock, and the
+  send follows. UNCERTAIN means "may be at the provider", which is exactly
+  true while the request is out, so a payment or a release landing mid-send
+  asks a person to void it there instead of voiding the row being sent, and a
+  remainder cannot be drafted beside it. Before this, a draft voided mid-send
+  still reached the buyer, and when a remainder had been drafted beside it the
+  late `VOID → ISSUED` move hit the live-invoice index and the issued invoice
+  left tracking altogether. A claim a crash abandoned before the effect was
+  reserved (`findExternalOperation` says none was) goes back to DRAFTED after
+  ten minutes and meets every check again, rather than being sent past them.
+- **A refund is a state machine bounded by money that has not left.**
+  - Authorization happens under the cash lock, against
+    `paid − refunded − unresolved`.
+  - The send carries the payment references.
+  - The outcome is CONFIRMED, FAILED or UNKNOWN.
+  - An UNKNOWN is never resent. It still counts against what may be refunded.
+  - A person's answer closes the `UNCERTAIN` operation itself, and is refused
+    while a send is in flight.
+  - The money route cannot write a REFUND on an agreed deal. A bare REFUND
+    bypassing the machine was the duplicate.
+- **Each cost counts once, and one formula is the P&L.** Supplier costs move
+  through the ledger:
+  - `UNPAID_COMMITMENT` is what is owed;
+  - `COMMITMENT_RELEASED` (new) records a cost that shrank before payment,
+    bounded by what is still owed;
+  - `COMMITMENT_PAID` plus `COST` record the payment.
+
+  `money.ts contributionFrom` is payments − refunds − costs − unpaid. It is the
+  only contribution formula. `dealPosition`, `cashPosition` and `record.ts` all
+  read it. The old project formula skipped unpaid liabilities, so it reported a
+  deal as more profitable than its own position said.
+- **Learning is written once, from terminal evidence.**
+  - An agreement recorded after a contact *is* that contact's answer, whether
+    or not anybody also recorded the reply as an observation. Silence is never
+    derived for such a contact and is learned only once a deal ended without
+    one, so a late reply is learned as the reply. The first version learned a
+    buyer who signed as silent, in an append-only row nothing corrects.
+  - `OFFERED_PRICE` is the price in the words that reached the buyer, not the
+    card's price when the tick happens to run. It is written only when the card
+    still composes the exact message digest every send intent of that contact
+    carried; otherwise no row states the offer in cents and nothing is learned.
+    The first version read today's card, so a sourced price replacing a
+    proposal after the contact rewrote what had been offered.
+  - Each `cash_outcomes` row is keyed by its figure.
+  - A change after the end is a new row keyed by the ledger entry that caused
+    it.
+  - `measuredByMechanism` feeds ranking only past `LESSON_MIN_SAMPLE` contacts
+    *and* finished deals. A one-sided floor treated one result as a rate.
+
+**What is true today:** `tests/cashPostSale.test.ts` and
+`tests/cashFirstDollar.test.ts` walk the journey and its failure paths on both
+backends. Sandbox adapters sit only at the provider boundary, and every effect
+is counted. No real buyer has been contacted and no real money has moved. No
+deployment has a refund adapter, so `ISSUE_A_REFUND` reads MISSING and a person
+pays refunds out and confirms them. Build 3's autonomous funnel landed in
+production as #128, and the two halves are one system rather than two proofs:
+`tests/cashAutonomousFunnel.test.ts` walks one opportunity the funnel found and
+readied, with no person answering a fact, through contact, agreement, invoice,
+payment, fulfilment, settlement, contribution and learning, across a restart
+and a replay that double nothing. It needed the sprint to hold capital first —
+the opening the funnel found needs money out before money comes back, and with
+nothing deployable Brain contacts the buyer and correctly declines to begin
+execution.
+
 ## Repository map
 
 ```
@@ -12396,6 +12630,8 @@ server/
     cashPortfolio.ts  the opportunities, and the needs they raise
     cashLedger.ts     money, as append-only rows; no balance column anywhere
     cashActions.ts    what was actually done, and under which grant
+    cashJourney.ts    what the buyer said, what was agreed, and what it taught
+    cashFulfillment.ts  one obligation per agreement, its events, and its refunds
     cashLock.ts       where two cash decisions stop being concurrent
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
     researchIntelligence.ts  the judgement above the engine: what to learn, and what changed it
@@ -12537,6 +12773,16 @@ server/
       commission.ts     every commissioning step in order, and one READY / NOT READY answer
       lab.ts            the eight test modes, and the five this version refuses to run
     cash/
+      providers/        Resend and Stripe adapters, their config and status (§53)
+      invoicing.ts      an agreed amount invoiced, paid and settled — two entries
+      journey/
+        position.ts     where one deal stands, and its P&L, derived from the ledger
+        deal.ts         observations and agreements; evidence or refusal
+        fulfillment.ts  the obligation: work, delivery, acceptance, costs, refunds
+        tick.ts         silence, the obligation pass, delivery and collection, on the tick
+        learning.ts     measured outcomes, and lessons with their sample shown
+        view.ts         every next step, and who takes it
+      outreach.ts       the message a buyer is sent, composed from the card
       access.ts         where the shared frontier ends and a private job begins
       shared.ts         what every member may read, built from the columns it names
       lifecycle.ts      activating a sprint, giving it somewhere to file, winding it down
@@ -12864,6 +13110,8 @@ tests/                  Vitest suites
   cashOperate.test.ts        a capability read, a need resumed, an action recorded
   cashIntegrationPass.test.ts  one sprint, walked the whole way, entrances only
   cashProposal.test.ts       the seven terms, and the numbers Brain will not invent
+  cashFirstDollar.test.ts    discovery to settled cash, restarted twice, and every way it fails
+  cashPostSale.test.ts       agreement to learning: one obligation, bounded refunds, one P&L
   cashOpportunityStandard.test.ts  what is an opportunity, and whose question is whose
   monetizationLedger.test.ts   forty ways preserved, ranked, and never rounded to one
   monetizationCommissioning.test.ts  a discovery to a moved rank, and every way it must not double-ask
