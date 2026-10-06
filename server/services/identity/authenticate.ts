@@ -196,8 +196,19 @@ export async function authenticateRequest(req: Request): Promise<AuthOutcome> {
    * verdict on the credential — every caller says so in those words.
    */
   const started = Date.now();
+  /*
+   * Only a machine's bearer — an OAuth access token or a worker credential —
+   * is authenticated on the control plane. A browser's session cookie and a
+   * person's bridge key ride the workload pool: a page loading a dozen routes
+   * in parallel would otherwise queue three statements each on the two
+   * reserved connections, ahead of the connector the reservation exists for.
+   */
+  const bearer = bearerToken(req);
+  const machine = bearer !== null && !parseBridgeCredential(bearer);
   try {
-    return await asControlPlane(() => authenticateOnControlPlane(req));
+    return await (machine
+      ? asControlPlane(() => authenticateOnControlPlane(req))
+      : asWorkload(() => authenticateOnControlPlane(req)));
   } finally {
     noteLatency('authenticate', Date.now() - started);
   }

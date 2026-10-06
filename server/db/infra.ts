@@ -64,6 +64,10 @@ const UNAVAILABLE_SQLSTATES = new Set([
   '08006',
   '08007',
   '08P01', // protocol_violation: what a pooler dropping a session mid-flight looks like
+  '57P05', // idle_session_timeout
+  '25P03', // idle_in_transaction_session_timeout
+  '53100', // disk_full
+  '53200', // out_of_memory
 ]);
 
 /**
@@ -73,7 +77,17 @@ const UNAVAILABLE_SQLSTATES = new Set([
  * database: reporting it to a worker as "Brain's database is busy" would be the
  * same wrong sentence this module exists to stop, one subsystem along.
  */
-const CONNECTION_ERRNOS = new Set(['ECONNRESET', 'ECONNREFUSED', 'EPIPE']);
+const CONNECTION_ERRNOS = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EPIPE',
+  'ETIMEDOUT',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  // DNS for the database host failing is the database being unreachable.
+  'EAI_AGAIN',
+  'ENOTFOUND',
+]);
 
 function textOf(error: unknown): string {
   const message = (error as { message?: unknown } | null)?.message;
@@ -100,6 +114,8 @@ export function classifyInfraFailure(error: unknown, depth = 0): InfraFailureKin
   if (text.includes('(ECHECKOUTTIMEOUT)')) return 'POOLER_CHECKOUT_TIMEOUT';
   if (text.includes('(EMAXCONNSESSION)')) return 'POOLER_REFUSED';
   if (code === '57014' || /canceling statement due to statement timeout/.test(text)) return 'STATEMENT_TIMEOUT';
+  // lock_timeout: the control plane's bound on waiting behind another holder.
+  if (code === '55P03' && /lock timeout/.test(text)) return 'STATEMENT_TIMEOUT';
   if (typeof code === 'string' && UNAVAILABLE_SQLSTATES.has(code)) return 'DATABASE_UNAVAILABLE';
   if (
     /^Connection terminated|^Client has encountered a connection error|^The database connection has been closed|server closed the connection unexpectedly|^Connection ended unexpectedly|SSL connection has been closed unexpectedly|^Query read timeout/.test(
@@ -109,6 +125,15 @@ export function classifyInfraFailure(error: unknown, depth = 0): InfraFailureKin
     return 'CONNECTION_LOST';
   }
   if (/configured for Postgres but could not reach/.test(text)) return 'DATABASE_UNAVAILABLE';
+  // pg's sentence for a client the pool already ended — a connection that went
+  // away under a caller, not a defect in what it asked.
+  if (/^Client was closed and is not queryable/.test(text)) return 'CONNECTION_LOST';
+  // Supavisor speaks in `(ESOMETHING) …` under the generic internal-error code;
+  // the two above are named because their remedies differ, the rest are its
+  // own refusals to hand over a backend.
+  if (code === 'XX000' && /^\(E[A-Z_]+\) /.test(text)) return 'DATABASE_UNAVAILABLE';
+  // SQLite's lock contention: the local database answering "not now".
+  if (code === 'SQLITE_BUSY' || code === 'SQLITE_LOCKED' || /^database is locked/.test(text)) return 'DATABASE_UNAVAILABLE';
   if (depth === 0 && typeof code === 'string' && CONNECTION_ERRNOS.has(code) && text !== 'fetch failed') {
     return 'CONNECTION_LOST';
   }

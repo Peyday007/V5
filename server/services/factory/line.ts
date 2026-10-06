@@ -49,7 +49,7 @@ import { listBins, listDispatchesForBin } from '../../repos/bins.ts';
 import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
-import { fleetSnapshot } from '../dispatch/candidates.ts';
+import { fleetSnapshot, sharedFleetSnapshot } from '../dispatch/candidates.ts';
 import { surfaceIneligibility } from '../dispatch/router.ts';
 
 /** The ledger kinds this module writes. */
@@ -452,6 +452,10 @@ function nextFor(campaign: FactoryCampaign, bins: LineBin[], blocked: LineCampai
  * fleet's, because a surface serves every project and a member is owed what is
  * free. Surface identifiers are for the operator and are left out by the route.
  */
+function nowIsLive(now: Date): boolean {
+  return Math.abs(Date.now() - now.getTime()) < 1_000;
+}
+
 export async function readLine(now: Date = new Date(), options: { projectId?: string } = {}): Promise<LineReading> {
   const nowIso = now.toISOString();
   const policy = await currentAdmissionPolicy();
@@ -459,7 +463,9 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
     listLiveCampaigns(),
     listQueueEntries(['QUEUED']),
     listBins({ states: ['READY', 'LEASED'], limit: 500 }),
-    fleetSnapshot(now),
+    // The shared reading when this is the live poll; an injected instant (a
+    // test, a replay) reads its own.
+    nowIsLive(now) ? sharedFleetSnapshot() : fleetSnapshot(now),
   ]);
   const inScope = (projectId: string) => !options.projectId || projectId === options.projectId;
   const live = allLive.filter((campaign) => inScope(campaign.projectId));

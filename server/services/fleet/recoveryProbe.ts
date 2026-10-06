@@ -99,6 +99,7 @@ import { attributeArrival, NO_SHOW_QUARANTINE_MARK, reconcileConnectorBindings }
 import { connectorHealth, forgetRoutingHealth } from './connectorHealth.ts';
 import { connectorOwners } from './memberReconnect.ts';
 import { createProbeBin, ProbeRefused } from './probe.ts';
+import { arrivalIncidentDuring, heldArrivalEvidence, restartWindowPending, unservedArrivalFor } from '../infra/incidents.ts';
 
 /**
  * How long a probe waits for its session. A Routine session boots, reads its
@@ -460,6 +461,32 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
       await retireProbeBin(probe, 'recovery probe: connector needs consent');
       return moved;
     }
+  }
+  /*
+   * Silence is only evidence about the connector when Brain was there to hear
+   * it. If Brain's own trouble overlapped the window — its session met a
+   * database that did not answer at the door or at check-in, or the machine was
+   * being replaced — nothing reaching Brain says nothing about the connector,
+   * and "reconnect Brain in Claude" would be a person sent to fix Brain's
+   * outage. The same evidence the no-show pass reads, in the same order.
+   */
+  const firedAt = probe.firedAt ?? probe.createdAt;
+  const outage =
+    restartWindowPending() ||
+    heldArrivalEvidence(probe.providerSession, firedAt) !== null ||
+    (await unservedArrivalFor(probe.providerSession, firedAt)) !== null ||
+    (await arrivalIncidentDuring(firedAt)) !== null;
+  if (outage) {
+    const moved = await settleRecoveryProbe(probe.id, 'FIRED', {
+      to: 'AMBIGUOUS',
+      outcome:
+        `The provider started ${probe.providerSession}, and Brain itself was failing while that session would have ` +
+        'arrived (its database did not answer, or it was restarting). Nothing reaching Brain says nothing about the ' +
+        'connector, so nothing was concluded, attributed or charged.',
+      nextAction: `Probe ${routine.routineRef} again once Brain is healthy; no reconnect is indicated.`,
+    });
+    await retireProbeBin(probe, 'recovery probe: Brain outage overlapped the window');
+    return moved;
   }
   const moved = await settleRecoveryProbe(probe.id, 'FIRED', {
     to: 'NO_MCP',

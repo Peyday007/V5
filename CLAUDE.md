@@ -12342,6 +12342,33 @@ and every layer above it reported that as something about the worker.**
   that says why. Each process writes its readings beside its liveness, because an
   operator script is another process and cannot see this one's memory.
 
+**The closure was not closed, and walking the whole chain again found eleven
+places where it was not.** Each part had been tested on its own and every row
+read healthy; the defects were all at the joints. The authorization-code
+exchange redeemed the code by a statement that committed on its own, so a pool
+timeout before the grant was minted left the retry facing `invalid_grant` and a
+person consenting again — the exchange, consent's invitation spend and the
+member-reconnect attachment are now one transaction each, and a lost exchange
+reply is answered with the same grant, derived from the code as a refresh
+successor is from its parent. A Brain retrying its boot answered every path
+`500 text/plain`; it answers 503 `temporarily_unavailable` now. The browser read
+a 503 session check as signed out. The check-in's routing read swallowed every
+error as "no routing row" and refused a Factory worker its own work out loud. On
+the no-show side a session's own evidence was dropped after fifteen minutes
+while the pass judged at thirty, the third session spelling
+(`claude-code-session_`) matched nothing, a lost assignment row left a working
+session reading as a no-show, the restart window was written once with no retry,
+and a browser's failed page load excused every no-show in its window. The
+recovery probe told a person to reconnect Brain in Claude about silence that
+Brain's own outage caused. And Brain amplified its own pressure: the extraction
+queue ran inside whichever transaction started it, a failed statement destroyed
+a reserved control connection, browser cookies authenticated on the control
+plane, a bin completion ran a second dispatch tick beside the loop's, and a
+recompute in cloud mode built the whole plan only to discard it.
+`docs/CONNECTION-RELIABILITY.md` has each, and *the chaos matrix* in
+`tests/connectionReliability.test.ts` is twenty cases read back from rows: only
+an explicitly revoked credential asks for a person.
+
 A human reconnect is now reserved for what `connectorHealth` reads from rows:
 consent revoked, credentials expired, a client holding a refused credential, or a
 client that stopped retrying after a *real* auth anomaly. What Brain still cannot
@@ -12699,6 +12726,7 @@ server/
   env.ts                every path the app uses
   config.ts             which database and which store, validated; no silent fallback
   bootRetry.ts          a boot whose cloud proof failed asks again, and falls back to nothing
+  bootFailure.ts        what that Brain answers meanwhile: 503 and retryable, never a grant failure
   db/
     types.ts            the async Database interface both backends implement
     infra.ts            what a database failure is, and the control plane that must survive one

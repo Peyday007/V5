@@ -61,7 +61,7 @@ import { rankGoals, type PriorityFacts } from './priority.ts';
 import { listDispatchesForBin } from '../../repos/bins.ts';
 import { REFUSAL_WAIT, surfaceIneligibility, type RoutingRefusal } from '../dispatch/router.ts';
 import { listRoutines } from '../../repos/fleet.ts';
-import { fleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.ts';
+import { sharedFleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
 
 // ---------------------------------------------------------------------------
@@ -649,7 +649,7 @@ export async function assembleGoals(options: {
   const surfaceRemedyFor = (projectId: string): ReturnType<typeof surfaceRemedy> => {
     let found = remedies.get(projectId);
     if (!found) {
-      found = surfaceRemedy(projectId, () => (fleet ??= fleetSnapshot()));
+      found = surfaceRemedy(projectId, () => (fleet ??= sharedFleetSnapshot()));
       remedies.set(projectId, found);
     }
     return found;

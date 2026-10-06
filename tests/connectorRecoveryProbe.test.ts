@@ -309,6 +309,25 @@ describe('a recovery probe establishes attribution from its own fire', () => {
     expect((await getBin(probe.binId!))!.state).toBe('CANCELLED');
   });
 
+  it('D2: silence while Brain itself was failing proves nothing about the connector, and asks nobody to reconnect', async () => {
+    const airyn = await account('airyn');
+    const probe = await startRecoveryProbe({ routineRef: airyn.routineRef, requestedById: 'usr_admin', fire: provider('cse_OUTAGE').fire });
+    // The fired session reached Brain and could not authenticate: the MCP door
+    // recorded an arrival-path outage in the window.
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO infra_incidents (id, kind, surface, started_at, ended_at, occurrences, affects_arrival, created_at)
+       VALUES ('inc_probe', 'POOL_CHECKOUT_TIMEOUT', 'mcp:authenticate@CONTROL', ?, ?, 2, 1, ?)`,
+      [at, at, at],
+    );
+    await settleRecoveryProbes(later());
+    const settled = (await getRecoveryProbe(probe.id))!;
+    expect(settled.state).toBe('AMBIGUOUS');
+    expect(settled.nextAction).toMatch(/no reconnect is indicated/);
+    expect(settled.nextAction).not.toMatch(/reconnect Brain in Claude/);
+    expect(await noShowEvents(airyn.routineId)).toBe(0);
+  });
+
   it('D: a session that starts and never reaches Brain attaches nothing and charges nothing', async () => {
     const airyn = await account('airyn');
     const probe = await startRecoveryProbe({ routineRef: airyn.routineRef, requestedById: 'usr_admin', fire: provider('cse_SILENT').fire });

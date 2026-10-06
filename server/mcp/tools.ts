@@ -33,6 +33,7 @@ import { visibleProjectIds } from '../services/identity/policy.ts';
 import { getProject, listProjects } from '../repos/projects.ts';
 import { listLayers } from '../repos/layers.ts';
 import { buildPlan, calculateNextAction } from '../services/planner.ts';
+import { withProjectExistence } from '../services/stateEngine.ts';
 import {
   claimWork,
   completeWork,
@@ -199,7 +200,7 @@ const getPlanTool: McpTool = {
   run: async (args, { principal }) => {
     const projectId = requiredString(args, 'project_id');
     await authorize(principal, projectId, 'READ', 'project:read');
-    const plan = await buildPlan(projectId);
+    const plan = await withProjectExistence(projectId, () => buildPlan(projectId));
     const brief = (items: typeof plan.now): Record<string, unknown>[] =>
       items.map((item) => ({
         layerId: item.layerId,
@@ -239,7 +240,7 @@ const nextActionTool: McpTool = {
   run: async (args, { principal }) => {
     const projectId = requiredString(args, 'project_id');
     await authorize(principal, projectId, 'READ', 'project:read');
-    const action = await calculateNextAction(projectId);
+    const action = await withProjectExistence(projectId, () => calculateNextAction(projectId));
     return {
       projectId,
       value: {

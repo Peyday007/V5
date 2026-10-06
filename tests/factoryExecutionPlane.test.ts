@@ -2140,7 +2140,7 @@ describe('an empty check-in derives only the caller’s campaigns', () => {
     const fs = await import('node:fs');
     const service = fs.readFileSync(new URL('../server/services/bins/service.ts', import.meta.url), 'utf8');
     expect(service).toMatch(/tickAllRemoteCampaigns\(\{ projectIds: scoped \}\)/);
-    expect(service).toMatch(/dispatchTick\(\{ projectIds: \[bin\.projectId\] \}\)/);
+    expect(service).toMatch(/dispatchTickIfIdle\(\{ projectIds: \[bin\.projectId\] \}\)/);
   });
 });
 

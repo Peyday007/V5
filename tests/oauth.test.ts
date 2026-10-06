@@ -912,7 +912,7 @@ describe('the token exchange', () => {
     expect(token.status).toBe(400);
   });
 
-  it('refuses a code redeemed twice', async () => {
+  it('answers a lost code-exchange reply with the same grant, and refuses the code once that grant is in use', async () => {
     const { verifier, challenge } = pkce();
     const approved = await approve(challenge);
     const body = {
@@ -922,12 +922,37 @@ describe('the token exchange', () => {
       client_id: clientId,
       code_verifier: verifier,
     };
-    expect((await exchange(body)).status).toBe(200);
-    // Redeemed by a guarded UPDATE, so an intercepted code is usable at most
-    // once even if two requests arrive together.
-    const second = await exchange(body);
-    expect(second.status).toBe(400);
-    expect(second.body['error']).toBe('invalid_grant');
+    const first = await exchange(body);
+    expect(first.status).toBe(200);
+    // The reply was lost: the holder of the verifier presents the same code and
+    // is answered with the same refresh token — one grant, never two.
+    const again = await exchange(body);
+    expect(again.status).toBe(200);
+    expect(again.body['refresh_token']).toBe(first.body['refresh_token']);
+    // Without the verifier it is refused as before.
+    expect((await exchange({ ...body, code_verifier: pkce().verifier })).status).toBe(400);
+    // Once the grant is in use, the code is spent: an intercepted code is
+    // usable at most once by anybody but the client that is using it.
+    expect((await callTool(again.body['access_token']!, 'brain_whoami')).isError).toBe(false);
+    const late = await exchange(body);
+    expect(late.status).toBe(400);
+    expect(late.body['error']).toBe('invalid_grant');
+  });
+
+  it('two presentations of one code at once converge on one grant', async () => {
+    const { verifier, challenge } = pkce();
+    const approved = await approve(challenge);
+    const body = {
+      grant_type: 'authorization_code',
+      code: approved.code!,
+      redirect_uri: REDIRECT,
+      client_id: clientId,
+      code_verifier: verifier,
+    };
+    const [a, b] = await Promise.all([exchange(body), exchange(body)]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    expect(a.body['refresh_token']).toBe(b.body['refresh_token']);
   });
 
   it('refuses a code presented by a different client', async () => {

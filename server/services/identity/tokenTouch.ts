@@ -32,8 +32,13 @@ const pending = new Map<string, Pending>();
 const inflight = new Map<string, Pending>();
 let timer: NodeJS.Timeout | null = null;
 let flushing: Promise<void> | null = null;
-/** Longer than any outage this repository has recorded; a touch lost before then is the bug this exists for. */
-const GIVE_UP_AFTER_MS = 60 * 60_000;
+/**
+ * Far longer than any outage this repository has recorded. A touch given up is
+ * a use `connectorHealth` can no longer see, which reads a picked-up reply as
+ * never picked up — the first step to a reconnect nobody needs — so the bound is
+ * a day rather than an hour; memory is bounded by `MAX_PENDING` either way.
+ */
+const GIVE_UP_AFTER_MS = 24 * 60 * 60_000;
 /** Bound on held touches. One per live token; a fleet holds tens. */
 const MAX_PENDING = 10_000;
 let nextDelay = 0;
@@ -118,6 +123,19 @@ export async function settleTokenTouches(): Promise<void> {
 /** Whether a use of this token is held in memory and not yet written. */
 export function tokenUseHeld(tokenId: string): boolean {
   return pending.has(tokenId) || inflight.has(tokenId);
+}
+
+/**
+ * The newest held use of each token not yet written, for a reader that must
+ * count a use it cannot see in the table yet (`connectorHealth`).
+ */
+export function heldTokenUses(): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [id, held] of [...inflight.entries(), ...pending.entries()]) {
+    const seen = out.get(id);
+    if (!seen || held.last > seen) out.set(id, held.last);
+  }
+  return out;
 }
 
 export function pendingTokenTouches(): number {

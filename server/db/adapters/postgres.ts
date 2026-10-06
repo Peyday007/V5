@@ -30,7 +30,7 @@ import type { PoolClient, PoolConfig } from 'pg';
 import type { Database, RunResult, Row, SqlParam } from '../types.ts';
 import { DatabaseConfigurationError } from '../types.ts';
 import { toPostgresSql, splitStatements } from '../dialect.ts';
-import { childFrame, rootFrame, savepointName, type TransactionFrame } from './transactions.ts';
+import { childFrame, rootFrame, runAfterCommit, savepointName, type TransactionFrame } from './transactions.ts';
 import {
   classifyInfraFailure,
   controlPlaneShare,
@@ -219,6 +219,11 @@ export function describePoolerRefusal(error: unknown): string | null {
   return null;
 }
 
+/** The server's bound on one control-plane statement: inside the client's 15s. */
+const CONTROL_STATEMENT_TIMEOUT_MS = 12_000;
+/** How long a control-plane statement may wait for a row lock. */
+const CONTROL_LOCK_TIMEOUT_MS = 5_000;
+
 interface TransactionContext extends TransactionFrame {
   client: PoolClient;
 }
@@ -273,6 +278,11 @@ export class PostgresAdapter implements Database {
       // it for half a minute (see the control pool below for the converse).
       idleTimeoutMillis: options.idleTimeoutMillis ?? 10_000,
       application_name: options.applicationName ?? 'brain',
+      // A connection the far end dropped silently inside a long transaction
+      // would otherwise hold its slot — and any row lock, the fence included —
+      // until the kernel's retransmission timeout, which is minutes.
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
     };
     if (options.schema) {
       if (!/^[a-z_][a-z0-9_]*$/i.test(options.schema)) {
@@ -325,6 +335,21 @@ export class PostgresAdapter implements Database {
         application_name: `${config.application_name ?? 'brain'}-control`,
       });
       this.#controlPool.on('error', () => undefined);
+      /*
+       * Bounded on the server, not only in this process. `query_timeout` stops
+       * *us* waiting; the statement — or a lock wait — goes on running on the
+       * backend, and the retry a worker sends five seconds later lands beside
+       * it. A server-side `statement_timeout` just inside the client's bound
+       * ends it there, and a `lock_timeout` stops a refresh queued behind
+       * another on one row from holding a reserved connection for the length of
+       * that other one. Set per session on connect, which is what session-mode
+       * pooling keeps for the life of the connection.
+       */
+      this.#controlPool.on('connect', (client: PoolClient) => {
+        client
+          .query(`SET statement_timeout = ${CONTROL_STATEMENT_TIMEOUT_MS}; SET lock_timeout = ${CONTROL_LOCK_TIMEOUT_MS}`)
+          .catch(() => undefined);
+      });
     }
   }
 
@@ -356,6 +381,18 @@ export class PostgresAdapter implements Database {
    */
   detached<T>(fn: () => Promise<T>): Promise<T> {
     return this.#transactions.exit(fn);
+  }
+
+  /** Run `fn` once the calling context's transaction commits; now, if there is none. */
+  afterCommit(fn: () => void): void {
+    const context = this.#transactions.getStore();
+    if (context) context.afterCommit.push(fn);
+    else fn();
+  }
+
+  /** Whether the calling context is inside a transaction on this adapter. */
+  inTransaction(): boolean {
+    return this.#transactions.getStore() !== undefined;
   }
 
   /** Which pool a statement outside a transaction belongs on. */
@@ -427,7 +464,7 @@ export class PostgresAdapter implements Database {
       if (context) {
         return (await context.client.query<T>(translated.sql, values)) as pg.QueryResult<T>;
       }
-      return (await this.#poolFor(workload).query<T>(translated.sql, values)) as pg.QueryResult<T>;
+      return await this.#pooledQuery<T>(this.#poolFor(workload), translated.sql, values);
     } catch (error) {
       this.#noteInfra(error);
       const pooled = this.#namePoolTimeout(error, workload);
@@ -437,6 +474,38 @@ export class PostgresAdapter implements Database {
       // produced it. The parameters are deliberately not included: they are the
       // part that carries the user's content.
       throw annotate(error, translated.sql);
+    }
+  }
+
+  /**
+   * One statement on a pooled client, returned to the pool unless the
+   * connection itself is in doubt.
+   *
+   * `pool.query` releases its client *with* the error, which destroys it — on
+   * a unique violation, on a statement timeout, on anything. For the control
+   * pool that is the reservation evaporating at the worst moment: its
+   * connections are held open precisely so that nothing has to be re-dialled
+   * through a saturated pooler, and every failed statement re-dialled one.
+   * Only a connection that is gone or unknowable is destroyed, the same rule
+   * the transaction path already applies.
+   */
+  async #pooledQuery<T extends pg.QueryResultRow>(
+    pool: pg.Pool,
+    sql: string,
+    values: unknown[],
+  ): Promise<pg.QueryResult<T>> {
+    const client = await pool.connect();
+    let broken: Error | undefined;
+    try {
+      return (await client.query<T>(sql, values)) as pg.QueryResult<T>;
+    } catch (error) {
+      const kind = classifyInfraFailure(error);
+      if (kind === 'CONNECTION_LOST' || kind === 'DATABASE_UNAVAILABLE') {
+        broken = error instanceof Error ? error : new Error(String(error));
+      }
+      throw error;
+    } finally {
+      client.release(broken);
     }
   }
 
@@ -502,6 +571,7 @@ export class PostgresAdapter implements Database {
       try {
         const result = await this.#transactions.run(context, fn);
         await client.query('COMMIT');
+        runAfterCommit(context, (work) => this.detached(work));
         return result;
       } catch (error) {
         try {

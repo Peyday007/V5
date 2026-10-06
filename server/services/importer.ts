@@ -43,7 +43,7 @@ import {
   unknownResult,
 } from './inference.ts';
 import { recomputeProject } from './stateEngine.ts';
-import { enqueueExtraction } from './documents/queue.ts';
+import { scheduleExtraction as queueExtractionAfterCommit } from './documents/queue.ts';
 
 /** Where project-wide sources live, beside the per-layer folders. */
 export const PROJECT_SOURCES_FOLDER = '_project-sources';
@@ -379,7 +379,7 @@ async function recomputeAfterRegistration(projectId: string): Promise<void> {
  */
 function scheduleExtraction(documentId: string | null): void {
   if (!documentId) return;
-  void enqueueExtraction(documentId);
+  queueExtractionAfterCommit(documentId);
 }
 
 function describeRegistration(registration: Registration): string {
@@ -566,7 +566,7 @@ async function registerProjectSource(input: {
     },
   });
 
-  void enqueueExtraction(document.id);
+  queueExtractionAfterCommit(document.id);
 
   return result({
     filename: input.originalFilename,

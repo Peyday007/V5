@@ -2352,8 +2352,10 @@ export function startFactoryRemoteLoop(intervalMs = DEFAULT_INTERVAL_MS): void {
          * every fire takes the surface with a compare-and-swap.
          */
         if (!reports.some((report) => report.created.length > 0)) return;
-        const { dispatchTick } = await import('../dispatch/loop.ts');
-        await dispatchTick();
+        // Through the dispatcher's own guard, so this pass and the loop's never
+        // run side by side over the same intents.
+        const { dispatchTickIfIdle } = await import('../dispatch/loop.ts');
+        await dispatchTickIfIdle({});
       })
       .catch(() => undefined)
       .finally(() => {

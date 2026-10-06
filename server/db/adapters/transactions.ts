@@ -44,17 +44,30 @@ export class Mutex {
 export interface TransactionFrame {
   depth: number;
   children: Mutex;
+  /**
+   * Work to start once the outermost transaction has committed, shared by
+   * every frame under one root. Dropped on rollback.
+   */
+  afterCommit: (() => void)[];
 }
 
 export function rootFrame(): TransactionFrame {
-  return { depth: 0, children: new Mutex() };
+  return { depth: 0, children: new Mutex(), afterCommit: [] };
 }
 
 export function childFrame(parent: TransactionFrame): TransactionFrame {
-  return { depth: parent.depth + 1, children: new Mutex() };
+  return { depth: parent.depth + 1, children: new Mutex(), afterCommit: parent.afterCommit };
 }
 
 /** The savepoint name for a frame. Unique within its transaction's stack. */
 export function savepointName(frame: TransactionFrame): string {
   return `brain_sp_${frame.depth}`;
+}
+
+/** Start every hook a committed root collected, each in no transaction at all. */
+export function runAfterCommit(frame: TransactionFrame, detach: (fn: () => Promise<void>) => Promise<void>): void {
+  const hooks = frame.afterCommit.splice(0);
+  for (const hook of hooks) {
+    void detach(async () => hook()).catch(() => undefined);
+  }
 }

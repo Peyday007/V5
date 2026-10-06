@@ -21,6 +21,11 @@ import { releaseTestSchemas } from './pgSchemas.ts';
 
 const PREFIX = 'brain-test-';
 
+// A test writes the fleet and reads it back within a second; a reading shared
+// for five seconds (`sharedFleetSnapshot`) would hand it the fleet from before.
+// The one suite that tests the sharing sets it back itself.
+process.env['BRAIN_SHARED_SNAPSHOT_MS'] ??= '0';
+
 /**
  * Old enough that no live suite could own it.
  *

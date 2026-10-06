@@ -34,7 +34,7 @@ import { getDb } from '../../db/database.ts';
 import { CONCURRENT_REFRESH_LEEWAY_MS } from '../../repos/oauth.ts';
 import { clientsOfConnector, getConnector, listConnectors, type Connector } from '../../repos/connectors.ts';
 import { getWorker } from '../../repos/identity.ts';
-import { tokenUseHeld } from '../identity/tokenTouch.ts';
+import { heldTokenUses, tokenUseHeld } from '../identity/tokenTouch.ts';
 
 export type ConnectorAuthState =
   | 'HEALTHY'
@@ -215,6 +215,25 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
        FROM oauth_tokens WHERE client_id IN (${ph})`,
     [at, ...clientIds],
   )) ?? { last_use: null, last_grant: null, last_refresh: null, live_refresh: 0 };
+  /*
+   * A use this process saw and has not yet written is a use. Under database
+   * pressure touches wait in memory (`tokenTouch.ts`), and reading only the
+   * column would let a stale presenter's real refusal look newer than the live
+   * client's last use — CLIENT_HOLDS_REFUSED_CREDENTIAL about a connector that
+   * is working.
+   */
+  const held = heldTokenUses();
+  if (held.size > 0) {
+    const ids = [...held.keys()];
+    const mine = await getDb().all<{ id: string }>(
+      `SELECT id FROM oauth_tokens WHERE client_id IN (${ph}) AND id IN (${inList(ids.length)})`,
+      [...clientIds, ...ids],
+    );
+    for (const { id } of mine) {
+      const usedAt = held.get(id)!;
+      if (!facts.last_use || usedAt > facts.last_use) facts.last_use = usedAt;
+    }
+  }
   base.lastAccessUseAt = facts.last_use;
   base.lastGrantAt = facts.last_grant;
   base.lastRefreshAt = facts.last_refresh;

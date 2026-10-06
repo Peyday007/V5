@@ -10,7 +10,7 @@
  * "who is this" question to be got wrong.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Api } from './lib/api.ts';
+import { Api, ApiError } from './lib/api.ts';
 import type { SessionUser } from './lib/api.ts';
 import { SignIn } from './components/SignIn.tsx';
 import { Recovery } from './components/Recovery.tsx';
@@ -29,14 +29,43 @@ export default function Root(): JSX.Element {
    */
   const [user, setUser] = useState<SessionUser | null | undefined>(undefined);
 
+  /**
+   * Whether the last answer was "Brain could not check right now". A 503 from
+   * the session check is the server saying it did not judge the session — its
+   * database did not answer — and reading that as signed out showed a signed-in
+   * person the sign-in screen for the length of every hiccup. So a retryable
+   * failure keeps whatever was known and asks again, on a bounded backoff.
+   */
+  const [unavailable, setUnavailable] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
   const ask = useCallback(() => {
     void Api.session().then(
-      (session) => setUser(session.user),
-      () => setUser(null),
+      (session) => {
+        setUnavailable(false);
+        setAttempt(0);
+        setUser(session.user);
+      },
+      (error: unknown) => {
+        if (error instanceof ApiError && error.retryable) {
+          setUnavailable(true);
+          setAttempt((n) => n + 1);
+          return;
+        }
+        setUnavailable(false);
+        setUser(null);
+      },
     );
   }, []);
 
   useEffect(ask, [ask]);
+
+  useEffect(() => {
+    if (!unavailable) return undefined;
+    const delay = Math.min(30_000, 2_000 * 2 ** Math.min(attempt, 4));
+    const timer = setTimeout(ask, delay);
+    return () => clearTimeout(timer);
+  }, [unavailable, attempt, ask]);
 
   /*
    * An invitation is answered before the sign-in gate, deliberately.
@@ -85,7 +114,11 @@ export default function Root(): JSX.Element {
   }
 
   if (user === undefined) {
-    return <div className="rs-boot">Starting…</div>;
+    return (
+      <div className="rs-boot" role="status">
+        {unavailable ? 'Brain is temporarily unavailable. Retrying…' : 'Starting…'}
+      </div>
+    );
   }
   if (user === null) {
     return <SignIn onSignedIn={ask} />;

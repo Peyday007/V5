@@ -89,3 +89,20 @@ export function sameProviderSession(
 export function isUnexpandedSessionRef(value: string | null | undefined): boolean {
   return typeof value === 'string' && value.includes('$');
 }
+
+/**
+ * Every spelling of one provider session, for an exact-match lookup in SQL.
+ *
+ * The no-show pass looks rows up by the session a fire produced, and the rows
+ * were written in whichever spelling the writer saw — `cse_` from the fire,
+ * `claude-code-session_` or `session_` from the worker. Matching only one or two
+ * of them made an arrival under the third read as no arrival at all: a healthy
+ * surface charged a no-show for a session that had checked in. Empty for an
+ * absent value, which is never equal to anything.
+ */
+export function sessionSpellings(value: string | null | undefined): string[] {
+  const id = normalizeSessionRef(value);
+  if (id === null) return [];
+  const known = SESSION_PREFIXES.some((prefix) => value!.trim().startsWith(prefix));
+  return known ? SESSION_PREFIXES.map((prefix) => `${prefix}${id}`) : [id];
+}

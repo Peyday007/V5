@@ -28,6 +28,7 @@ import {
   Mutex,
   childFrame,
   rootFrame,
+  runAfterCommit,
   savepointName,
   type TransactionFrame,
 } from './transactions.ts';
@@ -70,6 +71,18 @@ export class SqliteAdapter implements Database {
     return this.#transactions.exit(fn);
   }
 
+  /** Run `fn` once the calling context's transaction commits; now, if there is none. */
+  afterCommit(fn: () => void): void {
+    const frame = this.#transactions.getStore();
+    if (frame) frame.afterCommit.push(fn);
+    else fn();
+  }
+
+  /** Whether the calling context is inside a transaction on this adapter. */
+  inTransaction(): boolean {
+    return this.#transactions.getStore() !== undefined;
+  }
+
   async exec(sql: string): Promise<void> {
     await this.#withConnection(() => this.#driver.exec(sql));
   }
@@ -94,8 +107,12 @@ export class SqliteAdapter implements Database {
     try {
       this.#driver.exec('BEGIN');
       try {
-        const result = await this.#transactions.run(rootFrame(), fn);
+        const frame = rootFrame();
+        const result = await this.#transactions.run(frame, fn);
         this.#driver.exec('COMMIT');
+        // After the lock is released below: a hook that touched the database
+        // inline would otherwise wait on the lock this frame still holds.
+        queueMicrotask(() => runAfterCommit(frame, (work) => this.detached(work)));
         return result;
       } catch (error) {
         this.#driver.exec('ROLLBACK');

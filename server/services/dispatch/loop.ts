@@ -865,6 +865,27 @@ export function startDispatcher(intervalMs = DISPATCH_TICK_MS): void {
   timer.unref?.();
 }
 
+/**
+ * A dispatch pass on somebody's request path, sharing the loop's guard.
+ *
+ * A completed factory bin asks for one so the stage it created is fired now
+ * rather than on the next wake. It used to call `dispatchTick` directly, which
+ * ran beside the loop's own tick — two passes over the same intents, each with
+ * a fleet snapshot — inside a worker's MCP call. Now it declines when a pass is
+ * already running (that pass, or the next wake, fires what was created) and
+ * marks itself running so the loop declines in turn.
+ */
+export async function dispatchTickIfIdle(options: Parameters<typeof dispatchTick>[0]): Promise<boolean> {
+  if (running) return false;
+  running = true;
+  try {
+    await dispatchTick(options);
+    return true;
+  } finally {
+    running = false;
+  }
+}
+
 export function stopDispatcher(): void {
   if (!timer) return;
   clearInterval(timer);

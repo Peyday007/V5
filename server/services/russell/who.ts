@@ -48,7 +48,7 @@ import {
 import type { InvitationSummary } from '../identity/invitations.ts';
 import type { FleetState, Principal, ProjectRole } from '../../domain/types.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
-import { fleetSnapshot, routingRefusalByRoutine } from '../dispatch/candidates.ts';
+import { sharedFleetSnapshot, routingRefusalByRoutine } from '../dispatch/candidates.ts';
 
 /**
  * How much of the machinery this caller may be told about.
@@ -235,7 +235,7 @@ export async function whoForProject(input: {
     // "Work can run" is the router's answer: an ENABLED Routine whose worker
     // is disabled, whose account is out, or whose secret is not deployed is
     // never fired (§23, `surfaceIneligibility`).
-    const refusals = routingRefusalByRoutine(await fleetSnapshot(), routines.map((one) => one.id));
+    const refusals = routingRefusalByRoutine(await sharedFleetSnapshot(), routines.map((one) => one.id));
     const healthy = routines.filter((routine) => refusals.get(routine.id) === null).length;
     return {
       depth,
@@ -265,7 +265,7 @@ export async function whoForProject(input: {
     unansweredFiresByRoutine(),
   ]);
   const accountName = new Map(accounts.map((account) => [account.id, account.name]));
-  const refusals = routingRefusalByRoutine(await fleetSnapshot(), routines.map((one) => one.id));
+  const refusals = routingRefusalByRoutine(await sharedFleetSnapshot(), routines.map((one) => one.id));
 
   const surfaces: Surface[] = [];
   for (const routine of routines) {

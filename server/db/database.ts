@@ -268,6 +268,22 @@ export function outsideTransaction<T>(fn: () => Promise<T>): Promise<T> {
   return open?.detached ? open.detached(fn) : fn();
 }
 
+/**
+ * Start `fn` once the calling context's transaction has committed — at once, if
+ * there is none. Dropped if the transaction rolls back. Runs in no transaction.
+ */
+export function afterCommit(fn: () => void): void {
+  const open = db as (Database & { afterCommit?: (work: () => void) => void }) | null;
+  if (open?.afterCommit) open.afterCommit(fn);
+  else fn();
+}
+
+/** Whether the calling context is inside a transaction. */
+export function inTransaction(): boolean {
+  const open = db as (Database & { inTransaction?: () => boolean }) | null;
+  return open?.inTransaction ? open.inTransaction() : false;
+}
+
 /** Which backend actually answered, for the health endpoint and the banner. */
 export function activeDatabaseConfig(): DatabaseConfig | null {
   return activeConfig;

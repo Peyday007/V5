@@ -23,6 +23,7 @@ import {
   digestSecret,
   generateOAuthToken,
   type GeneratedOAuthToken,
+  verifyPkceS256,
 } from '../services/identity/secrets.ts';
 import type {
   OAuthAuthorizationCode,
@@ -266,33 +267,6 @@ export async function issueAuthorizationCode(input: IssueCodeInput): Promise<OAu
   return mapCode(row);
 }
 
-/**
- * Redeem a code, exactly once.
- *
- * The guard is in the `UPDATE`, not in a preceding `SELECT`. Two token requests
- * arriving with the same intercepted code both read an unredeemed row if this
- * were read-then-write; as a single guarded write, exactly one of them changes a
- * row and the other is refused. That is the same compare-and-swap shape the
- * queue uses, for the same reason.
- */
-export async function redeemAuthorizationCode(
-  codeDigest: string,
-): Promise<OAuthAuthorizationCode | null> {
-  const now = nowIso();
-  const result = await getDb().run(
-    `UPDATE oauth_authorization_codes
-        SET redeemed_at = ?
-      WHERE code_digest = ? AND redeemed_at IS NULL AND expires_at > ?`,
-    [now, codeDigest, now],
-  );
-  if (result.changes !== 1) return null;
-  const row = await getDb().get<OAuthAuthorizationCodeRow>(
-    'SELECT * FROM oauth_authorization_codes WHERE code_digest = ?',
-    [codeDigest],
-  );
-  return row ? mapCode(row) : null;
-}
-
 /** For the audit: was this code already used? Never used to decide access. */
 export async function findAuthorizationCode(
   codeDigest: string,
@@ -302,6 +276,128 @@ export async function findAuthorizationCode(
     [codeDigest],
   );
   return row ? mapCode(row) : null;
+}
+
+/**
+ * The outcome of presenting an authorization code at the token endpoint.
+ *
+ * `ISSUED` is the first answer; `REDELIVERED` is the same grant answered again
+ * because the first answer never reached the client. Every refusal is a verdict
+ * about the code, never about the database: a failure inside the exchange
+ * throws, rolls the whole exchange back — redemption included — and the
+ * endpoint answers `503 temporarily_unavailable`, so the same code still works.
+ */
+export type CodeExchange =
+  | { ok: true; outcome: 'ISSUED' | 'REDELIVERED'; record: OAuthAuthorizationCode; minted: MintedPair }
+  | {
+      ok: false;
+      reason: 'UNKNOWN_OR_EXPIRED' | 'CLIENT_MISMATCH' | 'PKCE_FAILED' | 'ALREADY_USED' | 'DENIED';
+      record: OAuthAuthorizationCode | null;
+      /** Set by `whileRedeeming` when it refuses; the endpoint audits it. */
+      detail?: Record<string, unknown>;
+    };
+
+/**
+ * Exchange an authorization code for a grant, once, in one transaction, and
+ * answer a lost reply with the same grant.
+ *
+ * Two defects this closes, both of which used to make a person consent again
+ * over a database hiccup. The code was redeemed by a statement that committed on
+ * its own, and the grant was minted by later statements; a pool timeout between
+ * them answered 503, and the client's retry found the code spent and got
+ * `invalid_grant`. Now the redemption, everything `whileRedeeming` does (the
+ * worker check, a member reconnect's attachment) and the grant commit together
+ * or not at all.
+ *
+ * And the reply could be lost after everything committed — the same shape
+ * refresh rotation already answers. The grant's refresh token is derived from
+ * the code (`deriveOAuthSuccessor` under the rotation key, over the code's row
+ * id and the code itself), so presenting the same code again — same client,
+ * same redirect, the PKCE verifier proving it is the same holder, inside the
+ * code's own lifetime — finds that grant, and while nothing in it has ever been
+ * used answers with the same refresh token and a fresh access token. Once the
+ * grant has been used, or anything in it rotated or withdrawn, a second
+ * presentation is refused as before: it is no longer a lost reply.
+ */
+export async function exchangeAuthorizationCode(input: {
+  code: string;
+  clientId: string;
+  redirectUri: string;
+  verifier: string;
+  now?: number;
+  /** A use this process saw and has not yet written (`tokenTouch.ts`) is a use. */
+  useHeld?: (tokenId: string) => boolean;
+  /** Runs inside the transaction on first redemption; a refusal still spends the code. */
+  whileRedeeming?: (record: OAuthAuthorizationCode) => Promise<{ ok: true } | { ok: false; detail: Record<string, unknown> }>;
+}): Promise<CodeExchange> {
+  const key = await rotationKey();
+  const db = getDb();
+  const codeDigest = digestSecret(input.code);
+  return db.transaction(async (): Promise<CodeExchange> => {
+    const now = input.now ?? Date.now();
+    const at = new Date(now).toISOString();
+    const row = await db.get<OAuthAuthorizationCodeRow>(
+      'SELECT * FROM oauth_authorization_codes WHERE code_digest = ?',
+      [codeDigest],
+    );
+    if (!row || row.expires_at <= at) return { ok: false, reason: 'UNKNOWN_OR_EXPIRED', record: null };
+    const record = mapCode(row);
+    if (record.clientId !== input.clientId || record.redirectUri !== input.redirectUri) {
+      return { ok: false, reason: 'CLIENT_MISMATCH', record };
+    }
+    const grantRefresh = deriveOAuthSuccessor(key, `code:${record.id}`, input.code);
+    const base = { clientId: record.clientId, workerId: record.workerId, scope: record.scope, resource: record.resource, now };
+
+    if (row.redeemed_at === null) {
+      // The guard is still the compare-and-swap: two requests holding the same
+      // code serialize here, and the loser falls through to the redelivery
+      // check below, which answers it with the winner's grant or refuses it.
+      const redeemed = await db.run(
+        `UPDATE oauth_authorization_codes SET redeemed_at = ?
+          WHERE id = ? AND redeemed_at IS NULL AND expires_at > ?`,
+        [at, record.id, at],
+      );
+      if (redeemed.changes === 1) {
+        if (!verifyPkceS256(input.verifier, record.codeChallenge)) return { ok: false, reason: 'PKCE_FAILED', record };
+        const allowed = input.whileRedeeming ? await input.whileRedeeming(record) : { ok: true as const };
+        if (!allowed.ok) return { ok: false, reason: 'DENIED', record, detail: allowed.detail };
+        const refreshId = newId('oat');
+        const minted = await mintPair({ ...base, refresh: grantRefresh, refreshId, parentTokenId: null, grantId: refreshId });
+        return { ok: true, outcome: 'ISSUED', record, minted };
+      }
+    }
+
+    // Already redeemed. Only the holder of the verifier may be answered again.
+    if (!verifyPkceS256(input.verifier, record.codeChallenge)) return { ok: false, reason: 'PKCE_FAILED', record };
+    const refresh = await db.get<OAuthTokenRow>(
+      `SELECT * FROM oauth_tokens WHERE token_digest = ? AND kind = 'REFRESH' AND parent_token_id IS NULL AND client_id = ?`,
+      [grantRefresh.digest, record.clientId],
+    );
+    if (!refresh) return { ok: false, reason: 'ALREADY_USED', record };
+    // Serialize concurrent redeliveries on the grant's root, as rotation does.
+    await db.run('UPDATE oauth_tokens SET revoked_reason = revoked_reason WHERE id = ?', [refresh.id]);
+    const grant = await db.all<OAuthTokenRow>(
+      'SELECT * FROM oauth_tokens WHERE grant_id = ? OR id = ? OR parent_token_id = ?',
+      [refresh.grant_id ?? refresh.id, refresh.id, refresh.id],
+    );
+    const unused = (t: OAuthTokenRow): boolean =>
+      (t.first_used_at ?? t.last_used_at) === null && !(input.useHeld?.(t.id) ?? false);
+    const untouched =
+      refresh.revoked_at === null &&
+      refresh.expires_at > at &&
+      grant.every(
+        (t) =>
+          (t.kind === 'ACCESS' && t.parent_token_id === refresh.id && unused(t)) || (t.id === refresh.id && unused(t)),
+      );
+    if (!untouched) return { ok: false, reason: 'ALREADY_USED', record };
+    const access = await mintAccess({ ...base, refreshId: refresh.id, grantId: refresh.grant_id ?? refresh.id });
+    return {
+      ok: true,
+      outcome: 'REDELIVERED',
+      record,
+      minted: { access, refresh: grantRefresh.plaintext, scope: refresh.scope, refreshTokenId: refresh.id, grantId: refresh.grant_id ?? refresh.id },
+    };
+  });
 }
 
 /* ------------------------------------------------------------------------- */

@@ -49,7 +49,7 @@ import {
   refreshProjectDependencies,
 } from './dependencies.ts';
 import { objectExistence, objectExists, prefetchExistence, storageKeyOf, withExistenceMemo } from './storage.ts';
-import { writeProjectState } from './runtimeState.ts';
+import { writeProjectState, writesRuntimeSnapshot } from './runtimeState.ts';
 
 /** Runs that still owe the project something, and therefore shape layer state. */
 const ACTIVE_RUN_STATUSES: ReadonlySet<RunStatus> = new Set<RunStatus>([
@@ -721,6 +721,22 @@ export async function recomputeRunReadiness(projectId: string): Promise<{ unbloc
 let recomputeDepth = 0;
 
 /**
+ * Run a read over a project's documents with every store question asked once,
+ * at most sixteen at a time.
+ *
+ * `buildPlan` outside a recompute had no memo, so it asked the store about every
+ * document twice and all at once — on the 430-document verification layer about
+ * 860 simultaneous Supabase Storage requests, each backed by the same Postgres
+ * the control plane depends on, from one `brain_get_plan` call.
+ */
+export async function withProjectExistence<T>(projectId: string, work: () => Promise<T>): Promise<T> {
+  return await withExistenceMemo(async () => {
+    await prefetchExistence((await listDocuments(projectId)).map((document) => storageKeyOf(document)));
+    return await work();
+  });
+}
+
+/**
  * The one entry point after any meaningful change. Order matters: the
  * filesystem is the outer truth, dependencies resolve against it, layer status
  * derives from the resolved dependencies, and only then is the derived runtime
@@ -760,7 +776,10 @@ async function recomputeProjectWithin(projectId: string): Promise<LayerStateSnap
       }
       return results;
     });
-    if (recomputeDepth === 1) {
+    // Only where the snapshot is written. In cloud mode building it here
+    // derived the whole plan after every recompute — inside the judge's and the
+    // filing's effect transactions too — and threw it away.
+    if (recomputeDepth === 1 && writesRuntimeSnapshot()) {
       try {
         await writeProjectState(projectId);
       } catch {
