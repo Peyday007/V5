@@ -740,6 +740,10 @@ describe('failure, refund and partial paths', () => {
     await tick();
     await tick();
     expect(await moneyCount(piece.id)).toMatchObject({ CUSTOMER_PAYMENT: 2, SETTLEMENT: 1 });
+    // The only settlement so far is the provider's, which is the duplicate's
+    // money: it is in the account and owed back, so none of it is deployable.
+    const held = await cashPosition({ projectId, currency: 'USD' });
+    expect(held.deployableCents).toBeLessThanOrEqual(held.availableFundsCents - 100_000);
     const needs = await getDb().all<{ request_key: string }>("SELECT request_key FROM cash_needs WHERE project_id = ?", [projectId]);
     expect(needs.filter((one) => one.request_key === `invoice-paid-twice:${invoice.id}`)).toHaveLength(1);
     // The second payment is owed back, never credit against the next agreement.

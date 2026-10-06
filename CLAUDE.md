@@ -12393,6 +12393,16 @@ table are unchanged in kind.
   refuses a released agreement, so with no obligation declared the refund was
   refused everywhere. The money route now records it where no obligation
   exists and none can be declared, bounded under the same lock.
+  **Owed-back money is a liability everywhere it is counted.** It is a term of
+  the one contribution formula (per deal, per project, and the realized
+  contribution learning writes), and deployable cash holds back the part of it
+  that has settled into the account. Which payment a settlement was cannot be
+  read from the ledger — the provider's key names the invoice and a duplicate
+  shares it — so the hold is the bound that cannot over-commit:
+  `min(owed back, settled)`. Its cost is stated rather than hidden: while a
+  duplicate is unsettled beside a settled original, deployable reads low until
+  the duplicate settles. A narrower formula that assumed an order of
+  settlement was tried and over-stated deployable in the ordinary order.
 - **An invoice is claimed before it is sent, never checked and then sent.**
   The coverage check, the check that Brain's own charge is not in flight and
   the move `DRAFTED → UNCERTAIN` are one decision under the cash lock, and the

@@ -265,10 +265,13 @@ export async function owedBackForProject(input: {
     const totals = await totalsByKind({ projectId: input.projectId, opportunityId, currency: input.currency });
     const here = Math.max(0, gross - num(totals, 'REFUND'));
     owedBack += here;
-    // Only the part that has settled is in the account to be held back: what
-    // settled beyond the payments that count toward agreements is this money.
-    const credited = Math.max(0, num(totals, 'CUSTOMER_PAYMENT') - gross);
-    inAccount += Math.min(here, Math.max(0, num(totals, 'SETTLEMENT') - credited));
+    // Only settled money is in the account to be held back. Which payment a
+    // settlement was cannot be told from the ledger — the provider's key names
+    // the invoice, and a duplicate shares it — so this takes the bound that
+    // cannot over-commit: as much of the piece's settled money as is owed
+    // back. Its cost is a deployable figure that reads low while a duplicate
+    // is unsettled beside a settled original, until the duplicate settles.
+    inAccount += Math.min(here, num(totals, 'SETTLEMENT'));
   }
   return { owedBack, inAccount };
 }
