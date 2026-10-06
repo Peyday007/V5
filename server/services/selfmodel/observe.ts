@@ -497,8 +497,8 @@ async function observeFleet(index: TextIndex): Promise<ComponentObservation[]> {
   }
 
   const allRoutines = await listRoutines();
-  const { fleetSnapshot, routingRefusalByRoutine } = await import('../dispatch/candidates.ts');
-  const refusals = routingRefusalByRoutine(await fleetSnapshot(), allRoutines.map((one) => one.id));
+  const { sharedFleetSnapshot, routingRefusalByRoutine } = await import('../dispatch/candidates.ts');
+  const refusals = routingRefusalByRoutine(await sharedFleetSnapshot(), allRoutines.map((one) => one.id));
   for (const routine of allRoutines) {
     /*
      * §23's four-row chain, as one query: Brain fired this Routine, a session

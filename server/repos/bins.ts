@@ -29,7 +29,7 @@ import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, retryAtWithin, toJson } from './util.ts';
 import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
-import { normalizeSessionRef, sameProviderSession } from '../domain/sessionRef.ts';
+import { normalizeSessionRef, sameProviderSession, sessionSpellings } from '../domain/sessionRef.ts';
 import { contractLeaseFloorMs } from '../domain/binLease.ts';
 import { observeConnectorArrival } from '../services/fleet/connectorBinding.ts';
 import { chargesToAuth, connectorHealth } from '../services/fleet/connectorHealth.ts';
@@ -1970,8 +1970,9 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
           credentialId: input.credentialId ?? null,
         },
         outcome: takeover ? 'TAKEOVER' : 'ASSIGNED',
-      }).catch((error: unknown) => {
+      }).catch(async (error: unknown) => {
         console.warn('[bins] assigned, and the assignment event could not be written:', (error as Error).message);
+        await keepArrivalEvidence(error, input.workerId, input.sessionRef ?? null);
       });
 
       await creditDispatchArrival(
@@ -1980,14 +1981,39 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
         input.workerId,
         input.credentialId ?? null,
         input.sessionRef ?? null,
-      ).catch((error: unknown) => {
+      ).catch(async (error: unknown) => {
         console.warn('[bins] assigned, and the arrival credit could not be written:', (error as Error).message);
+        await keepArrivalEvidence(error, input.workerId, input.sessionRef ?? null);
       });
 
       return { bin, leaseId, leaseGeneration: nextGeneration, leaseExpiresAt: expires, takeover };
     }
   }
   return null;
+}
+
+/**
+ * A session took a lease and the row saying so could not be written.
+ *
+ * The `BIN_ASSIGNED` event is what tells the no-show pass that a fired session
+ * arrived and took *other* work (`refusedOnArrival`), and the arrival credit is
+ * the other half. Losing both to a pool timeout left the fire reading as
+ * unanswered, so a session that was working charged its surface a no-show. The
+ * arrival is held in memory as evidence instead — the same row an unserved
+ * arrival writes, scoped to the session — and the failure is noted where it was
+ * felt. Never throws: it runs inside a failure it is reporting.
+ */
+async function keepArrivalEvidence(error: unknown, workerId: string, sessionRef: string | null): Promise<void> {
+  try {
+    const { classifyInfraFailure, noteInfraFailure } = await import('../db/infra.ts');
+    const kind = classifyInfraFailure(error);
+    if (!kind) return;
+    noteInfraFailure(kind, 'check_in:assign');
+    const { recordUnservedArrival } = await import('../services/infra/incidents.ts');
+    recordUnservedArrival({ workerId, sessionRef, kind: 'ARRIVED_ASSIGNMENT_UNRECORDED' });
+  } catch {
+    // Evidence is a convenience on top of the lease, which is already taken.
+  }
 }
 
 /**
@@ -2979,18 +3005,18 @@ export async function reopenNoShowDispatches(
      * code. Brain has the fired session's id on the dispatch row, so an
      * arrival under that id on any bin, after the fire, is the answer.
      */
+    const spellings = sessionSpellings(row.session_ref);
     const refusedOnArrival = await getDb().get<{ hit: number }>(
       `SELECT 1 AS hit FROM bin_events e
         WHERE e.event_type IN ('BIN_ASSIGNMENT_REFUSED', 'BIN_ASSIGNED', 'BIN_TAKEOVER')
           AND e.at >= ?
           AND e.session_ref IS NOT NULL
-          AND (e.session_ref = ? OR e.session_ref = ?)
+          AND e.session_ref IN (${spellings.length > 0 ? spellings.map(() => '?').join(', ') : "''"})
         LIMIT 1`,
-      [
-        row.sent_at,
-        row.session_ref ?? '',
-        row.session_ref?.startsWith('cse_') ? `session_${row.session_ref.slice(4)}` : (row.session_ref ?? ''),
-      ] as never[],
+      // Every spelling of the fired session: the worker reports it as
+      // `claude-code-session_…` as well as `session_…`, and an arrival under
+      // a spelling this did not list read as no arrival at all.
+      [row.sent_at, ...spellings] as never[],
     );
     /*
      * Brain's own outage is not the surface's no-show, nor the connector's.
@@ -3016,9 +3042,15 @@ export async function reopenNoShowDispatches(
     let unjudged = false;
     const deferLimit = new Date(Date.parse(now) - 2 * Math.max(0, staleAfterMs)).toISOString();
     if (row.routine_id && !refusedOnArrival) {
-      const { arrivalIncidentDuring, heldArrivalEvidence, unservedArrivalFor } = await import(
+      const { arrivalIncidentDuring, heldArrivalEvidence, restartWindowPending, unservedArrivalFor } = await import(
         '../services/infra/incidents.ts'
       );
+      // The window a restart left unserved is not known yet: judging now would
+      // charge exactly the fires it exists to excuse.
+      if (restartWindowPending()) {
+        if (row.sent_at > deferLimit) continue;
+        unjudged = true;
+      }
       const { classifyInfraFailure } = await import('../db/infra.ts');
       // What this process already knows, before any read that could fail.
       infraIncident = heldArrivalEvidence(row.session_ref, row.sent_at);

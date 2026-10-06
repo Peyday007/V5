@@ -191,6 +191,25 @@ async function eventsOf(type: string, routineId: string): Promise<number> {
   return Number(row!.n);
 }
 
+describe('a refusal under a superseded policy is not a verdict about today', () => {
+  it('a legacy OUTSIDE_RETRY_WINDOW refusal does not ask a person to reconnect', async () => {
+    const caleb = await account('caleb-legacy');
+    await recordIdentityEvent({
+      actorType: 'ANONYMOUS',
+      action: 'OAUTH_TOKEN',
+      targetType: 'OAUTH',
+      targetId: workerId,
+      result: 'DENIED',
+      metadata: { clientId: caleb.clientId, grant: 'refresh_token', reason: 'OUTSIDE_RETRY_WINDOW' },
+    });
+    const health = (await connectorHealth(caleb.connectorId))!;
+    expect(health.humanActionRequired).toBe(false);
+    expect(health.reason).not.toBe('CLIENT_HOLDS_REFUSED_CREDENTIAL');
+    // The row is still shown; it simply decides nothing.
+    expect(health.lastRefusal?.reason).toBe('OUTSIDE_RETRY_WINDOW');
+  });
+});
+
 describe('one identity per connector, even when every account is worker-10', () => {
   it('I. reads Airyn’s and Caleb’s connectors independently although both authenticate as one worker', async () => {
     const airyn = await account('airyn');

@@ -8,7 +8,8 @@
  * against a database that has since moved.
  */
 import { deliveryReadings } from '../../repos/deliveryProofs.ts';
-import { getDb } from '../../db/database.ts';
+import { getDb, outsideTransaction } from '../../db/database.ts';
+import { asWorkload } from '../../db/infra.ts';
 import {
   currentPolicy,
   effectiveTarget,
@@ -113,6 +114,46 @@ export async function inFlightByRoutine(nowMs: number): Promise<Map<string, numb
     if (row.routine_id) out.set(row.routine_id, Number(row.n));
   }
   return out;
+}
+
+/**
+ * How long a snapshot taken for a reader may be handed to the next reader.
+ * `BRAIN_SHARED_SNAPSHOT_MS=0` turns sharing off (the test suite does, because
+ * a test writes the fleet and reads it back inside a second).
+ */
+function sharedSnapshotMs(): number {
+  const raw = process.env['BRAIN_SHARED_SNAPSHOT_MS'];
+  return raw && /^\d+$/.test(raw) ? Number(raw) : 5_000;
+}
+let shared: { at: number; snapshot: Promise<FleetSnapshot> } | null = null;
+
+/**
+ * The fleet as read for a *surface*, shared for a few seconds.
+ *
+ * One `fleetSnapshot` is of the order of a hundred statements — connector
+ * health for every connector reads its token history and its refusals — and the
+ * Build page polls it every twenty seconds per open tab, beside Who, People, the
+ * goal model and the self-model, each taking its own. Under a slow database that
+ * was a browser multiplying the load on the pool the dispatcher and every check-in
+ * share. Readers that only *show* the fleet take this one; the dispatch tick,
+ * which decides who is fired, still reads its own, fresh. Built outside any
+ * caller's transaction and on the workload pool, because it is shared.
+ */
+export function sharedFleetSnapshot(): Promise<FleetSnapshot> {
+  const nowMs = Date.now();
+  if (shared && nowMs - shared.at < sharedSnapshotMs()) return shared.snapshot;
+  const snapshot = outsideTransaction(() => asWorkload(() => fleetSnapshot(new Date(nowMs))));
+  shared = { at: nowMs, snapshot };
+  // A failed read is not kept: the next reader asks again.
+  snapshot.catch(() => {
+    if (shared?.snapshot === snapshot) shared = null;
+  });
+  return snapshot;
+}
+
+/** Tests: forget the shared reading. */
+export function forgetSharedFleetSnapshot(): void {
+  shared = null;
 }
 
 /**

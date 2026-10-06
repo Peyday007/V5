@@ -38,6 +38,7 @@ import {
   type InfraFailureObservation,
 } from '../../db/infra.ts';
 import { newId, nowIso } from '../../repos/util.ts';
+import { sameProviderSession, sessionSpellings } from '../../domain/sessionRef.ts';
 
 /** How long after a fire a session that will arrive normally has arrived. */
 export const ARRIVAL_WINDOW_MS = 15 * 60_000;
@@ -49,13 +50,15 @@ const BUCKET_MS = 60_000;
  * The surfaces whose failure stops *any* fired session from arriving.
  *
  * Deliberately narrow, because an incident here excuses no-shows fleet-wide:
- * authentication at the MCP door and the API guard, and the token endpoint —
+ * authentication at the MCP door and the token endpoint — the only two doors a
+ * fired session uses. The API guard (`http:auth`) is a browser's, and counting
+ * it let one person's page load excuse every no-show in its window —
  * a session that cannot authenticate or refresh cannot arrive, and Brain cannot
  * tell whose credential it was. Not check-in's choosing half (that runs on the
  * workload pool, and a session that reached it *did* arrive — its own
  * UNSERVED_ARRIVAL row says so, scoped to it), and not background writes.
  */
-const ARRIVAL_SURFACES = new Set(['mcp:authenticate', 'http:auth', 'oauth:token', 'check_in:establish']);
+const ARRIVAL_SURFACES = new Set(['mcp:authenticate', 'oauth:token', 'check_in:establish']);
 
 function onArrivalPath(observation: InfraFailureObservation): boolean {
   return ARRIVAL_SURFACES.has(observation.surface);
@@ -265,15 +268,67 @@ let lastLiveness = 0;
 const LIVENESS_EVERY_MS = 30_000;
 
 /**
+ * Whether this process is still establishing the window its predecessor left
+ * unserved. While it is, the no-show pass does not judge: a fire whose session
+ * met the dead machine is exactly what that window excuses, and judging before
+ * it is known charged those fires to the surfaces.
+ */
+let restartPending = false;
+let restartRetry: NodeJS.Timeout | null = null;
+
+export function restartWindowPending(): boolean {
+  return restartPending;
+}
+
+/**
  * Record the window the previous process left unserved, and announce this one.
  *
  * The window runs from the newest liveness any *other* instance wrote to the
- * moment this one is about to listen. Written directly rather than through the
- * buffer: the boot has just proved the database answers, and a restart row that
- * waited in memory would be lost by the very failure it describes.
+ * moment this one is about to listen. Written directly, and held in memory as
+ * evidence if the write fails — a degraded database right after boot is the
+ * ordinary case (deploys 337 and 342), and a restart row lost to it would charge
+ * every fire whose session hit the dead machine. A read that fails is asked
+ * again in the background with the same `listeningAt`, and until it succeeds
+ * the no-show pass waits (`restartWindowPending`). The gap cannot be erased by
+ * waiting: it is measured against *other* instances' liveness, which this
+ * process never writes.
  */
 export async function recordProcessStart(listeningAt = new Date()): Promise<{ gapMs: number | null }> {
-  const now = listeningAt.toISOString();
+  restartPending = true;
+  if (restartRetry) {
+    clearTimeout(restartRetry);
+    restartRetry = null;
+  }
+  try {
+    const result = await establishRestartWindow(listeningAt.toISOString());
+    restartPending = false;
+    return result;
+  } catch (error) {
+    scheduleRestartRetry(listeningAt.toISOString(), 1);
+    throw error;
+  }
+}
+
+function scheduleRestartRetry(now: string, attempt: number): void {
+  const delay = Math.min(60_000, 1_000 * 2 ** Math.min(attempt, 6));
+  restartRetry = setTimeout(() => {
+    restartRetry = null;
+    void outsideTransaction(() => asWorkload(() => establishRestartWindow(now))).then(
+      () => {
+        restartPending = false;
+      },
+      () => {
+        // Bounded: after an hour of failing the pass judges again rather than
+        // waiting for ever, with the evidence it can read.
+        if (Date.now() - Date.parse(now) > GIVE_UP_AFTER_MS) restartPending = false;
+        else scheduleRestartRetry(now, attempt + 1);
+      },
+    );
+  }, delay);
+  restartRetry.unref?.();
+}
+
+async function establishRestartWindow(now: string): Promise<{ gapMs: number | null }> {
   const previous = await getDb().get<{ alive_at: string | null }>(
     'SELECT MAX(alive_at) AS alive_at FROM runtime_liveness WHERE instance_id <> ?',
     [INSTANCE_ID],
@@ -282,23 +337,37 @@ export async function recordProcessStart(listeningAt = new Date()): Promise<{ ga
   let gapMs: number | null = null;
   if (lastAlive && lastAlive < now) {
     gapMs = Date.parse(now) - Date.parse(lastAlive);
-    // A day is not a restart, it is a Brain that was off; recorded all the
-    // same, but bounded so one old row cannot excuse no-shows for ever.
-    const startedAt = gapMs > 24 * 3_600_000 ? new Date(Date.parse(now) - 24 * 3_600_000).toISOString() : lastAlive;
-    await writeIncident({
-      id: newId('inc'),
+    /*
+     * Anchored at the last instant the previous process was alive, because the
+     * fires it excuses were sent *before* that instant — nothing fires while no
+     * process is running. A Brain that was off for more than a day is bounded
+     * at the end rather than the start: capping the start used to drop exactly
+     * the fires sent just before it went down.
+     */
+    const endedAt = gapMs > 24 * 3_600_000 ? new Date(Date.parse(lastAlive) + 24 * 3_600_000).toISOString() : now;
+    const incident: PendingIncident = {
+      id: idFor(`RESTART|${INSTANCE_ID}`),
       kind: 'PROCESS_RESTART',
       surface: 'process',
       workerId: null,
       sessionRef: null,
-      startedAt,
-      endedAt: now,
+      startedAt: lastAlive,
+      endedAt,
       occurrences: 1,
       affectsArrival: true,
       detail: `previous process last alive ${lastAlive}; this one listening ${now}`,
       attempts: 0,
       heldAt: Date.now(),
-    });
+    };
+    try {
+      await writeIncident(incident);
+    } catch (error) {
+      // Held as evidence, which the recorder never gives up; the pass reads it
+      // from memory until it lands.
+      const { attempts: _a, occurrences: _o, heldAt: _h, id: _i, ...rest } = incident;
+      hold(`RESTART|${INSTANCE_ID}`, rest);
+      throw error;
+    }
   }
   await touchLiveness(true);
   // Retention: a month of incidents is what a no-show pass or a report reads.
@@ -414,6 +483,30 @@ export async function arrivalIncidentDuring(sentAt: string, untilIso?: string): 
 }
 
 /**
+ * Whether a held or written unserved arrival names this fire's session.
+ *
+ * By the session, in any of its spellings (`domain/sessionRef.ts`), and then
+ * with **no upper bound**: a session id is unique to the fire that produced it,
+ * so its arrival after the fire is the answer however late it came — exactly as
+ * `refusedOnArrival` reads an assignment. A fifteen-minute bound here used to
+ * drop the direct evidence of a session that arrived at minute sixteen, and the
+ * no-show pass, which judges at thirty, then charged the surface for it.
+ *
+ * A session that reported no id is matched by the worker it authenticated as —
+ * imprecise where one worker serves several Routines, and stated so: it can
+ * only excuse a miss inside its own arrival window.
+ */
+function unservedMatches(
+  held: { sessionRef: string | null; workerId: string | null; startedAt: string },
+  sessionRef: string | null,
+  workerId: string | null,
+  until: string,
+): boolean {
+  if (sessionRef !== null && sameProviderSession(held.sessionRef, sessionRef)) return true;
+  return held.sessionRef === null && workerId !== null && held.workerId === workerId && held.startedAt <= until;
+}
+
+/**
  * The evidence this process holds in memory, with no database read at all —
  * asked first by the no-show pass, so a pass whose own reads fail under the
  * very pressure it is judging still sees what Brain already knows.
@@ -424,15 +517,10 @@ export function heldArrivalEvidence(
   workerId: string | null = null,
 ): InfraIncident | null {
   const until = new Date(Date.parse(sentAt) + ARRIVAL_WINDOW_MS).toISOString();
-  const alias = sessionRef?.startsWith('cse_') ? `session_${sessionRef.slice(4)}` : sessionRef;
   for (const held of heldIncidents()) {
-    if (held.startedAt > until || held.endedAt < sentAt) continue;
-    if (held.affectsArrival) return heldAsIncident(held);
-    if (
-      held.kind === 'UNSERVED_ARRIVAL' &&
-      ((sessionRef !== null && (held.sessionRef === sessionRef || held.sessionRef === alias)) ||
-        (held.sessionRef === null && workerId !== null && held.workerId === workerId))
-    ) {
+    if (held.endedAt < sentAt) continue;
+    if (held.affectsArrival && held.startedAt <= until) return heldAsIncident(held);
+    if (held.kind === 'UNSERVED_ARRIVAL' && unservedMatches(held, sessionRef, workerId, until)) {
       return heldAsIncident(held);
     }
   }
@@ -449,25 +537,20 @@ export async function unservedArrivalFor(
   workerId: string | null = null,
 ): Promise<InfraIncident | null> {
   const until = new Date(Date.parse(sentAt) + ARRIVAL_WINDOW_MS).toISOString();
-  const alias = sessionRef?.startsWith('cse_') ? `session_${sessionRef.slice(4)}` : sessionRef;
-  const matches = (held: { sessionRef: string | null; workerId: string | null }): boolean =>
-    (sessionRef !== null && (held.sessionRef === sessionRef || held.sessionRef === alias)) ||
-    // A session that reported no id is matched by the worker it authenticated as
-    // — imprecise where one worker serves several Routines, and stated so: it
-    // can only excuse a miss inside its own arrival window.
-    (held.sessionRef === null && workerId !== null && held.workerId === workerId);
   for (const held of heldIncidents()) {
-    if (held.kind === 'UNSERVED_ARRIVAL' && held.endedAt >= sentAt && held.startedAt <= until && matches(held)) {
+    if (held.kind === 'UNSERVED_ARRIVAL' && held.endedAt >= sentAt && unservedMatches(held, sessionRef, workerId, until)) {
       return heldAsIncident(held);
     }
   }
-  if (!sessionRef && !workerId) return null;
+  const spellings = sessionSpellings(sessionRef);
+  if (spellings.length === 0 && !workerId) return null;
+  const bySession = spellings.length > 0 ? `session_ref IN (${spellings.map(() => '?').join(', ')})` : '1 = 0';
   const row = await getDb().get<IncidentRow>(
     `SELECT * FROM infra_incidents
-      WHERE kind = 'UNSERVED_ARRIVAL' AND ended_at >= ? AND started_at <= ?
-        AND (session_ref = ? OR session_ref = ? OR (session_ref IS NULL AND worker_id = ?))
+      WHERE kind = 'UNSERVED_ARRIVAL' AND ended_at >= ?
+        AND (${bySession} OR (session_ref IS NULL AND worker_id = ? AND started_at <= ?))
       ORDER BY started_at, id LIMIT 1`,
-    [sentAt, until, sessionRef ?? '', alias ?? '', workerId ?? ''],
+    [sentAt, ...spellings, workerId ?? '', until],
   );
   return row ? mapIncident(row) : null;
 }

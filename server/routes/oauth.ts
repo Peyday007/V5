@@ -38,7 +38,6 @@ import {
   generateOAuthToken,
   generateOpaqueSecret,
   parseOAuthToken,
-  verifyPkceS256,
   parseInvitationToken,
 } from '../services/identity/secrets.ts';
 import {
@@ -47,11 +46,11 @@ import {
   findLiveToken,
   getClientByClientId,
   issueAuthorizationCode,
-  redeemAuthorizationCode,
+  exchangeAuthorizationCode,
+  findAuthorizationCode,
   registerClient,
   findPresentedToken,
   authenticateClient,
-  issueGrant,
   rotateRefreshToken,
 } from '../repos/oauth.ts';
 import { getWorker, listWorkers, listMembershipsForPrincipal, recordIdentityEvent } from '../repos/identity.ts';
@@ -77,7 +76,9 @@ import { MCP_PATHS } from '../mcp/endpoint.ts';
 import { card, esc, page } from './pages.ts';
 import { workerIdentity } from '../services/identity/authenticate.ts';
 import { answerEscapedFailure } from './escape.ts';
-import { asControlPlane, noteLatency } from '../db/infra.ts';
+import { asControlPlane, asWorkload, noteLatency } from '../db/infra.ts';
+import { afterCommit, getDb } from '../db/database.ts';
+import { tokenUseHeld } from '../services/identity/tokenTouch.ts';
 
 export const OAUTH_BASE = '/oauth';
 
@@ -402,17 +403,21 @@ async function audit(input: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   try {
-    await recordIdentityEvent({
-      actorType: input.actor ? input.actor.type : 'ANONYMOUS',
-      actorId: input.actor?.id ?? null,
-      credentialId: input.actor?.credentialId ?? null,
-      action: input.action,
-      targetType: 'OAUTH',
-      targetId: input.targetId,
-      result: input.result,
-      // Ids and categories only. Never a token, a code, a secret or a challenge.
-      metadata: input.metadata ?? {},
-    });
+    // On the workload pool: an audit row is not authentication, and it must
+    // not hold one of the control plane's reserved connections while it waits.
+    await asWorkload(() =>
+      recordIdentityEvent({
+        actorType: input.actor ? input.actor.type : 'ANONYMOUS',
+        actorId: input.actor?.id ?? null,
+        credentialId: input.actor?.credentialId ?? null,
+        action: input.action,
+        targetType: 'OAUTH',
+        targetId: input.targetId,
+        result: input.result,
+        // Ids and categories only. Never a token, a code, a secret or a challenge.
+        metadata: input.metadata ?? {},
+      }),
+    );
   } catch {
     // An audit that cannot be written must not turn an authorization into
     // something else.
@@ -1085,15 +1090,102 @@ export function oauthRouter(): Router {
        * people opening the same link at once is a case to handle rather than an
        * anomaly. Exactly one of them gets the connection.
        *
-       * Deliberately before `issueAuthorizationCode`, not after. Spending first
-       * and failing later costs somebody a link; issuing first and failing to
-       * spend would leave an invitation that still works after it was used.
+       * Deliberately before `issueAuthorizationCode`, not after, and in one
+       * transaction with it: issuing first and failing to spend would leave an
+       * invitation that still works after it was used.
        *
        * A second click reaching this point is already filtered out above, since
        * a redeemed invitation stops resolving. What remains is the genuine race:
        * two requests that both read it as live, one of which loses the UPDATE.
        */
-      if (invited && !(await redeemInvitation(invited.invitation.id))) {
+      /*
+       * Spending the invitation, issuing the code and attaching the client are
+       * one transaction. They used to commit one by one, so a database failure
+       * after the spend answered 503 with no code delivered, and the retry met
+       * "This invitation cannot be used" — a person sent back for a new link
+       * over a hiccup. Rolled back together, the retry finds the same live
+       * invitation and simply succeeds.
+       */
+      const code = generateOpaqueSecret();
+      const consented = await getDb().transaction(async (): Promise<'OK' | 'ALREADY_USED'> => {
+        if (invited && !(await redeemInvitation(invited.invitation.id))) return 'ALREADY_USED';
+        await issueAuthorizationCode({
+          codeDigest: code.digest,
+          clientId: params.clientId,
+          // The identity the token will carry — chosen here, by a human.
+          workerId: worker.id,
+          // The human who decided. On the invited path that is whoever created the
+          // invitation, not whoever clicked — the recipient authorized nothing,
+          // they spent an authorization somebody else had already given.
+          // On a member reconnect, the member: they are restoring a grant an
+          // administrator already gave them for this connector, and they are the
+          // person who decided to restore it.
+          approvedByUserId: person ? person.id : invited ? invited.approvedByUserId : member!.id,
+          redirectUri: params.redirectUri,
+          codeChallenge: params.codeChallenge,
+          codeChallengeMethod: 'S256',
+          resource: params.resource,
+          scope: params.scope,
+          // A member reconnect attaches its client when this code is redeemed —
+          // by whoever holds the verifier and the client's secret — not now.
+          attachConnectorId: restoring ? restoring.connector.id : null,
+        });
+
+        /*
+         * A reconnect invitation names the logical connector it restores, so a
+         * new OAuth client approved on it is that connector — the same identity,
+         * the same Routines, no re-registration. And the Routines on a connector
+         * that has just been re-authorized are touched, so dispatch intents
+         * deferred while it could not authenticate are re-armed now.
+         */
+        if (reconnecting) {
+          const connector = reconnecting.connector;
+          // The one place a reconnect may move a connector's worker: back to the
+          // worker its Routines are registered for, which the screen named.
+          if (reconnecting.restoresFrom) {
+            await repointConnectorWorker({ connectorId: connector.id, from: reconnecting.restoresFrom, to: worker.id });
+            // After the commit: cleared inside the transaction, a tick in between
+            // would re-cache health computed from the rows before it.
+            afterCommit(forgetRoutingHealth);
+          }
+          const now = await getConnector(connector.id);
+          const outcome =
+            now?.workerId !== worker.id
+              ? 'CONFLICT'
+              : await attachClient({
+            clientId: params.clientId,
+            connectorId: connector.id,
+            source: 'OPERATOR',
+            evidence: `administrator reconnect by ${person!.id}${reconnecting.restoresFrom ? `; worker restored from ${reconnecting.restoresFrom}` : ''}`,
+          });
+          if (outcome !== 'CONFLICT') await touchConnectorRoutines(connector.id);
+        }
+
+        const bound = binding ?? (await boundWorkerFor(req, params.clientId, params.resource));
+        // A member reconnect is attached at redemption (see the token endpoint).
+        const restoringId = restoring ? null : (bound?.connectorId ?? null);
+        if (restoringId) {
+          const connector = await getConnector(restoringId);
+          if (
+            connector &&
+            connector.resource === endpointOf(params.resource) &&
+            (connector.workerId === null || connector.workerId === worker.id)
+          ) {
+            const outcome = await attachClient({
+              clientId: params.clientId,
+              connectorId: connector.id,
+              source: bound?.invitation?.connectorId ? 'BOUND_INVITATION' : 'OPERATOR',
+              evidence: bound?.invitation ? `invitation ${bound.invitation.id}` : `approved by ${person?.id ?? 'unknown'}`,
+              invitationId: bound?.invitation?.connectorId ? bound.invitation.id : null,
+            });
+            // A conflict is reported by the attach and acted on by nobody: only a
+            // client that is this connector re-arms its Routines.
+            if (outcome !== 'CONFLICT') await touchConnectorRoutines(connector.id);
+          }
+        }
+        return 'OK';
+      });
+      if (consented === 'ALREADY_USED') {
         await audit({
           action: 'OAUTH_AUTHORIZE',
           actor: null,
@@ -1108,80 +1200,6 @@ export function oauthRouter(): Router {
           'It may have been used already, withdrawn, or expired. Ask for a new one.',
         );
         return;
-      }
-
-      const code = generateOpaqueSecret();
-      await issueAuthorizationCode({
-        codeDigest: code.digest,
-        clientId: params.clientId,
-        // The identity the token will carry — chosen here, by a human.
-        workerId: worker.id,
-        // The human who decided. On the invited path that is whoever created the
-        // invitation, not whoever clicked — the recipient authorized nothing,
-        // they spent an authorization somebody else had already given.
-        // On a member reconnect, the member: they are restoring a grant an
-        // administrator already gave them for this connector, and they are the
-        // person who decided to restore it.
-        approvedByUserId: person ? person.id : invited ? invited.approvedByUserId : member!.id,
-        redirectUri: params.redirectUri,
-        codeChallenge: params.codeChallenge,
-        codeChallengeMethod: 'S256',
-        resource: params.resource,
-        scope: params.scope,
-        // A member reconnect attaches its client when this code is redeemed —
-        // by whoever holds the verifier and the client's secret — not now.
-        attachConnectorId: restoring ? restoring.connector.id : null,
-      });
-
-      /*
-       * A reconnect invitation names the logical connector it restores, so a
-       * new OAuth client approved on it is that connector — the same identity,
-       * the same Routines, no re-registration. And the Routines on a connector
-       * that has just been re-authorized are touched, so dispatch intents
-       * deferred while it could not authenticate are re-armed now.
-       */
-      if (reconnecting) {
-        const connector = reconnecting.connector;
-        // The one place a reconnect may move a connector's worker: back to the
-        // worker its Routines are registered for, which the screen named.
-        if (reconnecting.restoresFrom) {
-          await repointConnectorWorker({ connectorId: connector.id, from: reconnecting.restoresFrom, to: worker.id });
-          forgetRoutingHealth();
-        }
-        const now = await getConnector(connector.id);
-        const outcome =
-          now?.workerId !== worker.id
-            ? 'CONFLICT'
-            : await attachClient({
-          clientId: params.clientId,
-          connectorId: connector.id,
-          source: 'OPERATOR',
-          evidence: `administrator reconnect by ${person!.id}${reconnecting.restoresFrom ? `; worker restored from ${reconnecting.restoresFrom}` : ''}`,
-        });
-        if (outcome !== 'CONFLICT') await touchConnectorRoutines(connector.id);
-      }
-
-      const bound = binding ?? (await boundWorkerFor(req, params.clientId, params.resource));
-      // A member reconnect is attached at redemption (see the token endpoint).
-      const restoringId = restoring ? null : (bound?.connectorId ?? null);
-      if (restoringId) {
-        const connector = await getConnector(restoringId);
-        if (
-          connector &&
-          connector.resource === endpointOf(params.resource) &&
-          (connector.workerId === null || connector.workerId === worker.id)
-        ) {
-          const outcome = await attachClient({
-            clientId: params.clientId,
-            connectorId: connector.id,
-            source: bound?.invitation?.connectorId ? 'BOUND_INVITATION' : 'OPERATOR',
-            evidence: bound?.invitation ? `invitation ${bound.invitation.id}` : `approved by ${person?.id ?? 'unknown'}`,
-            invitationId: bound?.invitation?.connectorId ? bound.invitation.id : null,
-          });
-          // A conflict is reported by the attach and acted on by nobody: only a
-          // client that is this connector re-arms its Routines.
-          if (outcome !== 'CONFLICT') await touchConnectorRoutines(connector.id);
-        }
       }
 
       await audit({
@@ -1265,89 +1283,109 @@ export function oauthRouter(): Router {
           return;
         }
 
-        // Redeemed as a single guarded write, so two requests carrying the same
-        // intercepted code cannot both succeed.
-        const record = await redeemAuthorizationCode(digestSecret(code));
-        if (!record) {
-          res.status(400).json({ error: 'invalid_grant' });
-          return;
-        }
-        if (record.clientId !== clientId || record.redirectUri !== redirectUri) {
-          res.status(400).json({ error: 'invalid_grant' });
-          return;
-        }
-        if (!verifyPkceS256(verifier, record.codeChallenge)) {
-          await audit({ action: 'OAUTH_TOKEN', actor: null, targetId: record.workerId, result: 'DENIED', metadata: { reason: 'PKCE_FAILED' } });
-          res.status(400).json({ error: 'invalid_grant' });
-          return;
-        }
-
-        const worker = await getWorker(record.workerId);
-        if (!worker || worker.disabled) {
-          res.status(400).json({ error: 'invalid_grant' });
-          return;
-        }
-
         /*
-         * A member reconnect attaches its client to the connector it restores
-         * here, on redemption, rather than at approval: only the holder of the
-         * PKCE verifier and the client's own secret reaches this line, so
-         * approving somebody else's freshly registered (public) client id can
-         * no longer weld it to the approver's connector. A client that has
-         * meanwhile become another connector is refused, not re-pointed.
+         * Redemption, the worker check, a member reconnect's attachment and the
+         * grant are one transaction (`exchangeAuthorizationCode`): a database
+         * failure anywhere in it rolls the redemption back too, so the client's
+         * retry of the same code works instead of meeting `invalid_grant`. And a
+         * reply lost after the commit is answered again with the same grant,
+         * while nothing in that grant has been used.
          */
-        if (record.attachConnectorId) {
-          /*
-           * Asked again at redemption, not trusted from the approval: a
-           * withdrawal, a connection given back or a change of ownership inside
-           * the code's lifetime must not be undone by a grant minted after it.
-           */
-          const again = await resolveMemberReconnect({
-            userId: record.approvedByUserId,
-            clientId,
-            resource: record.resource,
-            scope: record.scope,
-          });
-          const connector = again.ok && again.connector.id === record.attachConnectorId ? again.connector : null;
-          const fits =
-            connector !== null &&
-            connector.resource === endpointOf(record.resource) &&
-            connector.workerId === record.workerId;
-          const outcome = fits
-            ? await attachClient({
-                clientId,
-                connectorId: connector.id,
-                source: 'MEMBER_RECONNECT',
-                evidence: `member ${record.approvedByUserId} reconnected; code ${record.id}`,
-              })
-            : 'CONFLICT';
-          if (outcome === 'CONFLICT') {
+        /*
+         * A member reconnect is asked again at redemption, not trusted from the
+         * approval — but asked *before* the exchange's transaction opens. The
+         * question reads connector ownership and health, and inside the
+         * transaction it held the code row's lock on a reserved connection for
+         * as long as those reads took. The guarded writes stay inside.
+         */
+        const pending = await findAuthorizationCode(digestSecret(code));
+        const reconnect =
+          pending?.attachConnectorId && pending.clientId === clientId
+            ? {
+                codeId: pending.id,
+                answer: await resolveMemberReconnect({
+                  userId: pending.approvedByUserId,
+                  clientId,
+                  resource: pending.resource,
+                  scope: pending.scope,
+                }),
+              }
+            : null;
+        const exchange = await exchangeAuthorizationCode({
+          code,
+          clientId,
+          redirectUri,
+          verifier,
+          useHeld: tokenUseHeld,
+          whileRedeeming: async (record) => {
+            const worker = await getWorker(record.workerId);
+            if (!worker || worker.disabled) return { ok: false, detail: { reason: 'WORKER_UNAVAILABLE' } };
+            /*
+             * A member reconnect attaches its client to the connector it restores
+             * here, on redemption, rather than at approval: only the holder of the
+             * PKCE verifier and the client's own secret reaches this line, so
+             * approving somebody else's freshly registered (public) client id can
+             * no longer weld it to the approver's connector. A client that has
+             * meanwhile become another connector is refused, not re-pointed.
+             */
+            if (!record.attachConnectorId) return { ok: true };
+            /*
+             * Asked again at redemption, not trusted from the approval: a
+             * withdrawal, a connection given back or a change of ownership inside
+             * the code's lifetime must not be undone by a grant minted after it.
+             */
+            // Resolved just before the exchange's transaction (below): the
+            // ownership and health reads it takes must not run while the code
+            // row is locked on one of the two control-plane connections.
+            const again = reconnect && reconnect.codeId === record.id ? reconnect.answer : null;
+            if (!again) return { ok: false, detail: { reason: 'MEMBER_RECONNECT_UNRESOLVED', via: 'MEMBER_RECONNECT', clientId } };
+            const connector = again.ok && again.connector.id === record.attachConnectorId ? again.connector : null;
+            const fits =
+              connector !== null &&
+              connector.resource === endpointOf(record.resource) &&
+              connector.workerId === record.workerId;
+            const outcome = fits
+              ? await attachClient({
+                  clientId,
+                  connectorId: connector.id,
+                  source: 'MEMBER_RECONNECT',
+                  evidence: `member ${record.approvedByUserId} reconnected; code ${record.id}`,
+                })
+              : 'CONFLICT';
+            if (outcome === 'CONFLICT') {
+              return {
+                ok: false,
+                detail: {
+                  reason: again.ok ? 'MEMBER_RECONNECT_ATTACH_CONFLICT' : again.reason,
+                  via: 'MEMBER_RECONNECT',
+                  clientId,
+                  userId: record.approvedByUserId,
+                  endpoint: endpointOf(record.resource),
+                  connectorId: record.attachConnectorId,
+                },
+              };
+            }
+            await touchConnectorRoutines(connector!.id);
+            return { ok: true };
+          },
+        });
+        if (!exchange.ok) {
+          // Only real verdicts about the code reach here, and only the two that
+          // name a holder are audited, exactly as before.
+          if (exchange.record && (exchange.reason === 'PKCE_FAILED' || exchange.reason === 'DENIED')) {
             await audit({
               action: 'OAUTH_TOKEN',
               actor: null,
-              targetId: record.workerId,
+              targetId: exchange.record.workerId,
               result: 'DENIED',
-              metadata: {
-                reason: again.ok ? 'MEMBER_RECONNECT_ATTACH_CONFLICT' : again.reason,
-                via: 'MEMBER_RECONNECT',
-                clientId,
-                userId: record.approvedByUserId,
-                endpoint: endpointOf(record.resource),
-                connectorId: record.attachConnectorId,
-              },
+              metadata: exchange.detail ?? { reason: exchange.reason },
             });
-            res.status(400).json({ error: 'invalid_grant' });
-            return;
           }
-          await touchConnectorRoutines(connector!.id);
+          res.status(400).json({ error: 'invalid_grant' });
+          return;
         }
-
-        await issueTokenPair(res, {
-          clientId,
-          workerId: record.workerId,
-          scope: record.scope,
-          resource: record.resource,
-        });
+        const record = exchange.record;
+        sendTokenPair(res, exchange.minted);
         await audit({
           action: 'OAUTH_TOKEN',
           actor: null,
@@ -1357,6 +1395,7 @@ export function oauthRouter(): Router {
             clientId,
             grant: 'authorization_code',
             endpoint: endpointOf(record.resource),
+            ...(exchange.outcome === 'REDELIVERED' ? { redelivered: true } : {}),
             ...(record.attachConnectorId
               ? { via: 'MEMBER_RECONNECT', userId: record.approvedByUserId, connectorId: record.attachConnectorId }
               : {}),
@@ -1439,13 +1478,6 @@ export function oauthRouter(): Router {
 /* ------------------------------------------------------------------------ */
 /* Token issuance                                                            */
 /* ------------------------------------------------------------------------ */
-
-async function issueTokenPair(
-  res: Response,
-  input: { clientId: string; workerId: string; scope: string; resource: string | null },
-): Promise<void> {
-  sendTokenPair(res, await issueGrant(input));
-}
 
 function sendTokenPair(res: Response, pair: { access: string; refresh: string; scope: string }): void {
   res.setHeader('Cache-Control', 'no-store');

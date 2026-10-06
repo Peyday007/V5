@@ -12,7 +12,8 @@
  *   - a crash leaves the run recoverable, never apparently ready (see
  *     `recoverInterruptedExtractions`).
  */
-import { getDb } from '../../db/database.ts';
+import { afterCommit, getDb, inTransaction, outsideTransaction } from '../../db/database.ts';
+import { asWorkload } from '../../db/infra.ts';
 import { extractDocument, type ExtractionResult } from './extraction.ts';
 
 interface QueueEntry {
@@ -69,6 +70,20 @@ export async function enqueueExtraction(
   // nothing to await — and suspending here would return control before the
   // `inFlight.set` below, letting a second caller for the same document miss
   // the entry and enqueue a competing extraction of the same file.
+  /*
+   * A caller inside a transaction — a filing inside its effect's transaction —
+   * is extracting a document only that transaction can see, so it runs here,
+   * in the caller's context, and nowhere near the shared queue. Starting the
+   * queue from inside a transaction used to run the whole drain loop on that
+   * transaction's connection: every document anybody else queued meanwhile was
+   * extracted inside the filing's transaction, and once it committed the loop
+   * kept issuing statements on a client the pool had already handed to someone
+   * else. And a filing that found the queue busy waited behind the backlog,
+   * holding its connection and the work item's fence, for a document the queue
+   * could not see.
+   */
+  if (inTransaction()) return extractDocument(documentId, { force: options.force ?? false });
+
   const existing: Promise<ExtractionResult> | undefined = inFlight.get(documentId);
   if (existing) return existing;
 
@@ -79,8 +94,22 @@ export async function enqueueExtraction(
   // Errors are delivered to whoever awaited the promise; an unawaited scheduling
   // call must not take the process down.
   void promise.catch(() => undefined);
-  void drain();
+  // The queue runs in no caller's transaction and on the workload pool.
+  void outsideTransaction(() => asWorkload(drain));
   return promise;
+}
+
+/**
+ * Queue extraction without waiting for it, once the caller's transaction (if
+ * any) has committed — a document only that transaction can see is invisible to
+ * the queue until then, and starting the queue from inside the transaction is
+ * the defect `enqueueExtraction` describes. Dropped if the transaction rolls
+ * back, which is right: the document it would have read does not exist.
+ */
+export function scheduleExtraction(documentId: string, options: { force?: boolean } = {}): void {
+  afterCommit(() => {
+    void enqueueExtraction(documentId, options).catch(() => undefined);
+  });
 }
 
 /** Resolves once every queued extraction has finished. Used by tests and shutdown. */

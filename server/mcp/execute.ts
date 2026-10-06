@@ -45,24 +45,28 @@ async function audit(input: {
   metadata: Record<string, unknown>;
 }): Promise<void> {
   try {
-    await recordIdentityEvent({
-      actorType: input.call.principal.type,
-      actorId: input.call.principal.id,
-      credentialId: input.call.principal.credentialId,
-      action: 'MCP_TOOL_CALL',
-      targetType: 'MCP_TOOL',
-      targetId: input.call.toolName,
-      projectId: input.projectId,
-      result: input.result,
-      requestId: input.call.requestId,
-      metadata: {
-        protocolVersion: input.call.protocolVersion,
-        client: input.call.clientName,
-        ...input.metadata,
-      },
-      userAgent: input.call.userAgent,
-      remoteAddr: input.call.remoteAddr,
-    });
+    // On the workload pool: an audit row is not authentication, and it must
+    // not hold one of the control plane's reserved connections while it waits.
+    await asWorkload(() =>
+      recordIdentityEvent({
+        actorType: input.call.principal.type,
+        actorId: input.call.principal.id,
+        credentialId: input.call.principal.credentialId,
+        action: 'MCP_TOOL_CALL',
+        targetType: 'MCP_TOOL',
+        targetId: input.call.toolName,
+        projectId: input.projectId,
+        result: input.result,
+        requestId: input.call.requestId,
+        metadata: {
+          protocolVersion: input.call.protocolVersion,
+          client: input.call.clientName,
+          ...input.metadata,
+        },
+        userAgent: input.call.userAgent,
+        remoteAddr: input.call.remoteAddr,
+      }),
+    );
   } catch {
     // Losing the record of a call is bad; turning the call into a failure
     // because the record could not be written is worse. The database being

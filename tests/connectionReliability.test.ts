@@ -54,6 +54,7 @@ import {
 } from '../server/services/infra/incidents.ts';
 import type { BinManifest, Principal } from '../server/domain/types.ts';
 import { StorageConfigurationError } from '../server/services/storage/types.ts';
+import { bootFailureApp } from '../server/bootFailure.ts';
 
 /* ------------------------------------------------------------------------ */
 /* Fault injection at the database the app is using                         */
@@ -1014,6 +1015,65 @@ describe.skipIf(!pg)('Postgres: the control plane has connections nobody else ca
     }
   });
 
+  it('a statement that fails keeps its control-plane connection, and the server bounds what the client gave up on', async () => {
+    const adapter = new PostgresAdapter({ connectionString: pg!.connectionString, schema: pg!.schema, max: 6 });
+    try {
+      const first = await asControlPlane(() => adapter.get<{ pid: number }>('SELECT pg_backend_pid() AS pid'));
+      // A real SQL error outside a transaction used to release the client with
+      // the error, which destroys it: the reservation re-dialled on every miss.
+      await expect(asControlPlane(() => adapter.get('SELECT * FROM a_table_that_is_not_there'))).rejects.toThrow();
+      const again = await asControlPlane(() => adapter.get<{ pid: number }>('SELECT pg_backend_pid() AS pid'));
+      expect(Number(again!.pid)).toBe(Number(first!.pid));
+      const bounds = await asControlPlane(() =>
+        adapter.get<{ s: string; l: string }>("SELECT current_setting('statement_timeout') AS s, current_setting('lock_timeout') AS l"),
+      );
+      expect(bounds).toMatchObject({ s: '12s', l: '5s' });
+    } finally {
+      await adapter.close();
+    }
+  });
+
+  it('a connection whose socket fails mid-statement rejects the statement and does not crash the process', async () => {
+    const pgModule = (await import('pg')).default;
+    const adapter = new PostgresAdapter({ connectionString: pg!.connectionString, schema: pg!.schema, max: 6 });
+    // Capture the clients the adapter's pools hand out, so the test can break
+    // one's socket the way a pooler dropping it does.
+    const handed: pgClient[] = [];
+    type pgClient = { connection: { stream: { destroy: (error?: Error) => void } } };
+    const originalConnect = pgModule.Pool.prototype.connect;
+    pgModule.Pool.prototype.connect = async function (this: unknown, ...args: unknown[]) {
+      const client = await (originalConnect as (...a: unknown[]) => Promise<pgClient>).apply(this, args);
+      handed.push(client);
+      return client;
+    } as typeof originalConnect;
+    const uncaught: unknown[] = [];
+    const listeners = process.listeners('uncaughtException');
+    process.removeAllListeners('uncaughtException');
+    const onUncaught = (error: unknown): void => {
+      uncaught.push(error);
+    };
+    process.on('uncaughtException', onUncaught);
+    try {
+      for (const plane of ['WORKLOAD', 'CONTROL'] as const) {
+        const run = <T,>(fn: () => Promise<T>): Promise<T> => (plane === 'CONTROL' ? asControlPlane(fn) : fn());
+        handed.length = 0;
+        const sleeping = run(() => adapter.get('SELECT pg_sleep(5) AS slept'));
+        for (let k = 0; k < 50 && handed.length === 0; k += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        handed[0]!.connection.stream.destroy(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }));
+        await expect(sleeping).rejects.toBeTruthy();
+        expect(Number((await run(() => adapter.get<{ ok: number }>('SELECT 1 AS ok')))!.ok)).toBe(1);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(uncaught).toEqual([]);
+    } finally {
+      pgModule.Pool.prototype.connect = originalConnect;
+      process.off('uncaughtException', onUncaught);
+      for (const listener of listeners) process.on('uncaughtException', listener);
+      await adapter.close();
+    }
+  });
+
   it('a pool too small to split is not split', () => {
     const adapter = new PostgresAdapter({ connectionString: pg!.connectionString, schema: pg!.schema, max: 2 });
     try {
@@ -1054,5 +1114,491 @@ describe('many sessions at once', () => {
       query: {},
     } as never);
     expect(outcome.ok).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------------ */
+/* The matrix: twenty cases, one row each                                    */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Every case the closure is accountable for, driven through the real doors and
+ * read back from the rows, one row per case — so the table printed at the end
+ * is a reading of what happened, not a description of what should. Columns:
+ * what the client saw, the connector's health, what the no-show pass wrote, how
+ * far the surface moved towards quarantine, whether a person was asked to
+ * reconnect, and whether the same connector worked again afterwards with its
+ * identity unchanged.
+ */
+interface MatrixRow {
+  case: string;
+  client: string;
+  connector: string;
+  noShow: string;
+  quarantine: number;
+  reconnect: boolean;
+  recovered: boolean;
+}
+
+const ECHECKOUT = (): Error =>
+  Object.assign(
+    new Error('(ECHECKOUTTIMEOUT) unable to check out connection from the pool after 15000ms in Session mode'),
+    { code: 'XX000' },
+  );
+const STATEMENT = (): Error =>
+  Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' });
+const TERMINATED = (): Error => new Error('Connection terminated due to connection timeout');
+
+describe('the chaos matrix', () => {
+  it('records all twenty cases; only a genuinely revoked credential asks for a person', async () => {
+    startInfraIncidentRecorder();
+    const rows: MatrixRow[] = [];
+    const describeClient = (r: { status: number; body: Record<string, unknown> }): string => {
+      const error = r.body['error'] as Record<string, unknown> | string | undefined;
+      const category =
+        typeof error === 'object' && error && 'data' in error
+          ? String((error['data'] as Record<string, unknown>)['category'])
+          : typeof error === 'string'
+            ? error
+            : '';
+      return `${r.status}${category ? ` ${category}` : ''}`;
+    };
+    const observe = async (
+      label: string,
+      c: Fixture,
+      client: string,
+      recovered: boolean,
+    ): Promise<void> => {
+      await settleTokenTouches();
+      await settleInfraIncidents();
+      const health = (await connectorHealth(c.connectorId))!;
+      const counts = [
+        ['NO_SHOW', await eventsOf('DISPATCH_NO_SHOW', c.routineId)],
+        ['AUTH', await eventsOf('DISPATCH_AUTH_NO_SHOW', c.routineId)],
+        ['INFRA', await eventsOf('DISPATCH_INFRA_NO_SHOW', c.routineId)],
+      ].filter(([, n]) => Number(n) > 0);
+      rows.push({
+        case: label,
+        client,
+        connector: health.state,
+        noShow: counts.length === 0 ? '—' : counts.map(([k, n]) => `${k}×${n}`).join(' '),
+        quarantine: (await unansweredFiresByRoutine()).get(c.routineId) ?? 0,
+        reconnect: health.humanActionRequired,
+        recovered,
+      });
+    };
+    const ok = async (bearer: string): Promise<boolean> => (await whoami(bearer)).status === 200;
+    const inOutage = (sentAt: Date, kind = 'POOL_CHECKOUT_TIMEOUT'): Promise<unknown> =>
+      getDb().run(
+        `INSERT INTO infra_incidents (id, kind, surface, started_at, ended_at, occurrences, affects_arrival, created_at)
+         VALUES (?, ?, 'mcp:authenticate@CONTROL', ?, ?, 3, 1, ?)`,
+        [`inc_${Math.random().toString(36).slice(2)}`, kind, new Date(sentAt.getTime() + 10_000).toISOString(), new Date(sentAt.getTime() + 120_000).toISOString(), new Date().toISOString()],
+      );
+
+    // 1. Healthy.
+    {
+      const c = await connector('m1');
+      const r = await whoami(c.access);
+      await observe('1 DB healthy', c, describeClient(r), await ok(c.access));
+    }
+    // 2. Slow: every statement answers, late.
+    {
+      const c = await connector('m2');
+      const db = getDb() as Database & Record<string, unknown>;
+      const original = db.get;
+      db.get = (async (sql: string, params?: never[]) => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return original.call(db, sql, params);
+      }) as Database['get'];
+      const r = await whoami(c.access);
+      db.get = original;
+      await observe('2 DB slow', c, describeClient(r), await ok(c.access));
+    }
+    // 3. Unavailable for a short outage: every statement fails, then heals.
+    {
+      const c = await connector('m3');
+      injectFault(EVERYTHING, TERMINATED);
+      const r = await whoami(c.access);
+      const rr = await refresh(c.clientId, c.refresh);
+      restore!();
+      await observe('3 DB unavailable 30s', c, `${describeClient(r)}; refresh ${describeClient(rr)}`, await ok(c.access));
+    }
+    // 4. Unavailable for longer: auth, refresh, a fire and an arrival all fail inside it.
+    {
+      const c = await connector('m4');
+      const sentAt = new Date(Date.now() - 2 * 3_600_000);
+      await inOutage(sentAt);
+      injectFault(EVERYTHING, TERMINATED);
+      const r = await whoami(c.access);
+      const rr = await refresh(c.clientId, c.refresh);
+      restore!();
+      await unansweredFire(c.routineId, sentAt);
+      const after = await refresh(c.clientId, c.refresh);
+      await observe('4 DB unavailable 2min', c, `${describeClient(r)}; refresh ${describeClient(rr)}`, after.status === 200 && (await ok(after.body['access_token']!)));
+    }
+    // 5. Pool saturated: Brain's own pool hands out nothing in time.
+    {
+      const c = await connector('m5');
+      injectFault(EVERYTHING, poolTimeout);
+      const r = await whoami(c.access);
+      restore!();
+      await observe('5 pool saturated', c, describeClient(r), await ok(c.access));
+    }
+    // 6. The pooler's checkout timeout.
+    {
+      const c = await connector('m6');
+      injectFault(EVERYTHING, ECHECKOUT);
+      const r = await whoami(c.access);
+      const rr = await refresh(c.clientId, c.refresh);
+      restore!();
+      await observe('6 checkout timeout', c, `${describeClient(r)}; refresh ${describeClient(rr)}`, await ok(c.access));
+    }
+    // 7. A statement timeout while choosing work at check-in.
+    {
+      const c = await connector('m7');
+      await readyBin();
+      injectFault((sql) => /FROM bins/.test(sql) && /ORDER BY priority/.test(sql), STATEMENT);
+      const r = await mcp('tools/call', { name: 'brain_check_in', arguments: { session_ref: 'cse_m7' } }, c.access);
+      restore!();
+      const value = ((r.body['result'] as Record<string, unknown>)['structuredContent'] ?? {}) as Record<string, unknown>;
+      await observe('7 statement timeout at check-in', c, `${r.status} ${String(value['reason'])}`, await ok(c.access));
+    }
+    // 8. Brain restarting while an access token is presented: the request met
+    //    the restarting process (503, see bootFailureAnswers), and the fire that
+    //    produced it lands in the restart window.
+    {
+      const c = await connector('m8');
+      const lastAlive = new Date(Date.now() - 90 * 60_000);
+      await getDb().run('INSERT INTO runtime_liveness (instance_id, started_at, alive_at) VALUES (?, ?, ?)', [
+        'proc_m8',
+        new Date(lastAlive.getTime() - 3_600_000).toISOString(),
+        lastAlive.toISOString(),
+      ]);
+      await recordProcessStart(new Date(lastAlive.getTime() + 2 * 60_000));
+      await unansweredFire(c.routineId, new Date(lastAlive.getTime() - 30_000));
+      // What the request that met the restarting process was answered.
+      const restarting = bootFailureApp(new Error('The cloud did not answer.'), { retrying: true, databasePath: '-', dataRoot: '-' }).listen(0);
+      await new Promise<void>((resolve) => restarting.once('listening', () => resolve()));
+      const port = (restarting.address() as AddressInfo).port;
+      const met = await fetch(`http://127.0.0.1:${port}/mcp`, { method: 'POST', headers: { authorization: `Bearer ${c.access}` } });
+      const metBody = (await met.json()) as Record<string, unknown>;
+      await new Promise<void>((resolve) => restarting.close(() => resolve()));
+      await observe('8 restart during access-token use', c, `${describeClient({ status: met.status, body: metBody })} (restarting)`, await ok(c.access));
+      await getDb().run("DELETE FROM runtime_liveness WHERE instance_id = 'proc_m8'");
+    }
+    // 9. Brain restarting inside a refresh: the rotation rolled back.
+    {
+      const c = await connector('m9');
+      injectFault((sql) => sql.includes('INSERT INTO oauth_tokens'), TERMINATED, 1);
+      const rr = await refresh(c.clientId, c.refresh);
+      restore!();
+      const again = await refresh(c.clientId, c.refresh);
+      await observe('9 restart during refresh', c, `refresh ${describeClient(rr)}`, again.status === 200 && (await ok(again.body['access_token']!)));
+    }
+    // 10. A refresh reply lost after Brain committed.
+    {
+      const c = await connector('m10');
+      const first = await refresh(c.clientId, c.refresh);
+      const again = await refresh(c.clientId, c.refresh);
+      expect(again.body['refresh_token']).toBe(first.body['refresh_token']);
+      await observe('10 refresh response lost', c, `refresh ${again.status} same successor`, await ok(again.body['access_token']!));
+    }
+    // 11. Two refreshes of one token at once.
+    {
+      const c = await connector('m11');
+      const [a, b] = await Promise.all([refresh(c.clientId, c.refresh), refresh(c.clientId, c.refresh)]);
+      expect(a.body['refresh_token']).toBe(b.body['refresh_token']);
+      await observe('11 simultaneous refreshes', c, `${a.status}/${b.status} one successor`, await ok(b.body['access_token']!));
+    }
+    // 12. A stale sibling presents the old refresh token after the chain moved on.
+    {
+      const c = await connector('m12');
+      const first = await refresh(c.clientId, c.refresh);
+      expect(await ok(first.body['access_token']!)).toBe(true);
+      const second = await refresh(c.clientId, first.body['refresh_token']!);
+      expect(await ok(second.body['access_token']!)).toBe(true);
+      await settleTokenTouches();
+      await getDb().run("UPDATE oauth_tokens SET first_used_at = ? WHERE client_id = ? AND first_used_at IS NOT NULL", [
+        new Date(Date.now() - 10 * 60_000).toISOString(),
+        c.clientId,
+      ]);
+      const stale = await refresh(c.clientId, c.refresh);
+      await observe('12 stale sibling token', c, `stale refresh ${describeClient(stale)}`, await ok(second.body['access_token']!));
+    }
+    // 13. The access token expired during the outage.
+    {
+      const c = await connector('m13');
+      await getDb().run("UPDATE oauth_tokens SET expires_at = ? WHERE kind = 'ACCESS' AND client_id = ?", [
+        new Date(Date.now() - 1_000).toISOString(),
+        c.clientId,
+      ]);
+      injectFault(EVERYTHING, ECHECKOUT);
+      const rr = await refresh(c.clientId, c.refresh);
+      restore!();
+      const after = await refresh(c.clientId, c.refresh);
+      await observe('13 token expired during outage', c, `refresh ${describeClient(rr)}`, after.status === 200 && (await ok(after.body['access_token']!)));
+    }
+    // 14. A Routine fired during the outage; its session could not authenticate.
+    {
+      const c = await connector('m14');
+      const sentAt = new Date(Date.now() - 2 * 3_600_000);
+      await inOutage(sentAt);
+      for (let i = 0; i < 3; i += 1) await unansweredFire(c.routineId, sentAt);
+      await observe('14 Routine fires during outage', c, '503 at the door (fleet-wide incident)', await ok(c.access));
+    }
+    // 15. A session reached check-in during the outage and could not be served.
+    {
+      const c = await connector('m15');
+      const sentAt = new Date(Date.now() - 2 * 3_600_000);
+      await getDb().run(
+        `INSERT INTO infra_incidents (id, kind, surface, session_ref, started_at, ended_at, occurrences, affects_arrival, created_at)
+         VALUES ('inc_m15', 'UNSERVED_ARRIVAL', 'check_in', 'claude-code-session_m15', ?, ?, 1, 0, ?)`,
+        [new Date(sentAt.getTime() + 20 * 60_000).toISOString(), new Date(sentAt.getTime() + 20 * 60_000).toISOString(), new Date().toISOString()],
+      );
+      // Reported in the third spelling, at minute twenty: both used to be missed.
+      await unansweredFire(c.routineId, sentAt, 'cse_m15');
+      await observe('15 session arrives during outage', c, 'check-in RETRY_LATER (unserved arrival)', await ok(c.access));
+    }
+    // 16. Several research workers at once, with the pool failing intermittently.
+    {
+      const cs = await Promise.all(['m16a', 'm16b', 'm16c'].map((n) => connector(n)));
+      injectFault((sql) => sql.includes('oauth_tokens'), poolTimeout, 2);
+      const answers = await Promise.all(cs.map((c) => whoami(c.access)));
+      restore!();
+      const recovered = (await Promise.all(cs.map((c) => ok(c.access)))).every(Boolean);
+      await observe('16 several research workers', cs[0]!, answers.map((a) => a.status).join('/'), recovered);
+    }
+    // 17–18. Research and Factory check in together while fleet reads run.
+    {
+      const research = await connector('m17r');
+      const factory = await connector('m17f');
+      await readyBin();
+      await readyBin();
+      const [a, b, health] = await Promise.all([
+        mcp('tools/call', { name: 'brain_check_in', arguments: { session_ref: 'cse_m17r' } }, research.access),
+        mcp('tools/call', { name: 'brain_check_in', arguments: { session_ref: 'cse_m17f' } }, factory.access),
+        Promise.all([connectorHealth(research.connectorId), connectorHealth(factory.connectorId)]),
+      ]);
+      expect(health.every((h) => h !== null)).toBe(true);
+      await observe('17 Research + Factory together', research, `${a.status}/${b.status}`, (await ok(research.access)) && (await ok(factory.access)));
+      await observe('18 + Admin/Fleet reads', factory, `${a.status}/${b.status}`, await ok(factory.access));
+    }
+    // 19. One worker serving two surfaces; one surface's fire meets the outage.
+    {
+      const one = await connector('m19a');
+      const two = await connector('m19b');
+      const sentAt = new Date(Date.now() - 2 * 3_600_000);
+      await inOutage(sentAt);
+      await unansweredFire(one.routineId, sentAt);
+      await observe('19 shared worker across surfaces', one, '503 at the door', (await ok(one.access)) && (await ok(two.access)));
+    }
+    // 20. Genuinely revoked.
+    {
+      const c = await connector('m20');
+      await getDb().run("UPDATE oauth_tokens SET revoked_at = ?, revoked_reason = 'EXPLICIT' WHERE client_id = ?", [
+        new Date().toISOString(),
+        c.clientId,
+      ]);
+      const r = await whoami(c.access);
+      await observe('20 genuinely revoked', c, `${r.status} Not authorized`, await ok(c.access));
+    }
+
+    // eslint-disable-next-line no-console
+    console.table(rows);
+    expect(rows).toHaveLength(20);
+    for (const row of rows.filter((r) => !r.case.startsWith('20'))) {
+      expect(row, row.case).toMatchObject({ reconnect: false, quarantine: 0, recovered: true });
+      expect(row.connector, row.case).not.toBe('HUMAN_REAUTH_REQUIRED');
+      expect(row.client, row.case).not.toMatch(/^401/);
+      expect(row.noShow, row.case).not.toMatch(/NO_SHOW|AUTH/);
+    }
+    const revoked = rows.find((r) => r.case.startsWith('20'))!;
+    expect(revoked).toMatchObject({ reconnect: true, connector: 'HUMAN_REAUTH_REQUIRED', recovered: false });
+  });
+});
+
+/* ------------------------------------------------------------------------ */
+/* The closure's own regressions                                             */
+/* ------------------------------------------------------------------------ */
+
+describe('the rest of the chain does not turn a database failure into a verdict', () => {
+  it('a code exchange that met a database failure rolls back whole, so the same code still works', async () => {
+    const { issueAuthorizationCode } = await import('../server/repos/oauth.ts');
+    const { generateOpaqueSecret } = await import('../server/services/identity/secrets.ts');
+    const crypto = await import('node:crypto');
+    const client = await registerClient({
+      clientName: 'Brain (exchange)',
+      redirectUris: ['https://claude.ai/api/mcp/auth_callback'],
+      secretDigest: null,
+      tokenAuthMethod: 'none',
+    });
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+    const code = generateOpaqueSecret();
+    await issueAuthorizationCode({
+      codeDigest: code.digest,
+      clientId: client.clientId,
+      workerId,
+      approvedByUserId: 'usr_test',
+      redirectUri: 'https://claude.ai/api/mcp/auth_callback',
+      codeChallenge: challenge,
+      codeChallengeMethod: 'S256',
+      resource: RESOURCE,
+      scope: '',
+    });
+    const exchange = () =>
+      fetch(`${base}/oauth/token`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: client.clientId,
+          code: code.plaintext,
+          code_verifier: verifier,
+          redirect_uri: 'https://claude.ai/api/mcp/auth_callback',
+        }).toString(),
+      });
+    // The grant's second insert fails: before, the code was already spent.
+    injectFault((sql) => sql.includes('INSERT INTO oauth_tokens'), TERMINATED, 1);
+    const during = await exchange();
+    restore!();
+    expect(during.status).toBe(503);
+    expect(((await during.json()) as Record<string, unknown>)['error']).toBe('temporarily_unavailable');
+    // Without the verifier the code is refused and *not spent*: an intercepted
+    // code cannot be burned for the client that holds the verifier.
+    const wrong = await fetch(`${base}/oauth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: client.clientId,
+        code: code.plaintext,
+        code_verifier: crypto.randomBytes(32).toString('base64url'),
+        redirect_uri: 'https://claude.ai/api/mcp/auth_callback',
+      }).toString(),
+    });
+    expect(wrong.status).toBe(400);
+    const after = await exchange();
+    expect(after.status).toBe(200);
+    const pair = (await after.json()) as Record<string, string>;
+    expect((await whoami(pair['access_token']!)).status).toBe(200);
+    // One grant, not a half-written one beside it.
+    const roots = await getDb().all("SELECT id FROM oauth_tokens WHERE kind = 'REFRESH' AND client_id = ?", [client.clientId]);
+    expect(roots).toHaveLength(1);
+  });
+
+  it('a routing read that fails is a retry, not "no work" and not a refusal on record', async () => {
+    startInfraIncidentRecorder();
+    await readyBin();
+    injectFault((sql) => sql.includes('worker_routing'), ECHECKOUT);
+    const result = await checkIn({ principal: workerPrincipal(), workerId, sessionRef: 'cse_routing' });
+    restore!();
+    expect(result).toEqual({ assigned: false, reason: 'RETRY_LATER' });
+    expect((await getDb().all('SELECT * FROM bin_session_refusals')).length).toBe(0);
+    await settleInfraIncidents();
+    const unserved = await getDb().get<{ session_ref: string }>("SELECT session_ref FROM infra_incidents WHERE kind = 'UNSERVED_ARRIVAL'");
+    expect(unserved?.session_ref).toBe('cse_routing');
+  });
+
+  it('a lease whose assignment row could not be written still leaves evidence that its session arrived', async () => {
+    startInfraIncidentRecorder();
+    await readyBin();
+    injectFault((sql) => sql.includes('INSERT INTO bin_events') || sql.includes('bin_dispatch'), poolTimeout);
+    const result = await checkIn({ principal: workerPrincipal(), workerId, sessionRef: 'claude-code-session_took_it' });
+    restore!();
+    expect(result.assigned).toBe(true);
+    await settleInfraIncidents();
+    const row = await getDb().get<{ session_ref: string; detail: string }>(
+      "SELECT session_ref, detail FROM infra_incidents WHERE kind = 'UNSERVED_ARRIVAL'",
+    );
+    expect(row).toMatchObject({ session_ref: 'claude-code-session_took_it', detail: 'ARRIVED_ASSIGNMENT_UNRECORDED' });
+    // The fire that produced it, recorded in the fire's spelling, is not a no-show.
+    const c = await connector('took-it');
+    await unansweredFire(c.routineId, new Date(Date.now() - 60 * 60_000), 'cse_took_it', 0);
+    expect(await eventsOf('DISPATCH_NO_SHOW', c.routineId)).toBe(0);
+    expect(await eventsOf('DISPATCH_INFRA_NO_SHOW', c.routineId)).toBe(1);
+  });
+
+  it('a session that arrived later than fifteen minutes is still its own fire’s answer', async () => {
+    const c = await connector('late');
+    const sentAt = new Date(Date.now() - 2 * 3_600_000);
+    await getDb().run(
+      `INSERT INTO infra_incidents (id, kind, surface, session_ref, started_at, ended_at, occurrences, affects_arrival, created_at)
+       VALUES ('inc_late', 'UNSERVED_ARRIVAL', 'check_in', 'session_late', ?, ?, 1, 0, ?)`,
+      [new Date(sentAt.getTime() + 25 * 60_000).toISOString(), new Date(sentAt.getTime() + 25 * 60_000).toISOString(), new Date().toISOString()],
+    );
+    await unansweredFire(c.routineId, sentAt, 'cse_late');
+    expect(await eventsOf('DISPATCH_NO_SHOW', c.routineId)).toBe(0);
+  });
+
+  it('no fire is judged while the restart window is still being established', async () => {
+    const c = await connector('pending-restart');
+    injectFault((sql) => sql.includes('runtime_liveness'), ECHECKOUT);
+    await expect(recordProcessStart()).rejects.toThrow();
+    restore!();
+    // Within the defer limit the row is left SENT rather than charged.
+    // Stale (past thirty minutes) and inside the defer limit (twice that).
+    await unansweredFire(c.routineId, new Date(Date.now() - 40 * 60_000), null, 30 * 60_000);
+    expect(await eventsOf('DISPATCH_NO_SHOW', c.routineId)).toBe(0);
+    expect((await getDb().get<{ state: string }>("SELECT state FROM bin_dispatch WHERE routine_id = ?", [c.routineId]))!.state).toBe('SENT');
+    // Once the window is known, judging resumes.
+    await recordProcessStart();
+    await reopenNoShowDispatches(30 * 60_000, 50);
+    expect(await eventsOf('DISPATCH_NO_SHOW', c.routineId)).toBe(1);
+  });
+
+  it('a browser’s failed authentication does not excuse a fired session’s no-show', async () => {
+    const c = await connector('browser');
+    const sentAt = new Date(Date.now() - 2 * 3_600_000);
+    await getDb().run(
+      `INSERT INTO infra_incidents (id, kind, surface, started_at, ended_at, occurrences, affects_arrival, created_at)
+       VALUES ('inc_http', 'POOL_CHECKOUT_TIMEOUT', 'http:auth@WORKLOAD', ?, ?, 1, 0, ?)`,
+      [new Date(sentAt.getTime() + 20_000).toISOString(), new Date(sentAt.getTime() + 20_000).toISOString(), new Date().toISOString()],
+    );
+    startInfraIncidentRecorder();
+    injectFault(EVERYTHING, poolTimeout);
+    await fetch(`${base}/api/ping`, { headers: { authorization: `Bearer ${c.access}` } });
+    restore!();
+    await settleInfraIncidents();
+    const recorded = await getDb().get<{ affects_arrival: number }>(
+      "SELECT affects_arrival FROM infra_incidents WHERE surface LIKE 'http:auth%' AND id <> 'inc_http'",
+    );
+    expect(Number(recorded!.affects_arrival)).toBe(0);
+  });
+
+  it('work registered after commit runs after commit, in no transaction, and not at all after a rollback', async () => {
+    const { afterCommit, inTransaction } = await import('../server/db/database.ts');
+    const seen: string[] = [];
+    await getDb().transaction(async () => {
+      afterCommit(() => {
+        seen.push(inTransaction() ? 'inside' : 'outside');
+      });
+      expect(seen).toEqual([]);
+    });
+    for (let i = 0; i < 20 && seen.length === 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(seen).toEqual(['outside']);
+    await expect(
+      getDb().transaction(async () => {
+        afterCommit(() => seen.push('rolled back'));
+        throw new Error('no');
+      }),
+    ).rejects.toThrow('no');
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(seen).toEqual(['outside']);
+    // A hook registered inside a savepoint that rolled back does not outlive it;
+    // one inside a released savepoint runs with its root.
+    await getDb().transaction(async () => {
+      await getDb()
+        .transaction(async () => {
+          afterCommit(() => seen.push('savepoint rolled back'));
+          throw new Error('inner');
+        })
+        .catch(() => undefined);
+      await getDb().transaction(async () => {
+        afterCommit(() => seen.push('savepoint released'));
+      });
+    });
+    for (let i = 0; i < 20 && seen.length < 2; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(seen).toEqual(['outside', 'savepoint released']);
   });
 });

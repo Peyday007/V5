@@ -66,7 +66,7 @@ import { getAccount, getRoutine } from '../../repos/fleet.ts';
 import { getUser, getWorkerByName, getWorkerRouting } from '../../repos/identity.ts';
 import { listTokensForWorker } from '../../repos/oauth.ts';
 import { resolveToken } from '../dispatch/fire.ts';
-import { fleetSnapshot, routingRefusalByRoutine } from '../dispatch/candidates.ts';
+import { sharedFleetSnapshot, routingRefusalByRoutine } from '../dispatch/candidates.ts';
 import { namesFor, settleConnection } from './connection.ts';
 
 export interface ContributedSurface {
@@ -108,7 +108,7 @@ export async function contributedCapacity(): Promise<ContributedCapacity> {
    * disabled or archived worker, and a worker with no project membership —
    * none of which the checks below read (§23, `surfaceIneligibility`).
    */
-  const snapshot = await fleetSnapshot();
+  const snapshot = await sharedFleetSnapshot();
   const surfaces: ContributedSurface[] = [];
 
   for (let connection of connections) {

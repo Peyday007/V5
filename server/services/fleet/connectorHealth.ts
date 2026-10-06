@@ -34,7 +34,7 @@ import { getDb } from '../../db/database.ts';
 import { CONCURRENT_REFRESH_LEEWAY_MS } from '../../repos/oauth.ts';
 import { clientsOfConnector, getConnector, listConnectors, type Connector } from '../../repos/connectors.ts';
 import { getWorker } from '../../repos/identity.ts';
-import { tokenUseHeld } from '../identity/tokenTouch.ts';
+import { heldTokenUses, tokenUseHeld } from '../identity/tokenTouch.ts';
 
 export type ConnectorAuthState =
   | 'HEALTHY'
@@ -88,6 +88,22 @@ export interface ConnectorHealth {
   lastRefusal: { at: string; reason: string } | null;
   authNoShowsSinceAnomaly: number;
 }
+
+/**
+ * The refusals the token endpoint issues under idempotent rotation — the only
+ * ones that are a verdict about the credential a client holds now.
+ *
+ * A refusal recorded under the retry-window policy that idempotent rotation
+ * replaced (`OUTSIDE_RETRY_WINDOW` and its siblings) was a verdict about a
+ * clock, and the token it refused is one current rotation answers: presented
+ * again, it gets the same successor. Reading such a row as "only a new consent
+ * restores it" asked a person to reconnect a connector Brain would serve.
+ * Production, 2026-10-06: Caleb's connector read HUMAN_REAUTH_REQUIRED for a
+ * 2026-10-03 `OUTSIDE_RETRY_WINDOW`. Without the row the connector is judged on
+ * what the tokens say — a reply not picked up is REFRESH_RECOVERABLE, and only
+ * a client that then stops asking reaches CLIENT_STOPPED_RETRYING.
+ */
+const CURRENT_REFUSALS = new Set(['MALFORMED', 'NOT_LIVE', 'CLIENT_MISMATCH', 'WORKER_UNAVAILABLE', 'REVOKED', 'REUSED']);
 
 interface TokenFacts {
   last_use: string | null;
@@ -215,6 +231,25 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
        FROM oauth_tokens WHERE client_id IN (${ph})`,
     [at, ...clientIds],
   )) ?? { last_use: null, last_grant: null, last_refresh: null, live_refresh: 0 };
+  /*
+   * A use this process saw and has not yet written is a use. Under database
+   * pressure touches wait in memory (`tokenTouch.ts`), and reading only the
+   * column would let a stale presenter's real refusal look newer than the live
+   * client's last use — CLIENT_HOLDS_REFUSED_CREDENTIAL about a connector that
+   * is working.
+   */
+  const held = heldTokenUses();
+  if (held.size > 0) {
+    const ids = [...held.keys()];
+    const mine = await getDb().all<{ id: string }>(
+      `SELECT id FROM oauth_tokens WHERE client_id IN (${ph}) AND id IN (${inList(ids.length)})`,
+      [...clientIds, ...ids],
+    );
+    for (const { id } of mine) {
+      const usedAt = held.get(id)!;
+      if (!facts.last_use || usedAt > facts.last_use) facts.last_use = usedAt;
+    }
+  }
   base.lastAccessUseAt = facts.last_use;
   base.lastGrantAt = facts.last_grant;
   base.lastRefreshAt = facts.last_refresh;
@@ -287,6 +322,7 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
   const refusalStrands =
     base.lastRefusal !== null &&
     base.lastRefusal.at > lastActivity &&
+    CURRENT_REFUSALS.has(base.lastRefusal.reason) &&
     !(base.lastRefusal.reason === 'REUSED' && Number(facts.live_refresh ?? 0) > 0);
   if (base.lastRefusal && refusalStrands) {
     return verdict(

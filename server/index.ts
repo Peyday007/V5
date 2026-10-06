@@ -50,7 +50,7 @@ import { OAUTH_BASE, oauthRouter, wellKnownRouter } from './routes/oauth.ts';
 import { authRouter } from './routes/auth.ts';
 import { bootstrapFirstAdmin, hasAnyAccount } from './services/identity/bootstrap.ts';
 import { breakGlassArmed } from './services/identity/passwordDoor.ts';
-import { writeProjectState } from './services/runtimeState.ts';
+import { writeProjectState, writesRuntimeSnapshot } from './services/runtimeState.ts';
 import { recomputeProject } from './services/stateEngine.ts';
 import { recoverInterruptedExtractions } from './services/documents/extraction.ts';
 import { ocrStatus } from './services/documents/ocr.ts';
@@ -66,6 +66,7 @@ import { repairLaunches } from './services/russell/launch.ts';
 import { describeFireTarget } from './services/dispatch/fire.ts';
 import { resumePulledPackets } from './services/research/packetRunner.ts';
 import { recoverInterruptedImports } from './services/archive/import.ts';
+import { bootFailureApp } from './bootFailure.ts';
 
 /**
  * `node:sqlite` prints an experimental-feature warning the moment it is loaded.
@@ -275,38 +276,8 @@ function buildApp(gate: AccessGateConfig): Express {
  * could not be delivered, and the one thing Brain must not do about that is
  * quietly serve the local file instead.
  */
-function serveMigrationFailure(error: Error): Server {
-  const configuration = error instanceof DatabaseConfigurationError;
-  const headline = configuration
-    ? 'Brain could not start: its persistence configuration is not usable.'
-    : 'Brain could not start: the application failed to migrate the database.';
-  const hint = configuration
-    ? `${error.detail} Nothing was written locally, and nothing fell back.`
-    : 'Applied migrations are checksum-locked. If you edited a migration that had already run, ' +
-      'restore the original file and add a new server/db/migrations/NNN_name.sql instead.';
-
-  const app = express();
-  app.disable('x-powered-by');
-  app.use('/api', (_req: Request, res: Response) => {
-    res.status(500).json({
-      error: `${headline} ${error.message}`,
-      detail: {
-        stage: configuration ? 'CONFIGURATION' : 'MIGRATION',
-        // Never the connection string: the point of the diagnostic is what to
-        // fix, and the value contains a password.
-        databasePath: configuration ? '(configured elsewhere)' : DB_PATH,
-        dataRoot: DATA_ROOT,
-        hint,
-      },
-    });
-  });
-  app.use((_req: Request, res: Response) => {
-    res
-      .status(500)
-      .type('text/plain')
-      .send(`${headline}\n\n${error.message}\n\n${hint}\n\nDatabase: ${DB_PATH}\nData root: ${DATA_ROOT}\n`);
-  });
-
+function serveMigrationFailure(error: Error, options: { retrying?: boolean } = {}): Server {
+  const app = bootFailureApp(error, { ...options, databasePath: DB_PATH, dataRoot: DATA_ROOT });
   const server = app.listen(PORT, () => {
     console.error(`[brain] Serving the migration error on http://localhost:${PORT} — nothing else will work.`);
   });
@@ -541,7 +512,7 @@ async function main(): Promise<void> {
     migrations = await proveCloud();
   } catch (error) {
     const failure = error instanceof Error ? error : new Error(String(error));
-    const failureServer = serveMigrationFailure(failure);
+    const failureServer = serveMigrationFailure(failure, { retrying: true });
     // Asked again rather than served for ever: see bootRetry.ts. Every attempt
     // is the identical proof, and nothing but the error is served until one
     // holds — which is retrying, not the fallback §18 forbids.
@@ -910,14 +881,14 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
       for (const project of await listProjects()) {
         try {
           await recomputeProject(project.id);
-          await writeProjectState(project.id);
+          if (writesRuntimeSnapshot()) await writeProjectState(project.id);
         } catch (error) {
           console.error(`[brain] boot recompute of ${project.id} failed; serving on:`, error);
         }
       }
       // One runtime file, so it describes the project the app opens on.
       const primary = await getDefaultProject();
-      if (primary) await writeProjectState(primary.id);
+      if (primary && writesRuntimeSnapshot()) await writeProjectState(primary.id);
     });
   })().catch((error: unknown) => {
     console.error('[brain] the after-listen recovery could not run; serving on:', error);

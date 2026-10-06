@@ -211,7 +211,17 @@ export async function workerRoutingFor(
     reason: 'No routing row: the families this worker\'s scopes imply, and no repository work.',
     explicit: false,
   };
-  try {
+  /*
+   * A failed read is not "no routing row". It used to be: every error here
+   * returned the derived routing, so a pool timeout handed a Factory worker the
+   * families its scopes imply and no repositories — its own repository bins
+   * were then refused out loud (a refusal row and a deferred fire), the session
+   * was told NO_READY_BINS rather than RETRY_LATER, and the derived families
+   * could be wider than the explicit row allowed. The error propagates now:
+   * inside admission it is the quiet infrastructure skip, and in check-in it is
+   * RETRY_LATER with the session recorded as served by nobody.
+   */
+  {
     const stored = await getWorkerRouting(workerId);
     if (!stored) return derived;
     return {
@@ -224,8 +234,6 @@ export async function workerRoutingFor(
       reason: stored.reason,
       explicit: true,
     };
-  } catch {
-    return derived;
   }
 }
 
@@ -1133,10 +1141,11 @@ async function advanceFactoryAfter(bin: Bin): Promise<void> {
     const { tickRemoteCampaign } = await import('../factory/remoteLoop.ts');
     const report = await tickRemoteCampaign(campaignId);
     if (report.created.length === 0) return;
-    const { dispatchTick } = await import('../dispatch/loop.ts');
+    const { dispatchTickIfIdle } = await import('../dispatch/loop.ts');
     // This campaign's project only: one person's completion must not pay for
-    // firing everybody's queue inside their MCP call. The loop fires the rest.
-    await dispatchTick({ projectIds: [bin.projectId] });
+    // firing everybody's queue inside their MCP call. The loop fires the rest,
+    // and a pass already in flight is that loop — this one then declines.
+    await dispatchTickIfIdle({ projectIds: [bin.projectId] });
   } catch {
     // The loop is the fallback for every one of these, and it runs in twenty
     // seconds. A completion must never fail because an optimisation did.
