@@ -11,7 +11,9 @@ import type { Principal } from '../domain/types.ts';
 import { ToolError, type ToolErrorCategory } from './errors.ts';
 import { TerminalEffectFailure } from '../services/effects/engine.ts';
 import { assertResultWithinBounds, takeRateSlot } from './limits.ts';
-import { findTool, type ToolContext } from './tools.ts';
+import { findTool, type McpTool, type ToolContext } from './tools.ts';
+import { asControlPlane, asWorkload, classifyInfraFailure, noteInfraFailure, noteLatency } from '../db/infra.ts';
+import { outsideTransaction } from '../db/database.ts';
 import { failureDetail } from '../services/effects/failureDetail.ts';
 
 export interface CallInput {
@@ -227,6 +229,16 @@ export async function callTool(input: CallInput): Promise<CallOutput> {
     throw error;
   }
 
+  const started = Date.now();
+  try {
+    return await (tool.plane === 'CONTROL' ? asControlPlane(() => runTool(tool, input)) : runTool(tool, input));
+  } finally {
+    if (tool.plane === 'CONTROL') noteLatency(input.toolName, Date.now() - started);
+    slot.release();
+  }
+}
+
+async function runTool(tool: McpTool, input: CallInput): Promise<CallOutput> {
   try {
     const context: ToolContext = { principal: input.principal, requestId: input.requestId };
     const outcome = await tool.run(input.args, context);
@@ -281,6 +293,26 @@ export async function callTool(input: CallInput): Promise<CallOutput> {
       });
       return { result: errorResult(error) };
     }
+    /*
+     * A database that could not answer is not a bug in the call, and saying
+     * "could not be completed" about it left a worker unable to tell a retry
+     * from a fault. It is named as temporary and retryable, and as nothing to do
+     * with the credential; every mutating tool is idempotent by its work item,
+     * so sending the same call again is safe.
+     */
+    const infra = classifyInfraFailure(error);
+    if (infra) {
+      noteInfraFailure(infra, `mcp:${input.toolName}`);
+      // Not awaited: the database that just failed would make the answer wait
+      // a connection timeout to learn it cannot write the audit either.
+      void outsideTransaction(() => asWorkload(() => audit({
+        call: input,
+        projectId: null,
+        result: 'FAILED',
+        metadata: { category: 'INFRA_RETRYABLE', infra },
+      })));
+      return { result: infraResult(input.requestId) };
+    }
     // eslint-disable-next-line no-console
     console.error('[mcp] tool call failed', input.toolName, input.requestId, error);
     await audit({
@@ -293,7 +325,22 @@ export async function callTool(input: CallInput): Promise<CallOutput> {
       metadata: { category: 'INTERNAL', detail: failureDetail(error) },
     });
     return { result: internalResult(input.requestId) };
-  } finally {
-    slot.release();
   }
+}
+
+/**
+ * The answer when Brain's database did not answer in time. Retryable, and
+ * explicitly not about authorization — the credential was already accepted.
+ */
+function infraResult(requestId: string): CallToolBody {
+  const message =
+    'Brain is temporarily busy (its database did not answer in time). This is not an authorization ' +
+    `problem and nothing was refused: send the same call again shortly. Reference ${requestId}.`;
+  return {
+    content: [{ type: 'text', text: message }],
+    structuredContent: {
+      error: { category: 'UNAVAILABLE', message, requestId, retryable: true, kind: 'INFRA_RETRYABLE' },
+    },
+    isError: true,
+  };
 }

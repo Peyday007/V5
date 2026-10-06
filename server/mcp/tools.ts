@@ -100,6 +100,8 @@ const whoami: McpTool = {
     'a worker that knows what it may do and one that discovers it by being refused.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   annotations: { title: 'Who am I', ...READ_ONLY },
+  // Liveness: answered from the principal alone, on the control plane.
+  plane: 'CONTROL',
   // No scope required, and none should be: this discloses only what the caller
   // already proved by presenting the credential. It cannot be used to learn
   // about anything the credential does not already reach.

@@ -1,11 +1,11 @@
 /**
- * The post-sale migrations (107/108, pg 098/099) over a Brain that already has
+ * The post-sale migrations (108/109, pg 099/100) over a Brain that already has
  * money in it, on whichever backend the suite runs against.
  *
- * 108 rebuilds `cash_money_entries` on SQLite to widen its kind CHECK, and a
+ * 109 rebuilds `cash_money_entries` on SQLite to widen its kind CHECK, and a
  * rebuild is only dangerous over rows (see `migrationRebuild.test.ts`). Every
  * other suite migrates an empty database. So this one records a production-
- * shaped ledger before 107, migrates to the head, and asserts:
+ * shaped ledger before 108, migrates to the head, and asserts:
  *   - every row and its rowid order come through;
  *   - the idempotency index still refuses a duplicate;
  *   - the two new kinds are accepted;

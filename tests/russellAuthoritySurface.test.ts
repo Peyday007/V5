@@ -265,10 +265,21 @@ describe('the agreed proposal, end to end', () => {
    * to unlimited, or pushed to the end of the day, reads identically on the
    * card that sent it.
    */
+  /*
+   * The card's shape with an expiry that is still in the future when the suite
+   * runs. It used to be the rollout's fixed date itself, which made the release
+   * gate a calendar: on 2026-10-06 the route correctly refused an expiry in the
+   * past and every deploy stopped here. The fixed suggestion is still asserted
+   * as fixed below; what the stored-exactly property needs is *an* agreed
+   * instant, at midnight, that has not passed.
+   */
+  const AGREED_EXPIRY = new Date(
+    Date.UTC(new Date().getUTCFullYear() + 1, new Date().getUTCMonth(), 1),
+  ).toISOString();
   const AS_THE_CARD_SENDS_IT = {
     name: 'Deal Dispatch discovery research',
     maxConcurrent: 1,
-    expiresAt: '2026-10-06T00:00:00.000Z',
+    expiresAt: AGREED_EXPIRY,
   };
 
   it('stores the agreed proposal exactly, expiry included', async () => {
@@ -295,7 +306,7 @@ describe('the agreed proposal, end to end', () => {
     expect(goal.maxFragments).toBe(0);
     expect(goal.maxProbes).toBe(0);
     // The instant that was agreed, not the end of that day and not null.
-    expect(goal.expiresAt).toBe('2026-10-06T00:00:00.000Z');
+    expect(goal.expiresAt).toBe(AGREED_EXPIRY);
     expect(goal.state).toBe('ACTIVE');
     // Paid spending at zero, from the schema default rather than the request:
     // there is no field on this route that could raise it.
@@ -310,14 +321,14 @@ describe('the agreed proposal, end to end', () => {
       await call('POST', `/projects/${projectId}/authority`, AS_THE_CARD_SENDS_IT);
     });
 
-    const live = await authorityFor({ projectId, now: '2026-09-08T00:00:00.000Z' });
+    const live = await authorityFor({ projectId, now: new Date(Date.parse(AGREED_EXPIRY) - 86_400_000).toISOString() });
     expect(live.grant).toBeTruthy();
-    expect(live.grant!.expiresAt).toBe('2026-10-06T00:00:00.000Z');
-    expect(live.grant!.permits.some((line) => /until 2026-10-06/.test(line))).toBe(true);
+    expect(live.grant!.expiresAt).toBe(AGREED_EXPIRY);
+    expect(live.grant!.permits.some((line) => line.includes(`until ${AGREED_EXPIRY.slice(0, 10)}`))).toBe(true);
 
     // One second after it, it is gone — derived from the clock, with nothing
     // having had to run.
-    const after = await authorityFor({ projectId, now: '2026-10-06T00:00:01.000Z' });
+    const after = await authorityFor({ projectId, now: new Date(Date.parse(AGREED_EXPIRY) + 1_000).toISOString() });
     expect(after.grant).toBeNull();
     expect(after.history[0]!.endedReason).toMatch(/date it was set to run until/i);
   });

@@ -1,6 +1,6 @@
 # The post-sale model
 
-CLAUDE.md §54 has the reasoning. This page covers what happens after a buyer agrees:
+CLAUDE.md §55 has the reasoning. This page covers what happens after a buyer agrees:
 
 - which row owns each fact;
 - which code writes it and which reads it;

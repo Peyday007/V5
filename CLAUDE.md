@@ -12254,7 +12254,101 @@ every standing-authority reader, so it never becomes Russell's grant.
   unresolved. The key makes two passes one packet. A ceiling that stops it
   raises exactly one request for a person and never raises the ceiling itself.
 
-## 53. A provider is a deployment secret and an effect class, never a boolean.
+## 53. A credential nobody judged was not refused, and Brain's outage is nobody's no-show.
+
+The recurring connection failures — `Not authorized` on whoami, refreshes
+failing during `Connection terminated due to connection timeout`, operator reads
+dying on `ECHECKOUTTIMEOUT`, check-in running into the client's sixty seconds on
+a research query, then no-shows, a quarantine and a person told to reconnect —
+were one chain with one first failure: **Brain's database did not answer in time,
+and every layer above it reported that as something about the worker.**
+`docs/CONNECTION-RELIABILITY.md` is the mechanism; this is why it is shaped so.
+
+- **The invariant.** A valid connector credential never becomes "Not authorized"
+  because Brain's database is busy, slow, restarting or unavailable. "Not
+  authorized" means a credential was judged. The MCP door and the HTTP guard used
+  to answer an authentication that *threw* with `503 "Not authorized."` — the
+  exact words whoami returned on Brain Research 1-D during a pooler timeout. Both
+  now answer `503` with `Retry-After` and a sentence saying the credential was not
+  judged (`routes/unavailable.ts`); `/oauth/token` answers `503
+  temporarily_unavailable` with `Retry-After`, never `invalid_grant`; a tool that
+  meets a database failure answers `INFRA_RETRYABLE`, never "could not be
+  completed". Fail closed is unchanged: nothing is served.
+- **One classification.** `classifyInfraFailure` (`server/db/infra.ts`) is the only
+  place that decides *the database could not answer*, and it refuses to call a
+  real defect infrastructure, because a bug hidden behind a retry is worse.
+- **The control plane is reserved, carved out of the ceiling rather than added
+  to it.** Authentication, token rotation, whoami and the establishing half of
+  check-in run under `asControlPlane`, which the Postgres adapter sends to a pool
+  of its own (2 of the 10 by default; none below 4, so the one-connection operator
+  scripts and the two-connection release harness are unsplit). Its connections
+  are **held open**, because Supabase's pooler is in session mode: a client holds
+  a backend while connected, and a control pool that idled out would queue at the
+  pooler for a new one exactly when the pooler is saturated. Workload connections
+  idle out after ten seconds instead of thirty, so they give their backends back.
+  The app's total against the pooler did not grow.
+- **Check-in establishes before it chooses.** Crediting the arrival is control
+  plane; choosing work steps back out to the workload pool and is bounded by
+  `CHECK_IN_ADMISSION_BUDGET_MS` (25s, inside Cowork's 60). A candidate whose
+  admission throws on infrastructure, or is reached after the budget, is skipped
+  quietly — no refusal row, no fire deferral, no attempt — and a session left
+  with nothing is told `RETRY_LATER`, not failed.
+- **A token's use is written even when the database is busy.** `touchToken` was
+  fire-and-forget; a lost touch of a rotated successor read to `connectorHealth`
+  as a reply never picked up, and three of those were `CLIENT_STOPPED_RETRYING` —
+  a reconnect demanded because a write was dropped. `services/identity/tokenTouch.ts`
+  holds the touch under the instant it was observed and retries it for up to an
+  hour; `first_used_at` only moves earlier and `last_used_at` only later.
+- **Background writes stay off the control plane and out of other people's
+  transactions.** Token touches, incident rows and the liveness write run on the
+  workload pool, one flush at a time, via `outsideTransaction` — Node timers
+  inherit the async context, so a write scheduled from inside a transaction would
+  otherwise run on a client that transaction had already released. The adapter
+  *counts* every failure it feels and never turns one into an incident itself, so
+  the recorder cannot feed on its own failed writes.
+- **Brain's outage is written down, and charged to nobody — narrowly.**
+  `infra_incidents` (`107_infra_incidents.sql`, pg `098_infra_incidents.sql`)
+  holds felt failures (coalesced per minute), every arrival check-in could not
+  serve, and the window a restart left unserved (from `runtime_liveness`, which
+  the dispatch tick moves forward). The no-show pass asks two questions before
+  charging a surface: did *this fire's own session* arrive and go unserved
+  (`unservedArrivalFor`, scoped to its session), and did a **fleet-wide** arrival
+  failure overlap its arrival window (`arrivalIncidentDuring`) — which is only an
+  infrastructure failure at the MCP door, the API guard, the token endpoint or
+  the establishing write of a check-in, or a restart. What this process holds
+  and has not yet written is asked first, before any read; a pass that cannot
+  read its evidence leaves the fire unjudged rather than charging it (and past
+  twice the window reopens it uncharged). That in-memory half is per process —
+  correct on production's one machine, and written down because it would not
+  be on several. An unclassified exception, a workload query timing out, or check-in's
+  choosing half excuses nobody: an excuse that broad would keep a dead surface
+  out of quarantine for as long as the database had a bad afternoon. A miss
+  that qualifies is `DISPATCH_INFRA_NO_SHOW` — read by neither the quarantine
+  count nor a connector's auth health — and its dispatch attempt is refunded at
+  most `MAX_INFRA_REFUNDS` (3) times, in the statement that reopens it, after
+  which the dispatch budget applies as usual.
+- **Once a lease is taken, nothing turns it into "nothing".** The re-read, the
+  assignment event and the arrival credit after `assignNextBin`'s swap are best
+  effort, because a check-in that threw there told the worker it was given
+  nothing while the bin sat leased to it with an attempt spent.
+- **The cost of establishing a session is bounded by the session, not the
+  archive.** `auditRoundFor` read a project's entire event history through
+  `(project_id, created_at)` to find its round events; `idx_events_project_type`
+  makes it cost the round events (measured locally at 400k rows: 99ms → 0.26ms).
+- **One reading.** `npm run report:connections` / the `Connection report`
+  workflow prints both pools, the failures each process felt, control-plane
+  latency, incidents by surface, real auth refusals by category, misses by cause
+  per Routine, and every connector with whether a person must act and the row
+  that says why. Each process writes its readings beside its liveness, because an
+  operator script is another process and cannot see this one's memory.
+
+A human reconnect is now reserved for what `connectorHealth` reads from rows:
+consent revoked, credentials expired, a client holding a refused credential, or a
+client that stopped retrying after a *real* auth anomaly. What Brain still cannot
+fix is a refresh that never reached it and Claude's own needs-auth state, which
+§51 already names.
+
+## 54. A provider is a deployment secret and an effect class, never a boolean.
 
 `SEND_A_MESSAGE`, `ISSUE_AN_INVOICE` and `TAKE_A_PAYMENT` read MISSING because
 nothing implemented them. `server/services/cash/providers/` and
@@ -12296,14 +12390,14 @@ a second credential framework or a second idempotency mechanism.
   each keyed on the invoice so a re-read records nothing. A payment outside
   Stripe is settled by a person, because Stripe holds no balance for it.
 
-**What is true today:** the adapters, the invoice table (`107_cash_invoices.sql`
-/ pg `098_cash_invoices.sql`), the tick pass and the status surface exist and
+**What is true today:** the adapters, the invoice table (`108_cash_invoices.sql`
+/ pg `099_cash_invoices.sql`), the tick pass and the status surface exist and
 are tested against fake providers (`tests/commercialProviders.test.ts`). No
 real buyer has been written to, no real invoice issued and no real money moved,
 and no provider secret has been set on the deployment — so all three still read
 MISSING in production until the owner sets them.
 
-## 54. After the buyer says yes there is one model, and each fact has one owner.
+## 55. After the buyer says yes there is one model, and each fact has one owner.
 
 Money Builds 1 to 3 each built a stretch of the road. Build 1 made a commercial
 effect safe to attempt. Build 2 made sending a message, issuing an invoice and
@@ -12492,6 +12586,7 @@ server/
   bootRetry.ts          a boot whose cloud proof failed asks again, and falls back to nothing
   db/
     types.ts            the async Database interface both backends implement
+    infra.ts            what a database failure is, and the control plane that must survive one
     driver.ts           SQLite driver abstraction (node:sqlite, or better-sqlite3 if installed)
     dialect.ts          ? -> $n and rowid -> seq, by walking the statement
     adapters/
@@ -12584,6 +12679,7 @@ server/
       enrollment.ts     a member slot, its one link, and the recovery that retires first
       passkeyAuth.ts    the relying party, the challenge, and one refusal for everything
       passwordDoor.ts   who may still present a password, derived per account from rows
+      tokenTouch.ts     a token's use, written even when the database was busy
       context.ts        the request's principal, and why it is also on the request
       policy.ts         roles, scopes, and the one authorization decision
       authenticate.ts   cookie or bearer -> principal, from server rows only
@@ -12645,6 +12741,8 @@ server/
       adopt.ts          a surface Brain already fires, recorded as somebody's
       contribution.ts   whose connection is usable capacity, and why not when it is not
     storageHealth.ts    how much room is left, measured rather than guessed
+    infra/
+      incidents.ts      Brain's own outages as rows, so none is charged to a worker
     engineering/
       evidence.ts       what is already known: rows, delivery proofs, and CI via the forge
       watchdog.ts       executable work beside idle capacity, recorded and continued
@@ -12930,6 +13028,7 @@ server/
     pages.ts            shared chrome for the server-rendered pages
     guard.ts            request context, authentication, deny-by-default
     escape.ts           what a request answers when an error escapes its handler
+    unavailable.ts      a credential nobody judged, said as retryable rather than refused
     auth.ts             sign in, sign out, change a password
     admin.ts            people, workers, credentials, membership, the identity audit
     access.ts           the optional shared-token outer layer (not the security model)
@@ -12968,6 +13067,8 @@ scripts/
   refinement-report.ts      where every deep dive spent its time, stage by stage
   labor-report.ts           §13's six readings, and the four figures nothing measures
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
+  connection-report.ts      pools, incidents, auth refusals, misses by cause, every connector
+  connection-report.sh      the same, inside the deployed container, on one connection
   puzzle-report.ts          what was made, proved, sold and learned; one puzzle re-rendered
   puzzle-report.sh          the same, inside the deployed container, on one connection
                             (reached by .github/workflows/puzzle-report.yml, which
@@ -13052,6 +13153,7 @@ tests/                  Vitest suites
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
   connectorLifecycle.test.ts two accounts on one worker, an auth no-show, and a recovery nobody pressed
   connectorRecoveryProbe.test.ts  a quarantined, unattributed Routine proving its own connector
+  connectionReliability.test.ts  the whole chain with the database failing on purpose
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```

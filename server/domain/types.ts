@@ -7165,7 +7165,7 @@ export interface CashInvoiceRow {
 }
 
 /**
- * One invoice for one agreed amount (§53). The amount and currency are the
+ * One invoice for one agreed amount (§54). The amount and currency are the
  * PIPELINE_AGREED entry's; the customer, tax treatment and due date are what a
  * person recorded. Brain chooses none of them.
  */

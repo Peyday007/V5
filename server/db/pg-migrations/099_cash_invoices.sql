@@ -1,6 +1,6 @@
 -- One invoice Brain issues for one agreed amount, and what the provider says
--- happened to its money (CLAUDE.md §53, services/cash/invoicing.ts).
--- SQLite chain: 107_cash_invoices.sql.
+-- happened to its money (CLAUDE.md §54, services/cash/invoicing.ts).
+-- SQLite chain: 108_cash_invoices.sql.
 --
 -- Nothing here is a figure Brain chose. The amount and the currency are copied
 -- from the PIPELINE_AGREED ledger entry the row names (`pipeline_entry_id`),

@@ -33,6 +33,11 @@ import {
 } from './protocol.ts';
 import { idOf, looksModern, validateModernRequest } from './validate.ts';
 import { answerEscapedFailure } from '../routes/escape.ts';
+import { CREDENTIAL_NOT_CHECKED, prepareUnavailable } from '../routes/unavailable.ts';
+import { classifyInfraFailure } from '../db/infra.ts';
+
+const INFRA_BUSY =
+  'Brain is temporarily busy (its database did not answer in time). This is not an authorization problem: send the same request again shortly.';
 
 export const MCP_PATH = '/mcp';
 
@@ -317,9 +322,15 @@ export function mcpRouter(): Router {
       let auth: Awaited<ReturnType<typeof principalFor>>;
       try {
         auth = await principalFor(req);
-      } catch {
-        // Fail closed. Not being able to tell who this is is not permission.
-        refuse(res, 503, TRANSPORT_REFUSED, 'Not authorized.');
+      } catch (error) {
+        /*
+         * Fail closed — not being able to tell who this is is not permission —
+         * and say so in words that are true. This used to answer "Not
+         * authorized." here, so a pool timeout read to Claude as a connector
+         * that had lost its authorization. The credential was never judged.
+         */
+        prepareUnavailable(res, 'mcp:authenticate', error);
+        res.status(503).json({ jsonrpc: '2.0', id: null, error: { code: TRANSPORT_REFUSED, message: CREDENTIAL_NOT_CHECKED, data: { retryable: true, category: 'INFRA_RETRYABLE' } } });
         return;
       }
 
@@ -385,7 +396,14 @@ export function mcpRouter(): Router {
         } catch (error) {
           // eslint-disable-next-line no-console
           console.error('[mcp] legacy dispatch failed', error);
-          if (!res.headersSent) refuse(res, 500, INTERNAL_ERROR, 'That request could not be served.');
+          if (!res.headersSent) {
+            if (classifyInfraFailure(error)) {
+              prepareUnavailable(res, 'mcp:dispatch', error);
+              res.status(503).json({ jsonrpc: '2.0', id: null, error: { code: INTERNAL_ERROR, message: INFRA_BUSY, data: { retryable: true, category: 'INFRA_RETRYABLE' } } });
+            } else {
+              refuse(res, 500, INTERNAL_ERROR, 'That request could not be served.');
+            }
+          }
         }
         return;
       }
@@ -407,6 +425,13 @@ export function mcpRouter(): Router {
           // reads exactly this pairing to decide whether to retry with another
           // version or fall back to `initialize`.
           res.status(error.status).json(errorResponse(idOf(body), error));
+          return;
+        }
+        if (classifyInfraFailure(error)) {
+          prepareUnavailable(res, 'mcp:dispatch', error);
+          res.status(503).json(
+            errorResponse(idOf(body), new McpProtocolError(INTERNAL_ERROR, 503, INFRA_BUSY)),
+          );
           return;
         }
         // eslint-disable-next-line no-console

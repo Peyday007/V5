@@ -203,6 +203,18 @@ export async function dispatchTick(
   result.superseded = await supersedeStaleIntents();
 
   /*
+   * This process is alive, at most every thirty seconds — what the next boot
+   * reads to know how long the restart window it must excuse was. Never stops
+   * the tick: a liveness write that fails is counted by the adapter, and the
+   * next boot's restart window simply starts a little earlier.
+   */
+  try {
+    const { touchLiveness } = await import('../infra/incidents.ts');
+    await touchLiveness();
+  } catch {
+    // Counted by the adapter; the tick goes on.
+  }
+  /*
    * Settle any finished delivery probe before the snapshot, so a surface that
    * has just proven it can push is routable in this same tick — and one that
    * has just failed is not. A failure here never stops dispatch: a probe that

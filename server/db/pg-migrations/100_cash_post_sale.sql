@@ -1,95 +1,15 @@
--- brain:rebuild-without-foreign-keys
+-- The post-sale model (SQLite 109_cash_post_sale.sql), on the Postgres chain.
+-- docs/POST-SALE.md is the ownership matrix; CLAUDE.md §55 says why.
 --
--- ---------------------------------------------------------------------------
--- THE POST-SALE MODEL: what happens after a buyer agrees, with one owner per fact
--- ---------------------------------------------------------------------------
---
--- Two branches modelled this independently (the first-dollar journey and the
--- fulfillment/refund work). This migration is the one model that survived; the
--- ownership matrix is docs/POST-SALE.md, and CLAUDE.md §54 says why each owner
--- won. In one line each:
---
---   cash_observations       what a buyer (or the channel) said, as evidence
---   cash_agreements         what was agreed: amount, deliverable, acceptance
---                           condition, evidence — and its PIPELINE_AGREED entry
---   cash_invoices (104)     what was billed against which agreement
---   cash_money_entries      every figure: payments, settlements, refunds, costs,
---                           supplier liabilities (invariant 37)
---   cash_fulfillments       the obligation one agreement creates: who performs
---                           it and the work Brain created for it
---   cash_fulfillment_events what happened to that obligation, append-only:
---                           work completed, delivered (wholly or partly),
---                           accepted, rejected, failed — and each refund's
---                           authorization and outcome
---   cash_outcomes           what a finished deal taught, written once from
---                           terminal evidence
---
--- No table here has a column saying where an obligation or a deal stands; that
--- is derived on the read path (services/cash/journey/). The two state columns
--- that remain are decisions, not readings: an agreement a person released, and
--- an invoice whose provider record Brain read.
---
--- The ledger's kind CHECK widens by two entries, PIPELINE_RELEASED (agreed work
--- that will no longer be billed) and COMMITMENT_RELEASED (a supplier liability
--- that shrank before it was paid), each the append-only undo of an entry that
--- would otherwise count for ever. SQLite cannot widen an inline CHECK in place,
--- so cash_money_entries is rebuilt by §32's procedure: nothing references it by
--- foreign key, every row is carried with its rowid, every index recreated.
--- ---------------------------------------------------------------------------
-
-CREATE TABLE cash_money_entries_rebuilt (
-  id                  TEXT PRIMARY KEY,
-  project_id          TEXT NOT NULL REFERENCES projects(id),
-  opportunity_id      TEXT,
-  kind                TEXT NOT NULL CHECK (kind IN (
-                        'CAPITAL_IN',
-                        'CAPITAL_OUT',
-                        'PIPELINE_AGREED',
-                        'PIPELINE_RELEASED',   -- agreed work that will no longer be billed
-                        'CUSTOMER_PAYMENT',
-                        'SETTLEMENT',
-                        'REFUND',
-                        'COST',
-                        'UNPAID_COMMITMENT',
-                        'COMMITMENT_PAID',
-                        'COMMITMENT_RELEASED', -- owed to a supplier and no longer owed: a cost that changed
-                        'RESERVE',
-                        'RESERVE_RELEASE'
-                      )),
-  amount_cents        INTEGER NOT NULL CHECK (amount_cents >= 0),
-  currency            TEXT NOT NULL,
-  verified_reference  TEXT,
-  funds_available_at  TEXT,
-  occurred_at         TEXT NOT NULL,
-  note                TEXT,
-  recorded_by         TEXT NOT NULL,
-  created_at          TEXT NOT NULL,
-  idempotency_key     TEXT,
-  payload_fingerprint TEXT,
-  commitment_id       TEXT
-);
-
-INSERT INTO cash_money_entries_rebuilt
-  (rowid, id, project_id, opportunity_id, kind, amount_cents, currency, verified_reference,
-   funds_available_at, occurred_at, note, recorded_by, created_at, idempotency_key,
-   payload_fingerprint, commitment_id)
-SELECT rowid, id, project_id, opportunity_id, kind, amount_cents, currency, verified_reference,
-       funds_available_at, occurred_at, note, recorded_by, created_at, idempotency_key,
-       payload_fingerprint, commitment_id
-  FROM cash_money_entries;
-
-DROP TABLE cash_money_entries;
-
-ALTER TABLE cash_money_entries_rebuilt RENAME TO cash_money_entries;
-
-CREATE INDEX IF NOT EXISTS idx_cash_money_project
-  ON cash_money_entries(project_id, occurred_at);
-
-CREATE INDEX IF NOT EXISTS idx_cash_money_opportunity
-  ON cash_money_entries(opportunity_id, occurred_at);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_money_key
-  ON cash_money_entries(project_id, idempotency_key);
+-- The ledger's inline CHECK is widened in place, which Postgres can do; the
+-- constraint is named as Postgres names an inline column CHECK and dropped
+-- without IF EXISTS on purpose (§35: the tolerant form leaves the old
+-- constraint standing beside the new one).
+ALTER TABLE cash_money_entries DROP CONSTRAINT cash_money_entries_kind_check;
+ALTER TABLE cash_money_entries ADD CONSTRAINT cash_money_entries_kind_check
+  CHECK (kind IN ('CAPITAL_IN', 'CAPITAL_OUT', 'PIPELINE_AGREED', 'PIPELINE_RELEASED',
+                  'CUSTOMER_PAYMENT', 'SETTLEMENT', 'REFUND', 'COST', 'UNPAID_COMMITMENT',
+                  'COMMITMENT_PAID', 'COMMITMENT_RELEASED', 'RESERVE', 'RESERVE_RELEASE'));
 
 -- ---------------------------------------------------------------------------
 -- cash_observations — what the buyer (or the channel) said, as evidence
@@ -101,6 +21,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_money_key
 -- no reply inside the window.
 CREATE TABLE IF NOT EXISTS cash_observations (
   id              TEXT PRIMARY KEY,
+  seq             BIGSERIAL,
   project_id      TEXT NOT NULL REFERENCES projects(id),
   opportunity_id  TEXT NOT NULL,
   kind            TEXT NOT NULL CHECK (kind IN (
@@ -133,6 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_cash_observations_opportunity
 -- and its acceptance condition: they are not copied anywhere else.
 CREATE TABLE IF NOT EXISTS cash_agreements (
   id                    TEXT PRIMARY KEY,
+  seq             BIGSERIAL,
   project_id            TEXT NOT NULL REFERENCES projects(id),
   opportunity_id        TEXT NOT NULL,
   amount_cents          INTEGER NOT NULL CHECK (amount_cents > 0),
@@ -169,6 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_cash_agreements_opportunity
 -- failed work, so a retry's Factory key can never collide with the failed one.
 CREATE TABLE IF NOT EXISTS cash_fulfillments (
   id                 TEXT PRIMARY KEY,
+  seq             BIGSERIAL,
   project_id         TEXT NOT NULL REFERENCES projects(id),
   opportunity_id     TEXT NOT NULL,
   agreement_id       TEXT NOT NULL REFERENCES cash_agreements(id),
@@ -201,6 +124,7 @@ CREATE INDEX IF NOT EXISTS idx_cash_fulfillments_opportunity
 -- its outcome; the money of a confirmed refund is a REFUND ledger entry.
 CREATE TABLE IF NOT EXISTS cash_fulfillment_events (
   id              TEXT PRIMARY KEY,
+  seq             BIGSERIAL,
   project_id      TEXT NOT NULL REFERENCES projects(id),
   fulfillment_id  TEXT NOT NULL REFERENCES cash_fulfillments(id),
   opportunity_id  TEXT NOT NULL,
@@ -232,6 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_cash_fulfillment_events_fulfillment
 -- pass that asks again writes nothing. Never updated, never deleted.
 CREATE TABLE IF NOT EXISTS cash_outcomes (
   id              TEXT PRIMARY KEY,
+  seq             BIGSERIAL,
   project_id      TEXT NOT NULL REFERENCES projects(id),
   opportunity_id  TEXT NOT NULL,
   kind            TEXT NOT NULL CHECK (kind IN (

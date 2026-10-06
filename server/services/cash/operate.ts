@@ -903,7 +903,7 @@ export async function operate(
   effects: ReconciledEffect[];
   authority: AuthorityAdvance;
   monetization: MonetizationPass;
-  /** Invoices issued, and the provider's payment and settlement answers read back (§53). */
+  /** Invoices issued, and the provider's payment and settlement answers read back (§54). */
   invoicing: InvoicingPass;
   /** The first-dollar journey advanced from rows; absent when Cash Mode is not active here. */
   journey?: JourneyTickReport;
@@ -993,7 +993,7 @@ export async function operate(
   /*
    * Invoices a person asked for, issued under QUOTE_AND_INVOICE while an
    * invoicing provider is usable, and the provider's answers about payment and
-   * settlement read back into the ledger as two separate entries (§53). After
+   * settlement read back into the ledger as two separate entries (§54). After
    * the contact pass because nothing here depends on it, and before the
    * journey because the journey reads money this may have just recorded.
    */

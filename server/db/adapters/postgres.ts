@@ -31,6 +31,13 @@ import type { Database, RunResult, Row, SqlParam } from '../types.ts';
 import { DatabaseConfigurationError } from '../types.ts';
 import { toPostgresSql, splitStatements } from '../dialect.ts';
 import { childFrame, rootFrame, savepointName, type TransactionFrame } from './transactions.ts';
+import {
+  classifyInfraFailure,
+  controlPlaneShare,
+  countDatabaseFailure,
+  currentWorkloadClass,
+  type WorkloadClass,
+} from '../infra.ts';
 
 const { Pool, types } = pg;
 
@@ -242,6 +249,13 @@ export class PostgresAdapter implements Database {
   readonly kind = 'postgres' as const;
 
   #pool: pg.Pool;
+  /**
+   * The control plane's own connections, carved out of `max` rather than added
+   * to it (`server/db/infra.ts`). Null when the ceiling is too small to split,
+   * and then control-plane statements share the one pool exactly as before.
+   */
+  #controlPool: pg.Pool | null = null;
+  #controlMax = 0;
   #transactions = new AsyncLocalStorage<TransactionContext>();
   #closed = false;
   // Kept because `pg.Pool` does not expose the options it was opened with, and a
@@ -254,7 +268,10 @@ export class PostgresAdapter implements Database {
       connectionString: options.connectionString,
       max: options.max ?? 10,
       connectionTimeoutMillis: options.connectionTimeoutMillis ?? 10_000,
-      idleTimeoutMillis: options.idleTimeoutMillis ?? 30_000,
+      // Short, so an idle workload connection gives its pooler backend back to
+      // the other clients sharing the session-mode limit instead of sitting on
+      // it for half a minute (see the control pool below for the converse).
+      idleTimeoutMillis: options.idleTimeoutMillis ?? 10_000,
       application_name: options.applicationName ?? 'brain',
     };
     if (options.schema) {
@@ -274,12 +291,100 @@ export class PostgresAdapter implements Database {
     if (options.ssl !== false && !/sslmode=/i.test(options.connectionString)) {
       config.ssl = { rejectUnauthorized: false };
     }
-    this.#max = config.max ?? 10;
+    const total = config.max ?? 10;
+    this.#controlMax = controlPlaneShare(total);
+    this.#max = total - this.#controlMax;
     this.#connectionTimeoutMs = config.connectionTimeoutMillis ?? 10_000;
-    this.#pool = new Pool(config);
+    this.#pool = new Pool({ ...config, max: this.#max });
     // A pool that emits an error with no listener takes the process down. An
     // idle client dropped by the far end is ordinary; the pool replaces it.
     this.#pool.on('error', () => undefined);
+    if (this.#controlMax > 0) {
+      /*
+       * Held open, never idled out. Supabase's pooler runs in session mode, so a
+       * client holds a database backend for as long as it is connected, and
+       * the pooler has fifteen of them for every client it serves — the app,
+       * each operator script, and during a deploy the old machine and the new
+       * one. A control pool that closed its idle connections would have to queue
+       * at the pooler for a new one exactly when the pooler is saturated, which
+       * is the moment it exists for (production, 2026-10-05: `SELECT version()`
+       * answered `ECHECKOUTTIMEOUT` after 15s). Keeping these few open is what
+       * makes the reservation a reservation at the pooler too, not only in this
+       * process.
+       */
+      this.#controlPool = new Pool({
+        ...config,
+        max: this.#controlMax,
+        idleTimeoutMillis: 0,
+        keepAlive: true,
+        // Held open indefinitely, so a connection a NAT or the pooler dropped
+        // silently must be noticed within seconds rather than the kernel's two
+        // hours, and a query on one must not hang unbounded.
+        keepAliveInitialDelayMillis: 10_000,
+        query_timeout: 15_000,
+        application_name: `${config.application_name ?? 'brain'}-control`,
+      });
+      this.#controlPool.on('error', () => undefined);
+    }
+  }
+
+  /**
+   * Open the control plane's connections now, so the first authentication
+   * after boot is not the one that has to queue at the pooler for them.
+   * Best effort: a failure here leaves the pool to connect on demand.
+   */
+  async warmControlPlane(): Promise<number> {
+    if (!this.#controlPool) return 0;
+    const clients: PoolClient[] = [];
+    try {
+      for (let i = 0; i < this.#controlMax; i += 1) clients.push(await this.#controlPool.connect());
+    } catch {
+      // On demand, then.
+    } finally {
+      for (const client of clients) client.release();
+    }
+    return clients.length;
+  }
+
+  /**
+   * Run `fn` outside whatever transaction the calling context is in.
+   *
+   * For background writers (token touches, incidents, liveness) scheduled from
+   * a context that may have been inside a transaction: Node timers inherit the
+   * async context, and a write that ran on a transaction's client after that
+   * transaction had released it would land in somebody else's work.
+   */
+  detached<T>(fn: () => Promise<T>): Promise<T> {
+    return this.#transactions.exit(fn);
+  }
+
+  /** Which pool a statement outside a transaction belongs on. */
+  #poolFor(workload: WorkloadClass): pg.Pool {
+    return workload === 'CONTROL' && this.#controlPool ? this.#controlPool : this.#pool;
+  }
+
+  /**
+   * What each pool is holding right now, for the operator report. A reading,
+   * not a guess: `pg-pool`'s own counters at the instant of asking.
+   */
+  poolReadings(): { workload: PoolReading; control: PoolReading | null } {
+    const read = (pool: pg.Pool, max: number): PoolReading => ({
+      total: pool.totalCount,
+      idle: pool.idleCount,
+      waiting: pool.waitingCount,
+      max,
+      timeoutMs: this.#connectionTimeoutMs,
+    });
+    return {
+      workload: read(this.#pool, this.#max),
+      control: this.#controlPool ? read(this.#controlPool, this.#controlMax) : null,
+    };
+  }
+
+  /** Count an infrastructure failure where it was felt, then hand it back. */
+  #noteInfra(error: unknown): void {
+    const kind = classifyInfraFailure(error);
+    if (kind) countDatabaseFailure(kind);
   }
 
   /**
@@ -288,15 +393,16 @@ export class PostgresAdapter implements Database {
    * Anything that is not a checkout timeout is returned untouched: a wrong
    * diagnosis costs more than the bare message it replaced.
    */
-  #namePoolTimeout(error: unknown): unknown {
+  #namePoolTimeout(error: unknown, workload: WorkloadClass = 'WORKLOAD'): unknown {
     if (!(error instanceof Error) || error.message !== POOL_TIMEOUT_MESSAGE) return error;
     if ('brainPool' in error) return error;
+    const pool = this.#poolFor(workload);
     const named = new DatabaseConfigurationError(
       describePoolExhaustion({
-        total: this.#pool.totalCount,
-        idle: this.#pool.idleCount,
-        waiting: this.#pool.waitingCount,
-        max: this.#max,
+        total: pool.totalCount,
+        idle: pool.idleCount,
+        waiting: pool.waitingCount,
+        max: pool === this.#pool ? this.#max : this.#controlMax,
         timeoutMs: this.#connectionTimeoutMs,
       }),
     );
@@ -316,13 +422,15 @@ export class PostgresAdapter implements Database {
     const translated = toPostgresSql(sql);
     const values = normalise(params);
     const context = this.#transactions.getStore();
+    const workload = currentWorkloadClass();
     try {
       if (context) {
         return (await context.client.query<T>(translated.sql, values)) as pg.QueryResult<T>;
       }
-      return (await this.#pool.query<T>(translated.sql, values)) as pg.QueryResult<T>;
+      return (await this.#poolFor(workload).query<T>(translated.sql, values)) as pg.QueryResult<T>;
     } catch (error) {
-      const pooled = this.#namePoolTimeout(error);
+      this.#noteInfra(error);
+      const pooled = this.#namePoolTimeout(error, workload);
       if (pooled !== error) throw pooled;
       // Name the statement. A dialect problem otherwise surfaces as `syntax
       // error at or near "$3"` with nothing to say which of two hundred queries
@@ -366,24 +474,53 @@ export class PostgresAdapter implements Database {
     if (existing) return await this.#nested(existing, fn);
 
     let client: PoolClient;
+    const workload = currentWorkloadClass();
     try {
-      client = await this.#pool.connect();
+      client = await this.#poolFor(workload).connect();
     } catch (error) {
-      throw this.#namePoolTimeout(error);
+      this.#noteInfra(error);
+      throw this.#namePoolTimeout(error, workload);
     }
     const context: TransactionContext = { client, ...rootFrame() };
+    /*
+     * A client whose state is uncertain is destroyed rather than pooled. A
+     * statement that timed out on the client side may still be running on the
+     * server; if the ROLLBACK behind it fails or times out too, the session is
+     * still inside the transaction, and returned to a pool that never idles it
+     * out (the control plane's) it would answer every later statement with
+     * 25P02 — half of the control plane, poisoned until a restart.
+     */
+    let broken: Error | undefined;
     try {
-      await client.query('BEGIN');
+      try {
+        await client.query('BEGIN');
+      } catch (begin) {
+        // A session that could not even begin is one whose state is unknown.
+        broken = begin instanceof Error ? begin : new Error(String(begin));
+        throw begin;
+      }
       try {
         const result = await this.#transactions.run(context, fn);
         await client.query('COMMIT');
         return result;
       } catch (error) {
-        await client.query('ROLLBACK').catch(() => undefined);
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollback) {
+          broken = rollback instanceof Error ? rollback : new Error(String(rollback));
+        }
+        // Only a connection that is actually gone or unknowable is destroyed. A
+        // statement timeout or a pool timeout leaves the session clean once the
+        // ROLLBACK above has run, and re-dialling through a saturated pooler is
+        // the one thing the control plane cannot afford.
+        const kind = classifyInfraFailure(error);
+        if (!broken && (kind === 'CONNECTION_LOST' || kind === 'DATABASE_UNAVAILABLE')) {
+          broken = error instanceof Error ? error : new Error(String(error));
+        }
         throw error;
       }
     } finally {
-      client.release();
+      client.release(broken);
     }
   }
 
@@ -416,7 +553,7 @@ export class PostgresAdapter implements Database {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
-    await this.#pool.end();
+    await Promise.all([this.#pool.end(), this.#controlPool?.end()]);
   }
 }
 
