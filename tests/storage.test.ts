@@ -545,6 +545,21 @@ describe('a busy store is not a missing document', () => {
     expect(isStoreCapacityRefusal(failure)).toBe(true);
   });
 
+  it('never calls a refused upload a capacity refusal, because the bytes may have landed', async () => {
+    const fetchImpl = (async () => new Response('bad gateway', { status: 502 })) as unknown as typeof fetch;
+    const store = new SupabaseStorageProvider({
+      url: 'https://example.supabase.co',
+      serviceRoleKey: 'service-role-secret-value',
+      bucket: 'brain',
+      fetchImpl,
+    });
+    const failure = await store
+      .put({ key: 'projects/p/documents/l/report.md', body: Buffer.from('x') })
+      .catch((e: unknown) => e);
+    expect(failure).toBeInstanceOf(StorageConfigurationError);
+    expect(isStoreCapacityRefusal(failure)).toBe(false);
+  });
+
   it('does not call a credential refusal or a missing bucket a capacity refusal', () => {
     expect(isStoreCapacityRefusal(new StorageConfigurationError('no', '', 403))).toBe(false);
     expect(isStoreCapacityRefusal(new StorageConfigurationError('no', '', 400))).toBe(false);

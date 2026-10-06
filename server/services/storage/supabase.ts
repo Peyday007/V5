@@ -50,7 +50,7 @@ interface SupabaseListEntry {
  * A 404 is an answer — the object is not there — and must never be retried.
  * These are the bucket declining to serve a request it would otherwise serve.
  */
-const TRANSIENT_READ_STATUSES = new Set([429, 500, 502, 503, 504]);
+const TRANSIENT_READ_STATUSES = new Set([429, 500, 502, 503, 504, 544]);
 
 const READ_ATTEMPTS = 3;
 
@@ -144,7 +144,6 @@ export class SupabaseStorageProvider implements StorageProvider {
       throw new StorageConfigurationError(
         `The document store refused an upload (HTTP ${response.status}).`,
         await safeBody(response),
-        response.status,
       );
     }
 
@@ -193,6 +192,9 @@ export class SupabaseStorageProvider implements StorageProvider {
         return response;
       }
       last = response;
+      // Release the refused response's body before asking again, rather than
+      // leaving its connection to the garbage collector.
+      await response.body?.cancel().catch(() => undefined);
       await new Promise((resolve) => setTimeout(resolve, retryAfterMs(response, attempt)));
     }
     // Unreachable: the loop returns on its last attempt.
@@ -291,7 +293,6 @@ export class SupabaseStorageProvider implements StorageProvider {
       throw new StorageConfigurationError(
         `The document store refused a move (HTTP ${response.status}).`,
         await safeBody(response),
-        response.status,
       );
     }
     const moved = await this.head(to);
@@ -309,7 +310,6 @@ export class SupabaseStorageProvider implements StorageProvider {
       throw new StorageConfigurationError(
         `The document store refused a delete (HTTP ${response.status}).`,
         await safeBody(response),
-        response.status,
       );
     }
   }

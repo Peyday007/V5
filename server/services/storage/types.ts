@@ -83,7 +83,13 @@ export interface StorageProvider {
 /** A storage failure that is about configuration rather than one object. */
 export class StorageConfigurationError extends Error {
   readonly detail: string;
-  /** The store's HTTP status, when it answered with one. */
+  /**
+   * The store's HTTP status, set only when a **read** (a get or a listing) was
+   * refused. A write refusal deliberately carries none: an upload answered 5xx
+   * may have landed in the bucket anyway, so its outcome is unknown (invariant
+   * 26) and it must never be read as a capacity refusal somebody may simply
+   * retry.
+   */
   readonly status: number | null;
 
   constructor(message: string, detail = '', status: number | null = null) {
@@ -95,9 +101,10 @@ export class StorageConfigurationError extends Error {
 }
 
 /**
- * The statuses that mean the store is declining for now rather than saying
- * something about the data or Brain's configuration: a rate limit, a 5xx, and
- * Supabase's own `544 DatabaseTimeout`. A caller told this may ask again.
+ * The statuses that mean the store is declining a **read** for now rather than
+ * saying something about the data or Brain's configuration: a rate limit, a
+ * 5xx, and Supabase's own `544 DatabaseTimeout`. A caller told this may ask
+ * again. Only read refusals carry a status, so a write is never classified here.
  */
 const STORE_CAPACITY_STATUSES = new Set([429, 500, 502, 503, 504, 544]);
 
