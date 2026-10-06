@@ -38,6 +38,9 @@ import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
 import { MachinesView } from './Machines.tsx';
 import { LaborView } from './Labor.tsx';
+import { ResearchView } from './Research.tsx';
+import { ConnectionsPanel } from './Connections.tsx';
+import { ClaudeConnectionCard } from './ClaudeConnection.tsx';
 import {
   FleetView,
   ProjectView,
@@ -53,52 +56,39 @@ import { Devices } from './Devices.tsx';
 import { PeopleAndCapacityView } from './People.tsx';
 
 /**
- * The six, and then the two.
+ * The six, and then everything else.
  *
- * `primary` is the approved split. Everything in both lists keeps its own
- * address, so a deep link to `/build` or `/sites` works exactly as it did
- * whichever list it is in.
+ * Integration 3 settled the primary set by what a person comes to Brain to
+ * find out, rather than by which backend system answers it: what Brain is doing
+ * for me (Home), what is making or costing money (Cash), what it is trying to
+ * learn (Research), what it is building (Build), what genuinely needs me (Needs
+ * you), and who and what is connected (Who).
+ *
+ * This **reverses** two earlier placements, and the reversal is recorded rather
+ * than quietly applied. Cash was secondary on the argument that a temporary
+ * section must not become the definition of Brain; that argument is about
+ * authority, and nothing about where a link sits grants any. The sprint is the
+ * surface the people running it open most, and burying it in a menu made the
+ * product harder to use without making anything safer. Research had no
+ * destination at all — its goals and budgets were scattered across Work and
+ * Needs you.
+ *
+ * Everything that left the primary set keeps its own address, so a deep link to
+ * `/work`, `/projects` or `/sites` works exactly as it did. Those surfaces are
+ * reached from More, at every width.
  */
 const SECTIONS = [
-  { name: 'HOME' as const, label: 'Russell', primary: true },
-  { name: 'WORK' as const, label: 'Work', primary: true },
-  { name: 'PROJECTS' as const, label: 'Ideas', primary: true },
-  { name: 'KNOWLEDGE' as const, label: 'Knows', primary: true },
-  { name: 'FLEET' as const, label: 'Who', primary: true },
+  { name: 'HOME' as const, label: 'Home', primary: true },
+  { name: 'CASH' as const, label: 'Cash', primary: true },
+  { name: 'RESEARCH' as const, label: 'Research', primary: true },
+  { name: 'BUILD' as const, label: 'Build', primary: true },
   { name: 'NEEDS_YOU' as const, label: 'Needs you', primary: true },
-  { name: 'BUILD' as const, label: 'Build', primary: false },
+  { name: 'FLEET' as const, label: 'Who', primary: true },
+  { name: 'WORK' as const, label: 'All work', primary: false },
+  { name: 'PROJECTS' as const, label: 'Ideas', primary: false },
+  { name: 'KNOWLEDGE' as const, label: 'What Brain knows', primary: false },
   { name: 'SITES' as const, label: 'Connected sites', primary: false },
-  /*
-   * Cash is secondary, and that is a decision rather than a ranking.
-   *
-   * It is the destination the people running a sprint use most, and it is still
-   * a *temporary* section inside a Brain that does research, software and
-   * everything else. Promoting it would make the six primary destinations seven
-   * and rebuild the thumb bar around work that is meant to be wound down in a
-   * month or two — §30's rule that Cash Mode must not become the global
-   * definition of what Brain is allowed to pursue, applied to the navigation.
-   */
-  { name: 'CASH' as const, label: 'Cash', primary: false },
-  /*
-   * Machines is secondary for Cash's reason, read the other way round.
-   *
-   * Cash is secondary because it is temporary; this is secondary because its
-   * horizon is decades and a person does not steer it hourly. Promoting either
-   * would rebuild the thumb bar around one kind of work in a Brain that does
-   * research, software and everything else.
-   */
   { name: 'MACHINES' as const, label: 'Machines', primary: false },
-  /*
-   * Labor is secondary for the same reason as its two neighbours, arrived at
-   * from a third direction.
-   *
-   * Who produces the work is a question about how a project operates rather
-   * than a destination somebody steers from, and a person reads it when a role
-   * is being examined rather than hourly. Promoting it would rebuild the thumb
-   * bar around one reading in a Brain that does research, software and
-   * everything else — which is the argument Cash and Machines both already make
-   * here.
-   */
   { name: 'LABOR' as const, label: 'Labor', primary: false },
 ];
 
@@ -200,6 +190,7 @@ export function RussellShell({
   const { route, go } = navigation;
   const mode = navigationMode(useViewportWidth());
   const [menuOpen, setMenuOpen] = useState(false);
+  const [operatorOpen, setOperatorOpen] = useState(false);
   const [depth, setDepth] = useDepth();
 
   const projects = useAsync(() => Api.projects(), []);
@@ -257,32 +248,15 @@ export function RussellShell({
     void Api.logout().then(onSignedOut, onSignedOut);
   }, [onSignedOut]);
 
-  const needsYou = useAsync(
-    () =>
-      projectId
-        ? RussellApi.needsYou(projectId)
-        : Promise.resolve({ requests: [], software: [], repositories: [] }),
-    [projectId],
-  );
   /*
-   * The badge counts decisions, and an outstanding approval is one.
+   * The badge counts exactly what Needs you shows, from the same reading.
    *
-   * Read from the same projection the briefing uses rather than computed a
-   * second time here, because two places counting the same thing is how they
-   * come to disagree — which they did: a project waiting on the one permission
-   * that lets Russell act showed no badge at all.
+   * It used to count three sources while the page read three others, so it
+   * could say 0 above a page of decisions. One inbox, one count (Integration 3).
+   * A failed read shows no number rather than a guessed one.
    */
-  const authority = useAsync(
-    () => (projectId ? RussellApi.authority(projectId) : Promise.resolve(null)),
-    [projectId],
-  );
-  const openCount =
-    (needsYou.data?.requests.length ?? 0) +
-    // A software change waiting to be authorized, and a campaign stopped at a
-    // blocker or a release, are decisions too. Counted from the same read the
-    // panel renders, for the reason the approval above is.
-    (needsYou.data?.software.length ?? 0) +
-    (authority.data && authority.data.grant === null ? 1 : 0);
+  const inbox = useAsync(() => RussellApi.inbox(projectId), [projectId]);
+  const openCount = inbox.data?.items.length ?? 0;
 
   /* Bumped after the command bar posts, so the open thread re-reads itself. */
   const [reloadToken, setReloadToken] = useState(0);
@@ -516,6 +490,8 @@ export function RussellShell({
         {route.name === 'HOME' ? (
           <RussellHome
             projectId={projectId}
+            needsYouCount={openCount}
+            go={go}
             openThreadId={conversationId}
             onOpenThread={openThread}
             onAsk={prefill}
@@ -537,30 +513,38 @@ export function RussellShell({
           )
         ) : null}
         {route.name === 'WORK' ? <WorkView projectId={projectId} /> : null}
+        {route.name === 'RESEARCH' ? (
+          <ResearchView projectId={projectId} onOpenNeedsYou={() => go({ name: 'NEEDS_YOU' })} />
+        ) : null}
         {route.name === 'BUILD' ? <BuildView projectId={projectId} /> : null}
         {route.name === 'PROJECTS' ? <ProjectView projectId={projectId} /> : null}
         {route.name === 'KNOWLEDGE' ? <KnowledgeView projectId={projectId} /> : null}
         {route.name === 'FLEET' ? (
           <>
-            {/* Who is people first, machinery second. The one-sentence reading
-                stays underneath because it is the one thing that carries its
-                own freshness, which the role-gated view deliberately does not. */}
+            {/*
+              * Who, since Integration 3: every Claude account Brain can run on,
+              * in one of six words; then the people on this project; then the
+              * operator's capacity and routing reading, one click away. The
+              * Deal Dispatch reading that used to sit here under the title
+              * "Who is doing the work" was about a connected site's work, and
+              * lives on Connected sites now.
+              */}
+            <ConnectionsPanel onOpenPeople={() => go({ name: 'PEOPLE' })} />
+            <ClaudeConnectionCard />
             <WhoView projectId={projectId} />
-            {/* Who answers "who is on this project"; People & capacity answers
-                "who is in this Brain, and what can run in it". Two questions
-                one word apart, so the link is here rather than the page being
-                folded into this one. */}
-            <p className="rs-hint">
-              <button type="button" className="rs-link" onClick={() => go({ name: 'PEOPLE' })}>
-                People &amp; capacity
-              </button>{' '}
-              is who has joined this Brain and how much Claude research capacity it can fire.
-            </p>
-            <FleetView />
-            <FleetCentre projectId={projectId} />
+            {/* Mounted only while open, so its reads are not spent on every visit. */}
+            <details className="rs-details rs-panel" onToggle={(event) => setOperatorOpen(event.currentTarget.open)}>
+              <summary>Capacity and routing — the operator view</summary>
+              {operatorOpen ? <FleetCentre projectId={projectId} /> : null}
+            </details>
           </>
         ) : null}
-        {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
+        {route.name === 'SITES' ? (
+          <>
+            <SitesView projectId={projectId} />
+            <FleetView />
+          </>
+        ) : null}
         {route.name === 'MACHINES' ? <MachinesView projectId={projectId} /> : null}
         {route.name === 'LABOR' ? <LaborView projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
@@ -579,7 +563,7 @@ export function RussellShell({
           />
         ) : null}
         {route.name === 'NEEDS_YOU' ? (
-          <NeedsYouView projectId={projectId} onAnswered={needsYou.reload} />
+          <NeedsYouView projectId={projectId} onAnswered={inbox.reload} go={go} shared={inbox} />
         ) : null}
         {route.name === 'NOT_FOUND' ? (
           <p className="rs-state rs-state-empty">

@@ -305,6 +305,27 @@ function endedReason(goal: RussellGoal, now: string): string | null {
  * waiting, and so expiry is decided by one clock rather than by whichever call
  * happens to evaluate `Date.now()` first.
  */
+/**
+ * The expiry the approval card proposes: midnight UTC on the first of the
+ * month three months after `now`.
+ *
+ * It was the constant `2026-10-06T00:00:00.000Z` — the bounded 12A rollout's
+ * end — and on that date the one-click Approve began failing, because the
+ * grant route refuses an expiry in the past ("An expiry in the past would
+ * grant nothing"). A constant proposal is a proposal with a shelf life nobody
+ * is told about. Integration 3 found it the day it expired.
+ *
+ * What the constant protected is kept: the proposal is identical on every read
+ * within a calendar month, so refreshing the page never quietly extends what
+ * is about to be approved, and a person who wants a different date still
+ * changes it before approving. It is a proposal, not a policy — the grant
+ * records whatever was approved.
+ */
+export function suggestedExpiry(now: string): string {
+  const at = new Date(now);
+  return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth() + 3, 1)).toISOString();
+}
+
 export async function authorityFor(input: {
   projectId: string;
   now?: string;
@@ -312,11 +333,12 @@ export async function authorityFor(input: {
   const now = input.now ?? new Date().toISOString();
   const goals = await listGoals(input.projectId);
   const project = await getProject(input.projectId);
-  // Fixed expiry for the bounded 12A rollout. Never silently roll it forward
-  // on a refresh: renewing authority requires a new explicit decision.
+  // Never silently roll it forward on a refresh: renewing authority requires
+  // a new explicit decision. See `suggestedExpiry` for why it is a calendar
+  // boundary rather than a constant.
   const suggestedApproval = {
     name: `${project?.name ?? 'Project'} discovery research`,
-    expiresAt: '2026-10-06T00:00:00.000Z',
+    expiresAt: suggestedExpiry(now),
   };
 
   const live = goals.find(

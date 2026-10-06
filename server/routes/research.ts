@@ -73,6 +73,7 @@ import { decideProjectAccess } from '../services/identity/policy.ts';
 import { createResearchGoal, getGoal, revokeGoal } from '../repos/russellAuthority.ts';
 import { goalBudgetViewFor, listGoalBudgetViews } from '../services/research/goalBudgetView.ts';
 import { researchIntelligenceView } from '../services/research/intelligence/view.ts';
+import { researchOverview } from '../services/research/overview.ts';
 
 /** A body field that has to be an object before it can be read as one. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -533,6 +534,21 @@ function wholeNumber(value: unknown, field: string): number {
   }
   return value;
 }
+
+/**
+ * The Research destination's one reading: goals, their budgets, the packets
+ * under each and what came back, every packet placed in one of six plain kinds.
+ * Person-only for the reason `/research-goals` is: a budget is a person's
+ * decision about their own project. See `services/research/overview.ts`.
+ */
+researchRouter.get(
+  '/projects/:projectId/research/overview',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { overview: await researchOverview(project.id) };
+  }),
+);
 
 researchRouter.get(
   '/projects/:projectId/research-goals',

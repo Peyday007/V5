@@ -20,6 +20,8 @@
  * let anyone enumerate other people's threads by watching which id changed the
  * status code.
  */
+import { inboxFor } from '../services/russell/inbox.ts';
+import { workSummary } from '../services/russell/summary.ts';
 import { Router } from 'express';
 import {
   DESIGN_DECISIONS,
@@ -1422,6 +1424,36 @@ russellRouter.get(
       repositoryChoicesFor(project.id),
     ]);
     return { requests, software, repositories };
+  }),
+);
+
+/**
+ * Needs You as one inbox: every genuine human decision, from every system that
+ * can ask, grouped by kind. `?projectId=` scopes the project-owned sources; the
+ * Brain-wide ones (Cash, goals, your own connection) are the caller's whatever
+ * project the shell is on. See `services/russell/inbox.ts`.
+ */
+/** Home's four-line summary of what Brain is doing across Cash, research and builds. */
+russellRouter.get(
+  '/summary',
+  handler(async (req) => {
+    requirePerson();
+    const requested = typeof req.query['projectId'] === 'string' ? req.query['projectId'] : null;
+    const project = requested ? await requireProject(requested) : null;
+    return { summary: await workSummary(project?.id ?? null) };
+  }),
+);
+
+russellRouter.get(
+  '/needs-you/inbox',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const requested = typeof req.query['projectId'] === 'string' ? req.query['projectId'] : null;
+    const project = requested ? await requireProject(requested) : null;
+    const host = req.get('host') ?? '';
+    const forwarded = req.get('x-forwarded-proto')?.split(',')[0]?.trim();
+    const scheme = forwarded === 'http' || forwarded === 'https' ? forwarded : req.protocol;
+    return inboxFor({ principal, projectId: project?.id ?? null, origin: `${scheme}://${host}` });
   }),
 );
 

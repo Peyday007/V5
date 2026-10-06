@@ -73,6 +73,7 @@ const DEAL: DealView = {
       step: 'Record the agreement: the amount, what is delivered, what counts as acceptance, and the evidence.',
       owner: 'PERSON',
       why: 'An agreement binds the buyer.',
+      kind: 'AGREEMENT',
     },
   ],
 };

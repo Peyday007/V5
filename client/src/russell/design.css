@@ -4193,3 +4193,126 @@ details.rs-card > section.rs-card {
 .rs-factory-line .rs-line-headline dd { margin: 0; font-weight: 600; }
 .rs-factory-line .rs-line-fault { color: var(--ochre-ink); text-decoration: underline; }
 .rs-factory-line .rs-line-list { padding-left: 1.1rem; }
+
+/* A temporary condition the screen is already asking about again. Ochre, not
+   iron: nothing is broken and nobody needs to do anything. (Integration 3) */
+.rs-state-retrying::before {
+  background: var(--ochre);
+}
+
+.rs-pill-quiet {
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+}
+
+/* ------------------------------------------------ Integration 3 surfaces */
+
+/* A build's stages as a strip that wraps on a phone rather than scrolling. */
+.rs-build-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-1);
+  margin: var(--gap-2) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-build-step {
+  padding: 2px var(--gap-2);
+  border-radius: var(--r-2);
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+  font-size: var(--step--1);
+}
+
+.rs-build-step-done {
+  background: var(--moss-wash);
+  color: var(--moss-ink);
+}
+
+.rs-build-step-now {
+  background: var(--verdigris-soft);
+  color: var(--verdigris-ink);
+  font-weight: 600;
+}
+
+/* Disclosure for operator detail: a plain summary that is a real tap target. */
+.rs-details > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: var(--step--1);
+}
+
+.rs-need-facts {
+  margin: var(--gap-2) 0;
+}
+
+.rs-needs-group + .rs-needs-group,
+.rs-research-goal + .rs-research-goal {
+  margin-top: var(--gap-4);
+}
+
+.rs-research-packets > li + li,
+.rs-connection-account .rs-list > li + li {
+  margin-top: var(--gap-3);
+  padding-top: var(--gap-3);
+  border-top: 1px solid var(--rule, var(--surface-sunk));
+}
+
+/* Home's summary strip: one column on a phone, a grid where there is room. */
+.rs-home-summary {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap-3);
+  container-type: inline-size;
+}
+
+.rs-home-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap-3);
+}
+
+@container (min-width: 35rem) {
+  .rs-home-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.rs-home-tile {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  min-height: 44px;
+}
+
+.rs-home-tile h3 {
+  margin: 0;
+  font-size: var(--step-0);
+}
+
+.rs-home-tile p {
+  margin: 0;
+}
+
+/*
+ * A form control inside the product owns its colours.
+ *
+ * The legacy console's stylesheet is global and gives every `select` and
+ * `input` its near-black `--bg-1` background; the rule near the top of this
+ * file makes their text inherit the product's ink. Together that was dark text
+ * on a black box — Build's repository picker was unreadable, found by
+ * photographing it in Integration 3. The product's own surface and ink, in both
+ * themes, because these tokens are redefined for dark mode.
+ */
+.rs-shell :is(select, input:not([type='checkbox']):not([type='radio'])) {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  min-height: 44px;
+  font-size: max(16px, 1em);
+}

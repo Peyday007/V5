@@ -21,6 +21,7 @@
  *     machine that could approve its own campaign's release would be a machine
  *     deciding what ships.
  */
+import { campaignStory } from '../services/factory/story.ts';
 import { Router } from 'express';
 import type { Principal } from '../domain/types.ts';
 import { FACTORY_DEPLOYMENT_POLICIES } from '../domain/factory.ts';
@@ -594,7 +595,9 @@ factoryRouter.get(
     ]);
 
     const lastReview = reviews[reviews.length - 1] ?? null;
+    const story = await campaignStory({ campaignId, changeRequest, units, findings });
     res.json({
+      story,
       objective: changeRequest.objective,
       expectedOutcome: changeRequest.expectedOutcome,
       stage: campaign.state,

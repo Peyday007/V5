@@ -10,6 +10,10 @@
  * rest of the client does it: the two halves cannot drift, and nothing from the
  * server is bundled.
  */
+import type { Inbox, InboxItem, InboxCategory } from '../../../server/services/russell/inbox.ts';
+export type { Inbox, InboxItem, InboxCategory };
+import type { WorkSummary } from '../../../server/services/russell/summary.ts';
+export type { WorkSummary };
 import { api } from './api.ts';
 import type {
   CandidatePriority,
@@ -581,6 +585,15 @@ export const RussellApi = {
    * is also what stops the briefing and this panel disagreeing, which is the
    * defect §29 records.
    */
+  /**
+   * Every genuine human decision, grouped (Integration 3). `projectId` scopes
+   * the project-owned sources; Cash, goals and your own connection are yours
+   * whatever project is open.
+   */
+  summary: (projectId: string | null): Promise<{ summary: WorkSummary }> =>
+    api(`/api/russell/summary${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
+  inbox: (projectId: string | null): Promise<Inbox> =>
+    api(`/api/russell/needs-you/inbox${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`),
   needsYou: (
     projectId: string,
   ): Promise<{

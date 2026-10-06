@@ -7,6 +7,7 @@
  * failures — an incomplete synthesis packet, an oversized upload — onto the
  * status code the client expects.
  */
+import { classifyInfraFailure, noteInfraFailure } from '../db/infra.ts';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import multer from 'multer';
 import type {
@@ -653,6 +654,10 @@ function mapError(error: unknown): MappedError {
   return { status, error: message };
 }
 
+/** What a person is told when Brain's database did not answer a read in time. */
+export const BRAIN_TEMPORARILY_UNAVAILABLE =
+  'Brain could not reach its database just now. This is temporary and nothing was changed; it will be read again shortly.';
+
 /** The single place an exception becomes a JSON response. */
 export function errorMiddleware(
   error: unknown,
@@ -662,6 +667,22 @@ export function errorMiddleware(
 ): void {
   if (res.headersSent) {
     next(error);
+    return;
+  }
+  /*
+   * A database that did not answer is not a defect in this request, and the
+   * person reading the screen must be told it is temporary rather than shown
+   * the driver's own words under a 500. Integration 3: every surface renders
+   * this as "retrying", and nothing anywhere renders it as an authorization
+   * problem — the same rule `unavailable.ts` applies at the guard, applied to
+   * a failure that happened inside a handler instead.
+   */
+  const infra = classifyInfraFailure(error);
+  if (infra) {
+    noteInfraFailure(infra, 'api-handler');
+    res.setHeader('Retry-After', '5');
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(503).json({ error: BRAIN_TEMPORARILY_UNAVAILABLE, retryable: true });
     return;
   }
   const mapped = mapError(error);

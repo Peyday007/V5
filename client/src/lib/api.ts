@@ -135,12 +135,21 @@ export class ApiError extends Error {
   readonly detail: unknown;
   /** The whole error envelope, for the rare caller that needs more than `detail`. */
   readonly body: unknown;
+  /**
+   * True when the failure is one asking again can fix: Brain said so
+   * (`retryable`), or it is a 502/503/504, or the server could not be reached
+   * at all. Never true of a refusal — a 401, 403 or 404 is an answer.
+   */
+  readonly retryable: boolean;
 
   constructor(message: string, status: number, body: unknown) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.body = body;
+    const flagged =
+      !!body && typeof body === 'object' && (body as { retryable?: unknown }).retryable === true;
+    this.retryable = flagged || status === 0 || status === 502 || status === 503 || status === 504;
     // Errors are `{ error, detail? }`. Callers want the detail itself; handing
     // them the envelope makes every structured-error branch silently dead.
     this.detail =
@@ -159,9 +168,27 @@ function parseBody(text: string): unknown {
   }
 }
 
+/**
+ * What a person is shown when Brain answered "temporarily unavailable" with no
+ * sentence of its own — an escaped failure carries only the OAuth-style code.
+ */
+export const TEMPORARILY_UNAVAILABLE =
+  'Brain could not reach its database just now. This is temporary; it will try again shortly.';
+
 function messageFromBody(body: unknown, fallback: string): string {
   if (body && typeof body === 'object') {
     const record = body as Record<string, unknown>;
+    /*
+     * A code is not a sentence. The guard answers a database it could not
+     * reach with `{ error: 'temporarily_unavailable', message: <sentence> }`,
+     * and preferring `error` put the bare code on every screen. Where `error`
+     * is a single machine token and a sentence sits beside it, the sentence
+     * wins; where there is no sentence, the code is translated rather than
+     * shown.
+     */
+    const isCode = typeof record.error === 'string' && /^[a-z_]+$/.test(record.error);
+    if (isCode && typeof record.message === 'string' && record.message.trim()) return record.message;
+    if (record.error === 'temporarily_unavailable') return TEMPORARILY_UNAVAILABLE;
     if (typeof record.error === 'string' && record.error.trim()) return record.error;
     if (typeof record.message === 'string' && record.message.trim()) return record.message;
   }
@@ -188,7 +215,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     response = await fetch(path, { ...init, headers });
   } catch (cause) {
     throw new ApiError(
-      `Cannot reach the Brain server (${path}). Is it running on the configured port?`,
+      'Brain could not be reached just now — it may be restarting, or the connection dropped. It will try again shortly.',
       0,
       cause,
     );

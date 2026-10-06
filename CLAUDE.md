@@ -12644,6 +12644,53 @@ waits on itself, so the production hang was the pooler's checkout, not the
 code. The one amplification it had — a fleet snapshot per project — is one
 snapshot now. `tests/factoryAllocationPool.test.ts`.
 
+## 57. The product is six destinations, and each one answers a question a person asks.
+
+Integration 3 (`client/src/russell/`, `server/services/russell/inbox.ts`,
+`server/services/russell/summary.ts`, `server/services/research/overview.ts`,
+`server/services/factory/story.ts`) turned the shell from a set of backend
+views into a product. The rules it settled:
+
+- **Six primary destinations, chosen by the question, not by the system that
+  answers it**: Home (what is Brain doing for me), Cash (what is making or
+  costing money), Research (what is Brain trying to learn), Build (what is it
+  building), Needs you (what genuinely needs me), Who (who and what is
+  connected). Everything else — All work, Ideas, What Brain knows, Connected
+  sites, Machines, Labor, People & capacity, devices, Search, the full console,
+  Sign out — keeps its own address and is one tap away in More. **This reverses
+  §29's placement of Cash as secondary**, and the reversal is recorded: that
+  argument was about authority, and where a link sits grants none.
+- **Needs you is one inbox, and the badge counts the same reading.** Every
+  system that can ask a person is read by `inboxFor` — research permission,
+  open questions, software to authorize, build objectives and releases, pull
+  requests, research ceilings, Cash's review and the deal steps whose `owner` is
+  `PERSON`, and the reader's own connection only when its authorization is
+  genuinely gone. Retries, queued work, a step Brain or a buyer takes next, and
+  a source that could not be read are **not** items; the last is said once, as
+  temporary. A cash journey step carries a typed `kind` so it is grouped without
+  reading its sentence.
+- **Only token rows can ask a person to reconnect.** `SurfaceConnectionState`
+  is six words — healthy, retrying, reconnect required, quarantined, disabled,
+  setting up — and `REAUTH_REQUIRED` comes from `connectorHealth` and nothing
+  else. A routing refusal for re-authorization used to fall through to "the
+  worker holds no project membership" in two readers; both now name the
+  reconnect.
+- **A database that did not answer is temporary everywhere.** A handler whose
+  error classifies as infrastructure answers `503 { error: <sentence>,
+  retryable: true }` with `Retry-After`, never a 500 with the driver's text.
+  The client prefers a sentence over a code, marks the failure retryable, shows
+  it as *retrying* (ochre, not iron) and asks again on a bounded backoff —
+  four attempts, about a minute and a quarter, then the button — because a page
+  polling a struggling database adds to the condition it is waiting out.
+- **Technical detail is behind Details.** Packet, campaign and worker ids, raw
+  statuses and blocker codes are one tap away and never the primary text.
+- **A proposal must be approvable.** The standing-permission card proposed the
+  constant `2026-10-06T00:00:00.000Z` as its expiry, and on that date Approve
+  began failing because the grant route refuses a past expiry. It is now
+  midnight UTC on the first of the month three months ahead — identical on
+  every read within a month, so a refresh never quietly extends what is about
+  to be approved.
+
 ## Repository map
 
 ```
@@ -12793,6 +12840,7 @@ server/
       ownership.ts      the one pre-dispatch check: every unit and repair can finish
       regrant.ts        the answer to a unit that ran out of attempts
       assemble.ts       the reviewable artifact, and the publishing it refuses
+      story.ts          why a campaign exists, its success conditions, plan rewrites in English
       metrics.ts        throughput from the ledger, with an evidence class
       sessions.ts       what the hosted plane ran, read back from Brain's own rows
       prompts.ts        every assignment, compiled from rows
@@ -13018,6 +13066,8 @@ server/
       subject.ts        what an idea is about, from rows rather than its own prose
       dealDispatch.ts   the connected system, with its freshness in the type
       projections.ts    the briefing, and progress that may not be invented
+      inbox.ts          Needs you: every genuine human decision, grouped by kind (§57)
+      summary.ts        Home's money, research and build lines, from the destinations' own readings
     research/
       intelligence/
         model.ts        what Brain believes it was asked, versioned so it can be wrong
@@ -13029,6 +13079,7 @@ server/
         proposals.ts    zero-trust validation of a worker's judgement about the plan
         retrospective.ts what the campaign taught, at the level it is true at
         view.ts         the mental state, derived on the read path
+      overview.ts       the Research destination: goal → budget → packets, six plain kinds (§57)
       schema.ts         zero-trust validation of every research pass
       sources.ts        what makes a claim sourced; structural URL validation
       standards.ts      the evidence standard per claim type, and independence
@@ -13106,6 +13157,8 @@ client/                 React UI
   src/Root.tsx          which shell this address wants, and who is signed in
   src/russell/          the whole product: conversation, thin views, states
   src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
+  src/russell/Research.tsx  what Brain is trying to learn: goals, budgets, packets, results
+  src/russell/Connections.tsx  every Claude account Brain runs on, in six words
   src/russell/Cash.tsx  one Cash page: one skeleton, and a role decides what is in it
   src/russell/Machines.tsx  the ladder, what entering costs, and the three decisions that are a person's
   src/russell/cashPage.ts  both payloads, normalized; the capabilities the server sent
@@ -13223,6 +13276,8 @@ tests/                  Vitest suites
   connectorLifecycle.test.ts two accounts on one worker, an auth no-show, and a recovery nobody pressed
   connectorRecoveryProbe.test.ts  a quarantined, unattributed Routine proving its own connector
   connectionReliability.test.ts  the whole chain with the database failing on purpose
+  integration3Product.test.ts   the readings the six destinations are built on
+  integration3Surfaces.test.tsx the six destinations, driven through the real shell
   russellPassIsolation.test.ts   one pass that throws, and every pass after it still runs
   autonomyChain.test.ts      discovery to READY_TO_TEST to a Factory campaign to COMPLETE, no manual tick
   fixtures/             generated PDFs and DOCX packages, not opaque binaries

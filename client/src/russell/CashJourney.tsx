@@ -62,6 +62,33 @@ export function JourneyTotals({ journey, currency }: { journey: JourneyView; cur
   );
 }
 
+/**
+ * What finished deals taught, with the sample shown (Integration 3).
+ *
+ * The server has always sent these and no screen read them, so the last step
+ * of the commercial journey — learning — was invisible. A lesson below the
+ * sample floor says it is one result rather than a pattern, because it is.
+ */
+export function JourneyLessons({ journey, currency }: { journey: JourneyView; currency: string }): JSX.Element | null {
+  if (journey.lessons.length === 0) return null;
+  return (
+    <div className="rs-cash-lessons">
+      <p className="rs-card-title">What finished deals taught</p>
+      <ul className="rs-list">
+        {journey.lessons.map((lesson, index) => (
+          <li key={`${lesson.mechanism ?? 'any'}-${lesson.channel ?? 'any'}-${index}`} className="rs-item-meta">
+            {lesson.mechanism ? lesson.mechanism.toLowerCase().replace(/_/g, ' ') : 'Any kind of deal'}
+            {lesson.channel ? ` via ${lesson.channel.toLowerCase().replace(/_/g, ' ')}` : ''}: {lesson.answered} of{' '}
+            {lesson.contacts} contacted answered, {lesson.agreements} agreed, {lesson.completed} completed,{' '}
+            {money(lesson.realizedContributionCents, currency)} earned after costs
+            {lesson.anecdote ? ' — one result so far, not yet a pattern.' : '.'}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 type Form = null | 'observe' | 'agree' | 'invoice' | 'release';
 
 export function DealJourney({

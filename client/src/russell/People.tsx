@@ -40,6 +40,7 @@
  * never reaches Brain: it goes into the deployment environment, and what is
  * shown here is the *name* of the variable.
  */
+import { ConnectionWord, connectionOf } from './Connections.tsx';
 import { useCallback, useEffect, useState } from 'react';
 import { useAsync } from './useAsync.ts';
 import {
@@ -582,9 +583,7 @@ function Surface({ surface }: { surface: SurfaceReading }): JSX.Element {
   return (
     <li className="rs-ready-row">
       <span>{surface.name}</span>
-      <span className="rs-ready-state" data-state={surface.health}>
-        {surface.health}
-      </span>
+      <ConnectionWord state={connectionOf(surface)} />
       {surface.because ? <span className="rs-hint">{surface.because}</span> : null}
       {surface.detail ? (
         <span className="rs-hint">

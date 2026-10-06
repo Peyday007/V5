@@ -71,6 +71,7 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
    * is nothing to show; a re-read leaves the previous answer up until the new
    * one arrives.
    */
+  const [machineryOpen, setMachineryOpen] = useState(false);
   const shown = repositories.data?.repositories ?? null;
   const state = listState({
     loading: repositories.loading && shown === null,
@@ -89,7 +90,28 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
         deploys.
       </p>
 
-      {projectId ? <Line key={`line-${projectId}`} projectId={projectId} /> : null}
+      {/*
+        * Integration 3's order: what is waiting on you, what is being built,
+        * how to ask for something, and then the machinery. The production line
+        * and the account allocation are an operator's reading — capacity,
+        * bins, surfaces — so they are one click away rather than the first
+        * thing a person sees, and the line only polls while it is open.
+        */}
+      <Unapproved
+        requests={requests.data?.changeRequests ?? []}
+        campaigns={campaigns.data?.campaigns ?? []}
+        onApproved={() => {
+          campaigns.reload();
+          requests.reload();
+        }}
+      />
+
+      <Campaigns
+        campaigns={campaigns.data?.campaigns ?? null}
+        loading={campaigns.loading}
+        error={campaigns.error}
+        onReload={campaigns.reload}
+      />
 
       {state.phase !== 'READY' ? (
         <p className={`rs-state rs-state-${state.phase.toLowerCase()}`}>
@@ -102,6 +124,14 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
         </p>
       ) : (
         <>
+          <Submit
+            projectId={projectId}
+            repositories={state.items}
+            onStarted={() => {
+              campaigns.reload();
+              requests.reload();
+            }}
+          />
           {/*
             * Keyed by the project, which is the other half of that decision: a
             * re-read of the same project keeps what is on screen, and a change
@@ -119,6 +149,13 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
             }
             onChanged={repositories.reload}
           />
+        </>
+      )}
+
+      <details className="rs-details" onToggle={(event) => setMachineryOpen(event.currentTarget.open)}>
+        <summary>Production line, capacity and accounts</summary>
+        {machineryOpen && projectId ? <Line key={`line-${projectId}`} projectId={projectId} /> : null}
+        {machineryOpen && state.phase === 'READY' ? (
           <Allocation
             key={`allocation-${projectId ?? 'none'}`}
             projectId={projectId}
@@ -127,32 +164,8 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
             error={repositories.error}
             onReload={repositories.reload}
           />
-          <Submit
-            projectId={projectId}
-            repositories={state.items}
-            onStarted={() => {
-              campaigns.reload();
-              requests.reload();
-            }}
-          />
-        </>
-      )}
-
-      <Campaigns
-        campaigns={campaigns.data?.campaigns ?? null}
-        loading={campaigns.loading}
-        error={campaigns.error}
-        onReload={campaigns.reload}
-      />
-
-      <Unapproved
-        requests={requests.data?.changeRequests ?? []}
-        campaigns={campaigns.data?.campaigns ?? []}
-        onApproved={() => {
-          campaigns.reload();
-          requests.reload();
-        }}
-      />
+        ) : null}
+      </details>
     </section>
   );
 }
@@ -1018,7 +1031,13 @@ function Campaigns({
   error: { status: number; message: string } | null;
   onReload(): void;
 }): JSX.Element {
-  const state = listState({ loading, error, items: campaigns, noun: 'campaigns' });
+  const state = listState({
+    loading,
+    error,
+    items: campaigns,
+    noun: 'campaigns',
+    explanation: 'Nothing is being built yet. Say what should become true below and the factory starts.',
+  });
   return (
     <div className="rs-build-campaigns">
       <h3>What the factory is doing</h3>
@@ -1042,32 +1061,142 @@ function Campaigns({
   );
 }
 
+/**
+ * A campaign's stages, in the order a build moves through them, and the plain
+ * words for each (Integration 3). `REPAIRING` is its own step because a repair
+ * is the factory answering its own reviewer, which a person should see happen
+ * rather than read as the build going backwards.
+ */
+const CAMPAIGN_STEPS = [
+  { key: 'PLANNING', label: 'Plan' },
+  { key: 'EXECUTING', label: 'Build units' },
+  { key: 'INTEGRATING', label: 'Integrate' },
+  { key: 'REVIEWING', label: 'Review' },
+  { key: 'REPAIRING', label: 'Repair' },
+  { key: 'VERIFYING', label: 'Final checks' },
+  { key: 'COMPLETE', label: 'Complete' },
+] as const;
+
+const STAGE_SENTENCE: Record<string, string> = {
+  PLANNING: 'Factory is planning the build: splitting it into units that can each finish.',
+  EXECUTING: 'Factory is building the units.',
+  INTEGRATING: 'Factory is merging the finished units and running the repository’s own checks.',
+  REVIEWING: 'An independent session is reviewing the change.',
+  REPAIRING: 'Factory is repairing what the reviewer found.',
+  VERIFYING: 'Factory is running the final checks on the merged change.',
+  ASSEMBLING: 'Factory is preparing the pull request.',
+  AWAITING_RELEASE: 'Finished and reviewed — waiting for you to approve its release.',
+  COMPLETE: 'Complete.',
+  BLOCKED: 'Stopped — see why below.',
+  CANCELLED: 'Cancelled.',
+};
+
+/** Where a state sits on the timeline; ASSEMBLING and AWAITING_RELEASE are after final checks. */
+function stepIndex(state: string): number {
+  if (state === 'ASSEMBLING' || state === 'AWAITING_RELEASE') return 5;
+  return CAMPAIGN_STEPS.findIndex((step) => step.key === state);
+}
+
+/** Plain words for the closed blocker vocabulary; the server's remedy follows. */
+const BLOCKER_WORDS: Record<string, string> = {
+  NO_HEALTHY_EXECUTION_SURFACE: 'Nothing is available to run it right now',
+  NO_ELIGIBLE_REVIEWER: 'No independent reviewer is available yet',
+  DEPENDENCY_CYCLE: 'The plan has units that wait on each other',
+  STALE_BASE: 'The branch it started from has moved',
+  UNIT_EXHAUSTED_ATTEMPTS: 'A unit ran out of attempts',
+  CONTRADICTORY_CONTRACT: 'The objective contradicts itself',
+  AWAITING_HUMAN_RELEASE: 'Waiting for your release',
+  EXTERNAL_CREDENTIAL_REQUIRED: 'It needs access only a person can give',
+  SCOPE_AMENDMENT_REQUIRED: 'A repair needs a file the approved scope does not cover',
+  REPAIR_OWNERSHIP_UNRESOLVED: 'Brain could not tell which file a repair belongs in',
+};
+
+const UNIT_WORDS: Record<string, string> = {
+  BLOCKED: 'waiting on another unit',
+  READY: 'ready to start',
+  LEASED: 'being built',
+  IMPLEMENTED: 'built, waiting to merge',
+  INTEGRATED: 'merged',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+  SUPERSEDED: 'replaced by a later plan',
+};
+
+/**
+ * An objective as a heading: the first sentence-sized line, with any trailing
+ * row id — `(cop_…)`, `(rcn_…)` — left for Details rather than the heading.
+ */
+function plainObjective(objective: string): string {
+  const first = objective.split('\n')[0] ?? objective;
+  return first.replace(/\s*\((?:cop|rcn|orc|fcp|rsw)_[a-z0-9]+\)/gi, '').trim();
+}
+
 function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
   const detail = useAsync(() => FactoryApi.campaign(campaign.id), [campaign.id]);
   const view = detail.data;
+  const state = view?.stage ?? campaign.state;
   const landed = view?.units.filter((unit) => unit.state === 'INTEGRATED').length ?? 0;
   const total = view?.units.length ?? 0;
+  const at = stepIndex(state);
+  const story = view?.story;
 
   return (
     <li className="rs-card rs-build-campaign">
-      <h4>{view?.objective ?? campaign.id}</h4>
-      <p className="rs-build-stage">
-        <strong>{view?.stage ?? campaign.state}</strong>
-        {view?.stageDetail ? ` — ${view.stageDetail}` : null}
-      </p>
-      {total > 0 ? (
-        <p className="rs-hint">
-          {landed} of {total} unit(s) integrated
-          {view?.review ? `; review round ${view.review.round}: ${view.review.verdict}` : ''}
-          {view && view.openFindings.length > 0
-            ? `; ${view.openFindings.length} open finding(s)`
-            : ''}
+      <h4>
+        {view
+          ? plainObjective(view.objective)
+          : detail.error
+            ? 'Brain could not read this build just now.'
+            : 'Loading the build…'}
+      </h4>
+      {detail.error ? (
+        <p className={`rs-state rs-state-${detail.error.retryable ? 'retrying' : 'error'}`}>
+          {detail.error.retryable
+            ? 'This is temporary; it will be read again by itself.'
+            : detail.error.message}{' '}
+          <button type="button" className="rs-retry" onClick={detail.reload}>
+            Try again
+          </button>
         </p>
       ) : null}
+      {story ? <p className="rs-hint">{story.origin}</p> : null}
+
+      <ol className="rs-build-steps" aria-label="Where this build is">
+        {CAMPAIGN_STEPS.map((step, index) => (
+          <li
+            key={step.key}
+            className={
+              index < at || state === 'COMPLETE'
+                ? 'rs-build-step rs-build-step-done'
+                : index === at
+                  ? 'rs-build-step rs-build-step-now'
+                  : 'rs-build-step'
+            }
+            aria-current={index === at && state !== 'COMPLETE' ? 'step' : undefined}
+          >
+            {step.label}
+          </li>
+        ))}
+      </ol>
+      <p className="rs-build-stage">
+        <strong>{STAGE_SENTENCE[state] ?? 'In progress.'}</strong>
+        {view?.stageDetail && state !== 'COMPLETE' ? ` ${view.stageDetail}` : null}
+      </p>
+
+      {total > 0 ? (
+        <p className="rs-hint">
+          {landed} of {total} {total === 1 ? 'unit' : 'units'} merged
+          {view?.review
+            ? `; independent review round ${view.review.round} said ${view.review.verdict === 'PASS' ? 'it passes' : 'it needs changes'}`
+            : ''}
+          .
+        </p>
+      ) : null}
+
       {view?.blocker ? (
         <p className="rs-state rs-state-error">
-          <strong>{view.blocker.kind}</strong>
-          {view.blocker.detail ? ` — ${view.blocker.detail}` : null} {view.blocker.remedy}
+          <strong>{BLOCKER_WORDS[view.blocker.kind] ?? 'Stopped'}.</strong>
+          {view.blocker.detail ? ` ${view.blocker.detail}` : null} {view.blocker.remedy}
         </p>
       ) : null}
       {view?.decisionWaiting ? (
@@ -1077,15 +1206,45 @@ function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
           onAnswered={detail.reload}
         />
       ) : null}
-      {view && view.openFindings.length > 0 ? (
-        <ul className="rs-findings">
-          {view.openFindings.map((finding) => (
-            <li key={finding.id}>
-              <strong>{finding.severity}</strong> {finding.statement}
-            </li>
-          ))}
-        </ul>
+
+      {story && story.planRewrites.length > 0 ? (
+        <div className="rs-build-rewrites">
+          <p className="rs-card-title">How Brain changed the plan</p>
+          <ul className="rs-list">
+            {story.planRewrites.map((line) => (
+              <li key={line} className="rs-item-meta">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
+
+      {view && view.openFindings.length > 0 ? (
+        <div>
+          <p className="rs-card-title">What the reviewer found, still open</p>
+          <ul className="rs-findings">
+            {view.openFindings.map((finding) => (
+              <li key={finding.id}>{finding.statement}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {story && story.repairs.length > 0 ? (
+        <div>
+          <p className="rs-card-title">Repairs</p>
+          <ul className="rs-list">
+            {story.repairs.map((repair) => (
+              <li key={repair.unitTitle} className="rs-item-meta">
+                {repair.unitTitle} — {UNIT_WORDS[repair.state] ?? repair.state.toLowerCase()}
+                {repair.finding ? `. Fixes: ${repair.finding}` : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {campaign.prUrl ? (
         <p>
           <a href={campaign.prUrl} target="_blank" rel="noreferrer">
@@ -1112,10 +1271,56 @@ function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
         </p>
       ) : (
         <p className="rs-hint">
-          No pull request yet. One is opened when the work has been integrated and an
+          No pull request yet. One is opened when the work has been merged and an
           independent session has passed it.
         </p>
       )}
+
+      {/* Progressive disclosure: everything a person needs to *judge* the
+          build is above; what an operator needs to *debug* it is here. */}
+      <details className="rs-details">
+        <summary>Details</summary>
+        {story ? (
+          <dl className="rs-facts">
+            <dt>Approved by</dt>
+            <dd>
+              {story.approvedVia === 'STANDING_AUTHORITY'
+                ? 'The standing permission a person set'
+                : story.approvedVia === 'PERSON'
+                  ? 'A person'
+                  : 'Not approved yet'}
+            </dd>
+            <dt>Success means</dt>
+            <dd>
+              {story.successConditions.length
+                ? story.successConditions.map((condition) => condition.statement).join(' · ')
+                : 'No conditions recorded'}
+            </dd>
+            <dt>May change</dt>
+            <dd>{story.scope.join(', ') || 'Nothing declared'}</dd>
+            <dt>Risk</dt>
+            <dd>{story.riskClass.toLowerCase()}</dd>
+          </dl>
+        ) : null}
+        {view ? (
+          <ul className="rs-list">
+            {view.units.map((unit) => (
+              <li key={unit.id} className="rs-item-meta">
+                {unit.title} — {UNIT_WORDS[unit.state] ?? unit.state.toLowerCase()}
+                {unit.attempt > 1 ? ` (attempt ${unit.attempt})` : ''}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="rs-hint">
+          Campaign <code>{campaign.id}</code> · state <code>{state}</code>
+          {view?.blocker ? (
+            <>
+              {' '}· blocker <code>{view.blocker.kind}</code>
+            </>
+          ) : null}
+        </p>
+      </details>
     </li>
   );
 }

@@ -205,6 +205,8 @@ async function seedSoftwareDecision(dataDir: string): Promise<void> {
 
 const DESTINATIONS = [
   { name: 'russell', path: '/' },
+  { name: 'cash', path: '/cash' },
+  { name: 'research', path: '/research' },
   { name: 'work', path: '/work' },
   { name: 'ideas', path: '/projects' },
   { name: 'knows', path: '/knowledge' },
@@ -368,14 +370,16 @@ const REACHABLE = `(() => {
  * still reached — which is why the probe opens the sheet before it answers.
  */
 const MUST_REACH = [
-  'Russell',
-  'Work',
-  'Ideas',
-  'Knows',
-  'Who',
-  'Needs you',
-  'Search',
+  'Home',
+  'Cash',
+  'Research',
   'Build',
+  'Needs you',
+  'Who',
+  'All work',
+  'Ideas',
+  'What Brain knows',
+  'Search',
   'Connected sites',
   'Normal',
   'Interested',
@@ -506,13 +510,39 @@ interface JourneyStep {
 }
 
 /** Press a thumb-bar cell by the label a person reads on it. */
+/**
+ * Press a destination by its label, wherever the shell puts it.
+ *
+ * Integration 3 made six primary destinations (Home, Cash, Research, Build,
+ * Needs you, Who) and moved the rest — All work, Ideas, What Brain knows — into
+ * More at phone width and into the rail's secondary group on a desktop. The
+ * journey below was written against the older labels, so they are aliased
+ * here, and a label not in the rail is reached through More: the same two
+ * presses a person makes.
+ */
+const RAIL_ALIASES: Record<string, string> = {
+  Russell: 'Home',
+  Work: 'All work',
+  Knows: 'What Brain knows',
+};
+
 function railPress(label: string): string {
+  const wanted = RAIL_ALIASES[label] ?? label;
   return `(() => {
+    const wanted = ${JSON.stringify(wanted)};
     const item = [...document.querySelectorAll('.rs-rail-item')].find(
-      (button) => (button.textContent || '').trim().startsWith(${JSON.stringify(label)}),
+      (button) => (button.textContent || '').trim().startsWith(wanted),
     );
-    if (!item) return false;
-    item.click();
+    if (item) { item.click(); return true; }
+    const more = [...document.querySelectorAll('.rs-more > button')][0];
+    if (!more) return false;
+    more.click();
+    setTimeout(() => {
+      const entry = [...document.querySelectorAll('[role="menuitem"]')].find(
+        (button) => (button.textContent || '').trim().startsWith(wanted),
+      );
+      if (entry) entry.click();
+    }, 80);
     return true;
   })()`;
 }
@@ -726,10 +756,13 @@ const JOURNEY_DECISION: JourneyStep[] = [
       'The decision Russell could not take: its packet stopped outside what was preauthorized, ' +
       'and the card carries the packet’s own recorded reason and the answers that can act on it.',
     act: railPress('Needs you'),
-    until: "document.querySelector('.rs-decision-what') !== null",
+    // The parked decision's own card — the one with answers — rather than any
+    // card: Needs you also shows the seeded software change, which has none.
+    until: "document.querySelector('.rs-choice') !== null",
     patience: 30_000,
     read: `(() => {
-      const what = document.querySelector('.rs-decision-what');
+      const card = document.querySelector('.rs-choice')?.closest('.rs-decision');
+      const what = card ? card.querySelector('.rs-decision-what') : null;
       const choices = [...document.querySelectorAll('.rs-choice strong')]
         .map((el) => (el.textContent || '').trim());
       return (what ? (what.textContent || '').trim().slice(0, 60) : 'no decision on the page') +
@@ -754,7 +787,11 @@ const JOURNEY_DECISION: JourneyStep[] = [
     })()`,
     // The card is gone because the list re-read from the server, not because
     // anything here hid it — `NeedsYouView` takes no optimistic update.
-    until: "document.querySelector('.rs-decision-what') === null",
+    // The answered card, not every card: since Integration 3 Needs you also
+    // shows a seeded software change in the same decision-card shape, and that
+    // one is correctly still waiting.
+    until:
+      "![...document.querySelectorAll('.rs-choice')].some((el) => /authorize this plan/i.test(el.textContent || ''))",
     patience: 30_000,
     read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 90)",
   },

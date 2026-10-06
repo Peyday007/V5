@@ -26,9 +26,10 @@
  */
 import { useState } from 'react';
 import { useAsync } from './useAsync.ts';
+import { listState, humanWhen } from './present.ts';
 import { cashPage, modeState, type CashPage } from './cashPage.ts';
 import { Api } from '../lib/api.ts';
-import { DealJourney, JourneyTotals } from './CashJourney.tsx';
+import { JourneyLessons, DealJourney, JourneyTotals } from './CashJourney.tsx';
 import type { Project } from '../../../server/domain/types.ts';
 import {
   CashApi,
@@ -154,10 +155,29 @@ export function CashView_({
   );
 
   if (!known) {
+    /*
+     * A failed read is not a slow one. This used to wait on "Reading Cash
+     * Mode…" for ever when the read failed, because the error was never
+     * asked about — a page that never stops loading is stuck, not waiting.
+     */
+    const failed = reading.error
+      ? listState({ loading: false, error: reading.error, items: null, noun: 'Cash' })
+      : null;
     return (
       <section className="rs-view rs-view-cash">
         <h2>Cash</h2>
-        <p className="rs-state rs-state-loading">Reading Cash Mode&hellip;</p>
+        {failed ? (
+          <p className={`rs-state rs-state-${failed.phase.toLowerCase()}`} role={failed.phase === 'ERROR' ? 'alert' : undefined}>
+            {failed.message}
+            {failed.retryable ? (
+              <button type="button" onClick={reading.reload}>
+                Try again
+              </button>
+            ) : null}
+          </p>
+        ) : (
+          <p className="rs-state rs-state-loading">Reading Cash Mode&hellip;</p>
+        )}
       </section>
     );
   }
@@ -189,14 +209,20 @@ export function CashView_({
    */
   const data = view.data ?? null;
 
-  if (view.error) {
+  if (view.error && !(view.error.retryable && view.data)) {
     return (
       <section className="rs-view rs-view-cash">
         <h2>Cash</h2>
-        <p className={`rs-state rs-state-${view.error.status === 404 ? 'forbidden' : 'error'}`}>
+        <p
+          className={`rs-state rs-state-${
+            view.error.status === 404 ? 'forbidden' : view.error.retryable ? 'retrying' : 'error'
+          }`}
+        >
           {view.error.status === 404
             ? 'There is nothing here for you to see. That is the same answer a project that does not exist gives, on purpose.'
-            : view.error.message}
+            : view.error.retryable
+              ? 'Brain could not read Cash just now — this is temporary and it is trying again by itself.'
+              : view.error.message}
           {view.error.status === 404 ? null : (
             <button type="button" onClick={view.reload}>
               Try again
@@ -1782,7 +1808,7 @@ function Status({ page }: { page: CashPage }): JSX.Element {
       <ul className="rs-cash-tiers">
         <li>
           <strong>
-            {frontier.mode?.state === 'ACTIVE' ? 'Active' : (frontier.mode?.state ?? 'Not started')}
+            {frontier.mode ? (MODE_WORDS[frontier.mode.state] ?? frontier.mode.state) : 'Not started'}
           </strong>
           <span>Discovery</span>
         </li>
@@ -1855,6 +1881,70 @@ const TIER_LABEL: Record<string, string> = {
   QUALIFIED: 'Qualified',
   READY_TO_TEST: 'Ready to test',
 };
+
+/** Plain words for the sprint's lifecycle, the deep dive and a path's status. */
+const MODE_WORDS: Record<string, string> = {
+  ACTIVE: 'Active',
+  WINDING_DOWN: 'Winding down — no new discovery',
+  ARCHIVED: 'Archived',
+};
+const DIVE_WORDS: Record<string, string> = {
+  PENDING: 'deep dive queued',
+  RUNNING: 'deep dive running',
+  NEEDS_PERSON: 'deep dive waiting on a person',
+  COMPLETE: 'deep dive finished',
+  BLOCKED: 'deep dive stopped',
+};
+const PATH_WORDS: Record<string, string> = {
+  ACTIVE: 'Workable',
+  WATCH: 'Watching',
+  BLOCKED: 'Blocked',
+  WEAK: 'Weak',
+  UNPROVEN: 'Unproven',
+  INVALIDATED: 'Ruled out',
+  ARCHIVED: 'Put away',
+};
+
+/** The short name of a tier, for the causal sentence. */
+const TIER_SHORT: Record<string, string> = {
+  SIGNAL: 'evidence',
+  CANDIDATE: 'a candidate',
+  QUALIFIED: 'qualified',
+  READY_TO_TEST: 'ready to test',
+};
+
+const OWNER_SENTENCE: Record<string, string> = {
+  BRAIN_RESEARCH: 'Brain is researching it.',
+  BRAIN_PROPOSES: 'Brain proposes it once it has what it needs.',
+  PERSON_ONLY: 'This one is yours to answer.',
+};
+
+/**
+ * Why a piece is at its tier, and the one thing stopping the next (Integration 3).
+ *
+ * "Still evidence because Payer is not established" rather than a status word:
+ * the tier's own open requirements are an ordered list from the server
+ * (`tier.toAdvance`), so the first entry is the first blocker and nothing here
+ * chooses it. Whose question it is comes from the same entry's `owner`, so a
+ * researchable blank is never presented as a person's task.
+ */
+export function FirstBlocker({
+  tier,
+}: {
+  tier: { tier: string; toAdvance: { key: string; label: string; task: string; owner: string }[] };
+}): JSX.Element | null {
+  const first = tier.toAdvance[0];
+  if (!first) return null;
+  return (
+    <p className="rs-item-meta rs-cash-first-blocker">
+      <strong>
+        Still {TIER_SHORT[tier.tier] ?? tier.tier.toLowerCase()} because {first.label.toLowerCase()} is not
+        established yet.
+      </strong>{' '}
+      Next: {first.task} {OWNER_SENTENCE[first.owner] ?? ''}
+    </p>
+  );
+}
 
 /**
  * What this person actually has to do, and what is genuinely held up.
@@ -1953,6 +2043,9 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
       {work.journey && work.journey.deals.length > 0 ? (
         <JourneyTotals journey={work.journey} currency={view.myCash.position.currency} />
       ) : null}
+      {work.journey ? (
+        <JourneyLessons journey={work.journey} currency={view.myCash.position.currency} />
+      ) : null}
       <ul className="rs-list">
         {[...acting, ...held].map((placement) => (
           <li key={placement.opportunity.id} className="rs-group">
@@ -1963,6 +2056,7 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
                 : DISPOSITION_LABEL.EVIDENCE_ONLY}
             </p>
             <p className="rs-decision-why">{placement.because}</p>
+            {placement.tier ? <FirstBlocker tier={placement.tier} /> : null}
             {placement.opportunity.nextAction ? (
               <p className="rs-item-meta">{placement.opportunity.nextAction}</p>
             ) : null}
@@ -2543,6 +2637,7 @@ function BestOpportunities({
                   <p className="rs-item-title">{one.title}</p>
                   <p className="rs-badge">{TIER_LABEL[tier.tier] ?? tier.tier}</p>
                   <p className="rs-decision-why">{tier.summary}</p>
+                  <FirstBlocker tier={tier} />
                   <p className="rs-item-meta">
                     {tier.answered} of {tier.required} decision questions answered.
                     {placement
@@ -2844,6 +2939,7 @@ function Portfolio({
                       : (TIER_LABEL[one.tier.tier] ?? one.tier.tier)}
                   </p>
                   <p className="rs-decision-why">{placement ? placement.because : one.because}</p>
+                  <FirstBlocker tier={placement?.tier ?? one.tier} />
                   {placement?.opportunity.exhaustedAt ? (
                     <p className="rs-item-meta">
                       This opening is finished: {placement.opportunity.exhaustedReason}. Whatever it
@@ -2945,7 +3041,7 @@ function EngineCard({
       <button type="button" className="rs-link-button" onClick={() => setOpen(!open)}>
         {open ? 'Hide the full card' : 'Show the full card'} &mdash; {answered.length} answered,{' '}
         {unknown.length} still unknown
-        {card.validationState ? ` · deep dive ${card.validationState}` : ' · no deep dive yet'}
+        {card.validationState ? ` · ${DIVE_WORDS[card.validationState] ?? 'deep dive'}` : ' · no deep dive yet'}
       </button>
       {note ? <p className="rs-hint">{note}</p> : null}
       {open ? (
@@ -3948,7 +4044,7 @@ function Lifecycle({
   return (
     <section className="rs-card rs-cash-lifecycle">
       <h3>The sprint</h3>
-      <p className="rs-item-meta">It is {state.toLowerCase().replace('_', ' ')}.</p>
+      <p className="rs-item-meta">It is {(MODE_WORDS[state] ?? state).toLowerCase()}.</p>
       {/*
         * The state is a fact about the sprint and is shown to everybody; the
         * transitions are a decision and are offered to whoever may take it.
@@ -4123,7 +4219,7 @@ function ResearchInFlight({ page }: { page: CashPage }): JSX.Element | null {
                 * the elapsed time by hand.
                 */}
               <p className="rs-hint">
-                {WORK_STATE_LABEL[one.state] ?? one.state} Asked {one.askedAt}.
+                {WORK_STATE_LABEL[one.state] ?? one.state} Asked {humanWhen(one.askedAt)?.text ?? one.askedAt}.
               </p>
               {/*
                 * Why Brain chose this question over the others open.
@@ -4240,7 +4336,7 @@ function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }
                   </h4>
                   <p className="rs-decision-why">{detail?.what ?? path.methodWhat}</p>
                   <p className="rs-hint">
-                    <strong>{path.status}</strong> &mdash; {path.statusNote}
+                    <strong>{PATH_WORDS[path.status] ?? path.status}</strong> &mdash; {path.statusNote}
                   </p>
 
                   {/*
@@ -4380,7 +4476,7 @@ function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }
                         if (!path) return null;
                         return (
                           <li key={id}>
-                            <strong>#{path.rank}</strong> {path.title} &mdash; {path.status}
+                            <strong>#{path.rank}</strong> {path.title} &mdash; {PATH_WORDS[path.status] ?? path.status}
                             {path.openQuestions.length > 0 ? (
                               <span className="rs-hint">
                                 {' '}
