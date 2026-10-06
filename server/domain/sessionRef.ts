@@ -104,5 +104,5 @@ export function sessionSpellings(value: string | null | undefined): string[] {
   const id = normalizeSessionRef(value);
   if (id === null) return [];
   const known = SESSION_PREFIXES.some((prefix) => value!.trim().startsWith(prefix));
-  return known ? SESSION_PREFIXES.map((prefix) => `${prefix}${id}`) : [id];
+  return known ? [...SESSION_PREFIXES.map((prefix) => `${prefix}${id}`), id] : [id];
 }

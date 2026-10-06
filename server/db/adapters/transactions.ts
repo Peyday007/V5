@@ -45,8 +45,9 @@ export interface TransactionFrame {
   depth: number;
   children: Mutex;
   /**
-   * Work to start once the outermost transaction has committed, shared by
-   * every frame under one root. Dropped on rollback.
+   * Work to start once the outermost transaction has committed. A savepoint
+   * hands its hooks to its parent when it is released and drops them when it
+   * is rolled back, so a hook never outlives the rows it was registered for.
    */
   afterCommit: (() => void)[];
 }
@@ -56,7 +57,7 @@ export function rootFrame(): TransactionFrame {
 }
 
 export function childFrame(parent: TransactionFrame): TransactionFrame {
-  return { depth: parent.depth + 1, children: new Mutex(), afterCommit: parent.afterCommit };
+  return { depth: parent.depth + 1, children: new Mutex(), afterCommit: [] };
 }
 
 /** The savepoint name for a frame. Unique within its transaction's stack. */
@@ -70,4 +71,9 @@ export function runAfterCommit(frame: TransactionFrame, detach: (fn: () => Promi
   for (const hook of hooks) {
     void detach(async () => hook()).catch(() => undefined);
   }
+}
+
+/** A released savepoint's hooks become its parent's. */
+export function promoteAfterCommit(child: TransactionFrame, parent: TransactionFrame): void {
+  parent.afterCommit.push(...child.afterCommit.splice(0));
 }

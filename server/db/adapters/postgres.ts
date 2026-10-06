@@ -30,9 +30,10 @@ import type { PoolClient, PoolConfig } from 'pg';
 import type { Database, RunResult, Row, SqlParam } from '../types.ts';
 import { DatabaseConfigurationError } from '../types.ts';
 import { toPostgresSql, splitStatements } from '../dialect.ts';
-import { childFrame, rootFrame, runAfterCommit, savepointName, type TransactionFrame } from './transactions.ts';
+import { childFrame, promoteAfterCommit, rootFrame, runAfterCommit, savepointName, type TransactionFrame } from './transactions.ts';
 import {
   classifyInfraFailure,
+  markDatabaseError,
   controlPlaneShare,
   countDatabaseFailure,
   currentWorkloadClass,
@@ -346,6 +347,9 @@ export class PostgresAdapter implements Database {
        * pooling keeps for the life of the connection.
        */
       this.#controlPool.on('connect', (client: PoolClient) => {
+        // Held for the life of the client: this SET runs after pg-pool has taken
+        // the idle listener off, and a drop during it must not be uncaught.
+        client.on('error', () => undefined);
         client
           .query(`SET statement_timeout = ${CONTROL_STATEMENT_TIMEOUT_MS}; SET lock_timeout = ${CONTROL_LOCK_TIMEOUT_MS}`)
           .catch(() => undefined);
@@ -420,6 +424,7 @@ export class PostgresAdapter implements Database {
 
   /** Count an infrastructure failure where it was felt, then hand it back. */
   #noteInfra(error: unknown): void {
+    markDatabaseError(error);
     const kind = classifyInfraFailure(error);
     if (kind) countDatabaseFailure(kind);
   }
@@ -496,6 +501,12 @@ export class PostgresAdapter implements Database {
   ): Promise<pg.QueryResult<T>> {
     const client = await pool.connect();
     let broken: Error | undefined;
+    // pg-pool removes a client's idle error listener when it hands it out, and
+    // pg emits 'error' after rejecting the query when the socket drops. With no
+    // listener that emit is an uncaught exception that takes the process down —
+    // `pool.query` adds one for the length of the query, and so must this.
+    const swallow = (): void => undefined;
+    client.on('error', swallow);
     try {
       return (await client.query<T>(sql, values)) as pg.QueryResult<T>;
     } catch (error) {
@@ -505,6 +516,7 @@ export class PostgresAdapter implements Database {
       }
       throw error;
     } finally {
+      client.removeListener('error', swallow);
       client.release(broken);
     }
   }
@@ -551,6 +563,10 @@ export class PostgresAdapter implements Database {
       throw this.#namePoolTimeout(error, workload);
     }
     const context: TransactionContext = { client, ...rootFrame() };
+    // The same listener `#pooledQuery` holds: a socket that drops mid-transaction
+    // must reject the statement, never become an uncaught 'error' event.
+    const swallow = (): void => undefined;
+    client.on('error', swallow);
     /*
      * A client whose state is uncertain is destroyed rather than pooled. A
      * statement that timed out on the client side may still be running on the
@@ -590,6 +606,7 @@ export class PostgresAdapter implements Database {
         throw error;
       }
     } finally {
+      client.removeListener('error', swallow);
       client.release(broken);
     }
   }
@@ -609,6 +626,7 @@ export class PostgresAdapter implements Database {
       try {
         const result = await this.#transactions.run(frame, fn);
         await parent.client.query(`RELEASE SAVEPOINT ${savepoint}`);
+        promoteAfterCommit(frame, parent);
         return result;
       } catch (error) {
         await parent.client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);

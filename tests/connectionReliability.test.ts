@@ -1033,6 +1033,47 @@ describe.skipIf(!pg)('Postgres: the control plane has connections nobody else ca
     }
   });
 
+  it('a connection whose socket fails mid-statement rejects the statement and does not crash the process', async () => {
+    const pgModule = (await import('pg')).default;
+    const adapter = new PostgresAdapter({ connectionString: pg!.connectionString, schema: pg!.schema, max: 6 });
+    // Capture the clients the adapter's pools hand out, so the test can break
+    // one's socket the way a pooler dropping it does.
+    const handed: pgClient[] = [];
+    type pgClient = { connection: { stream: { destroy: (error?: Error) => void } } };
+    const originalConnect = pgModule.Pool.prototype.connect;
+    pgModule.Pool.prototype.connect = async function (this: unknown, ...args: unknown[]) {
+      const client = await (originalConnect as (...a: unknown[]) => Promise<pgClient>).apply(this, args);
+      handed.push(client);
+      return client;
+    } as typeof originalConnect;
+    const uncaught: unknown[] = [];
+    const listeners = process.listeners('uncaughtException');
+    process.removeAllListeners('uncaughtException');
+    const onUncaught = (error: unknown): void => {
+      uncaught.push(error);
+    };
+    process.on('uncaughtException', onUncaught);
+    try {
+      for (const plane of ['WORKLOAD', 'CONTROL'] as const) {
+        const run = <T,>(fn: () => Promise<T>): Promise<T> => (plane === 'CONTROL' ? asControlPlane(fn) : fn());
+        handed.length = 0;
+        const sleeping = run(() => adapter.get('SELECT pg_sleep(5) AS slept'));
+        for (let k = 0; k < 50 && handed.length === 0; k += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        handed[0]!.connection.stream.destroy(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }));
+        await expect(sleeping).rejects.toBeTruthy();
+        expect(Number((await run(() => adapter.get<{ ok: number }>('SELECT 1 AS ok')))!.ok)).toBe(1);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(uncaught).toEqual([]);
+    } finally {
+      pgModule.Pool.prototype.connect = originalConnect;
+      process.off('uncaughtException', onUncaught);
+      for (const listener of listeners) process.on('uncaughtException', listener);
+      await adapter.close();
+    }
+  });
+
   it('a pool too small to split is not split', () => {
     const adapter = new PostgresAdapter({ connectionString: pg!.connectionString, schema: pg!.schema, max: 2 });
     try {
@@ -1423,6 +1464,20 @@ describe('the rest of the chain does not turn a database failure into a verdict'
     restore!();
     expect(during.status).toBe(503);
     expect(((await during.json()) as Record<string, unknown>)['error']).toBe('temporarily_unavailable');
+    // Without the verifier the code is refused and *not spent*: an intercepted
+    // code cannot be burned for the client that holds the verifier.
+    const wrong = await fetch(`${base}/oauth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: client.clientId,
+        code: code.plaintext,
+        code_verifier: crypto.randomBytes(32).toString('base64url'),
+        redirect_uri: 'https://claude.ai/api/mcp/auth_callback',
+      }).toString(),
+    });
+    expect(wrong.status).toBe(400);
     const after = await exchange();
     expect(after.status).toBe(200);
     const pair = (await after.json()) as Record<string, string>;
@@ -1530,5 +1585,20 @@ describe('the rest of the chain does not turn a database failure into a verdict'
     ).rejects.toThrow('no');
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(seen).toEqual(['outside']);
+    // A hook registered inside a savepoint that rolled back does not outlive it;
+    // one inside a released savepoint runs with its root.
+    await getDb().transaction(async () => {
+      await getDb()
+        .transaction(async () => {
+          afterCommit(() => seen.push('savepoint rolled back'));
+          throw new Error('inner');
+        })
+        .catch(() => undefined);
+      await getDb().transaction(async () => {
+        afterCommit(() => seen.push('savepoint released'));
+      });
+    });
+    for (let i = 0; i < 20 && seen.length < 2; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(seen).toEqual(['outside', 'savepoint released']);
   });
 });

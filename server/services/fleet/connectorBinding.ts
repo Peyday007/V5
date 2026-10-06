@@ -22,7 +22,7 @@
  * never re-pointed: a second connector observed for an attached client is a
  * conflict, reported and left alone.
  */
-import { getDb } from '../../db/database.ts';
+import { afterCommit, getDb } from '../../db/database.ts';
 import {
   attachClient,
   bindRoutineConnector,
@@ -364,5 +364,7 @@ export async function touchConnectorRoutines(connectorId: string): Promise<void>
     new Date().toISOString(),
     connectorId,
   ]);
-  forgetRoutingHealth();
+  // After the commit when called inside a transaction (consent, the code
+  // exchange): cleared before it, a tick in between re-caches the old health.
+  afterCommit(forgetRoutingHealth);
 }

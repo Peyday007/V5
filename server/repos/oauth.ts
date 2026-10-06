@@ -348,6 +348,10 @@ export async function exchangeAuthorizationCode(input: {
     const grantRefresh = deriveOAuthSuccessor(key, `code:${record.id}`, input.code);
     const base = { clientId: record.clientId, workerId: record.workerId, scope: record.scope, resource: record.resource, now };
 
+    // Before anything is spent: a holder of an intercepted code without the
+    // verifier must not be able to burn it for the client that has one.
+    if (!verifyPkceS256(input.verifier, record.codeChallenge)) return { ok: false, reason: 'PKCE_FAILED', record };
+
     if (row.redeemed_at === null) {
       // The guard is still the compare-and-swap: two requests holding the same
       // code serialize here, and the loser falls through to the redelivery
@@ -358,7 +362,6 @@ export async function exchangeAuthorizationCode(input: {
         [at, record.id, at],
       );
       if (redeemed.changes === 1) {
-        if (!verifyPkceS256(input.verifier, record.codeChallenge)) return { ok: false, reason: 'PKCE_FAILED', record };
         const allowed = input.whileRedeeming ? await input.whileRedeeming(record) : { ok: true as const };
         if (!allowed.ok) return { ok: false, reason: 'DENIED', record, detail: allowed.detail };
         const refreshId = newId('oat');
@@ -367,8 +370,7 @@ export async function exchangeAuthorizationCode(input: {
       }
     }
 
-    // Already redeemed. Only the holder of the verifier may be answered again.
-    if (!verifyPkceS256(input.verifier, record.codeChallenge)) return { ok: false, reason: 'PKCE_FAILED', record };
+    // Already redeemed; the verifier above proved this is the holder.
     const refresh = await db.get<OAuthTokenRow>(
       `SELECT * FROM oauth_tokens WHERE token_digest = ? AND kind = 'REFRESH' AND parent_token_id IS NULL AND client_id = ?`,
       [grantRefresh.digest, record.clientId],

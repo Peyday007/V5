@@ -28,6 +28,7 @@ import {
   Mutex,
   childFrame,
   rootFrame,
+  promoteAfterCommit,
   runAfterCommit,
   savepointName,
   type TransactionFrame,
@@ -137,6 +138,7 @@ export class SqliteAdapter implements Database {
       try {
         const result = await this.#transactions.run(frame, fn);
         this.#driver.exec(`RELEASE ${savepoint}`);
+        promoteAfterCommit(frame, parent);
         return result;
       } catch (error) {
         this.#driver.exec(`ROLLBACK TO ${savepoint}`);

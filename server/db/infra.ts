@@ -77,17 +77,26 @@ const UNAVAILABLE_SQLSTATES = new Set([
  * database: reporting it to a worker as "Brain's database is busy" would be the
  * same wrong sentence this module exists to stop, one subsystem along.
  */
-const CONNECTION_ERRNOS = new Set([
-  'ECONNRESET',
-  'ECONNREFUSED',
-  'EPIPE',
-  'ETIMEDOUT',
-  'EHOSTUNREACH',
-  'ENETUNREACH',
-  // DNS for the database host failing is the database being unreachable.
-  'EAI_AGAIN',
-  'ENOTFOUND',
-]);
+const CONNECTION_ERRNOS = new Set(['ECONNRESET', 'ECONNREFUSED', 'EPIPE']);
+
+/**
+ * Errnos that are the database only when the database adapter threw them.
+ * A timeout or a DNS failure from an outbound HTTP call — a Routine fire, a
+ * provider — is not Brain's database being unreachable, and saying so would be
+ * the wrong sentence this module exists to stop.
+ */
+const DATABASE_ONLY_ERRNOS = new Set(['ETIMEDOUT', 'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN', 'ENOTFOUND']);
+
+/** Called by the database adapter on every error it throws. */
+export function markDatabaseError(error: unknown): void {
+  if (error && typeof error === 'object' && !('brainDatabase' in error)) {
+    try {
+      Object.defineProperty(error, 'brainDatabase', { value: true, enumerable: false });
+    } catch {
+      // A frozen error is classified on its own terms.
+    }
+  }
+}
 
 function textOf(error: unknown): string {
   const message = (error as { message?: unknown } | null)?.message;
@@ -135,6 +144,9 @@ export function classifyInfraFailure(error: unknown, depth = 0): InfraFailureKin
   // SQLite's lock contention: the local database answering "not now".
   if (code === 'SQLITE_BUSY' || code === 'SQLITE_LOCKED' || /^database is locked/.test(text)) return 'DATABASE_UNAVAILABLE';
   if (depth === 0 && typeof code === 'string' && CONNECTION_ERRNOS.has(code) && text !== 'fetch failed') {
+    return 'CONNECTION_LOST';
+  }
+  if (depth === 0 && typeof code === 'string' && DATABASE_ONLY_ERRNOS.has(code) && 'brainDatabase' in error) {
     return 'CONNECTION_LOST';
   }
   if (text === 'fetch failed') return null;

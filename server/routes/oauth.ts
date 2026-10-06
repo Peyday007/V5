@@ -47,6 +47,7 @@ import {
   getClientByClientId,
   issueAuthorizationCode,
   exchangeAuthorizationCode,
+  findAuthorizationCode,
   registerClient,
   findPresentedToken,
   authenticateClient,
@@ -76,7 +77,7 @@ import { card, esc, page } from './pages.ts';
 import { workerIdentity } from '../services/identity/authenticate.ts';
 import { answerEscapedFailure } from './escape.ts';
 import { asControlPlane, asWorkload, noteLatency } from '../db/infra.ts';
-import { getDb } from '../db/database.ts';
+import { afterCommit, getDb } from '../db/database.ts';
 import { tokenUseHeld } from '../services/identity/tokenTouch.ts';
 
 export const OAUTH_BASE = '/oauth';
@@ -1143,7 +1144,9 @@ export function oauthRouter(): Router {
           // worker its Routines are registered for, which the screen named.
           if (reconnecting.restoresFrom) {
             await repointConnectorWorker({ connectorId: connector.id, from: reconnecting.restoresFrom, to: worker.id });
-            forgetRoutingHealth();
+            // After the commit: cleared inside the transaction, a tick in between
+            // would re-cache health computed from the rows before it.
+            afterCommit(forgetRoutingHealth);
           }
           const now = await getConnector(connector.id);
           const outcome =
@@ -1288,6 +1291,26 @@ export function oauthRouter(): Router {
          * reply lost after the commit is answered again with the same grant,
          * while nothing in that grant has been used.
          */
+        /*
+         * A member reconnect is asked again at redemption, not trusted from the
+         * approval — but asked *before* the exchange's transaction opens. The
+         * question reads connector ownership and health, and inside the
+         * transaction it held the code row's lock on a reserved connection for
+         * as long as those reads took. The guarded writes stay inside.
+         */
+        const pending = await findAuthorizationCode(digestSecret(code));
+        const reconnect =
+          pending?.attachConnectorId && pending.clientId === clientId
+            ? {
+                codeId: pending.id,
+                answer: await resolveMemberReconnect({
+                  userId: pending.approvedByUserId,
+                  clientId,
+                  resource: pending.resource,
+                  scope: pending.scope,
+                }),
+              }
+            : null;
         const exchange = await exchangeAuthorizationCode({
           code,
           clientId,
@@ -1311,12 +1334,11 @@ export function oauthRouter(): Router {
              * withdrawal, a connection given back or a change of ownership inside
              * the code's lifetime must not be undone by a grant minted after it.
              */
-            const again = await resolveMemberReconnect({
-              userId: record.approvedByUserId,
-              clientId,
-              resource: record.resource,
-              scope: record.scope,
-            });
+            // Resolved just before the exchange's transaction (below): the
+            // ownership and health reads it takes must not run while the code
+            // row is locked on one of the two control-plane connections.
+            const again = reconnect && reconnect.codeId === record.id ? reconnect.answer : null;
+            if (!again) return { ok: false, detail: { reason: 'MEMBER_RECONNECT_UNRESOLVED', via: 'MEMBER_RECONNECT', clientId } };
             const connector = again.ok && again.connector.id === record.attachConnectorId ? again.connector : null;
             const fits =
               connector !== null &&
