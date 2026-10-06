@@ -18,7 +18,13 @@ authorized" means a credential was judged and found wanting.
 | `AUTH_INVALID` | bad, revoked or expired credential; actual lack of permission | MCP `401 Not authorized…`; token endpoint `400 invalid_grant` / `401 invalid_client`; tool `NOT_PERMITTED` |
 | `AUTH_REAUTH_REQUIRED` | `connectorHealth` reads `HUMAN_REAUTH_REQUIRED` from rows | the connector report, with the row that says why |
 | `INFRA_RETRYABLE` | pool or pooler checkout timeout, statement timeout, connection lost, database unavailable, restart | MCP and HTTP `503` + `Retry-After: 5`, a sentence saying the credential was not judged; token endpoint `503 temporarily_unavailable`; tool result `kind: INFRA_RETRYABLE, retryable: true`; check-in `RETRY_LATER` |
-| `RATE_OR_CAPACITY_RETRYABLE` | the MCP rate slot, a provider refusal | unchanged: `RATE_LIMITED`, a deferred intent |
+| `RATE_OR_CAPACITY_RETRYABLE` | the MCP rate slot, a provider refusal, the document store declining a *read* (429, 5xx, 544) after its own retries — never a write, whose outcome is unknown | `RATE_LIMITED`, a deferred intent; a store refusal is a tool result `kind: RATE_OR_CAPACITY_RETRYABLE, retryable: true` |
+
+Every Supabase read retries a transient refusal up to three times, honouring
+`Retry-After` — listings included. A listing is a POST only because Supabase
+takes its query as a body; it was the one read that did not retry, and deploy
+403's post-restart gate died on it (`refused a listing (HTTP 429)` inside
+`storeFile`'s collision check, during a synthesis filing).
 
 `server/db/infra.ts#classifyInfraFailure` is the one classifier. It returns
 null for real defects (constraint violations, bugs) so they are never hidden

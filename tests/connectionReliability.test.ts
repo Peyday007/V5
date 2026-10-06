@@ -53,6 +53,7 @@ import {
   stopInfraIncidentRecorder,
 } from '../server/services/infra/incidents.ts';
 import type { BinManifest, Principal } from '../server/domain/types.ts';
+import { StorageConfigurationError } from '../server/services/storage/types.ts';
 
 /* ------------------------------------------------------------------------ */
 /* Fault injection at the database the app is using                         */
@@ -643,6 +644,35 @@ describe('a worker proving it is here does not wait on work selection', () => {
     expect(error['kind']).toBe('INFRA_RETRYABLE');
     expect(error['retryable']).toBe(true);
     expect(String(error['message'])).toMatch(/not an authorization problem/);
+  });
+
+  it('a tool whose document store refused for now says RATE_OR_CAPACITY_RETRYABLE (deploy 403)', async () => {
+    const c = await connector('store-tool');
+    injectFault(
+      (sql) => /FROM projects/.test(sql) && !/project_memberships/.test(sql),
+      () => new StorageConfigurationError('The document store refused a listing (HTTP 429).', 'slow down', 429),
+    );
+    const answer = await mcp('tools/call', { name: 'brain_list_projects', arguments: {} }, c.access);
+    restore!();
+    const result = answer.body['result'] as Record<string, unknown>;
+    expect(result['isError']).toBe(true);
+    const error = (result['structuredContent'] as Record<string, unknown>)['error'] as Record<string, unknown>;
+    expect(error['kind']).toBe('RATE_OR_CAPACITY_RETRYABLE');
+    expect(error['retryable']).toBe(true);
+    expect(String(error['message'])).not.toMatch(/could not be completed/);
+  });
+
+  it('a credential the store rejected is still an internal failure, not a retry', async () => {
+    const c = await connector('store-cred');
+    injectFault(
+      (sql) => /FROM projects/.test(sql) && !/project_memberships/.test(sql),
+      () => new StorageConfigurationError("The document store rejected Brain's credentials (HTTP 403).", '', 403),
+    );
+    const answer = await mcp('tools/call', { name: 'brain_list_projects', arguments: {} }, c.access);
+    restore!();
+    const result = answer.body['result'] as Record<string, unknown>;
+    const error = (result['structuredContent'] as Record<string, unknown>)['error'] as Record<string, unknown>;
+    expect(error['retryable']).not.toBe(true);
   });
 });
 
