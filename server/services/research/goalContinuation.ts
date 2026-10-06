@@ -37,6 +37,7 @@ import { coverBeforeWork } from '../russell/coverage.ts';
 import { inventoryProject } from '../reconcile/plan.ts';
 import { TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { GoalBudgetExhausted, startPacket } from './startPacket.ts';
+import { binForOrchestration, createBin } from '../../repos/bins.ts';
 
 /** How many goals one pass looks at. A pass is bounded; the next tick takes the rest. */
 export const MAX_GOALS_PER_PASS = 5;
@@ -49,6 +50,8 @@ export interface GoalContinuationReport {
   answeredByArchive: string[];
   /** Goals a ceiling stopped, and which one. */
   stopped: { goalId: string; ceiling: 'PACKETS' | 'FRAGMENTS' | 'DEADLINE'; asked: boolean }[];
+  /** Packets of a goal that were given the bin that carries them to a worker. */
+  binned: { goalId: string; orchestrationId: string; binId: string }[];
   /** Goals that could not be advanced, with a reason. Left exactly as they were. */
   skipped: { goalId: string; reason: string }[];
 }
@@ -68,6 +71,88 @@ interface GoalRow {
 interface PacketRow {
   id: string;
   status: string;
+}
+
+/** A bin in one of these states will never be handed to a worker again. */
+const SPENT_BIN = new Set(['COMPLETE', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN']);
+
+/**
+ * The bin that carries a goal's packet to a worker.
+ *
+ * A packet's work reaches a worker inside a bin (§24): `startPacket` queues the
+ * packet's work items and nothing fires a Routine for an item no bin holds. So
+ * a packet this pass started with no bin sat at PLANNING for ever with its plan
+ * item claimable and nobody sent for it — every row healthy, which is how
+ * production held seven of them for seventeen hours. This is the same bin the
+ * Russell launch builds for a mission, and only ever a first one: a bin that
+ * has been spent is left alone, because a replacement is the launch's
+ * `packetMayHaveAnotherBin` decision and not this pass's.
+ *
+ * Idempotent by the packet's own rows, never by a flag: a pass that finds a
+ * bin already there creates nothing, and two passes that both find none make
+ * one, because `idx_bins_goal_packet_live` refuses the second live bin.
+ */
+async function ensurePacketBin(goal: GoalRow, orchestrationId: string, title: string): Promise<string | null> {
+  if (!goal.research_layer_id) return null;
+  if (await binForOrchestration(orchestrationId)) return null;
+  const objective =
+    'Carry this research packet from its plan to a filed, audited report, inside the ' +
+    'ceilings its goal was approved with, and stop. Read published sources only.';
+  const created = await createBin({
+    projectId: goal.project_id,
+    layerId: goal.research_layer_id,
+    kind: 'RESEARCH_PACKET',
+    title,
+    objective,
+    rationale: `Research goal ${goal.id}, continued by Brain under its approved budget.`,
+    manifest: {
+      objective,
+      why: 'A person approved this research goal once, with its ceilings; this packet is one the goal needs.',
+      lineage: {
+        projectId: goal.project_id,
+        layerId: goal.research_layer_id,
+        goal: goal.research_assignment,
+        orchestrationId,
+      },
+      units: [],
+      acceptableSources: [],
+      excludedSources: [],
+      evidence: [
+        'Each claim carrying its canonical source URL, its publisher and the date it was ' +
+          'published or observed, or recorded as unresolved with the search that failed',
+      ],
+      outputs: ['One filed, audited document with a claim ledger inside it'],
+      authorizedActions: [
+        'brain_claim_work and the research tools, for work items belonging to this packet',
+      ],
+      prohibitedActions: [
+        'any spend beyond this packet',
+        'any work item outside this orchestration',
+        'enabling paid overage',
+        'any purchase, contact, filing or other irreversible external action',
+      ],
+      budgetUnits: 1,
+      retry: { maxAttempts: 3, backoffSeconds: 60 },
+      stoppingConditions: [
+        'The packet reaches its own terminal state and the filed document has bytes in the store',
+      ],
+    },
+    completionContract: 'RESEARCH_PACKET_V1',
+    orchestrationId,
+    requiredCapabilities: [],
+    workloadClass: 'RESEARCH',
+    createdByType: 'SYSTEM',
+    createdById: `research-goal:${goal.id}`,
+    ready: true,
+    priority: 7,
+    maxAttempts: 5,
+  }).catch(async (error: unknown) => {
+    // `idx_bins_goal_packet_live` refused a second live bin: another pass made
+    // it first, and that bin is the answer. Anything else is a real failure.
+    if (await binForOrchestration(orchestrationId)) return null;
+    throw error;
+  });
+  return created?.id ?? null;
 }
 
 /** Coverage that leaves nothing for research to do on a requirement. */
@@ -223,7 +308,13 @@ async function advanceOne(goal: GoalRow, report: GoalContinuationReport): Promis
       WHERE goal_id = ? ORDER BY created_at, id`,
     [goal.id],
   );
-  if (packets.some((packet) => !TERMINAL_ORCHESTRATION.has(packet.status))) {
+  const live = packets.filter((packet) => !TERMINAL_ORCHESTRATION.has(packet.status));
+  if (live.length > 0) {
+    // A live packet nothing can be sent for is not live; give it its first bin.
+    for (const packet of live) {
+      const binId = await ensurePacketBin(goal, packet.id, `${goal.name} — ${packet.id}`);
+      if (binId) report.binned.push({ goalId: goal.id, orchestrationId: packet.id, binId });
+    }
     report.skipped.push({ goalId: goal.id, reason: 'a packet of this goal is still live' });
     return;
   }
@@ -298,6 +389,14 @@ async function advanceOne(goal: GoalRow, report: GoalContinuationReport): Promis
       startedBy: { kind: 'BRAIN', id: goal.id },
     });
     report.started.push({ goalId: goal.id, packetKey, orchestrationId: started.orchestration.id });
+    if (!TERMINAL_ORCHESTRATION.has(started.orchestration.status)) {
+      const binId = await ensurePacketBin(
+        goal,
+        started.orchestration.id,
+        `${goal.name} — round ${packets.length + 1}`,
+      );
+      if (binId) report.binned.push({ goalId: goal.id, orchestrationId: started.orchestration.id, binId });
+    }
   } catch (error) {
     if (error instanceof GoalBudgetExhausted) {
       const asked = await askAboutCeiling(goal, error.ceiling, error.message);
@@ -321,6 +420,7 @@ export async function advanceResearchGoals(): Promise<GoalContinuationReport> {
     started: [],
     answeredByArchive: [],
     stopped: [],
+    binned: [],
     skipped: [],
   };
   const goals = await getDb().all<GoalRow>(
