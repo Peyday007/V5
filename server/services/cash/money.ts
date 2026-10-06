@@ -92,8 +92,14 @@ export function contributionFrom(input: {
   refunds: number;
   costs: number;
   unpaidCommitments: number;
+  /**
+   * Money received that is owed back to the buyer and not yet refunded — a
+   * second payment of a paid invoice, or payment on a released agreement. A
+   * liability like an unpaid bill: never earned, and never deployable.
+   */
+  owedBack?: number;
 }): number {
-  return input.payments - input.refunds - input.costs - input.unpaidCommitments;
+  return input.payments - input.refunds - (input.owedBack ?? 0) - input.costs - input.unpaidCommitments;
 }
 
 export async function cashPosition(input: {
@@ -143,14 +149,23 @@ export async function cashPosition(input: {
   const held = input.opportunityId ? 0 : await heldCentsForProject(input.projectId, input.currency ?? 'USD');
   const reserves = Math.max(0, reserved - released);
 
-  const deployable = availableFunds - unpaidCommitments - held - reserves;
+  // Received and owed back to a buyer: in the account until it is refunded,
+  // and not ours to deploy or to count as earned. The per-deal rule, summed.
+  const { owedBackForProject } = await import('./journey/position.ts');
+  const owedBack = await owedBackForProject({
+    projectId: input.projectId,
+    opportunityId: input.opportunityId ?? null,
+    currency: input.currency ?? 'USD',
+  });
+
+  const deployable = availableFunds - unpaidCommitments - owedBack - held - reserves;
 
   // Earned, not received: a contribution is what the transaction produced, and
   // it is complete whether or not the provider has paid out yet. Every
   // incremental cost is in it, including the tests that produced no sale — and
   // a cost incurred and not yet paid is a cost, so it is in it too. The one
   // formula; `journey/position.ts` reads it rather than restating it.
-  const completedContribution = contributionFrom({ payments, refunds, costs, unpaidCommitments });
+  const completedContribution = contributionFrom({ payments, refunds, costs, unpaidCommitments, owedBack });
 
   return {
     currency: input.currency ?? 'USD',

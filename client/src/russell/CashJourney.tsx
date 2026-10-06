@@ -55,7 +55,7 @@ export function JourneyTotals({ journey, currency }: { journey: JourneyView; cur
   return (
     <p className="rs-item-meta rs-cash-journey-totals">
       Agreed {money(t.agreedRevenueCents, currency)} · invoiced {money(t.invoicedCents, currency)} · paid{' '}
-      {money(t.customerPaymentsCents, currency)} · settled {money(t.settledCashCents, currency)} · owed to you{' '}
+      {money(t.paidNetCents, currency)} · settled {money(t.settledCashCents, currency)} · owed to you{' '}
       {money(t.owedByBuyersCents, currency)} · contribution {money(t.contributionCents, currency)}
       {t.unsettledCents > 0 ? ` (${money(t.unsettledCents, currency)} paid and not yet settled is not cash)` : ''}
     </p>
@@ -124,14 +124,15 @@ export function DealJourney({
       <p className="rs-badge">{STAGE_LABEL[deal.stage] ?? deal.stage}</p>
       <p className="rs-item-meta">
         {PAYMENT_LABEL[deal.paymentState] ?? deal.paymentState}. Agreed {money(p.agreedRevenueCents, currency)}, invoiced{' '}
-        {money(p.invoicedCents, currency)}, paid {money(p.customerPaymentsCents - p.refundsCents, currency)}, settled{' '}
+        {money(p.invoicedCents, currency)}, paid {money(p.paidNetCents, currency)}, settled{' '}
         {money(p.settledCashCents, currency)}; costs {money(p.incrementalCostsCents + p.unpaidCommitmentsCents, currency)};
         contribution {money(p.contributionCents, currency)}.
       </p>
       {p.owedBackCents > 0 ? (
         <p className="rs-state rs-state-warn">
-          {money(p.owedBackCents, currency)} was paid twice on an invoice and is owed back to the buyer. It is not
-          payment toward any agreement, and the deal is not collected until it is refunded.
+          {money(p.owedBackCents, currency)} is owed back to the buyer — a second payment of a paid invoice, or
+          payment on an agreement since released. It is not payment toward any agreement, and the deal is not
+          collected until it is refunded.
         </p>
       ) : null}
       {p.unbackedAgreedCents > 0 ? (

@@ -128,6 +128,8 @@ export interface DealPnl {
   invoicedCents: number;
   /** Gross customer payments, before refunds. */
   customerPaymentsCents: number;
+  /** Customer payments net of refunds: what every surface calls "paid". */
+  paidNetCents: number;
   refundsCents: number;
   /** Settled and usable. Never more than was paid. */
   settledCashCents: number;
@@ -160,7 +162,10 @@ export interface DealPnl {
    * back never makes the buyer owe that money again.
    */
   creditedGrossCents: number;
-  /** A second payment of an already-paid invoice, not yet refunded: owed back. */
+  /**
+   * Owed back to the buyer and not yet refunded: a second payment of an
+   * already-paid invoice, or money paid on an agreement since released.
+   */
   owedBackCents: number;
   /** Billed and not yet paid. */
   owedByBuyerCents: number;
@@ -234,6 +239,34 @@ export async function owedBackGrossCents(input: {
 }
 
 const num = (t: Partial<Record<CashMoneyKind, number>>, k: CashMoneyKind): number => Number(t[k] ?? 0);
+
+/**
+ * Money owed back across a project (or one piece): each piece's owed-back sum
+ * less that piece's refunds, never below zero — the per-deal `owedBackCents`,
+ * summed. Only pieces with a paid invoice can owe anything back, so only those
+ * are read.
+ */
+export async function owedBackForProject(input: {
+  projectId: string;
+  opportunityId: string | null;
+  currency: string;
+}): Promise<number> {
+  const ids = new Set(
+    (await listInvoices({ projectId: input.projectId, ...(input.opportunityId ? { opportunityId: input.opportunityId } : {}) }))
+      .filter((one) => one.currency === input.currency && one.paymentEntryId)
+      .map((one) => one.opportunityId),
+  );
+  let total = 0;
+  for (const opportunityId of ids) {
+    const gross = await owedBackGrossCents({ projectId: input.projectId, opportunityId, currency: input.currency });
+    if (gross <= 0) continue;
+    const totals = await totalsByKind({ projectId: input.projectId, opportunityId, currency: input.currency });
+    total += Math.max(0, gross - num(totals, 'REFUND'));
+  }
+  return total;
+}
+
+
 
 export async function dealPosition(input: {
   opportunity: CashOpportunity;
@@ -363,13 +396,14 @@ export async function dealPosition(input: {
       unbackedAgreedCents: Math.max(0, ledgerAgreed - agreedRevenue),
       invoicedCents: invoiced,
       customerPaymentsCents: payments,
+      paidNetCents: paidNet,
       refundsCents: refunds,
       settledCashCents: Math.min(settled, paidNet),
       unsettledCents: Math.max(0, paidNet - settled),
       incrementalCostsCents: costs,
       unpaidCommitmentsCents: unpaid,
       heldCommitmentsCents: held,
-      contributionCents: contributionFrom({ payments, refunds, costs, unpaidCommitments: unpaid }),
+      contributionCents: contributionFrom({ payments, refunds, costs, unpaidCommitments: unpaid, owedBack }),
       creditedPaymentsCents: creditedNet,
       creditedGrossCents: credited,
       owedBackCents: owedBack,
@@ -416,7 +450,8 @@ export function collectable(position: DealPosition): { ok: true } | { ok: false;
     return {
       ok: false,
       reason:
-        'The buyer paid an invoice twice and the second payment has not been refunded; money owed back ' +
+        'The buyer is owed money back — a second payment of a paid invoice, or payment on an agreement ' +
+        'since released — and it has not been refunded; money owed back ' +
         'is not collected revenue.',
     };
   }

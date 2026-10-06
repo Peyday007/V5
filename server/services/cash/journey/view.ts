@@ -32,6 +32,8 @@ export interface JourneyView {
     agreedRevenueCents: number;
     invoicedCents: number;
     customerPaymentsCents: number;
+    /** Net of refunds: the figure each deal's card calls "paid". */
+    paidNetCents: number;
     settledCashCents: number;
     unsettledCents: number;
     owedByBuyersCents: number;
@@ -162,6 +164,7 @@ export async function journeyView(input: {
       agreedRevenueCents: sum('agreedRevenueCents'),
       invoicedCents: sum('invoicedCents'),
       customerPaymentsCents: sum('customerPaymentsCents'),
+      paidNetCents: sum('paidNetCents'),
       settledCashCents: sum('settledCashCents'),
       unsettledCents: sum('unsettledCents'),
       owedByBuyersCents: sum('owedByBuyerCents'),

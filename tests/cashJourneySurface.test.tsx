@@ -28,6 +28,7 @@ const DEAL: DealView = {
     unbackedAgreedCents: 0,
     invoicedCents: 0,
     customerPaymentsCents: 0,
+    paidNetCents: 0,
     refundsCents: 0,
     settledCashCents: 0,
     unsettledCents: 0,

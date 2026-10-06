@@ -1142,6 +1142,11 @@ describe('agreement and invoice', () => {
     let deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
     // The second agreement is unpaid and fully billable; the first's money is owed back.
     expect(deal.pnl).toMatchObject({ creditedPaymentsCents: 0, owedBackCents: 40_000, invoiceableCents: 40_001, owedByBuyerCents: 0 });
+    // Owed back is a liability: not earned, and not ours to deploy.
+    expect(deal.pnl.contributionCents).toBe(0);
+    const project = await cashPosition({ projectId, currency: 'USD' });
+    expect(project.completedContributionCents).toBe(0);
+    const projectBefore = project.deployableCents;
     expect(deal.paymentState).not.toMatch(/PAID_UNSETTLED|SETTLED/);
     expect(collectable(deal).ok).toBe(false);
     // There is a way to pay it back even though no obligation ever existed:
@@ -1166,6 +1171,11 @@ describe('agreement and invoice', () => {
     ).toBe(false);
     deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
     expect(deal.pnl.owedBackCents).toBe(0);
+    // Paid is one figure on every surface: net of the refund.
+    expect(deal.pnl).toMatchObject({ customerPaymentsCents: 40_000, paidNetCents: 0, contributionCents: 0 });
+    // Nothing settled, so the refund left the account and the owed-back hold
+    // is gone: deployable moved by exactly the refund, not twice.
+    expect((await cashPosition({ projectId, currency: 'USD' })).deployableCents).toBe(projectBefore);
   });
 
   it('the next agreement’s real payment is recorded while a released agreement’s money is still owed back', async () => {
