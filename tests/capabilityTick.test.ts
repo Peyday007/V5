@@ -475,12 +475,15 @@ describe('the kernel advancing on the tick', () => {
     );
     const call = loop.indexOf('await advanceCapabilityPackets(');
     expect(call).toBeGreaterThan(-1);
-    // The nearest `try {` before the call, and a `catch` after it: the call is
-    // inside a guard rather than beside one.
-    const guard = loop.lastIndexOf('try {', call);
+    // The nearest `runPass(` before the call opens the pass it runs in: the
+    // tick's failure domain, which records a throw and lets every later pass
+    // run. Nothing closes that pass between the guard and the call.
+    const guard = loop.lastIndexOf("runPass(report, 'capability-packets'", call);
     expect(guard).toBeGreaterThan(-1);
-    expect(loop.slice(guard, call)).not.toContain('catch');
-    expect(loop.slice(call, call + 900)).toContain('catch');
+    expect(loop.slice(guard, call)).not.toContain('});');
+    // And `runPass` itself is the guard: it catches and records.
+    const runPass = loop.slice(loop.indexOf('export async function runPass('));
+    expect(runPass.slice(0, 2000)).toMatch(/catch \(error\)[\s\S]*passFailures\.push/);
   });
 });
 
