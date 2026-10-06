@@ -27,7 +27,7 @@ import { entriesOfKinds, moneyEntryByKey, totalsByKind, unattributedPersonPaymen
 import { listInvoices } from '../../../repos/cashInvoices.ts';
 import { listCommitments } from '../../../repos/cashAuthority.ts';
 import { actionsFor } from '../../../repos/cashActions.ts';
-import { agreementsFor, observationsFor } from '../../../repos/cashJourney.ts';
+import { agreementsFor, agreementsInProject, observationsFor } from '../../../repos/cashJourney.ts';
 import { readObligation, type ObligationReading } from './fulfillment.ts';
 import { contributionFrom } from '../money.ts';
 import { commercialOperationsFor } from '../effects.ts';
@@ -341,7 +341,25 @@ export async function owedBackReading(input: {
     .sort((a, b) => (a.agreement.createdAt < b.agreement.createdAt ? -1 : 1));
   const releasedTotal = releasedPaid.reduce((sum, one) => sum + one.cents, 0);
   const agreedLive = live.reduce((sum, one) => sum + one.amountCents, 0);
-  let room = Math.max(0, agreedLive - (paid - duplicates - releasedTotal));
+  // Payments bound to no agreement's invoice — a hand payment outside every
+  // invoice, Brain's own charge — pay whatever the live agreements still need.
+  // On a piece that has agreements, what is beyond that is owed back: money for
+  // an agreement since cancelled is not earned because it never had an
+  // invoice. (A piece with no agreement at all is a one-sided record from
+  // before agreements existed, and its payments stay what they were.)
+  const liveInvoicePaid = invoices
+    .filter(
+      (one) =>
+        one.paymentEntryId &&
+        BILLED_INVOICE_STATES.includes(one.state) &&
+        live.some((agreement) => entries.get(agreement.id)?.id === one.pipelineEntryId),
+    )
+    .reduce((sum, one) => sum + one.amountCents, 0);
+  const unbound = Math.max(0, paid - duplicates - releasedTotal - liveInvoicePaid);
+  const unboundCredited =
+    agreements.length === 0 ? unbound : Math.min(unbound, Math.max(0, agreedLive - liveInvoicePaid));
+  const unboundExcess = unbound - unboundCredited;
+  let room = Math.max(0, agreedLive - liveInvoicePaid - unboundCredited);
   for (const { agreement, cents } of releasedPaid) {
     const net = repay(agreement.id, cents);
     const carried = Math.min(net, room);
@@ -349,6 +367,10 @@ export async function owedBackReading(input: {
     // Not payment toward a live agreement: all of it but what carried.
     gross += cents - carried;
     owedBack += net - carried;
+  }
+  if (unboundExcess > 0) {
+    gross += unboundExcess;
+    owedBack += repay(null, unboundExcess);
   }
   for (const { agreementId, cents } of duplicateOwed) {
     gross += cents;
@@ -380,9 +402,10 @@ export async function owedBackForProject(input: {
   opportunityId: string | null;
   currency: string;
 }): Promise<{ owedBack: number; inAccount: number }> {
+  // Only pieces with an agreement can owe anything back.
   const ids = new Set(
-    (await listInvoices({ projectId: input.projectId, ...(input.opportunityId ? { opportunityId: input.opportunityId } : {}) }))
-      .filter((one) => one.currency === input.currency && one.paymentEntryId)
+    (await agreementsInProject(input.projectId))
+      .filter((one) => one.currency === input.currency && (!input.opportunityId || one.opportunityId === input.opportunityId))
       .map((one) => one.opportunityId),
   );
   let owedBack = 0;

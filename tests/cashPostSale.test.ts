@@ -1187,6 +1187,36 @@ describe('agreement and invoice', () => {
     expect(deal.pnl).toMatchObject({ agreedRevenueCents: 40_002, creditedGrossCents: 0, creditedPaymentsCents: 0, owedBackCents: 0, invoiceableCents: 40_002 });
   });
 
+  it('money paid outside any invoice on an agreement since cancelled is owed back, not earned or deployable', async () => {
+    const id = await executing();
+    const agreement = await agree(id, 75_000);
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId, opportunityId: id, kind: 'CUSTOMER_PAYMENT', amountCents: 75_000, currency: 'USD',
+          verifiedReference: 'bank-outside', idempotencyKey: `pay:${id}:outside`, actorRef: userId,
+          appliesTo: 'OUTSIDE_INVOICES',
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId, opportunityId: id, kind: 'SETTLEMENT', amountCents: 75_000, currency: 'USD',
+          verifiedReference: 'payout-outside', idempotencyKey: `settle:${id}:outside`, actorRef: userId,
+        })
+      ).ok,
+    ).toBe(true);
+    const before = await cashPosition({ projectId, currency: 'USD' });
+    expect(before.completedContributionCents).toBe(75_000);
+    expect((await releaseAgreement({ agreementId: agreement.id, reason: 'The buyer cancelled.', actorRef: userId })).ok).toBe(true);
+    const deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
+    expect(deal.pnl).toMatchObject({ creditedPaymentsCents: 0, owedBackCents: 75_000, contributionCents: 0 });
+    const after = await cashPosition({ projectId, currency: 'USD' });
+    expect(after.completedContributionCents).toBe(0);
+    expect(after.deployableCents).toBe(before.deployableCents - 75_000);
+  });
+
   it('money paid on an agreement released for a replacement stays paid, and the replacement is never billed again', async () => {
     const id = await executing();
     const first = await paidOnInvoice(id, 40_000, 'replaced');

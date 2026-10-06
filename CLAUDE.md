@@ -12396,7 +12396,12 @@ table are unchanged in kind.
   cancelled deal's money as revenue. `owedBackReading` is the one reader, and
   it attributes refunds too: a refund on an agreement's obligation repays that
   agreement's owed-back money and nothing else's, so a refund for one
-  agreement's failed work cannot make another's owed-back money disappear. And that money had no way
+  agreement's failed work cannot make another's owed-back money disappear.
+  The same holds for money that reached an agreement with no invoice — a hand
+  payment outside every invoice, or Brain's own charge: it pays what the live
+  agreements still need, and on a piece that has agreements the rest is owed
+  back. A piece with no agreement at all is a one-sided record from before
+  agreements existed, and its payments are left exactly as they were. And that money had no way
   back: a refund on an agreed deal belongs to the obligation, `declare`
   refuses a released agreement, so with no obligation declared the refund was
   refused everywhere. The money route now records it where no obligation
