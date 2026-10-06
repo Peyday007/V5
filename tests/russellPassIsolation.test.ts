@@ -23,6 +23,20 @@ vi.mock('../server/repos/sharedFindings.ts', async (importOriginal) => {
   };
 });
 
+const renewal = vi.hoisted(() => ({ fail: false }));
+vi.mock('../server/repos/russellMissions.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../server/repos/russellMissions.ts')>();
+  return {
+    ...actual,
+    renewLiveMissionReservations: async (
+      ...args: Parameters<typeof actual.renewLiveMissionReservations>
+    ) => {
+      if (renewal.fail) throw new Error('renewal failed');
+      return actual.renewLiveMissionReservations(...args);
+    },
+  };
+});
+
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -94,5 +108,29 @@ describe('a failed pass is its own failure domain', () => {
     expect(
       await getDb().all('SELECT id FROM research_orchestrations WHERE goal_id = ?', [goal.id]),
     ).toHaveLength(1);
+  });
+});
+
+describe('what a member is shown about a pass that failed', () => {
+  it('does not degrade every project for a pass the next tick retries, and still does for a failed tick', async () => {
+    const { stateOf } = await import('../server/services/russell/home.ts');
+    const base = { cycleState: 'RUNNING' as const, power: 'READY' as const, working: 1, decisionsWaiting: 0 };
+    expect(stateOf({ ...base, cycleError: 'passes: design-kernel: boom' }).state).toBe('LIVE');
+    expect(stateOf({ ...base, cycleError: 'the tick failed' }).state).toBe('DEGRADED');
+  });
+});
+
+describe('a pass that guards the launch', () => {
+  it('skips the launch when the reservation renewal failed, and records why', async () => {
+    renewal.fail = true;
+    try {
+      const report = await tick('isolation');
+      const launch = report.passFailures.find((one) => one.pass === 'launch');
+      expect(report.passFailures.map((one) => one.pass)).toContain('renew-reservations');
+      expect(launch?.error).toMatch(/skipped/);
+      expect(report.launched).toEqual([]);
+    } finally {
+      renewal.fail = false;
+    }
   });
 });

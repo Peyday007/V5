@@ -26,7 +26,7 @@
 import { approveObjective } from './contract.ts';
 import { campaignSpecFor } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
-import { ensureCampaign } from '../../repos/factory.ts';
+import { ensureCampaign, getChangeRequest } from '../../repos/factory.ts';
 import type { FactoryCampaign, FactoryChangeRequest } from '../../domain/factory.ts';
 
 export type StartCampaignOutcome =
@@ -57,6 +57,27 @@ export async function approveAndStartCampaign(
      */
     | { changeRequestId: string; standingAuthorityId: string },
 ): Promise<StartCampaignOutcome> {
+  /*
+   * A standing authority is checked here as well as by the caller, so no
+   * future entrance can approve on a grant id that is not live, not this
+   * project's, or does not cover building a test.
+   */
+  if ('standingAuthorityId' in input) {
+    const changeRequest = await getChangeRequest(input.changeRequestId);
+    if (!changeRequest) throw new Error('No such change request.');
+    const { checkCommercialAuthority } = await import('../cash/authority.ts');
+    const decision = await checkCommercialAuthority({
+      projectId: changeRequest.projectId,
+      action: 'BUILD_A_TEST',
+    });
+    if (!decision.ok || decision.authority?.id !== input.standingAuthorityId) {
+      return {
+        ok: false,
+        reason: `The standing authority does not cover this: ${decision.reason}.`,
+        changeRequest,
+      };
+    }
+  }
   const approval = await approveObjective(
     'standingAuthorityId' in input
       ? {

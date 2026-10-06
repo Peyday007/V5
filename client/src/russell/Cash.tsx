@@ -899,7 +899,11 @@ function Authority({
   const [committed, setCommitted] = useState('');
   const [perAction, setPerAction] = useState('');
   const [concurrent, setConcurrent] = useState('');
-  const [actions, setActions] = useState<string[]>(view.vocabulary.commercialActions);
+  // Everything checked by default except handing tests to the Software
+  // Factory: that one starts work on its own, so a person opts into it.
+  const [actions, setActions] = useState<string[]>(
+    view.vocabulary.commercialActions.filter((action) => action !== 'BUILD_A_TEST'),
+  );
   const [preview, setPreview] = useState<string[] | null>(null);
   const [withdrawReason, setWithdrawReason] = useState('');
 

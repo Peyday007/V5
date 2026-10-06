@@ -569,6 +569,18 @@ describe('a fire nobody answered', () => {
     await age();
     expect(await reviveAbandonedNoShowDispatches(10)).toEqual([]);
 
+    // An intent with no revival left is never selected, so it cannot crowd out
+    // one abandoned after it even when the page holds a single row.
+    const later = await aReadyBin();
+    const laterIntent = await aFireThatWentUnanswered(later, { attempts: 5 });
+    await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10);
+    await getDb().run('UPDATE bin_dispatch SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - ABANDONED_REVIVE_AFTER_MS - 30_000).toISOString(),
+      laterIntent,
+    ]);
+    await age();
+    expect((await reviveAbandonedNoShowDispatches(1)).map((r) => r.binId)).toEqual([later]);
+
     // And the bin it can no longer fire for is named, not counted as healthy.
     const reconciled = await reconcileBins();
     expect(reconciled.details.find((d) => d.binId === binId)?.disposition).toBe('DISPATCH_EXHAUSTED');

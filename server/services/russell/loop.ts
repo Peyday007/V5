@@ -126,6 +126,7 @@ import {
 } from './planning.ts';
 import { resumeParkedAcrossProjects } from './resumeParked.ts';
 import { promoteEligibleClaims } from '../../repos/sharedFindings.ts';
+import { classifyInfraFailure } from '../../db/infra.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
 import {
@@ -631,22 +632,41 @@ export interface TickReport {
  * one. Each statement is bounded by the database's own statement timeout and
  * the pool's checkout timeout, which is what bounds a pass.
  */
+/** Marks a cycle error that is per-pass failures rather than a failed tick. */
+export const PASS_FAILURE_PREFIX = 'passes: ';
+
 export async function runPass(
   report: Pick<TickReport, 'passFailures'>,
   name: string,
   fn: () => Promise<unknown>,
 ): Promise<boolean> {
+  /*
+   * Isolating passes must not turn a database outage into forty-five timeouts
+   * in a row: once three passes on this tick have failed because the database
+   * could not answer, the rest are skipped and recorded, and the next tick asks
+   * again. That keeps the tick inside its lease and off a database that is
+   * already struggling, without one *ordinary* failure stopping anything.
+   */
+  const infra = report.passFailures.filter((f) => f.error.startsWith(INFRA_MARK)).length;
+  if (infra >= MAX_INFRA_FAILURES_PER_TICK) {
+    report.passFailures.push({ pass: name, error: 'skipped: the database is not answering this tick' });
+    return false;
+  }
   try {
     await fn();
     return true;
   } catch (error) {
+    const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
     report.passFailures.push({
       pass: name,
-      error: (error instanceof Error ? error.message : String(error)).slice(0, 300),
+      error: classifyInfraFailure(error) ? `${INFRA_MARK}${message}` : message,
     });
     return false;
   }
 }
+
+const INFRA_MARK = 'infra: ';
+export const MAX_INFRA_FAILURES_PER_TICK = 3;
 
 const EMPTY: TickReport = {
   ran: false,
@@ -1438,7 +1458,7 @@ export async function tick(owner: string): Promise<TickReport> {
      * spend that never happened, and the launch step would hand out a slot the
      * owner had already committed.
      */
-    await runPass(report, 'renew-reservations', async () => {
+    const renewed = await runPass(report, 'renew-reservations', async () => {
       for (const id of await renewLiveMissionReservations(cycle.maxEventsPerCycle)) {
         report.renewedReservations.push(id);
       }
@@ -1456,8 +1476,8 @@ export async function tick(owner: string): Promise<TickReport> {
      * Failures here are contained to the project: a frontier is a reading, and
      * losing one must never stop the tick from finishing missions.
      */
-    await runPass(report, 'frontier', async () => {
-      await runPass(report, 'projects', async () => {
+    await runPass(report, 'project-kernels', async () => {
+      await runPass(report, 'frontier', async () => {
       for (const project of await listProjects()) {
           try {
             /*
@@ -1924,7 +1944,7 @@ export async function tick(owner: string): Promise<TickReport> {
      * whose mission is waiting on a person does not start another one in front
      * of it.
      */
-    await runPass(report, 'park-stopped', async () => {
+    const parkedStopped = await runPass(report, 'park-stopped', async () => {
       for (const parked of await parkStoppedMissions(cycle.maxEventsPerCycle)) {
         report.needsHuman.push(parked);
       }
@@ -2024,7 +2044,19 @@ export async function tick(owner: string): Promise<TickReport> {
     });
 
     // 4. Start at most one thing.
-    await runPass(report, 'launch', async () => {
+    /*
+     * Launch is the one pass that must not run after its guards failed. A
+     * lapsed hold reads to `reserve` as a free slot, so launching after the
+     * renewal failed could start a mission over the grant's concurrency; and a
+     * mission waiting on a person must be parked before another is started in
+     * front of it. Skipped this tick, recorded, and asked again next tick.
+     */
+    if (!renewed || !parkedStopped) {
+      report.passFailures.push({
+        pass: 'launch',
+        error: 'skipped: a pass it depends on (renew-reservations or park-stopped) failed this tick',
+      });
+    } else await runPass(report, 'launch', async () => {
       const launchable = await nextLaunchable(cycle.maxEventsPerCycle);
       let started = 0;
       for (const entry of launchable) {
@@ -2146,9 +2178,13 @@ export async function tick(owner: string): Promise<TickReport> {
       cursorAt: cycleNow(),
       // Recorded on the row, so a pass that keeps failing is a reading
       // somebody can take rather than something only the process saw.
+      // Prefixed so the projections that turn a failed *tick* into a DEGRADED
+      // status on every project's Home can tell it apart: a pass that failed
+      // is retried next tick, and its error text is an operator's reading,
+      // not something to show every member of every project.
       error:
         report.passFailures.length > 0
-          ? report.passFailures.map((f) => `${f.pass}: ${f.error}`).join(' | ').slice(0, 2000)
+          ? `${PASS_FAILURE_PREFIX}${report.passFailures.map((f) => `${f.pass}: ${f.error}`).join(' | ')}`.slice(0, 2000)
           : null,
     });
     return report;

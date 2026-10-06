@@ -1541,9 +1541,15 @@ async function runRemoteTick(
 
   // 1. Read anything a worker finished. Before creating work, so a decision about
   //    what to do next is taken against what the campaign now knows.
+  // Only the newest completed plan is a candidate to install: two proposals
+  // must never be installed into one campaign's units.
+  const newestPlan = bins
+    .filter((one) => one.kind === 'FACTORY_PLAN' && one.state === 'COMPLETE')
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))[0];
   for (const bin of bins) {
     if (bin.state !== 'COMPLETE') continue;
     if (bin.kind === 'FACTORY_PLAN') {
+      if (bin.id !== newestPlan?.id) continue;
       if (await ingestPlanBin(campaign, changeRequest, bin, report)) report.progress = true;
     } else if (bin.kind === 'FACTORY_UNITS') {
       if (await ingestUnitsBin(campaign, changeRequest, bin, report)) report.progress = true;

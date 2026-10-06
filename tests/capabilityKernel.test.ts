@@ -1359,10 +1359,13 @@ describe('the capability kernel', () => {
       );
       // A kernel that could not advance must not stop Russell writing back a
       // mission — it is a reading about Brain, never a precondition of Brain.
-      const advance = loop.slice(loop.indexOf('await advanceSources()'));
-      expect(advance.slice(0, 400)).toMatch(/} catch \{/);
-      const scan = loop.slice(loop.indexOf('await scanIfStale()'));
-      expect(scan.slice(0, 400)).toMatch(/} catch \{/);
+      // Each sits in its own `runPass`, the tick's failure domain: a throw is
+      // recorded and the passes after it still run.
+      const before = (call: string) => loop.slice(Math.max(0, loop.indexOf(call) - 200), loop.indexOf(call));
+      expect(loop.indexOf('await advanceSources()')).toBeGreaterThan(0);
+      expect(before('await advanceSources()')).toMatch(/runPass\(report, 'capability-sources'/);
+      expect(loop.indexOf('await scanIfStale()')).toBeGreaterThan(0);
+      expect(before('await scanIfStale()')).toMatch(/runPass\(report, 'self-model'/);
     });
   });
 

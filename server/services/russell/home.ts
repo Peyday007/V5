@@ -121,7 +121,9 @@ export function stateOf(input: {
   if (input.cycleState === 'STOPPED' || input.cycleState === null) {
     return { state: 'DEGRADED', reason: 'Russell’s loop is not running.' };
   }
-  if (input.cycleError) {
+  // Per-pass failures are retried next tick and are an operator's reading;
+  // only a tick that failed outright degrades what every member is shown.
+  if (input.cycleError && !input.cycleError.startsWith('passes: ')) {
     return { state: 'DEGRADED', reason: `Russell’s last cycle ended with a problem: ${input.cycleError}` };
   }
   if (input.power === 'NONE') {

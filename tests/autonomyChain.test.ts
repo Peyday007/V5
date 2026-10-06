@@ -784,6 +784,14 @@ describe('a READY_TO_TEST software test reaches the Factory and the hosted loop 
     ).toBe(1);
     expect(await count('SELECT COUNT(*) AS n FROM cash_actions WHERE opportunity_id = ?', [ready.id])).toBe(1);
     expect(await count(handoffEvents, [ready.id])).toBe(1);
+    // And the handoff did not run again at all: a re-run resubmits the
+    // objective, which asks the forge and writes a dedupe row every tick.
+    expect(
+      await count(
+        "SELECT COUNT(*) AS n FROM factory_events WHERE kind = 'CHANGE_REQUEST_DEDUPED' AND detail LIKE ?",
+        [`%${request!.id}%`],
+      ),
+    ).toBe(0);
     expect(
       (await listBins({ projectId })).filter(
         (bin) => bin.kind === 'FACTORY_PLAN' && bin.factoryCampaignId === campaignId,

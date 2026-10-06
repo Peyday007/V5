@@ -56,7 +56,7 @@
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactsFor } from '../../repos/cashCardFacts.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
-import { recordAction } from '../../repos/cashActions.ts';
+import { actionsFor, recordAction } from '../../repos/cashActions.ts';
 import { checkCommercialAuthority } from './authority.ts';
 import { raiseNeed } from './needs.ts';
 import { cashTier } from './tier.ts';
@@ -165,6 +165,10 @@ export async function handOffReadyTests(projectId: string): Promise<FactoryHando
   const ready = await listOpportunities({ projectId, states: ['READY'] });
   for (const opportunity of ready) {
     if (!opportunity.requiredCapabilities.includes(BUILD_CAPABILITY)) continue;
+    // Handed off already: the action is written only after the campaign
+    // exists, so its row is the proof. Without this every Cash tick re-ran the
+    // whole handoff — forge requests and a dedupe row each time, for ever.
+    if ((await actionsFor(opportunity.id)).some((one) => one.action === BUILD_ACTION)) continue;
 
     // The tier, re-derived: a card that lost a fact since it was marked ready
     // is not handed anywhere.
@@ -226,6 +230,12 @@ export async function handOffReadyTests(projectId: string): Promise<FactoryHando
       changeRequestId = submitted.changeRequest.id;
     } catch (error) {
       if (!(error instanceof ContractError)) throw error;
+      // A forge that did not answer is not a refusal: nothing for a person to
+      // fix, and the next pass asks again.
+      if ((error.detail as { reason?: string } | undefined)?.reason === 'FORGE_UNREADABLE') {
+        pass.waiting.push({ opportunityId: opportunity.id, reason: `the forge did not answer: ${error.message}` });
+        continue;
+      }
       await waitOn(pass, opportunity, `The Factory refused the objective: ${error.message}`, {
         key: `factory-handoff:refused:${opportunity.id}`,
         recommendedPath: 'Fix what the Factory named, and Brain submits the objective again on the next pass.',

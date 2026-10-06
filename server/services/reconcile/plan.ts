@@ -112,6 +112,9 @@ export async function persistPlan(input: PlanInput): Promise<{
  * not evidence, and pretending otherwise is the failure the extraction gate
  * exists to prevent.
  */
+/** How long a document still being read holds back a decision about research. */
+export const PENDING_READ_WINDOW_MS = 60 * 60_000;
+
 export async function inventoryProject(projectId: string): Promise<{
   claims: ExistingClaim[];
   documentsRead: number;
@@ -134,7 +137,14 @@ export async function inventoryProject(projectId: string): Promise<{
     const run = await getCurrentExtractionRun(document.id);
     if (!run || (run.status !== 'READY' && run.status !== 'READY_WITH_WARNINGS')) {
       unreadable += 1;
-      if (!run || (run.status !== 'BLOCKED' && run.status !== 'FAILED')) pending += 1;
+      // Pending only while a reading could plausibly still finish: an
+      // INTERRUPTED run, or one that has sat for longer than a reading takes,
+      // is requeued at boot rather than by anything a caller could wait on.
+      const since = run ? run.updatedAt : document.createdAt;
+      const recent = Date.now() - Date.parse(since) < PENDING_READ_WINDOW_MS;
+      if (recent && (!run || (run.status !== 'BLOCKED' && run.status !== 'FAILED' && run.status !== 'INTERRUPTED'))) {
+        pending += 1;
+      }
       continue;
     }
     read += 1;

@@ -3229,6 +3229,10 @@ export async function reopenNoShowDispatches(
  */
 export const ABANDONED_REVIVE_AFTER_MS = 2 * 3_600_000;
 export const MAX_ABANDONED_REVIVALS = 2;
+/** What one revival adds to the intent's ceiling: one more intent's worth of fires. */
+const REVIVAL_STEP = 5;
+/** `ensureDispatchIntent` creates every intent at 5; past this it has no revival left. */
+const REVIVED_CEILING = 5 + REVIVAL_STEP * MAX_ABANDONED_REVIVALS;
 
 /**
  * Give an intent that gave up on unanswered fires a bounded second life.
@@ -3268,20 +3272,24 @@ export async function reviveAbandonedNoShowDispatches(
         AND ${claimableStateSql('b.')}
         AND b.attempt_count < b.max_attempts
         AND b.lease_generation = d.lease_generation
+        -- The bound is in the selection, on the column the revival itself
+        -- raises: an intent with no revival left is never selected, so it
+        -- cannot crowd the page and starve one abandoned after it, and the
+        -- bound does not rest on an event write that may be swallowed.
+        AND d.max_attempts < ?
         AND NOT EXISTS (SELECT 1 FROM connector_recovery_probes p WHERE p.bin_id = b.id)
       ORDER BY d.updated_at, d.id
       LIMIT ?`,
-    [before, now, Math.max(1, limit)] as never[],
+    [before, now, REVIVED_CEILING, Math.max(1, limit)] as never[],
   );
   const out: { dispatchId: string; binId: string }[] = [];
   for (const row of rows) {
-    if ((await abandonedRevivals(row.bin_id, row.lease_generation)) >= MAX_ABANDONED_REVIVALS) continue;
     const result = await getDb().run(
       `UPDATE bin_dispatch
-          SET state = 'PENDING', max_attempts = max_attempts + 5, next_attempt_at = ?, updated_at = ?,
+          SET state = 'PENDING', max_attempts = max_attempts + ?, next_attempt_at = ?, updated_at = ?,
               last_error = 'Revived after unanswered fires: the surfaces that did not answer may since have been taken out of routing.'
-        WHERE id = ? AND state = 'ABANDONED'`,
-      [now, now, row.id] as never[],
+        WHERE id = ? AND state = 'ABANDONED' AND max_attempts < ?`,
+      [REVIVAL_STEP, now, now, row.id, REVIVED_CEILING] as never[],
     );
     if (result.changes !== 1) continue;
     await recordBinEvent({
@@ -3318,7 +3326,11 @@ export async function dispatchExhaustedFor(binId: string, leaseGeneration: numbe
     [binId, leaseGeneration],
   );
   if (Number(row?.n ?? 0) === 0) return false;
-  return (await abandonedRevivals(binId, leaseGeneration)) >= MAX_ABANDONED_REVIVALS;
+  const ceiling = await getDb().get<{ m: number | string | null }>(
+    `SELECT MAX(max_attempts) AS m FROM bin_dispatch WHERE bin_id = ? AND lease_generation = ?`,
+    [binId, leaseGeneration],
+  );
+  return Number(ceiling?.m ?? 0) >= REVIVED_CEILING;
 }
 
 /** How many times one intent's attempt is refunded for Brain's own outage. */
