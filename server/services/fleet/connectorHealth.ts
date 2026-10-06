@@ -89,6 +89,22 @@ export interface ConnectorHealth {
   authNoShowsSinceAnomaly: number;
 }
 
+/**
+ * The refusals the token endpoint issues under idempotent rotation — the only
+ * ones that are a verdict about the credential a client holds now.
+ *
+ * A refusal recorded under the retry-window policy that idempotent rotation
+ * replaced (`OUTSIDE_RETRY_WINDOW` and its siblings) was a verdict about a
+ * clock, and the token it refused is one current rotation answers: presented
+ * again, it gets the same successor. Reading such a row as "only a new consent
+ * restores it" asked a person to reconnect a connector Brain would serve.
+ * Production, 2026-10-06: Caleb's connector read HUMAN_REAUTH_REQUIRED for a
+ * 2026-10-03 `OUTSIDE_RETRY_WINDOW`. Without the row the connector is judged on
+ * what the tokens say — a reply not picked up is REFRESH_RECOVERABLE, and only
+ * a client that then stops asking reaches CLIENT_STOPPED_RETRYING.
+ */
+const CURRENT_REFUSALS = new Set(['MALFORMED', 'NOT_LIVE', 'CLIENT_MISMATCH', 'WORKER_UNAVAILABLE', 'REVOKED', 'REUSED']);
+
 interface TokenFacts {
   last_use: string | null;
   last_grant: string | null;
@@ -306,6 +322,7 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
   const refusalStrands =
     base.lastRefusal !== null &&
     base.lastRefusal.at > lastActivity &&
+    CURRENT_REFUSALS.has(base.lastRefusal.reason) &&
     !(base.lastRefusal.reason === 'REUSED' && Number(facts.live_refresh ?? 0) > 0);
   if (base.lastRefusal && refusalStrands) {
     return verdict(
