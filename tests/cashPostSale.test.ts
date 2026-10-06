@@ -1179,6 +1179,12 @@ describe('agreement and invoice', () => {
     deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
     expect(deal.pnl).toMatchObject({ owedBackCents: 0, customerPaymentsCents: 40_000, paidNetCents: 0, contributionCents: 0 });
     expect((await cashPosition({ projectId, currency: 'USD' })).deployableCents).toBe(before);
+    // A new, unrelated agreement afterwards: the refunded money is gone, not
+    // carried, so the new one is wholly unpaid and wholly billable.
+    // (A different amount: the helper's evidence is keyed by it.)
+    await agree(id, 40_002);
+    deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
+    expect(deal.pnl).toMatchObject({ agreedRevenueCents: 40_002, creditedGrossCents: 0, creditedPaymentsCents: 0, owedBackCents: 0, invoiceableCents: 40_002 });
   });
 
   it('money paid on an agreement released for a replacement stays paid, and the replacement is never billed again', async () => {

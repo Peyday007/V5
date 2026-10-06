@@ -275,21 +275,55 @@ export async function owedBackReading(input: {
   const refunds = money.filter((one) => one.kind === 'REFUND');
   const paid = payments.reduce((sum, one) => sum + one.amountCents, 0);
 
-  const owedByAgreement = new Map<string, number>();
-  const owe = (agreementId: string, cents: number) =>
-    owedByAgreement.set(agreementId, (owedByAgreement.get(agreementId) ?? 0) + cents);
+  // Which agreement each refund repaid, from the obligation it was recorded on.
+  const fulfillments = await fulfillmentsForOpportunity(input.projectId, input.opportunityId);
+  const agreementOfFulfillment = new Map<string, string>(
+    fulfillments.map((one): [string, string] => [one.id, one.agreementId]),
+  );
+  const refundedOn = new Map<string, number>();
+  let unattributed = 0;
+  for (const refund of refunds) {
+    const match = /^refund:([^:]+):/.exec(refund.idempotencyKey ?? '');
+    const agreementId = match ? agreementOfFulfillment.get(match[1]!) : undefined;
+    if (agreementId) refundedOn.set(agreementId, (refundedOn.get(agreementId) ?? 0) + refund.amountCents);
+    else unattributed += refund.amountCents;
+  }
+  let toOwed = 0;
+  const repay = (agreementId: string | null, owed: number): number => {
+    // Refunds on this agreement's own obligation first, then unattributed ones.
+    let repaid = 0;
+    if (agreementId) {
+      const own = Math.min(owed, refundedOn.get(agreementId) ?? 0);
+      refundedOn.set(agreementId, (refundedOn.get(agreementId) ?? 0) - own);
+      repaid += own;
+    }
+    const loose = Math.min(owed - repaid, unattributed);
+    unattributed -= loose;
+    repaid += loose;
+    toOwed += repaid;
+    return owed - repaid;
+  };
 
-  // Second payments of an already-paid invoice.
+  let gross = 0;
+  let owedBack = 0;
+
+  // Second payments of an already-paid invoice: owed back.
   let duplicates = 0;
+  const duplicateOwed: { agreementId: string | null; cents: number }[] = [];
   for (const entry of payments) {
     if (!entry.idempotencyKey?.startsWith('invoice-payment:')) continue;
     const invoice = invoices.find((one) => `invoice-payment:${one.id}` === entry.idempotencyKey);
     if (!invoice || !invoice.paymentEntryId || invoice.paymentEntryId === entry.id) continue;
     duplicates += entry.amountCents;
-    owe(agreementOfEntry.get(invoice.pipelineEntryId ?? '')?.id ?? `invoice:${invoice.id}`, entry.amountCents);
+    duplicateOwed.push({ agreementId: agreementOfEntry.get(invoice.pipelineEntryId ?? '')?.id ?? null, cents: entry.amountCents });
   }
 
-  // Money paid on released agreements' invoices, carried to live ones first.
+  // Money paid on released agreements' invoices. A refund that already repaid
+  // it is applied *before* anything carries — money returned to the buyer is
+  // not there to carry — and what is left carries to live agreements, oldest
+  // released first, up to what they still need. The room is read from gross
+  // live payments, so a refund of a live agreement's own failed work never
+  // pulls released money into it.
   const releasedPaid = agreements
     .filter((one) => one.state !== 'AGREED')
     .map((agreement) => ({
@@ -309,41 +343,23 @@ export async function owedBackReading(input: {
   const agreedLive = live.reduce((sum, one) => sum + one.amountCents, 0);
   let room = Math.max(0, agreedLive - (paid - duplicates - releasedTotal));
   for (const { agreement, cents } of releasedPaid) {
-    const carried = Math.min(cents, room);
+    const net = repay(agreement.id, cents);
+    const carried = Math.min(net, room);
     room -= carried;
-    if (cents - carried > 0) owe(agreement.id, cents - carried);
+    // Not payment toward a live agreement: all of it but what carried.
+    gross += cents - carried;
+    owedBack += net - carried;
+  }
+  for (const { agreementId, cents } of duplicateOwed) {
+    gross += cents;
+    owedBack += repay(agreementId, cents);
   }
 
-  // Refunds: an obligation's repays its own agreement's owed-back money first.
-  const fulfillments = await fulfillmentsForOpportunity(input.projectId, input.opportunityId);
-  const agreementOfFulfillment = new Map<string, string>(
-    fulfillments.map((one): [string, string] => [one.id, one.agreementId]),
-  );
-  const left = new Map(owedByAgreement);
-  let toOwed = 0;
-  let unattributed = 0;
-  for (const refund of refunds) {
-    const match = /^refund:([^:]+):/.exec(refund.idempotencyKey ?? '');
-    const agreementId = match ? agreementOfFulfillment.get(match[1]!) : undefined;
-    if (!agreementId) {
-      unattributed += refund.amountCents;
-      continue;
-    }
-    const owedHere = left.get(agreementId) ?? 0;
-    const repaid = Math.min(owedHere, refund.amountCents);
-    left.set(agreementId, owedHere - repaid);
-    toOwed += repaid;
-  }
-  const stillOwed = [...left.values()].reduce((sum, one) => sum + one, 0);
-  const unattributedToOwed = Math.min(unattributed, stillOwed);
-  toOwed += unattributedToOwed;
-
-  const gross = [...owedByAgreement.values()].reduce((sum, one) => sum + one, 0);
   const refunded = refunds.reduce((sum, one) => sum + one.amountCents, 0);
   const other = refunded - toOwed;
   return {
     grossCents: gross,
-    owedBackCents: stillOwed - unattributedToOwed,
+    owedBackCents: owedBack,
     otherRefundsCents: other,
     creditedGrossCents: Math.max(0, paid - gross),
     creditedNetCents: Math.max(0, paid - gross - other),
