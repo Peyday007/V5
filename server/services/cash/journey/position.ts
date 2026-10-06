@@ -243,27 +243,34 @@ const num = (t: Partial<Record<CashMoneyKind, number>>, k: CashMoneyKind): numbe
 /**
  * Money owed back across a project (or one piece): each piece's owed-back sum
  * less that piece's refunds, never below zero — the per-deal `owedBackCents`,
- * summed. Only pieces with a paid invoice can owe anything back, so only those
- * are read.
+ * summed — and the part of it that has settled into the account, which is all
+ * deployable cash can hold back. Only pieces with a paid invoice can owe
+ * anything back, so only those are read.
  */
 export async function owedBackForProject(input: {
   projectId: string;
   opportunityId: string | null;
   currency: string;
-}): Promise<number> {
+}): Promise<{ owedBack: number; inAccount: number }> {
   const ids = new Set(
     (await listInvoices({ projectId: input.projectId, ...(input.opportunityId ? { opportunityId: input.opportunityId } : {}) }))
       .filter((one) => one.currency === input.currency && one.paymentEntryId)
       .map((one) => one.opportunityId),
   );
-  let total = 0;
+  let owedBack = 0;
+  let inAccount = 0;
   for (const opportunityId of ids) {
     const gross = await owedBackGrossCents({ projectId: input.projectId, opportunityId, currency: input.currency });
     if (gross <= 0) continue;
     const totals = await totalsByKind({ projectId: input.projectId, opportunityId, currency: input.currency });
-    total += Math.max(0, gross - num(totals, 'REFUND'));
+    const here = Math.max(0, gross - num(totals, 'REFUND'));
+    owedBack += here;
+    // Only the part that has settled is in the account to be held back: what
+    // settled beyond the payments that count toward agreements is this money.
+    const credited = Math.max(0, num(totals, 'CUSTOMER_PAYMENT') - gross);
+    inAccount += Math.min(here, Math.max(0, num(totals, 'SETTLEMENT') - credited));
   }
-  return total;
+  return { owedBack, inAccount };
 }
 
 

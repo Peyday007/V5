@@ -548,7 +548,10 @@ export async function beginExecution(input: {
     );
   }
 
-  const position = await cashPosition({ projectId: opportunity.projectId });
+  // In the sprint's own currency: unscoped, the ledger sums every currency
+  // while the per-currency terms (held, owed back) read only one.
+  const sprint = await getCashMode(opportunity.projectId);
+  const position = await cashPosition({ projectId: opportunity.projectId, currency: sprint?.currency ?? 'USD' });
   const needed = opportunity.peakFundingCents ?? 0;
   if (needed > position.deployableCents) {
     return refuse(

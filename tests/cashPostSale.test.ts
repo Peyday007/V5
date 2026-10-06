@@ -1146,7 +1146,21 @@ describe('agreement and invoice', () => {
     expect(deal.pnl.contributionCents).toBe(0);
     const project = await cashPosition({ projectId, currency: 'USD' });
     expect(project.completedContributionCents).toBe(0);
+    // Not settled yet: not in the account, so nothing is held back for it.
+    expect(project.deployableCents).toBe(project.availableFundsCents);
     const projectBefore = project.deployableCents;
+    // It settles: in the account now, and held back, so deployable does not move.
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId, opportunityId: id, kind: 'SETTLEMENT', amountCents: 40_000, currency: 'USD',
+          verifiedReference: 'payout-first', idempotencyKey: `settle:${id}:first`, actorRef: userId,
+        })
+      ).ok,
+    ).toBe(true);
+    const settled = await cashPosition({ projectId, currency: 'USD' });
+    expect(settled.availableFundsCents).toBe(project.availableFundsCents + 40_000);
+    expect(settled.deployableCents).toBe(projectBefore);
     expect(deal.paymentState).not.toMatch(/PAID_UNSETTLED|SETTLED/);
     expect(collectable(deal).ok).toBe(false);
     // There is a way to pay it back even though no obligation ever existed:
@@ -1173,8 +1187,8 @@ describe('agreement and invoice', () => {
     expect(deal.pnl.owedBackCents).toBe(0);
     // Paid is one figure on every surface: net of the refund.
     expect(deal.pnl).toMatchObject({ customerPaymentsCents: 40_000, paidNetCents: 0, contributionCents: 0 });
-    // Nothing settled, so the refund left the account and the owed-back hold
-    // is gone: deployable moved by exactly the refund, not twice.
+    // Refunded: the money left the account and the hold went with it, so
+    // deployable is where it was — the refund is subtracted once, not twice.
     expect((await cashPosition({ projectId, currency: 'USD' })).deployableCents).toBe(projectBefore);
   });
 

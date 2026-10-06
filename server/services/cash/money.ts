@@ -152,13 +152,14 @@ export async function cashPosition(input: {
   // Received and owed back to a buyer: in the account until it is refunded,
   // and not ours to deploy or to count as earned. The per-deal rule, summed.
   const { owedBackForProject } = await import('./journey/position.ts');
-  const owedBack = await owedBackForProject({
+  const { owedBack, inAccount: owedBackInAccount } = await owedBackForProject({
     projectId: input.projectId,
     opportunityId: input.opportunityId ?? null,
     currency: input.currency ?? 'USD',
   });
 
-  const deployable = availableFunds - unpaidCommitments - owedBack - held - reserves;
+  // Only what settled is in available funds, so only that is held back here.
+  const deployable = availableFunds - unpaidCommitments - owedBackInAccount - held - reserves;
 
   // Earned, not received: a contribution is what the transaction produced, and
   // it is complete whether or not the provider has paid out yet. Every
