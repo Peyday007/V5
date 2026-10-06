@@ -1291,6 +1291,7 @@ export async function recordMoneyEvent(input: {
     const backing = await agreementBehind(input);
     if (!backing.ok) return refuse(backing.reason);
   }
+  let refundOnlyOwedBack = false;
   if (input.kind === 'REFUND' && input.opportunityId && !input.confirmsRefund) {
     /*
      * On an agreed deal a refund belongs to the obligation it pays back. Where
@@ -1305,15 +1306,31 @@ export async function recordMoneyEvent(input: {
     const obligationPossible =
       (await fulfillmentsForOpportunity(input.projectId, input.opportunityId)).length > 0 ||
       (performing && agreements.some((one) => one.state === 'AGREED'));
-    if (agreements.length > 0 && obligationPossible) {
-      return refuse(
-        'A refund on an agreed deal is authorized on the obligation it pays back, which bounds it ' +
-          'against every refund still pending or unknown and sends it once. Record it there.',
-      );
-    }
+    // Where an obligation can carry it, this route still records money that
+    // no obligation can: what is owed back on an agreement that never had
+    // one — bounded, under the lock below, by exactly what is owed back.
+    refundOnlyOwedBack = agreements.length > 0 && obligationPossible;
   }
 
   const written = await serializeCash(input.projectId, input.currency, async () => {
+    if (refundOnlyOwedBack && input.opportunityId && !(await moneyEntryByKey(input.projectId, input.idempotencyKey))) {
+      const owedBack = (
+        await owedBackReading({ projectId: input.projectId, opportunityId: input.opportunityId, currency: input.currency })
+      ).owedBackCents;
+      if (input.amountCents > owedBack) {
+        return {
+          ok: false as const,
+          entry: null,
+          replayed: false,
+          reason:
+            owedBack > 0
+              ? `Only ${owedBack} cents is owed back on this piece outside any obligation, so a refund of ` +
+                `${input.amountCents} is recorded on the obligation it pays back instead.`
+              : 'A refund on an agreed deal is authorized on the obligation it pays back, which bounds it ' +
+                'against every refund still pending or unknown and sends it once. Record it there.',
+        };
+      }
+    }
     /*
      * A settlement is the money a payment became, never a second sale, and a
      * refund returns money that was paid — so neither may exceed what was paid

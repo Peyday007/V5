@@ -1236,6 +1236,26 @@ describe('agreement and invoice', () => {
     expect(deal.pnl).toMatchObject({ refundsCents: 75_000, owedBackCents: 0, contributionCents: 0 });
   });
 
+  it('money owed back on an agreement that never had an obligation can be refunded beside one that has', async () => {
+    const id = await executing();
+    const cancelled = await paidOnInvoice(id, 40_000, 'no-obligation');
+    const kept = await paidOnInvoice(id, 30_000, 'kept');
+    expect((await releaseAgreement({ agreementId: cancelled.id, reason: 'The buyer cancelled it.', actorRef: userId })).ok).toBe(true);
+    expect((await declare({ projectId, agreementId: kept.id, kind: 'PERSON', performer: 'The operator', actorRef: userId })).ok).toBe(true);
+    const refund = (amountCents: number, ref: string) =>
+      recordMoneyEvent({
+        projectId, opportunityId: id, kind: 'REFUND', amountCents, currency: 'USD',
+        verifiedReference: ref, idempotencyKey: `refund:${id}:${ref}`, actorRef: userId,
+      });
+    // More than is owed back belongs on the obligation, not here.
+    expect((await refund(40_001, 'too-much')).ok).toBe(false);
+    const paidBack = await refund(40_000, 'owed-back');
+    expect(paidBack.ok, paidBack.ok ? '' : paidBack.reason).toBe(true);
+    expect((await refund(1, 'one-more')).ok).toBe(false);
+    const deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
+    expect(deal.pnl).toMatchObject({ owedBackCents: 0, creditedPaymentsCents: 30_000, contributionCents: 30_000 });
+  });
+
   it('money paid on an agreement released for a replacement stays paid, and the replacement is never billed again', async () => {
     const id = await executing();
     const first = await paidOnInvoice(id, 40_000, 'replaced');
