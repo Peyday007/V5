@@ -11,7 +11,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
-import { createBin, getBin } from '../server/repos/bins.ts';
+import { createBin, getBin, listBinEvents } from '../server/repos/bins.ts';
 import { createWorker, grantMembership } from '../server/repos/identity.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import { isUnexpandedSessionRef } from '../server/domain/sessionRef.ts';
@@ -115,12 +115,17 @@ describe('an unexpanded session_ref', () => {
     expect(isUnexpandedSessionRef(undefined)).toBe(false);
   });
 
-  it('is refused at check-in, naming the remedy, and assigns nothing', async () => {
-    await expect(checkIn('$CLAUDE_CODE_REMOTE_SESSION_ID')).rejects.toThrow(/unexpanded variable/);
+  it('is ignored rather than refused: the session checks in as one that sent none, and is told the fix', async () => {
+    // Refusing it happened before the arrival was recorded, so a session that
+    // had reached Brain read as a no-show and quarantined its surface.
+    const answer = await checkIn('$CLAUDE_CODE_REMOTE_SESSION_ID');
+    expect(answer.assigned).toBe(true);
+    expect(String(answer.sessionRefIgnored)).toMatch(/unexpanded variable/);
     const bin = await getBin(binId);
-    expect(bin?.state).toBe('READY');
-    expect(bin?.attemptCount).toBe(0);
-    expect(bin?.leaseGeneration).toBe(0);
+    expect(bin?.state).toBe('LEASED');
+    // Nothing stored the placeholder as an identity.
+    const events = await listBinEvents(binId);
+    expect(events.some((e) => String(e.sessionRef ?? '').includes('$'))).toBe(false);
   });
 
   it('leaves a real id, and an omitted one, to check in as before', async () => {

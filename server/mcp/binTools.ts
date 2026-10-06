@@ -122,16 +122,23 @@ const checkInTool: McpTool = {
   plane: 'CONTROL',
   run: async (args, { principal }) => {
     const workerId = workerOnly(principal);
-    if (isUnexpandedSessionRef(optionalString(args, 'session_ref'))) {
-      throw invalidInput(
-        'session_ref is an unexpanded variable, not a session id. Run `echo $CLAUDE_CODE_REMOTE_SESSION_ID` ' +
-          'and send what it prints (it looks like cse_…), or leave session_ref out. Nothing was assigned.',
-      );
-    }
+    /*
+     * A placeholder is not a session id, and it is not a reason to turn the
+     * session away either. Refusing it used to happen *before* the arrival was
+     * recorded, so a fired session that had authenticated and asked for work
+     * read to the no-show pass as one that never came: production, 2026-10-05
+     * onward, the four research Routines on a healthy connector were each
+     * quarantined after their sessions reached Brain. It is read as the field
+     * left out — which the contract already allows, and for which Brain uses
+     * the session it recorded when it fired — and the worker is told the fix.
+     */
+    const reported = optionalString(args, 'session_ref');
+    const placeholder = isUnexpandedSessionRef(reported);
+    const sessionRef = placeholder ? null : reported;
     const result = await checkIn({
       principal,
       workerId,
-      sessionRef: optionalString(args, 'session_ref'),
+      sessionRef,
       leaseMs: optionalInteger(args, 'lease_ms') ?? undefined,
     });
 
@@ -173,7 +180,14 @@ const checkInTool: McpTool = {
          * implementer is unknown and its review is refused to every session on
          * the same connector. Sending it on the next check-in fixes the next bin.
          */
-        ...(optionalString(args, 'session_ref')
+        ...(placeholder
+          ? {
+              sessionRefIgnored:
+                'session_ref was an unexpanded variable, not a session id, so it was ignored. Run ' +
+                '`echo $CLAUDE_CODE_REMOTE_SESSION_ID` and send what it prints (it looks like cse_…) on every ' +
+                'later check-in.',
+            }
+          : sessionRef
           ? {}
           : {
               sessionRefMissing:
