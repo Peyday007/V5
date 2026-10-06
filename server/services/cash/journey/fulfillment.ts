@@ -932,8 +932,8 @@ export async function authorizeRefund(input: {
         if (amount > owedBack) {
           return {
             refused:
-              `${owedBack} cents is owed back on this released agreement and not already being refunded, ` +
-              'so a larger refund is not this agreement’s to make.',
+              `${owedBack} cents is owed back on this piece and not already being refunded, so a ` +
+              'larger refund on a released agreement repays money that is not owed back.',
           };
         }
       }

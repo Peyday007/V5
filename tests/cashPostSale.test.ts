@@ -1282,6 +1282,21 @@ describe('agreement and invoice', () => {
     }
   });
 
+  it('a refund on one released agreement’s obligation may repay another released agreement’s owed-back money', async () => {
+    const id = await executing();
+    const withObligation = await paidOnInvoice(id, 10_000, 'r1');
+    expect((await declare({ projectId, agreementId: withObligation.id, kind: 'PERSON', performer: 'The operator', actorRef: userId })).ok).toBe(true);
+    const without = await paidOnInvoice(id, 40_000, 'r2');
+    for (const one of [withObligation, without]) {
+      expect((await releaseAgreement({ agreementId: one.id, reason: 'The buyer cancelled.', actorRef: userId })).ok).toBe(true);
+    }
+    expect((await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' })).pnl.owedBackCents).toBe(50_000);
+    await refundConfirmed((await getAgreement(withObligation.id))!, 50_000, 'refund-both', userId);
+    const deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
+    expect(deal.pnl).toMatchObject({ refundsCents: 50_000, owedBackCents: 0, contributionCents: 0 });
+    expect((await cashPosition({ projectId, currency: 'USD' })).completedContributionCents).toBe(0);
+  });
+
   it('money paid on an agreement released for a replacement stays paid, and the replacement is never billed again', async () => {
     const id = await executing();
     const first = await paidOnInvoice(id, 40_000, 'replaced');

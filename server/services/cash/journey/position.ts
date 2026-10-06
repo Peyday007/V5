@@ -382,6 +382,19 @@ export async function owedBackReading(input: {
     owedBack += repay(agreementId ? [agreementId] : [], cents);
   }
 
+  // A refund on a *released* agreement's obligation is a refund of owed-back
+  // money whatever it exceeds its own agreement's share by: what is left of it
+  // repays the piece's remaining owed-back money, as an unattributed refund
+  // would. (A live agreement's refunds never do: they repaid its own work.)
+  // This is the reading `owedBackUnclaimedCents` bounds both refund routes by.
+  const releasedIds = new Set(agreements.filter((one) => one.state !== 'AGREED').map((one) => one.id));
+  const leftoverOnReleased = [...refundedOn.entries()]
+    .filter(([agreementId]) => releasedIds.has(agreementId))
+    .reduce((sum, [, cents]) => sum + Math.max(0, cents), 0);
+  const extra = Math.min(leftoverOnReleased, owedBack);
+  owedBack -= extra;
+  toOwed += extra;
+
   const refunded = refunds.reduce((sum, one) => sum + one.amountCents, 0);
   const other = refunded - toOwed;
   return {
@@ -397,8 +410,7 @@ const num = (t: Partial<Record<CashMoneyKind, number>>, k: CashMoneyKind): numbe
 
 /**
  * Owed-back money no refund has yet claimed: what is owed back, less refunds
- * already authorized on a released agreement's obligation and still pending
- * or unknown — those are on their way out and have no ledger entry yet. The
+ * already authorized on an obligation and still pending or unknown — those are on their way out and have no ledger entry yet. The
  * bound both refund routes check under the cash lock, so a refund of
  * owed-back money is never authorized twice, whichever route goes first.
  */
@@ -408,16 +420,10 @@ export async function owedBackUnclaimedCents(input: {
   currency: string;
 }): Promise<number> {
   const reading = await owedBackReading(input);
-  const released = new Set(
-    (await agreementsFor(input.opportunityId)).filter((one) => one.state !== 'AGREED').map((one) => one.id),
-  );
-  const fulfillmentIds = (await fulfillmentsForOpportunity(input.projectId, input.opportunityId))
-    .filter((one) => released.has(one.agreementId))
-    .map((one) => one.id);
-  const pending =
-    fulfillmentIds.length === 0
-      ? 0
-      : await unresolvedRefundCents({ projectId: input.projectId, opportunityId: input.opportunityId, fulfillmentIds });
+  // Every refund still pending or unknown, on any obligation: one on a live
+  // agreement may be repaying a duplicate payment, and counting it costs at
+  // most a refusal until it resolves — never a second refund of one sum.
+  const pending = await unresolvedRefundCents({ projectId: input.projectId, opportunityId: input.opportunityId });
   return Math.max(0, reading.owedBackCents - pending);
 }
 
