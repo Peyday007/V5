@@ -1217,6 +1217,25 @@ describe('agreement and invoice', () => {
     expect(after.deployableCents).toBe(before.deployableCents - 75_000);
   });
 
+  it('a refund on a cancelled agreement’s own obligation repays the money paid on it outside any invoice', async () => {
+    const id = await executing();
+    const agreement = await agree(id, 75_000);
+    expect((await declare({ projectId, agreementId: agreement.id, kind: 'PERSON', performer: 'The operator', actorRef: userId })).ok).toBe(true);
+    expect(
+      (
+        await recordMoneyEvent({
+          projectId, opportunityId: id, kind: 'CUSTOMER_PAYMENT', amountCents: 75_000, currency: 'USD',
+          verifiedReference: 'bank-outside-2', idempotencyKey: `pay:${id}:outside-2`, actorRef: userId,
+          appliesTo: 'OUTSIDE_INVOICES',
+        })
+      ).ok,
+    ).toBe(true);
+    expect((await releaseAgreement({ agreementId: agreement.id, reason: 'The buyer cancelled.', actorRef: userId })).ok).toBe(true);
+    await refundConfirmed((await getAgreement(agreement.id))!, 75_000, 'refund-outside', userId);
+    const deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
+    expect(deal.pnl).toMatchObject({ refundsCents: 75_000, owedBackCents: 0, contributionCents: 0 });
+  });
+
   it('money paid on an agreement released for a replacement stays paid, and the replacement is never billed again', async () => {
     const id = await executing();
     const first = await paidOnInvoice(id, 40_000, 'replaced');

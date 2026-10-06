@@ -289,11 +289,11 @@ export async function owedBackReading(input: {
     else unattributed += refund.amountCents;
   }
   let toOwed = 0;
-  const repay = (agreementId: string | null, owed: number): number => {
-    // Refunds on this agreement's own obligation first, then unattributed ones.
+  const repay = (agreementIds: readonly string[], owed: number): number => {
+    // Refunds on these agreements' own obligations first, then unattributed ones.
     let repaid = 0;
-    if (agreementId) {
-      const own = Math.min(owed, refundedOn.get(agreementId) ?? 0);
+    for (const agreementId of agreementIds) {
+      const own = Math.min(owed - repaid, refundedOn.get(agreementId) ?? 0);
       refundedOn.set(agreementId, (refundedOn.get(agreementId) ?? 0) - own);
       repaid += own;
     }
@@ -361,7 +361,7 @@ export async function owedBackReading(input: {
   const unboundExcess = unbound - unboundCredited;
   let room = Math.max(0, agreedLive - liveInvoicePaid - unboundCredited);
   for (const { agreement, cents } of releasedPaid) {
-    const net = repay(agreement.id, cents);
+    const net = repay([agreement.id], cents);
     const carried = Math.min(net, room);
     room -= carried;
     // Not payment toward a live agreement: all of it but what carried.
@@ -369,12 +369,17 @@ export async function owedBackReading(input: {
     owedBack += net - carried;
   }
   if (unboundExcess > 0) {
+    // Money for an agreement since cancelled: a refund on any released
+    // agreement's own obligation repays it, as an unattributed one does.
     gross += unboundExcess;
-    owedBack += repay(null, unboundExcess);
+    owedBack += repay(
+      agreements.filter((one) => one.state !== 'AGREED').map((one) => one.id),
+      unboundExcess,
+    );
   }
   for (const { agreementId, cents } of duplicateOwed) {
     gross += cents;
-    owedBack += repay(agreementId, cents);
+    owedBack += repay(agreementId ? [agreementId] : [], cents);
   }
 
   const refunded = refunds.reduce((sum, one) => sum + one.amountCents, 0);
