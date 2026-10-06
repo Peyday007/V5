@@ -325,5 +325,57 @@ describe('one packet however the passes overlap', () => {
       [goal.id],
     );
     expect(rows.map((row) => row.goal_packet_key)).toEqual(['round-1']);
+    const bins = await getDb().all<{ state: string }>(
+      `SELECT b.state FROM bins b JOIN research_orchestrations o ON o.id = b.orchestration_id
+        WHERE o.goal_id = ? AND b.state IN ('DRAFT','READY','LEASED')`,
+      [goal.id],
+    );
+    expect(bins.map((bin) => bin.state)).toEqual(['READY']);
+  });
+});
+
+describe('a packet the goal starts is one a worker can be sent for', () => {
+  const binsOf = (goalId: string) =>
+    getDb().all<{ id: string; state: string; completion_contract: string; workload_class: string | null }>(
+      `SELECT b.id, b.state, b.completion_contract, b.workload_class
+         FROM bins b JOIN research_orchestrations o ON o.id = b.orchestration_id
+        WHERE o.goal_id = ? ORDER BY b.created_at, b.id`,
+      [goalId],
+    );
+
+  it('starts round-1 with a READY research bin, and a later pass adds none', async () => {
+    const goal = await newGoal(OTHER);
+    const first = await advanceResearchGoals();
+    expect(first.started.map((one) => one.goalId)).toEqual([goal.id]);
+    const bins = await binsOf(goal.id);
+    expect(bins).toHaveLength(1);
+    expect(bins[0]).toMatchObject({ state: 'READY', completion_contract: 'RESEARCH_PACKET_V1', workload_class: 'RESEARCH' });
+    expect(first.binned.map((one) => one.binId)).toEqual([bins[0]!.id]);
+
+    const second = await advanceResearchGoals();
+    expect(second.binned).toEqual([]);
+    expect((await binsOf(goal.id)).map((bin) => bin.id)).toEqual([bins[0]!.id]);
+  });
+
+  it('gives a live packet that was started without a bin its first one', async () => {
+    const goal = await newGoal(OTHER);
+    await advanceResearchGoals();
+    // The state production held: a live round-1 packet and no bin at all.
+    await getDb().run(
+      `DELETE FROM bin_events WHERE bin_id IN (SELECT b.id FROM bins b JOIN research_orchestrations o
+         ON o.id = b.orchestration_id WHERE o.goal_id = ?)`,
+      [goal.id],
+    );
+    await getDb().run(
+      `DELETE FROM bins WHERE orchestration_id IN (SELECT id FROM research_orchestrations WHERE goal_id = ?)`,
+      [goal.id],
+    );
+    expect(await binsOf(goal.id)).toEqual([]);
+
+    const repaired = await advanceResearchGoals();
+    expect(repaired.started).toEqual([]);
+    const bins = await binsOf(goal.id);
+    expect(bins.map((bin) => bin.state)).toEqual(['READY']);
+    expect(repaired.binned.map((one) => one.binId)).toEqual([bins[0]!.id]);
   });
 });

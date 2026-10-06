@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'open | report'
+        description: 'open | report | explain'
         required: true
         default: report
       project:
@@ -52,8 +52,8 @@ jobs:
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           case "$PROOF_COMMAND" in
-            open|report) ;;
-            *) echo "::error::Refusing '$PROOF_COMMAND': open or report."; exit 1 ;;
+            open|report|explain) ;;
+            *) echo "::error::Refusing '$PROOF_COMMAND': open, report or explain."; exit 1 ;;
           esac
           case "$PROOF_PROJECT" in
             ''|*[!A-Za-z0-9_-]*) echo "::error::Refusing the project: letters, digits, dash and underscore."; exit 1 ;;

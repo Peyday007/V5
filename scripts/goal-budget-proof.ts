@@ -3,6 +3,7 @@
  *
  *   npm run goal-budget-proof -- open <project> --admin someone@example.com
  *   npm run goal-budget-proof -- report <project>
+ *   npm run goal-budget-proof -- explain <project>
  *
  * `open` approves seven research goals once, in a fixed order, and then does
  * nothing else: every packet after that is created by the Russell tick's own
@@ -196,13 +197,42 @@ async function report(projectRef: string): Promise<void> {
   for (const stop of stops) console.log(`stopped ${stop.created_at}  ${stop.payload.slice(0, 200)}`);
 }
 
+/**
+ * What the archive says about each proof goal now, through the pass's own
+ * reading. `inventoryProject` is the pass's first step and is idempotent; the
+ * verdict itself writes nothing.
+ */
+async function explain(projectRef: string): Promise<void> {
+  const project = await projectFrom(projectRef);
+  const goals = await getDb().all<{ id: string; name: string; research_assignment: string; research_layer_id: string }>(
+    `SELECT id, name, research_assignment, research_layer_id FROM russell_goals
+      WHERE project_id = ? AND purpose = 'RESEARCH_GOAL' AND name LIKE ? ORDER BY created_at, id`,
+    [project.id, `${PROOF_PREFIX}%`],
+  );
+  const inventory = await inventoryProject(project.id);
+  for (const goal of goals) {
+    const verdict = await coverBeforeWork({
+      projectId: project.id,
+      layerId: goal.research_layer_id,
+      claims: inventory.claims,
+      requirements: [{ key: 'goal-assignment', statement: goal.research_assignment, necessity: 'MANDATORY' }],
+    });
+    const one = verdict.verdicts[0];
+    console.log(`${goal.id}  ${goal.name}  fullyAnswered=${verdict.fullyAnswered}  status=${one?.status}`);
+    console.log(`    assignment ${goal.research_assignment.slice(0, 160)}`);
+    for (const reason of one?.reasons ?? []) console.log(`    reason ${String(reason).slice(0, 300)}`);
+    console.log(`    claims ${(one?.claimIds ?? []).slice(0, 8).join(' ')}`);
+  }
+}
+
 async function main(): Promise<void> {
   if (!process.env['BRAIN_DATABASE_POOL_SIZE']) process.env['BRAIN_DATABASE_POOL_SIZE'] = '1';
   await initDatabase();
   const [command, projectRef] = process.argv.slice(2).filter((arg, index, all) => !arg.startsWith('--') && !all[index - 1]?.startsWith('--'));
-  if (!projectRef) fail('Usage: goal-budget-proof (open|report) <project> [--admin email]');
+  if (!projectRef) fail('Usage: goal-budget-proof (open|report|explain) <project> [--admin email]');
   if (command === 'open') await open(projectRef);
   else if (command === 'report') await report(projectRef);
+  else if (command === 'explain') await explain(projectRef);
   else fail(`Unknown command ${command}.`);
   console.log('GOAL-BUDGET-PROOF: OK');
 }
