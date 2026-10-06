@@ -53,7 +53,7 @@ import { describePersistence, persistenceConfig } from '../server/config.ts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ModernMcpClient } from './mcpModernClient.ts';
-import { boundedRequest, type BoundedReply } from './boundedRequest.ts';
+import { boundedRequest, boundedRequestRetrying, type BoundedReply } from './boundedRequest.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { listBins, terminateUnleasedBin } from '../server/repos/bins.ts';
 import {
@@ -3769,7 +3769,7 @@ async function memberReconnectChecks(fixtures: Fixtures, cookie: string): Promis
     `${attached?.connectorId ?? 'none'} / ${attached?.source ?? '-'}`,
   );
 
-  const mcp = await boundedRequest(`${base}/mcp`, {
+  const mcp = await boundedRequestRetrying(`${base}/mcp`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',

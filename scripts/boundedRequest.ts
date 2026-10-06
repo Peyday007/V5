@@ -136,3 +136,26 @@ export async function boundedRequest(url: string, init: BoundedRequestInit): Pro
     req.end();
   });
 }
+
+/**
+ * The same request, asked again when the answer is a transport refusal rather
+ * than a verdict: 502, 503 or 504, at most `attempts` times, honouring
+ * `Retry-After`. For idempotent calls only (a read, a whoami). It is what Brain
+ * tells every client to do with those answers, so a gate that failed on the
+ * first one — deploy 410: `the reconnected token authenticates an MCP call as
+ * the same worker — 502`, one proxy hiccup after a restart, 273 of 274 passing —
+ * was testing a stricter client than any Brain serves.
+ */
+export async function boundedRequestRetrying(
+  url: string,
+  init: BoundedRequestInit,
+  attempts = 3,
+): Promise<BoundedReply> {
+  let reply = await boundedRequest(url, init);
+  for (let attempt = 1; attempt < attempts && [502, 503, 504].includes(reply.status); attempt += 1) {
+    const after = Number(reply.headers['retry-after'] ?? '');
+    await new Promise((resolve) => setTimeout(resolve, Number.isFinite(after) && after > 0 ? Math.min(after, 10) * 1_000 : 2_000));
+    reply = await boundedRequest(url, init);
+  }
+  return reply;
+}
