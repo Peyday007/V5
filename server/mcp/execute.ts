@@ -15,6 +15,7 @@ import { findTool, type McpTool, type ToolContext } from './tools.ts';
 import { asControlPlane, asWorkload, classifyInfraFailure, noteInfraFailure, noteLatency } from '../db/infra.ts';
 import { outsideTransaction } from '../db/database.ts';
 import { failureDetail } from '../services/effects/failureDetail.ts';
+import { isStoreCapacityRefusal } from '../services/storage/types.ts';
 
 export interface CallInput {
   toolName: string;
@@ -313,6 +314,23 @@ async function runTool(tool: McpTool, input: CallInput): Promise<CallOutput> {
       })));
       return { result: infraResult(input.requestId) };
     }
+    /*
+     * The document store declining for now (a rate limit, a 5xx, Supabase's
+     * own 544) is the same shape one subsystem along: retries inside the
+     * provider have already been spent, nothing committed — the upload sits
+     * inside the effect's transaction — and the call is idempotent by its work
+     * item. Deploy 403's post-restart gate reported exactly this as "could not
+     * be completed", which a worker cannot tell from a fault.
+     */
+    if (isStoreCapacityRefusal(error)) {
+      void outsideTransaction(() => asWorkload(() => audit({
+        call: input,
+        projectId: null,
+        result: 'FAILED',
+        metadata: { category: 'RATE_OR_CAPACITY_RETRYABLE', detail: failureDetail(error) },
+      })));
+      return { result: capacityResult(input.requestId) };
+    }
     // eslint-disable-next-line no-console
     console.error('[mcp] tool call failed', input.toolName, input.requestId, error);
     await audit({
@@ -326,6 +344,20 @@ async function runTool(tool: McpTool, input: CallInput): Promise<CallOutput> {
     });
     return { result: internalResult(input.requestId) };
   }
+}
+
+/** The answer when Brain's document store declined for now. Retryable. */
+function capacityResult(requestId: string): CallToolBody {
+  const message =
+    "Brain's document store is temporarily refusing requests (rate limited or busy). Nothing was " +
+    `recorded and nothing was refused: send the same call again shortly. Reference ${requestId}.`;
+  return {
+    content: [{ type: 'text', text: message }],
+    structuredContent: {
+      error: { category: 'UNAVAILABLE', message, requestId, retryable: true, kind: 'RATE_OR_CAPACITY_RETRYABLE' },
+    },
+    isError: true,
+  };
 }
 
 /**

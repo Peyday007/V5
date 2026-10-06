@@ -24,6 +24,7 @@ import { buildNames } from '../server/domain/naming.ts';
 import {
   ObjectNotFoundError,
   StorageConfigurationError,
+  isStoreCapacityRefusal,
 } from '../server/services/storage/types.ts';
 import {
   assertSafeKey,
@@ -503,6 +504,52 @@ describe('a busy store is not a missing document', () => {
     });
     await expect(store.get('projects/p/documents/l/gone.md')).rejects.toThrow();
     expect(seen).toBe(1);
+  });
+
+  /*
+   * Deploy 403's post-restart gate died on exactly this: `storeFile`'s collision
+   * check lists the folder, the bucket answered 429, and the listing — the one
+   * read that was never retried — threw straight through a synthesis filing.
+   */
+  function flakyListing(refusals: number, status = 429) {
+    let seen = 0;
+    const fetchImpl = (async (url: string | URL | Request) => {
+      if (!String(url).includes('/object/list/')) return new Response('{}', { status: 200 });
+      seen += 1;
+      if (seen <= refusals) return new Response('slow down', { status, headers: { 'retry-after': '0' } });
+      return new Response(JSON.stringify([{ name: 'report.md', id: 'x' }]), { status: 200 });
+    }) as unknown as typeof fetch;
+    return {
+      calls: () => seen,
+      store: new SupabaseStorageProvider({
+        url: 'https://example.supabase.co',
+        serviceRoleKey: 'service-role-secret-value',
+        bucket: 'brain',
+        fetchImpl,
+      }),
+    };
+  }
+
+  it('asks again when a listing is refused 429, because a listing is a read', async () => {
+    const flaky = flakyListing(1);
+    expect(await flaky.store.exists('projects/p/documents/l/report.md')).toBe(true);
+    expect(flaky.calls()).toBe(2);
+  });
+
+  it('gives a listing up after the same bound, as a capacity refusal a caller may retry', async () => {
+    const flaky = flakyListing(99);
+    const failure = await flaky.store.exists('projects/p/documents/l/report.md').catch((e: unknown) => e);
+    expect(flaky.calls()).toBe(3);
+    expect(failure).toBeInstanceOf(StorageConfigurationError);
+    expect((failure as StorageConfigurationError).status).toBe(429);
+    expect(isStoreCapacityRefusal(failure)).toBe(true);
+  });
+
+  it('does not call a credential refusal or a missing bucket a capacity refusal', () => {
+    expect(isStoreCapacityRefusal(new StorageConfigurationError('no', '', 403))).toBe(false);
+    expect(isStoreCapacityRefusal(new StorageConfigurationError('no', '', 400))).toBe(false);
+    expect(isStoreCapacityRefusal(new StorageConfigurationError('no'))).toBe(false);
+    expect(isStoreCapacityRefusal(new StorageConfigurationError('busy', '', 544))).toBe(true);
   });
 
   it('honours Retry-After rather than inventing its own delay', async () => {
