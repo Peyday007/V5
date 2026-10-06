@@ -18,7 +18,7 @@
  *   - **Nothing is optimistic.** There is no "saved!" that precedes the save.
  */
 
-export type Phase = 'LOADING' | 'READY' | 'EMPTY' | 'FORBIDDEN' | 'ERROR';
+export type Phase = 'LOADING' | 'READY' | 'EMPTY' | 'FORBIDDEN' | 'RETRYING' | 'ERROR';
 
 export interface ViewState<T> {
   phase: Phase;
@@ -31,7 +31,7 @@ export interface ViewState<T> {
 
 export interface AsyncInput<T> {
   loading: boolean;
-  error: { status: number; message: string } | null;
+  error: { status: number; message: string; retryable?: boolean } | null;
   items: T[] | null;
   /** What this screen is about, for the empty sentence. E.g. "work". */
   noun: string;
@@ -127,6 +127,21 @@ export function listState<T>(input: AsyncInput<T>): ViewState<T> {
         // ambiguity into a claim the interface has no basis for.
         message: `This is not something you can open. Ask whoever runs this Brain for access to see the ${input.noun}.`,
         retryable: false,
+      };
+    }
+    /*
+     * Temporary is not broken. A database that did not answer, a gateway
+     * timeout or a server mid-restart is a condition the read hook is already
+     * asking about again, and a person told "Could not load" over it concludes
+     * something is wrong with their account or their work. It never names an
+     * authorization problem: those are a 401 or a 404, which are answers.
+     */
+    if (input.error.retryable) {
+      return {
+        phase: 'RETRYING',
+        items: [],
+        message: `Brain could not read the ${input.noun} just now — this is temporary and it is trying again by itself.`,
+        retryable: true,
       };
     }
     return {

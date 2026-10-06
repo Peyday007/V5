@@ -17,6 +17,8 @@
  * true to put in them.
  */
 import { GoalsHome } from './Goals.tsx';
+import type { Route } from '../lib/router.ts';
+import type { SummaryLine } from '../../../server/services/russell/summary.ts';
 import { RussellApi } from '../lib/russellApi.ts';
 import type { CollectionView, HomeView, RankedThread } from '../lib/russellApi.ts';
 import type { Milestone } from '../../../server/services/russell/progress.ts';
@@ -26,6 +28,8 @@ import { ClaudeConnectionCard } from './ClaudeConnection.tsx';
 
 export function RussellHome({
   projectId,
+  needsYouCount = 0,
+  go,
   onOpenThread,
   onAsk,
   onStartThread,
@@ -33,6 +37,9 @@ export function RussellHome({
   starting,
 }: {
   projectId: string | null;
+  /** From the shell's own Needs you reading, so the two can never disagree. */
+  needsYouCount?: number;
+  go?: (route: Route) => void;
   onOpenThread(conversationId: string): void;
   onAsk(text: string): void;
   /** Begin a new thread. Without this a person can only ever see their newest. */
@@ -60,7 +67,12 @@ export function RussellHome({
    * It is an entry point and not a second copy: pressing it opens the one
    * canonical panel on People & capacity. See `ClaudeConnection.tsx`.
    */
-  const connection = <ClaudeConnectionCard />;
+  const connection = (
+    <>
+      <ClaudeConnectionCard />
+      <Summary projectId={projectId} needsYouCount={needsYouCount} go={go} />
+    </>
+  );
 
   if (home.loading) {
     return (
@@ -481,3 +493,65 @@ function Thread({
 }
 
 export type { HomeView };
+
+/**
+ * What Brain is doing for you, in four lines (Integration 3).
+ *
+ * Needs you first, because it is the only one that asks something of the
+ * reader; then money, research and builds, each one sentence from the server
+ * and each a way into its own destination. It sits above every early return,
+ * for the connection card's reason: a project that cannot be read is no reason
+ * to hide what Cash or the factory is doing.
+ */
+function Summary({
+  projectId,
+  needsYouCount,
+  go,
+}: {
+  projectId: string | null;
+  needsYouCount: number;
+  go?: (route: Route) => void;
+}): JSX.Element {
+  const summary = useAsync(() => RussellApi.summary(projectId), [projectId]);
+  const data = summary.data?.summary ?? null;
+  const tile = (
+    key: string,
+    title: string,
+    line: SummaryLine | null,
+    route: Route,
+  ): JSX.Element => (
+    <button
+      key={key}
+      type="button"
+      className={`rs-card rs-home-tile${line?.retrying ? ' rs-home-tile-retrying' : ''}`}
+      onClick={() => go?.(route)}
+    >
+      <h3>{title}</h3>
+      <p>{line ? line.sentence : summary.error ? 'Brain could not read this just now.' : 'Reading…'}</p>
+      {line?.detail ? <p className="rs-hint">{line.detail}</p> : null}
+    </button>
+  );
+  return (
+    <section className="rs-home-summary" aria-label="What Brain is doing for you">
+      <h2 className="rs-visually-hidden">What Brain is doing for you</h2>
+      <p className={needsYouCount > 0 ? 'rs-state rs-state-stale' : 'rs-hint'}>
+        {needsYouCount > 0 ? (
+          <>
+            <strong>Next:</strong>{' '}
+            {needsYouCount === 1 ? 'one thing needs your decision.' : `${needsYouCount} things need your decision.`}{' '}
+            <button type="button" className="rs-link" onClick={() => go?.({ name: 'NEEDS_YOU' })}>
+              Open Needs you
+            </button>
+          </>
+        ) : (
+          'Nothing needs your decision. Brain carries on by itself.'
+        )}
+      </p>
+      <div className="rs-home-summary-grid">
+        {tile('cash', 'Money', data?.cash ?? null, { name: 'CASH' })}
+        {tile('research', 'Research', data?.research ?? null, { name: 'RESEARCH' })}
+        {tile('build', 'Building', data?.build ?? null, { name: 'BUILD' })}
+      </div>
+    </section>
+  );
+}

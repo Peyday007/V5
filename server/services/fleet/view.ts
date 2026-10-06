@@ -250,12 +250,24 @@ export function usability(
         recorded,
       };
     }
-    if (ineligible !== null) {
+    if (ineligible !== null && ineligible.startsWith('connector needs re-authorization')) {
+      // Not a membership problem: the connector's authorization is gone, and
+      // the remedy is a reconnect by whoever owns that Claude account.
+      return {
+        usable: false,
+        reason: 'Its Claude connector’s authorization is gone; the account owner reconnects it.',
+        recorded,
+      };
+    }
+    if (ineligible === 'bound worker holds no project membership') {
       return {
         usable: false,
         reason: 'The worker identity it is bound to holds no project membership.',
         recorded,
       };
+    }
+    if (ineligible !== null) {
+      return { usable: false, reason: `Brain does not fire it right now (${ineligible}).`, recorded };
     }
   }
   const waitUntil =

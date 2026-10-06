@@ -72,8 +72,59 @@ import type { Bin, BinDispatch, FleetAccount, FleetRoutine } from '../../domain/
  */
 export type SurfaceHealth = 'HEALTHY' | 'CONFIGURING' | 'WAITING' | 'UNAVAILABLE';
 
+/**
+ * How a surface's connection stands, in the five words a person needs and no
+ * others (Integration 3).
+ *
+ * Kept apart because the remedies are opposite:
+ *
+ *   - `HEALTHY` — Brain fires it and sessions arrive.
+ *   - `RETRYING` — temporarily held back (the provider asked Brain to wait, or a
+ *     refresh is recovering by itself). Nobody needs to do anything.
+ *   - `REAUTH_REQUIRED` — the connector's authorization is genuinely gone, read
+ *     from token rows by `connectorHealth`. A person reconnects it. This is the
+ *     **only** state that ever asks for a reconnect, and nothing here derives it
+ *     from a failed read.
+ *   - `QUARANTINED` — Brain took it out of routing after it stopped answering;
+ *     an operator looks at it.
+ *   - `DISABLED` — somebody turned it off, retired it, or it is bound to an
+ *     identity that cannot sign in.
+ *   - `SETTING_UP` — registered and not yet usable or not yet proven.
+ */
+export const SURFACE_CONNECTION_STATES = [
+  'HEALTHY',
+  'RETRYING',
+  'REAUTH_REQUIRED',
+  'QUARANTINED',
+  'DISABLED',
+  'SETTING_UP',
+] as const;
+export type SurfaceConnectionState = (typeof SURFACE_CONNECTION_STATES)[number];
+
+/** Pure: the connection word for one surface, from facts the reading already holds. */
+export function surfaceConnectionState(input: {
+  routineState: string;
+  accountState: string;
+  workerActive: boolean;
+  connectorAuthState: string | null;
+  secretPresent: boolean;
+  rateLimited: boolean;
+  proven: boolean;
+}): SurfaceConnectionState {
+  if (input.routineState === 'QUARANTINED' || input.accountState === 'QUARANTINED') return 'QUARANTINED';
+  if (input.routineState !== 'ENABLED' || input.accountState !== 'ENABLED' || !input.workerActive) {
+    return 'DISABLED';
+  }
+  if (input.connectorAuthState === 'HUMAN_REAUTH_REQUIRED') return 'REAUTH_REQUIRED';
+  if (!input.secretPresent) return 'SETTING_UP';
+  if (input.rateLimited || input.connectorAuthState === 'REFRESH_RECOVERABLE') return 'RETRYING';
+  return input.proven ? 'HEALTHY' : 'SETTING_UP';
+}
+
 export interface SurfaceReading {
   routineId: string;
+  /** The connection word for this surface — see `SurfaceConnectionState`. */
+  connection: SurfaceConnectionState;
   /** The display label. Never the trigger ref and never the secret's name. */
   name: string;
   accountId: string;
@@ -250,10 +301,25 @@ function unavailableBecause(
       'would be refused at sign-in. Brain does not fire it.'
     );
   }
-  return (
-    'the worker identity it is bound to holds no project membership, so nothing could be ' +
-    'handed to it. Brain does not fire it.'
-  );
+  if (verdict.startsWith('connector needs re-authorization')) {
+    /*
+     * This used to fall through to the membership sentence below, so a
+     * connector whose authorization was genuinely gone read as a worker with
+     * no project — sending an operator to grant a membership that already
+     * existed. Integration 3: the reconnect is the remedy, and it is named.
+     */
+    return (
+      'its Claude connector’s authorization is gone, so Brain does not fire it. The person who ' +
+      'owns that Claude account reconnects it, and it comes back by itself.'
+    );
+  }
+  if (verdict === 'bound worker holds no project membership') {
+    return (
+      'the worker identity it is bound to holds no project membership, so nothing could be ' +
+      'handed to it. Brain does not fire it.'
+    );
+  }
+  return `Brain does not fire it right now (${verdict}).`;
 }
 
 export async function capacityReading(
@@ -330,6 +396,15 @@ export async function capacityReading(
 
     const reading: SurfaceReading = {
       routineId: routine.id,
+      connection: surfaceConnectionState({
+        routineState: routine.state,
+        accountState: owner.state,
+        workerActive: candidate ? candidate.workerActive : true,
+        connectorAuthState: candidate?.connectorHealth?.state ?? null,
+        secretPresent,
+        rateLimited: rateLimited(routine, owner, now),
+        proven: chain.proven,
+      }),
       name: routine.name,
       accountId: owner.id,
       accountName: owner.name,

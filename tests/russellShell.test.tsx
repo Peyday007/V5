@@ -29,6 +29,7 @@ import {
   turnLabel,
 } from '../client/src/russell/present.ts';
 import { parseRoute, pathFor } from '../client/src/lib/router.ts';
+import { inboxFromLegacy } from './helpers/inboxFixture.ts';
 
 // React 18 wants to be told this is an act-capable environment; without it
 // every update logs a warning that hides real ones.
@@ -261,6 +262,25 @@ let calls: string[] = [];
 let postedBodies: unknown[] = [];
 
 function reply(route: string): Reply {
+  /*
+   * Needs you and its badge read the inbox (Integration 3). Derived from the
+   * same scripted `/needs-you` and `/authority` bodies every test here already
+   * writes, so a test's fixture means what it meant before.
+   */
+  if (route.startsWith('GET /api/russell/needs-you/inbox') && !routes[route]) {
+    const match = /projectId=([^&]+)/.exec(route);
+    const project = match ? decodeURIComponent(match[1]!) : null;
+    const legacyRoute = project ? routes[`GET /api/russell/projects/${project}/needs-you`] : undefined;
+    const authorityRoute = project ? routes[`GET /api/russell/projects/${project}/authority`] : undefined;
+    const legacy = (typeof legacyRoute === 'function' ? legacyRoute() : legacyRoute)?.body ?? {
+      requests: [],
+      software: [],
+    };
+    const authority = typeof authorityRoute === 'function' ? authorityRoute() : authorityRoute;
+    const missing =
+      !!authority && (authority.status ?? 200) === 200 && (authority.body as { grant?: unknown }).grant === null;
+    return { body: inboxFromLegacy(legacy as never, missing) };
+  }
   const found = routes[route];
   if (!found) return { status: 404, body: { error: 'No such route.' } };
   return typeof found === 'function' ? found() : found;
@@ -886,9 +906,9 @@ describe('the thin views', () => {
       'GET /api/russell/projects/prj_1/work': { status: 404, body: { error: 'No project with that id.' } },
     });
     await mount();
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Work/ })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^All work/ })).toBeTruthy());
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /^Work/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^All work/ }));
     });
     /*
      * Scoped to the Work panel rather than to the document.
@@ -907,9 +927,9 @@ describe('the thin views', () => {
   it('says an empty list is empty, which is a different screen', async () => {
     baseRoutes({ 'GET /api/russell/projects/prj_1/work': { body: { missions: [] } } });
     await mount();
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Work/ })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^All work/ })).toBeTruthy());
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /^Work/ }));
+      fireEvent.click(screen.getByRole('button', { name: /^All work/ }));
     });
     await waitFor(() => expect(screen.getByText(/no work yet/i)).toBeTruthy());
   });

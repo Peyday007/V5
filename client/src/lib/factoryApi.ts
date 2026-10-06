@@ -26,6 +26,7 @@ import type {
   CampaignBriefing,
 } from '../../../server/services/factory/projections.ts';
 import type { CampaignMetrics } from '../../../server/services/factory/metrics.ts';
+import type { CampaignStory } from '../../../server/services/factory/story.ts';
 import type { RepositoryGrant } from '../../../server/services/factory/repositoryEnvelope.ts';
 import type {
   FactoryInvitations,
@@ -83,6 +84,12 @@ export interface ApproveResponse {
 }
 
 export interface CampaignDetail {
+  /**
+   * Why it exists, what counts as success, what it may touch, what the plan
+   * validator changed and which repairs came out of review — composed on the
+   * server in plain English (Integration 3).
+   */
+  story: CampaignStory;
   objective: string;
   expectedOutcome: string;
   stage: string;

@@ -21,7 +21,7 @@ import { getDb } from '../server/db/database.ts';
 import { createUser, createWorker, grantMembership } from '../server/repos/identity.ts';
 import { russellRouter } from '../server/routes/russell.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
-import { authorityFor, AUTHORITY_LIMITS } from '../server/services/russell/authority.ts';
+import { authorityFor, AUTHORITY_LIMITS, suggestedExpiry } from '../server/services/russell/authority.ts';
 import { listGoals, reserve } from '../server/repos/russellAuthority.ts';
 import { listEvents } from '../server/repos/events.ts';
 import type { Principal, ProjectMembership } from '../server/domain/types.ts';
@@ -193,7 +193,10 @@ describe('a person grants it inside Russell', () => {
     expect(view.headline).toMatch(/capture ideas/i);
     expect(view.suggested.maxConcurrent).toBe(1);
     expect(view.suggestedApproval.name).toMatch(/discovery research$/);
-    expect(view.suggestedApproval.expiresAt).toBe('2026-10-06T00:00:00.000Z');
+    // A proposal that is already in the past is one Approve would refuse —
+    // which is what the old constant became on 2026-10-06.
+    expect(Date.parse(view.suggestedApproval.expiresAt)).toBeGreaterThan(Date.now());
+    expect(view.suggestedApproval.expiresAt).toMatch(/-01T00:00:00\.000Z$/);
     expect(await listGoals(projectId)).toHaveLength(0);
   });
 
@@ -339,7 +342,7 @@ describe('the agreed proposal, end to end', () => {
     expect(first.suggestedApproval).toEqual(second.suggestedApproval);
     // A rollout expiry that moved with the clock would mean refreshing the
     // page quietly extended what was about to be approved.
-    expect(first.suggestedApproval.expiresAt).toBe('2026-10-06T00:00:00.000Z');
+    expect(first.suggestedApproval.expiresAt).toBe(suggestedExpiry(new Date().toISOString()));
     expect(first.suggestedApproval.name).toBe('Deal Dispatch discovery research');
     expect(await listGoals(projectId)).toHaveLength(0);
   });

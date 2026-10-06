@@ -200,6 +200,20 @@ describe('account allocation on Build', () => {
       nextAccountId: next, explanation, accounts }],
   });
 
+  /*
+   * Integration 3 put the allocation behind Build's "Production line, capacity
+   * and accounts" disclosure — an operator's reading, one click away — and it
+   * mounts only while that is open, so its reads are not spent on every visit.
+   */
+  async function openMachinery(): Promise<void> {
+    const summary = await screen.findByText('Production line, capacity and accounts');
+    await act(async () => {
+      const details = summary.closest('details')!;
+      details.open = true;
+      fireEvent(details, new Event('toggle'));
+    });
+  }
+
   it('labels measured activity and a reported allowance as different kinds of fact, and records a report', async () => {
     base({
       [REPOSITORIES]: { body: { repositories: [grant()],
@@ -208,6 +222,7 @@ describe('account allocation on Build', () => {
         reportedAt: '2026-09-25T01:00:00.000Z' } } },
     });
     await mount();
+    await openMachinery();
     const section = await screen.findByRole('heading', { name: 'Factory account allocation' });
     const card = section.closest('section')!;
     expect(within(card).getByText(/Measured, last 24 hours in this project: 5 fires,/)).toBeTruthy();
@@ -231,6 +246,7 @@ describe('account allocation on Build', () => {
         null, 'Every eligible surface is rate limited.') },
     });
     await mount();
+    await openMachinery();
     const card = (await screen.findByRole('heading', { name: 'Factory account allocation' })).closest('section')!;
     expect(within(card).getByText(/70% \(older than 6 hours, not used\)/)).toBeTruthy();
     await act(async () => {

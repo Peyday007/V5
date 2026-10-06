@@ -10,10 +10,18 @@
  */
 import { api } from './api.ts';
 import type { GoalBudgetView, StoppingCeiling } from '../../../server/services/research/goalBudgetView.ts';
+import type {
+  GoalReading,
+  PacketKind,
+  PacketReading,
+  ResearchOverview,
+} from '../../../server/services/research/overview.ts';
 
-export type { GoalBudgetView, StoppingCeiling };
+export type { GoalBudgetView, GoalReading, PacketKind, PacketReading, ResearchOverview, StoppingCeiling };
 
 export const ResearchGoalsApi = {
+  overview: (projectId: string): Promise<{ overview: ResearchOverview }> =>
+    api(`/api/projects/${encodeURIComponent(projectId)}/research/overview`),
   list: (projectId: string): Promise<{ goals: GoalBudgetView[] }> =>
     api(`/api/projects/${encodeURIComponent(projectId)}/research-goals`),
 };

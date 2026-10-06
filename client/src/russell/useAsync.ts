@@ -16,16 +16,35 @@ import { ApiError } from '../lib/api.ts';
 export interface AsyncResult<T> {
   data: T | null;
   loading: boolean;
-  error: { status: number; message: string } | null;
+  /**
+   * `retryable` says the failure is one asking again can fix (a database that
+   * did not answer, a restart, a dropped connection). While it is true the hook
+   * is already asking again on a bounded backoff — see `RETRY_DELAYS_MS`.
+   */
+  error: { status: number; message: string; retryable: boolean } | null;
   reload(): void;
 }
+
+/**
+ * How long to wait before asking again after a temporary failure.
+ *
+ * Bounded on purpose: four attempts over about a minute and a quarter, then
+ * the screen stays on the retrying state with its button. A page that polled a
+ * struggling database for ever would be adding load to the condition it is
+ * waiting out — Integration 3's rule that a dashboard must not create database
+ * pressure to look live.
+ */
+export const RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000] as const;
 
 export function useAsync<T>(load: () => Promise<T>, deps: readonly unknown[]): AsyncResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<{ status: number; message: string } | null>(null);
+  const [error, setError] = useState<AsyncResult<T>['error']>(null);
   const [nonce, setNonce] = useState(0);
   const generation = useRef(0);
+  /** Automatic retries spent since the last success or the last manual reload. */
+  const retries = useRef(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const mine = ++generation.current;
@@ -34,24 +53,44 @@ export function useAsync<T>(load: () => Promise<T>, deps: readonly unknown[]): A
     load().then(
       (value) => {
         if (generation.current !== mine) return;
+        retries.current = 0;
         setData(value);
         setLoading(false);
       },
       (cause: unknown) => {
         if (generation.current !== mine) return;
-        setData(null);
-        setError(
+        const next =
           cause instanceof ApiError
-            ? { status: cause.status, message: cause.message }
-            : { status: 0, message: cause instanceof Error ? cause.message : String(cause) },
-        );
+            ? { status: cause.status, message: cause.message, retryable: cause.retryable }
+            : {
+                status: 0,
+                message: cause instanceof Error ? cause.message : String(cause),
+                retryable: false,
+              };
+        // A temporary failure keeps what was already on screen: blanking a
+        // page because one re-read hit a busy database is worse than showing
+        // the last answer with a note that it is being refreshed.
+        if (!next.retryable) setData(null);
+        setError(next);
         setLoading(false);
+        const delay = RETRY_DELAYS_MS[retries.current];
+        if (next.retryable && delay !== undefined) {
+          retries.current += 1;
+          timer.current = setTimeout(() => setNonce((value) => value + 1), delay);
+        }
       },
     );
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+    };
     // `load` is rebuilt on every render by design; the caller's deps decide.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, nonce]);
 
-  const reload = useCallback(() => setNonce((value) => value + 1), []);
+  const reload = useCallback(() => {
+    retries.current = 0;
+    setNonce((value) => value + 1);
+  }, []);
   return { data, loading, error, reload };
 }

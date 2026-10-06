@@ -18,6 +18,12 @@ export type Route =
   | { name: 'HOME' }
   | { name: 'CONVERSATION'; conversationId: string }
   | { name: 'WORK' }
+  /**
+   * What Brain is trying to learn: research goals, their budgets, the packets
+   * running under them and what came back. A primary destination since
+   * Integration 3, because research is one of the four things Brain does.
+   */
+  | { name: 'RESEARCH' }
   | { name: 'BUILD' }
   | { name: 'PROJECTS' }
   | { name: 'KNOWLEDGE' }
@@ -81,6 +87,8 @@ export function parseRoute(pathname: string): Route {
       return parts[1] ? { name: 'CONVERSATION', conversationId: parts[1] } : { name: 'HOME' };
     case 'work':
       return { name: 'WORK' };
+    case 'research':
+      return { name: 'RESEARCH' };
     case 'build':
       return { name: 'BUILD' };
     case 'projects':
@@ -126,6 +134,8 @@ export function pathFor(route: Route): string {
       return `/conversation/${route.conversationId}`;
     case 'WORK':
       return '/work';
+    case 'RESEARCH':
+      return '/research';
     case 'BUILD':
       return '/build';
     case 'PROJECTS':

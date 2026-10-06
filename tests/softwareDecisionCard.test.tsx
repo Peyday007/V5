@@ -38,10 +38,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import fs from 'node:fs';
 import path from 'node:path';
 import { NeedsYouView } from '../client/src/russell/Views.tsx';
+import { inboxFromLegacy } from './helpers/inboxFixture.ts';
 
 const PROJECT = 'prj_1';
 const NEEDS_YOU = `GET /api/russell/projects/${PROJECT}/needs-you`;
 const AUTHORITY = `GET /api/russell/projects/${PROJECT}/authority`;
+const INBOX = `GET /api/russell/needs-you/inbox?projectId=${PROJECT}`;
 const AUTHORIZE = 'POST /api/russell/software/rsw_1/authorize';
 const DECLINE = 'POST /api/russell/software/rsw_1/decline';
 
@@ -141,6 +143,13 @@ beforeEach(() => {
     const key = `${init?.method ?? 'GET'} ${typeof input === 'string' ? input : String(input)}`;
     calls.push(key);
     if (typeof init?.body === 'string') bodies[key] = JSON.parse(init.body) as unknown;
+    // The page reads the inbox; derive it from the same scripted bodies.
+    if (key === INBOX) {
+      const legacy = routes[NEEDS_YOU] as Reply;
+      const authority = routes[AUTHORITY] as Reply | undefined;
+      const missing = !!authority && (authority.body as { grant: unknown }).grant === null;
+      routes[INBOX] = { body: inboxFromLegacy(legacy.body as never, missing) };
+    }
     const found = routes[key];
     const answer: Reply = !found
       ? { status: 404, body: { error: 'No such route.' } }

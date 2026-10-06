@@ -12,14 +12,14 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { Constellation } from './Constellation.tsx';
 import { Register } from './Register.tsx';
-import { ResearchBudgets } from './ResearchBudgets.tsx';
-import { DecisionCard, Goals } from './Goals.tsx';
-import { GoalsApi } from '../lib/goalsApi.ts';
+import { Goals } from './Goals.tsx';
 import { Frontier } from './Frontier.tsx';
 import { Maps } from './Maps.tsx';
 import { freshnessLabel, humanWhen, listState, priorityTone, readingState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { RussellApi } from '../lib/russellApi.ts';
+import type { InboxItem } from '../lib/russellApi.ts';
+import type { Route } from '../lib/router.ts';
 import type { ConnectSiteResult, SiteConnectionState } from '../lib/russellApi.ts';
 import type {
   SoftwareRepositoryChoice,
@@ -31,7 +31,6 @@ import type {
   IssuedInvitation,
   KnowsEntry,
   Progress,
-  RussellHumanRequest,
   WhoView as WhoData,
   WorkEntry,
 } from '../lib/russellApi.ts';
@@ -1211,7 +1210,7 @@ export function FleetView(): JSX.Element {
     noun: 'fleet',
   });
   return (
-    <Panel title="Who is doing the work" state={state} onRetry={query.reload}>
+    <Panel title="Work on the connected site" state={state} onRetry={query.reload}>
       {view ? (
         <>
           {view.purpose ? <p className="rs-fleet-line">{view.purpose}</p> : null}
@@ -1994,204 +1993,226 @@ function SoftwareDecisions({
   );
 }
 
+/**
+ * Needs you — what genuinely requires a person, and nothing else.
+ *
+ * Integration 3 rebuilt this on one server reading (`services/russell/inbox.ts`)
+ * that asks every system able to ask: research permission, Russell's open
+ * questions, software to authorize, build objectives and releases, pull
+ * requests to merge, research budgets that ran out, Cash decisions and the
+ * steps of a deal that are a person's, and your own Claude connection when its
+ * authorization is genuinely gone. The page used to read three of those and the
+ * badge counted a different three.
+ *
+ * What is **not** here is the other half of the design: retries, queued work,
+ * a database that did not answer, and anything Brain or a buyer does next. A
+ * source that could not be read is said once, as temporary, and the rest of the
+ * page still renders — nothing here ever asks a person to reconnect because a
+ * read failed.
+ *
+ * Each item says why a person is being asked, what happens if nobody answers,
+ * exactly what to do, what it is about, and that Brain carries on meanwhile.
+ * The controls are the ones that already exist: an answer to a question, the
+ * standing permission card, the software authorization, or a link to the
+ * surface holding the control — never a second copy of it.
+ */
 export function NeedsYouView({
   projectId,
   onAnswered,
+  go,
 }: {
   projectId: string | null;
   onAnswered?: () => void;
+  go?: (route: Route) => void;
 }): JSX.Element {
-  const query = useAsync(
+  const inbox = useAsync(() => RussellApi.inbox(projectId), [projectId]);
+  /* Software authorization needs the repository choices that come with it. */
+  const legacy = useAsync(
     () =>
       projectId
         ? RussellApi.needsYou(projectId)
         : Promise.resolve({ requests: [], software: [], repositories: [] }),
     [projectId],
   );
-  const state = listState<RussellHumanRequest>({
-    loading: query.loading,
-    error: query.error,
-    items: query.data?.requests ?? null,
+  const data = inbox.data ?? null;
+  const items = data?.items ?? null;
+  const state = listState<InboxItem>({
+    loading: inbox.loading && data === null,
+    error: inbox.error,
+    items,
     noun: 'decisions',
   });
-  const software = query.data?.software ?? [];
-  const repositories = query.data?.repositories ?? [];
+
+  const refresh = (): void => {
+    inbox.reload();
+    legacy.reload();
+    onAnswered?.();
+  };
 
   async function answer(requestId: string, choice: string): Promise<void> {
-    // No optimistic update. The list re-reads from the server, so what a person
-    // sees after answering is what actually happened rather than what was asked
-    // for — and a refused answer shows as refused instead of appearing to work.
+    // No optimistic update: what a person sees afterwards is what happened.
     await RussellApi.answer(requestId, choice);
-    query.reload();
-    onAnswered?.();
+    refresh();
   }
 
-  /*
-   * Nothing needing a decision is good news, and must read as a settled state.
-   *
-   * The rejected screen put a long authority card on an empty inbox, which
-   * made "you are not needed" look like a page full of obligations. §16 asks
-   * for the opposite: a compact statement, what continues without anybody, and
-   * the standing authority folded to one line.
-   *
-   * **The empty list is not the same fact as the empty page, and this page
-   * used to treat them as one.** A project with no standing grant has exactly
-   * one decision outstanding — the one nothing else can proceed without — and
-   * `AuthorityPanel` correctly refuses to fold it. So the heading said
-   * "Nothing needs your decision" directly above a card saying Russell may not
-   * start research here, while the nav badge beside them both showed 1.
-   *
-   * That is §29's own correction reappearing one surface along. It was applied
-   * to the briefing and to the badge, both of which now count an ungranted
-   * project as one decision, and this page was left asserting the opposite
-   * about the same fact. **A status that contradicts the control beside it is
-   * worse than no status**, because it teaches a person to stop reading it.
-   *
-   * It asks the same question the badge asks, from the same route, rather than
-   * inferring it from the list — two places counting the same thing is how
-   * they come to disagree, which is exactly how this happened. While the
-   * answer is still unknown the reassurance is simply withheld: an incomplete
-   * page is a better wrong answer than a false settled one.
-   */
-  const authority = useAsync(
-    () => (projectId ? RussellApi.authority(projectId) : Promise.resolve(null)),
-    [projectId],
-  );
-  /*
-   * Three things can be waiting, and settled means none of them is.
-   *
-   * The request list is one, the standing approval is the second, and a
-   * software change waiting to be authorized is the third — the same defect
-   * arriving from a third direction. `listEmpty` stays the *list's* own
-   * emptiness, because it decides whether the panel prints its own "no
-   * decisions" message and a page holding a software card must not; settled is
-   * the conjunction.
-   */
-  const listEmpty = state.phase === 'EMPTY';
-  const grantOutstanding = authority.data ? authority.data.grant === null : null;
-  /*
-   * A goal's decisions that are not already a request card above: approving a
-   * change request, releasing a campaign, merging a pull request. Each arrives
-   * with its answers, what each causes, what waits on it and what Brain does
-   * afterwards — composed on the server, rendered here. A goal decision that
-   * *is* a request is answered by the request card itself, so it is not shown
-   * twice. A goals read that failed is no decisions rather than a withheld
-   * page: the requests above are the authority on this surface.
-   */
-  const goals = useAsync(() => GoalsApi.briefing(), []);
-  const goalDecisions = (goals.data?.briefing.decisions ?? []).filter((one) => one.kind !== 'HUMAN_REQUEST');
-  const nothingWaiting =
-    listEmpty && software.length === 0 && grantOutstanding === false && goalDecisions.length === 0;
+  const hasAuthorityItem = (items ?? []).some((item) => item.action.type === 'GRANT_RESEARCH_AUTHORITY');
+  const groups = (data?.categories ?? [])
+    .map((category) => ({ ...category, items: (items ?? []).filter((item) => item.category === category.key) }))
+    .filter((group) => group.items.length > 0);
 
   return (
-    <Panel
-      title="Needs you"
-      /*
-       * An empty list is never the panel's own EMPTY message here, whichever
-       * way the grant goes: either this page is settled and says so below, or
-       * the approval is the decision and says so itself. A third sentence
-       * announcing no decisions would be the same contradiction again.
-       */
-      state={{ ...state, phase: listEmpty ? 'READY' : state.phase }}
-      onRetry={query.reload}
-    >
-      {nothingWaiting ? (
+    <section className="rs-panel rs-needs-you" aria-labelledby="rs-needs-you-title">
+      <h2 id="rs-needs-you-title">Needs you</h2>
+      {state.phase !== 'READY' && state.phase !== 'EMPTY' ? (
+        <p className={`rs-state rs-state-${state.phase.toLowerCase()}`} role={state.phase === 'ERROR' ? 'alert' : undefined}>
+          {state.message}
+          {state.retryable ? (
+            <button type="button" className="rs-retry" onClick={inbox.reload}>
+              Try again
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+
+      {state.phase === 'EMPTY' ? (
         <section className="rs-nothing">
           <h3>Nothing needs your decision</h3>
           <p>
-            Russell carries on by itself: it keeps watching the project, ranking what is worth
-            doing, and starting work it already has permission for. You will be asked here if it
-            reaches something it cannot decide.
+            Brain carries on by itself: research, builds and Cash keep moving within the permissions
+            already given. You will be asked here when something genuinely needs you.
           </p>
         </section>
       ) : null}
-      {/* Above the list when a decision is outstanding, folded to one line when
-          the grant already exists — §16, and the rejected page's own fault. */}
-      <AuthorityPanel
-        key={projectId}
-        projectId={projectId}
-        folded={nothingWaiting}
-        /*
-         * Both readings of the same fact, and the badge above them.
-         *
-         * This page asks the authority route itself rather than inferring the
-         * answer from the list — which is right, and left it with a second copy
-         * of a fact the card can change. So the card says when it changed it,
-         * and every reader goes back to the server. `onAnswered` is the shell's
-         * own refresh, already wired for answering a request: granting the
-         * standing authority resolves exactly the same kind of decision, so it
-         * belongs on the same hook rather than a second one beside it.
-         */
-        onChanged={() => {
-          authority.reload();
-          query.reload();
-          onAnswered?.();
-        }}
-      />
-      {goalDecisions.length ? (
-        <ul className="rs-list rs-goal-decisions" aria-label="Decisions your goals are waiting on">
-          {goalDecisions.map((decision) => (
-            <li key={decision.id}>
-              <DecisionCard decision={decision} goalTitle={decision.goalTitle} />
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <ResearchBudgets projectId={projectId} />
-      <SoftwareDecisions
-        software={software}
-        repositories={repositories}
-        onAnswered={() => {
-          query.reload();
-          onAnswered?.();
-        }}
-      />
-      <ul className="rs-list">
-        {state.items.map((request) => (
-          <li key={request.id}>
-            <article className={`rs-decision rs-decision-${request.urgency.toLowerCase()}`}>
-            <span className="rs-decision-label">{URGENCY_WORDS[request.urgency] ?? request.urgency}</span>
-            <h4 className="rs-decision-what">{request.authorityNeeded}</h4>
-            {/* Why Russell is asking rather than deciding. A request with no
-                stated reason would be indistinguishable from Russell simply
-                declining to do its job. */}
-            <p className="rs-decision-why">{request.whyNotRussell}</p>
-            {request.recommendation ? (
-              <p className="rs-recommend">Russell suggests: {request.recommendation}</p>
-            ) : null}
-            {/* The consequence, beside the button that causes it.
 
-                `askHuman` has refused a choice without one since it was
-                written — "Every choice must carry a key, a label and its
-                consequence" — and then this rendered the label alone. So the
-                server enforced a promise the interface did not keep, and a
-                person deciding between "record what could not be settled" and
-                "authorize this plan" saw two verbs and no consequences. It is
-                the one place in Russell where a wrong click spends real
-                research or files a report into the archive. */}
-            <ul className="rs-choices">
-              {request.choices.map((choice) => (
-                <li key={choice.key} className="rs-choice">
-                  <span className="rs-choice-text">
-                    <strong>{choice.label}</strong>
-                    <span className="rs-choice-consequence">{choice.consequence}</span>
-                  </span>
-                  <button
-                    type="button"
-                    className="rs-button"
-                    onClick={() => {
-                      void answer(request.id, choice.key);
-                    }}
-                  >
-                    Choose this
-                  </button>
-                </li>
-              ))}
-            </ul>
-            </article>
-          </li>
-        ))}
-      </ul>
-    </Panel>
+      {data && data.unreadable.length > 0 ? (
+        <p className="rs-state rs-state-retrying">
+          Brain could not check {data.unreadable.map((one) => one.source).join(', ')} just now
+          {data.unreadable.every((one) => one.temporary)
+            ? ' — this is temporary and it will check again.'
+            : '. Everything else on this page is current.'}
+        </p>
+      ) : null}
+
+      {groups.map((group) => (
+        <section key={group.key} className="rs-needs-group" aria-label={group.label}>
+          <h3 className="rs-group-title">
+            {group.label}
+            <span className="rs-count">{group.items.length}</span>
+          </h3>
+          <ul className="rs-list">
+            {group.items.map((item) => (
+              <li key={item.id}>
+                <NeedCard
+                  item={item}
+                  projectId={projectId}
+                  software={legacy.data?.software ?? []}
+                  repositories={legacy.data?.repositories ?? []}
+                  onAnswer={answer}
+                  onChanged={refresh}
+                  go={go}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+
+      {/* The standing permission, folded to one line once it exists — §16:
+          what Russell may do is reference material, not a decision. */}
+      {data && !hasAuthorityItem && projectId ? (
+        <AuthorityPanel key={projectId} projectId={projectId} folded onChanged={refresh} />
+      ) : null}
+    </section>
+  );
+}
+
+const DESTINATIONS: Record<string, Route> = {
+  CASH: { name: 'CASH' },
+  BUILD: { name: 'BUILD' },
+  RESEARCH: { name: 'RESEARCH' },
+  PEOPLE: { name: 'PEOPLE' },
+};
+
+function NeedCard({
+  item,
+  projectId,
+  software,
+  repositories,
+  onAnswer,
+  onChanged,
+  go,
+}: {
+  item: InboxItem;
+  projectId: string | null;
+  software: SoftwareRequestView[];
+  repositories: SoftwareRepositoryChoice[];
+  onAnswer(requestId: string, choice: string): Promise<void>;
+  onChanged(): void;
+  go?: (route: Route) => void;
+}): JSX.Element {
+  const action = item.action;
+  if (action.type === 'GRANT_RESEARCH_AUTHORITY') {
+    // The permission card is its own complete decision, with its limits.
+    return <AuthorityPanel key={projectId} projectId={projectId} onChanged={onChanged} />;
+  }
+  return (
+    <article className={`rs-decision rs-decision-${item.urgency.toLowerCase()}`}>
+      <span className="rs-decision-label">{URGENCY_WORDS[item.urgency] ?? item.urgency}</span>
+      <h4 className="rs-decision-what">{item.title}</h4>
+      <p className="rs-decision-why">{item.reason}</p>
+      <dl className="rs-facts rs-need-facts">
+        <dt>What to do</dt>
+        <dd>{item.requestedAction}</dd>
+        <dt>If nobody answers</dt>
+        <dd>{item.ifIgnored}</dd>
+        <dt>About</dt>
+        <dd>{item.affects}</dd>
+        <dt>Meanwhile</dt>
+        <dd>{item.continuing}</dd>
+      </dl>
+      {action.type === 'ANSWER_REQUEST' ? (
+        <>
+          {action.recommendation ? <p className="rs-recommend">Russell suggests: {action.recommendation}</p> : null}
+          {/* The consequence beside the button that causes it: `askHuman`
+              refuses a choice without one, so the screen must show it. */}
+          <ul className="rs-choices">
+            {action.choices.map((choice) => (
+              <li key={choice.key} className="rs-choice">
+                <span className="rs-choice-text">
+                  <strong>{choice.label}</strong>
+                  <span className="rs-choice-consequence">{choice.consequence}</span>
+                </span>
+                <button
+                  type="button"
+                  className="rs-button"
+                  onClick={() => {
+                    void onAnswer(action.requestId, choice.key);
+                  }}
+                >
+                  Choose this
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {action.type === 'SOFTWARE' ? (
+        <SoftwareDecisions
+          software={software.filter((entry) => entry.request.id === action.requestId)}
+          repositories={repositories}
+          onAnswered={onChanged}
+        />
+      ) : null}
+      {action.type === 'OPEN' && go ? (
+        <button type="button" className="rs-button" onClick={() => go(DESTINATIONS[action.destination]!)}>
+          {action.label}
+        </button>
+      ) : null}
+      {action.type === 'EXTERNAL' ? (
+        <a className="rs-button" href={action.url} target="_blank" rel="noreferrer">
+          {action.label}
+        </a>
+      ) : null}
+    </article>
   );
 }

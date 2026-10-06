@@ -9,15 +9,39 @@
  * with the reason, so the screen never promises Brain will do something the
  * send path would refuse.
  */
+import { formatMoney } from '../figures.ts';
 import { dealPosition, type DealPosition } from './position.ts';
 import type { CashLesson } from './learning.ts';
 import type { ExecutionRecord } from '../record.ts';
 import type { CashOpportunity } from '../../../domain/types.ts';
 
+/**
+ * Which kind of step this is, so a reader can group it without parsing the
+ * sentence. Integration 3's Needs You groups a person's steps by this —
+ * reaching a buyer, recording an agreement, invoice terms, a payment whose
+ * outcome is unknown, fulfilling the work — and a prose match there would be
+ * model-free but still a guess.
+ */
+export type JourneyStepKind =
+  | 'CONTACT'
+  | 'AGREEMENT'
+  | 'FOLLOW_UP'
+  | 'AWAIT_BUYER'
+  | 'INVOICE_TERMS'
+  | 'ISSUE_INVOICE'
+  | 'OVERDUE'
+  | 'PAYMENT'
+  | 'PAYMENT_UNKNOWN'
+  | 'FULFIL'
+  | 'ACCEPTANCE'
+  | 'SETTLEMENT'
+  | 'COLLECT';
+
 export interface JourneyNext {
   step: string;
   owner: 'BRAIN' | 'PERSON' | 'BUYER';
   why: string;
+  kind: JourneyStepKind;
 }
 
 export interface DealView extends Omit<DealPosition, 'observations'> {
@@ -58,7 +82,7 @@ export function nextFor(position: DealPosition, record: ExecutionRecord | undefi
   if (state === 'COLLECTED' || state === 'DECLINED' || state === 'ARCHIVED') return out;
   if (!position.contacted) {
     const c = performable(record, 'CONTACT_BUYER');
-    out.push({ step: 'Reach the buyer with the offer on the card.', owner: c.brain ? 'BRAIN' : 'PERSON', why: c.why });
+    out.push({ step: 'Reach the buyer with the offer on the card.', owner: c.brain ? 'BRAIN' : 'PERSON', why: c.why, kind: 'CONTACT' });
     return out;
   }
   if (p.agreedRevenueCents <= 0) {
@@ -69,6 +93,7 @@ export function nextFor(position: DealPosition, record: ExecutionRecord | undefi
         step: 'Record the agreement: the amount, what is delivered, what counts as acceptance, and the evidence.',
         owner: 'PERSON',
         why: 'An agreement binds the buyer; Brain records one only from evidence somebody can point at.',
+        kind: 'AGREEMENT',
       });
     } else {
       out.push({
@@ -77,6 +102,7 @@ export function nextFor(position: DealPosition, record: ExecutionRecord | undefi
         why: silent
           ? 'Silence is recorded; a second contact is a new action under the grant.'
           : 'Brain records silence by itself if nothing arrives inside the response window.',
+        kind: silent ? 'FOLLOW_UP' : 'AWAIT_BUYER',
       });
     }
     return out;
@@ -84,9 +110,10 @@ export function nextFor(position: DealPosition, record: ExecutionRecord | undefi
   const drafted = position.invoices.filter((one) => one.state === 'DRAFTED');
   if (p.invoiceableCents > 0) {
     out.push({
-      step: `Request the invoice for the ${p.invoiceableCents} cents agreed: who is billed, the tax treatment and the due date.`,
+      step: `Request the invoice for the ${formatMoney(p.invoiceableCents, p.currency)} agreed: who is billed, the tax treatment and the due date.`,
       owner: 'PERSON',
       why: 'Those are terms only you hold; Brain takes the amount from the agreement and invents none of them.',
+      kind: 'INVOICE_TERMS',
     });
   }
   if (drafted.length > 0) {
@@ -95,6 +122,7 @@ export function nextFor(position: DealPosition, record: ExecutionRecord | undefi
       step: 'Issue the drafted invoice.',
       owner: i.brain ? 'BRAIN' : 'PERSON',
       why: i.brain ? 'Brain issues it on its next pass, once, under its own key.' : (drafted[0]!.stateReason ?? i.why),
+      kind: 'ISSUE_INVOICE',
     });
   }
   const overdue = position.invoices.filter((one) => one.state === 'ISSUED' && one.dueDate < new Date().toISOString().slice(0, 10));
@@ -103,17 +131,19 @@ export function nextFor(position: DealPosition, record: ExecutionRecord | undefi
       step: `${overdue.length === 1 ? 'An invoice is' : `${overdue.length} invoices are`} past due and unpaid.`,
       owner: 'PERSON',
       why: 'Chase the buyer, or release the agreement if it has fallen through; Brain rewrites no invoice.',
+      kind: 'OVERDUE',
     });
   }
   if (p.owedByBuyerCents > 0 && !position.paymentInFlight) {
     out.push({
-      step: `The buyer pays the ${p.owedByBuyerCents} cents billed.`,
+      step: `The buyer pays the ${formatMoney(p.owedByBuyerCents, p.currency)} billed.`,
       owner: 'BUYER',
       why: 'Brain reads the payment from the provider when it arrives, or a person records one made another way with its reference.',
+      kind: 'PAYMENT',
     });
   }
   if (position.paymentInFlight) {
-    out.push({ step: 'A payment attempt is in flight or its outcome is unknown.', owner: 'PERSON', why: 'An unknown outcome is settled by checking the provider, never by sending again.' });
+    out.push({ step: 'A payment attempt is in flight or its outcome is unknown.', owner: 'PERSON', why: 'An unknown outcome is settled by checking the provider, never by sending again.', kind: 'PAYMENT_UNKNOWN' });
   }
   // Each live agreement's obligation says what it is waiting on, in its own
   // words (`fulfillment.ts`); the view only says whose turn it is.
@@ -121,20 +151,20 @@ export function nextFor(position: DealPosition, record: ExecutionRecord | undefi
     if (obligation.agreement.state !== 'AGREED' || obligation.complete) continue;
     const label = position.obligations.length > 1 ? ` (${obligation.agreement.deliverable})` : '';
     for (const step of obligation.personNext) {
-      out.push({ step: `${step}${label}`, owner: 'PERSON', why: obligation.outstanding[0] ?? 'The obligation is not complete.' });
+      out.push({ step: `${step}${label}`, owner: 'PERSON', why: obligation.outstanding[0] ?? 'The obligation is not complete.', kind: 'FULFIL' });
     }
     for (const step of obligation.brainNext) {
-      out.push({ step: `${step}${label}`, owner: 'BRAIN', why: 'From the obligation’s own rows; nothing is needed from a person.' });
+      out.push({ step: `${step}${label}`, owner: 'BRAIN', why: 'From the obligation’s own rows; nothing is needed from a person.', kind: 'FULFIL' });
     }
     if (obligation.acceptance.state === 'AWAITING_ACCEPTANCE') {
-      out.push({ step: `The buyer accepts the work against: ${obligation.acceptance.condition}`, owner: 'BUYER', why: 'Delivered is not accepted.' });
+      out.push({ step: `The buyer accepts the work against: ${obligation.acceptance.condition}`, owner: 'BUYER', why: 'Delivered is not accepted.', kind: 'ACCEPTANCE' });
     }
   }
   if (p.unsettledCents > 0) {
-    out.push({ step: `${p.unsettledCents} cents paid has not settled yet.`, owner: 'PERSON', why: 'A settlement is recorded with the bank or provider payout reference; until then it is not cash.' });
+    out.push({ step: `${formatMoney(p.unsettledCents, p.currency)} paid has not settled yet.`, owner: 'PERSON', why: 'A settlement is recorded with the bank or provider payout reference; until then it is not cash.', kind: 'SETTLEMENT' });
   }
   if (out.length === 0) {
-    out.push({ step: 'Brain marks this collected on its next pass.', owner: 'BRAIN', why: 'Paid, settled and accepted.' });
+    out.push({ step: 'Brain marks this collected on its next pass.', owner: 'BRAIN', why: 'Paid, settled and accepted.', kind: 'COLLECT' });
   }
   return out;
 }
