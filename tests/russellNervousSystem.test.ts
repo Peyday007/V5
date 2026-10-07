@@ -90,6 +90,7 @@ import { createRun } from '../server/repos/runs.ts';
 import {
   NEEDS_HUMAN_CHOICES,
   parkStoppedMissions,
+  reaskRefusedPlans,
   unparkResolvedMissions,
 } from '../server/services/russell/needsHuman.ts';
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
@@ -1661,6 +1662,7 @@ describe('the loop keeps going without anybody watching', () => {
         'The proposed plan falls outside the preauthorized envelope: the assignment is not ' +
         'the text this envelope authorizes.',
     });
+    await refuseForReal(mission.orchestrationId!);
 
     await tick('instance-a');
     const request = (await listOpenRequests(projectId)).find(
@@ -1752,13 +1754,13 @@ describe('the loop keeps going without anybody watching', () => {
         candidateId: captured.candidate!.id,
       });
     };
+    // A stop that genuinely needs a person — not an envelope refusal, which
+    // Brain now re-asks the envelope about by itself.
     const stop = async (orchestrationId: string) => {
       await withPlan(orchestrationId, layerId, projectId);
       await updateOrchestration(orchestrationId, {
         status: 'NEEDS_HUMAN',
-        failureReason:
-          'The proposed plan falls outside the preauthorized envelope: the assignment is not ' +
-          'the text this envelope authorizes.',
+        failureReason: 'A person must decide whether this plan should run.',
       });
     };
     const liveHolds = async () =>
@@ -1885,6 +1887,74 @@ describe('the loop keeps going without anybody watching', () => {
     expect((await getMission(mission.id))!.state).toBe('RUNNING');
   });
 
+  it('asks the envelope again about a plan it wrongly refused, and resumes it with nobody involved', async () => {
+    /*
+     * Production, 2026-10-07: `orc_0029a3b7251a49b1971a` and every Cash deep
+     * dive beside it parked on "instructs the researcher to telephone call".
+     * The screen was corrected, and the packets stayed parked: a plan refused
+     * at approval has no work items, so nothing ever re-entered it.
+     */
+    const conversation = await ownedConversation('A refusal the screen got wrong');
+    const mission = await parkedMission(conversation.id, 'wrongly-refused');
+    const orchestrationId = mission.orchestrationId!;
+    const fragments = await currentFragments(orchestrationId);
+    expect(fragments.length).toBeGreaterThan(0);
+    for (const fragment of fragments) await updateFragment(fragment.id, { status: 'PLANNED' });
+    await updateOrchestration(orchestrationId, {
+      status: 'NEEDS_HUMAN',
+      failureReason:
+        'The proposed plan falls outside the preauthorized envelope: fragment "x" instructs the ' +
+        'researcher to telephone call, which is an action on the world.',
+    });
+    await parkStoppedMissions(10);
+    const card = (await listOpenRequests(projectId)).find((r) => r.missionId === mission.id)!;
+    expect(card).toBeDefined();
+    const before = (await listEvents(projectId, 500)).length;
+
+    // The plan fits the envelope as it stands now: it is approved without a person.
+    expect(await reaskRefusedPlans(50)).toEqual([orchestrationId]);
+    expect((await currentFragments(orchestrationId)).every((f) => f.status !== 'PLANNED')).toBe(true);
+    expect((await getOrchestration(orchestrationId))!.status).not.toBe('NEEDS_HUMAN');
+    expect(await unparkResolvedMissions(10)).toEqual([mission.id]);
+    expect((await getMission(mission.id))!.state).toBe('RUNNING');
+    expect((await getHumanRequest(card.id))!.state).toBe('WITHDRAWN');
+    // Approved by the envelope, by name — never as a person.
+    const approved = (await listEvents(projectId, 500)).find(
+      (event) =>
+        event.eventType === 'RESEARCH_PLAN_REVIEWED' &&
+        String((event.payload as Record<string, unknown>)['approvedByUserId'] ?? '').startsWith('SYSTEM:'),
+    );
+    expect(approved).toBeDefined();
+    expect((await listEvents(projectId, 500)).length).toBeGreaterThan(before);
+
+    // Nothing to ask the second time: the packet is no longer parked.
+    expect(await reaskRefusedPlans(50)).toEqual([]);
+  });
+
+  it('leaves a plan the envelope genuinely refuses exactly where it is, and records nothing', async () => {
+    const conversation = await ownedConversation('A real refusal');
+    const mission = await parkedMission(conversation.id, 'really-refused');
+    const orchestrationId = mission.orchestrationId!;
+    for (const fragment of await currentFragments(orchestrationId)) {
+      await updateFragment(fragment.id, { status: 'PLANNED' });
+    }
+    await getDb().run(`UPDATE research_fragments SET question = ? WHERE orchestration_id = ?`, [
+      'Call the county clerk and ask which permits they publish.',
+      orchestrationId,
+    ]);
+    await updateOrchestration(orchestrationId, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'The proposed plan falls outside the preauthorized envelope: call the.',
+    });
+    await parkStoppedMissions(10);
+    const before = (await listEvents(projectId, 500)).length;
+    expect(await reaskRefusedPlans(50)).toEqual([]);
+    expect(await reaskRefusedPlans(50)).toEqual([]);
+    expect((await listEvents(projectId, 500)).length).toBe(before);
+    expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
+    expect((await getOrchestration(orchestrationId))!.status).toBe('NEEDS_HUMAN');
+  });
+
   it('re-offers an already-open request when the packet no longer matches it', async () => {
     /*
      * A repair that cannot reach the row that motivated it is half a repair.
@@ -1902,6 +1972,7 @@ describe('the loop keeps going without anybody watching', () => {
       status: 'NEEDS_HUMAN',
       failureReason: 'The proposed plan falls outside the preauthorized envelope.',
     });
+    await refuseForReal(mission.orchestrationId!);
     await transitionMission({
       missionId: mission.id,
       from: mission.state,
@@ -1947,6 +2018,7 @@ describe('the loop keeps going without anybody watching', () => {
       status: 'NEEDS_HUMAN',
       failureReason: 'The proposed plan falls outside the preauthorized envelope.',
     });
+    await refuseForReal(mission.orchestrationId!);
     await tick('instance-a');
     const request = (await listOpenRequests(projectId)).find(
       (entry) => entry.missionId === mission.id,
@@ -2978,6 +3050,19 @@ async function withResearch(orchestrationId: string, layerIdFor: string, project
 }
 
 /** A packet whose plan is proposed and waiting to be approved. */
+/**
+ * Make an envelope refusal genuine: the assignment no longer matches the text
+ * the envelope pins, which is the production stop these tests describe
+ * (`orc_8adc4708f56f49a8964b`). Without it the plan fits, and Brain now asks
+ * the envelope again by itself rather than waiting for a person.
+ */
+async function refuseForReal(orchestrationId: string) {
+  await getDb().run(`UPDATE research_orchestrations SET assignment = ? WHERE id = ?`, [
+    'An assignment this envelope does not authorize.',
+    orchestrationId,
+  ]);
+}
+
 async function withPlan(orchestrationId: string, layerIdFor: string, projectIdFor: string) {
   await createFragments([
     {

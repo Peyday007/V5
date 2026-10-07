@@ -134,6 +134,7 @@ import {
   restoreWronglyConcludedParks,
   parkStoppedMissions,
   unparkResolvedMissions,
+  reaskRefusedPlans,
   reopenAnswered,
   resumeAnsweredRequest,
 } from './needsHuman.ts';
@@ -1952,6 +1953,7 @@ export async function tick(owner: string): Promise<TickReport> {
     });
     // And the other way: a packet that stopped waiting on a person by itself.
     await runPass(report, 'unpark-resolved', async () => {
+      await reaskRefusedPlans(500);
       await unparkResolvedMissions(cycle.maxEventsPerCycle);
     });
 
