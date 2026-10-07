@@ -25,7 +25,7 @@
  * item from being a state nobody can clear.
  */
 import { getDb } from '../db/database.ts';
-import { renewReservation, settleReservation } from './russellAuthority.ts';
+import { readmitReservation, renewReservation, settleReservation } from './russellAuthority.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
 import type {
   HumanRequestChoice,
@@ -385,7 +385,7 @@ export async function transitionMission(input: {
  * the packet, the bin and any card all stay exactly as written, and the moment
  * the work can run again — a person answers, a bin is reopened, the launch
  * builds a fresh bin — the mission no longer matches and the next tick renews
- * its hold (`renewReservation` is guarded on HELD, not on expiry).
+ * its hold — through `readmitReservation`, so only while a slot is free.
  */
 const WAITING_ON_A_PERSON = `(
   m.state = 'NEEDS_HUMAN'
@@ -432,7 +432,7 @@ const WAITING_ON_A_PERSON = `(
  * two-hour TTL that the previous tick just extended would leave a stuck sprint
  * stuck, and rows reach everything while a hook reaches one entrance.
  *
- * Answering the park costs nothing: `renewReservation` is guarded on `HELD`
+ * Answering the park re-admits the hold through `readmitReservation`, which is guarded on `HELD`
  * and not on expiry, so a mission that goes back to RUNNING is renewed again on
  * the next tick and counts again from then.
  *
@@ -457,8 +457,8 @@ export async function renewLiveMissionReservations(limit: number): Promise<strin
     [nowIso(), nowIso()],
   );
 
-  const rows = await getDb().all<{ reservation_id: string }>(
-    `SELECT m.reservation_id AS reservation_id
+  const rows = await getDb().all<{ reservation_id: string; expires_at: string }>(
+    `SELECT m.reservation_id AS reservation_id, r.expires_at AS expires_at
        FROM russell_missions m
        JOIN russell_budget_reservations r ON r.id = m.reservation_id
       WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING')
@@ -470,8 +470,19 @@ export async function renewLiveMissionReservations(limit: number): Promise<strin
     [Math.max(1, limit)],
   );
   const renewed: string[] = [];
+  const now = nowIso();
   for (const row of rows) {
-    if (await renewReservation(row.reservation_id)) renewed.push(row.reservation_id);
+    /*
+     * An unexpired hold is already counted, so renewing it changes nothing
+     * about the ceiling. A lapsed one is a slot given back — a mission that
+     * waited on a person and is running again — and taking it back is an
+     * admission that has to meet `maxConcurrent` like any launch.
+     */
+    const ok =
+      row.expires_at > now
+        ? await renewReservation(row.reservation_id)
+        : await readmitReservation(row.reservation_id);
+    if (ok) renewed.push(row.reservation_id);
   }
   return renewed;
 }

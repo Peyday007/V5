@@ -47,6 +47,7 @@ import { nowIso } from '../../repos/util.ts';
 import { authorizeUnresolvedGaps } from '../research/gapPolicy.ts';
 import { advancePacket, approvePlan } from '../research/packetRunner.ts';
 import { getApprovalEnvelope, planFitsEnvelope } from '../research/approvalEnvelope.ts';
+import { getReservation, readmitReservation } from '../../repos/russellAuthority.ts';
 import type {
   HumanRequestChoice,
   ResearchFragment,
@@ -572,6 +573,20 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
 }
 
 /**
+ * Whether resuming this mission fits under its grant's research ceiling.
+ *
+ * A mission with no hold, or one already settled or released, has no slot to
+ * take back and is never what blocks a resume; only a live-or-lapsed `HELD`
+ * hold is an admission, and `readmitReservation` decides it.
+ */
+async function admitResume(reservationId: string | null): Promise<boolean> {
+  if (!reservationId) return true;
+  const reservation = await getReservation(reservationId);
+  if (!reservation || reservation.state !== 'HELD') return true;
+  return readmitReservation(reservationId);
+}
+
+/**
  * Ask the envelope again about a plan it refused, and nothing else.
  *
  * A packet whose plan the envelope refused has no work items yet, so nothing
@@ -590,13 +605,18 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
  * card is withdrawn by `unparkResolvedMissions` once the packet has moved.
  */
 export async function reaskRefusedPlans(limit: number): Promise<string[]> {
-  const rows = await getDb().all<{ id: string }>(
-    `SELECT DISTINCT o.id FROM russell_missions m
+  const rows = await getDb().all<{ id: string; reservation_id: string | null }>(
+    /*
+     * Oldest park first, so the order is the same on every tick and after a
+     * restart, and work waiting longest is resumed first.
+     */
+    `SELECT o.id, m.reservation_id FROM russell_missions m
        JOIN research_orchestrations o ON o.id = m.orchestration_id
       WHERE m.state = 'NEEDS_HUMAN'
         AND o.status = 'NEEDS_HUMAN'
         AND o.approval_envelope_id IS NOT NULL
         AND o.failure_reason LIKE 'The proposed plan falls outside the preauthorized envelope%'
+      ORDER BY m.updated_at, m.rowid
       LIMIT ?`,
     [Math.max(1, limit)],
   );
@@ -611,6 +631,13 @@ export async function reaskRefusedPlans(limit: number): Promise<string[]> {
     );
     if (planned.length === 0) continue;
     if (!planFitsEnvelope({ envelope, orchestration, fragments: planned }).fits) continue;
+    /*
+     * Resuming it is an admission: only within the grant's free research
+     * slots. With none free, everything after this one waits, in order, for a
+     * later tick — nothing is skipped past and nothing is approved over the
+     * ceiling.
+     */
+    if (!(await admitResume(row.reservation_id))) break;
     await advancePacket(orchestration.id);
     advanced.push(orchestration.id);
   }
@@ -686,6 +713,12 @@ export interface ResumeResult {
   missionId: string | null;
   /** True when the request is finished with and may be marked resumed. */
   settled: boolean;
+  /**
+   * Not carried out yet only because no research slot is free. The answer
+   * stays recorded and is tried again on a later tick, in answer order; it is
+   * not put back in front of the person.
+   */
+  deferred?: boolean;
 }
 
 
@@ -828,6 +861,25 @@ export async function resumeAnsweredRequest(
       reason: 'stopped, as asked',
       missionId: mission.id,
       settled: true,
+    };
+  }
+
+  /*
+   * Both answers below put research back to work, so resuming is an admission
+   * and meets the grant's `maxConcurrent` like any launch. With no free slot
+   * the answer waits, recorded, rather than pushing live research over the
+   * ceiling a person set.
+   */
+  if (
+    (choice === NEEDS_HUMAN_CHOICES.RECORD_GAPS.key || choice === NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key) &&
+    !(await admitResume(mission.reservationId))
+  ) {
+    return {
+      ok: false,
+      reason: 'answered; waiting for a free research slot under this project\'s concurrency limit',
+      missionId: mission.id,
+      settled: false,
+      deferred: true,
     };
   }
 

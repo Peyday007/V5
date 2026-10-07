@@ -1951,11 +1951,7 @@ export async function tick(owner: string): Promise<TickReport> {
         report.needsHuman.push(parked);
       }
     });
-    // And the other way: a packet that stopped waiting on a person by itself.
-    await runPass(report, 'unpark-resolved', async () => {
-      await reaskRefusedPlans(500);
-      await unparkResolvedMissions(cycle.maxEventsPerCycle);
-    });
+
 
     /*
      * 2. Carry out what a person answered.
@@ -1979,8 +1975,15 @@ export async function tick(owner: string): Promise<TickReport> {
      * so what comes back is a card whose remaining options are true.
      */
     await runPass(report, 'answered-requests', async () => {
-      for (const request of await listAnsweredRequests(cycle.maxEventsPerCycle)) {
+      // The whole backlog, not one cycle's worth: an answer waiting for a
+      // research slot keeps its place, and a window that size would hide a
+      // newer answer behind it for ever.
+      for (const request of await listAnsweredRequests(500)) {
         const outcome = await resumeAnsweredRequest(request);
+        if (outcome.deferred) {
+          report.unresolvedAnswers.push({ requestId: request.id, reason: outcome.reason });
+          continue;
+        }
         if (!outcome.settled) {
           report.unresolvedAnswers.push({ requestId: request.id, reason: outcome.reason });
           await reopenAnswered(request, outcome.reason);
@@ -1988,6 +1991,17 @@ export async function tick(owner: string): Promise<TickReport> {
         }
         if (await markResumed(request.id)) report.resumed.push(request.id);
       }
+    });
+
+    /*
+     * 2b. A packet that stopped waiting on a person by itself, and plans the
+     * envelope refused that it now admits. After the answers above, so a
+     * person's decision is never kept waiting behind Brain's own re-asks for
+     * the same free research slots.
+     */
+    await runPass(report, 'unpark-resolved', async () => {
+      await reaskRefusedPlans(500);
+      await unparkResolvedMissions(cycle.maxEventsPerCycle);
     });
 
     // 3. Recover what a deadline passed.
