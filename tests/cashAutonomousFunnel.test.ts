@@ -46,17 +46,24 @@ import { agree, fulfil } from './helpers/cashDeal.ts';
 import { recordMoneyEvent } from '../server/services/cash/opportunities.ts';
 import { createUser, createWorker, grantMembership } from '../server/repos/identity.ts';
 import { createRun } from '../server/repos/runs.ts';
-import { createFragments, createOrchestration } from '../server/repos/research.ts';
+import {
+  createFragments,
+  createOrchestration,
+  currentFragments,
+  getOrchestration,
+} from '../server/repos/research.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import { claimWork } from '../server/repos/workQueue.ts';
 import { advancePacket, approvePlan } from '../server/services/research/packetRunner.ts';
 import {
   latestMissionForCandidate,
   launchMission,
+  listMissions,
   linkMission,
   transitionMission,
 } from '../server/repos/russellMissions.ts';
 import { listCandidates } from '../server/repos/russellCandidates.ts';
+import { launch } from '../server/services/russell/launch.ts';
 import { getOpportunity, listNeeds, listOpportunities } from '../server/repos/cashPortfolio.ts';
 import { cardFactsFor } from '../server/repos/cashCardFacts.ts';
 import { tick } from '../server/services/russell/loop.ts';
@@ -1018,4 +1025,66 @@ describe('one opportunity from discovery to learning, across the seam', () => {
     expect([sends.CONTACT_BUYER!.length, sends.QUOTE_AND_INVOICE!.length]).toEqual([1, 1]);
     expect(await agreementsFor(id)).toHaveLength(1);
   }, 180_000);
+});
+
+describe('a deep dive Brain compiles is approved by its own envelope, with no person', () => {
+  it('launches the dive and the envelope, not a person, starts its research', async () => {
+    /*
+     * Production, 2026-10-07: every Cash deep dive's compiled plan was refused
+     * by `RUSSELL_CASH_VALIDATION_V1` and parked for a person. The journeys
+     * above answer dives before they launch, so they never asked the envelope.
+     */
+    const activated = await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    expect(activated.ok).toBe(true);
+    await tick('autonomous');
+    const bucket = (await listCandidates({ projectId })).find(
+      (one) => one.title === SEARCH_BUCKETS[0]!.title,
+    )!;
+    await answer(bucket.id, bucket.statement, [
+      {
+        claim:
+          'The Westfield drainage authority published request 2026-441 for ownership research ' +
+          'on twenty parcels, with a stated budget of USD 2,000, closing 30 October 2026.',
+        lane: 'demand_signal',
+        sourceUrl: SOURCE,
+        signal: 'ACTIVE_BUYER_DEMAND',
+      },
+    ]);
+    let candidateId: string | null = null;
+    for (let pass = 0; pass < 12 && !candidateId; pass += 1) {
+      await tick('autonomous');
+      const piece = (await listOpportunities({ projectId }))[0];
+      const candidate = piece?.candidateId
+        ? (await listCandidates({ projectId })).find((one) => one.id === piece.candidateId)
+        : null;
+      if (candidate?.judgment['missionSpec']) candidateId = candidate.id;
+    }
+    expect(candidateId, 'the deep dive was compiled').not.toBeNull();
+    // The loop's own launch, with the compiled specification — the discovery
+    // missions hold this test grant's slots, so the loop would wait for them.
+    // Free the grant's slots, held by the other discovery buckets' missions.
+    for (const other of await listMissions({ projectId, states: ['RUNNING'] })) {
+      await transitionMission({ missionId: other.id, from: 'RUNNING', to: 'CANCELLED', terminalReason: 'test' });
+    }
+    const candidate = (await listCandidates({ projectId })).find((one) => one.id === candidateId)!;
+    const spec = candidate.judgment['missionSpec'] as Record<string, unknown>;
+    const launched = await launch({
+      ...(spec as unknown as Omit<Parameters<typeof launch>[0], 'candidateId'>),
+      candidateId: candidateId!,
+    });
+    const orchestrationId = launched.mission?.orchestrationId ?? null;
+    expect(orchestrationId, 'the deep dive launched').not.toBeNull();
+    await tick('autonomous');
+    const packet = (await getOrchestration(orchestrationId!))!;
+    expect(packet.failureReason ?? '').not.toMatch(/outside the preauthorized envelope/);
+    expect(packet.status).not.toBe('NEEDS_HUMAN');
+    const fragments = await currentFragments(orchestrationId!);
+    expect(fragments.length).toBeGreaterThan(0);
+    expect(fragments.every((fragment) => fragment.status !== 'PLANNED')).toBe(true);
+  });
 });
