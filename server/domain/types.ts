@@ -257,6 +257,8 @@ export const EVENT_TYPES = [
   // lives. `bin_events` is best-effort by design and may be swallowed.
   'RUSSELL_MISSION_FAILED',
   'RUSSELL_MISSION_REDONE',
+  // A parked mission whose packet stopped waiting on a person by itself.
+  'RUSSELL_MISSION_UNPARKED',
 
   // A person deciding what Russell may spend on its own, and withdrawing it.
   //

@@ -87,7 +87,11 @@ import {
   updateOrchestration,
 } from '../server/repos/research.ts';
 import { createRun } from '../server/repos/runs.ts';
-import { NEEDS_HUMAN_CHOICES, parkStoppedMissions } from '../server/services/russell/needsHuman.ts';
+import {
+  NEEDS_HUMAN_CHOICES,
+  parkStoppedMissions,
+  unparkResolvedMissions,
+} from '../server/services/russell/needsHuman.ts';
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
 import { listTurns, createConversation, getConversation } from '../server/repos/russellConversations.ts';
 import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
@@ -1838,6 +1842,47 @@ describe('the loop keeps going without anybody watching', () => {
     expect(
       (await listMissions({ projectId })).filter((m) => m.candidateId === b.mission!.candidateId),
     ).toHaveLength(1);
+  });
+
+  it('un-parks a mission whose packet stopped waiting on a person by itself, once', async () => {
+    /*
+     * Production, 2026-10-07: every Cash deep dive's plan was refused by its
+     * own envelope on a screen that read "…is a telephone call" as an
+     * instruction. A packet is re-entered every tick, so once the screen was
+     * right the plan approved itself — and the mission stayed NEEDS_HUMAN with
+     * a card asking a question the packet had moved past, because the only way
+     * back was a person answering.
+     */
+    const conversation = await ownedConversation('Resolved by itself');
+    const mission = await parkedMission(conversation.id, 'self-resolved');
+    await withPlan(mission.orchestrationId!, layerId, projectId);
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason:
+        'The proposed plan falls outside the preauthorized envelope: the assignment is not ' +
+        'the text this envelope authorizes.',
+    });
+    await parkStoppedMissions(10);
+    expect((await getMission(mission.id))!.state).toBe('NEEDS_HUMAN');
+    const card = (await listOpenRequests(projectId)).find((r) => r.missionId === mission.id)!;
+    expect(card).toBeDefined();
+
+    // Still stopped: nothing is un-parked.
+    expect(await unparkResolvedMissions(10)).toEqual([]);
+
+    // The packet moves on by itself.
+    await updateOrchestration(mission.orchestrationId!, { status: 'QUEUED', failureReason: null });
+    const passes = await Promise.all([unparkResolvedMissions(10), unparkResolvedMissions(10)]);
+    expect(passes.flat()).toEqual([mission.id]);
+    const after = (await getMission(mission.id))!;
+    expect(after.state).toBe('RUNNING');
+    expect(after.orchestrationId).toBe(mission.orchestrationId);
+    expect((await getHumanRequest(card.id))!.state).toBe('WITHDRAWN');
+    // Its hold counts again from the next tick, because the work is running.
+    expect(await renewLiveMissionReservations(10)).toContain(mission.reservationId);
+    // And the parking pass does not take it back while the packet runs.
+    expect(await parkStoppedMissions(10)).toEqual([]);
+    expect((await getMission(mission.id))!.state).toBe('RUNNING');
   });
 
   it('re-offers an already-open request when the packet no longer matches it', async () => {
