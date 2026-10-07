@@ -47,7 +47,11 @@ import { nowIso } from '../../repos/util.ts';
 import { authorizeUnresolvedGaps } from '../research/gapPolicy.ts';
 import { advancePacket, approvePlan } from '../research/packetRunner.ts';
 import { getApprovalEnvelope, planFitsEnvelope } from '../research/approvalEnvelope.ts';
-import { getReservation, readmitReservation } from '../../repos/russellAuthority.ts';
+import {
+  getReservation,
+  readmitReservation,
+  readmitReservationOutcome,
+} from '../../repos/russellAuthority.ts';
 import type {
   HumanRequestChoice,
   ResearchFragment,
@@ -637,7 +641,16 @@ export async function reaskRefusedPlans(limit: number): Promise<string[]> {
      * later tick — nothing is skipped past and nothing is approved over the
      * ceiling.
      */
-    if (!(await admitResume(row.reservation_id))) break;
+    if (row.reservation_id) {
+      const reservation = await getReservation(row.reservation_id);
+      if (reservation?.state === 'HELD') {
+        const outcome = await readmitReservationOutcome(row.reservation_id);
+        if (outcome === 'REFUSED') break;
+        // Another pass took this one's slot back a moment ago and is resuming
+        // it; a resume happens once, so this pass leaves it to that one.
+        if (outcome === 'ALREADY') continue;
+      }
+    }
     await advancePacket(orchestration.id);
     advanced.push(orchestration.id);
   }
