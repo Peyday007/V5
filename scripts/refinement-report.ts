@@ -56,6 +56,10 @@ import { getCandidate } from '../server/repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
 import { getOrchestration, listPasses } from '../server/repos/research.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
+import { getDb } from '../server/db/database.ts';
+import { getBin } from '../server/repos/bins.ts';
+import { checkAuthority, spendTotals } from '../server/repos/russellAuthority.ts';
+import { RESEARCH_WORK_CLASS } from '../server/services/russell/launch.ts';
 import {
   MAX_VALIDATIONS_IN_FLIGHT,
   MAX_VALIDATION_ROUNDS,
@@ -220,6 +224,8 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
     );
   }
 
+  await researchConcurrency(projectId);
+
   const queue = await listWorkItems(projectId, { limit: 500 });
   const byPacket = new Map<string, WorkItem[]>();
   for (const item of queue) {
@@ -301,6 +307,104 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
     console.log('  none — no opening in this project has had a deep dive.');
   }
   return true;
+}
+
+/**
+ * Who holds the research grant's mission slots, row by row.
+ *
+ * `researchMissionSlotsFull` answers yes or no, and a dive that waits on it
+ * waits on whatever that count is made of — so "the slots are full" is only a
+ * diagnosis once each live hold is named with the mission, the idea, the packet
+ * and the bin behind it. Read-only, and the arithmetic is `spendTotals`' own
+ * predicate (`HELD` and unexpired), so the list adds up to the number the gate
+ * compares.
+ */
+async function researchConcurrency(projectId: string): Promise<void> {
+  const authority = await checkAuthority({ projectId, workClass: RESEARCH_WORK_CLASS });
+  console.log('');
+  console.log('RESEARCH CONCURRENCY');
+  if (!authority.ok || !authority.goal) {
+    console.log('  no live research grant governs this project');
+    return;
+  }
+  const goal = authority.goal;
+  const now = new Date().toISOString();
+  const totals = await spendTotals(goal.id, 'MISSION', now);
+  console.log(
+    `  grant       ${goal.id}  maxConcurrent=${goal.maxConcurrent}  live=${totals.live}  ` +
+      `full=${totals.live >= goal.maxConcurrent ? 'yes' : 'no'}`,
+  );
+  const holders = await getDb().all<{
+    reservation_id: string;
+    created_at: string;
+    expires_at: string;
+    mission_id: string | null;
+    mission_state: string | null;
+    mission_updated: string | null;
+    waiting_on: string | null;
+    candidate_id: string | null;
+    candidate_title: string | null;
+    orchestration_id: string | null;
+    packet_status: string | null;
+    packet_pass: string | null;
+    packet_updated: string | null;
+    failure_reason: string | null;
+    bin_id: string | null;
+  }>(
+    `SELECT r.id AS reservation_id, r.created_at, r.expires_at,
+            m.id AS mission_id, m.state AS mission_state, m.updated_at AS mission_updated,
+            m.waiting_on, m.candidate_id, c.title AS candidate_title,
+            m.orchestration_id, o.status AS packet_status, o.current_pass AS packet_pass,
+            o.updated_at AS packet_updated, o.failure_reason, m.bin_id
+       FROM russell_budget_reservations r
+       LEFT JOIN russell_missions m ON m.reservation_id = r.id
+       LEFT JOIN russell_candidates c ON c.id = m.candidate_id
+       LEFT JOIN research_orchestrations o ON o.id = m.orchestration_id
+      WHERE r.goal_id = ? AND r.kind = 'MISSION' AND r.state = 'HELD' AND r.expires_at > ?
+      ORDER BY r.created_at`,
+    [goal.id, now],
+  );
+  for (const row of holders) {
+    const bin = row.bin_id ? await getBin(row.bin_id) : null;
+    const passes = row.orchestration_id ? await listPasses(row.orchestration_id) : [];
+    const lastPass = passes
+      .map((pass) => pass.completedAt ?? pass.startedAt ?? null)
+      .filter((at): at is string => !!at)
+      .sort()
+      .at(-1);
+    console.log(
+      `  HOLDER  ${row.reservation_id}  reserved ${stamp(row.created_at)}  expires ${stamp(row.expires_at)}`,
+    );
+    console.log(
+      `      mission   ${row.mission_id ?? '— (no mission names this reservation)'} ` +
+        `${row.mission_state ?? ''}  updated ${stamp(row.mission_updated)}`,
+    );
+    console.log(`      idea      ${row.candidate_id ?? '—'}  ${(row.candidate_title ?? '').slice(0, 90)}`);
+    console.log(
+      `      packet    ${row.orchestration_id ?? '—'}  ${row.packet_status ?? ''} pass ${row.packet_pass ?? '—'}  ` +
+        `updated ${stamp(row.packet_updated)}  last pass ${stamp(lastPass)}`,
+    );
+    if (row.packet_status === 'NEEDS_HUMAN' || row.failure_reason) {
+      console.log(`      reason    ${(row.failure_reason ?? row.waiting_on ?? '').slice(0, 160)}`);
+    }
+    console.log(
+      `      bin       ${bin ? `${bin.id} ${bin.state} attempts ${bin.attemptCount}/${bin.maxAttempts}` : '—'}`,
+    );
+  }
+  const unheld = await getDb().all<{ state: string; packet: string | null; n: number }>(
+    `SELECT m.state, o.status AS packet, COUNT(*) AS n
+       FROM russell_missions m
+       LEFT JOIN russell_budget_reservations r ON r.id = m.reservation_id
+       LEFT JOIN research_orchestrations o ON o.id = m.orchestration_id
+      WHERE m.project_id = ? AND m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN')
+        AND NOT (r.state = 'HELD' AND r.expires_at > ?)
+      GROUP BY m.state, o.status
+      ORDER BY m.state, o.status`,
+    [projectId, now],
+  );
+  for (const row of unheld) {
+    console.log(`  not holding  mission=${row.state} packet=${row.packet ?? '—'}  ${Number(row.n)}`);
+  }
 }
 
 async function main(): Promise<void> {
