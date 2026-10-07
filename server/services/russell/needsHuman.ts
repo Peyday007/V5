@@ -315,10 +315,24 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
      * real decision, `transitionMission` is guarded on the state it read, and
      * re-parking one would be a no-op anyway.
      */
-    `SELECT id FROM russell_missions
-      WHERE state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN')
-        AND orchestration_id IS NOT NULL
-      ORDER BY updated_at, rowid
+    /*
+     * Only missions whose packet has actually stopped, and the unparked ones
+     * first.
+     *
+     * The window used to be every live or parked mission, oldest `updated_at`
+     * first. Nothing below touches a mission it skips or one it leaves parked,
+     * so those rows kept their old `updated_at` and sat at the front of the
+     * window on every tick. Once more than `limit` of them existed, a RUNNING
+     * mission whose packet stopped later was never reached: it was never
+     * parked, so `renewLiveMissionReservations` kept renewing its hold, and the
+     * grant's concurrency stayed full of work waiting on a person while
+     * eligible research queued behind it.
+     */
+    `SELECT m.id FROM russell_missions m
+       JOIN research_orchestrations o ON o.id = m.orchestration_id
+      WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN')
+        AND o.status = 'NEEDS_HUMAN'
+      ORDER BY CASE WHEN m.state = 'NEEDS_HUMAN' THEN 1 ELSE 0 END, m.updated_at, m.rowid
       LIMIT ?`,
     [Math.max(1, limit)],
   );
