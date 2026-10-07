@@ -961,6 +961,82 @@ export async function renewReservation(
   return result.changes === 1;
 }
 
+/**
+ * Take a research slot back for a hold that lapsed, only if one is free.
+ *
+ * A mission waiting on a person lets its hold lapse, so the slot is free for
+ * other work (`renewLiveMissionReservations`). Resuming it — a plan the
+ * envelope now admits, a person's answer, a packet that moved on by itself —
+ * is an admission like any launch, and it must meet the same ceiling.
+ * Renewing the lapsed hold unconditionally is how a bulk re-approval put
+ * live research at 40 against a `maxConcurrent` of 6 (production,
+ * 2026-10-07).
+ *
+ * An unexpired hold is already counted and is left alone (true). A lapsed one
+ * is revived in one guarded statement whose condition is the live count, and
+ * then counted again: if a concurrent admission took the last slot between
+ * the two, this one lapses itself back and reports false. Both racers backing
+ * off is possible and is the safe direction — the next tick admits one —
+ * where `reserve` ranks by insertion order, which a revived hold does not have.
+ */
+export async function readmitReservation(
+  reservationId: string,
+  ttlMinutes = 120,
+): Promise<boolean> {
+  return (await readmitReservationOutcome(reservationId, ttlMinutes)) !== 'REFUSED';
+}
+
+/**
+ * The same admission, saying which of three things happened.
+ *
+ * `ADMITTED` means this call's statement took the slot back, so exactly one
+ * caller sees it for a given lapse — what a resume that must happen once (a
+ * plan re-approval) keys on. `ALREADY` means the hold was live before this
+ * call; another admission, or one that never lapsed. `REFUSED` means no slot.
+ */
+export async function readmitReservationOutcome(
+  reservationId: string,
+  ttlMinutes = 120,
+): Promise<'ADMITTED' | 'ALREADY' | 'REFUSED'> {
+  const rows = await getDb().all<RussellReservationRow>(
+    'SELECT * FROM russell_budget_reservations WHERE id = ?',
+    [reservationId],
+  );
+  const row = rows[0];
+  if (!row || row.state !== 'HELD') return 'REFUSED';
+  const now = authorityNow();
+  if (row.expires_at > now) return 'ALREADY';
+  const goal = await getGoal(row.goal_id);
+  if (!goal) return 'REFUSED';
+  const limit = ceilingsFor(goal, row.kind as ReservationKind).active;
+  const expires = new Date(Date.parse(now) + Math.max(1, ttlMinutes) * 60_000).toISOString();
+  if (limit === null) {
+    const free = await getDb().run(
+      `UPDATE russell_budget_reservations SET expires_at = ?
+        WHERE id = ? AND state = 'HELD' AND expires_at <= ?`,
+      [expires, reservationId, now],
+    );
+    return free.changes === 1 ? 'ADMITTED' : 'ALREADY';
+  }
+  const result = await getDb().run(
+    `UPDATE russell_budget_reservations SET expires_at = ?
+      WHERE id = ? AND state = 'HELD' AND expires_at <= ?
+        AND (
+          SELECT COALESCE(SUM(amount), 0) FROM russell_budget_reservations
+           WHERE goal_id = ? AND kind = ? AND state = 'HELD' AND expires_at > ?
+        ) + ? <= ?`,
+    [expires, reservationId, now, row.goal_id, row.kind, now, row.amount, limit],
+  );
+  if (result.changes !== 1) return 'REFUSED';
+  const { live } = await spendTotals(row.goal_id, row.kind as ReservationKind, authorityNow());
+  if (live <= limit) return 'ADMITTED';
+  await getDb().run(
+    `UPDATE russell_budget_reservations SET expires_at = ? WHERE id = ? AND state = 'HELD'`,
+    [authorityNow(), reservationId],
+  );
+  return 'REFUSED';
+}
+
 export async function releaseReservation(input: {
   reservationId: string;
   reason: string;

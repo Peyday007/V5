@@ -17,7 +17,12 @@ import { createProject } from '../server/repos/projects.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import { getCandidate, recordJudgment } from '../server/repos/russellCandidates.ts';
 import { judgeCandidate } from '../server/services/russell/planning.ts';
-import { createGoal, listGoals, listReservations } from '../server/repos/russellAuthority.ts';
+import {
+  createGoal,
+  listGoals,
+  listReservations,
+  setGoalConcurrency,
+} from '../server/repos/russellAuthority.ts';
 import { authorityFor } from '../server/services/russell/authority.ts';
 import {
   getMission,
@@ -1808,7 +1813,13 @@ describe('the loop keeps going without anybody watching', () => {
     const d = await launchIdea('Contractor licences', 'establish which Michigan counties publish contractor licence lists');
     expect(d.ok, d.reason).toBe(true);
     await getDb().run(`UPDATE bins SET state = 'READY' WHERE id = ?`, [cBin]);
+    // D now holds the only slot, so C's hold is not taken back over the ceiling…
+    expect(await renewLiveMissionReservations(10)).not.toContain(c.mission!.reservationId);
+    expect(await liveHolds()).toBe(1);
+    // …and is the moment D finishes.
+    await transitionMission({ missionId: d.mission!.id, from: 'RUNNING', to: 'DONE' });
     expect(await renewLiveMissionReservations(10)).toContain(c.mission!.reservationId);
+    expect(await liveHolds()).toBe(1);
     expect((await getMission(c.mission!.id))!.state).toBe('RUNNING');
 
     // Nothing duplicated, nothing abandoned: one mission per idea, one open
@@ -1835,8 +1846,18 @@ describe('the loop keeps going without anybody watching', () => {
       actorUserId: userId,
       choice: NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key,
     });
+    // C holds the only slot: the answer waits, recorded, rather than pushing
+    // live research over the ceiling — and is not put back in front of anyone.
+    const waiting = await tick('instance-a');
+    expect(waiting.resumed).not.toContain(request.id);
+    expect((await getHumanRequest(request.id))!.state).toBe('ANSWERED');
+    expect((await getMission(b.mission!.id))!.state).toBe('NEEDS_HUMAN');
+    expect(await liveHolds()).toBeLessThanOrEqual(1);
+    // C finishes; the next tick carries the answer out within the ceiling.
+    await transitionMission({ missionId: c.mission!.id, from: 'RUNNING', to: 'DONE' });
     const resumed = await tick('instance-a');
     expect(resumed.resumed).toContain(request.id);
+    expect(await liveHolds()).toBeLessThanOrEqual(1);
     const after = (await getMission(b.mission!.id))!;
     expect(after.state).not.toBe('NEEDS_HUMAN');
     expect(after.orchestrationId).toBe(b.mission!.orchestrationId);
@@ -1911,6 +1932,8 @@ describe('the loop keeps going without anybody watching', () => {
     expect(card).toBeDefined();
     const before = (await listEvents(projectId, 500)).length;
 
+    // A tick lapses the parked hold before it re-asks, as the loop does.
+    await renewLiveMissionReservations(10);
     // The plan fits the envelope as it stands now: it is approved without a person.
     expect(await reaskRefusedPlans(50)).toEqual([orchestrationId]);
     expect((await currentFragments(orchestrationId)).every((f) => f.status !== 'PLANNED')).toBe(true);
@@ -2341,6 +2364,148 @@ describe('the loop keeps going without anybody watching', () => {
     const ended = await getProbe(probe.id);
     expect(ended!.state).toBe('COMPLETE');
     expect(ended!.outcome).toBe('UNKNOWN');
+  });
+});
+
+describe('resumed research meets the same concurrency ceiling as a launch', () => {
+  /*
+   * Production, 2026-10-07: 34 deep dives the envelope had wrongly refused were
+   * re-approved in one pass, each taking its lapsed hold back unconditionally,
+   * and live research reached 40 against a `maxConcurrent` of 6.
+   */
+  async function parkedFleet(count: number, ceiling: number) {
+    const goal = await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'bulk',
+      allowedWork: ['RESEARCH'],
+      workPolicy: 'UNCAPPED',
+      maxMissions: count,
+      maxFragments: count,
+      maxConcurrent: count,
+      maxProbes: 1,
+    });
+    const conversation = await ownedConversation('Bulk re-approval');
+    const missions: { id: string; orchestrationId: string; candidateId: string }[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const captured = await capture({
+        title: `County register ${index}`,
+        statement: `establish which Michigan counties publish register ${index} in a usable form`,
+        projectId,
+        conversationId: conversation.id,
+        visibility: 'PRIVATE',
+      });
+      await judgeCandidate(captured.candidate!.id);
+      const spec = (await getCandidate(captured.candidate!.id))!.judgment['missionSpec'] as Record<string, unknown>;
+      const launched = await launch({
+        ...(spec as unknown as Omit<Parameters<typeof launch>[0], 'candidateId'>),
+        candidateId: captured.candidate!.id,
+      });
+      expect(launched.ok, launched.reason).toBe(true);
+      const orchestrationId = launched.mission!.orchestrationId!;
+      for (const fragment of await currentFragments(orchestrationId)) {
+        await updateFragment(fragment.id, { status: 'PLANNED' });
+      }
+      await updateOrchestration(orchestrationId, {
+        status: 'NEEDS_HUMAN',
+        failureReason:
+          'The proposed plan falls outside the preauthorized envelope: fragment "x" instructs the ' +
+          'researcher to telephone call, which is an action on the world.',
+      });
+      missions.push({ id: launched.mission!.id, orchestrationId, candidateId: captured.candidate!.id });
+    }
+    await parkStoppedMissions(500);
+    await renewLiveMissionReservations(500);
+    expect(await setGoalConcurrency(goal.id, ceiling)).toBe(true);
+    const live = async () =>
+      (await listReservations(goal.id)).filter(
+        (row) => row.kind === 'MISSION' && row.state === 'HELD' && row.expiresAt > new Date().toISOString(),
+      ).length;
+    expect(await live(), 'every parked hold lapsed').toBe(0);
+    return { goal, missions, live };
+  }
+
+  it('admits at most the ceiling, in park order, and the next one only as a slot frees', async () => {
+    const { missions, live } = await parkedFleet(40, 6);
+    const order = missions.map((m) => m.orchestrationId);
+
+    // Two ticks at once over 40 re-approvable plans: never more than 6 live.
+    const passes = await Promise.all([reaskRefusedPlans(500), reaskRefusedPlans(500)]);
+    const admitted = passes.flat();
+    expect(new Set(admitted).size).toBe(admitted.length);
+    expect(admitted.length).toBeLessThanOrEqual(6);
+    expect(await live()).toBeLessThanOrEqual(6);
+    // Converges: further passes fill exactly to the ceiling and no further.
+    await reaskRefusedPlans(500);
+    await reaskRefusedPlans(500);
+    expect(await live()).toBe(6);
+    await unparkResolvedMissions(500);
+
+    const running = async () =>
+      (await listMissions({ projectId, states: ['RUNNING'] })).map((m) => m.orchestrationId!);
+    const first = await running();
+    expect(first.length).toBe(6);
+    // The oldest parks, in order — durable across a restart, because it is read from rows.
+    expect([...first].sort()).toEqual([...order.slice(0, 6)].sort());
+
+    // The other 34 are untouched: parked, their cards open, their plans unapproved.
+    const open = await listOpenRequests(projectId);
+    for (const waiting of missions.slice(6)) {
+      expect((await getMission(waiting.id))!.state).toBe('NEEDS_HUMAN');
+      expect(open.filter((r) => r.missionId === waiting.id)).toHaveLength(1);
+      expect((await currentFragments(waiting.orchestrationId)).every((f) => f.status === 'PLANNED')).toBe(true);
+    }
+
+    // A "restart": a fresh pass with nothing in memory admits nothing more.
+    expect(await reaskRefusedPlans(500)).toEqual([]);
+    expect(await live()).toBe(6);
+
+    // One finishes: exactly one more — the next in park order — is admitted.
+    const done = (await listMissions({ projectId, states: ['RUNNING'] }))[0]!;
+    await transitionMission({ missionId: done.id, from: 'RUNNING', to: 'DONE' });
+    expect(await live()).toBe(5);
+    expect(await reaskRefusedPlans(500)).toEqual([order[6]]);
+    expect(await live()).toBe(6);
+    expect(await reaskRefusedPlans(500)).toEqual([]);
+
+    // Nothing duplicated: one mission per idea, one packet per mission.
+    const all = await listMissions({ projectId });
+    for (const one of missions) {
+      expect(all.filter((m) => m.candidateId === one.candidateId)).toHaveLength(1);
+    }
+    expect(new Set(all.map((m) => m.orchestrationId)).size).toBe(all.length);
+  });
+
+  it('holds a person’s answer, recorded, while the ceiling is full, and carries it out when a slot frees', async () => {
+    const { missions, live } = await parkedFleet(8, 2);
+    await reaskRefusedPlans(500);
+    await unparkResolvedMissions(500);
+    expect(await live()).toBe(2);
+
+    // A person answers the card of one still waiting.
+    const waiting = missions[7]!;
+    const card = (await listOpenRequests(projectId)).find((r) => r.missionId === waiting.id)!;
+    await answerHumanRequest({
+      requestId: card.id,
+      actorUserId: userId,
+      choice: NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key,
+    });
+    for (let pass = 0; pass < 2; pass += 1) {
+      const report = await tick('instance-a');
+      expect(report.resumed).not.toContain(card.id);
+      expect(await live()).toBeLessThanOrEqual(2);
+    }
+    expect((await getHumanRequest(card.id))!.state).toBe('ANSWERED');
+    expect((await getMission(waiting.id))!.state).toBe('NEEDS_HUMAN');
+
+    // A slot frees: the answered card is carried out first, ahead of Brain's own re-asks.
+    const done = (await listMissions({ projectId, states: ['RUNNING'] }))[0]!;
+    await transitionMission({ missionId: done.id, from: 'RUNNING', to: 'DONE' });
+    const report = await tick('instance-a');
+    expect(report.resumed).toContain(card.id);
+    expect((await getMission(waiting.id))!.state).toBe('RUNNING');
+    expect(await live()).toBeLessThanOrEqual(2);
   });
 });
 
