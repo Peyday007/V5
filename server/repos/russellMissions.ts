@@ -369,6 +369,34 @@ export async function transitionMission(input: {
 }
 
 /**
+ * A mission whose work is waiting on a person, read from rows — and so using
+ * none of the provider capacity `maxConcurrent` exists to bound.
+ *
+ * Three shapes, one fact. The mission itself is parked; or its packet stopped
+ * for a person and the parking pass has not reached it yet; or its current bin
+ * is `NEEDS_HUMAN`, which no dispatch selects, so nothing can be fired for it
+ * until a person reopens or regrants it. Production, Cash Mode 1, 2026-10-07:
+ * `live=31` against `maxConcurrent=6`, eight holders over a NEEDS_HUMAN packet
+ * with the mission still RUNNING and fourteen over a bin parked at
+ * NEEDS_HUMAN with its attempts spent and nothing moved since 2026-09-20 —
+ * while two eligible deep dives waited forty-two hours for a slot.
+ *
+ * The hold is lapsed rather than settled or released: the row, the mission,
+ * the packet, the bin and any card all stay exactly as written, and the moment
+ * the work can run again — a person answers, a bin is reopened, the launch
+ * builds a fresh bin — the mission no longer matches and the next tick renews
+ * its hold (`renewReservation` is guarded on HELD, not on expiry).
+ */
+const WAITING_ON_A_PERSON = `(
+  m.state = 'NEEDS_HUMAN'
+  OR (m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING') AND (
+    EXISTS (SELECT 1 FROM research_orchestrations o
+             WHERE o.id = m.orchestration_id AND o.status = 'NEEDS_HUMAN')
+    OR EXISTS (SELECT 1 FROM bins b WHERE b.id = m.bin_id AND b.state = 'NEEDS_HUMAN')
+  ))
+)`;
+
+/**
  * Keep a live mission's reservation from expiring underneath it.
  *
  * A reservation is `HELD` with a two-hour TTL, and both ceilings ignore an
@@ -423,8 +451,8 @@ export async function renewLiveMissionReservations(limit: number): Promise<strin
       WHERE state = 'HELD'
         AND expires_at > ?
         AND id IN (
-          SELECT reservation_id FROM russell_missions
-           WHERE state = 'NEEDS_HUMAN' AND reservation_id IS NOT NULL
+          SELECT m.reservation_id FROM russell_missions m
+           WHERE m.reservation_id IS NOT NULL AND ${WAITING_ON_A_PERSON}
         )`,
     [nowIso(), nowIso()],
   );
@@ -436,6 +464,7 @@ export async function renewLiveMissionReservations(limit: number): Promise<strin
       WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING')
         AND m.reservation_id IS NOT NULL
         AND r.state = 'HELD'
+        AND NOT ${WAITING_ON_A_PERSON}
       ORDER BY r.expires_at
       LIMIT ?`,
     [Math.max(1, limit)],

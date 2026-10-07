@@ -87,7 +87,7 @@ import {
   updateOrchestration,
 } from '../server/repos/research.ts';
 import { createRun } from '../server/repos/runs.ts';
-import { NEEDS_HUMAN_CHOICES } from '../server/services/russell/needsHuman.ts';
+import { NEEDS_HUMAN_CHOICES, parkStoppedMissions } from '../server/services/russell/needsHuman.ts';
 import { listCurrentKnowledge } from '../server/repos/russellMissions.ts';
 import { listTurns, createConversation, getConversation } from '../server/repos/russellConversations.ts';
 import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
@@ -1701,6 +1701,143 @@ describe('the loop keeps going without anybody watching', () => {
     expect((reviewed?.payload as Record<string, unknown> | undefined)?.['approvedByUserId']).toBe(
       userId,
     );
+  });
+
+  it('frees the research slot of work parked on a person, however many parks are already waiting', async () => {
+    /*
+     * Production, Cash Mode 1, 2026-10-07: the research grant's six mission
+     * slots were full and two eligible deep dives had waited about 42 hours.
+     *
+     * `parkStoppedMissions` scanned the `limit` oldest-updated live or parked
+     * missions. A parked mission is never touched again, so the oldest parks
+     * filled that window on every tick, and a RUNNING mission whose packet
+     * stopped for a person later was never reached. It was never parked, so
+     * its hold kept being renewed and its slot was never freed.
+     *
+     * Reproduced with a window of one: the first park fills it, exactly as
+     * fifty did in production.
+     */
+    const goal = await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'one at a time',
+      allowedWork: ['RESEARCH'],
+      workPolicy: 'UNCAPPED',
+      maxMissions: 1,
+      maxFragments: 1,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const conversation = await ownedConversation('Parked work holds no slot');
+    const launchIdea = async (title: string, statement: string) => {
+      const captured = await capture({
+        title,
+        statement,
+        projectId,
+        conversationId: conversation.id,
+        visibility: 'PRIVATE',
+      });
+      await judgeCandidate(captured.candidate!.id);
+      const spec = (await getCandidate(captured.candidate!.id))!.judgment['missionSpec'] as Record<
+        string,
+        unknown
+      >;
+      return launch({
+        ...(spec as unknown as Omit<Parameters<typeof launch>[0], 'candidateId'>),
+        candidateId: captured.candidate!.id,
+      });
+    };
+    const stop = async (orchestrationId: string) => {
+      await withPlan(orchestrationId, layerId, projectId);
+      await updateOrchestration(orchestrationId, {
+        status: 'NEEDS_HUMAN',
+        failureReason:
+          'The proposed plan falls outside the preauthorized envelope: the assignment is not ' +
+          'the text this envelope authorizes.',
+      });
+    };
+    const liveHolds = async () =>
+      (await listReservations(goal.id)).filter(
+        (row) => row.kind === 'MISSION' && row.state === 'HELD' && row.expiresAt > new Date().toISOString(),
+      ).length;
+
+    // A: launched, stopped for a person, parked. Its slot comes back.
+    const a = await launchIdea('Permit coverage', 'establish which Michigan counties publish permit data in a usable form');
+    expect(a.ok).toBe(true);
+    await stop(a.mission!.orchestrationId!);
+    expect((await parkStoppedMissions(1)).map((p) => p.missionId)).toEqual([a.mission!.id]);
+    await renewLiveMissionReservations(10);
+    expect(await liveHolds()).toBe(0);
+
+    // B: takes the freed slot, then also stops for a person — after A parked.
+    const b = await launchIdea('Fee schedules', 'establish which Michigan counties publish a permit fee schedule');
+    expect(b.ok, b.reason).toBe(true);
+    expect(await liveHolds()).toBe(1);
+    await stop(b.mission!.orchestrationId!);
+    // Its packet stopping for a person frees the slot on the next tick, before
+    // any card is raised — capacity does not wait on the parking pass.
+    await renewLiveMissionReservations(10);
+    expect(await liveHolds(), 'a packet waiting on a person still owns the slot').toBe(0);
+
+    // The window of one reaches B, not A again — twice at once, so concurrent
+    // ticks still produce one park and one card.
+    const passes = await Promise.all([parkStoppedMissions(1), parkStoppedMissions(1)]);
+    expect(passes.flat().map((p) => p.missionId)).toEqual([b.mission!.id]);
+    expect((await getMission(b.mission!.id))!.state).toBe('NEEDS_HUMAN');
+    await renewLiveMissionReservations(10);
+    expect(await liveHolds(), 'parked work still owns the research slot').toBe(0);
+
+    // The freed slot is reused by eligible work.
+    const c = await launchIdea('Inspection backlog', 'establish which Michigan counties publish inspection backlogs');
+    expect(c.ok, c.reason).toBe(true);
+    expect(await liveHolds()).toBe(1);
+
+    // A mission whose only bin is parked for a person cannot be fired, so it
+    // holds no slot either — and gets it back the moment the bin is reopened.
+    const cBin = (await getMission(c.mission!.id))!.binId!;
+    await getDb().run(`UPDATE bins SET state = 'NEEDS_HUMAN' WHERE id = ?`, [cBin]);
+    expect(await renewLiveMissionReservations(10)).not.toContain(c.mission!.reservationId);
+    expect(await liveHolds(), 'a bin waiting on a person still owns the slot').toBe(0);
+    const d = await launchIdea('Contractor licences', 'establish which Michigan counties publish contractor licence lists');
+    expect(d.ok, d.reason).toBe(true);
+    await getDb().run(`UPDATE bins SET state = 'READY' WHERE id = ?`, [cBin]);
+    expect(await renewLiveMissionReservations(10)).toContain(c.mission!.reservationId);
+    expect((await getMission(c.mission!.id))!.state).toBe('RUNNING');
+
+    // Nothing duplicated, nothing abandoned: one mission per idea, one open
+    // card per parked mission, and both parks still waiting on their person.
+    const missions = await listMissions({ projectId });
+    for (const one of [a, b, c, d]) {
+      expect(missions.filter((m) => m.candidateId === one.mission!.candidateId)).toHaveLength(1);
+    }
+    const open = await listOpenRequests(projectId);
+    expect(open.filter((r) => r.missionId === a.mission!.id)).toHaveLength(1);
+    expect(open.filter((r) => r.missionId === b.mission!.id)).toHaveLength(1);
+    expect((await getMission(a.mission!.id))!.state).toBe('NEEDS_HUMAN');
+
+    // A tick restarted from nothing changes none of it.
+    await tick('instance-b');
+    expect((await getMission(a.mission!.id))!.state).toBe('NEEDS_HUMAN');
+    expect((await getMission(b.mission!.id))!.state).toBe('NEEDS_HUMAN');
+    expect((await listOpenRequests(projectId)).filter((r) => r.missionId === b.mission!.id)).toHaveLength(1);
+
+    // Answering B later resumes B — the same mission and packet — and nothing else.
+    const request = open.find((r) => r.missionId === b.mission!.id)!;
+    await answerHumanRequest({
+      requestId: request.id,
+      actorUserId: userId,
+      choice: NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key,
+    });
+    const resumed = await tick('instance-a');
+    expect(resumed.resumed).toContain(request.id);
+    const after = (await getMission(b.mission!.id))!;
+    expect(after.state).not.toBe('NEEDS_HUMAN');
+    expect(after.orchestrationId).toBe(b.mission!.orchestrationId);
+    expect((await getMission(a.mission!.id))!.state).toBe('NEEDS_HUMAN');
+    expect(
+      (await listMissions({ projectId })).filter((m) => m.candidateId === b.mission!.candidateId),
+    ).toHaveLength(1);
   });
 
   it('re-offers an already-open request when the packet no longer matches it', async () => {
