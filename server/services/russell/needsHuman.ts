@@ -46,6 +46,7 @@ import { recordEvent } from '../../repos/events.ts';
 import { nowIso } from '../../repos/util.ts';
 import { authorizeUnresolvedGaps } from '../research/gapPolicy.ts';
 import { advancePacket, approvePlan } from '../research/packetRunner.ts';
+import { getApprovalEnvelope, planFitsEnvelope } from '../research/approvalEnvelope.ts';
 import type {
   HumanRequestChoice,
   ResearchFragment,
@@ -568,6 +569,52 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
     }
   }
   return parked;
+}
+
+/**
+ * Ask the envelope again about a plan it refused, and nothing else.
+ *
+ * A packet whose plan the envelope refused has no work items yet, so nothing
+ * re-enters it: `resumePulledPackets` skips a packet with no items and the
+ * envelope check runs only inside `advancePacket`. A refusal the screen got
+ * wrong — production, 2026-10-07: every Cash deep dive refused for reading
+ * "…is a telephone call" as an instruction — therefore stood for ever, and a
+ * person was asked to authorize a plan the envelope a person already set
+ * permits.
+ *
+ * The check is the pure `planFitsEnvelope` over the packet's PLANNED
+ * fragments, so a plan that still does not fit records nothing and moves
+ * nothing. Only a plan that now fits is advanced, through `advancePacket` —
+ * the same path that approves a fitting plan the first time, which re-checks
+ * the envelope's availability and records the system approval. The person's
+ * card is withdrawn by `unparkResolvedMissions` once the packet has moved.
+ */
+export async function reaskRefusedPlans(limit: number): Promise<string[]> {
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT DISTINCT o.id FROM russell_missions m
+       JOIN research_orchestrations o ON o.id = m.orchestration_id
+      WHERE m.state = 'NEEDS_HUMAN'
+        AND o.status = 'NEEDS_HUMAN'
+        AND o.approval_envelope_id IS NOT NULL
+        AND o.failure_reason LIKE 'The proposed plan falls outside the preauthorized envelope%'
+      LIMIT ?`,
+    [Math.max(1, limit)],
+  );
+  const advanced: string[] = [];
+  for (const row of rows) {
+    const orchestration = await getOrchestration(row.id);
+    if (!orchestration?.approvalEnvelopeId) continue;
+    const envelope = getApprovalEnvelope(orchestration.approvalEnvelopeId);
+    if (!envelope) continue;
+    const planned = (await currentFragments(orchestration.id)).filter(
+      (fragment) => fragment.status === 'PLANNED',
+    );
+    if (planned.length === 0) continue;
+    if (!planFitsEnvelope({ envelope, orchestration, fragments: planned }).fits) continue;
+    await advancePacket(orchestration.id);
+    advanced.push(orchestration.id);
+  }
+  return advanced;
 }
 
 /**
