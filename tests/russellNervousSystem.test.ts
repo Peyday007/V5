@@ -1662,6 +1662,7 @@ describe('the loop keeps going without anybody watching', () => {
         'The proposed plan falls outside the preauthorized envelope: the assignment is not ' +
         'the text this envelope authorizes.',
     });
+    await refuseForReal(mission.orchestrationId!);
 
     await tick('instance-a');
     const request = (await listOpenRequests(projectId)).find(
@@ -1971,6 +1972,7 @@ describe('the loop keeps going without anybody watching', () => {
       status: 'NEEDS_HUMAN',
       failureReason: 'The proposed plan falls outside the preauthorized envelope.',
     });
+    await refuseForReal(mission.orchestrationId!);
     await transitionMission({
       missionId: mission.id,
       from: mission.state,
@@ -2016,6 +2018,7 @@ describe('the loop keeps going without anybody watching', () => {
       status: 'NEEDS_HUMAN',
       failureReason: 'The proposed plan falls outside the preauthorized envelope.',
     });
+    await refuseForReal(mission.orchestrationId!);
     await tick('instance-a');
     const request = (await listOpenRequests(projectId)).find(
       (entry) => entry.missionId === mission.id,
@@ -3047,6 +3050,19 @@ async function withResearch(orchestrationId: string, layerIdFor: string, project
 }
 
 /** A packet whose plan is proposed and waiting to be approved. */
+/**
+ * Make an envelope refusal genuine: the assignment no longer matches the text
+ * the envelope pins, which is the production stop these tests describe
+ * (`orc_8adc4708f56f49a8964b`). Without it the plan fits, and Brain now asks
+ * the envelope again by itself rather than waiting for a person.
+ */
+async function refuseForReal(orchestrationId: string) {
+  await getDb().run(`UPDATE research_orchestrations SET assignment = ? WHERE id = ?`, [
+    'An assignment this envelope does not authorize.',
+    orchestrationId,
+  ]);
+}
+
 async function withPlan(orchestrationId: string, layerIdFor: string, projectIdFor: string) {
   await createFragments([
     {
