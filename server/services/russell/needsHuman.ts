@@ -570,6 +570,68 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
   return parked;
 }
 
+/**
+ * Un-park a mission whose packet stopped waiting on a person by itself.
+ *
+ * A packet is re-entered every tick, so a stop can resolve without anybody:
+ * the envelope re-asked and the plan now fits, a repair that was missing
+ * became claimable. The mission stayed `NEEDS_HUMAN` — nothing moved it back,
+ * because the only path back was a person answering — so its card kept asking
+ * a question the packet had already moved past, its hold stayed lapsed while
+ * work ran, and anything reading the mission (a Cash deep dive settles on it)
+ * never saw the research finish.
+ *
+ * Production, 2026-10-07: every Cash deep dive's plan was refused by its own
+ * envelope on a screen misreading "…is a telephone call" as an instruction.
+ * Fixing the screen lets those packets approve themselves on re-entry; this
+ * is what lets their missions follow.
+ *
+ * Only a live packet counts — a terminal one is the writeback's and the
+ * abandoned-park sweeps'. The move is a compare-and-swap from `NEEDS_HUMAN`,
+ * and only the winner withdraws the open card, guarded on `OPEN`, so an answer
+ * a person already gave is never reached back through.
+ */
+export async function unparkResolvedMissions(limit: number): Promise<string[]> {
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT m.id FROM russell_missions m
+       JOIN research_orchestrations o ON o.id = m.orchestration_id
+      WHERE m.state = 'NEEDS_HUMAN'
+        AND o.status IN ('PLANNING','QUEUED','RESEARCHING','SYNTHESIZING','AUDITING')
+      ORDER BY m.updated_at, m.rowid
+      LIMIT ?`,
+    [Math.max(1, limit)],
+  );
+  const out: string[] = [];
+  for (const row of rows) {
+    const mission = await getMission(row.id);
+    if (!mission) continue;
+    const moved = await transitionMission({ missionId: mission.id, from: 'NEEDS_HUMAN', to: 'RUNNING' });
+    if (!moved) continue;
+    const open = await openRequestFor(mission.id);
+    if (open) {
+      await withdrawRequest({
+        requestId: open.id,
+        reason:
+          'Withdrawn: the packet stopped waiting on this decision by itself and is running again, ' +
+          'so there is nothing left for you to decide here.',
+      });
+    }
+    await recordEvent({
+      projectId: mission.projectId,
+      entityType: 'RUSSELL_MISSION',
+      entityId: mission.id,
+      eventType: 'RUSSELL_MISSION_UNPARKED',
+      payload: {
+        orchestrationId: mission.orchestrationId,
+        withdrawnRequestId: open?.id ?? null,
+        surface: 'RUSSELL',
+      },
+    });
+    out.push(mission.id);
+  }
+  return out;
+}
+
 export interface ResumeResult {
   ok: boolean;
   /** What the answer actually did, in words the loop reports and a person reads. */

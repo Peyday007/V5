@@ -89,6 +89,24 @@ const GOVERNOR =
   /\b(?:about|whether|how\s+to|where\s+to|when\s+to|regarding|concerning|available|eligible|offered|advertised|listed|for\s+sale|says?|said|states?|stating|explains?|describ(?:es?|ing)|permits?|allows?|requires?|prohibits?|invites?|solicits?|accepts?)\b/i;
 
 /** Leading list markers and whitespace, which do not change who is acting. */
+/**
+ * A phrase that is the complement of a copula is a description, not a step.
+ *
+ * *"…and whether the only published route to the buyer is a telephone call"*
+ * is the question every Cash deep dive asks, and it names the route rather than
+ * telling anybody to dial. Its governor, *whether*, sits more than
+ * `GOVERNOR_WINDOW` characters back, so the clause read as an instruction and
+ * Brain's own compiled plan was refused by Brain's own envelope — every
+ * validation since 2026-10-01 parked for a person on a decision nobody had to
+ * make. Production, 2026-10-07: `orc_0029a3b7251a49b1971a`, refused for
+ * "instructs the researcher to telephone call".
+ *
+ * Anchored to the text immediately before the phrase, so *"…is to call the
+ * buyer"* (an instruction) is untouched: only *is a / is an / is the / is
+ * only* reach here.
+ */
+const COPULA_COMPLEMENT = /\b(?:is|are|was|were|be|being|been)\s+(?:only\s+)?(?:an?|the)?\s*$/i;
+
 const LEADING_FILLER = /^(?:\s|[-*•]|\d+[.)])+/;
 
 /**
@@ -173,5 +191,6 @@ function clauseEndAfter(prose: string, at: number): number {
 function isOwnAction(before: string): boolean {
   const head = before.replace(LEADING_FILLER, '');
   if (RESEARCHER_SUBJECT.test(head)) return true;
+  if (COPULA_COMPLEMENT.test(head)) return false;
   return !GOVERNOR.test(head.slice(-GOVERNOR_WINDOW));
 }
