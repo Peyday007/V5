@@ -1932,6 +1932,8 @@ describe('the loop keeps going without anybody watching', () => {
     expect(card).toBeDefined();
     const before = (await listEvents(projectId, 500)).length;
 
+    // A tick lapses the parked hold before it re-asks, as the loop does.
+    await renewLiveMissionReservations(10);
     // The plan fits the envelope as it stands now: it is approved without a person.
     expect(await reaskRefusedPlans(50)).toEqual([orchestrationId]);
     expect((await currentFragments(orchestrationId)).every((f) => f.status !== 'PLANNED')).toBe(true);
