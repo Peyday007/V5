@@ -152,6 +152,9 @@ prompts; that is a defect to fix with another narrow rule, never with a wider on
   review the pull request has not satisfied stops the release at MERGE with the
   forge's reason. If you require approving reviews on `production`, automatic
   release becomes a one-click approval on the pull request, by design.
-- *Settings → Actions → General → Workflow permissions*: allow GitHub Actions to
-  create and approve pull requests is **not** needed; read and write permission
-  for the `GITHUB_TOKEN` is set per job in the workflow.
+- *Settings → Actions → General → Workflow permissions*: tick **Allow GitHub
+  Actions to create and approve pull requests**. Merging the Factory's own pull
+  request does not need it; opening the revert pull request a rollback merges
+  does. Without it a rollback stops at FAILED naming the revert branch, which is
+  safe and needs a person. The token's read/write scopes are set per job in the
+  workflow, so the repository default can stay read-only.
