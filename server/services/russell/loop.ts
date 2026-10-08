@@ -86,7 +86,7 @@ import {
   recordJudgment,
 } from '../../repos/russellCandidates.ts';
 import { getDb } from '../../db/database.ts';
-import { cancelWork, listWorkItems } from '../../repos/workQueue.ts';
+import { cancelWork, listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
 import { completeProbe, listExpiredProbes } from '../../repos/russellProbes.ts';
 import { openProbe, runProbe } from './probe.ts';
 import { GENERAL_LIGHT_PROBE_V1 } from './probeEnvelope.ts';
@@ -2879,8 +2879,7 @@ async function reopenAuditRound(
        * Cancelling is not destroying: the row keeps its id, its attempts and
        * its history, and gains the reason it stopped.
        */
-      for (const item of await listWorkItems(packet.projectId, { limit: 500 })) {
-        if (item.orchestrationId !== packet.id) continue;
+      for (const item of await listWorkItemsForOrchestration(packet.id)) {
         if (item.workType !== 'RESEARCH_AUDIT') continue;
         if (item.state !== 'QUEUED' && item.state !== 'LEASED') continue;
         await cancelWork(
