@@ -65,7 +65,13 @@ import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
 import { researchMissionSlotsFull } from '../russell/launch.ts';
-import { screenPortfolio, screenRank, targetedQuestion } from './screening.ts';
+import {
+  screenPortfolio,
+  screenRank,
+  targetedQuestion,
+  type PortfolioScreen,
+  type Screen,
+} from './screening.ts';
 import type { CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
 
 /** How many deep dives one project may have in flight. Provider capacity. */
@@ -176,7 +182,12 @@ export type DiveRefusal =
   /** Declined, archived or already being executed — the commercial questions are closed. */
   | { kind: 'NOT_A_QUALIFYING_STATE'; state: string }
   /** No published signal and no source claim, so there is nothing to quote into a question. */
-  | { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
+  | { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' }
+  /**
+   * Cheap screening (`screening.ts`) says a dive is not what this opening has
+   * earned: it is screened out, parked, or its one question is a need.
+   */
+  | { kind: 'SCREENED'; verdict: Screen['verdict']; reason: Screen['reason']; because: string };
 
 /** One line, for a report or an operator. */
 export function describeDiveRefusal(refusal: DiveRefusal): string {
@@ -198,6 +209,8 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
       return `state ${refusal.state}: the commercial questions are closed`;
     case 'NOTHING_PUBLISHED_TO_ASK_ABOUT':
       return 'no buying signal and no source claim — nothing published to ask about';
+    case 'SCREENED':
+      return `screened ${refusal.verdict}: cheap screening says a deep dive is not what it has earned (see COMMERCIAL SCREENING)`;
   }
 }
 
@@ -207,7 +220,16 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
  * Every branch reads a row. Nothing here consults a clock, a count of workers,
  * or anything a caller supplied.
  */
-export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRefusal> {
+export async function whyNotDiving(
+  opportunity: CashOpportunity,
+  /**
+   * The opening's screening reading, when the caller has one. Passed rather
+   * than computed here because a screen reads the whole portfolio — a rejection
+   * is a fact about *another* opening — and the loop and the report each read
+   * the portfolio once and hand every opening its own reading.
+   */
+  screen?: Screen,
+): Promise<DiveRefusal> {
   if (opportunity.validationState !== null) {
     if (HOLDS_A_SLOT.has(opportunity.validationState)) {
       return { kind: 'IN_FLIGHT', state: opportunity.validationState };
@@ -230,6 +252,11 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
   }
   if (!opportunity.buyingSignal && !opportunity.sourceClaimId) {
     return { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
+  }
+  // A dive only where the screen says a dive asks it: a card field the screen
+  // targets is one narrow need, asked by the needs path instead.
+  if (screen && screen.askBy !== 'FULL_DIVE' && screen.askBy !== 'DIVE') {
+    return { kind: 'SCREENED', verdict: screen.verdict, reason: screen.reason, because: screen.because };
   }
   return { kind: 'ELIGIBLE' };
 }
@@ -331,6 +358,8 @@ export function validationQuestion(opportunity: CashOpportunity): string {
 export async function startValidations(input: {
   projectId: string;
   limit?: number;
+  /** A screening reading still known to be current; read afresh when absent. */
+  screened?: PortfolioScreen[];
 }): Promise<StartedValidation[]> {
   const mode = await getCashMode(input.projectId);
   if (!mode) return [];
@@ -405,7 +434,10 @@ export async function startValidations(input: {
   // when there is a slot to spend.
   const screens = new Map(
     room > 0
-      ? (await screenPortfolio(input.projectId)).map((one) => [one.opportunity.id, one.screen])
+      ? (input.screened ?? (await screenPortfolio(input.projectId))).map((one) => [
+          one.opportunity.id,
+          one.screen,
+        ])
       : [],
   );
   ordered.sort((a, b) => {
@@ -429,11 +461,9 @@ export async function startValidations(input: {
      * drifts. What that report prints is therefore the refusal that actually
      * happened rather than a second opinion about it.
      */
-    if ((await whyNotDiving(opportunity)).kind !== 'ELIGIBLE') continue;
     const screen = screens.get(opportunity.id);
-    // A dive only where the screen says a dive asks it: a card field the
-    // screen targets is one narrow need, asked by the needs path instead.
-    if (!screen || (screen.askBy !== 'FULL_DIVE' && screen.askBy !== 'DIVE')) continue;
+    if (!screen) continue;
+    if ((await whyNotDiving(opportunity, screen)).kind !== 'ELIGIBLE') continue;
     const targeted = screen.askBy === 'DIVE' ? screen.decisive : null;
 
     const candidate = await createCandidate({
@@ -957,7 +987,11 @@ function hasCompiledSpecification(judgment: unknown): boolean {
 }
 
 /** Both halves, for the tick. */
-export async function runValidations(projectId: string): Promise<ValidationProgress> {
+export async function runValidations(
+  projectId: string,
+  /** The operating pass's screening reading, reused when nothing below changed a row it read. */
+  screened?: PortfolioScreen[],
+): Promise<ValidationProgress> {
   // Settling first, so a deep dive that finished this tick frees its slot for
   // the next one rather than waiting a whole pass for it.
   const settled = await settleValidations(projectId);
@@ -965,11 +999,19 @@ export async function runValidations(projectId: string): Promise<ValidationProgr
   // order the effects depend on each other in: a proposal is built from the
   // evidence, so applying the evidence first is what stops the proposal being
   // made against last tick's card.
-  await applyValidationAnswers(projectId);
-  await proposeEngineTerms(projectId);
+  const applied = await applyValidationAnswers(projectId);
+  const proposed = await proposeEngineTerms(projectId);
   // A question already asked is resumed before a new one takes a slot.
-  await resumeUnlaunchedDives(projectId);
-  const started = await startValidations({ projectId });
+  const resumed = await resumeUnlaunchedDives(projectId);
+  /*
+   * The screen the operating pass already read is still true only if none of
+   * the three steps above wrote a row it reads — a settled dive, a card fact or
+   * a refunded round. Otherwise it is read again, because a dive must be
+   * screened on what it just established.
+   */
+  const unchanged =
+    settled.length === 0 && applied.length === 0 && proposed.length === 0 && resumed.length === 0;
+  const started = await startValidations({ projectId, screened: unchanged ? screened : undefined });
   return { started, settled };
 }
 

@@ -1011,7 +1011,12 @@ export async function operate(
    * and `mayReplace` decides which answer stands — by authority rather than by
    * whichever arrived last.
    */
-  const validations = await runValidations(projectId);
+  /*
+   * The needs and continuations above write needs rather than the rows the
+   * screen reads about a dive, so the reading is handed on; `runValidations`
+   * reads it again if its own steps change anything.
+   */
+  const validations = await runValidations(projectId, screens);
   /*
    * Last, and that order is the point: a piece only becomes ready because the
    * research landed on its card and the proposal filled what the research could

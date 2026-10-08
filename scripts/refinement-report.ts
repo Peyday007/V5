@@ -175,17 +175,22 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
   console.log('WHY REFINEMENT IS OR IS NOT MOVING');
   console.log(`  sprint      ${sprintLine}`);
 
+  // The same screening reading the loop hands `whyNotDiving`, read once.
+  const screens = new Map(
+    (await screenPortfolio(projectId)).map((one) => [one.opportunity.id, one.screen]),
+  );
   const refusals = new Map<string, { count: number; line: string; examples: string[] }>();
   for (const one of opportunities) {
-    const refusal = await whyNotDiving(one);
-    const entry = refusals.get(refusal.kind) ?? {
+    const refusal = await whyNotDiving(one, screens.get(one.id));
+    const groupKey = refusal.kind === 'SCREENED' ? `SCREENED_${refusal.verdict}` : refusal.kind;
+    const entry = refusals.get(groupKey) ?? {
       count: 0,
       line: describeDiveRefusal(refusal),
       examples: [],
     };
     entry.count += 1;
     if (entry.examples.length < 3) entry.examples.push(one.id);
-    refusals.set(refusal.kind, entry);
+    refusals.set(groupKey, entry);
   }
   for (const [kind, entry] of [...refusals.entries()].sort((a, b) => b[1].count - a[1].count)) {
     console.log(

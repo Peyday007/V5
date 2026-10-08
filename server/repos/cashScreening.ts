@@ -51,3 +51,17 @@ export async function latestScreens(
   }
   return out;
 }
+
+/**
+ * When each declined opening in a project was declined, from the decline's own
+ * event rather than the row's `updated_at` — which any later write moves.
+ */
+export async function declineTimes(projectId: string): Promise<Map<string, string>> {
+  const rows = await getDb().all<{ opportunity_id: string; at: string }>(
+    `SELECT opportunity_id, MAX(created_at) AS at FROM cash_events
+      WHERE project_id = ? AND kind = 'CASH_OPPORTUNITY_DECLINED' AND opportunity_id IS NOT NULL
+      GROUP BY opportunity_id`,
+    [projectId],
+  );
+  return new Map(rows.map((row) => [row.opportunity_id, row.at]));
+}

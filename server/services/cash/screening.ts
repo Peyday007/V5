@@ -52,7 +52,7 @@
  */
 import { cardFactsFor } from '../../repos/cashCardFacts.ts';
 import { cashEventsOfKind, recordCashEvent } from '../../repos/cashMode.ts';
-import { latestScreens, sourceUrlsFor } from '../../repos/cashScreening.ts';
+import { declineTimes, latestScreens, sourceUrlsFor } from '../../repos/cashScreening.ts';
 import { citableClaims, listPasses } from '../../repos/research.ts';
 import { listNeeds, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { latestMissionForCandidate, missionsForCandidate } from '../../repos/russellMissions.ts';
@@ -184,7 +184,7 @@ export interface MechanismRejection {
   opportunityId: string;
   key: string;
   at: string;
-  why: 'DECLINED' | 'ARCHIVED' | 'ECONOMICS_NEGATIVE' | 'ESTABLISHED_ABSENT';
+  why: 'DECLINED' | 'ECONOMICS_NEGATIVE';
 }
 
 /** One targeted round: what it asked, and when it was asked. */
@@ -209,7 +209,12 @@ export interface ScreenInput {
    * exit-evidence field is not exit evidence.
    */
   negativeClaimIds: readonly string[];
-  /** Rejections of *other* openings that share a key with this one. */
+  /**
+   * Rejections of *other* openings that share a key with this one: a person's
+   * decline, or the economics owner's negative verdict. Never an archive, which
+   * also closes a deal that succeeded, and never an established absence, which
+   * is a fact about one opening rather than about its source.
+   */
   rejections: readonly MechanismRejection[];
   /** Targeted rounds already run for it, settled or not. */
   targetedRounds: readonly TargetedRound[];
@@ -427,28 +432,36 @@ export function screenOpportunity(input: ScreenInput): Screen {
     );
   }
 
-  // 8. The decisive question was already asked and nothing answered it.
+  // 8. The decisive question cannot usefully be asked again.
   //
-  //    Asked narrowly — a targeted round, or a need's own research — is a
-  //    question that failed on its own terms, and asking it the same way again
-  //    is the repeated strategy §15 refuses. Asked broadly — inside a full
-  //    qualification — still leaves the narrow question as a different
-  //    strategy, so it parks only when no narrow question is left to ask: the
-  //    dives are spent and the field is not one a need can ask.
+  //    Three ways, each a row rather than a blank:
+  //      * it was asked narrowly — a targeted round or a need whose research
+  //        ran — and nothing answered it, so asking it the same way again is
+  //        the repeated strategy §15 refuses;
+  //      * a documented search established that what it asks for does not
+  //        exist, even if that absence was written into the answer's place;
+  //      * no path is left that could ask it: the dives are spent and it is not
+  //        a field a need can ask. Calling that TARGET would say Brain is
+  //        asking a question nothing asks.
+  //    A full qualification having asked it is *not* on the list: a narrow
+  //    question is a different strategy from a broad one, so it is still asked.
+  //    And a dive round refunded by the stall backstop makes it askable again,
+  //    so the third is not permanent either.
   if (!inFlight) {
     const narrowly = input.askedNarrowly.includes(decisive);
-    const broadly = input.researchedDives > input.targetedRounds.length;
+    const absentHere = input.establishedAbsent.includes(decisive);
     const askable = input.needAskable.includes(decisive) || input.diveRoundsLeft;
-    if (narrowly || (broadly && !askable)) {
-      const how = narrowly
-        ? 'Brain asked it narrowly'
-        : `${input.researchedDives} full qualification${input.researchedDives === 1 ? '' : 's'} asked it`;
+    if (narrowly || absentHere || !askable) {
+      const how = absentHere
+        ? 'a documented search found none'
+        : narrowly
+          ? 'Brain asked it on its own and nothing published answered it'
+          : 'both dives are spent and a need cannot ask it';
       return make(
         'PARK',
         'DECISIVE_QUESTION_UNANSWERED',
-        `The question this opening turns on — ${labelOf(decisive)} — is still unanswered: ${how}, ` +
-          'and nothing published answered it. Kept with that gap named, and reconsidered the ' +
-          'moment it is answered.',
+        `The question this opening turns on — ${labelOf(decisive)} — is still unanswered: ${how}. ` +
+          'Kept with that gap named, and reconsidered the moment it is answered.',
         { reconsidered },
       );
     }
@@ -603,12 +616,14 @@ export async function screenPortfolio(projectId: string, now = new Date().toISOS
   const keyOf = (one: CashOpportunity): string | null =>
     rejectionKey(one, one.sourceClaimId ? (urls.get(one.sourceClaimId) ?? null) : null);
 
-  // Read each opening's rows once, one opening at a time: this runs on every
-  // operating pass, and a fan-out of every opening's reads at once is exactly
-  // what a shared pooler punishes.
+  // Read each live opening's rows once, one opening at a time: this runs on
+  // every operating pass, and a fan-out of every opening's reads at once is
+  // exactly what a shared pooler punishes. A closed opening is only ever an
+  // input — a rejection — so it costs no reads beyond its row.
   const needs = await listNeeds({ projectId });
   const gathered = [];
   for (const opportunity of all) {
+    if (!SCREENABLE_STATES.has(opportunity.state)) continue;
     const facts = await cardFactsFor(opportunity.id);
     const card = cashEngineCard({ opportunity, facts });
     const tier = cashTier({ opportunity, card, readiness: evidenceCard(opportunity).readiness });
@@ -633,39 +648,47 @@ export async function screenPortfolio(projectId: string, now = new Date().toISOS
     });
   }
 
-  // Rejections a person made, and rejections a screen made on a recorded fact.
-  // A MECHANISM_REJECTED screen is deliberately not itself a rejection: one
-  // rejection must not propagate through every later copy of itself.
+  /*
+   * What counts as a rejection of a mechanism, and what deliberately does not.
+   *
+   * A person's decline, timed by the decline's own event. Not an archive: an
+   * opening is archived when it is finished, including one that delivered and
+   * was paid for, and reading that as a rejection would screen out the next
+   * opening of the kind that worked. Not an established absence either: "this
+   * domain has no recorded sale" is a fact about one domain, and reading it as
+   * a fact about every domain on that marketplace would reject on evidence
+   * about something else. And not a MECHANISM_REJECTED screen, so one
+   * rejection never propagates through every later copy of itself. What does
+   * propagate is the economics owner's negative verdict, which is about the
+   * transaction's shape rather than one instance of it.
+   */
+  const declined = await declineTimes(projectId);
   const rejections: MechanismRejection[] = [];
-  for (const one of gathered) {
-    if (!one.key) continue;
-    if (one.opportunity.state === 'DECLINED' || one.opportunity.state === 'ARCHIVED') {
-      rejections.push({
-        opportunityId: one.opportunity.id,
-        key: one.key,
-        at: one.opportunity.updatedAt,
-        why: one.opportunity.state === 'DECLINED' ? 'DECLINED' : 'ARCHIVED',
-      });
-    }
+  for (const opportunity of all) {
+    if (opportunity.state !== 'DECLINED') continue;
+    const key = keyOf(opportunity);
+    if (!key) continue;
+    rejections.push({
+      opportunityId: opportunity.id,
+      key,
+      at: declined.get(opportunity.id) ?? opportunity.updatedAt,
+      why: 'DECLINED',
+    });
   }
-  const primary = new Map<string, Screen>();
   for (const one of gathered) {
-    if (!SCREENABLE_STATES.has(one.opportunity.state)) continue;
     const screen = screenOpportunity({ ...one, rejections: [], now });
-    primary.set(one.opportunity.id, screen);
-    if (one.key && (screen.reason === 'ECONOMICS_NEGATIVE' || screen.reason === 'ESTABLISHED_ABSENT')) {
+    if (one.key && screen.reason === 'ECONOMICS_NEGATIVE') {
       rejections.push({
         opportunityId: one.opportunity.id,
         key: one.key,
         at: one.opportunity.validationSettledAt ?? one.opportunity.updatedAt,
-        why: screen.reason,
+        why: 'ECONOMICS_NEGATIVE',
       });
     }
   }
 
   const out: PortfolioScreen[] = [];
   for (const one of gathered) {
-    if (!SCREENABLE_STATES.has(one.opportunity.state)) continue;
     const screen = screenOpportunity({ ...one, rejections, now });
     out.push({ opportunity: one.opportunity, tier: one.tier, screen });
   }
@@ -730,11 +753,13 @@ async function diveHistory(opportunity: CashOpportunity): Promise<{
 }
 
 /**
- * The card fields a need already asked about this opening and got an ending for.
+ * The card fields a need already asked about this opening, and whose research ran.
  *
- * A need is one narrow question, and a need whose research finished without
- * filling its field asked it and found nothing. Matched by rebuilding the key,
- * as `reconcileDiscoverableGaps` does, never by parsing it apart.
+ * A need is one narrow question. It counts as asked only when its mission is
+ * DONE and its packet ran a completed research pass: a mission that failed
+ * because the fleet was quarantined, or that somebody stopped, asked nothing,
+ * and treating it as asked would park an opening on an unknown. Matched by
+ * rebuilding the key, as `reconcileDiscoverableGaps` does, never by parsing it.
  */
 async function fieldsAskedByNeeds(opportunityId: string, needs: readonly CashNeed[]): Promise<string[]> {
   const out: string[] = [];
@@ -745,13 +770,15 @@ async function fieldsAskedByNeeds(opportunityId: string, needs: readonly CashNee
     for (const need of asked) {
       if (need.requestKey !== key) continue;
       const mission = await latestMissionForCandidate(need.candidateId!);
-      if (mission && FINISHED_MISSIONS.has(mission.state)) out.push(field);
+      if (mission?.state !== 'DONE' || !mission.orchestrationId) continue;
+      if ((await listPasses(mission.orchestrationId)).some((pass) => pass.status === 'COMPLETE')) {
+        out.push(field);
+      }
     }
   }
   return out;
 }
 
-const FINISHED_MISSIONS: ReadonlySet<string> = new Set(['DONE', 'FAILED', 'CANCELLED']);
 const ALL_FIELD_KEYS: readonly string[] = [...new Set(Object.values(DECISIVE_LADDER).flatMap((one) => [...one]))];
 
 /**

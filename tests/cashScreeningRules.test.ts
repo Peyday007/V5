@@ -132,8 +132,14 @@ function input(
   };
 }
 
-describe('1 and 5. the economics owner’s negative verdict ends the spending, whatever the price', () => {
-  it('screens out GoTranscript-style manual work whose costs exceed what it pays', () => {
+/*
+ * The economics owner (`tier.ts`) does not yet carry `economics` on its reading
+ * on this tree, so these cases put that field on the reading the way the owner
+ * will. On today's production readings `economicsOf` is null and neither rule
+ * fires — which is the point of the next describe, not a gap in this one.
+ */
+describe('1 and 5. once the economics owner reports NEGATIVE, the spending ends, whatever the price', () => {
+  it('screens out GoTranscript-style manual work the owner reads as costing more than it pays', () => {
     const op = opportunity({
       opportunitySignal: 'PAID_TASK_OR_CONTRACT',
       source: 'https://gotranscript.com/transcription-jobs',
@@ -144,7 +150,7 @@ describe('1 and 5. the economics owner’s negative verdict ends the spending, w
     expect(screen.reason).toBe('ECONOMICS_NEGATIVE');
   });
 
-  it('screens out a high-priced project whose costs exceed its price', () => {
+  it('screens out a high-priced project the owner reads as unprofitable', () => {
     const op = opportunity({
       opportunitySignal: 'ACTIVE_BUYER_DEMAND',
       payer: 'A county',
@@ -336,4 +342,26 @@ describe('every narrow question passes Brain’s own envelope', () => {
       expect(ownActionMatches(question, pattern)).toEqual([]);
     });
   }
+});
+
+describe('what the independent review found, pinned', () => {
+  it('asks nothing it cannot ask: a dive question with no rounds left parks, naming the gap', () => {
+    const op = opportunity({ opportunitySignal: 'RESALABLE_ASSET_OPENING', validationRounds: 2 });
+    const screen = screenOpportunity(input(op, [], { diveRoundsLeft: false }));
+    expect(screen.verdict).toBe('PARK');
+    expect(screen.decisive).toBe('exitEvidence');
+    expect(screen.because).toContain('both dives are spent');
+  });
+
+  it('parks an established absence of a field that is not what the kind depends on, rather than asking for ever', () => {
+    const op = opportunity({ opportunitySignal: 'ACTIVE_BUYER_DEMAND', payer: 'A county' });
+    const written = [fact('access', 'No published route to the buyer was found.', { kind: 'EVIDENCE', claimId: 'clm_noroute' })];
+    const screen = screenOpportunity(
+      input(op, written, { establishedAbsent: ['access'], negativeClaimIds: ['clm_noroute'] }),
+    );
+    // The payer is known and the request dated, but the decisive question —
+    // the route — was searched for and is not there.
+    expect(screen.verdict).toBe('PARK');
+    expect(screen.decisive).toBe('access');
+  });
 });

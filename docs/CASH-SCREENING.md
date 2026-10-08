@@ -22,11 +22,11 @@ Screening applies to each live opening (`DISCOVERED` or `EVIDENCE_CARD`). It che
 | 1 | The opening's recorded `expires_at` has passed | SCREEN_OUT | `OPENING_EXPIRED` |
 | 2 | The economics owner's verdict (`tier.ts`) is NEGATIVE | SCREEN_OUT | `ECONOMICS_NEGATIVE` |
 | 3 | An accepted NEGATIVE_EXISTENCE claim from one of its dives shows that a field the kind depends on (exit, acquisition, payer) does not exist, and nothing has answered that field since | SCREEN_OUT | `ESTABLISHED_ABSENT` |
-| 4 | The same signal kind from the same source host was declined or archived by a person, or screened out by rule 2 or 3, and no decisive EVIDENCE or PERSON fact has been recorded on this opening since | SCREEN_OUT | `MECHANISM_REJECTED` |
+| 4 | The same signal kind from the same source host was **declined by a person** (timed by the decline's own event), or read NEGATIVE by the economics owner, and no decisive EVIDENCE or PERSON fact has been recorded on this opening since | SCREEN_OUT | `MECHANISM_REJECTED` |
 | 5 | The economics owner's verdict is POSITIVE | PRIORITIZE | `ECONOMICS_POSITIVE` |
 | 6 | Every gate in the kind's ladder is answered | PRIORITIZE | `GATES_ANSWERED` |
 | 7 | A one-question round was answered | PRIORITIZE | `DECISIVE_QUESTION_PASSED` |
-| 8 | The decisive question was already asked narrowly, or asked by full dives with no narrow way left, and it is still unanswered | PARK | `DECISIVE_QUESTION_UNANSWERED` |
+| 8 | The decisive question was asked narrowly (a targeted round or a need whose research ran a completed pass) and nothing answered it, or a documented search found it does not exist, or no path is left that could ask it | PARK | `DECISIVE_QUESTION_UNANSWERED` |
 | 9 | A dated direct-demand signal with a known payer | PRIORITIZE | `DIRECT_DEMAND_PAYER_KNOWN` |
 | 10 | Anything else | TARGET | `DECISIVE_UNKNOWN` |
 
@@ -48,6 +48,22 @@ Each kind's ladder is its `doesNotEstablish` turned into questions, cheapest fir
 - `EXPIRING_OPENING`: still open → payer → eligibility → price → costs
 - `SUPPLY_DEMAND_MISMATCH`: payer → acquisition → eligibility → price
 - `RECURRING_OUTSOURCED_WORK`: payer → price → costs → scaling lever
+
+### What is deliberately *not* a rejection
+
+The first version had three of these wrong, and an independent review caught them:
+
+- **An archived opening.** Archiving also closes a deal that delivered and was paid for. Reading it as a rejection would screen out the next opening of the kind that worked.
+- **An established absence.** "dujo.com has no recorded sale" is a fact about one domain, not about every domain on Afternic. It stops that opening and spreads to no other.
+- **A need whose mission failed.** A mission that failed because the fleet was quarantined, or that somebody stopped, asked nothing. Only a `DONE` mission whose packet ran a completed pass counts as having asked.
+
+### The two-round cap, stated plainly
+
+A one-question dive is a round, and an opening gets `MAX_VALIDATION_ROUNDS` (2).
+
+- **If the one question is answered**, round 2 is the full qualification (`DECISIVE_QUESTION_PASSED`).
+- **If it is not answered**, the opening parks and the full qualification is never bought. This is the intended saving.
+- **The cost:** an opening whose cheap question found nothing does not get a broad second look unless new evidence answers that question.
 
 ## What it never does
 

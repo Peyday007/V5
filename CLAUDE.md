@@ -12737,8 +12737,13 @@ deep dive and the needs path. `docs/CASH-SCREENING.md` covers it in full.
   - an expiry that has passed;
   - an accepted NEGATIVE_EXISTENCE claim (§14's documented search);
   - the economics owner's NEGATIVE verdict;
-  - a person's decline or archive of the same kind of evidence from the same
-    host.
+  - a person's decline of the same kind of evidence from the same host, timed
+    by the decline's own event.
+
+  An archive is not a rejection, because finished deals are archived too. One
+  opening's established absence is not spread to its host. A need whose mission
+  failed without researching does not count as asked. The independent review
+  caught all three in the first version.
 
   A blank is a reason to ask, never to stop.
 - **The decisive question is a written-down ladder per signal kind**
@@ -12755,6 +12760,9 @@ deep dive and the needs path. `docs/CASH-SCREENING.md` covers it in full.
   recorded after the rejection sets it aside, and the `reconsidered` field
   records which rejection and which field. A screened-out piece's open needs are
   deferred, not closed.
+- **The producer and the report read one answer.** `whyNotDiving` takes the
+  screen and returns `SCREENED`, so `refinement-report` never calls an opening
+  eligible that the loop will not start.
 - **The saving is measured, not claimed.** `refinement-report` prints
   `COMMERCIAL SCREENING`. It shows dives, passes per dive and question needs,
   split at the first recorded reading, and says so when no window exists yet.

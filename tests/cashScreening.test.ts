@@ -537,3 +537,76 @@ describe('the needs path asks the decisive question alone', () => {
     expect((await divesStarted()).has('A county posted a request for drainage parcel research.')).toBe(false);
   });
 });
+
+describe('what the independent review found, through the entrances', () => {
+  it('does not read an archived opening — including one that was paid for — as a rejected mechanism', async () => {
+    const done = await piece({
+      title: 'A Sedo domain we bought and resold.',
+      signal: 'RESALABLE_ASSET_OPENING',
+      source: 'https://sedo.com/search/details/?domain=first.com',
+    });
+    await transitionOpportunity({
+      id: done,
+      from: ['DISCOVERED'],
+      to: 'ARCHIVED',
+      archivedReason: 'Finished: bought, resold, settled.',
+    });
+    const next = await piece({
+      title: 'Another Sedo domain.',
+      signal: 'RESALABLE_ASSET_OPENING',
+      source: 'https://sedo.com/search/details/?domain=second.com',
+    });
+    await operate(projectId);
+    const last = (await cashEventsOfKind(next, 'CASH_OPPORTUNITY_SCREENED')).at(-1)!;
+    expect(last.detail['reason']).not.toBe('MECHANISM_REJECTED');
+  });
+
+  it('does not spread one domain’s established absence of sales to every domain on that marketplace', async () => {
+    const first = await piece({
+      title: 'dujo.com on Afternic.',
+      signal: 'RESALABLE_ASSET_OPENING',
+      source: 'https://www.afternic.com/domain/dujo.com',
+    });
+    await finishedDive(first, {
+      round: 1,
+      targeted: 'exitEvidence',
+      claims: [{ lane: 'exit_evidence', text: 'No sale of dujo.com was found.', negative: true }],
+    });
+    const second = await piece({
+      title: 'vjn.com on Afternic.',
+      signal: 'RESALABLE_ASSET_OPENING',
+      source: 'https://www.afternic.com/domain/vjn.com',
+    });
+    await operate(projectId);
+    expect((await cashEventsOfKind(first, 'CASH_OPPORTUNITY_SCREENED')).at(-1)!.detail['reason']).toBe(
+      'ESTABLISHED_ABSENT',
+    );
+    const other = (await cashEventsOfKind(second, 'CASH_OPPORTUNITY_SCREENED')).at(-1)!;
+    expect(other.detail['verdict']).toBe('TARGET');
+  });
+
+  it('does not count a need whose mission failed without researching as a question already asked', async () => {
+    const id = await piece({
+      title: 'A county posted a request for drainage parcel research.',
+      signal: 'ACTIVE_BUYER_DEMAND',
+      source: 'https://county.example.gov/rfp',
+    });
+    await operate(projectId);
+    const need = (await listNeeds({ projectId })).find((one) => one.opportunityId === id)!;
+    expect(need.candidateId).toBeTruthy();
+    // The fleet was quarantined: the mission failed and no pass ever ran.
+    const { mission } = await launchMission({
+      projectId,
+      visibility: 'SHARED',
+      objective: 'payer',
+      whyNow: 'test',
+      idempotencyKey: `need:${need.id}`,
+      candidateId: need.candidateId!,
+    });
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'FAILED', terminalReason: 'no surface' });
+    await operate(projectId);
+    const last = (await cashEventsOfKind(id, 'CASH_OPPORTUNITY_SCREENED')).at(-1)!;
+    expect(last.detail['verdict']).toBe('TARGET');
+    expect(last.detail['decisive']).toBe('payer');
+  });
+});
