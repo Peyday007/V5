@@ -372,6 +372,24 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       }
       console.log(`      evidence    ${evidence.length}: ${parts.join(' ')}`);
     }
+    /*
+     * The card itself, for a piece past SIGNAL.
+     *
+     * A commercial-quality audit asks what each field *says* — who the payer
+     * is, what the capture thesis proposes, where the evidence came from — and
+     * the ids above answer only where it came from. One line per fact, the
+     * value trimmed, the source's publisher and address beside evidence.
+     */
+    if (tier.tier !== 'SIGNAL') {
+      for (const fact of facts) {
+        let source = '';
+        if (fact.kind === 'EVIDENCE' && fact.claimId) {
+          const claim = await getClaim(fact.claimId);
+          source = ` <- ${claim?.sourcePublisher ?? '—'} ${claim?.sourceUrl ?? '—'}`;
+        }
+        console.log(`      card ${fact.field.padEnd(18)} ${fact.kind.padEnd(14)} ${trim(fact.value, 220)}${source}`);
+      }
+    }
     if (opportunity.candidateId && opportunity.validationState !== 'COMPLETE') {
       const candidate = await getCandidate(opportunity.candidateId);
       const mission = await latestMissionForCandidate(opportunity.candidateId);
