@@ -11,7 +11,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
-import { approveObjective, submitObjective } from '../server/services/factory/contract.ts';
+import { approveObjective, inferRisk, submitObjective } from '../server/services/factory/contract.ts';
 import { run } from '../server/services/factory/git.ts';
 import { ensureCampaign, factoryNow, getCampaign, patchCampaign } from '../server/repos/factory.ts';
 import { recordReview } from '../server/repos/factoryFleet.ts';
@@ -207,6 +207,16 @@ describe('the release gate', () => {
     expect(decideRelease({ ...base, changedFiles: ['server/db/migrations/1.sql'] }).excludedPathsTouched).toEqual([
       'server/db/migrations/1.sql',
     ]);
+  });
+});
+
+describe('risk inference', () => {
+  it('reads whole words, so a release or a test file name is not a lease', () => {
+    expect(inferRisk('Add tests/buildReleaseSentence.test.tsx and release it, please')).toBe('LOW');
+    expect(inferRisk('Shorten the work item lease')).toBe('MEDIUM');
+    expect(inferRisk('Add a route for the briefing')).toBe('MEDIUM');
+    expect(inferRisk('Rename the queues')).toBe('MEDIUM');
+    expect(inferRisk('Add a migration for the new table')).toBe('HIGH');
   });
 });
 
