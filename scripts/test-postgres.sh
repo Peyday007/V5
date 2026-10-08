@@ -95,7 +95,7 @@ up() {
   if [ "$(id -u)" = "0" ]; then chown postgres "$BASE"; fi
   if [ ! -f "$DATA/PG_VERSION" ]; then
     as_owner mkdir -p "$DATA" "$SOCK"
-    as_owner "$BIN/initdb" -D "$DATA" -U postgres --auth-local=trust --auth-host=reject \
+    as_owner "$BIN/initdb" -D "$DATA" -U postgres -E UTF8 --no-locale --auth-local=trust --auth-host=reject \
       --no-instructions >/dev/null
     # Loopback only, trust only for loopback; everything else rejected above.
     as_owner sh -c "printf '%s\n' \

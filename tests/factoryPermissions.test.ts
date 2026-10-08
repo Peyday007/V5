@@ -74,6 +74,9 @@ describe('the unattended worker’s permissions', () => {
     expect(code).toMatch(/LOGIN CREATEDB/);
     expect(code).toMatch(/listen_addresses = '127\.0\.0\.1'/);
     expect(code).toMatch(/--auth-host=reject/);
+    // The suite's baseline refuses a SQL_ASCII database, which is what a bare
+    // initdb under the C locale makes; found by running the suite on it.
+    expect(code).toMatch(/-E UTF8/);
     const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> };
     expect(pkg.scripts['test:pg']).toContain('scripts/test-postgres.sh run');
   });
