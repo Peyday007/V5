@@ -36,7 +36,12 @@
  * refused, because that is a `COMMERCIAL_ACTION` under a grant a person makes
  * separately.
  */
-import { getCashMode, listCashEventsFor, recordCashEvent } from '../../repos/cashMode.ts';
+import {
+  cashEventsOfKind,
+  getCashMode,
+  listCashEventsFor,
+  recordCashEvent,
+} from '../../repos/cashMode.ts';
 import {
   getOpportunity,
   listOpportunities,
@@ -44,13 +49,14 @@ import {
   updateOpportunity,
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
-import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
+import { latestMissionForCandidate, missionsForCandidate } from '../../repos/russellMissions.ts';
 import { citableClaims, getOrchestration, listPasses } from '../../repos/research.ts';
 import {
   cardFact,
   cardFactsFor,
   mayReplace,
   recordCardFact,
+  recordEvidenceFact,
 } from '../../repos/cashCardFacts.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
@@ -975,72 +981,127 @@ export interface AppliedValidation {
 }
 
 /**
- * Put the deep dive's accepted claims on the card.
+ * Put every deep dive's accepted claims on the card.
  *
- * Only accepted ones, and only from that opening's own validation packet — a
+ * Only citable ones, and only from that opening's own validation packets — a
  * claim that did not clear the gate is not evidence, and a claim from another
  * packet is about something else.
  *
- * Idempotent by the unique index on `(opportunity_id, field)`: re-running
- * rewrites the same row rather than accumulating, and `mayReplace` is what
- * stops a later automatic answer overwriting a person's. Nothing here decides
- * anything about the opportunity's state.
+ * Every dive the opening has had, not only its current one, and a dive that
+ * settled BLOCKED as well as one that settled COMPLETE. Both used to be
+ * excluded, and production measured what that cost: the New Jersey Department
+ * of Health dive `orc_381e9bb31d4f49ecb7cc` ended with four accepted, sourced
+ * claims (payer, price, timing, disqualifier) in a fragment whose integrity
+ * passed and whose coverage fell short. `citableClaims` already includes such
+ * claims, on the reasoning written beside it — a fragment falling short on
+ * coverage says the question was incompletely answered, not that its claims are
+ * unsound. But the reader asked only for openings settled `COMPLETE`, and a dive
+ * whose only fragment is BLOCKED never completes; and by then the opening had
+ * moved on to its second round, so `validation_orchestration_id` no longer named
+ * that packet at all. Thirty-nine of forty cards sat at their starting answers.
+ *
+ * What this changes is which packets are read, never what counts as evidence:
+ *
+ *   - `citableClaims` still decides — accepted claims of ACCEPTED or BLOCKED
+ *     fragments, nothing from a REJECTED or CANCELLED one — and a claim with no
+ *     source is skipped;
+ *   - a packet is read only once its mission is finished, so nothing still
+ *     being researched lands early;
+ *   - `recordEvidenceFact` applies `mayReplace` in the statement that writes,
+ *     so a person's answer and earlier evidence both stand, and two ticks
+ *     reading one empty field cannot each write a different claim;
+ *   - nothing here touches the dive's own state. A BLOCKED dive stays BLOCKED,
+ *     and its requirement stays unanswered; only the claims carry across.
+ *
+ * Dives are read oldest first and claims in gate order, so which claim fills a
+ * field is deterministic and survives a restart. It is derived from rows on the
+ * tick, so it reaches the openings already stranded with nothing replayed.
  */
 export async function applyValidationAnswers(projectId: string): Promise<AppliedValidation[]> {
   if (!(await getCashMode(projectId))) return [];
   const out: AppliedValidation[] = [];
 
   for (const opportunity of await listOpportunities({ projectId })) {
-    if (opportunity.validationState !== 'COMPLETE') continue;
-    if (!opportunity.validationOrchestrationId) continue;
-
-    for (const claim of await citableClaims(opportunity.validationOrchestrationId)) {
-      const field = FIELD_BY_LANE[claim.evidenceLane ?? ''];
-      if (!field) continue;
-      const existing = await cardFact(opportunity.id, field);
-      // A person's answer stands, and so does an earlier piece of evidence:
-      // `mayReplace` is the order, and it is about authority rather than
-      // recency.
-      if (!mayReplace(existing, 'EVIDENCE')) continue;
-      const value = clampText(claim.claim, 600);
-      /*
-       * The column as well as the fact, where the field has one.
-       *
-       * `answers.ts` writes both when a *need's* research settles a card field,
-       * and this wrote only the fact — so the same question, answered by the
-       * deep dive instead, reached `cash_card_facts` and never reached
-       * `evidenceCard`, `readyToTest` or anything else that reads the row. Two
-       * writers for one field with only one of them counting is this file's own
-       * recurring defect: a rule applied by one of two readers is worse than
-       * none, because the two disagree about the same opening.
-       *
-       * `COLUMN` is imported rather than restated for exactly that reason — a
-       * second copy is the thing that drifts. Most of the fields the deep dive
-       * fills are engine fields with no column at all, which is why this is a
-       * lookup rather than an assumption: `payer` has one, `hours` does not,
-       * and a field with none is a card fact and nothing else.
-       *
-       * It changes no evidence and lowers no bar: the claim already cleared the
-       * gate, `mayReplace` still decides authority, and a person's answer still
-       * stands.
-       */
-      const column = COLUMN[field];
-      if (column) {
-        await updateOpportunity(opportunity.id, { [column]: value } as never);
+    for (const orchestrationId of await finishedDivePackets(opportunity)) {
+      for (const claim of await citableClaims(orchestrationId)) {
+        if (!claim.sourceUrl) continue;
+        const field = FIELD_BY_LANE[claim.evidenceLane ?? ''];
+        if (!field) continue;
+        const existing = await cardFact(opportunity.id, field);
+        // Already this claim: nothing to do, which is what a replay must find.
+        if (existing?.claimId === claim.id) continue;
+        // A person's answer stands, and so does an earlier piece of evidence:
+        // `mayReplace` is the order, and it is about authority rather than
+        // recency. Asked here to skip the write, and again inside it.
+        if (!mayReplace(existing, 'EVIDENCE')) continue;
+        const value = clampText(claim.claim, 600);
+        const written = await recordEvidenceFact({
+          projectId,
+          opportunityId: opportunity.id,
+          field,
+          value,
+          claimId: claim.id,
+        });
+        if (!written) continue;
+        /*
+         * The column as well as the fact, where the field has one.
+         *
+         * `answers.ts` writes both when a *need's* research settles a card
+         * field, and this once wrote only the fact — so the same question,
+         * answered by the deep dive instead, reached `cash_card_facts` and never
+         * reached `evidenceCard`, `readyToTest` or anything else that reads the
+         * row. `COLUMN` is imported rather than restated, because a second copy
+         * is the thing that drifts. Written only once the fact is this claim's,
+         * so the column and the fact cannot name two different claims.
+         */
+        const column = COLUMN[field];
+        if (column) {
+          await updateOpportunity(opportunity.id, { [column]: value } as never);
+        }
+        out.push({ opportunityId: opportunity.id, field, claimId: claim.id });
       }
-      await recordCardFact({
-        projectId,
-        opportunityId: opportunity.id,
-        field,
-        kind: 'EVIDENCE',
-        value,
-        claimId: claim.id,
-        decidedBy: 'BRAIN',
-      });
-      out.push({ opportunityId: opportunity.id, field, claimId: claim.id });
     }
   }
   return out;
+}
+
+const FINISHED_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);
+
+/**
+ * Every packet a deep dive of this opening produced, whose mission has finished.
+ *
+ * Each round's idea is named by its own `CASH_VALIDATION_STARTED` event, so the
+ * history is read from the rows that recorded it rather than from the one
+ * column the latest round overwrites. The column is still read too, for an
+ * opening settled before those events existed. Oldest first.
+ */
+async function finishedDivePackets(opportunity: CashOpportunity): Promise<string[]> {
+  const packets: string[] = [];
+  const add = (id: string | null | undefined): void => {
+    if (id && !packets.includes(id)) packets.push(id);
+  };
+  // By the round each event recorded, then by time: two rounds started in one
+  // millisecond would otherwise sort by their generated ids, and which claim
+  // fills a field must not depend on that.
+  const roundOf = (detail: Record<string, unknown>): number =>
+    typeof detail['round'] === 'number' ? detail['round'] : Number.MAX_SAFE_INTEGER;
+  const started = (await cashEventsOfKind(opportunity.id, 'CASH_VALIDATION_STARTED')).sort(
+    (a, b) => roundOf(a.detail) - roundOf(b.detail),
+  );
+  for (const event of started) {
+    const candidateId = event.detail['candidateId'];
+    if (typeof candidateId !== 'string') continue;
+    for (const mission of await missionsForCandidate(candidateId)) {
+      if (FINISHED_MISSION.has(mission.state)) add(mission.orchestrationId);
+    }
+  }
+  if (
+    opportunity.validationState === 'COMPLETE' ||
+    opportunity.validationState === 'BLOCKED'
+  ) {
+    add(opportunity.validationOrchestrationId);
+  }
+  return packets;
 }
 
 /**

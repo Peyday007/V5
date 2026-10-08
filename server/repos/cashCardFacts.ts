@@ -96,6 +96,50 @@ export async function recordCardFact(input: NewCardFact): Promise<CashCardFact> 
   return found;
 }
 
+/**
+ * Record a gated claim as a field's evidence, only where `mayReplace` permits it,
+ * decided in the statement that writes.
+ *
+ * `recordCardFact` is an unconditional upsert, and its callers check
+ * `mayReplace` first by reading the row. Two ticks reading one empty field and
+ * both writing would let the second replace the first's evidence with different
+ * evidence — which `mayReplace` forbids. So the authority order is the upsert's
+ * own `WHERE`: an EVIDENCE answer lands on an empty field or over a
+ * RECOMMENDATION, and never over EVIDENCE or a PERSON.
+ *
+ * Returns true when the field now holds this claim, which is also the answer
+ * after a replay of the same write.
+ */
+export async function recordEvidenceFact(input: {
+  projectId: string;
+  opportunityId: string;
+  field: string;
+  value: string;
+  claimId: string;
+}): Promise<boolean> {
+  const at = nowIso();
+  await getDb().run(
+    `INSERT INTO cash_card_facts
+       (id, project_id, opportunity_id, field, kind, value, claim_id, need_id,
+        basis, assumptions, uncertainty, decided_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'EVIDENCE', ?, ?, NULL, NULL, NULL, NULL, 'BRAIN', ?, ?)
+     ON CONFLICT (opportunity_id, field) DO UPDATE SET
+       kind = excluded.kind,
+       value = excluded.value,
+       claim_id = excluded.claim_id,
+       need_id = NULL,
+       basis = NULL,
+       assumptions = NULL,
+       uncertainty = NULL,
+       decided_by = excluded.decided_by,
+       updated_at = excluded.updated_at
+     WHERE cash_card_facts.kind = 'RECOMMENDATION'`,
+    [newId('ccf'), input.projectId, input.opportunityId, input.field, input.value, input.claimId, at, at],
+  );
+  const found = await cardFact(input.opportunityId, input.field);
+  return found?.kind === 'EVIDENCE' && found.claimId === input.claimId;
+}
+
 export async function cardFact(
   opportunityId: string,
   field: string,

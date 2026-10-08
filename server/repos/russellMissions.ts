@@ -221,6 +221,16 @@ export async function latestMissionForCandidate(
   return rows[0] ? mapMission(rows[0]) : null;
 }
 
+/** Every mission one idea has had, oldest attempt first. */
+export async function missionsForCandidate(candidateId: string): Promise<RussellMission[]> {
+  const rows = await getDb().all<RussellMissionRow>(
+    `SELECT * FROM russell_missions WHERE candidate_id = ?
+      ORDER BY attempt, rowid`,
+    [candidateId],
+  );
+  return rows.map(mapMission);
+}
+
 /** How many mission rows one idea has. The runaway guard's only reader. */
 export async function countMissionsForCandidate(candidateId: string): Promise<number> {
   const rows = await getDb().all<{ n: number }>(
