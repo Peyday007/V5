@@ -223,7 +223,7 @@ jobs:
 
       - name: Verdict
         id: verdict
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           MERGE_FAILURE: ${{ steps.merge.outputs.failure }}
           SCAN: ${{ steps.scan.outcome }}
@@ -242,7 +242,12 @@ jobs:
   release:
     name: Merge, deploy, verify
     needs: [plan, gate]
-    if: always() && needs.plan.result == 'success' && needs.plan.outputs.kind != ''
+    # `!cancelled()`, never `always()`: it must still run when the gate failed or
+    # was skipped, so the outcome is recorded, and it must stop when somebody
+    # cancels the run. A job conditioned on `always()` ignores cancellation —
+    # found by cancelling a live release to test recovery, which ran on for
+    # twenty minutes regardless.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.kind != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
