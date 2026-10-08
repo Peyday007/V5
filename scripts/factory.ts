@@ -17,9 +17,7 @@
  *   npm run factory -- release --campaign <id> --decision APPROVED
  */
 import fs from 'node:fs';
-import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
-import { parseRemote } from '../server/services/factory/forge.ts';
-import { campaignsAwaitingRelease, observeRelease } from '../server/services/factory/release.ts';
+import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { listProjects } from '../server/repos/projects.ts';
 import { listUsers } from '../server/repos/identity.ts';
 import {
@@ -868,95 +866,6 @@ async function main(): Promise<void> {
       break;
     }
 
-    /*
-     * The release workflow's question (§58): may this pull request, at exactly
-     * this head, be released without a person? Brain answers from its own rows
-     * and the forge; the workflow then re-derives the path classification from
-     * the canonical branch's checkout before merging anything. A head that moved
-     * since the workflow read it is not an answer about the head it read.
-     */
-    case 'release-decision': {
-      const remote = flagString(flags, 'repository') ?? fail('--repository is required');
-      const prNumber = Number(flagString(flags, 'pr') ?? fail('--pr is required'));
-      const head = flagString(flags, 'head') ?? fail('--head is required');
-      if (!Number.isInteger(prNumber) || prNumber <= 0) fail('--pr must be a pull request number');
-      const wanted = parseRemote(remote.includes('://') ? remote : `https://github.com/${remote}`);
-      if (!wanted) fail('--repository does not parse as a repository');
-      const rows = await getDb().all<{ id: string; change_request_id: string }>(
-        `SELECT id, change_request_id FROM factory_campaigns
-          WHERE pr_ref IN (?, ?) AND execution_mode = 'REMOTE' ORDER BY created_at DESC`,
-        [`#${prNumber}`, String(prNumber)],
-      );
-      let campaignId: string | null = null;
-      for (const row of rows) {
-        const cr = await getChangeRequest(row.change_request_id);
-        if (cr && parseRemote(cr.repository)?.slug.toLowerCase() === wanted.slug.toLowerCase()) {
-          campaignId = row.id;
-          break;
-        }
-      }
-      if (!campaignId) {
-        process.stdout.write(
-          `FACTORY-RELEASE: MANUAL pr=${prNumber} — no Factory campaign delivered this pull request, so nothing in Brain vouches for it.\n`,
-        );
-        break;
-      }
-      const { reading } = await observeRelease(campaignId);
-      for (const blocker of reading.blockers) {
-        process.stdout.write(`  blocker ${blocker.code} (${blocker.owner}): ${blocker.sentence}\n`);
-      }
-      if (reading.stage !== 'AUTO_RELEASE_ELIGIBLE') {
-        process.stdout.write(`FACTORY-RELEASE: MANUAL campaign=${campaignId} stage=${reading.stage} — ${reading.summary}\n`);
-      } else if (reading.headSha !== head) {
-        process.stdout.write(
-          `FACTORY-RELEASE: MANUAL campaign=${campaignId} stage=HEAD_MOVED — Brain assessed ${reading.headSha}, the workflow asked about ${head}.\n`,
-        );
-      } else {
-        process.stdout.write(`FACTORY-RELEASE: ELIGIBLE campaign=${campaignId} head=${head}\n`);
-      }
-      break;
-    }
-
-    /*
-     * The pull requests the release workflow may take next, oldest first: one
-     * `FACTORY-RELEASE-CANDIDATE` line each, for the named repository only.
-     * Every one is read fresh from the forge and recorded if it changed, so the
-     * list is never an older answer than the one the workflow then acts on.
-     */
-    case 'release-queue': {
-      const remote = flagString(flags, 'repository') ?? fail('--repository is required');
-      const wanted = parseRemote(remote.includes('://') ? remote : `https://github.com/${remote}`);
-      if (!wanted) fail('--repository does not parse as a repository');
-      let offered = 0;
-      for (const campaign of await campaignsAwaitingRelease()) {
-        const cr = await getChangeRequest(campaign.changeRequestId);
-        if (!cr || parseRemote(cr.repository)?.slug.toLowerCase() !== wanted.slug.toLowerCase()) continue;
-        const { reading } = await observeRelease(campaign.id);
-        process.stdout.write(`  ${campaign.id} pr=${reading.prNumber ?? '—'} ${reading.stage}\n`);
-        if (reading.stage === 'AUTO_RELEASE_ELIGIBLE' && reading.prNumber !== null && reading.headSha) {
-          process.stdout.write(
-            `FACTORY-RELEASE-CANDIDATE: pr=${reading.prNumber} head=${reading.headSha} campaign=${campaign.id}\n`,
-          );
-          offered += 1;
-        }
-      }
-      process.stdout.write(`release queue: ${offered} eligible\n`);
-      break;
-    }
-
-    case 'release-status': {
-      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
-      const { reading, recorded } = await observeRelease(campaignId);
-      process.stdout.write(`${reading.stage} — ${reading.summary}\n`);
-      process.stdout.write(
-        `  pr=${reading.prNumber ?? '—'} head=${reading.headSha ?? '—'} serving=${reading.servingRevision ?? 'unknown'} recorded=${recorded}\n`,
-      );
-      for (const blocker of reading.blockers) {
-        process.stdout.write(`  blocker ${blocker.code} (${blocker.owner}): ${blocker.sentence}\n`);
-      }
-      break;
-    }
-
     case 'release': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const decision = (flagString(flags, 'decision') ?? 'APPROVED') as 'APPROVED' | 'REFUSED';
@@ -1401,13 +1310,133 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * Automatic release — the terminal half. `authorize-release` is the owner's
+     * grant (attributed to the `--admin` it names, resolved against the
+     * database); the other four are what `.github/workflows/factory-release.yml`
+     * asks, through this same door, and each prints one machine-readable line.
+     * See `server/services/factory/release/`.
+     */
+    case 'authorize-release': {
+      const changeRequestId = flagString(flags, 'change-request') ?? fail('--change-request is required');
+      const admin = flagString(flags, 'admin') ?? fail('--admin <email> is required: a grant is a person’s');
+      const users = await listUsers();
+      const actor = users.find((one) => one.email === admin && one.isBrainAdmin && !one.disabled);
+      if (!actor) fail('no enabled administrator with that address');
+      const { authorizeAutomaticRelease, ReleaseGrantError } = await import(
+        '../server/services/factory/release/grant.ts'
+      );
+      const file = flagString(flags, 'file');
+      const fromFile = file
+        ? (JSON.parse(fs.readFileSync(file, 'utf8')) as { release?: Record<string, unknown> }).release ?? {}
+        : {};
+      try {
+        const { grant, created } = await authorizeAutomaticRelease({
+          changeRequestId,
+          userId: actor.id,
+          channel: 'SHELL',
+          executedByRef: flagString(flags, 'by') ?? null,
+          reason: String(fromFile.reason ?? flagString(flags, 'why') ?? 'Release automatically when every gate passes.'),
+          pagePath: fromFile.pagePath ?? flagString(flags, 'page'),
+          liveChecks: fromFile.liveChecks,
+        });
+        process.stdout.write(
+          `${created ? 'granted' : 'already granted'} ${grant.id} for ${changeRequestId} by ${actor.email}\n` +
+            `page ${grant.pagePath ?? '—'}; ${grant.liveChecks.length} live check(s)\n`,
+        );
+      } catch (error) {
+        if (error instanceof ReleaseGrantError) {
+          process.stdout.write(`FACTORY REFUSED: ${error.message}\n`);
+          process.exitCode = 1;
+          break;
+        }
+        throw error;
+      }
+      break;
+    }
+
+    case 'release-plan': {
+      const repository = flagString(flags, 'repository') ?? fail('--repository owner/name is required');
+      const { planRelease } = await import('../server/services/factory/release/plan.ts');
+      const plan = await planRelease({
+        releasableRepository: repository,
+        workflowRunId: flagString(flags, 'workflow-run') ?? null,
+      });
+      for (const note of plan.notes) process.stdout.write(`note: ${note}\n`);
+      process.stdout.write(`RELEASE-PLAN: ${JSON.stringify(plan.action)}\n`);
+      break;
+    }
+
+    case 'release-advance': {
+      const runId = flagString(flags, 'run') ?? fail('--run is required');
+      const to = flagString(flags, 'to') ?? fail('--to is required');
+      const { RELEASE_RUN_STATES, RELEASE_FAILURE_STAGES } = await import('../server/domain/factoryRelease.ts');
+      if (!(RELEASE_RUN_STATES as readonly string[]).includes(to)) fail(`--to must be one of ${RELEASE_RUN_STATES.join(', ')}`);
+      const stage = flagString(flags, 'stage');
+      if (stage && !(RELEASE_FAILURE_STAGES as readonly string[]).includes(stage)) {
+        fail(`--stage must be one of ${RELEASE_FAILURE_STAGES.join(', ')}`);
+      }
+      const { advanceRelease } = await import('../server/services/factory/release/plan.ts');
+      // Free text travels underscore-joined through the workflow's argument class.
+      const detail = flagString(flags, 'detail')?.replace(/_/g, ' ');
+      const { moved, run } = await advanceRelease({
+        runId,
+        to: to as (typeof RELEASE_RUN_STATES)[number],
+        mergeSha: flagString(flags, 'merge-sha'),
+        deployRunId: flagString(flags, 'deploy-run'),
+        failureStage: stage as (typeof RELEASE_FAILURE_STAGES)[number] | undefined,
+        failureDetail: detail,
+      });
+      process.stdout.write(`RELEASE-ADVANCE: ${JSON.stringify({ moved, state: run?.state ?? null })}\n`);
+      break;
+    }
+
+    case 'release-verify': {
+      const runId = flagString(flags, 'run') ?? fail('--run is required');
+      const { verifyReleaseRun } = await import('../server/services/factory/release/verify.ts');
+      const outcome = await verifyReleaseRun(runId);
+      for (const check of outcome.checks) {
+        process.stdout.write(`  ${check.ok ? 'PASS' : 'FAIL'} ${check.check} — ${check.detail}\n`);
+      }
+      process.stdout.write(`RELEASE-VERIFY: ${outcome.live ? 'LIVE' : 'FAILED'}\n`);
+      break;
+    }
+
+    case 'release-status': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const campaign = await getCampaign(campaignId);
+      if (!campaign) fail('no such campaign');
+      const { objectiveOutcome } = await import('../server/services/factory/release/outcome.ts');
+      const { listRuns, liveGrantFor } = await import('../server/repos/factoryRelease.ts');
+      const outcome = await objectiveOutcome(campaign);
+      const grant = await liveGrantFor(campaign.changeRequestId);
+      process.stdout.write(
+        `${outcome.status} — ${outcome.detail}\n` +
+          `${outcome.blocker ? `blocker: ${outcome.blocker}\n` : ''}` +
+          `${outcome.needsPerson ? `needs a person: ${outcome.personAction}\n` : 'needs a person: no\n'}` +
+          `pull request ${outcome.prUrl ?? '—'}; page ${outcome.pageUrl ?? '—'}\n` +
+          `grant ${grant ? `${grant.id} by ${grant.grantedByUserId} (${grant.authorityChannel})` : 'none'}\n`,
+      );
+      for (const run of await listRuns(campaignId)) {
+        process.stdout.write(
+          `  ${run.id} attempt ${run.attempt} ${run.state} head ${run.headSha.slice(0, 12)} ` +
+            `merge ${run.mergeSha?.slice(0, 12) ?? '—'} deploy ${run.deployRunId ?? '—'}` +
+            `${run.failureStage ? ` failed at ${run.failureStage}: ${run.failureDetail ?? ''}` : ''}` +
+            `${run.refusal.length ? ` refused: ${run.refusal.join(' ')}` : ''}\n`,
+        );
+      }
+      process.stdout.write(`RELEASE-STATUS: ${JSON.stringify(outcome)}\n`);
+      break;
+    }
+
     default:
       process.stdout.write(
         'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
           '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
           '  answer-bin,\n' +
-          '  reauthorize, regrant-unit, retire, release\n',
+          '  reauthorize, regrant-unit, retire, release,\n' +
+          '  authorize-release, release-plan, release-advance, release-verify, release-status\n',
       );
       // An unknown command is the caller getting it wrong, and it used to be
       // reported as success — see the verdict line below.

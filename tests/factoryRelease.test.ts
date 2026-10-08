@@ -1,128 +1,39 @@
 /**
- * Unattended release (CLAUDE.md §58): what may be released without a person,
- * the owner's authorization that allows it, and the reading that says whether a
- * change is actually live — never because a workflow said so.
+ * Automatic release of a Factory campaign: the gate, the attempt state machine,
+ * the plan Brain hands the release workflow, verification inside the released
+ * Brain, and the one status a person reads.
+ *
+ * The forge is stubbed at `fetch`; everything else is the real repository layer.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { approveObjective, submitObjective } from '../server/services/factory/contract.ts';
 import { run } from '../server/services/factory/git.ts';
-import { ensureCampaign, patchCampaign } from '../server/repos/factory.ts';
-import { listFactoryEvents, recordReview } from '../server/repos/factoryFleet.ts';
+import { ensureCampaign, factoryNow, getCampaign, patchCampaign } from '../server/repos/factory.ts';
+import { recordReview } from '../server/repos/factoryFleet.ts';
 import { getDb } from '../server/db/database.ts';
-import {
-  classifyRelease,
-  PROTECTED_CLASSES,
-  PROTECTED_PATHS,
-  protectedClassesOf,
-} from '../server/services/factory/releaseEligibility.ts';
-import {
-  assessRelease,
-  campaignsAwaitingRelease,
-  observeRelease,
-  observeReleases,
-  RELEASE_EVENT_KINDS,
-  resetReleaseObservationThrottle,
-  type ReleaseDeps,
-} from '../server/services/factory/release.ts';
-import {
-  insertReleaseAuthorization,
-  liveReleaseAuthorization,
-  revokeReleaseAuthorization,
-} from '../server/repos/releaseAuthorizations.ts';
-import { requirementFor } from '../server/services/identity/policy.ts';
+import { decideRelease, excludedPathsIn } from '../server/services/factory/release/gate.ts';
+import { advanceRelease, planRelease } from '../server/services/factory/release/plan.ts';
+import { authorizeAutomaticRelease, ReleaseGrantError, validateLiveChecks } from '../server/services/factory/release/grant.ts';
+import { deriveOutcome, objectiveOutcome } from '../server/services/factory/release/outcome.ts';
+import { verifyLive, type VerifyDeps } from '../server/services/factory/release/verify.ts';
+import { latestRun, listRuns, openRun } from '../server/repos/factoryRelease.ts';
+import { forbiddenPathsFor } from '../server/services/factory/forbidden.ts';
+import { scanDiff } from '../scripts/release-scan.ts';
+import { deployReleased } from '../scripts/factory-release.ts';
+import type { FactoryCampaign, FactoryChangeRequest } from '../server/domain/factory.ts';
+import type { ReleaseGrant, ReleaseRun } from '../server/domain/factoryRelease.ts';
 
-describe('which changes may be released without a person', () => {
-  it('releases ordinary product code, tests and docs', () => {
-    const verdict = classifyRelease([
-      'client/src/russell/Build.tsx',
-      'server/services/factory/story.ts',
-      'tests/factoryStory.test.ts',
-      'docs/FACTORY.md',
-    ]);
-    expect(verdict.eligible).toBe(true);
-    expect(verdict.reasons).toEqual([]);
-  });
-
-  it.each([
-    ['server/services/identity/secrets.ts', 'CREDENTIALS'],
-    ['server/routes/oauth.ts', 'CREDENTIALS'],
-    ['server/routes/guard.ts', 'SECURITY'],
-    ['server/services/identity/policy.ts', 'SECURITY'],
-    ['server/services/cash/authority.ts', 'FINANCIAL_AUTHORITY'],
-    ['server/repos/cashLedger.ts', 'FINANCIAL_AUTHORITY'],
-    ['.github/workflows/deploy.yml', 'DEPLOYMENT_CONTROLS'],
-    ['fly.toml', 'DEPLOYMENT_CONTROLS'],
-    ['server/db/migrations/999_x.sql', 'SCHEMA'],
-    ['package-lock.json', 'DEPENDENCIES'],
-  ] as const)('keeps %s manual as %s', (file, cls) => {
-    const verdict = classifyRelease(['client/src/ok.tsx', file]);
-    expect(verdict.eligible).toBe(false);
-    expect(verdict.classes).toContain(cls);
-  });
-
-  it('cannot be widened by the change it judges: every file that decides a release is a deployment control', () => {
-    for (const file of [
-      'server/services/factory/releaseEligibility.ts',
-      'server/services/factory/release.ts',
-      'server/repos/releaseAuthorizations.ts',
-      'scripts/release-eligibility.ts',
-      'scripts/test-pg.mjs',
-      '.github/workflows/factory-release.yml',
-    ]) {
-      expect(protectedClassesOf(file)).toContain('DEPLOYMENT_CONTROLS');
-    }
-  });
-
-  it('is deny by default: anything outside the low-risk surface waits for a person', () => {
-    expect(classifyRelease(['CLAUDE.md']).eligible).toBe(false);
-    expect(classifyRelease(['scripts/admin.ts']).eligible).toBe(false);
-    expect(classifyRelease(['some-new-dir/thing.ts']).reasons[0]?.kind).toBe('OUTSIDE_LOW_RISK_SURFACE');
-  });
-
-  it('refuses an empty change and a truncated file list rather than calling them safe', () => {
-    expect(classifyRelease([]).reasons.map((r) => r.kind)).toEqual(['NOTHING_CHANGED']);
-    expect(classifyRelease(['client/a.tsx'], { truncated: true }).eligible).toBe(false);
-  });
-
-  it('names every reason rather than the first', () => {
-    const verdict = classifyRelease(['server/routes/guard.ts', 'server/routes/cash.ts', 'package.json']);
-    expect(verdict.classes).toEqual(['SECURITY', 'FINANCIAL_AUTHORITY', 'DEPENDENCIES']);
-  });
-
-  it('declares paths for every protected class', () => {
-    for (const cls of PROTECTED_CLASSES) expect(PROTECTED_PATHS[cls].length).toBeGreaterThan(0);
-  });
-});
-
-describe('the authorization is a person’s, at ADMIN', () => {
-  it('is an ADMIN write in the policy table, and so refused to a worker by type', () => {
-    for (const suffix of ['', '/revoke']) {
-      const requirement = requirementFor(
-        'POST',
-        `/api/projects/prj_x/factory/repositories/brain/release-authorization${suffix}`,
-      );
-      expect(requirement.level).toBe('ADMIN');
-      expect(requirement.scope ?? null).toBeNull();
-    }
-  });
-});
-
-/* ------------------------------------------------------------------------- */
-/* Rows and readings                                                          */
-/* ------------------------------------------------------------------------- */
-
+const REMOTE = 'https://github.com/Peyday007/V5';
 const HEAD = 'a'.repeat(40);
-const BASE = 'b'.repeat(40);
-const SERVING = 'c'.repeat(40);
 
 let fixture: TestProject;
 let repoRoot: string;
-let approverId: string;
+let adminId: string;
 
 async function makeRepository(): Promise<string> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'factory-release-repo-'));
@@ -140,266 +51,360 @@ async function makeRepository(): Promise<string> {
 beforeEach(async () => {
   fixture = await freshProject();
   repoRoot = await makeRepository();
-  approverId = (
+  adminId = (
     await createUser({
-      email: 'factory-release-owner@test.local',
-      displayName: 'Factory Release Owner',
+      email: 'factory-release-admin@test.local',
+      displayName: 'Factory Release Admin',
       password: 'a-long-enough-password',
       isBrainAdmin: true,
     })
   ).id;
-  resetReleaseObservationThrottle();
 });
 
 afterEach(async () => {
+  vi.unstubAllGlobals();
   await teardown();
   fs.rmSync(repoRoot, { recursive: true, force: true });
 });
 
-/**
- * A finished remote campaign with a delivered pull request. The change request
- * is submitted locally and then pointed at the Brain grant's remote, because
- * what is under test is the reading, not the submission.
- */
-async function deliveredCampaign(options: { review?: 'PASS' | 'CHANGES_REQUIRED'; reviewedSha?: string } = {}) {
+async function approved(objective = 'Show a friendly greeting line on the Build page.'): Promise<FactoryChangeRequest> {
   const submitted = await submitObjective({
     projectId: fixture.project.id,
-    objective: 'Change the client file so the release reading has something to read.',
-    expectedOutcome: 'client/one.txt carries the new text.',
-    acceptanceConditions: [{ statement: 'client/one.txt changed', verification: 'read the file' }],
+    objective,
+    expectedOutcome: 'The Build page shows the greeting.',
+    acceptanceConditions: [{ statement: 'the Build page shows the greeting', verification: 'open the page' }],
     repositoryRoot: repoRoot,
     mutationScope: ['client/**'],
   });
-  const approved = await approveObjective({
-    changeRequestId: submitted.changeRequest.id,
-    via: 'PERSON',
-    userId: approverId,
-  });
-  expect(approved.ok).toBe(true);
-  await getDb().run(`UPDATE factory_change_requests SET repository = ? WHERE id = ?`, [
-    'https://github.com/Peyday007/V5',
-    submitted.changeRequest.id,
-  ]);
+  const done = await approveObjective({ changeRequestId: submitted.changeRequest.id, via: 'PERSON', userId: adminId });
+  expect(done.ok).toBe(true);
+  // A hosted campaign names its remote; the fixture pins locally, so say so in the row.
+  await getDb().run('UPDATE factory_change_requests SET repository = ? WHERE id = ?', [REMOTE, done.changeRequest.id]);
+  return { ...done.changeRequest, repository: REMOTE };
+}
+
+async function completeCampaign(changeRequest: FactoryChangeRequest, verdict: 'PASS' | 'CHANGES_REQUIRED' = 'PASS') {
   const { campaign } = await ensureCampaign({
-    changeRequestId: submitted.changeRequest.id,
+    changeRequestId: changeRequest.id,
     projectId: fixture.project.id,
-    baseSha: submitted.changeRequest.baseSha,
+    baseSha: changeRequest.baseSha,
     laneTarget: 1,
     laneTargetReason: 'initial',
   });
+  await recordReview({
+    campaignId: campaign.id,
+    round: 1,
+    scope: 'CAMPAIGN',
+    unitId: null,
+    reviewerSessionId: 's-review',
+    reviewedSha: HEAD,
+    verdict,
+    summary: 'read it',
+    independence: 'SESSION_SEPARATED',
+    findings: [],
+  });
   await patchCampaign(campaign.id, {
     state: 'COMPLETE',
-    prUrl: 'https://github.com/Peyday007/V5/pull/77',
+    integrationSha: HEAD,
+    finishedAt: factoryNow(),
+    prUrl: `${REMOTE}/pull/77`,
     prRef: '#77',
-    finishedAt: new Date().toISOString(),
   });
-  await getDb().run(`UPDATE factory_campaigns SET execution_mode = 'REMOTE' WHERE id = ?`, [campaign.id]);
-  if (options.review) {
-    await recordReview({
-      campaignId: campaign.id,
-      round: 1,
-      scope: 'CAMPAIGN',
-      unitId: null,
-      reviewerSessionId: 's-review',
-      reviewedSha: options.reviewedSha ?? HEAD,
-      verdict: options.review,
-      summary: 'reviewed',
-      independence: 'SESSION_SEPARATED',
-      findings: [],
-    });
-  }
-  return campaign.id;
+  return (await getCampaign(campaign.id)) as FactoryCampaign;
 }
 
-interface ForgeState {
-  merged: boolean;
-  files: string[];
-  servingContains: boolean;
-}
-
-function forge(state: ForgeState, serving: string | null = SERVING): ReleaseDeps & { calls: string[] } {
-  const calls: string[] = [];
-  return {
-    calls,
-    servingRevision: serving,
-    now: () => new Date(),
-    async readPullRequest(_repository, number) {
-      calls.push(`pr:${number}`);
-      return {
-        ok: true,
-        status: 200,
-        authenticated: true,
-        reason: null,
-        body: {
-          number,
-          state: state.merged ? 'closed' : 'open',
-          headSha: HEAD,
-          headRef: 'factory/x',
-          baseRef: 'production',
-          merged: state.merged,
-          url: `https://github.com/Peyday007/V5/pull/${number}`,
-          title: 't',
-          updatedAt: '',
-        },
-      };
-    },
-    async compareCommits(_repository, base, head) {
-      calls.push(`compare:${base}...${head}`);
-      if (base === HEAD && head === serving) {
-        return {
-          ok: true,
-          status: 200,
-          authenticated: true,
-          reason: null,
-          body: {
-            baseSha: HEAD,
-            headSha: serving,
-            aheadBy: 1,
-            files: [],
-            truncated: false,
-            status: state.servingContains ? 'ahead' : 'diverged',
-          },
-        };
+/** The forge, as the tests need it: one pull request, open, and a compare listing `files`. */
+function stubForge(files: string[], opts: { merged?: boolean; truncated?: boolean } = {}): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string | URL) => {
+      const url = String(input);
+      if (url.includes('/pulls/77')) {
+        return new Response(
+          JSON.stringify({
+            number: 77,
+            state: opts.merged ? 'closed' : 'open',
+            merged: opts.merged === true,
+            html_url: `${REMOTE}/pull/77`,
+            head: { sha: HEAD, ref: 'factory/x' },
+            base: { ref: 'production' },
+          }),
+          { status: 200 },
+        );
       }
-      return {
-        ok: true,
-        status: 200,
-        authenticated: true,
-        reason: null,
-        body: { baseSha: BASE, headSha: head, aheadBy: 1, files: state.files, truncated: false, status: 'ahead' },
-      };
-    },
-  } as ReleaseDeps & { calls: string[] };
+      if (url.includes('/compare/')) {
+        const list = opts.truncated ? Array.from({ length: 300 }, (_, i) => `client/f${i}.ts`) : files;
+        return new Response(
+          JSON.stringify({ ahead_by: 1, status: 'ahead', files: list.map((filename) => ({ filename })) }),
+          { status: 200 },
+        );
+      }
+      return new Response('{}', { status: 404 });
+    }),
+  );
 }
 
-async function authorize() {
-  return insertReleaseAuthorization({
-    projectId: fixture.project.id,
-    repositoryGrant: 'brain',
-    grantedById: approverId,
-    authorityChannel: 'BROWSER_SESSION',
-    reason: 'low-risk product changes may ship unattended',
-    expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+async function grant(changeRequestId: string): Promise<ReleaseGrant> {
+  const { grant } = await authorizeAutomaticRelease({
+    changeRequestId,
+    userId: adminId,
+    channel: 'SHELL',
+    executedByRef: null,
+    reason: 'release it when it passes',
+    pagePath: '/build',
+    liveChecks: [{ kind: 'BUNDLE_TEXT', text: 'greeting' }],
   });
+  return grant;
 }
 
-describe('the owner’s standing release authorization', () => {
-  it('is one live grant per repository, and revoking keeps the row', async () => {
-    const first = await authorize();
-    expect(first).not.toBeNull();
-    expect(await authorize()).toBeNull();
-    expect(await revokeReleaseAuthorization({
-      projectId: fixture.project.id,
-      repositoryGrant: 'brain',
-      revokedById: approverId,
-      reason: 'pausing',
-    })).toBe(true);
-    expect(await liveReleaseAuthorization(fixture.project.id, 'brain')).toBeNull();
-    const rows = await getDb().all(`SELECT * FROM factory_release_authorizations`);
-    expect(rows).toHaveLength(1);
+describe('the release gate', () => {
+  it('refuses every reserved change class, whatever the grant says', () => {
+    for (const file of [
+      'server/db/migrations/200_x.sql',
+      'server/services/identity/policy.ts',
+      'server/services/cash/authority.ts',
+      '.github/workflows/deploy.yml',
+      'fly.toml',
+      'package.json',
+      'server/services/factory/release/gate.ts',
+      'scripts/factory-release.ts',
+    ]) {
+      expect(excludedPathsIn([file])).toEqual([file]);
+    }
+    expect(excludedPathsIn(['client/src/russell/Build.tsx', 'server/services/russell/home.ts'])).toEqual([]);
   });
 
-  it('does not count once expired, and a new grant closes the expired one rather than colliding', async () => {
-    await insertReleaseAuthorization({
-      projectId: fixture.project.id,
-      repositoryGrant: 'brain',
-      grantedById: approverId,
-      authorityChannel: 'SHELL',
-      reason: 'old',
-      expiresAt: new Date(Date.now() - 1000).toISOString(),
-    });
-    expect(await liveReleaseAuthorization(fixture.project.id, 'brain')).toBeNull();
-    expect(await authorize()).not.toBeNull();
-    const closed = await getDb().get<{ revoke_reason: string }>(
-      `SELECT revoke_reason FROM factory_release_authorizations WHERE reason = 'old'`,
-    );
-    expect(closed?.revoke_reason).toBe('expired');
+  it('a campaign can never own the machinery that releases it', () => {
+    const forbidden = forbiddenPathsFor(REMOTE);
+    for (const owned of ['server/services/factory/release/**', 'scripts/factory-release.ts', 'scripts/release-scan.ts']) {
+      expect(forbidden).toContain(owned);
+    }
+  });
+
+  it('names every reason it refuses, and only passes when none hold', async () => {
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    const theGrant = await grant(changeRequest.id);
+    const review = {
+      id: 'r', campaignId: campaign.id, round: 1, scope: 'CAMPAIGN' as const, unitId: null,
+      reviewerSessionId: 's', reviewedSha: HEAD, verdict: 'PASS' as const, summary: '', independence: 'SESSION_SEPARATED' as const, createdAt: '',
+    };
+    const base = {
+      campaign, changeRequest, grant: theGrant, latestReview: review, openFindings: [],
+      releasableRepository: 'Peyday007/V5', repositorySlug: 'Peyday007/V5',
+      changedFiles: ['client/src/russell/Build.tsx'], changedFilesTruncated: false,
+    };
+    expect(decideRelease(base)).toMatchObject({ eligible: true, reasons: [] });
+    expect(decideRelease({ ...base, grant: null }).reasons.join(' ')).toMatch(/not authorized automatic release/);
+    expect(decideRelease({ ...base, changeRequest: { ...changeRequest, riskClass: 'MEDIUM' } }).eligible).toBe(false);
+    expect(decideRelease({ ...base, latestReview: { ...review, verdict: 'CHANGES_REQUIRED' } }).eligible).toBe(false);
+    expect(decideRelease({ ...base, latestReview: { ...review, independence: 'UNKNOWN' } }).eligible).toBe(false);
+    expect(decideRelease({ ...base, latestReview: { ...review, reviewedSha: 'b'.repeat(40) } }).eligible).toBe(false);
+    expect(decideRelease({ ...base, openFindings: [{} as never] }).eligible).toBe(false);
+    expect(decideRelease({ ...base, changedFilesTruncated: true }).eligible).toBe(false);
+    expect(decideRelease({ ...base, changedFiles: null }).eligible).toBe(false);
+    expect(decideRelease({ ...base, repositorySlug: 'Peyday007/other' }).eligible).toBe(false);
+    expect(decideRelease({ ...base, changedFiles: ['server/db/migrations/1.sql'] }).excludedPathsTouched).toEqual([
+      'server/db/migrations/1.sql',
+    ]);
   });
 });
 
-describe('where a finished change stands on its way to production', () => {
-  it('has nothing to release before a pull request exists', async () => {
-    const campaignId = await deliveredCampaign();
-    await patchCampaign(campaignId, { prUrl: null, prRef: null });
-    const reading = await assessRelease(campaignId, forge({ merged: false, files: [], servingContains: false }));
-    expect(reading.stage).toBe('NOT_DELIVERED');
+describe('the grant', () => {
+  it('is a person’s, LOW risk only, and validates its live checks exactly', async () => {
+    const low = await approved();
+    const first = await grant(low.id);
+    const again = await authorizeAutomaticRelease({
+      changeRequestId: low.id, userId: adminId, channel: 'BROWSER', executedByRef: null, reason: 'again',
+    });
+    expect(again.created).toBe(false);
+    expect(again.grant.id).toBe(first.id);
+
+    const high = await approved('Run a database migration that drops the old table.');
+    expect(high.riskClass).toBe('HIGH');
+    await expect(
+      authorizeAutomaticRelease({ changeRequestId: high.id, userId: adminId, channel: 'SHELL', executedByRef: null, reason: 'x' }),
+    ).rejects.toBeInstanceOf(ReleaseGrantError);
+
+    expect(() => validateLiveChecks([{ kind: 'HTTP', path: '/healthz', expectStatus: 200, extra: 1 }])).toThrow(/unknown field/);
+    expect(() => validateLiveChecks([{ kind: 'HTTP', path: 'https://evil.example/' }])).toThrow(/path on this Brain/);
+    expect(() => validateLiveChecks([{ kind: 'SHELL', command: 'rm -rf /' }])).toThrow(/HTTP or BUNDLE_TEXT/);
+  });
+});
+
+describe('the release plan and its state machine', () => {
+  it('opens one attempt, refuses a reserved change once, and resumes an attempt in flight', async () => {
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/src/russell/Build.tsx']);
+
+    const plan = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf1' });
+    expect(plan.action?.action).toBe('RELEASE');
+    expect(plan.action?.prNumber).toBe(77);
+    expect(plan.action?.headSha).toBe(HEAD);
+    const runId = plan.action?.runId ?? '';
+
+    // A second pass resumes the same attempt rather than opening another.
+    const again = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf2' });
+    expect(again.action).toMatchObject({ action: 'RESUME', runId, state: 'GATING' });
+    expect((await listRuns(campaign.id)).length).toBe(1);
+
+    // The database refuses a second in-flight attempt even from a racing caller.
+    const racing = await openRun({
+      campaignId: campaign.id, changeRequestId: changeRequest.id, grantId: (await latestRun(campaign.id))!.grantId,
+      headSha: HEAD, attempt: 2, state: 'GATING', refusal: [], workflowRunId: null,
+    });
+    expect(racing.created).toBe(false);
+
+    // Guarded moves: out of order is refused, in order moves.
+    expect((await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '9' })).moved).toBe(false);
+    expect((await advanceRelease({ runId, to: 'MERGED', mergeSha: 'c'.repeat(40) })).moved).toBe(true);
+    expect((await advanceRelease({ runId, to: 'MERGED', mergeSha: 'd'.repeat(40) })).moved).toBe(false);
+    expect((await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '9' })).moved).toBe(true);
+
+    // A worker restart: the workflow that held it is gone; the next pass resumes at DEPLOYING.
+    const resumed = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf3' });
+    expect(resumed.action).toMatchObject({ action: 'RESUME', state: 'DEPLOYING', deployRunId: '9', mergeSha: 'c'.repeat(40) });
+
+    expect((await advanceRelease({ runId, to: 'VERIFYING' })).moved).toBe(true);
+    expect((await objectiveOutcome(campaign)).status).toBe('RELEASING');
+    expect((await advanceRelease({ runId, to: 'LIVE', verification: { ok: true } })).moved).toBe(true);
+    const live = await objectiveOutcome((await getCampaign(campaign.id))!);
+    expect(live).toMatchObject({ status: 'LIVE', pageUrl: '/build', needsPerson: false });
+
+    // Finished: nothing more to do for this head.
+    expect((await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf4' })).action).toBeNull();
   });
 
-  it('is eligible only when the diff is low risk, the review passed at this head, and a person authorized it', async () => {
-    const campaignId = await deliveredCampaign({ review: 'PASS' });
-    await authorize();
-    const reading = await assessRelease(
-      campaignId,
-      forge({ merged: false, files: ['client/one.txt'], servingContains: false }),
-    );
-    expect(reading.blockers).toEqual([]);
-    expect(reading.stage).toBe('AUTO_RELEASE_ELIGIBLE');
-    expect(reading.headSha).toBe(HEAD);
+  it('records a refusal once and shows it as a person’s blocker', async () => {
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/a.tsx', 'server/db/migrations/999_x.sql']);
+    const plan = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    expect(plan.action).toBeNull();
+    const runs = await listRuns(campaign.id);
+    expect(runs.map((one) => one.state)).toEqual(['REFUSED']);
+    await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    expect((await listRuns(campaign.id)).length).toBe(1);
+    const outcome = await objectiveOutcome(campaign);
+    expect(outcome.status).toBe('BLOCKED');
+    expect(outcome.needsPerson).toBe(true);
+    expect(outcome.blocker).toMatch(/reserved for a person/);
   });
 
-  it('waits for a person without the authorization, and says so', async () => {
-    const campaignId = await deliveredCampaign({ review: 'PASS' });
-    const reading = await assessRelease(
-      campaignId,
-      forge({ merged: false, files: ['client/one.txt'], servingContains: false }),
-    );
-    expect(reading.stage).toBe('MANUAL_RELEASE_REQUIRED');
-    expect(reading.blockers.map((b) => b.code)).toEqual(['NO_RELEASE_AUTHORIZATION']);
+  it('does not refuse on a forge that did not answer, and leaves a person-merged request alone', async () => {
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('down', { status: 502 })));
+    expect((await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null })).action).toBeNull();
+    expect(await listRuns(campaign.id)).toEqual([]);
+    stubForge(['client/a.tsx'], { merged: true });
+    expect((await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null })).action).toBeNull();
+    expect(await listRuns(campaign.id)).toEqual([]);
   });
 
-  it('keeps a protected change manual whatever the authorization says', async () => {
-    const campaignId = await deliveredCampaign({ review: 'PASS' });
-    await authorize();
-    const reading = await assessRelease(
-      campaignId,
-      forge({ merged: false, files: ['client/one.txt', 'server/services/cash/authority.ts'], servingContains: false }),
-    );
-    expect(reading.stage).toBe('MANUAL_RELEASE_REQUIRED');
-    expect(reading.protectedClasses).toEqual(['FINANCIAL_AUTHORITY']);
+  it('retries a runner failure on the same head, never a verdict about the work', async () => {
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/a.tsx']);
+    const first = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    await advanceRelease({ runId: first.action!.runId, to: 'FAILED', failureStage: 'INFRA', failureDetail: 'runner lost' });
+    expect((await objectiveOutcome(campaign)).status).toBe('RELEASING');
+    const second = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null });
+    expect(second.action?.action).toBe('RELEASE');
+    await advanceRelease({ runId: second.action!.runId, to: 'FAILED', failureStage: 'GATE', failureDetail: 'tests failed' });
+    expect((await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: null })).action).toBeNull();
+    const outcome = await objectiveOutcome(campaign);
+    expect(outcome).toMatchObject({ status: 'BLOCKED', needsPerson: true });
+    expect(outcome.blocker).toBe('tests failed');
+  });
+});
+
+describe('verification inside the released Brain', () => {
+  const page = '<html><script type="module" src="/assets/index-x.js"></script></html>';
+  function deps(over: Partial<VerifyDeps> & { bundle?: string; health?: number } = {}): VerifyDeps {
+    return {
+      revision: 'c'.repeat(40),
+      baseUrl: 'http://127.0.0.1:9',
+      contains: async () => true,
+      fetch: (async (input: string | URL) => {
+        const url = String(input);
+        if (url.endsWith('/healthz')) return new Response('ok', { status: over.health ?? 200 });
+        if (url.endsWith('/')) return new Response(page, { status: 200 });
+        if (url.includes('/assets/index-x.js')) return new Response(over.bundle ?? 'a greeting here', { status: 200 });
+        return new Response('nope', { status: 404 });
+      }) as typeof fetch,
+      ...over,
+    };
+  }
+  const checks = [{ kind: 'BUNDLE_TEXT' as const, text: 'greeting' }];
+
+  it('is LIVE only when the revision, health and every live check agree', async () => {
+    expect((await verifyLive(deps(), { mergeSha: 'c'.repeat(40), liveChecks: checks })).live).toBe(true);
+    expect((await verifyLive(deps({ bundle: 'old code' }), { mergeSha: 'c'.repeat(40), liveChecks: checks })).live).toBe(false);
+    expect((await verifyLive(deps({ health: 503 }), { mergeSha: 'c'.repeat(40), liveChecks: checks })).live).toBe(false);
+    expect((await verifyLive(deps({ revision: null }), { mergeSha: 'c'.repeat(40), liveChecks: [] })).live).toBe(false);
+    expect(
+      (await verifyLive(deps({ revision: 'e'.repeat(40), contains: async () => false }), { mergeSha: 'c'.repeat(40), liveChecks: [] })).live,
+    ).toBe(false);
+    expect(
+      (await verifyLive(deps({ revision: 'e'.repeat(40), contains: async () => null }), { mergeSha: 'c'.repeat(40), liveChecks: [] })).live,
+    ).toBe(false);
+  });
+});
+
+describe('the status a person reads', () => {
+  const campaign = { state: 'EXECUTING', stageDetail: 'two units running', integrationSha: HEAD, prUrl: null, blockerKind: null, blockerDetail: null } as unknown as FactoryCampaign;
+  it('maps every stage, and a PR alone is never LIVE', () => {
+    expect(deriveOutcome({ campaign, grant: null, latestRun: null, origin: null }).status).toBe('BUILDING');
+    expect(deriveOutcome({ campaign: { ...campaign, state: 'ASSEMBLING' }, grant: null, latestRun: null, origin: null }).status).toBe('VERIFYING');
+    const complete = { ...campaign, state: 'COMPLETE', prUrl: `${REMOTE}/pull/77` } as FactoryCampaign;
+    const manual = deriveOutcome({ campaign: complete, grant: null, latestRun: null, origin: null });
+    expect(manual).toMatchObject({ status: 'BLOCKED', needsPerson: true });
+    const grantRow = { revokedAt: null, pagePath: '/build' } as ReleaseGrant;
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: null, origin: null }).status).toBe('VERIFYING');
+    const merged = { state: 'MERGED', headSha: HEAD } as ReleaseRun;
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: merged, origin: null }).status).toBe('RELEASING');
+    const stale = { state: 'LIVE', headSha: 'f'.repeat(40) } as ReleaseRun;
+    expect(deriveOutcome({ campaign: complete, grant: grantRow, latestRun: stale, origin: null }).status).not.toBe('LIVE');
+    const surface = { ...campaign, state: 'BLOCKED', blockerKind: 'NO_HEALTHY_EXECUTION_SURFACE', blockerDetail: 'no surface' } as FactoryCampaign;
+    expect(deriveOutcome({ campaign: surface, grant: null, latestRun: null, origin: null })).toMatchObject({
+      status: 'BLOCKED',
+      needsPerson: false,
+      blocker: 'no surface',
+    });
+  });
+});
+
+describe('the release workflow’s own readings', () => {
+  it('scans for reserved paths and credentials in added lines', () => {
+    expect(scanDiff(['client/a.tsx'], ['const greeting = "hi";']).ok).toBe(true);
+    expect(scanDiff(['fly.toml'], []).ok).toBe(false);
+    expect(scanDiff(['client/a.tsx'], [`const k = "ghp_${'x'.repeat(36)}";`]).ok).toBe(false);
+    expect(scanDiff([], []).ok).toBe(false);
   });
 
-  it('refuses a review that read a different head, or did not pass', async () => {
-    const stale = await deliveredCampaign({ review: 'PASS', reviewedSha: 'd'.repeat(40) });
-    await authorize();
-    const deps = forge({ merged: false, files: ['client/one.txt'], servingContains: false });
-    expect((await assessRelease(stale, deps)).blockers.map((b) => b.code)).toContain('REVIEW_STALE');
-    const failed = await deliveredCampaign({ review: 'CHANGES_REQUIRED' });
-    expect((await assessRelease(failed, deps)).blockers.map((b) => b.code)).toContain('REVIEW_NOT_PASSED');
+  it('reads whether a Deploy run released from its own steps', () => {
+    expect(deployReleased([{ name: 'Record what was released', conclusion: 'success' }])).toBe(true);
+    expect(deployReleased([{ name: 'Record what was released', conclusion: 'skipped' }])).toBe(false);
+    expect(deployReleased([{ name: 'Deploy', conclusion: 'failure' }])).toBe(false);
   });
 
-  it('reads merged-but-not-serving as MERGED_NOT_LIVE, naming the deploy', async () => {
-    const campaignId = await deliveredCampaign({ review: 'PASS' });
-    const reading = await assessRelease(campaignId, forge({ merged: true, files: [], servingContains: false }));
-    expect(reading.stage).toBe('MERGED_NOT_LIVE');
-    expect(reading.blockers[0]?.owner).toBe('DEPLOY');
-  });
-
-  it('says LIVE only when the serving revision contains the head, and records it once', async () => {
-    const campaignId = await deliveredCampaign({ review: 'PASS' });
-    const deps = forge({ merged: true, files: [], servingContains: true });
-    const first = await observeRelease(campaignId, deps);
-    expect(first.reading.stage).toBe('LIVE');
-    expect(first.recorded).toBe(true);
-    const again = await observeRelease(campaignId, deps);
-    expect(again.recorded).toBe(false);
-    expect(await listFactoryEvents(campaignId, { kinds: [RELEASE_EVENT_KINDS.live] })).toHaveLength(1);
-    // And a live campaign stops being asked about.
-    expect((await campaignsAwaitingRelease()).map((c) => c.id)).not.toContain(campaignId);
-  });
-
-  it('cannot call anything live without knowing its own revision', async () => {
-    const campaignId = await deliveredCampaign({ review: 'PASS' });
-    const reading = await assessRelease(campaignId, forge({ merged: true, files: [], servingContains: true }, null));
-    expect(reading.stage).toBe('MERGED_NOT_LIVE');
-  });
-
-  it('is read by the tick, throttled per campaign', async () => {
-    const campaignId = await deliveredCampaign({ review: 'PASS' });
-    const deps = forge({ merged: false, files: ['client/one.txt'], servingContains: false });
-    expect(await observeReleases(deps)).toBe(1);
-    expect(await observeReleases(deps)).toBe(0);
-    const recorded = await listFactoryEvents(campaignId, { kinds: [RELEASE_EVENT_KINDS.assessed] });
-    expect(recorded).toHaveLength(1);
-    expect((recorded[0]?.detail as { stage?: string }).stage).toBe('MANUAL_RELEASE_REQUIRED');
+  it('the workflow never force-pushes, never runs flyctl deploy, and runs the change only without secrets', () => {
+    const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    expect(workflow).not.toMatch(/--force|-f\s+origin|\+refs\/heads/);
+    expect(script).not.toMatch(/'--force'|'-f'|\+refs\/heads/);
+    expect(workflow).not.toMatch(/^\s*flyctl\s+deploy\b/m);
+    expect(script).not.toMatch(/'deploy',\s*'--app'/);
+    const gate = workflow.slice(workflow.indexOf('  gate:'), workflow.indexOf('  release:'));
+    expect(gate).not.toMatch(/secrets\./);
+    expect(gate).toMatch(/persist-credentials: false/);
+    expect(gate).toMatch(/contents: read/);
+    expect(gate).toMatch(/npm run test:impacted/);
   });
 });

@@ -185,6 +185,17 @@ export const REPOSITORY_GRANTS: readonly RepositoryGrant[] = [
       '.github/actions/**',
       'fly.toml',
       'Dockerfile',
+      /*
+       * What decides whether a finished campaign may go live without a person,
+       * and what performs it. A campaign that could edit the release gate could
+       * release itself past it — the same sentence as everything above, at the
+       * one decision added after it was written.
+       */
+      'server/services/factory/release/**',
+      'server/domain/factoryRelease.ts',
+      'server/repos/factoryRelease.ts',
+      'scripts/factory-release.ts',
+      'scripts/release-scan.ts',
     ],
     mayOpenPullRequest: true,
   },

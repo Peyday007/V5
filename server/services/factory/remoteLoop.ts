@@ -66,7 +66,6 @@ import {
   reconcileRepairs,
 } from './repair.ts';
 import { listCampaignsPendingOutcome, recordCampaignOutcome } from './writeback.ts';
-import { observeReleases } from './release.ts';
 import {
   acceptIntegration,
   integrationBranchDrift,
@@ -2261,13 +2260,6 @@ export async function tickAllRemoteCampaigns(
       await recordTickFailure(campaign.id, `the outcome writeback threw: ${message}`).catch(() => undefined);
     }
   }
-  /*
-   * And where each finished change stands on its way to production (§58):
-   * manual, eligible for the release workflow, merged, or live in the revision
-   * serving this Brain. Throttled per campaign inside, and it reads the forge
-   * only — nothing here merges or deploys.
-   */
-  await observeReleases().catch(() => 0);
   return reports;
 }
 

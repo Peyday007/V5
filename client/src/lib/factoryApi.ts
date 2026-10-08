@@ -27,8 +27,8 @@ import type {
 } from '../../../server/services/factory/projections.ts';
 import type { CampaignMetrics } from '../../../server/services/factory/metrics.ts';
 import type { CampaignStory } from '../../../server/services/factory/story.ts';
-import type { ReleaseReading } from '../../../server/services/factory/release.ts';
-import type { FactoryReleaseAuthorization } from '../../../server/domain/factory.ts';
+import type { ObjectiveOutcome, ReleaseGrant } from '../../../server/domain/factoryRelease.ts';
+export type { ObjectiveOutcome, ReleaseGrant };
 import type { RepositoryGrant } from '../../../server/services/factory/repositoryEnvelope.ts';
 import type {
   FactoryInvitations,
@@ -92,6 +92,12 @@ export interface CampaignDetail {
    * server in plain English (Integration 3).
    */
   story: CampaignStory;
+  /**
+   * BUILDING → VERIFYING → RELEASING → LIVE, or BLOCKED with the exact blocker
+   * and whether a person must act. LIVE only from a verification inside the
+   * released Brain. See `server/services/factory/release/outcome.ts`.
+   */
+  outcome: ObjectiveOutcome;
   objective: string;
   expectedOutcome: string;
   stage: string;
@@ -127,21 +133,6 @@ export interface CampaignDetail {
   units: FactoryWorkUnit[];
   review: FactoryReview | null;
   openFindings: FactoryFinding[];
-  /**
-   * Where the delivered change stands on its way to production (§58): manual,
-   * eligible for unattended release, merged, or LIVE in the revision serving
-   * this Brain. The last recorded reading; null until one was taken.
-   */
-  release: ReleaseReading | null;
-}
-
-/** Whether unattended release is authorized for one repository in one project. */
-export interface ReleaseAuthorizationView {
-  repositoryGrant: string;
-  live: FactoryReleaseAuthorization | null;
-  history: FactoryReleaseAuthorization[];
-  mayAuthorize: boolean;
-  covers: string;
 }
 
 /**
@@ -356,6 +347,25 @@ export const FactoryApi = {
     }),
 
   /**
+   * The owner letting an approved objective go live without them, if it passes
+   * every gate. ADMIN; refused for anything but a LOW-risk objective.
+   */
+  grantRelease: (
+    changeRequestId: string,
+    input: { reason?: string; pagePath?: string; liveChecks?: unknown[] } = {},
+  ): Promise<{ grant: ReleaseGrant; created: boolean }> =>
+    api(`/api/factory/change-requests/${encodeURIComponent(changeRequestId)}/release-grant`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  withdrawRelease: (changeRequestId: string, reason?: string): Promise<{ withdrawn: boolean }> =>
+    api(`/api/factory/change-requests/${encodeURIComponent(changeRequestId)}/release-grant/withdraw`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  /**
    * The second of a person's two decisions, which this module's own header said
    * existed and no screen offered.
    *
@@ -370,39 +380,6 @@ export const FactoryApi = {
    * is guarded on `REQUESTED`, so a second press changes nothing rather than
    * re-stamping somebody else's answer, and `answered` says which it was.
    */
-  /** Read the release now, from the forge and this Brain's revision. Merges and deploys nothing. */
-  releaseStatus: (campaignId: string): Promise<ReleaseReading> =>
-    api(`/api/factory/campaigns/${encodeURIComponent(campaignId)}/release-status`),
-
-  releaseAuthorization: (projectId: string, grantId: string): Promise<ReleaseAuthorizationView> =>
-    api(
-      `/api/projects/${encodeURIComponent(projectId)}/factory/repositories/` +
-        `${encodeURIComponent(grantId)}/release-authorization`,
-    ),
-
-  /** A person's standing decision; one of two keys (the other is a GitHub setting). */
-  authorizeRelease: (
-    projectId: string,
-    grantId: string,
-    input: { reason: string; days: number },
-  ): Promise<{ authorization: FactoryReleaseAuthorization }> =>
-    api(
-      `/api/projects/${encodeURIComponent(projectId)}/factory/repositories/` +
-        `${encodeURIComponent(grantId)}/release-authorization`,
-      { method: 'POST', body: JSON.stringify(input) },
-    ),
-
-  revokeReleaseAuthorization: (
-    projectId: string,
-    grantId: string,
-    reason: string,
-  ): Promise<{ revoked: boolean }> =>
-    api(
-      `/api/projects/${encodeURIComponent(projectId)}/factory/repositories/` +
-        `${encodeURIComponent(grantId)}/release-authorization/revoke`,
-      { method: 'POST', body: JSON.stringify({ reason }) },
-    ),
-
   answerRelease: (
     campaignId: string,
     decision: 'APPROVED' | 'REFUSED',

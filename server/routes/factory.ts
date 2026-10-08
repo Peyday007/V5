@@ -52,14 +52,14 @@ import { campaignBriefing } from '../services/factory/projections.ts';
 import { throughputReport } from '../services/factory/throughput.ts';
 import { pullRequestFor } from '../services/factory/pullRequest.ts';
 import { approveAndStartCampaign } from '../services/factory/start.ts';
-import { latestReleaseReading, observeRelease } from '../services/factory/release.ts';
-import { listRepositoryGrants } from '../services/factory/repositoryEnvelope.ts';
+import { objectiveOutcome } from '../services/factory/release/outcome.ts';
 import {
-  insertReleaseAuthorization,
-  listReleaseAuthorizations,
-  liveReleaseAuthorization,
-  revokeReleaseAuthorization,
-} from '../repos/releaseAuthorizations.ts';
+  authorizeAutomaticRelease,
+  liveGrantFor,
+  ReleaseGrantError,
+  withdrawAutomaticRelease,
+} from '../services/factory/release/grant.ts';
+import type { ObjectiveOutcome } from '../domain/factoryRelease.ts';
 import {
   factoryInvitations,
   issueFactoryInvitation,
@@ -522,6 +522,93 @@ factoryRouter.post(
   }),
 );
 
+/**
+ * Automatic release: the owner saying, once, that this objective may go live
+ * without them if it passes every gate — and withdrawing that.
+ *
+ * ADMIN rather than WRITE. Approving an objective starts work on a branch;
+ * this lets the result reach production, which is the larger decision, so it
+ * carries the level every other change to what a project may do already
+ * carries. A worker principal is refused by type through `requirePerson`, and
+ * the grantor is the authenticated principal — no field in the body names
+ * them. See `services/factory/release/`.
+ */
+factoryRouter.get(
+  '/factory/change-requests/:changeRequestId/release-grant',
+  handler(async (req, res) => {
+    const changeRequestId = pathId(req, 'changeRequestId');
+    const changeRequest = await getChangeRequest(changeRequestId);
+    if (!changeRequest) throw notFound('No such change request.');
+    await authorizeOrDeny(changeRequest.projectId, 'read', 'No such change request.');
+    const mayGrant = decideProjectAccess(currentPrincipal(), changeRequest.projectId, 'ADMIN').allowed;
+    res.json({
+      grant: await liveGrantFor(changeRequestId),
+      mayGrant,
+      refusal: mayGrant ? null : 'Only an administrator of this project can let an objective go live without them.',
+      riskClass: changeRequest.riskClass,
+    });
+  }),
+);
+
+factoryRouter.post(
+  '/factory/change-requests/:changeRequestId/release-grant',
+  handler(async (req, res) => {
+    const principal = requirePerson();
+    const changeRequestId = pathId(req, 'changeRequestId');
+    const changeRequest = await getChangeRequest(changeRequestId);
+    if (!changeRequest) throw notFound('No such change request.');
+    await authorizeOrDeny(changeRequest.projectId, 'read', 'No such change request.');
+    if (!decideProjectAccess(principal, changeRequest.projectId, 'ADMIN').allowed) {
+      throw notFound('No such change request.');
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    try {
+      const { grant, created } = await authorizeAutomaticRelease({
+        changeRequestId,
+        userId: principal.id,
+        channel: 'BROWSER',
+        executedByRef: null,
+        reason:
+          typeof body.reason === 'string' && body.reason.trim()
+            ? body.reason
+            : 'Release automatically when every gate passes.',
+        pagePath: body.pagePath,
+        liveChecks: body.liveChecks,
+      });
+      res.json({ grant, created });
+    } catch (error) {
+      if (error instanceof ReleaseGrantError) throw badRequest(error.message);
+      throw error;
+    }
+  }),
+);
+
+factoryRouter.post(
+  '/factory/change-requests/:changeRequestId/release-grant/withdraw',
+  handler(async (req, res) => {
+    const principal = requirePerson();
+    const changeRequestId = pathId(req, 'changeRequestId');
+    const changeRequest = await getChangeRequest(changeRequestId);
+    if (!changeRequest) throw notFound('No such change request.');
+    await authorizeOrDeny(changeRequest.projectId, 'read', 'No such change request.');
+    if (!decideProjectAccess(principal, changeRequest.projectId, 'ADMIN').allowed) {
+      throw notFound('No such change request.');
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    try {
+      const withdrawn = await withdrawAutomaticRelease({
+        changeRequestId,
+        userId: principal.id,
+        reason: typeof body.reason === 'string' && body.reason.trim() ? body.reason : 'Withdrawn on Build.',
+      });
+      res.json({ withdrawn });
+    } catch (error) {
+      if (error instanceof ReleaseGrantError) throw badRequest(error.message);
+      throw error;
+    }
+  }),
+);
+
 factoryRouter.get(
   '/factory/change-requests/:changeRequestId',
   handler(async (req, res) => {
@@ -537,113 +624,6 @@ factoryRouter.get(
 );
 
 /* ------------------------------------------------------------------------- */
-/* Unattended release (§58)                                                  */
-/* ------------------------------------------------------------------------- */
-
-/** The longest a standing release authorization may run before a person renews it. */
-const MAX_RELEASE_AUTHORIZATION_DAYS = 90;
-
-function releaseGrant(grantId: string) {
-  const grant = listRepositoryGrants().find((one) => one.id === grantId);
-  if (!grant) throw notFound('No such repository.');
-  return grant;
-}
-
-/**
- * Whether unattended release is authorized for this repository here, and the
- * history of that decision. Any reader of the project's Factory may read it;
- * only an administrator may change it, and a worker never.
- */
-factoryRouter.get(
-  '/projects/:projectId/factory/repositories/:grantId/release-authorization',
-  handler(async (req) => {
-    const projectId = pathId(req, 'projectId');
-    await projectForFactory(projectId, 'read');
-    const grant = releaseGrant(pathId(req, 'grantId'));
-    const all = (await listReleaseAuthorizations(projectId)).filter((one) => one.repositoryGrant === grant.id);
-    return {
-      repositoryGrant: grant.id,
-      live: await liveReleaseAuthorization(projectId, grant.id),
-      history: all,
-      mayAuthorize: decideProjectAccess(currentPrincipal(), projectId, 'ADMIN').allowed,
-      covers:
-        'Changes the classifier calls low risk, after an independent PASS review, with no open blocking ' +
-        'finding. A change to credentials, security, financial authority, deployment controls, schema or ' +
-        'dependencies always waits for a person, whatever this says.',
-    };
-  }),
-);
-
-/**
- * A person's standing decision that eligible changes may be released without
- * them. ADMIN by the policy table; a worker is refused by type. It is one of
- * two keys — the other is a GitHub setting this Brain cannot change.
- */
-factoryRouter.post(
-  '/projects/:projectId/factory/repositories/:grantId/release-authorization',
-  handler(async (req, res) => {
-    const principal = requirePerson();
-    const projectId = pathId(req, 'projectId');
-    await projectForFactory(projectId, 'write');
-    const grant = releaseGrant(pathId(req, 'grantId'));
-    const body = bodyOf(req);
-    const reason = requiredString(body['reason'], 'reason');
-    const daysRaw = body['days'] === undefined ? 30 : Number(body['days']);
-    if (!Number.isInteger(daysRaw) || daysRaw < 1 || daysRaw > MAX_RELEASE_AUTHORIZATION_DAYS) {
-      throw badRequest(`"days" must be a whole number from 1 to ${MAX_RELEASE_AUTHORIZATION_DAYS}.`);
-    }
-    const expiresAt = new Date(Date.now() + daysRaw * 86_400_000).toISOString();
-    const created = await insertReleaseAuthorization({
-      projectId,
-      repositoryGrant: grant.id,
-      grantedById: principal.id,
-      authorityChannel: 'BROWSER_SESSION',
-      reason,
-      expiresAt,
-    });
-    if (!created) {
-      res.status(409).json({
-        error: 'ALREADY_AUTHORIZED',
-        message: 'Unattended release is already authorized for this repository here. Revoke it first to change it.',
-      });
-      return;
-    }
-    res.json({ authorization: created });
-  }),
-);
-
-factoryRouter.post(
-  '/projects/:projectId/factory/repositories/:grantId/release-authorization/revoke',
-  handler(async (req) => {
-    const principal = requirePerson();
-    const projectId = pathId(req, 'projectId');
-    await projectForFactory(projectId, 'write');
-    const grant = releaseGrant(pathId(req, 'grantId'));
-    const revoked = await revokeReleaseAuthorization({
-      projectId,
-      repositoryGrant: grant.id,
-      revokedById: principal.id,
-      reason: requiredString(bodyOf(req)['reason'], 'reason'),
-    });
-    return { revoked };
-  }),
-);
-
-/**
- * Where this campaign's change stands on its way to production, read now from
- * the forge and from the revision serving this request, and recorded when it
- * changed. Reading it merges and deploys nothing.
- */
-factoryRouter.get(
-  '/factory/campaigns/:campaignId/release-status',
-  handler(async (req) => {
-    const campaignId = pathId(req, 'campaignId');
-    await campaignFor(campaignId, 'READ');
-    return (await observeRelease(campaignId)).reading;
-  }),
-);
-
-/* ------------------------------------------------------------------------- */
 /* Watching a campaign                                                        */
 /* ------------------------------------------------------------------------- */
 
@@ -652,7 +632,10 @@ factoryRouter.get(
   handler(async (req, res) => {
     const projectId = pathId(req, 'projectId');
     await projectForFactory(projectId, 'read');
-    res.json({ campaigns: await listCampaigns(projectId) });
+    const campaigns = await listCampaigns(projectId);
+    const outcomes: Record<string, ObjectiveOutcome> = {};
+    for (const campaign of campaigns) outcomes[campaign.id] = await objectiveOutcome(campaign);
+    res.json({ campaigns, outcomes });
   }),
 );
 
@@ -713,6 +696,7 @@ factoryRouter.get(
     const story = await campaignStory({ campaignId, changeRequest, units, findings });
     res.json({
       story,
+      outcome: await objectiveOutcome(campaign),
       objective: changeRequest.objective,
       expectedOutcome: changeRequest.expectedOutcome,
       stage: campaign.state,
@@ -726,8 +710,6 @@ factoryRouter.get(
       review: lastReview,
       openFindings: findings.filter((finding) => finding.state === 'OPEN'),
       metrics,
-      // The last recorded release reading (§58); null until one was taken.
-      release: await latestReleaseReading(campaignId),
     });
   }),
 );

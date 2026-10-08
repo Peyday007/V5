@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:impacted": "node scripts/test-impacted.mjs",
-    "test:pg": "node scripts/test-pg.mjs",
+    "test:pg": "sh scripts/test-postgres.sh run -- node scripts/test-impacted.mjs",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
     "db:reset": "node --input-type=module -e \"import{rmSync}from'node:fs';rmSync('data/brain.db',{force:true});rmSync('data/brain.db-wal',{force:true});rmSync('data/brain.db-shm',{force:true});console.log('database removed')\"",

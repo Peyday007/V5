@@ -234,7 +234,7 @@ export function testPolicy(input: TestPolicyInput): TestPolicy {
   const commands: string[] = [];
   if (typecheck) commands.push('npm run typecheck');
   if (impacted) commands.push('npm run test:impacted');
-  if (focusedPostgres) commands.push('BRAIN_TEST_DATABASE_URL=postgresql://... npm run test:impacted');
+  if (focusedPostgres) commands.push('npm run test:pg');
   if (fullSuite) commands.push('the canonical release gate (CI), once');
   if (allDocs) reasons.push('documentation only: no test run is required');
 

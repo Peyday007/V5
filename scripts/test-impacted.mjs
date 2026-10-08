@@ -47,6 +47,13 @@ export const WHEN_SCHEMA_CHANGES = [
   'tests/migration.test.ts',
   'tests/migrations.test.ts',
 ];
+/**
+ * Run when a shell wrapper under scripts/ moved. The guard that every wrapper
+ * bounds its pooler ceiling reads the directory rather than importing a file,
+ * so no module graph reaches it — and missing it once let a new script fail the
+ * release SHA's full gate (Deploy 421) instead of the developer's run.
+ */
+export const WHEN_WRAPPERS_CHANGE = ['tests/dealflowKernel.test.ts'];
 
 function git(...args) {
   return execFileSync('git', args, { encoding: 'utf8' }).trim();
@@ -84,6 +91,7 @@ const changed = new Set(
 
 const isTest = (file) => /^tests\/.*\.test\.tsx?$/.test(file);
 const isSchema = (file) => /^server\/db\/(pg-)?migrations\/.*\.sql$/.test(file);
+const isWrapper = (file) => /^scripts\/[^/]+\.sh$/.test(file);
 const transitive = process.argv.includes('--transitive');
 
 /**
@@ -117,7 +125,11 @@ const directlyCovering = testFiles.filter((test) => {
   return imports.some((target) => changed.has(target) || helperChanged(target));
 });
 
-const guards = [...ALWAYS_RUN, ...([...changed].some(isSchema) ? WHEN_SCHEMA_CHANGES : [])]
+const guards = [
+  ...ALWAYS_RUN,
+  ...([...changed].some(isSchema) ? WHEN_SCHEMA_CHANGES : []),
+  ...([...changed].some(isWrapper) ? WHEN_WRAPPERS_CHANGE : []),
+]
   .filter((file) => fs.existsSync(file) && !directlyCovering.includes(file));
 
 console.log(`test:impacted: ${changed.size} changed file(s) since ${base} (${mergeBase.slice(0, 7)})`);

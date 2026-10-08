@@ -12718,47 +12718,74 @@ views into a product. The rules it settled:
   every read within a month, so a refresh never quietly extends what is about
   to be approved.
 
-## 58. A change is released by a rule a person turned on, and it is live when the serving revision says so.
+## 58. An approved objective ends live and verified, or at one named blocker.
 
-The Factory stopped at a reviewed pull request (§27), and everything after it —
-whether a person had to release it, whether it merged, whether it was serving —
-was readable nowhere. `services/factory/releaseEligibility.ts`,
-`services/factory/release.ts`, `repos/releaseAuthorizations.ts`,
-`.github/workflows/factory-release.yml` and `docs/FACTORY-RELEASE.md` are the
-rest of the road.
+A hosted Factory campaign used to stop at a reviewed pull request, and every
+one of them then waited for a person to merge it and dispatch Deploy. The
+intended experience is the opposite: approve a bounded objective, go offline,
+and come back to the deployed capability or to one specific blocker.
+`server/services/factory/release/`, `server/repos/factoryRelease.ts`,
+`.github/workflows/factory-release.yml`, `scripts/factory-release.ts` and
+`docs/FACTORY-RELEASE.md` are the mechanism. **This is a recorded correction to
+§27's "a person merges"** for the `brain` repository grant, made at the owner's
+instruction and bounded per objective by a grant the owner gives; for every
+objective without one, a person still merges.
 
-- **Low risk is a reading of the paths that moved, deny by default.** Credentials,
-  security, financial authority, deployment controls, schema and dependencies
-  are always manual, and so is anything outside `client/`, `server/`, `tests/`,
-  `docs/`, `objectives/` and `blueprints/`. The classifier and everything that
-  decides a release are deployment controls, so the release machinery never
-  releases a change to itself.
-- **Two keys, and neither alone releases anything.** A project administrator's
-  standing, expiring, revocable authorization in Brain (one live per
-  repository, by a partial unique index; a worker refused by type), and the
-  GitHub variable `FACTORY_AUTO_RELEASE` plus the `factory-release`
-  environment, which only a repository administrator can set.
-- **The pull request cannot release itself.** The workflow runs the classifier
-  from the canonical branch's checkout, runs the pull request's code only in a
-  job with a read-only token and no secret, rebuilds the identical merge
-  (fixed identity, date and message) in the job that holds the write token,
-  refuses if its SHA differs from the tested one, and pushes without force — so
-  a moved canonical branch is refused by the forge in the statement that makes
-  the change (§28). It never runs `flyctl deploy`; it dispatches `Deploy`.
-- **LIVE is the serving revision's answer, never a workflow's.** The forge is
-  asked whether the head is contained in `BRAIN_REVISION`; merged-but-not-serving
-  is `MERGED_NOT_LIVE` naming the deploy. Readings are recorded only when they
-  change, `RELEASE_LIVE` once, on the remote tick (throttled per campaign) and
-  from Build's *Check again*.
-- **Unattended Postgres is one allowlisted command.** `npm run test:pg` makes a
-  throwaway cluster on a private unix socket with no TCP and no password, runs
-  the impacted tests (or `--files`) against it, and removes it. An environment
-  assignment in front of a command matches no permission rule, which is why the
-  Postgres half used to stop an unattended worker at a prompt.
-
-**What is not true yet:** no change has been released this way. The proof is
-one real objective taken from approval to `RELEASE_LIVE` with nobody touching
-it, after this change is reviewed, merged and both keys are turned.
+- **Brain decides; a protected workflow performs.** Brain still holds no forge
+  write credential and no deployment credential, and no Factory worker holds
+  either. The only write credential is the release workflow's own
+  `GITHUB_TOKEN`, given only to the job that runs nothing from the change. The
+  change's code runs in a separate gate job with a read-only token, no secrets
+  and credentials not persisted — the pwn-request shape refused by
+  construction.
+- **The owner decides once, at approval.** `factory_release_grants` (migration
+  `111_factory_release_runs.sql`, pg `102_factory_release_runs.sql`) is the
+  grant: ADMIN, a person by principal type, LOW risk only, carrying what "live"
+  means (the page and the live checks). It widens nothing.
+- **Some changes are never released without a person, whatever the grant
+  says.** `RELEASE_EXCLUDED_PATHS` — financial authority, secrets and deployment
+  configuration, identity and authorization policy, every migration (a glob
+  cannot tell additive from destructive), dependencies, and the release
+  machinery itself — refuses at Brain's gate and again on the gated diff. The
+  release machinery is also in the `brain` grant's `forbiddenPaths`, so a
+  campaign cannot own it: a campaign may not edit what decides its release.
+- **The durable record comes first, the effect second.** `factory_release_runs`
+  is a state machine — GATING, MERGED, DEPLOYING, VERIFYING, LIVE, or FAILED /
+  ROLLED_BACK / REFUSED — every move a guarded UPDATE naming its source state,
+  one row per (campaign, head, attempt), and at most one in flight per campaign
+  by a partial unique index. A workflow run that dies anywhere leaves a row the
+  next run resumes. Runner-shaped failures retry on the same head up to three
+  attempts; a verdict about the work does not.
+- **The merge is pinned.** The commit pushed is exactly the one the gate
+  merged and tested, its second parent must be the reviewed head, and the push
+  is a plain fast-forward; a moved branch re-gates rather than force-pushes.
+- **Rule 3 holds.** The gate runs typecheck, `test:impacted` and the build on
+  the merged tree; the full suite runs once, on the released SHA, as Deploy's
+  own test job.
+- **Rollback goes through the canonical pipeline, never around it.** §28 is
+  that exactly one workflow runs `flyctl deploy`, so a failed release is
+  reverted on the branch and Deploy is dispatched for the revert. Branch and
+  image never disagree. The cost is stated: restoration takes one deploy cycle
+  rather than an image swap, and a Deploy harness failure on a healthy release
+  costs a rollback rather than a silent LIVE.
+- **LIVE is a measurement inside the released process.** `release-verify` runs
+  through the console door in the deployed container: `BRAIN_REVISION` must be
+  the merge commit (or one the forge says contains it), `/healthz` must answer,
+  and every live check the owner wrote must pass. A pull request is never LIVE
+  and a merge is never LIVE.
+- **One status, derived.** `outcome.ts` gives every campaign BUILDING,
+  VERIFYING, RELEASING, LIVE or BLOCKED — with the exact blocker and whether a
+  person must act — on Build, in the campaigns route and from `factory
+  release-status`. A blocker Brain re-examines by itself is never reported as a
+  person's.
+- **Unattended execution is a narrow allowlist, not a wide one.**
+  `.claude/settings.json` pre-approves routine development commands and
+  `scripts/test-postgres.sh`, the reviewed replacement for the `sudo -u postgres`
+  / `pg_ctlcluster` / inline `DO $$` setup that stopped unattended sessions at a
+  prompt; it denies force pushes, canonical-branch pushes, `flyctl`, `sudo` and
+  environment dumps, and a test refuses `Bash` or `Bash(*)`. OS sandboxing is
+  not enabled because the cloud worker image has no bubblewrap — enabling it
+  there would sandbox nothing, and saying so is the honest report.
 
 ## Repository map
 
@@ -12805,11 +12832,11 @@ server/
     auditReopens.ts     the record behind a re-audit, and its one reservation
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
     deliveryProofs.ts   what each Routine has been shown able to deliver, per repository
-    releaseAuthorizations.ts  the owner's standing release decision, one live per repository
     connectors.ts       one Claude account at one endpoint, and every OAuth client it ever was
     recoveryProbes.ts   each recovery probe and what its fire proved; one live at a time
     factory.ts          the contract, the campaign, and units that own a surface
     factoryFleet.ts     factory workers, sessions, reviews, findings, the ledger
+    factoryRelease.ts   release grants, and each release attempt as a guarded state machine
     externalRecords.ts  a site's record, its version guard, and its refusals
     cashMode.ts       the sprint's row, and the append-only history beside it
     cashAuthority.ts  the commercial grant, and the ceiling spent by insert
@@ -12896,8 +12923,6 @@ server/
       simulate.ts       a deterministic projection, structurally labelled
       profiles.ts       workload cost and activation traces, as queries
     factory/
-      releaseEligibility.ts  which changed paths may ship without a person (§58)
-      release.ts        manual, eligible, merged or LIVE — read from the forge and BRAIN_REVISION
       contract.ts       the change request, and what may never happen to it
       planner.ts        a proposed plan, validated to death before a row is written
       architect.ts      the decomposition pass, and the plan it is refused for
@@ -12913,6 +12938,12 @@ server/
       ownership.ts      the one pre-dispatch check: every unit and repair can finish
       regrant.ts        the answer to a unit that ran out of attempts
       assemble.ts       the reviewable artifact, and the publishing it refuses
+      release/
+        gate.ts         whether a finished campaign may go live without a person, pure
+        plan.ts         what the release workflow does next, recorded before it acts
+        grant.ts        the owner's one decision, validated by one writer for both doors
+        verify.ts       LIVE, measured inside the released Brain
+        outcome.ts      BUILDING → VERIFYING → RELEASING → LIVE, or the exact blocker
       story.ts          why a campaign exists, its success conditions, plan rewrites in English
       metrics.ts        throughput from the ledger, with an evidence class
       sessions.ts       what the hosted plane ran, read back from Brain's own rows
@@ -13256,6 +13287,9 @@ scripts/
   design.sh                 the half that reads rows, inside the deployed container
   capability.ts             the kernel's operator surface: register, advance, derive
   factory.ts                the operator's factory surface: register, submit, run
+  factory-release.ts        the protected half of an automatic release, run by its workflow
+  release-scan.ts           the gate's own reading of the merged diff: reserved paths, credentials
+  test-postgres.sh          a throwaway, unprivileged Postgres for the suite, without a prompt
   manufacturing.ts          the programme's recovery door, when the bundle will not load
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
@@ -13406,14 +13440,8 @@ moved. If the change touched persistence, run the same selection against the
 other backend:
 
 ```
-npm run test:pg
+npm run test:pg        # the same selection on a throwaway local Postgres
 ```
-
-`test:pg` starts a throwaway cluster on a private socket, runs the impacted
-selection against it and removes it — one allowlisted command, so an unattended
-worker is never stopped at a permission prompt (§58). It takes the same flags as
-`test:impacted`, and `--files <tests…>` for exact files. With
-`BRAIN_TEST_DATABASE_URL` already set it uses that database instead.
 
 `--list` prints the selection without running it; `--transitive` widens it to
 everything the module graph reaches, for a change whose reach genuinely is that

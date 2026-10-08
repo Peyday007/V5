@@ -880,38 +880,3 @@ export interface FactoryProjectRepositoryRow {
   created_at: string;
   updated_at: string;
 }
-
-/* ------------------------------------------------------------------------- */
-/* Release authorization (CLAUDE.md §58)                                     */
-/* ------------------------------------------------------------------------- */
-
-export const RELEASE_AUTHORITY_CHANNELS = ['BROWSER_SESSION', 'SHELL'] as const;
-export type ReleaseAuthorityChannel = (typeof RELEASE_AUTHORITY_CHANNELS)[number];
-
-export interface FactoryReleaseAuthorizationRow {
-  id: string;
-  project_id: string;
-  repository_grant: string;
-  granted_by_id: string;
-  authority_channel: string;
-  reason: string;
-  expires_at: string;
-  created_at: string;
-  revoked_at: string | null;
-  revoked_by_id: string | null;
-  revoke_reason: string | null;
-}
-
-export interface FactoryReleaseAuthorization {
-  id: string;
-  projectId: string;
-  repositoryGrant: string;
-  grantedById: string;
-  authorityChannel: ReleaseAuthorityChannel;
-  reason: string;
-  expiresAt: string;
-  createdAt: string;
-  revokedAt: string | null;
-  revokedById: string | null;
-  revokeReason: string | null;
-}

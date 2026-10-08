@@ -1,0 +1,37 @@
+{
+  "objective": "On the Build page, directly beneath the heading 'What the factory is doing' in client/src/russell/Build.tsx (the Campaigns component), show one short hint sentence that reads exactly: 'Approved objectives finish live and verified, or name exactly what is blocking them.' Render it as a paragraph with className 'rs-hint'. Add tests/buildReleaseSentence.test.tsx that renders the Build campaigns section with an empty campaign list and asserts the sentence is on the screen. Change nothing else.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "The Build page shows the sentence 'Approved objectives finish live and verified, or name exactly what is blocking them.' under 'What the factory is doing'.",
+  "nonGoals": [
+    "Any server, schema or workflow change",
+    "Restyling the Build page"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "client/src/russell/Build.tsx renders 'Approved objectives finish live and verified, or name exactly what is blocking them.' beneath the heading 'What the factory is doing'.",
+      "verification": "npx vitest run tests/buildReleaseSentence.test.tsx",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/russell/Build.tsx",
+    "tests/buildReleaseSentence.test.tsx"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the merge commit; no schema or data change.",
+  "release": {
+    "reason": "End-to-end proof of unattended release: a one-sentence, client-only change, released automatically once every gate passes.",
+    "pagePath": "/build",
+    "liveChecks": [
+      { "kind": "BUNDLE_TEXT", "text": "Approved objectives finish live and verified" },
+      { "kind": "HTTP", "path": "/healthz", "expectStatus": 200 }
+    ]
+  }
+}

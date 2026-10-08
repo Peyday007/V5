@@ -8,10 +8,9 @@
  * have no control here, because none of them is a decision a person should be
  * asked to take.
  *
- * Two things it deliberately is not. It is not an administration page — the
- * decisions it offers are the ones the server guards by principal type: approving
- * an objective, answering a release, and (§58) a project administrator's standing
- * authorization of unattended release for a repository. And it is not optimistic: a campaign's stage, its blocker and
+ * Two things it deliberately is not. It is not an administration page — the two
+ * decisions it offers are the two the server guards by principal type, and
+ * nothing else. And it is not optimistic: a campaign's stage, its blocker and
  * its pull request are whatever the server says they are on this read, and the
  * four states of a read — loading, empty, forbidden, error — are four different
  * screens.
@@ -20,7 +19,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { listState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { FactoryApi } from '../lib/factoryApi.ts';
-import type { ReleaseReading } from '../../../server/services/factory/release.ts';
 import type {
   FactoryCampaign,
   FactoryChangeRequest,
@@ -30,6 +28,7 @@ import type {
   FactoryAllocation,
   FactoryLine,
   IssuedFactoryInvitation,
+  ObjectiveOutcome,
   OnboardResult,
   RepositoryOnboarding,
   SubmitResponse,
@@ -539,9 +538,6 @@ function Repositories({
               * composed once so the card and the picker below cannot disagree.
               */}
             <p className="rs-hint rs-repo-summary">{repo.summary}</p>
-            {projectId && repo.readiness !== 'NOT_ONBOARDED' ? (
-              <ReleaseAuthorization projectId={projectId} grantId={repo.grantId} />
-            ) : null}
             {repo.surfaces.length > 0 ? (
               /*
                * Accounts, then surfaces, then what each one would actually do.
@@ -1198,14 +1194,13 @@ function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
         </p>
       ) : null}
 
+      {view?.outcome ? <OutcomePanel outcome={view.outcome} /> : null}
+
       {view?.blocker ? (
         <p className="rs-state rs-state-error">
           <strong>{BLOCKER_WORDS[view.blocker.kind] ?? 'Stopped'}.</strong>
           {view.blocker.detail ? ` ${view.blocker.detail}` : null} {view.blocker.remedy}
         </p>
-      ) : null}
-      {view?.release ? (
-        <ReleaseStatus campaignId={campaign.id} reading={view.release} onChecked={detail.reload} />
       ) : null}
       {view?.decisionWaiting ? (
         <ReleaseDecision
@@ -1365,146 +1360,6 @@ function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
  * decisions would make the screen inconsistent with itself, and a hidden button
  * is not authorization in either case.
  */
-const RELEASE_WORDS: Record<string, string> = {
-  NOT_DELIVERED: 'Not delivered yet',
-  MANUAL_RELEASE_REQUIRED: 'A person releases this',
-  AUTO_RELEASE_ELIGIBLE: 'Eligible for unattended release',
-  MERGED_NOT_LIVE: 'Merged, not live yet',
-  LIVE: 'Live',
-  UNKNOWN: 'Could not be read',
-};
-
-/**
- * Where the delivered change stands on its way to production (§58). Every
- * sentence is the server's; LIVE is the serving revision's own reading, never
- * a workflow's report.
- */
-function ReleaseStatus({
-  campaignId,
-  reading,
-  onChecked,
-}: {
-  campaignId: string;
-  reading: ReleaseReading;
-  onChecked(): void;
-}): JSX.Element {
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  async function check(): Promise<void> {
-    setBusy(true);
-    setProblem(null);
-    try {
-      await FactoryApi.releaseStatus(campaignId);
-      onChecked();
-    } catch (error) {
-      setProblem(error instanceof Error ? error.message : 'That did not work.');
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className={`rs-build-release rs-build-release-${reading.stage.toLowerCase()}`}>
-      <p className="rs-card-title">Deployment</p>
-      <p>
-        <strong>{RELEASE_WORDS[reading.stage] ?? reading.stage}.</strong> {reading.summary}
-      </p>
-      {reading.blockers.length > 0 ? (
-        <ul className="rs-list">
-          {reading.blockers.map((blocker) => (
-            <li key={`${blocker.code}-${blocker.sentence}`} className="rs-item-meta">
-              {blocker.sentence}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <details className="rs-details">
-        <summary>Details</summary>
-        <p className="rs-item-meta">
-          Head {reading.headSha?.slice(0, 12) ?? '—'}, serving revision{' '}
-          {reading.servingRevision?.slice(0, 12) ?? 'unknown'}, read {reading.assessedAt}.
-        </p>
-      </details>
-      <button type="button" onClick={() => void check()} disabled={busy}>
-        {busy ? 'Reading…' : 'Check again'}
-      </button>
-      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
-    </div>
-  );
-}
-
-/**
- * The owner's standing decision that eligible changes to this repository may
- * ship without them. One of two keys: the other is a GitHub setting only a
- * repository administrator can turn, which this screen says rather than hides.
- * A reader who may not decide sees the control disabled with the reason.
- */
-function ReleaseAuthorization({ projectId, grantId }: { projectId: string; grantId: string }): JSX.Element {
-  const view = useAsync(() => FactoryApi.releaseAuthorization(projectId, grantId), [projectId, grantId]);
-  const [reason, setReason] = useState('');
-  const [days, setDays] = useState(30);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const data = view.data;
-  if (!data) return <p className="rs-hint">{view.error ? view.error.message : 'Reading release authorization…'}</p>;
-
-  async function act(kind: 'GRANT' | 'REVOKE'): Promise<void> {
-    setBusy(true);
-    setProblem(null);
-    try {
-      if (kind === 'GRANT') await FactoryApi.authorizeRelease(projectId, grantId, { reason, days });
-      else await FactoryApi.revokeReleaseAuthorization(projectId, grantId, reason);
-      setReason('');
-      view.reload();
-    } catch (error) {
-      setProblem(error instanceof Error ? error.message : 'That did not work.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const refusal = data.mayAuthorize ? null : 'Only an administrator of this project can change this.';
-  return (
-    <div className="rs-build-release-authorization">
-      <p className="rs-card-title">Unattended release</p>
-      <p className="rs-hint">
-        {data.live
-          ? `Authorized until ${data.live.expiresAt.slice(0, 10)}: ${data.live.reason}`
-          : 'Not authorized: a person merges and deploys every change.'}{' '}
-        {data.covers} It also needs the repository's FACTORY_AUTO_RELEASE setting, which only a GitHub
-        administrator can turn on.
-      </p>
-      <label>
-        Reason
-        <input value={reason} onChange={(event) => setReason(event.target.value)} disabled={!data.mayAuthorize} />
-      </label>
-      {data.live ? (
-        <button type="button" onClick={() => void act('REVOKE')} disabled={busy || !data.mayAuthorize || !reason.trim()}>
-          Revoke
-        </button>
-      ) : (
-        <>
-          <label>
-            For how many days
-            <input
-              type="number"
-              min={1}
-              max={90}
-              value={days}
-              onChange={(event) => setDays(Number(event.target.value))}
-              disabled={!data.mayAuthorize}
-            />
-          </label>
-          <button type="button" onClick={() => void act('GRANT')} disabled={busy || !data.mayAuthorize || !reason.trim()}>
-            Authorize unattended release
-          </button>
-        </>
-      )}
-      {refusal ? <p className="rs-hint">{refusal}</p> : null}
-      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
-    </div>
-  );
-}
-
 function ReleaseDecision({
   campaignId,
   release,
@@ -1585,6 +1440,68 @@ function ReleaseDecision({
  * one. Nothing is running here — an unapproved objective has no campaign — so
  * the only control is the same single decision.
  */
+/**
+ * The one status a person reads about an approved objective:
+ * BUILDING → VERIFYING → RELEASING → LIVE, or BLOCKED with the exact blocker.
+ * Every word is the server's (`release/outcome.ts`); this only lays it out.
+ * LIVE carries the page the finished feature lives on.
+ */
+const OUTCOME_STEPS = ['BUILDING', 'VERIFYING', 'RELEASING', 'LIVE'] as const;
+
+function OutcomePanel({ outcome }: { outcome: ObjectiveOutcome }): JSX.Element {
+  const at = OUTCOME_STEPS.indexOf(outcome.status as (typeof OUTCOME_STEPS)[number]);
+  return (
+    <div className={`rs-build-outcome rs-build-outcome-${outcome.status.toLowerCase()}`}>
+      <ol className="rs-build-steps" aria-label="Where this objective is">
+        {OUTCOME_STEPS.map((step, index) => (
+          <li
+            key={step}
+            className={
+              at >= 0 && (index < at || outcome.status === 'LIVE')
+                ? 'rs-build-step rs-build-step-done'
+                : index === at
+                  ? 'rs-build-step rs-build-step-now'
+                  : 'rs-build-step'
+            }
+            aria-current={index === at && outcome.status !== 'LIVE' ? 'step' : undefined}
+          >
+            {step === 'LIVE' ? 'Live' : step.charAt(0) + step.slice(1).toLowerCase()}
+          </li>
+        ))}
+      </ol>
+      <p className={outcome.status === 'BLOCKED' ? 'rs-state rs-state-error' : 'rs-build-stage'}>
+        <strong>{outcome.status === 'BLOCKED' ? 'Blocked' : outcome.status === 'LIVE' ? 'Live' : outcome.status.charAt(0) + outcome.status.slice(1).toLowerCase()}.</strong>{' '}
+        {outcome.detail}
+        {outcome.blocker ? ` ${outcome.blocker}` : null}
+      </p>
+      {outcome.status === 'BLOCKED' ? (
+        <p className="rs-hint">
+          {outcome.needsPerson
+            ? `Needs you: ${outcome.personAction ?? 'a decision only you can make.'}`
+            : 'Does not need you: Brain re-examines this by itself.'}
+        </p>
+      ) : null}
+      <p className="rs-hint">
+        {outcome.autoRelease ? 'Released automatically once every gate passes.' : 'Release is yours to approve.'}
+        {outcome.prUrl ? (
+          <>
+            {' '}
+            <a href={outcome.prUrl} target="_blank" rel="noreferrer">
+              Pull request
+            </a>
+          </>
+        ) : null}
+        {outcome.status === 'LIVE' && outcome.pageUrl ? (
+          <>
+            {' '}
+            <a href={outcome.pageUrl}>Open it in Brain</a>
+          </>
+        ) : null}
+      </p>
+    </div>
+  );
+}
+
 function Unapproved({
   requests,
   campaigns,
@@ -1598,6 +1515,7 @@ function Unapproved({
   const waiting = requests.filter((request) => !started.has(request.id));
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [autoRelease, setAutoRelease] = useState<Set<string>>(new Set());
   if (waiting.length === 0) return null;
 
   return (
@@ -1611,6 +1529,26 @@ function Unapproved({
               {request.repository} at <code>{request.baseSha.slice(0, 12)}</code> on{' '}
               <code>{request.baseBranch}</code>
             </p>
+            {request.riskClass === 'LOW' ? (
+              <label className="rs-hint">
+                <input
+                  type="checkbox"
+                  checked={autoRelease.has(request.id)}
+                  onChange={(event) => {
+                    const next = new Set(autoRelease);
+                    if (event.target.checked) next.add(request.id);
+                    else next.delete(request.id);
+                    setAutoRelease(next);
+                  }}
+                />{' '}
+                Release it to production by itself once it passes review, tests and deployment checks
+                (rolled back if verification fails).
+              </label>
+            ) : (
+              <p className="rs-hint">
+                This objective is {request.riskClass.toLowerCase()} risk, so it finishes at a pull request you merge.
+              </p>
+            )}
             <button
               type="button"
               className="rs-primary"
@@ -1618,7 +1556,13 @@ function Unapproved({
               onClick={() => {
                 setBusy(request.id);
                 setProblem(null);
-                FactoryApi.approve(request.id)
+                (autoRelease.has(request.id)
+                  ? FactoryApi.grantRelease(request.id, {
+                      reason: 'Approved on Build with automatic release.',
+                    }).then(() => undefined)
+                  : Promise.resolve()
+                )
+                  .then(() => FactoryApi.approve(request.id))
                   .then(() => onApproved())
                   .catch((cause: unknown) =>
                     setProblem(cause instanceof Error ? cause.message : String(cause)),
