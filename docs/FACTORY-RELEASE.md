@@ -56,7 +56,14 @@ any repository other than the one the workflow deploys.
 
 ## The release workflow
 
-`.github/workflows/factory-release.yml`, every fifteen minutes and on demand.
+`.github/workflows/factory-release.yml`. It runs when the Factory opens or
+updates its own pull request (`pull_request_target`, restricted to
+`factory/campaign/*` branches of this repository, and running only the base
+branch's copy of the workflow), when a Deploy run completes (to resume), and on
+a fifteen-minute schedule as a backstop. The schedule is not the trigger:
+measured on 2026-10-08, GitHub ran an hourly schedule on this repository about
+every four to seven hours, so a timer alone left a finished objective waiting
+for hours with nothing saying why.
 Brain decides; the workflow performs. Brain holds no forge write credential and
 no deployment credential, and no Factory worker holds either.
 

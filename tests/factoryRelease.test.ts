@@ -404,6 +404,20 @@ describe('the release workflow’s own readings', () => {
     expect(deployReleased([{ name: 'Deploy', conclusion: 'failure' }])).toBe(false);
   });
 
+  it('is triggered by the Factory’s own pull request, from the base branch, and by nobody else’s', () => {
+    const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
+    // pull_request_target runs the base branch's workflow file, never the PR's.
+    expect(workflow).toMatch(/^  pull_request_target:/m);
+    expect(workflow).not.toMatch(/^  pull_request:/m);
+    expect(workflow).not.toMatch(/^  push:/m);
+    expect(workflow).toContain("startsWith(github.event.pull_request.head.ref, 'factory/campaign/')");
+    expect(workflow).toContain('github.event.pull_request.head.repo.full_name == github.repository');
+    // The release job runs only the trusted checkout of the canonical branch.
+    const release = workflow.slice(workflow.indexOf('  release:'));
+    expect(release).toMatch(/ref: production/);
+    expect(release).not.toMatch(/github\.event\.pull_request\.head\.sha/);
+  });
+
   it('the workflow never force-pushes, never runs flyctl deploy, and runs the change only without secrets', () => {
     const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
     const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
