@@ -10619,3 +10619,42 @@ export interface EngineeringBlockerRow {
   actor_id: string;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// The scenario engine (CLAUDE.md §58). The vocabulary is server/domain/scenario.ts.
+// ---------------------------------------------------------------------------
+
+export interface ScenarioModelRow {
+  id: string;
+  project_id: string;
+  title: string;
+  definition_json: string;
+  definition_hash: string;
+  illustrative: number;
+  created_by_id: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export type ScenarioRunState = 'RUNNING' | 'COMPLETE' | 'FAILED';
+
+export interface ScenarioRunRow {
+  id: string;
+  model_id: string;
+  project_id: string;
+  label: string | null;
+  seed: number | string;
+  evaluations: number;
+  config_json: string;
+  config_hash: string;
+  engine_version: string;
+  state: ScenarioRunState;
+  result_json: string | null;
+  result_digest: string | null;
+  failure: string | null;
+  elapsed_ms: number | null;
+  created_by_id: string;
+  started_at: string;
+  finished_at: string | null;
+}

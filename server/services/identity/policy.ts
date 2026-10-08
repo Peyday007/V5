@@ -416,6 +416,16 @@ const OVERRIDES: Override[] = [
   // of the project can see who does the work here and why.
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'PATCH', level: 'ADMIN' },
+  // ---------------------------------------------------------------------
+  // The scenario engine (§58)
+  // ---------------------------------------------------------------------
+  //
+  // Saving, revising and running a model take the default WRITE: a model is
+  // work inside the operation, and a run computes a labelled simulation and
+  // performs no effect. Reproducing a run is a POST because it computes, and
+  // it writes nothing, so it is READ. No entry names a worker scope, and every
+  // handler calls `requirePerson`.
+  { pattern: /^\/api\/projects\/[^/]+\/scenarios\/[^/]+\/runs\/[^/]+\/reproduce$/, method: 'POST', level: 'READ' },
   // The manufacturing kernel's programme (§39)
   // ---------------------------------------------------------------------
   //
