@@ -171,10 +171,15 @@ export function groupOfOrchestration(status: OrchestrationStatus): MissionGroup 
 }
 
 /** Which group a dispatched bin belongs in. */
-export function groupOfBin(bin: Bin): MissionGroup {
+export function groupOfBin(bin: Bin, now: number = Date.now()): MissionGroup {
   switch (bin.state) {
-    case 'LEASED':
-      return 'WORKING_NOW';
+    case 'LEASED': {
+      // An expired lease is claimable work with nobody on it, so it is next
+      // rather than running. A missing or unparseable expiry says nothing, and
+      // stays what the state says.
+      const expiry = bin.leaseExpiresAt ? Date.parse(bin.leaseExpiresAt) : Number.NaN;
+      return Number.isFinite(expiry) && expiry <= now ? 'UP_NEXT' : 'WORKING_NOW';
+    }
     case 'READY':
       return 'UP_NEXT';
     case 'DRAFT':
