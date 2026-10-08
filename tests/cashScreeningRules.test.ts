@@ -175,7 +175,9 @@ describe('8. missing costs, volumes and effort are unknown, never profitable', (
     const screen = screenOpportunity(input(op));
     expect(screen.verdict).toBe('PRIORITIZE');
     expect(screen.reason).toBe('DIRECT_DEMAND_PAYER_KNOWN');
-    expect(screen.economics).toBeNull();
+    // Absent on a tree whose tier carries no economics yet, UNKNOWN on one
+    // that does: never POSITIVE, because nothing has priced it.
+    expect(screen.economics?.verdict ?? 'UNKNOWN').toBe('UNKNOWN');
     expect(screen.because).toContain('not treated as profitable');
   });
 
@@ -196,9 +198,10 @@ describe('8. missing costs, volumes and effort are unknown, never profitable', (
 });
 
 describe('the seam to the economics owner reads its fields and nothing else', () => {
-  it('is null on a reading that carries no economics, which is the tree today', () => {
+  it('is null on a reading that carries no economics', () => {
     const op = opportunity();
-    expect(economicsOf(input(op).tier)).toBeNull();
+    const reading = { ...input(op).tier, economics: undefined, route: undefined } as TierReading;
+    expect(economicsOf(reading)).toBeNull();
   });
 
   it('carries the owner’s route when there is one', () => {
