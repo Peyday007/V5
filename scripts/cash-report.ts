@@ -43,7 +43,12 @@ import { liveAuthority } from '../server/repos/cashAuthority.ts';
 import { listGoals } from '../server/repos/russellAuthority.ts';
 import { getCandidate, listCandidates } from '../server/repos/russellCandidates.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
-import { getOrchestration, listOrchestrationsByProject } from '../server/repos/research.ts';
+import {
+  getClaim,
+  getFragment,
+  getOrchestration,
+  listOrchestrationsByProject,
+} from '../server/repos/research.ts';
 import { cashRoadmap } from '../server/services/cash/roadmap.ts';
 import { CASH_DISCOVERY_AUTHORITY_NAME } from '../server/services/cash/discoveryAuthority.ts';
 import { cashTier } from '../server/services/cash/tier.ts';
@@ -341,6 +346,32 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
      * parked, or a mission exists and something else is wrong. Nothing in the
      * row says which, so the row is printed.
      */
+    /*
+     * Where each evidence fact on the card came from.
+     *
+     * One line per opening, naming every EVIDENCE fact's claim with the packet
+     * and fragment status behind it — so whether a card holds only citable
+     * evidence (accepted, sourced, from an ACCEPTED or BLOCKED fragment) is a
+     * reading rather than an assumption. `UNCITABLE` is the word to look for.
+     */
+    const evidence = facts.filter((fact) => fact.kind === 'EVIDENCE' && fact.claimId);
+    if (evidence.length > 0) {
+      const parts: string[] = [];
+      for (const fact of evidence) {
+        const claim = await getClaim(fact.claimId!);
+        const fragment = claim?.fragmentId ? await getFragment(claim.fragmentId) : null;
+        const citable =
+          claim !== null &&
+          claim.accepted &&
+          claim.sourceUrl !== null &&
+          (fragment?.status === 'ACCEPTED' || fragment?.status === 'BLOCKED');
+        parts.push(
+          `${fact.field}=${fact.claimId}@${claim?.orchestrationId ?? '—'}/${fragment?.status ?? '—'}` +
+            (citable ? '' : ' UNCITABLE'),
+        );
+      }
+      console.log(`      evidence    ${evidence.length}: ${parts.join(' ')}`);
+    }
     if (opportunity.candidateId && opportunity.validationState !== 'COMPLETE') {
       const candidate = await getCandidate(opportunity.candidateId);
       const mission = await latestMissionForCandidate(opportunity.candidateId);
