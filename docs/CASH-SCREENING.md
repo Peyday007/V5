@@ -1,6 +1,6 @@
 # Cash Mode: cheap commercial screening before deep research
 
-`server/services/cash/screening.ts` decides, from rows Brain already holds, whether an opening has earned an expensive look. It is the module behind CLAUDE.md §58.
+`server/services/cash/screening.ts` decides, from rows Brain already holds, whether an opening has earned an expensive look. It is the module behind CLAUDE.md §59.
 
 ## Why it exists
 

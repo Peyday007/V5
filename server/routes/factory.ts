@@ -52,6 +52,14 @@ import { campaignBriefing } from '../services/factory/projections.ts';
 import { throughputReport } from '../services/factory/throughput.ts';
 import { pullRequestFor } from '../services/factory/pullRequest.ts';
 import { approveAndStartCampaign } from '../services/factory/start.ts';
+import { objectiveOutcome } from '../services/factory/release/outcome.ts';
+import {
+  authorizeAutomaticRelease,
+  liveGrantFor,
+  ReleaseGrantError,
+  withdrawAutomaticRelease,
+} from '../services/factory/release/grant.ts';
+import type { ObjectiveOutcome } from '../domain/factoryRelease.ts';
 import {
   factoryInvitations,
   issueFactoryInvitation,
@@ -514,6 +522,93 @@ factoryRouter.post(
   }),
 );
 
+/**
+ * Automatic release: the owner saying, once, that this objective may go live
+ * without them if it passes every gate — and withdrawing that.
+ *
+ * ADMIN rather than WRITE. Approving an objective starts work on a branch;
+ * this lets the result reach production, which is the larger decision, so it
+ * carries the level every other change to what a project may do already
+ * carries. A worker principal is refused by type through `requirePerson`, and
+ * the grantor is the authenticated principal — no field in the body names
+ * them. See `services/factory/release/`.
+ */
+factoryRouter.get(
+  '/factory/change-requests/:changeRequestId/release-grant',
+  handler(async (req, res) => {
+    const changeRequestId = pathId(req, 'changeRequestId');
+    const changeRequest = await getChangeRequest(changeRequestId);
+    if (!changeRequest) throw notFound('No such change request.');
+    await authorizeOrDeny(changeRequest.projectId, 'read', 'No such change request.');
+    const mayGrant = decideProjectAccess(currentPrincipal(), changeRequest.projectId, 'ADMIN').allowed;
+    res.json({
+      grant: await liveGrantFor(changeRequestId),
+      mayGrant,
+      refusal: mayGrant ? null : 'Only an administrator of this project can let an objective go live without them.',
+      riskClass: changeRequest.riskClass,
+    });
+  }),
+);
+
+factoryRouter.post(
+  '/factory/change-requests/:changeRequestId/release-grant',
+  handler(async (req, res) => {
+    const principal = requirePerson();
+    const changeRequestId = pathId(req, 'changeRequestId');
+    const changeRequest = await getChangeRequest(changeRequestId);
+    if (!changeRequest) throw notFound('No such change request.');
+    await authorizeOrDeny(changeRequest.projectId, 'read', 'No such change request.');
+    if (!decideProjectAccess(principal, changeRequest.projectId, 'ADMIN').allowed) {
+      throw notFound('No such change request.');
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    try {
+      const { grant, created } = await authorizeAutomaticRelease({
+        changeRequestId,
+        userId: principal.id,
+        channel: 'BROWSER',
+        executedByRef: null,
+        reason:
+          typeof body.reason === 'string' && body.reason.trim()
+            ? body.reason
+            : 'Release automatically when every gate passes.',
+        pagePath: body.pagePath,
+        liveChecks: body.liveChecks,
+      });
+      res.json({ grant, created });
+    } catch (error) {
+      if (error instanceof ReleaseGrantError) throw badRequest(error.message);
+      throw error;
+    }
+  }),
+);
+
+factoryRouter.post(
+  '/factory/change-requests/:changeRequestId/release-grant/withdraw',
+  handler(async (req, res) => {
+    const principal = requirePerson();
+    const changeRequestId = pathId(req, 'changeRequestId');
+    const changeRequest = await getChangeRequest(changeRequestId);
+    if (!changeRequest) throw notFound('No such change request.');
+    await authorizeOrDeny(changeRequest.projectId, 'read', 'No such change request.');
+    if (!decideProjectAccess(principal, changeRequest.projectId, 'ADMIN').allowed) {
+      throw notFound('No such change request.');
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    try {
+      const withdrawn = await withdrawAutomaticRelease({
+        changeRequestId,
+        userId: principal.id,
+        reason: typeof body.reason === 'string' && body.reason.trim() ? body.reason : 'Withdrawn on Build.',
+      });
+      res.json({ withdrawn });
+    } catch (error) {
+      if (error instanceof ReleaseGrantError) throw badRequest(error.message);
+      throw error;
+    }
+  }),
+);
+
 factoryRouter.get(
   '/factory/change-requests/:changeRequestId',
   handler(async (req, res) => {
@@ -537,7 +632,10 @@ factoryRouter.get(
   handler(async (req, res) => {
     const projectId = pathId(req, 'projectId');
     await projectForFactory(projectId, 'read');
-    res.json({ campaigns: await listCampaigns(projectId) });
+    const campaigns = await listCampaigns(projectId);
+    const outcomes: Record<string, ObjectiveOutcome> = {};
+    for (const campaign of campaigns) outcomes[campaign.id] = await objectiveOutcome(campaign);
+    res.json({ campaigns, outcomes });
   }),
 );
 
@@ -598,6 +696,7 @@ factoryRouter.get(
     const story = await campaignStory({ campaignId, changeRequest, units, findings });
     res.json({
       story,
+      outcome: await objectiveOutcome(campaign),
       objective: changeRequest.objective,
       expectedOutcome: changeRequest.expectedOutcome,
       stage: campaign.state,

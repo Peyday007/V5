@@ -28,6 +28,7 @@ import type {
   FactoryAllocation,
   FactoryLine,
   IssuedFactoryInvitation,
+  ObjectiveOutcome,
   OnboardResult,
   RepositoryOnboarding,
   SubmitResponse,
@@ -1193,6 +1194,8 @@ function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
         </p>
       ) : null}
 
+      {view?.outcome ? <OutcomePanel outcome={view.outcome} /> : null}
+
       {view?.blocker ? (
         <p className="rs-state rs-state-error">
           <strong>{BLOCKER_WORDS[view.blocker.kind] ?? 'Stopped'}.</strong>
@@ -1437,6 +1440,68 @@ function ReleaseDecision({
  * one. Nothing is running here — an unapproved objective has no campaign — so
  * the only control is the same single decision.
  */
+/**
+ * The one status a person reads about an approved objective:
+ * BUILDING → VERIFYING → RELEASING → LIVE, or BLOCKED with the exact blocker.
+ * Every word is the server's (`release/outcome.ts`); this only lays it out.
+ * LIVE carries the page the finished feature lives on.
+ */
+const OUTCOME_STEPS = ['BUILDING', 'VERIFYING', 'RELEASING', 'LIVE'] as const;
+
+function OutcomePanel({ outcome }: { outcome: ObjectiveOutcome }): JSX.Element {
+  const at = OUTCOME_STEPS.indexOf(outcome.status as (typeof OUTCOME_STEPS)[number]);
+  return (
+    <div className={`rs-build-outcome rs-build-outcome-${outcome.status.toLowerCase()}`}>
+      <ol className="rs-build-steps" aria-label="Where this objective is">
+        {OUTCOME_STEPS.map((step, index) => (
+          <li
+            key={step}
+            className={
+              at >= 0 && (index < at || outcome.status === 'LIVE')
+                ? 'rs-build-step rs-build-step-done'
+                : index === at
+                  ? 'rs-build-step rs-build-step-now'
+                  : 'rs-build-step'
+            }
+            aria-current={index === at && outcome.status !== 'LIVE' ? 'step' : undefined}
+          >
+            {step === 'LIVE' ? 'Live' : step.charAt(0) + step.slice(1).toLowerCase()}
+          </li>
+        ))}
+      </ol>
+      <p className={outcome.status === 'BLOCKED' ? 'rs-state rs-state-error' : 'rs-build-stage'}>
+        <strong>{outcome.status === 'BLOCKED' ? 'Blocked' : outcome.status === 'LIVE' ? 'Live' : outcome.status.charAt(0) + outcome.status.slice(1).toLowerCase()}.</strong>{' '}
+        {outcome.detail}
+        {outcome.blocker ? ` ${outcome.blocker}` : null}
+      </p>
+      {outcome.status === 'BLOCKED' ? (
+        <p className="rs-hint">
+          {outcome.needsPerson
+            ? `Needs you: ${outcome.personAction ?? 'a decision only you can make.'}`
+            : 'Does not need you: Brain re-examines this by itself.'}
+        </p>
+      ) : null}
+      <p className="rs-hint">
+        {outcome.autoRelease ? 'Released automatically once every gate passes.' : 'Release is yours to approve.'}
+        {outcome.prUrl ? (
+          <>
+            {' '}
+            <a href={outcome.prUrl} target="_blank" rel="noreferrer">
+              Pull request
+            </a>
+          </>
+        ) : null}
+        {outcome.status === 'LIVE' && outcome.pageUrl ? (
+          <>
+            {' '}
+            <a href={outcome.pageUrl}>Open it in Brain</a>
+          </>
+        ) : null}
+      </p>
+    </div>
+  );
+}
+
 function Unapproved({
   requests,
   campaigns,
@@ -1450,6 +1515,7 @@ function Unapproved({
   const waiting = requests.filter((request) => !started.has(request.id));
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [autoRelease, setAutoRelease] = useState<Set<string>>(new Set());
   if (waiting.length === 0) return null;
 
   return (
@@ -1463,6 +1529,26 @@ function Unapproved({
               {request.repository} at <code>{request.baseSha.slice(0, 12)}</code> on{' '}
               <code>{request.baseBranch}</code>
             </p>
+            {request.riskClass === 'LOW' ? (
+              <label className="rs-hint">
+                <input
+                  type="checkbox"
+                  checked={autoRelease.has(request.id)}
+                  onChange={(event) => {
+                    const next = new Set(autoRelease);
+                    if (event.target.checked) next.add(request.id);
+                    else next.delete(request.id);
+                    setAutoRelease(next);
+                  }}
+                />{' '}
+                Release it to production by itself once it passes review, tests and deployment checks
+                (rolled back if verification fails).
+              </label>
+            ) : (
+              <p className="rs-hint">
+                This objective is {request.riskClass.toLowerCase()} risk, so it finishes at a pull request you merge.
+              </p>
+            )}
             <button
               type="button"
               className="rs-primary"
@@ -1470,7 +1556,13 @@ function Unapproved({
               onClick={() => {
                 setBusy(request.id);
                 setProblem(null);
-                FactoryApi.approve(request.id)
+                (autoRelease.has(request.id)
+                  ? FactoryApi.grantRelease(request.id, {
+                      reason: 'Approved on Build with automatic release.',
+                    }).then(() => undefined)
+                  : Promise.resolve()
+                )
+                  .then(() => FactoryApi.approve(request.id))
                   .then(() => onApproved())
                   .catch((cause: unknown) =>
                     setProblem(cause instanceof Error ? cause.message : String(cause)),
