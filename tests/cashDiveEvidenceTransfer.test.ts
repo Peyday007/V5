@@ -33,7 +33,8 @@ import {
   recordCardFact,
   recordEvidenceFact,
 } from '../server/repos/cashCardFacts.ts';
-import { applyValidationAnswers } from '../server/services/cash/validation.ts';
+import { applyValidationAnswers, proposeEngineTerms } from '../server/services/cash/validation.ts';
+import { cardFactsFor as factsOf } from '../server/repos/cashCardFacts.ts';
 import type { FragmentStatus, Layer, MissionState } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -369,5 +370,108 @@ describe('a failed deep dive still carries its accepted claims to the card', () 
     expect([a, b].filter(Boolean)).toHaveLength(1);
     const winner = (await cardFact(id, 'payer'))!;
     expect(winner.claimId).toBe(a ? round1.claimIds[0] : round1.claimIds[1]);
+  });
+});
+
+describe('a settled BLOCKED dive produces the capture thesis its evidence supports', () => {
+  const OFFER = 'Preventative maintenance on the RFQ #09-11-26-39DPA equipment, as the request names it.';
+
+  async function settled(input: {
+    key: string;
+    state: 'COMPLETE' | 'BLOCKED' | 'RUNNING' | 'PENDING';
+    claims: ClaimSpec[];
+    offer: string | null;
+  }): Promise<string> {
+    const round = await dive({ key: input.key, mission: 'FAILED', fragment: 'BLOCKED', claims: input.claims });
+    const id = await opening([round], { state: 'BLOCKED', orchestrationId: round.orchestrationId });
+    await applyValidationAnswers(projectId);
+    await updateOpportunity(id, {
+      validation_state: input.state,
+      ...(input.offer ? { offer_scope: input.offer } : {}),
+    });
+    return id;
+  }
+
+  it('composes it from the gated payer and the recorded offer, as a recommendation with its reasons', async () => {
+    const id = await settled({ key: 'thesis', state: 'BLOCKED', claims: NJDOH, offer: OFFER });
+    const touched = await proposeEngineTerms(projectId);
+    expect(touched).toContain(`${id}:captureMechanism`);
+
+    const thesis = (await cardFact(id, 'captureMechanism'))!;
+    const payer = (await cardFact(id, 'payer'))!;
+    expect(thesis.kind).toBe('RECOMMENDATION');
+    expect(thesis.value).toContain(OFFER.slice(0, 40));
+    expect(thesis.value).toContain('NJDOH');
+    expect(thesis.basis).toContain(payer.claimId!);
+    expect(thesis.assumptions?.length).toBeGreaterThan(0);
+    expect(thesis.uncertainty?.length).toBeGreaterThan(0);
+    // The dive's own state does not move.
+    expect((await getOpportunity(id))!.validationState).toBe('BLOCKED');
+  });
+
+  it('proposes no capture thesis without a payer, or without something to supply', async () => {
+    const noPayer = await settled({
+      key: 'no payer',
+      state: 'BLOCKED',
+      claims: NJDOH.filter((claim) => claim.lane !== 'payer'),
+      offer: OFFER,
+    });
+    const noOffer = await settled({ key: 'no offer', state: 'BLOCKED', claims: NJDOH, offer: null });
+    await proposeEngineTerms(projectId);
+    expect(await cardFact(noPayer, 'captureMechanism')).toBeNull();
+    expect(await cardFact(noOffer, 'captureMechanism')).toBeNull();
+  });
+
+  it('proposes nothing while a dive is still in flight', async () => {
+    const running = await settled({ key: 'running', state: 'RUNNING', claims: NJDOH, offer: OFFER });
+    const pending = await settled({ key: 'pending', state: 'PENDING', claims: NJDOH, offer: OFFER });
+    expect(await proposeEngineTerms(projectId)).toEqual([]);
+    for (const id of [running, pending]) {
+      expect((await factsOf(id)).filter((fact) => fact.kind === 'RECOMMENDATION')).toEqual([]);
+    }
+  });
+
+  it('leaves a person’s answer and an earlier proposal exactly as they were', async () => {
+    const id = await settled({ key: 'stronger', state: 'BLOCKED', claims: NJDOH, offer: OFFER });
+    await recordCardFact({
+      projectId,
+      opportunityId: id,
+      field: 'captureMechanism',
+      kind: 'PERSON',
+      value: 'We subcontract it to a local servicer and bill NJDOH.',
+      decidedBy: ownerId,
+    });
+    await recordCardFact({
+      projectId,
+      opportunityId: id,
+      field: 'bottleneck',
+      kind: 'RECOMMENDATION',
+      value: 'An earlier proposal.',
+      basis: 'b',
+      assumptions: 'a',
+      uncertainty: 'u',
+      decidedBy: 'BRAIN',
+    });
+    await proposeEngineTerms(projectId);
+    const thesis = (await cardFact(id, 'captureMechanism'))!;
+    expect(thesis.kind).toBe('PERSON');
+    expect(thesis.value).toBe('We subcontract it to a local servicer and bill NJDOH.');
+    expect((await cardFact(id, 'bottleneck'))!.value).toBe('An earlier proposal.');
+    // Evidence is never touched by a proposal.
+    expect((await cardFact(id, 'payer'))!.kind).toBe('EVIDENCE');
+  });
+
+  it('is idempotent across repeated and concurrent ticks and a restart', async () => {
+    const id = await settled({ key: 'idempotent', state: 'BLOCKED', claims: NJDOH, offer: OFFER });
+    await Promise.all([proposeEngineTerms(projectId), proposeEngineTerms(projectId)]);
+    const first = await factsOf(id);
+    expect(await proposeEngineTerms(projectId)).toEqual([]);
+    await restartDatabase();
+    expect(await proposeEngineTerms(projectId)).toEqual([]);
+    const again = await factsOf(id);
+    expect(again.map((fact) => [fact.id, fact.field, fact.kind, fact.value])).toEqual(
+      first.map((fact) => [fact.id, fact.field, fact.kind, fact.value]),
+    );
+    expect(again.filter((fact) => fact.field === 'captureMechanism')).toHaveLength(1);
   });
 });

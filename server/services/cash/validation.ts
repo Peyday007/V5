@@ -55,8 +55,8 @@ import {
   cardFact,
   cardFactsFor,
   mayReplace,
-  recordCardFact,
   recordEvidenceFact,
+  recordRecommendationFact,
 } from '../../repos/cashCardFacts.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
@@ -1123,7 +1123,26 @@ export async function proposeEngineTerms(projectId: string): Promise<string[]> {
   const touched: string[] = [];
 
   for (const opportunity of await listOpportunities({ projectId })) {
-    if (opportunity.validationState !== 'COMPLETE') continue;
+    /*
+     * Once a dive has settled — COMPLETE or BLOCKED — and never while one is
+     * in flight.
+     *
+     * COMPLETE alone was the gate, and it is the same defect
+     * `applyValidationAnswers` carried: a dive whose fragment fell short on
+     * coverage settles BLOCKED, its citable claims now reach the card, and
+     * nothing then read them. In production 22 openings held a gated payer and
+     * a proposed offer and not one capture thesis, so all forty stayed SIGNAL.
+     * Every proposal below is still composed only from facts already on the
+     * card; a BLOCKED dive stays BLOCKED and nothing here moves it.
+     *
+     * PENDING, RUNNING and NEEDS_PERSON are skipped because the card is still
+     * being filled, and a recommendation is never replaced by a later one — a
+     * proposal made mid-dive would stand over the better one the finished dive
+     * would have made.
+     */
+    if (opportunity.validationState !== 'COMPLETE' && opportunity.validationState !== 'BLOCKED') {
+      continue;
+    }
 
     const price = await cardFact(opportunity.id, 'revenueRange');
     const costs = await cardFact(opportunity.id, 'directCosts');
@@ -1333,18 +1352,19 @@ export async function proposeEngineTerms(projectId: string): Promise<string[]> {
     for (const proposal of proposals) {
       const existing = await cardFact(opportunity.id, proposal.field);
       if (!mayReplace(existing, 'RECOMMENDATION')) continue;
-      await recordCardFact({
+      // Into an empty field only, decided in the statement that writes: a
+      // person answering between the read above and this write keeps their
+      // answer, and two ticks proposing at once leave one row.
+      const written = await recordRecommendationFact({
         projectId,
         opportunityId: opportunity.id,
         field: proposal.field,
-        kind: 'RECOMMENDATION',
         value: proposal.value,
         basis: proposal.basis,
         assumptions: proposal.assumptions,
         uncertainty: proposal.uncertainty,
-        decidedBy: 'BRAIN',
       });
-      touched.push(`${opportunity.id}:${proposal.field}`);
+      if (written) touched.push(`${opportunity.id}:${proposal.field}`);
     }
   }
   return touched;

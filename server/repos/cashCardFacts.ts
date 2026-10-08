@@ -140,6 +140,45 @@ export async function recordEvidenceFact(input: {
   return found?.kind === 'EVIDENCE' && found.claimId === input.claimId;
 }
 
+/**
+ * Record Brain's proposal for a field, only where the field is empty.
+ *
+ * `mayReplace` says a recommendation replaces nothing — not a person's
+ * answer, not evidence, not an earlier recommendation — so the whole of that
+ * rule is `ON CONFLICT DO NOTHING`. Returns true only when this call wrote it.
+ */
+export async function recordRecommendationFact(input: {
+  projectId: string;
+  opportunityId: string;
+  field: string;
+  value: string;
+  basis: string;
+  assumptions: string;
+  uncertainty: string;
+}): Promise<boolean> {
+  const at = nowIso();
+  const result = await getDb().run(
+    `INSERT INTO cash_card_facts
+       (id, project_id, opportunity_id, field, kind, value, claim_id, need_id,
+        basis, assumptions, uncertainty, decided_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'RECOMMENDATION', ?, NULL, NULL, ?, ?, ?, 'BRAIN', ?, ?)
+     ON CONFLICT (opportunity_id, field) DO NOTHING`,
+    [
+      newId('ccf'),
+      input.projectId,
+      input.opportunityId,
+      input.field,
+      input.value,
+      input.basis,
+      input.assumptions,
+      input.uncertainty,
+      at,
+      at,
+    ],
+  );
+  return result.changes > 0;
+}
+
 export async function cardFact(
   opportunityId: string,
   field: string,
