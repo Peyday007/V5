@@ -12756,12 +12756,40 @@ objective without one, a person still merges.
   by a partial unique index. A workflow run that dies anywhere leaves a row the
   next run resumes. Runner-shaped failures retry on the same head up to three
   attempts; a verdict about the work does not.
-- **The merge is pinned.** The commit pushed is exactly the one the gate
-  merged and tested, its second parent must be the reviewed head, and the push
-  is a plain fast-forward; a moved branch re-gates rather than force-pushes.
-- **Rule 3 holds.** The gate runs typecheck, `test:impacted` and the build on
-  the merged tree; the full suite runs once, on the released SHA, as Deploy's
-  own test job.
+- **The merge goes through the pull request, and is pinned.** The first
+  version pushed the gated commit to `production` with the workflow token,
+  which works only while `production` is unprotected and asks the owner to
+  exempt a bot from any rule they add — a bypass, not a merge. **The correction
+  is recorded rather than quietly applied:** the release merges through the
+  pull request's own endpoint, pinned to the reviewed head, only while
+  production is still the base the gate merged onto, and the merged tree must
+  be the tree the gate tested; otherwise nothing deploys and the next pass
+  gates production's tip. Rollback is a revert pull request merged the same
+  way. A rule that refuses either stops the release with the forge's reason.
+- **Every required gate finishes before deployment, and the first version did
+  not.** It ran `test:impacted` (SQLite) in the gate and relied on Deploy's
+  SQLite suite — and nothing ran Postgres before production at all, because a
+  merge made by the workflow's own token triggers no `push` workflow, so
+  `postgres-suite.yml` never sees it. The gate now runs the whole suite against
+  Postgres on the merged tree before anything merges; the SQLite half stays
+  Deploy's test job, which gates `flyctl deploy` (rule 3 pays it once).
+- **A withdrawal must be able to stop a merge.** The plan decides eligibility
+  when the attempt opens, and the gate between that and the merge runs for up
+  to three hours. `release-may-merge` re-reads the grant, the head, the state
+  and the risk class immediately before the merge, and refusal is a GATE
+  failure the owner reads on Build.
+- **The Factory never releases a change to itself.** The excluded paths first
+  named the release modules and left their inputs open — `glob.ts` decides what
+  the patterns match, `forge.ts` lists the files they classify, `review.ts` and
+  `campaignView.ts` say whether the review passed, `routes/factory.ts` guards
+  the grant — and the gate runs the merged tree's own test runner, so a change
+  to `test-impacted.mjs` or `vitest.config.ts` could select no tests and pass.
+  All of the Factory and all of the gate's test machinery are reserved.
+- **ROLLED_BACK may only follow a recorded failure.** A failed verification
+  went straight from VERIFYING to ROLLED_BACK, which the state machine refused,
+  so the attempt stayed VERIFYING and the next pass would have verified and
+  reverted again. It records FAILED first; a revert that could not land leaves
+  it FAILED with the open revert pull request named, never ROLLED_BACK.
 - **Rollback goes through the canonical pipeline, never around it.** §28 is
   that exactly one workflow runs `flyctl deploy`, so a failed release is
   reverted on the branch and Deploy is dispatched for the revert. Branch and
@@ -12782,7 +12810,8 @@ objective without one, a person still merges.
   `.claude/settings.json` pre-approves routine development commands and
   `scripts/test-postgres.sh`, the reviewed replacement for the `sudo -u postgres`
   / `pg_ctlcluster` / inline `DO $$` setup that stopped unattended sessions at a
-  prompt; it denies force pushes, canonical-branch pushes, `flyctl`, `sudo` and
+  prompt — which itself failed in a real Cowork container until it stopped
+  honouring a root-private TMPDIR the `postgres` account cannot enter; it denies force pushes, canonical-branch pushes, `flyctl`, `sudo` and
   environment dumps, and a test refuses `Bash` or `Bash(*)`. OS sandboxing is
   not enabled because the cloud worker image has no bubblewrap — enabling it
   there would sandbox nothing, and saying so is the honest report.

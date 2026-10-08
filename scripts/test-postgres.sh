@@ -44,7 +44,18 @@
 set -eu
 
 PORT="${BRAIN_TEST_PG_PORT:-54329}"
-BASE="${TMPDIR:-/tmp}/brain-test-pg-$PORT"
+# Where the cluster lives. TMPDIR is honoured only when it can actually hold
+# one: under root the cluster is owned by `postgres`, which cannot traverse a
+# root-private temp directory (a Claude Code session's TMPDIR is under a 0700
+# /tmp/claude-<uid>), and a unix socket path is limited to about a hundred
+# bytes, which a session's own TMPDIR alone can exceed. Measured in a Cowork
+# container: `mkdir: cannot create directory '/tmp/claude-0': Permission
+# denied`. Either way /tmp is the answer, and it is always both.
+TMP_BASE="${TMPDIR:-/tmp}"
+if [ "$(id -u)" = "0" ] || [ "${#TMP_BASE}" -gt 60 ]; then
+  TMP_BASE=/tmp
+fi
+BASE="$TMP_BASE/brain-test-pg-$PORT"
 DATA="$BASE/data"
 SOCK="$BASE/sock"
 LOG="$BASE/postgres.log"
