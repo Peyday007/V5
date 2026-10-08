@@ -569,7 +569,10 @@ describe('the manufacturing operator surface is readable beside a running app', 
  * second exception is a visible edit to this file.
  */
 describe('every operator wrapper is readable beside a running app', () => {
-  const EXEMPT = new Set(['verify-hosted.sh']);
+  // `test-postgres.sh` is not an operator wrapper at all: it starts a throwaway
+  // test cluster and never opens a Brain, so there is no pool to bound. Named
+  // here rather than pattern-matched, and asserted below to stay that way.
+  const EXEMPT = new Set(['verify-hosted.sh', 'test-postgres.sh']);
   const wrappers = readdirSync('scripts')
     .filter((name) => name.endsWith('.sh'))
     .sort();
@@ -598,6 +601,11 @@ describe('every operator wrapper is readable beside a running app', () => {
           ),
       );
     expect(wrongCeiling).toEqual([]);
+  });
+
+  it('exempts the test-cluster script only while it opens no Brain', () => {
+    const script = readFileSync('scripts/test-postgres.sh', 'utf8');
+    expect(script).not.toMatch(/scripts\/[a-z-]+\.ts|node --import|BRAIN_DATABASE_URL/);
   });
 
   it('leaves the harness that fans out to set its own, in its own file', () => {
