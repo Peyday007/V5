@@ -12773,6 +12773,12 @@ objective without one, a person still merges.
   the merge commit (or one the forge says contains it), `/healthz` must answer,
   and every live check the owner wrote must pass. A pull request is never LIVE
   and a merge is never LIVE.
+- **A timer is not the trigger.** GitHub ran this repository's hourly
+  schedule about every four to seven hours on 2026-10-08, so the release
+  workflow runs on the Factory's own pull request (`pull_request_target`, which
+  runs the base branch's workflow file and is restricted to Factory campaign
+  branches in this repository) and on Deploy completing; the schedule is a
+  backstop.
 - **One status, derived.** `outcome.ts` gives every campaign BUILDING,
   VERIFYING, RELEASING, LIVE or BLOCKED — with the exact blocker and whether a
   person must act — on Build, in the campaigns route and from `factory
