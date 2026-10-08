@@ -323,7 +323,11 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
         ` signal=${String(opportunity.opportunitySignal ?? '—').padEnd(32)}` +
         ` validation=${String(opportunity.validationState ?? 'NOT_STARTED').padEnd(12)}` +
         ` round=${opportunity.validationRounds}` +
-        ` answered=${tier.answered}/${tier.required}`,
+        ` answered=${tier.answered}/${tier.required}` +
+        ` route=${tier.route} economics=${tier.economics.verdict}` +
+        (tier.economics.contributionCents !== null
+          ? `(${tier.economics.contributionCents} ${opportunity.currency} minor)`
+          : ''),
     );
     if (tier.toAdvance.length > 0) {
       console.log(
@@ -385,7 +389,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
         let source = '';
         if (fact.kind === 'EVIDENCE' && fact.claimId) {
           const claim = await getClaim(fact.claimId);
-          source = ` <- ${claim?.sourcePublisher ?? '—'} ${claim?.sourceUrl ?? '—'}`;
+          source = ` <- [${claim?.claimType ?? '—'}] ${claim?.sourcePublisher ?? '—'} ${claim?.sourceUrl ?? '—'}`;
         }
         console.log(`      card ${fact.field.padEnd(18)} ${fact.kind.padEnd(14)} ${trim(fact.value, 220)}${source}`);
       }

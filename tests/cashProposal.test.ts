@@ -24,6 +24,7 @@
  * reading is asserted rather than assumed: no test in this repository contacts
  * a buyer, takes a payment or fires a live worker, and none of them says it has.
  */
+import { ECONOMIC_ANSWERS } from './helpers/cashTier.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -346,7 +347,7 @@ describe('Brain acts inside the standing authority', () => {
         opportunityId: piece.id,
         field,
         kind: 'EVIDENCE',
-        value: `A published answer to ${field}.`,
+        value: ECONOMIC_ANSWERS[field] ?? `A published answer to ${field}.`,
         claimId: `clm_${field}`,
         decidedBy: 'BRAIN',
       });

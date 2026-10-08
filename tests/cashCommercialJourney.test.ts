@@ -34,6 +34,7 @@
  *   J08 — the page itself: the record shows the attempt, and the person
  *         settles it with the panel's own controls.
  */
+import { ECONOMIC_ANSWERS } from './helpers/cashTier.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import express from 'express';
@@ -276,7 +277,7 @@ async function qualified(): Promise<CashOpportunity> {
       opportunityId: piece.id,
       field,
       kind: 'EVIDENCE',
-      value: `A published answer to ${field}.`,
+      value: ECONOMIC_ANSWERS[field] ?? `A published answer to ${field}.`,
       claimId: `clm_${field}`,
       decidedBy: 'BRAIN',
     });

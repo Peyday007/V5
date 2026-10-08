@@ -23,6 +23,7 @@
  *       and repeated passes change no figure.
  *   F — a second recovery pass writes nothing at all.
  */
+import { ECONOMIC_ANSWERS } from './helpers/cashTier.ts';
 import { listInvoices, moveInvoice } from '../server/repos/cashInvoices.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
@@ -221,7 +222,7 @@ async function qualified(): Promise<CashOpportunity> {
       opportunityId: piece.id,
       field,
       kind: 'EVIDENCE',
-      value: `A published answer to ${field}.`,
+      value: ECONOMIC_ANSWERS[field] ?? `A published answer to ${field}.`,
       claimId: `clm_${field}`,
       decidedBy: 'BRAIN',
     });

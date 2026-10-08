@@ -50,22 +50,23 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate, missionsForCandidate } from '../../repos/russellMissions.ts';
-import { citableClaims, getOrchestration, listPasses } from '../../repos/research.ts';
+import { citableClaims, getClaim, getOrchestration, listPasses } from '../../repos/research.ts';
 import {
   cardFact,
   cardFactsFor,
   mayReplace,
   recordEvidenceFact,
   recordRecommendationFact,
+  withdrawCardFact,
 } from '../../repos/cashCardFacts.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
-import { cashTier } from './tier.ts';
+import { cashTier, missingCaptureInputs, signalNamesABuyer } from './tier.ts';
 import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
 import { researchMissionSlotsFull } from '../russell/launch.ts';
-import type { CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
+import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
 
 /** How many deep dives one project may have in flight. Provider capacity. */
 export const MAX_VALIDATIONS_IN_FLIGHT = 2;
@@ -465,6 +466,21 @@ export async function startValidations(input: {
  * to decide which of two pieces is asked about first.
  */
 function closestFirst(a: CashOpportunity, b: CashOpportunity): number {
+  /*
+   * An opening whose own source names somebody asking for work, ahead of a
+   * market observation.
+   *
+   * A deep dive is the scarce resource, and the cheap screen is the signal a
+   * worker already declared: a published request, a paid task or an expiring
+   * solicitation has a buyer at the other end by construction, while a price
+   * asymmetry, a resale and a disconnected supply have one only if a trade can
+   * be made — which is a longer, more speculative question. Both still dive,
+   * in arrival order within their group; this decides only who waits for a
+   * slot, and nothing is refused because of it.
+   */
+  const buyer = Number(signalNamesABuyer(b.opportunitySignal ?? null)) -
+    Number(signalNamesABuyer(a.opportunitySignal ?? null));
+  if (buyer !== 0) return buyer;
   return answeredCount(b) - answeredCount(a);
 }
 
@@ -930,6 +946,7 @@ export async function runValidations(projectId: string): Promise<ValidationProgr
   // order the effects depend on each other in: a proposal is built from the
   // evidence, so applying the evidence first is what stops the proposal being
   // made against last tick's card.
+  await withdrawUnsupportedFacts(projectId);
   await applyValidationAnswers(projectId);
   await proposeEngineTerms(projectId);
   // A question already asked is resumed before a new one takes a slot.
@@ -981,6 +998,92 @@ export interface AppliedValidation {
 }
 
 /**
+ * A documented absence answers exactly one question: whether anything rules
+ * the opening out.
+ *
+ * "No payer was found" is a real finding and a good one, and filing it as the
+ * payer is what let production compose "Supply … to No payer was found" into a
+ * capture thesis and call the piece a candidate. The same is true of "no sale
+ * price was found" filed as exit evidence and "no budget is published" filed
+ * as a price: each says the field is unknown, and recording it as an answer
+ * makes the card read as more complete than the research is. A disqualifier is
+ * the exception, because a documented search that found none *is* its answer.
+ * The claim keeps its row either way; only which field it may fill changes.
+ */
+export function absenceMayAnswer(claimType: string | null | undefined, field: string): boolean {
+  return claimType !== 'NEGATIVE_EXISTENCE' || field === 'disqualifiers';
+}
+
+/**
+ * Take off a card what the rules above would never have put on it.
+ *
+ * Two kinds of row, both written before those rules existed and both derived
+ * from the rows on every tick, so it reaches what is already stranded and is
+ * idempotent: an evidence fact whose claim is a documented absence, filed in a
+ * field an absence does not answer; and a capture thesis Brain proposed whose
+ * inputs are not established. Each removal is a recorded event naming the
+ * field, the value and the claim, and the claim itself is untouched — the
+ * evidence stays, and what changes is that the card no longer reads it as an
+ * answer. A person's answer is never withdrawn.
+ */
+export async function withdrawUnsupportedFacts(projectId: string): Promise<string[]> {
+  if (!(await getCashMode(projectId))) return [];
+  const withdrawn: string[] = [];
+  for (const opportunity of await listOpportunities({ projectId })) {
+    const record = async (fact: CashCardFact, why: string): Promise<void> => {
+      await recordCashEvent({
+        projectId,
+        opportunityId: opportunity.id,
+        kind: 'CASH_CARD_FACT_WITHDRAWN',
+        actorRef: 'BRAIN',
+        summary: why,
+        detail: { field: fact.field, kind: fact.kind, value: fact.value, claimId: fact.claimId },
+      });
+      withdrawn.push(`${opportunity.id}:${fact.field}`);
+    };
+
+    for (const fact of await cardFactsFor(opportunity.id)) {
+      if (fact.kind !== 'EVIDENCE' || !fact.claimId) continue;
+      const claim = await getClaim(fact.claimId);
+      if (!claim || absenceMayAnswer(claim.claimType, fact.field)) continue;
+      if (!(await withdrawCardFact(fact))) continue;
+      const column = COLUMN[fact.field];
+      if (column && (opportunity as unknown as Record<string, unknown>)[camel(column)] === fact.value) {
+        await updateOpportunity(opportunity.id, { [column]: null } as never);
+      }
+      await record(
+        fact,
+        `Brain no longer reads a documented absence as the ${fact.field}: the source says ` +
+          'nothing of the kind was found, so the field is unknown rather than answered.',
+      );
+    }
+
+    const facts = await cardFactsFor(opportunity.id);
+    const thesis = facts.find((fact) => fact.field === 'captureMechanism');
+    if (thesis && thesis.kind === 'RECOMMENDATION' && thesis.decidedBy === 'BRAIN') {
+      const fresh = (await getOpportunity(opportunity.id)) ?? opportunity;
+      const missing = missingCaptureInputs(
+        fresh.opportunitySignal ?? null,
+        cashEngineCard({ opportunity: fresh, facts }),
+      );
+      if (missing.length > 0 && (await withdrawCardFact(thesis))) {
+        await record(
+          thesis,
+          'Brain withdrew its capture thesis: it named nobody established as paying us. ' +
+            `It is proposed again once ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} ` +
+            'established from a source.',
+        );
+      }
+    }
+  }
+  return withdrawn;
+}
+
+function camel(column: string): string {
+  return column.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+}
+
+/**
  * Put every deep dive's accepted claims on the card.
  *
  * Only citable ones, and only from that opening's own validation packets — a
@@ -1027,6 +1130,7 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
         if (!claim.sourceUrl) continue;
         const field = FIELD_BY_LANE[claim.evidenceLane ?? ''];
         if (!field) continue;
+        if (!absenceMayAnswer(claim.claimType, field)) continue;
         const existing = await cardFact(opportunity.id, field);
         // Already this claim: nothing to do, which is what a replay must find.
         if (existing?.claimId === claim.id) continue;
@@ -1199,7 +1303,20 @@ export async function proposeEngineTerms(projectId: string): Promise<string[]> {
      * outcome — see `tier.ts` for why a keyword list was refused.
      */
     const supplies = opportunity.offerScope ?? delivery?.value ?? null;
-    if (payer?.value && supplies) {
+    /*
+     * And only once a payer is established for this kind of evidence.
+     *
+     * `missingCaptureInputs` is the tier's own rule, so the thesis is proposed
+     * exactly when the tier would count it: a payer that is a sourced fact or a
+     * person's answer, and for a price asymmetry or a resale the acquisition
+     * and the exit as well. A payer field that only says who the vendor's
+     * customers are no longer composes a route by which we are paid.
+     */
+    const missingInputs = missingCaptureInputs(
+      opportunity.opportunitySignal ?? null,
+      cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }),
+    );
+    if (payer?.value && supplies && missingInputs.length === 0) {
       proposals.push({
         field: 'captureMechanism',
         value:

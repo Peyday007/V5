@@ -179,6 +179,28 @@ export async function recordRecommendationFact(input: {
   return result.changes > 0;
 }
 
+/**
+ * Withdraw one card fact, guarded on it still being exactly the row read.
+ *
+ * A card fact is a projection of evidence onto a field, not the evidence: the
+ * claim it pointed at keeps its row, its source and its gate decision whatever
+ * happens here. Guarded on the id, the kind and the value, so a person's
+ * answer or newer evidence written in between is never the thing removed, and
+ * two ticks withdrawing one fact remove it once. Returns true only for the
+ * call that removed it.
+ */
+export async function withdrawCardFact(fact: {
+  id: string;
+  kind: CashCardFact['kind'];
+  value: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    'DELETE FROM cash_card_facts WHERE id = ? AND kind = ? AND value = ?',
+    [fact.id, fact.kind, fact.value],
+  );
+  return result.changes > 0;
+}
+
 export async function cardFact(
   opportunityId: string,
   field: string,

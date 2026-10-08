@@ -10,6 +10,7 @@
  * completion while anything is outstanding, no refund sent twice, no lesson
  * written twice.
  */
+import { ECONOMIC_ANSWERS } from './helpers/cashTier.ts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -142,7 +143,7 @@ async function executing(title = 'A paid intake repair', priceCents = 75_000, me
   });
   if (!filled.ok) throw new Error(filled.reason);
   for (const field of [CAPTURE_KEY, ...qualificationKeys(null)]) {
-    await recordCardFact({ projectId, opportunityId: id, field, kind: 'PERSON', value: `The owner's answer to ${field}.`, decidedBy: userId });
+    await recordCardFact({ projectId, opportunityId: id, field, kind: 'PERSON', value: ECONOMIC_ANSWERS[field] ?? `The owner's answer to ${field}.`, decidedBy: userId });
   }
   expect((await markReady({ opportunityId: id, actorRef: userId })).ok).toBe(true);
   const began = await beginExecution({

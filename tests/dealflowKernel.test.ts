@@ -28,6 +28,7 @@
  * **Transaction value is not our capital.** §13's whole distinction, and the
  * view is asserted to report no revenue figure at all.
  */
+import { ECONOMIC_ANSWERS } from './helpers/cashTier.ts';
 import { readdirSync, readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
@@ -1244,7 +1245,7 @@ describe('a stage is read from a row, or it is not reported', () => {
         opportunityId,
         field,
         kind: 'PERSON',
-        value: `The owner's own answer to ${field}.`,
+        value: ECONOMIC_ANSWERS[field] ?? `The owner's own answer to ${field}.`,
         decidedBy: userId,
       });
     }

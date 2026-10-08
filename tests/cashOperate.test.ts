@@ -18,6 +18,7 @@
  * could point at. "The transaction is being pursued", written on a button
  * press.
  */
+import { ECONOMIC_ANSWERS } from './helpers/cashTier.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
 import { freshProject } from './helpers.ts';
@@ -176,7 +177,7 @@ async function readyPiece(
       opportunityId: captured.value.id,
       field,
       kind: 'PERSON',
-      value: `The owner's own answer to ${field}.`,
+      value: ECONOMIC_ANSWERS[field] ?? `The owner's own answer to ${field}.`,
       decidedBy: userId,
     });
   }
@@ -657,27 +658,37 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
       decidedBy: 'BRAIN',
     });
 
+    /*
+     * A thesis with no payer behind it is not yet one: it is composed *from*
+     * a payer, so until research names one the piece is still a signal and
+     * only the payer, the access and the buying evidence are asked.
+     */
+    const first = await reconcileDiscoverableGaps(projectId);
+    expect(first.map((one) => one.field).sort()).toEqual(['access', 'buyingEvidence', 'payer']);
+
+    await fillCard({
+      opportunityId: captured.value.id,
+      actorRef: userId,
+      patch: { payer: 'The owner, who signs' },
+    });
     const gaps = await reconcileDiscoverableGaps(projectId);
     /*
-     * Seven, not three. A price, a delivery path, who does the work and the
+     * Then the rest. A price, a delivery path, who does the work and the
      * exposure are facts about the world that Brain looks up — §30 had already
      * said so and the boolean that decided it had not moved. The offer and the
      * acceptance condition stay off this list: Brain proposes those and a
      * person may overrule them, and neither is ever *asked* for.
      */
     expect(gaps.map((one) => one.field).sort()).toEqual([
-      'access',
-      'buyingEvidence',
       'delivery',
       'exposure',
       'fulfillment',
-      'payer',
       'price',
     ]);
 
     // And once, however many ticks read it.
     expect(await reconcileDiscoverableGaps(projectId)).toEqual([]);
-    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(7);
+    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(6);
   });
 
   it('settles one the moment the card carries the answer, whoever put it there', async () => {
@@ -701,9 +712,9 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
       uncertainty: 'Whether they would choose us.',
       decidedBy: 'BRAIN',
     });
-    // Seven, not three: a capture thesis is what makes the other four worth
-    // spending on, and the three above were raised for the signal already.
-    expect((await reconcileDiscoverableGaps(projectId)).length).toBe(7);
+    // Three: a thesis with no payer behind it is still a signal, so only the
+    // payer, the access and the buying evidence are asked yet.
+    expect((await reconcileDiscoverableGaps(projectId)).length).toBe(3);
 
     await fillCard({
       opportunityId: captured.value.id,

@@ -52,12 +52,14 @@ import { cashEngineCard } from '../server/services/cash/engineCard.ts';
 import { evidenceCard, fieldOwner, readyToTest } from '../server/services/cash/card.ts';
 import {
   CAPTURE_KEY,
+  CAPTURE_PREREQUISITES,
   cashTier,
   qualificationKeys,
   SIGNAL_MEANING,
   UNIVERSAL_QUALIFICATION,
 } from '../server/services/cash/tier.ts';
 import { assemble, rank } from '../server/services/cash/portfolio.ts';
+import { ECONOMIC_ANSWERS } from './helpers/cashTier.ts';
 import { compressedReview, RESEARCHED_FIELDS } from '../server/services/cash/review.ts';
 import { cashView } from '../server/services/cash/view.ts';
 import { fillCard, markReady } from '../server/services/cash/opportunities.ts';
@@ -135,7 +137,7 @@ async function harvested(
 async function answer(
   opportunity: CashOpportunity,
   field: string,
-  value = `An answer to ${field}.`,
+  value = ECONOMIC_ANSWERS[field] ?? `An answer to ${field}.`,
 ): Promise<void> {
   await recordCardFact({
     projectId,
@@ -208,9 +210,13 @@ describe('market evidence stays a signal', () => {
       // And it says what its evidence does establish, so nothing is thrown away.
       expect(reading.establishes).toBe(SIGNAL_MEANING[one.signal].establishes);
       expect(reading.doesNotEstablish).toBe(SIGNAL_MEANING[one.signal].doesNotEstablish);
-      // The one thing that would move it is named, and it is Brain's to answer.
-      expect(reading.toAdvance.map((r) => r.key)).toEqual([CAPTURE_KEY]);
-      expect(reading.toAdvance[0]!.owner).not.toBe('PERSON_ONLY');
+      // What would move it is named — the facts a capture thesis has to be
+      // composed from, before the thesis itself — and every one is Brain's.
+      expect(reading.toAdvance.map((r) => r.key)).toEqual([
+        'payer',
+        ...CAPTURE_PREREQUISITES[one.signal],
+      ]);
+      for (const r of reading.toAdvance) expect(r.owner).not.toBe('PERSON_ONLY');
     });
   }
 
@@ -227,7 +233,14 @@ describe('market evidence stays a signal', () => {
     );
     expect((await tierOf(piece.id)).tier).toBe('SIGNAL');
 
+    // A thesis alone moves nothing: a sentence about who would pay is not a
+    // payer, and an arbitrage is not one without acquisition and an exit.
     await answer(piece, CAPTURE_KEY);
+    expect((await tierOf(piece.id)).tier).toBe('SIGNAL');
+
+    for (const key of ['payer', ...CAPTURE_PREREQUISITES.PRICING_OR_INFORMATION_ASYMMETRY]) {
+      await answer(piece, key);
+    }
     const after = await tierOf(piece.id);
     expect(after.tier).toBe('CANDIDATE');
     // And it says what is still open, which is what a candidate owes.
@@ -389,6 +402,9 @@ describe('every question the tier asks has something that can answer it', () => 
       patch: { captureMechanism: 'Supply the repair to the buyer who asked, and be paid.' },
     });
     expect(filled.ok).toBe(true);
+    // A thesis is composed from a payer, so it moves nothing until one is said.
+    expect((await tierOf(piece.id)).tier).toBe('SIGNAL');
+    expect((await fillCard({ opportunityId: piece.id, actorRef: userId, patch: { payer: 'The named buyer' } })).ok).toBe(true);
     expect((await tierOf(piece.id)).tier).toBe('CANDIDATE');
 
     // A person's answer is a PERSON fact, so nothing automatic writes over it.
@@ -689,6 +705,7 @@ describe('the page is a dashboard, and reading it changes nothing', () => {
   it('offers the nearly-qualified ones, labelled as such, when nothing is qualified', async () => {
     for (let i = 0; i < 3; i += 1) {
       const piece = await harvested('ACTIVE_BUYER_DEMAND', `A candidate ${i}.`);
+      await answer(piece, 'payer');
       await answer(piece, CAPTURE_KEY);
       // Progressively closer, so the ordering is a count rather than a feeling.
       for (const key of qualificationKeys('ACTIVE_BUYER_DEMAND').slice(0, i * 4)) {

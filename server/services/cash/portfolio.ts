@@ -101,6 +101,14 @@ const UNREAD_TIER: TierReading = Object.freeze({
   answered: 0,
   required: 0,
   summary: 'Nothing has been read about this piece yet.',
+  economics: Object.freeze({
+    verdict: 'UNKNOWN' as const,
+    revenueCents: null,
+    costCents: null,
+    contributionCents: null,
+    because: 'Nothing has been read about this piece yet.',
+  }),
+  route: 'UNPROVEN' as const,
 });
 
 export interface Placement {

@@ -631,11 +631,20 @@ export async function sharedFrontier(input: {
    */
   const shared: SharedOpportunity[] = rank(opportunities).map((opportunity: CashOpportunity) => {
     const card = evidenceCard(opportunity);
-    const tier = cashTier({
+    const read = cashTier({
       opportunity,
       card: cashEngineCard({ opportunity, facts: facts.get(opportunity.id) ?? [] }),
       readiness: card.readiness,
     });
+    /*
+     * The verdict and the route cross; the figures do not. A contribution is
+     * the value of a commercial term, which this file's header keeps private,
+     * and the sentences beside it name no figure.
+     */
+    const tier: TierReading = {
+      ...read,
+      economics: { ...read.economics, revenueCents: null, costCents: null, contributionCents: null },
+    };
     return {
       id: opportunity.id,
       title: opportunity.title,

@@ -30,6 +30,7 @@
  *   F10 — Brain-delivered research: the work is read as performed from the
  *         mission's own row, and a person cannot attest to it instead.
  */
+import { ECONOMIC_ANSWERS } from './helpers/cashTier.ts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import express from 'express';
 import type { AddressInfo } from 'node:net';
@@ -229,7 +230,7 @@ async function qualified(title = 'A published intake repair request'): Promise<C
       opportunityId: piece.id,
       field,
       kind: 'EVIDENCE',
-      value: `A published answer to ${field}.`,
+      value: ECONOMIC_ANSWERS[field] ?? `A published answer to ${field}.`,
       claimId: `clm_${field}`,
       decidedBy: 'BRAIN',
     });

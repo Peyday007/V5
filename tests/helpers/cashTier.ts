@@ -42,8 +42,22 @@ export function fact(
 /** Every question this piece's kind asks, answered. A qualified fixture. */
 export function qualifyingFacts(opportunity: CashOpportunity): CashCardFact[] {
   const keys = [CAPTURE_KEY, ...qualificationKeys(opportunity.opportunitySignal)];
-  return [...new Set(keys)].map((key) => fact(opportunity, key));
+  return [...new Set(keys)].map((key) =>
+    fact(opportunity, key, ECONOMIC_ANSWERS[key] ? { value: ECONOMIC_ANSWERS[key] } : {}),
+  );
 }
+
+/**
+ * The two answers the economics are read from, stated as figures.
+ *
+ * QUALIFIED needs a published price that exceeds the published direct costs,
+ * and a sentence with no figure in it is an unknown rather than a zero — so a
+ * qualified fixture has to say its economics in numbers, as a real source does.
+ */
+export const ECONOMIC_ANSWERS: Readonly<Record<string, string>> = Object.freeze({
+  revenueRange: 'Comparable work is published at USD 500 to 800.',
+  directCosts: 'Nothing to buy, USD 0 out.',
+});
 
 export function tierFor(
   opportunity: CashOpportunity,
@@ -83,7 +97,7 @@ export function tiersFor(
 export const EXECUTION_THESIS: Readonly<Record<string, string>> = Object.freeze({
   captureMechanism: 'Supply the repair to the buyer who asked, and be paid for it.',
   revenueRange: 'Comparable work is published at USD 500 to 800.',
-  directCosts: 'Nothing to buy. One afternoon of our own time.',
+  directCosts: 'Nothing to buy, USD 0 out. One afternoon of our own time.',
   requiredCapital: 'Nothing out before the invoice.',
   timeToFirstCash: 'Their published terms are net 14 from acceptance.',
   hours: 'Comparable work is published as taking four to six hours.',

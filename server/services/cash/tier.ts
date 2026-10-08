@@ -65,6 +65,7 @@ import type { CashOpportunity, OpportunitySignal } from '../../domain/types.ts';
 import type { CardFieldKey } from './card.ts';
 import type { EngineFieldKey } from './engineCard.ts';
 import { fieldOwner, type CardReadiness, type FieldOwner } from './card.ts';
+import { readMoneyFigures } from './figures.ts';
 
 export const CASH_TIERS = ['SIGNAL', 'CANDIDATE', 'QUALIFIED', 'READY_TO_TEST'] as const;
 export type CashTier = (typeof CASH_TIERS)[number];
@@ -219,6 +220,154 @@ const UNSIGNALLED: SignalMeaning = Object.freeze({
   alsoRequires: [],
 });
 
+/**
+ * What must be established, as evidence, before a capture thesis is a route by
+ * which we are paid rather than a sentence composed from the card.
+ *
+ * The payer is always one of them. For three kinds of evidence it is not
+ * enough, and the reason is what the evidence is *about*: a pricing asymmetry,
+ * a resalable asset and a disconnected supply are facts about a market, and
+ * the only party who could pay us in any of them is a buyer at the far end of
+ * a trade we would have to be able to make. So the trade itself has to be
+ * established first — that we can acquire the thing now, and, where we would
+ * be reselling it, that things like it actually sell at the higher figure. A
+ * vendor's published price, an asking price and an appraisal establish none of
+ * that, and before this they were enough to compose a thesis: production held
+ * GoTranscript, WriterAccess, Verblio and Depositphotos price lists, two domain
+ * appraisals and seven resale listings as candidates on exactly that basis.
+ *
+ * Keyed on the closed `opportunity_signal` vocabulary a worker chose when it
+ * read the source, so it reads no prose and lists no company. These were
+ * already required — at QUALIFIED. What changed is that the question of
+ * whether a transaction exists is asked where the transaction is first
+ * claimed, rather than after the claim has been treated as true.
+ */
+export const CAPTURE_PREREQUISITES: Readonly<Record<OpportunitySignal, readonly QualificationKey[]>> =
+  Object.freeze({
+    ACTIVE_BUYER_DEMAND: [],
+    PAID_TASK_OR_CONTRACT: [],
+    PRICING_OR_INFORMATION_ASYMMETRY: ['acquisitionAccess', 'exitEvidence'],
+    EXPIRING_OPENING: [],
+    SUPPLY_DEMAND_MISMATCH: ['acquisitionAccess'],
+    RESALABLE_ASSET_OPENING: ['acquisitionAccess', 'exitEvidence'],
+    RECURRING_OUTSOURCED_WORK: [],
+  });
+
+/**
+ * The capture thesis's own inputs that are not established, for one piece.
+ *
+ * Established means a sourced fact or a person's answer. Brain's own proposal
+ * is not an input to a thesis about who pays us — a recommendation standing in
+ * for the payer would be the thesis resting on itself.
+ */
+export function missingCaptureInputs(
+  signal: OpportunitySignal | null,
+  card: EngineCard,
+): QualificationKey[] {
+  const needed: QualificationKey[] = ['payer', ...(signal ? CAPTURE_PREREQUISITES[signal] : [])];
+  return needed.filter((key) => {
+    const entry = card.entries.find((one) => one.key === key);
+    return !entry || entry.value === null || entry.kind === 'ESTIMATE' || entry.kind === 'UNKNOWN';
+  });
+}
+
+/**
+ * What one transaction leaves, from the card's own published figures.
+ *
+ * The lowest published price less the highest published direct cost, and only
+ * when both are totals in the sprint's currency. A per-word, per-minute or
+ * per-month figure is a rate rather than a transaction, so it is left out
+ * rather than multiplied by a volume nobody published; a text with no figure
+ * is unknown. `NEGATIVE` is the one verdict this can give against a piece,
+ * because it is arithmetic over published numbers rather than a judgement
+ * about what is worth doing — an hourly floor or a minimum contribution would
+ * be a threshold nobody approved, and none is applied here.
+ */
+export interface EconomicReading {
+  verdict: 'POSITIVE' | 'NEGATIVE' | 'UNKNOWN';
+  revenueCents: number | null;
+  costCents: number | null;
+  contributionCents: number | null;
+  because: string;
+}
+
+export function economicReading(card: EngineCard, currency: string): EconomicReading {
+  const value = (key: string): string | null =>
+    card.entries.find((one) => one.key === key && one.kind !== 'ESTIMATE')?.value ?? null;
+  const totals = (text: string | null) =>
+    text ? readMoneyFigures(text, currency).filter((figure) => !figure.perUnit) : [];
+  const revenue = totals(value('revenueRange'));
+  const costs = totals(value('directCosts'));
+  const revenueCents = revenue.length > 0 ? Math.min(...revenue.map((one) => one.cents)) : null;
+  const costCents = costs.length > 0 ? Math.max(...costs.map((one) => one.cents)) : null;
+  if (revenueCents === null || costCents === null) {
+    return {
+      verdict: 'UNKNOWN',
+      revenueCents,
+      costCents,
+      contributionCents: null,
+      because:
+        revenueCents === null && costCents === null
+          ? `Neither a published price nor a published cost is stated as a ${currency} total.`
+          : revenueCents === null
+            ? `No published price is stated as a ${currency} total, so there is nothing to take the costs from.`
+            : `No published direct cost is stated as a ${currency} total, and an unknown cost is not a zero.`,
+    };
+  }
+  const contributionCents = revenueCents - costCents;
+  return {
+    verdict: contributionCents > 0 ? 'POSITIVE' : 'NEGATIVE',
+    revenueCents,
+    costCents,
+    contributionCents,
+    because:
+      contributionCents > 0
+        ? 'The lowest published price exceeds the highest published direct cost.'
+        : 'The published direct costs meet or exceed the lowest published price, so a ' +
+          'transaction leaves nothing.',
+  };
+}
+
+/**
+ * Which of the two things worth pursuing a piece is, if either.
+ *
+ * FAST_CASH: a buyer published a request, the transaction leaves a positive
+ * contribution, and when the money arrives is established. SCALABLE: a
+ * positive contribution and a scaling lever that a source or a person
+ * established — Brain's own generic proposal of one is not evidence that the
+ * next transaction is cheaper. Everything else is UNPROVEN, and a negative
+ * contribution is UNATTRACTIVE. Derived, so it moves the moment its inputs do.
+ */
+export type CommercialRoute = 'FAST_CASH' | 'SCALABLE' | 'UNPROVEN' | 'UNATTRACTIVE';
+
+const BUYER_SIGNALS: ReadonlySet<OpportunitySignal> = new Set([
+  'ACTIVE_BUYER_DEMAND',
+  'PAID_TASK_OR_CONTRACT',
+  'EXPIRING_OPENING',
+  'RECURRING_OUTSOURCED_WORK',
+]);
+
+/** A kind of evidence whose source itself publishes somebody asking for work. */
+export function signalNamesABuyer(signal: OpportunitySignal | null): boolean {
+  return signal !== null && BUYER_SIGNALS.has(signal);
+}
+
+export function commercialRoute(
+  signal: OpportunitySignal | null,
+  card: EngineCard,
+  economics: EconomicReading,
+): CommercialRoute {
+  if (economics.verdict === 'NEGATIVE') return 'UNATTRACTIVE';
+  if (economics.verdict !== 'POSITIVE') return 'UNPROVEN';
+  const established = (key: string): boolean => {
+    const entry = card.entries.find((one) => one.key === key);
+    return Boolean(entry && entry.value !== null && (entry.kind === 'FACT' || entry.kind === 'DECISION'));
+  };
+  if (established('scalingLever')) return 'SCALABLE';
+  if (signalNamesABuyer(signal) && established('timeToFirstCash')) return 'FAST_CASH';
+  return 'UNPROVEN';
+}
+
 export interface TierRequirement {
   key: QualificationKey;
   label: string;
@@ -240,6 +389,10 @@ export interface TierReading {
   required: number;
   /** One sentence a person reads, composed from the counts and the tier. */
   summary: string;
+  /** What one transaction leaves, from published figures, or why that is unknown. */
+  economics: EconomicReading;
+  /** Fast cash, scalable income, unproven, or unattractive. */
+  route: CommercialRoute;
 }
 
 /** The whole requirement set for one piece, universal plus its own kind's. */
@@ -294,22 +447,40 @@ export function cashTier(input: {
     };
   };
 
-  const captured = answered(CAPTURE_KEY);
   const keys = qualificationKeys(signal);
   const open = keys.filter((key) => !answered(key));
   const answeredCount = keys.length - open.length;
+  const economics = economicReading(input.card, input.opportunity.currency);
+  const route = commercialRoute(signal, input.card, economics);
+
+  /*
+   * A thesis counts only while what it rests on is established.
+   *
+   * Derived rather than trusted from the row, so a thesis composed before its
+   * prerequisites were asked about — every production candidate built from a
+   * vendor's price list — stops counting the moment this deploys, with nothing
+   * deleted to make it so.
+   */
+  const missingInputs = missingCaptureInputs(signal, input.card);
+  const captured = answered(CAPTURE_KEY) && missingInputs.length === 0;
 
   if (!captured) {
     return {
       tier: 'SIGNAL',
       establishes: meaning.establishes,
       doesNotEstablish: meaning.doesNotEstablish,
-      toAdvance: [requirement(CAPTURE_KEY)],
+      toAdvance: missingInputs.length > 0 ? missingInputs.map(requirement) : [requirement(CAPTURE_KEY)],
       answered: answeredCount,
       required: keys.length,
       summary:
         `This is evidence, not work: it establishes ${meaning.establishes}, and not ` +
-        `${meaning.doesNotEstablish}. Brain is still working out how we would be paid from it.`,
+        `${meaning.doesNotEstablish}. ` +
+        (missingInputs.length > 0
+          ? `Nobody is shown paying us until ${missingInputs.length === 1 ? 'this is' : 'these are'} ` +
+            `established: ${missingInputs.join(', ')}.`
+          : 'Brain is still working out how we would be paid from it.'),
+      economics,
+      route,
     };
   }
 
@@ -325,6 +496,34 @@ export function cashTier(input: {
         `Brain can say how this would make money, and ${open.length} thing` +
         `${open.length === 1 ? '' : 's'} still ${open.length === 1 ? 'needs' : 'need'} ` +
         'establishing before it could be acted on.',
+      economics,
+      route,
+    };
+  }
+
+  /*
+   * Every field answered is not the same fact as a transaction worth doing.
+   *
+   * A card can answer every question with a price stated per word and a cost
+   * stated per month, or with costs that exceed the price, and the field count
+   * cannot tell. QUALIFIED is where somebody is told this is worth acting on,
+   * so it needs the published figures to leave something — and an unknown is
+   * never the favourable assumption.
+   */
+  if (economics.verdict !== 'POSITIVE') {
+    return {
+      tier: 'CANDIDATE',
+      establishes: meaning.establishes,
+      doesNotEstablish: meaning.doesNotEstablish,
+      toAdvance: [requirement('revenueRange'), requirement('directCosts')],
+      answered: answeredCount,
+      required: keys.length,
+      summary:
+        economics.verdict === 'NEGATIVE'
+          ? `Every question is answered and the published figures leave no contribution: ${economics.because}`
+          : `Every question is answered, and what one transaction leaves is unknown: ${economics.because}`,
+      economics,
+      route,
     };
   }
 
@@ -356,6 +555,8 @@ export function cashTier(input: {
       summary:
         'The execution thesis is supported. What is left is the short card a bounded test ' +
         'runs against.',
+      economics,
+      route,
     };
   }
 
@@ -369,6 +570,8 @@ export function cashTier(input: {
     summary:
       'Everything a bounded test turns on is answered. What remains is a decision only a ' +
       'person can make.',
+    economics,
+    route,
   };
 }
 

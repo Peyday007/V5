@@ -22,6 +22,7 @@
  *         begin, the opportunity stays READY, and an open need names the
  *         unknown outcome.
  */
+import { ECONOMIC_ANSWERS } from './helpers/cashTier.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -123,7 +124,7 @@ async function readyToTest(): Promise<CashOpportunity> {
       opportunityId: piece.id,
       field,
       kind: 'EVIDENCE',
-      value: `A published answer to ${field}.`,
+      value: ECONOMIC_ANSWERS[field] ?? `A published answer to ${field}.`,
       claimId: `clm_${field}`,
       decidedBy: 'BRAIN',
     });
