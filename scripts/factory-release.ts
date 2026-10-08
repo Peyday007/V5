@@ -11,16 +11,22 @@
  * performs is recorded in Brain *before* the next one is attempted, so a run
  * that dies at any point leaves a row the next run resumes:
  *
- *   GATING  → push the merge the gate job tested         → MERGED
+ *   GATING  → merge through the pull request, as tested  → MERGED
  *   MERGED  → dispatch the canonical Deploy workflow     → DEPLOYING
  *   DEPLOYING → watch it to termination                  → VERIFYING | FAILED
  *   VERIFYING → verify inside the released Brain         → LIVE | FAILED
  *   FAILED (after release) → roll back                   → ROLLED_BACK
  *
- * The merge is pinned: the commit pushed is exactly the commit the gate job
- * merged and tested, its second parent must be the reviewed head, and the push
- * is a plain fast-forward — if the branch moved, the push is refused and the
- * attempt is retried from the gate rather than force-pushed.
+ * The merge goes through the pull request's own merge endpoint, never a push
+ * to the protected branch: that endpoint honours every branch protection rule
+ * and ruleset the owner has set, so automatic release needs no bypass of any of
+ * them — a rule that refuses the merge stops the release with the forge's own
+ * reason. The merge is pinned to the reviewed head (`sha`), it is attempted only
+ * while production is still the base the gate merged onto, and afterwards the
+ * merged tree must be byte-for-byte the tree the gate tested; a tree nobody
+ * tested is never deployed — the next pass gates production's tip instead.
+ * Immediately before merging, Brain is asked whether the merge may still happen,
+ * so an owner who withdraws the grant during the gate stops it.
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -110,12 +116,6 @@ async function gh<T>(method: string, path: string, body?: unknown): Promise<{ st
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** True when `ancestor` is already on the canonical branch. */
-async function productionContains(ancestor: string): Promise<boolean> {
-  const reply = await gh<{ status?: string }>('GET', `/repos/${REPO}/compare/${ancestor}...production`);
-  return reply.status === 200 && (reply.body?.status === 'identical' || reply.body?.status === 'ahead');
-}
-
 /** The merge commit on production whose second parent is `head`, if one exists. */
 function mergeCommitFor(head: string): string | null {
   sh('git', ['fetch', '--quiet', 'origin', 'production']);
@@ -127,29 +127,74 @@ function mergeCommitFor(head: string): string | null {
   return null;
 }
 
-async function pushGatedMerge(action: Action): Promise<string | null> {
-  const mergeSha = process.env.GATE_MERGE_SHA ?? '';
+/** Ask Brain, immediately before merging, whether the merge may still happen. */
+function mayMerge(action: Action): { ok: boolean; reasons: string[] } {
+  const out = brain(['release-may-merge', '--run', action.runId]);
+  const line = /^RELEASE-MAY-MERGE: (.*)$/m.exec(out)?.[1];
+  if (!line) return { ok: false, reasons: ['Brain did not say whether the merge may happen'] };
+  return JSON.parse(line) as { ok: boolean; reasons: string[] };
+}
+
+function treeOf(sha: string): string {
+  return sh('git', ['rev-parse', `${sha}^{tree}`]).stdout.trim();
+}
+
+/**
+ * Merge the reviewed head through its pull request, exactly as the gate tested
+ * it. Returns the merge commit, or null with the reason recorded in Brain.
+ */
+async function mergeGated(action: Action): Promise<{ mergeSha: string; deploySha: string } | null> {
+  const gated = process.env.GATE_MERGE_SHA ?? '';
+  if (!/^[0-9a-f]{40}$/.test(gated)) {
+    advance(action.runId, 'FAILED', { stage: 'INFRA', detail: 'the gate job left no tested commit' });
+    return null;
+  }
+  const permission = mayMerge(action);
+  if (!permission.ok) {
+    advance(action.runId, 'FAILED', { stage: 'GATE', detail: `not merged: ${permission.reasons.join(' ')}` });
+    return null;
+  }
+  sh('git', ['fetch', '--quiet', 'origin', 'production']);
+  const tip = sh('git', ['rev-parse', 'origin/production']).stdout.trim();
+
+  if (process.env.GATE_ALREADY_MERGED === 'true') {
+    // A previous attempt merged and died, or production moved under the last
+    // merge: the gate tested production's tip itself, and that is what deploys.
+    if (gated !== tip) {
+      advance(action.runId, 'FAILED', {
+        stage: 'INFRA',
+        detail: `production moved from the gated ${gated} to ${tip}; the next pass gates its tip`,
+      });
+      return null;
+    }
+    const mergeSha = mergeCommitFor(action.headSha);
+    if (!mergeSha) {
+      advance(action.runId, 'FAILED', {
+        stage: 'MERGE',
+        detail: `production holds ${action.headSha} but no merge commit of it was found to roll back to`,
+      });
+      return null;
+    }
+    advance(action.runId, 'MERGED', { 'merge-sha': mergeSha });
+    return { mergeSha, deploySha: tip };
+  }
+
   const bundle = process.env.GATE_BUNDLE ?? '';
-  if (!/^[0-9a-f]{40}$/.test(mergeSha) || !fs.existsSync(bundle)) {
-    advance(action.runId, 'FAILED', { stage: 'INFRA', detail: 'the gate job left no merge commit to push' });
+  if (!fs.existsSync(bundle)) {
+    advance(action.runId, 'FAILED', { stage: 'INFRA', detail: 'the gate job left no tested merge to compare against' });
     return null;
   }
   sh('git', ['fetch', '--quiet', bundle, 'HEAD:refs/release/candidate']);
   const fetched = sh('git', ['rev-parse', 'refs/release/candidate']).stdout.trim();
-  if (fetched !== mergeSha) {
-    advance(action.runId, 'FAILED', {
-      stage: 'INFRA',
-      detail: `the gate's bundle carries ${fetched}, not the reported ${mergeSha}`,
-    });
+  if (fetched !== gated) {
+    advance(action.runId, 'FAILED', { stage: 'INFRA', detail: `the gate's bundle carries ${fetched}, not the reported ${gated}` });
     return null;
   }
-  const parents = sh('git', ['rev-list', '--parents', '-n', '1', mergeSha]).stdout.trim().split(/\s+/);
-  sh('git', ['fetch', '--quiet', 'origin', 'production']);
-  const tip = sh('git', ['rev-parse', 'origin/production']).stdout.trim();
+  const parents = sh('git', ['rev-list', '--parents', '-n', '1', gated]).stdout.trim().split(/\s+/);
   if (parents.length !== 3 || parents[2] !== action.headSha) {
     advance(action.runId, 'FAILED', {
       stage: 'MERGE',
-      detail: `the gated commit ${mergeSha} is not a merge of the reviewed head ${action.headSha}`,
+      detail: `the gated commit ${gated} is not a merge of the reviewed head ${action.headSha}`,
     });
     return null;
   }
@@ -160,15 +205,39 @@ async function pushGatedMerge(action: Action): Promise<string | null> {
     });
     return null;
   }
-  // A plain fast-forward. No force: if the branch moved, this is refused.
-  const pushed = sh('git', ['push', 'origin', `${mergeSha}:refs/heads/production`], { allowFail: true });
-  if (!pushed.ok) {
-    advance(action.runId, 'FAILED', { stage: 'INFRA', detail: `the push was refused: ${pushed.stderr.slice(0, 300)}` });
+  const reply = await gh<{ sha?: string; merged?: boolean; message?: string }>(
+    'PUT',
+    `/repos/${REPO}/pulls/${action.prNumber}/merge`,
+    {
+      sha: action.headSha,
+      merge_method: 'merge',
+      commit_title: `Merge pull request #${action.prNumber} (factory release)`,
+      commit_message: `Released by Brain under the owner's grant; release ${action.runId}.`,
+    },
+  );
+  const mergeSha = reply.body?.sha ?? '';
+  if (reply.status !== 200 || !reply.body?.merged || !/^[0-9a-f]{40}$/.test(mergeSha)) {
+    // 405 is a branch rule or an unmergeable request, 409 a moved head: the
+    // forge's own words are the actionable reason, and nothing was merged.
+    advance(action.runId, 'FAILED', {
+      stage: 'MERGE',
+      detail: `the forge refused the merge (${reply.status}): ${reply.body?.message ?? 'no reason given'}`,
+    });
     return null;
   }
-  log(`merged ${action.headSha} into production as ${mergeSha}`);
+  log(`merged ${action.headSha} into production as ${mergeSha} through pull request #${action.prNumber}`);
   advance(action.runId, 'MERGED', { 'merge-sha': mergeSha });
-  return mergeSha;
+  sh('git', ['fetch', '--quiet', 'origin', 'production']);
+  if (treeOf(mergeSha) !== treeOf(gated)) {
+    // Production moved between the check and the merge. The merge is real and
+    // stays recorded; what does not happen is a deploy of a tree nobody tested.
+    advance(action.runId, 'FAILED', {
+      stage: 'INFRA',
+      detail: `merged as ${mergeSha}, whose tree is not the tree the gate tested; nothing was deployed, and the next pass gates production's tip`,
+    });
+    return null;
+  }
+  return { mergeSha, deploySha: mergeSha };
 }
 
 interface WorkflowRun {
@@ -237,19 +306,50 @@ async function watchDeploy(runId: number): Promise<{ conclusion: string; release
   }
 }
 
-/** Revert the merge on the canonical branch, so the branch says what is running. */
-function revertMerge(mergeSha: string): { ok: boolean; sha: string | null; detail: string } {
+/**
+ * Revert the merge on the canonical branch through a pull request of its own,
+ * so a rollback obeys the same branch rules the merge did. Returns whether the
+ * revert is on production.
+ */
+async function revertMerge(runId: string, mergeSha: string): Promise<{ ok: boolean; detail: string }> {
   sh('git', ['fetch', '--quiet', 'origin', 'production']);
+  const branch = `factory-release/revert-${runId}`.replace(/[^A-Za-z0-9_./-]/g, '-');
   sh('git', ['checkout', '--quiet', '-B', 'release-revert', 'origin/production']);
   const reverted = sh('git', ['revert', '-m', '1', '--no-edit', mergeSha], { allowFail: true });
-  if (!reverted.ok) return { ok: false, sha: null, detail: `git revert failed: ${reverted.stderr.slice(0, 300)}` };
-  const sha = sh('git', ['rev-parse', 'HEAD']).stdout.trim();
-  const pushed = sh('git', ['push', 'origin', 'HEAD:refs/heads/production'], { allowFail: true });
-  if (!pushed.ok) return { ok: false, sha, detail: `the revert push was refused: ${pushed.stderr.slice(0, 300)}` };
-  return { ok: true, sha, detail: `reverted as ${sha}` };
+  if (!reverted.ok) return { ok: false, detail: `git revert failed: ${reverted.stderr.slice(0, 300)}` };
+  const pushed = sh('git', ['push', 'origin', `HEAD:refs/heads/${branch}`], { allowFail: true });
+  if (!pushed.ok) return { ok: false, detail: `the revert branch could not be pushed: ${pushed.stderr.slice(0, 300)}` };
+  const revertSha = sh('git', ['rev-parse', 'HEAD']).stdout.trim();
+  const opened = await gh<{ number?: number; message?: string }>('POST', `/repos/${REPO}/pulls`, {
+    title: `Revert factory release ${runId}`,
+    head: branch,
+    base: 'production',
+    body: `Brain's factory release ${runId} did not go live; this reverts ${mergeSha}.`,
+  });
+  const number = opened.body?.number;
+  if (opened.status !== 201 || !number) {
+    return { ok: false, detail: `the revert pull request could not be opened (${opened.status}): ${opened.body?.message ?? ''}; the revert is on branch ${branch}` };
+  }
+  const merged = await gh<{ merged?: boolean; message?: string }>('PUT', `/repos/${REPO}/pulls/${number}/merge`, {
+    sha: revertSha,
+    merge_method: 'merge',
+  });
+  if (merged.status !== 200 || !merged.body?.merged) {
+    return {
+      ok: false,
+      detail: `the revert is open as pull request #${number} and the forge refused to merge it (${merged.status}): ${merged.body?.message ?? ''}; a person merges it and dispatches Deploy`,
+    };
+  }
+  return { ok: true, detail: `reverted through pull request #${number}` };
 }
 
-async function rollBack(action: Action, mergeSha: string, released: boolean, why: string): Promise<void> {
+async function rollBack(
+  action: Action,
+  mergeSha: string,
+  released: boolean,
+  why: string,
+  stage: 'DEPLOY' | 'VERIFY',
+): Promise<void> {
   /*
    * Rollback goes through the canonical pipeline, never around it: §28 is that
    * exactly one workflow runs `flyctl deploy`, and a second one "only for
@@ -258,16 +358,23 @@ async function rollBack(action: Action, mergeSha: string, released: boolean, why
    * previous behaviour on that deploy, and branch and image never disagree.
    */
   const steps: string[] = [why, released ? 'the change had been released' : 'nothing had been released'];
-  const revert = revertMerge(mergeSha);
+  const revert = await revertMerge(action.runId, mergeSha);
   steps.push(`branch: ${revert.detail}`);
-  if (revert.ok && revert.sha) {
+  if (revert.ok) {
     const reply = await gh('POST', `/repos/${REPO}/actions/workflows/deploy.yml/dispatches`, {
       ref: 'production',
       inputs: { reason: `factory release ${action.runId}: deploy the revert of ${mergeSha.slice(0, 12)}` },
     });
     steps.push(`redeploy of the revert dispatched: ${reply.status === 204 ? 'yes' : `no (${reply.status})`}`);
   }
-  advance(action.runId, 'ROLLED_BACK', { detail: steps.join('; ') });
+  if (revert.ok) {
+    advance(action.runId, 'ROLLED_BACK', { detail: steps.join('; ') });
+    return;
+  }
+  // The revert did not land. The attempt stays FAILED — never ROLLED_BACK,
+  // which would tell the owner production is back when it may not be — and its
+  // detail says exactly what a person has to do.
+  advance(action.runId, 'FAILED', { stage, detail: steps.join('; ') });
 }
 
 async function verify(action: Action, mergeSha: string): Promise<void> {
@@ -278,7 +385,10 @@ async function verify(action: Action, mergeSha: string): Promise<void> {
     log(`RELEASE: LIVE ${action.runId} ${mergeSha}`);
     return;
   }
-  await rollBack(action, mergeSha, true, 'verification inside the released Brain failed');
+  // FAILED first: ROLLED_BACK may only follow a recorded failure, and a run left
+  // at VERIFYING would be resumed, re-verified and reverted a second time.
+  advance(action.runId, 'FAILED', { stage: 'VERIFY', detail: 'verification inside the released Brain failed' });
+  await rollBack(action, mergeSha, true, 'verification inside the released Brain failed', 'VERIFY');
   log(`RELEASE: ROLLED_BACK ${action.runId}`);
 }
 
@@ -299,14 +409,14 @@ async function fromDeploying(action: Action, mergeSha: string, deployRunId: numb
     stage: 'DEPLOY',
     detail: `Deploy run ${deployRunId} concluded ${watched.conclusion}${watched.released ? ' after releasing' : ' before releasing'}`,
   });
-  await rollBack(action, mergeSha, watched.released, `Deploy concluded ${watched.conclusion}`);
+  await rollBack(action, mergeSha, watched.released, `Deploy concluded ${watched.conclusion}`, 'DEPLOY');
   log(`RELEASE: ROLLED_BACK ${action.runId}`);
 }
 
-async function fromMerged(action: Action, mergeSha: string): Promise<void> {
+async function fromMerged(action: Action, mergeSha: string, deploySha: string = mergeSha): Promise<void> {
   const deployRunId = await dispatchDeploy(
     action,
-    mergeSha,
+    deploySha,
     `factory release ${action.runId}: campaign ${action.campaignId}, PR #${action.prNumber}`,
   );
   if (deployRunId === null) {
@@ -329,15 +439,6 @@ async function main(): Promise<void> {
   log(`release ${action.runId}: ${action.action} at ${state} — campaign ${action.campaignId}, PR #${action.prNumber}`);
 
   if (state === 'GATING') {
-    // A previous run may have pushed and died before recording it.
-    if (await productionContains(action.headSha)) {
-      const mergeSha = mergeCommitFor(action.headSha);
-      if (mergeSha) {
-        advance(action.runId, 'MERGED', { 'merge-sha': mergeSha });
-        await fromMerged(action, mergeSha);
-        return;
-      }
-    }
     const gate = process.env.GATE_RESULT ?? 'skipped';
     if (gate !== 'success') {
       const failure = process.env.GATE_FAILURE ?? '';
@@ -348,12 +449,14 @@ async function main(): Promise<void> {
       log('RELEASE: FAILED');
       return;
     }
-    const mergeSha = await pushGatedMerge(action);
-    if (!mergeSha) {
+    // Whether production already holds the head (a previous attempt merged and
+    // died) the gate decided from the same tree, and tested accordingly.
+    const merged = await mergeGated(action);
+    if (!merged) {
       log('RELEASE: FAILED');
       return;
     }
-    await fromMerged(action, mergeSha);
+    await fromMerged(action, merged.mergeSha, merged.deploySha);
     return;
   }
   const mergeSha = action.mergeSha ?? '';

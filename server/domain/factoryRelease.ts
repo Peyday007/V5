@@ -190,19 +190,37 @@ export const RELEASE_EXCLUDED_PATHS: readonly string[] = [
   'server/services/cash/effects.ts',
   'server/repos/cashAuthority.ts',
   'server/repos/cashLedger.ts',
-  'server/repos/factoryRelease.ts',
-  'server/domain/factoryRelease.ts',
-  'server/services/factory/release/**',
-  'server/services/factory/repositoryEnvelope.ts',
-  'server/services/factory/projectScope.ts',
-  'server/services/factory/forbidden.ts',
+  /*
+   * The Factory never releases a change to itself. Naming the release modules
+   * alone left their inputs open: `glob.ts` decides what these patterns match,
+   * `forge.ts` lists the changed files the gate classifies, `campaignView.ts`
+   * and `review.ts` say whether the review passed and was independent, and
+   * `routes/factory.ts` is where a grant is guarded. A campaign that weakened
+   * any one of them could make the next campaign release itself past the gate,
+   * so the whole of the Factory — services, repositories, domain, routes and
+   * operator scripts — waits for a person.
+   */
+  'server/repos/factory*.ts',
+  'server/domain/factory*.ts',
+  'server/services/factory/**',
+  'server/routes/factory.ts',
   'server/services/research/approvalEnvelope.ts',
   'server/services/russell/probeEnvelope.ts',
   'server/services/russell/authority.ts',
   'scripts/factory.ts',
+  'scripts/factory.sh',
   'scripts/factory-release.ts',
   'scripts/release-scan.ts',
+  /*
+   * What the gate runs to decide the tests passed. The gate executes the merged
+   * tree's own runner, so a change to the runner, its configuration or the
+   * compiler settings could select no tests and pass — it is the gate's own
+   * input, and only a person may release a change to it.
+   */
   'scripts/test-postgres.sh',
+  'scripts/test-impacted.mjs',
+  'vitest.config.ts',
+  'tsconfig.json',
 ];
 
 /** Patterns that look like a credential in an added line of a diff. */

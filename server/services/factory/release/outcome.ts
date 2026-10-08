@@ -9,7 +9,7 @@
  * green review or a merge is never LIVE.
  */
 import type { FactoryBlockerKind, FactoryCampaign } from '../../../domain/factory.ts';
-import type { ObjectiveOutcome, ReleaseGrant, ReleaseRun } from '../../../domain/factoryRelease.ts';
+import { MAX_RELEASE_ATTEMPTS, type ObjectiveOutcome, type ReleaseGrant, type ReleaseRun } from '../../../domain/factoryRelease.ts';
 
 /**
  * Which campaign blockers wait on a person rather than on Brain. A blocker Brain
@@ -142,7 +142,7 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
     case 'LIVE':
       return { ...make('LIVE', `Live and verified at ${run.mergeSha?.slice(0, 12) ?? '—'}.`), pageUrl: pageUrl(input) };
     case 'FAILED':
-      if (run.failureStage === 'INFRA' || run.failureStage === 'DISPATCH') {
+      if ((run.failureStage === 'INFRA' || run.failureStage === 'DISPATCH') && run.attempt < MAX_RELEASE_ATTEMPTS) {
         return make('RELEASING', `The last attempt stopped on the runner (${run.failureDetail ?? 'no detail'}); it will be tried again.`);
       }
       return make(
@@ -154,7 +154,7 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
     case 'ROLLED_BACK':
       return make(
         'BLOCKED',
-        `Released, failed verification at ${run.failureStage ?? '—'}, and was rolled back.`,
+        `Did not go live (failed at ${run.failureStage ?? '—'}) and was rolled back.`,
         run.failureDetail ?? 'no detail recorded',
         'Read the failure and amend the objective; production is back on the previous version.',
       );

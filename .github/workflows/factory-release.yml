@@ -24,16 +24,22 @@
 #            answering, so a run that dies leaves a row the next run resumes.
 #   gate     merges the reviewed head into the canonical branch locally, scans
 #            the diff from the *trusted* checkout, and runs typecheck,
-#            test:impacted and the build on the merged tree. Read-only token,
-#            no secrets, credentials not persisted — this is the only job that
-#            executes the change's code.
-#   release  pushes exactly the commit the gate tested (a plain fast-forward,
-#            never a force), dispatches Deploy, watches it to termination,
-#            verifies, and rolls back. Runs only the trusted checkout.
+#            test:impacted, the build and the **whole suite against Postgres**
+#            on the merged tree. Read-only token, no secrets, credentials not
+#            persisted — this is the only job that executes the change's code.
+#   release  asks Brain whether the merge may still happen, then merges through
+#            the pull request's own merge endpoint (which honours every branch
+#            protection rule rather than bypassing one), checks the merged tree
+#            is the tree the gate tested, dispatches Deploy, watches it to
+#            termination, verifies, and rolls back. Runs only the trusted
+#            checkout.
 #
-# The full suite is not run here, deliberately: CLAUDE.md rule 3 pays the full
-# gate once, on the released SHA, and Deploy's own test job is that gate. If it
-# fails, nothing is released and the merge is reverted.
+# Every test gate finishes before anything is merged or deployed. The Postgres
+# half runs here because nothing else would run it before production: a merge
+# made by this run's token triggers no `push` workflow, so `postgres-suite.yml`
+# never sees it, and Deploy's own test job is SQLite only. The SQLite half is
+# Deploy's test job, which runs the whole suite on the merged commit and gates
+# `flyctl deploy` — so it is not paid twice here (CLAUDE.md rule 3).
 #
 # ---------------------------------------------------------------------------
 # Why a timer
@@ -114,11 +120,14 @@ jobs:
     needs: plan
     if: needs.plan.outputs.needs_gate == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The whole Postgres suite takes up to two hours (postgres-suite.yml records
+    # why its own bound is 120); a bound the gate cannot finish inside is not a gate.
+    timeout-minutes: 180
     permissions:
       contents: read
     outputs:
       merge_sha: ${{ steps.merge.outputs.merge_sha }}
+      already_merged: ${{ steps.merge.outputs.already_merged }}
       failure: ${{ steps.verdict.outputs.failure }}
     steps:
       - name: Trusted checkout of the canonical branch
@@ -154,6 +163,26 @@ jobs:
             exit 1
           fi
           git checkout --quiet -B release origin/production
+          # A previous attempt merged and died, or the merged tree was not the
+          # gated one: production already holds the head, so what is gated is
+          # production's tip itself — never a deploy of a tree nobody tested.
+          if git merge-base --is-ancestor "$HEAD_SHA" origin/production; then
+            # The first commit on production's first-parent line that holds the
+            # head is the merge that brought it in; its own diff is the change.
+            merged_by=$(git rev-list --first-parent --ancestry-path "${HEAD_SHA}..origin/production" | tail -n 1)
+            if [ -z "$merged_by" ]; then
+              echo "failure=production holds the reviewed head but not through a merge on its first-parent line" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            echo "already_merged=true" >> "$GITHUB_OUTPUT"
+            echo "merge_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            echo "scan_base=${merged_by}^1" >> "$GITHUB_OUTPUT"
+            echo "scan_head=${merged_by}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "already_merged=false" >> "$GITHUB_OUTPUT"
+          echo "scan_base=origin/production" >> "$GITHUB_OUTPUT"
+          echo "scan_head=HEAD" >> "$GITHUB_OUTPUT"
           git config user.name "factory-release"
           git config user.email "factory-release@users.noreply.github.com"
           if ! git merge --no-ff --no-edit -m "Merge pull request #${PR} (factory release)" "$HEAD_SHA"; then
@@ -164,10 +193,14 @@ jobs:
 
       - name: Scan the diff from the trusted checkout
         id: scan
+        env:
+          SCAN_BASE: ${{ steps.merge.outputs.scan_base }}
+          SCAN_HEAD: ${{ steps.merge.outputs.scan_head }}
         run: |
           set -euo pipefail
           (cd trusted && npm ci --no-audit --no-fund >/dev/null)
-          (cd trusted && npx tsx scripts/release-scan.ts --work ../work --base origin/production) | tee scan.txt
+          (cd trusted && npx tsx scripts/release-scan.ts --work ../work \
+            --base "$SCAN_BASE" --head "$SCAN_HEAD") | tee scan.txt
 
       - name: Typecheck, impacted tests and build on the merged tree
         id: tests
@@ -180,13 +213,22 @@ jobs:
           npm run test:impacted
           npm run build
 
+      - name: The whole suite against Postgres, on the merged tree
+        id: postgres
+        working-directory: work
+        run: |
+          set -euo pipefail
+          # The trusted copy of the cluster script, so the change cannot choose
+          # how its own database gate is set up; the merged tree's own suite.
+          sh ../trusted/scripts/test-postgres.sh run -- npx vitest run
+
       - name: Bundle the tested merge
-        if: success()
+        if: success() && steps.merge.outputs.already_merged != 'true'
         working-directory: work
         run: git bundle create ../merge.bundle origin/production..HEAD
 
       - uses: actions/upload-artifact@v4
-        if: success()
+        if: success() && steps.merge.outputs.already_merged != 'true'
         with:
           name: release-merge
           path: merge.bundle
@@ -199,6 +241,7 @@ jobs:
           MERGE_FAILURE: ${{ steps.merge.outputs.failure }}
           SCAN: ${{ steps.scan.outcome }}
           TESTS: ${{ steps.tests.outcome }}
+          POSTGRES: ${{ steps.postgres.outcome }}
         run: |
           failure="$MERGE_FAILURE"
           if [ -z "$failure" ] && [ "$SCAN" = "failure" ]; then
@@ -208,6 +251,12 @@ jobs:
           if [ -z "$failure" ] && [ "$TESTS" = "failure" ]; then
             failure="typecheck, the impacted tests or the build failed on the merged tree"
           fi
+          if [ -z "$failure" ] && [ "$POSTGRES" = "failure" ]; then
+            failure="the whole suite against Postgres failed on the merged tree"
+          fi
+          if [ -z "$failure" ] && [ "$POSTGRES" = "cancelled" ]; then
+            failure="the Postgres suite did not finish inside the gate's bound"
+          fi
           echo "failure=$failure" >> "$GITHUB_OUTPUT"
 
   release:
@@ -216,8 +265,12 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.kind != ''
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    # contents and pull-requests: to merge through the pull request's endpoint
+    # (and open a revert pull request); actions: to dispatch Deploy. No bypass
+    # of any branch rule is asked for or needed.
     permissions:
       contents: write
+      pull-requests: write
       actions: write
     steps:
       - name: Trusted checkout of the canonical branch
@@ -234,7 +287,7 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - uses: actions/download-artifact@v4
-        if: needs.gate.result == 'success'
+        if: needs.gate.result == 'success' && needs.gate.outputs.already_merged != 'true'
         with:
           name: release-merge
           path: gate
@@ -247,6 +300,7 @@ jobs:
           GATE_RESULT: ${{ needs.gate.result }}
           GATE_FAILURE: ${{ needs.gate.outputs.failure }}
           GATE_MERGE_SHA: ${{ needs.gate.outputs.merge_sha }}
+          GATE_ALREADY_MERGED: ${{ needs.gate.outputs.already_merged }}
           GATE_BUNDLE: gate/merge.bundle
         run: |
           set -o pipefail
