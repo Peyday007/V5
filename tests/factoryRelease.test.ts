@@ -424,6 +424,8 @@ describe('the release workflow’s own readings', () => {
     expect(workflow).not.toMatch(/--force|-f\s+origin|\+refs\/heads/);
     expect(script).not.toMatch(/'--force'|'-f'|\+refs\/heads/);
     expect(workflow).not.toMatch(/^\s*flyctl\s+deploy\b/m);
+    // A job or step conditioned on always() cannot be cancelled, so nobody could stop a release.
+    expect(workflow.split('\n').filter((line) => /^\s*if:.*always\(\)/.test(line))).toEqual([]);
     expect(script).not.toMatch(/'deploy',\s*'--app'/);
     const gate = workflow.slice(workflow.indexOf('  gate:'), workflow.indexOf('  release:'));
     expect(gate).not.toMatch(/secrets\./);
