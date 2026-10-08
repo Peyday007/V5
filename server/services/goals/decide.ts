@@ -29,7 +29,7 @@
  */
 import { getDb } from '../../db/database.ts';
 import type { GoalCommitment } from '../../domain/goals.ts';
-import { getWorkstream, listLinks, recordWorkstreamEvent, updateWorkstream } from '../../repos/register.ts';
+import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, supersedeLink, updateWorkstream } from '../../repos/register.ts';
 import { binsHeldBy, cancelGoal, pauseGoal, reinstateGoal, resumeGoal, setGoalTerms } from '../../repos/goals.ts';
 
 export interface DecisionResult {
@@ -183,4 +183,82 @@ export async function changeObjective(
       ? `${pursuing.length} piece(s) of work were started under the previous objective and keep going. Supersede any link that no longer serves the new one; its row and its history stay.`
       : 'No work was linked yet, so nothing was started under the previous objective.',
   };
+}
+
+/**
+ * Declare that a goal cannot finish before another one does — the one writer of
+ * that decision. Refuses a self-reference and any cycle, transitively, because
+ * two goals each waiting on the other would hold each other's bins for ever.
+ * Authorization is the caller's; nothing is written when it refuses.
+ */
+export async function setDependency(
+  goalId: string,
+  otherGoalId: string,
+  who: { actorRef: string; userId: string },
+): Promise<DecisionResult> {
+  const refuse = (reason: string): DecisionResult => ({ ok: false, reason, consequence: 'Nothing changed.' });
+  if (otherGoalId === goalId) return refuse('A goal cannot depend on itself.');
+  const goal = await getWorkstream(goalId);
+  if (!goal) return refuse('No such goal.');
+  const other = await getWorkstream(otherGoalId);
+  if (!other) return refuse('No such goal.');
+
+  // Walk what the other goal depends on; reaching this goal is a cycle.
+  const seen = new Set<string>();
+  const queue = [other.id];
+  while (queue.length) {
+    const next = queue.shift()!;
+    if (next === goal.id) return refuse('That would make the two goals wait on each other for ever.');
+    if (seen.has(next)) continue;
+    seen.add(next);
+    for (const link of await listLinks(next)) {
+      if (link.kind === 'WORKSTREAM' && link.relation === 'DEPENDS_ON') queue.push(link.ref);
+    }
+  }
+
+  const link = await linkWorkstream({
+    workstreamId: goal.id,
+    kind: 'WORKSTREAM',
+    ref: other.id,
+    relation: 'DEPENDS_ON',
+    label: other.title,
+    recordedBy: 'PERSON',
+    recordedByUserId: who.userId,
+  });
+  await recordWorkstreamEvent({
+    workstreamId: goal.id,
+    kind: 'GOAL_DEPENDENCY_SET',
+    summary: `Waits on "${other.title}" until it completes.`,
+    detail: { dependsOn: other.id, linkId: link.id },
+    actorRef: who.actorRef,
+  });
+  return {
+    ok: true,
+    reason: null,
+    consequence:
+      'Until that goal completes, Brain holds this goal’s live bins so capacity goes to work that can move; it releases them on the first tick after the other goal completes.',
+  };
+}
+
+/**
+ * Stop a goal waiting on another — the one writer of that decision for the
+ * terminal. Supersedes the live dependency link, keeping its row and its reason,
+ * and records LINK_SUPERSEDED beside it exactly as the register's supersede
+ * route does. Nothing is written when there is no live link or no reason.
+ */
+export async function clearDependency(
+  goalId: string,
+  otherGoalId: string,
+  reason: string,
+  actorRef: string,
+): Promise<DecisionResult> {
+  const refuse = (why: string): DecisionResult => ({ ok: false, reason: why, consequence: 'Nothing changed.' });
+  if (!reason.trim()) return refuse('A reason is required.');
+  const live = (await listLinks(goalId)).find(
+    (one) => one.kind === 'WORKSTREAM' && one.relation === 'DEPENDS_ON' && one.ref === otherGoalId,
+  );
+  if (!live) return refuse(`${goalId} has no live dependency on ${otherGoalId}.`);
+  if (!(await supersedeLink(live.id, reason))) return refuse('That link was already superseded.');
+  await recordWorkstreamEvent({ workstreamId: goalId, kind: 'LINK_SUPERSEDED', summary: reason, detail: { linkId: live.id }, actorRef });
+  return { ok: true, reason: null, consequence: 'The link keeps its row and its reason; the goal no longer waits on that one.' };
 }

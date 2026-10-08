@@ -103,6 +103,7 @@ import {
   renameUser,
   signInNameTaken,
   listWorkers,
+  listIdentityEvents,
   recordIdentityEvent,
   revokeMembership,
   setWorkerStatus,
@@ -114,7 +115,7 @@ import { countLivePasskeys } from '../server/repos/passkeys.ts';
 import { listOrchestrationsByProject, currentFragments } from '../server/repos/research.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import { reissueMissingVerification, retryFragment } from '../server/services/research/reissue.ts';
-import { CONNECTOR_SCOPES } from '../server/domain/types.ts';
+import { CONNECTOR_SCOPES, IDENTITY_RESULTS, type IdentityResult } from '../server/domain/types.ts';
 import {
   WORKLOAD_FAMILIES,
   decideBinRouting,
@@ -287,6 +288,9 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
   packets   list <project> | approve <orchestration>
             independence [project] | scope [project] | reaudit <orchestration>
             retry-fragment <fragment> | reissue <workItem>
+  identity  events [--actor <id>] [--project <id>] [--action <ACTION>]
+                    [--result SUCCESS|DENIED|FAILED] [--limit <n>]
+                    (§17's append-only audit; read-only, needs no --admin)
 
 Connecting a site is not here. It is a person's decision and it lives in
 Russell, under Connected sites, which is the only place a site credential is
@@ -2067,6 +2071,62 @@ async function main(): Promise<void> {
         actor: { type: 'HUMAN', id: actor.id },
       });
       console.log(`  ${JSON.stringify(result)}`);
+      break;
+    }
+
+    /*
+     * §17's audit, read rather than reconstructed: `identity_events` is
+     * append-only, and this is the one terminal reader of it. A read, so it
+     * needs no `--admin` — the same rule `people list` and `workers list`
+     * already follow.
+     *
+     * What is printed is exactly what the repository's own `IdentityEvent`
+     * shape stores minus what §17 forbids: `credentialId`, `metadata`,
+     * `userAgent` and `remoteAddr` never cross into this terminal, because an
+     * identity event may hold identifiers, prefixes and categories and must
+     * never hold anything that reads like a credential.
+     */
+    case 'identity events': {
+      const resultFlag = flag('result');
+      let result: IdentityResult | undefined;
+      if (resultFlag !== null) {
+        const normalized = resultFlag.trim().toUpperCase();
+        const match = IDENTITY_RESULTS.find((candidate) => candidate === normalized);
+        if (!match) {
+          fail(
+            `"${resultFlag}" is not a valid result. Expected one of: ${IDENTITY_RESULTS.join(', ')}.`,
+          );
+        }
+        result = match;
+      }
+      let limit = 200;
+      const limitFlag = flag('limit');
+      if (limitFlag !== null) {
+        const parsed = Number(limitFlag.trim());
+        if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1000) {
+          fail(`"${limitFlag}" is not a valid limit. It must be a whole number between 1 and 1000.`);
+        }
+        limit = parsed;
+      }
+      const actorId = flag('actor');
+      const projectId = flag('project');
+      const action = flag('action');
+      const events = await listIdentityEvents({
+        ...(actorId ? { actorId } : {}),
+        ...(projectId ? { projectId } : {}),
+        ...(action ? { action } : {}),
+        ...(result ? { result } : {}),
+        limit,
+      });
+      for (const event of events) {
+        console.log(
+          `  ${event.createdAt}  actor=${event.actorType}:${event.actorId ?? '—'}  ` +
+            `action=${event.action}  result=${event.result}` +
+            (event.reason ? `  reason=${event.reason}` : '') +
+            (event.targetType ? `  target=${event.targetType}:${event.targetId ?? '—'}` : '') +
+            (event.projectId ? `  project=${event.projectId}` : ''),
+        );
+      }
       break;
     }
     default:
