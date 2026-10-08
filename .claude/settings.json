@@ -46,7 +46,31 @@
       "Bash(npx vitest run:*)",
       "Bash(node scripts/test-impacted.mjs:*)",
       "Bash(ls:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(scripts/test-postgres.sh:*)",
+      "Bash(sh scripts/test-postgres.sh:*)",
+      "Bash(npm run test:pg:*)",
+      "Bash(BRAIN_FULL_GATE=1 npm test)",
+      "Bash(npm run build:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(git merge --no-edit origin/:*)",
+      "Bash(git merge --ff-only:*)",
+      "Bash(git pull --ff-only:*)",
+      "Bash(git restore:*)",
+      "Bash(git mv:*)",
+      "Bash(git rm:*)",
+      "Bash(git rev-list:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git blame:*)",
+      "Bash(git worktree add:*)",
+      "Bash(git checkout:*)",
+      "Bash(node --version)",
+      "Bash(npm --version)",
+      "Bash(pwd)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)"
     ],
     "deny": [
       "Bash(git push --force:*)",
@@ -54,7 +78,20 @@
       "Bash(git push origin production:*)",
       "Bash(git push origin HEAD:production:*)",
       "Bash(flyctl secrets set:*)",
-      "Bash(flyctl deploy:*)"
+      "Bash(flyctl deploy:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git push origin +:*)",
+      "Bash(git push origin --delete:*)",
+      "Bash(flyctl:*)",
+      "Bash(fly:*)",
+      "Bash(sudo:*)",
+      "Bash(su:*)",
+      "Bash(printenv:*)",
+      "Bash(env)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(//root/.ssh/**)",
+      "Read(//etc/shadow)"
     ]
   },
   "hooks": {
@@ -62,7 +99,10 @@
       {
         "matcher": "Bash|mcp__Claude_Code_Remote__send_later",
         "hooks": [
-          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/engineering-guard.mjs\"" }
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/engineering-guard.mjs\""
+          }
         ]
       }
     ]
