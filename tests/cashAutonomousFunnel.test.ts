@@ -1059,16 +1059,6 @@ describe('a deep dive Brain compiles is approved by its own envelope, with no pe
     for (let pass = 0; pass < 12 && !candidateId; pass += 1) {
       await tick('autonomous');
       const piece = (await listOpportunities({ projectId }))[0];
-      /*
-       * A known payer, so cheap screening sends this opening to the full deep
-       * dive this test is about. With the payer unknown it is asked that one
-       * question first, as a need, and no dive is compiled until it is
-       * answered — see `screening.ts` and `tests/cashScreening.test.ts`.
-       */
-      if (piece && !piece.payer) {
-        const { updateOpportunity } = await import('../server/repos/cashPortfolio.ts');
-        await updateOpportunity(piece.id, { payer: 'The Westfield drainage authority' });
-      }
       const candidate = piece?.candidateId
         ? (await listCandidates({ projectId })).find((one) => one.id === piece.candidateId)
         : null;

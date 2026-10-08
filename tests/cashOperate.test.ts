@@ -604,7 +604,7 @@ describe('answering a need resumes what was waiting, exactly once', () => {
 });
 
 describe('a fact Brain could look up is Brain’s work, not a person’s', () => {
-  it('asks a record that is still only evidence the one question that decides it', async () => {
+  it('asks a record that is still only evidence the three questions that could move it', async () => {
     /*
      * A bare record is a *signal*: something was found and nothing says who
      * would pay us for it. The only questions worth spending on are the ones
@@ -628,18 +628,12 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
     });
     if (!captured.ok) throw new Error(captured.reason);
 
-    /*
-     * One, not three. Cheap screening (`screening.ts`) asks the first gate this
-     * kind of record fails on — nobody yet says who would pay — and nothing
-     * else until that is answered: an answer can end the record, and the other
-     * two would then have been bought for nothing.
-     */
     const gaps = await reconcileDiscoverableGaps(projectId);
-    expect(gaps.map((one) => one.field)).toEqual(['payer']);
-    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(1);
+    expect(gaps.map((one) => one.field).sort()).toEqual(['access', 'buyingEvidence', 'payer']);
+    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(3);
   });
 
-  it('raises a question for each researchable blank once the decisive gates are answered', async () => {
+  it('raises a question for each researchable blank once there is a capture thesis', async () => {
     const captured = await capture({
       projectId,
       actorRef: userId,
@@ -663,45 +657,27 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
       decidedBy: 'BRAIN',
     });
 
-    // A capture thesis Brain proposed is not a payer: the decisive question is
-    // still who pays, and it is asked alone.
-    expect((await reconcileDiscoverableGaps(projectId)).map((one) => one.field)).toEqual(['payer']);
-
-    // The gates this kind of record fails on — who pays, whether the request is
-    // current, what such work is published at — answered.
-    await updateOpportunity(captured.value.id, {
-      payer: 'The owner, who signs',
-      buying_signal: 'The owner asked for a repair quote.',
-      signal_observed_at: '2026-09-20',
-    });
-    await recordCardFact({
-      projectId,
-      opportunityId: captured.value.id,
-      field: 'revenueRange',
-      kind: 'PERSON',
-      value: '$400 to $600 a repair',
-      decidedBy: userId,
-    });
-
     const gaps = await reconcileDiscoverableGaps(projectId);
     /*
-     * Then every researchable blank. A price, a delivery path, who does the
-     * work and the exposure are facts about the world that Brain looks up —
-     * §30 had already said so. The offer and the acceptance condition stay off
-     * this list: Brain proposes those and a person may overrule them, and
-     * neither is ever *asked* for.
+     * Seven, not three. A price, a delivery path, who does the work and the
+     * exposure are facts about the world that Brain looks up — §30 had already
+     * said so and the boolean that decided it had not moved. The offer and the
+     * acceptance condition stay off this list: Brain proposes those and a
+     * person may overrule them, and neither is ever *asked* for.
      */
     expect(gaps.map((one) => one.field).sort()).toEqual([
       'access',
+      'buyingEvidence',
       'delivery',
       'exposure',
       'fulfillment',
+      'payer',
       'price',
     ]);
 
     // And once, however many ticks read it.
     expect(await reconcileDiscoverableGaps(projectId)).toEqual([]);
-    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(5);
+    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(7);
   });
 
   it('settles one the moment the card carries the answer, whoever put it there', async () => {
@@ -725,8 +701,9 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
       uncertainty: 'Whether they would choose us.',
       decidedBy: 'BRAIN',
     });
-    // The decisive question is asked alone.
-    expect((await reconcileDiscoverableGaps(projectId)).length).toBe(1);
+    // Seven, not three: a capture thesis is what makes the other four worth
+    // spending on, and the three above were raised for the signal already.
+    expect((await reconcileDiscoverableGaps(projectId)).length).toBe(7);
 
     await fillCard({
       opportunityId: captured.value.id,
@@ -738,10 +715,7 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
     const resolved = await listNeeds({ projectId, states: ['RESOLVED'] });
     expect(resolved).toHaveLength(1);
     expect(resolved[0]!.requestKey).toContain(':payer');
-    // And the next gate is asked once the first is answered, again alone.
-    const open = await listNeeds({ projectId, states: ['OPEN'] });
-    expect(open).toHaveLength(1);
-    expect(open[0]!.requestKey).toContain(':buyingEvidence');
+    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(6);
   });
 
   it('asks nothing about a piece already past the card', async () => {
@@ -1203,7 +1177,6 @@ describe('the operating pass as the tick calls it', () => {
       // read, so there is nothing to say about how it is classified.
       reclassified: null,
       capabilities: { raised: [], settled: [] },
-      screened: 0,
       gaps: [],
       research: { applied: [], unanswered: [] },
       proposed: [],

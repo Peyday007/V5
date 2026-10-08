@@ -18,7 +18,6 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { screenPortfolio } from '../server/services/cash/screening.ts';
 import { fact, qualifyingFacts, tiersFor } from './helpers/cashTier.ts';
 import { assemble, isWorkable, placements } from '../server/services/cash/portfolio.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
@@ -882,20 +881,8 @@ describe('the refinement lifecycle is bounded and says what it is doing', () => 
     };
 
     // Four openings, four different reasons, all of them rows.
-    // A buyer's own dated request with a known payer: what cheap screening
-    // sends to the full qualification (`screening.ts`).
     const eligible = await make('has a published signal', {
       buying_signal: 'A county published a paid request on 2026-09-01.',
-      signal_observed_at: '2026-09-01',
-      payer: 'The county',
-      opportunity_signal: 'ACTIVE_BUYER_DEMAND',
-    });
-    // The same request with nobody yet named as payer: screening asks that one
-    // question as a need, so no dive is started for it.
-    const unpaid = await make('nobody named as payer', {
-      buying_signal: 'A county published a paid request on 2026-09-02.',
-      signal_observed_at: '2026-09-02',
-      opportunity_signal: 'ACTIVE_BUYER_DEMAND',
     });
     const silent = await make('nothing published to ask about', {});
     const spent = await make('both dives spent', {
@@ -912,11 +899,6 @@ describe('the refinement lifecycle is bounded and says what it is doing', () => 
     expect((await whyNotDiving(silent)).kind).toBe('NOTHING_PUBLISHED_TO_ASK_ABOUT');
     expect((await whyNotDiving(spent)).kind).toBe('ROUNDS_SPENT');
     expect((await whyNotDiving(closed)).kind).toBe('NOT_A_QUALIFYING_STATE');
-    const screens = new Map(
-      (await screenPortfolio(fixture.project.id)).map((one) => [one.opportunity.id, one.screen]),
-    );
-    expect((await whyNotDiving(eligible, screens.get(eligible.id))).kind).toBe('ELIGIBLE');
-    expect((await whyNotDiving(unpaid, screens.get(unpaid.id))).kind).toBe('SCREENED');
 
     /*
      * And the producer agrees, which is the assertion that matters.
