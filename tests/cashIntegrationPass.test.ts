@@ -104,7 +104,11 @@ import {
   COMMERCIAL_ACTIONS,
 } from '../server/services/cash/authority.ts';
 import { SEARCH_BUCKETS, openDiscovery } from '../server/services/cash/discovery.ts';
-import { advanceWithinAuthority, runNeedContinuations } from '../server/services/cash/operate.ts';
+import {
+  advanceWithinAuthority,
+  operate,
+  runNeedContinuations,
+} from '../server/services/cash/operate.ts';
 import { readCapability } from '../server/services/cash/capabilities.ts';
 import { cashView } from '../server/services/cash/view.ts';
 import { cashRouter } from '../server/routes/cash.ts';
@@ -673,11 +677,13 @@ describe('one sprint, from activation to money in and winding down', () => {
      * 3. Brain names what it does not know, and researches the parts that
      *    are facts rather than the owner's decisions.
      * ------------------------------------------------------------------ */
+    /*
+     * One question first, and only one: cheap screening (`screening.ts`) asks
+     * the gate this kind of opening fails on — who pays — and asks the route
+     * to them only once a payer exists to be reached.
+     */
     const needs = await listNeeds({ projectId, states: ['OPEN'] });
-    expect(needs.map((one) => one.requestKey?.split(':').pop()).sort()).toEqual([
-      'access',
-      'payer',
-    ]);
+    expect(needs.map((one) => one.requestKey?.split(':').pop())).toEqual(['payer']);
     for (const need of needs) {
       expect(need.completionCondition).toBeTruthy();
       expect(need.blocksState).toBe('EXECUTING');
@@ -686,7 +692,6 @@ describe('one sprint, from activation to money in and winding down', () => {
     }
 
     const payerNeed = needs.find((one) => one.requestKey?.endsWith(':payer'))!;
-    const accessNeed = needs.find((one) => one.requestKey?.endsWith(':access'))!;
     await workerResearches({
       candidateId: payerNeed.candidateId!,
       question: payerNeed.nextStep,
@@ -701,6 +706,15 @@ describe('one sprint, from activation to money in and winding down', () => {
         },
       ],
     });
+    // The operating step alone, so nothing else is launched between the two
+    // researched questions and the worker below claims the access question.
+    const payerApplied = await operate(projectId);
+    expect(payerApplied.research.applied.map((one) => one.needId)).toContain(payerNeed.id);
+    // The payer is known and the request is dated, so the rest is worth asking.
+    const accessNeed = (await listNeeds({ projectId, states: ['OPEN'] })).find((one) =>
+      one.requestKey?.endsWith(':access'),
+    )!;
+    expect(accessNeed.candidateId).toBeTruthy();
     await workerResearches({
       candidateId: accessNeed.candidateId!,
       question: accessNeed.nextStep,
@@ -718,9 +732,7 @@ describe('one sprint, from activation to money in and winding down', () => {
 
     const applying = await tick('journey');
     const operated = applying.cashOperations.find((one) => one.projectId === projectId)!;
-    expect(operated.cardsAnswered).toEqual(
-      expect.arrayContaining([payerNeed.id, accessNeed.id]),
-    );
+    expect(operated.cardsAnswered).toEqual(expect.arrayContaining([accessNeed.id]));
 
     /*
      * On the card, and resolvable to the passage it came from — the whole of

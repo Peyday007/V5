@@ -65,6 +65,7 @@ import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
 import { researchMissionSlotsFull } from '../russell/launch.ts';
+import { screenPortfolio, screenRank, targetedQuestion } from './screening.ts';
 import type { CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
 
 /** How many deep dives one project may have in flight. Provider capacity. */
@@ -391,6 +392,27 @@ export async function startValidations(input: {
     ...all.filter((one) => one.validationState === null).sort(closestFirst),
     ...all.filter((one) => one.validationState !== null).sort(closestFirst),
   ];
+  /*
+   * Cheap screening decides which of them earns a dive, and in what order.
+   *
+   * A screened-out or parked opening is not dived at all; a full qualification
+   * goes ahead of a one-question targeted round; and the order above is kept
+   * inside each rank, because the sort is stable. See `screening.ts` — it
+   * reads rows and writes nothing here.
+   */
+  // Read fresh rather than taken from the pass that called this: a dive the
+  // settle step just closed must be screened on what it established, and only
+  // when there is a slot to spend.
+  const screens = new Map(
+    room > 0
+      ? (await screenPortfolio(input.projectId)).map((one) => [one.opportunity.id, one.screen])
+      : [],
+  );
+  ordered.sort((a, b) => {
+    const left = screens.get(a.id);
+    const right = screens.get(b.id);
+    return (left ? screenRank(left) : 3) - (right ? screenRank(right) : 3);
+  });
 
   const out: StartedValidation[] = [];
   for (const opportunity of ordered) {
@@ -408,12 +430,17 @@ export async function startValidations(input: {
      * happened rather than a second opinion about it.
      */
     if ((await whyNotDiving(opportunity)).kind !== 'ELIGIBLE') continue;
+    const screen = screens.get(opportunity.id);
+    // A dive only where the screen says a dive asks it: a card field the
+    // screen targets is one narrow need, asked by the needs path instead.
+    if (!screen || (screen.askBy !== 'FULL_DIVE' && screen.askBy !== 'DIVE')) continue;
+    const targeted = screen.askBy === 'DIVE' ? screen.decisive : null;
 
     const candidate = await createCandidate({
       projectId: input.projectId,
       visibility: 'SHARED',
       title: `Qualify: ${opportunity.title}`,
-      statement: validationQuestion(opportunity),
+      statement: targeted ? targetedQuestion(opportunity, targeted) : validationQuestion(opportunity),
     });
     const round = opportunity.validationRounds + 1;
     const moved = await updateOpportunity(opportunity.id, {
@@ -442,13 +469,21 @@ export async function startValidations(input: {
       opportunityId: opportunity.id,
       kind: 'CASH_VALIDATION_STARTED',
       actorRef: 'BRAIN',
-      summary:
-        round > 1
+      summary: targeted
+        ? `Brain is asking one question about this opening first: ${screen.because} Nothing is ` +
+          'being contacted or spent.'
+        : round > 1
           ? 'Brain is qualifying this opening a second time, for the questions the first ' +
             'pass was never asked. Nothing is being contacted or spent.'
           : 'Brain is qualifying this opening from published sources: who pays, what it pays, ' +
             'what it costs and what would rule it out. Nothing is being contacted or spent.',
-      detail: { candidateId: candidate.id, signal: opportunity.buyingSignal, round },
+      detail: {
+        candidateId: candidate.id,
+        signal: opportunity.buyingSignal,
+        round,
+        targeted,
+        screen: screen.reason,
+      },
     });
     out.push({ opportunityId: opportunity.id, candidateId: candidate.id });
     room -= 1;
@@ -1075,7 +1110,7 @@ const FINISHED_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);
  * column the latest round overwrites. The column is still read too, for an
  * opening settled before those events existed. Oldest first.
  */
-async function finishedDivePackets(opportunity: CashOpportunity): Promise<string[]> {
+export async function finishedDivePackets(opportunity: CashOpportunity): Promise<string[]> {
   const packets: string[] = [];
   const add = (id: string | null | undefined): void => {
     if (id && !packets.includes(id)) packets.push(id);
