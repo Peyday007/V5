@@ -17,7 +17,9 @@
  *   npm run factory -- release --campaign <id> --decision APPROVED
  */
 import fs from 'node:fs';
-import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
+import { parseRemote } from '../server/services/factory/forge.ts';
+import { campaignsAwaitingRelease, observeRelease } from '../server/services/factory/release.ts';
 import { listProjects } from '../server/repos/projects.ts';
 import { listUsers } from '../server/repos/identity.ts';
 import {
@@ -863,6 +865,95 @@ async function main(): Promise<void> {
         break;
       }
       process.stdout.write(`${rendered.title}\n\n${rendered.body}\n`);
+      break;
+    }
+
+    /*
+     * The release workflow's question (§58): may this pull request, at exactly
+     * this head, be released without a person? Brain answers from its own rows
+     * and the forge; the workflow then re-derives the path classification from
+     * the canonical branch's checkout before merging anything. A head that moved
+     * since the workflow read it is not an answer about the head it read.
+     */
+    case 'release-decision': {
+      const remote = flagString(flags, 'repository') ?? fail('--repository is required');
+      const prNumber = Number(flagString(flags, 'pr') ?? fail('--pr is required'));
+      const head = flagString(flags, 'head') ?? fail('--head is required');
+      if (!Number.isInteger(prNumber) || prNumber <= 0) fail('--pr must be a pull request number');
+      const wanted = parseRemote(remote.includes('://') ? remote : `https://github.com/${remote}`);
+      if (!wanted) fail('--repository does not parse as a repository');
+      const rows = await getDb().all<{ id: string; change_request_id: string }>(
+        `SELECT id, change_request_id FROM factory_campaigns
+          WHERE pr_ref IN (?, ?) AND execution_mode = 'REMOTE' ORDER BY created_at DESC`,
+        [`#${prNumber}`, String(prNumber)],
+      );
+      let campaignId: string | null = null;
+      for (const row of rows) {
+        const cr = await getChangeRequest(row.change_request_id);
+        if (cr && parseRemote(cr.repository)?.slug.toLowerCase() === wanted.slug.toLowerCase()) {
+          campaignId = row.id;
+          break;
+        }
+      }
+      if (!campaignId) {
+        process.stdout.write(
+          `FACTORY-RELEASE: MANUAL pr=${prNumber} — no Factory campaign delivered this pull request, so nothing in Brain vouches for it.\n`,
+        );
+        break;
+      }
+      const { reading } = await observeRelease(campaignId);
+      for (const blocker of reading.blockers) {
+        process.stdout.write(`  blocker ${blocker.code} (${blocker.owner}): ${blocker.sentence}\n`);
+      }
+      if (reading.stage !== 'AUTO_RELEASE_ELIGIBLE') {
+        process.stdout.write(`FACTORY-RELEASE: MANUAL campaign=${campaignId} stage=${reading.stage} — ${reading.summary}\n`);
+      } else if (reading.headSha !== head) {
+        process.stdout.write(
+          `FACTORY-RELEASE: MANUAL campaign=${campaignId} stage=HEAD_MOVED — Brain assessed ${reading.headSha}, the workflow asked about ${head}.\n`,
+        );
+      } else {
+        process.stdout.write(`FACTORY-RELEASE: ELIGIBLE campaign=${campaignId} head=${head}\n`);
+      }
+      break;
+    }
+
+    /*
+     * The pull requests the release workflow may take next, oldest first: one
+     * `FACTORY-RELEASE-CANDIDATE` line each, for the named repository only.
+     * Every one is read fresh from the forge and recorded if it changed, so the
+     * list is never an older answer than the one the workflow then acts on.
+     */
+    case 'release-queue': {
+      const remote = flagString(flags, 'repository') ?? fail('--repository is required');
+      const wanted = parseRemote(remote.includes('://') ? remote : `https://github.com/${remote}`);
+      if (!wanted) fail('--repository does not parse as a repository');
+      let offered = 0;
+      for (const campaign of await campaignsAwaitingRelease()) {
+        const cr = await getChangeRequest(campaign.changeRequestId);
+        if (!cr || parseRemote(cr.repository)?.slug.toLowerCase() !== wanted.slug.toLowerCase()) continue;
+        const { reading } = await observeRelease(campaign.id);
+        process.stdout.write(`  ${campaign.id} pr=${reading.prNumber ?? '—'} ${reading.stage}\n`);
+        if (reading.stage === 'AUTO_RELEASE_ELIGIBLE' && reading.prNumber !== null && reading.headSha) {
+          process.stdout.write(
+            `FACTORY-RELEASE-CANDIDATE: pr=${reading.prNumber} head=${reading.headSha} campaign=${campaign.id}\n`,
+          );
+          offered += 1;
+        }
+      }
+      process.stdout.write(`release queue: ${offered} eligible\n`);
+      break;
+    }
+
+    case 'release-status': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const { reading, recorded } = await observeRelease(campaignId);
+      process.stdout.write(`${reading.stage} — ${reading.summary}\n`);
+      process.stdout.write(
+        `  pr=${reading.prNumber ?? '—'} head=${reading.headSha ?? '—'} serving=${reading.servingRevision ?? 'unknown'} recorded=${recorded}\n`,
+      );
+      for (const blocker of reading.blockers) {
+        process.stdout.write(`  blocker ${blocker.code} (${blocker.owner}): ${blocker.sentence}\n`);
+      }
       break;
     }
 

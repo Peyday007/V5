@@ -301,6 +301,9 @@ const OVERRIDES: Override[] = [
   // the same authority as inviting an account into that pool. Reading the
   // allocation takes the default: it is the same fleet reading Build already shows.
   { pattern: /^\/api\/projects\/[^/]+\/factory\/allocation\/[^/]+\/report$/, method: 'POST', level: 'ADMIN' },
+  // Authorizing unattended release is a person deciding that changes may reach
+  // production without them (§58): the onboarding level, and a worker never.
+  { pattern: /^\/api\/projects\/[^/]+\/factory\/repositories\/[^/]+\/release-authorization(\/revoke)?$/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/russell\/projects\/[^/]+\/sites/, method: 'GET', level: 'READ' },
 
   // ---------------------------------------------------------------------

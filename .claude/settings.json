@@ -39,6 +39,8 @@
       "Bash(npm install)",
       "Bash(npm run typecheck)",
       "Bash(npm run test:impacted:*)",
+      "Bash(npm run test:pg)",
+      "Bash(npm run test:pg:*)",
       "Bash(npm run build)",
       "Bash(npm run lint:*)",
       "Bash(npm run engineering:*)",

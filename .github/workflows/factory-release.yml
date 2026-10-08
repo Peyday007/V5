@@ -1,0 +1,302 @@
+# Unattended release of an eligible Factory pull request (CLAUDE.md §58).
+#
+# ---------------------------------------------------------------------------
+# What this does, and the two keys it needs
+# ---------------------------------------------------------------------------
+#
+# A Factory campaign stops at a reviewable pull request (§27). For a change the
+# owner has decided may ship without them, this workflow takes it the rest of
+# the way: it asks Brain whether the pull request is eligible, re-derives that
+# from the canonical branch's own checkout, builds the merge, tests the merged
+# tree on both backends, fast-forwards the canonical branch to that exact
+# merge, and dispatches the one `Deploy` workflow. Brain then reads its own
+# serving revision and says LIVE only when it contains the change.
+#
+# Nothing happens unless BOTH keys are turned:
+#
+#   1. Brain: a project administrator authorized unattended release for this
+#      repository (`factory_release_authorizations`, a person, revocable, with
+#      an expiry). Without it Brain answers MANUAL.
+#   2. GitHub: the repository variable FACTORY_AUTO_RELEASE is `enabled`, and
+#      the `factory-release` environment exists. Only a repository
+#      administrator can change either, and this Brain cannot.
+#
+# ---------------------------------------------------------------------------
+# What it will never release
+# ---------------------------------------------------------------------------
+#
+# Anything `server/services/factory/releaseEligibility.ts` calls manual:
+# credentials, security, financial authority, deployment controls (this file
+# among them), schema and dependencies, and anything outside the low-risk
+# surface. The classifier is run from the canonical branch's checkout, never
+# from the pull request's, so a change cannot rewrite the rule it is judged by.
+#
+# ---------------------------------------------------------------------------
+# Why three jobs
+# ---------------------------------------------------------------------------
+#
+# The pull request's code runs only in `verify`, which holds a read-only token
+# and no secret. `release` holds the write token and runs no code from the pull
+# request at all: it rebuilds the identical merge commit (fixed identity, date
+# and message, so the same parents give the same SHA), refuses if the SHA
+# differs from the one `verify` tested, and pushes it without force — so if
+# the canonical branch moved in the meantime the push is refused by the forge
+# itself, in the statement that makes the change (§28).
+#
+# It never runs `flyctl deploy`. `Deploy` is still the only workflow that can,
+# with its own canonical guard, its test gate and its hosted verification.
+name: Factory release
+
+on:
+  schedule:
+    # Twice an hour, off the hour. A release is not urgent enough to poll
+    # harder, and a schedule only runs from the default branch.
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'A pull request number to consider (blank: the oldest one Brain calls eligible)'
+        required: false
+        default: ''
+
+# One release at a time, and a newer run waits rather than cancelling one that
+# may already be between its merge and its deploy.
+concurrency:
+  group: factory-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  decide:
+    name: Ask Brain which pull request is eligible
+    if: vars.FACTORY_AUTO_RELEASE == 'enabled'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      pr: ${{ steps.pick.outputs.pr }}
+      head: ${{ steps.pick.outputs.head }}
+      base_sha: ${{ steps.pick.outputs.base_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: ./.github/actions/await-release
+
+      - name: Ask Brain
+        id: pick
+        timeout-minutes: 15
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          PR_INPUT: ${{ inputs.pr }}
+        run: |
+          set -euo pipefail
+          canonical=$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          case "$PR_INPUT" in
+            '') ;;
+            *[!0-9]*) echo "::error::The pull request input must be a number."; exit 1 ;;
+          esac
+
+          if [ -n "$PR_INPUT" ]; then
+            head=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_INPUT}" --jq .head.sha)
+            case "$head" in *[!0-9a-f]*|'') echo "::error::Could not read the pull request's head."; exit 1 ;; esac
+            flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh release-decision --repository ${GITHUB_REPOSITORY} --pr ${PR_INPUT} --head ${head}" 2>&1 | tee brain.txt
+            line=$(grep -m1 '^FACTORY-RELEASE: ' brain.txt || true)
+          else
+            flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh release-queue --repository ${GITHUB_REPOSITORY}" 2>&1 | tee brain.txt
+            line=$(grep -m1 '^FACTORY-RELEASE-CANDIDATE: ' brain.txt || true)
+          fi
+          grep -q '^FACTORY: OK' brain.txt || { echo "::error::Brain did not finish answering."; exit 1; }
+
+          pr=$(printf '%s' "$line" | sed -n 's/.*pr=\([0-9][0-9]*\).*/\1/p')
+          head=$(printf '%s' "$line" | sed -n 's/.*head=\([0-9a-f]\{40\}\).*/\1/p')
+          if [ -z "$pr" ]; then
+            pr=$(printf '%s' "$PR_INPUT")
+          fi
+          case "$line" in
+            'FACTORY-RELEASE: ELIGIBLE'*|'FACTORY-RELEASE-CANDIDATE: '*) ;;
+            *)
+              echo "Nothing to release: ${line:-Brain offered no eligible pull request}."
+              echo "pr=" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+
+          # Brain's answer is about one head. The forge must agree that this is
+          # still the head, that it targets the canonical branch, and that it
+          # comes from this repository rather than a fork.
+          info=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}" \
+            --jq '[.state, .draft, .base.ref, .head.sha, .head.repo.full_name] | @tsv')
+          IFS=$'\t' read -r state draft base_ref forge_head head_repo <<< "$info"
+          if [ "$state" != open ] || [ "$draft" != false ] || [ "$base_ref" != "$canonical" ] \
+             || [ "$forge_head" != "$head" ] || [ "$head_repo" != "$GITHUB_REPOSITORY" ]; then
+            echo "::warning::Pull request #${pr} is not releasable as Brain read it (state=${state} draft=${draft} base=${base_ref} head=${forge_head} from=${head_repo}). The next run asks again."
+            echo "pr=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base_sha=$(git ls-remote origin "refs/heads/${canonical}" | cut -f1)
+          {
+            echo "pr=${pr}"
+            echo "head=${head}"
+            echo "base_sha=${base_sha}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Brain calls pull request #${pr} eligible at ${head}; ${canonical} is at ${base_sha}."
+
+  verify:
+    name: Re-derive eligibility and test the merged tree
+    needs: decide
+    if: needs.decide.outputs.pr != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    outputs:
+      merge_sha: ${{ steps.merge.outputs.merge_sha }}
+    steps:
+      # The canonical branch, at exactly the commit `decide` read. This copy is
+      # the trusted one: the classifier is run from here.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.decide.outputs.base_sha }}
+          fetch-depth: 0
+          path: trusted
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Classify the diff with the canonical branch's own rule
+        working-directory: trusted
+        env:
+          PR: ${{ needs.decide.outputs.pr }}
+          HEAD_SHA: ${{ needs.decide.outputs.head }}
+          BASE_SHA: ${{ needs.decide.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/pull/${PR}/head:refs/remotes/release/head"
+          test "$(git rev-parse refs/remotes/release/head)" = "$HEAD_SHA" \
+            || { echo "::error::The pull request moved since Brain read it."; exit 1; }
+          npm ci --ignore-scripts
+          git diff --name-only "${BASE_SHA}...${HEAD_SHA}" > ../changed.txt
+          cat ../changed.txt
+          npx tsx scripts/release-eligibility.ts < ../changed.txt | tee ../eligibility.txt
+          grep -q '^RELEASE-ELIGIBILITY: ELIGIBLE' ../eligibility.txt \
+            || { echo "::error::The canonical branch's classifier calls this change manual. A person releases it."; exit 1; }
+
+      - name: Build the merge the release will push
+        id: merge
+        working-directory: trusted
+        env:
+          PR: ${{ needs.decide.outputs.pr }}
+          HEAD_SHA: ${{ needs.decide.outputs.head }}
+          BASE_SHA: ${{ needs.decide.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          git worktree add --detach ../merged "$BASE_SHA"
+          cd ../merged
+          when="$(git log -1 --format=%ct "$HEAD_SHA") +0000"
+          GIT_AUTHOR_NAME='Brain Factory Release' GIT_AUTHOR_EMAIL='factory-release@users.noreply.github.com' \
+          GIT_COMMITTER_NAME='Brain Factory Release' GIT_COMMITTER_EMAIL='factory-release@users.noreply.github.com' \
+          GIT_AUTHOR_DATE="$when" GIT_COMMITTER_DATE="$when" \
+            git -c core.hooksPath=/dev/null merge --no-ff --no-edit -m "Factory release: merge pull request #${PR}" "$HEAD_SHA" \
+            || { echo "::error::The pull request does not merge cleanly onto the canonical branch."; exit 1; }
+          echo "merge_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          # Everything this job fetches has been fetched. The read-only token is
+          # removed before the pull request's code runs, so that code holds no
+          # credential at all.
+          git config --local --name-only --get-regexp '(extraheader|^includeif\.)' 2>/dev/null \
+            | xargs -r -n1 git config --local --unset-all || true
+          if git config --local --get-regexp 'extraheader' >/dev/null 2>&1; then
+            echo "::error::A credential is still configured; refusing to run the pull request's code."
+            exit 1
+          fi
+
+      # The pull request's code runs from here on, in a job with a read-only
+      # token and no secrets. typecheck and the impacted tests on both
+      # backends; the full gate is paid once by Deploy on the released SHA
+      # (CLAUDE.md rule 3), not here.
+      - name: Typecheck and impacted tests, SQLite and Postgres
+        working-directory: merged
+        env:
+          BASE_SHA: ${{ needs.decide.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-eng
+          npm ci
+          npm run typecheck
+          npm run test:impacted -- --base "$BASE_SHA"
+          npm run test:pg -- --base "$BASE_SHA" | tee ../pg.txt
+          grep -q '^TEST-PG: OK' ../pg.txt
+
+  release:
+    name: Fast-forward the canonical branch and dispatch Deploy
+    needs: [decide, verify]
+    runs-on: ubuntu-latest
+    environment: factory-release
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.decide.outputs.base_sha }}
+          fetch-depth: 0
+
+      - name: Rebuild the tested merge and push it, without force
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.decide.outputs.pr }}
+          HEAD_SHA: ${{ needs.decide.outputs.head }}
+          BASE_SHA: ${{ needs.decide.outputs.base_sha }}
+          MERGE_SHA: ${{ needs.verify.outputs.merge_sha }}
+        run: |
+          set -euo pipefail
+          canonical=$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)
+          git fetch --no-tags origin "+refs/pull/${PR}/head:refs/remotes/release/head"
+          test "$(git rev-parse refs/remotes/release/head)" = "$HEAD_SHA" \
+            || { echo "::error::The pull request moved after it was tested."; exit 1; }
+          now=$(git ls-remote origin "refs/heads/${canonical}" | cut -f1)
+          if [ "$now" != "$BASE_SHA" ]; then
+            echo "::warning::${canonical} moved from ${BASE_SHA} to ${now} after the merge was tested. Nothing was pushed; the next run re-tests against the new tip."
+            exit 0
+          fi
+          git checkout --detach "$BASE_SHA"
+          when="$(git log -1 --format=%ct "$HEAD_SHA") +0000"
+          GIT_AUTHOR_NAME='Brain Factory Release' GIT_AUTHOR_EMAIL='factory-release@users.noreply.github.com' \
+          GIT_COMMITTER_NAME='Brain Factory Release' GIT_COMMITTER_EMAIL='factory-release@users.noreply.github.com' \
+          GIT_AUTHOR_DATE="$when" GIT_COMMITTER_DATE="$when" \
+            git -c core.hooksPath=/dev/null merge --no-ff --no-edit -m "Factory release: merge pull request #${PR}" "$HEAD_SHA"
+          test "$(git rev-parse HEAD)" = "$MERGE_SHA" \
+            || { echo "::error::The rebuilt merge is not the one that was tested. Nothing was pushed."; exit 1; }
+          # No code from the pull request runs in this job, and hooks are off for
+          # the push. A refused non-fast-forward is the forge saying the branch
+          # moved: nothing is forced.
+          git -c core.hooksPath=/dev/null push origin "${MERGE_SHA}:refs/heads/${canonical}"
+          echo "FACTORY-RELEASE: MERGED pr=${PR} merge=${MERGE_SHA}"
+
+      - name: Dispatch the one Deploy, and the full Postgres gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ needs.decide.outputs.pr }}
+          MERGE_SHA: ${{ needs.verify.outputs.merge_sha }}
+        run: |
+          set -euo pipefail
+          canonical=$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)
+          now=$(git ls-remote origin "refs/heads/${canonical}" | cut -f1)
+          if [ "$now" != "$MERGE_SHA" ]; then
+            echo "Nothing was pushed by this run (or ${canonical} already moved on), so nothing is dispatched."
+            exit 0
+          fi
+          # A push made with this workflow's token triggers no workflow by
+          # itself, so the gates the canonical branch runs on a push are
+          # dispatched explicitly. Deploy keeps its own canonical guard, test
+          # gate and hosted verification; Brain reads LIVE from its own
+          # revision once the new image serves.
+          gh workflow run deploy.yml --ref "$canonical" -f reason="Factory release of pull request #${PR} (${MERGE_SHA})"
+          gh workflow run postgres-suite.yml --ref "$canonical" -f reason="Factory release of pull request #${PR}"
+          echo "FACTORY-RELEASE: DISPATCHED pr=${PR} merge=${MERGE_SHA}"

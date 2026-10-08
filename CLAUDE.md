@@ -12718,6 +12718,48 @@ views into a product. The rules it settled:
   every read within a month, so a refresh never quietly extends what is about
   to be approved.
 
+## 58. A change is released by a rule a person turned on, and it is live when the serving revision says so.
+
+The Factory stopped at a reviewed pull request (§27), and everything after it —
+whether a person had to release it, whether it merged, whether it was serving —
+was readable nowhere. `services/factory/releaseEligibility.ts`,
+`services/factory/release.ts`, `repos/releaseAuthorizations.ts`,
+`.github/workflows/factory-release.yml` and `docs/FACTORY-RELEASE.md` are the
+rest of the road.
+
+- **Low risk is a reading of the paths that moved, deny by default.** Credentials,
+  security, financial authority, deployment controls, schema and dependencies
+  are always manual, and so is anything outside `client/`, `server/`, `tests/`,
+  `docs/`, `objectives/` and `blueprints/`. The classifier and everything that
+  decides a release are deployment controls, so the release machinery never
+  releases a change to itself.
+- **Two keys, and neither alone releases anything.** A project administrator's
+  standing, expiring, revocable authorization in Brain (one live per
+  repository, by a partial unique index; a worker refused by type), and the
+  GitHub variable `FACTORY_AUTO_RELEASE` plus the `factory-release`
+  environment, which only a repository administrator can set.
+- **The pull request cannot release itself.** The workflow runs the classifier
+  from the canonical branch's checkout, runs the pull request's code only in a
+  job with a read-only token and no secret, rebuilds the identical merge
+  (fixed identity, date and message) in the job that holds the write token,
+  refuses if its SHA differs from the tested one, and pushes without force — so
+  a moved canonical branch is refused by the forge in the statement that makes
+  the change (§28). It never runs `flyctl deploy`; it dispatches `Deploy`.
+- **LIVE is the serving revision's answer, never a workflow's.** The forge is
+  asked whether the head is contained in `BRAIN_REVISION`; merged-but-not-serving
+  is `MERGED_NOT_LIVE` naming the deploy. Readings are recorded only when they
+  change, `RELEASE_LIVE` once, on the remote tick (throttled per campaign) and
+  from Build's *Check again*.
+- **Unattended Postgres is one allowlisted command.** `npm run test:pg` makes a
+  throwaway cluster on a private unix socket with no TCP and no password, runs
+  the impacted tests (or `--files`) against it, and removes it. An environment
+  assignment in front of a command matches no permission rule, which is why the
+  Postgres half used to stop an unattended worker at a prompt.
+
+**What is not true yet:** no change has been released this way. The proof is
+one real objective taken from approval to `RELEASE_LIVE` with nobody touching
+it, after this change is reviewed, merged and both keys are turned.
+
 ## Repository map
 
 ```
@@ -12763,6 +12805,7 @@ server/
     auditReopens.ts     the record behind a re-audit, and its one reservation
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
     deliveryProofs.ts   what each Routine has been shown able to deliver, per repository
+    releaseAuthorizations.ts  the owner's standing release decision, one live per repository
     connectors.ts       one Claude account at one endpoint, and every OAuth client it ever was
     recoveryProbes.ts   each recovery probe and what its fire proved; one live at a time
     factory.ts          the contract, the campaign, and units that own a surface
@@ -12853,6 +12896,8 @@ server/
       simulate.ts       a deterministic projection, structurally labelled
       profiles.ts       workload cost and activation traces, as queries
     factory/
+      releaseEligibility.ts  which changed paths may ship without a person (§58)
+      release.ts        manual, eligible, merged or LIVE — read from the forge and BRAIN_REVISION
       contract.ts       the change request, and what may never happen to it
       planner.ts        a proposed plan, validated to death before a row is written
       architect.ts      the decomposition pass, and the plan it is refused for
@@ -13361,8 +13406,14 @@ moved. If the change touched persistence, run the same selection against the
 other backend:
 
 ```
-BRAIN_TEST_DATABASE_URL=postgresql://... npm run test:impacted
+npm run test:pg
 ```
+
+`test:pg` starts a throwaway cluster on a private socket, runs the impacted
+selection against it and removes it — one allowlisted command, so an unattended
+worker is never stopped at a permission prompt (§58). It takes the same flags as
+`test:impacted`, and `--files <tests…>` for exact files. With
+`BRAIN_TEST_DATABASE_URL` already set it uses that database instead.
 
 `--list` prints the selection without running it; `--transitive` widens it to
 everything the module graph reaches, for a change whose reach genuinely is that
