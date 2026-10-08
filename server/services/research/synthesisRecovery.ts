@@ -53,7 +53,7 @@ import {
   listPasses,
   updateOrchestration,
 } from '../../repos/research.ts';
-import { enqueueWork, getWorkItem, listWorkItems } from '../../repos/workQueue.ts';
+import { enqueueWork, getWorkItem, listWorkItems, listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
 import {
   binForOrchestration,
   getBin,
@@ -291,9 +291,7 @@ export async function assessSynthesisRecovery(workItemId: string): Promise<Asses
 
   // 2. No successful equivalent operation. The rollback is Brain's own account;
   //    this is the ledger's.
-  const items = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
-    (item) => item.orchestrationId === orchestration.id,
-  );
+  const items = await listWorkItemsForOrchestration(orchestration.id);
   const synthesisItems = items.filter((item) => item.workType === 'RESEARCH_SYNTHESIZE');
   const operations = await operationsForWorkItems(synthesisItems.map((item) => item.id));
   const succeeded = operations.find(

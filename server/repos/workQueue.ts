@@ -278,11 +278,21 @@ export async function listWorkItemsForBin(bin: BinConfinement): Promise<WorkItem
   return rows.map(mapWorkItem);
 }
 
-/** Every unit of one research packet, whatever state it is in. */
+/**
+ * Every unit of one research packet, whatever state it is in.
+ *
+ * Unbounded on purpose. This is the one read that decides whether a packet's
+ * work exists, and a packet's own work is small; reading it as a filter over a
+ * project-wide window (`listWorkItems(projectId, { limit: 500 })`) made a
+ * packet in a busy project look as though it had none — Cash Mode 1's
+ * researching packets read "0 work items" with their fragment item QUEUED
+ * outside the window. Indexed by `idx_work_items_orchestration` on both
+ * backends.
+ */
 export async function listWorkItemsForOrchestration(orchestrationId: string): Promise<WorkItem[]> {
   const rows = await getDb().all<WorkItemRow>(
     `SELECT * FROM work_items WHERE orchestration_id = ?
-      ORDER BY priority DESC, available_at, created_at, id LIMIT 500`,
+      ORDER BY priority DESC, available_at, created_at, id`,
     [orchestrationId],
   );
   return rows.map(mapWorkItem);

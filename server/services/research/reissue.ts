@@ -46,7 +46,7 @@ import {
   updateFragment,
   updateOrchestration,
 } from '../../repos/research.ts';
-import { cancelWork, enqueueWork, getWorkItem, listWorkItems } from '../../repos/workQueue.ts';
+import { cancelWork, enqueueWork, getWorkItem, listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { workType } from '../queue/workTypes.ts';
 import { runIdempotent, type OperationNamespace } from '../effects/engine.ts';
@@ -174,8 +174,8 @@ export async function findStrandedVerifications(
   const orchestration = await getOrchestration(orchestrationId);
   if (!orchestration) return [];
 
-  const items = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
-    (item) => item.orchestrationId === orchestration.id && item.workType === 'RESEARCH_VERIFY',
+  const items = (await listWorkItemsForOrchestration(orchestration.id)).filter(
+    (item) => item.workType === 'RESEARCH_VERIFY',
   );
 
   const stranded: StrandedVerification[] = [];
@@ -280,8 +280,8 @@ export async function reissueMissingVerification(input: {
   }
 
   // 5. Nothing has already replaced it.
-  const items = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
-    (item) => item.orchestrationId === orchestration.id && item.workType === 'RESEARCH_VERIFY',
+  const items = (await listWorkItemsForOrchestration(orchestration.id)).filter(
+    (item) => item.workType === 'RESEARCH_VERIFY',
   );
   const existing = await liveOrRecordedReplacement(items, original);
   if (existing) throw new ReplacementExists(existing.id);
@@ -683,9 +683,8 @@ export async function retryFragment(input: {
    * Bounded to items that name this exact fragment id. The new attempt is a
    * different row, so its own item cannot be caught by this.
    */
-  const superseded = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
+  const superseded = (await listWorkItemsForOrchestration(orchestration.id)).filter(
     (item) =>
-      item.orchestrationId === orchestration.id &&
       item.fragmentId === previous.id &&
       (item.state === 'QUEUED' || item.state === 'LEASED'),
   );

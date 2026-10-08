@@ -82,7 +82,6 @@ import { binForOrchestration, creditBinAttempt } from '../../repos/bins.ts';
 import {
   cancelWork,
   enqueueWork,
-  listWorkItems,
   listWorkItemsForOrchestration,
   queueNow,
 } from '../../repos/workQueue.ts';
@@ -232,8 +231,7 @@ function stillRunning(items: WorkItem[], predicate: (item: WorkItem) => boolean)
  * Every state, not only the live ones, for the reason in `alreadyCreated`.
  */
 async function itemsFor(orchestration: ResearchOrchestration): Promise<WorkItem[]> {
-  const items = await listWorkItems(orchestration.projectId, { limit: 500 });
-  return items.filter((item) => item.orchestrationId === orchestration.id);
+  return await listWorkItemsForOrchestration(orchestration.id);
 }
 
 /**
@@ -1021,8 +1019,8 @@ async function creditPacketProgress(orchestrationId: string): Promise<void> {
     // No bin, or nothing to give back. The common case on most ticks.
     if (!bin || bin.attemptCount <= 0) return;
 
-    const items = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
-      (item) => item.orchestrationId === orchestrationId && item.state === 'SUCCEEDED',
+    const items = (await listWorkItemsForOrchestration(orchestrationId)).filter(
+      (item) => item.state === 'SUCCEEDED',
     );
     for (const item of items) {
       await creditBinAttempt({
@@ -1072,12 +1070,8 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
   const result = await advanceOnce(orchestrationId);
   if (TERMINAL_ORCHESTRATION.has(result.status)) return result;
 
-  const items = await listWorkItems(
-    (await getOrchestration(orchestrationId))?.projectId ?? '',
-    { limit: 500 },
-  );
-  const live = items.filter(
-    (item) => item.orchestrationId === orchestrationId && LIVE_ITEM.has(item.state),
+  const live = (await listWorkItemsForOrchestration(orchestrationId)).filter((item) =>
+    LIVE_ITEM.has(item.state),
   );
   if (live.length > 0) return result;
 
@@ -2246,10 +2240,8 @@ export async function concludeUnworkablePackets(
     const orchestration = await getOrchestration(row.id);
     if (!orchestration) continue;
 
-    const outstanding = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
-      (item) =>
-        item.orchestrationId === orchestration.id &&
-        (item.state === 'QUEUED' || item.state === 'LEASED'),
+    const outstanding = (await listWorkItemsForOrchestration(orchestration.id)).filter(
+      (item) => item.state === 'QUEUED' || item.state === 'LEASED',
     );
     if (outstanding.length === 0) continue;
 
@@ -2322,8 +2314,7 @@ export async function reconcileTerminalPackets(
  */
 async function retireTerminalWork(orchestration: ResearchOrchestration): Promise<number> {
   let retired = 0;
-  for (const item of await listWorkItems(orchestration.projectId, { limit: 500 })) {
-    if (item.orchestrationId !== orchestration.id) continue;
+  for (const item of await listWorkItemsForOrchestration(orchestration.id)) {
     if (item.state !== 'QUEUED' && item.state !== 'LEASED') continue;
     /*
      * Never under a live lease, and this is a correction.
@@ -2506,8 +2497,7 @@ export async function resumePulledPackets(): Promise<number> {
   for (const orchestration of await listPendingOrchestrations()) {
     // Only packets that are actually worker-driven. A push-model orchestration
     // has no work items and enqueueing some would start it a second way.
-    const items = await listWorkItems(orchestration.projectId, { limit: 500 });
-    const isPulled = items.some((item) => item.orchestrationId === orchestration.id);
+    const isPulled = (await listWorkItemsForOrchestration(orchestration.id)).length > 0;
     if (!isPulled) continue;
 
     /**

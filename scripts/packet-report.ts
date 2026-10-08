@@ -36,7 +36,7 @@ import { auditMatrixVerdict } from '../server/services/research/auditEligibility
 import { reopenProjection } from '../server/services/audit/integrityReaudit.ts';
 import { binForOrchestration } from '../server/repos/bins.ts';
 import { listCoverage, listRequirements } from '../server/repos/reconciliation.ts';
-import { listWorkItems } from '../server/repos/workQueue.ts';
+import { listWorkItemsForOrchestration } from '../server/repos/workQueue.ts';
 import { listAttempts, operationsForWorkItems } from '../server/repos/idempotency.ts';
 import { objectExists, objectSize, readObject, storageKeyOf } from '../server/services/storage.ts';
 import { getStorage, initStorage } from '../server/services/storage/index.ts';
@@ -247,9 +247,9 @@ async function main(): Promise<void> {
     );
   }
 
-  const items = (await listWorkItems(packet.projectId, { limit: 400 })).filter(
-    (item) => item.orchestrationId === packet.id,
-  );
+  // The packet's own work, read by orchestration rather than filtered out of a
+  // project-wide window — the runner reads exactly the same rows.
+  const items = await listWorkItemsForOrchestration(packet.id);
   const live = items.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
   console.log('');
   console.log(`WORK ITEMS (${items.length})`);

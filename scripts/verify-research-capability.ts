@@ -28,7 +28,7 @@ import {
   listFragments,
 } from '../server/repos/research.ts';
 import { listCoverage, listRequirements } from '../server/repos/reconciliation.ts';
-import { listWorkItems } from '../server/repos/workQueue.ts';
+import { listWorkItemsForOrchestration } from '../server/repos/workQueue.ts';
 import { getDocument } from '../server/repos/documents.ts';
 import { objectExists, readObject, storageKeyOf } from '../server/services/storage.ts';
 import { initStorage } from '../server/services/storage/index.ts';
@@ -72,9 +72,7 @@ async function main(): Promise<void> {
   const coverage = await citableClaimCoverage(id);
   const requirements = await listRequirements(id);
   const requirementCoverage = await listCoverage(id);
-  const items = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
-    (item) => item.orchestrationId === id,
-  );
+  const items = await listWorkItemsForOrchestration(id);
   const live = items.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
 
   console.log(`\nPacket ${id} — ${orchestration.status}`);
