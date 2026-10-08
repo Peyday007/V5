@@ -65,6 +65,13 @@ import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
 import { researchMissionSlotsFull } from '../russell/launch.ts';
+import {
+  screenPortfolio,
+  screenRank,
+  targetedQuestion,
+  type PortfolioScreen,
+  type Screen,
+} from './screening.ts';
 import type { CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
 
 /** How many deep dives one project may have in flight. Provider capacity. */
@@ -175,7 +182,12 @@ export type DiveRefusal =
   /** Declined, archived or already being executed — the commercial questions are closed. */
   | { kind: 'NOT_A_QUALIFYING_STATE'; state: string }
   /** No published signal and no source claim, so there is nothing to quote into a question. */
-  | { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
+  | { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' }
+  /**
+   * Cheap screening (`screening.ts`) says a dive is not what this opening has
+   * earned: it is screened out, parked, or its one question is a need.
+   */
+  | { kind: 'SCREENED'; verdict: Screen['verdict']; reason: Screen['reason']; because: string };
 
 /** One line, for a report or an operator. */
 export function describeDiveRefusal(refusal: DiveRefusal): string {
@@ -197,6 +209,8 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
       return `state ${refusal.state}: the commercial questions are closed`;
     case 'NOTHING_PUBLISHED_TO_ASK_ABOUT':
       return 'no buying signal and no source claim — nothing published to ask about';
+    case 'SCREENED':
+      return `screened ${refusal.verdict}: cheap screening says a deep dive is not what it has earned (see COMMERCIAL SCREENING)`;
   }
 }
 
@@ -206,7 +220,16 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
  * Every branch reads a row. Nothing here consults a clock, a count of workers,
  * or anything a caller supplied.
  */
-export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRefusal> {
+export async function whyNotDiving(
+  opportunity: CashOpportunity,
+  /**
+   * The opening's screening reading, when the caller has one. Passed rather
+   * than computed here because a screen reads the whole portfolio — a rejection
+   * is a fact about *another* opening — and the loop and the report each read
+   * the portfolio once and hand every opening its own reading.
+   */
+  screen?: Screen,
+): Promise<DiveRefusal> {
   if (opportunity.validationState !== null) {
     if (HOLDS_A_SLOT.has(opportunity.validationState)) {
       return { kind: 'IN_FLIGHT', state: opportunity.validationState };
@@ -229,6 +252,11 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
   }
   if (!opportunity.buyingSignal && !opportunity.sourceClaimId) {
     return { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
+  }
+  // A dive only where the screen says a dive asks it: a card field the screen
+  // targets is one narrow need, asked by the needs path instead.
+  if (screen && screen.askBy !== 'FULL_DIVE' && screen.askBy !== 'DIVE') {
+    return { kind: 'SCREENED', verdict: screen.verdict, reason: screen.reason, because: screen.because };
   }
   return { kind: 'ELIGIBLE' };
 }
@@ -330,6 +358,8 @@ export function validationQuestion(opportunity: CashOpportunity): string {
 export async function startValidations(input: {
   projectId: string;
   limit?: number;
+  /** A screening reading still known to be current; read afresh when absent. */
+  screened?: PortfolioScreen[];
 }): Promise<StartedValidation[]> {
   const mode = await getCashMode(input.projectId);
   if (!mode) return [];
@@ -391,6 +421,30 @@ export async function startValidations(input: {
     ...all.filter((one) => one.validationState === null).sort(closestFirst),
     ...all.filter((one) => one.validationState !== null).sort(closestFirst),
   ];
+  /*
+   * Cheap screening decides which of them earns a dive, and in what order.
+   *
+   * A screened-out or parked opening is not dived at all; a full qualification
+   * goes ahead of a one-question targeted round; and the order above is kept
+   * inside each rank, because the sort is stable. See `screening.ts` — it
+   * reads rows and writes nothing here.
+   */
+  // Read fresh rather than taken from the pass that called this: a dive the
+  // settle step just closed must be screened on what it established, and only
+  // when there is a slot to spend.
+  const screens = new Map(
+    room > 0
+      ? (input.screened ?? (await screenPortfolio(input.projectId))).map((one) => [
+          one.opportunity.id,
+          one.screen,
+        ])
+      : [],
+  );
+  ordered.sort((a, b) => {
+    const left = screens.get(a.id);
+    const right = screens.get(b.id);
+    return (left ? screenRank(left) : 3) - (right ? screenRank(right) : 3);
+  });
 
   const out: StartedValidation[] = [];
   for (const opportunity of ordered) {
@@ -407,13 +461,16 @@ export async function startValidations(input: {
      * drifts. What that report prints is therefore the refusal that actually
      * happened rather than a second opinion about it.
      */
-    if ((await whyNotDiving(opportunity)).kind !== 'ELIGIBLE') continue;
+    const screen = screens.get(opportunity.id);
+    if (!screen) continue;
+    if ((await whyNotDiving(opportunity, screen)).kind !== 'ELIGIBLE') continue;
+    const targeted = screen.askBy === 'DIVE' ? screen.decisive : null;
 
     const candidate = await createCandidate({
       projectId: input.projectId,
       visibility: 'SHARED',
       title: `Qualify: ${opportunity.title}`,
-      statement: validationQuestion(opportunity),
+      statement: targeted ? targetedQuestion(opportunity, targeted) : validationQuestion(opportunity),
     });
     const round = opportunity.validationRounds + 1;
     const moved = await updateOpportunity(opportunity.id, {
@@ -442,13 +499,21 @@ export async function startValidations(input: {
       opportunityId: opportunity.id,
       kind: 'CASH_VALIDATION_STARTED',
       actorRef: 'BRAIN',
-      summary:
-        round > 1
+      summary: targeted
+        ? `Brain is asking one question about this opening first: ${screen.because} Nothing is ` +
+          'being contacted or spent.'
+        : round > 1
           ? 'Brain is qualifying this opening a second time, for the questions the first ' +
             'pass was never asked. Nothing is being contacted or spent.'
           : 'Brain is qualifying this opening from published sources: who pays, what it pays, ' +
             'what it costs and what would rule it out. Nothing is being contacted or spent.',
-      detail: { candidateId: candidate.id, signal: opportunity.buyingSignal, round },
+      detail: {
+        candidateId: candidate.id,
+        signal: opportunity.buyingSignal,
+        round,
+        targeted,
+        screen: screen.reason,
+      },
     });
     out.push({ opportunityId: opportunity.id, candidateId: candidate.id });
     room -= 1;
@@ -922,7 +987,11 @@ function hasCompiledSpecification(judgment: unknown): boolean {
 }
 
 /** Both halves, for the tick. */
-export async function runValidations(projectId: string): Promise<ValidationProgress> {
+export async function runValidations(
+  projectId: string,
+  /** The operating pass's screening reading, reused when nothing below changed a row it read. */
+  screened?: PortfolioScreen[],
+): Promise<ValidationProgress> {
   // Settling first, so a deep dive that finished this tick frees its slot for
   // the next one rather than waiting a whole pass for it.
   const settled = await settleValidations(projectId);
@@ -930,11 +999,19 @@ export async function runValidations(projectId: string): Promise<ValidationProgr
   // order the effects depend on each other in: a proposal is built from the
   // evidence, so applying the evidence first is what stops the proposal being
   // made against last tick's card.
-  await applyValidationAnswers(projectId);
-  await proposeEngineTerms(projectId);
+  const applied = await applyValidationAnswers(projectId);
+  const proposed = await proposeEngineTerms(projectId);
   // A question already asked is resumed before a new one takes a slot.
-  await resumeUnlaunchedDives(projectId);
-  const started = await startValidations({ projectId });
+  const resumed = await resumeUnlaunchedDives(projectId);
+  /*
+   * The screen the operating pass already read is still true only if none of
+   * the three steps above wrote a row it reads — a settled dive, a card fact or
+   * a refunded round. Otherwise it is read again, because a dive must be
+   * screened on what it just established.
+   */
+  const unchanged =
+    settled.length === 0 && applied.length === 0 && proposed.length === 0 && resumed.length === 0;
+  const started = await startValidations({ projectId, screened: unchanged ? screened : undefined });
   return { started, settled };
 }
 
@@ -1075,7 +1152,7 @@ const FINISHED_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);
  * column the latest round overwrites. The column is still read too, for an
  * opening settled before those events existed. Oldest first.
  */
-async function finishedDivePackets(opportunity: CashOpportunity): Promise<string[]> {
+export async function finishedDivePackets(opportunity: CashOpportunity): Promise<string[]> {
   const packets: string[] = [];
   const add = (id: string | null | undefined): void => {
     if (id && !packets.includes(id)) packets.push(id);

@@ -12786,6 +12786,54 @@ objective without one, a person still merges.
   environment dumps, and a test refuses `Bash` or `Bash(*)`. OS sandboxing is
   not enabled because the cloud worker image has no bubblewrap — enabling it
   there would sandbox nothing, and saying so is the honest report.
+## 59. An opening earns an expensive look; it is not owed one.
+
+Production Cash Mode 1, 2026-10-08: 40 openings, 31 of them through both full
+deep dives — most of which failed after three to eight passes. Every live
+research mission was a follow-up question about a vendor's price list. The
+research was honest; it was spent in the wrong order. `services/cash/screening.ts`
+puts a cheap, deterministic screen in front of both research-spending paths: the
+deep dive and the needs path. `docs/CASH-SCREENING.md` covers it in full.
+
+- **Four verdicts, all derived from rows and none stored as state.** `PRIORITIZE`
+  (full qualification, first). `TARGET` (one decisive question). `PARK` (that
+  question was asked and nothing answered it). `SCREEN_OUT` (a recorded fact
+  disqualifies it). A reading is appended as `CASH_OPPORTUNITY_SCREENED` only
+  when it changes. No opportunity state, tier or card is written, and the tier
+  meanings are untouched.
+- **Unknown is never rejection.** Every `SCREEN_OUT` rests on a row:
+  - an expiry that has passed;
+  - an accepted NEGATIVE_EXISTENCE claim (§14's documented search);
+  - the economics owner's NEGATIVE verdict;
+  - a person's decline of the same kind of evidence from the same host, timed
+    by the decline's own event.
+
+  An archive is not a rejection, because finished deals are archived too. One
+  opening's established absence is not spread to its host. A need whose mission
+  failed without researching does not count as asked. The independent review
+  caught all three in the first version.
+
+  A blank is a reason to ask, never to stop.
+- **The decisive question is a written-down ladder per signal kind**
+  (`DECISIVE_LADDER`): existence before estimation, cheapest first. There is no
+  score and no invented threshold. Each question has exactly one asker: a card
+  field becomes a need, anything else a one-question dive. The first version had
+  both ask the payer, and the duplicate was caught only because the compiled
+  specs collided.
+- **Economics has one owner.** Unit economics belong to `tier.ts`. The screen
+  reads the owner's `economics`/`route` through `economicsOf` and never
+  re-derives them. Until that owner's work lands, the reading is null, and null
+  screens nothing out.
+- **A rejection reopens on new evidence.** A decisive EVIDENCE or PERSON fact
+  recorded after the rejection sets it aside, and the `reconsidered` field
+  records which rejection and which field. A screened-out piece's open needs are
+  deferred, not closed.
+- **The producer and the report read one answer.** `whyNotDiving` takes the
+  screen and returns `SCREENED`, so `refinement-report` never calls an opening
+  eligible that the loop will not start.
+- **The saving is measured, not claimed.** `refinement-report` prints
+  `COMMERCIAL SCREENING`. It shows dives, passes per dive and question needs,
+  split at the first recorded reading, and says so when no window exists yet.
 
 ## Repository map
 
@@ -12859,6 +12907,7 @@ server/
     capacityConnections.ts  one member's Claude connection, as rows rather than a conversation
     manufacturing.ts  the ladder, the capability ledger, and the one write research cannot reach
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
+    cashScreening.ts  the two batched reads screening needs, once per pass
     labor.ts          workflows, tasks, who produces each, and what has been asked
     monetization.ts   the possibility ledger; nothing in it is ever deleted
     engineering.ts    evidence, interventions and blockers; append-only
@@ -13024,6 +13073,7 @@ server/
       record.ts         what happened on one piece: actions, ledger figures, attempts
       discoveryAuthority.ts  what pressing Start authorizes, and what it never will
       validation.ts     the bounded deep dive, and what it puts on the card
+      screening.ts      whether an opening has earned an expensive look, and which one question (§59)
       engineCard.ts     fact, estimate, decision, unknown — and the margin withheld
       discovery.ts      where the portfolio comes from: buckets, and a lane
       operate.ts        acting on a need: raise, settle, resume, start work
@@ -13341,6 +13391,8 @@ tests/                  Vitest suites
   cashProposal.test.ts       the seven terms, and the numbers Brain will not invent
   cashFirstDollar.test.ts    discovery to settled cash, restarted twice, and every way it fails
   cashPostSale.test.ts       agreement to learning: one obligation, bounded refunds, one P&L
+  cashScreening.test.ts      what Brain spends on an opening, through the operating pass
+  cashScreeningRules.test.ts the screen's reasons, case by case, without a database
   cashOpportunityStandard.test.ts  what is an opportunity, and whose question is whose
   monetizationLedger.test.ts   forty ways preserved, ranked, and never rounded to one
   monetizationCommissioning.test.ts  a discovery to a moved rank, and every way it must not double-ask

@@ -68,6 +68,12 @@ import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
 import { runValidations, type ValidationProgress } from './validation.ts';
+import {
+  recordScreens,
+  screenPortfolio,
+  screenWithholds,
+  type PortfolioScreen,
+} from './screening.ts';
 import { enumeratePossibilities } from './monetization/enumerate.ts';
 import { recordMovements } from './monetization/movement.ts';
 import { composeLedger } from './monetization/ledger.ts';
@@ -229,8 +235,19 @@ export interface DiscoverableGap {
  * still never become needs, because a researched answer to "what should we
  * charge for this" is invented judgment wearing a citation.
  */
-export async function reconcileDiscoverableGaps(projectId: string): Promise<DiscoverableGap[]> {
+export async function reconcileDiscoverableGaps(
+  projectId: string,
+  screened?: PortfolioScreen[],
+): Promise<DiscoverableGap[]> {
   const out: DiscoverableGap[] = [];
+  /*
+   * Cheap screening first (see `screening.ts`). A screened-out or parked
+   * opening raises no new need, and a signal being asked one decisive question
+   * is asked that one rather than all three capture inputs.
+   */
+  const screens = new Map(
+    (screened ?? (await screenPortfolio(projectId))).map((one) => [one.opportunity.id, one.screen]),
+  );
   const open = await listNeeds({ projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
 
@@ -275,10 +292,14 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * many: it left the payer unasked, which is the single question that could
      * have moved the piece.
      */
+    const screen = screens.get(opportunity.id);
+    if (screen && screenWithholds(screen)) continue;
     const asking =
-      reading.tier === 'SIGNAL'
-        ? card.fields.filter((one) => (CAPTURE_INPUTS as readonly string[]).includes(one.key))
-        : card.fields;
+      screen?.verdict === 'TARGET'
+        ? card.fields.filter((one) => one.key === screen.decisive)
+        : reading.tier === 'SIGNAL'
+          ? card.fields.filter((one) => (CAPTURE_INPUTS as readonly string[]).includes(one.key))
+          : card.fields;
 
     for (const field of asking) {
       if (!field.loadBearing || field.owner !== 'BRAIN_RESEARCH' || field.value !== null) continue;
@@ -510,14 +531,28 @@ export interface DependentWork {
  * is asked first, the judgment decides, and the standing authority decides
  * whether anything may be spent. None of those is this function's to make.
  */
-export async function startDependentWork(projectId: string): Promise<DependentWork[]> {
+export async function startDependentWork(
+  projectId: string,
+  screened?: PortfolioScreen[],
+): Promise<DependentWork[]> {
   if (!(await getCashMode(projectId))) return [];
   const out: DependentWork[] = [];
+  let screens: Map<string, PortfolioScreen['screen']> | null = null;
   for (const need of await listNeeds({ projectId, states: ['OPEN'] })) {
     if (need.candidateId || !need.opportunityId) continue;
     if (!need.requestKey?.startsWith('question:')) continue;
     const opportunity = await getOpportunity(need.opportunityId);
     if (!opportunity) continue;
+    /*
+     * A question about an opening screening withholds is deferred, not
+     * closed: the need stays open with its words, nothing is spent on it, and
+     * it starts by itself the pass the screen stops withholding.
+     */
+    screens ??= new Map(
+      (screened ?? (await screenPortfolio(projectId))).map((one) => [one.opportunity.id, one.screen]),
+    );
+    const screen = screens.get(opportunity.id);
+    if (screen && screenWithholds(screen)) continue;
     const candidate = await createCandidate({
       projectId,
       visibility: 'SHARED',
@@ -894,6 +929,8 @@ export async function operate(
   /** Non-null exactly once per project, the pass that recorded the change. */
   reclassified: Reclassification | null;
   capabilities: CapabilityReconciliation;
+  /** Openings whose screening reading changed this pass. */
+  screened: number;
   gaps: DiscoverableGap[];
   research: ResearchApplication;
   proposed: Proposed[];
@@ -915,6 +952,7 @@ export async function operate(
     return {
       reclassified: null,
       capabilities: { raised: [], settled: [] },
+      screened: 0,
       gaps: [],
       research: { applied: [], unanswered: [] },
       proposed: [],
@@ -954,9 +992,15 @@ export async function operate(
   const capabilities = await reconcileCapabilityNeeds(projectId);
   const research = await applyResearchAnswers(projectId);
   const proposed = await proposeCommercialTerms(projectId);
-  const gaps = await reconcileDiscoverableGaps(projectId);
+  /*
+   * Cheap commercial screening, read once for the two research-spending passes
+   * below and recorded when a reading changes. It writes nothing but history.
+   */
+  const screens = await screenPortfolio(projectId);
+  const screened = await recordScreens(projectId, screens);
+  const gaps = await reconcileDiscoverableGaps(projectId, screens);
   const continuations = await runNeedContinuations(projectId, now);
-  const dependentWork = await startDependentWork(projectId);
+  const dependentWork = await startDependentWork(projectId, screens);
   /*
    * And the bounded deep dive on each opening, which is where the commercial
    * questions actually get answered.
@@ -967,7 +1011,12 @@ export async function operate(
    * and `mayReplace` decides which answer stands — by authority rather than by
    * whichever arrived last.
    */
-  const validations = await runValidations(projectId);
+  /*
+   * The needs and continuations above write needs rather than the rows the
+   * screen reads about a dive, so the reading is handed on; `runValidations`
+   * reads it again if its own steps change anything.
+   */
+  const validations = await runValidations(projectId, screens);
   /*
    * Last, and that order is the point: a piece only becomes ready because the
    * research landed on its card and the proposal filled what the research could
@@ -1035,6 +1084,7 @@ export async function operate(
   return {
     reclassified,
     capabilities,
+    screened,
     gaps,
     research,
     proposed,

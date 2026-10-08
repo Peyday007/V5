@@ -53,7 +53,7 @@ import { listProjects } from '../server/repos/projects.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import { listOpportunities } from '../server/repos/cashPortfolio.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
-import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
+import { latestMissionForCandidate, missionsForCandidate } from '../server/repos/russellMissions.ts';
 import { getOrchestration, listPasses } from '../server/repos/research.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { getDb } from '../server/db/database.ts';
@@ -69,6 +69,7 @@ import {
   whyNotDiving,
 } from '../server/services/cash/validation.ts';
 import type { WorkItem } from '../server/domain/types.ts';
+import { screenPortfolio, SCREEN_REASONS, SCREEN_VERDICTS } from '../server/services/cash/screening.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -174,17 +175,22 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
   console.log('WHY REFINEMENT IS OR IS NOT MOVING');
   console.log(`  sprint      ${sprintLine}`);
 
+  // The same screening reading the loop hands `whyNotDiving`, read once.
+  const screens = new Map(
+    (await screenPortfolio(projectId)).map((one) => [one.opportunity.id, one.screen]),
+  );
   const refusals = new Map<string, { count: number; line: string; examples: string[] }>();
   for (const one of opportunities) {
-    const refusal = await whyNotDiving(one);
-    const entry = refusals.get(refusal.kind) ?? {
+    const refusal = await whyNotDiving(one, screens.get(one.id));
+    const groupKey = refusal.kind === 'SCREENED' ? `SCREENED_${refusal.verdict}` : refusal.kind;
+    const entry = refusals.get(groupKey) ?? {
       count: 0,
       line: describeDiveRefusal(refusal),
       examples: [],
     };
     entry.count += 1;
     if (entry.examples.length < 3) entry.examples.push(one.id);
-    refusals.set(refusal.kind, entry);
+    refusals.set(groupKey, entry);
   }
   for (const [kind, entry] of [...refusals.entries()].sort((a, b) => b[1].count - a[1].count)) {
     console.log(
@@ -225,6 +231,7 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
   }
 
   await researchConcurrency(projectId);
+  await screeningReport(projectId);
 
   const queue = await listWorkItems(projectId, { limit: 500 });
   const byPacket = new Map<string, WorkItem[]>();
@@ -404,6 +411,121 @@ async function researchConcurrency(projectId: string): Promise<void> {
   );
   for (const row of unheld) {
     console.log(`  not holding  mission=${row.state} packet=${row.packet ?? '—'}  ${Number(row.n)}`);
+  }
+}
+
+/**
+ * What cheap screening decides, and what it measurably changed.
+ *
+ * Read-only: `screenPortfolio` reads rows and writes nothing (the operating
+ * pass is what records a reading). Every figure below is a count of rows or a
+ * difference of two recorded timestamps, split at the first recorded screening
+ * reading in this project. Nothing is extrapolated, and no saving is stated
+ * unless both windows exist.
+ */
+async function screeningReport(projectId: string): Promise<void> {
+  console.log('');
+  console.log('COMMERCIAL SCREENING');
+  const screens = await screenPortfolio(projectId);
+  const verdicts = SCREEN_VERDICTS.map(
+    (verdict) => `${verdict}=${screens.filter((one) => one.screen.verdict === verdict).length}`,
+  );
+  console.log(`  openings screened  ${screens.length}  ${verdicts.join(' ')}`);
+  for (const reason of SCREEN_REASONS) {
+    const these = screens.filter((one) => one.screen.reason === reason);
+    if (these.length === 0) continue;
+    console.log(`  ${reason.padEnd(30)}${String(these.length).padStart(3)}`);
+  }
+  const tiers = new Map<string, number>();
+  for (const one of screens) tiers.set(one.tier.tier, (tiers.get(one.tier.tier) ?? 0) + 1);
+  console.log(`  tiers              ${[...tiers].map(([tier, n]) => `${tier}=${n}`).join(' ')}`);
+  for (const { opportunity, screen } of screens) {
+    console.log(
+      `  ${opportunity.id}  ${screen.verdict.padEnd(10)} ${screen.reason.padEnd(28)} ` +
+        `ask=${(screen.decisive ?? '-').padEnd(17)} by=${(screen.askBy ?? '-').padEnd(9)} ` +
+        `shape=${screen.shape}`,
+    );
+    console.log(`      ${opportunity.title.replace(/\s+/g, ' ').slice(0, 96)}`);
+    console.log(`      ${screen.because.slice(0, 220)}`);
+  }
+
+  // The measured half.
+  const first = await getDb().get<{ at: string | null }>(
+    `SELECT MIN(created_at) AS at FROM cash_events
+      WHERE project_id = ? AND kind = 'CASH_OPPORTUNITY_SCREENED'`,
+    [projectId],
+  );
+  const since = first?.at ?? null;
+  const now = new Date().toISOString();
+  const started = await getDb().all<{ detail: string; created_at: string }>(
+    `SELECT detail, created_at FROM cash_events
+      WHERE project_id = ? AND kind = 'CASH_VALIDATION_STARTED' ORDER BY created_at`,
+    [projectId],
+  );
+  const window = <T extends { created_at: string }>(rows: T[], after: boolean): T[] =>
+    rows.filter((one) => (since === null ? !after : after ? one.created_at >= since : one.created_at < since));
+  const before = window(started, false);
+  const after = window(started, true);
+
+  async function passesFor(rows: { detail: string }[]): Promise<{ dives: number; passes: number; targeted: number }> {
+    let passes = 0;
+    let targeted = 0;
+    for (const row of rows) {
+      const detail = JSON.parse(row.detail) as Record<string, unknown>;
+      if (typeof detail['targeted'] === 'string') targeted += 1;
+      const candidateId = detail['candidateId'];
+      if (typeof candidateId !== 'string') continue;
+      for (const mission of await missionsForCandidate(candidateId)) {
+        if (mission.orchestrationId) passes += (await listPasses(mission.orchestrationId)).length;
+      }
+    }
+    return { dives: rows.length, passes, targeted };
+  }
+  const was = await passesFor(before);
+  const is = await passesFor(after);
+  const needRows = await getDb().all<{ created_at: string }>(
+    `SELECT created_at FROM cash_needs WHERE project_id = ? AND request_key LIKE 'question:%'`,
+    [projectId],
+  );
+  const firstStart = started[0]?.created_at ?? null;
+  const days = (from: string | null, to: string | null): number | null =>
+    from && to ? Math.max(0, (Date.parse(to) - Date.parse(from)) / 86_400_000) : null;
+  const beforeDays = days(firstStart, since ?? now);
+  const afterDays = since ? days(since, now) : null;
+  const rate = (n: number, d: number | null): string =>
+    d === null || d <= 0
+      ? 'no window'
+      : d < 1 / 24
+        ? 'window under an hour, no rate'
+        : `${(n / d).toFixed(2)}/day over ${d.toFixed(1)}d`;
+  console.log(`  screening since    ${since ? stamp(since) : 'never recorded in this project'}`);
+  console.log(
+    `  before             dives ${was.dives} (${rate(was.dives, beforeDays)})  passes ${was.passes}  ` +
+      `passes/dive ${was.dives ? (was.passes / was.dives).toFixed(2) : '—'}  ` +
+      `question needs ${window(needRows, false).length}`,
+  );
+  console.log(
+    `  after              dives ${is.dives} (${rate(is.dives, afterDays)})  one-question ${is.targeted}  ` +
+      `passes ${is.passes}  passes/dive ${is.dives ? (is.passes / is.dives).toFixed(2) : '—'}  ` +
+      `question needs ${window(needRows, true).length}`,
+  );
+  const withheld = new Set(
+    screens
+      .filter((one) => one.screen.verdict === 'SCREEN_OUT' || one.screen.verdict === 'PARK')
+      .map((one) => one.opportunity.id),
+  );
+  const deferred = await getDb().all<{ opportunity_id: string }>(
+    `SELECT opportunity_id FROM cash_needs
+      WHERE project_id = ? AND state = 'OPEN' AND candidate_id IS NULL
+        AND request_key LIKE 'question:%'`,
+    [projectId],
+  );
+  console.log(
+    `  withheld now       ${withheld.size} opening(s) spend nothing  ·  ` +
+      `${deferred.filter((one) => withheld.has(one.opportunity_id)).length} open question(s) deferred`,
+  );
+  if (!since || is.dives === 0) {
+    console.log('  saving             not measurable yet: no dive has started since screening began.');
   }
 }
 
