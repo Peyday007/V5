@@ -27,6 +27,8 @@ import type {
 } from '../../../server/services/factory/projections.ts';
 import type { CampaignMetrics } from '../../../server/services/factory/metrics.ts';
 import type { CampaignStory } from '../../../server/services/factory/story.ts';
+import type { ObjectiveOutcome, ReleaseGrant } from '../../../server/domain/factoryRelease.ts';
+export type { ObjectiveOutcome, ReleaseGrant };
 import type { RepositoryGrant } from '../../../server/services/factory/repositoryEnvelope.ts';
 import type {
   FactoryInvitations,
@@ -90,6 +92,12 @@ export interface CampaignDetail {
    * server in plain English (Integration 3).
    */
   story: CampaignStory;
+  /**
+   * BUILDING → VERIFYING → RELEASING → LIVE, or BLOCKED with the exact blocker
+   * and whether a person must act. LIVE only from a verification inside the
+   * released Brain. See `server/services/factory/release/outcome.ts`.
+   */
+  outcome: ObjectiveOutcome;
   objective: string;
   expectedOutcome: string;
   stage: string;
@@ -336,6 +344,25 @@ export const FactoryApi = {
   approve: (changeRequestId: string): Promise<ApproveResponse> =>
     api(`/api/factory/change-requests/${encodeURIComponent(changeRequestId)}/approve`, {
       method: 'POST',
+    }),
+
+  /**
+   * The owner letting an approved objective go live without them, if it passes
+   * every gate. ADMIN; refused for anything but a LOW-risk objective.
+   */
+  grantRelease: (
+    changeRequestId: string,
+    input: { reason?: string; pagePath?: string; liveChecks?: unknown[] } = {},
+  ): Promise<{ grant: ReleaseGrant; created: boolean }> =>
+    api(`/api/factory/change-requests/${encodeURIComponent(changeRequestId)}/release-grant`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  withdrawRelease: (changeRequestId: string, reason?: string): Promise<{ withdrawn: boolean }> =>
+    api(`/api/factory/change-requests/${encodeURIComponent(changeRequestId)}/release-grant/withdraw`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
     }),
 
   /**

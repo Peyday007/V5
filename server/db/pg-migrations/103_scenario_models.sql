@@ -1,4 +1,4 @@
--- The scenario engine (SQLite 111_scenario_models.sql), on the Postgres chain.
+-- The scenario engine (SQLite 112_scenario_models.sql), on the Postgres chain.
 -- Saved models, and every run with the exact configuration it evaluated.
 CREATE TABLE IF NOT EXISTS scenario_models (
   id               TEXT PRIMARY KEY,

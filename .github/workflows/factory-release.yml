@@ -1,0 +1,323 @@
+# Releasing a finished Factory campaign without a person, when its owner said so.
+#
+# ---------------------------------------------------------------------------
+# What this is
+# ---------------------------------------------------------------------------
+#
+# A hosted Factory campaign ends at a reviewed pull request. For an objective
+# whose owner granted automatic release (`factory_release_grants`, written on
+# Build or by `npm run factory authorize-release`), this workflow takes it the
+# rest of the way: merge, deploy through the canonical `Deploy` workflow, verify
+# inside the released Brain, and roll back on failure.
+#
+# Brain decides; this performs. Brain holds no forge write credential and no
+# deployment credential, and no Factory worker holds either. The only write
+# credential involved is this run's own `GITHUB_TOKEN`, scoped to this
+# repository for the length of one run, and it is given only to the `release`
+# job — which runs nothing from the change being released.
+#
+# ---------------------------------------------------------------------------
+# Three jobs, and why the change's own code never meets a credential
+# ---------------------------------------------------------------------------
+#
+#   plan     asks Brain for the next action. Brain records the attempt before
+#            answering, so a run that dies leaves a row the next run resumes.
+#   gate     merges the reviewed head into the canonical branch locally, scans
+#            the diff from the *trusted* checkout, and runs typecheck,
+#            test:impacted and the build on the merged tree. Read-only token,
+#            no secrets, credentials not persisted — this is the only job that
+#            executes the change's code.
+#   release  pushes exactly the commit the gate tested (a plain fast-forward,
+#            never a force), dispatches Deploy, watches it to termination,
+#            verifies, and rolls back. Runs only the trusted checkout.
+#
+# The full suite is not run here, deliberately: CLAUDE.md rule 3 pays the full
+# gate once, on the released SHA, and Deploy's own test job is that gate. If it
+# fails, nothing is released and the merge is reverted.
+#
+# ---------------------------------------------------------------------------
+# Why a timer
+# ---------------------------------------------------------------------------
+#
+# Brain cannot dispatch a workflow: that would need the forge write credential it
+# deliberately does not hold. So the release side asks on a schedule. Fifteen
+# minutes is a bound on how long a finished objective waits to start releasing,
+# not on how long a release takes, and `workflow_dispatch` asks immediately.
+name: Factory release
+
+on:
+  # The event that matters: the Factory opening or updating its own pull
+  # request. `pull_request_target` runs the workflow file from the *base* branch,
+  # never from the pull request, so a campaign cannot change what releases it;
+  # and the `plan` job's condition below restricts it to Factory campaign
+  # branches in this repository, so a stranger's pull request does nothing.
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  # Resuming a release whose own run died while its Deploy was in flight.
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+  # A backstop only. Measured on this repository on 2026-10-08: a workflow
+  # scheduled hourly ran about every four to seven hours, so a timer alone left
+  # a finished objective waiting for hours with nothing anywhere saying why.
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why this pass was asked for, for the run log'
+        required: false
+        default: 'release whatever is ready'
+      resume_depth:
+        description: 'How many times a failed pass has already asked for the next one (bounded)'
+        required: false
+        default: '0'
+
+# Its own group: one release at a time, and nothing else evicts it.
+concurrency:
+  group: brain-factory-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Ask Brain what to release
+    if: >-
+      github.event_name != 'pull_request_target' || (
+        startsWith(github.event.pull_request.head.ref, 'factory/campaign/') &&
+        github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      action: ${{ steps.ask.outputs.action }}
+      kind: ${{ steps.ask.outputs.kind }}
+      needs_gate: ${{ steps.ask.outputs.needs_gate }}
+      pr: ${{ steps.ask.outputs.pr }}
+      head: ${{ steps.ask.outputs.head }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: ./.github/actions/await-release
+
+      - name: Ask
+        id: ask
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -uo pipefail
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # A Factory pull request is opened a few seconds before Brain records
+          # the campaign COMPLETE, so on that event ask again for a while
+          # rather than answering "nothing" to a release that is about to exist.
+          tries=1
+          if [ "$GITHUB_EVENT_NAME" = "pull_request_target" ]; then tries=15; fi
+          action=null
+          for attempt in $(seq 1 "$tries"); do
+            flyctl ssh console --app "$app" -C \
+              "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh release-plan --repository $GITHUB_REPOSITORY --workflow-run $GITHUB_RUN_ID" \
+              2>&1 | tee plan.txt
+            if ! grep -q '^FACTORY: OK' plan.txt; then
+              echo "::error::Brain did not answer the release plan. Its output is above."
+              exit 1
+            fi
+            action=$(grep -m1 '^RELEASE-PLAN: ' plan.txt | sed 's/^RELEASE-PLAN: //')
+            if [ "$action" != "null" ] || [ "$attempt" = "$tries" ]; then break; fi
+            echo "Nothing to release yet (attempt $attempt of $tries); asking again in 60s."
+            sleep 60
+          done
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+          kind=$(printf '%s' "$action" | jq -r 'if . == null then "" else .action end')
+          state=$(printf '%s' "$action" | jq -r 'if . == null then "" else (.state // "GATING") end')
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          if [ -n "$kind" ] && [ "$state" = "GATING" ]; then
+            echo "needs_gate=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_gate=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "pr=$(printf '%s' "$action" | jq -r '.prNumber // ""')" >> "$GITHUB_OUTPUT"
+          echo "head=$(printf '%s' "$action" | jq -r '.headSha // ""')" >> "$GITHUB_OUTPUT"
+          if [ -z "$kind" ]; then echo "Nothing to release."; fi
+
+  gate:
+    name: Gate the merged tree
+    needs: plan
+    if: needs.plan.outputs.needs_gate == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      merge_sha: ${{ steps.merge.outputs.merge_sha }}
+      failure: ${{ steps.verdict.outputs.failure }}
+    steps:
+      - name: Trusted checkout of the canonical branch
+        uses: actions/checkout@v4
+        with:
+          ref: production
+          path: trusted
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: trusted/package-lock.json
+
+      - name: Merge the reviewed head locally
+        id: merge
+        env:
+          PR: ${{ needs.plan.outputs.pr }}
+          HEAD_SHA: ${{ needs.plan.outputs.head }}
+        run: |
+          set -euo pipefail
+          case "$PR" in ''|*[!0-9]*) echo "::error::No pull request number."; exit 1 ;; esac
+          case "$HEAD_SHA" in *[!0-9a-f]*|'') echo "::error::No head sha."; exit 1 ;; esac
+          git clone --quiet --no-local trusted work
+          cd work
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --quiet origin production "pull/${PR}/head:refs/release/pr"
+          fetched=$(git rev-parse refs/release/pr)
+          if [ "$fetched" != "$HEAD_SHA" ]; then
+            echo "failure=the pull request head is $fetched, not the reviewed $HEAD_SHA" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          git checkout --quiet -B release origin/production
+          git config user.name "factory-release"
+          git config user.email "factory-release@users.noreply.github.com"
+          if ! git merge --no-ff --no-edit -m "Merge pull request #${PR} (factory release)" "$HEAD_SHA"; then
+            echo "failure=the reviewed head does not merge cleanly into production" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "merge_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Scan the diff from the trusted checkout
+        id: scan
+        run: |
+          set -euo pipefail
+          (cd trusted && npm ci --no-audit --no-fund >/dev/null)
+          (cd trusted && npx tsx scripts/release-scan.ts --work ../work --base origin/production) | tee scan.txt
+
+      - name: Typecheck, impacted tests and build on the merged tree
+        id: tests
+        working-directory: work
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-eng >/dev/null
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run test:impacted
+          npm run build
+
+      - name: Bundle the tested merge
+        if: success()
+        working-directory: work
+        run: git bundle create ../merge.bundle origin/production..HEAD
+
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: release-merge
+          path: merge.bundle
+          retention-days: 3
+
+      - name: Verdict
+        id: verdict
+        if: ${{ !cancelled() }}
+        env:
+          MERGE_FAILURE: ${{ steps.merge.outputs.failure }}
+          SCAN: ${{ steps.scan.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+        run: |
+          failure="$MERGE_FAILURE"
+          if [ -z "$failure" ] && [ "$SCAN" = "failure" ]; then
+            failure=$(grep -m1 '^RELEASE-SCAN: FAIL' scan.txt 2>/dev/null | sed 's/^RELEASE-SCAN: FAIL //' || true)
+            [ -n "$failure" ] || failure="the diff scan failed"
+          fi
+          if [ -z "$failure" ] && [ "$TESTS" = "failure" ]; then
+            failure="typecheck, the impacted tests or the build failed on the merged tree"
+          fi
+          echo "failure=$failure" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Merge, deploy, verify
+    needs: [plan, gate]
+    # `!cancelled()`, never `always()`: it must still run when the gate failed or
+    # was skipped, so the outcome is recorded, and it must stop when somebody
+    # cancels the run. A job conditioned on `always()` ignores cancellation —
+    # found by cancelling a live release to test recovery, which ran on for
+    # twenty minutes regardless.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.kind != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Trusted checkout of the canonical branch
+        uses: actions/checkout@v4
+        with:
+          ref: production
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - uses: actions/download-artifact@v4
+        if: needs.gate.result == 'success'
+        with:
+          name: release-merge
+          path: gate
+
+      - name: Release
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ACTION: ${{ needs.plan.outputs.action }}
+          GATE_RESULT: ${{ needs.gate.result }}
+          GATE_FAILURE: ${{ needs.gate.outputs.failure }}
+          GATE_MERGE_SHA: ${{ needs.gate.outputs.merge_sha }}
+          GATE_BUNDLE: gate/merge.bundle
+        run: |
+          set -o pipefail
+          npm ci --no-audit --no-fund >/dev/null
+          git config user.name "factory-release"
+          git config user.email "factory-release@users.noreply.github.com"
+          npx tsx scripts/factory-release.ts 2>&1 | tee release.txt
+          if grep -qE '^RELEASE: (LIVE|NOTHING|WAITING)' release.txt; then exit 0; fi
+          if grep -qE '^RELEASE: (ROLLED_BACK|FAILED)' release.txt; then
+            echo "::error::The release did not go live. Brain records why; read the lines above."
+            exit 1
+          fi
+          echo "::error::The release did not complete. Its output is above."
+          exit 1
+
+      # A release run that dies leaves its attempt in flight in Brain, and the
+      # next pass resumes it — but only if a next pass happens. GitHub's schedule
+      # cannot be relied on to be that pass (§58), so a failed release job asks
+      # for one itself, a bounded number of times: workflow_dispatch is the one
+      # event this run's own token may start. Nothing here decides anything;
+      # the next pass asks Brain, and Brain answers from its rows.
+      - name: Ask for the pass that resumes this one
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPTH: ${{ github.event.inputs.resume_depth || '0' }}
+        run: |
+          case "$DEPTH" in ''|*[!0-9]*) DEPTH=0 ;; esac
+          if [ "$DEPTH" -ge 3 ]; then
+            echo "::warning::Three resume passes in a row have failed; leaving the next one to the schedule. Brain shows the attempt and its stage."
+            exit 0
+          fi
+          sleep 120
+          gh workflow run factory-release.yml --ref production \
+            -f reason="resume after a failed release pass ($GITHUB_RUN_ID)" \
+            -f resume_depth="$((DEPTH + 1))"

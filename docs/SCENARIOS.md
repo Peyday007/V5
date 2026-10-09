@@ -2,7 +2,7 @@
 
 A reusable Brain capability that evaluates up to 50,000 scenarios per run, compares
 controllable strategies on the same scenarios, exposes downside risk, and says which
-inputs drive the result. CLAUDE.md §58 records the rules; this page is how to use it.
+inputs drive the result. CLAUDE.md §59 records the rules; this page is how to use it.
 
 ## Where it is
 

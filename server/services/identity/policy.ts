@@ -301,6 +301,10 @@ const OVERRIDES: Override[] = [
   // the same authority as inviting an account into that pool. Reading the
   // allocation takes the default: it is the same fleet reading Build already shows.
   { pattern: /^\/api\/projects\/[^/]+\/factory\/allocation\/[^/]+\/report$/, method: 'POST', level: 'ADMIN' },
+  // Letting an approved objective reach production without its owner is a larger
+  // decision than approving it (which only starts work on a branch), so it carries
+  // ADMIN — the level every other change to what a project may do carries.
+  { pattern: /^\/api\/factory\/change-requests\/[^/]+\/release-grant(\/withdraw)?$/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/russell\/projects\/[^/]+\/sites/, method: 'GET', level: 'READ' },
 
   // ---------------------------------------------------------------------
@@ -417,7 +421,7 @@ const OVERRIDES: Override[] = [
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'PATCH', level: 'ADMIN' },
   // ---------------------------------------------------------------------
-  // The scenario engine (§58)
+  // The scenario engine (§59)
   // ---------------------------------------------------------------------
   //
   // Saving, revising and running a model take the default WRITE: a model is

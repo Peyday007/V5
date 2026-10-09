@@ -116,7 +116,7 @@ export function createApiRouter(): Router {
   // prefix and must sit before the projects router.
   router.use(laborRouter);
   router.use(manufacturingRouter);
-  // The scenario engine (§58). Root-mounted, before the projects router, for
+  // The scenario engine (§59). Root-mounted, before the projects router, for
   // the labor kernel's reason: its routes carry their own prefix.
   router.use(scenarioRouter);
 

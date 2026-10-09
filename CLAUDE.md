@@ -12718,7 +12718,82 @@ views into a product. The rules it settled:
   every read within a month, so a refresh never quietly extends what is about
   to be approved.
 
-## 58. A simulation compares decisions on the same worlds, and never calls coverage a probability.
+## 58. An approved objective ends live and verified, or at one named blocker.
+
+A hosted Factory campaign used to stop at a reviewed pull request, and every
+one of them then waited for a person to merge it and dispatch Deploy. The
+intended experience is the opposite: approve a bounded objective, go offline,
+and come back to the deployed capability or to one specific blocker.
+`server/services/factory/release/`, `server/repos/factoryRelease.ts`,
+`.github/workflows/factory-release.yml`, `scripts/factory-release.ts` and
+`docs/FACTORY-RELEASE.md` are the mechanism. **This is a recorded correction to
+§27's "a person merges"** for the `brain` repository grant, made at the owner's
+instruction and bounded per objective by a grant the owner gives; for every
+objective without one, a person still merges.
+
+- **Brain decides; a protected workflow performs.** Brain still holds no forge
+  write credential and no deployment credential, and no Factory worker holds
+  either. The only write credential is the release workflow's own
+  `GITHUB_TOKEN`, given only to the job that runs nothing from the change. The
+  change's code runs in a separate gate job with a read-only token, no secrets
+  and credentials not persisted — the pwn-request shape refused by
+  construction.
+- **The owner decides once, at approval.** `factory_release_grants` (migration
+  `111_factory_release_runs.sql`, pg `102_factory_release_runs.sql`) is the
+  grant: ADMIN, a person by principal type, LOW risk only, carrying what "live"
+  means (the page and the live checks). It widens nothing.
+- **Some changes are never released without a person, whatever the grant
+  says.** `RELEASE_EXCLUDED_PATHS` — financial authority, secrets and deployment
+  configuration, identity and authorization policy, every migration (a glob
+  cannot tell additive from destructive), dependencies, and the release
+  machinery itself — refuses at Brain's gate and again on the gated diff. The
+  release machinery is also in the `brain` grant's `forbiddenPaths`, so a
+  campaign cannot own it: a campaign may not edit what decides its release.
+- **The durable record comes first, the effect second.** `factory_release_runs`
+  is a state machine — GATING, MERGED, DEPLOYING, VERIFYING, LIVE, or FAILED /
+  ROLLED_BACK / REFUSED — every move a guarded UPDATE naming its source state,
+  one row per (campaign, head, attempt), and at most one in flight per campaign
+  by a partial unique index. A workflow run that dies anywhere leaves a row the
+  next run resumes. Runner-shaped failures retry on the same head up to three
+  attempts; a verdict about the work does not.
+- **The merge is pinned.** The commit pushed is exactly the one the gate
+  merged and tested, its second parent must be the reviewed head, and the push
+  is a plain fast-forward; a moved branch re-gates rather than force-pushes.
+- **Rule 3 holds.** The gate runs typecheck, `test:impacted` and the build on
+  the merged tree; the full suite runs once, on the released SHA, as Deploy's
+  own test job.
+- **Rollback goes through the canonical pipeline, never around it.** §28 is
+  that exactly one workflow runs `flyctl deploy`, so a failed release is
+  reverted on the branch and Deploy is dispatched for the revert. Branch and
+  image never disagree. The cost is stated: restoration takes one deploy cycle
+  rather than an image swap, and a Deploy harness failure on a healthy release
+  costs a rollback rather than a silent LIVE.
+- **LIVE is a measurement inside the released process.** `release-verify` runs
+  through the console door in the deployed container: `BRAIN_REVISION` must be
+  the merge commit (or one the forge says contains it), `/healthz` must answer,
+  and every live check the owner wrote must pass. A pull request is never LIVE
+  and a merge is never LIVE.
+- **A timer is not the trigger.** GitHub ran this repository's hourly
+  schedule about every four to seven hours on 2026-10-08, so the release
+  workflow runs on the Factory's own pull request (`pull_request_target`, which
+  runs the base branch's workflow file and is restricted to Factory campaign
+  branches in this repository) and on Deploy completing; the schedule is a
+  backstop.
+- **One status, derived.** `outcome.ts` gives every campaign BUILDING,
+  VERIFYING, RELEASING, LIVE or BLOCKED — with the exact blocker and whether a
+  person must act — on Build, in the campaigns route and from `factory
+  release-status`. A blocker Brain re-examines by itself is never reported as a
+  person's.
+- **Unattended execution is a narrow allowlist, not a wide one.**
+  `.claude/settings.json` pre-approves routine development commands and
+  `scripts/test-postgres.sh`, the reviewed replacement for the `sudo -u postgres`
+  / `pg_ctlcluster` / inline `DO $$` setup that stopped unattended sessions at a
+  prompt; it denies force pushes, canonical-branch pushes, `flyctl`, `sudo` and
+  environment dumps, and a test refuses `Bash` or `Bash(*)`. OS sandboxing is
+  not enabled because the cloud worker image has no bubblewrap — enabling it
+  there would sandbox nothing, and saying so is the honest report.
+
+## 59. A simulation compares decisions on the same worlds, and never calls coverage a probability.
 
 The scenario engine (`server/services/scenario/`, `server/repos/scenario.ts`,
 `server/domain/scenario.ts`, `client/src/russell/Scenarios.tsx`,
@@ -12809,6 +12884,7 @@ server/
     recoveryProbes.ts   each recovery probe and what its fire proved; one live at a time
     factory.ts          the contract, the campaign, and units that own a surface
     factoryFleet.ts     factory workers, sessions, reviews, findings, the ledger
+    factoryRelease.ts   release grants, and each release attempt as a guarded state machine
     externalRecords.ts  a site's record, its version guard, and its refusals
     cashMode.ts       the sprint's row, and the append-only history beside it
     cashAuthority.ts  the commercial grant, and the ceiling spent by insert
@@ -12910,6 +12986,12 @@ server/
       ownership.ts      the one pre-dispatch check: every unit and repair can finish
       regrant.ts        the answer to a unit that ran out of attempts
       assemble.ts       the reviewable artifact, and the publishing it refuses
+      release/
+        gate.ts         whether a finished campaign may go live without a person, pure
+        plan.ts         what the release workflow does next, recorded before it acts
+        grant.ts        the owner's one decision, validated by one writer for both doors
+        verify.ts       LIVE, measured inside the released Brain
+        outcome.ts      BUILDING → VERIFYING → RELEASING → LIVE, or the exact blocker
       story.ts          why a campaign exists, its success conditions, plan rewrites in English
       metrics.ts        throughput from the ledger, with an evidence class
       sessions.ts       what the hosted plane ran, read back from Brain's own rows
@@ -13264,6 +13346,9 @@ scripts/
   design.sh                 the half that reads rows, inside the deployed container
   capability.ts             the kernel's operator surface: register, advance, derive
   factory.ts                the operator's factory surface: register, submit, run
+  factory-release.ts        the protected half of an automatic release, run by its workflow
+  release-scan.ts           the gate's own reading of the merged diff: reserved paths, credentials
+  test-postgres.sh          a throwaway, unprivileged Postgres for the suite, without a prompt
   manufacturing.ts          the programme's recovery door, when the bundle will not load
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
@@ -13418,7 +13503,7 @@ moved. If the change touched persistence, run the same selection against the
 other backend:
 
 ```
-BRAIN_TEST_DATABASE_URL=postgresql://... npm run test:impacted
+npm run test:pg        # the same selection on a throwaway local Postgres
 ```
 
 `--list` prints the selection without running it; `--transitive` widens it to

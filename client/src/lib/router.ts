@@ -41,7 +41,7 @@ export type Route =
    * in a month or two would take it down with one.
    */
   | { name: 'LABOR' }
-  /** Scenario modelling: simulate a decision and compare strategies (§58). */
+  /** Scenario modelling: simulate a decision and compare strategies (§59). */
   | { name: 'SCENARIOS' }
   | { name: 'SEARCH' }
   /**

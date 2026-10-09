@@ -10621,7 +10621,7 @@ export interface EngineeringBlockerRow {
 }
 
 // ---------------------------------------------------------------------------
-// The scenario engine (CLAUDE.md §58). The vocabulary is server/domain/scenario.ts.
+// The scenario engine (CLAUDE.md §59). The vocabulary is server/domain/scenario.ts.
 // ---------------------------------------------------------------------------
 
 export interface ScenarioModelRow {
