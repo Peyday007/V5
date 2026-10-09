@@ -12793,6 +12793,31 @@ objective without one, a person still merges.
   not enabled because the cloud worker image has no bubblewrap — enabling it
   there would sandbox nothing, and saying so is the honest report.
 
+**What has run, said plainly.** Two LOW-risk, one-sentence Build objectives
+went from a person's approval to LIVE, with the fleet doing every Factory stage
+and Brain verifying inside the released process:
+
+- `fcp_3d52c82c` — approved 21:40Z 2026-10-08, PR #159 opened by the fleet
+  22:22Z, merged by `factory-release` as `48acaff`, LIVE 00:00Z. Its release was
+  started by a Deploy completing — a Deploy I dispatched to land the trigger fix
+  — because the schedule had not run once in four hours.
+- `fcp_5d4f6311` — approved 00:42Z, PR #163 opened 01:01Z and **picked up by the
+  `pull_request_target` event with nobody dispatching anything**, gated and
+  merged as `8aae3dd` at 01:04Z. The release run then died on one transient
+  `fetch failed` before dispatching Deploy; Brain held the attempt at MERGED, and
+  a later pass resumed it there — no re-merge, no re-gate — to LIVE at
+  `034737c`, which contains the merge. That later pass was dispatched by hand
+  after ninety minutes without a scheduled run, before the retry and
+  self-resume that would have made it unnecessary existed (#164).
+
+Running it found five defects the tests had not: a wrapper guard the impacted
+selection missed (#155), risk inference reading "lease" inside "release"
+(#158), a timer that was not a trigger (#160), a release job conditioned on
+`always()` that ignored cancellation (#161), and a single forge error ending a
+run with no prompt resume (#164). **Recovery after a death *mid-deploy* by
+cancellation has not been exercised in production**; the attempt killed that way
+ran on (the `always()` defect) and the organic death landed at MERGED instead.
+
 ## Repository map
 
 ```
