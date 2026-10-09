@@ -1524,6 +1524,7 @@ function Unapproved({
   return (
     <div className="rs-build-unapproved">
       <h3>Pinned, waiting for you to approve</h3>
+      <p className="rs-hint">Approve once: Brain carries it live, or names what is blocking it.</p>
       <ul className="rs-list">
         {waiting.map((request) => (
           <li key={request.id} className="rs-card">
