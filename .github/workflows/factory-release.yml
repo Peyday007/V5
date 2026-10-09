@@ -68,6 +68,10 @@ on:
         description: 'Why this pass was asked for, for the run log'
         required: false
         default: 'release whatever is ready'
+      resume_depth:
+        description: 'How many times a failed pass has already asked for the next one (bounded)'
+        required: false
+        default: '0'
 
 # Its own group: one release at a time, and nothing else evicts it.
 concurrency:
@@ -295,3 +299,25 @@ jobs:
           fi
           echo "::error::The release did not complete. Its output is above."
           exit 1
+
+      # A release run that dies leaves its attempt in flight in Brain, and the
+      # next pass resumes it — but only if a next pass happens. GitHub's schedule
+      # cannot be relied on to be that pass (§58), so a failed release job asks
+      # for one itself, a bounded number of times: workflow_dispatch is the one
+      # event this run's own token may start. Nothing here decides anything;
+      # the next pass asks Brain, and Brain answers from its rows.
+      - name: Ask for the pass that resumes this one
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPTH: ${{ github.event.inputs.resume_depth || '0' }}
+        run: |
+          case "$DEPTH" in ''|*[!0-9]*) DEPTH=0 ;; esac
+          if [ "$DEPTH" -ge 3 ]; then
+            echo "::warning::Three resume passes in a row have failed; leaving the next one to the schedule. Brain shows the attempt and its stage."
+            exit 0
+          fi
+          sleep 120
+          gh workflow run factory-release.yml --ref production \
+            -f reason="resume after a failed release pass ($GITHUB_RUN_ID)" \
+            -f resume_depth="$((DEPTH + 1))"

@@ -92,20 +92,42 @@ function advance(runId: string, to: string, extra: Record<string, string | null 
   return parsed?.moved === true;
 }
 
+/**
+ * One GitHub API call, retried on a network failure or a 5xx.
+ *
+ * A single `fetch failed` used to end the whole run between MERGED and the
+ * Deploy dispatch (release frr_280add20, 2026-10-09). The durable record kept
+ * the merge, so nothing was lost — but nothing resumed it promptly either, and a
+ * transient error at the forge is not a fact about the release.
+ */
 async function gh<T>(method: string, path: string, body?: unknown): Promise<{ status: number; body: T | null }> {
-  const reply = await fetch(`https://api.github.com${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${TOKEN}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
-  });
-  const text = await reply.text();
-  return { status: reply.status, body: text ? (JSON.parse(text) as T) : null };
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      const reply = await fetch(`https://api.github.com${path}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (reply.status >= 500 && attempt < 5) {
+        lastError = new Error(`GitHub answered ${reply.status}`);
+      } else {
+        const text = await reply.text();
+        return { status: reply.status, body: text ? (JSON.parse(text) as T) : null };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    log(`GitHub ${method} ${path} attempt ${attempt} failed: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+    await new Promise((resolve) => setTimeout(resolve, 2_000 * 2 ** attempt));
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -180,20 +202,39 @@ interface WorkflowRun {
   event: string;
 }
 
-async function deployRunFor(mergeSha: string, since: string | null): Promise<WorkflowRun | null> {
+/** True when `ancestor` is in the history of `descendant`, from the trusted checkout. */
+function contains(ancestor: string, descendant: string): boolean {
+  sh('git', ['fetch', '--quiet', 'origin', 'production']);
+  return sh('git', ['merge-base', '--is-ancestor', ancestor, descendant], { allowFail: true }).ok;
+}
+
+/**
+ * A Deploy run that releases `mergeSha`: one on the canonical branch whose head
+ * *contains* the merge (the branch may have moved past it — a later commit
+ * deploys this one too), created after the merge was made, and not already a
+ * failure or a cancellation. Exact-head matching made a resume fail as soon as
+ * anything else landed after the merge.
+ */
+async function deployRunFor(mergeSha: string, since: string): Promise<WorkflowRun | null> {
   const reply = await gh<{ workflow_runs: WorkflowRun[] }>(
     'GET',
     `/repos/${REPO}/actions/workflows/deploy.yml/runs?branch=production&event=workflow_dispatch&per_page=30`,
   );
-  const runs = reply.body?.workflow_runs ?? [];
-  return (
-    runs.find((run) => run.head_sha === mergeSha && (since === null || run.created_at >= since)) ?? null
-  );
+  const runs = (reply.body?.workflow_runs ?? [])
+    .filter((run) => run.created_at >= since)
+    .filter((run) => run.status !== 'completed' || run.conclusion === 'success')
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+  return runs.find((run) => run.head_sha === mergeSha || contains(mergeSha, run.head_sha)) ?? null;
 }
 
 async function dispatchDeploy(action: Action, mergeSha: string, reason: string): Promise<number | null> {
-  const existing = await deployRunFor(mergeSha, null);
-  if (existing) return existing.id;
+  const mergedAt = sh('git', ['log', '-1', '--format=%cI', mergeSha]).stdout.trim();
+  const mergedAtIso = new Date(mergedAt).toISOString();
+  const existing = await deployRunFor(mergeSha, mergedAtIso);
+  if (existing) {
+    log(`adopting Deploy run ${existing.id}, which already releases ${mergeSha.slice(0, 12)}`);
+    return existing.id;
+  }
   const since = new Date(Date.now() - 5_000).toISOString();
   const reply = await gh('POST', `/repos/${REPO}/actions/workflows/deploy.yml/dispatches`, {
     ref: 'production',
