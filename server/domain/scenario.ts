@@ -236,7 +236,8 @@ export interface RunOptions {
   acceptable?: { minContributionCents: number };
 }
 
-export type SummaryStatistic = 'MEAN' | 'P10' | 'P50' | 'P90' | 'MIN' | 'MAX';
+export const SUMMARY_STATISTICS = ['MEAN', 'P10', 'P50', 'P90', 'MIN', 'MAX'] as const;
+export type SummaryStatistic = (typeof SUMMARY_STATISTICS)[number];
 
 export interface SelectedObjective {
   /** `contribution` or a metric key. */

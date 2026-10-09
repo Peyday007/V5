@@ -17,6 +17,7 @@ import {
   badRequest,
   bodyOf,
   handler,
+  HttpError,
   notFound,
   optionalString,
   pathId,
@@ -24,12 +25,13 @@ import {
   requireProject,
   unprocessable,
 } from './helpers.ts';
-import { SCENARIO_LIMITS, VARIABLE_PROVENANCES, type RunOptions, type ScenarioModelDefinition } from '../domain/scenario.ts';
+import { SCENARIO_LIMITS, SUMMARY_STATISTICS, VARIABLE_PROVENANCES, type RunOptions, type ScenarioModelDefinition } from '../domain/scenario.ts';
 import { archiveScenarioModel, getScenarioModel, getScenarioRun, listScenarioModels, listScenarioRuns, type ScenarioModelRecord } from '../repos/scenario.ts';
 import { ScenarioModelError } from '../services/scenario/model.ts';
 import { ScenarioRunError } from '../services/scenario/engine.ts';
 import { demonstration, normalizeOptions, readRunState, reproduce, reviseModel, runModel, saveModel } from '../services/scenario/service.ts';
 import { demonstrationModel } from '../services/scenario/demo.ts';
+import { ScenarioBusyError } from '../services/scenario/isolate.ts';
 
 export const scenarioRouter = Router();
 
@@ -38,6 +40,7 @@ const NOT_A_MODEL = 'No scenario model with that id.';
 function refusal(error: unknown): never {
   if (error instanceof ScenarioModelError) throw unprocessable(error.message, { problems: error.problems });
   if (error instanceof ScenarioRunError) throw unprocessable(error.message);
+  if (error instanceof ScenarioBusyError) throw new HttpError(429, error.message, { retryable: true });
   throw error;
 }
 
@@ -61,6 +64,34 @@ function optionsFrom(body: Record<string, unknown>): RunOptions {
     throw badRequest(`"options.evaluations" must be a whole number from 1 to ${SCENARIO_LIMITS.maxEvaluations}.`);
   }
   if (raw.basis !== undefined && raw.basis !== 'MONTE_CARLO' && raw.basis !== 'SWEEP') throw badRequest('"options.basis" must be MONTE_CARLO or SWEEP.');
+  // The rest are checked for shape here, so a malformed option is a refusal
+  // naming the field rather than a run that quietly answers something else.
+  // Whether a key names a real variable or metric is the engine's to say.
+  const finite = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+  const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  if (raw.overrides !== undefined) {
+    if (!isObject(raw.overrides)) throw badRequest('"options.overrides" must be an object.');
+    for (const [key, o] of Object.entries(raw.overrides)) {
+      if (!isObject(o) || Object.keys(o).some((k) => k !== 'multiply' && k !== 'value') || (o.multiply === undefined) === (o.value === undefined)
+        || (o.multiply !== undefined && !finite(o.multiply)) || (o.value !== undefined && !finite(o.value))) {
+        throw badRequest(`"options.overrides.${key}" must carry exactly one finite "multiply" or "value".`);
+      }
+    }
+  }
+  if (raw.acceptable !== undefined && (!isObject(raw.acceptable) || !finite(raw.acceptable.minContributionCents))) {
+    throw badRequest('"options.acceptable.minContributionCents" must be a finite number.');
+  }
+  if (raw.objective !== undefined) {
+    const o = raw.objective as unknown;
+    const statistic = (v: unknown) => typeof v === 'string' && (SUMMARY_STATISTICS as readonly string[]).includes(v);
+    if (!isObject(o) || typeof o.metric !== 'string' || !statistic(o.statistic) || (o.direction !== 'MAX' && o.direction !== 'MIN')) {
+      throw badRequest('"options.objective" needs a "metric", a "statistic" (MEAN, P10, P50, P90, MIN or MAX) and a "direction" of MAX or MIN.');
+    }
+    if (o.constraints !== undefined && (!Array.isArray(o.constraints) || !o.constraints.every((c) =>
+      isObject(c) && typeof c.metric === 'string' && statistic(c.statistic) && (c.op === '<=' || c.op === '>=') && finite(c.value)))) {
+      throw badRequest('"options.objective.constraints" must each carry a "metric", a "statistic", an "op" of <= or >=, and a finite "value".');
+    }
+  }
   return normalizeOptions(raw);
 }
 
@@ -90,7 +121,11 @@ scenarioRouter.get(
   handler(async (req) => {
     requirePerson();
     await requireProject(pathId(req, 'projectId'));
-    return demonstration();
+    try {
+      return await demonstration();
+    } catch (error) {
+      return refusal(error);
+    }
   }),
 );
 
@@ -154,8 +189,12 @@ scenarioRouter.post(
     const model = await modelOf(project.id, pathId(req, 'modelId'));
     const body = bodyOf(req);
     const options = optionsFrom(body);
-    const run = await runModel({ model, options, label: optionalString(body.label, 'label') ?? null, createdById: person.id });
-    return { run: runView(run) };
+    try {
+      const run = await runModel({ model, options, label: optionalString(body.label, 'label') ?? null, createdById: person.id });
+      return { run: runView(run) };
+    } catch (error) {
+      return refusal(error);
+    }
   }),
 );
 
@@ -171,7 +210,12 @@ scenarioRouter.get(
   }),
 );
 
-/** Re-run a recorded configuration and compare digests. Computes; writes nothing. */
+/**
+ * Re-run a recorded configuration and compare digests. Computes; writes
+ * nothing. It takes the default WRITE level all the same: it spends the
+ * process's one run slot, and a reader who could loop it would hold that slot
+ * for everybody else.
+ */
 scenarioRouter.post(
   '/projects/:projectId/scenarios/:modelId/runs/:runId/reproduce',
   handler(async (req) => {
@@ -182,7 +226,7 @@ scenarioRouter.post(
     if (!run || run.modelId !== model.id) throw notFound(NOT_A_MODEL);
     if (run.state !== 'COMPLETE') throw unprocessable('Only a completed run has a result to reproduce.');
     try {
-      return { reproduction: reproduce(run) };
+      return { reproduction: await reproduce(run) };
     } catch (error) {
       return refusal(error);
     }

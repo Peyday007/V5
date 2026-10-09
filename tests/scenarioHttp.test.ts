@@ -20,6 +20,7 @@ import { scenarioRouter } from '../server/routes/scenario.ts';
 import { getDb } from '../server/db/database.ts';
 import { insertScenarioRun, getScenarioRun } from '../server/repos/scenario.ts';
 import { readRunState } from '../server/services/scenario/service.ts';
+import { claimRunSlot, runsInFlight } from '../server/services/scenario/isolate.ts';
 import type { Principal, ProjectRole } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -161,6 +162,61 @@ describe('the scenario door', () => {
     expect(readRunState(run)).toBe('INTERRUPTED');
     const read = await call('GET', `/api/projects/${projectId}/scenarios/${saved.body.model.id}/runs/${runId}`);
     expect(read.body.run.reading).toBe('INTERRUPTED');
+  });
+
+  it('runs off the request loop: a second run while the slot is held is refused as busy and writes no row', async () => {
+    const saved = await call('POST', `/api/projects/${projectId}/scenarios`, { fromDemonstration: true });
+    const modelId = saved.body.model.id as string;
+    const release = claimRunSlot();
+    try {
+      const busy = await call('POST', `/api/projects/${projectId}/scenarios/${modelId}/runs`, { options: { seed: 1, evaluations: 400 } });
+      expect(busy.status).toBe(429);
+      expect(busy.body.detail.retryable).toBe(true);
+      const rows = await getDb().get<{ n: number | string }>('SELECT COUNT(*) AS n FROM scenario_runs');
+      expect(Number(rows!.n)).toBe(0);
+    } finally {
+      release();
+    }
+    expect(runsInFlight()).toBe(0);
+    // The event loop stays free while a run computes on its thread: the
+    // server is in this process, so an inline engine would leave one long gap.
+    let last = Date.now();
+    let longestGap = 0;
+    const interval = setInterval(() => { const now = Date.now(); longestGap = Math.max(longestGap, now - last); last = now; }, 5);
+    const ran = await call('POST', `/api/projects/${projectId}/scenarios/${modelId}/runs`, { options: { seed: 1, evaluations: 50_000 } });
+    clearInterval(interval);
+    expect(ran.body.run.reading).toBe('COMPLETE');
+    expect(ran.body.run.elapsedMs).toBeGreaterThan(250);
+    expect(longestGap).toBeLessThan(250);
+    expect(runsInFlight()).toBe(0);
+  });
+
+  it('refuses malformed run options by name rather than answering something else', async () => {
+    const saved = await call('POST', `/api/projects/${projectId}/scenarios`, { fromDemonstration: true });
+    const path = `/api/projects/${projectId}/scenarios/${saved.body.model.id}/runs`;
+    for (const options of [
+      { acceptable: { minContributionCents: 'x' } },
+      { objective: { metric: 'contribution', statistic: 'P50', direction: 'UP' } },
+      { objective: { metric: 'contribution', statistic: 'P50', direction: 'MAX', constraints: [{ metric: 'contribution', statistic: 'P10', op: '<', value: 0 }] } },
+      { overrides: { price: { multiply: 2, value: 3 } } },
+      { overrides: { price: { multiply: 'twice' } } },
+    ]) {
+      const refused = await call('POST', path, { options });
+      expect(refused.status, JSON.stringify(options)).toBe(400);
+    }
+    const rows = await getDb().get<{ n: number | string }>('SELECT COUNT(*) AS n FROM scenario_runs');
+    expect(Number(rows!.n)).toBe(0);
+  });
+
+  it('does not let a reader spend the run slot by reproducing', async () => {
+    const saved = await call('POST', `/api/projects/${projectId}/scenarios`, { fromDemonstration: true });
+    const modelId = saved.body.model.id as string;
+    const ran = await call('POST', `/api/projects/${projectId}/scenarios/${modelId}/runs`, { options: { seed: 5, evaluations: 400 } });
+    current = human('VIEWER');
+    const reader = await call('POST', `/api/projects/${projectId}/scenarios/${modelId}/runs/${ran.body.run.id}/reproduce`);
+    expect(reader.status).toBe(404);
+    const read = await call('GET', `/api/projects/${projectId}/scenarios/${modelId}/runs/${ran.body.run.id}`);
+    expect(read.status).toBe(200);
   });
 
   it('refuses a worker by type, and answers another project’s model exactly as one that does not exist', async () => {

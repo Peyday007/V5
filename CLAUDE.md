@@ -12828,9 +12828,17 @@ forecast and `dispatch/simulate.ts` keeps owning the fleet replay.
 - **Reproducible from rows.** A run is written `RUNNING` with the exact
   definition and options before the engine starts, finished guarded on
   `RUNNING`, and re-running it must reproduce `result_digest`; a `RUNNING` row a
-  dead process left reads as interrupted. The engine is pure and synchronous,
-  bounded by 50,000 evaluations and a 20 s budget — measured at about 0.5 s on
-  the demonstration — so it needs no queue.
+  dead process left reads as interrupted.
+- **Bounded is not harmless, so a run never executes on the request's loop.**
+  The first version ran the engine inline on the argument that it is bounded
+  (50,000 evaluations, 20 s) and measured at about 0.5 s on the demonstration.
+  The independent review measured a worst-case model holding Node's one event
+  loop for 25.8 s, during which `/mcp`, `/oauth/token`, heartbeats and the
+  dispatch tick were not served — §20's "connector down" story, triggered by a
+  page. A run now executes on a worker thread (`isolate.ts`) that is terminated
+  outright past the budget, a process runs one at a time and refuses a second
+  as busy (429, before any row is written), and reproducing a run takes the
+  default WRITE level because it spends that slot.
 - **The demonstration is illustrative and labelled so on every figure.** It is
   computed on read and never stored.
 
@@ -13200,6 +13208,8 @@ server/
       engine.ts         drawing the worlds, and every strategy on the same draw
       analyze.ts        distributions, dominance, trade-offs, sensitivity, break-evens
       run.ts            the one pure entrance, and the digest that proves reproducibility
+      isolate.ts        a worker thread per run, terminated past the budget; one run at a time
+      worker.ts         the thread itself; worker-boot.mjs registers tsx before loading it
       service.ts        a run written down before it starts; the read-only demonstration
       demo.ts           the illustrative demonstration model
     russell/

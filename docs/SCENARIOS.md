@@ -73,6 +73,9 @@ expression are refused as a double count.
   page's *Re-run and compare* checks it.
 - **Bounded.** 50,000 evaluations, 40 variables, 8 strategies, expression size and depth caps,
   and a 20 s wall-clock budget past which the run fails rather than hangs.
+- **Off the request's loop.** A run executes on a worker thread that is terminated past the
+  budget, so the rest of Brain keeps answering while it runs. One run at a time per process;
+  a second is refused with 429 (retryable) before any row is written.
 - **Stress tests** (`overrides`) multiply or replace an input in every scenario and are
   recorded on the result.
 

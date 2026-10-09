@@ -306,7 +306,7 @@ export function evaluateAll(model: CompiledModel, draws: Draws, options: Pick<Ru
   const values = new Float64Array(model.variables.length);
   const n = model.variables.length;
   for (let i = 0; i < scenarios; i++) {
-    if (i % 1024 === 0 && Date.now() - startedAt > SCENARIO_LIMITS.maxRunMs) {
+    if (i % 64 === 0 && Date.now() - startedAt > SCENARIO_LIMITS.maxRunMs) {
       throw new ScenarioRunError(`The run passed its ${SCENARIO_LIMITS.maxRunMs / 1000}s budget after ${i} scenarios and was stopped rather than left running.`);
     }
     for (let v = 0; v < n; v++) values[v] = draws.base[v * scenarios + i]!;

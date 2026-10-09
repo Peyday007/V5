@@ -8,10 +8,10 @@
  * working; re-running it is safe because the engine is pure and the same
  * configuration produces the same digest.
  *
- * The engine runs synchronously in the request. It is bounded — at most
- * 50,000 evaluations and a wall-clock budget — and measured at under two
- * seconds for the demonstration model, so a queue would add a second
- * mechanism for no reliability it does not already have.
+ * The engine runs on a worker thread, never on the request's own loop, and a
+ * process runs one at a time (`isolate.ts`): bounded is not harmless, and a
+ * 20 s synchronous run would hold every other request in the process. A run
+ * refused as busy is refused before its row is written — nothing was run.
  */
 import { ENGINE_VERSION, SCENARIO_LIMITS, type RunOptions, type ScenarioModelDefinition, type ScenarioResult } from '../../domain/scenario.ts';
 import {
@@ -25,7 +25,8 @@ import {
   type ScenarioRunRecord,
 } from '../../repos/scenario.ts';
 import { canonicalJson, compileModel, sha256 } from './model.ts';
-import { resultDigest, runConfigHash, runScenarioModel } from './run.ts';
+import { resultDigest, runConfigHash } from './run.ts';
+import { claimRunSlot, runIsolated, runOnWorker } from './isolate.ts';
 import { DEMONSTRATION_EVALUATIONS, DEMONSTRATION_SEED, demonstrationModel } from './demo.ts';
 
 /** A RUNNING row older than this belonged to a process that is gone. */
@@ -77,6 +78,20 @@ export function normalizeOptions(raw: Partial<RunOptions> | undefined): RunOptio
 export async function runModel(input: { model: ScenarioModelRecord; options: RunOptions; label: string | null; createdById: string }): Promise<ScenarioRunRecord> {
   const { model, options } = input;
   const compiled = compileModel(model.definition);
+  const release = claimRunSlot();
+  try {
+    return await recordRun(input, compiled.hash, options);
+  } finally {
+    release();
+  }
+}
+
+async function recordRun(
+  input: { model: ScenarioModelRecord; label: string | null; createdById: string },
+  modelHash: string,
+  options: RunOptions,
+): Promise<ScenarioRunRecord> {
+  const { model } = input;
   const runId = await insertScenarioRun({
     modelId: model.id,
     projectId: model.projectId,
@@ -84,13 +99,13 @@ export async function runModel(input: { model: ScenarioModelRecord; options: Run
     seed: options.seed,
     evaluations: options.evaluations,
     config: { definition: model.definition, options },
-    configHash: runConfigHash(compiled.hash, options),
+    configHash: runConfigHash(modelHash, options),
     engineVersion: ENGINE_VERSION,
     createdById: input.createdById,
   });
   const startedAt = Date.now();
   try {
-    const result = runScenarioModel(model.definition, options);
+    const result = await runOnWorker(model.definition, options);
     await finishScenarioRun(runId, { state: 'COMPLETE', result, resultDigest: resultDigest(result), elapsedMs: result.elapsedMs });
   } catch (error) {
     await finishScenarioRun(runId, { state: 'FAILED', failure: error instanceof Error ? error.message : String(error), elapsedMs: Date.now() - startedAt });
@@ -107,25 +122,30 @@ export interface Reproduction {
 }
 
 /** Re-run a recorded run's exact configuration and compare digests. Writes nothing. */
-export function reproduce(run: ScenarioRunRecord): Reproduction {
-  const result = runScenarioModel(run.config.definition, run.config.options);
+export async function reproduce(run: ScenarioRunRecord): Promise<Reproduction> {
+  const result = await runIsolated(run.config.definition, run.config.options);
   const recomputed = resultDigest(result);
   return { runId: run.id, reproduced: recomputed === run.resultDigest, recordedDigest: run.resultDigest, recomputedDigest: recomputed, elapsedMs: result.elapsedMs };
 }
 
-let demonstrationCache: { key: string; result: ScenarioResult } | null = null;
+let demonstrationCache: { key: string; result: Promise<ScenarioResult> } | null = null;
 
 /**
  * The demonstration, computed and never stored. Read-only: anybody who can
  * read the page can see it, and it writes no row. Cached by its configuration
  * hash, which is safe precisely because the engine is deterministic.
  */
-export function demonstration(): { definition: ScenarioModelDefinition; options: RunOptions; result: ScenarioResult } {
+export async function demonstration(): Promise<{ definition: ScenarioModelDefinition; options: RunOptions; result: ScenarioResult }> {
   const definition = demonstrationModel();
   const options: RunOptions = { seed: DEMONSTRATION_SEED, evaluations: DEMONSTRATION_EVALUATIONS };
   const key = sha256(canonicalJson({ definition, options }));
+  // The promise is cached, so concurrent first readers share one computation.
+  // It runs on a worker too, outside the one-run slot: it is computed once per
+  // process, and a demonstration a busy slot refused would be a blank page.
   if (!demonstrationCache || demonstrationCache.key !== key) {
-    demonstrationCache = { key, result: runScenarioModel(definition, options) };
+    const result = runOnWorker(definition, options);
+    demonstrationCache = { key, result };
+    result.catch(() => { if (demonstrationCache?.result === result) demonstrationCache = null; });
   }
-  return { definition, options, result: demonstrationCache.result };
+  return { definition, options, result: await demonstrationCache.result };
 }
