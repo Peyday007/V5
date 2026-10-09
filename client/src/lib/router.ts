@@ -41,6 +41,8 @@ export type Route =
    * in a month or two would take it down with one.
    */
   | { name: 'LABOR' }
+  /** Scenario modelling: simulate a decision and compare strategies (§59). */
+  | { name: 'SCENARIOS' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -107,6 +109,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'MACHINES' };
     case 'labor':
       return { name: 'LABOR' };
+    case 'scenarios':
+      return { name: 'SCENARIOS' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
@@ -154,6 +158,8 @@ export function pathFor(route: Route): string {
       return '/machines';
     case 'LABOR':
       return '/labor';
+    case 'SCENARIOS':
+      return '/scenarios';
     case 'SEARCH':
       return '/search';
     case 'INVITE':

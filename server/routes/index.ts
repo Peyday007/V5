@@ -24,6 +24,7 @@ import { connectRouter } from './connect.ts';
 import { cashRouter } from './cash.ts';
 import { laborRouter } from './labor.ts';
 import { manufacturingRouter } from './manufacturing.ts';
+import { scenarioRouter } from './scenario.ts';
 import { invitationsRouter } from './invitations.ts';
 import { passkeyRouter } from './passkeys.ts';
 import { peopleRouter } from './people.ts';
@@ -115,6 +116,9 @@ export function createApiRouter(): Router {
   // prefix and must sit before the projects router.
   router.use(laborRouter);
   router.use(manufacturingRouter);
+  // The scenario engine (§59). Root-mounted, before the projects router, for
+  // the labor kernel's reason: its routes carry their own prefix.
+  router.use(scenarioRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);
