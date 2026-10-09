@@ -404,6 +404,19 @@ describe('the release workflow’s own readings', () => {
     expect(deployReleased([{ name: 'Deploy', conclusion: 'failure' }])).toBe(false);
   });
 
+  it('asks for its own resume after a failure, a bounded number of times', () => {
+    const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
+    const step = workflow.slice(workflow.indexOf('Ask for the pass that resumes this one'));
+    expect(step).toMatch(/if: \$\{\{ failure\(\) \}\}/);
+    expect(step).toMatch(/"\$DEPTH" -ge 3/);
+    expect(step).toMatch(/gh workflow run factory-release\.yml --ref production/);
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    // A transient forge error is retried rather than ending the run.
+    expect(script).toMatch(/attempt <= 5/);
+    // A Deploy whose head merely contains the merge is adopted, not refused.
+    expect(script).toMatch(/merge-base', '--is-ancestor'/);
+  });
+
   it('is triggered by the Factory’s own pull request, from the base branch, and by nobody else’s', () => {
     const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
     // pull_request_target runs the base branch's workflow file, never the PR's.
