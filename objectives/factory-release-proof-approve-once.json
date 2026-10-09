@@ -1,0 +1,44 @@
+{
+  "objective": "On the Build page, directly beneath the heading 'Pinned, waiting for you to approve' in client/src/russell/Build.tsx (the Unapproved component), show one short hint sentence that reads exactly: 'Approve once: Brain carries it live, or names what is blocking it.' Render it as a paragraph with className 'rs-hint'. Add tests/buildApproveOnceSentence.test.tsx that renders the Unapproved section with one waiting change request and asserts the sentence is on the screen. Change nothing else.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "The Build page shows 'Approve once: Brain carries it live, or names what is blocking it.' under 'Pinned, waiting for you to approve'.",
+  "nonGoals": [
+    "Any server, schema or workflow change",
+    "Restyling the Build page"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "client/src/russell/Build.tsx renders 'Approve once: Brain carries it live, or names what is blocking it.' beneath the heading 'Pinned, waiting for you to approve'.",
+      "verification": "npx vitest run tests/buildApproveOnceSentence.test.tsx",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/russell/Build.tsx",
+    "tests/buildApproveOnceSentence.test.tsx"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the merge commit; no schema or data change.",
+  "release": {
+    "reason": "Second end-to-end proof: event-triggered release and recovery from a release worker killed mid-deploy.",
+    "pagePath": "/build",
+    "liveChecks": [
+      {
+        "kind": "BUNDLE_TEXT",
+        "text": "Approve once: Brain carries it live"
+      },
+      {
+        "kind": "HTTP",
+        "path": "/healthz",
+        "expectStatus": 200
+      }
+    ]
+  }
+}
