@@ -318,7 +318,53 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
   }
   await printCancellations(projectId);
   await printWorkByExecutor(projectId, now);
+  await printJudgingQueue(projectId, now);
   return true;
+}
+
+/**
+ * The step between a dive starting and its mission existing.
+ *
+ * A dive's idea must be judged before it can launch, and judging reads the
+ * oldest unjudged ideas in the whole Brain, a bounded number per tick. So a
+ * dive can wait here with every mission slot free; this says how deep that
+ * queue is, how old its head is, and where this sprint's dives stand in it.
+ */
+async function printJudgingQueue(projectId: string, now: string): Promise<void> {
+  const cycle = await getDb().all<{
+    max_launches_per_cycle: number;
+    last_ran_at: string | null;
+    last_error: string | null;
+    state: string;
+  }>('SELECT max_launches_per_cycle, last_ran_at, last_error, state FROM russell_cycle LIMIT 1');
+  const queue = await getDb().all<{ id: string; project_id: string; title: string; created_at: string }>(
+    `SELECT id, project_id, title, created_at FROM russell_candidates
+      WHERE priority IS NULL AND state <> 'MERGED' AND project_id IS NOT NULL
+      ORDER BY created_at, rowid`,
+  );
+  console.log('');
+  console.log('JUDGING QUEUE (every project; oldest first, as the tick reads it)');
+  const row = cycle[0];
+  console.log(
+    `  cycle      state=${row?.state ?? '—'} perTick=${row?.max_launches_per_cycle ?? '—'}` +
+      ` lastRan=${stamp(row?.last_ran_at)} lastError=${(row?.last_error ?? '—').slice(0, 120)}`,
+  );
+  console.log(
+    `  unjudged   ${queue.length}` +
+      (queue[0] ? `  oldest ${span(queue[0].created_at, now)} (${queue[0].id})` : ''),
+  );
+  const byPrefix = new Map<string, number>();
+  for (const one of queue) {
+    const prefix = one.title.split(/[:—]/)[0]!.slice(0, 30);
+    byPrefix.set(prefix, (byPrefix.get(prefix) ?? 0) + 1);
+  }
+  for (const [prefix, n] of [...byPrefix.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)) {
+    console.log(`    ${String(n).padStart(4)} × ${prefix}`);
+  }
+  queue.forEach((one, index) => {
+    if (one.project_id !== projectId || !one.title.startsWith('Qualify:')) return;
+    console.log(`  dive idea  position ${index + 1}  waited ${span(one.created_at, now)}  ${one.id}`);
+  });
 }
 
 /**
