@@ -33,7 +33,7 @@ import {
   MAX_CANCELLED_DEPLOYS,
   deployRefusedAtTip,
   deployReleased,
-  failuresPreExisting,
+  judgeReleasedVerdict,
   verificationFromLog,
   onCancelledDeploy,
   onProductionMoved,
@@ -542,25 +542,28 @@ describe('the release workflow’s own readings', () => {
     expect(workflow).toMatch(/startsWith\(github\.event\.pull_request\.head\.ref, 'factory\/campaign\/'\) &&\s*github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
   });
 
-  it('does not roll back for a hosted-verification failure the previous release already had', () => {
+  it('does not roll back for a hosted-verification failure the previous release already had, or an unknown', () => {
     const base = { released: true, complete: true, failing: ['the Brain keeps answering while a run executes'] };
     // The same condition failed before the merge: not the change's doing.
-    expect(failuresPreExisting({ released: true, complete: true, failing: ['the Brain keeps answering while a run executes'] }, base))
-      .toEqual({ preExisting: true, failing: ['the Brain keeps answering while a run executes'] });
+    expect(judgeReleasedVerdict({ released: true, complete: true, failing: ['the Brain keeps answering while a run executes'] }, base).countsAgainst).toBe(false);
     // A condition that was passing before is the change's, and still rolls back.
-    expect(failuresPreExisting({ released: true, complete: true, failing: ['a new check'] }, base).preExisting).toBe(false);
-    // Nothing to compare against, or a run that never reached a verdict: still the change's.
-    expect(failuresPreExisting({ released: true, complete: true, failing: ['x'] }, null).preExisting).toBe(false);
-    expect(failuresPreExisting({ released: true, complete: false, failing: ['x'] }, { ...base, failing: ['x'] }).preExisting).toBe(false);
-    expect(failuresPreExisting({ released: true, complete: true, failing: ['x'] }, { ...base, complete: false, failing: ['x'] }).preExisting).toBe(false);
-    expect(failuresPreExisting({ released: true, complete: true, failing: [] }, base).preExisting).toBe(false);
-    expect(failuresPreExisting({ released: true, complete: true }, base).preExisting).toBe(false);
+    const added = judgeReleasedVerdict({ released: true, complete: true, failing: ['a new check'] }, base);
+    expect(added.countsAgainst).toBe(true);
+    // A verification that never reached a verdict is unknown (Deploy 444: Supabase 429), not a failure.
+    expect(judgeReleasedVerdict({ released: true, complete: false, failing: ['the work left before the restart is still there'] }, null).countsAgainst).toBe(false);
+    expect(judgeReleasedVerdict(null, null).countsAgainst).toBe(false);
+    // A complete failure with nothing to compare against still counts, as does an unnamed one.
+    expect(judgeReleasedVerdict({ released: true, complete: true, failing: ['x'] }, null).countsAgainst).toBe(true);
+    expect(judgeReleasedVerdict({ released: true, complete: true, failing: ['x'] }, { ...base, complete: false, failing: ['x'] }).countsAgainst).toBe(true);
+    expect(judgeReleasedVerdict({ released: true, complete: true, failing: [] }, base).countsAgainst).toBe(true);
     // Deploy records the names it compares, and the release reads them only for a released, failed Deploy.
     const deploy = fs.readFileSync('.github/workflows/deploy.yml', 'utf8');
     expect(deploy).toMatch(/'failing': sorted\(failing\)/);
     expect(deploy).toMatch(/'complete': complete/);
     const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
     expect(script).toMatch(/watched\.conclusion === 'failure' && watched\.released/);
+    // And a rollback whose revert did not land never prints ROLLED_BACK.
+    expect(script).toMatch(/rolled \? `RELEASE: ROLLED_BACK \$\{action\.runId\}` : `RELEASE: FAILED \$\{action\.runId\}`/);
   });
 
   it('reads an older release\'s failures from its log, and a tip refusal as nothing released', () => {

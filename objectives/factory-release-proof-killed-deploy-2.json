@@ -1,0 +1,44 @@
+{
+  "objective": "On the Research page, directly beneath the heading 'Research' in client/src/russell/Research.tsx (the h2 with id 'rs-research-title'), show one short hint sentence that reads exactly: 'Research Brain can answer from what it holds is never bought twice.' Render it as a paragraph with className 'rs-hint', always (whatever the loading state). Add tests/researchNeverBoughtTwiceSentence.test.tsx that renders the Research section and asserts the sentence is on the screen. Change nothing else.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "The Research page shows 'Research Brain can answer from what it holds is never bought twice.' under 'Research'.",
+  "nonGoals": [
+    "Any server, schema or workflow change",
+    "Restyling the Build page"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "client/src/russell/Research.tsx renders 'Research Brain can answer from what it holds is never bought twice.' beneath the heading 'Research'.",
+      "verification": "npx vitest run tests/researchNeverBoughtTwiceSentence.test.tsx",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/russell/Research.tsx",
+    "tests/researchNeverBoughtTwiceSentence.test.tsx"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the merge commit; no schema or data change.",
+  "release": {
+    "reason": "End-to-end proof, second run: a release killed mid-deploy resumes by itself to verified LIVE.",
+    "pagePath": "/research",
+    "liveChecks": [
+      {
+        "kind": "BUNDLE_TEXT",
+        "text": "is never bought twice"
+      },
+      {
+        "kind": "HTTP",
+        "path": "/healthz",
+        "expectStatus": 200
+      }
+    ]
+  }
+}

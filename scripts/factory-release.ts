@@ -464,7 +464,7 @@ async function rollBack(
   released: boolean,
   why: string,
   stage: 'DEPLOY' | 'VERIFY',
-): Promise<void> {
+): Promise<boolean> {
   /*
    * Rollback goes through the canonical pipeline, never around it: §28 is that
    * exactly one workflow runs `flyctl deploy`, and a second one "only for
@@ -484,12 +484,14 @@ async function rollBack(
   }
   if (revert.ok) {
     advance(action.runId, 'ROLLED_BACK', { detail: steps.join('; ') });
-    return;
+    return true;
   }
   // The revert did not land. The attempt stays FAILED — never ROLLED_BACK,
   // which would tell the owner production is back when it may not be — and its
   // detail says exactly what a person has to do.
   advance(action.runId, 'FAILED', { stage, detail: steps.join('; ') });
+  log(`the revert did not land: ${revert.detail}`);
+  return false;
 }
 
 async function verify(action: Action, mergeSha: string): Promise<void> {
@@ -503,8 +505,8 @@ async function verify(action: Action, mergeSha: string): Promise<void> {
   // FAILED first: ROLLED_BACK may only follow a recorded failure, and a run left
   // at VERIFYING would be resumed, re-verified and reverted a second time.
   advance(action.runId, 'FAILED', { stage: 'VERIFY', detail: 'verification inside the released Brain failed' });
-  await rollBack(action, mergeSha, true, 'verification inside the released Brain failed', 'VERIFY');
-  log(`RELEASE: ROLLED_BACK ${action.runId}`);
+  const rolled = await rollBack(action, mergeSha, true, 'verification inside the released Brain failed', 'VERIFY');
+  log(rolled ? `RELEASE: ROLLED_BACK ${action.runId}` : `RELEASE: FAILED ${action.runId}`);
 }
 
 /** How many Deploy runs for one merge may be cancelled before releasing before the attempt stops. */
@@ -562,33 +564,43 @@ export interface DeployVerification {
 }
 
 /**
- * Whether a released Deploy's failed verdict is the change's doing.
+ * Whether a released Deploy's failed verdict counts against the change.
  *
  * Deploy's hosted verification checks the whole Brain, and it fails for
  * reasons that have nothing to do with the change being released — a slow
- * pooler, or a defect another workstream merged (Deploys 438 and 439 on
- * 2026-10-11 both failed on the Scenario engine's checks). Rolling a Factory
- * change back for a condition the previous release already had undoes a good
- * change and fixes nothing. So the failure is not counted against the change
- * when, and only when: both this run and the last release before the merge ran
- * to a verdict, and every condition that failed now was already failing then.
- * A new failing condition, an incomplete run, or no readable baseline is still
- * the change's, and still rolls back. The release then verifies the live Brain
- * itself, which is what decides LIVE.
+ * pooler, a storage API refusing connections, or a defect another workstream
+ * merged (Deploys 438 and 439 on 2026-10-11 both failed on the Scenario
+ * engine's checks). Rolling a Factory change back for that undoes a good
+ * change and fixes nothing. So:
+ *
+ *   - a verification that never reached a verdict is **unknown**, not a
+ *     failure (§20: an unknown is recorded as unknown). Deploy 444 released and
+ *     its first pass died on Supabase `429 too_many_connections`; its second
+ *     pass then failed the check that reads what the first pass left behind.
+ *   - a complete verification whose every failing condition was already
+ *     failing on the last complete release before the merge is pre-existing.
+ *
+ * Either way the release goes on to verify the live Brain itself (revision,
+ * health, the owner's live checks), which is what decides LIVE. A complete
+ * verification with a condition the previous release passed — or with no
+ * readable baseline to say otherwise — still rolls back.
  */
-export function failuresPreExisting(
+export function judgeReleasedVerdict(
   current: DeployVerification | null,
   baseline: DeployVerification | null,
-): { preExisting: true; failing: string[] } | { preExisting: false; reason: string } {
-  if (!current || !Array.isArray(current.failing)) return { preExisting: false, reason: 'this Deploy recorded no failing conditions to compare' };
-  if (!baseline || !Array.isArray(baseline.failing)) return { preExisting: false, reason: 'no earlier release recorded its failing conditions' };
-  if (current.complete !== true) return { preExisting: false, reason: 'this Deploy\'s verification did not run to a verdict' };
-  if (baseline.complete !== true) return { preExisting: false, reason: 'the earlier release\'s verification did not run to a verdict' };
-  if (current.failing.length === 0) return { preExisting: false, reason: 'the verdict failed without naming a condition' };
+): { countsAgainst: false; why: string } | { countsAgainst: true; reason: string } {
+  if (!current || current.complete !== true) {
+    return { countsAgainst: false, why: 'its hosted verification never reached a verdict, which is unknown rather than a failure' };
+  }
+  const failing = Array.isArray(current.failing) ? current.failing : [];
+  if (failing.length === 0) return { countsAgainst: true, reason: 'the verdict failed without naming a condition' };
+  if (!baseline || baseline.complete !== true || !Array.isArray(baseline.failing)) {
+    return { countsAgainst: true, reason: 'no earlier complete release recorded its failing conditions to compare with' };
+  }
   const before = new Set(baseline.failing);
-  const added = current.failing.filter((name) => !before.has(name));
-  if (added.length > 0) return { preExisting: false, reason: `new failing condition(s): ${added.slice(0, 5).join('; ')}` };
-  return { preExisting: true, failing: current.failing };
+  const added = failing.filter((name) => !before.has(name));
+  if (added.length > 0) return { countsAgainst: true, reason: `new failing condition(s): ${added.slice(0, 5).join('; ')}` };
+  return { countsAgainst: false, why: `it failed only on condition(s) the last release before the merge also failed (${failing.join('; ')})` };
 }
 
 /** A Deploy run's recorded verification, or null when it cannot be read. */
@@ -617,12 +629,30 @@ export function verificationFromLog(log: string, released: boolean): DeployVerif
   return { released, complete, failing: [...failing].sort() };
 }
 
-function verificationFromRunLog(runId: number, released: boolean): DeployVerification | null {
-  const jobs = sh('gh', ['api', `repos/${REPO}/actions/runs/${runId}/jobs`, '--jq', '.jobs[] | select(.name == "Deploy to Fly") | .id'], { allowFail: true });
-  const jobId = jobs.stdout.trim().split('\n')[0];
-  if (!jobs.ok || !jobId) return null;
-  const log = sh('gh', ['api', `repos/${REPO}/actions/jobs/${jobId}/logs`], { allowFail: true });
-  return log.ok ? verificationFromLog(log.stdout, released) : null;
+async function verificationFromRunLog(runId: number, released: boolean): Promise<DeployVerification | null> {
+  const jobs = await gh<{ jobs: { id: number; name: string }[] }>('GET', `/repos/${REPO}/actions/runs/${runId}/jobs`);
+  const job = (jobs.body?.jobs ?? []).find((one) => one.name === 'Deploy to Fly');
+  if (!job) {
+    log(`Deploy run ${runId} has no release job to read a verdict from`);
+    return null;
+  }
+  // The logs endpoint redirects to a short-lived blob URL; fetch follows it and
+  // drops the Authorization header across origins, which is what the blob wants.
+  try {
+    const reply = await fetch(`https://api.github.com/repos/${REPO}/actions/jobs/${job.id}/logs`, {
+      headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json' },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (reply.status !== 200) {
+      log(`Deploy run ${runId}'s log answered ${reply.status}`);
+      return null;
+    }
+    return verificationFromLog(await reply.text(), released);
+  } catch (error) {
+    log(`Deploy run ${runId}'s log could not be read: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
 }
 
 /** The last Deploy before the merge that released an image and recorded what failed. */
@@ -637,13 +667,19 @@ async function baselineVerification(mergeSha: string): Promise<DeployVerificatio
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   for (const run of earlier.slice(0, 10)) {
     const recorded = readVerification(run.id);
-    if (recorded?.released === true && Array.isArray(recorded.failing)) return recorded;
     if (recorded && recorded.released === false) continue;
+    if (recorded?.released === true && Array.isArray(recorded.failing)) {
+      // A release whose verification never reached a verdict says nothing
+      // about which conditions were failing; keep looking further back.
+      if (recorded.complete === true) return recorded;
+      continue;
+    }
     // Recorded before the artifact named its failures: read the run's own steps and log.
     const jobs = await gh<{ jobs: { steps?: Step[] }[] }>('GET', `/repos/${REPO}/actions/runs/${run.id}/jobs`);
     const steps = (jobs.body?.jobs ?? []).flatMap((job) => job.steps ?? []);
     if (!deployReleased(steps)) continue;
-    return verificationFromRunLog(run.id, true);
+    const fromLog = await verificationFromRunLog(run.id, true);
+    if (fromLog?.complete === true) return fromLog;
   }
   return null;
 }
@@ -708,11 +744,10 @@ async function fromDeploying(action: Action, mergeSha: string, deployRunId: numb
     return;
   }
   if (watched.conclusion === 'failure' && watched.released) {
-    const judged = failuresPreExisting(readVerification(deployRunId), await baselineVerification(mergeSha));
-    if (judged.preExisting) {
-      log(
-        `Deploy run ${deployRunId} released and its verdict failed only on condition(s) the last release before the merge also failed (${judged.failing.join('; ')}); verifying the live Brain.`,
-      );
+    const current = readVerification(deployRunId);
+    const judged = judgeReleasedVerdict(current, current?.complete === true ? await baselineVerification(mergeSha) : null);
+    if (!judged.countsAgainst) {
+      log(`Deploy run ${deployRunId} released and its verdict failed, but ${judged.why}; verifying the live Brain.`);
       advance(action.runId, 'VERIFYING');
       await verify(action, mergeSha);
       return;
@@ -723,8 +758,8 @@ async function fromDeploying(action: Action, mergeSha: string, deployRunId: numb
     stage: 'DEPLOY',
     detail: `Deploy run ${deployRunId} concluded ${watched.conclusion}${watched.released ? ' after releasing' : ' before releasing'}`,
   });
-  await rollBack(action, mergeSha, watched.released, `Deploy concluded ${watched.conclusion}`, 'DEPLOY');
-  log(`RELEASE: ROLLED_BACK ${action.runId}`);
+  const rolled = await rollBack(action, mergeSha, watched.released, `Deploy concluded ${watched.conclusion}`, 'DEPLOY');
+  log(rolled ? `RELEASE: ROLLED_BACK ${action.runId}` : `RELEASE: FAILED ${action.runId}`);
 }
 
 async function fromMerged(action: Action, mergeSha: string, deploySha: string = mergeSha): Promise<void> {
