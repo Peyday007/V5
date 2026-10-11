@@ -71,6 +71,8 @@ import {
 } from '../research/approvalEnvelope.ts';
 import { properName, statesNamedIn } from '../../domain/jurisdiction.ts';
 import { opportunityForOwnCandidate } from '../../repos/cashPortfolio.ts';
+import { cardFact } from '../../repos/cashCardFacts.ts';
+import { getClaim } from '../../repos/research.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
@@ -729,7 +731,34 @@ export async function compileMission(input: {
   const whyNow =
     "The project's own archive does not answer this, so the answer has to come from outside it.";
 
-  const lanes: EvidenceLane[] = profile.lanes;
+  /*
+   * A payer an earlier round already established is inherited, not re-asked.
+   *
+   * The deep dive's payer lane is REQUIRED because an opening nobody pays for
+   * is not an opening. But a second round on an opening whose payer is already
+   * on the card from an accepted, sourced claim was being held to the same
+   * bar: production blocked a round that accepted cost evidence because its
+   * worker, sensibly, did not rediscover the payer — and the whole round was
+   * thrown away. So that lane is CONDITIONAL here and names the claim, and the
+   * card keeps the inherited claim as its evidence. A payer that is unresolved
+   * — none recorded, or only a search that found nobody — keeps the lane
+   * REQUIRED, exactly as before.
+   */
+  const inherited = profile.id === 'COMMERCIAL_VALIDATION' ? await inheritedPayer(candidate, project) : null;
+  const lanes: EvidenceLane[] = inherited
+    ? profile.lanes.map((lane) =>
+        lane.id === 'payer'
+          ? {
+              ...lane,
+              necessity: 'CONDITIONAL',
+              description:
+                `Already established for this opening by accepted claim ${inherited.claimId} ` +
+                `(${inherited.sourceUrl}): "${clamp(inherited.value, 240)}". Do not rediscover it; ` +
+                'submit a payer claim only where a source shows that payer has changed or was wrong.',
+            }
+          : lane,
+      )
+    : profile.lanes;
 
   /*
    * What "done" means, and — since 2026-09-11 — what a claim without a source
@@ -814,6 +843,29 @@ export async function compileMission(input: {
       },
     },
   };
+}
+
+/**
+ * The payer an earlier round established for the opening this deep dive is
+ * about, or null when there is none to inherit.
+ *
+ * Only an accepted, sourced claim that asserts a payer — never a documented
+ * search that found nobody — and only one recorded before this round's idea
+ * existed, so the same candidate compiles to the same lanes on every pass.
+ */
+async function inheritedPayer(
+  candidate: RussellCandidate,
+  project: Project,
+): Promise<{ claimId: string; value: string; sourceUrl: string } | null> {
+  const opportunity = await opportunityForOwnCandidate(project.id, candidate.id);
+  if (!opportunity) return null;
+  const fact = await cardFact(opportunity.id, 'payer');
+  if (!fact || fact.kind !== 'EVIDENCE' || !fact.claimId || !fact.value?.trim()) return null;
+  const claim = await getClaim(fact.claimId);
+  if (!claim || !claim.accepted || !claim.sourceUrl) return null;
+  if (claim.claimType === 'NEGATIVE_EXISTENCE') return null;
+  if (claim.createdAt >= candidate.createdAt) return null;
+  return { claimId: claim.id, value: fact.value, sourceUrl: claim.sourceUrl };
 }
 
 function lowerFirst(text: string): string {
