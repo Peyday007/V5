@@ -80,8 +80,18 @@ on:
         default: '0'
 
 # Its own group: one release at a time, and nothing else evicts it.
+#
+# GitHub keeps one *pending* run per group and a newer one evicts it. Every pull
+# request in this repository fires `pull_request_target`, and a run for anything
+# but a Factory campaign branch does nothing (the plan job's condition skips
+# it) — but it still took the pending slot, so another session pushing to its
+# own pull request evicted a waiting release run and then did nothing itself.
+# Measured on 2026-10-11: three other sessions' pull requests fired this
+# workflow within minutes of a Factory campaign starting. Such a run is given a
+# group of its own, so only a run that can release anything competes for the
+# slot; every run that does compete asks Brain the same question.
 concurrency:
-  group: brain-factory-release
+  group: brain-factory-release${{ (github.event_name == 'pull_request_target' && !(startsWith(github.event.pull_request.head.ref, 'factory/campaign/') && github.event.pull_request.head.repo.full_name == github.repository)) && format('-ignored-{0}', github.run_id) || '' }}
   cancel-in-progress: false
 
 permissions:
