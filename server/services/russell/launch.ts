@@ -34,7 +34,7 @@
  * required and neither substitutes for the other.
  */
 import { createHash } from 'node:crypto';
-import { createBin, getBin } from '../../repos/bins.ts';
+import { createBin, getBin, MAX_PACKET_BINS, packetHeldUntargeted } from '../../repos/bins.ts';
 import { getLayer } from '../../repos/layers.ts';
 import {
   countMissionsForCandidate,
@@ -584,7 +584,29 @@ export async function packetMayHaveAnotherBin(orchestrationId: string | null): P
         AND attempt_count < max_attempts`,
     [orchestrationId],
   );
-  return Number(rows[0]?.total ?? 0) > 0;
+  if (Number(rows[0]?.total ?? 0) === 0) return false;
+  /*
+   * A packet held because its question names nothing to research is not given
+   * a fresh bin to spend: the question has not changed, so neither will the
+   * answer. See `services/cash/dependentTarget.ts`.
+   */
+  if (await packetHeldUntargeted(orchestrationId)) return false;
+  /*
+   * And no packet is given bins for ever. The comment above `completeLaunch`
+   * argued the work items' own attempt ceilings bound this, and they do not
+   * when the item a bin exists for is never claimable: each assignment charges
+   * the *bin*, the queued item behind a backoff is never charged, and the
+   * packet is handed a new bin every time the last one spends out. Production,
+   * 2026-10-11: `orc_9e770111d6e9419ab10c` and `orc_2f4d1c80fb654970b07e` each
+   * spent two full bins in an afternoon on a question no worker could answer.
+   * The bound is the one goal packets already carry, and reaching it leaves
+   * the last bin parked at NEEDS_HUMAN, where regrant is the answer.
+   */
+  const bins = await getDb().all<{ n: number | string }>(
+    'SELECT COUNT(*) AS n FROM bins WHERE orchestration_id = ?',
+    [orchestrationId],
+  );
+  return Number(bins[0]?.n ?? 0) < MAX_PACKET_BINS;
 }
 
 async function completeLaunch(

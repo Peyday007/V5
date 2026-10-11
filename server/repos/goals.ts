@@ -23,6 +23,7 @@ import { newId, nowIso } from './util.ts';
 import { mapBin } from './bins.ts';
 import type { Bin, BinRow } from '../domain/types.ts';
 import type { GoalCommitment, GoalPrioritySnapshot, HoldReason } from '../domain/goals.ts';
+import { HOLD_REASONS } from '../domain/goals.ts';
 export type { GoalPrioritySnapshot };
 
 // ---------------------------------------------------------------------------
@@ -206,8 +207,16 @@ export async function binsHeldBy(workstreamId: string): Promise<Bin[]> {
  * reinstated, dependency met — can be found without walking every goal.
  */
 export async function allHeldBins(): Promise<Bin[]> {
+  // A goal's holds only. The same column carries a hold that is not a goal's —
+  // `UNTARGETED_HOLD_REASON`, research whose question names nothing to research
+  // — and the goals tick releasing every hold no goal wants would undo that one
+  // on the next pass.
   const rows = await getDb().all<BinRow>(
-    `SELECT * FROM bins WHERE held_by_workstream_id IS NOT NULL ORDER BY created_at, id`,
+    `SELECT * FROM bins
+      WHERE held_by_workstream_id IS NOT NULL
+        AND held_reason IN (${HOLD_REASONS.map(() => '?').join(', ')})
+      ORDER BY created_at, id`,
+    [...HOLD_REASONS],
   );
   return rows.map(mapBin);
 }

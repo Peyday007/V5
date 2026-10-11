@@ -37,7 +37,7 @@ import { coverBeforeWork } from '../russell/coverage.ts';
 import { inventoryProject } from '../reconcile/plan.ts';
 import { TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { GoalBudgetExhausted, startPacket } from './startPacket.ts';
-import { binForOrchestration, createBin } from '../../repos/bins.ts';
+import { binForOrchestration, createBin, MAX_PACKET_BINS } from '../../repos/bins.ts';
 import { packetMayHaveAnotherBin } from '../russell/launch.ts';
 
 /** How many goals one pass looks at. A pass is bounded; the next tick takes the rest. */
@@ -83,7 +83,7 @@ const SPENT_BIN = new Set(['COMPLETE', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN']);
  * keep being spent without the items moving: past it the packet waits for
  * `concludeUnworkablePackets` or a person rather than earning more fires.
  */
-export const MAX_GOAL_PACKET_BINS = 4;
+export const MAX_GOAL_PACKET_BINS = MAX_PACKET_BINS;
 
 /**
  * The bin that carries a goal's packet to a worker.

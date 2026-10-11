@@ -726,10 +726,57 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
   });
 });
 
+/**
+ * Where an opening was published. A question about an opening is asked only
+ * when Brain can name the opening (`dependentTarget.ts`), and it names it from
+ * the claim the opening was harvested from.
+ */
+async function withPublishedSource(opportunityId: string): Promise<void> {
+  const run = await createRun({ projectId, layerId: layer.id, runType: 'FOUNDATION', provider: 'WORKER' });
+  const orchestration = await createOrchestration({
+    projectId,
+    layerId: layer.id,
+    runId: run.id,
+    title: 'Where the opening was found',
+    assignment: 'Find openings.',
+    provider: 'WORKER',
+  });
+  const [claim] = await insertClaims([
+    {
+      orchestrationId: orchestration.id,
+      fragmentId: null,
+      passId: null,
+      passKey: 'TARGETED',
+      claim: 'The drainage authority published a request for parcel searches.',
+      sourceUrl: 'https://example.test/authority/request',
+      sourceTitle: 'Request for parcel searches',
+      sourcePublisher: 'The drainage authority',
+      sourceDate: '2026-09-01',
+      evidenceExcerpt: null,
+      evidenceLocator: null,
+      evidenceLane: 'demand_signal',
+      retrievedAt: '2026-09-02',
+      confidence: 0.9,
+      validationState: 'SOURCED',
+      validationDetail: null,
+      sourced: true,
+      derived: false,
+      derivedFrom: [],
+      accepted: true,
+      contentHash: `fixture-${opportunityId}`,
+    },
+  ]);
+  // Set directly: this is the harvest's column, and a piece already past the
+  // card is one no ordinary update writes it on.
+  const { getDb } = await import('../server/db/database.ts');
+  await getDb().run('UPDATE cash_opportunities SET source_claim_id = ? WHERE id = ?', [claim!.id, opportunityId]);
+}
+
 describe('a need that is a question becomes work', () => {
   it('captures an idea for it and never launches one', async () => {
     await granted();
     const id = await readyPiece();
+    await withPublishedSource(id);
     const raised = await raiseNeed({
       projectId,
       opportunityId: id,
@@ -910,6 +957,7 @@ describe('what the research established reaches the card', () => {
      * looked like it worked while the card stayed blank.
      */
     const id = await bareOpportunity();
+    await withPublishedSource(id);
     await reconcileDiscoverableGaps(projectId);
     await startDependentWork(projectId);
 
@@ -948,6 +996,7 @@ describe('what the research established reaches the card', () => {
 
   it('leaves the field unknown when nothing found supports one', async () => {
     const id = await bareOpportunity();
+    await withPublishedSource(id);
     await reconcileDiscoverableGaps(projectId);
     await startDependentWork(projectId);
     const need = (await listNeeds({ projectId, states: ['OPEN'] })).find((one) =>
@@ -965,7 +1014,7 @@ describe('what the research established reaches the card', () => {
   });
 
   it('says so when the research that would have answered it failed', async () => {
-    await bareOpportunity();
+    await withPublishedSource(await bareOpportunity());
     await reconcileDiscoverableGaps(projectId);
     await startDependentWork(projectId);
     const need = (await listNeeds({ projectId, states: ['OPEN'] })).find((one) =>

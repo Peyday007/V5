@@ -2335,6 +2335,37 @@ describe('reporting a blocker', () => {
   });
 });
 
+/**
+ * A blocker on an item that has no fragment names the remedy instead of
+ * reading as an access refusal.
+ *
+ * Production, 2026-10-11: a JUDGE whose brief kept timing out tried to report
+ * it on `wki_684c8d09f8694d449ff6` and was told NOT_FOUND — about an item it
+ * had just been proven to own. Ownership is still proven first: a caller who
+ * does not hold the item is refused exactly as before.
+ */
+describe('a blocker on an item with no fragment', () => {
+  it('says what the item is and what to do instead, to the worker that owns it', async () => {
+    const orchestration = await makeOrchestration();
+    const synth = await claimFor(orchestration, 'RESEARCH_SYNTHESIZE', null);
+    const refused = await refusal('brain_report_blocker', { ...proof(synth), reason: 'the brief times out' });
+    expect(refused.category).not.toBe('NOT_FOUND');
+    expect(refused.message).toContain('RESEARCH_SYNTHESIZE');
+    expect(refused.message).toContain('brain_release_work');
+  });
+
+  it('still answers NOT_FOUND to a caller without the scope', async () => {
+    const orchestration = await makeOrchestration();
+    const synth = await claimFor(orchestration, 'RESEARCH_SYNTHESIZE', null);
+    const refused = await refusal(
+      'brain_report_blocker',
+      { ...proof(synth), reason: 'cannot' },
+      FULL.filter((scope) => scope !== 'blockers:report'),
+    );
+    expect(refused.category).toBe('NOT_FOUND');
+  });
+});
+
 describe('checkpoints through the tool', () => {
   it('are visible to whoever holds the item next', async () => {
     const orchestration = await makeOrchestration();

@@ -2527,7 +2527,21 @@ const reportBlockerTool: McpTool = {
       'blockers:report',
     );
     if (!item) throw notFoundError();
-    if (!item.fragmentId) throw notFoundError();
+    /*
+     * An item with no fragment has no question to block — an audit role, a
+     * synthesis, a verification. It used to answer NOT_FOUND here, to a worker
+     * that had just been proven to own the item, so a judge whose brief kept
+     * timing out read its own blocker report as an access refusal
+     * (`wki_684c8d09f8694d449ff6`, 2026-10-11). Ownership is already proven, so
+     * saying what the item is discloses nothing; what it needs is the remedy.
+     */
+    if (!item.fragmentId) {
+      throw conflictError(
+        `${item.id} is a ${item.workType} work item, not a research fragment, so it has no question ` +
+          'to report as unanswerable. Hand it back with brain_release_work and the reason (it is ' +
+          'offered again later), or use brain_fail_work if the work itself cannot be done.',
+      );
+    }
     const fragment = await getFragment(item.fragmentId);
     if (!fragment) throw notFoundError();
     const proof = proofFrom(args, item.id, workerId);

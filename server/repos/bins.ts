@@ -1239,6 +1239,107 @@ async function insideRefusalBackoff(
 }
 
 /**
+ * How far back a worker's own releases of a bin count toward its backoff.
+ *
+ * Longer than the top rung, so a worker that keeps handing the same bin back
+ * climbs the ladder rather than restarting it every half hour.
+ */
+const RELEASE_MEMORY_MS = 2 * 60 * 60_000;
+
+/**
+ * Is this worker inside the backoff its own releases of this bin earned?
+ *
+ * A release used to put the bin straight back to READY, and the session that
+ * had just handed it back checked in a second later and was handed it again —
+ * each round an attempt charged, nothing changed. Production, 2026-10-11:
+ * `bin_8131dbc5044f4ece9e97` and `bin_853479a8c376474ea529` each went from a
+ * fresh bin to 5/5 in about two minutes, every assignment to a worker that had
+ * already reported the same blocker on the same packet.
+ *
+ * Keyed by the **worker**, not the session: one worker identity serves every
+ * Routine on an account, so a sibling session of the same worker reads the
+ * same packet and meets the same blocker. Read from `bin_events`, which is
+ * append-only, so nothing new is stored. The ladder is the admission refusal
+ * ladder — 1, 2, 5, 15, 30 minutes by how many times this worker released it
+ * recently — and it only ever keeps *this* worker away: any other worker is
+ * still handed the bin the moment it asks, and the attempt ceiling is untouched.
+ */
+async function sameWorkerReleaseBackoff(
+  binId: string,
+  workerId: string,
+  now: string,
+): Promise<string | null> {
+  const rows = await getDb().all<{ at: string }>(
+    `SELECT at FROM bin_events
+      WHERE bin_id = ? AND worker_id = ? AND event_type = 'BIN_RELEASED' AND at > ?
+      ORDER BY at DESC LIMIT 10`,
+    [binId, workerId, plusMs(now, -RELEASE_MEMORY_MS)],
+  );
+  const latest = rows[0]?.at;
+  if (!latest) return null;
+  const retryAt = plusMs(latest, refusalBackoffMs(rows.length));
+  return retryAt > now ? retryAt : null;
+}
+
+/**
+ * The hold for research whose question names nothing to research.
+ *
+ * Stored in the column a goal's hold uses, because that column is the one every
+ * dispatch reader already refuses (`claimableStateSql`), and a hold asked by
+ * one reader is a hold the others walk past. It is told apart by its reason:
+ * the goals tick manages only holds whose reason is one of `HOLD_REASONS`, and
+ * this is not one of them. The holder is the cash need whose question it is.
+ */
+export const UNTARGETED_HOLD_REASON = 'UNTARGETED_QUESTION';
+
+/**
+ * How many bins one research packet may ever be given, its first included.
+ * Read by the mission launcher and the goal pass alike — see
+ * `packetMayHaveAnotherBin`.
+ */
+export const MAX_PACKET_BINS = 4;
+
+/**
+ * Hold a bin out of dispatch because its packet's question names no research
+ * target. Destroys nothing — the lease, the attempts, the generation and every
+ * event stay as they are — and is guarded on the bin being unheld and not
+ * finished, so it never overrides a goal's hold.
+ */
+export async function holdUntargetedBin(input: {
+  binId: string;
+  holderId: string;
+  reason: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE bins SET held_by_workstream_id = ?, held_reason = ?, updated_at = ?
+      WHERE id = ? AND held_by_workstream_id IS NULL
+        AND state NOT IN ('COMPLETE', 'FAILED', 'CANCELLED')`,
+    [input.holderId, UNTARGETED_HOLD_REASON, binNow(), input.binId],
+  );
+  if (result.changes !== 1) return false;
+  const bin = await getBin(input.binId);
+  await recordBinEvent({
+    eventType: 'BIN_HELD',
+    binId: input.binId,
+    projectId: bin?.projectId ?? null,
+    orchestrationId: bin?.orchestrationId ?? null,
+    leaseGeneration: bin?.leaseGeneration ?? null,
+    outcome: UNTARGETED_HOLD_REASON,
+    reason: input.reason,
+  });
+  return true;
+}
+
+/** Has any bin of this packet been held because its question names no target? */
+export async function packetHeldUntargeted(orchestrationId: string): Promise<boolean> {
+  const row = await getDb().get<{ id: string }>(
+    'SELECT id FROM bins WHERE orchestration_id = ? AND held_reason = ? LIMIT 1',
+    [orchestrationId, UNTARGETED_HOLD_REASON],
+  );
+  return row !== null && row !== undefined;
+}
+
+/**
  * Do not spend a fire on this bin before `until`.
  *
  * Only ever moves the point forward, so two callers racing settle on the later
@@ -1815,6 +1916,20 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
        * candidate is skipped and nothing about the bin changes except the
        * refusal Brain writes down about itself.
        */
+      /*
+       * A worker that just handed this bin back is not handed it again at once.
+       *
+       * Before the accounting, like every skip here: no attempt, no lease, no
+       * generation. And the fire is pushed to the same instant, because firing
+       * earlier wakes another session of the worker that just gave it back.
+       * See `sameWorkerReleaseBackoff`.
+       */
+      const released = await sameWorkerReleaseBackoff(row.id, input.workerId, now);
+      if (released) {
+        await deferFire(row.id, released);
+        continue;
+      }
+
       if (input.admit) {
         const sessionRef = input.sessionRef ?? null;
         if (sessionRef) {

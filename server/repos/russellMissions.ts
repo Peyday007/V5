@@ -397,12 +397,16 @@ export async function transitionMission(input: {
  * builds a fresh bin — the mission no longer matches and the next tick renews
  * its hold — through `readmitReservation`, so only while a slot is free.
  */
+// The last clause: a bin held because its question names nothing to research
+// is never fired, so its mission uses no capacity either
+// (services/cash/dependentTarget.ts).
 const WAITING_ON_A_PERSON = `(
   m.state = 'NEEDS_HUMAN'
   OR (m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING') AND (
     EXISTS (SELECT 1 FROM research_orchestrations o
              WHERE o.id = m.orchestration_id AND o.status = 'NEEDS_HUMAN')
     OR EXISTS (SELECT 1 FROM bins b WHERE b.id = m.bin_id AND b.state = 'NEEDS_HUMAN')
+    OR EXISTS (SELECT 1 FROM bins b WHERE b.id = m.bin_id AND b.held_reason = 'UNTARGETED_QUESTION')
   ))
 )`;
 

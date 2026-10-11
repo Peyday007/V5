@@ -777,6 +777,53 @@ export async function setNeedCandidate(id: string, candidateId: string): Promise
   return result.changes === 1;
 }
 
+/**
+ * Move a need to the idea that replaced the one it was asking through.
+ *
+ * Guarded on the idea it is moving *from*, so two passes produce one move and
+ * an idea somebody else already re-pointed is never overwritten. The old idea,
+ * its mission and its packet keep every row.
+ */
+export async function repointNeedCandidate(id: string, from: string, to: string): Promise<boolean> {
+  const result = await getDb().run(
+    'UPDATE cash_needs SET candidate_id = ?, updated_at = ? WHERE id = ? AND candidate_id = ?',
+    [to, portfolioNow(), id, from],
+  );
+  return result.changes === 1;
+}
+
+/**
+ * Live bins of research a need asked through an idea whose question does not
+ * carry `marker` — the phrase Brain writes only when it named the opening the
+ * question is about. One read for the whole project, because this is asked on
+ * every tick and a per-need walk would be five reads a need.
+ */
+export async function untargetedDependentBins(
+  projectId: string,
+  marker: string,
+): Promise<Array<{ binId: string; needId: string; candidateId: string; orchestrationId: string }>> {
+  return (
+    await getDb().all<{ bin_id: string; need_id: string; candidate_id: string; orchestration_id: string }>(
+      `SELECT b.id AS bin_id, n.id AS need_id, c.id AS candidate_id, b.orchestration_id AS orchestration_id
+         FROM cash_needs n
+         JOIN russell_candidates c ON c.id = n.candidate_id
+         JOIN russell_missions m ON m.candidate_id = c.id
+         JOIN bins b ON b.orchestration_id = m.orchestration_id
+        WHERE n.project_id = ? AND n.request_key LIKE 'question:%'
+          AND c.statement NOT LIKE ?
+          AND b.held_by_workstream_id IS NULL
+          AND b.state NOT IN ('COMPLETE', 'FAILED', 'CANCELLED')
+        ORDER BY b.created_at, b.id`,
+      [projectId, `%${marker}%`],
+    )
+  ).map((row) => ({
+    binId: row.bin_id,
+    needId: row.need_id,
+    candidateId: row.candidate_id,
+    orchestrationId: row.orchestration_id,
+  }));
+}
+
 /** What the continuation did. Written once, by whoever claimed it. */
 export async function recordNeedContinuation(id: string, note: string): Promise<void> {
   await getDb().run(

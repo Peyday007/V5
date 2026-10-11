@@ -46,6 +46,12 @@
  */
 import type { AuditRole } from '../queue/workTypes.ts';
 import { buildAuditContext, type AuditContext } from '../audit/context.ts';
+import { listDocumentsByLayer } from '../../repos/documents.ts';
+import { recordBinEvent } from '../../repos/bins.ts';
+import { prefetchExistence, storageKeyOf, withExistenceMemo } from '../storage.ts';
+
+/** A brief this slow is recorded. Well inside the 60 seconds a Cowork client waits. */
+const SLOW_BRIEF_MS = 15_000;
 import {
   buildPrimaryPrompt,
   buildAdversarialPrompt,
@@ -145,12 +151,30 @@ export async function auditBriefFor(input: {
     );
   }
 
-  const context = await buildAuditContext({
-    mode: 'SINGLE_DOCUMENT',
-    layerId: orchestration.layerId,
-    documentId: orchestration.documentId,
-    runId: orchestration.runId,
+  /*
+   * One existence memo for the whole brief, primed with every document in the
+   * layer, a bounded number at a time.
+   *
+   * `buildAuditContext` asks the store about every document in the layer twice:
+   * `computeLayerState` checks each one's presence (unbounded, outside any
+   * memo) and the sibling listing asks again inside its own. On Cash Mode 1's
+   * opportunity layer that is 68 documents, so about 135 bucket requests per
+   * brief, repeated on every retry of a role. Asked once here, the second
+   * pass is answered from memory. Nothing in a brief writes an object, so no
+   * answer can go stale inside it — §27's reasoning for the submission memo.
+   */
+  const started = Date.now();
+  const layerDocuments = await listDocumentsByLayer(orchestration.layerId);
+  const context = await withExistenceMemo(async () => {
+    await prefetchExistence(layerDocuments.map((document) => storageKeyOf(document)));
+    return await buildAuditContext({
+      mode: 'SINGLE_DOCUMENT',
+      layerId: orchestration.layerId,
+      documentId: orchestration.documentId,
+      runId: orchestration.runId,
+    });
   });
+  const contextMs = Date.now() - started;
 
   if (context.artifacts.length === 0) {
     throw new AuditBriefUnavailable('The document under audit could not be read back.');
@@ -186,6 +210,35 @@ export async function auditBriefFor(input: {
     }
     dependsOnRoles.push('PRIMARY', 'ADVERSARIAL');
     prompt = buildJudgePrompt(context, primary, adversarial);
+  }
+
+  /*
+   * A slow brief is written down, measured, where it can be read afterwards.
+   *
+   * Production, 2026-10-11: `brain_get_audit_brief` for the JUDGE item
+   * `wki_684c8d09f8694d449ff6` on `orc_ddd52ffa586642d98929` timed out at the
+   * worker's 60 seconds, twice from one worker and repeatedly from another,
+   * and the item retired with nothing recorded. Brain logged nothing about
+   * it and the host's log buffer no longer held the window by the time
+   * anybody looked, so how long the brief took, and in which half, was not
+   * established. This is that reading for the next time: an append-only row
+   * with the elapsed time, how much of it was the context, and how many
+   * documents the layer held.
+   */
+  const totalMs = Date.now() - started;
+  if (totalMs >= SLOW_BRIEF_MS) {
+    await recordBinEvent({
+      eventType: 'AUDIT_BRIEF_SLOW',
+      projectId: orchestration.projectId,
+      orchestrationId: orchestration.id,
+      outcome: role,
+      durationMs: totalMs,
+      measures: { totalMs, contextMs, layerDocuments: layerDocuments.length },
+      reason:
+        `The ${role} brief for ${orchestration.id} took ${totalMs}ms ` +
+        `(${contextMs}ms building the context over ${layerDocuments.length} document(s) in the layer).`,
+      evidenceClass: 'MEASURED',
+    });
   }
 
   return {

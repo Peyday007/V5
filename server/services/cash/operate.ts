@@ -56,9 +56,8 @@ import {
   claimNeedContinuation,
   deferNeedContinuation,
   finishNeedContinuation,
-  setNeedCandidate,
 } from '../../repos/cashPortfolio.ts';
-import { createCandidate } from '../../repos/russellCandidates.ts';
+import { advanceDependentWork } from './dependentTarget.ts';
 import { readCapability, needForCapability } from './capabilities.ts';
 import { cardFactsFor } from '../../repos/cashCardFacts.ts';
 import { evidenceCard } from './card.ts';
@@ -536,22 +535,16 @@ export interface DependentWork {
  */
 export async function startDependentWork(projectId: string): Promise<DependentWork[]> {
   if (!(await getCashMode(projectId))) return [];
-  const out: DependentWork[] = [];
-  for (const need of await listNeeds({ projectId, states: ['OPEN'] })) {
-    if (need.candidateId || !need.opportunityId) continue;
-    if (!need.requestKey?.startsWith('question:')) continue;
-    const opportunity = await getOpportunity(need.opportunityId);
-    if (!opportunity) continue;
-    const candidate = await createCandidate({
-      projectId,
-      visibility: 'SHARED',
-      title: need.blockedAction,
-      statement: `${need.whyItMatters} ${need.nextStep}`.trim(),
-    });
-    await setNeedCandidate(need.id, candidate.id);
-    out.push({ needId: need.id, candidateId: candidate.id });
-  }
-  return out;
+  /*
+   * Every question is asked with the opening it is about, or not at all — and
+   * questions already asked without one are held and re-asked. See
+   * `dependentTarget.ts`, which owns that rule; this only reports what started.
+   */
+  const pass = await advanceDependentWork(projectId);
+  return [
+    ...pass.started.map((one) => ({ needId: one.needId, candidateId: one.candidateId })),
+    ...pass.retargeted.map((one) => ({ needId: one.needId, candidateId: one.to })),
+  ];
 }
 
 export interface AutonomousStep {
