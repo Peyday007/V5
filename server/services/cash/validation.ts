@@ -279,13 +279,29 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
   // The one clock read here, against a closing date a row states. Brain's own
   // clock, never a worker's; an opening with no recorded date is not assumed
   // closed (invariant 39).
-  if (opportunity.expiresAt && opportunity.expiresAt <= cashNow()) {
-    return { kind: 'EXPIRED', at: opportunity.expiresAt };
+  if (closedBy(opportunity.expiresAt, cashNow())) {
+    return { kind: 'EXPIRED', at: opportunity.expiresAt! };
   }
   if (!opportunity.buyingSignal && !opportunity.sourceClaimId) {
     return { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
   }
   return { kind: 'ELIGIBLE' };
+}
+
+/**
+ * Whether a recorded closing date has passed. The column is free text, so only
+ * an ISO date or timestamp is read: anything else is unknown, never closed. A
+ * bare date closes at the end of that UTC day, not at its first second.
+ */
+export function closedBy(expiresAt: string | null, now: string): boolean {
+  if (!expiresAt) return false;
+  const value = expiresAt.trim();
+  let closes: number;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) closes = Date.parse(`${value}T23:59:59.999Z`);
+  else if (/^\d{4}-\d{2}-\d{2}T/.test(value)) closes = Date.parse(value);
+  else return false;
+  if (!Number.isFinite(closes)) return false;
+  return closes <= Date.parse(now);
 }
 
 /** The card's own reading of how far this piece has got. */

@@ -238,6 +238,9 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
     projectId,
     states: ['DISCOVERED', 'EVIDENCE_CARD'],
   })) {
+    // A second record of an opening is researched through its survivor, never
+    // again on its own (`duplicates.ts`).
+    if (opportunity.duplicateOfId) continue;
     /*
      * Only for something Brain has a reason to spend on.
      *
@@ -632,6 +635,8 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
     projectId,
     states: ['DISCOVERED', 'EVIDENCE_CARD'],
   })) {
+    // A second record of an opening is never readied or contacted on its own.
+    if (opportunity.duplicateOfId) continue;
     // Asked before it is attempted: an incomplete card is the ordinary state of
     // a piece being worked on, and reporting every one of them as withheld
     // every tick would bury the ones that are actually stuck.
@@ -649,6 +654,7 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
   }
 
   for (const opportunity of await listOpportunities({ projectId, states: ['READY'] })) {
+    if (opportunity.duplicateOfId) continue;
     // The person's decision first, because it is the authorization and the
     // other is an operational fact: deny-by-default asks whether this may
     // happen before it asks whether it could.

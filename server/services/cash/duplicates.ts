@@ -20,16 +20,19 @@
  * linked and visible, never deleted, and clearing `duplicate_of_id` undoes it.
  */
 
-import { getClaim } from '../../repos/research.ts';
 import {
-  listOpportunities,
   markOpportunityDuplicate,
+  openingsWithSourceUrl,
+  releaseDuplicatesOfArchived,
 } from '../../repos/cashPortfolio.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 
-/** Query parameters that name a visitor rather than a document. */
-const TRACKING = /^(utm_[a-z]+|gclid|fbclid|mc_[a-z]+|ref|source)$/i;
+/**
+ * Query parameters that name a visitor rather than a document. Deliberately
+ * not `ref` or `source`: on procurement sites those are the document id.
+ */
+const TRACKING = /^(utm_[a-z]+|gclid|fbclid|mc_cid|mc_eid)$/i;
 
 /**
  * What addresses the document: scheme-less, host lower-cased without `www.`,
@@ -61,24 +64,32 @@ function identity(url: string | null, signal: string | null): string | null {
   return key && signal ? `${signal}|${key}` : null;
 }
 
-/** The order a survivor is chosen in: further along first, then oldest. */
-function survivorFirst(a: CashOpportunity, b: CashOpportunity): number {
-  if (a.validationRounds !== b.validationRounds) return b.validationRounds - a.validationRounds;
-  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
-  return a.id < b.id ? -1 : 1;
+interface Opening {
+  opportunity: CashOpportunity;
+  hasWork: boolean;
 }
 
-async function identities(
-  opportunities: CashOpportunity[],
-): Promise<Map<string, CashOpportunity[]>> {
-  const groups = new Map<string, CashOpportunity[]>();
-  for (const opportunity of opportunities) {
-    if (opportunity.state === 'ARCHIVED' || !opportunity.sourceClaimId) continue;
-    const claim = await getClaim(opportunity.sourceClaimId);
-    const key = identity(claim?.sourceUrl ?? null, opportunity.opportunitySignal);
+/**
+ * The order a survivor is chosen in: dived further first, then one somebody
+ * has already answered or asked something on (the guarded write would refuse
+ * to mark it anyway), then oldest, then id.
+ */
+function survivorFirst(a: Opening, b: Opening): number {
+  const x = a.opportunity;
+  const y = b.opportunity;
+  if (x.validationRounds !== y.validationRounds) return y.validationRounds - x.validationRounds;
+  if (a.hasWork !== b.hasWork) return a.hasWork ? -1 : 1;
+  if (x.createdAt !== y.createdAt) return x.createdAt < y.createdAt ? -1 : 1;
+  return x.id < y.id ? -1 : 1;
+}
+
+async function identities(projectId: string): Promise<Map<string, Opening[]>> {
+  const groups = new Map<string, Opening[]>();
+  for (const { opportunity, sourceUrl, hasWork } of await openingsWithSourceUrl(projectId)) {
+    const key = identity(sourceUrl, opportunity.opportunitySignal);
     if (!key) continue;
     const group = groups.get(key) ?? [];
-    group.push(opportunity);
+    group.push({ opportunity, hasWork });
     groups.set(key, group);
   }
   return groups;
@@ -95,9 +106,9 @@ export async function existingOpeningFor(input: {
 }): Promise<CashOpportunity | null> {
   const key = identity(input.sourceUrl, input.signal);
   if (!key) return null;
-  const groups = await identities(await listOpportunities({ projectId: input.projectId }));
-  const group = (groups.get(key) ?? []).filter((one) => !one.duplicateOfId);
-  return group.sort(survivorFirst)[0] ?? null;
+  const groups = await identities(input.projectId);
+  const group = (groups.get(key) ?? []).filter((one) => !one.opportunity.duplicateOfId);
+  return group.sort(survivorFirst)[0]?.opportunity ?? null;
 }
 
 /**
@@ -108,11 +119,12 @@ export async function existingOpeningFor(input: {
  * never marks one whose dive has started.
  */
 export async function markDuplicateOpenings(projectId: string): Promise<string[]> {
-  const groups = await identities(await listOpportunities({ projectId }));
+  await releaseDuplicatesOfArchived(projectId);
+  const groups = await identities(projectId);
   const marked: string[] = [];
   for (const group of groups.values()) {
     if (group.length < 2) continue;
-    const ordered = [...group].sort(survivorFirst);
+    const ordered = [...group].sort(survivorFirst).map((one) => one.opportunity);
     const survivor = ordered.find((one) => !one.duplicateOfId) ?? ordered[0]!;
     for (const other of ordered) {
       if (other.id === survivor.id || other.duplicateOfId) continue;

@@ -873,8 +873,53 @@ export async function markOpportunityDuplicate(id: string, ofId: string): Promis
     `UPDATE cash_opportunities
         SET duplicate_of_id = ?, updated_at = ?
       WHERE id = ? AND duplicate_of_id IS NULL AND validation_state IS NULL
-        AND state IN ('DISCOVERED', 'EVIDENCE_CARD') AND id <> ?`,
+        AND state IN ('DISCOVERED', 'EVIDENCE_CARD') AND id <> ?
+        AND NOT EXISTS (SELECT 1 FROM cash_card_facts f WHERE f.opportunity_id = cash_opportunities.id)
+        AND NOT EXISTS (SELECT 1 FROM cash_needs n
+                         WHERE n.opportunity_id = cash_opportunities.id AND n.state = 'OPEN')`,
     [ofId, nowIso(), id, ofId],
   );
   return result.changes > 0;
+}
+
+/**
+ * Release every record linked to a survivor that is no longer live, so an
+ * archived survivor cannot strand its duplicates as DUPLICATE for ever. The
+ * next pass links them to a live record again, or leaves them standalone.
+ */
+export async function releaseDuplicatesOfArchived(projectId: string): Promise<number> {
+  const result = await getDb().run(
+    `UPDATE cash_opportunities SET duplicate_of_id = NULL, updated_at = ?
+      WHERE project_id = ? AND duplicate_of_id IS NOT NULL
+        AND duplicate_of_id IN (SELECT id FROM cash_opportunities WHERE state = 'ARCHIVED')`,
+    [nowIso(), projectId],
+  );
+  return result.changes ?? 0;
+}
+
+/**
+ * Every live opening with its source claim's URL, and whether anything has
+ * been answered or asked on it, in one read.
+ */
+export async function openingsWithSourceUrl(
+  projectId: string,
+): Promise<Array<{ opportunity: CashOpportunity; sourceUrl: string | null; hasWork: boolean }>> {
+  const rows = await getDb().all<
+    CashOpportunityRow & { claim_source_url: string | null; has_work: number }
+  >(
+    `SELECT o.*, c.source_url AS claim_source_url,
+            CASE WHEN EXISTS (SELECT 1 FROM cash_card_facts f WHERE f.opportunity_id = o.id)
+                   OR EXISTS (SELECT 1 FROM cash_needs n
+                               WHERE n.opportunity_id = o.id AND n.state = 'OPEN')
+                 THEN 1 ELSE 0 END AS has_work
+       FROM cash_opportunities o
+       JOIN research_claims c ON c.id = o.source_claim_id
+      WHERE o.project_id = ? AND o.state <> 'ARCHIVED'`,
+    [projectId],
+  );
+  return rows.map((row) => ({
+    opportunity: mapOpportunity(row),
+    sourceUrl: row.claim_source_url,
+    hasWork: Number(row.has_work) === 1,
+  }));
 }
