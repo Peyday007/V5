@@ -856,3 +856,25 @@ export async function settleNeed(input: {
   );
   return result.changes === 1;
 }
+
+/**
+ * Mark an opening as a second record of another, guarded so it never moves
+ * work that has already started.
+ *
+ * Only a piece nobody has dived, taken or answered is marked: one whose deep
+ * dive ran is kept as it stands, because its evidence is its own and the
+ * survivor may be the duplicate of it rather than the other way round. Guarded
+ * on the column still being null, so two ticks mark it once and a person's
+ * own value is never replaced. Destroys nothing: the row, its claim and its
+ * lineage all stay, and clearing the column undoes it.
+ */
+export async function markOpportunityDuplicate(id: string, ofId: string): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE cash_opportunities
+        SET duplicate_of_id = ?, updated_at = ?
+      WHERE id = ? AND duplicate_of_id IS NULL AND validation_state IS NULL
+        AND state IN ('DISCOVERED', 'EVIDENCE_CARD') AND id <> ?`,
+    [ofId, nowIso(), id, ofId],
+  );
+  return result.changes > 0;
+}
