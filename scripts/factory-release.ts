@@ -297,9 +297,7 @@ async function deployRunFor(mergeSha: string, since: string): Promise<WorkflowRu
 }
 
 async function dispatchDeploy(action: Action, mergeSha: string, reason: string): Promise<number | null> {
-  const mergedAt = sh('git', ['log', '-1', '--format=%cI', mergeSha]).stdout.trim();
-  const mergedAtIso = new Date(mergedAt).toISOString();
-  const existing = await deployRunFor(mergeSha, mergedAtIso);
+  const existing = await deployRunFor(mergeSha, mergedAtIso(mergeSha));
   if (existing) {
     log(`adopting Deploy run ${existing.id}, which already releases ${mergeSha.slice(0, 12)}`);
     return existing.id;
@@ -433,6 +431,53 @@ async function verify(action: Action, mergeSha: string): Promise<void> {
   log(`RELEASE: ROLLED_BACK ${action.runId}`);
 }
 
+/** How many Deploy runs for one merge may be cancelled before releasing before the attempt stops. */
+export const MAX_CANCELLED_DEPLOYS = 3;
+
+/**
+ * What a Deploy that ended `cancelled` means for the release.
+ *
+ * `brain-release` keeps one *pending* Deploy, and a newer dispatch evicts the
+ * waiting one — so a Deploy this release dispatched can end `cancelled` without
+ * ever starting, because another session dispatched a Deploy of a tip that
+ * already contains this merge (Deploy 434, evicted by 435, 2026-10-11). That is
+ * not a verdict about the change, and rolling the change back for it would undo
+ * a good release. So:
+ *
+ *   - cancelled after releasing: the image is live; verify it, which decides.
+ *   - cancelled before releasing, with another Deploy that contains the merge
+ *     running or succeeded: adopt that one.
+ *   - cancelled before releasing with none: dispatch again, at most
+ *     MAX_CANCELLED_DEPLOYS times for one merge, then stop with the reason.
+ *
+ * A Deploy that *failed* is still a failure and still rolls back.
+ */
+export function onCancelledDeploy(input: {
+  released: boolean;
+  successorRunId: number | null;
+  cancelledSoFar: number;
+}): { kind: 'VERIFY' } | { kind: 'ADOPT'; runId: number } | { kind: 'REDISPATCH' } | { kind: 'STOP' } {
+  if (input.released) return { kind: 'VERIFY' };
+  if (input.successorRunId !== null) return { kind: 'ADOPT', runId: input.successorRunId };
+  if (input.cancelledSoFar >= MAX_CANCELLED_DEPLOYS) return { kind: 'STOP' };
+  return { kind: 'REDISPATCH' };
+}
+
+/** Deploy runs created since the merge whose head contains it and that ended cancelled. */
+async function cancelledDeploysFor(mergeSha: string, since: string): Promise<number> {
+  const reply = await gh<{ workflow_runs: WorkflowRun[] }>(
+    'GET',
+    `/repos/${REPO}/actions/workflows/deploy.yml/runs?branch=production&event=workflow_dispatch&per_page=30`,
+  );
+  return (reply.body?.workflow_runs ?? [])
+    .filter((run) => run.created_at >= since && run.status === 'completed' && run.conclusion === 'cancelled')
+    .filter((run) => run.head_sha === mergeSha || contains(mergeSha, run.head_sha)).length;
+}
+
+function mergedAtIso(mergeSha: string): string {
+  return new Date(sh('git', ['log', '-1', '--format=%cI', mergeSha]).stdout.trim()).toISOString();
+}
+
 async function fromDeploying(action: Action, mergeSha: string, deployRunId: number): Promise<void> {
   log(`watching Deploy run ${deployRunId}`);
   const watched = await watchDeploy(deployRunId);
@@ -444,6 +489,46 @@ async function fromDeploying(action: Action, mergeSha: string, deployRunId: numb
   if (watched.conclusion === 'success') {
     advance(action.runId, 'VERIFYING');
     await verify(action, mergeSha);
+    return;
+  }
+  if (watched.conclusion === 'cancelled') {
+    const since = mergedAtIso(mergeSha);
+    const successor = watched.released ? null : await deployRunFor(mergeSha, since);
+    const next = onCancelledDeploy({
+      released: watched.released,
+      successorRunId: successor ? successor.id : null,
+      cancelledSoFar: watched.released || successor ? 0 : await cancelledDeploysFor(mergeSha, since),
+    });
+    if (next.kind === 'VERIFY') {
+      log(`Deploy run ${deployRunId} was cancelled after releasing; verifying the released Brain.`);
+      advance(action.runId, 'VERIFYING');
+      await verify(action, mergeSha);
+      return;
+    }
+    if (next.kind === 'ADOPT') {
+      log(`Deploy run ${deployRunId} was cancelled before releasing; adopting Deploy run ${next.runId}, which contains the merge.`);
+      advance(action.runId, 'DEPLOYING', { 'deploy-run': String(next.runId) });
+      await fromDeploying(action, mergeSha, next.runId);
+      return;
+    }
+    if (next.kind === 'REDISPATCH') {
+      log(`Deploy run ${deployRunId} was cancelled before releasing and nothing else deploys the merge; dispatching again.`);
+      const id = await dispatchDeploy(action, mergeSha, `factory release ${action.runId}: re-dispatch after a cancelled Deploy`);
+      if (id === null) {
+        log('RELEASE: FAILED');
+        return;
+      }
+      advance(action.runId, 'DEPLOYING', { 'deploy-run': String(id) });
+      await fromDeploying(action, mergeSha, id);
+      return;
+    }
+    // Nothing was released, so there is nothing to roll back: the merge is on
+    // the branch and the next Deploy of the branch carries it.
+    advance(action.runId, 'FAILED', {
+      stage: 'DISPATCH',
+      detail: `${MAX_CANCELLED_DEPLOYS} Deploy runs of ${mergeSha.slice(0, 12)} were cancelled before releasing; nothing was released and the merge stays on the branch`,
+    });
+    log('RELEASE: FAILED');
     return;
   }
   advance(action.runId, 'FAILED', {

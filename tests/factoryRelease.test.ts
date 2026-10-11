@@ -29,7 +29,7 @@ import { verifyLive, type VerifyDeps } from '../server/services/factory/release/
 import { latestRun, listRuns, openRun } from '../server/repos/factoryRelease.ts';
 import { forbiddenPathsFor } from '../server/services/factory/forbidden.ts';
 import { scanDiff } from '../scripts/release-scan.ts';
-import { deployReleased } from '../scripts/factory-release.ts';
+import { MAX_CANCELLED_DEPLOYS, deployReleased, onCancelledDeploy } from '../scripts/factory-release.ts';
 import type { FactoryCampaign, FactoryChangeRequest } from '../server/domain/factory.ts';
 import type { ReleaseGrant, ReleaseRun } from '../server/domain/factoryRelease.ts';
 
@@ -292,6 +292,10 @@ describe('the release plan and its state machine', () => {
     expect((await advanceRelease({ runId, to: 'MERGED', mergeSha: 'c'.repeat(40) })).moved).toBe(true);
     expect((await advanceRelease({ runId, to: 'MERGED', mergeSha: 'd'.repeat(40) })).moved).toBe(false);
     expect((await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '9' })).moved).toBe(true);
+    // A Deploy evicted before it started is replaced, and the attempt records the one that carries the merge.
+    expect((await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '8' })).moved).toBe(true);
+    expect((await latestRun(campaign.id))!.deployRunId).toBe('8');
+    expect((await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '9' })).moved).toBe(true);
 
     // A worker restart: the workflow that held it is gone; the next pass resumes at DEPLOYING.
     const resumed = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf3' });
@@ -484,6 +488,21 @@ describe('the release workflow’s own readings', () => {
     expect(deployReleased([{ name: 'Record what was released', conclusion: 'success' }])).toBe(true);
     expect(deployReleased([{ name: 'Record what was released', conclusion: 'skipped' }])).toBe(false);
     expect(deployReleased([{ name: 'Deploy', conclusion: 'failure' }])).toBe(false);
+  });
+
+  it('never rolls back for a Deploy that was cancelled rather than failed', () => {
+    // Evicted from the pending slot by a newer Deploy that contains the merge: adopt it.
+    expect(onCancelledDeploy({ released: false, successorRunId: 435, cancelledSoFar: 1 })).toEqual({ kind: 'ADOPT', runId: 435 });
+    // Cancelled after the image was released: verify the live Brain, which decides.
+    expect(onCancelledDeploy({ released: true, successorRunId: null, cancelledSoFar: 1 })).toEqual({ kind: 'VERIFY' });
+    // Nothing else deploys it: dispatch again, a bounded number of times.
+    expect(onCancelledDeploy({ released: false, successorRunId: null, cancelledSoFar: 1 })).toEqual({ kind: 'REDISPATCH' });
+    expect(onCancelledDeploy({ released: false, successorRunId: null, cancelledSoFar: MAX_CANCELLED_DEPLOYS })).toEqual({ kind: 'STOP' });
+    // And the script still rolls back a Deploy that genuinely failed.
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    const body = script.slice(script.indexOf('async function fromDeploying'), script.indexOf('async function fromMerged'));
+    expect(body).toMatch(/watched\.conclusion === 'cancelled'/);
+    expect(body).toMatch(/stage: 'DEPLOY'[\s\S]*rollBack\(/);
   });
 
   it('asks for its own resume after a failure, a bounded number of times', () => {
