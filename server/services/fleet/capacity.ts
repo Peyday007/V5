@@ -157,6 +157,18 @@ export interface SurfaceReading {
   proven: boolean;
   /** Why it is not HEALTHY, with the remedy in it. Absent when it is. */
   because?: string;
+  /**
+   * When a session Brain fired at this surface last arrived and was recorded as
+   * executing here — the last real work, as opposed to the last configuration
+   * change. History; null when it never has. Names nothing.
+   */
+  lastWorkAt: string | null;
+  /**
+   * Who has to do something, and exactly what — from `connectionAlerts`, the one
+   * derivation Needs you and the connection report also read. `NOBODY` when Brain
+   * is recovering it by itself. Absent when nothing is wrong.
+   */
+  requiredAction?: { who: 'ACCOUNT_OWNER' | 'OPERATOR' | 'NOBODY'; problem: string; what: string };
   /** Operator depth only; see `CapacityReading.diagnostics`. */
   detail?: {
     routineRef: string;
@@ -366,6 +378,9 @@ export async function capacityReading(
    */
   const { listRoutines, unansweredFiresByRoutine } = await import('../../repos/fleet.ts');
   const unanswered = await unansweredFiresByRoutine();
+  // A reading that cannot be had is an absent field, never a failed page.
+  const { alertsByRoutine } = await import('./connectionAlerts.ts');
+  const alerts = await alertsByRoutine().catch(() => new Map<string, never>());
   for (const routine of await listRoutines()) {
     const account = accountById.get(routine.accountId);
     if (!keep(account)) continue;
@@ -401,6 +416,8 @@ export async function capacityReading(
         'piece of work here — so it is configured rather than proven.';
     }
 
+    const alert = alerts.get(routine.id);
+    if (alert && alert.problem === 'OUT_OF_SCOPE' && !because) because = alert.detail;
     const reading: SurfaceReading = {
       routineId: routine.id,
       connection: surfaceConnectionState({
@@ -418,6 +435,8 @@ export async function capacityReading(
       health,
       proven: chain.proven,
       ...(because ? { because } : {}),
+      lastWorkAt: chain.lastArrivalAt,
+      ...(alert ? { requiredAction: { who: alert.who, problem: alert.problem, what: alert.action } } : {}),
       detail: {
         routineRef: routine.routineRef,
         secretName: routine.tokenSecretName,
@@ -465,9 +484,30 @@ export async function capacityReading(
  * asks for, applied by dropping the fields rather than by asking a screen not
  * to render them.
  */
+/** The member-depth instruction for each problem `connectionAlerts` names. */
+const PLAIN_ACTION: Record<string, string> = {
+  WRONG_WORKER:
+    'In Claude, open this Routine and choose the Brain connector it was set up with; an administrator can also re-register it. Brain re-enables it by itself.',
+  REAUTH_REQUIRED: 'The owner of this Claude account reconnects Brain from Claude while signed in to Brain. It comes back by itself.',
+  RECOVERING: 'Nothing to do: Brain is checking it again by itself and puts it back when a session arrives.',
+  RECOVERY_EXHAUSTED: 'Brain has stopped retrying. The owner of this Claude account checks the Routine and its Brain connector in Claude.',
+  OUT_OF_SCOPE: 'An administrator decides whether this account should work on the project with waiting work.',
+};
+
 export function withoutDiagnostics(reading: CapacityReading): CapacityReading {
   const strip = (one: SurfaceReading): SurfaceReading => {
     const { detail: _detail, ...rest } = one;
+    /*
+     * The action names trigger refs, worker ids and commands — operator depth.
+     * Who acts and what kind of problem it is stay; the instruction becomes the
+     * plain one a member can follow, and `because` (already plain) stays.
+     */
+    if (rest.requiredAction) {
+      rest.requiredAction = { ...rest.requiredAction, what: PLAIN_ACTION[rest.requiredAction.problem] ?? rest.requiredAction.what };
+    }
+    if (rest.requiredAction?.problem === 'OUT_OF_SCOPE') {
+      rest.because = 'It is healthy, and the work waiting is in projects its worker is not part of. An administrator decides.';
+    }
     return rest;
   };
   return {

@@ -138,7 +138,9 @@ export function ConnectionsPanel({ onOpenPeople }: { onOpenPeople?: () => void }
                       ? ` · serves ${owner.routing.families.map((one) => one.toLowerCase()).join(', ') || 'nothing yet'}`
                       : ''}
                     {surface.proven ? ' · has finished real work' : ' · has not finished work yet'}
+                    {` · last work ${surface.lastWorkAt ?? 'never'}`}
                   </p>
+                  <RequiredAction surface={surface} />
                   {surface.detail ? (
                     <details className="rs-details">
                       <summary>Details</summary>
@@ -166,5 +168,22 @@ export function ConnectionsPanel({ onOpenPeople }: { onOpenPeople?: () => void }
         </p>
       ) : null}
     </section>
+  );
+}
+
+const WHO_ACTS: Record<string, string> = {
+  ACCOUNT_OWNER: 'The owner of this Claude account',
+  OPERATOR: 'An administrator',
+};
+
+/** Who has to act on this connection, and exactly what — or that Brain is handling it. */
+export function RequiredAction({ surface }: { surface: SurfaceReading }): JSX.Element | null {
+  const action = surface.requiredAction;
+  if (!action) return null;
+  return (
+    <p className={action.who === 'NOBODY' ? 'rs-hint rs-required-action' : 'rs-state rs-state-error rs-required-action'}>
+      {action.who === 'NOBODY' ? null : <strong>{WHO_ACTS[action.who] ?? action.who} needs to: </strong>}
+      {action.what}
+    </p>
   );
 }

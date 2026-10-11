@@ -3008,7 +3008,13 @@ export async function reopenNoShowDispatches(
     const spellings = sessionSpellings(row.session_ref);
     const refusedOnArrival = await getDb().get<{ hit: number }>(
       `SELECT 1 AS hit FROM bin_events e
-        WHERE e.event_type IN ('BIN_ASSIGNMENT_REFUSED', 'BIN_ASSIGNED', 'BIN_TAKEOVER')
+        -- DISPATCH_SESSION_ARRIVED and DISPATCH_WRONG_WORKER are written at
+        -- check-in by services/fleet/arrivalIdentity.ts: the fired session
+        -- arrived and took nothing (a lost race, or a Routine whose Claude
+        -- connector authenticates as another worker). Either answered the fire;
+        -- the second has its own quarantine with its own reason.
+        WHERE e.event_type IN ('BIN_ASSIGNMENT_REFUSED', 'BIN_ASSIGNED', 'BIN_TAKEOVER',
+                               'DISPATCH_SESSION_ARRIVED', 'DISPATCH_WRONG_WORKER')
           AND e.at >= ?
           AND e.session_ref IS NOT NULL
           AND e.session_ref IN (${spellings.length > 0 ? spellings.map(() => '?').join(', ') : "''"})
