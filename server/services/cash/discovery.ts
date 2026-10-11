@@ -684,8 +684,74 @@ export async function harvest(input: {
         found: foundPerRound.get(entry.round.id) ?? 0,
       });
     }
+    await closeStoppedRounds({ projectId: input.projectId, live, missions });
   }
   return out;
+}
+
+/** Mission states in which a round's research has stopped without finishing. */
+const ROUND_STOPPED = new Set(['FAILED', 'CANCELLED', 'NEEDS_HUMAN']);
+
+/**
+ * Close a round whose research stopped, so its bucket can be asked again.
+ *
+ * `closeRound` has always accepted `ABANDONED` and nothing ever wrote it: a
+ * round was closed only when its mission reached `DONE`. So a mission that
+ * failed, was cancelled, or parked at a decision left its round `OPEN` for
+ * ever, and an open round is exactly what `nextRoundFor` refuses to ask past.
+ * Production, Cash Mode 1: all ten buckets sat at round 1, `open=10
+ * harvested=0`, every one parked — broad discovery had stopped while every row
+ * read as waiting.
+ *
+ * Only a round whose idea actually became a mission: an idea parked before it
+ * launched (no grant, a refused specification) is answered by its own
+ * resumption, and closing it would record a round that researched nothing.
+ *
+ * `found` is counted from the openings that name this round, rather than
+ * tallied by this pass, because the claims of a stopped packet were harvested
+ * on earlier ticks. And the parked mission is left exactly where it is: closing
+ * the round ends nothing, it lets the bucket ask again after the cool-off, and
+ * `nextRoundFor`'s barren rule still stops a bucket whose last three rounds
+ * found nothing.
+ */
+async function closeStoppedRounds(input: {
+  projectId: string;
+  live: Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>;
+  missions: Awaited<ReturnType<typeof listMissions>>;
+}): Promise<string[]> {
+  const latest = new Map<string, (typeof input.missions)[number]>();
+  for (const mission of input.missions) {
+    if (!mission.candidateId) continue;
+    const seen = latest.get(mission.candidateId);
+    if (!seen || mission.createdAt > seen.createdAt) latest.set(mission.candidateId, mission);
+  }
+  const closed: string[] = [];
+  let opportunities: CashOpportunity[] | null = null;
+  for (const [candidateId, entry] of input.live) {
+    const mission = latest.get(candidateId);
+    if (!mission || !ROUND_STOPPED.has(mission.state)) continue;
+    opportunities ??= await listOpportunities({ projectId: input.projectId });
+    const found = opportunities.filter((one) => one.discoveryRoundId === entry.round.id).length;
+    if (!(await closeRound({ id: entry.round.id, to: 'ABANDONED', found }))) continue;
+    await recordCashEvent({
+      projectId: input.projectId,
+      kind: 'CASH_DISCOVERY_ROUND_STOPPED',
+      actorRef: 'BRAIN',
+      summary:
+        `Discovery round ${entry.round.round} of "${entry.bucket.title}" stopped without ` +
+        `finishing (its research is ${mission.state.toLowerCase()}), having filed ${found} ` +
+        'opening(s). The bucket will be asked again after its cool-off.',
+      detail: {
+        roundId: entry.round.id,
+        bucketId: entry.bucket.id,
+        missionId: mission.id,
+        missionState: mission.state,
+        found,
+      },
+    });
+    closed.push(entry.round.id);
+  }
+  return closed;
 }
 
 function clamp(text: string, max: number): string {

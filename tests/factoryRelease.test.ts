@@ -11,7 +11,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
-import { approveObjective, submitObjective } from '../server/services/factory/contract.ts';
+import { approveObjective, inferRisk, submitObjective } from '../server/services/factory/contract.ts';
 import { run } from '../server/services/factory/git.ts';
 import { ensureCampaign, factoryNow, getCampaign, patchCampaign } from '../server/repos/factory.ts';
 import { recordReview } from '../server/repos/factoryFleet.ts';
@@ -227,6 +227,16 @@ describe('the release gate', () => {
     expect(decideRelease({ ...base, changedFiles: ['server/db/migrations/1.sql'] }).excludedPathsTouched).toEqual([
       'server/db/migrations/1.sql',
     ]);
+  });
+});
+
+describe('risk inference', () => {
+  it('reads whole words, so a release or a test file name is not a lease', () => {
+    expect(inferRisk('Add tests/buildReleaseSentence.test.tsx and release it, please')).toBe('LOW');
+    expect(inferRisk('Shorten the work item lease')).toBe('MEDIUM');
+    expect(inferRisk('Add a route for the briefing')).toBe('MEDIUM');
+    expect(inferRisk('Rename the queues')).toBe('MEDIUM');
+    expect(inferRisk('Add a migration for the new table')).toBe('HIGH');
   });
 });
 
@@ -476,12 +486,41 @@ describe('the release workflow’s own readings', () => {
     expect(deployReleased([{ name: 'Deploy', conclusion: 'failure' }])).toBe(false);
   });
 
+  it('asks for its own resume after a failure, a bounded number of times', () => {
+    const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
+    const step = workflow.slice(workflow.indexOf('Ask for the pass that resumes this one'));
+    expect(step).toMatch(/if: \$\{\{ failure\(\) \}\}/);
+    expect(step).toMatch(/"\$DEPTH" -ge 3/);
+    expect(step).toMatch(/gh workflow run factory-release\.yml --ref production/);
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    // A transient forge error is retried rather than ending the run.
+    expect(script).toMatch(/attempt <= 5/);
+    // A Deploy whose head merely contains the merge is adopted, not refused.
+    expect(script).toMatch(/merge-base', '--is-ancestor'/);
+  });
+
+  it('is triggered by the Factory’s own pull request, from the base branch, and by nobody else’s', () => {
+    const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
+    // pull_request_target runs the base branch's workflow file, never the PR's.
+    expect(workflow).toMatch(/^  pull_request_target:/m);
+    expect(workflow).not.toMatch(/^  pull_request:/m);
+    expect(workflow).not.toMatch(/^  push:/m);
+    expect(workflow).toContain("startsWith(github.event.pull_request.head.ref, 'factory/campaign/')");
+    expect(workflow).toContain('github.event.pull_request.head.repo.full_name == github.repository');
+    // The release job runs only the trusted checkout of the canonical branch.
+    const release = workflow.slice(workflow.indexOf('  release:'));
+    expect(release).toMatch(/ref: production/);
+    expect(release).not.toMatch(/github\.event\.pull_request\.head\.sha/);
+  });
+
   it('the workflow never force-pushes, never runs flyctl deploy, and runs the change only without secrets', () => {
     const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
     const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
     expect(workflow).not.toMatch(/--force|-f\s+origin|\+refs\/heads/);
     expect(script).not.toMatch(/'--force'|'-f'|\+refs\/heads/);
     expect(workflow).not.toMatch(/^\s*flyctl\s+deploy\b/m);
+    // A job or step conditioned on always() cannot be cancelled, so nobody could stop a release.
+    expect(workflow.split('\n').filter((line) => /^\s*if:.*always\(\)/.test(line))).toEqual([]);
     expect(script).not.toMatch(/'deploy',\s*'--app'/);
     const gate = workflow.slice(workflow.indexOf('  gate:'), workflow.indexOf('  release:'));
     expect(gate).not.toMatch(/secrets\./);

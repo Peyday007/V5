@@ -2719,6 +2719,37 @@ async function main(): Promise<void> {
     for (const row of refusals) {
       console.log(`  ${String(row.n).padStart(6)}  ${row.outcome ?? '(none)'}  last ${row.last_at}`);
     }
+    /*
+     * And which bins those refusals are about now. A cumulative count says the
+     * fleet refused something; only the bin, its project and its class say
+     * whether the refusal was the work a person is waiting for or a bin nothing
+     * is supposed to serve.
+     */
+    const since = new Date(Date.now() - 6 * 3_600_000).toISOString();
+    const recent = await getDb().all<{
+      bin_id: string;
+      project_id: string | null;
+      workload_class: string | null;
+      outcome: string | null;
+      n: number;
+      last_at: string;
+    }>(
+      `SELECT bin_id AS bin_id, project_id AS project_id, workload_class AS workload_class,
+              outcome AS outcome, COUNT(*) AS n, MAX(at) AS last_at
+         FROM bin_events
+        WHERE event_type = 'DISPATCH_UNROUTED' AND at >= ?
+        GROUP BY bin_id, project_id, workload_class, outcome
+        ORDER BY MAX(at) DESC
+        LIMIT 40`,
+      [since],
+    );
+    console.log(`DISPATCH_UNROUTED since ${since}, by bin: ${recent.length}`);
+    for (const row of recent) {
+      console.log(
+        `  ${row.bin_id}  ${row.outcome ?? '(none)'}  project=${row.project_id ?? '—'}  ` +
+          `class=${row.workload_class ?? '—'}  n=${row.n}  last ${row.last_at}`,
+      );
+    }
     return;
   }
 

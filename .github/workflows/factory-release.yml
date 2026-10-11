@@ -52,6 +52,20 @@
 name: Factory release
 
 on:
+  # The event that matters: the Factory opening or updating its own pull
+  # request. `pull_request_target` runs the workflow file from the *base* branch,
+  # never from the pull request, so a campaign cannot change what releases it;
+  # and the `plan` job's condition below restricts it to Factory campaign
+  # branches in this repository, so a stranger's pull request does nothing.
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  # Resuming a release whose own run died while its Deploy was in flight.
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+  # A backstop only. Measured on this repository on 2026-10-08: a workflow
+  # scheduled hourly ran about every four to seven hours, so a timer alone left
+  # a finished objective waiting for hours with nothing anywhere saying why.
   schedule:
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
@@ -60,6 +74,10 @@ on:
         description: 'Why this pass was asked for, for the run log'
         required: false
         default: 'release whatever is ready'
+      resume_depth:
+        description: 'How many times a failed pass has already asked for the next one (bounded)'
+        required: false
+        default: '0'
 
 # Its own group: one release at a time, and nothing else evicts it.
 concurrency:
@@ -72,6 +90,10 @@ permissions:
 jobs:
   plan:
     name: Ask Brain what to release
+    if: >-
+      github.event_name != 'pull_request_target' || (
+        startsWith(github.event.pull_request.head.ref, 'factory/campaign/') &&
+        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -94,14 +116,25 @@ jobs:
         run: |
           set -uo pipefail
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-          flyctl ssh console --app "$app" -C \
-            "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh release-plan --repository $GITHUB_REPOSITORY --workflow-run $GITHUB_RUN_ID" \
-            2>&1 | tee plan.txt
-          if ! grep -q '^FACTORY: OK' plan.txt; then
-            echo "::error::Brain did not answer the release plan. Its output is above."
-            exit 1
-          fi
-          action=$(grep -m1 '^RELEASE-PLAN: ' plan.txt | sed 's/^RELEASE-PLAN: //')
+          # A Factory pull request is opened a few seconds before Brain records
+          # the campaign COMPLETE, so on that event ask again for a while
+          # rather than answering "nothing" to a release that is about to exist.
+          tries=1
+          if [ "$GITHUB_EVENT_NAME" = "pull_request_target" ]; then tries=15; fi
+          action=null
+          for attempt in $(seq 1 "$tries"); do
+            flyctl ssh console --app "$app" -C \
+              "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh release-plan --repository $GITHUB_REPOSITORY --workflow-run $GITHUB_RUN_ID" \
+              2>&1 | tee plan.txt
+            if ! grep -q '^FACTORY: OK' plan.txt; then
+              echo "::error::Brain did not answer the release plan. Its output is above."
+              exit 1
+            fi
+            action=$(grep -m1 '^RELEASE-PLAN: ' plan.txt | sed 's/^RELEASE-PLAN: //')
+            if [ "$action" != "null" ] || [ "$attempt" = "$tries" ]; then break; fi
+            echo "Nothing to release yet (attempt $attempt of $tries); asking again in 60s."
+            sleep 60
+          done
           echo "action=$action" >> "$GITHUB_OUTPUT"
           kind=$(printf '%s' "$action" | jq -r 'if . == null then "" else .action end')
           state=$(printf '%s' "$action" | jq -r 'if . == null then "" else (.state // "GATING") end')
@@ -236,7 +269,7 @@ jobs:
 
       - name: Verdict
         id: verdict
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           MERGE_FAILURE: ${{ steps.merge.outputs.failure }}
           SCAN: ${{ steps.scan.outcome }}
@@ -262,7 +295,12 @@ jobs:
   release:
     name: Merge, deploy, verify
     needs: [plan, gate]
-    if: always() && needs.plan.result == 'success' && needs.plan.outputs.kind != ''
+    # `!cancelled()`, never `always()`: it must still run when the gate failed or
+    # was skipped, so the outcome is recorded, and it must stop when somebody
+    # cancels the run. A job conditioned on `always()` ignores cancellation —
+    # found by cancelling a live release to test recovery, which ran on for
+    # twenty minutes regardless.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.kind != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 240
     # contents and pull-requests: to merge through the pull request's endpoint
@@ -315,3 +353,25 @@ jobs:
           fi
           echo "::error::The release did not complete. Its output is above."
           exit 1
+
+      # A release run that dies leaves its attempt in flight in Brain, and the
+      # next pass resumes it — but only if a next pass happens. GitHub's schedule
+      # cannot be relied on to be that pass (§58), so a failed release job asks
+      # for one itself, a bounded number of times: workflow_dispatch is the one
+      # event this run's own token may start. Nothing here decides anything;
+      # the next pass asks Brain, and Brain answers from its rows.
+      - name: Ask for the pass that resumes this one
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPTH: ${{ github.event.inputs.resume_depth || '0' }}
+        run: |
+          case "$DEPTH" in ''|*[!0-9]*) DEPTH=0 ;; esac
+          if [ "$DEPTH" -ge 3 ]; then
+            echo "::warning::Three resume passes in a row have failed; leaving the next one to the schedule. Brain shows the attempt and its stage."
+            exit 0
+          fi
+          sleep 120
+          gh workflow run factory-release.yml --ref production \
+            -f reason="resume after a failed release pass ($GITHUB_RUN_ID)" \
+            -f resume_depth="$((DEPTH + 1))"

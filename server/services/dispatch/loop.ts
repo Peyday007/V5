@@ -158,6 +158,12 @@ export interface TickResult {
   quarantinedForNoShow: string[];
   /** Surfaces put back after their connector was re-authorized. */
   recoveredAfterReauth: string[];
+  /** Surfaces stopped at their first session that arrived as another worker. */
+  quarantinedForWrongWorker: string[];
+  /** Surfaces put back because their registration now matches the worker that arrived. */
+  recoveredAfterRebind: string[];
+  /** A recovery probe Brain started by itself for a quarantine it derived, if any. */
+  autoProbe: string | null;
   intentsCreated: number;
   fired: number;
   failed: number;
@@ -195,6 +201,9 @@ export async function dispatchTick(
     revivedAbandoned: 0,
     quarantinedForNoShow: [],
     recoveredAfterReauth: [],
+    quarantinedForWrongWorker: [],
+    recoveredAfterRebind: [],
+    autoProbe: null,
     intentsCreated: 0,
     fired: 0,
     failed: 0,
@@ -379,6 +388,20 @@ export async function dispatchTick(
     result.recoveredAfterReauth = [];
   }
   /*
+   * Who actually arrived (`services/fleet/arrivalIdentity.ts`): a Routine whose
+   * fired session authenticated as another worker is stopped at the first one,
+   * and comes back by itself once an operator has registered it for the worker
+   * it was proven to run as. Evidence and derivations; neither may stop a
+   * dispatch.
+   */
+  try {
+    const { quarantineWrongWorkerSurfaces, recoverRebindedSurfaces } = await import('../fleet/arrivalIdentity.ts');
+    result.quarantinedForWrongWorker = await quarantineWrongWorkerSurfaces();
+    result.recoveredAfterRebind = await recoverRebindedSurfaces();
+  } catch {
+    // The next pass retries it.
+  }
+  /*
    * Recovery probes (`services/fleet/recoveryProbe.ts`): settle any whose
    * session has arrived or whose window has closed. A probe that proves a
    * healthy connector lifts the quarantine Brain derived; one that proves
@@ -389,6 +412,19 @@ export async function dispatchTick(
     await settleRecoveryProbes();
   } catch {
     // Evidence, not a precondition. The next pass retries it.
+  }
+  /*
+   * And a quarantine Brain derived is asked about again by itself, on a
+   * bounded backoff, one probe in the Brain at a time — so a surface that went
+   * quiet for a reason that has since cleared (a Claude-side outage, a usage
+   * limit, a connector the owner already fixed) comes back without anybody
+   * remembering to probe it. `services/fleet/autoRecovery.ts`.
+   */
+  try {
+    const { autoProbeQuarantinedSurfaces } = await import('../fleet/autoRecovery.ts');
+    result.autoProbe = await autoProbeQuarantinedSurfaces();
+  } catch {
+    result.autoProbe = null;
   }
 
   // Ensure intent for everything a worker could be given — which is not the

@@ -124,6 +124,14 @@ export interface SurfaceReading {
    */
   unansweredFires: number;
   retryAt: string | null;
+  /** When a session last checked in on this surface's worker — the last sign of it working. */
+  lastCheckInAt: string | null;
+  /**
+   * Who has to act and what, from `connectionAlerts` — the same derivation People
+   * and Needs you read. The instruction is operator depth (it names refs and
+   * commands); below that a plain sentence is sent instead. Absent when fine.
+   */
+  requiredAction: { who: string; problem: string; what: string; detail: string } | null;
 }
 
 export interface FleetView {
@@ -168,6 +176,24 @@ export interface FleetView {
     reason: string;
     at: string;
   }[];
+}
+
+/** The member-depth instruction for each connection problem. */
+function plainActionFor(problem: string): string {
+  switch (problem) {
+    case 'WRONG_WORKER':
+      return 'In Claude, this Routine uses a different Brain connector than it was set up with; its owner switches it back, or an administrator re-registers it.';
+    case 'REAUTH_REQUIRED':
+      return 'The owner of this Claude account reconnects Brain from Claude while signed in to Brain.';
+    case 'RECOVERING':
+      return 'Nothing to do: Brain is checking it again by itself.';
+    case 'RECOVERY_EXHAUSTED':
+      return 'Brain has stopped retrying; the owner of this Claude account checks the Routine in Claude.';
+    case 'OUT_OF_SCOPE':
+      return 'It is healthy and has no work it may take; an administrator decides which project it serves.';
+    default:
+      return 'An administrator looks at it.';
+  }
 }
 
 const STATE_WORDS: Record<string, string> = {
@@ -346,8 +372,12 @@ export async function fleetView(input: {
     routineTargets.set(routine.id, target ? effectiveTarget(target, now).target : null);
   }
 
+  const { alertsByRoutine } = await import('./connectionAlerts.ts');
+  const alerts = await alertsByRoutine(Date.parse(now)).catch(() => new Map<string, never>());
+
   const surfaces: SurfaceReading[] = routines.map((routine) => {
     const account = byAccount.get(routine.accountId);
+    const alert = alerts.get(routine.id);
     const { usable, reason, recorded } = usability(routine, account, now, {
       candidate: candidateById.get(routine.id) ?? null,
     });
@@ -378,6 +408,12 @@ export async function fleetView(input: {
       consecutiveFailures: routine.consecutiveFailures,
       unansweredFires: unanswered.get(routine.id) ?? 0,
       retryAt: routine.retryAt,
+      lastCheckInAt: routine.lastCheckInAt,
+      requiredAction: alert
+        ? input.includeTechnical
+          ? { who: alert.who, problem: alert.problem, what: alert.action, detail: alert.detail }
+          : { who: alert.who, problem: alert.problem, what: plainActionFor(alert.problem), detail: '' }
+        : null,
     };
   });
 

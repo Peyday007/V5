@@ -458,7 +458,9 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
       description:
         'Any published fact that would rule this out outright — a closed or awarded request, a ' +
         'restriction excluding a supplier like this one, a requirement nobody here could meet. ' +
-        'A documented absence of one is a real finding and belongs here.',
+        'A documented absence of one is a real finding and belongs here, submitted as ' +
+        'NEGATIVE_EXISTENCE naming where you looked; any other claim in this lane is read as a ' +
+        'disqualifier found, and it stops the opening.',
       necessity: 'CONDITIONAL',
     },
     /*
@@ -511,7 +513,8 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
         'What the published route to the buyer actually is, and specifically whether it ' +
         'requires a telephone call — a portal, an email address, a form, a bid submission or a ' +
         'phone number. Where a call is the only published route, say so; that is a finding ' +
-        'rather than a detail.',
+        'rather than a detail. A route found is how the opening is reached; where none is ' +
+        'published, submit that as NEGATIVE_EXISTENCE naming where you looked.',
       necessity: 'CONDITIONAL',
     },
   ],

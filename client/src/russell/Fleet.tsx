@@ -136,7 +136,21 @@ export function FleetCentre({ projectId }: { projectId: string | null }): JSX.El
                     ? `${surface.headroom.used} in flight, no ceiling set`
                     : `${surface.headroom.used} of ${surface.headroom.limit} in flight`}
                 </p>
-                <p className="rs-item-meta">Last fire: {surface.lastOutcome}</p>
+                <p className="rs-item-meta">
+                  Last fire: {surface.lastOutcome} · last check-in {surface.lastCheckInAt ?? 'never'}
+                </p>
+                {surface.requiredAction ? (
+                  <p
+                    className={
+                      surface.requiredAction.who === 'NOBODY'
+                        ? 'rs-hint rs-required-action'
+                        : 'rs-state rs-state-error rs-required-action'
+                    }
+                  >
+                    {surface.requiredAction.detail ? `${surface.requiredAction.detail} ` : ''}
+                    {surface.requiredAction.what}
+                  </p>
+                ) : null}
                 {surface.capabilities.length > 0 ? (
                   <p className="rs-item-meta rs-at-interested">
                     Can do: {surface.capabilities.join(', ')}

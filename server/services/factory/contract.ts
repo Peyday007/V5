@@ -324,7 +324,11 @@ export function inferRisk(objective: string): FactoryRiskClass {
   if (/migration|schema|auth|credential|deploy|production|delete|drop table/.test(text)) {
     return 'HIGH';
   }
-  if (/refactor|rename|endpoint|route|scheduler|queue|lease/.test(text)) return 'MEDIUM';
+  // Whole words: a substring match read "lease" inside "release" and "please",
+  // so every objective mentioning a release came out MEDIUM.
+  if (/\b(refactor\w*|renam\w*|endpoints?|routes?|routing|schedulers?|queues?|queued|leases?|leased)\b/.test(text)) {
+    return 'MEDIUM';
+  }
   return 'LOW';
 }
 
