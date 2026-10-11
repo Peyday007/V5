@@ -29,7 +29,7 @@ import { verifyLive, type VerifyDeps } from '../server/services/factory/release/
 import { latestRun, listRuns, openRun } from '../server/repos/factoryRelease.ts';
 import { forbiddenPathsFor } from '../server/services/factory/forbidden.ts';
 import { scanDiff } from '../scripts/release-scan.ts';
-import { MAX_CANCELLED_DEPLOYS, deployReleased, onCancelledDeploy } from '../scripts/factory-release.ts';
+import { MAX_CANCELLED_DEPLOYS, deployReleased, onCancelledDeploy, onProductionMoved } from '../scripts/factory-release.ts';
 import type { FactoryCampaign, FactoryChangeRequest } from '../server/domain/factory.ts';
 import type { ReleaseGrant, ReleaseRun } from '../server/domain/factoryRelease.ts';
 
@@ -505,6 +505,23 @@ describe('the release workflow’s own readings', () => {
     expect(body).toMatch(/stage: 'DEPLOY'[\s\S]*rollBack\(/);
   });
 
+  it('merges onto a moved production only when the movement is disjoint from the change', () => {
+    const change = ['client/src/russell/Build.tsx', 'tests/buildRepositoriesReleaseSentence.test.tsx'];
+    const ok = { fastForward: true, changeFiles: change, remergedCleanly: true };
+    expect(onProductionMoved({ ...ok, productionFiles: ['server/services/cash/x.ts', 'CLAUDE.md'] })).toEqual({ ok: true });
+    // Production touched a file the change touches: the tested tree says nothing about the combination.
+    const overlap = onProductionMoved({ ...ok, productionFiles: ['client/src/russell/Build.tsx'] });
+    expect(overlap.ok).toBe(false);
+    if (!overlap.ok) expect(overlap.reason).toMatch(/Build\.tsx/);
+    // A rewound branch, an unclean re-merge or an empty change re-gate as before.
+    expect(onProductionMoved({ ...ok, fastForward: false, productionFiles: ['a.ts'] }).ok).toBe(false);
+    expect(onProductionMoved({ ...ok, remergedCleanly: false, productionFiles: ['a.ts'] }).ok).toBe(false);
+    expect(onProductionMoved({ ...ok, changeFiles: [], productionFiles: ['a.ts'] }).ok).toBe(false);
+    // And the forge's merge must still produce exactly the tree Brain expected.
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    expect(script).toMatch(/treeOf\(mergeSha\) !== expectedTree/);
+  });
+
   it('asks for its own resume after a failure, a bounded number of times', () => {
     const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
     const step = workflow.slice(workflow.indexOf('Ask for the pass that resumes this one'));
@@ -567,7 +584,9 @@ describe('the release workflow’s own readings', () => {
     expect(script).not.toMatch(/refs\/heads\/production/);
     // The merge is asked about immediately before it happens, and the merged tree must be the tested tree.
     expect(script.indexOf("brain(['release-may-merge'")).toBeGreaterThan(-1);
-    expect(script).toMatch(/treeOf\(mergeSha\) !== treeOf\(gated\)/);
+    // The tree it must be is the gated tree, or the reviewed head re-merged onto a moved production.
+    expect(script).toMatch(/let expectedTree = treeOf\(gated\)/);
+    expect(script).toMatch(/treeOf\(mergeSha\) !== expectedTree/);
     const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
     expect(workflow).toMatch(/pull-requests: write/);
   });
