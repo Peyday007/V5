@@ -815,15 +815,41 @@ jobs:
         if: always()
         run: |
           mkdir -p docs/evidence/step12b-hosted
-          cat > docs/evidence/step12b-hosted/verification.json <<JSON
-          {
-            "revision": "${GITHUB_SHA}",
-            "ranAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "beforeRestart": ${{ steps.hosted.outcome == 'success' }},
-            "afterRestart": ${{ steps.hosted_after.outcome == 'success' }},
-            "workflowRun": "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          # Which conditions failed, by name, and whether both passes ran to a
+          # verdict. The Factory release reads this to tell a failure the change
+          # introduced from one the previous release already had: a released
+          # Deploy whose verdict fails only on conditions the last release before
+          # the merge also failed is not evidence against the change. Names, not
+          # details — a detail carries timings that differ on every run.
+          RELEASED='${{ steps.release.outcome == 'success' }}' \
+          BEFORE='${{ steps.hosted.outcome == 'success' }}' \
+          AFTER='${{ steps.hosted_after.outcome == 'success' }}' \
+          python3 - <<'PY'
+          import json, os, re
+          failing, complete = set(), True
+          for name in ('hosted-verification.txt', 'hosted-after-restart.txt'):
+              try:
+                  text = open(name, encoding='utf-8', errors='replace').read()
+              except OSError:
+                  complete = False
+                  continue
+              verdict = re.search(r'^HOSTED-VERIFICATION: (\S+)(.*)$', text, re.M)
+              if not verdict or 'could-not-complete' in verdict.group(2):
+                  complete = False
+              for line in re.findall(r'^ *FAIL  (.+)$', text, re.M):
+                  failing.add(line.split(' — ')[0].strip())
+          record = {
+              'revision': os.environ['GITHUB_SHA'],
+              'ranAt': __import__('time').strftime('%Y-%m-%dT%H:%M:%SZ', __import__('time').gmtime()),
+              'released': os.environ['RELEASED'] == 'true',
+              'beforeRestart': os.environ['BEFORE'] == 'true',
+              'afterRestart': os.environ['AFTER'] == 'true',
+              'complete': complete,
+              'failing': sorted(failing),
+              'workflowRun': f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
           }
-          JSON
+          json.dump(record, open('docs/evidence/step12b-hosted/verification.json', 'w'), indent=2)
+          PY
           cat docs/evidence/step12b-hosted/verification.json
 
       - name: Keep it
