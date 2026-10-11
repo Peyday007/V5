@@ -4318,7 +4318,7 @@ details.rs-card > section.rs-card {
 }
 
 /* --------------------------------------------------------------------------
- * Scenarios (§59). Tables scroll inside .rs-table-wrap; nothing else does.
+ * Scenarios (§60). Tables scroll inside .rs-table-wrap; nothing else does.
  * ------------------------------------------------------------------------ */
 .rs-scenarios select,
 .rs-scenarios textarea,

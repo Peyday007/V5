@@ -456,6 +456,30 @@ function refuse(
 const SPENT_BIN: ReadonlySet<string> = new Set(['COMPLETE', 'FAILED', 'CANCELLED']);
 
 /**
+ * A bin parked at `NEEDS_HUMAN` with its whole assignment budget spent is spent
+ * too, and for a while nothing treated it as one.
+ *
+ * `reconcileBins` reopens a parked bin only while it still has attempts, and
+ * `reopenNeedsHumanBin` refuses one that has none, so an exhausted park has no
+ * automatic way back; the dispatcher's own `attempt_count < max_attempts` clause
+ * means nothing will ever be fired for it either. `goalContinuation.ts` already
+ * counts `NEEDS_HUMAN` as spent for a goal packet. The launcher counted only the
+ * three terminal states, so a *mission* packet that had gone back to work after
+ * its bin parked kept claimable items behind a bin no worker could reach.
+ * Production, 2026-10-09: research in Cash Mode 1 stopped firing entirely, with
+ * `orc_d0cd97072ed94a0f8204` RESEARCHING, a fragment QUEUED at 0/2, and its only
+ * bin `NEEDS_HUMAN` at 10/10. Nobody was being asked anything.
+ *
+ * A parked bin that still has budget is deliberately *not* spent here: that is
+ * `reconcileBins`' to reopen, and replacing it as well would leave two live
+ * bins for one packet.
+ */
+function binIsSpent(bin: { state: string; attemptCount: number; maxAttempts: number }): boolean {
+  if (SPENT_BIN.has(bin.state)) return true;
+  return bin.state === 'NEEDS_HUMAN' && bin.attemptCount >= bin.maxAttempts;
+}
+
+/**
  * Packet states in which work *should* be moving, so a spent bin is a fault.
  *
  * `AWAITING_APPROVAL` and `NEEDS_HUMAN` are deliberately absent: those are
@@ -482,7 +506,7 @@ async function binCanStillDeliver(mission: RussellMission): Promise<boolean> {
   if (!mission.binId) return false;
   const bin = await getBin(mission.binId);
   if (!bin) return false;
-  return !SPENT_BIN.has(bin.state);
+  return !binIsSpent(bin);
 }
 
 /**
@@ -551,10 +575,13 @@ export async function packetMayHaveAnotherBin(orchestrationId: string | null): P
     return false;
   }
   // And something a worker could actually be handed. A bin over a packet with
-  // nothing claimable is the drained bin above, one status along.
+  // nothing claimable is the drained bin above, one status along — and an item
+  // past its own attempt ceiling is not claimable however it is leased (§20),
+  // so counting one would build a bin a worker is sent to and handed nothing.
   const rows = await getDb().all<{ total: number }>(
     `SELECT COUNT(*) AS total FROM work_items
-      WHERE orchestration_id = ? AND state IN ('QUEUED','LEASED')`,
+      WHERE orchestration_id = ? AND state IN ('QUEUED','LEASED')
+        AND attempt_count < max_attempts`,
     [orchestrationId],
   );
   return Number(rows[0]?.total ?? 0) > 0;
@@ -783,12 +810,16 @@ export async function repairLaunches(): Promise<RepairReport> {
               FROM bins b
               JOIN research_orchestrations o ON o.id = m.orchestration_id
              WHERE b.id = m.bin_id
-               AND b.state IN ('COMPLETE','FAILED','CANCELLED')
+               AND (
+                 b.state IN ('COMPLETE','FAILED','CANCELLED')
+                 OR (b.state = 'NEEDS_HUMAN' AND b.attempt_count >= b.max_attempts)
+               )
                AND o.status IN (${WORKING_ORCHESTRATION.map(() => '?').join(', ')})
                AND EXISTS (
                  SELECT 1 FROM work_items w
                   WHERE w.orchestration_id = m.orchestration_id
                     AND w.state IN ('QUEUED','LEASED')
+                    AND w.attempt_count < w.max_attempts
                )
           )
         )

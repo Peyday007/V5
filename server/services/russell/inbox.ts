@@ -125,6 +125,14 @@ export interface Inbox {
 
 const CONTINUING = 'Brain carries on with everything else meanwhile.';
 
+const CONNECTION_PROBLEM_TITLE: Record<string, string> = {
+  WRONG_WORKER: 'its Claude Routine uses the wrong Brain connector',
+  REAUTH_REQUIRED: 'its Claude connector needs reconnecting',
+  RECOVERY_EXHAUSTED: 'Brain has stopped retrying it',
+  OUT_OF_SCOPE: 'healthy, with no work it is allowed to take',
+  RECOVERING: 'recovering by itself',
+};
+
 /**
  * The blocker kinds a person can answer. The others — nowhere to run it, no
  * independent reviewer yet, a base that moved — Brain resolves by itself, and
@@ -466,6 +474,57 @@ export async function inboxFor(input: {
       since: null,
       action: { type: 'OPEN', destination: 'PEOPLE', label: 'Open your connection' },
     });
+  }
+
+  /*
+   * Connections that need a person, for the person who administers the fleet —
+   * named at the first sign rather than after a surface has burned its
+   * activations (`services/fleet/connectionAlerts.ts`). A connection Brain is
+   * recovering by itself is not an item: an inbox that asks somebody to wait
+   * for Brain teaches them to stop reading it.
+   */
+  if (input.principal.isBrainAdmin) {
+    const fleet = await source('fleet connections', unreadable, async () => {
+      const { connectionAlerts } = await import('../fleet/connectionAlerts.ts');
+      return connectionAlerts();
+    });
+    if (fleet) {
+      const stalled = new Set(fleet.stalled.map((one) => one.accountId));
+      for (const account of fleet.stalled) {
+        items.push({
+          id: `connection:account:${account.accountId}`,
+          category: 'CONNECTION',
+          title: `The ${account.accountName} Claude account is contributing nothing`,
+          reason: `Every one of its ${account.routineIds.length} Routine(s) is stopped on something only a person can fix.`,
+          ifIgnored: 'That account’s capacity stays idle; the other accounts keep working.',
+          requestedAction: 'Open Connections: each Routine says who has to act and exactly what to do.',
+          affects: `Claude account ${account.accountName}`,
+          continuing: CONTINUING,
+          urgency: 'URGENT',
+          since: null,
+          action: { type: 'OPEN', destination: 'PEOPLE', label: 'Open Connections' },
+        });
+      }
+      for (const alert of fleet.alerts) {
+        if (alert.who === 'NOBODY' || stalled.has(alert.accountId)) continue;
+        items.push({
+          id: `connection:routine:${alert.routineId}`,
+          category: 'CONNECTION',
+          title: `${alert.routineName} (${alert.accountName}): ${CONNECTION_PROBLEM_TITLE[alert.problem]}`,
+          // A Brain administrator may read every project, so the names are theirs to see.
+          reason: alert.projects
+            ? `${alert.detail} It serves ${alert.projects.served.join(', ') || 'no project'}; the work is in ${alert.projects.waiting.join(', ')}.`
+            : alert.detail,
+          ifIgnored: 'Brain does not fire it, so it costs nothing and contributes nothing until this is fixed.',
+          requestedAction: alert.action,
+          affects: `Claude account ${alert.accountName}`,
+          continuing: CONTINUING,
+          urgency: 'BLOCKING',
+          since: alert.since,
+          action: { type: 'OPEN', destination: 'PEOPLE', label: 'Open Connections' },
+        });
+      }
+    }
   }
 
   items.sort((a, b) => {

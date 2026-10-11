@@ -1919,6 +1919,25 @@ rules.
   finished by the writeback pass, which reads the same status; one waiting for a
   person has its own answering transition already.
 
+  **And "spent" left out the one park with no way back, which stopped research
+  for a day and a half.** The launcher replaced only a `COMPLETE`, `FAILED` or
+  `CANCELLED` bin. A bin parked at `NEEDS_HUMAN` with its whole budget used has
+  no other exit either: `reconcileBins` reopens a park only while it has
+  attempts, `reopenNeedsHumanBin` refuses one with none, and the dispatcher
+  fires only below the ceiling. So a mission packet that went back to work
+  after its bin exhausted held claimable items nothing could reach. Production,
+  2026-10-09 17:05Z onward: no research fire at all in Cash Mode 1, eight
+  routable surfaces idle, `orc_d0cd97072ed94a0f8204` RESEARCHING with a
+  fragment queued at 0/2 behind `bin_27488ac9270d46fd8990` at 10/10.
+  `goalContinuation.ts` already counted `NEEDS_HUMAN` as spent, so this was
+  two readers of one rule disagreeing. An exhausted park now counts as spent
+  for a working packet, and a park with attempts left does not, because the
+  reconcile reopens that one and two live bins for one packet is the
+  duplicate. "Claimable" also gained `attempt_count < max_attempts`: an item
+  past its own ceiling is not claimable however it is leased, so counting one
+  built a bin a worker would be sent to and handed nothing. The parked bin
+  keeps its row, its attempts and its reason; nothing is reset.
+
 - **What a person is shown about coverage is what the auditor read.**
   `reconcileAcceptedFragment` moves a requirement's coverage when a fragment
   clears all seven gate conditions, and it had exactly one caller — the
@@ -12793,7 +12812,82 @@ objective without one, a person still merges.
   not enabled because the cloud worker image has no bubblewrap — enabling it
   there would sandbox nothing, and saying so is the honest report.
 
-## 59. A simulation compares decisions on the same worlds, and never calls coverage a probability.
+**What has run, said plainly.** Two LOW-risk, one-sentence Build objectives
+went from a person's approval to LIVE, with the fleet doing every Factory stage
+and Brain verifying inside the released process:
+
+- `fcp_3d52c82c` — approved 21:40Z 2026-10-08, PR #159 opened by the fleet
+  22:22Z, merged by `factory-release` as `48acaff`, LIVE 00:00Z. Its release was
+  started by a Deploy completing — a Deploy I dispatched to land the trigger fix
+  — because the schedule had not run once in four hours.
+- `fcp_5d4f6311` — approved 00:42Z, PR #163 opened 01:01Z and **picked up by the
+  `pull_request_target` event with nobody dispatching anything**, gated and
+  merged as `8aae3dd` at 01:04Z. The release run then died on one transient
+  `fetch failed` before dispatching Deploy; Brain held the attempt at MERGED, and
+  a later pass resumed it there — no re-merge, no re-gate — to LIVE at
+  `034737c`, which contains the merge. That later pass was dispatched by hand
+  after ninety minutes without a scheduled run, before the retry and
+  self-resume that would have made it unnecessary existed (#164).
+
+Running it found five defects the tests had not: a wrapper guard the impacted
+selection missed (#155), risk inference reading "lease" inside "release"
+(#158), a timer that was not a trigger (#160), a release job conditioned on
+`always()` that ignored cancellation (#161), and a single forge error ending a
+run with no prompt resume (#164). **Recovery after a death *mid-deploy* by
+cancellation has not been exercised in production**; the attempt killed that way
+ran on (the `always()` defect) and the organic death landed at MERGED instead.
+
+## 59. A session that arrived is an answer, and who it arrived as is the first question.
+
+Production, 2026-10-11. Airyn's four Research Routines were registered for
+worker-05, and the Claude Routines behind them selected his other Brain
+connector, the one at `/mcp/factory` that authorizes as worker-12. Every fire
+started a session, it authenticated, checked in, was offered nothing a worker-12
+session may take, and ended. An arrival was credited only when the session took
+a bin, so each one read as "never checked in". Three of those quarantined the
+surface, and after each re-enable the cycle started again: 115 fires per Routine.
+Two recovery probes then reported NO_MCP and told the operator to have Airyn
+reconnect Brain in Claude. Yet worker-12's token was used seven seconds after
+each probe fired. Caleb's four Routines read ENABLED and routable, and nothing
+had fired them since 2026-09-19, because worker-04 is a member of test projects
+only. `docs/CONNECTOR-LIFECYCLE.md` describes the mechanism.
+
+- **Check-in records who arrived for a fire** (`services/fleet/arrivalIdentity.ts`).
+  A session whose reported provider session matches a fire is recorded once:
+  `DISPATCH_SESSION_ARRIVED` when it is the registered worker, and
+  `DISPATCH_WRONG_WORKER` when it is another. The no-show pass reads both as
+  answers. A wrong-worker arrival is the Claude Routine choosing a connector. It
+  is not expired consent and not a Brain outage, and each of those three now has
+  its own row.
+- **One wrong-worker arrival stops the Routine.** It is quarantined with the
+  cause and both remedies: the account owner picks the right connector in
+  Claude, or an operator repoints the Routine. Brain never adopts the arriving
+  identity. Once a person registers the Routine for the worker it was proven to
+  run as, the Routine comes back by itself, and its next arrival binds the
+  connector. Old evidence binds nothing and re-enables nothing; a later
+  quarantine for another reason waits for its own recovery.
+- **One session may hold both of a person's connectors.** It can check in
+  through each with the same session id. So a wrong-worker arrival is acted on
+  only after a two-minute grace period, and only if the same session never
+  arrived as the registered worker. A probe decides it only when its window
+  closes. Without this the independent review showed the surface flapping
+  between quarantine and recovery on every fire.
+- **A quarantine Brain derived is probed again by Brain**
+  (`services/fleet/autoRecovery.ts`). It uses the same recovery probe, one at a
+  time, 15 minutes after the quarantine and then at 1h, 4h, 12h and 24h. After
+  four probes that do not prove the Routine healthy, Brain stops and names the
+  account owner. A person's own probe or re-enable buys a fresh budget. A
+  quarantine a person set is never probed.
+- **One derivation says who acts** (`services/fleet/connectionAlerts.ts`). Each
+  alert has a problem: `WRONG_WORKER`, `REAUTH_REQUIRED`, `RECOVERING`,
+  `RECOVERY_EXHAUSTED` or `OUT_OF_SCOPE`. Each also names who acts:
+  `ACCOUNT_OWNER`, `OPERATOR` or `NOBODY`. People, Fleet, Needs you (for Brain
+  administrators) and the connection report all read it. `OUT_OF_SCOPE` is the
+  Caleb case: the account is healthy and has nothing it may be given. Granting a
+  project stays an operator's decision. A member sees the plain instruction;
+  refs and commands are operator depth.
+
+## 60. A simulation compares decisions on the same worlds, and never calls coverage a probability.
 
 The scenario engine (`server/services/scenario/`, `server/repos/scenario.ts`,
 `server/domain/scenario.ts`, `client/src/russell/Scenarios.tsx`,
@@ -13042,6 +13136,9 @@ server/
       view.ts           three capacity numbers that are not each other, and why it is slow
       capacity.ts       what the dispatcher would fire, counted once and labelled honestly
       connectorHealth.ts  the one answer to whether a connector can authenticate, and whose fault a no-show is
+      arrivalIdentity.ts  who arrived for a fire; a wrong worker is stopped at once, restored once registered
+      autoRecovery.ts   Brain probes the quarantines it derived again, bounded, one at a time
+      connectionAlerts.ts  what is wrong with each connection, who acts, and exactly what
       connectorBinding.ts which connector a client and a Routine are, from proof; auth-caused quarantines lifted
       recoveryProbe.ts  one controlled fire that proves a quarantined, unattributed Routine's connector
       memberReconnect.ts  the one connector a signed-in member may restore without an invitation, or why not
@@ -13454,6 +13551,7 @@ tests/                  Vitest suites
   scenarioHttp.test.ts       models and runs persist, reproduce after a restart, and stay private
   scenarioSurface.test.tsx   the page over the real route: labelled simulation, never a probability
   connectorLifecycle.test.ts two accounts on one worker, an auth no-show, and a recovery nobody pressed
+  connectionRecovery.test.ts the wrong connector, an arrival that took nothing, a probe nobody asked for
   connectorRecoveryProbe.test.ts  a quarantined, unattributed Routine proving its own connector
   connectionReliability.test.ts  the whole chain with the database failing on purpose
   integration3Product.test.ts   the readings the six destinations are built on
