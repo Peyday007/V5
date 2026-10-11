@@ -237,7 +237,9 @@ const FROM: Record<ReleaseRunState, readonly ReleaseRunState[]> = {
   REFUSED: [],
   GATING: [],
   MERGED: ['GATING'],
-  DEPLOYING: ['MERGED'],
+  // DEPLOYING may restamp DEPLOYING: a Deploy evicted before it started is
+  // replaced by the one that carries the merge, and the attempt records which.
+  DEPLOYING: ['MERGED', 'DEPLOYING'],
   VERIFYING: ['DEPLOYING'],
   LIVE: ['VERIFYING'],
   // FAILED may restamp FAILED: a rollback whose revert could not land records
