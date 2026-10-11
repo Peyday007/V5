@@ -36,6 +36,7 @@
  * refused, because that is a `COMMERCIAL_ACTION` under a grant a person makes
  * separately.
  */
+import { getDb } from '../../db/database.ts';
 import {
   cashEventsOfKind,
   getCashMode,
@@ -57,8 +58,9 @@ import {
   mayReplace,
   recordEvidenceFact,
   recordRecommendationFact,
+  clearColumnIfStill,
   withdrawEvidenceFact,
-  withdrawRecommendationResting,
+  withdrawRecommendationsResting,
 } from '../../repos/cashCardFacts.ts';
 import {
   DISQUALIFIED_FIELD,
@@ -1196,34 +1198,37 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
   return out;
 }
 
-/** Lanes whose documented absence leaves the field unknown rather than answering it. */
-export const ABSENCE_IS_NOT_AN_ANSWER: ReadonlySet<string> = new Set([
-  'payer',
-  'price_evidence',
-  'cost_evidence',
-  'timing',
-  'effort',
-]);
+/**
+ * Lanes whose documented absence leaves the field unknown rather than answering it.
+ *
+ * Only the payer. For the other lanes an absence can genuinely be the answer —
+ * "no fee is charged" is a cost, "no licence is required" is eligibility — and
+ * the claim's type alone cannot tell that apart from "no price is published",
+ * so narrowing them would withdraw real answers.
+ */
+export const ABSENCE_IS_NOT_AN_ANSWER: ReadonlySet<string> = new Set(['payer']);
 
 /**
  * Take back an absence that was written onto a card as the answer.
  *
- * Before the guard above, a NEGATIVE_EXISTENCE claim in one of these lanes
- * filled its field — production carried "No payer was found" as one opening's
- * payer, and a capture thesis was then composed from it. The fact and its
- * column are cleared, a recommendation Brain composed from that claim is
- * withdrawn with it, and the correction is an append-only event carrying the
- * value it replaced. Nothing is written in its place: an absence is not
- * evidence that there is no payer either, so the field is simply unknown.
+ * Before the guard above, a NEGATIVE_EXISTENCE claim in the payer lane filled
+ * the payer — production carried "No payer was found" as one opening's payer,
+ * and a capture thesis was then composed from it. The fact and its column are
+ * cleared, every recommendation Brain composed from that claim is withdrawn
+ * with it, and the correction is an append-only event carrying the value it
+ * replaced. Nothing is written in its place: an absence is not evidence that
+ * there is no payer either, so the field is simply unknown.
  *
- * Guarded on the fact still naming that claim, so a person's answer and any
- * newer evidence are untouched and a replay withdraws nothing twice.
+ * One transaction, because the fact is also the only guard: deleted alone and
+ * then interrupted, the column would keep the absence for ever with nothing
+ * left to notice it. Each write is guarded on the value it replaces, so a
+ * person's answer and newer evidence are untouched and a replay changes
+ * nothing.
  */
 async function withdrawAbsencesWrittenAsAnswers(
   projectId: string,
   opportunity: CashOpportunity,
 ): Promise<void> {
-  // One read of the card per opening per tick, rather than one per field.
   const byField = new Map((await cardFactsFor(opportunity.id)).map((one) => [one.field, one]));
   for (const lane of ABSENCE_IS_NOT_AN_ANSWER) {
     const field = FIELD_BY_LANE[lane];
@@ -1232,33 +1237,23 @@ async function withdrawAbsencesWrittenAsAnswers(
     if (!fact || fact.kind !== 'EVIDENCE' || !fact.claimId) continue;
     const claim = await getClaim(fact.claimId);
     if (!claim || claim.claimType !== 'NEGATIVE_EXISTENCE') continue;
-    if (!(await withdrawEvidenceFact({ opportunityId: opportunity.id, field, claimId: claim.id }))) continue;
-    const column = COLUMN[field];
-    const current = column ? (opportunity as unknown as Record<string, unknown>)[camel(column)] : undefined;
-    if (column && current === fact.value) await updateOpportunity(opportunity.id, { [column]: null } as never);
-    const composed: string[] = [];
-    if (field === 'payer') {
-      for (const resting of ['captureMechanism', 'firstSteps']) {
-        if (await withdrawRecommendationResting({ opportunityId: opportunity.id, field: resting, claimId: claim.id })) {
-          composed.push(resting);
-        }
-      }
-    }
-    await recordCashEvent({
-      projectId,
-      opportunityId: opportunity.id,
-      kind: 'CASH_CARD_FACT_WITHDRAWN',
-      actorRef: 'BRAIN',
-      summary:
-        `The ${field} on this card was a search that found nothing, not an answer. It is unknown ` +
-        'again, and nothing Brain composed from it stands.',
-      detail: { field, claimId: claim.id, value: fact.value, withdrawnRecommendations: composed },
+    await getDb().transaction(async () => {
+      if (!(await withdrawEvidenceFact({ opportunityId: opportunity.id, field, claimId: claim.id }))) return;
+      const column = COLUMN[field];
+      if (column) await clearColumnIfStill({ opportunityId: opportunity.id, column, value: fact.value });
+      const composed = await withdrawRecommendationsResting({ opportunityId: opportunity.id, claimId: claim.id });
+      await recordCashEvent({
+        projectId,
+        opportunityId: opportunity.id,
+        kind: 'CASH_CARD_FACT_WITHDRAWN',
+        actorRef: 'BRAIN',
+        summary:
+          `The ${field} on this card was a search that found nothing, not an answer. It is unknown ` +
+          'again, and nothing Brain composed from it stands.',
+        detail: { field, claimId: claim.id, value: fact.value, withdrawnRecommendations: composed },
+      });
     });
   }
-}
-
-function camel(column: string): string {
-  return column.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
 }
 
 /** Whether any citable claim of this packet declared the opening ruled out. */

@@ -256,22 +256,42 @@ export async function withdrawEvidenceFact(input: {
 }
 
 /**
- * Take back a recommendation Brain composed from an answer it has withdrawn.
+ * Take back every recommendation Brain composed from an answer it has withdrawn.
  *
- * Guarded on the recommendation still being the one built from that claim —
- * its own basis names the claim it rested on — so a person's decision, or a
- * recommendation re-proposed from something else, is never touched.
+ * Guarded on each recommendation's own basis naming the claim it rested on, so
+ * a person's decision, or a recommendation built from something else, is never
+ * touched. Returns the fields withdrawn.
  */
-export async function withdrawRecommendationResting(input: {
+export async function withdrawRecommendationsResting(input: {
   opportunityId: string;
-  field: string;
   claimId: string;
+}): Promise<string[]> {
+  const out: string[] = [];
+  for (const fact of await cardFactsFor(input.opportunityId)) {
+    if (fact.kind !== 'RECOMMENDATION' || !(fact.basis ?? '').includes(input.claimId)) continue;
+    const result = await getDb().run(
+      `DELETE FROM cash_card_facts WHERE id = ? AND kind = 'RECOMMENDATION'`,
+      [fact.id],
+    );
+    if (result.changes > 0) out.push(fact.field);
+  }
+  return out;
+}
+
+/**
+ * Clear an opportunity column only while it still holds the value being
+ * withdrawn, in the statement that changes it — so a person's answer written
+ * after the reader looked is never nulled.
+ */
+export async function clearColumnIfStill(input: {
+  opportunityId: string;
+  column: string;
+  value: string;
 }): Promise<boolean> {
-  const fact = await cardFact(input.opportunityId, input.field);
-  if (!fact || fact.kind !== 'RECOMMENDATION' || !(fact.basis ?? '').includes(input.claimId)) return false;
+  if (!/^[a-z_]+$/.test(input.column)) throw new Error(`Not a column: ${input.column}`);
   const result = await getDb().run(
-    `DELETE FROM cash_card_facts WHERE id = ? AND kind = 'RECOMMENDATION'`,
-    [fact.id],
+    `UPDATE cash_opportunities SET ${input.column} = NULL WHERE id = ? AND ${input.column} = ?`,
+    [input.opportunityId, input.value],
   );
   return result.changes > 0;
 }

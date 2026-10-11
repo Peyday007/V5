@@ -244,18 +244,13 @@ describe('an absence never answers the field it looked for', () => {
     expect((await tierOf(id)).card.entries.find((e) => e.key === 'payer')!.value).toBeNull();
   });
 
-  it('nor a search that found no price, cost, terms or effort figure', async () => {
-    const one = await dive('no-figures', [
-      { lane: 'price_evidence', text: 'No comparable fee is published.', type: 'NEGATIVE_EXISTENCE' },
-      { lane: 'cost_evidence', text: 'No input price is published.', type: 'NEGATIVE_EXISTENCE' },
-      { lane: 'timing', text: 'No payment terms are published.', type: 'NEGATIVE_EXISTENCE' },
-      { lane: 'effort', text: 'No effort estimate is published.', type: 'NEGATIVE_EXISTENCE' },
+  it('a documented absence in the cost or price lane is still an answer ("no fee is charged")', async () => {
+    const one = await dive('no-fee', [
+      { lane: 'cost_evidence', text: 'The portal states no fee is charged to submit a bid.', type: 'NEGATIVE_EXISTENCE' },
     ]);
     const id = await opening([one]);
     await applyValidationAnswers(projectId);
-    for (const field of ['revenueRange', 'directCosts', 'timeToFirstCash', 'hours']) {
-      expect(await cardFact(id, field)).toBeNull();
-    }
+    expect((await cardFact(id, 'directCosts'))?.claimId).toBe(one.claimIds[0]);
   });
 
   it('where an absence is the answer, it still answers', async () => {
@@ -288,10 +283,21 @@ describe('an absence never answers the field it looked for', () => {
       assumptions: 'x',
       uncertainty: 'x',
     });
+    // A recommendation of another field composed from the same claim goes too.
+    await recordRecommendationFact({
+      projectId,
+      opportunityId: id,
+      field: 'recommendation',
+      value: 'Worth testing: the payer is No payer was found.',
+      basis: `Rests on the payer (claim ${one.claimIds[0]}).`,
+      assumptions: 'x',
+      uncertainty: 'x',
+    });
     await applyValidationAnswers(projectId);
     expect(await cardFact(id, 'payer')).toBeNull();
     expect((await getOpportunity(id))!.payer).toBeNull();
     expect(await cardFact(id, 'captureMechanism')).toBeNull();
+    expect(await cardFact(id, 'recommendation')).toBeNull();
     const events = await getDb().all<{ detail: string }>(
       "SELECT detail FROM cash_events WHERE opportunity_id = ? AND kind = 'CASH_CARD_FACT_WITHDRAWN'",
       [id],
@@ -303,6 +309,20 @@ describe('an absence never answers the field it looked for', () => {
     expect(
       await getDb().all("SELECT 1 FROM cash_events WHERE opportunity_id = ? AND kind = 'CASH_CARD_FACT_WITHDRAWN'", [id]),
     ).toHaveLength(1);
+  });
+
+  it('a column a person has since changed is never cleared', async () => {
+    const one = await dive('changed-column', [{ lane: 'payer', text: 'No payer was found.', type: 'NEGATIVE_EXISTENCE' }]);
+    const id = await opening([one]);
+    await getDb().run(
+      `INSERT INTO cash_card_facts (id, project_id, opportunity_id, field, kind, value, claim_id, decided_by, created_at, updated_at)
+       VALUES ('ccf_old', ?, ?, 'payer', 'EVIDENCE', 'No payer was found.', ?, 'BRAIN', '2026-10-08', '2026-10-08')`,
+      [projectId, id, one.claimIds[0]],
+    );
+    await updateOpportunity(id, { payer: 'The city clerk' });
+    await applyValidationAnswers(projectId);
+    expect(await cardFact(id, 'payer')).toBeNull();
+    expect((await getOpportunity(id))!.payer).toBe('The city clerk');
   });
 
   it('a person’s own payer is never withdrawn', async () => {
