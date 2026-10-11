@@ -100,6 +100,7 @@ export function ConnectionsPanel({ onOpenPeople }: { onOpenPeople?: () => void }
   return (
     <section className="rs-panel rs-connections" aria-labelledby="rs-connections-title">
       <h2 id="rs-connections-title">Connections</h2>
+      <p className="rs-hint">A retrying connection recovers by itself; only a reconnect needs you.</p>
       {data && surfaces.length > 0 ? (
         <p className="rs-lede">
           {surfaces.filter((one) => connectionOf(one) === 'HEALTHY').length} of {surfaces.length} Claude{' '}
