@@ -232,3 +232,46 @@ export function mayReplace(
   if (existing.kind === 'EVIDENCE') return incoming === 'PERSON';
   return incoming === 'PERSON' || incoming === 'EVIDENCE';
 }
+
+/**
+ * Take back an answer that was never one, in one guarded statement.
+ *
+ * Only an EVIDENCE fact naming the claim the caller read, so a person's answer
+ * and any newer evidence written since are untouched and two ticks produce one
+ * withdrawal. The row is what the card says *now*; the history of it having
+ * said otherwise is the `cash_events` row the caller writes, which is where
+ * this module's header says a correction lives.
+ */
+export async function withdrawEvidenceFact(input: {
+  opportunityId: string;
+  field: string;
+  claimId: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `DELETE FROM cash_card_facts
+      WHERE opportunity_id = ? AND field = ? AND kind = 'EVIDENCE' AND claim_id = ?`,
+    [input.opportunityId, input.field, input.claimId],
+  );
+  return result.changes > 0;
+}
+
+/**
+ * Take back a recommendation Brain composed from an answer it has withdrawn.
+ *
+ * Guarded on the recommendation still being the one built from that claim —
+ * its own basis names the claim it rested on — so a person's decision, or a
+ * recommendation re-proposed from something else, is never touched.
+ */
+export async function withdrawRecommendationResting(input: {
+  opportunityId: string;
+  field: string;
+  claimId: string;
+}): Promise<boolean> {
+  const fact = await cardFact(input.opportunityId, input.field);
+  if (!fact || fact.kind !== 'RECOMMENDATION' || !(fact.basis ?? '').includes(input.claimId)) return false;
+  const result = await getDb().run(
+    `DELETE FROM cash_card_facts WHERE id = ? AND kind = 'RECOMMENDATION'`,
+    [fact.id],
+  );
+  return result.changes > 0;
+}

@@ -50,13 +50,15 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate, missionsForCandidate } from '../../repos/russellMissions.ts';
-import { citableClaims, getFragment, getOrchestration, listPasses } from '../../repos/research.ts';
+import { citableClaims, getClaim, getFragment, getOrchestration, listPasses } from '../../repos/research.ts';
 import {
   cardFact,
   cardFactsFor,
   mayReplace,
   recordEvidenceFact,
   recordRecommendationFact,
+  withdrawEvidenceFact,
+  withdrawRecommendationResting,
 } from '../../repos/cashCardFacts.ts';
 import {
   DISQUALIFIED_FIELD,
@@ -1107,7 +1109,20 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
         if (!claim.sourceUrl) continue;
         const lane = claim.evidenceLane ?? '';
         const fields: string[] = [];
-        if (FIELD_BY_LANE[lane]) fields.push(FIELD_BY_LANE[lane]);
+        /*
+         * A search that found nothing is not the thing it looked for.
+         *
+         * For most lanes a documented absence *is* the answer — no licence is
+         * required, nothing rules it out, no call is needed. For these it is
+         * not: a search that found no payer, no published price, no published
+         * cost, no payment terms or no effort figure leaves that field unknown,
+         * and writing it there made production read "No payer was found" as the
+         * payer and compose a capture thesis from it. The claim still stands as
+         * evidence; it simply answers nothing.
+         */
+        const absenceAnswersNothing =
+          claim.claimType === 'NEGATIVE_EXISTENCE' && ABSENCE_IS_NOT_AN_ANSWER.has(lane);
+        if (FIELD_BY_LANE[lane] && !absenceAnswersNothing) fields.push(FIELD_BY_LANE[lane]);
         if (ALSO_ANSWERS_BY_LANE[lane] && claim.claimType !== 'NEGATIVE_EXISTENCE') {
           fields.push(ALSO_ANSWERS_BY_LANE[lane]);
         }
@@ -1176,8 +1191,72 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
         }
       }
     }
+    await withdrawAbsencesWrittenAsAnswers(projectId, opportunity);
   }
   return out;
+}
+
+/** Lanes whose documented absence leaves the field unknown rather than answering it. */
+export const ABSENCE_IS_NOT_AN_ANSWER: ReadonlySet<string> = new Set([
+  'payer',
+  'price_evidence',
+  'cost_evidence',
+  'timing',
+  'effort',
+]);
+
+/**
+ * Take back an absence that was written onto a card as the answer.
+ *
+ * Before the guard above, a NEGATIVE_EXISTENCE claim in one of these lanes
+ * filled its field — production carried "No payer was found" as one opening's
+ * payer, and a capture thesis was then composed from it. The fact and its
+ * column are cleared, a recommendation Brain composed from that claim is
+ * withdrawn with it, and the correction is an append-only event carrying the
+ * value it replaced. Nothing is written in its place: an absence is not
+ * evidence that there is no payer either, so the field is simply unknown.
+ *
+ * Guarded on the fact still naming that claim, so a person's answer and any
+ * newer evidence are untouched and a replay withdraws nothing twice.
+ */
+async function withdrawAbsencesWrittenAsAnswers(
+  projectId: string,
+  opportunity: CashOpportunity,
+): Promise<void> {
+  for (const lane of ABSENCE_IS_NOT_AN_ANSWER) {
+    const field = FIELD_BY_LANE[lane];
+    if (!field) continue;
+    const fact = await cardFact(opportunity.id, field);
+    if (!fact || fact.kind !== 'EVIDENCE' || !fact.claimId) continue;
+    const claim = await getClaim(fact.claimId);
+    if (!claim || claim.claimType !== 'NEGATIVE_EXISTENCE') continue;
+    if (!(await withdrawEvidenceFact({ opportunityId: opportunity.id, field, claimId: claim.id }))) continue;
+    const column = COLUMN[field];
+    const current = column ? (opportunity as unknown as Record<string, unknown>)[camel(column)] : undefined;
+    if (column && current === fact.value) await updateOpportunity(opportunity.id, { [column]: null } as never);
+    const composed: string[] = [];
+    if (field === 'payer') {
+      for (const resting of ['captureMechanism', 'firstSteps']) {
+        if (await withdrawRecommendationResting({ opportunityId: opportunity.id, field: resting, claimId: claim.id })) {
+          composed.push(resting);
+        }
+      }
+    }
+    await recordCashEvent({
+      projectId,
+      opportunityId: opportunity.id,
+      kind: 'CASH_CARD_FACT_WITHDRAWN',
+      actorRef: 'BRAIN',
+      summary:
+        `The ${field} on this card was a search that found nothing, not an answer. It is unknown ` +
+        'again, and nothing Brain composed from it stands.',
+      detail: { field, claimId: claim.id, value: fact.value, withdrawnRecommendations: composed },
+    });
+  }
+}
+
+function camel(column: string): string {
+  return column.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
 }
 
 /** Whether any citable claim of this packet declared the opening ruled out. */
