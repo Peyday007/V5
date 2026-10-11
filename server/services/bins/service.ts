@@ -555,6 +555,7 @@ export async function checkIn(input: {
      * leave no row at all (`services/fleet/arrivalIdentity.ts`). Never throws.
      */
     // Bounded: evidence must not spend the admission budget a session's work needs.
+    let evidenceLost: InfraFailureKind | null = null;
     const evidence = asWorkload(() =>
       observeFiredSessionArrival({
         workerId: input.workerId,
@@ -567,15 +568,20 @@ export async function checkIn(input: {
     try {
       await beforeDeadline(evidence, Math.min(deadline, Date.now() + ARRIVAL_EVIDENCE_BUDGET_MS));
     } catch (error) {
-      // Lost evidence of arriving is recorded as an unserved arrival, so the
-      // no-show pass does not charge the surface for Brain's own failure.
+      // Lost evidence of arriving: noted where it was felt, and — if this
+      // session then gets nothing — recorded as an unserved arrival, so the
+      // no-show pass does not charge the surface for Brain's own failure. A
+      // session that is assigned work has its arrival on the assignment.
       const kind = classifyInfraFailure(error);
       if (kind) {
         noteInfraFailure(kind, 'check_in:arrival');
-        noteSessionUnserved(input, kind);
+        evidenceLost = kind;
       }
     }
     const result = await asWorkload(() => chooseWork(input, deadline, choosing));
+    if (!result.assigned && evidenceLost && !(choosing.infra || choosing.deferred)) {
+      noteSessionUnserved(input, evidenceLost);
+    }
     if (!result.assigned && (choosing.infra || choosing.deferred)) {
       noteSessionUnserved(input, choosing.infra ?? 'CHECK_IN_BUDGET');
       return { assigned: false, reason: 'RETRY_LATER' };
