@@ -1,0 +1,44 @@
+{
+  "objective": "On the Connections page, directly beneath the heading 'Connections' in client/src/russell/Connections.tsx, show one short hint sentence that reads exactly: 'A retrying connection recovers by itself; only a reconnect needs you.' Render it as a paragraph with className 'rs-hint', always (whatever the loading state). Add tests/connectionsRecoverSentence.test.tsx that renders the Connections section and asserts the sentence is on the screen. Change nothing else.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "The Connections page shows 'A retrying connection recovers by itself; only a reconnect needs you.' under 'Connections'.",
+  "nonGoals": [
+    "Any server, schema or workflow change",
+    "Restyling the Build page"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "client/src/russell/Connections.tsx renders 'A retrying connection recovers by itself; only a reconnect needs you.' beneath the heading 'Connections'.",
+      "verification": "npx vitest run tests/connectionsRecoverSentence.test.tsx",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/russell/Connections.tsx",
+    "tests/connectionsRecoverSentence.test.tsx"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the merge commit; no schema or data change.",
+  "release": {
+    "reason": "Fourth end-to-end proof: a release killed mid-deploy resumes by itself to verified LIVE.",
+    "pagePath": "/who",
+    "liveChecks": [
+      {
+        "kind": "BUNDLE_TEXT",
+        "text": "A retrying connection recovers by itself"
+      },
+      {
+        "kind": "HTTP",
+        "path": "/healthz",
+        "expectStatus": 200
+      }
+    ]
+  }
+}
