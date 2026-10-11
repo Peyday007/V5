@@ -28,7 +28,7 @@
   "rollbackRequirement": "Revert the merge commit; no schema or data change.",
   "release": {
     "reason": "Fourth end-to-end proof: a release killed mid-deploy resumes by itself to verified LIVE.",
-    "pagePath": "/who",
+    "pagePath": "/",
     "liveChecks": [
       {
         "kind": "BUNDLE_TEXT",
