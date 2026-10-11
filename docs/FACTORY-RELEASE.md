@@ -110,6 +110,15 @@ deliberately no second path that runs `flyctl deploy` (§28), so production
 returns to the previous behaviour on that deploy, and branch and image never
 disagree. The attempt is recorded ROLLED_BACK with every step.
 
+A Deploy that ends **cancelled** is not a Deploy that failed. `brain-release`
+keeps one pending Deploy and a newer dispatch evicts the waiting one, so a
+release's own Deploy can be cancelled before it starts because another session
+dispatched a Deploy of a tip that already contains the merge. Then the release
+adopts that Deploy; if none carries the merge it dispatches again (at most
+three cancelled runs per merge, then it stops with the reason and nothing to
+roll back); and if the cancelled run had already released, it verifies the live
+Brain. Only a Deploy that *failed* rolls back.
+
 ## Continuation and recovery
 
 Every effect is recorded before the next is attempted, so a workflow run that
