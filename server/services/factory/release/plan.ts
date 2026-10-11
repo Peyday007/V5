@@ -133,7 +133,10 @@ export async function planRelease(input: {
     const prNumber = pullRequestNumber(campaign);
     if (repository && prNumber !== null) {
       const pr = await readPullRequest(repository, prNumber);
-      if (pr.ok && pr.body?.merged) {
+      // Merged by an earlier attempt of this mechanism (its merge is on the
+      // attempt) is a release to resume, not somebody else's merge.
+      const mergedHere = latest !== null && latest.headSha === head && latest.mergeSha !== null;
+      if (pr.ok && pr.body?.merged && !mergedHere) {
         notes.push(`${campaign.id}: pull request #${prNumber} was already merged, not by this mechanism`);
         continue;
       }
@@ -192,6 +195,43 @@ export async function planRelease(input: {
   return { action: null, notes };
 }
 
+/**
+ * Whether the merge may still happen, asked by the workflow immediately before
+ * it asks the forge to merge.
+ *
+ * The plan decided eligibility when the attempt opened, and the gate between
+ * that decision and the merge runs the whole Postgres suite — long enough for
+ * the owner to withdraw the grant, or for the campaign to move to another head.
+ * A withdrawal that could not stop a merge already in its gate would be a
+ * decision recorded and ignored, so the facts that made the attempt eligible are
+ * read again here, from rows, at the last moment they can still stop it.
+ * Anything after the merge is finished rather than stopped: a merged change is
+ * on the branch either way, and stopping half-way would leave branch and image
+ * disagreeing.
+ */
+export async function mayMerge(runId: string): Promise<{ ok: boolean; reasons: string[] }> {
+  const run = await getRun(runId);
+  if (!run) return { ok: false, reasons: ['No such release attempt.'] };
+  const reasons: string[] = [];
+  if (run.state !== 'GATING') reasons.push(`The attempt is ${run.state}, not GATING.`);
+  const grant = await liveGrantFor(run.changeRequestId);
+  if (!grant || grant.id !== run.grantId) {
+    reasons.push('The owner withdrew automatic release for this objective before it was merged.');
+  }
+  const view = await loadCampaignView(run.campaignId);
+  if (!view) {
+    reasons.push('The campaign can no longer be read.');
+  } else {
+    if (view.campaign.state !== 'COMPLETE') reasons.push(`The campaign is ${view.campaign.state}, not COMPLETE.`);
+    if (view.campaign.integrationSha !== run.headSha) {
+      reasons.push('The campaign moved to another head after this attempt was gated.');
+    }
+    if (view.changeRequest.state !== 'APPROVED') reasons.push(`The objective is ${view.changeRequest.state}.`);
+    if (view.changeRequest.riskClass !== 'LOW') reasons.push(`The objective is risk class ${view.changeRequest.riskClass}.`);
+  }
+  return { ok: reasons.length === 0, reasons };
+}
+
 /** Which state each move may come from. */
 const FROM: Record<ReleaseRunState, readonly ReleaseRunState[]> = {
   REFUSED: [],
@@ -200,7 +240,9 @@ const FROM: Record<ReleaseRunState, readonly ReleaseRunState[]> = {
   DEPLOYING: ['MERGED'],
   VERIFYING: ['DEPLOYING'],
   LIVE: ['VERIFYING'],
-  FAILED: RELEASE_IN_FLIGHT,
+  // FAILED may restamp FAILED: a rollback whose revert could not land records
+  // what a person must do on the attempt that already failed.
+  FAILED: [...RELEASE_IN_FLIGHT, 'FAILED'],
   ROLLED_BACK: ['FAILED'],
 };
 
