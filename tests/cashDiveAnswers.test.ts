@@ -21,12 +21,14 @@ import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { createCandidate, getCandidate } from '../server/repos/russellCandidates.ts';
 import { launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
-import { createOpportunity, getOpportunity, updateOpportunity } from '../server/repos/cashPortfolio.ts';
+import { createOpportunity, getOpportunity, transitionOpportunity, updateOpportunity } from '../server/repos/cashPortfolio.ts';
 import { recordCashEvent } from '../server/repos/cashMode.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, insertClaims, updateFragment } from '../server/repos/research.ts';
 import { cardFact, cardFactsFor, recordRecommendationFact } from '../server/repos/cashCardFacts.ts';
-import { applyValidationAnswers, whyNotDiving } from '../server/services/cash/validation.ts';
+import { applyValidationAnswers, closedBy, whyNotDiving } from '../server/services/cash/validation.ts';
+import { reconcileDiscoverableGaps } from '../server/services/cash/operate.ts';
+import { markDuplicateOpenings, openingSourceKey, existingOpeningFor } from '../server/services/cash/duplicates.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
 import { evidenceCard } from '../server/services/cash/card.ts';
 import { cashTier, qualificationKeys } from '../server/services/cash/tier.ts';
@@ -34,6 +36,7 @@ import { compileMission } from '../server/services/russell/compiler.ts';
 import { getProject } from '../server/repos/projects.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
 import type { ClaimType, EvidenceLane, Layer } from '../server/domain/types.ts';
+import type { OpportunitySignal } from '../server/domain/types.ts';
 
 const DIVE_LANES: EvidenceLane[] = profileFor('RUSSELL_CASH_VALIDATION_V1')!.lanes;
 
@@ -71,6 +74,7 @@ interface ClaimSpec {
   text: string;
   type?: ClaimType;
   accepted?: boolean;
+  url?: string;
 }
 
 async function dive(key: string, claims: ClaimSpec[]): Promise<{ candidateId: string; claimIds: string[] }> {
@@ -123,7 +127,7 @@ async function dive(key: string, claims: ClaimSpec[]): Promise<{ candidateId: st
       passKey: 'TARGETED' as const,
       claim: spec.text,
       claimType: spec.type ?? 'SOURCED_FACT',
-      sourceUrl: 'https://www.stlpartnership.com/rfp/',
+      sourceUrl: spec.url ?? 'https://www.stlpartnership.com/rfp/',
       sourceTitle: 'Request for proposals',
       sourcePublisher: 'St. Louis Development Corporation',
       sourceDate: '2026-09-01',
@@ -463,5 +467,180 @@ describe('a later round inherits an established payer', () => {
     const lanes = await compiledLanesFor(one.candidateId);
     expect(lanes.find((l) => l.id === 'payer')!.necessity).toBe('REQUIRED');
     expect(id).toBeTruthy();
+  });
+});
+
+describe('one opening is one piece of work', () => {
+  async function harvested(claimId: string, title: string, signal: OpportunitySignal = 'PAID_TASK_OR_CONTRACT') {
+    return createOpportunity({
+      projectId,
+      cashModeId: modeId,
+      ownerUserId: ownerId,
+      title,
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      opportunitySignal: signal,
+      currency: 'USD',
+      sourceClaimId: claimId,
+    });
+  }
+
+  it('reduces a source URL to what addresses the document', () => {
+    expect(openingSourceKey('https://www.StlPartnership.com/rfp/?utm_source=x#top')).toBe(
+      openingSourceKey('http://stlpartnership.com/rfp'),
+    );
+    expect(openingSourceKey('https://a.gov/bid?id=1')).not.toBe(openingSourceKey('https://a.gov/bid?id=2'));
+    expect(openingSourceKey('not a url')).toBeNull();
+  });
+
+  it('links later records of one request to the first, and never dives them', async () => {
+    const { claimIds } = await dive('dup', [
+      { lane: 'payer', text: 'The RFP is issued by SLDC.' },
+      { lane: 'payer', text: 'SLDC seeks an urban planning consultant.', url: 'https://stlpartnership.com/rfp' },
+      { lane: 'payer', text: 'A different bid entirely.', url: 'https://other.gov/bid/9' },
+    ]);
+    const first = await harvested(claimIds[0]!, 'RFP: urban planning (first)');
+    const second = await harvested(claimIds[1]!, 'RFP: urban planning (second)');
+    const other = await harvested(claimIds[2]!, 'A different bid');
+    await updateOpportunity(second.id, { buying_signal: 'x' });
+    // Written in one millisecond otherwise; the survivor is the older record.
+    await getDb().run('UPDATE cash_opportunities SET created_at = ? WHERE id = ?', ['2026-01-01T00:00:00.000Z', first.id]);
+
+    expect(await markDuplicateOpenings(projectId)).toEqual([second.id]);
+    expect((await getOpportunity(second.id))!.duplicateOfId).toBe(first.id);
+    expect((await getOpportunity(other.id))!.duplicateOfId).toBeNull();
+    expect((await getOpportunity(first.id))!.duplicateOfId).toBeNull();
+    expect(await whyNotDiving((await getOpportunity(second.id))!)).toEqual({ kind: 'DUPLICATE', of: first.id });
+    // Idempotent, and the row and its claim are kept.
+    expect(await markDuplicateOpenings(projectId)).toEqual([]);
+    expect((await getOpportunity(second.id))!.sourceClaimId).toBe(claimIds[1]);
+
+    // The harvest asks before writing, so a new duplicate is linked at birth.
+    const twin = await existingOpeningFor({
+      projectId,
+      sourceUrl: 'https://stlpartnership.com/rfp/?utm_medium=y',
+      signal: 'PAID_TASK_OR_CONTRACT',
+    });
+    expect(twin?.id).toBe(first.id);
+  });
+
+  it('a different kind of opening at the same source is not a duplicate', async () => {
+    const { claimIds } = await dive('kinds', [
+      { lane: 'payer', text: 'A paid request.' },
+      { lane: 'payer', text: 'Repeated outsourced work.' },
+    ]);
+    await harvested(claimIds[0]!, 'Paid request');
+    await harvested(claimIds[1]!, 'Repeated work', 'RECURRING_OUTSOURCED_WORK');
+    expect(await markDuplicateOpenings(projectId)).toEqual([]);
+  });
+
+  it('never marks a record whose dive already started, and keeps it as the survivor', async () => {
+    const { claimIds } = await dive('started', [
+      { lane: 'payer', text: 'First record.' },
+      { lane: 'payer', text: 'Second record.' },
+    ]);
+    const first = await harvested(claimIds[0]!, 'First record');
+    const second = await harvested(claimIds[1]!, 'Second record');
+    await updateOpportunity(second.id, { validation_state: 'BLOCKED', validation_rounds: 1 });
+    // The one a dive has reached survives; the untouched one is the duplicate.
+    expect(await markDuplicateOpenings(projectId)).toEqual([first.id]);
+    expect((await getOpportunity(second.id))!.duplicateOfId).toBeNull();
+  });
+});
+
+describe('a duplicate is left alone by every other reader', () => {
+  async function pair(key: string) {
+    const { claimIds } = await dive(key, [
+      { lane: 'payer', text: `${key} first.` },
+      { lane: 'payer', text: `${key} second.` },
+    ]);
+    const make = (claimId: string, title: string) =>
+      createOpportunity({
+        projectId,
+        cashModeId: modeId,
+        ownerUserId: ownerId,
+        title,
+        mechanism: 'EXPLICIT_PAID_REQUEST',
+        opportunitySignal: 'PAID_TASK_OR_CONTRACT',
+        currency: 'USD',
+        sourceClaimId: claimId,
+      });
+    return { first: await make(claimIds[0]!, `${key} A`), second: await make(claimIds[1]!, `${key} B`) };
+  }
+
+  it('raises no research need for a duplicate', async () => {
+    const { first, second } = await pair('needs');
+    await getDb().run('UPDATE cash_opportunities SET created_at = ? WHERE id = ?', ['2026-01-01T00:00:00.000Z', first.id]);
+    await markDuplicateOpenings(projectId);
+    const gaps = await reconcileDiscoverableGaps(projectId);
+    expect(gaps.some((gap) => gap.opportunityId === second.id)).toBe(false);
+    expect(gaps.some((gap) => gap.opportunityId === first.id)).toBe(true);
+  });
+
+  it('never marks a record somebody has already answered something on', async () => {
+    const { first, second } = await pair('answered');
+    await getDb().run(
+      `INSERT INTO cash_card_facts (id, project_id, opportunity_id, field, kind, value, decided_by, created_at, updated_at)
+       VALUES ('ccf_t1', ?, ?, 'payer', 'PERSON', 'The City', 'usr_x', '2026-10-01', '2026-10-01')`,
+      [projectId, second.id],
+    );
+    // The answered record survives whatever the clock says, and the bare one is
+    // the duplicate; the answered one is never marked.
+    await getDb().run('UPDATE cash_opportunities SET created_at = ? WHERE id = ?', ['2026-01-01T00:00:00.000Z', first.id]);
+    expect(await markDuplicateOpenings(projectId)).toEqual([first.id]);
+    expect((await getOpportunity(second.id))!.duplicateOfId).toBeNull();
+  });
+
+  it('releases a duplicate whose survivor was archived', async () => {
+    const { first, second } = await pair('archived');
+    await getDb().run('UPDATE cash_opportunities SET created_at = ? WHERE id = ?', ['2026-01-01T00:00:00.000Z', first.id]);
+    await markDuplicateOpenings(projectId);
+    expect((await getOpportunity(second.id))!.duplicateOfId).toBe(first.id);
+    await transitionOpportunity({ id: first.id, from: ['DISCOVERED'], to: 'ARCHIVED', archivedReason: 'test' });
+    await markDuplicateOpenings(projectId);
+    expect((await getOpportunity(second.id))!.duplicateOfId).toBeNull();
+  });
+
+  it('keeps a document id carried in ref or source', () => {
+    expect(openingSourceKey('https://bids.gov/view?ref=RFP-1')).not.toBe(
+      openingSourceKey('https://bids.gov/view?ref=RFP-2'),
+    );
+  });
+});
+
+describe('an opening whose recorded closing date passed is not dived', () => {
+  it('refuses EXPIRED, and does not assume a missing date means closed', async () => {
+    const made = await createOpportunity({
+      projectId,
+      cashModeId: modeId,
+      ownerUserId: ownerId,
+      title: 'A request with a deadline',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      opportunitySignal: 'PAID_TASK_OR_CONTRACT',
+      currency: 'USD',
+    });
+    await updateOpportunity(made.id, { buying_signal: 'asked' });
+    expect((await whyNotDiving((await getOpportunity(made.id))!)).kind).toBe('ELIGIBLE');
+    await updateOpportunity(made.id, { expires_at: '2020-01-01T00:00:00.000Z' });
+    expect(await whyNotDiving((await getOpportunity(made.id))!)).toEqual({
+      kind: 'EXPIRED',
+      at: '2020-01-01T00:00:00.000Z',
+    });
+  });
+});
+
+describe('a closing date is read, never compared as text', () => {
+  const now = '2026-10-15T12:00:00.000Z';
+  it('closes a bare date at the end of its own day', () => {
+    expect(closedBy('2026-10-15', now)).toBe(false);
+    expect(closedBy('2026-10-14', now)).toBe(true);
+  });
+  it('reads a timestamp exactly', () => {
+    expect(closedBy('2026-10-15T11:59:00Z', now)).toBe(true);
+    expect(closedBy('2026-10-15T12:01:00Z', now)).toBe(false);
+  });
+  it('treats an unreadable date as unknown, never closed', () => {
+    expect(closedBy('15/11/2026', now)).toBe(false);
+    expect(closedBy('Nov 1 2020', now)).toBe(false);
+    expect(closedBy(null, now)).toBe(false);
   });
 });

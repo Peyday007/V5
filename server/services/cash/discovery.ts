@@ -88,6 +88,7 @@ import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { listMissions } from '../../repos/russellMissions.ts';
 import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
 import { discoveryAllowed } from './lifecycle.ts';
+import { existingOpeningFor, markDuplicateOpenings } from './duplicates.ts';
 import {
   ensureDiscoveryAuthority,
   resumeAuthorityParkedCandidates,
@@ -589,7 +590,17 @@ export async function harvest(input: {
      */
     if (await opportunityForClaim(input.projectId, claim.id)) continue;
 
+    // A second claim about an opening already in the portfolio is filed as a
+    // linked record of it, so the evidence keeps its row and nothing dives the
+    // same request twice. See `duplicates.ts`.
+    const twin = await existingOpeningFor({
+      projectId: input.projectId,
+      sourceUrl: claim.sourceUrl,
+      signal,
+    });
+
     const created = await createOpportunity({
+      duplicateOfId: twin ? twin.id : null,
       projectId: input.projectId,
       cashModeId: mode.id,
       ownerUserId: mode.ownerUserId,
@@ -817,6 +828,9 @@ export async function runDiscovery(projectId: string): Promise<{
    * left exactly as it is.
    */
   const signalled = await reconcileOpportunitySignals(projectId);
+
+  // And the second records of one opening written before this existed.
+  await markDuplicateOpenings(projectId);
 
   return {
     opened: await openDiscovery({ projectId, limit: 1 }),
