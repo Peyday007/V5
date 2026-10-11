@@ -1919,6 +1919,25 @@ rules.
   finished by the writeback pass, which reads the same status; one waiting for a
   person has its own answering transition already.
 
+  **And "spent" left out the one park with no way back, which stopped research
+  for a day and a half.** The launcher replaced only a `COMPLETE`, `FAILED` or
+  `CANCELLED` bin. A bin parked at `NEEDS_HUMAN` with its whole budget used has
+  no other exit either: `reconcileBins` reopens a park only while it has
+  attempts, `reopenNeedsHumanBin` refuses one with none, and the dispatcher
+  fires only below the ceiling. So a mission packet that went back to work
+  after its bin exhausted held claimable items nothing could reach. Production,
+  2026-10-09 17:05Z onward: no research fire at all in Cash Mode 1, eight
+  routable surfaces idle, `orc_d0cd97072ed94a0f8204` RESEARCHING with a
+  fragment queued at 0/2 behind `bin_27488ac9270d46fd8990` at 10/10.
+  `goalContinuation.ts` already counted `NEEDS_HUMAN` as spent, so this was
+  two readers of one rule disagreeing. An exhausted park now counts as spent
+  for a working packet, and a park with attempts left does not, because the
+  reconcile reopens that one and two live bins for one packet is the
+  duplicate. "Claimable" also gained `attempt_count < max_attempts`: an item
+  past its own ceiling is not claimable however it is leased, so counting one
+  built a bin a worker would be sent to and handed nothing. The parked bin
+  keeps its row, its attempts and its reason; nothing is reset.
+
 - **What a person is shown about coverage is what the auditor read.**
   `reconcileAcceptedFragment` moves a requirement's coverage when a fragment
   clears all seven gate conditions, and it had exactly one caller — the

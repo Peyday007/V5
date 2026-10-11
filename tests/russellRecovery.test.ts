@@ -393,6 +393,137 @@ describe('a launch interrupted between its steps is finished, not restarted', ()
     expect((await getMission(mission.id))!.binId).toBe(mission.binId);
   });
 
+  it('replaces a bin parked with its whole budget spent while its packet works again', async () => {
+    /*
+     * Production, 2026-10-09: a RESEARCHING packet with a fragment queued at 0/2
+     * and its only bin NEEDS_HUMAN at 10/10. The reconcile reopens a parked bin
+     * only while it has attempts, the dispatcher fires only at one that has, and
+     * the launcher replaced only COMPLETE/FAILED/CANCELLED — so no worker could
+     * ever be sent for the item, and research stopped across the project.
+     */
+    await authorized();
+    const candidate = await idea();
+    const launched = await launch({ ...spec(), candidateId: candidate.id });
+    const mission = launched.mission!;
+    const firstBin = mission.binId!;
+    const orchestrationId = mission.orchestrationId!;
+
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    await updateOrchestration(orchestrationId, { status: 'RESEARCHING' });
+    await getDb().run(
+      `UPDATE bins SET state = 'NEEDS_HUMAN', attempt_count = 10, max_attempts = 10 WHERE id = ?`,
+      [firstBin],
+    );
+
+    const report = await repairLaunches();
+    expect(report.completed).toContain(mission.id);
+    const repaired = (await getMission(mission.id))!;
+    expect(repaired.binId).not.toBe(firstBin);
+    expect((await getBin(repaired.binId!))?.state).toBe('READY');
+
+    // The parked bin keeps its row, its state and its spent budget: nothing reset.
+    const parked = (await getBin(firstBin))!;
+    expect(parked.state).toBe('NEEDS_HUMAN');
+    expect(parked.attemptCount).toBe(10);
+    expect(parked.maxAttempts).toBe(10);
+    expect(await countBins()).toBe(2);
+
+    // Converges, on both paths.
+    await repairLaunches();
+    await launch({ ...spec(), candidateId: candidate.id });
+    expect(await countBins()).toBe(2);
+  });
+
+  it('leaves a parked bin with budget left to the reconcile that reopens it', async () => {
+    // Replacing it as well would leave two live bins for one packet.
+    await authorized();
+    const candidate = await idea();
+    const launched = await launch({ ...spec(), candidateId: candidate.id });
+    const mission = launched.mission!;
+    const orchestrationId = mission.orchestrationId!;
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    await updateOrchestration(orchestrationId, { status: 'RESEARCHING' });
+    await getDb().run(
+      `UPDATE bins SET state = 'NEEDS_HUMAN', attempt_count = 2, max_attempts = 10 WHERE id = ?`,
+      [mission.binId!],
+    );
+
+    await repairLaunches();
+    await launch({ ...spec(), candidateId: candidate.id });
+    expect(await countBins()).toBe(1);
+  });
+
+  it('builds no bin for items already past their own attempt ceiling', async () => {
+    // A worker sent for those is handed nothing: they are not claimable (§20).
+    await authorized();
+    const candidate = await idea();
+    const launched = await launch({ ...spec(), candidateId: candidate.id });
+    const mission = launched.mission!;
+    const orchestrationId = mission.orchestrationId!;
+    await getDb().run(`UPDATE work_items SET state = 'SUCCEEDED' WHERE orchestration_id = ?`, [
+      orchestrationId,
+    ]);
+    const item = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    await getDb().run(`UPDATE work_items SET attempt_count = 2, max_attempts = 2 WHERE id = ?`, [
+      item.id,
+    ]);
+    await updateOrchestration(orchestrationId, { status: 'RESEARCHING' });
+    await getDb().run(
+      `UPDATE bins SET state = 'NEEDS_HUMAN', attempt_count = 10, max_attempts = 10 WHERE id = ?`,
+      [mission.binId!],
+    );
+
+    await repairLaunches();
+    await launch({ ...spec(), candidateId: candidate.id });
+    expect(await countBins()).toBe(1);
+  });
+
+  it('builds no bin over an exhausted park while the packet waits for a person', async () => {
+    await authorized();
+    const candidate = await idea();
+    const launched = await launch({ ...spec(), candidateId: candidate.id });
+    const mission = launched.mission!;
+    const orchestrationId = mission.orchestrationId!;
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    await updateOrchestration(orchestrationId, { status: 'NEEDS_HUMAN' });
+    await getDb().run(
+      `UPDATE bins SET state = 'NEEDS_HUMAN', attempt_count = 10, max_attempts = 10 WHERE id = ?`,
+      [mission.binId!],
+    );
+
+    await repairLaunches();
+    await launch({ ...spec(), candidateId: candidate.id });
+    expect(await countBins()).toBe(1);
+  });
+
   it('converges: repairing twice does the work once', async () => {
     await authorized();
     const candidate = await idea();
