@@ -401,7 +401,12 @@ export function deployReleased(steps: Step[]): boolean {
   return steps.some((step) => step.name === 'Record what was released' && step.conclusion === 'success');
 }
 
-async function watchDeploy(runId: number): Promise<{ conclusion: string; released: boolean }> {
+/** Whether a Deploy run stopped at its own pre-release tip check: production moved, nothing was released. */
+export function deployRefusedAtTip(steps: Step[]): boolean {
+  return steps.some((step) => step.name === 'The ref must still be the canonical tip, now' && step.conclusion === 'failure');
+}
+
+async function watchDeploy(runId: number): Promise<{ conclusion: string; released: boolean; refusedAtTip: boolean }> {
   const deadline = Date.now() + DEPLOY_WATCH_MS;
   for (;;) {
     const reply = await gh<WorkflowRun>('GET', `/repos/${REPO}/actions/runs/${runId}`);
@@ -409,9 +414,9 @@ async function watchDeploy(runId: number): Promise<{ conclusion: string; release
     if (run && run.status === 'completed') {
       const jobs = await gh<{ jobs: { steps?: Step[] }[] }>('GET', `/repos/${REPO}/actions/runs/${runId}/jobs`);
       const steps = (jobs.body?.jobs ?? []).flatMap((job) => job.steps ?? []);
-      return { conclusion: run.conclusion ?? 'unknown', released: deployReleased(steps) };
+      return { conclusion: run.conclusion ?? 'unknown', released: deployReleased(steps), refusedAtTip: deployRefusedAtTip(steps) };
     }
-    if (Date.now() > deadline) return { conclusion: 'still-running', released: false };
+    if (Date.now() > deadline) return { conclusion: 'still-running', released: false, refusedAtTip: false };
     await sleep(POLL_MS);
   }
 }
@@ -534,14 +539,14 @@ export function onCancelledDeploy(input: {
   return { kind: 'REDISPATCH' };
 }
 
-/** Deploy runs created since the merge whose head contains it and that ended cancelled. */
+/** Deploy runs created since the merge whose head contains it and that ended without success. */
 async function cancelledDeploysFor(mergeSha: string, since: string): Promise<number> {
   const reply = await gh<{ workflow_runs: WorkflowRun[] }>(
     'GET',
     `/repos/${REPO}/actions/workflows/deploy.yml/runs?branch=production&event=workflow_dispatch&per_page=30`,
   );
   return (reply.body?.workflow_runs ?? [])
-    .filter((run) => run.created_at >= since && run.status === 'completed' && run.conclusion === 'cancelled')
+    .filter((run) => run.created_at >= since && run.status === 'completed' && run.conclusion !== 'success')
     .filter((run) => run.head_sha === mergeSha || contains(mergeSha, run.head_sha)).length;
 }
 
@@ -599,6 +604,27 @@ function readVerification(runId: number): DeployVerification | null {
   }
 }
 
+/**
+ * What a Deploy run's own log says failed, for a run recorded before Deploy
+ * kept the names in its artifact. Only the release job prints a verdict.
+ */
+export function verificationFromLog(log: string, released: boolean): DeployVerification {
+  const failing = new Set<string>();
+  for (const match of log.matchAll(/^\S*\s+FAIL  (.+)$/gm)) {
+    failing.add((match[1] ?? '').split(' — ')[0]!.trim());
+  }
+  const complete = /HOSTED-VERIFICATION: (PASS|FAIL)/.test(log) && !/could-not-complete/.test(log);
+  return { released, complete, failing: [...failing].sort() };
+}
+
+function verificationFromRunLog(runId: number, released: boolean): DeployVerification | null {
+  const jobs = sh('gh', ['api', `repos/${REPO}/actions/runs/${runId}/jobs`, '--jq', '.jobs[] | select(.name == "Deploy to Fly") | .id'], { allowFail: true });
+  const jobId = jobs.stdout.trim().split('\n')[0];
+  if (!jobs.ok || !jobId) return null;
+  const log = sh('gh', ['api', `repos/${REPO}/actions/jobs/${jobId}/logs`], { allowFail: true });
+  return log.ok ? verificationFromLog(log.stdout, released) : null;
+}
+
 /** The last Deploy before the merge that released an image and recorded what failed. */
 async function baselineVerification(mergeSha: string): Promise<DeployVerification | null> {
   const since = mergedAtIso(mergeSha);
@@ -611,7 +637,13 @@ async function baselineVerification(mergeSha: string): Promise<DeployVerificatio
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   for (const run of earlier.slice(0, 10)) {
     const recorded = readVerification(run.id);
-    if (recorded?.released === true) return recorded;
+    if (recorded?.released === true && Array.isArray(recorded.failing)) return recorded;
+    if (recorded && recorded.released === false) continue;
+    // Recorded before the artifact named its failures: read the run's own steps and log.
+    const jobs = await gh<{ jobs: { steps?: Step[] }[] }>('GET', `/repos/${REPO}/actions/runs/${run.id}/jobs`);
+    const steps = (jobs.body?.jobs ?? []).flatMap((job) => job.steps ?? []);
+    if (!deployReleased(steps)) continue;
+    return verificationFromRunLog(run.id, true);
   }
   return null;
 }
@@ -629,7 +661,13 @@ async function fromDeploying(action: Action, mergeSha: string, deployRunId: numb
     await verify(action, mergeSha);
     return;
   }
-  if (watched.conclusion === 'cancelled') {
+  // A Deploy refused at its own tip check never released: another merge moved
+  // production while it tested (Deploy 443, refused when this mechanism's own
+  // merge of #178 landed, 2026-10-11). That says nothing against the change,
+  // and the next Deploy of the branch carries it — the same as an eviction.
+  const notReleasedNoVerdict =
+    watched.conclusion === 'cancelled' || (watched.conclusion === 'failure' && !watched.released && watched.refusedAtTip);
+  if (notReleasedNoVerdict) {
     const since = mergedAtIso(mergeSha);
     const successor = watched.released ? null : await deployRunFor(mergeSha, since);
     const next = onCancelledDeploy({

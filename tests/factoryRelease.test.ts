@@ -31,8 +31,10 @@ import { forbiddenPathsFor } from '../server/services/factory/forbidden.ts';
 import { scanDiff } from '../scripts/release-scan.ts';
 import {
   MAX_CANCELLED_DEPLOYS,
+  deployRefusedAtTip,
   deployReleased,
   failuresPreExisting,
+  verificationFromLog,
   onCancelledDeploy,
   onProductionMoved,
 } from '../scripts/factory-release.ts';
@@ -559,6 +561,27 @@ describe('the release workflow’s own readings', () => {
     expect(deploy).toMatch(/'complete': complete/);
     const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
     expect(script).toMatch(/watched\.conclusion === 'failure' && watched\.released/);
+  });
+
+  it('reads an older release\'s failures from its log, and a tip refusal as nothing released', () => {
+    const log = [
+      '2026-10-11T21:47:21.07Z HOSTED-VERIFICATION: FAIL 262/263',
+      '2026-10-11T21:47:21.07Z   FAIL  a run past its 20 s budget is ended — state=COMPLETE wall=20540ms',
+      '2026-10-11T21:47:21.08Z   FAILED  a run past its 20 s budget is ended — state=COMPLETE',
+      '2026-10-11T21:47:21.09Z   FAIL  the Brain keeps answering — healthz max=8400ms',
+      "2026-10-11T21:47:21.09Z [36;1m  grep -E '^ *(FAIL|Hosted verification could not complete)' file",
+    ].join('\n');
+    expect(verificationFromLog(log, true)).toEqual({
+      released: true,
+      complete: true,
+      failing: ['a run past its 20 s budget is ended', 'the Brain keeps answering'],
+    });
+    expect(verificationFromLog('x HOSTED-VERIFICATION: FAIL could-not-complete', true).complete).toBe(false);
+    expect(verificationFromLog('nothing printed', true).complete).toBe(false);
+    expect(deployRefusedAtTip([{ name: 'The ref must still be the canonical tip, now', conclusion: 'failure' }])).toBe(true);
+    expect(deployRefusedAtTip([{ name: 'The ref must still be the canonical tip, now', conclusion: 'success' }])).toBe(false);
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    expect(script).toMatch(/watched\.conclusion === 'failure' && !watched\.released && watched\.refusedAtTip/);
   });
 
   it('asks for its own resume after a failure, a bounded number of times', () => {
