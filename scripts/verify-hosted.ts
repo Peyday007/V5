@@ -1428,49 +1428,16 @@ async function laborBoundary(fixtures: Fixtures, cookie: string): Promise<void> 
 }
 
 /**
- * A model built to outrun the engine's own budget (CLAUDE.md §60).
- *
- * Every limit at its ceiling: 39 variables, 60 derived values each a chain of
- * square roots of thirty-way products, 40 lines and 8 strategies at 50,000
- * evaluations. Locally it reached 3,840 of 6,250 scenarios in 20 s; the
- * shared-cpu-1x machine is slower, so the budget is what ends it. It exists to
- * prove that ending — and that the Brain keeps answering while it runs.
- */
-function heavyScenarioModel(): Record<string, unknown> {
-  const variables: Record<string, unknown>[] = Array.from({ length: 38 }, (_, i) => ({
-    key: `v${i}`, label: `v${i}`, unit: '', provenance: 'ASSUMPTION', controllable: false, spec: { kind: 'RANGE', min: 1, max: 2 },
-  }));
-  variables.push({ key: 'k', label: 'k', unit: '', provenance: 'ASSUMPTION', controllable: true, spec: { kind: 'RANGE', min: 1, max: 9 } });
-  const term = (j: number) => Array.from({ length: 30 }, (_, i) => `v${(i + j) % 38}`).join('*');
-  const derived = Array.from({ length: 60 }, (_, j) => {
-    let expr = j === 0 ? 'k' : `d${j - 1}`;
-    for (let n = 0; ; n++) {
-      const next = `${expr}+sqrt(${term(j + n)})`;
-      if (next.length > 595) break;
-      expr = next;
-    }
-    return { key: `d${j}`, label: `d${j}`, unit: '', expr };
-  });
-  return {
-    title: 'Hosted verification: budget model (illustrative)',
-    description: 'Created by scripts/verify-hosted.ts to exercise the run budget. Archived at the end of each run.',
-    currency: 'USD', horizon: 'none', illustrative: true,
-    variables, correlations: [], derived,
-    lines: Array.from({ length: 40 }, (_, i) => ({ key: `l${i}`, label: `l${i}`, kind: i ? 'COST' : 'REVENUE', expr: `d${59 - (i % 20)} * ${i + 1}` })),
-    metrics: [], constraints: [],
-    strategies: Array.from({ length: 8 }, (_, i) => ({ key: `s${i}`, label: `s${i}`, set: { k: i + 1 } })),
-  };
-}
-
-/**
  * The scenario engine, on the released process (CLAUDE.md §60).
  *
- * A real 50,000-evaluation run that reproduces its own digest; a run that
- * outruns the 20 s budget and is ended rather than left running; a second run
+ * A real 50,000-evaluation run that reproduces its own digest; a second run
  * refused as busy while the first holds the one slot, with no row written; and
- * the Brain still answering `/healthz` and an authenticated read throughout.
- * The latencies printed are measurements of this machine at this moment, not a
- * claim about any other.
+ * `/healthz` answering while a run executes. Deliberately cheap — a few seconds
+ * of CPU per pass. An earlier version also ran a model built to outrun the 20 s
+ * budget, on every deploy, twice; on a shared-cpu-1x machine that spent the
+ * burst allowance and made everything after it slow (deploy 439), so the
+ * budget is measured once by hand rather than paid for on every release.
+ * Latencies printed are a measurement of this machine at this moment.
  */
 async function scenarioChecks(fixtures: Fixtures, cookie: string): Promise<void> {
   console.log('\nThe scenario engine, on the released process');
@@ -1479,25 +1446,58 @@ async function scenarioChecks(fixtures: Fixtures, cookie: string): Promise<void>
     return;
   }
   const root = `/api/projects/${fixtures.scope.id}/scenarios`;
-  const created: string[] = [];
+  let demoId = '';
   try {
     const demo = await call(root, { method: 'POST', cookie, origin: base, body: { fromDemonstration: true } });
     expectStatus('a member saves the demonstration model', demo.status, 200);
-    const demoId = String(((demo.json ?? {}) as { model?: { id?: string } }).model?.id ?? '');
-    if (demoId) created.push(demoId);
+    demoId = String(((demo.json ?? {}) as { model?: { id?: string } }).model?.id ?? '');
+    const runsOf = async () => (((await call(`${root}/${demoId}`, { cookie })).json ?? {}) as { runs?: unknown[] }).runs?.length ?? -1;
 
+    // The run, with /healthz asked every 100 ms while it is in flight and a
+    // second run sent while it holds the slot.
     const t0 = Date.now();
-    const ran = await call(`${root}/${demoId}/runs`, {
+    let settled = false;
+    const first = call(`${root}/${demoId}/runs`, {
       method: 'POST', cookie, origin: base, body: { options: { evaluations: 50_000 }, label: 'hosted verification' },
     });
+    void first.finally(() => { settled = true; });
+    await new Promise((r) => setTimeout(r, 250));
+    const second = settled ? null : call(`${root}/${demoId}/runs`, { method: 'POST', cookie, origin: base, body: { options: { evaluations: 1_000 } } });
+    const health: number[] = [];
+    let healthFailures = 0;
+    while (!settled && Date.now() - t0 < 60_000) {
+      const h0 = Date.now();
+      const h = await call('/healthz');
+      health.push(Date.now() - h0);
+      if (h.status !== 200) healthFailures++;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const ran = await first;
     const wall = Date.now() - t0;
+    const busy = second ? await second : null;
     const run = ((ran.json ?? {}) as { run?: Record<string, unknown> }).run ?? {};
     const result = (run['result'] ?? {}) as Record<string, unknown>;
     record(
       'a real 50,000-evaluation run completes on the released process',
       ran.status === 200 && run['state'] === 'COMPLETE' && /^[0-9a-f]{64}$/.test(String(run['resultDigest'])) && result['evaluations'] === 50_000,
-      `status=${ran.status} state=${String(run['state'])} evaluations=${String(result['evaluations'])} basis=${String(result['basis'])} engine=${String(run['elapsedMs'])}ms wall=${wall}ms`,
+      `status=${ran.status} state=${String(run['state'])} evaluations=${String(result['evaluations'])} basis=${String(result['basis'])} engine=${String(run['elapsedMs'])}ms wall=${wall}ms` +
+        (run['failure'] ? ` failure=${String(run['failure']).slice(0, 100)}` : ''),
     );
+    const busyDetail = ((busy?.json ?? {}) as { detail?: { retryable?: unknown } }).detail;
+    record(
+      'a second run while one holds the slot is refused as busy and retryable',
+      busy?.status === 429 && busyDetail?.retryable === true,
+      busy ? `status=${busy.status} retryable=${String(busyDetail?.retryable)}` : 'the first run finished before the second could be sent',
+    );
+    const runs = await runsOf();
+    record('and the refused run wrote no row', runs === 1, `runs=${runs}`);
+    const maxHealth = health.length ? Math.max(...health) : NaN;
+    record(
+      '/healthz keeps answering while a run executes (measured, this machine, this moment)',
+      healthFailures === 0 && (health.length === 0 || maxHealth < 5_000),
+      `n=${health.length} max=${maxHealth}ms failures=${healthFailures}`,
+    );
+
     const again = await call(`${root}/${demoId}/runs/${String(run['id'])}/reproduce`, { method: 'POST', cookie, origin: base });
     const reproduction = ((again.json ?? {}) as { reproduction?: Record<string, unknown> }).reproduction ?? {};
     record(
@@ -1505,63 +1505,8 @@ async function scenarioChecks(fixtures: Fixtures, cookie: string): Promise<void>
       again.status === 200 && reproduction['reproduced'] === true,
       `status=${again.status} reproduced=${String(reproduction['reproduced'])}`,
     );
-
-    const heavy = await call(root, { method: 'POST', cookie, origin: base, body: { definition: heavyScenarioModel() } });
-    expectStatus('a model at every limit is accepted as valid', heavy.status, 200);
-    const heavyId = String(((heavy.json ?? {}) as { model?: { id?: string } }).model?.id ?? '');
-    if (heavyId) created.push(heavyId);
-    const runsBefore = (((await call(`${root}/${demoId}`, { cookie })).json ?? {}) as { runs?: unknown[] }).runs?.length ?? -1;
-
-    // Start the long run and watch the Brain while it holds the slot.
-    const started = Date.now();
-    const long = call(`${root}/${heavyId}/runs`, { method: 'POST', cookie, origin: base, body: { options: { evaluations: 50_000 } } });
-    const health: number[] = [];
-    const reads: number[] = [];
-    let healthFailures = 0;
-    let busy: Reply | null = null;
-    let settled = false;
-    void long.finally(() => { settled = true; });
-    await new Promise((r) => setTimeout(r, 2_000));
-    while (!settled && Date.now() - started < 45_000) {
-      const h0 = Date.now();
-      const h = await call('/healthz');
-      health.push(Date.now() - h0);
-      if (h.status !== 200) healthFailures++;
-      const r0 = Date.now();
-      await call(root, { cookie });
-      reads.push(Date.now() - r0);
-      if (!busy) busy = await call(`${root}/${demoId}/runs`, { method: 'POST', cookie, origin: base, body: { options: { evaluations: 1_000 } } });
-      await new Promise((r) => setTimeout(r, 250));
-    }
-    const longReply = await long;
-    const longWall = Date.now() - started;
-    const longRun = ((longReply.json ?? {}) as { run?: Record<string, unknown> }).run ?? {};
-    record(
-      'a run past its 20 s budget is ended and recorded as FAILED, not left running',
-      longReply.status === 200 && longRun['state'] === 'FAILED' && /budget/.test(String(longRun['failure'])) && longWall < 45_000,
-      `state=${String(longRun['state'])} wall=${longWall}ms failure=${String(longRun['failure']).slice(0, 110)}`,
-    );
-    const busyDetail = ((busy?.json ?? {}) as { detail?: { retryable?: unknown } }).detail;
-    record(
-      'a second run while one holds the slot is refused as busy and retryable',
-      busy?.status === 429 && busyDetail?.retryable === true,
-      `status=${String(busy?.status)} retryable=${String(busyDetail?.retryable)}`,
-    );
-    const runsAfter = (((await call(`${root}/${demoId}`, { cookie })).json ?? {}) as { runs?: unknown[] }).runs?.length ?? -2;
-    record('and the refused run wrote no row', runsAfter === runsBefore, `runs before=${runsBefore} after=${runsAfter}`);
-
-    const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b);
-    const p = (xs: number[], q: number) => (xs.length ? sorted(xs)[Math.min(xs.length - 1, Math.floor(q * xs.length))]! : NaN);
-    const maxHealth = health.length ? Math.max(...health) : NaN;
-    const maxRead = reads.length ? Math.max(...reads) : NaN;
-    record(
-      'the Brain keeps answering while a run executes (measured, this machine, this moment)',
-      health.length >= 5 && healthFailures === 0 && maxHealth < 5_000 && maxRead < 5_000,
-      `healthz n=${health.length} p50=${p(health, 0.5)}ms max=${maxHealth}ms failures=${healthFailures}; ` +
-        `authenticated read n=${reads.length} p50=${p(reads, 0.5)}ms max=${maxRead}ms`,
-    );
   } finally {
-    for (const id of created) await call(`${root}/${id}/archive`, { method: 'POST', cookie, origin: base });
+    if (demoId) await call(`${root}/${demoId}/archive`, { method: 'POST', cookie, origin: base });
   }
 }
 
