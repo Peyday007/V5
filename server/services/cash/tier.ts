@@ -313,6 +313,38 @@ export function cashTier(input: {
     };
   }
 
+  /*
+   * A published fact rules it out, so it does not qualify however much else is
+   * answered.
+   *
+   * The `disqualifiers` field counts as answered by a documented absence *and*
+   * by a disqualifier found, and before this the second read as progress:
+   * production held closed RFPs and closed listings one field from QUALIFIED,
+   * their own card saying the deadline had passed. Capped at CANDIDATE rather
+   * than given a tier of its own, because what moves it back is new evidence —
+   * a reopened deadline, an extension — and nothing about the state changes.
+   */
+  if (input.card.disqualifiedBy) {
+    return {
+      tier: 'CANDIDATE',
+      establishes: meaning.establishes,
+      doesNotEstablish: meaning.doesNotEstablish,
+      toAdvance: [
+        {
+          ...requirement('disqualifiers'),
+          task:
+            `A published fact rules this out: ${input.card.disqualifiedBy.value.slice(0, 240)} ` +
+            'It qualifies only if that stops being true.',
+        },
+      ],
+      answered: answeredCount,
+      required: keys.length,
+      summary:
+        'Disqualified: the deep dive found a published fact that rules this opening out, so it ' +
+        'is not qualified whatever else is answered.',
+    };
+  }
+
   if (open.length > 0) {
     return {
       tier: 'CANDIDATE',

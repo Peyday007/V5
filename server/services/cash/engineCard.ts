@@ -142,7 +142,22 @@ export interface EngineCard {
    * Brain's own recommendation, when it has formed one. Never a fact.
    */
   recommendation: EngineCardEntry | null;
+  /**
+   * A published fact that rules this opening out, where the deep dive found one.
+   *
+   * Not a card field and not an answer: the `disqualifiers` field is answered
+   * either way — by a documented absence or by a disqualifier found — and only
+   * the second stops the opening. Which one it is was declared by the worker
+   * that read the source, as the claim's type (`NEGATIVE_EXISTENCE` for an
+   * absence), so this is read from a row rather than from the sentence.
+   * Optional so a card built before it existed still type-checks; absent means
+   * nothing has been found.
+   */
+  disqualifiedBy?: { value: string; claimId: string | null } | null;
 }
+
+/** The card-fact field an established disqualifier is recorded under. */
+export const DISQUALIFIED_FIELD = 'disqualifiedBy';
 
 const LABELS: Record<EngineFieldKey, { label: string; task: string }> = {
   revenueRange: {
@@ -339,6 +354,11 @@ export function cashEngineCard(input: {
     unknowns: entries.filter((entry) => entry.value === null).map((entry) => entry.key),
     validationState: input.opportunity.validationState,
     recommendation: entries.find((entry) => entry.key === 'recommendation' && entry.value) ?? null,
+    disqualifiedBy: (() => {
+      const fact = byField.get(DISQUALIFIED_FIELD);
+      const value = text(fact?.value);
+      return fact && value ? { value, claimId: fact.claimId ?? null } : null;
+    })(),
   };
 }
 
