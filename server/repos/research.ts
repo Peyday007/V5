@@ -208,6 +208,7 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     monetizationMethod: isMonetizationMethod(row.monetization_method)
       ? row.monetization_method
       : null,
+    closesOn: row.closes_on ?? null,
     structuralFinding: isStructuralFinding(row.structural_finding)
       ? row.structural_finding
       : null,
@@ -892,6 +893,7 @@ export interface InsertClaimInput {
   opportunitySignal?: OpportunitySignal | null;
   /** How the claim says money would be made from that opening, or null. */
   monetizationMethod?: MonetizationMethod | null;
+  closesOn?: string | null;
   /** The structural fact about an industry it establishes, or null. */
   structuralFinding?: StructuralFinding | null;
   /** What the finding is about: a name, or a value from that kind's own set. */
@@ -980,7 +982,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
       await db.run(
         `INSERT INTO research_claims (id, orchestration_id, fragment_id, pass_id, pass_key, claim,
            source_url, source_title, source_publisher, source_date, evidence_excerpt,
-           evidence_locator, evidence_lane, opportunity_signal, monetization_method,
+           evidence_locator, evidence_lane, opportunity_signal, monetization_method, closes_on,
            structural_finding,
            structural_subject, structural_qualifier, structural_amount_cents,
            labor_finding, labor_subject, labor_qualifier, labor_rate_cents,
@@ -999,12 +1001,13 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
           input.opportunitySignal ?? null,
           input.monetizationMethod ?? null,
+          input.closesOn ?? null,
           input.structuralFinding ?? null, input.structuralSubject ?? null,
           input.structuralQualifier ?? null, input.structuralAmountCents ?? null,
           input.laborFinding ?? null, input.laborSubject ?? null,

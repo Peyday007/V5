@@ -23,6 +23,7 @@ import {
   getRoutine,
   repointRoutineWorker,
   setRoutineState,
+  getRoutineByRef,
 } from '../server/repos/fleet.ts';
 import { createWorker, grantMembership, setWorkerRouting } from '../server/repos/identity.ts';
 import { findLiveToken, issueGrant, registerClient, touchToken } from '../server/repos/oauth.ts';
@@ -285,6 +286,15 @@ describe('a Routine whose Claude connector authenticates as another worker (Airy
     expect(settled.outcome).toContain('the Claude Routine selects the wrong one');
     expect(settled.nextAction).toContain('repoint-worker');
     expect(settled.nextAction).not.toContain('reconnect Brain in Claude');
+    // And the quarantine carries the proven cause, so the alert names the
+    // account owner instead of "Nothing to do" (production, Caleb's Factory
+    // surface 3, 2026-10-11).
+    const after = (await getRoutineByRef(airyn.routineRef))!;
+    expect(after.state).toBe('QUARANTINED');
+    expect(after.stateReason).toContain(WRONG_WORKER_MARK);
+    const alert = (await connectionAlerts()).alerts.find((one) => one.routineId === airyn.routineId)!;
+    expect(alert.problem).toBe('WRONG_WORKER');
+    expect(alert.who).toBe('ACCOUNT_OWNER');
   });
 });
 

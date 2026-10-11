@@ -861,6 +861,13 @@ export async function settleNeed(input: {
  * Mark an opening as a second record of another, guarded so it never moves
  * work that has already started.
  *
+ * "Answered" means a sourced or a person's fact on its card. A proposal Brain
+ * composed, and a research need Brain raised for itself, are not: every
+ * harvested signal is given needs for its payer and access at once, and the
+ * first version refused to mark a record with an open need — so in production
+ * it marked nothing, ever (§33's mechanism nothing reaches). The caller
+ * withdraws a marked record's open needs instead.
+ *
  * Only a piece nobody has dived, taken or answered is marked: one whose deep
  * dive ran is kept as it stands, because its evidence is its own and the
  * survivor may be the duplicate of it rather than the other way round. Guarded
@@ -874,10 +881,24 @@ export async function markOpportunityDuplicate(id: string, ofId: string): Promis
         SET duplicate_of_id = ?, updated_at = ?
       WHERE id = ? AND duplicate_of_id IS NULL AND validation_state IS NULL
         AND state IN ('DISCOVERED', 'EVIDENCE_CARD') AND id <> ?
-        AND NOT EXISTS (SELECT 1 FROM cash_card_facts f WHERE f.opportunity_id = cash_opportunities.id)
-        AND NOT EXISTS (SELECT 1 FROM cash_needs n
-                         WHERE n.opportunity_id = cash_opportunities.id AND n.state = 'OPEN')`,
+        AND NOT EXISTS (SELECT 1 FROM cash_card_facts f
+                         WHERE f.opportunity_id = cash_opportunities.id
+                           AND f.kind IN ('EVIDENCE', 'PERSON'))`,
     [ofId, nowIso(), id, ofId],
+  );
+  return result.changes > 0;
+}
+
+/**
+ * Give an opening a closing date it does not have yet. Guarded on the column
+ * still being empty, so a person's own value or an earlier date is never
+ * replaced.
+ */
+export async function setOpportunityExpiryIfUnset(id: string, expiresAt: string): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE cash_opportunities SET expires_at = ?, updated_at = ?
+      WHERE id = ? AND (expires_at IS NULL OR expires_at = '')`,
+    [expiresAt, nowIso(), id],
   );
   return result.changes > 0;
 }
@@ -908,9 +929,8 @@ export async function openingsWithSourceUrl(
     CashOpportunityRow & { claim_source_url: string | null; has_work: number }
   >(
     `SELECT o.*, c.source_url AS claim_source_url,
-            CASE WHEN EXISTS (SELECT 1 FROM cash_card_facts f WHERE f.opportunity_id = o.id)
-                   OR EXISTS (SELECT 1 FROM cash_needs n
-                               WHERE n.opportunity_id = o.id AND n.state = 'OPEN')
+            CASE WHEN EXISTS (SELECT 1 FROM cash_card_facts f
+                               WHERE f.opportunity_id = o.id AND f.kind IN ('EVIDENCE', 'PERSON'))
                  THEN 1 ELSE 0 END AS has_work
        FROM cash_opportunities o
        JOIN research_claims c ON c.id = o.source_claim_id

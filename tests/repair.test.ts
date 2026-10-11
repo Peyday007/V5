@@ -132,6 +132,7 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     evidenceLocator: 'National estimates table',
     opportunitySignal: null,
     monetizationMethod: null,
+    closesOn: null,
     evidenceLane: 'official statistics',
     retrievedAt: '2025-01-05',
     confidence: 0.8,

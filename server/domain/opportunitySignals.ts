@@ -87,3 +87,46 @@ export const SIGNAL_GUIDE: Record<OpportunitySignal, string> = {
   RECURRING_OUTSOURCED_WORK:
     'one narrow brief commissioned repeatedly as separate custom jobs',
 };
+
+/**
+ * The deadline a source publishes for an opening, validated, or null.
+ *
+ * One rule for both submission doors (the MCP tool and the provider path), for
+ * the reason `validateMonetizationMethod` gives: a rule applied by one of two
+ * readers is worse than none.
+ *
+ * Strict on purpose. YYYY-MM-DD and nothing else — no time, no zone, no prose —
+ * because the reader (`closedBy` in services/cash/validation.ts) treats a bare
+ * date as closing at the end of that day in UTC, and anything looser would be
+ * a guess about which day was meant. A calendar date that does not exist is
+ * refused rather than rolled over. And only alongside an opportunity signal: a
+ * closing date belongs to an opening, and a claim that establishes no opening
+ * has nothing for it to close.
+ */
+export function validateClosesOn(input: {
+  where: string;
+  closesOn: unknown;
+  hasSignal: boolean;
+}): { ok: true; value: string | null } | { ok: false; error: string } {
+  const { where, closesOn } = input;
+  if (closesOn === undefined || closesOn === null || closesOn === '') return { ok: true, value: null };
+  if (typeof closesOn !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(closesOn)) {
+    return {
+      ok: false,
+      error: `${where}: closes_on must be the published deadline as YYYY-MM-DD, or omitted.`,
+    };
+  }
+  const parsed = new Date(`${closesOn}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== closesOn) {
+    return { ok: false, error: `${where}: closes_on ${closesOn} is not a calendar date.` };
+  }
+  if (!input.hasSignal) {
+    return {
+      ok: false,
+      error:
+        `${where}: closes_on needs an opportunity_signal on the same claim. A closing date ` +
+        'belongs to an opening, and this claim establishes none.',
+    };
+  }
+  return { ok: true, value: closesOn };
+}

@@ -21,12 +21,39 @@
  */
 
 import {
+  listNeeds,
   markOpportunityDuplicate,
   openingsWithSourceUrl,
   releaseDuplicatesOfArchived,
+  setOpportunityExpiryIfUnset,
 } from '../../repos/cashPortfolio.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
-import type { CashOpportunity } from '../../domain/types.ts';
+import { closeNeed } from './needs.ts';
+import type { CashOpportunity, OpportunitySignal } from '../../domain/types.ts';
+
+const BRAIN = 'BRAIN';
+
+/**
+ * Which signals name the same kind of opening, for identity.
+ *
+ * A worker declares a signal per claim, and two workers reading one RFQ
+ * declared it `EXPIRING_OPENING` and `ACTIVE_BUYER_DEMAND`: production held six
+ * records of one St. Louis RFQ split across those two, so a signal-exact
+ * identity kept them apart. A buyer asking for something — with or without a
+ * deadline, as a request or as a paid task — is one opening at one address.
+ * The other kinds stay apart, because one price page can genuinely be both a
+ * resale opening and a pricing asymmetry. A `Record` over the whole union, so a
+ * signal added later is a compile error until somebody says which it joins.
+ */
+const OPENING_FAMILY: Record<OpportunitySignal, string> = {
+  ACTIVE_BUYER_DEMAND: 'BUYER_REQUEST',
+  EXPIRING_OPENING: 'BUYER_REQUEST',
+  PAID_TASK_OR_CONTRACT: 'BUYER_REQUEST',
+  RECURRING_OUTSOURCED_WORK: 'RECURRING_OUTSOURCED_WORK',
+  PRICING_OR_INFORMATION_ASYMMETRY: 'PRICING_OR_INFORMATION_ASYMMETRY',
+  SUPPLY_DEMAND_MISMATCH: 'SUPPLY_DEMAND_MISMATCH',
+  RESALABLE_ASSET_OPENING: 'RESALABLE_ASSET_OPENING',
+};
 
 /**
  * Query parameters that name a visitor rather than a document. Deliberately
@@ -59,9 +86,9 @@ export function openingSourceKey(url: string | null | undefined): string | null 
   return `${host}${path}${query}`;
 }
 
-function identity(url: string | null, signal: string | null): string | null {
+function identity(url: string | null, signal: OpportunitySignal | null): string | null {
   const key = openingSourceKey(url);
-  return key && signal ? `${signal}|${key}` : null;
+  return key && signal ? `${OPENING_FAMILY[signal]}|${key}` : null;
 }
 
 interface Opening {
@@ -102,7 +129,7 @@ async function identities(projectId: string): Promise<Map<string, Opening[]>> {
 export async function existingOpeningFor(input: {
   projectId: string;
   sourceUrl: string | null;
-  signal: string | null;
+  signal: OpportunitySignal | null;
 }): Promise<CashOpportunity | null> {
   const key = identity(input.sourceUrl, input.signal);
   if (!key) return null;
@@ -126,10 +153,21 @@ export async function markDuplicateOpenings(projectId: string): Promise<string[]
     if (group.length < 2) continue;
     const ordered = [...group].sort(survivorFirst).map((one) => one.opportunity);
     const survivor = ordered.find((one) => !one.duplicateOfId) ?? ordered[0]!;
+    /*
+     * The opening's closing date, wherever one of its records carries it. The
+     * earliest, because reading a later one would keep a closed opening
+     * looking open; and only into an empty column, so a person's value stands.
+     */
+    const dated = ordered
+      .map((one) => one.expiresAt)
+      .filter((at): at is string => typeof at === 'string' && /^\d{4}-\d{2}-\d{2}/.test(at))
+      .sort();
+    if (dated[0] && !survivor.expiresAt) await setOpportunityExpiryIfUnset(survivor.id, dated[0]);
     for (const other of ordered) {
       if (other.id === survivor.id || other.duplicateOfId) continue;
       if (!(await markOpportunityDuplicate(other.id, survivor.id))) continue;
       marked.push(other.id);
+      await withdrawOpenNeeds(projectId, other.id, survivor.id);
       await recordCashEvent({
         projectId,
         opportunityId: other.id,
@@ -141,4 +179,25 @@ export async function markDuplicateOpenings(projectId: string): Promise<string[]
     }
   }
   return marked;
+}
+
+/**
+ * A duplicate's own research questions stop being worth asking: the survivor
+ * asks them. Withdrawn rather than deleted, with the reason, and only those
+ * still open — a settled need keeps its resolution. A need whose mission is
+ * already running is withdrawn too; that mission finishes and its answer is
+ * not lost, it simply belongs to a record nothing will act on.
+ */
+async function withdrawOpenNeeds(projectId: string, opportunityId: string, survivorId: string) {
+  const open = (await listNeeds({ projectId, states: ['OPEN'] })).filter(
+    (need) => need.opportunityId === opportunityId,
+  );
+  for (const need of open) {
+    await closeNeed({
+      needId: need.id,
+      to: 'WITHDRAWN',
+      resolution: `A second record of opening ${survivorId}, which asks this itself.`,
+      actorUserId: BRAIN,
+    });
+  }
 }

@@ -36,6 +36,7 @@
  * refused, because that is a `COMMERCIAL_ACTION` under a grant a person makes
  * separately.
  */
+import { closedBy } from './closing.ts';
 import { getDb } from '../../db/database.ts';
 import {
   cashEventsOfKind,
@@ -288,21 +289,7 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
   return { kind: 'ELIGIBLE' };
 }
 
-/**
- * Whether a recorded closing date has passed. The column is free text, so only
- * an ISO date or timestamp is read: anything else is unknown, never closed. A
- * bare date closes at the end of that UTC day, not at its first second.
- */
-export function closedBy(expiresAt: string | null, now: string): boolean {
-  if (!expiresAt) return false;
-  const value = expiresAt.trim();
-  let closes: number;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) closes = Date.parse(`${value}T23:59:59.999Z`);
-  else if (/^\d{4}-\d{2}-\d{2}T/.test(value)) closes = Date.parse(value);
-  else return false;
-  if (!Number.isFinite(closes)) return false;
-  return closes <= Date.parse(now);
-}
+export { closedBy } from './closing.ts';
 
 /** The card's own reading of how far this piece has got. */
 async function qualifiedTier(opportunity: CashOpportunity): Promise<string> {
