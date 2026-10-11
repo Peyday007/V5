@@ -634,6 +634,14 @@ export async function harvest(input: {
     const withSignal = await updateOpportunity(created.id, {
       buying_signal: clamp(claim.claim, 1_000),
       signal_observed_at: claim.sourceDate ?? claim.retrievedAt ?? null,
+      /*
+       * And the closing date, where the source published one, before anything
+       * is spent: a request already past it is disqualified on the next pass
+       * by `applyValidationAnswers`, so it never reaches a deep dive.
+       */
+      ...(claim.validationFinding === 'RESPONSE_DEADLINE' && claim.validationDate
+        ? { expires_at: claim.validationDate, expiry_reason: 'responses close' }
+        : {}),
     });
 
     const missionId = missionByOrchestration.get(entry.orchestrationId) ?? null;

@@ -300,6 +300,19 @@ export function cashTier(input: {
   const answeredCount = keys.length - open.length;
 
   if (!captured) {
+    if (input.card.disqualifiedBy) {
+      return {
+        tier: 'SIGNAL',
+        establishes: meaning.establishes,
+        doesNotEstablish: meaning.doesNotEstablish,
+        toAdvance: [],
+        answered: answeredCount,
+        required: keys.length,
+        summary:
+          `Disqualified: a published fact rules this opening out (${input.card.disqualifiedBy.value.slice(0, 200)}), ` +
+          'so nothing more is asked about it unless that stops being true.',
+      };
+    }
     return {
       tier: 'SIGNAL',
       establishes: meaning.establishes,

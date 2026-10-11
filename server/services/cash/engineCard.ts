@@ -154,7 +154,23 @@ export interface EngineCard {
    * nothing has been found.
    */
   disqualifiedBy?: { value: string; claimId: string | null } | null;
+  /**
+   * Which of three answers the disqualifier question has, read from rows.
+   *
+   * `ESTABLISHED` — a published fact rules it out (`disqualifiedBy`).
+   * `NONE_FOUND` — a documented search found nothing that does, or a person
+   * answered the field. `UNRESOLVED` — neither, which includes a legacy claim
+   * filed in the disqualifier lane that never said which it was. Only
+   * `NONE_FOUND` answers the field for qualification; an unresolved one is
+   * shown with what was filed and counted as open.
+   */
+  disqualifierStatus?: DisqualifierStatus;
 }
+
+export type DisqualifierStatus = 'ESTABLISHED' | 'NONE_FOUND' | 'UNRESOLVED';
+
+/** The card-fact field a documented absence of any disqualifier is recorded under. */
+export const DISQUALIFIER_STATUS_FIELD = 'disqualifierStatus';
 
 /** The card-fact field an established disqualifier is recorded under. */
 export const DISQUALIFIED_FIELD = 'disqualifiedBy';
@@ -331,15 +347,39 @@ export function cashEngineCard(input: {
     };
   });
 
+  const disqualifiedFact = byField.get(DISQUALIFIED_FIELD);
+  const disqualifiedValue = text(disqualifiedFact?.value);
+  const disqualifierStatus: DisqualifierStatus = disqualifiedValue
+    ? 'ESTABLISHED'
+    : text(byField.get(DISQUALIFIER_STATUS_FIELD)?.value) === 'NONE_FOUND' ||
+        byField.get('disqualifiers')?.kind === 'PERSON'
+      ? 'NONE_FOUND'
+      : 'UNRESOLVED';
+
   for (const key of ENGINE_FIELDS) {
     const fact = byField.get(key);
-    const value = text(fact?.value);
+    let value = text(fact?.value);
+    let task = LABELS[key].task;
+    /*
+     * A disqualifier answer that never said which way it went is not an answer.
+     *
+     * Before typed findings any claim in the disqualifier lane filled this
+     * field, so a closed RFP and a clean search both read as "answered". What
+     * was filed is kept in the task, where a person can read it; the value is
+     * unknown, so nothing counts it as progress toward QUALIFIED.
+     */
+    if (key === 'disqualifiers' && disqualifierStatus === 'UNRESOLVED' && value !== null && fact?.kind === 'EVIDENCE') {
+      task =
+        `Unresolved: a claim was filed here that does not say whether it rules this opening out ` +
+        `(“${value.slice(0, 240)}”). ${LABELS[key].task}`;
+      value = null;
+    }
     entries.push({
       key,
       label: LABELS[key].label,
       value,
       kind: kindOf(fact, value),
-      task: LABELS[key].task,
+      task,
       owner: fieldOwner(key),
       claimId: fact?.claimId ?? null,
       basis: fact?.basis ?? null,
@@ -354,11 +394,11 @@ export function cashEngineCard(input: {
     unknowns: entries.filter((entry) => entry.value === null).map((entry) => entry.key),
     validationState: input.opportunity.validationState,
     recommendation: entries.find((entry) => entry.key === 'recommendation' && entry.value) ?? null,
-    disqualifiedBy: (() => {
-      const fact = byField.get(DISQUALIFIED_FIELD);
-      const value = text(fact?.value);
-      return fact && value ? { value, claimId: fact.claimId ?? null } : null;
-    })(),
+    disqualifiedBy:
+      disqualifiedFact && disqualifiedValue
+        ? { value: disqualifiedValue, claimId: disqualifiedFact.claimId ?? null }
+        : null,
+    disqualifierStatus,
   };
 }
 

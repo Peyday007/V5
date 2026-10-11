@@ -323,8 +323,15 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
         ` signal=${String(opportunity.opportunitySignal ?? '—').padEnd(32)}` +
         ` validation=${String(opportunity.validationState ?? 'NOT_STARTED').padEnd(12)}` +
         ` round=${opportunity.validationRounds}` +
-        ` answered=${tier.answered}/${tier.required}`,
+        ` answered=${tier.answered}/${tier.required}` +
+        ` disqualifier=${card.disqualifierStatus ?? 'UNRESOLVED'}` +
+        (opportunity.expiresAt ? ` closes=${opportunity.expiresAt}` : ''),
     );
+    if (card.disqualifiedBy) {
+      console.log(
+        `      disqualified by claim ${card.disqualifiedBy.claimId ?? '—'}: ${trim(card.disqualifiedBy.value)}`,
+      );
+    }
     if (tier.toAdvance.length > 0) {
       console.log(
         `      to advance: ${tier.toAdvance.map((one) => one.key).join(', ')}`,

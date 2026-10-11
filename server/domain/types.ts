@@ -2186,6 +2186,8 @@ export interface ResearchClaimRow {
   puzzle_value: string | null;
   puzzle_amount_cents: number | null;
   puzzle_currency: string | null;
+  validation_finding: string | null;
+  validation_date: string | null;
   retrieved_at: string | null;
   confidence: number;
   contradiction_state: string;
@@ -3530,6 +3532,14 @@ export interface ResearchClaim {
   puzzleAmountCents: number | null;
   /** The currency that figure is published in. Brain never converts one. */
   puzzleCurrency: string | null;
+  /**
+   * What this claim establishes about whether its opening can be taken — a
+   * payer, a route to the buyer, a disqualifier, or the documented absence of
+   * one. See `domain/validationFindings.ts`.
+   */
+  validationFinding: ValidationFinding | null;
+  /** The published closing date of a RESPONSE_DEADLINE finding, YYYY-MM-DD. */
+  validationDate: string | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
@@ -6635,6 +6645,7 @@ export interface RussellCycle {
  * parallel workers need to change at once is one two of them will collide in.
  */
 export * from './factory.ts';
+import type { ValidationFinding } from './validationFindings.ts';
 // ---------------------------------------------------------------------------
 // Step 12C — a connected site
 // ---------------------------------------------------------------------------

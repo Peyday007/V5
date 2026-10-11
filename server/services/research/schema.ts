@@ -45,6 +45,7 @@ import { validateLabor } from '../../domain/labor.ts';
 import { validateCapabilityFinding } from '../../domain/manufacturing.ts';
 import { validateDealFinding } from '../../domain/dealflow.ts';
 import { validatePuzzleFinding } from '../../domain/puzzle.ts';
+import { validateValidationFinding, type ValidationFinding } from '../../domain/validationFindings.ts';
 import {
   booleanField,
   confidenceField,
@@ -598,6 +599,10 @@ export interface ParsedClaim {
   puzzleAmountCents: number | null;
   /** Which currency it was published in. Brain never converts one. */
   puzzleCurrency: string | null;
+  /** What it establishes about whether its opening can be taken. See `domain/validationFindings.ts`. */
+  validationFinding: ValidationFinding | null;
+  /** The published closing date of a RESPONSE_DEADLINE finding. */
+  validationDate: string | null;
   /**
    * Whether the worker could actually read the source.
    *
@@ -883,6 +888,15 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   if (!claimType.ok) return claimType;
   const derivedFrom = stringArray(row['derivedFrom'], `${where}.derivedFrom`);
   if (!derivedFrom.ok) return derivedFrom;
+  // The one rule the MCP tool also calls; it needs the claim's own type,
+  // because an absence must be declared as one.
+  const validationFinding = validateValidationFinding({
+    where,
+    finding: row['validationFinding'],
+    date: row['validationDate'],
+    claimType: claimType.value,
+  });
+  if (!validationFinding.ok) return validationFinding;
 
   return {
     ok: true,
@@ -929,6 +943,8 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       puzzleValue: puzzle.value.value,
       puzzleAmountCents: puzzle.value.amountCents,
       puzzleCurrency: puzzle.value.currency,
+      validationFinding: validationFinding.value.finding,
+      validationDate: validationFinding.value.date,
       derived: derived.value,
       derivedFrom: derivedFrom.value,
       claimType: claimType.value,

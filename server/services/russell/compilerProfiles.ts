@@ -338,6 +338,18 @@ const MARKET_DISCOVERY: CompilerProfile = {
       'is a shape worth naming, set the claim\'s monetization_method as well — only ' +
       'alongside an opportunity_signal, because a way of being paid has to say what it is a ' +
       'way of being paid for. Almost every claim carries none, and it lowers no bar either.',
+    /*
+     * The early deadline check, at the only place it is cheap.
+     *
+     * A request already closed when it is found used to be filed, queued for a
+     * deep dive and researched for what it pays. Its closing date is usually on
+     * the same page as the request, so a worker declares it here and Brain
+     * compares it to its own clock before anything else is spent.
+     */
+    'Where the source publishes the date responses to that opening close, set the same claim\'s ' +
+      'validation_finding to RESPONSE_DEADLINE and validation_date to that date, YYYY-MM-DD. ' +
+      'Brain compares it to its own clock, so an opening already past it is never researched ' +
+      'further.',
     'Sources that are really one source are counted once, and the duplication is reported: ' +
       'two pages of one site, one release carried by three outlets, three publishers ' +
       'restating one upstream estimate.',
@@ -407,7 +419,9 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
       description:
         'Who actually pays: the organisation or role named in a published source, and the ' +
         'published way a supplier reaches them. A named buyer in the request itself settles ' +
-        'this; "an industry like this" does not.',
+        'this; "an industry like this" does not. Declare the payer with validation_finding ' +
+        'PAYER_ESTABLISHED; a documented search that found nobody is NO_PAYER_FOUND as ' +
+        'NEGATIVE_EXISTENCE, which leaves the payer unknown rather than answering it.',
       necessity: 'REQUIRED',
     },
     {
@@ -432,7 +446,9 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
       evidenceKind: 'SPECIFIC_INSTANCE',
       description:
         'When money would actually arrive: the published payment terms, payout schedule, ' +
-        'closing date or decision date, quoted from whoever publishes them.',
+        'closing date or decision date, quoted from whoever publishes them. A closing date for ' +
+        'responses is declared with validation_finding RESPONSE_DEADLINE and the date in ' +
+        'validation_date, YYYY-MM-DD.',
       necessity: 'CONDITIONAL',
     },
     {
@@ -458,9 +474,12 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
       description:
         'Any published fact that would rule this out outright — a closed or awarded request, a ' +
         'restriction excluding a supplier like this one, a requirement nobody here could meet. ' +
-        'A documented absence of one is a real finding and belongs here, submitted as ' +
-        'NEGATIVE_EXISTENCE naming where you looked; any other claim in this lane is read as a ' +
-        'disqualifier found, and it stops the opening.',
+        'Declare which it is with validation_finding: DISQUALIFIED_CLOSED, ' +
+        'DISQUALIFIED_SUPPLIER_EXCLUDED or DISQUALIFIED_REQUIREMENT_UNMET for a disqualifier found, ' +
+        'which stops the opening; NO_DISQUALIFIER_FOUND, as NEGATIVE_EXISTENCE naming what you ' +
+        'read, for a documented absence. A published closing date is RESPONSE_DEADLINE with the ' +
+        'date in validation_date. A claim here that declares none of these leaves the question ' +
+        'unresolved.',
       necessity: 'CONDITIONAL',
     },
     /*
@@ -513,8 +532,9 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
         'What the published route to the buyer actually is, and specifically whether it ' +
         'requires a telephone call — a portal, an email address, a form, a bid submission or a ' +
         'phone number. Where a call is the only published route, say so; that is a finding ' +
-        'rather than a detail. A route found is how the opening is reached; where none is ' +
-        'published, submit that as NEGATIVE_EXISTENCE naming where you looked.',
+        'rather than a detail. A route found is how the opening is reached: declare it with ' +
+        'validation_finding BUYER_ROUTE_ESTABLISHED. Where none is published, submit ' +
+        'NO_BUYER_ROUTE_FOUND as NEGATIVE_EXISTENCE naming where you looked.',
       necessity: 'CONDITIONAL',
     },
   ],

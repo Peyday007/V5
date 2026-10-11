@@ -70,6 +70,12 @@ import {
 } from '../domain/puzzle.ts';
 import type { PuzzleFinding, PuzzleProductClass } from '../domain/types.ts';
 import {
+  validateValidationFinding,
+  VALIDATION_FINDINGS,
+  VALIDATION_FINDING_GUIDE,
+  type ValidationFinding,
+} from '../domain/validationFindings.ts';
+import {
   TerminalEffectFailure,
   type OperationNamespace,
 } from '../services/effects/engine.ts';
@@ -1352,6 +1358,28 @@ function puzzleOf(
   };
 }
 
+/**
+ * The wire door's validation finding, delegated to the one validator.
+ *
+ * It needs the claim's own type, because a documented absence must be
+ * declared as one: `NO_PAYER_FOUND` on a claim that asserts a payer, or a
+ * payer on a NEGATIVE_EXISTENCE claim, is refused rather than stored.
+ */
+function validationOf(
+  row: Record<string, unknown>,
+  claimType: string,
+  where: string,
+): { validationFinding: ValidationFinding | null; validationDate: string | null } {
+  const parsed = validateValidationFinding({
+    where,
+    finding: row['validation_finding'],
+    date: row['validation_date'],
+    claimType,
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return { validationFinding: parsed.value.finding, validationDate: parsed.value.date };
+}
+
 const submitClaimsTool: McpTool = {
   name: 'brain_submit_claims',
   title: 'Submit a fragment\'s claims',
@@ -1793,6 +1821,24 @@ const submitClaimsTool: McpTool = {
                 'published. Brain never converts, so a product class whose figures are in two ' +
                 'currencies has its contribution withheld and says why.',
             },
+            validation_finding: {
+              type: 'string',
+              enum: [...VALIDATION_FINDINGS],
+              description:
+                'Set on a deep dive (a fragment qualifying one opening) when the claim settles ' +
+                'one of these about that opening: ' +
+                VALIDATION_FINDINGS.map((one) => `${one} — ${VALIDATION_FINDING_GUIDE[one]}`).join('; ') +
+                '. The NO_… values are documented absences and must be claim_type ' +
+                'NEGATIVE_EXISTENCE; the others must not be. An absence answers nothing about ' +
+                'the thing that was not found, and a disqualifier stops the opening, so declare ' +
+                'exactly what the source says and omit this when it says neither.',
+            },
+            validation_date: {
+              type: 'string',
+              description:
+                'Only with validation_finding RESPONSE_DEADLINE: the published closing date, ' +
+                'YYYY-MM-DD. Refused otherwise.',
+            },
             retrieval_state: {
               type: 'string',
               enum: [...RETRIEVAL_STATES],
@@ -1919,6 +1965,7 @@ const submitClaimsTool: McpTool = {
          */
         ...dealOf(row, where),
         ...puzzleOf(row, where),
+        ...validationOf(row, oneOf(row, 'claim_type', where, CLAIM_TYPES, 'SOURCED_FACT'), where),
         retrievalState: retrievalStateOf(row, where),
         derived: bool(row, 'derived', where, false),
         derivedFrom: strList(row, 'derived_from', where),

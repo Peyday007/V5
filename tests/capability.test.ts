@@ -80,6 +80,8 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     puzzleValue: null,
     puzzleAmountCents: null,
     puzzleCurrency: null,
+    validationFinding: null,
+    validationDate: null,
     structuralSubject: null,
     structuralQualifier: null,
     structuralAmountCents: null,

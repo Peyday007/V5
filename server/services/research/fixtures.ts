@@ -156,6 +156,8 @@ function claim(input: {
     puzzleValue: null,
     puzzleAmountCents: null,
     puzzleCurrency: null,
+    validationFinding: null,
+    validationDate: null,
     structuralQualifier: null,
     structuralAmountCents: null,
     laborFinding: null,

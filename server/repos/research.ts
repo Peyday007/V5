@@ -16,6 +16,7 @@ import { isLaborFinding } from '../domain/labor.ts';
 import type { LaborFinding, StructuralFinding } from '../domain/types.ts';
 import { isDealFinding } from '../domain/dealflow.ts';
 import { isPuzzleFinding, isPuzzleProductClass } from '../domain/puzzle.ts';
+import { isValidationFinding, type ValidationFinding } from '../domain/validationFindings.ts';
 import type { DealFinding, PuzzleFinding, PuzzleProductClass } from '../domain/types.ts';
 import type { OpportunitySignal } from '../domain/types.ts';
 import type { EvidenceLane } from '../domain/types.ts';
@@ -244,6 +245,8 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     puzzleValue: row.puzzle_value,
     puzzleAmountCents: row.puzzle_amount_cents,
     puzzleCurrency: row.puzzle_currency,
+    validationFinding: isValidationFinding(row.validation_finding) ? row.validation_finding : null,
+    validationDate: row.validation_date ?? null,
     retrievedAt: row.retrieved_at,
     confidence: Number(row.confidence),
     contradictionState: row.contradiction_state as ContradictionState,
@@ -944,6 +947,8 @@ export interface InsertClaimInput {
   puzzleAmountCents?: number | null;
   /** Which currency that figure is in, as the source published it. */
   puzzleCurrency?: string | null;
+  validationFinding?: ValidationFinding | null;
+  validationDate?: string | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState?: ContradictionState;
@@ -991,6 +996,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            deal_amount_cents, deal_currency,
            puzzle_finding, puzzle_subject, puzzle_format, puzzle_product_class,
            puzzle_value, puzzle_amount_cents, puzzle_currency,
+           validation_finding, validation_date,
            retrieved_at, confidence,
            contradiction_state,
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
@@ -999,7 +1005,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
@@ -1021,6 +1027,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
           input.puzzleFormat ?? null, input.puzzleProductClass ?? null,
           input.puzzleValue ?? null, input.puzzleAmountCents ?? null,
           input.puzzleCurrency ?? null,
+          input.validationFinding ?? null, input.validationDate ?? null,
           input.retrievedAt,
           input.confidence,
           input.contradictionState ?? 'UNCHALLENGED', input.contradictionNote ?? null,

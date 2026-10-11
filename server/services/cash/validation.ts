@@ -50,22 +50,28 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate, missionsForCandidate } from '../../repos/russellMissions.ts';
-import { citableClaims, getOrchestration, listPasses } from '../../repos/research.ts';
+import { citableClaims, getClaim, getOrchestration, listPasses } from '../../repos/research.ts';
 import {
   cardFact,
   cardFactsFor,
   mayReplace,
   recordEvidenceFact,
   recordRecommendationFact,
+  withdrawEvidenceFact,
+  withdrawRecommendationResting,
 } from '../../repos/cashCardFacts.ts';
-import { cashEngineCard } from './engineCard.ts';
+import {
+  deadlinePassed,
+  DISQUALIFYING_FINDINGS,
+} from '../../domain/validationFindings.ts';
+import { cashEngineCard, DISQUALIFIED_FIELD, DISQUALIFIER_STATUS_FIELD } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { cashTier } from './tier.ts';
 import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
 import { researchMissionSlotsFull } from '../russell/launch.ts';
-import type { CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
+import type { CashOpportunity, OpportunityValidationState, ResearchClaim } from '../../domain/types.ts';
 
 /** How many deep dives one project may have in flight. Provider capacity. */
 export const MAX_VALIDATIONS_IN_FLIGHT = 2;
@@ -175,7 +181,13 @@ export type DiveRefusal =
   /** Declined, archived or already being executed — the commercial questions are closed. */
   | { kind: 'NOT_A_QUALIFYING_STATE'; state: string }
   /** No published signal and no source claim, so there is nothing to quote into a question. */
-  | { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
+  | { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' }
+  /**
+   * A published fact rules it out — a closed request, a passed deadline, a
+   * restriction that excludes us. Researching what it would pay is the
+   * allowance spent on a question whose answer cannot change the decision.
+   */
+  | { kind: 'DISQUALIFIED'; reason: string };
 
 /** One line, for a report or an operator. */
 export function describeDiveRefusal(refusal: DiveRefusal): string {
@@ -197,6 +209,8 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
       return `state ${refusal.state}: the commercial questions are closed`;
     case 'NOTHING_PUBLISHED_TO_ASK_ABOUT':
       return 'no buying signal and no source claim — nothing published to ask about';
+    case 'DISQUALIFIED':
+      return `disqualified — ${refusal.reason.slice(0, 160)}`;
   }
 }
 
@@ -227,6 +241,8 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
   if (opportunity.state !== 'DISCOVERED' && opportunity.state !== 'EVIDENCE_CARD') {
     return { kind: 'NOT_A_QUALIFYING_STATE', state: opportunity.state };
   }
+  const disqualified = await cardFact(opportunity.id, DISQUALIFIED_FIELD);
+  if (disqualified?.value?.trim()) return { kind: 'DISQUALIFIED', reason: disqualified.value };
   if (!opportunity.buyingSignal && !opportunity.sourceClaimId) {
     return { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
   }
@@ -1017,52 +1033,222 @@ export interface AppliedValidation {
  * field is deterministic and survives a restart. It is derived from rows on the
  * tick, so it reaches the openings already stranded with nothing replayed.
  */
-export async function applyValidationAnswers(projectId: string): Promise<AppliedValidation[]> {
+export async function applyValidationAnswers(
+  projectId: string,
+  now: number = Date.now(),
+): Promise<AppliedValidation[]> {
   if (!(await getCashMode(projectId))) return [];
   const out: AppliedValidation[] = [];
 
   for (const opportunity of await listOpportunities({ projectId })) {
+    const claims: ResearchClaim[] = [];
     for (const orchestrationId of await finishedDivePackets(opportunity)) {
       for (const claim of await citableClaims(orchestrationId)) {
-        if (!claim.sourceUrl) continue;
-        const field = FIELD_BY_LANE[claim.evidenceLane ?? ''];
-        if (!field) continue;
-        const existing = await cardFact(opportunity.id, field);
-        // Already this claim: nothing to do, which is what a replay must find.
-        if (existing?.claimId === claim.id) continue;
-        // A person's answer stands, and so does an earlier piece of evidence:
-        // `mayReplace` is the order, and it is about authority rather than
-        // recency. Asked here to skip the write, and again inside it.
-        if (!mayReplace(existing, 'EVIDENCE')) continue;
-        const value = clampText(claim.claim, 600);
-        const written = await recordEvidenceFact({
-          projectId,
-          opportunityId: opportunity.id,
-          field,
-          value,
-          claimId: claim.id,
-        });
-        if (!written) continue;
-        /*
-         * The column as well as the fact, where the field has one.
-         *
-         * `answers.ts` writes both when a *need's* research settles a card
-         * field, and this once wrote only the fact — so the same question,
-         * answered by the deep dive instead, reached `cash_card_facts` and never
-         * reached `evidenceCard`, `readyToTest` or anything else that reads the
-         * row. `COLUMN` is imported rather than restated, because a second copy
-         * is the thing that drifts. Written only once the fact is this claim's,
-         * so the column and the fact cannot name two different claims.
-         */
-        const column = COLUMN[field];
-        if (column) {
-          await updateOpportunity(opportunity.id, { [column]: value } as never);
-        }
-        out.push({ opportunityId: opportunity.id, field, claimId: claim.id });
+        if (claim.sourceUrl) claims.push(claim);
       }
     }
+    for (const claim of claims) {
+      for (const field of cardFieldsFor(claim)) {
+        const written = await answerField(projectId, opportunity.id, field, claim, clampText(claim.claim, 600));
+        if (written) out.push({ opportunityId: opportunity.id, field, claimId: claim.id });
+      }
+      const status = disqualifierStatusFrom(claim);
+      if (status === 'NONE_FOUND') {
+        if (await answerField(projectId, opportunity.id, DISQUALIFIER_STATUS_FIELD, claim, 'NONE_FOUND')) {
+          out.push({ opportunityId: opportunity.id, field: DISQUALIFIER_STATUS_FIELD, claimId: claim.id });
+        }
+      }
+      if (status === 'ESTABLISHED') {
+        if (await answerField(projectId, opportunity.id, DISQUALIFIED_FIELD, claim, clampText(claim.claim, 600))) {
+          out.push({ opportunityId: opportunity.id, field: DISQUALIFIED_FIELD, claimId: claim.id });
+        }
+      }
+    }
+    out.push(...(await applyDeadline(projectId, opportunity, claims, now)));
+    await withdrawNegativePayer(projectId, opportunity);
   }
   return out;
+}
+
+/**
+ * Which card fields one accepted claim answers: its typed finding first, its
+ * lane second, and never the thing an absence is the absence of.
+ *
+ * A claim with a `validation_finding` says what it establishes, so that is what
+ * is read. A claim from before the column existed has only its lane and its
+ * type, and the legacy reading is kept with the two corrections the production
+ * audit asked for: a NEGATIVE_EXISTENCE claim in the payer lane is a search
+ * that found nobody, never a payer; and a route found in the contact lane
+ * answers `access` as well as whether a call is needed, because that lane's
+ * contract always defined a claim there as the published route to the buyer.
+ */
+export function cardFieldsFor(claim: ResearchClaim): string[] {
+  const finding = claim.validationFinding;
+  const negative = claim.claimType === 'NEGATIVE_EXISTENCE';
+  const lane = claim.evidenceLane ?? '';
+  const laneField = FIELD_BY_LANE[lane];
+  const out = new Set<string>();
+
+  const payer = finding === 'PAYER_ESTABLISHED' || (finding === null && laneField === 'payer' && !negative);
+  if (payer) out.add('payer');
+
+  const route =
+    finding === 'BUYER_ROUTE_ESTABLISHED' || (finding === null && lane === 'contact_mode' && !negative);
+  if (route) out.add('access');
+
+  const disqualifierAnswer =
+    (finding !== null && (DISQUALIFYING_FINDINGS.has(finding) || finding === 'NO_DISQUALIFIER_FOUND')) ||
+    (finding === null && laneField === 'disqualifiers');
+  if (disqualifierAnswer) out.add('disqualifiers');
+
+  // Every other lane keeps the field it always filled — but a documented
+  // absence of a route answers nothing about whether a call is needed.
+  if (laneField && laneField !== 'payer' && laneField !== 'disqualifiers') {
+    if (!(laneField === 'phoneDependency' && finding === 'NO_BUYER_ROUTE_FOUND')) out.add(laneField);
+  }
+  return [...out];
+}
+
+/**
+ * Whether this claim settles the disqualifier question, and which way.
+ *
+ * Three answers, kept apart because their consequences are opposite: a
+ * disqualifier established stops the opening; a documented search that found
+ * none answers the question; anything else — including a legacy claim in the
+ * disqualifier lane that says neither — leaves it unresolved, and unresolved
+ * qualifies nothing.
+ */
+export function disqualifierStatusFrom(claim: ResearchClaim): 'ESTABLISHED' | 'NONE_FOUND' | null {
+  const finding = claim.validationFinding;
+  if (finding !== null && DISQUALIFYING_FINDINGS.has(finding)) return 'ESTABLISHED';
+  if (finding === 'NO_DISQUALIFIER_FOUND') return 'NONE_FOUND';
+  if (finding === null && claim.evidenceLane === 'disqualifier' && claim.claimType === 'NEGATIVE_EXISTENCE') {
+    return 'NONE_FOUND';
+  }
+  return null;
+}
+
+async function answerField(
+  projectId: string,
+  opportunityId: string,
+  field: string,
+  claim: ResearchClaim,
+  value: string,
+): Promise<boolean> {
+  const existing = await cardFact(opportunityId, field);
+  // Already this claim: nothing to do, which is what a replay must find.
+  if (existing?.claimId === claim.id) return false;
+  // A person's answer stands, and so does an earlier piece of evidence:
+  // `mayReplace` is the order, and it is about authority rather than recency.
+  // Asked here to skip the write, and again inside it.
+  if (!mayReplace(existing, 'EVIDENCE')) return false;
+  const written = await recordEvidenceFact({ projectId, opportunityId, field, value, claimId: claim.id });
+  if (!written) return false;
+  /*
+   * The column as well as the fact, where the field has one.
+   *
+   * `answers.ts` writes both when a *need's* research settles a card field, and
+   * this once wrote only the fact — so the same question, answered by the deep
+   * dive instead, reached `cash_card_facts` and never reached `evidenceCard`,
+   * `readyToTest` or anything else that reads the row. `COLUMN` is imported
+   * rather than restated, because a second copy is the thing that drifts.
+   */
+  const column = COLUMN[field];
+  if (column) await updateOpportunity(opportunityId, { [column]: value } as never);
+  return true;
+}
+
+/**
+ * A published closing date, compared to Brain's own clock.
+ *
+ * The latest date any accepted claim publishes for this opening wins, because
+ * an extension is published after the original date and the original is still
+ * on the record. The opening's own discovery claim counts too, so a request
+ * found already closed never reaches a dive at all — that is the early check.
+ * A passed date is recorded as the disqualifier, naming the claim; an
+ * extension published later withdraws a disqualifier that only the old date
+ * established.
+ */
+async function applyDeadline(
+  projectId: string,
+  opportunity: CashOpportunity,
+  claims: ResearchClaim[],
+  now: number,
+): Promise<AppliedValidation[]> {
+  const deadlines = claims.filter((one) => one.validationFinding === 'RESPONSE_DEADLINE' && one.validationDate);
+  if (opportunity.sourceClaimId && !deadlines.some((one) => one.id === opportunity.sourceClaimId)) {
+    const source = await getClaim(opportunity.sourceClaimId);
+    if (source?.validationFinding === 'RESPONSE_DEADLINE' && source.validationDate && source.accepted) {
+      deadlines.push(source);
+    }
+  }
+  if (deadlines.length === 0) return [];
+  const latest = deadlines.reduce((a, b) => ((b.validationDate ?? '') > (a.validationDate ?? '') ? b : a));
+  const date = latest.validationDate!;
+  if (!opportunity.expiresAt) {
+    await updateOpportunity(opportunity.id, { expires_at: date, expiry_reason: 'responses close' });
+  }
+  const existing = await cardFact(opportunity.id, DISQUALIFIED_FIELD);
+  if (!deadlinePassed(date, now)) {
+    // A later closing date than the one a disqualifier rested on: the old date
+    // is no longer the deadline, so what it established is taken back.
+    const earlier = deadlines.find((one) => one.id === existing?.claimId && one.id !== latest.id);
+    if (existing && earlier) {
+      if (await withdrawEvidenceFact({ opportunityId: opportunity.id, field: DISQUALIFIED_FIELD, claimId: earlier.id })) {
+        await recordCashEvent({
+          projectId,
+          opportunityId: opportunity.id,
+          kind: 'CASH_CARD_FACT_WITHDRAWN',
+          actorRef: 'BRAIN',
+          summary: `A later published closing date (${date}) replaces the one that had closed this opening.`,
+          detail: { field: DISQUALIFIED_FIELD, claimId: earlier.id, value: existing.value, supersededBy: latest.id },
+        });
+      }
+    }
+    return [];
+  }
+  const value = `The published closing date, ${date}, has passed. ${clampText(latest.claim, 400)}`;
+  return (await answerField(projectId, opportunity.id, DISQUALIFIED_FIELD, latest, value))
+    ? [{ opportunityId: opportunity.id, field: DISQUALIFIED_FIELD, claimId: latest.id }]
+    : [];
+}
+
+/**
+ * A payer that was a search finding nobody, taken back off the card.
+ *
+ * Before typed findings a NEGATIVE_EXISTENCE claim in the payer lane was written
+ * as the payer — production carried "No payer was found" as one opening's payer,
+ * and a capture thesis was then composed from it. The fact and the column are
+ * cleared, the recommendations Brain composed from it are withdrawn, and the
+ * correction is an event carrying the value it replaced. The payer field is then
+ * unknown, which is what it always was: an absence is not evidence that there is
+ * no payer either, so nothing is written in its place.
+ */
+async function withdrawNegativePayer(projectId: string, opportunity: CashOpportunity): Promise<void> {
+  const fact = await cardFact(opportunity.id, 'payer');
+  if (!fact || fact.kind !== 'EVIDENCE' || !fact.claimId) return;
+  const claim = await getClaim(fact.claimId);
+  if (!claim) return;
+  const negative = claim.claimType === 'NEGATIVE_EXISTENCE' || claim.validationFinding === 'NO_PAYER_FOUND';
+  if (!negative) return;
+  if (!(await withdrawEvidenceFact({ opportunityId: opportunity.id, field: 'payer', claimId: claim.id }))) return;
+  if (opportunity.payer === fact.value) await updateOpportunity(opportunity.id, { payer: null });
+  const composed: string[] = [];
+  for (const field of ['captureMechanism', 'firstSteps', 'bottleneck']) {
+    if (await withdrawRecommendationResting({ opportunityId: opportunity.id, field, claimId: claim.id })) {
+      composed.push(field);
+    }
+  }
+  await recordCashEvent({
+    projectId,
+    opportunityId: opportunity.id,
+    kind: 'CASH_CARD_FACT_WITHDRAWN',
+    actorRef: 'BRAIN',
+    summary:
+      'The payer on this card was a search that found nobody, not a payer. It is unknown again, ' +
+      'and nothing Brain composed from it stands.',
+    detail: { field: 'payer', claimId: claim.id, value: fact.value, withdrawnRecommendations: composed },
+  });
 }
 
 const FINISHED_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);

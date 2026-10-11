@@ -215,6 +215,12 @@ export async function recordFragmentClaims(input: {
         puzzleValue: claim.puzzleValue ?? null,
         puzzleAmountCents: claim.puzzleAmountCents ?? null,
         puzzleCurrency: claim.puzzleCurrency ?? null,
+        // The validation finding and its date travel together, and through
+        // this mapper rather than around it, for the reason every paragraph
+        // above records: a declaration validated at the door and dropped here
+        // lands NULL and reads as the worker never having made it.
+        validationFinding: claim.validationFinding ?? null,
+        validationDate: claim.validationDate ?? null,
         // Carried through rather than defaulted here. This mapper dropped it,
         // so every claim landed RETRIEVED however the worker had marked it —
         // and a claim whose source nobody could open was then judged as though
