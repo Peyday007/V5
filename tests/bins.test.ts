@@ -1752,7 +1752,11 @@ describe('an assignment budget the work itself spent', () => {
     const { binId, orchestrationId } = await packetWithBin(2);
     const one = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
     await releaseBin(proofFrom(one, workerOne), 'nothing to do');
-    await assignNextBin({ workerId: workerOne, projectIds: [projectA] });
+    // The same worker is backed off a bin it just released having achieved
+    // nothing (`sameWorkerReleaseBackoff`), so the second activation is another
+    // worker's — which is the fleet case this budget exists for anyway.
+    expect(await assignNextBin({ workerId: workerOne, projectIds: [projectA] })).toBeNull();
+    await assignNextBin({ workerId: workerTwo, projectIds: [projectA] });
 
     await advancePacket(orchestrationId);
     const bin = (await getBin(binId))!;

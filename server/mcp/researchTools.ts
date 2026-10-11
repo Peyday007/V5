@@ -2733,7 +2733,10 @@ const getAuditBriefTool: McpTool = {
     );
     const role = auditRoleOf(item);
     try {
-      const { brief } = await auditBriefFor({ orchestration, role });
+      const brief = await briefOnce(
+        `${item.id}:${orchestration.documentId ?? ''}:${orchestration.updatedAt}`,
+        async () => (await auditBriefFor({ orchestration, role })).brief,
+      );
       return { projectId: item.projectId, value: { brief } };
     } catch (error) {
       // Not a NOT_FOUND: the caller is entitled to this item and the reason it
@@ -2744,6 +2747,46 @@ const getAuditBriefTool: McpTool = {
     }
   },
 };
+
+/*
+ * One audit brief per (item, document, packet state), shared by a retry.
+ *
+ * Measured 2026-10-11 through a connector: composing a brief on Cash Mode 1's
+ * 68-document layer took about 40s (JUDGE) and 32s (PRIMARY) server-side,
+ * against a Cowork client that gives up at 60s. When it gave up, the server
+ * still finished — and discarded the brief — and the worker's retry paid the
+ * whole cost again, so `wki_684c8d09f8694d449ff6` timed out repeatedly on a
+ * brief that was being built correctly every time. A retry now joins the build
+ * already in flight, or reads the one that finished.
+ *
+ * Safe because a brief's inputs are fixed for the key: a role is served only
+ * once the roles it depends on are complete and immutable for the round, and
+ * any change to the packet (a new round, a new document, a status move) moves
+ * `updated_at` and so the key. A failure is not kept. Per process and bounded,
+ * so it is a memo rather than a store: a restart forgets it and nothing reads
+ * it but this tool.
+ */
+const BRIEF_MEMO_MS = 15 * 60_000;
+const BRIEF_MEMO_MAX = 64;
+const briefMemo = new Map<string, { at: number; brief: Promise<unknown> }>();
+
+export async function briefOnce<T>(key: string, build: () => Promise<T>): Promise<T> {
+  const now = Date.now();
+  for (const [stale, entry] of briefMemo) {
+    if (now - entry.at > BRIEF_MEMO_MS) briefMemo.delete(stale);
+  }
+  const held = briefMemo.get(key);
+  if (held) return (await held.brief) as T;
+  const brief = build();
+  briefMemo.set(key, { at: now, brief });
+  if (briefMemo.size > BRIEF_MEMO_MAX) briefMemo.delete(briefMemo.keys().next().value!);
+  try {
+    return await brief;
+  } catch (error) {
+    briefMemo.delete(key);
+    throw error;
+  }
+}
 
 const submitAuditTool: McpTool = {
   name: 'brain_submit_audit',

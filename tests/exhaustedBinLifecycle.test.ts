@@ -131,6 +131,13 @@ describe('a bin that has spent its attempts', () => {
           workerId,
         });
         if (outcome !== 'OK') throw new Error(`release refused: ${outcome}`);
+        // Each round is a separate activation, minutes apart in production. A
+        // worker that released having achieved nothing is backed off the bin
+        // (`sameWorkerReleaseBackoff`), so let that time pass.
+        await getDb().run(
+          "UPDATE bin_events SET at = '2000-01-01T00:00:00.000Z' WHERE bin_id = ? AND event_type = 'BIN_RELEASED'",
+          [binId],
+        );
       } else {
         await getDb().run(
           "UPDATE bins SET lease_expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?",

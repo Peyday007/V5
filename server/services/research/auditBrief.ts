@@ -165,8 +165,11 @@ export async function auditBriefFor(input: {
    */
   const started = Date.now();
   const layerDocuments = await listDocumentsByLayer(orchestration.layerId);
+  let prefetchMs = 0;
   const context = await withExistenceMemo(async () => {
+    const prefetchStarted = Date.now();
     await prefetchExistence(layerDocuments.map((document) => storageKeyOf(document)));
+    prefetchMs = Date.now() - prefetchStarted;
     return await buildAuditContext({
       mode: 'SINGLE_DOCUMENT',
       layerId: orchestration.layerId,
@@ -221,9 +224,11 @@ export async function auditBriefFor(input: {
    * and the item retired with nothing recorded. Brain logged nothing about
    * it and the host's log buffer no longer held the window by the time
    * anybody looked, so how long the brief took, and in which half, was not
-   * established. This is that reading for the next time: an append-only row
-   * with the elapsed time, how much of it was the context, and how many
-   * documents the layer held.
+   * established. Measured the same evening through a connector, building the
+   * brief took about 40s (JUDGE, orc_ddd52) and 32s (PRIMARY, orc_b818) on a
+   * 68-document layer — server-side, before any client overhead. This row is
+   * the breakdown that measurement could not give: the elapsed time, how much
+   * was the context, how much of that was the store, and the layer's size.
    */
   const totalMs = Date.now() - started;
   if (totalMs >= SLOW_BRIEF_MS) {
@@ -233,10 +238,11 @@ export async function auditBriefFor(input: {
       orchestrationId: orchestration.id,
       outcome: role,
       durationMs: totalMs,
-      measures: { totalMs, contextMs, layerDocuments: layerDocuments.length },
+      measures: { totalMs, contextMs, prefetchMs, layerDocuments: layerDocuments.length },
       reason:
         `The ${role} brief for ${orchestration.id} took ${totalMs}ms ` +
-        `(${contextMs}ms building the context over ${layerDocuments.length} document(s) in the layer).`,
+        `(${contextMs}ms building the context, ${prefetchMs}ms of it asking the store about ` +
+        `${layerDocuments.length} document(s) in the layer).`,
       evidenceClass: 'MEASURED',
     });
   }

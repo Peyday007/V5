@@ -1247,7 +1247,7 @@ async function insideRefusalBackoff(
 const RELEASE_MEMORY_MS = 2 * 60 * 60_000;
 
 /**
- * Is this worker inside the backoff its own releases of this bin earned?
+ * Is this worker inside the backoff its own fruitless releases of this bin earned?
  *
  * A release used to put the bin straight back to READY, and the session that
  * had just handed it back checked in a second later and was handed it again —
@@ -1269,15 +1269,51 @@ async function sameWorkerReleaseBackoff(
   workerId: string,
   now: string,
 ): Promise<string | null> {
-  const rows = await getDb().all<{ at: string }>(
-    `SELECT at FROM bin_events
-      WHERE bin_id = ? AND worker_id = ? AND event_type = 'BIN_RELEASED' AND at > ?
-      ORDER BY at DESC LIMIT 10`,
+  /*
+   * Only a release that achieved nothing counts, which is what "the blocker is
+   * unresolved" looks like in rows. A worker handing over real progress because
+   * its session ended must be able to pick the work straight back up. Progress
+   * is any of the three rows Brain writes when a lease achieves something — an
+   * attempt credit, a work item of this bin's packet completed, a unit result —
+   * between this lease's assignment and its release, read by time because a
+   * credit carries no worker or generation.
+   */
+  const rows = await getDb().all<{ at: string; progressed: number | string }>(
+    `SELECT x.at,
+            CASE WHEN EXISTS (
+                   SELECT 1 FROM bin_events c
+                    WHERE c.bin_id = x.bin_id AND c.event_type = 'BIN_ATTEMPT_CREDITED'
+                      AND c.at > x.assigned_at AND c.at <= x.at)
+                 OR EXISTS (
+                   SELECT 1 FROM work_items w
+                    WHERE x.orchestration_id IS NOT NULL AND w.orchestration_id = x.orchestration_id
+                      AND w.state = 'SUCCEEDED'
+                      AND w.completed_at > x.assigned_at AND w.completed_at <= x.at)
+                 OR EXISTS (
+                   SELECT 1 FROM bin_unit_results u
+                    WHERE u.bin_id = x.bin_id AND u.created_at > x.assigned_at AND u.created_at <= x.at)
+                 THEN 1 ELSE 0 END AS progressed
+       FROM (
+         SELECT r.at, r.bin_id, b.orchestration_id,
+                COALESCE((
+                  SELECT MAX(a.at) FROM bin_events a
+                   WHERE a.bin_id = r.bin_id AND a.event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER')
+                     AND a.at <= r.at), '') AS assigned_at
+           FROM bin_events r
+           JOIN bins b ON b.id = r.bin_id
+          WHERE r.bin_id = ? AND r.worker_id = ? AND r.event_type = 'BIN_RELEASED' AND r.at > ?
+       ) x
+      ORDER BY x.at DESC LIMIT 10`,
     [binId, workerId, plusMs(now, -RELEASE_MEMORY_MS)],
   );
-  const latest = rows[0]?.at;
-  if (!latest) return null;
-  const retryAt = plusMs(latest, refusalBackoffMs(rows.length));
+  // Consecutive releases without progress, newest first; progress resets it.
+  let unresolved = 0;
+  for (const row of rows) {
+    if (Number(row.progressed) === 1) break;
+    unresolved += 1;
+  }
+  if (unresolved === 0) return null;
+  const retryAt = plusMs(rows[0]!.at, refusalBackoffMs(unresolved));
   return retryAt > now ? retryAt : null;
 }
 
