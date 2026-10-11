@@ -110,6 +110,14 @@ deliberately no second path that runs `flyctl deploy` (§28), so production
 returns to the previous behaviour on that deploy, and branch and image never
 disagree. The attempt is recorded ROLLED_BACK with every step.
 
+Production moving while the gate runs is ordinary (eight merges in three hours
+on 2026-10-11, against a gate of about an hour). The release then re-merges the
+reviewed head onto the new tip itself, and goes ahead only when production
+moved forward, none of the files it changed is a file the change touches, and
+the re-merge is clean; the forge's merge must produce exactly that tree, and
+Deploy's full suite runs on it before anything is released. Anything else
+re-gates.
+
 A Deploy that ends **cancelled** is not a Deploy that failed. `brain-release`
 keeps one pending Deploy and a newer dispatch evicts the waiting one, so a
 release's own Deploy can be cancelled before it starts because another session

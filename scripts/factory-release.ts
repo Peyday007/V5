@@ -220,12 +220,29 @@ async function mergeGated(action: Action): Promise<{ mergeSha: string; deploySha
     });
     return null;
   }
+  // The tree the forge's merge must produce: the gated merge itself, or — when
+  // production moved while the gate ran — the reviewed head merged onto the new
+  // tip, accepted only under the conditions `onProductionMoved` names.
+  let expectedTree = treeOf(gated);
+  let movedNote: string | null = null;
   if (parents[1] !== tip) {
-    advance(action.runId, 'FAILED', {
-      stage: 'INFRA',
-      detail: `production moved from ${parents[1]} to ${tip} while the gate ran; the next pass re-gates`,
-    });
-    return null;
+    const base = parents[1] ?? '';
+    const fastForward = sh('git', ['merge-base', '--is-ancestor', base, tip], { allowFail: true }).ok;
+    const changeFiles = fastForward ? filesBetween(base, gated) : [];
+    const productionFiles = fastForward ? filesBetween(base, tip) : [];
+    const remerged = fastForward ? remergeOnto(tip, action.headSha) : null;
+    const decision = onProductionMoved({ fastForward, changeFiles, productionFiles, remergedCleanly: remerged !== null });
+    if (!decision.ok || !remerged) {
+      const reason = decision.ok ? 'the reviewed head does not merge onto the new tip cleanly' : decision.reason;
+      advance(action.runId, 'FAILED', {
+        stage: 'INFRA',
+        detail: `production moved from ${base} to ${tip} while the gate ran and ${reason}; the next pass re-gates`,
+      });
+      return null;
+    }
+    expectedTree = treeOf(remerged);
+    movedNote = `production moved from ${base.slice(0, 12)} to ${tip.slice(0, 12)} while the gate ran; its ${productionFiles.length} changed file(s) are disjoint from the change's ${changeFiles.length}, so the reviewed head was merged onto the new tip and Deploy's full suite gates the result`;
+    log(movedNote);
   }
   const reply = await gh<{ sha?: string; merged?: boolean; message?: string }>(
     'PUT',
@@ -250,7 +267,7 @@ async function mergeGated(action: Action): Promise<{ mergeSha: string; deploySha
   log(`merged ${action.headSha} into production as ${mergeSha} through pull request #${action.prNumber}`);
   advance(action.runId, 'MERGED', { 'merge-sha': mergeSha });
   sh('git', ['fetch', '--quiet', 'origin', 'production']);
-  if (treeOf(mergeSha) !== treeOf(gated)) {
+  if (treeOf(mergeSha) !== expectedTree) {
     // Production moved between the check and the merge. The merge is real and
     // stays recorded; what does not happen is a deploy of a tree nobody tested.
     advance(action.runId, 'FAILED', {
@@ -259,7 +276,61 @@ async function mergeGated(action: Action): Promise<{ mergeSha: string; deploySha
     });
     return null;
   }
+  if (movedNote) log(`merged onto a moved production: ${movedNote}`);
   return { mergeSha, deploySha: mergeSha };
+}
+
+/** Files that differ between two commits, from the trusted checkout. */
+function filesBetween(from: string, to: string): string[] {
+  return sh('git', ['diff', '--name-only', from, to]).stdout.split('\n').map((line) => line.trim()).filter(Boolean);
+}
+
+/** The reviewed head merged onto `tip` locally; null when it does not merge cleanly. */
+function remergeOnto(tip: string, head: string): string | null {
+  sh('git', ['checkout', '--quiet', '-B', 'release-remerge', tip]);
+  const merged = sh(
+    'git',
+    ['-c', 'user.name=factory-release', '-c', 'user.email=factory-release@users.noreply.github.com',
+      'merge', '--no-ff', '--no-edit', head],
+    { allowFail: true },
+  );
+  if (!merged.ok) {
+    sh('git', ['merge', '--abort'], { allowFail: true });
+    return null;
+  }
+  return sh('git', ['rev-parse', 'HEAD']).stdout.trim();
+}
+
+/**
+ * Whether a merge may go ahead when production moved while the gate ran.
+ *
+ * The gate's whole Postgres suite takes about an hour, and on 2026-10-11
+ * production took eight merges in three hours — so "production must not move"
+ * would spend all three attempts in an ordinary afternoon and stop the release
+ * for a reason that is not about the change. The gate tested the change on the
+ * base it merged onto; what moved since is other work that reached production
+ * through its own review. It is accepted only when production moved forward
+ * (never rewound), when none of the files production changed is a file the
+ * change touches, and when the reviewed head merges onto the new tip cleanly.
+ * The merged tree is then checked against that local re-merge, and Deploy's
+ * own full suite runs on it before anything is released. Anything else
+ * re-gates, as before.
+ */
+export function onProductionMoved(input: {
+  fastForward: boolean;
+  changeFiles: readonly string[];
+  productionFiles: readonly string[];
+  remergedCleanly: boolean;
+}): { ok: true } | { ok: false; reason: string } {
+  if (!input.fastForward) return { ok: false, reason: 'production was rewound rather than moved forward' };
+  const touched = new Set(input.changeFiles);
+  const overlap = input.productionFiles.filter((file) => touched.has(file));
+  if (overlap.length > 0) {
+    return { ok: false, reason: `production changed ${overlap.length} file(s) the change also touches (${overlap.slice(0, 5).join(', ')})` };
+  }
+  if (input.changeFiles.length === 0) return { ok: false, reason: 'the gated merge changes nothing' };
+  if (!input.remergedCleanly) return { ok: false, reason: 'the reviewed head does not merge onto the new tip cleanly' };
+  return { ok: true };
 }
 
 interface WorkflowRun {
