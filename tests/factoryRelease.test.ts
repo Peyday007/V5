@@ -17,14 +17,19 @@ import { ensureCampaign, factoryNow, getCampaign, patchCampaign } from '../serve
 import { recordReview } from '../server/repos/factoryFleet.ts';
 import { getDb } from '../server/db/database.ts';
 import { decideRelease, excludedPathsIn } from '../server/services/factory/release/gate.ts';
-import { advanceRelease, planRelease } from '../server/services/factory/release/plan.ts';
-import { authorizeAutomaticRelease, ReleaseGrantError, validateLiveChecks } from '../server/services/factory/release/grant.ts';
+import { advanceRelease, mayMerge, planRelease } from '../server/services/factory/release/plan.ts';
+import {
+  authorizeAutomaticRelease,
+  ReleaseGrantError,
+  validateLiveChecks,
+  withdrawAutomaticRelease,
+} from '../server/services/factory/release/grant.ts';
 import { deriveOutcome, objectiveOutcome } from '../server/services/factory/release/outcome.ts';
 import { verifyLive, type VerifyDeps } from '../server/services/factory/release/verify.ts';
 import { latestRun, listRuns, openRun } from '../server/repos/factoryRelease.ts';
 import { forbiddenPathsFor } from '../server/services/factory/forbidden.ts';
 import { scanDiff } from '../scripts/release-scan.ts';
-import { deployReleased } from '../scripts/factory-release.ts';
+import { MAX_CANCELLED_DEPLOYS, deployReleased, onCancelledDeploy, onProductionMoved } from '../scripts/factory-release.ts';
 import type { FactoryCampaign, FactoryChangeRequest } from '../server/domain/factory.ts';
 import type { ReleaseGrant, ReleaseRun } from '../server/domain/factoryRelease.ts';
 
@@ -168,6 +173,21 @@ describe('the release gate', () => {
       'package.json',
       'server/services/factory/release/gate.ts',
       'scripts/factory-release.ts',
+      // The gate's own inputs: what its patterns match, the changed-file list it
+      // classifies, whether the review passed, and where a grant is guarded.
+      'server/services/factory/glob.ts',
+      'server/services/factory/forge.ts',
+      'server/services/factory/campaignView.ts',
+      'server/services/factory/review.ts',
+      'server/routes/factory.ts',
+      'server/repos/factory.ts',
+      'scripts/factory.sh',
+      // What the gate runs to decide the tests passed.
+      'scripts/test-impacted.mjs',
+      'vitest.config.ts',
+      'tsconfig.json',
+      'scripts/test-postgres.sh',
+      '.claude/settings.json',
     ]) {
       expect(excludedPathsIn([file])).toEqual([file]);
     }
@@ -271,6 +291,10 @@ describe('the release plan and its state machine', () => {
     expect((await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '9' })).moved).toBe(false);
     expect((await advanceRelease({ runId, to: 'MERGED', mergeSha: 'c'.repeat(40) })).moved).toBe(true);
     expect((await advanceRelease({ runId, to: 'MERGED', mergeSha: 'd'.repeat(40) })).moved).toBe(false);
+    expect((await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '9' })).moved).toBe(true);
+    // A Deploy evicted before it started is replaced, and the attempt records the one that carries the merge.
+    expect((await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '8' })).moved).toBe(true);
+    expect((await latestRun(campaign.id))!.deployRunId).toBe('8');
     expect((await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '9' })).moved).toBe(true);
 
     // A worker restart: the workflow that held it is gone; the next pass resumes at DEPLOYING.
@@ -390,6 +414,68 @@ describe('the status a person reads', () => {
   });
 });
 
+describe('the last moment a merge can be stopped', () => {
+  it('refuses the merge once the owner withdraws the grant during the gate', async () => {
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/src/russell/Build.tsx']);
+    const plan = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf1' });
+    const runId = plan.action?.runId ?? '';
+    expect(await mayMerge(runId)).toEqual({ ok: true, reasons: [] });
+
+    expect(await withdrawAutomaticRelease({ changeRequestId: changeRequest.id, userId: adminId, reason: 'not today' })).toBe(true);
+    const answer = await mayMerge(runId);
+    expect(answer.ok).toBe(false);
+    expect(answer.reasons.join(' ')).toMatch(/withdrew automatic release/);
+
+    // The workflow records that as a non-retryable GATE failure, which Brain shows as a person's blocker.
+    expect((await advanceRelease({ runId, to: 'FAILED', failureStage: 'GATE', failureDetail: answer.reasons.join(' ') })).moved).toBe(true);
+    const outcome = await objectiveOutcome(campaign);
+    expect(outcome).toMatchObject({ status: 'BLOCKED', needsPerson: true });
+    // With the grant gone the objective reads as a person's to merge; the attempt keeps why it stopped.
+    expect(outcome.blocker).toMatch(/person’s decision/);
+    expect((await latestRun(campaign.id))?.failureDetail).toMatch(/withdrew/);
+    expect((await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf2' })).action).toBeNull();
+  });
+
+  it('refuses the merge when the campaign moved to another head after the gate', async () => {
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/src/russell/Build.tsx']);
+    const runId = (await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf1' })).action?.runId ?? '';
+    await patchCampaign(campaign.id, { integrationSha: 'e'.repeat(40) });
+    expect((await mayMerge(runId)).reasons.join(' ')).toMatch(/another head/);
+  });
+
+  it('a runner failure past the attempt ceiling reads as a blocker, not as "will be tried again"', async () => {
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    const base = { id: 'rr', campaignId: campaign.id, headSha: HEAD, state: 'FAILED', failureStage: 'INFRA', failureDetail: 'runner died' } as ReleaseRun;
+    const grantRow = await grant(changeRequest.id);
+    expect(deriveOutcome({ campaign, grant: grantRow, latestRun: { ...base, attempt: 1 }, origin: null }).status).toBe('RELEASING');
+    expect(deriveOutcome({ campaign, grant: grantRow, latestRun: { ...base, attempt: 3 }, origin: null })).toMatchObject({ status: 'BLOCKED', needsPerson: true });
+  });
+
+  it('a rollback whose revert could not land stays FAILED with what a person must do', async () => {
+    const changeRequest = await approved();
+    await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    stubForge(['client/src/russell/Build.tsx']);
+    const runId = (await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf1' })).action?.runId ?? '';
+    await advanceRelease({ runId, to: 'MERGED', mergeSha: 'c'.repeat(40) });
+    await advanceRelease({ runId, to: 'DEPLOYING', deployRunId: '9' });
+    await advanceRelease({ runId, to: 'VERIFYING' });
+    // Verification failed: FAILED first, which is what lets ROLLED_BACK follow.
+    expect((await advanceRelease({ runId, to: 'ROLLED_BACK' })).moved).toBe(false);
+    expect((await advanceRelease({ runId, to: 'FAILED', failureStage: 'VERIFY', failureDetail: 'verification failed' })).moved).toBe(true);
+    const restamped = await advanceRelease({ runId, to: 'FAILED', failureStage: 'VERIFY', failureDetail: 'the revert is open as pull request #12; a person merges it' });
+    expect(restamped.moved).toBe(true);
+    expect(restamped.run?.failureDetail).toMatch(/pull request #12/);
+  });
+});
+
 describe('the release workflow’s own readings', () => {
   it('scans for reserved paths and credentials in added lines', () => {
     expect(scanDiff(['client/a.tsx'], ['const greeting = "hi";']).ok).toBe(true);
@@ -402,6 +488,38 @@ describe('the release workflow’s own readings', () => {
     expect(deployReleased([{ name: 'Record what was released', conclusion: 'success' }])).toBe(true);
     expect(deployReleased([{ name: 'Record what was released', conclusion: 'skipped' }])).toBe(false);
     expect(deployReleased([{ name: 'Deploy', conclusion: 'failure' }])).toBe(false);
+  });
+
+  it('never rolls back for a Deploy that was cancelled rather than failed', () => {
+    // Evicted from the pending slot by a newer Deploy that contains the merge: adopt it.
+    expect(onCancelledDeploy({ released: false, successorRunId: 435, cancelledSoFar: 1 })).toEqual({ kind: 'ADOPT', runId: 435 });
+    // Cancelled after the image was released: verify the live Brain, which decides.
+    expect(onCancelledDeploy({ released: true, successorRunId: null, cancelledSoFar: 1 })).toEqual({ kind: 'VERIFY' });
+    // Nothing else deploys it: dispatch again, a bounded number of times.
+    expect(onCancelledDeploy({ released: false, successorRunId: null, cancelledSoFar: 1 })).toEqual({ kind: 'REDISPATCH' });
+    expect(onCancelledDeploy({ released: false, successorRunId: null, cancelledSoFar: MAX_CANCELLED_DEPLOYS })).toEqual({ kind: 'STOP' });
+    // And the script still rolls back a Deploy that genuinely failed.
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    const body = script.slice(script.indexOf('async function fromDeploying'), script.indexOf('async function fromMerged'));
+    expect(body).toMatch(/watched\.conclusion === 'cancelled'/);
+    expect(body).toMatch(/stage: 'DEPLOY'[\s\S]*rollBack\(/);
+  });
+
+  it('merges onto a moved production only when the movement is disjoint from the change', () => {
+    const change = ['client/src/russell/Build.tsx', 'tests/buildRepositoriesReleaseSentence.test.tsx'];
+    const ok = { fastForward: true, changeFiles: change, remergedCleanly: true };
+    expect(onProductionMoved({ ...ok, productionFiles: ['server/services/cash/x.ts', 'CLAUDE.md'] })).toEqual({ ok: true });
+    // Production touched a file the change touches: the tested tree says nothing about the combination.
+    const overlap = onProductionMoved({ ...ok, productionFiles: ['client/src/russell/Build.tsx'] });
+    expect(overlap.ok).toBe(false);
+    if (!overlap.ok) expect(overlap.reason).toMatch(/Build\.tsx/);
+    // A rewound branch, an unclean re-merge or an empty change re-gate as before.
+    expect(onProductionMoved({ ...ok, fastForward: false, productionFiles: ['a.ts'] }).ok).toBe(false);
+    expect(onProductionMoved({ ...ok, remergedCleanly: false, productionFiles: ['a.ts'] }).ok).toBe(false);
+    expect(onProductionMoved({ ...ok, changeFiles: [], productionFiles: ['a.ts'] }).ok).toBe(false);
+    // And the forge's merge must still produce exactly the tree Brain expected.
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    expect(script).toMatch(/treeOf\(mergeSha\) !== expectedTree/);
   });
 
   it('asks for its own resume after a failure, a bounded number of times', () => {
@@ -445,5 +563,36 @@ describe('the release workflow’s own readings', () => {
     expect(gate).toMatch(/persist-credentials: false/);
     expect(gate).toMatch(/contents: read/);
     expect(gate).toMatch(/npm run test:impacted/);
+  });
+
+  it('every test gate finishes before anything merges, the Postgres half included', () => {
+    const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
+    const gate = workflow.slice(workflow.indexOf('  gate:'), workflow.indexOf('  release:'));
+    const release = workflow.slice(workflow.indexOf('  release:'));
+    // The whole suite against Postgres runs in the gate, from the trusted copy of the cluster script.
+    expect(gate).toMatch(/sh \.\.\/trusted\/scripts\/test-postgres\.sh run -- npx vitest run/);
+    expect(gate).toMatch(/POSTGRES: \$\{\{ steps\.postgres\.outcome \}\}/);
+    // The release job runs only after the gate; nothing in it starts a test suite alongside Deploy.
+    expect(release).toMatch(/needs: \[plan, gate\]/);
+    expect(release).not.toMatch(/postgres-suite/);
+    expect(fs.readFileSync('scripts/factory-release.ts', 'utf8')).not.toMatch(/postgres-suite/);
+  });
+
+  it('merges through the pull request, never by pushing to the protected branch', () => {
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    expect(script).toMatch(/'PUT',\s*`\/repos\/\$\{REPO\}\/pulls\/\$\{action\.prNumber\}\/merge`/);
+    expect(script).not.toMatch(/refs\/heads\/production/);
+    // The merge is asked about immediately before it happens, and the merged tree must be the tested tree.
+    expect(script.indexOf("brain(['release-may-merge'")).toBeGreaterThan(-1);
+    // The tree it must be is the gated tree, or the reviewed head re-merged onto a moved production.
+    expect(script).toMatch(/let expectedTree = treeOf\(gated\)/);
+    expect(script).toMatch(/treeOf\(mergeSha\) !== expectedTree/);
+    const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
+    expect(workflow).toMatch(/pull-requests: write/);
+  });
+
+  it('the Postgres runner never puts its cluster where its owner cannot reach it', () => {
+    const runner = fs.readFileSync('scripts/test-postgres.sh', 'utf8');
+    expect(runner).toMatch(/if \[ "\$\(id -u\)" = "0" \] \|\| \[ "\$\{#TMP_BASE\}" -gt 60 \]; then\n\s*TMP_BASE=\/tmp/);
   });
 });

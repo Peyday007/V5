@@ -459,8 +459,30 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
         'Any published fact that would rule this out outright — a closed or awarded request, a ' +
         'restriction excluding a supplier like this one, a requirement nobody here could meet. ' +
         'A documented absence of one is a real finding and belongs here, submitted as ' +
-        'NEGATIVE_EXISTENCE naming where you looked; any other claim in this lane is read as a ' +
-        'disqualifier found, and it stops the opening.',
+        'NEGATIVE_EXISTENCE naming where you looked. A fact that does rule it out goes in ' +
+        'ruled_out instead; a risk or condition that might matter stays here.',
+      necessity: 'CONDITIONAL',
+    },
+    /*
+     * The disqualifier *found*, declared rather than inferred.
+     *
+     * Production showed the `disqualifier` lane holding three different
+     * things: a documented absence (typed NEGATIVE_EXISTENCE, reliably), a fact
+     * that rules the opening out (a closed RFP, a closed listing), and a risk
+     * or rule that merely bears on it ("independent confirmation is thin",
+     * "unauthorized contact may disqualify"). The first two decide whether an
+     * opening may qualify and the third does not, and claim type alone could
+     * not tell the second from the third. So the worker that read the source
+     * says which, by the lane it files the claim under.
+     */
+    {
+      id: 'ruled_out',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A published fact that rules this opening out now: its closing date or expiry has ' +
+        'passed, the listing is closed, filled or awarded, or a published rule excludes a ' +
+        'supplier like this one. Only such a fact belongs here, quoted with its source and ' +
+        'date; a risk, a condition or a rule that might matter belongs in disqualifier.',
       necessity: 'CONDITIONAL',
     },
     /*

@@ -1,0 +1,44 @@
+{
+  "objective": "On the Build page, directly beneath the heading 'Repositories' in client/src/russell/Build.tsx (the repositories card, className 'rs-factory-repositories'), show one short hint sentence that reads exactly: 'Each repository is released only under its owner's approval.' Render it as a paragraph with className 'rs-hint'. Add tests/buildRepositoriesReleaseSentence.test.tsx that renders the repositories card with one repository and asserts the sentence is on the screen. Change nothing else.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "The Build page shows 'Each repository is released only under its owner's approval.' under 'Repositories'.",
+  "nonGoals": [
+    "Any server, schema or workflow change",
+    "Restyling the Build page"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "client/src/russell/Build.tsx renders 'Each repository is released only under its owner's approval.' beneath the heading 'Repositories'.",
+      "verification": "npx vitest run tests/buildRepositoriesReleaseSentence.test.tsx",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/russell/Build.tsx",
+    "tests/buildRepositoriesReleaseSentence.test.tsx"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the merge commit; no schema or data change.",
+  "release": {
+    "reason": "Third end-to-end proof: zero manual intervention between approval and verified LIVE.",
+    "pagePath": "/build",
+    "liveChecks": [
+      {
+        "kind": "BUNDLE_TEXT",
+        "text": "released only under its owner's approval"
+      },
+      {
+        "kind": "HTTP",
+        "path": "/healthz",
+        "expectStatus": 200
+      }
+    ]
+  }
+}

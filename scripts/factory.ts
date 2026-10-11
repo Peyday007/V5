@@ -1391,6 +1391,14 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'release-may-merge': {
+      const runId = flagString(flags, 'run') ?? fail('--run is required');
+      const { mayMerge } = await import('../server/services/factory/release/plan.ts');
+      const answer = await mayMerge(runId);
+      process.stdout.write(`RELEASE-MAY-MERGE: ${JSON.stringify(answer)}\n`);
+      break;
+    }
+
     case 'release-verify': {
       const runId = flagString(flags, 'run') ?? fail('--run is required');
       const { verifyReleaseRun } = await import('../server/services/factory/release/verify.ts');
@@ -1436,7 +1444,7 @@ async function main(): Promise<void> {
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
           '  answer-bin,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
-          '  authorize-release, release-plan, release-advance, release-verify, release-status\n',
+          '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-status\n',
       );
       // An unknown command is the caller getting it wrong, and it used to be
       // reported as success — see the verdict line below.

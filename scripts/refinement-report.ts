@@ -316,7 +316,70 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
   if (dived.length === 0) {
     console.log('  none — no opening in this project has had a deep dive.');
   }
+  await printCancellations(projectId);
   return true;
+}
+
+/** The measured healthy window the cancellation rates are compared against. */
+const HEALTHY_FROM = '2026-10-08T07:28:00.000Z';
+const HEALTHY_TO = '2026-10-09T04:27:00.000Z';
+
+/** A reason with its row ids and numbers folded, so one cause counts once. */
+function reasonKey(text: string | null): string {
+  return (text ?? '(no reason recorded)')
+    .replace(/\b[a-z]{2,4}_[0-9a-f]{12,}\b/g, '<id>')
+    .replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '<time>')
+    .replace(/\d+/g, 'N')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 110);
+}
+
+/**
+ * Why work was cancelled, grouped by the reason recorded on each row.
+ *
+ * The cancellation *rate* had been reported without its causes, over a mixed
+ * period that included outages. Both halves are printed here: every
+ * cancellation, and the ones created inside the measured healthy window, so a
+ * reader can tell a policy that discards work from an outage that stranded it.
+ * Read-only: it counts rows and changes none.
+ */
+async function printCancellations(projectId: string): Promise<void> {
+  const items = await getDb().all<{ work_type: string; state: string; cancelled_reason: string | null; created_at: string }>(
+    `SELECT work_type, state, cancelled_reason, created_at FROM work_items WHERE project_id = ?`,
+    [projectId],
+  );
+  const packets = await getDb().all<{ status: string; failure_reason: string | null; created_at: string }>(
+    `SELECT status, failure_reason, created_at FROM research_orchestrations WHERE project_id = ?`,
+    [projectId],
+  );
+  const healthy = (at: string): boolean => at >= HEALTHY_FROM && at <= HEALTHY_TO;
+  const group = <T,>(rows: T[], key: (row: T) => string): [string, number][] => {
+    const counts = new Map<string, number>();
+    for (const row of rows) counts.set(key(row), (counts.get(key(row)) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  };
+  console.log('');
+  console.log('CANCELLATIONS');
+  for (const [label, scope] of [
+    ['all time', (_: string) => true],
+    [`healthy window ${HEALTHY_FROM.slice(0, 16)}..${HEALTHY_TO.slice(0, 16)}`, healthy],
+  ] as const) {
+    const scopedItems = items.filter((row) => scope(row.created_at));
+    const cancelledItems = scopedItems.filter((row) => row.state === 'CANCELLED');
+    const scopedPackets = packets.filter((row) => scope(row.created_at));
+    const cancelledPackets = scopedPackets.filter((row) => row.status === 'CANCELLED');
+    console.log(
+      `  ${label}: work items ${cancelledItems.length}/${scopedItems.length} cancelled,` +
+        ` packets ${cancelledPackets.length}/${scopedPackets.length} cancelled`,
+    );
+    for (const [reason, n] of group(cancelledItems, (row) => `${row.work_type} · ${reasonKey(row.cancelled_reason)}`).slice(0, 12)) {
+      console.log(`    item   ${String(n).padStart(4)} × ${reason}`);
+    }
+    for (const [reason, n] of group(cancelledPackets, (row) => reasonKey(row.failure_reason)).slice(0, 10)) {
+      console.log(`    packet ${String(n).padStart(4)} × ${reason}`);
+    }
+  }
 }
 
 /**
@@ -392,9 +455,9 @@ async function printGateOutcome(one: CashOpportunity): Promise<void> {
       // The two lanes whose claim *type* decides what the answer means: a
       // documented absence of a disqualifier, or one found; a route, or none.
       for (const claim of accepted) {
-        if (claim.evidenceLane !== 'disqualifier' && claim.evidenceLane !== 'contact_mode') continue;
+        if (!['disqualifier', 'ruled_out', 'contact_mode'].includes(claim.evidenceLane ?? '')) continue;
         console.log(
-          `          ${claim.evidenceLane.padEnd(12)} ${claim.claimType.padEnd(18)} ` +
+          `          ${(claim.evidenceLane ?? '').padEnd(12)} ${claim.claimType.padEnd(18)} ` +
             claim.claim.replace(/\s+/g, ' ').slice(0, 120),
         );
       }

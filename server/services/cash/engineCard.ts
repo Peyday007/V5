@@ -153,11 +153,33 @@ export interface EngineCard {
    * Optional so a card built before it existed still type-checks; absent means
    * nothing has been found.
    */
-  disqualifiedBy?: { value: string; claimId: string | null } | null;
+  disqualifiedBy?: { value: string; claimId: string | null; declared: boolean } | null;
 }
 
-/** The card-fact field an established disqualifier is recorded under. */
+/**
+ * The card-fact field a disqualifier the worker *declared* is recorded under:
+ * a claim filed in the dive's `ruled_out` lane.
+ */
 export const DISQUALIFIED_FIELD = 'disqualifiedBy';
+
+/**
+ * The field for a possible disqualifier a dive recorded without classifying it.
+ *
+ * A dive compiled before `ruled_out` existed had one `disqualifier` lane for
+ * an absence, a disqualifier and a mere risk alike. An absence is typed
+ * NEGATIVE_EXISTENCE and is read as one; anything else there is a statement
+ * nobody classified, and an unknown may never be the favourable reading — so
+ * it blocks qualification, and says that it is unclassified rather than
+ * claiming the opening is ruled out.
+ */
+export const UNCLASSIFIED_DISQUALIFIER_FIELD = 'possibleDisqualifier';
+
+/**
+ * The field recording that a dive offered `ruled_out` and documented that
+ * nothing rules the opening out. Only this clears an unclassified possible
+ * disqualifier: silence from a later dive is not an answer.
+ */
+export const RULED_OUT_CLEARED_FIELD = 'ruledOutCleared';
 
 const LABELS: Record<EngineFieldKey, { label: string; task: string }> = {
   revenueRange: {
@@ -355,9 +377,15 @@ export function cashEngineCard(input: {
     validationState: input.opportunity.validationState,
     recommendation: entries.find((entry) => entry.key === 'recommendation' && entry.value) ?? null,
     disqualifiedBy: (() => {
-      const fact = byField.get(DISQUALIFIED_FIELD);
-      const value = text(fact?.value);
-      return fact && value ? { value, claimId: fact.claimId ?? null } : null;
+      const declared = byField.get(DISQUALIFIED_FIELD);
+      if (declared && text(declared.value)) {
+        return { value: text(declared.value)!, claimId: declared.claimId ?? null, declared: true };
+      }
+      const possible = byField.get(UNCLASSIFIED_DISQUALIFIER_FIELD);
+      if (possible && text(possible.value) && !text(byField.get(RULED_OUT_CLEARED_FIELD)?.value)) {
+        return { value: text(possible.value)!, claimId: possible.claimId ?? null, declared: false };
+      }
+      return null;
     })(),
   };
 }

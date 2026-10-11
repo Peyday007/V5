@@ -36,6 +36,7 @@
  * refused, because that is a `COMMERCIAL_ACTION` under a grant a person makes
  * separately.
  */
+import { getDb } from '../../db/database.ts';
 import {
   cashEventsOfKind,
   getCashMode,
@@ -50,15 +51,23 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate, missionsForCandidate } from '../../repos/russellMissions.ts';
-import { citableClaims, getOrchestration, listPasses } from '../../repos/research.ts';
+import { citableClaims, getClaim, getFragment, getOrchestration, listPasses } from '../../repos/research.ts';
 import {
   cardFact,
   cardFactsFor,
   mayReplace,
   recordEvidenceFact,
   recordRecommendationFact,
+  clearColumnIfStill,
+  withdrawEvidenceFact,
+  withdrawRecommendationsResting,
 } from '../../repos/cashCardFacts.ts';
-import { cashEngineCard } from './engineCard.ts';
+import {
+  DISQUALIFIED_FIELD,
+  RULED_OUT_CLEARED_FIELD,
+  UNCLASSIFIED_DISQUALIFIER_FIELD,
+  cashEngineCard,
+} from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { cashTier } from './tier.ts';
 import { COLUMN } from './answers.ts';
@@ -119,6 +128,9 @@ export const VALIDATION_STALL_MS = 6 * 60 * 60 * 1000;
  */
 export const MAX_VALIDATION_ROUNDS = 2;
 
+/** Extra rounds an opening may have only to classify an older dive's possible disqualifier. */
+export const CLASSIFICATION_ROUNDS = 1;
+
 /**
  * Why a particular opening is not being qualified right now.
  *
@@ -172,6 +184,15 @@ export type DiveRefusal =
   | { kind: 'ROUNDS_SPENT'; rounds: number; cap: number }
   /** It got there. A qualified piece has nothing left for a dive to ask. */
   | { kind: 'ALREADY_QUALIFIED'; tier: string }
+  /**
+   * A dive already found a published fact that rules it out.
+   *
+   * A second round would ask the same sources the same questions about an
+   * opening whose deadline has passed or whose terms exclude us — production
+   * spent a second ~25-minute dive on each closed RFP. New evidence that the
+   * fact stopped being true arrives through discovery, not by asking again.
+   */
+  | { kind: 'DISQUALIFIED'; reason: string }
   /** Declined, archived or already being executed — the commercial questions are closed. */
   | { kind: 'NOT_A_QUALIFYING_STATE'; state: string }
   /** No published signal and no source claim, so there is nothing to quote into a question. */
@@ -193,6 +214,8 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
       return `both dives are spent (${refusal.rounds}/${refusal.cap}); each dive's own reason says what it established`;
     case 'ALREADY_QUALIFIED':
       return `already ${refusal.tier} — a dive has nothing left to ask`;
+    case 'DISQUALIFIED':
+      return `disqualified by a published fact: ${refusal.reason.slice(0, 140)}`;
     case 'NOT_A_QUALIFYING_STATE':
       return `state ${refusal.state}: the commercial questions are closed`;
     case 'NOTHING_PUBLISHED_TO_ASK_ABOUT':
@@ -212,7 +235,23 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
       return { kind: 'IN_FLIGHT', state: opportunity.validationState };
     }
     if (opportunity.validationState === 'NEEDS_PERSON') return { kind: 'AWAITING_PERSON' };
-    if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS) {
+    const disqualified = await cardFact(opportunity.id, DISQUALIFIED_FIELD);
+    if (disqualified?.value) return { kind: 'DISQUALIFIED', reason: disqualified.value };
+    /*
+     * One bounded round more, to classify what an older dive left unclassified.
+     *
+     * A dive compiled before `ruled_out` existed could record a possible
+     * disqualifier without saying whether it rules the opening out, and that
+     * blocks qualification. Refusing another dive would make the block
+     * permanent, since another dive — which offers `ruled_out` and asks the
+     * open-or-closed question first — is exactly what settles it. So it gets
+     * exactly one, and the bound is the round count rather than a flag.
+     */
+    const classifying =
+      opportunity.validationRounds < MAX_VALIDATION_ROUNDS + CLASSIFICATION_ROUNDS &&
+      Boolean((await cardFact(opportunity.id, UNCLASSIFIED_DISQUALIFIER_FIELD))?.value) &&
+      !(await cardFact(opportunity.id, RULED_OUT_CLEARED_FIELD))?.value;
+    if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS && !classifying) {
       return {
         kind: 'ROUNDS_SPENT',
         rounds: opportunity.validationRounds,
@@ -297,7 +336,22 @@ export function validationQuestion(opportunity: CashOpportunity): string {
   const source = opportunity.source ? ` The source is ${opportunity.source}.` : '';
   return (
     `What would somebody need to know before acting on this specific opening: "${signal}".` +
-    `${source}${observed} Establish who actually pays and how a supplier reaches them, what ` +
+    `${source}${observed} ` +
+    /*
+     * The decisive question first, because it is the cheap one.
+     *
+     * Production, Cash Mode 1: nine of the dives that reached their
+     * disqualifier recorded a closing date already passed or a listing already
+     * closed — after twenty to thirty minutes spent on the payer, the price, the
+     * costs and the effort of something nobody could take. Whether an opening
+     * is still open is one look at its own source, and when the answer is no it
+     * is the whole answer.
+     */
+    'First establish whether this opening is still open to a supplier like us: whether its ' +
+    'closing date, expiry or listing status has passed, or a published rule excludes us. If ' +
+    'it has closed or excludes us, submit that one fact in the ruled_out lane with its ' +
+    'source and stop; nothing else about it needs answering. Otherwise establish who ' +
+    'actually pays and how a supplier reaches them, what ' +
     'comparable work is published at, what delivering it would cost, what capital it needs ' +
     'before any money arrives, how long published terms say payment takes, how much human ' +
     'time comparable work is published as taking, whether selling, calling, fulfilment or ' +
@@ -972,7 +1026,37 @@ export const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
   acquisition_access: 'acquisitionAccess',
   exit_evidence: 'exitEvidence',
   contact_mode: 'phoneDependency',
+  /*
+   * A declared disqualifier answers "what would rule it out" as well as
+   * stopping the opening; `applyValidationAnswers` records the second.
+   */
+  ruled_out: 'disqualifiers',
 });
+
+/**
+ * A lane that answers a second card field as well as its own.
+ *
+ * `contact_mode` asks for the published route to the buyer — a portal, an
+ * address, a form, a bid submission or a phone number — and that *is* the
+ * `access` field: "a channel that actually reaches them". It used to fill
+ * `phoneDependency` alone, so a dive could establish exactly how to reach the
+ * buyer and the card would still read `access` as unknown. Production, Cash
+ * Mode 1: seven openings stood one field from QUALIFIED with that field
+ * `access`, and Brain launched separate "Access for …" research missions — one
+ * of them holding a mission slot while the opening's own dive ran beside it.
+ *
+ * Never from a `NEGATIVE_EXISTENCE` claim: a documented absence of a route is
+ * a finding, and it is the opposite of access.
+ */
+export const ALSO_ANSWERS_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
+  contact_mode: 'access',
+});
+
+/** The lane where a dive records what bears on ruling an opening out, absences included. */
+export const DISQUALIFIER_LANE = 'disqualifier';
+
+/** The lane where a dive declares a fact that does rule the opening out. */
+export const RULED_OUT_LANE = 'ruled_out';
 
 export interface AppliedValidation {
   opportunityId: string;
@@ -1025,44 +1109,165 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
     for (const orchestrationId of await finishedDivePackets(opportunity)) {
       for (const claim of await citableClaims(orchestrationId)) {
         if (!claim.sourceUrl) continue;
-        const field = FIELD_BY_LANE[claim.evidenceLane ?? ''];
-        if (!field) continue;
-        const existing = await cardFact(opportunity.id, field);
-        // Already this claim: nothing to do, which is what a replay must find.
-        if (existing?.claimId === claim.id) continue;
-        // A person's answer stands, and so does an earlier piece of evidence:
-        // `mayReplace` is the order, and it is about authority rather than
-        // recency. Asked here to skip the write, and again inside it.
-        if (!mayReplace(existing, 'EVIDENCE')) continue;
-        const value = clampText(claim.claim, 600);
-        const written = await recordEvidenceFact({
-          projectId,
-          opportunityId: opportunity.id,
-          field,
-          value,
-          claimId: claim.id,
-        });
-        if (!written) continue;
+        const lane = claim.evidenceLane ?? '';
+        const fields: string[] = [];
         /*
-         * The column as well as the fact, where the field has one.
+         * A search that found nothing is not the thing it looked for.
          *
-         * `answers.ts` writes both when a *need's* research settles a card
-         * field, and this once wrote only the fact — so the same question,
-         * answered by the deep dive instead, reached `cash_card_facts` and never
-         * reached `evidenceCard`, `readyToTest` or anything else that reads the
-         * row. `COLUMN` is imported rather than restated, because a second copy
-         * is the thing that drifts. Written only once the fact is this claim's,
-         * so the column and the fact cannot name two different claims.
+         * For most lanes a documented absence *is* the answer — no licence is
+         * required, nothing rules it out, no call is needed. For these it is
+         * not: a search that found no payer, no published price, no published
+         * cost, no payment terms or no effort figure leaves that field unknown,
+         * and writing it there made production read "No payer was found" as the
+         * payer and compose a capture thesis from it. The claim still stands as
+         * evidence; it simply answers nothing.
          */
-        const column = COLUMN[field];
-        if (column) {
-          await updateOpportunity(opportunity.id, { [column]: value } as never);
+        const absenceAnswersNothing =
+          claim.claimType === 'NEGATIVE_EXISTENCE' && ABSENCE_IS_NOT_AN_ANSWER.has(lane);
+        if (FIELD_BY_LANE[lane] && !absenceAnswersNothing) fields.push(FIELD_BY_LANE[lane]);
+        if (ALSO_ANSWERS_BY_LANE[lane] && claim.claimType !== 'NEGATIVE_EXISTENCE') {
+          fields.push(ALSO_ANSWERS_BY_LANE[lane]);
         }
-        out.push({ opportunityId: opportunity.id, field, claimId: claim.id });
+        /*
+         * "No disqualifier found" and "disqualifier found" are two answers.
+         *
+         * Found is declared: a claim filed in `ruled_out` answers the question
+         * and stops the opening. None found is a NEGATIVE_EXISTENCE claim in
+         * `disqualifier`, which answers the question and stops nothing.
+         *
+         * A dive compiled before `ruled_out` existed had only `disqualifier`,
+         * and production's held absences, closed RFPs and mere risks side by
+         * side. The absences are typed and read as absences; anything else is
+         * a statement nobody classified, recorded as a *possible* disqualifier
+         * that blocks qualification and says so — never as clear.
+         */
+        const classifying = await declaresRuledOut(claim.fragmentId);
+        if (claim.claimType !== 'NEGATIVE_EXISTENCE') {
+          if (lane === RULED_OUT_LANE) {
+            fields.push(DISQUALIFIED_FIELD);
+          } else if (lane === DISQUALIFIER_LANE && !classifying) {
+            fields.push(UNCLASSIFIED_DISQUALIFIER_FIELD);
+          }
+        } else if (
+          lane === DISQUALIFIER_LANE &&
+          classifying &&
+          !(await packetRuledOut(orchestrationId))
+        ) {
+          // A dive that was offered `ruled_out`, used none, and documented that
+          // nothing excludes it: the one answer that clears an unclassified one.
+          fields.push(RULED_OUT_CLEARED_FIELD);
+        }
+        for (const field of fields) {
+          const existing = await cardFact(opportunity.id, field);
+          // Already this claim: nothing to do, which is what a replay must find.
+          if (existing?.claimId === claim.id) continue;
+          // A person's answer stands, and so does an earlier piece of evidence:
+          // `mayReplace` is the order, and it is about authority rather than
+          // recency. Asked here to skip the write, and again inside it.
+          if (!mayReplace(existing, 'EVIDENCE')) continue;
+          const value = clampText(claim.claim, 600);
+          const written = await recordEvidenceFact({
+            projectId,
+            opportunityId: opportunity.id,
+            field,
+            value,
+            claimId: claim.id,
+          });
+          if (!written) continue;
+          /*
+           * The column as well as the fact, where the field has one.
+           *
+           * `answers.ts` writes both when a *need's* research settles a card
+           * field, and this once wrote only the fact — so the same question,
+           * answered by the deep dive instead, reached `cash_card_facts` and never
+           * reached `evidenceCard`, `readyToTest` or anything else that reads the
+           * row. `COLUMN` is imported rather than restated, because a second copy
+           * is the thing that drifts. Written only once the fact is this claim's,
+           * so the column and the fact cannot name two different claims.
+           */
+          const column = COLUMN[field];
+          if (column) {
+            await updateOpportunity(opportunity.id, { [column]: value } as never);
+          }
+          out.push({ opportunityId: opportunity.id, field, claimId: claim.id });
+        }
       }
     }
+    await withdrawAbsencesWrittenAsAnswers(projectId, opportunity);
   }
   return out;
+}
+
+/**
+ * Lanes whose documented absence leaves the field unknown rather than answering it.
+ *
+ * Only the payer. For the other lanes an absence can genuinely be the answer —
+ * "no fee is charged" is a cost, "no licence is required" is eligibility — and
+ * the claim's type alone cannot tell that apart from "no price is published",
+ * so narrowing them would withdraw real answers.
+ */
+export const ABSENCE_IS_NOT_AN_ANSWER: ReadonlySet<string> = new Set(['payer']);
+
+/**
+ * Take back an absence that was written onto a card as the answer.
+ *
+ * Before the guard above, a NEGATIVE_EXISTENCE claim in the payer lane filled
+ * the payer — production carried "No payer was found" as one opening's payer,
+ * and a capture thesis was then composed from it. The fact and its column are
+ * cleared, every recommendation Brain composed from that claim is withdrawn
+ * with it, and the correction is an append-only event carrying the value it
+ * replaced. Nothing is written in its place: an absence is not evidence that
+ * there is no payer either, so the field is simply unknown.
+ *
+ * One transaction, because the fact is also the only guard: deleted alone and
+ * then interrupted, the column would keep the absence for ever with nothing
+ * left to notice it. Each write is guarded on the value it replaces, so a
+ * person's answer and newer evidence are untouched and a replay changes
+ * nothing.
+ */
+async function withdrawAbsencesWrittenAsAnswers(
+  projectId: string,
+  opportunity: CashOpportunity,
+): Promise<void> {
+  const byField = new Map((await cardFactsFor(opportunity.id)).map((one) => [one.field, one]));
+  for (const lane of ABSENCE_IS_NOT_AN_ANSWER) {
+    const field = FIELD_BY_LANE[lane];
+    if (!field) continue;
+    const fact = byField.get(field);
+    if (!fact || fact.kind !== 'EVIDENCE' || !fact.claimId) continue;
+    const claim = await getClaim(fact.claimId);
+    if (!claim || claim.claimType !== 'NEGATIVE_EXISTENCE') continue;
+    await getDb().transaction(async () => {
+      if (!(await withdrawEvidenceFact({ opportunityId: opportunity.id, field, claimId: claim.id }))) return;
+      const column = COLUMN[field];
+      if (column) await clearColumnIfStill({ opportunityId: opportunity.id, column, value: fact.value });
+      const composed = await withdrawRecommendationsResting({ opportunityId: opportunity.id, claimId: claim.id });
+      await recordCashEvent({
+        projectId,
+        opportunityId: opportunity.id,
+        kind: 'CASH_CARD_FACT_WITHDRAWN',
+        actorRef: 'BRAIN',
+        summary:
+          `The ${field} on this card was a search that found nothing, not an answer. It is unknown ` +
+          'again, and nothing Brain composed from it stands.',
+        detail: { field, claimId: claim.id, value: fact.value, withdrawnRecommendations: composed },
+      });
+    });
+  }
+}
+
+/** Whether any citable claim of this packet declared the opening ruled out. */
+async function packetRuledOut(orchestrationId: string): Promise<boolean> {
+  return (await citableClaims(orchestrationId)).some(
+    (claim) => claim.evidenceLane === RULED_OUT_LANE && claim.claimType !== 'NEGATIVE_EXISTENCE',
+  );
+}
+
+/** Whether a dive's fragment offered its worker the `ruled_out` lane. */
+async function declaresRuledOut(fragmentId: string | null): Promise<boolean> {
+  if (!fragmentId) return false;
+  const fragment = await getFragment(fragmentId);
+  return Boolean(fragment?.requiredEvidence.some((lane) => lane.id === RULED_OUT_LANE));
 }
 
 const FINISHED_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);

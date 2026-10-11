@@ -33,7 +33,18 @@ import {
   recordCardFact,
   recordEvidenceFact,
 } from '../server/repos/cashCardFacts.ts';
-import { applyValidationAnswers, proposeEngineTerms } from '../server/services/cash/validation.ts';
+import {
+  applyValidationAnswers,
+  proposeEngineTerms,
+  whyNotDiving,
+} from '../server/services/cash/validation.ts';
+import {
+  DISQUALIFIED_FIELD,
+  RULED_OUT_CLEARED_FIELD,
+  UNCLASSIFIED_DISQUALIFIER_FIELD,
+  cashEngineCard,
+} from '../server/services/cash/engineCard.ts';
+import { UNIVERSAL_QUALIFICATION, cashTier } from '../server/services/cash/tier.ts';
 import { cardFactsFor as factsOf } from '../server/repos/cashCardFacts.ts';
 import type { FragmentStatus, Layer, MissionState } from '../server/domain/types.ts';
 
@@ -66,6 +77,8 @@ beforeEach(async () => {
 interface ClaimSpec {
   lane: string;
   text: string;
+  /** What the claim establishes; a documented absence is NEGATIVE_EXISTENCE. */
+  claimType?: 'SOURCED_FACT' | 'NEGATIVE_EXISTENCE' | 'QUOTATION';
   accepted?: boolean;
   sourceUrl?: string | null;
 }
@@ -76,6 +89,8 @@ async function dive(input: {
   mission: MissionState;
   fragment: FragmentStatus;
   claims: ClaimSpec[];
+  /** Whether the fragment offered the worker the `ruled_out` lane (dives compiled now do). */
+  offersRuledOut?: boolean;
 }): Promise<{ candidateId: string; orchestrationId: string; claimIds: string[] }> {
   const candidate = await createCandidate({
     projectId,
@@ -112,7 +127,12 @@ async function dive(input: {
       timeframe: 'as at 2026',
       population: null,
       definitions: null,
-      requiredEvidence: [{ id: 'payer', description: 'a named payer', necessity: 'REQUIRED' }],
+      requiredEvidence: [
+        { id: 'payer', description: 'a named payer', necessity: 'REQUIRED' },
+        ...(input.offersRuledOut
+          ? [{ id: 'ruled_out', description: 'a fact that rules it out', necessity: 'CONDITIONAL' as const }]
+          : []),
+      ],
       acceptableSourceTypes: ['the published request'],
       excludedSourceTypes: ['blog'],
       completionCriteria: ['A named payer.'],
@@ -136,6 +156,7 @@ async function dive(input: {
       evidenceExcerpt: spec.text,
       evidenceLocator: 'RFQ #09-11-26-39DPA',
       evidenceLane: spec.lane,
+      claimType: spec.claimType ?? ('SOURCED_FACT' as const),
       retrievedAt: '2026-10-07T12:00:00.000Z',
       confidence: 0.8,
       validationState: 'SOURCED' as const,
@@ -203,7 +224,11 @@ const NJDOH: ClaimSpec[] = [
   { lane: 'payer', text: 'NJDOH is the buyer named on RFQ #09-11-26-39DPA.' },
   { lane: 'price_evidence', text: 'Comparable preventative maintenance awards were published at $18,400.' },
   { lane: 'timing', text: 'NJDOH pays approved invoices within 30 days of acceptance.' },
-  { lane: 'disqualifier', text: 'The RFQ restricts no bidder by state of incorporation.' },
+  {
+    lane: 'disqualifier',
+    text: 'The RFQ restricts no bidder by state of incorporation.',
+    claimType: 'NEGATIVE_EXISTENCE',
+  },
 ];
 
 describe('a failed deep dive still carries its accepted claims to the card', () => {
@@ -473,5 +498,160 @@ describe('a settled BLOCKED dive produces the capture thesis its evidence suppor
       first.map((fact) => [fact.id, fact.field, fact.kind, fact.value]),
     );
     expect(again.filter((fact) => fact.field === 'captureMechanism')).toHaveLength(1);
+  });
+});
+
+describe('what the deep dive establishes about reaching the buyer, and about ruling it out', () => {
+  it('answers access from a route the dive found, and not from a documented absence', async () => {
+    const found = await dive({
+      key: 'route found',
+      mission: 'FAILED',
+      fragment: 'BLOCKED',
+      claims: [
+        { lane: 'payer', text: 'SLDC is the buyer named on the RFP.' },
+        {
+          lane: 'contact_mode',
+          text: 'Submission is by email only: one PDF to the procurement officer; no call is required.',
+        },
+      ],
+    });
+    const absent = await dive({
+      key: 'no route',
+      mission: 'FAILED',
+      fragment: 'BLOCKED',
+      claims: [
+        {
+          lane: 'contact_mode',
+          text: 'No published route to the buyer was found on its site or the portal.',
+          claimType: 'NEGATIVE_EXISTENCE',
+        },
+      ],
+    });
+    const withRoute = await opening([found], { state: 'BLOCKED', orchestrationId: found.orchestrationId });
+    const withoutRoute = await opening([absent], { state: 'BLOCKED', orchestrationId: absent.orchestrationId });
+
+    await applyValidationAnswers(projectId);
+
+    const reached = (await getOpportunity(withRoute))!;
+    expect(reached.reachableChannel).toContain('email only');
+    expect((await cardFact(withRoute, 'access'))?.claimId).toBe(found.claimIds[1]);
+    expect((await cardFact(withRoute, 'phoneDependency'))?.claimId).toBe(found.claimIds[1]);
+
+    expect((await getOpportunity(withoutRoute))!.reachableChannel).toBeNull();
+    expect(await cardFact(withoutRoute, 'access')).toBeNull();
+  });
+
+  it('a disqualifier found stops the opening; one searched for and not found does not', async () => {
+    const closed = await dive({
+      key: 'closed rfp',
+      mission: 'FAILED',
+      fragment: 'BLOCKED',
+      offersRuledOut: true,
+      claims: [{ lane: 'ruled_out', text: 'Proposals closed 25 September 2026; late ones are refused.' }],
+    });
+    const clear = await dive({
+      key: 'clear',
+      mission: 'FAILED',
+      fragment: 'BLOCKED',
+      offersRuledOut: true,
+      claims: [
+        {
+          lane: 'disqualifier',
+          text: 'No restriction excluding a supplier like this one was found in the RFQ or its terms.',
+          claimType: 'NEGATIVE_EXISTENCE',
+        },
+      ],
+    });
+    const out = await opening([closed], { state: 'BLOCKED', orchestrationId: closed.orchestrationId });
+    const ok = await opening([clear], { state: 'BLOCKED', orchestrationId: clear.orchestrationId });
+
+    await applyValidationAnswers(projectId);
+
+    // Both answer the question "what would rule it out".
+    expect((await cardFact(out, 'disqualifiers'))?.claimId).toBe(closed.claimIds[0]);
+    expect((await cardFact(ok, 'disqualifiers'))?.claimId).toBe(clear.claimIds[0]);
+    // Only the first is ruled out, and the second is affirmatively clear.
+    expect((await cardFact(out, DISQUALIFIED_FIELD))?.claimId).toBe(closed.claimIds[0]);
+    expect(await cardFact(ok, DISQUALIFIED_FIELD)).toBeNull();
+    expect((await cardFact(ok, RULED_OUT_CLEARED_FIELD))?.claimId).toBe(clear.claimIds[0]);
+
+    const outRow = (await getOpportunity(out))!;
+    const card = cashEngineCard({ opportunity: outRow, facts: await cardFactsFor(out) });
+    expect(card.disqualifiedBy).toMatchObject({ claimId: closed.claimIds[0], declared: true });
+    const okRow = (await getOpportunity(ok))!;
+    expect(cashEngineCard({ opportunity: okRow, facts: await cardFactsFor(ok) }).disqualifiedBy).toBeNull();
+    // A declared disqualifier is not offered another round of the same questions.
+    await updateOpportunity(out, { validation_rounds: 1, buying_signal: 'An open RFQ.' });
+    expect((await whyNotDiving((await getOpportunity(out))!)).kind).toBe('DISQUALIFIED');
+    await updateOpportunity(ok, { validation_rounds: 1, buying_signal: 'An open RFQ.' });
+    expect((await whyNotDiving((await getOpportunity(ok))!)).kind).toBe('ELIGIBLE');
+  });
+
+  it('an older dive\'s unclassified disqualifier blocks qualification until a classifying dive answers it', async () => {
+    // Production held this exact shape: a dive compiled before `ruled_out` put
+    // "No closing date: the program is ongoing" in the disqualifier lane typed
+    // as a sourced fact. Nobody classified it, so it is neither clear nor out.
+    const legacy = await dive({
+      key: 'legacy',
+      mission: 'FAILED',
+      fragment: 'BLOCKED',
+      claims: [{ lane: 'disqualifier', text: 'No closing date: the program is ongoing.' }],
+    });
+    const id = await opening([legacy], { state: 'BLOCKED', orchestrationId: legacy.orchestrationId });
+    await updateOpportunity(id, { validation_rounds: 2, buying_signal: 'An ongoing program.' });
+    await applyValidationAnswers(projectId);
+
+    expect(await cardFact(id, DISQUALIFIED_FIELD)).toBeNull();
+    expect((await cardFact(id, UNCLASSIFIED_DISQUALIFIER_FIELD))?.claimId).toBe(legacy.claimIds[0]);
+    const before = cashEngineCard({ opportunity: (await getOpportunity(id))!, facts: await cardFactsFor(id) });
+    expect(before.disqualifiedBy).toMatchObject({ declared: false });
+    // Both ordinary rounds are spent, and it still gets the one that classifies it.
+    expect((await whyNotDiving((await getOpportunity(id))!)).kind).toBe('ELIGIBLE');
+
+    // The classifying round documents that nothing rules it out.
+    const classifying = await dive({
+      key: 'classifying',
+      mission: 'FAILED',
+      fragment: 'BLOCKED',
+      offersRuledOut: true,
+      claims: [
+        {
+          lane: 'disqualifier',
+          text: 'Nothing on the program pages or rules excludes a supplier like this one.',
+          claimType: 'NEGATIVE_EXISTENCE',
+        },
+      ],
+    });
+    await recordCashEvent({
+      projectId,
+      opportunityId: id,
+      kind: 'CASH_VALIDATION_STARTED',
+      actorRef: 'BRAIN',
+      summary: 'started',
+      detail: { candidateId: classifying.candidateId, round: 3 },
+    });
+    await updateOpportunity(id, { validation_rounds: 3 });
+    await applyValidationAnswers(projectId);
+    const after = cashEngineCard({ opportunity: (await getOpportunity(id))!, facts: await cardFactsFor(id) });
+    expect(after.disqualifiedBy).toBeNull();
+    // And it is not offered a fourth.
+    expect((await whyNotDiving((await getOpportunity(id))!)).kind).toBe('ROUNDS_SPENT');
+  });
+
+  it('a disqualified opening never reads as qualified, whatever else is answered', () => {
+    const opportunity = { opportunitySignal: 'EXPIRING_OPENING' } as never;
+    const entries: { key: string; label: string; value: string }[] = UNIVERSAL_QUALIFICATION.map((key) => ({ key, label: key, value: 'answered' }));
+    entries.push({ key: 'captureMechanism', label: 'capture', value: 'answered' });
+    const card = { entries, disqualifiedBy: null } as never;
+    const ready = { ready: true, missing: [] } as never;
+    expect(cashTier({ opportunity, card, readiness: ready }).tier).toBe('READY_TO_TEST');
+    const ruledOut = {
+      entries,
+      disqualifiedBy: { value: 'Proposals closed 25 September 2026.', claimId: 'clm_x', declared: true },
+    } as never;
+    const reading = cashTier({ opportunity, card: ruledOut, readiness: ready });
+    expect(reading.tier).toBe('CANDIDATE');
+    expect(reading.toAdvance.map((one) => one.key)).toEqual(['disqualifiers']);
+    expect(reading.toAdvance[0]!.task).toContain('Proposals closed');
   });
 });
