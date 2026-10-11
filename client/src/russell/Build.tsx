@@ -525,6 +525,7 @@ function Repositories({
   return (
     <section className="rs-card rs-factory-repositories">
       <h3>Repositories</h3>
+      <p className="rs-hint">Each repository is released only under its owner's approval.</p>
       <ul className="rs-repo-list">
         {repositories.map((repo) => (
           <li key={repo.grantId} className={`rs-repo rs-repo-${repo.readiness.toLowerCase()}`}>
