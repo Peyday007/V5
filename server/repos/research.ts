@@ -1183,6 +1183,22 @@ export async function signalledClaims(input: {
           SELECT 1 FROM cash_opportunities v
            WHERE v.validation_orchestration_id = o.id
         )
+        /*
+         * Not a claim that is already an opportunity.
+         *
+         * The ordering above promised that a bounded pass makes progress
+         * through a backlog, and without this it re-read its head: `harvest`
+         * asks for forty, skips every one already filed, and once forty
+         * signalled claims had been promoted the forty-first and every later
+         * one were never read at all. Production, Cash Mode 1: discovery kept
+         * researching and filed nothing after its fortieth opening. The unique
+         * index on (project, source_claim_id) is still what decides a race;
+         * this only stops the read returning work that is already done.
+         */
+        AND NOT EXISTS (
+          SELECT 1 FROM cash_opportunities filed
+           WHERE filed.project_id = o.project_id AND filed.source_claim_id = c.id
+        )
       ORDER BY c.created_at, c.rowid
       LIMIT ?`,
     [input.projectId, Math.max(1, input.limit ?? 50)],

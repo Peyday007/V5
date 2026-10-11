@@ -50,11 +50,20 @@
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { listProjects } from '../server/repos/projects.ts';
-import { getCashMode } from '../server/repos/cashMode.ts';
+import { cashEventsOfKind, getCashMode } from '../server/repos/cashMode.ts';
 import { listOpportunities } from '../server/repos/cashPortfolio.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
-import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
-import { getOrchestration, listPasses } from '../server/repos/research.ts';
+import { latestMissionForCandidate, missionsForCandidate } from '../server/repos/russellMissions.ts';
+import {
+  getOrchestration,
+  listClaimsForFragment,
+  listFragments,
+  listPasses,
+} from '../server/repos/research.ts';
+import { cardFactsFor } from '../server/repos/cashCardFacts.ts';
+import { cashTier } from '../server/services/cash/tier.ts';
+import { evidenceCard } from '../server/services/cash/card.ts';
+import { cashEngineCard } from '../server/services/cash/engineCard.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { getDb } from '../server/db/database.ts';
 import { getBin } from '../server/repos/bins.ts';
@@ -68,7 +77,7 @@ import {
   sprintCanRefine,
   whyNotDiving,
 } from '../server/services/cash/validation.ts';
-import type { WorkItem } from '../server/domain/types.ts';
+import type { CashOpportunity, WorkItem } from '../server/domain/types.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -301,12 +310,113 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
         '      the mission stopped at a decision only a person can make; it is in Needs you.',
       );
     }
+    await printGateOutcome(one);
   }
 
   if (dived.length === 0) {
     console.log('  none — no opening in this project has had a deep dive.');
   }
   return true;
+}
+
+/**
+ * What every round of one opening's deep dive actually produced, at the gate.
+ *
+ * The timings above say where the time went; this says what came of it, which
+ * is the half *why does nothing qualify* turns on. Per round: the packet, why
+ * it stopped, and per fragment the gate's two verdicts, the claims accepted by
+ * lane, the rejections grouped by reason, and what the verification pass
+ * itself said about sufficiency. Then the card: which tier the opening reads
+ * and what it still needs. Read-only, like the rest of this file.
+ */
+async function printGateOutcome(one: CashOpportunity): Promise<void> {
+  const started = await cashEventsOfKind(one.id, 'CASH_VALIDATION_STARTED');
+  const packets: { round: unknown; candidateId: string; orchestrationId: string | null; mission: string; reason: string | null }[] = [];
+  for (const event of started) {
+    const candidateId = event.detail['candidateId'];
+    if (typeof candidateId !== 'string') continue;
+    const candidate = await getCandidate(candidateId);
+    const missions = await missionsForCandidate(candidateId);
+    if (missions.length === 0) {
+      packets.push({
+        round: event.detail['round'],
+        candidateId,
+        orchestrationId: null,
+        mission: '—',
+        reason: candidate?.reason ?? null,
+      });
+    }
+    for (const mission of missions) {
+      packets.push({
+        round: event.detail['round'],
+        candidateId,
+        orchestrationId: mission.orchestrationId,
+        mission: `${mission.id} ${mission.state}`,
+        reason: mission.terminalReason ?? candidate?.reason ?? null,
+      });
+    }
+  }
+  for (const entry of packets) {
+    const packet = entry.orchestrationId ? await getOrchestration(entry.orchestrationId) : null;
+    console.log(
+      `      gate r${String(entry.round ?? '?')}  ${entry.candidateId}  mission ${entry.mission}` +
+        `  packet ${entry.orchestrationId ?? '—'} ${packet?.status ?? ''}`,
+    );
+    const why = packet?.failureReason ?? entry.reason;
+    if (why) console.log(`        stopped   ${why.replace(/\s+/g, ' ').slice(0, 220)}`);
+    if (!entry.orchestrationId) continue;
+    const passes = await listPasses(entry.orchestrationId);
+    for (const fragment of await listFragments(entry.orchestrationId)) {
+      const claims = await listClaimsForFragment(fragment.id);
+      const accepted = claims.filter((claim) => claim.accepted);
+      const lanes = new Map<string, number>();
+      for (const claim of accepted) {
+        const key = claim.evidenceLane ?? '(untagged)';
+        lanes.set(key, (lanes.get(key) ?? 0) + 1);
+      }
+      const refused = new Map<string, number>();
+      for (const claim of claims) {
+        if (claim.accepted || !claim.rejectionReason) continue;
+        const key = claim.rejectionReason.replace(/\s+/g, ' ').slice(0, 90);
+        refused.set(key, (refused.get(key) ?? 0) + 1);
+      }
+      const unread = claims.filter((claim) => claim.retrievalState !== 'RETRIEVED').length;
+      console.log(
+        `        fragment  ${fragment.fragmentKey} a${fragment.attempt} ${fragment.status}` +
+          `  integrity ${fragment.integrityVerdict ?? '—'} sufficiency ${fragment.sufficiencyVerdict ?? '—'}` +
+          `  claims ${claims.length} accepted ${accepted.length} unread ${unread}`,
+      );
+      if (lanes.size > 0) {
+        console.log(`          lanes   ${[...lanes.entries()].map(([k, n]) => `${k}×${n}`).join(' ')}`);
+      }
+      for (const [reason, n] of [...refused.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)) {
+        console.log(`          refused ${n} × ${reason}`);
+      }
+      const verify = passes.filter(
+        (pass) => pass.fragmentId === fragment.id && pass.passKey === 'VERIFICATION' && pass.parsed,
+      );
+      const last = verify[verify.length - 1];
+      if (last) {
+        const parsed = last.parsed as Record<string, unknown>;
+        const raw = (parsed['raw'] ?? parsed) as Record<string, unknown>;
+        const missing = Array.isArray(raw['missingLanes']) ? (raw['missingLanes'] as unknown[]).join(',') : '';
+        console.log(
+          `          verify  ${String(raw['sufficiency'] ?? parsed['sufficiency'] ?? '—')}` +
+            (missing ? `  missing ${missing.slice(0, 160)}` : ''),
+        );
+      }
+      if (fragment.blockedReason) {
+        console.log(`          blocked ${fragment.blockedReason.replace(/\s+/g, ' ').slice(0, 260)}`);
+      }
+    }
+  }
+  const facts = await cardFactsFor(one.id);
+  const card = cashEngineCard({ opportunity: one, facts });
+  const tier = cashTier({ opportunity: one, card, readiness: evidenceCard(one).readiness });
+  console.log(
+    `      card      tier ${tier.tier} answered ${tier.answered}/${tier.required}` +
+      `  facts ${facts.length}  to advance ${tier.toAdvance.map((item) => item.key).join(',') || '—'}`,
+  );
 }
 
 /**
