@@ -1187,11 +1187,10 @@ export async function signalledClaims(input: {
          * Not a claim that is already an opportunity.
          *
          * The ordering above promised that a bounded pass makes progress
-         * through a backlog, and without this it re-read its head: `harvest`
+         * through a backlog, and without this it re-read its head: harvest
          * asks for forty, skips every one already filed, and once forty
          * signalled claims had been promoted the forty-first and every later
-         * one were never read at all. Production, Cash Mode 1: discovery kept
-         * researching and filed nothing after its fortieth opening. The unique
+         * one could never be read at all. Cash Mode 1 holds forty-one. The unique
          * index on (project, source_claim_id) is still what decides a race;
          * this only stops the read returning work that is already done.
          */

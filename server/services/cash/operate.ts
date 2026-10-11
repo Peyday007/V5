@@ -254,10 +254,34 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * — a named payer and something to supply them — which is exactly the
      * point at which spending more on the piece is justified.
      */
+    /*
+     * Not while the opening's own deep dive is still asking.
+     *
+     * The dive asks every one of these questions about this exact opening, so
+     * a need raised beside it researches the same thing twice — and each need
+     * is a mission holding one of the grant's slots. Production, Cash Mode 1:
+     * the "Access for" and "Payer for" missions of one opening held two of
+     * six slots while that opening's dive ran in a third. What the dive leaves
+     * blank is asked once it has settled, which is what this pass is for.
+     */
+    if (
+      opportunity.validationState === 'PENDING' ||
+      opportunity.validationState === 'RUNNING' ||
+      opportunity.validationState === 'NEEDS_PERSON'
+    ) {
+      continue;
+    }
     const card = evidenceCard(opportunity);
+    const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
+    /*
+     * And not for an opening a published fact already rules out. Asking what
+     * a closed RFP pays is the allowance spent on a question whose answer
+     * cannot change the decision.
+     */
+    if (engine.disqualifiedBy) continue;
     const reading = cashTier({
       opportunity,
-      card: cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }),
+      card: engine,
       readiness: card.readiness,
     });
     /*

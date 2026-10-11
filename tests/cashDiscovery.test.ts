@@ -106,6 +106,8 @@ async function finishedMission(input: {
     claimType?: 'SOURCED_FACT' | 'NEGATIVE_EXISTENCE' | 'QUOTATION';
   }[];
   fragmentStatus?: 'ACCEPTED' | 'BLOCKED' | 'REJECTED';
+  /** Where the mission ends; DONE unless a test says the research stopped. */
+  missionEnds?: 'DONE' | 'FAILED' | 'NEEDS_HUMAN';
 }): Promise<{ missionId: string; orchestrationId: string }> {
   const run = await createRun({
     projectId,
@@ -194,7 +196,14 @@ async function finishedMission(input: {
   });
   await linkMission({ missionId: mission.id, orchestrationId: orchestration.id });
   await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
-  await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'DONE' });
+  const ends = input.missionEnds ?? 'DONE';
+  await transitionMission({
+    missionId: mission.id,
+    from: 'RUNNING',
+    to: ends,
+    terminalReason: ends === 'DONE' ? null : 'No fragment cleared its evidence gate.',
+    waitingOn: ends === 'NEEDS_HUMAN' ? 'a person' : null,
+  });
   return { missionId: mission.id, orchestrationId: orchestration.id };
 }
 
@@ -781,5 +790,75 @@ describe('harvesting what discovery found', () => {
       // answers the whole pass for a project holding no sprint at all.
       signalled: [],
     });
+  });
+});
+
+describe('a discovery round whose research stopped', () => {
+  it('closes, keeps what it filed, and lets the bucket be asked again', async () => {
+    /*
+     * Production, Cash Mode 1: all ten buckets OPEN at round 1, every one
+     * parked, because a round closed only on a DONE mission. An open round is
+     * what `nextRoundFor` refuses to ask past, so broad discovery stopped.
+     */
+    await activated();
+    const [opened] = await openDiscovery({ projectId });
+    await finishedMission({
+      candidateId: opened!.candidateId,
+      missionEnds: 'NEEDS_HUMAN',
+      fragmentStatus: 'BLOCKED',
+      claims: [
+        {
+          claim: 'A city published an open request for records digitization.',
+          lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
+          sourceUrl: 'https://example.test/rfp/stopped',
+        },
+      ],
+    });
+
+    // The gated claim of the blocked fragment is still filed, against the round.
+    const filed = await harvest({ projectId });
+    expect(filed).toHaveLength(1);
+    const rounds = await listRounds(projectId);
+    const round = rounds.find((one) => one.bucketId === opened!.bucketId)!;
+    expect(round.state).toBe('ABANDONED');
+    expect(round.found).toBe(1);
+
+    // And the bucket is asked again once the cool-off has passed.
+    const tomorrow = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString();
+    const again = await openDiscovery({ projectId, limit: 9, now: tomorrow });
+    expect(again.find((one) => one.bucketId === opened!.bucketId)?.round).toBe(2);
+  });
+
+  it('leaves a round alone while its research is still running or never launched', async () => {
+    await activated();
+    const [opened] = await openDiscovery({ projectId });
+    // No mission at all: the idea has not launched, and closing it would record
+    // a round that researched nothing.
+    await harvest({ projectId });
+    expect((await listRounds(projectId)).find((one) => one.bucketId === opened!.bucketId)!.state).toBe(
+      'OPEN',
+    );
+  });
+});
+
+describe('harvest reads past what it already filed', () => {
+  it('files the forty-first signalled claim', async () => {
+    /*
+     * `signalledClaims` read the oldest forty and `harvest` skipped every one
+     * already filed, so once forty openings existed nothing later could be read.
+     */
+    await activated();
+    const [opened] = await openDiscovery({ projectId });
+    const claims = Array.from({ length: 45 }, (_, index) => ({
+      claim: `Buyer ${index} published a paid request for survey work.`,
+      lane: SIGNAL_LANE,
+      signal: 'ACTIVE_BUYER_DEMAND' as const,
+      sourceUrl: `https://example.test/rfp/${index}`,
+    }));
+    await finishedMission({ candidateId: opened!.candidateId, claims });
+    // The tick's own bound: runDiscovery harvests ten, so it reads forty.
+    for (let pass = 0; pass < 6; pass += 1) await harvest({ projectId, limit: 10 });
+    expect(await listOpportunities({ projectId })).toHaveLength(45);
   });
 });
