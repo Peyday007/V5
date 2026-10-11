@@ -522,6 +522,18 @@ describe('the release workflow’s own readings', () => {
     expect(script).toMatch(/treeOf\(mergeSha\) !== expectedTree/);
   });
 
+  it('a pull request that is not a Factory campaign never takes the release slot', () => {
+    const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
+    const group = /^concurrency:\n(?:.*\n)*?\s*group:\s*(.+)$/m.exec(workflow)?.[1] ?? '';
+    // A run that can release anything shares the one group; an ignored pull request event does not.
+    expect(group.startsWith('brain-factory-release')).toBe(true);
+    expect(group).toMatch(/github\.event_name == 'pull_request_target'/);
+    expect(group).toMatch(/startsWith\(github\.event\.pull_request\.head\.ref, 'factory\/campaign\/'\)/);
+    expect(group).toMatch(/github\.run_id/);
+    // The same condition the plan job applies, so the two cannot disagree about what is ignored.
+    expect(workflow).toMatch(/startsWith\(github\.event\.pull_request\.head\.ref, 'factory\/campaign\/'\) &&\s*github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
+  });
+
   it('asks for its own resume after a failure, a bounded number of times', () => {
     const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
     const step = workflow.slice(workflow.indexOf('Ask for the pass that resumes this one'));
