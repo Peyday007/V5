@@ -58,7 +58,7 @@ import {
   recordEvidenceFact,
   recordRecommendationFact,
 } from '../../repos/cashCardFacts.ts';
-import { cashEngineCard } from './engineCard.ts';
+import { DISQUALIFIED_FIELD, cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { cashTier } from './tier.ts';
 import { COLUMN } from './answers.ts';
@@ -172,6 +172,15 @@ export type DiveRefusal =
   | { kind: 'ROUNDS_SPENT'; rounds: number; cap: number }
   /** It got there. A qualified piece has nothing left for a dive to ask. */
   | { kind: 'ALREADY_QUALIFIED'; tier: string }
+  /**
+   * A dive already found a published fact that rules it out.
+   *
+   * A second round would ask the same sources the same questions about an
+   * opening whose deadline has passed or whose terms exclude us — production
+   * spent a second ~25-minute dive on each closed RFP. New evidence that the
+   * fact stopped being true arrives through discovery, not by asking again.
+   */
+  | { kind: 'DISQUALIFIED'; reason: string }
   /** Declined, archived or already being executed — the commercial questions are closed. */
   | { kind: 'NOT_A_QUALIFYING_STATE'; state: string }
   /** No published signal and no source claim, so there is nothing to quote into a question. */
@@ -193,6 +202,8 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
       return `both dives are spent (${refusal.rounds}/${refusal.cap}); each dive's own reason says what it established`;
     case 'ALREADY_QUALIFIED':
       return `already ${refusal.tier} — a dive has nothing left to ask`;
+    case 'DISQUALIFIED':
+      return `disqualified by a published fact: ${refusal.reason.slice(0, 140)}`;
     case 'NOT_A_QUALIFYING_STATE':
       return `state ${refusal.state}: the commercial questions are closed`;
     case 'NOTHING_PUBLISHED_TO_ASK_ABOUT':
@@ -212,6 +223,8 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
       return { kind: 'IN_FLIGHT', state: opportunity.validationState };
     }
     if (opportunity.validationState === 'NEEDS_PERSON') return { kind: 'AWAITING_PERSON' };
+    const disqualified = await cardFact(opportunity.id, DISQUALIFIED_FIELD);
+    if (disqualified?.value) return { kind: 'DISQUALIFIED', reason: disqualified.value };
     if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS) {
       return {
         kind: 'ROUNDS_SPENT',
@@ -297,7 +310,22 @@ export function validationQuestion(opportunity: CashOpportunity): string {
   const source = opportunity.source ? ` The source is ${opportunity.source}.` : '';
   return (
     `What would somebody need to know before acting on this specific opening: "${signal}".` +
-    `${source}${observed} Establish who actually pays and how a supplier reaches them, what ` +
+    `${source}${observed} ` +
+    /*
+     * The decisive question first, because it is the cheap one.
+     *
+     * Production, Cash Mode 1: nine of the dives that reached their
+     * disqualifier recorded a closing date already passed or a listing already
+     * closed — after twenty to thirty minutes spent on the payer, the price, the
+     * costs and the effort of something nobody could take. Whether an opening
+     * is still open is one look at its own source, and when the answer is no it
+     * is the whole answer.
+     */
+    'First establish whether this opening is still open to a supplier like us: whether its ' +
+    'closing date, expiry or listing status has passed, or a published rule excludes us. If ' +
+    'it has closed or excludes us, submit that one fact in the disqualifier lane with its ' +
+    'source and stop; nothing else about it needs answering. Otherwise establish who ' +
+    'actually pays and how a supplier reaches them, what ' +
     'comparable work is published at, what delivering it would cost, what capital it needs ' +
     'before any money arrives, how long published terms say payment takes, how much human ' +
     'time comparable work is published as taking, whether selling, calling, fulfilment or ' +
@@ -974,6 +1002,28 @@ export const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
   contact_mode: 'phoneDependency',
 });
 
+/**
+ * A lane that answers a second card field as well as its own.
+ *
+ * `contact_mode` asks for the published route to the buyer — a portal, an
+ * address, a form, a bid submission or a phone number — and that *is* the
+ * `access` field: "a channel that actually reaches them". It used to fill
+ * `phoneDependency` alone, so a dive could establish exactly how to reach the
+ * buyer and the card would still read `access` as unknown. Production, Cash
+ * Mode 1: seven openings stood one field from QUALIFIED with that field
+ * `access`, and Brain launched separate "Access for …" research missions — one
+ * of them holding a mission slot while the opening's own dive ran beside it.
+ *
+ * Never from a `NEGATIVE_EXISTENCE` claim: a documented absence of a route is
+ * a finding, and it is the opposite of access.
+ */
+export const ALSO_ANSWERS_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
+  contact_mode: 'access',
+});
+
+/** The lane whose positive finding rules an opening out. */
+export const DISQUALIFIER_LANE = 'disqualifier';
+
 export interface AppliedValidation {
   opportunityId: string;
   field: string;
@@ -1025,40 +1075,59 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
     for (const orchestrationId of await finishedDivePackets(opportunity)) {
       for (const claim of await citableClaims(orchestrationId)) {
         if (!claim.sourceUrl) continue;
-        const field = FIELD_BY_LANE[claim.evidenceLane ?? ''];
-        if (!field) continue;
-        const existing = await cardFact(opportunity.id, field);
-        // Already this claim: nothing to do, which is what a replay must find.
-        if (existing?.claimId === claim.id) continue;
-        // A person's answer stands, and so does an earlier piece of evidence:
-        // `mayReplace` is the order, and it is about authority rather than
-        // recency. Asked here to skip the write, and again inside it.
-        if (!mayReplace(existing, 'EVIDENCE')) continue;
-        const value = clampText(claim.claim, 600);
-        const written = await recordEvidenceFact({
-          projectId,
-          opportunityId: opportunity.id,
-          field,
-          value,
-          claimId: claim.id,
-        });
-        if (!written) continue;
-        /*
-         * The column as well as the fact, where the field has one.
-         *
-         * `answers.ts` writes both when a *need's* research settles a card
-         * field, and this once wrote only the fact — so the same question,
-         * answered by the deep dive instead, reached `cash_card_facts` and never
-         * reached `evidenceCard`, `readyToTest` or anything else that reads the
-         * row. `COLUMN` is imported rather than restated, because a second copy
-         * is the thing that drifts. Written only once the fact is this claim's,
-         * so the column and the fact cannot name two different claims.
-         */
-        const column = COLUMN[field];
-        if (column) {
-          await updateOpportunity(opportunity.id, { [column]: value } as never);
+        const lane = claim.evidenceLane ?? '';
+        const fields: string[] = [];
+        if (FIELD_BY_LANE[lane]) fields.push(FIELD_BY_LANE[lane]);
+        if (ALSO_ANSWERS_BY_LANE[lane] && claim.claimType !== 'NEGATIVE_EXISTENCE') {
+          fields.push(ALSO_ANSWERS_BY_LANE[lane]);
         }
-        out.push({ opportunityId: opportunity.id, field, claimId: claim.id });
+        /*
+         * A disqualifier *found*, as opposed to one searched for and not found.
+         *
+         * The lane asks for "any published fact that would rule this out
+         * outright", and says a documented absence belongs there too. The worker
+         * that read the source declares which by the claim's type, so a
+         * `NEGATIVE_EXISTENCE` claim is the absence and any other accepted claim
+         * is a disqualifier the verification pass confirmed the source supports.
+         * Recorded beside the `disqualifiers` answer rather than instead of it.
+         */
+        if (lane === DISQUALIFIER_LANE && claim.claimType !== 'NEGATIVE_EXISTENCE') {
+          fields.push(DISQUALIFIED_FIELD);
+        }
+        for (const field of fields) {
+          const existing = await cardFact(opportunity.id, field);
+          // Already this claim: nothing to do, which is what a replay must find.
+          if (existing?.claimId === claim.id) continue;
+          // A person's answer stands, and so does an earlier piece of evidence:
+          // `mayReplace` is the order, and it is about authority rather than
+          // recency. Asked here to skip the write, and again inside it.
+          if (!mayReplace(existing, 'EVIDENCE')) continue;
+          const value = clampText(claim.claim, 600);
+          const written = await recordEvidenceFact({
+            projectId,
+            opportunityId: opportunity.id,
+            field,
+            value,
+            claimId: claim.id,
+          });
+          if (!written) continue;
+          /*
+           * The column as well as the fact, where the field has one.
+           *
+           * `answers.ts` writes both when a *need's* research settles a card
+           * field, and this once wrote only the fact — so the same question,
+           * answered by the deep dive instead, reached `cash_card_facts` and never
+           * reached `evidenceCard`, `readyToTest` or anything else that reads the
+           * row. `COLUMN` is imported rather than restated, because a second copy
+           * is the thing that drifts. Written only once the fact is this claim's,
+           * so the column and the fact cannot name two different claims.
+           */
+          const column = COLUMN[field];
+          if (column) {
+            await updateOpportunity(opportunity.id, { [column]: value } as never);
+          }
+          out.push({ opportunityId: opportunity.id, field, claimId: claim.id });
+        }
       }
     }
   }
