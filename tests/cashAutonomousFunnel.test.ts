@@ -220,11 +220,18 @@ interface Found {
  * judged by Brain's gate, then linked to a DONE mission for that candidate.
  */
 async function answer(candidateId: string, question: string, found: Found[]): Promise<void> {
-  const lanes = [...new Set(found.map((one) => one.lane))].map((id) => ({
+  const lanes: { id: string; description: string; necessity: 'REQUIRED' | 'CONDITIONAL' }[] = [
+    ...new Set(found.map((one) => one.lane)),
+  ].map((id) => ({
     id,
     description: `Evidence for ${id}.`,
     necessity: 'REQUIRED' as const,
   }));
+  // A deep dive compiled now also offers `ruled_out`, where a worker declares a
+  // fact that rules the opening out; this one found none, so it stays empty.
+  if (lanes.some((lane) => lane.id === 'disqualifier') && !lanes.some((lane) => lane.id === 'ruled_out')) {
+    lanes.push({ id: 'ruled_out', description: 'A fact that rules it out.', necessity: 'CONDITIONAL' });
+  }
   const run = await createRun({
     projectId,
     layerId: layer.id,
