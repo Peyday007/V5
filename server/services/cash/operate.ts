@@ -264,13 +264,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * six slots while that opening's dive ran in a third. What the dive leaves
      * blank is asked once it has settled, which is what this pass is for.
      */
-    if (
-      opportunity.validationState === 'PENDING' ||
-      opportunity.validationState === 'RUNNING' ||
-      opportunity.validationState === 'NEEDS_PERSON'
-    ) {
-      continue;
-    }
+    if (diveOwnsItsQuestions(opportunity)) continue;
     const card = evidenceCard(opportunity);
     const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
     /*
@@ -520,6 +514,21 @@ export function isTemporary(reason: string): boolean {
   );
 }
 
+/**
+ * Whether the opening's own deep dive is still asking its questions.
+ *
+ * The dive asks every card question about this exact opening, so fallback
+ * research beside it buys the same answers twice and holds a mission slot to
+ * do it. Parked at a person counts: answering that card resumes the dive.
+ */
+export function diveOwnsItsQuestions(opportunity: CashOpportunity): boolean {
+  return (
+    opportunity.validationState === 'PENDING' ||
+    opportunity.validationState === 'RUNNING' ||
+    opportunity.validationState === 'NEEDS_PERSON'
+  );
+}
+
 export interface DependentWork {
   needId: string;
   candidateId: string;
@@ -542,6 +551,20 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
     if (!need.requestKey?.startsWith('question:')) continue;
     const opportunity = await getOpportunity(need.opportunityId);
     if (!opportunity) continue;
+    /*
+     * The same two refusals the raising pass applies, at the launch.
+     *
+     * Raising was gated and launching was not, so a need raised before either
+     * condition held still became a mission: production launched "Access for"
+     * and "Payer for" an opening whose dive was parked, and "Payer for" a
+     * closed RFP, into four of six slots. The need stays open; it is simply
+     * not turned into work while the dive owns the question or the opening is
+     * ruled out, and it launches by itself the tick that stops being true.
+     */
+    if (diveOwnsItsQuestions(opportunity)) continue;
+    if (cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }).disqualifiedBy) {
+      continue;
+    }
     const candidate = await createCandidate({
       projectId,
       visibility: 'SHARED',

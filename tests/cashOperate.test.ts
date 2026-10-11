@@ -760,6 +760,49 @@ describe('a need that is a question becomes work', () => {
     expect(await startDependentWork(projectId)).toEqual([]);
   });
 
+  it('does not launch a need while the opening\'s own dive asks it, nor for a ruled-out opening', async () => {
+    await granted();
+    const id = await readyPiece();
+    const raise = (key: string) =>
+      raiseNeed({
+        projectId,
+        opportunityId: id,
+        actorRef: 'BRAIN',
+        blockedAction: `Establish the ${key}`,
+        whyItMatters: 'The card has none.',
+        recommendedPath: 'Read the publishing organisation’s own pages.',
+        setupEffort: 'One bounded look.',
+        nextStep: 'Record it.',
+        completionCondition: `The ${key} is recorded on the card.`,
+        blocksState: 'EXECUTING',
+        requestKey: `question:${id}:${key}`,
+      });
+    const raised = await raise('payer');
+    if (!raised.ok) throw new Error(raised.reason);
+    const { updateOpportunity } = await import('../server/repos/cashPortfolio.ts');
+
+    // Raised before the dive started, and the dive now owns the question.
+    for (const state of ['PENDING', 'RUNNING', 'NEEDS_PERSON'] as const) {
+      await updateOpportunity(id, { validation_state: state });
+      expect(await startDependentWork(projectId)).toEqual([]);
+    }
+
+    // The dive settled, and found the opening ruled out.
+    await updateOpportunity(id, { validation_state: 'BLOCKED' });
+    const { recordEvidenceFact } = await import('../server/repos/cashCardFacts.ts');
+    await recordEvidenceFact({
+      projectId,
+      opportunityId: id,
+      field: 'disqualifiedBy',
+      value: 'Proposals closed 25 September 2026.',
+      claimId: 'clm_closed',
+    });
+    expect(await startDependentWork(projectId)).toEqual([]);
+    // The need is untouched, still open, and would launch once neither holds.
+    expect((await getNeed(raised.value.id))!.state).toBe('OPEN');
+    expect((await getNeed(raised.value.id))!.candidateId).toBeNull();
+  });
+
   it('starts nothing for a need that is an integration rather than a question', async () => {
     await readyPiece(['TAKE_A_PAYMENT']);
     await reconcileCapabilityNeeds(projectId);
