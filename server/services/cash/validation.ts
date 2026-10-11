@@ -1223,10 +1223,12 @@ async function withdrawAbsencesWrittenAsAnswers(
   projectId: string,
   opportunity: CashOpportunity,
 ): Promise<void> {
+  // One read of the card per opening per tick, rather than one per field.
+  const byField = new Map((await cardFactsFor(opportunity.id)).map((one) => [one.field, one]));
   for (const lane of ABSENCE_IS_NOT_AN_ANSWER) {
     const field = FIELD_BY_LANE[lane];
     if (!field) continue;
-    const fact = await cardFact(opportunity.id, field);
+    const fact = byField.get(field);
     if (!fact || fact.kind !== 'EVIDENCE' || !fact.claimId) continue;
     const claim = await getClaim(fact.claimId);
     if (!claim || claim.claimType !== 'NEGATIVE_EXISTENCE') continue;
