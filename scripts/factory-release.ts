@@ -549,6 +549,73 @@ function mergedAtIso(mergeSha: string): string {
   return new Date(sh('git', ['log', '-1', '--format=%cI', mergeSha]).stdout.trim()).toISOString();
 }
 
+/** What one Deploy run recorded about its hosted verification, from its artifact. */
+export interface DeployVerification {
+  released?: boolean;
+  complete?: boolean;
+  failing?: string[];
+}
+
+/**
+ * Whether a released Deploy's failed verdict is the change's doing.
+ *
+ * Deploy's hosted verification checks the whole Brain, and it fails for
+ * reasons that have nothing to do with the change being released — a slow
+ * pooler, or a defect another workstream merged (Deploys 438 and 439 on
+ * 2026-10-11 both failed on the Scenario engine's checks). Rolling a Factory
+ * change back for a condition the previous release already had undoes a good
+ * change and fixes nothing. So the failure is not counted against the change
+ * when, and only when: both this run and the last release before the merge ran
+ * to a verdict, and every condition that failed now was already failing then.
+ * A new failing condition, an incomplete run, or no readable baseline is still
+ * the change's, and still rolls back. The release then verifies the live Brain
+ * itself, which is what decides LIVE.
+ */
+export function failuresPreExisting(
+  current: DeployVerification | null,
+  baseline: DeployVerification | null,
+): { preExisting: true; failing: string[] } | { preExisting: false; reason: string } {
+  if (!current || !Array.isArray(current.failing)) return { preExisting: false, reason: 'this Deploy recorded no failing conditions to compare' };
+  if (!baseline || !Array.isArray(baseline.failing)) return { preExisting: false, reason: 'no earlier release recorded its failing conditions' };
+  if (current.complete !== true) return { preExisting: false, reason: 'this Deploy\'s verification did not run to a verdict' };
+  if (baseline.complete !== true) return { preExisting: false, reason: 'the earlier release\'s verification did not run to a verdict' };
+  if (current.failing.length === 0) return { preExisting: false, reason: 'the verdict failed without naming a condition' };
+  const before = new Set(baseline.failing);
+  const added = current.failing.filter((name) => !before.has(name));
+  if (added.length > 0) return { preExisting: false, reason: `new failing condition(s): ${added.slice(0, 5).join('; ')}` };
+  return { preExisting: true, failing: current.failing };
+}
+
+/** A Deploy run's recorded verification, or null when it cannot be read. */
+function readVerification(runId: number): DeployVerification | null {
+  const dir = `release-verification-${runId}`;
+  fs.rmSync(dir, { recursive: true, force: true });
+  const got = sh('gh', ['run', 'download', String(runId), '-R', REPO, '-n', 'step12b-hosted-verification', '-D', dir], { allowFail: true });
+  if (!got.ok) return null;
+  try {
+    return JSON.parse(fs.readFileSync(`${dir}/verification.json`, 'utf8')) as DeployVerification;
+  } catch {
+    return null;
+  }
+}
+
+/** The last Deploy before the merge that released an image and recorded what failed. */
+async function baselineVerification(mergeSha: string): Promise<DeployVerification | null> {
+  const since = mergedAtIso(mergeSha);
+  const reply = await gh<{ workflow_runs: WorkflowRun[] }>(
+    'GET',
+    `/repos/${REPO}/actions/workflows/deploy.yml/runs?branch=production&status=completed&per_page=30`,
+  );
+  const earlier = (reply.body?.workflow_runs ?? [])
+    .filter((run) => run.created_at < since)
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  for (const run of earlier.slice(0, 10)) {
+    const recorded = readVerification(run.id);
+    if (recorded?.released === true) return recorded;
+  }
+  return null;
+}
+
 async function fromDeploying(action: Action, mergeSha: string, deployRunId: number): Promise<void> {
   log(`watching Deploy run ${deployRunId}`);
   const watched = await watchDeploy(deployRunId);
@@ -601,6 +668,18 @@ async function fromDeploying(action: Action, mergeSha: string, deployRunId: numb
     });
     log('RELEASE: FAILED');
     return;
+  }
+  if (watched.conclusion === 'failure' && watched.released) {
+    const judged = failuresPreExisting(readVerification(deployRunId), await baselineVerification(mergeSha));
+    if (judged.preExisting) {
+      log(
+        `Deploy run ${deployRunId} released and its verdict failed only on condition(s) the last release before the merge also failed (${judged.failing.join('; ')}); verifying the live Brain.`,
+      );
+      advance(action.runId, 'VERIFYING');
+      await verify(action, mergeSha);
+      return;
+    }
+    log(`Deploy run ${deployRunId} released and its verdict failed: ${judged.reason}.`);
   }
   advance(action.runId, 'FAILED', {
     stage: 'DEPLOY',
