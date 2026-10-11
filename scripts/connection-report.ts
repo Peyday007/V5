@@ -189,6 +189,58 @@ async function main(): Promise<void> {
     console.log(`    human action required: ${health.humanActionRequired ? `YES — ${health.detail}` : 'NO'}`);
   }
   console.log(`\nconnectors needing a person: ${humanRequired}`);
+
+  /*
+   * Who actually arrived when a Routine was fired. A wrong-worker arrival is a
+   * Claude Routine choosing another Brain connector: the connector works, the
+   * selection is wrong, and no reconnect fixes it.
+   */
+  console.log('\nARRIVALS (fired sessions that checked in, by Routine)');
+  const arrivals = await db.all<{ routine_id: string | null; event_type: string; n: number; last: string; worker: string | null }>(
+    `SELECT routine_id, event_type, COUNT(*) AS n, MAX(at) AS last, MAX(worker_id) AS worker FROM bin_events
+      WHERE event_type IN ('DISPATCH_SESSION_ARRIVED', 'DISPATCH_WRONG_WORKER') AND at >= ?
+      GROUP BY routine_id, event_type ORDER BY last DESC`,
+    [since],
+  );
+  if (arrivals.length === 0) console.log('  none recorded in the window');
+  for (const a of arrivals) {
+    console.log(
+      `  ${routineName.get(a.routine_id ?? '') ?? a.routine_id}  ${a.event_type === 'DISPATCH_WRONG_WORKER' ? 'WRONG WORKER' : 'arrived'} ` +
+        `n=${Number(a.n)} last=${a.last} as=${a.worker ?? '-'}`,
+    );
+  }
+
+  /*
+   * What each worker's sessions actually called, from the audit row every MCP
+   * tool call writes. The question this answers is the one a probe that read
+   * "nothing reached Brain" cannot: did a session arrive and call something
+   * other than check-in, or call nothing at all.
+   */
+  console.log('\nMCP CALLS (by worker and tool)');
+  const calls = await db.all<{ actor_id: string | null; target_id: string | null; result: string; n: number; last: string }>(
+    `SELECT actor_id, target_id, result, COUNT(*) AS n, MAX(created_at) AS last FROM identity_events
+      WHERE action = 'MCP_TOOL_CALL' AND actor_type = 'WORKER' AND created_at >= ?
+      GROUP BY actor_id, target_id, result ORDER BY actor_id, last DESC`,
+    [since],
+  );
+  if (calls.length === 0) console.log('  none in the window');
+  for (const c of calls) {
+    console.log(`  ${c.actor_id ?? '-'}  ${c.target_id ?? '-'}  ${c.result}  n=${Number(c.n)} last=${c.last}`);
+  }
+
+  console.log('\nALERTS (who has to act, and what)');
+  const { connectionAlerts } = await import('../server/services/fleet/connectionAlerts.ts');
+  const alerts = await connectionAlerts();
+  if (alerts.alerts.length === 0) console.log('  none');
+  for (const alert of alerts.alerts) {
+    console.log(`  ${alert.routineName} (${alert.accountName})  ${alert.problem}  who=${alert.who}`);
+    console.log(`    ${alert.detail}`);
+    if (alert.projects) console.log(`    serves: ${alert.projects.served.join(', ') || 'no project'} · waiting in: ${alert.projects.waiting.join(', ')}`);
+    console.log(`    action: ${alert.action}`);
+  }
+  for (const account of alerts.stalled) {
+    console.log(`  STALLED ACCOUNT ${account.accountName}: every live Routine needs a person`);
+  }
   console.log('CONNECTION-REPORT: OK');
 }
 

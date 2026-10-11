@@ -99,6 +99,7 @@ import { attributeArrival, NO_SHOW_QUARANTINE_MARK, reconcileConnectorBindings }
 import { connectorHealth, forgetRoutingHealth } from './connectorHealth.ts';
 import { connectorOwners } from './memberReconnect.ts';
 import { createProbeBin, ProbeRefused } from './probe.ts';
+import { WRONG_WORKER_MARK } from './arrivalIdentity.ts';
 import { arrivalIncidentDuring, heldArrivalEvidence, restartWindowPending, unservedArrivalFor } from '../infra/incidents.ts';
 
 /**
@@ -277,6 +278,7 @@ export function liftableQuarantine(reason: string | null): boolean {
   if (!reason) return false;
   return (
     reason.includes(NO_SHOW_QUARANTINE_MARK) ||
+    reason.includes(WRONG_WORKER_MARK) ||
     reason.includes('consecutive fire failures') ||
     reason.startsWith('The provider refused a fire with')
   );
@@ -302,6 +304,33 @@ async function reconnectAction(connectorId: string, routine: FleetRoutine): Prom
   );
 }
 
+/** The wrong-worker arrival of this probe's own session, if one was recorded. */
+async function wrongWorkerArrivalFor(probe: RecoveryProbe): Promise<{
+  sessionRef: string | null;
+  expectedWorkerId: string;
+  arrivedWorkerId: string;
+  clientId: string | null;
+  endpoint: string | null;
+} | null> {
+  if (!probe.binId || !probe.providerSession) return null;
+  for (const event of await listBinEvents(probe.binId)) {
+    if (event.eventType !== 'DISPATCH_WRONG_WORKER') continue;
+    if (!sameProviderSession(event.sessionRef, probe.providerSession)) continue;
+    const m = event.measures ?? {};
+    const expected = typeof m['expectedWorkerId'] === 'string' ? (m['expectedWorkerId'] as string) : null;
+    const arrived = typeof m['arrivedWorkerId'] === 'string' ? (m['arrivedWorkerId'] as string) : null;
+    if (!expected || !arrived) continue;
+    return {
+      sessionRef: event.sessionRef,
+      expectedWorkerId: expected,
+      arrivedWorkerId: arrived,
+      clientId: typeof m['clientId'] === 'string' ? (m['clientId'] as string) : null,
+      endpoint: typeof m['endpoint'] === 'string' ? (m['endpoint'] as string) : null,
+    };
+  }
+  return null;
+}
+
 interface Arrival {
   workerId: string | null;
   credentialId: string | null;
@@ -313,7 +342,13 @@ interface Arrival {
 async function arrivalFor(probe: RecoveryProbe): Promise<Arrival | null> {
   if (!probe.binId || !probe.providerSession) return null;
   for (const event of await listBinEvents(probe.binId)) {
-    if (event.eventType !== 'BIN_ASSIGNED' && event.eventType !== 'BIN_TAKEOVER') continue;
+    /*
+     * A session that arrived as the registered worker and could not take the
+     * probe bin (its project or family did not fit) still arrived, and its
+     * credential is on the arrival row (`arrivalIdentity.ts`). Reading only the
+     * assignment reported that as NO_MCP — "nothing reached Brain".
+     */
+    if (event.eventType !== 'BIN_ASSIGNED' && event.eventType !== 'BIN_TAKEOVER' && event.eventType !== 'DISPATCH_SESSION_ARRIVED') continue;
     if (!sameProviderSession(event.sessionRef, probe.providerSession)) continue;
     const credentialId = typeof event.measures?.['credentialId'] === 'string' ? (event.measures['credentialId'] as string) : null;
     return { workerId: event.workerId, credentialId, sessionRef: event.sessionRef, at: event.at };
@@ -426,6 +461,33 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
   }
 
   if (!expired) return false;
+
+  /*
+   * The fired session arrived authenticated as a different worker than the
+   * Routine is registered for. That is the Claude Routine selecting another
+   * Brain connector — production, 2026-10-11, twice reported here as NO_MCP
+   * with "reconnect Brain in Claude", which would not have changed anything.
+   * Decided only once the window closed with no arrival as the registered
+   * worker: a session holding both of a person's connectors may check in
+   * through each, and the matching one is the answer.
+   */
+  const wrong = await wrongWorkerArrivalFor(probe);
+  if (wrong) {
+    const moved = await settleRecoveryProbe(probe.id, 'FIRED', {
+      to: 'AMBIGUOUS',
+      clientId: wrong.clientId,
+      outcome:
+        `The fired session ${wrong.sessionRef ?? probe.providerSession} arrived, authenticated as ${wrong.arrivedWorkerId}` +
+        `${wrong.endpoint ? ` through the connector at ${wrong.endpoint}` : ''}, but this Routine is registered for ` +
+        `${wrong.expectedWorkerId}. The connector works; the Claude Routine selects the wrong one. Nothing was attributed.`,
+      nextAction:
+        `Either the account holder sets this Routine's Brain connector in Claude to the one that authorizes as ${wrong.expectedWorkerId}, ` +
+        `or, if ${wrong.arrivedWorkerId} is intended, an operator runs \`fleet repoint-worker --ref ${routine.routineRef} ` +
+        `--expect ${wrong.expectedWorkerId} --worker ${wrong.arrivedWorkerId}\`; Brain then re-enables it by itself.`,
+    });
+    await retireProbeBin(probe, 'recovery probe: wrong worker arrived');
+    return moved;
+  }
 
   // A check-in with no session arrived during the window. It may have been
   // this probe's session; Brain cannot tell, so it neither attributes from it

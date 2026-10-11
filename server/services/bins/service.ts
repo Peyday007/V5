@@ -71,6 +71,7 @@ import {
 } from '../../repos/workQueue.ts';
 import { evaluateContract, hashUnitValue, researchPacketParkReason, type ContractVerdict } from './contracts.ts';
 import { getWorkerRouting } from '../../repos/identity.ts';
+import { observeFiredSessionArrival } from '../fleet/arrivalIdentity.ts';
 import {
   allAdmissions,
   classesForFamilies,
@@ -153,6 +154,9 @@ export type CheckInResult =
  * spent out of it, and the reply still has to travel.
  */
 export const CHECK_IN_ADMISSION_BUDGET_MS = 25_000;
+
+/** How long recording who arrived may take inside a check-in, out of that budget. */
+const ARRIVAL_EVIDENCE_BUDGET_MS = 4_000;
 
 /**
  * Give this worker one bin, or tell it there is nothing.
@@ -543,6 +547,34 @@ export async function checkIn(input: {
   }
   const choosing = { infra: null as InfraFailureKind | null, deferred: false };
   try {
+    /*
+     * Who arrived, for the fire that started this session. Recorded before any
+     * work is chosen, because the case it exists for — a Routine whose Claude
+     * configuration selects another worker's connector — is exactly the session
+     * that will be offered nothing, and an arrival that took no bin used to
+     * leave no row at all (`services/fleet/arrivalIdentity.ts`). Never throws.
+     */
+    // Bounded: evidence must not spend the admission budget a session's work needs.
+    const evidence = asWorkload(() =>
+      observeFiredSessionArrival({
+        workerId: input.workerId,
+        credentialId: input.principal.credentialId ?? null,
+        sessionRef: input.sessionRef ?? null,
+      }),
+    );
+    // Abandoned past its budget, it finishes (or fails) in the background, observed.
+    evidence.catch(() => undefined);
+    try {
+      await beforeDeadline(evidence, Math.min(deadline, Date.now() + ARRIVAL_EVIDENCE_BUDGET_MS));
+    } catch (error) {
+      // Lost evidence of arriving is recorded as an unserved arrival, so the
+      // no-show pass does not charge the surface for Brain's own failure.
+      const kind = classifyInfraFailure(error);
+      if (kind) {
+        noteInfraFailure(kind, 'check_in:arrival');
+        noteSessionUnserved(input, kind);
+      }
+    }
     const result = await asWorkload(() => chooseWork(input, deadline, choosing));
     if (!result.assigned && (choosing.infra || choosing.deferred)) {
       noteSessionUnserved(input, choosing.infra ?? 'CHECK_IN_BUDGET');

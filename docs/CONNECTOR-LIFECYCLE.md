@@ -314,6 +314,70 @@ No token, digest or prefix is printed. `connectors derive` runs the attribution
 now; `connectors attach` is the explicit binding; `connectors probe` obtains the
 proof for a Routine nothing else can attribute.
 
+## Who arrived for a fire
+
+`server/services/fleet/arrivalIdentity.ts` · CLAUDE.md §59
+
+A check-in that reports the provider session of one of Brain's fires (within
+six hours) is recorded once per fired session:
+
+| event | means | effect |
+|---|---|---|
+| `DISPATCH_SESSION_ARRIVED` | the registered worker arrived | answers the fire: no no-show, even if it took nothing; its connector is attributed from the proven arrival |
+| `DISPATCH_WRONG_WORKER` | the session authenticated as another worker | answers the fire; the next tick quarantines the Routine with `WRONG_WORKER_MARK` and both remedies |
+
+A wrong-worker arrival is acted on only after a two-minute grace period, and
+only if the same session never also arrived as the registered worker (a session
+may hold both of a person's connectors and check in through each). A probe
+decides it only when its window closes. Check-in records the arrival within
+four seconds of its admission budget; a database failure there is recorded as
+an unserved arrival, so the fire is never charged to the surface.
+
+A wrong worker is the Claude Routine selecting a different Brain connector. It
+is not expiry (`DISPATCH_AUTH_NO_SHOW`, `HUMAN_REAUTH_REQUIRED`) and not a Brain
+outage (`DISPATCH_INFRA_NO_SHOW`). Brain never adopts the arriving identity. The
+remedies are:
+
+- the account owner sets the Routine's Brain connector in Claude to the one that
+  authorizes as the registered worker; or
+- an operator runs `fleet repoint-worker --ref <trig_…> --expect <registered> --worker <arrived>`.
+  The tick then re-enables the Routine by itself (`recoverRebindedSurfaces`), only
+  for a wrong-worker quarantine and only on evidence newer than its last release;
+  the next fire's arrival binds the connector.
+
+A recovery probe whose session arrives as the wrong worker settles `AMBIGUOUS`
+and names these remedies, rather than reporting NO_MCP.
+
+## Brain probes its own quarantines
+
+`server/services/fleet/autoRecovery.ts`
+
+The dispatch tick starts at most one recovery probe a minute, for the most
+overdue Routine whose quarantine Brain derived (no-shows, a refused fire, a
+wrong worker) and which a probe could disprove. The schedule is 15 minutes after
+the quarantine, then 1h, 4h, 12h and 24h after each probe that did not prove the
+Routine healthy. After four such probes Brain stops (`autoRecoveryExhausted`)
+and the alert names the account owner. Probes run one at a time, and an
+operator's probe wins the slot and resets the count. A quarantine a person set,
+a retired surface and a verification account are never probed. The probe's
+`requested_by_id` is `brain:auto-recovery`.
+
+## Who acts
+
+`server/services/fleet/connectionAlerts.ts`
+
+| problem | who | means |
+|---|---|---|
+| `WRONG_WORKER` | account owner (or operator, by repointing) | the Routine's Claude connector authenticates as another worker |
+| `REAUTH_REQUIRED` | account owner | the connector's consent is gone (token rows) |
+| `RECOVERING` | nobody | Brain will probe it again at the time given |
+| `RECOVERY_EXHAUSTED` | account owner | Brain's probes stopped; a reconnect is asked for only if token rows prove consent is gone |
+| `OUT_OF_SCOPE` | operator | eligible and idle for over 24h, while every waiting bin of its kind is in a project its worker does not serve (the sentence names no project; the shell report and Brain administrators see the names) |
+
+An account where every live Routine needs a person is listed as **stalled**.
+People, Fleet, Needs you (Brain administrators) and `npm run report:connections`
+(sections `ARRIVALS`, `MCP CALLS`, `ALERTS`) all read this one derivation.
+
 ## What it cannot fix
 
 - **A reply lost before Brain received the request.** If Claude's refresh never
