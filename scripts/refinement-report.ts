@@ -317,7 +317,44 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
     console.log('  none — no opening in this project has had a deep dive.');
   }
   await printCancellations(projectId);
+  await printWorkByExecutor(projectId, now);
   return true;
+}
+
+/**
+ * Who actually finished research here, by the worker and Routine Brain recorded
+ * on each pass — never by a fire or an arrival, which say a session started and
+ * nothing about whether it did the work.
+ */
+async function printWorkByExecutor(projectId: string, now: string): Promise<void> {
+  const since = new Date(Date.parse(now) - 24 * 60 * 60 * 1000).toISOString();
+  const rows = await getDb().all<{
+    worker: string | null;
+    routine: string | null;
+    pass_key: string;
+    n: number;
+    first_done: string | null;
+    last_done: string | null;
+  }>(
+    `SELECT p.executor_worker_id AS worker, p.executor_routine_id AS routine, p.pass_key AS pass_key,
+            COUNT(*) AS n, MIN(p.completed_at) AS first_done, MAX(p.completed_at) AS last_done
+       FROM research_passes p
+       JOIN research_orchestrations o ON o.id = p.orchestration_id
+      WHERE o.project_id = ? AND p.status = 'COMPLETE' AND p.completed_at >= ?
+      GROUP BY p.executor_worker_id, p.executor_routine_id, p.pass_key
+      ORDER BY p.executor_worker_id, p.executor_routine_id, p.pass_key`,
+    [projectId, since],
+  );
+  console.log('');
+  console.log(`RESEARCH COMPLETED BY EXECUTOR (last 24h, since ${stamp(since)})`);
+  if (rows.length === 0) console.log('  none');
+  for (const row of rows) {
+    console.log(
+      `  ${String(row.worker ?? '—').padEnd(26)} ${String(row.routine ?? '—').padEnd(26)}` +
+        ` ${row.pass_key.padEnd(12)} ${String(Number(row.n)).padStart(4)}` +
+        `  ${stamp(row.first_done)} .. ${stamp(row.last_done)}`,
+    );
+  }
 }
 
 /** The measured healthy window the cancellation rates are compared against. */
