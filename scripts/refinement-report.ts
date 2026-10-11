@@ -455,9 +455,9 @@ async function printGateOutcome(one: CashOpportunity): Promise<void> {
       // The two lanes whose claim *type* decides what the answer means: a
       // documented absence of a disqualifier, or one found; a route, or none.
       for (const claim of accepted) {
-        if (claim.evidenceLane !== 'disqualifier' && claim.evidenceLane !== 'contact_mode') continue;
+        if (!['disqualifier', 'ruled_out', 'contact_mode'].includes(claim.evidenceLane ?? '')) continue;
         console.log(
-          `          ${claim.evidenceLane.padEnd(12)} ${claim.claimType.padEnd(18)} ` +
+          `          ${(claim.evidenceLane ?? '').padEnd(12)} ${claim.claimType.padEnd(18)} ` +
             claim.claim.replace(/\s+/g, ' ').slice(0, 120),
         );
       }

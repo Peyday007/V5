@@ -324,7 +324,9 @@ export function cashTier(input: {
    * than given a tier of its own, because what moves it back is new evidence —
    * a reopened deadline, an extension — and nothing about the state changes.
    */
-  if (input.card.disqualifiedBy) {
+  const ruledOut = input.card.disqualifiedBy;
+  if (ruledOut) {
+    const fact = ruledOut.value.slice(0, 240);
     return {
       tier: 'CANDIDATE',
       establishes: meaning.establishes,
@@ -332,16 +334,19 @@ export function cashTier(input: {
       toAdvance: [
         {
           ...requirement('disqualifiers'),
-          task:
-            `A published fact rules this out: ${input.card.disqualifiedBy.value.slice(0, 240)} ` +
-            'It qualifies only if that stops being true.',
+          task: ruledOut.declared
+            ? `A published fact rules this out: ${fact} It qualifies only if that stops being true.`
+            : `The deep dive recorded a possible disqualifier without saying whether it rules ` +
+              `this out: ${fact} It cannot qualify until a dive establishes that it does not.`,
         },
       ],
       answered: answeredCount,
       required: keys.length,
-      summary:
-        'Disqualified: the deep dive found a published fact that rules this opening out, so it ' +
-        'is not qualified whatever else is answered.',
+      summary: ruledOut.declared
+        ? 'Disqualified: the deep dive found a published fact that rules this opening out, so ' +
+          'it is not qualified whatever else is answered.'
+        : 'Not qualifiable yet: the deep dive recorded a possible disqualifier and did not ' +
+          'classify it, and an unknown is never read as clear.',
     };
   }
 

@@ -50,7 +50,7 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate, missionsForCandidate } from '../../repos/russellMissions.ts';
-import { citableClaims, getOrchestration, listPasses } from '../../repos/research.ts';
+import { citableClaims, getFragment, getOrchestration, listPasses } from '../../repos/research.ts';
 import {
   cardFact,
   cardFactsFor,
@@ -58,7 +58,12 @@ import {
   recordEvidenceFact,
   recordRecommendationFact,
 } from '../../repos/cashCardFacts.ts';
-import { DISQUALIFIED_FIELD, cashEngineCard } from './engineCard.ts';
+import {
+  DISQUALIFIED_FIELD,
+  RULED_OUT_CLEARED_FIELD,
+  UNCLASSIFIED_DISQUALIFIER_FIELD,
+  cashEngineCard,
+} from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { cashTier } from './tier.ts';
 import { COLUMN } from './answers.ts';
@@ -118,6 +123,9 @@ export const VALIDATION_STALL_MS = 6 * 60 * 60 * 1000;
  * answer — the sources do not publish it — and the card says which fields.
  */
 export const MAX_VALIDATION_ROUNDS = 2;
+
+/** Extra rounds an opening may have only to classify an older dive's possible disqualifier. */
+export const CLASSIFICATION_ROUNDS = 1;
 
 /**
  * Why a particular opening is not being qualified right now.
@@ -225,7 +233,21 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
     if (opportunity.validationState === 'NEEDS_PERSON') return { kind: 'AWAITING_PERSON' };
     const disqualified = await cardFact(opportunity.id, DISQUALIFIED_FIELD);
     if (disqualified?.value) return { kind: 'DISQUALIFIED', reason: disqualified.value };
-    if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS) {
+    /*
+     * One bounded round more, to classify what an older dive left unclassified.
+     *
+     * A dive compiled before `ruled_out` existed could record a possible
+     * disqualifier without saying whether it rules the opening out, and that
+     * blocks qualification. Refusing another dive would make the block
+     * permanent, since another dive — which offers `ruled_out` and asks the
+     * open-or-closed question first — is exactly what settles it. So it gets
+     * exactly one, and the bound is the round count rather than a flag.
+     */
+    const classifying =
+      opportunity.validationRounds < MAX_VALIDATION_ROUNDS + CLASSIFICATION_ROUNDS &&
+      Boolean((await cardFact(opportunity.id, UNCLASSIFIED_DISQUALIFIER_FIELD))?.value) &&
+      !(await cardFact(opportunity.id, RULED_OUT_CLEARED_FIELD))?.value;
+    if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS && !classifying) {
       return {
         kind: 'ROUNDS_SPENT',
         rounds: opportunity.validationRounds,
@@ -323,7 +345,7 @@ export function validationQuestion(opportunity: CashOpportunity): string {
      */
     'First establish whether this opening is still open to a supplier like us: whether its ' +
     'closing date, expiry or listing status has passed, or a published rule excludes us. If ' +
-    'it has closed or excludes us, submit that one fact in the disqualifier lane with its ' +
+    'it has closed or excludes us, submit that one fact in the ruled_out lane with its ' +
     'source and stop; nothing else about it needs answering. Otherwise establish who ' +
     'actually pays and how a supplier reaches them, what ' +
     'comparable work is published at, what delivering it would cost, what capital it needs ' +
@@ -1000,6 +1022,11 @@ export const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
   acquisition_access: 'acquisitionAccess',
   exit_evidence: 'exitEvidence',
   contact_mode: 'phoneDependency',
+  /*
+   * A declared disqualifier answers "what would rule it out" as well as
+   * stopping the opening; `applyValidationAnswers` records the second.
+   */
+  ruled_out: 'disqualifiers',
 });
 
 /**
@@ -1021,8 +1048,11 @@ export const ALSO_ANSWERS_BY_LANE: Readonly<Record<string, string>> = Object.fre
   contact_mode: 'access',
 });
 
-/** The lane whose positive finding rules an opening out. */
+/** The lane where a dive records what bears on ruling an opening out, absences included. */
 export const DISQUALIFIER_LANE = 'disqualifier';
+
+/** The lane where a dive declares a fact that does rule the opening out. */
+export const RULED_OUT_LANE = 'ruled_out';
 
 export interface AppliedValidation {
   opportunityId: string;
@@ -1082,17 +1112,33 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
           fields.push(ALSO_ANSWERS_BY_LANE[lane]);
         }
         /*
-         * A disqualifier *found*, as opposed to one searched for and not found.
+         * "No disqualifier found" and "disqualifier found" are two answers.
          *
-         * The lane asks for "any published fact that would rule this out
-         * outright", and says a documented absence belongs there too. The worker
-         * that read the source declares which by the claim's type, so a
-         * `NEGATIVE_EXISTENCE` claim is the absence and any other accepted claim
-         * is a disqualifier the verification pass confirmed the source supports.
-         * Recorded beside the `disqualifiers` answer rather than instead of it.
+         * Found is declared: a claim filed in `ruled_out` answers the question
+         * and stops the opening. None found is a NEGATIVE_EXISTENCE claim in
+         * `disqualifier`, which answers the question and stops nothing.
+         *
+         * A dive compiled before `ruled_out` existed had only `disqualifier`,
+         * and production's held absences, closed RFPs and mere risks side by
+         * side. The absences are typed and read as absences; anything else is
+         * a statement nobody classified, recorded as a *possible* disqualifier
+         * that blocks qualification and says so — never as clear.
          */
-        if (lane === DISQUALIFIER_LANE && claim.claimType !== 'NEGATIVE_EXISTENCE') {
-          fields.push(DISQUALIFIED_FIELD);
+        const classifying = await declaresRuledOut(claim.fragmentId);
+        if (claim.claimType !== 'NEGATIVE_EXISTENCE') {
+          if (lane === RULED_OUT_LANE) {
+            fields.push(DISQUALIFIED_FIELD);
+          } else if (lane === DISQUALIFIER_LANE && !classifying) {
+            fields.push(UNCLASSIFIED_DISQUALIFIER_FIELD);
+          }
+        } else if (
+          lane === DISQUALIFIER_LANE &&
+          classifying &&
+          !(await packetRuledOut(orchestrationId))
+        ) {
+          // A dive that was offered `ruled_out`, used none, and documented that
+          // nothing excludes it: the one answer that clears an unclassified one.
+          fields.push(RULED_OUT_CLEARED_FIELD);
         }
         for (const field of fields) {
           const existing = await cardFact(opportunity.id, field);
@@ -1132,6 +1178,20 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
     }
   }
   return out;
+}
+
+/** Whether any citable claim of this packet declared the opening ruled out. */
+async function packetRuledOut(orchestrationId: string): Promise<boolean> {
+  return (await citableClaims(orchestrationId)).some(
+    (claim) => claim.evidenceLane === RULED_OUT_LANE && claim.claimType !== 'NEGATIVE_EXISTENCE',
+  );
+}
+
+/** Whether a dive's fragment offered its worker the `ruled_out` lane. */
+async function declaresRuledOut(fragmentId: string | null): Promise<boolean> {
+  if (!fragmentId) return false;
+  const fragment = await getFragment(fragmentId);
+  return Boolean(fragment?.requiredEvidence.some((lane) => lane.id === RULED_OUT_LANE));
 }
 
 const FINISHED_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);
