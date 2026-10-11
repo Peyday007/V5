@@ -39,6 +39,7 @@
 import { getDb } from '../../db/database.ts';
 import {
   cashEventsOfKind,
+  cashNow,
   getCashMode,
   listCashEventsFor,
   recordCashEvent,
@@ -196,7 +197,11 @@ export type DiveRefusal =
   /** Declined, archived or already being executed — the commercial questions are closed. */
   | { kind: 'NOT_A_QUALIFYING_STATE'; state: string }
   /** No published signal and no source claim, so there is nothing to quote into a question. */
-  | { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
+  | { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' }
+  /** A second record of an opening already in the portfolio; the survivor is dived instead. */
+  | { kind: 'DUPLICATE'; of: string }
+  /** Its recorded closing date has passed, so there is nothing left to win. */
+  | { kind: 'EXPIRED'; at: string };
 
 /** One line, for a report or an operator. */
 export function describeDiveRefusal(refusal: DiveRefusal): string {
@@ -220,14 +225,18 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
       return `state ${refusal.state}: the commercial questions are closed`;
     case 'NOTHING_PUBLISHED_TO_ASK_ABOUT':
       return 'no buying signal and no source claim — nothing published to ask about';
+    case 'DUPLICATE':
+      return `a second record of ${refusal.of} (same source, same kind of opening) — that one is dived instead`;
+    case 'EXPIRED':
+      return `closed on ${refusal.at} — a dive cannot win an opening that has already closed`;
   }
 }
 
 /**
  * The per-opening half of the decision, in the order the loop applies it.
  *
- * Every branch reads a row. Nothing here consults a clock, a count of workers,
- * or anything a caller supplied.
+ * Every branch reads a row. The one clock read compares a closing date a row
+ * states; nothing consults a count of workers or anything a caller supplied.
  */
 export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRefusal> {
   if (opportunity.validationState !== null) {
@@ -266,10 +275,33 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
   if (opportunity.state !== 'DISCOVERED' && opportunity.state !== 'EVIDENCE_CARD') {
     return { kind: 'NOT_A_QUALIFYING_STATE', state: opportunity.state };
   }
+  if (opportunity.duplicateOfId) return { kind: 'DUPLICATE', of: opportunity.duplicateOfId };
+  // The one clock read here, against a closing date a row states. Brain's own
+  // clock, never a worker's; an opening with no recorded date is not assumed
+  // closed (invariant 39).
+  if (closedBy(opportunity.expiresAt, cashNow())) {
+    return { kind: 'EXPIRED', at: opportunity.expiresAt! };
+  }
   if (!opportunity.buyingSignal && !opportunity.sourceClaimId) {
     return { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
   }
   return { kind: 'ELIGIBLE' };
+}
+
+/**
+ * Whether a recorded closing date has passed. The column is free text, so only
+ * an ISO date or timestamp is read: anything else is unknown, never closed. A
+ * bare date closes at the end of that UTC day, not at its first second.
+ */
+export function closedBy(expiresAt: string | null, now: string): boolean {
+  if (!expiresAt) return false;
+  const value = expiresAt.trim();
+  let closes: number;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) closes = Date.parse(`${value}T23:59:59.999Z`);
+  else if (/^\d{4}-\d{2}-\d{2}T/.test(value)) closes = Date.parse(value);
+  else return false;
+  if (!Number.isFinite(closes)) return false;
+  return closes <= Date.parse(now);
 }
 
 /** The card's own reading of how far this piece has got. */
