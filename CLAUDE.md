@@ -12775,12 +12775,40 @@ objective without one, a person still merges.
   by a partial unique index. A workflow run that dies anywhere leaves a row the
   next run resumes. Runner-shaped failures retry on the same head up to three
   attempts; a verdict about the work does not.
-- **The merge is pinned.** The commit pushed is exactly the one the gate
-  merged and tested, its second parent must be the reviewed head, and the push
-  is a plain fast-forward; a moved branch re-gates rather than force-pushes.
-- **Rule 3 holds.** The gate runs typecheck, `test:impacted` and the build on
-  the merged tree; the full suite runs once, on the released SHA, as Deploy's
-  own test job.
+- **The merge goes through the pull request, and is pinned.** The first
+  version pushed the gated commit to `production` with the workflow token,
+  which works only while `production` is unprotected and asks the owner to
+  exempt a bot from any rule they add — a bypass, not a merge. **The correction
+  is recorded rather than quietly applied:** the release merges through the
+  pull request's own endpoint, pinned to the reviewed head, only while
+  production is still the base the gate merged onto, and the merged tree must
+  be the tree the gate tested; otherwise nothing deploys and the next pass
+  gates production's tip. Rollback is a revert pull request merged the same
+  way. A rule that refuses either stops the release with the forge's reason.
+- **Every required gate finishes before deployment, and the first version did
+  not.** It ran `test:impacted` (SQLite) in the gate and relied on Deploy's
+  SQLite suite — and nothing ran Postgres before production at all, because a
+  merge made by the workflow's own token triggers no `push` workflow, so
+  `postgres-suite.yml` never sees it. The gate now runs the whole suite against
+  Postgres on the merged tree before anything merges; the SQLite half stays
+  Deploy's test job, which gates `flyctl deploy` (rule 3 pays it once).
+- **A withdrawal must be able to stop a merge.** The plan decides eligibility
+  when the attempt opens, and the gate between that and the merge runs for up
+  to three hours. `release-may-merge` re-reads the grant, the head, the state
+  and the risk class immediately before the merge, and refusal is a GATE
+  failure the owner reads on Build.
+- **The Factory never releases a change to itself.** The excluded paths first
+  named the release modules and left their inputs open — `glob.ts` decides what
+  the patterns match, `forge.ts` lists the files they classify, `review.ts` and
+  `campaignView.ts` say whether the review passed, `routes/factory.ts` guards
+  the grant — and the gate runs the merged tree's own test runner, so a change
+  to `test-impacted.mjs` or `vitest.config.ts` could select no tests and pass.
+  All of the Factory and all of the gate's test machinery are reserved.
+- **ROLLED_BACK may only follow a recorded failure.** A failed verification
+  went straight from VERIFYING to ROLLED_BACK, which the state machine refused,
+  so the attempt stayed VERIFYING and the next pass would have verified and
+  reverted again. It records FAILED first; a revert that could not land leaves
+  it FAILED with the open revert pull request named, never ROLLED_BACK.
 - **Rollback goes through the canonical pipeline, never around it.** §28 is
   that exactly one workflow runs `flyctl deploy`, so a failed release is
   reverted on the branch and Deploy is dispatched for the revert. Branch and
@@ -12807,7 +12835,8 @@ objective without one, a person still merges.
   `.claude/settings.json` pre-approves routine development commands and
   `scripts/test-postgres.sh`, the reviewed replacement for the `sudo -u postgres`
   / `pg_ctlcluster` / inline `DO $$` setup that stopped unattended sessions at a
-  prompt; it denies force pushes, canonical-branch pushes, `flyctl`, `sudo` and
+  prompt — which itself failed in a real Cowork container until it stopped
+  honouring a root-private TMPDIR the `postgres` account cannot enter; it denies force pushes, canonical-branch pushes, `flyctl`, `sudo` and
   environment dumps, and a test refuses `Bash` or `Bash(*)`. OS sandboxing is
   not enabled because the cloud worker image has no bubblewrap — enabling it
   there would sandbox nothing, and saying so is the honest report.
@@ -12887,6 +12916,55 @@ only. `docs/CONNECTOR-LIFECYCLE.md` describes the mechanism.
   project stays an operator's decision. A member sees the plain instruction;
   refs and commands are operator depth.
 
+## 60. A simulation compares decisions on the same worlds, and never calls coverage a probability.
+
+The scenario engine (`server/services/scenario/`, `server/repos/scenario.ts`,
+`server/domain/scenario.ts`, `client/src/russell/Scenarios.tsx`,
+`docs/SCENARIOS.md`) is a reusable capability: a typed model of a decision is
+evaluated up to 50,000 times, strategies are compared on identical scenario
+draws, and the result says what drives it. It is not a second Cash ranking:
+nothing in it reads or writes a Cash row, and no result moves an opportunity,
+spends money or contacts anybody. `cash/forecast.ts` keeps owning the Cash
+forecast and `dispatch/simulate.ts` keeps owning the fleet replay.
+
+- **Every input says what it is, and only a source may carry a distribution.**
+  `EVIDENCE` and `HISTORICAL` may be a distribution or a weighted choice; an
+  assumption, a hypothetical or an unknown is a range, and an unknown may never
+  be one value. Invariant 39 at a sampler: an invented distribution would make
+  every percentile downstream read like a measurement.
+- **A sweep is not Monte Carlo, and the result says which it was.** A run whose
+  sampled inputs are not all sourced is a Latin-hypercube sweep, its shares are
+  *coverage of the tested conditions*, and the page never says "probability"
+  about it. Monte Carlo over assumptions is refused with the reason.
+- **Strategies are compared on the same worlds.** Common random numbers, one
+  keyed stream per variable, so a difference between strategies is paired and
+  adding a variable shifts no other draw.
+- **Money is line items the engine sums, in whole cents.** A model cannot write
+  contribution, and two identical lines are refused as a double count. A
+  non-finite answer is an *invalid* scenario, counted, never a zero; a broken
+  constraint is *infeasible*, counted, never hidden.
+- **No winner without a person's objective.** Dominance over named criteria
+  (P50, P10 and P90 contribution, acceptable share, each metric) and the
+  trade-offs among the rest; an order only under an objective somebody chose.
+  Upside is a criterion: without it the first test run read a high-upside
+  strategy as dominated by a merely safer one.
+- **Reproducible from rows.** A run is written `RUNNING` with the exact
+  definition and options before the engine starts, finished guarded on
+  `RUNNING`, and re-running it must reproduce `result_digest`; a `RUNNING` row a
+  dead process left reads as interrupted.
+- **Bounded is not harmless, so a run never executes on the request's loop.**
+  The first version ran the engine inline on the argument that it is bounded
+  (50,000 evaluations, 20 s) and measured at about 0.5 s on the demonstration.
+  The independent review measured a worst-case model holding Node's one event
+  loop for 25.8 s, during which `/mcp`, `/oauth/token`, heartbeats and the
+  dispatch tick were not served — §20's "connector down" story, triggered by a
+  page. A run now executes on a worker thread (`isolate.ts`) that is terminated
+  outright past the budget, a process runs one at a time and refuses a second
+  as busy (429, before any row is written), and reproducing a run takes the
+  default WRITE level because it spends that slot.
+- **The demonstration is illustrative and labelled so on every figure.** It is
+  computed on read and never stored.
+
 ## Repository map
 
 ```
@@ -12928,6 +13006,7 @@ server/
     dealflow.ts         what a claim establishes about a transaction, and where it lands
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
+    scenario.ts       saved scenario models, and every run with exactly what it evaluated
     design.ts           surfaces, captures, findings, patterns, corrections, gaps
     auditReopens.ts     the record behind a re-audit, and its one reservation
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
@@ -13248,6 +13327,17 @@ server/
       askTheWorld.ts    a capability question becomes an idea, and never a packet
       advance.ts        the ordering the tick runs, and no transition of its own
       prove.ts          what makes a capability exist, as opposed to built
+    scenario/
+      expr.ts           a closed arithmetic grammar, parsed by hand, compiled to closures
+      random.ts         seeded streams, Φ and Φ⁻¹, Cholesky — no clock, no Math.random
+      model.ts          a definition validated to death and compiled once
+      engine.ts         drawing the worlds, and every strategy on the same draw
+      analyze.ts        distributions, dominance, trade-offs, sensitivity, break-evens
+      run.ts            the one pure entrance, and the digest that proves reproducibility
+      isolate.ts        a worker thread per run, terminated past the budget; one run at a time
+      worker.ts         the thread itself; worker-boot.mjs registers tsx before loading it
+      service.ts        a run written down before it starts; the read-only demonstration
+      demo.ts           the illustrative demonstration model
     russell/
       home.ts           the eight things home says, in the order S6 fixes them
       collections.ts    threads organized without inventing a category, ranked by meaning
@@ -13344,6 +13434,7 @@ server/
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
     labor.ts            the labor kernel's door: workflows, tasks, who produces each
+    scenario.ts         the scenario engine's door: models, runs, the demonstration, reproduce
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     register.ts         the work register's door: workstreams, links, corrections
     bridge.ts           the conversation entrance: credentials, sync, transcript, status
@@ -13365,6 +13456,7 @@ client/                 React UI
   src/russell/          the whole product: conversation, thin views, states
   src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
   src/russell/Research.tsx  what Brain is trying to learn: goals, budgets, packets, results
+  src/russell/Scenarios.tsx  model a decision, run 50,000 evaluations, read what drives it
   src/russell/Connections.tsx  every Claude account Brain runs on, in six words
   src/russell/Cash.tsx  one Cash page: one skeleton, and a role decides what is in it
   src/russell/Machines.tsx  the ladder, what entering costs, and the three decisions that are a person's
@@ -13399,6 +13491,7 @@ scripts/
   refinement-report.ts      where every deep dive spent its time, stage by stage
   labor-report.ts           §13's six readings, and the four figures nothing measures
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
+  scenario-bench.ts         time the engine at 50,000 evaluations on this machine
   connection-report.ts      pools, incidents, auth refusals, misses by cause, every connector
   connection-report.sh      the same, inside the deployed container, on one connection
   puzzle-report.ts          what was made, proved, sold and learned; one puzzle re-rendered
@@ -13483,6 +13576,9 @@ tests/                  Vitest suites
   connectorIsolation.test.ts one site, two private operations, two identities
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
+  scenarioEngine.test.ts     known answers, refusals, correlation, pairing, sensitivity
+  scenarioHttp.test.ts       models and runs persist, reproduce after a restart, and stay private
+  scenarioSurface.test.tsx   the page over the real route: labelled simulation, never a probability
   connectorLifecycle.test.ts two accounts on one worker, an auth no-show, and a recovery nobody pressed
   connectionRecovery.test.ts the wrong connector, an arrival that took nothing, a probe nobody asked for
   connectorRecoveryProbe.test.ts  a quarantined, unattributed Routine proving its own connector
