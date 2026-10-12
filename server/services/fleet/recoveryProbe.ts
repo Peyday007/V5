@@ -500,6 +500,9 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
      */
     if (
       routine.state === 'QUARANTINED' &&
+      // Only a quarantine Brain derived: a person's own hold is never turned
+      // into one Brain may lift.
+      liftableQuarantine(routine.stateReason) &&
       routine.workerId === wrong.expectedWorkerId &&
       !(routine.stateReason ?? '').includes(WRONG_WORKER_MARK)
     ) {

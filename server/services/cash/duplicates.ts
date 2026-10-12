@@ -157,6 +157,9 @@ export async function markDuplicateOpenings(projectId: string): Promise<string[]
      * The opening's closing date, wherever one of its records carries it. The
      * earliest, because reading a later one would keep a closed opening
      * looking open; and only into an empty column, so a person's value stands.
+     * The cost is stated: where one listing page carried two genuinely
+     * different requests and they were joined, the earlier request's date
+     * reaches the survivor. Undone by setting the survivor's date by hand.
      */
     const dated = ordered
       .map((one) => one.expiresAt)
@@ -186,7 +189,8 @@ export async function markDuplicateOpenings(projectId: string): Promise<string[]
  * asks them. Withdrawn rather than deleted, with the reason, and only those
  * still open — a settled need keeps its resolution. A need whose mission is
  * already running is withdrawn too; that mission finishes and its answer is
- * not lost, it simply belongs to a record nothing will act on.
+ * not applied to anything (answers reach only open needs), which is the cost
+ * of stopping the duplicate asking — bounded, because marking happens once.
  */
 async function withdrawOpenNeeds(projectId: string, opportunityId: string, survivorId: string) {
   const open = (await listNeeds({ projectId, states: ['OPEN'] })).filter(

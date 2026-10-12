@@ -400,7 +400,9 @@ export function cashEngineCard(input: {
        * reading of the claim's sentence.
        */
       const expiresAt = input.opportunity.expiresAt;
-      if (expiresAt && closedBy(expiresAt, input.now ?? nowIso())) {
+      const found = byField.get(DISQUALIFIED_FIELD);
+      // A disqualifier a dive declared says more than the date, so it wins.
+      if (!(found && text(found.value)) && expiresAt && closedBy(expiresAt, input.now ?? nowIso())) {
         return {
           value: `Its published closing date, ${expiresAt}, has passed.`,
           claimId: input.opportunity.sourceClaimId ?? null,

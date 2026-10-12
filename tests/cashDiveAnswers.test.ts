@@ -27,7 +27,7 @@ import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, insertClaims, updateFragment } from '../server/repos/research.ts';
 import { cardFact, cardFactsFor, recordRecommendationFact } from '../server/repos/cashCardFacts.ts';
 import { applyValidationAnswers, closedBy, whyNotDiving } from '../server/services/cash/validation.ts';
-import { reconcileDiscoverableGaps } from '../server/services/cash/operate.ts';
+import { advanceWithinAuthority, reconcileDiscoverableGaps } from '../server/services/cash/operate.ts';
 import { markDuplicateOpenings, openingSourceKey, existingOpeningFor } from '../server/services/cash/duplicates.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
 import { evidenceCard } from '../server/services/cash/card.ts';
@@ -698,6 +698,15 @@ describe('a passed closing date stops an opening everywhere', () => {
     expect(reading.summary.startsWith('Closed:')).toBe(true);
     expect((await whyNotDiving((await getOpportunity(id))!)).kind).toBe('EXPIRED');
     expect((await reconcileDiscoverableGaps(projectId)).some((gap) => gap.opportunityId === id)).toBe(false);
+  });
+
+  it('contacts nobody about a piece marked ready before its deadline passed', async () => {
+    const { candidateId } = await dive('ready-closed', [{ lane: 'payer', text: 'The City of St. Louis pays.' }]);
+    const id = await opening([{ candidateId }], 'RFQ: ready, then closed');
+    await getDb().run("UPDATE cash_opportunities SET state = 'READY', expires_at = '2026-09-25' WHERE id = ?", [id]);
+    const advance = await advanceWithinAuthority(projectId);
+    expect(advance.took.some((one) => one.opportunityId === id)).toBe(false);
+    expect(advance.withheld.find((one) => one.opportunityId === id)?.because).toContain('closing date');
   });
 
   it('a deadline still ahead changes nothing', async () => {

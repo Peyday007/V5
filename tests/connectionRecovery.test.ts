@@ -298,6 +298,21 @@ describe('a Routine whose Claude connector authenticates as another worker (Airy
   });
 });
 
+describe('a probe never rewrites a hold a person placed', () => {
+  it('keeps an operator quarantine as written when the probe proves the wrong worker', async () => {
+    const airyn = await surface('airyn-held', research);
+    const held = 'operator hold: billing switch in progress';
+    await setRoutineState({ routineId: airyn.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: held });
+    const wrong = await connector(other, 'https://brain.example/mcp/factory');
+    const fire: Fire = async ({ target }) => ({ ok: true, sessionRef: 'cse_HELD1', fireEventId: 'f', routineId: target.routineId });
+    const probe = await startRecoveryProbe({ routineRef: airyn.routineRef, requestedById: 'usr_admin', fire });
+    await arrive(other, wrong.accessId, 'session_HELD1', []);
+    await settleRecoveryProbes(Date.now() + RECOVERY_PROBE_WINDOW_MS + 1_000);
+    expect((await getRecoveryProbe(probe.id))!.state).toBe('AMBIGUOUS');
+    expect((await getRoutineByRef(airyn.routineRef))!.stateReason).toBe(held);
+  });
+});
+
 describe('the review findings, pinned', () => {
   it('a session holding both connectors, arriving through each, is not a wrong-connector Routine', async () => {
     const s = await surface('both', research);
