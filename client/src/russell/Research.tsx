@@ -59,6 +59,7 @@ export function ResearchView({
   return (
     <section className="rs-view rs-view-research" aria-labelledby="rs-research-title">
       <h2 id="rs-research-title">Research</h2>
+      <p className="rs-hint">Research Brain can answer from what it holds is never bought twice.</p>
       {overview && state.phase === 'READY' ? <p className="rs-lede">{overview.headline}</p> : null}
       {projectId && state.phase !== 'READY' ? (
         <p className={`rs-state rs-state-${state.phase.toLowerCase()}`} role={state.phase === 'ERROR' ? 'alert' : undefined}>
