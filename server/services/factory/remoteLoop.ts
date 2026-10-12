@@ -481,7 +481,7 @@ async function ingestReviewBin(
   });
   await patchCampaign(campaign.id, { reviewRounds: round });
 
-  const repairs = await queueRepairs(campaign, changeRequest);
+  const repairs = await queueRepairs(campaign, changeRequest, { gatingOnly: round > 1 });
   for (const queued of repairs.queued) {
     await recordFactoryEvent({
       campaignId: campaign.id,
@@ -1833,9 +1833,17 @@ async function runRemoteTick(
   const latest = reviews[reviews.length - 1];
   const gating = await gatingFindings(fresh.id);
 
-  if (!latest || gating.length > 0 || latest.verdict !== 'PASS') {
-    // A review is wanted when there is none, or when the last one asked for
-    // changes that have since been repaired and nobody has looked again.
+  // The commit that will ship must be the commit a reviewer passed. A repair
+  // for a non-gating finding lands *after* a PASS, so without this the campaign
+  // delivered a head no reviewer had read, and an automatic release was refused
+  // for exactly that (campaign fcp_83fb897d, 2026-10-12: review passed e28e488,
+  // the repair made 4a1a05d, and 4a1a05d was delivered unreviewed).
+  const head = fresh.integrationSha ?? fresh.baseSha;
+  const headPassed = latest?.verdict === 'PASS' && latest.reviewedSha === head;
+  if (!latest || gating.length > 0 || latest.verdict !== 'PASS' || !headPassed) {
+    // A review is wanted when there is none, when the last one asked for
+    // changes that have since been repaired and nobody has looked again, or when
+    // anything landed after the last passing review.
     const reviewedSha = fresh.integrationSha ?? fresh.baseSha;
     const alreadyReviewed = reviews.some((row) => row.reviewedSha === reviewedSha);
     if (gating.length > 0) {
@@ -1845,7 +1853,7 @@ async function runRemoteTick(
        * amendment a person makes afterwards is answered here, on the next tick,
        * with nobody re-running anything. Idempotent — only unqueued findings.
        */
-      const repairs = await queueRepairs(fresh, changeRequest);
+      const repairs = await queueRepairs(fresh, changeRequest, { gatingOnly: reviews.length > 1 });
       for (const queued of repairs.queued) {
         await recordFactoryEvent({
           campaignId: fresh.id,

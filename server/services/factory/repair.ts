@@ -194,11 +194,19 @@ export interface RepairResult {
 export async function queueRepairs(
   campaign: FactoryCampaign,
   changeRequest: FactoryChangeRequest,
+  options: { gatingOnly?: boolean } = {},
 ): Promise<RepairResult> {
   // Only findings that have no repair yet. A finding whose repair is queued is
   // still unresolved, so it belongs in the open set — but it does not need a
   // second repair unit, and `attachRepair` would refuse one anyway.
-  const findings = await listUnqueuedFindings(campaign.id);
+  //
+  // `gatingOnly` is for a review round after the first: a repair changes the
+  // commit, a changed commit is reviewed again, and a re-review that queued a
+  // repair for every new nit would never end. A later round's MINOR findings
+  // stay open and are listed on the pull request as remaining limitations.
+  const findings = (await listUnqueuedFindings(campaign.id)).filter(
+    (finding) => !options.gatingOnly || GATING_SEVERITIES.has(finding.severity),
+  );
   const units = await listUnits(campaign.id);
   const dependencies = await listDependencies(campaign.id);
   const result: RepairResult = { queued: [], skipped: [], needsAmendment: [], ownershipBlocked: [] };
