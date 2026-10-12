@@ -1046,6 +1046,9 @@ function Campaigns({
       <p className="rs-hint">
         Approved objectives finish live and verified, or name exactly what is blocking them.
       </p>
+      <p className="rs-hint">
+        A change that lands after its review is reviewed again before it ships.
+      </p>
       {state.phase !== 'READY' ? (
         <p className={`rs-state rs-state-${state.phase.toLowerCase()}`}>
           {state.message}
