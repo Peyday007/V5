@@ -4604,6 +4604,33 @@ describe('a completed delivery bin that could not be ingested says so in the led
     return assigned!.bin.id;
   }
 
+  /*
+   * Campaign fcp_83fb897d, 2026-10-12: round 1 passed e28e488 with one MINOR
+   * finding, the repair made 4a1a05d, and 4a1a05d was delivered with no review —
+   * so its automatic release was refused, correctly, for shipping a commit no
+   * reviewer had read. The commit delivered must be the commit that passed.
+   */
+  it('reviews a commit that landed after the passing review before delivering it', async () => {
+    const repaired = 'e'.repeat(40);
+    const { patchCampaign } = await import('../server/repos/factory.ts');
+    await patchCampaign(campaignId, { integrationSha: repaired });
+    stubForge({
+      branches: { [integrationBranch]: repaired },
+      compares: { [`${BASE}...${repaired}`]: { files: ['test/only.test.js'], status: 'ahead' } },
+    });
+    const report = await tickRemoteCampaign(campaignId);
+    expect(report.created.some((entry) => entry.startsWith('review:'))).toBe(true);
+    expect(report.created.some((entry) => entry.startsWith('deliver:'))).toBe(false);
+    expect((await getCampaign(campaignId))?.state).toBe('REVIEWING');
+  });
+
+  it('delivers the commit the passing review read, with no second review', async () => {
+    forgeConfirms();
+    const report = await tickRemoteCampaign(campaignId);
+    expect(report.created.some((entry) => entry.startsWith('review:'))).toBe(false);
+    expect(report.created.some((entry) => entry.startsWith('deliver:'))).toBe(true);
+  });
+
   it('records a report it cannot read, once, without stopping the retry', async () => {
     const binId = await completedDeliveryBin('this is not a delivery report');
 
