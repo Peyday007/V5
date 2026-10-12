@@ -13045,15 +13045,20 @@ went. 2026-10-12 is the reading that finally did.
   `client_connection_check_interval` 10 s, because Postgres goes on executing a
   statement whose client has gone, and a saturated Brain's scans used to outlive
   its own restart.
-- **A boot migration may not build an index on a large, write-hot table — and
-  the first version of 115/106 did.** It indexed `identity_events`; on the
-  saturated database the build hit the statement timeout, the migration rolled
-  back on every boot attempt, and production served 503 until a corrected,
-  never-applied migration was deployed. Recorded rather than quietly fixed,
-  because it is the clearest instance of a cure built on a reading taken in one
-  condition and applied in another. Large tables (`identity_events`,
-  `bin_events`, `project_events`) get an index only outside the boot path, by a
-  person who has measured the build.
+- **A boot migration may not build an index on a large, write-hot table, and
+  115/106 did.** It indexes `identity_events`. On the saturated database the build
+  hit the statement timeout, the migration rolled back on each boot attempt, and
+  production served 503 until an attempt landed in a quieter minute and applied
+  it (16:21Z). Then a second mistake followed: I had already "corrected" the
+  migration file to drop that index, which would have made the next boot refuse
+  to start on a checksum mismatch, so the deploy was cancelled in its test gate
+  and the file restored to exactly what was applied. Both are recorded rather
+  than quietly fixed. The first is a cure built on a reading taken in one
+  condition and applied in another. The second is §3's checksum rule, which is
+  there to catch exactly that. From now on, large tables (`identity_events`,
+  `bin_events`, `project_events`) get an index outside the boot path only, from
+  a person who has measured the build. A migration that failed in production is
+  not "never applied" until the database says so.
 - **What is not established.** Whether the saturation is Brain's load alone,
   or Brain's load against a compute tier whose CPU or disk-IO burst budget runs
   out, is not readable from inside Brain: during both failed boots no Brain
