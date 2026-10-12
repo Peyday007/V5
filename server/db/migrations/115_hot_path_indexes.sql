@@ -10,8 +10,13 @@
 --
 -- Additive only: nothing reads differently, and each is a plain index on a
 -- table of thousands of rows, built inside the migration's transaction.
+--
+-- Deliberately NOT identity_events, though its connector-health probe was on
+-- the same list: that table is large, and the first version of this migration
+-- indexed it — on the saturated database the build hit the statement timeout,
+-- the migration rolled back, and production could not boot until it was taken
+-- out. An index on a large, write-hot table is not something a boot migration
+-- may build inside a transaction.
 CREATE INDEX IF NOT EXISTS idx_bins_lease_credential ON bins (lease_credential_id, worker_id);
-CREATE INDEX IF NOT EXISTS idx_work_leases_credential ON work_leases (credential_id, worker_id);
 CREATE INDEX IF NOT EXISTS idx_cash_events_opportunity ON cash_events (opportunity_id, kind, created_at);
-CREATE INDEX IF NOT EXISTS idx_identity_events_target ON identity_events (target_id, action, created_at);
 CREATE INDEX IF NOT EXISTS idx_bin_dispatch_sent ON bin_dispatch (state, sent_at);
