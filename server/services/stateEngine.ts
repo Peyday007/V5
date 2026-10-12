@@ -41,10 +41,12 @@ import { listEventsByLayer, recordEvent } from '../repos/events.ts';
 import { getLayer, listLayers, updateLayer, type UpdateLayerInput } from '../repos/layers.ts';
 import { getProject, updateProject } from '../repos/projects.ts';
 import { listRuns, listRunsByLayer, updateRun } from '../repos/runs.ts';
+import { listRunDependenciesForProject } from '../repos/dependencies.ts';
 import {
   checkCanonicalNames,
   checkDocumentDependencies,
   checkRunDependencies,
+  checkRunDependencyRows,
   documentPresence,
   refreshProjectDependencies,
 } from './dependencies.ts';
@@ -459,9 +461,11 @@ async function deriveLayer(layerId: string): Promise<LayerDerivation> {
       missingDependencyItems.push(item);
     }
   };
+  // One read for every run's dependencies rather than two statements per run.
+  const runDependencies = activeRuns.length > 0 ? await listRunDependenciesForProject(layer.projectId) : new Map();
   for (const run of activeRuns) {
     if (run.dependencyOverride) continue;
-    collect((await checkRunDependencies(run.id)).items);
+    collect((await checkRunDependencyRows(layer.projectId, runDependencies.get(run.id) ?? [])).items);
   }
   for (const document of documents) {
     if (document.status === 'COMPLETE' || document.status === 'FROZEN' || document.status === 'SUPERSEDED') {
@@ -685,10 +689,13 @@ export async function recomputeRunReadiness(projectId: string): Promise<{ unbloc
   const unblocked: string[] = [];
   const blocked: string[] = [];
 
+  const dependenciesByRun = await listRunDependenciesForProject(projectId);
   for (const run of await listRuns(projectId)) {
     // Only runs that have not started yet; a finished run's status is history.
     if (run.status !== 'BLOCKED' && run.status !== 'READY' && run.status !== 'PLANNED') continue;
-    const ready = run.dependencyOverride || (await checkRunDependencies(run.id)).ready;
+    const ready =
+      run.dependencyOverride ||
+      (await checkRunDependencyRows(projectId, dependenciesByRun.get(run.id) ?? [])).ready;
 
     if (!ready && run.status !== 'BLOCKED') {
       await updateRun(run.id, { status: 'BLOCKED' });

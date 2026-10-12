@@ -167,6 +167,11 @@ async function checkDependencyRows(
   );
 }
 
+/** A run's status against dependency rows already read. Used by the recompute. */
+export async function checkRunDependencyRows(projectId: string, rows: Dependency[]): Promise<DependencyCheckResult> {
+  return checkDependencyRows(projectId, rows);
+}
+
 /** Source-packet status for a run, e.g. before letting a synthesis start. */
 export async function checkRunDependencies(runId: string): Promise<DependencyCheckResult> {
   const run = await getRun(runId);

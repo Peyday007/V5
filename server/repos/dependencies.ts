@@ -57,6 +57,27 @@ export async function listDependenciesForRun(runId: string): Promise<Dependency[
     .map(mapDependency);
 }
 
+/**
+ * Every run dependency in a project, grouped by run, in one statement.
+ *
+ * Readiness used to ask per run (`listDependenciesForRun`, plus a re-read of
+ * the run itself): 2,800 of each in twelve minutes of production on
+ * 2026-10-12, inside the recompute transaction, for runs that mostly have no
+ * dependencies at all. Same rows, same order within a run.
+ */
+export async function listRunDependenciesForProject(projectId: string): Promise<Map<string, Dependency[]>> {
+  const rows = (await getDb().all<DependencyRow>(
+    'SELECT * FROM dependencies WHERE project_id = ? AND dependent_run_id IS NOT NULL ORDER BY created_at',
+    [projectId],
+  )).map(mapDependency);
+  const byRun = new Map<string, Dependency[]>();
+  for (const row of rows) {
+    if (!row.dependentRunId) continue;
+    byRun.set(row.dependentRunId, [...(byRun.get(row.dependentRunId) ?? []), row]);
+  }
+  return byRun;
+}
+
 export async function listDependenciesForDocument(documentId: string): Promise<Dependency[]> {
   return (await getDb().all<DependencyRow>(
       'SELECT * FROM dependencies WHERE dependent_document_id = ? ORDER BY created_at',

@@ -155,6 +155,14 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 /** How often the loop wakes when nothing else has woken it. */
 export const RUSSELL_TICK_MS = 30_000;
 
+/** How often the tick re-walks missing execution lineage. A backlog, not a tick concern. */
+export const LINEAGE_RECOVERY_INTERVAL_MS = 15 * 60_000;
+let lastLineageRecoveryAt = 0;
+/** Test seam: forget when lineage was last recovered. */
+export function resetLineageRecoveryThrottle(): void {
+  lastLineageRecoveryAt = 0;
+}
+
 import { advanceSources } from '../capability/extraction.ts';
 import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
@@ -1275,7 +1283,17 @@ export async function tick(owner: string): Promise<TickReport> {
       }
     });
 
+    /*
+     * Throttled, because it was the most expensive thing this database did.
+     * Production, 2026-10-12: its per-candidate `bins ⋈ bin_dispatch` statement
+     * was the costliest in pg_stat_statements (280,205 calls, 9,690 s) and its
+     * candidate scan ran 673 ms a time — every thirty seconds, over a page of
+     * sessions it can never resolve, for ever. It recovers history: an
+     * attribution filled in fifteen minutes later is the same attribution.
+     */
     await runPass(report, 'execution-lineage', async () => {
+      if (Date.now() - lastLineageRecoveryAt < LINEAGE_RECOVERY_INTERVAL_MS) return;
+      lastLineageRecoveryAt = Date.now();
       const lineage = await recoverExecutionLineage(cycle.maxEventsPerCycle);
       report.lineageRecovered.push(...lineage.passes);
       report.lineageUnresolved.push(...lineage.unresolved);
