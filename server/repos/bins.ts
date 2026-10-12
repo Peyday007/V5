@@ -3506,6 +3506,9 @@ export async function leaseCredentialFor(
  * would record is lineage every independence tier and every delivery proof is
  * read from. A worker that reports its own `session_ref` never reaches this.
  */
+/** How far back an assignment can still be a session in use when Brain fired. */
+const OVERLAP_LOOKBACK_MS = 24 * 3_600_000;
+
 export async function firedSessionForArrival(
   binId: string,
   leaseGeneration: number,
@@ -3527,17 +3530,29 @@ export async function firedSessionForArrival(
   if (live) return null;
   // A lease this credential held on another bin that was still in use at or
   // after the fire: assigned after it, or with any event of that lease after it.
+  /*
+   * Bounded to assignments in the day before the fire, and the inner probe
+   * goes through the lease's own bin. Both keep the answer and lose the cost:
+   * this ran on every check-in, scanned every assignment ever recorded with a
+   * LIKE and probed `bin_events` by an unindexed `lease_id` per row — 121 s a
+   * statement on 2026-10-12, which is most of a 148 s check-in. A lease belongs
+   * to exactly one bin, so `b.bin_id = a.bin_id` changes nothing it matches;
+   * and no activation runs for a day, so an assignment older than that cannot
+   * be the session still in use when Brain fired.
+   */
+  const since = new Date(Date.parse(fire.sent_at) - OVERLAP_LOOKBACK_MS).toISOString();
   const overlapped = await db.get<{ id: string }>(
     `SELECT a.id FROM bin_events a
       WHERE a.event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER')
+        AND a.at >= ?
         AND a.bin_id <> ?
         AND a.lease_id IS NOT NULL
         AND a.measures LIKE ?
         AND (a.at >= ?
              OR EXISTS (SELECT 1 FROM bin_events b
-                         WHERE b.lease_id = a.lease_id AND b.at >= ?))
+                         WHERE b.bin_id = a.bin_id AND b.lease_id = a.lease_id AND b.at >= ?))
       LIMIT 1`,
-    [binId, `%"credentialId":${JSON.stringify(credentialId)}%`, fire.sent_at, fire.sent_at],
+    [since, binId, `%"credentialId":${JSON.stringify(credentialId)}%`, fire.sent_at, fire.sent_at],
   );
   if (overlapped) return null;
   return fire.session_ref;
