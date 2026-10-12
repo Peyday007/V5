@@ -129,6 +129,15 @@ Brain. Only a Deploy that *failed* rolls back.
 
 ## Continuation and recovery
 
+Every Deploy ends by dispatching one Factory release pass (its `hand-off`
+job). The release also listens for `workflow_run` on Deploy, but GitHub raises
+no such event for a Deploy dispatched with a `GITHUB_TOKEN` — which is how a
+release dispatches its own — so without the hand-off a release that died while
+its Deploy ran had nothing to wake it but the schedule (measured: Deploys 444,
+447 and 448 started no release run; the schedule then did not run for over two
+hours).
+
+
 Every effect is recorded before the next is attempted, so a workflow run that
 dies anywhere leaves a row the next run resumes:
 

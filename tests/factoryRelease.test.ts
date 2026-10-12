@@ -587,6 +587,21 @@ describe('the release workflow’s own readings', () => {
     expect(script).toMatch(/watched\.conclusion === 'failure' && !watched\.released && watched\.refusedAtTip/);
   });
 
+  it('every Deploy, however it was dispatched, wakes a waiting Factory release when it ends', () => {
+    // A Deploy dispatched with GITHUB_TOKEN raises no workflow_run, so the release's own trigger
+    // could never fire for the Deploy a release dispatched itself.
+    const deploy = fs.readFileSync('.github/workflows/deploy.yml', 'utf8');
+    const job = deploy.slice(deploy.indexOf('\n  hand-off:'));
+    expect(job).toMatch(/needs: deploy/);
+    expect(job).toMatch(/if: \$\{\{ always\(\) \}\}/);
+    expect(job).toMatch(/actions: write/);
+    expect(job).toMatch(/gh workflow run factory-release\.yml/);
+    // It dispatches and holds nothing else: no environment, no deployment credential.
+    expect(job).not.toMatch(/environment:|FLY_API_TOKEN|contents: write/);
+    const release = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
+    expect(release).toMatch(/workflow_dispatch:/);
+  });
+
   it('asks for its own resume after a failure, a bounded number of times', () => {
     const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
     const step = workflow.slice(workflow.indexOf('Ask for the pass that resumes this one'));

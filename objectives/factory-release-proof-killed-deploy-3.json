@@ -1,0 +1,44 @@
+{
+  "objective": "On the People & capacity page in client/src/russell/People.tsx, in the main return (the section with className 'rs-view rs-view-people'), directly after the existing 'rs-hint' paragraph beneath the heading 'People & capacity', add one paragraph with className 'rs-hint' that reads exactly: 'A connection that authorized once keeps working until someone takes it back.' Add tests/peopleKeepsWorkingSentence.test.tsx that renders that section and asserts the sentence is on the screen. Change nothing else.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "The People & capacity page shows 'A connection that authorized once keeps working until someone takes it back.'.",
+  "nonGoals": [
+    "Any server, schema or workflow change",
+    "Restyling the Build page"
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "client/src/russell/People.tsx renders 'A connection that authorized once keeps working until someone takes it back.' in the People & capacity section.",
+      "verification": "npx vitest run tests/peopleKeepsWorkingSentence.test.tsx",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "client/src/russell/People.tsx",
+    "tests/peopleKeepsWorkingSentence.test.tsx"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Revert the merge commit; no schema or data change.",
+  "release": {
+    "reason": "End-to-end proof, third run: a release killed mid-deploy resumes by itself, from its own Deploy's completion, to verified LIVE.",
+    "pagePath": "/people",
+    "liveChecks": [
+      {
+        "kind": "BUNDLE_TEXT",
+        "text": "keeps working until someone takes it back"
+      },
+      {
+        "kind": "HTTP",
+        "path": "/healthz",
+        "expectStatus": 200
+      }
+    ]
+  }
+}
