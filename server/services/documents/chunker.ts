@@ -57,6 +57,9 @@ export function planChunks(blocks: DocumentBlock[], options: ChunkOptions = {}):
   let current: DocumentBlock[] = [];
   let headingPath: string[] = [];
   let pendingHeadingPath: string[] = [];
+  // The last heading seen, wherever it fell: a size flush must label the next
+  // chunk with it, not with the older heading the flushed chunk opened under.
+  let lastHeadingPath: string[] = [];
 
   const flush = (): void => {
     if (current.length === 0) return;
@@ -98,6 +101,7 @@ export function planChunks(blocks: DocumentBlock[], options: ChunkOptions = {}):
       // otherwise a run of subheadings produces a chunk each.
       const size = current.reduce((total, entry) => total + entry.normalizedText.length, 0);
       pendingHeadingPath = [block.normalizedText];
+      lastHeadingPath = pendingHeadingPath;
       if (size >= maxChars * 0.5) {
         flush();
       }
@@ -107,11 +111,11 @@ export function planChunks(blocks: DocumentBlock[], options: ChunkOptions = {}):
     current.push(block);
     const size = current.reduce((total, entry) => total + entry.normalizedText.length, 0);
     if (size >= maxChars) {
-      pendingHeadingPath = headingPath;
+      pendingHeadingPath = lastHeadingPath;
       flush();
     }
   }
-  pendingHeadingPath = headingPath;
+  pendingHeadingPath = lastHeadingPath;
   flush();
 
   return chunks;
