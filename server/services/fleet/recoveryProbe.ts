@@ -99,7 +99,7 @@ import { attributeArrival, NO_SHOW_QUARANTINE_MARK, reconcileConnectorBindings }
 import { connectorHealth, forgetRoutingHealth } from './connectorHealth.ts';
 import { connectorOwners } from './memberReconnect.ts';
 import { createProbeBin, ProbeRefused } from './probe.ts';
-import { WRONG_WORKER_MARK } from './arrivalIdentity.ts';
+import { WRONG_WORKER_MARK, wrongWorkerReason } from './arrivalIdentity.ts';
 import { arrivalIncidentDuring, heldArrivalEvidence, restartWindowPending, unservedArrivalFor } from '../infra/incidents.ts';
 
 /**
@@ -311,6 +311,7 @@ async function wrongWorkerArrivalFor(probe: RecoveryProbe): Promise<{
   arrivedWorkerId: string;
   clientId: string | null;
   endpoint: string | null;
+  at: string;
 } | null> {
   if (!probe.binId || !probe.providerSession) return null;
   for (const event of await listBinEvents(probe.binId)) {
@@ -326,6 +327,7 @@ async function wrongWorkerArrivalFor(probe: RecoveryProbe): Promise<{
       arrivedWorkerId: arrived,
       clientId: typeof m['clientId'] === 'string' ? (m['clientId'] as string) : null,
       endpoint: typeof m['endpoint'] === 'string' ? (m['endpoint'] as string) : null,
+      at: event.at,
     };
   }
   return null;
@@ -486,6 +488,35 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
         `--expect ${wrong.expectedWorkerId} --worker ${wrong.arrivedWorkerId}\`; Brain then re-enables it by itself.`,
     });
     await retireProbeBin(probe, 'recovery probe: wrong worker arrived');
+    /*
+     * And the quarantine now says so. Production, 2026-10-11: Caleb's Factory
+     * surface 3 was quarantined for no-shows, its probe proved the Routine
+     * selects his research connector, and the alert went on reading
+     * "Nothing to do: Brain probes it again" — naming nobody, while every
+     * further probe spent an activation relearning it. The reason is what the
+     * alert, the auto-recovery and the repoint recovery all read, so the proven
+     * cause replaces the guessed one. Only over a quarantine this Routine is
+     * still registered for the expected worker under, and only once.
+     */
+    if (
+      routine.state === 'QUARANTINED' &&
+      // Only a quarantine Brain derived: a person's own hold is never turned
+      // into one Brain may lift.
+      liftableQuarantine(routine.stateReason) &&
+      routine.workerId === wrong.expectedWorkerId &&
+      !(routine.stateReason ?? '').includes(WRONG_WORKER_MARK)
+    ) {
+      await setRoutineState({
+        routineId: routine.id,
+        from: 'QUARANTINED',
+        to: 'QUARANTINED',
+        reason: wrongWorkerReason({
+          routineName: routine.name,
+          routineRef: routine.routineRef,
+          evidence: { ...wrong, routineId: routine.id, binId: probe.binId, credentialId: null },
+        }),
+      });
+    }
     return moved;
   }
 

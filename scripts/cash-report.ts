@@ -32,6 +32,7 @@
  * string, a bucket key or a token: it reports what a project contains, never
  * where it is kept.
  */
+import { describeDiveRefusal, whyNotDiving } from '../server/services/cash/validation.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { industryView } from '../server/services/industry/view.ts';
 import { dealflowView } from '../server/services/dealflow/view.ts';
@@ -292,6 +293,8 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   console.log(`PORTFOLIO (${opportunities.length})`);
   let cardsComplete = 0;
   let validationsStarted = 0;
+  let duplicates = 0;
+  let closed = 0;
   /*
    * The tier, counted here as well as printed per piece.
    *
@@ -331,6 +334,24 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       );
     }
     console.log(`      ${trim(opportunity.title)}`);
+    /*
+     * Whether this record is one opening or a second record of another, when
+     * it closes, and why no deep dive will start — three facts the tick acts
+     * on that nothing printed, so duplicate prevention and the closing-date
+     * check could only be verified by trusting them.
+     */
+    if (opportunity.duplicateOfId) {
+      duplicates += 1;
+      console.log(`      duplicate of ${opportunity.duplicateOfId}`);
+    }
+    if (card.disqualifiedBy?.closed) closed += 1;
+    if (opportunity.expiresAt) console.log(`      closes ${opportunity.expiresAt}`);
+    {
+      const refusal = await whyNotDiving(opportunity);
+      if (refusal.kind !== 'ELIGIBLE') {
+        console.log(`      no dive: ${refusal.kind} — ${trim(describeDiveRefusal(refusal))}`);
+      }
+    }
     console.log(
       `      from claim ${opportunity.sourceClaimId ?? '—'}` +
         ` · packet ${opportunity.orchestrationId ?? '—'}` +
@@ -722,6 +743,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       ` signals=${byTier['SIGNAL']} candidates=${byTier['CANDIDATE']}` +
       ` qualified=${byTier['QUALIFIED']} ready=${byTier['READY_TO_TEST']}` +
       ` validations=${validationsStarted}` +
+      ` duplicates=${duplicates} closed=${closed}` +
       ` cards_complete=${cardsComplete}` +
       ` subjects=${map.subjects.length} retired_subjects=${map.retired.length}` +
       ` capital_decomposed=${map.capital.length}` +

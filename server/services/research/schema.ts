@@ -41,6 +41,7 @@ import {
 } from '../../domain/types.ts';
 import { validateStructural } from '../../domain/industry.ts';
 import { validateMonetizationMethod } from '../../domain/monetization.ts';
+import { validateClosesOn } from '../../domain/opportunitySignals.ts';
 import { validateLabor } from '../../domain/labor.ts';
 import { validateCapabilityFinding } from '../../domain/manufacturing.ts';
 import { validateDealFinding } from '../../domain/dealflow.ts';
@@ -529,6 +530,8 @@ export interface ParsedClaim {
   evidenceLane: string | null;
   /** The kind of opening this claim establishes, or null for context. */
   opportunitySignal: OpportunitySignal | null;
+  /** The deadline the source publishes for that opening, YYYY-MM-DD, or null. */
+  closesOn?: string | null;
   /**
    * And how the source says money would be made from that opening.
    *
@@ -776,6 +779,14 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   });
   if (!method.ok) return method;
 
+  /* The opening's published deadline: `validateClosesOn`, which the MCP tool calls too. */
+  const closesOn = validateClosesOn({
+    where,
+    closesOn: row['closesOn'],
+    hasSignal: opportunitySignal !== null,
+  });
+  if (!closesOn.ok) return closesOn;
+
   /*
    * The structural fact about an industry, if this claim establishes one.
    *
@@ -899,6 +910,7 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       evidenceLane: lane.value || null,
       opportunitySignal,
       monetizationMethod: method.value,
+      closesOn: closesOn.value,
       structuralFinding: structural.value.finding,
       structuralSubject: structural.value.subject,
       structuralQualifier: structural.value.qualifier,

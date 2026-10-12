@@ -228,6 +228,35 @@ async function main(): Promise<void> {
     console.log(`  ${c.actor_id ?? '-'}  ${c.target_id ?? '-'}  ${c.result}  n=${Number(c.n)} last=${c.last}`);
   }
 
+  /*
+   * Work, by worker and project, from the bin ledger.
+   *
+   * An arrival says a session checked in; it does not say it did anything.
+   * "Verify real work completes" was answerable only by inference — a check-in
+   * count beside a quarantine — so this counts what a session did once it was
+   * in: bins it took, work items it claimed, units it submitted, completions
+   * Brain accepted and refused. Every figure is a `bin_events` row Brain wrote
+   * with the authenticated worker on it; nothing a worker said contributes.
+   */
+  console.log('\nWORK (what sessions did once in, by worker and project)');
+  const work = await db.all<{ worker_id: string; project_id: string | null; event_type: string; n: number; last: string }>(
+    `SELECT worker_id, project_id, event_type, COUNT(*) AS n, MAX(at) AS last FROM bin_events
+      WHERE worker_id IS NOT NULL AND at >= ?
+        AND event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER', 'BIN_ITEM_CLAIMED', 'BIN_UNIT_SUBMITTED',
+                           'BIN_COMPLETION_ACCEPTED', 'BIN_COMPLETION_REFUSED', 'BIN_RELEASED')
+      GROUP BY worker_id, project_id, event_type ORDER BY worker_id, project_id, event_type`,
+    [since],
+  );
+  if (work.length === 0) console.log('  none in the window');
+  const grouped = new Map<string, string[]>();
+  const lastAt = new Map<string, string>();
+  for (const row of work) {
+    const key = `${row.worker_id}  ${row.project_id ?? '-'}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), `${row.event_type.replace(/^BIN_/, '').toLowerCase()}=${Number(row.n)}`]);
+    if ((lastAt.get(key) ?? '') < row.last) lastAt.set(key, row.last);
+  }
+  for (const [key, counts] of grouped) console.log(`  ${key}  ${counts.join(' ')}  last=${lastAt.get(key)}`);
+
   console.log('\nALERTS (who has to act, and what)');
   const { connectionAlerts } = await import('../server/services/fleet/connectionAlerts.ts');
   const alerts = await connectionAlerts();

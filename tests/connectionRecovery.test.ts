@@ -23,6 +23,7 @@ import {
   getRoutine,
   repointRoutineWorker,
   setRoutineState,
+  getRoutineByRef,
 } from '../server/repos/fleet.ts';
 import { createWorker, grantMembership, setWorkerRouting } from '../server/repos/identity.ts';
 import { findLiveToken, issueGrant, registerClient, touchToken } from '../server/repos/oauth.ts';
@@ -285,6 +286,30 @@ describe('a Routine whose Claude connector authenticates as another worker (Airy
     expect(settled.outcome).toContain('the Claude Routine selects the wrong one');
     expect(settled.nextAction).toContain('repoint-worker');
     expect(settled.nextAction).not.toContain('reconnect Brain in Claude');
+    // And the quarantine carries the proven cause, so the alert names the
+    // account owner instead of "Nothing to do" (production, Caleb's Factory
+    // surface 3, 2026-10-11).
+    const after = (await getRoutineByRef(airyn.routineRef))!;
+    expect(after.state).toBe('QUARANTINED');
+    expect(after.stateReason).toContain(WRONG_WORKER_MARK);
+    const alert = (await connectionAlerts()).alerts.find((one) => one.routineId === airyn.routineId)!;
+    expect(alert.problem).toBe('WRONG_WORKER');
+    expect(alert.who).toBe('ACCOUNT_OWNER');
+  });
+});
+
+describe('a probe never rewrites a hold a person placed', () => {
+  it('keeps an operator quarantine as written when the probe proves the wrong worker', async () => {
+    const airyn = await surface('airyn-held', research);
+    const held = 'operator hold: billing switch in progress';
+    await setRoutineState({ routineId: airyn.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: held });
+    const wrong = await connector(other, 'https://brain.example/mcp/factory');
+    const fire: Fire = async ({ target }) => ({ ok: true, sessionRef: 'cse_HELD1', fireEventId: 'f', routineId: target.routineId });
+    const probe = await startRecoveryProbe({ routineRef: airyn.routineRef, requestedById: 'usr_admin', fire });
+    await arrive(other, wrong.accessId, 'session_HELD1', []);
+    await settleRecoveryProbes(Date.now() + RECOVERY_PROBE_WINDOW_MS + 1_000);
+    expect((await getRecoveryProbe(probe.id))!.state).toBe('AMBIGUOUS');
+    expect((await getRoutineByRef(airyn.routineRef))!.stateReason).toBe(held);
   });
 });
 

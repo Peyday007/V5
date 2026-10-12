@@ -126,6 +126,9 @@ export async function recordFragmentClaims(input: {
          * back, which is the only shape of test that could have seen it.
          */
         monetizationMethod: claim.monetizationMethod ?? null,
+        // And the opening's published deadline, for the same reason: declared at
+        // both doors and dropped here, it would land NULL and nothing would stop.
+        closesOn: claim.closesOn ?? null,
         /*
          * The structural declaration travels whole or not at all.
          *

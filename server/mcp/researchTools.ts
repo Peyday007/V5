@@ -108,6 +108,7 @@ import {
   OPPORTUNITY_SIGNALS,
   SIGNAL_GUIDE,
   isOpportunitySignal,
+  validateClosesOn,
   type OpportunitySignal,
 } from '../domain/opportunitySignals.ts';
 import {
@@ -1130,6 +1131,20 @@ function optionalSignal(row: Record<string, unknown>, where: string): Opportunit
  * the first where the second reader did not exist. This is a rename of the
  * wire's field names onto a rule that lives somewhere both can reach.
  */
+/**
+ * The published deadline of the opening a claim establishes, or null.
+ * `validateClosesOn` is the rule; the provider path calls it too.
+ */
+function optionalClosesOn(
+  row: Record<string, unknown>,
+  signal: OpportunitySignal | null,
+  where: string,
+): string | null {
+  const checked = validateClosesOn({ where, closesOn: row['closes_on'], hasSignal: signal !== null });
+  if (!checked.ok) throw invalidInput(checked.error);
+  return checked.value;
+}
+
 function optionalMethod(
   row: Record<string, unknown>,
   signal: OpportunitySignal | null,
@@ -1442,6 +1457,16 @@ const submitClaimsTool: McpTool = {
                 'exactly one of the strings brain_get_assignment returns as `requiredEvidence`, ' +
                 'verbatim. The gate asks per lane whether any accepted claim filled it, so an ' +
                 'untagged claim cannot answer the question it was found for, however good it is.',
+            },
+            closes_on: {
+              type: 'string',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+              description:
+                'Optional, and only alongside opportunity_signal. When the source publishes a ' +
+                'deadline for the opening (a proposal due date, a listing end, an application ' +
+                'close), the date as YYYY-MM-DD exactly as the source states it. Brain stops ' +
+                'researching an opening once that date has passed. Omit it when the source ' +
+                'states none; never estimate one.',
             },
             monetization_method: {
               type: 'string',
@@ -1877,6 +1902,7 @@ const submitClaimsTool: McpTool = {
          * knows, and a worker that read a source may name one it did not.
          */
         monetizationMethod: optionalMethod(row, optionalSignal(row, where), where),
+        closesOn: optionalClosesOn(row, optionalSignal(row, where), where),
         /*
          * And what it establishes about how the industry is put together.
          *

@@ -98,6 +98,7 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     evidenceLane: 'statute',
     opportunitySignal: null,
     monetizationMethod: null,
+    closesOn: null,
     retrievedAt: '2026-01-05',
     confidence: 0.9,
     contradictionState: 'UNCHALLENGED',

@@ -141,6 +141,9 @@ export async function reconcileCapabilityNeeds(
   const wanted = new Set<string>();
 
   for (const opportunity of live) {
+    // A second record of an opening asks nothing: its needs were withdrawn when
+    // it was linked, and the survivor asks them.
+    if (opportunity.duplicateOfId) continue;
     for (const capabilityId of opportunity.requiredCapabilities) {
       const key = capabilityKey(opportunity.id, capabilityId);
       wanted.add(key);
@@ -678,6 +681,18 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
 
   for (const opportunity of await listOpportunities({ projectId, states: ['READY'] })) {
     if (opportunity.duplicateOfId) continue;
+    /*
+     * Not after its published deadline. A piece marked ready before the date
+     * passed would otherwise still get a buyer message after it — contacting
+     * nobody creates no obligation, so stopping here stops no customer's work.
+     */
+    if (cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }).disqualifiedBy?.closed) {
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because: `Its published closing date, ${opportunity.expiresAt}, has passed, so nobody is contacted.`,
+      });
+      continue;
+    }
     // The person's decision first, because it is the authorization and the
     // other is an operational fact: deny-by-default asks whether this may
     // happen before it asks whether it could.

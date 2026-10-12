@@ -613,6 +613,9 @@ export async function harvest(input: {
       // lossy on purpose and the tier turns on the signal — see `tier.ts`.
       opportunitySignal: signal,
       currency: mode.currency,
+      // The deadline the source publishes, as the worker declared it. Null
+      // when it states none, which `closedBy` reads as never closed, not open.
+      expiresAt: claim.closesOn ?? null,
       source: claim.sourcePublisher ?? claim.sourceTitle ?? claim.sourceUrl,
       discoveredByCandidateId: context ? context.round.candidateId : null,
       // The subject whose scan found it, where a kernel scan did. Null where

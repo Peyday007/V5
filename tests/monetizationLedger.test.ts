@@ -1300,6 +1300,7 @@ describe('a method declared over the wire reaches the row', () => {
           primary_source: true,
           opportunity_signal: 'ACTIVE_BUYER_DEMAND',
           monetization_method: 'FRANCHISE',
+          closes_on: '2026-09-25',
         },
       ],
     });
@@ -1314,6 +1315,9 @@ describe('a method declared over the wire reaches the row', () => {
     expect(stored).toHaveLength(1);
     expect(stored[0]!.opportunitySignal).toBe('ACTIVE_BUYER_DEMAND');
     expect(stored[0]!.monetizationMethod).toBe('FRANCHISE');
+    // And the opening's published deadline, through the same mapper, which is
+    // where a declared field lands NULL if nobody carried it.
+    expect(stored[0]!.closesOn).toBe('2026-09-25');
   });
 
   it('refuses a method with no opening beside it, at the provider door too', () => {

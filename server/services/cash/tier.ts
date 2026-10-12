@@ -334,7 +334,9 @@ export function cashTier(input: {
       toAdvance: [
         {
           ...requirement('disqualifiers'),
-          task: ruledOut.declared
+          task: ruledOut.closed
+            ? `${fact} It qualifies only if the source publishes a later deadline.`
+            : ruledOut.declared
             ? `A published fact rules this out: ${fact} It qualifies only if that stops being true.`
             : `The deep dive recorded a possible disqualifier without saying whether it rules ` +
               `this out: ${fact} It cannot qualify until a dive establishes that it does not.`,
@@ -342,7 +344,10 @@ export function cashTier(input: {
       ],
       answered: answeredCount,
       required: keys.length,
-      summary: ruledOut.declared
+      summary: ruledOut.closed
+        ? 'Closed: the deadline its source published has passed, so it is not qualified ' +
+          'whatever else is answered.'
+        : ruledOut.declared
         ? 'Disqualified: the deep dive found a published fact that rules this opening out, so ' +
           'it is not qualified whatever else is answered.'
         : 'Not qualifiable yet: the deep dive recorded a possible disqualifier and did not ' +

@@ -100,6 +100,8 @@ async function finishedMission(input: {
      */
     signal?: OpportunitySignal;
     sourceUrl: string | null;
+    /** The published deadline, as a worker would declare it. */
+    closesOn?: string | null;
     accepted?: boolean;
     sourceDate?: string | null;
     /** What the claim established. A documented absence is not an opening. */
@@ -172,6 +174,7 @@ async function finishedMission(input: {
       evidenceLocator: 'the listing body',
       evidenceLane: one.lane,
       opportunitySignal: one.signal ?? null,
+      closesOn: one.closesOn ?? null,
       retrievedAt: '2026-09-12',
       confidence: 0.8,
       validationState: 'SOURCED' as const,
@@ -262,6 +265,32 @@ describe('opening the discovery of a sprint', () => {
     // "Something else" is not a question, so there is no OTHER bucket for a
     // worker to decide the contents of.
     expect(SEARCH_BUCKETS.map((one) => one.mechanism)).not.toContain('OTHER');
+  });
+});
+
+describe('a published deadline reaches the opening', () => {
+  it('copies the closing date a worker declared onto the opening it harvests', async () => {
+    /*
+     * A closed RFP used to be discovered, harvested and dived before anything
+     * noticed, because its deadline was a sentence on a card. The date is a
+     * typed declaration on the claim now, and the harvest carries it.
+     */
+    await activated();
+    const [first] = await openDiscovery({ projectId });
+    await finishedMission({
+      candidateId: first!.candidateId,
+      claims: [
+        {
+          claim: 'A county published an RFP for parcel research, proposals due 25 September 2026.',
+          lane: SIGNAL_LANE,
+          signal: 'EXPIRING_OPENING',
+          sourceUrl: 'https://example.test/rfp/dated',
+          closesOn: '2026-09-25',
+        },
+      ],
+    });
+    const [made] = await harvest({ projectId });
+    expect((await getOpportunity(made!.opportunity.id))!.expiresAt).toBe('2026-09-25');
   });
 });
 

@@ -51,6 +51,8 @@ import {
   type FieldOwner,
 } from './card.ts';
 import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
+import { nowIso } from '../../repos/util.ts';
+import { closedBy } from './closing.ts';
 
 /**
  * The questions a decision actually turns on, beyond the twelve on the card.
@@ -153,7 +155,17 @@ export interface EngineCard {
    * Optional so a card built before it existed still type-checks; absent means
    * nothing has been found.
    */
-  disqualifiedBy?: { value: string; claimId: string | null; declared: boolean } | null;
+  disqualifiedBy?: {
+    value: string;
+    claimId: string | null;
+    declared: boolean;
+    /**
+     * Set when what rules it out is the opening's own recorded closing date
+     * having passed, rather than a fact a deep dive found. Read from
+     * `expiresAt` against the calendar, never from prose.
+     */
+    closed?: boolean;
+  } | null;
 }
 
 /**
@@ -311,14 +323,17 @@ function kindOf(fact: CashCardFact | undefined, value: string | null): CardEntry
  * than read here so the caller can fetch a project's worth in one query — the
  * card is composed for every piece on the page.
  *
- * Deterministic and total over its inputs: the same opportunity and the same
- * facts produce the same card. Nothing here writes, and nothing here invents a
+ * Deterministic and total over its inputs: the same opportunity, the same
+ * facts and the same instant produce the same card. `now` is the one clock
+ * read, and only for whether a recorded closing date has passed; it defaults
+ * to the present. Nothing here writes, and nothing here invents a
  * value — a field with no column value and no fact is `UNKNOWN`, which is the
  * answer rather than the absence of one.
  */
 export function cashEngineCard(input: {
   opportunity: CashOpportunity;
   facts: CashCardFact[];
+  now?: string;
 }): EngineCard {
   const byField = new Map(input.facts.map((fact) => [fact.field, fact]));
   const base: EvidenceCard = evidenceCard(input.opportunity);
@@ -377,6 +392,24 @@ export function cashEngineCard(input: {
     validationState: input.opportunity.validationState,
     recommendation: entries.find((entry) => entry.key === 'recommendation' && entry.value) ?? null,
     disqualifiedBy: (() => {
+      /*
+       * A recorded closing date that has passed rules it out before anything a
+       * dive found: an opening nobody may apply to cannot be worth testing,
+       * whatever else is answered. Declared, because the date is a typed
+       * column the worker set from the source (or a person entered), not a
+       * reading of the claim's sentence.
+       */
+      const expiresAt = input.opportunity.expiresAt;
+      const found = byField.get(DISQUALIFIED_FIELD);
+      // A disqualifier a dive declared says more than the date, so it wins.
+      if (!(found && text(found.value)) && expiresAt && closedBy(expiresAt, input.now ?? nowIso())) {
+        return {
+          value: `Its published closing date, ${expiresAt}, has passed.`,
+          claimId: input.opportunity.sourceClaimId ?? null,
+          declared: true,
+          closed: true,
+        };
+      }
       const declared = byField.get(DISQUALIFIED_FIELD);
       if (declared && text(declared.value)) {
         return { value: text(declared.value)!, claimId: declared.claimId ?? null, declared: true };

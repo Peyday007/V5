@@ -27,7 +27,7 @@ import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, insertClaims, updateFragment } from '../server/repos/research.ts';
 import { cardFact, cardFactsFor, recordRecommendationFact } from '../server/repos/cashCardFacts.ts';
 import { applyValidationAnswers, closedBy, whyNotDiving } from '../server/services/cash/validation.ts';
-import { reconcileDiscoverableGaps } from '../server/services/cash/operate.ts';
+import { advanceWithinAuthority, reconcileDiscoverableGaps } from '../server/services/cash/operate.ts';
 import { markDuplicateOpenings, openingSourceKey, existingOpeningFor } from '../server/services/cash/duplicates.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
 import { evidenceCard } from '../server/services/cash/card.ts';
@@ -37,6 +37,7 @@ import { getProject } from '../server/repos/projects.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
 import type { ClaimType, EvidenceLane, Layer } from '../server/domain/types.ts';
 import type { OpportunitySignal } from '../server/domain/types.ts';
+import { validateClosesOn } from '../server/domain/opportunitySignals.ts';
 
 const DIVE_LANES: EvidenceLane[] = profileFor('RUSSELL_CASH_VALIDATION_V1')!.lanes;
 
@@ -545,6 +546,20 @@ describe('one opening is one piece of work', () => {
     expect(await markDuplicateOpenings(projectId)).toEqual([first.id]);
     expect((await getOpportunity(second.id))!.duplicateOfId).toBeNull();
   });
+
+  it('one request declared as two kinds of buyer demand is one opening', async () => {
+    // Production: one St. Louis RFQ held six records, split between
+    // EXPIRING_OPENING and ACTIVE_BUYER_DEMAND, which an exact-signal identity
+    // could never join.
+    const { claimIds } = await dive('family', [
+      { lane: 'payer', text: 'SLDC RFQ, closing soon.' },
+      { lane: 'payer', text: 'SLDC is asking for a consultant.' },
+    ]);
+    const first = await harvested(claimIds[0]!, 'SLDC RFQ (expiring)', 'EXPIRING_OPENING');
+    const second = await harvested(claimIds[1]!, 'SLDC RFQ (demand)', 'ACTIVE_BUYER_DEMAND');
+    await getDb().run('UPDATE cash_opportunities SET created_at = ? WHERE id = ?', ['2026-01-01T00:00:00.000Z', first.id]);
+    expect(await markDuplicateOpenings(projectId)).toEqual([second.id]);
+  });
 });
 
 describe('a duplicate is left alone by every other reader', () => {
@@ -590,6 +605,49 @@ describe('a duplicate is left alone by every other reader', () => {
     expect((await getOpportunity(second.id))!.duplicateOfId).toBeNull();
   });
 
+  it('marks a signal whose own research questions are open, and withdraws them', async () => {
+    // The production shape: every harvested signal is asked its payer and
+    // access at once, and the first version refused to mark any record with an
+    // open need — so it marked nothing, ever.
+    const { first, second } = await pair('open-needs');
+    await getDb().run('UPDATE cash_opportunities SET created_at = ? WHERE id = ?', ['2026-01-01T00:00:00.000Z', first.id]);
+    const raised = await reconcileDiscoverableGaps(projectId);
+    expect(raised.some((gap) => gap.opportunityId === second.id)).toBe(true);
+
+    expect(await markDuplicateOpenings(projectId)).toEqual([second.id]);
+    const needs = await getDb().all<{ opportunity_id: string; state: string }>(
+      'SELECT opportunity_id, state FROM cash_needs WHERE project_id = ?',
+      [projectId],
+    );
+    expect(needs.filter((n) => n.opportunity_id === second.id).every((n) => n.state === 'WITHDRAWN')).toBe(true);
+    expect(needs.filter((n) => n.opportunity_id === first.id).every((n) => n.state === 'OPEN')).toBe(true);
+    // And nothing raises them again while it is a duplicate.
+    expect((await reconcileDiscoverableGaps(projectId)).some((gap) => gap.opportunityId === second.id)).toBe(false);
+  });
+
+  it('a proposal Brain composed does not protect a duplicate', async () => {
+    const { first, second } = await pair('proposed');
+    await recordRecommendationFact({
+      projectId,
+      opportunityId: second.id,
+      field: 'recommendation',
+      value: 'Worth testing.',
+      basis: 'b',
+      assumptions: 'a',
+      uncertainty: 'u',
+    });
+    await getDb().run('UPDATE cash_opportunities SET created_at = ? WHERE id = ?', ['2026-01-01T00:00:00.000Z', first.id]);
+    expect(await markDuplicateOpenings(projectId)).toEqual([second.id]);
+  });
+
+  it('gives the survivor the earliest closing date one of its records carries', async () => {
+    const { first, second } = await pair('dated');
+    await getDb().run('UPDATE cash_opportunities SET created_at = ? WHERE id = ?', ['2026-01-01T00:00:00.000Z', first.id]);
+    await updateOpportunity(second.id, { expires_at: '2026-09-25' });
+    await markDuplicateOpenings(projectId);
+    expect((await getOpportunity(first.id))!.expiresAt).toBe('2026-09-25');
+  });
+
   it('releases a duplicate whose survivor was archived', async () => {
     const { first, second } = await pair('archived');
     await getDb().run('UPDATE cash_opportunities SET created_at = ? WHERE id = ?', ['2026-01-01T00:00:00.000Z', first.id]);
@@ -625,6 +683,48 @@ describe('an opening whose recorded closing date passed is not dived', () => {
       kind: 'EXPIRED',
       at: '2020-01-01T00:00:00.000Z',
     });
+  });
+});
+
+describe('a passed closing date stops an opening everywhere', () => {
+  it('caps the card as closed, raises no question and starts no dive', async () => {
+    const { candidateId } = await dive('closed', [{ lane: 'payer', text: 'The City of St. Louis pays.' }]);
+    const id = await opening([{ candidateId }], 'RFQ: a closed request');
+    await answerAllExcept(id, []);
+    await updateOpportunity(id, { expires_at: '2026-09-25', validation_state: null, validation_rounds: 0 });
+    const { card, reading } = await tierOf(id);
+    expect(card.disqualifiedBy).toMatchObject({ declared: true, closed: true });
+    expect(reading.tier).toBe('CANDIDATE');
+    expect(reading.summary.startsWith('Closed:')).toBe(true);
+    expect((await whyNotDiving((await getOpportunity(id))!)).kind).toBe('EXPIRED');
+    expect((await reconcileDiscoverableGaps(projectId)).some((gap) => gap.opportunityId === id)).toBe(false);
+  });
+
+  it('contacts nobody about a piece marked ready before its deadline passed', async () => {
+    const { candidateId } = await dive('ready-closed', [{ lane: 'payer', text: 'The City of St. Louis pays.' }]);
+    const id = await opening([{ candidateId }], 'RFQ: ready, then closed');
+    await getDb().run("UPDATE cash_opportunities SET state = 'READY', expires_at = '2026-09-25' WHERE id = ?", [id]);
+    const advance = await advanceWithinAuthority(projectId);
+    expect(advance.took.some((one) => one.opportunityId === id)).toBe(false);
+    expect(advance.withheld.find((one) => one.opportunityId === id)?.because).toContain('closing date');
+  });
+
+  it('a deadline still ahead changes nothing', async () => {
+    const { candidateId } = await dive('open', [{ lane: 'payer', text: 'The City of St. Louis pays.' }]);
+    const id = await opening([{ candidateId }], 'RFQ: still open');
+    await updateOpportunity(id, { expires_at: '2099-01-01' });
+    expect((await tierOf(id)).card.disqualifiedBy ?? null).toBeNull();
+  });
+});
+
+describe('a declared closing date is a calendar date beside an opening, or refused', () => {
+  it('accepts the published date and nothing looser', () => {
+    expect(validateClosesOn({ where: 'c', closesOn: '2026-09-25', hasSignal: true })).toEqual({ ok: true, value: '2026-09-25' });
+    expect(validateClosesOn({ where: 'c', closesOn: undefined, hasSignal: false })).toEqual({ ok: true, value: null });
+    expect(validateClosesOn({ where: 'c', closesOn: 'Sept 25', hasSignal: true }).ok).toBe(false);
+    expect(validateClosesOn({ where: 'c', closesOn: '2026-09-25T17:00:00Z', hasSignal: true }).ok).toBe(false);
+    expect(validateClosesOn({ where: 'c', closesOn: '2026-02-30', hasSignal: true }).ok).toBe(false);
+    expect(validateClosesOn({ where: 'c', closesOn: '2026-09-25', hasSignal: false }).ok).toBe(false);
   });
 });
 

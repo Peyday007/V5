@@ -2156,6 +2156,7 @@ export interface ResearchClaimRow {
   evidence_lane: string | null;
   opportunity_signal: string | null;
   monetization_method: string | null;
+  closes_on: string | null;
   structural_finding: string | null;
   structural_subject: string | null;
   structural_qualifier: string | null;
@@ -3326,6 +3327,16 @@ export interface ResearchClaim {
    * which is correct rather than a gap: nobody was asked.
    */
   monetizationMethod: MonetizationMethod | null;
+  /**
+   * The deadline the source publishes for the opening this claim establishes,
+   * as YYYY-MM-DD, or null.
+   *
+   * Declared by the worker that read the source and validated as a real
+   * calendar date, never read out of the claim's prose. Only alongside an
+   * `opportunitySignal`, because a closing date belongs to an opening. Null
+   * means the source stated none, which is never read as "open".
+   */
+  closesOn: string | null;
   /**
    * The structural fact about an industry this claim establishes, if any.
    *
