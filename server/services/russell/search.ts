@@ -154,7 +154,7 @@ export async function search(input: {
     const rows = await db.all<{ id: string; title: string; project_id: string | null; updated_at: string }>(
       `SELECT id, title, project_id, updated_at
          FROM russell_conversations
-        WHERE owner_user_id = ? AND LOWER(title) LIKE ?
+        WHERE owner_user_id = ? AND LOWER(title) LIKE ? ESCAPE '\\'
         ORDER BY updated_at DESC
         LIMIT ?`,
       [input.principal!.id, pattern, limit],
@@ -189,7 +189,7 @@ export async function search(input: {
          FROM russell_candidates
         WHERE project_id IN (${inProjects})
           AND visibility = 'SHARED'
-          AND (LOWER(title) LIKE ? OR LOWER(statement) LIKE ?)
+          AND (LOWER(title) LIKE ? ESCAPE '\\' OR LOWER(statement) LIKE ? ESCAPE '\\')
         ORDER BY updated_at DESC
         LIMIT ?`,
       [...projectIds, pattern, pattern, limit],
@@ -220,7 +220,7 @@ export async function search(input: {
          FROM russell_missions
         WHERE project_id IN (${inProjects})
           AND visibility = 'SHARED'
-          AND (LOWER(objective) LIKE ? OR LOWER(why_now) LIKE ?)
+          AND (LOWER(objective) LIKE ? ESCAPE '\\' OR LOWER(why_now) LIKE ? ESCAPE '\\')
         ORDER BY updated_at DESC
         LIMIT ?`,
       [...projectIds, pattern, pattern, limit],
@@ -253,7 +253,7 @@ export async function search(input: {
         WHERE project_id IN (${inProjects})
           AND visibility = 'SHARED'
           AND superseded_by_id IS NULL
-          AND (LOWER(statement) LIKE ? OR LOWER(COALESCE(detail, '')) LIKE ?)
+          AND (LOWER(statement) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(detail, '')) LIKE ? ESCAPE '\\')
         ORDER BY updated_at DESC
         LIMIT ?`,
       [...projectIds, pattern, pattern, limit],
@@ -282,7 +282,7 @@ export async function search(input: {
       `SELECT id, canonical_name, project_id, updated_at
          FROM documents
         WHERE project_id IN (${inProjects})
-          AND LOWER(canonical_name) LIKE ?
+          AND LOWER(canonical_name) LIKE ? ESCAPE '\\'
         ORDER BY updated_at DESC
         LIMIT ?`,
       [...projectIds, pattern, limit],
@@ -315,7 +315,7 @@ export async function search(input: {
         WHERE project_id IN (${inProjects})
           AND visibility = 'SHARED'
           AND resolved_at IS NULL
-          AND (LOWER(subject) LIKE ? OR LOWER(COALESCE(detail, '')) LIKE ?)
+          AND (LOWER(subject) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(detail, '')) LIKE ? ESCAPE '\\')
         ORDER BY last_seen_at DESC
         LIMIT ?`,
       [...projectIds, pattern, pattern, limit],
