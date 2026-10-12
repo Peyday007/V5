@@ -12866,6 +12866,52 @@ run with no prompt resume (#164). **Recovery after a death *mid-deploy* by
 cancellation has not been exercised in production**; the attempt killed that way
 ran on (the `always()` defect) and the organic death landed at MERGED instead.
 
+**Both cases have now run end to end, and the record is corrected rather than
+edited.** That sentence was true when it was written. On 2026-10-11/12, with
+#157's six safety fixes in (merge through the PR endpoint, the whole Postgres
+suite in the gate, `release-may-merge`, the Factory reserved from itself,
+FAILED before ROLLED_BACK, and the `/tmp` cluster):
+
+- **Zero intervention after approval.** `fcp_ee3e986`: approved 22:42:56Z, PR
+  #185 opened by the fleet 00:14:38Z, gated, merged by `factory-release` onto a
+  production that had moved 27 disjoint files during the gate (`8f454ee`,
+  01:07:41Z), Deploy 447, `RELEASE-VERIFY: LIVE` 01:56:28Z. Nobody touched it.
+- **Killed mid-deploy, resumed by itself.** `fcp_ba3b3e01`: approved 08:12:14Z,
+  PR #191 merged by the release as `6e19e4a` at 10:03:13Z. Its release run was
+  cancelled at 10:32:38Z while Deploy 452 was in its flyctl step. That Deploy's
+  `hand-off` job dispatched the next pass at 10:44:30Z, which resumed the
+  attempt at DEPLOYING, watched the recorded Deploy, skipped the gate, merged
+  nothing and dispatched nothing, and verified LIVE at 10:48Z.
+
+Getting there found eight more defects, each one a release that would have
+stalled or been rolled back for a reason that was not about the change:
+
+1. A cancelled Deploy read as a failed one (an evicted pending Deploy, 434), and
+   so did a Deploy refused at its own tip check (443): both rolled back a good
+   change. Adopt the Deploy that carries the merge, or dispatch again (#172, #182).
+2. "Production must not move during the gate" spends every attempt in an
+   ordinary afternoon (eight merges in three hours against a gate of about an
+   hour). A disjoint, fast-forward move is merged onto (#174).
+3. Every pull request in the repository took `factory-release`'s single pending
+   slot and evicted a waiting release run, then did nothing (#177).
+4. A released Deploy whose verdict failed on conditions the previous release
+   already failed rolled back (the Scenario checks, Deploys 438/439); and a
+   verification that never reached a verdict (Supabase `429`) was counted as a
+   failure. Pre-existing is excused, unknown is unknown (#180, #182, #183).
+5. `workflow_run` is never raised for a Deploy dispatched with `GITHUB_TOKEN`,
+   so the trigger meant for a release killed mid-deploy could not fire; Deploy
+   now ends by dispatching one release pass (#187).
+6. The hosted loop delivered a commit a repair made *after* the passing review,
+   so the gate refused releasing an unreviewed head; it re-reviews now, and later
+   rounds repair only gating findings (#190).
+
+**Still owed, and not mine to give:** GitHub refuses to let Actions open a pull
+request in this repository (`403: GitHub Actions is not permitted to create or
+approve pull requests`), so an automatic rollback cannot land its revert. The
+owner enables it under Settings → Actions → General → Workflow permissions.
+Until then a failed release stays FAILED with the revert branch named, and the
+change stays live — which is how `fcp_4cc6c148` (PR #178) ended.
+
 ## 59. A session that arrived is an answer, and who it arrived as is the first question.
 
 Production, 2026-10-11. Airyn's four Research Routines were registered for
