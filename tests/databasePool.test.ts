@@ -342,3 +342,22 @@ describe.runIf(postgres)('the server says what it will allow', () => {
     });
   });
 });
+
+describe.runIf(postgres)('a workload connection is bounded on the server', () => {
+  it('carries a statement timeout, an idle-in-transaction timeout and a client check', async () => {
+    if (!postgres) return;
+    // Production, 2026-10-12: statements a saturated Brain started went on
+    // running through its own restart, because nothing bounded them on the
+    // server and Postgres does not notice a departed client mid-statement.
+    const adapter = new PostgresAdapter({ connectionString: postgres.connectionString, schema: postgres.schema, max: 2 });
+    try {
+      const read = async (name: string): Promise<string> =>
+        String((await adapter.get<Record<string, string>>(`SHOW ${name}`))?.[name]);
+      expect(await read('statement_timeout')).toBe('2min');
+      expect(await read('idle_in_transaction_session_timeout')).toBe('2min');
+      expect(await read('client_connection_check_interval')).toBe('10s');
+    } finally {
+      await adapter.close();
+    }
+  });
+});

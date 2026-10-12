@@ -227,6 +227,17 @@ export function describePoolerRefusal(error: unknown): string | null {
 const CONTROL_STATEMENT_TIMEOUT_MS = 12_000;
 /** How long a control-plane statement may wait for a row lock. */
 const CONTROL_LOCK_TIMEOUT_MS = 5_000;
+/** The server's bound on one workload statement. Nothing ordinary comes near it. */
+const WORKLOAD_STATEMENT_TIMEOUT_MS = 120_000;
+/** A workload transaction left open and idle this long is ended by the server. */
+const WORKLOAD_IDLE_IN_TRANSACTION_MS = 120_000;
+/** How soon the server notices that a statement's client has gone. */
+const CLIENT_CHECK_INTERVAL_MS = 10_000;
+
+function readPositiveMs(name: string, fallback: number): number {
+  const raw = process.env[name];
+  return raw && /^\d+$/.test(raw) && Number(raw) > 0 ? Number(raw) : fallback;
+}
 
 interface TransactionContext extends TransactionFrame {
   client: PoolClient;
@@ -313,6 +324,36 @@ export class PostgresAdapter implements Database {
     // A pool that emits an error with no listener takes the process down. An
     // idle client dropped by the far end is ordinary; the pool replaces it.
     this.#pool.on('error', () => undefined);
+    /*
+     * Bounded on the server too, which the workload pool never was.
+     *
+     * Production, 2026-10-12: with the database saturated, workload statements
+     * had no server-side bound at all, and Postgres goes on executing a
+     * statement whose client has gone — so the heavy scans a slow Brain had
+     * started kept running through its own restart, and two deploys in a row
+     * could not boot (Supabase Storage, which shares the database, answering
+     * 544 and 429 too_many_connections) until they finished. Three per-session
+     * settings, each a backstop no ordinary statement reaches:
+     *
+     *   statement_timeout                    one statement may not run for minutes
+     *   idle_in_transaction_session_timeout  a transaction left open is ended
+     *   client_connection_check_interval     a statement whose client is gone is
+     *                                        cancelled within seconds, not run on
+     *
+     * Sent one at a time, because a server that does not know the last one must
+     * not lose the first two with it.
+     */
+    const workloadTimeoutMs = readPositiveMs('BRAIN_DATABASE_STATEMENT_TIMEOUT_MS', WORKLOAD_STATEMENT_TIMEOUT_MS);
+    this.#pool.on('connect', (client: PoolClient) => {
+      client.on('error', () => undefined);
+      for (const setting of [
+        `SET statement_timeout = ${workloadTimeoutMs}`,
+        `SET idle_in_transaction_session_timeout = ${WORKLOAD_IDLE_IN_TRANSACTION_MS}`,
+        `SET client_connection_check_interval = ${CLIENT_CHECK_INTERVAL_MS}`,
+      ]) {
+        client.query(setting).catch(() => undefined);
+      }
+    });
     if (this.#controlMax > 0) {
       /*
        * Held open, never idled out. Supabase's pooler runs in session mode, so a
@@ -356,6 +397,7 @@ export class PostgresAdapter implements Database {
         client
           .query(`SET statement_timeout = ${CONTROL_STATEMENT_TIMEOUT_MS}; SET lock_timeout = ${CONTROL_LOCK_TIMEOUT_MS}`)
           .catch(() => undefined);
+        client.query(`SET client_connection_check_interval = ${CLIENT_CHECK_INTERVAL_MS}`).catch(() => undefined);
       });
     }
   }
