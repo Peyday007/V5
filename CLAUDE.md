@@ -13011,6 +13011,59 @@ forecast and `dispatch/simulate.ts` keeps owning the fleet replay.
 - **The demonstration is illustrative and labelled so on every figure.** It is
   computed on read and never stored.
 
+## 61. The database is the shared dependency, and its load is measured rather than guessed.
+
+Most recurring "connector down", "Not authorized", stuck check-in, failed deploy
+and storage 544 reports this repository has written down share one upstream: the
+Supabase Postgres behind both Brain and Supabase Storage running out of time.
+§18, §27 and §53 each hardened Brain against that condition, and none of them
+could say what was *causing* it, because nothing measured where database time
+went. 2026-10-12 is the reading that finally did.
+
+- **What the process measures.** Each process writes beside its liveness the
+  statements that cost it most (by parameterised text; no parameter is kept) and
+  how long each transaction held a pooled connection, keyed by the code that
+  opened it (`noteStatement`, `noteConnectionHold` in `server/db/infra.ts`).
+  `npm run report:connections` prints both, then asks the server itself:
+  `pg_stat_activity`, the tables read sequentially, and `pg_stat_statements`.
+  A section that cannot be read says so and the rest still prints, because the
+  report is most needed when the database is slow.
+- **What it showed.** `bins` had been scanned sequentially 632,347 times — 1.48
+  billion rows — and the costliest statement in the database was lineage
+  recovery's `bins ⋈ bin_dispatch` by `lease_credential_id`: 280,205 calls,
+  9,690 s, on a column no index covered, re-run every thirty seconds over a page
+  of sessions it can never resolve. Next were connector health's
+  `identity_events` LIKE probe (50,056 × 97 ms), the dispatcher's in-flight count
+  (84,111 × 54 ms), Storage's own `storage.search` for Brain's existence checks
+  (225,809 × 28 ms) and recompute's per-run readiness reads (2,800 + 2,800 in
+  twelve minutes, inside the recompute transaction).
+- **What changed.** Lineage recovery runs at most every fifteen minutes; three
+  plain indexes (migration `115_hot_path_indexes.sql` / pg
+  `106_hot_path_indexes.sql`); readiness reads a project's run dependencies in
+  one statement. And the workload pool is bounded on the server, which it never
+  was: `statement_timeout` 2 min, `idle_in_transaction_session_timeout` 2 min and
+  `client_connection_check_interval` 10 s, because Postgres goes on executing a
+  statement whose client has gone, and a saturated Brain's scans used to outlive
+  its own restart.
+- **A boot migration may not build an index on a large, write-hot table — and
+  the first version of 115/106 did.** It indexed `identity_events`; on the
+  saturated database the build hit the statement timeout, the migration rolled
+  back on every boot attempt, and production served 503 until a corrected,
+  never-applied migration was deployed. Recorded rather than quietly fixed,
+  because it is the clearest instance of a cure built on a reading taken in one
+  condition and applied in another. Large tables (`identity_events`,
+  `bin_events`, `project_events`) get an index only outside the boot path, by a
+  person who has measured the build.
+- **What is not established.** Whether the saturation is Brain's load alone,
+  or Brain's load against a compute tier whose CPU or disk-IO burst budget runs
+  out, is not readable from inside Brain: during both failed boots no Brain
+  process was running and Supabase Storage still answered 544 and 429
+  `too_many_connections`. The project's Supabase dashboard (CPU, disk IO budget,
+  connections) is where that is read, and resizing the compute is spending, so
+  it is the owner's (invariant 18). What Brain can do — stop doing work that
+  produces nothing — is what changed here, and the next reading of this report
+  is what says whether it was enough.
+
 ## Repository map
 
 ```
