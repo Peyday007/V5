@@ -315,4 +315,103 @@ export function latencySummary(): Record<string, LatencySummary> {
 
 export function resetLatencies(): void {
   latencies.clear();
+  statements.clear();
+  holds.clear();
+}
+
+/* ------------------------------------------------------------------------- */
+/* Where database time goes                                                  */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * The connection report could say the workload pool was 8/8 with callers
+ * queued, and could not say what held the eight. Two readings answer that, both
+ * measured in this process and written beside its liveness:
+ *
+ *   statements  each distinct statement's count, total and slowest time, keyed
+ *               by its own text (parameterised, so the text is the shape and
+ *               never the content — no parameter is kept).
+ *   holds       how long each kind of caller held a pooled connection: a
+ *               transaction is keyed by the code that opened it, because a
+ *               transaction that waits on something other than the database
+ *               holds a connection the whole time and no statement shows it.
+ *
+ * Bounded: past STATEMENT_KEYS the smallest total is evicted, so a process that
+ * runs for weeks keeps the statements that cost it most.
+ */
+
+interface CostTally {
+  count: number;
+  totalMs: number;
+  maxMs: number;
+}
+
+const statements = new Map<string, CostTally>();
+const holds = new Map<string, CostTally>();
+const STATEMENT_KEYS = 300;
+const STATEMENT_TEXT = 160;
+
+function tally(map: Map<string, CostTally>, key: string, ms: number): void {
+  const entry = map.get(key);
+  if (entry) {
+    entry.count += 1;
+    entry.totalMs += ms;
+    if (ms > entry.maxMs) entry.maxMs = ms;
+    return;
+  }
+  if (map.size >= STATEMENT_KEYS) {
+    let smallest: string | null = null;
+    let least = Infinity;
+    for (const [k, v] of map) {
+      if (v.totalMs < least) {
+        least = v.totalMs;
+        smallest = k;
+      }
+    }
+    if (smallest !== null) map.delete(smallest);
+  }
+  map.set(key, { count: 1, totalMs: ms, maxMs: ms });
+}
+
+/** One statement's execution time, keyed by its parameterised text. */
+export function noteStatement(sql: string, ms: number): void {
+  tally(statements, sql.replace(/\s+/g, ' ').trim().slice(0, STATEMENT_TEXT), ms);
+}
+
+/** How long a caller held a pooled connection, keyed by what it was. */
+export function noteConnectionHold(site: string, ms: number): void {
+  tally(holds, site, ms);
+}
+
+export interface CostReading extends CostTally {
+  key: string;
+}
+
+function top(map: Map<string, CostTally>, n: number): CostReading[] {
+  return [...map.entries()]
+    .sort((a, b) => b[1].totalMs - a[1].totalMs)
+    .slice(0, n)
+    .map(([key, v]) => ({ key, count: v.count, totalMs: Math.round(v.totalMs), maxMs: Math.round(v.maxMs) }));
+}
+
+export function statementCosts(n = 15): CostReading[] {
+  return top(statements, n);
+}
+
+export function connectionHolds(n = 15): CostReading[] {
+  return top(holds, n);
+}
+
+/**
+ * The first caller frame outside the database layer, as `file:line`. Read
+ * only when a transaction opens, never per statement.
+ */
+export function callerSite(): string {
+  const stack = new Error().stack?.split('\n').slice(2) ?? [];
+  for (const line of stack) {
+    if (/\/server\/db\/|node:internal|node_modules/.test(line)) continue;
+    const match = /\/((?:server|scripts|tests)\/[^:)\s]+:\d+)/.exec(line);
+    if (match?.[1]) return match[1];
+  }
+  return 'unknown';
 }

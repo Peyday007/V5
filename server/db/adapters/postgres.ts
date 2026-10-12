@@ -37,6 +37,9 @@ import {
   controlPlaneShare,
   countDatabaseFailure,
   currentWorkloadClass,
+  callerSite,
+  noteConnectionHold,
+  noteStatement,
   type WorkloadClass,
 } from '../infra.ts';
 
@@ -465,6 +468,7 @@ export class PostgresAdapter implements Database {
     const values = normalise(params);
     const context = this.#transactions.getStore();
     const workload = currentWorkloadClass();
+    const started = performance.now();
     try {
       if (context) {
         return (await context.client.query<T>(translated.sql, values)) as pg.QueryResult<T>;
@@ -479,6 +483,9 @@ export class PostgresAdapter implements Database {
       // produced it. The parameters are deliberately not included: they are the
       // part that carries the user's content.
       throw annotate(error, translated.sql);
+    } finally {
+      // Includes the wait for a pooled client, which is where saturation shows.
+      noteStatement(translated.sql, performance.now() - started);
     }
   }
 
@@ -563,6 +570,8 @@ export class PostgresAdapter implements Database {
       throw this.#namePoolTimeout(error, workload);
     }
     const context: TransactionContext = { client, ...rootFrame() };
+    const heldSince = performance.now();
+    const site = callerSite();
     // The same listener `#pooledQuery` holds: a socket that drops mid-transaction
     // must reject the statement, never become an uncaught 'error' event.
     const swallow = (): void => undefined;
@@ -608,6 +617,7 @@ export class PostgresAdapter implements Database {
     } finally {
       client.removeListener('error', swallow);
       client.release(broken);
+      noteConnectionHold(`transaction ${site}`, performance.now() - heldSince);
     }
   }
 

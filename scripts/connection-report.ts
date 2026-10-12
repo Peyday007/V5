@@ -47,6 +47,77 @@ function safeJson(raw: string | null): Record<string, unknown> {
   }
 }
 
+/**
+ * One part of the report. A part that cannot be read is said to be unreadable
+ * and the rest is still printed: the report is most needed exactly when the
+ * database is slow, and one timed-out section used to take every later one
+ * with it.
+ */
+async function section(title: string | null, body: () => Promise<void>): Promise<void> {
+  if (title) console.log(`\n${title}`);
+  try {
+    await body();
+  } catch (error) {
+    console.log(`  (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
+  }
+}
+
+/**
+ * The database server's own view, Postgres only: the statements running now and
+ * how long each has run, which tables are scanned without an index, and — where
+ * `pg_stat_statements` is installed — what has cost most in total. Statement
+ * text only: `pg_stat_activity` shows parameters as `$n`, never their values,
+ * for statements issued with parameters, which is how Brain issues all of them.
+ */
+async function databaseActivity(): Promise<void> {
+  const db = getDb();
+  if (db.dialect !== 'postgres') {
+    console.log('  (SQLite: no server to ask)');
+    return;
+  }
+  const running = await db.all<{ pid: number; state: string | null; wait: string | null; secs: number; query: string | null }>(
+    `SELECT pid, state, COALESCE(wait_event_type || ':' || wait_event, '') AS wait,
+            EXTRACT(EPOCH FROM (now() - COALESCE(query_start, backend_start)))::int AS secs,
+            LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 180) AS query
+       FROM pg_stat_activity
+      WHERE datname = current_database() AND pid <> pg_backend_pid() AND backend_type = 'client backend'
+      ORDER BY (state = 'idle') ASC, secs DESC
+      LIMIT 25`,
+  );
+  const byState = new Map<string, number>();
+  for (const row of running) byState.set(row.state ?? '?', (byState.get(row.state ?? '?') ?? 0) + 1);
+  console.log(`  connections ${JSON.stringify(Object.fromEntries(byState))}`);
+  for (const row of running.filter((r) => r.state !== 'idle')) {
+    console.log(`  ${String(row.secs).padStart(6)}s ${(row.state ?? '?').padEnd(20)} ${row.wait ?? ''}  ${row.query ?? ''}`);
+  }
+  const scans = await db.all<{ relname: string; seq_scan: number; seq_tup_read: number; idx_scan: number | null; n_live_tup: number }>(
+    `SELECT relname, seq_scan, seq_tup_read, idx_scan, n_live_tup FROM pg_stat_user_tables
+      ORDER BY seq_tup_read DESC LIMIT 12`,
+  );
+  console.log('  tables by rows read sequentially (since the statistics were last reset)');
+  for (const t of scans) {
+    console.log(`    ${t.relname.padEnd(32)} rows=${t.n_live_tup} seq_scans=${t.seq_scan} seq_rows_read=${t.seq_tup_read} idx_scans=${t.idx_scan ?? 0}`);
+  }
+  const where = await db.get<{ schema: string | null }>(
+    `SELECT n.nspname AS schema FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'pg_stat_statements'`,
+  );
+  if (!where?.schema) {
+    console.log('  pg_stat_statements is not installed; the per-process statement costs above are the reading');
+    return;
+  }
+  const costly = await db.all<{ calls: number; total: number; mean: number; query: string }>(
+    `SELECT calls, total_exec_time::bigint AS total, mean_exec_time::numeric(12,1) AS mean,
+            LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 180) AS query
+       FROM ${where.schema}.pg_stat_statements
+      WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+      ORDER BY total_exec_time DESC LIMIT 15`,
+  );
+  console.log('  statements by total server time (pg_stat_statements)');
+  for (const q of costly) {
+    console.log(`    total=${Number(q.total)}ms calls=${Number(q.calls)} mean=${Number(q.mean)}ms  ${q.query}`);
+  }
+}
+
 async function main(): Promise<void> {
   await initDatabase();
   const hours = Number(arg('hours') ?? '24');
@@ -68,7 +139,16 @@ async function main(): Promise<void> {
     for (const [op, l] of Object.entries(latency)) {
       console.log(`    latency      ${op.padEnd(16)} n=${l.count} p50=${l.p50}ms p95=${l.p95}ms max=${l.max}ms`);
     }
+    type Cost = { key: string; count: number; totalMs: number; maxMs: number };
+    for (const c of ((r['holds'] ?? []) as Cost[]).slice(0, 8)) {
+      console.log(`    held         total=${c.totalMs}ms n=${c.count} max=${c.maxMs}ms  ${c.key}`);
+    }
+    for (const c of ((r['statements'] ?? []) as Cost[]).slice(0, 10)) {
+      console.log(`    statement    total=${c.totalMs}ms n=${c.count} max=${c.maxMs}ms  ${c.key}`);
+    }
   }
+
+  await section('DATABASE (what the server itself is doing now)', () => databaseActivity());
 
   console.log('\nINCIDENTS (Brain infrastructure, never charged to a worker)');
   const incidents = await listIncidentsSince(since, 500);
@@ -109,12 +189,14 @@ async function main(): Promise<void> {
   if (denials.length === 0) console.log('  none');
   for (const d of denials) console.log(`  ${d.action} ${d.reason ?? ''} ${Number(d.n)}`);
   for (const [reason, n] of byRefusal) console.log(`    OAUTH_TOKEN refusal ${reason}: ${n}`);
-  const infraCalls = await db.get<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM identity_events
-      WHERE action = 'MCP_TOOL_CALL' AND result = 'FAILED' AND created_at >= ? AND metadata LIKE '%INFRA_RETRYABLE%'`,
-    [since],
-  );
-  console.log(`  MCP tool calls answered INFRA_RETRYABLE (not auth): ${Number(infraCalls?.n ?? 0)}`);
+  await section(null, async () => {
+    const infraCalls = await db.get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM identity_events
+        WHERE action = 'MCP_TOOL_CALL' AND result = 'FAILED' AND created_at >= ? AND metadata LIKE '%INFRA_RETRYABLE%'`,
+      [since],
+    );
+    console.log(`  MCP tool calls answered INFRA_RETRYABLE (not auth): ${Number(infraCalls?.n ?? 0)}`);
+  });
 
   console.log('\nMISSES (unanswered fires, by cause)');
   const misses = await db.all<{ routine_id: string | null; event_type: string; n: number }>(

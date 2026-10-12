@@ -31,10 +31,12 @@ import crypto from 'node:crypto';
 import { databasePoolReadings, getDb, outsideTransaction } from '../../db/database.ts';
 import {
   asWorkload,
+  connectionHolds,
   databaseFailureCounts,
   infraFailureCounts,
   latencySummary,
   onInfraFailure,
+  statementCosts,
   type InfraFailureObservation,
 } from '../../db/infra.ts';
 import { newId, nowIso } from '../../repos/util.ts';
@@ -409,6 +411,10 @@ export function processReadings(): Record<string, unknown> {
     infraFailures: infraFailureCounts(),
     databaseFailures: databaseFailureCounts(),
     latency: latencySummary(),
+    // Where database time went in this process: the statements that cost most
+    // in total, and the callers that held a pooled connection longest.
+    statements: statementCosts(12),
+    holds: connectionHolds(12),
     pendingIncidentWrites: pending.size,
   };
 }
