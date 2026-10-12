@@ -13068,6 +13068,23 @@ went. 2026-10-12 is the reading that finally did.
   it is the owner's (invariant 18). What Brain can do — stop doing work that
   produces nothing — is what changed here, and the next reading of this report
   is what says whether it was enough.
+- **The next reading says it was not, and says why it is not Brain's load.**
+  At 20:37Z, on `a8e883d`, `bins` had gained **136** sequential scans in the
+  2h17m since 18:20Z (it had been gaining hundreds a minute), and the lineage
+  statement **150** calls. So the throttle and the indexes did what they were
+  for. Brain's own reading of that same process, though, still shows check-in at
+  p95 274 s and authentication at p95 15 s. The statements it waited on are the
+  cheapest ones Brain issues: `UPDATE runtime_liveness … WHERE instance_id = $3`
+  took up to **207 s**. That row is written by exactly one process, so nothing
+  contends for it. A single-row update to `factory_campaigns` by its key took up to
+  154 s, and `INSERT INTO bin_events` up to 210 s. All of this happened while
+  `pg_stat_activity` showed **3 active connections**.
+  A one-writer row taking minutes with the server nearly idle is not Brain's
+  contention and not a missing index. The server itself is not executing, and
+  that is the signature of an exhausted CPU or disk-IO budget. The first
+  connection-report attempt at 20:29Z could not even obtain a pooler
+  connection within 10 s. That makes the Supabase dashboard reading the
+  outstanding fact, and it is the owner's to take.
 
 ## Repository map
 
