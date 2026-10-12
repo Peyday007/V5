@@ -60,7 +60,32 @@ export const FETCH_BLOCKED_PORTS: ReadonlySet<number> = new Set([
 ]);
 
 /**
- * One port from `[base, base + span)` that `fetch` will actually dial.
+ * Ports something the repository's own instructions tell you to be running
+ * already listens on.
+ *
+ * `fetch` is perfectly happy to dial these; what happens instead is that the
+ * spawned Brain cannot **bind**, prints `Port N is already in use`, and the
+ * suite waits out its readiness deadline against a server that never started.
+ * The symptom is identical to the bad-port lottery and the cause is the
+ * opposite end of the connection, which is exactly why they belong in one
+ * helper rather than in two places that will drift.
+ *
+ * `5432` is the one, and it is not hypothetical: `CLAUDE.md` says to run the
+ * suite against Postgres, `pg_ctlcluster 16 main start` puts a server on 5432,
+ * and `tests/api.test.ts` draws from `[5400, 5500)`. So the SQLite run passes
+ * on a machine with no Postgres and fails deterministically on a machine set up
+ * the way this repository asks for — which is the worse of the two, because it
+ * fails for everybody who followed the instructions.
+ *
+ * Kept as its own list rather than folded into the WHATWG one: that list is a
+ * specification and this one is a fact about this project, and a future reader
+ * deleting an entry needs to know which kind it is.
+ */
+export const LOCALLY_OCCUPIED_PORTS: ReadonlySet<number> = new Set([5432]);
+
+/**
+ * One port from `[base, base + span)` that `fetch` will actually dial **and** a
+ * server can actually bind.
  *
  * Deterministic in its refusal rather than its choice: the port is still
  * random, so two suites that overlapped would still be caught by colliding,
@@ -75,12 +100,13 @@ export const FETCH_BLOCKED_PORTS: ReadonlySet<number> = new Set([
 export function pickPort(base: number, span: number): number {
   const usable: number[] = [];
   for (let port = base; port < base + span; port += 1) {
-    if (!FETCH_BLOCKED_PORTS.has(port)) usable.push(port);
+    if (!FETCH_BLOCKED_PORTS.has(port) && !LOCALLY_OCCUPIED_PORTS.has(port)) usable.push(port);
   }
   if (usable.length === 0) {
     throw new Error(
-      `every port in [${base}, ${base + span}) is on the fetch bad-port list, so no server ` +
-        'started here could ever be reached. Choose a different range.',
+      `every port in [${base}, ${base + span}) is either on the fetch bad-port list or is one ` +
+        'this project already runs something on, so no server started here could be reached. ' +
+        'Choose a different range.',
     );
   }
   return usable[Math.floor(Math.random() * usable.length)]!;
