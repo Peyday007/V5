@@ -33,7 +33,7 @@
  * where it is kept.
  */
 import { describeDiveRefusal, whyNotDiving } from '../server/services/cash/validation.ts';
-import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { industryView } from '../server/services/industry/view.ts';
 import { dealflowView } from '../server/services/dealflow/view.ts';
 import { listProjects } from '../server/repos/projects.ts';
@@ -286,6 +286,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
    */
   const missions = await listMissions({ projectId });
   console.log(`  missions    ${missions.length} — ${tally(missions, (one) => one.state)}`);
+  await researchYield(projectId);
 
   // --- What became a piece of work ----------------------------------------
   const opportunities = await listOpportunities({ projectId });
@@ -761,6 +762,73 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       ` abandoned=${commissions.filter((one) => one.state === 'ABANDONED').length}`,
   );
   return true;
+}
+
+/**
+ * Where the research went, and why so little of it filed anything.
+ *
+ * Every packet, mission and duplicate opening is a row; this groups them by the
+ * reason each one stopped, so "516 packets, 26 complete" turns into the handful
+ * of causes that account for the rest. Grouped on the first words of each
+ * recorded reason, which is Brain's own sentence rather than anybody's
+ * classification of it. A section that cannot be read says so and the report
+ * carries on.
+ */
+async function researchYield(projectId: string): Promise<void> {
+  const db = getDb();
+  try {
+    console.log('');
+    console.log('RESEARCH YIELD (last 14 days)');
+    const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
+    const byDay = await db.all<{ day: string; status: string; n: number }>(
+      `SELECT SUBSTR(queued_at, 1, 10) AS day, status, COUNT(*) AS n FROM research_orchestrations
+        WHERE project_id = ? AND queued_at >= ? GROUP BY SUBSTR(queued_at, 1, 10), status ORDER BY day`,
+      [projectId, since],
+    );
+    const days = new Map<string, string[]>();
+    for (const row of byDay) days.set(row.day, [...(days.get(row.day) ?? []), `${row.status}=${Number(row.n)}`]);
+    for (const [day, counts] of days) console.log(`  ${day}  ${counts.join(' ')}`);
+    const reasons = await db.all<{ status: string; reason: string | null; n: number }>(
+      `SELECT status, SUBSTR(COALESCE(cancel_reason, failure_reason, ''), 1, 90) AS reason, COUNT(*) AS n
+         FROM research_orchestrations
+        WHERE project_id = ? AND queued_at >= ? AND status IN ('CANCELLED', 'FAILED', 'NEEDS_HUMAN', 'AWAITING_REPAIR')
+        GROUP BY status, SUBSTR(COALESCE(cancel_reason, failure_reason, ''), 1, 90)
+        ORDER BY COUNT(*) DESC LIMIT 14`,
+      [projectId, since],
+    );
+    console.log('  why packets stopped');
+    for (const r of reasons) console.log(`    ${String(Number(r.n)).padStart(4)}  ${r.status.padEnd(15)} ${r.reason || '(no reason recorded)'}`);
+    const titles = await db.all<{ title: string; n: number; complete: number }>(
+      `SELECT SUBSTR(title, 1, 70) AS title, COUNT(*) AS n,
+              SUM(CASE WHEN status = 'COMPLETE' THEN 1 ELSE 0 END) AS complete
+         FROM research_orchestrations WHERE project_id = ? AND queued_at >= ?
+        GROUP BY SUBSTR(title, 1, 70) ORDER BY COUNT(*) DESC LIMIT 10`,
+      [projectId, since],
+    );
+    console.log('  questions asked most often');
+    for (const t of titles) console.log(`    ${String(Number(t.n)).padStart(4)}x complete=${Number(t.complete)}  ${t.title}`);
+    const missionReasons = await db.all<{ state: string; reason: string | null; n: number }>(
+      `SELECT state, SUBSTR(COALESCE(terminal_reason, ''), 1, 90) AS reason, COUNT(*) AS n FROM russell_missions
+        WHERE project_id = ? AND state IN ('FAILED', 'NEEDS_HUMAN')
+        GROUP BY state, SUBSTR(COALESCE(terminal_reason, ''), 1, 90) ORDER BY COUNT(*) DESC LIMIT 10`,
+      [projectId],
+    );
+    console.log('  why missions stopped');
+    for (const m of missionReasons) console.log(`    ${String(Number(m.n)).padStart(4)}  ${m.state.padEnd(12)} ${m.reason || '(no reason recorded)'}`);
+    const dupes = await db.get<{ total: number; duplicates: number; canonicals: number }>(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN duplicate_of_id IS NOT NULL THEN 1 ELSE 0 END) AS duplicates,
+              COUNT(DISTINCT duplicate_of_id) AS canonicals
+         FROM cash_opportunities WHERE project_id = ?`,
+      [projectId],
+    );
+    console.log(
+      `  openings ${Number(dupes?.total ?? 0)}, of which ${Number(dupes?.duplicates ?? 0)} re-found an opening already held` +
+        ` (${Number(dupes?.canonicals ?? 0)} distinct openings found more than once)`,
+    );
+  } catch (error) {
+    console.log(`  (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
+  }
 }
 
 async function main(): Promise<void> {
