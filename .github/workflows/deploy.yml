@@ -859,3 +859,35 @@ jobs:
           name: step12b-hosted-verification
           path: docs/evidence/step12b-hosted/verification.json
           if-no-files-found: warn
+
+  # A Factory release that died while this Deploy ran has to hear that it ended.
+  #
+  # The release workflow listens for `workflow_run` on Deploy, and GitHub does
+  # not raise that event for a run dispatched with a `GITHUB_TOKEN` — which is
+  # exactly how a Factory release dispatches this workflow. Measured on
+  # 2026-10-11/12: Deploys 444, 447 and 448, each dispatched by a release run,
+  # completed and started no release run at all; release frr for PR #186, killed
+  # mid-deploy on purpose, then waited with nothing to wake it while the
+  # fifteen-minute schedule did not run for over two hours. `workflow_dispatch`
+  # is the one event a `GITHUB_TOKEN` may raise, so this job raises it. The
+  # release asks Brain what is in flight and resumes it, or finds nothing to do;
+  # it performs no effect of its own beyond that question.
+  #
+  # `always()` on purpose: a Deploy that failed or was cancelled is precisely
+  # when a waiting release must hear about it. The job dispatches, and nothing
+  # else; it holds no deployment credential.
+  hand-off:
+    name: Tell a waiting Factory release this Deploy ended
+    needs: deploy
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch the Factory release pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REASON: Deploy run ${{ github.run_id }} ended ${{ needs.deploy.result }}
+        run: |
+          gh workflow run factory-release.yml -R "$GITHUB_REPOSITORY" --ref production -f reason="$REASON" \
+            || echo "::warning::The Factory release pass could not be dispatched; the next Deploy or the schedule asks again."
