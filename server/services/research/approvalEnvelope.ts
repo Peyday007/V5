@@ -48,6 +48,17 @@ import { ownActionMatches } from './actorScope.ts';
 import type { ResearchFragment, ResearchOrchestration } from '../../domain/types.ts';
 
 /**
+ * The jurisdiction of an envelope that bounds actions rather than places.
+ *
+ * It reaches a fragment as its geography when neither the subject's row nor the
+ * question named a market (`compiler.ts jurisdictionFor`), so it is a sentence
+ * about the question rather than a market a source could be in. The gate reads
+ * it by this name: a verifier that could not tell whether a claim is in "the
+ * market this question names" has not found the claim out of scope.
+ */
+export const ANY_NAMED_MARKET = 'the market this question names';
+
+/**
  * Bumped whenever the checks below change meaning.
  *
  * Recorded on every automatic approval, because "Brain approved this" is only
@@ -1179,7 +1190,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'discovered is authorized separately by a commercial grant a person makes, and never by ' +
       'this envelope.',
     assignmentTemplate: CASH_DISCOVERY_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     // As many bounded questions as the gaps require: every condition below
     // applies to each of them, so a broader decomposition is more to refuse
     // rather than more room to hide in.
@@ -1260,7 +1271,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'person can decide whether to act on it. Acting is authorized separately by a ' +
       'commercial grant a person makes, and never by this envelope.',
     assignmentTemplate: CASH_VALIDATION_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     // One opening, and as many bounded questions about it as the unknowns
     // require. Every condition applies to each of them.
     maxFragments: null,
@@ -1302,7 +1313,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'the others on what is established rather than on what is unknown. Acting is authorized ' +
       'separately by a commercial grant a person makes, and never by this envelope.',
     assignmentTemplate: MONETIZATION_ATTRIBUTE_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     // One attribute, one fragment. Unlike the deep dive, this assignment asks
     // exactly one thing, so a plan that decomposed it into several would be
     // answering a different question from the one that was commissioned.
@@ -1343,7 +1354,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'on what is found is authorized separately by a commercial grant a person makes, and ' +
       'never by this envelope.',
     assignmentTemplate: INDUSTRY_MAP_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,
@@ -1385,7 +1396,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'hiring, contracting, posting, quoting and every other commitment is a commercial ' +
       'action a person grants separately, and never this envelope.',
     assignmentTemplate: LABOR_ALLOCATION_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,
@@ -1418,7 +1429,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'commitment, deposit, borrowing and purchase is a commercial action a person grants ' +
       'separately, and never this envelope.',
     assignmentTemplate: CAPITAL_STRUCTURE_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,
@@ -1460,7 +1471,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'have published the capability to supply it. Approaching either of them is a commercial ' +
       'action a person grants separately, and never this envelope.',
     assignmentTemplate: DEALFLOW_PARTIES_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,
@@ -1495,7 +1506,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'customs and agreeing a commission are commercial actions a person grants separately, ' +
       'and never this envelope.',
     assignmentTemplate: DEALFLOW_TERMS_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,
@@ -1537,7 +1548,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'any of them or listing anything anywhere is a commercial action a person grants ' +
       'separately, and never this envelope.',
     assignmentTemplate: PUZZLE_MARKET_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,
@@ -1560,7 +1571,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'registering an account, obtaining a certification and listing anything anywhere are ' +
       'commercial actions a person grants separately, and never this envelope.',
     assignmentTemplate: PUZZLE_TERMS_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,
@@ -1603,7 +1614,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'to point. Deciding to produce anything is a decision a person makes, and it is ' +
       'authorized by nothing here.',
     assignmentTemplate: MACHINE_LADDER_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,
@@ -1634,7 +1645,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'market and never acting in one: every approach, listing, purchase and commitment is a ' +
       'commercial action a person grants separately, and never this envelope.',
     assignmentTemplate: MACHINE_DEMAND_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,
@@ -1672,7 +1683,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'qualifying, certifying, acquiring and producing are decisions a person makes, and this ' +
       'envelope authorizes none of them.',
     assignmentTemplate: MACHINE_CAPABILITY_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,
@@ -1707,7 +1718,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'a purchase: every one of those is a commercial action a person grants separately, and ' +
       'never this envelope.',
     assignmentTemplate: MACHINE_CAPITAL_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,
@@ -1747,7 +1758,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'commitment, no negotiation and no purchase — every one of those is a decision a person ' +
       'makes under a separate authorization, and nothing in this programme can make it.',
     assignmentTemplate: MACHINE_ACQUISITION_ASSIGNMENT_TEMPLATE,
-    jurisdiction: 'the market this question names',
+    jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,

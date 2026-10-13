@@ -32,6 +32,7 @@ import type {
 } from '../../domain/types.ts';
 import type { ClaimScopeBasis, ClaimScopeMatch } from './schema.ts';
 import { countIndependentSources, duplicateGroups, effectiveStandard } from './standards.ts';
+import { ANY_NAMED_MARKET } from './approvalEnvelope.ts';
 
 /** Which of the seven a claim or fragment fell at. */
 export const GATE_CONDITIONS = {
@@ -177,7 +178,16 @@ function scopeFailures(scope: ClaimScopeMatch, fragment: ResearchFragment): stri
   const failures: string[] = [];
   // Only dimensions the fragment actually declared are enforced. A fragment that
   // named no timeframe cannot fail a claim for not matching one.
-  if (fragment.geography && !SCOPE_PASSES.has(scope.geography)) {
+  //
+  // `ANY_NAMED_MARKET` is the one geography that is not a place: it is what an
+  // envelope bounding actions rather than places supplies when nothing named a
+  // market. A verifier answering UNKNOWN against it could not have answered
+  // anything else, so it is not a finding about the claim — 21 Cash Mode 1
+  // claims were refused on exactly that on 2026-10-13. A MISMATCH still
+  // fails: that is a reader saying the claim is about another market than the
+  // one the question is about.
+  const anyMarket = fragment.geography === ANY_NAMED_MARKET && scope.geography === 'UNKNOWN';
+  if (fragment.geography && !anyMarket && !SCOPE_PASSES.has(scope.geography)) {
     failures.push(`geography (${scope.geography.toLowerCase()} vs "${fragment.geography}")`);
   }
   if (fragment.timeframe && !SCOPE_PASSES.has(scope.timeframe)) {
@@ -614,8 +624,29 @@ export function applyGate(input: {
   // The verification pass's own opinion can only make it worse, never better:
   // coverage is arithmetic, and a pass that says SUFFICIENT over empty lanes is
   // simply wrong.
+  //
+  // With one exception, which is the rule above applied to the verifier rather
+  // than to the arithmetic: a verifier that calls the answer incomplete and
+  // names, as what is missing, only lanes this fragment declared CONDITIONAL or
+  // OPTIONAL is asserting that a non-blocking lane blocks. Production read it
+  // on 29 of 143 blocked Cash Mode 1 fragments on 2026-10-13 — every required
+  // lane covered, the source count met, and the fragment blocked because
+  // `effort` or `exit_evidence` was empty, while the gate's own reason said in
+  // the same breath that those lanes "are open and do not block". That opinion
+  // is still recorded and the lanes are still reported as open; it no longer
+  // overrides a declaration it cannot change. A verifier naming a required
+  // lane, a lane this fragment does not declare, or nothing at all still makes
+  // the answer insufficient, because then it is judging something else.
+  const nonBlocking = new Set(
+    coverage.filter((lane) => lane.necessity !== 'REQUIRED').map((lane) => lane.lane),
+  );
+  const verifierNamesOnlyNonBlocking =
+    verification.missingLanes.length > 0 &&
+    verification.missingLanes.every((lane) => nonBlocking.has(lane));
+  const verifierSatisfied =
+    verification.sufficiency === 'SUFFICIENT' || verifierNamesOnlyNonBlocking;
   const sufficiency: GateResult['sufficiency'] =
-    uncoveredLanes.length === 0 && enoughSources && verification.sufficiency === 'SUFFICIENT'
+    uncoveredLanes.length === 0 && enoughSources && verifierSatisfied
       ? 'SUFFICIENT'
       : 'INSUFFICIENT';
 
@@ -662,7 +693,13 @@ export function applyGate(input: {
         '. They were asked and nothing was accepted for them.',
     );
   }
-  if (verification.sufficiency === 'INSUFFICIENT' && uncoveredLanes.length === 0) {
+  if (verification.sufficiency === 'INSUFFICIENT' && verifierNamesOnlyNonBlocking) {
+    reasons.push(
+      'Verification judged the answer incomplete, naming only lanes this fragment declared ' +
+        `non-blocking (${verification.missingLanes.join(', ')}); they are reported as open ` +
+        'above and do not fail the fragment.',
+    );
+  } else if (verification.sufficiency === 'INSUFFICIENT' && uncoveredLanes.length === 0) {
     reasons.push(
       'Verification judged the answer incomplete even though every lane is covered: ' +
         (verification.missingLanes.join(', ') || 'see the pass reasoning.'),

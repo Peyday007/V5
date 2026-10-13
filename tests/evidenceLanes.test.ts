@@ -18,6 +18,7 @@ import {
   serializeLanes,
 } from '../server/domain/evidenceLanes.ts';
 import { applyGate } from '../server/services/research/gate.ts';
+import { ANY_NAMED_MARKET } from '../server/services/research/approvalEnvelope.ts';
 import { laneProblems, explainLaneProblems } from '../server/services/research/lanes.ts';
 import type { EvidenceLane, ResearchClaim, ResearchFragment } from '../server/domain/types.ts';
 
@@ -239,6 +240,40 @@ describe('coverage', () => {
     expect(why).toContain('operative_authority');
     expect(why).toContain(PROSE.slice(0, 30));
   });
+
+  /**
+   * A verifier's INSUFFICIENT that names only non-blocking lanes cannot block
+   * what the declaration says does not block. Production: 29 of 143 blocked
+   * Cash Mode 1 fragments, every required lane covered, blocked on `effort`
+   * and `exit_evidence` while the gate's own reason called them non-blocking.
+   */
+  describe("the verifier's view of what is missing", () => {
+    const declared = [
+      lane({ id: 'operative_authority', necessity: 'REQUIRED' }),
+      lane({ id: 'regulator_guidance', necessity: 'CONDITIONAL' }),
+      lane({ id: 'commentary', description: 'Secondary commentary.', necessity: 'OPTIONAL' }),
+    ];
+    const gateWith = (missingLanes: string[]) => {
+      const claims = [claim({ evidenceLane: 'operative_authority' })];
+      return applyGate({
+        fragment: fragment({ requiredEvidence: declared }),
+        claims,
+        verification: { ...verdictsFor(claims), sufficiency: 'INSUFFICIENT', missingLanes },
+      });
+    };
+
+    it('does not block when it names only conditional or optional lanes', () => {
+      const result = gateWith(['regulator_guidance', 'commentary']);
+      expect(result.sufficiency).toBe('SUFFICIENT');
+      expect(result.reasons.join(' ')).toContain('declared non-blocking');
+    });
+
+    it('still blocks when it names a required lane, an undeclared lane, or nothing', () => {
+      expect(gateWith(['operative_authority', 'regulator_guidance']).sufficiency).toBe('INSUFFICIENT');
+      expect(gateWith(['some_other_lane']).sufficiency).toBe('INSUFFICIENT');
+      expect(gateWith([]).sufficiency).toBe('INSUFFICIENT');
+    });
+  });
 });
 
 describe('the refusal a worker reads', () => {
@@ -276,5 +311,24 @@ describe('a lane rendered for a human', () => {
     expect(
       describeLane(lane({ id: 'regulator_guidance', description: 'Guidance.', necessity: 'CONDITIONAL' })),
     ).toBe('regulator_guidance (conditional) — Guidance.');
+  });
+});
+
+describe('a fragment whose geography is not a place', () => {
+  const scoped = (geography: string, verdict: 'UNKNOWN' | 'MISMATCH') => {
+    const claims = [claim()];
+    const verification = verdictsFor(claims);
+    const entry = verification.verdicts.get(claims[0]!.id)!;
+    entry.scopeMatch = { ...entry.scopeMatch, geography: verdict };
+    return applyGate({ fragment: fragment({ geography }), claims, verification });
+  };
+
+  it('does not refuse a claim the verifier could not place in "the market this question names"', () => {
+    expect(scoped(ANY_NAMED_MARKET, 'UNKNOWN').acceptedClaims).toBe(1);
+  });
+
+  it('still refuses a mismatch against it, and an unknown against a real place', () => {
+    expect(scoped(ANY_NAMED_MARKET, 'MISMATCH').acceptedClaims).toBe(0);
+    expect(scoped('New Jersey', 'UNKNOWN').acceptedClaims).toBe(0);
   });
 });

@@ -13085,6 +13085,25 @@ went. 2026-10-12 is the reading that finally did.
   connection-report attempt at 20:29Z could not even obtain a pooler
   connection within 10 s. That makes the Supabase dashboard reading the
   outstanding fact, and it is the owner's to take.
+- **By 00:43Z the server was executing again.** Authentication p95 was 85 ms and
+  `pg_stat_activity` read 13 idle connections, with no Brain incident in three
+  hours. Whatever was exhausted refilled without any change on Brain's side,
+  which fits a burst budget rather than a load Brain controls. It also means it
+  can run out again.
+- **With the database answering, the waste moved to research, and two of its
+  causes were the gate's.** On Cash Mode 1, 143 fragments were BLOCKED against
+  12 accepted, yet 444 of their 632 claims had been accepted. Classified by
+  first cause: 33 missing the required `payer` lane, 30 where the worker's
+  environment refused the host (proxy `CONNECT 403`, DNS `ENOTFOUND`), 29 where
+  the verifier called the answer incomplete naming only *conditional* lanes,
+  19 where nothing survived, and 14 with unread sources only. The 29 are a gate
+  defect: a verifier's opinion may make an answer insufficient, but not by
+  promoting a lane the fragment declared non-blocking. That is fixed in
+  `gate.ts`, and the verifier's view is still reported. Separately, 21 claims
+  were refused for geography `UNKNOWN` against `ANY_NAMED_MARKET`, which is an
+  envelope's sentence and not a place; a MISMATCH against it still fails. The
+  30 egress refusals are the Routines' own network policy (§22: *the surface
+  owns whether a worker may act*), and only their owners can fix them.
 
 ## Repository map
 
