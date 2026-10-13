@@ -29,7 +29,7 @@
  * drifts and the drifting one is whichever nobody reads — this repository has
  * had to write that sentence four times already.
  */
-import { getDb } from '../db/database.ts';
+import { afterCommit, getDb, inTransaction } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
 import type { SharedFinding, SharedFindingRow, SharedFindingState } from '../domain/types.ts';
 
@@ -117,8 +117,32 @@ interface PromotableRow {
  * Nothing here judges, scores or rewrites a claim. It reads rows and writes a
  * pointer.
  */
-export async function promoteEligibleClaims(limit = 200): Promise<string[]> {
+export async function promoteEligibleClaims(
+  limit = 200,
+  options: { quietReuseMs?: number } = {},
+): Promise<string[]> {
   const db = getDb();
+  /*
+   * INF-6c, the tick's half. This anti-join walks every accepted claim, and the
+   * Russell tick ran it first on every pass whether or not anything could have
+   * become eligible. A claim becomes eligible when it is decided or a
+   * fragment's status moves, and both go through `touchSharedFinding*`, which
+   * bumps `generation`. So a caller that asks (`quietReuseMs`) skips the walk
+   * when nothing has been decided in this process since the last walk, that
+   * walk was not cut short by `limit`, and it is recent — the bound covering
+   * a write this process did not see.
+   */
+  const seenGeneration = generation;
+  const last = lastPromotion.get(db);
+  if (
+    options.quietReuseMs !== undefined &&
+    last &&
+    last.generation === seenGeneration &&
+    !last.truncated &&
+    Date.now() - last.at < options.quietReuseMs
+  ) {
+    return [];
+  }
   const rows = await db.all<PromotableRow>(
     `SELECT c.id            AS claim_id,
             o.project_id    AS origin_project_id,
@@ -167,8 +191,20 @@ export async function promoteEligibleClaims(limit = 200): Promise<string[]> {
     );
     if ((result.changes ?? 0) > 0) promoted.push(id);
   }
+  if (promoted.length > 0) invalidate();
+  lastPromotion.set(db, {
+    // The generation seen *before* the walk: a promotion (or any write that
+    // landed during it) moves `generation`, so the next pass walks once more
+    // and only a genuinely quiet pass is reused.
+    generation: seenGeneration,
+    truncated: rows.length >= limit,
+    at: Date.now(),
+  });
   return promoted;
 }
+
+/** When this process last walked the promotable claims, per database. */
+const lastPromotion = new WeakMap<object, { generation: number; truncated: boolean; at: number }>();
 
 /**
  * A finding as a reader needs it: the promotion row, plus the claim it points
@@ -348,13 +384,26 @@ export async function eligibleFindings(input: {
   now?: string;
   limit?: number;
 }): Promise<SharedFindingEvidence[]> {
-  const now = input.now ?? nowIso();
   const limit = Math.max(1, Math.min(1000, input.limit ?? 500));
+  // An explicit clock is a caller asking about a particular moment; a cached
+  // answer computed at another one cannot be reused for it. Inside a
+  // transaction the rows may be uncommitted, and must not outlive a rollback.
+  if (input.now !== undefined || inTransaction()) {
+    return await readEligible(input.excludeProjectId ?? null, input.now ?? nowIso(), limit);
+  }
+  return await eligibleFromCache(input.excludeProjectId ?? null, limit);
+}
+
+async function readEligible(
+  excludeProjectId: string | null,
+  now: string,
+  limit: number,
+): Promise<SharedFindingEvidence[]> {
   const params: unknown[] = [now];
   let exclusion = '';
-  if (input.excludeProjectId) {
+  if (excludeProjectId) {
     exclusion = 'AND f.origin_project_id <> ?';
-    params.push(input.excludeProjectId);
+    params.push(excludeProjectId);
   }
   params.push(limit);
 
@@ -371,6 +420,98 @@ export async function eligibleFindings(input: {
       LIMIT ?`,
     params as never[],
   )).map(mapEvidence);
+}
+
+/*
+ * INF-6c: the read above is a three-way join that re-derives the rule over
+ * every promoted claim, and production called it 6,741 times in two and a half
+ * hours at 470 ms mean (max 136 s) — once per archive check and once per
+ * reconciliation, over a pool that changes a few times a day.
+ *
+ * So the answer is reused while nothing it depends on can have changed, and the
+ * test for that is rows, not a timer alone:
+ *
+ *   * every write that can change it goes through this module — a promotion,
+ *     a revocation, a horizon, and `touchSharedFinding*`, which `research.ts`
+ *     calls whenever a claim's acceptance or contradiction state or a
+ *     fragment's status moves (the fields `ELIGIBLE_SQL` reads). Each bumps
+ *     `generation` in this process at once, and moves `updated_at`, which
+ *     another process sees in the marker below;
+ *   * the marker — the pool's row count and newest `updated_at` — is one
+ *     aggregate over `shared_findings` alone, read on every call;
+ *   * a horizon passing changes no row, so a cached answer is not used past
+ *     the earliest `valid_until` still ahead of it;
+ *   * and whatever none of those sees (a second process whose clock is behind,
+ *     a write that bypassed this module) is bounded by `CACHE_TTL_MS`.
+ *
+ * Keyed by the database handle, so a test's fresh database never sees another
+ * one's answer. It is a memo of one query, not a second source of truth: every
+ * entry is the exact rows that query returned.
+ */
+const CACHE_TTL_MS = 60_000;
+let generation = 0;
+
+interface CachedAnswer {
+  generation: number;
+  marker: string;
+  nextExpiry: string | null;
+  computedAt: number;
+  rows: SharedFindingEvidence[];
+}
+
+const caches = new WeakMap<object, Map<string, CachedAnswer>>();
+
+/**
+ * Note, in this process, that something the eligible pool depends on was
+ * written: now, and again once the writer's transaction commits, so a read
+ * that ran in between cannot keep the pre-write answer.
+ */
+function invalidate(): void {
+  generation += 1;
+  afterCommit(() => {
+    generation += 1;
+  });
+}
+
+async function eligibleFromCache(excludeProjectId: string | null, limit: number): Promise<SharedFindingEvidence[]> {
+  const db = getDb();
+  const now = nowIso();
+  const seenGeneration = generation;
+  const marker = await getDb().get<{ n: number; newest: string | null; next_expiry: string | null }>(
+    `SELECT COUNT(*) AS n, MAX(updated_at) AS newest,
+            MIN(CASE WHEN state = 'ACTIVE' AND valid_until > ? THEN valid_until END) AS next_expiry
+       FROM shared_findings`,
+    [now],
+  );
+  const markerText = `${Number(marker?.n ?? 0)}|${marker?.newest ?? ''}`;
+  let byKey = caches.get(db);
+  if (!byKey) {
+    byKey = new Map();
+    caches.set(db, byKey);
+  }
+  const key = `${excludeProjectId ?? ''}|${limit}`;
+  const cached = byKey.get(key);
+  if (
+    cached &&
+    cached.generation === seenGeneration &&
+    cached.marker === markerText &&
+    Date.now() - cached.computedAt < CACHE_TTL_MS &&
+    (cached.nextExpiry === null || now < cached.nextExpiry)
+  ) {
+    return cached.rows;
+  }
+  const rows = await readEligible(excludeProjectId, now, limit);
+  // A write that landed while this read ran leaves the next call to read again.
+  if (generation === seenGeneration) {
+    byKey.set(key, {
+      generation: seenGeneration,
+      marker: markerText,
+      nextExpiry: marker?.next_expiry ?? null,
+      computedAt: Date.now(),
+      rows,
+    });
+  }
+  return rows;
 }
 
 /**
@@ -423,6 +564,7 @@ export async function revokeFinding(input: {
       WHERE id = ? AND state = 'ACTIVE'`,
     [now, input.userId, input.reason, now, input.id] as never[],
   );
+  invalidate();
   if ((result.changes ?? 0) === 0) return null;
   return getFinding(input.id);
 }
@@ -444,6 +586,7 @@ export async function setFindingHorizon(input: {
       WHERE id = ? AND state = 'ACTIVE'`,
     [input.validUntil, nowIso(), input.id] as never[],
   );
+  invalidate();
   if ((result.changes ?? 0) === 0) return null;
   return getFinding(input.id);
 }
@@ -455,11 +598,13 @@ export async function setFindingHorizon(input: {
  * claim that was never promoted.
  */
 export async function touchSharedFindingForClaim(claimId: string): Promise<void> {
+  invalidate();
   await getDb().run('UPDATE shared_findings SET updated_at = ? WHERE claim_id = ?', [nowIso(), claimId]);
 }
 
 /** The same, for every finding whose claim belongs to a fragment (its status is read by `ELIGIBLE_SQL`). */
 export async function touchSharedFindingsForFragment(fragmentId: string): Promise<void> {
+  invalidate();
   await getDb().run(
     `UPDATE shared_findings SET updated_at = ?
       WHERE claim_id IN (SELECT id FROM research_claims WHERE fragment_id = ?)`,

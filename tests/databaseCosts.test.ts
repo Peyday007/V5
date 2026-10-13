@@ -12,6 +12,8 @@ import { freshProject, teardown } from './helpers.ts';
 import {
   callerSite,
   connectionHolds,
+  eventLoopReading,
+  noteConnectionHold,
   noteStatement,
   resetLatencies,
   statementCosts,
@@ -64,5 +66,38 @@ describe('statement and connection-hold costs', () => {
     const readings = processReadings();
     expect(readings).toHaveProperty('statements');
     expect(readings).toHaveProperty('holds');
+    // INF-2 and INF-3: the pool wait, connection churn and the event loop.
+    expect(readings).toHaveProperty('checkouts');
+    expect(readings).toHaveProperty('churn');
+    expect(readings).toHaveProperty('eventLoop');
+  });
+
+  it('keeps the wait for a client apart from the time awaiting the answer', () => {
+    resetLatencies();
+    noteStatement('SELECT waited', 5, 4_000);
+    noteStatement('SELECT waited', 7, 1_000);
+    noteConnectionHold('transaction here:1', 50, 300);
+    const statement = statementCosts(5).find((c) => c.key === 'SELECT waited');
+    expect(statement).toMatchObject({ count: 2, totalMs: 12, maxMs: 7, waitTotalMs: 5_000, waitMaxMs: 4_000 });
+    expect(connectionHolds(5)[0]).toMatchObject({ totalMs: 50, waitTotalMs: 300 });
+  });
+
+  it('measures how late the event loop ran, per window', async () => {
+    eventLoopReading(); // start a fresh window
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const until = Date.now() + 250;
+    while (Date.now() < until) {
+      // A synchronous stall, the kind that makes every in-flight statement look slow.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const stalled = eventLoopReading();
+    expect(stalled).not.toBeNull();
+    expect(stalled!.max).toBeGreaterThanOrEqual(150);
+    expect(stalled!.worstMs).toBeGreaterThanOrEqual(stalled!.max);
+    // The next window starts clean; the worst ever is kept.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const after = eventLoopReading();
+    expect(after!.max).toBeLessThan(stalled!.max);
+    expect(after!.worstMs).toBeGreaterThanOrEqual(150);
   });
 });
