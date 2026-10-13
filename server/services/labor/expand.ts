@@ -37,7 +37,7 @@
 import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
-import { listMissions } from '../../repos/russellMissions.ts';
+import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
 import { laborClaims } from '../../repos/research.ts';
 import {
   closeLaborRound,
@@ -250,47 +250,48 @@ export async function absorb(input: {
    * and absorbing its claims would answer a necessity question about a task
    * nothing chose.
    */
-  const missions = await listMissions({ projectId: input.projectId });
-  const byOrchestration = new Map<
-    string,
-    { round: LaborRound; settles: 'HARVESTED' | 'ABANDONED' | null }
-  >();
-  for (const mission of missions) {
-    if (!mission.orchestrationId || !mission.candidateId) continue;
-    const round = live.get(mission.candidateId);
-    if (round) {
-      byOrchestration.set(mission.orchestrationId, {
-        round,
-        /*
-         * A round settles on *any* terminal mission, not only a successful one.
-         *
-         * A mission that failed or was cancelled has answered this question as
-         * far as it is going to, and a round left OPEN is precisely what stops
-         * that purpose being asked again — for ever, since nothing else will
-         * ever close it. §24's *waiting nobody can resolve*, arriving through
-         * a table nobody would think to look at. The two outcomes stay
-         * distinct, because "it ran and found nothing" and "it never finished"
-         * have different remedies and the allocator's barren rule reads the
-         * first.
-         */
-        settles:
-          mission.state === 'DONE'
-            ? 'HARVESTED'
-            : mission.state === 'FAILED' || mission.state === 'CANCELLED'
-              ? 'ABANDONED'
-              : null,
-      });
+  /*
+   * Read by the open rounds' own candidate ids (RES-2), not through
+   * `listMissions`, which returns only the 100 most recently updated missions:
+   * a busy project pushed a labor round's mission out of that window and the
+   * round never settled. The latest attempt decides, exactly as every other
+   * kernel now settles — DONE harvests, FAILED or CANCELLED abandons, an idea
+   * the archive answered with no mission abandons, and anything else stays
+   * OPEN.
+   */
+  const rounds = await missionsForRounds([...live.keys()]);
+  const byOrchestration = new Map<string, { round: LaborRound }>();
+  for (const [candidateId, round] of live) {
+    for (const orchestrationId of rounds.get(candidateId)?.orchestrationIds ?? []) {
+      byOrchestration.set(orchestrationId, { round });
     }
   }
-  if (byOrchestration.size === 0) return out;
+  const ending = [...live].filter(([candidateId]) => rounds.get(candidateId)?.outcome);
+  if (byOrchestration.size === 0 && ending.length === 0) return out;
 
   const foundPerRound = new Map<string, number>();
 
-  const claims = await laborClaims({
+  // Rounds still being worked on: what has been gated so far, within budget.
+  // Rounds ending this pass: every claim, paged, so nothing they established
+  // is left behind a closed round. Filed oldest first across both.
+  const working = [...live]
+    .filter(([candidateId]) => !rounds.get(candidateId)?.outcome)
+    .flatMap(([candidateId]) => rounds.get(candidateId)?.orchestrationIds ?? []);
+  const workingClaims = await laborClaims({
     projectId: input.projectId,
-    orchestrationIds: [...byOrchestration.keys()],
+    orchestrationIds: working,
     limit,
   });
+  const endingClaims: Awaited<ReturnType<typeof laborClaims>> = [];
+  for (const [candidateId] of ending) {
+    const ids = rounds.get(candidateId)!.orchestrationIds;
+    endingClaims.push(
+      ...(await everyPage((offset, size) =>
+        laborClaims({ projectId: input.projectId, orchestrationIds: ids, limit: size, offset }),
+      )),
+    );
+  }
+  const claims = byClaimTime([...workingClaims, ...endingClaims]);
   for (const entry of claims) {
     const context = byOrchestration.get(entry.orchestrationId);
     if (!context) continue;
@@ -314,8 +315,8 @@ export async function absorb(input: {
    * again while looking like it was still running, which is the state this
    * kernel is built to make impossible.
    */
-  for (const { round, settles } of byOrchestration.values()) {
-    if (!settles) continue;
+  for (const [candidateId, round] of ending) {
+    const settles = rounds.get(candidateId)!.outcome!;
     const found = foundPerRound.get(round.id) ?? 0;
     if (await closeLaborRound({ id: round.id, to: settles, found })) {
       out.settled.push({ roundId: round.id, found });

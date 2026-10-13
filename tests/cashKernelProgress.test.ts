@@ -305,6 +305,45 @@ describe('RES-2: industry, manufacturing and puzzle', () => {
   });
 });
 
+describe('RES-2: labor settles by key too', () => {
+  async function laborRound(candidateId: string) {
+    const { createWorkflow, createTask, openLaborRound } = await import('../server/repos/labor.ts');
+    seq += 1;
+    const { workflow } = await createWorkflow({ projectId, name: `labor flow ${seq}`, origin: 'SEED' });
+    const { task } = await createTask({
+      projectId,
+      workflowId: workflow.id,
+      name: `labor task ${seq}`,
+      output: 'a delivered report',
+      origin: 'SEED',
+    });
+    return (await openLaborRound({ projectId, taskId: task.id, purpose: 'NECESSITY', round: 1, candidateId })).round;
+  }
+
+  it('a FAILED mission outside the newest hundred abandons the labor round once; a RUNNING one stays OPEN', async () => {
+    const { absorb } = await import('../server/services/labor/expand.ts');
+    const failed = await idea();
+    const running = await idea();
+    const ended = await laborRound(failed);
+    const live = await laborRound(running);
+    await mission(failed, 'FAILED', { ageMinutes: 600 });
+    await mission(running, 'RUNNING', { ageMinutes: 600 });
+    await buryUnderNewerMissions();
+
+    const first = await absorb({ projectId });
+    expect(first.settled.map((one) => one.roundId)).toEqual([ended.id]);
+    const rows = await getDb().all<{ id: string; state: string }>(
+      'SELECT id, state FROM labor_rounds WHERE id IN (?, ?)',
+      [ended.id, live.id],
+    );
+    expect(Object.fromEntries(rows.map((row) => [row.id, row.state]))).toEqual({
+      [ended.id]: 'ABANDONED',
+      [live.id]: 'OPEN',
+    });
+    expect((await absorb({ projectId })).settled).toEqual([]);
+  });
+});
+
 describe('RES-2: cash discovery and answers find their missions by key', () => {
   it('harvest closes a discovery round whose FAILED mission is outside the window', async () => {
     const { openDiscovery, harvest } = await import('../server/services/cash/discovery.ts');
