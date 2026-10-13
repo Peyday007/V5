@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import type { Database } from '../server/db/types.ts';
-import { noteInfraFailure, recentInfraFailures, resetInfraCounters } from '../server/db/infra.ts';
+import { asControlPlane, noteInfraFailure, recentInfraFailures, resetInfraCounters } from '../server/db/infra.ts';
 import { createAccount, createRoutine, getRoutine, setRoutineState } from '../server/repos/fleet.ts';
 import { createWorker, grantMembership, setWorkerRouting } from '../server/repos/identity.ts';
 import {
@@ -334,7 +334,8 @@ describe('CON-7: choosing work records its failures as WORKLOAD', () => {
   it('a pool exhaustion inside chooseWork is attributed to the workload pool, not CONTROL', async () => {
     await readyBin();
     intercept((sql) => /FROM worker_routing/.test(sql), { error: () => new Error('timeout exceeded when trying to connect') });
-    const result = await checkIn({ principal: principal(research), workerId: research, sessionRef: 'cse_con7' });
+    // Entered on the control plane, exactly as the brain_check_in tool enters it.
+    const result = await asControlPlane(() => checkIn({ principal: principal(research), workerId: research, sessionRef: 'cse_con7' }));
     restore!();
     expect(result).toEqual({ assigned: false, reason: 'RETRY_LATER' });
     const felt = recentInfraFailures().filter((o) => o.surface === 'check_in:choose');
