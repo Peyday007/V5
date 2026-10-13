@@ -121,15 +121,15 @@ export async function everyPage<T>(
 export function byClaimTime<T extends { claim: { createdAt: string; id: string } }>(
   entries: readonly T[],
 ): T[] {
+  /*
+   * Stable on the timestamp alone. Each claim read is already ordered
+   * `created_at, rowid`, which is insertion order; breaking a same-millisecond
+   * tie by the claim's random id instead reordered claims one submission wrote
+   * together, so a capital restructuring could be filed before the requirement
+   * it names and be refused for naming nothing (industryKernel "capital and
+   * constraints reach the right table").
+   */
   return [...entries].sort((a, b) =>
-    a.claim.createdAt < b.claim.createdAt
-      ? -1
-      : a.claim.createdAt > b.claim.createdAt
-        ? 1
-        : a.claim.id < b.claim.id
-          ? -1
-          : a.claim.id > b.claim.id
-            ? 1
-            : 0,
+    a.claim.createdAt < b.claim.createdAt ? -1 : a.claim.createdAt > b.claim.createdAt ? 1 : 0,
   );
 }
