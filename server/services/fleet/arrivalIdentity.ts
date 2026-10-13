@@ -41,6 +41,7 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { getRoutine, setRoutineState } from '../../repos/fleet.ts';
 import { getWorker, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { getToken } from '../../repos/oauth.ts';
+import { workerIdentity } from '../identity/authenticate.ts';
 import { connectorClient, endpointOf, getConnector, listConnectors, type Connector } from '../../repos/connectors.ts';
 import { normalizeSessionRef, sessionSpellings } from '../../domain/sessionRef.ts';
 import type { FleetRoutine } from '../../domain/types.ts';
@@ -351,7 +352,7 @@ function describeConnector(connector: Connector): string {
 
 async function workerLabel(workerId: string): Promise<string> {
   const worker = await getWorker(workerId);
-  return worker?.label ?? worker?.displayName ?? workerId;
+  return worker ? workerIdentity(worker) : workerId;
 }
 
 /**
