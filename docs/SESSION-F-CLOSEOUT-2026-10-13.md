@@ -168,7 +168,23 @@ So RES-1..RES-13 and FAC-15 stay AWAITING-VERIFICATION until the database answer
 
 **Defect found and fixed (`07f9e4d`).** `closeout-report campaigns` went **green** while `factory.sh` died before printing anything. Its marker was `.`, which matches a stack trace; `fleet`, `routing`, `projects` and `bins` had the same marker. Each now greps the script's own OK line, and `tests/closeoutReportMarkers.test.ts` refuses any marker that a failure would match. The test was run against the old file and failed there.
 
-### 4.5 Still to read
+### 4.5 Second reading (20:04Z–20:25Z, `2bb5879`)
+
+**The database is still I/O-starved.**
+- The pooler refused `fleet show` and the packet report (`ECHECKOUTTIMEOUT`, Storage `544`).
+- The connection report and the cash report each died part-way on statement timeouts (`bin_events` by routine; `monetization_rank_snapshots`).
+- Server sessions were waiting on `LWLock:WALInsert` and `IO:DataFileRead`, with 14 connections open server-wide and no lock waits.
+- Brain's own side read clean again: workload pool wait p95 0 ms, event loop p99 21 ms.
+
+**What could be read:**
+- **Campaigns:** `closeout-report campaigns` read the campaign list, ending in `FACTORY: OK` (so this green is real).
+- **The marker fix in production:** `closeout-report fleet` now reads **red** when it fails. Before `07f9e4d` the same failure read green.
+- **Research packets:** 609 in total. 15 RESEARCHING, 132 NEEDS_HUMAN, 8 QUEUED, 2 AUDITING.
+- **INF-3 (pool churn):** the workload pool opened 585 connections in 110 minutes (about 5.3 per minute), up from 99 in 35 minutes (about 2.8 per minute) on the first reading. Each new connection costs the pooler `pgbouncer.get_auth` and `DISCARD ALL`. Under an I/O-starved database, the 10-second idle release is churn rather than relief. This is a measurement, not a decision; the comparison wants a reading in healthy time.
+
+**No research is moving.** Since the restart at 18:18Z the connection report shows no fired session arriving and no work done. Earlier in the three-hour window, two sessions did check in: 1-B at 17:33Z, and Airyn 2-C at 18:07Z (one arrival as the right worker, one as the wrong one). The dispatcher's own reads take up to 63 s per statement on this database. Everything points the same way: the work is not refused, the database simply cannot answer fast enough to hand any of it out. RES-* and FAC-15 remain AWAITING-VERIFICATION. The next step is the owner's Supabase reading (INF-1), not another Brain change.
+
+### 4.6 Still to read
 
 - A second connection report about 60 minutes after the first, for INF-3's churn comparison.
 - The cash, packet, campaign and kernel reports, once the database is answering.
