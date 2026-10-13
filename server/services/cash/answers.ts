@@ -60,17 +60,32 @@
  *     person's own answer outranks a proposal permanently.
  */
 import { citableClaims } from '../../repos/research.ts';
-import { getMission, listMissions } from '../../repos/russellMissions.ts';
+import { getMission } from '../../repos/russellMissions.ts';
+import { missionsForRounds } from '../russell/roundMissions.ts';
 import { getOpportunity, listOpportunities, updateOpportunity } from '../../repos/cashPortfolio.ts';
 import { listNeeds } from '../../repos/cashPortfolio.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
-import { cardFact, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
+import {
+  cardFact,
+  clearColumnIfStill,
+  mayReplace,
+  recordCardFact,
+  withdrawRecommendationValue,
+} from '../../repos/cashCardFacts.ts';
+import { listAllocations, listTasks, listWorkflows } from '../../repos/labor.ts';
 import { evidenceCard } from './card.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed } from './needs.ts';
-import { readCapability } from './capabilities.ts';
+import { readCapabilities } from './capabilities.ts';
 import { formatMoney, readMoneyFigures } from './figures.ts';
-import type { CashCardFact, CashNeed, CashOpportunity, ResearchClaim } from '../../domain/types.ts';
+import { NON_HUMAN_LAYERS } from '../../domain/types.ts';
+import type {
+  CashCardFact,
+  CashNeed,
+  CashOpportunity,
+  LaborAllocation,
+  ResearchClaim,
+} from '../../domain/types.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -218,9 +233,14 @@ export async function assessResearch(projectId: string): Promise<ResearchAssessm
   const open = await listNeeds({ projectId, states: ['OPEN'] });
   if (open.length === 0) return out;
 
-  const missions = await listMissions({ projectId });
-  const byCandidate = new Map(
-    missions.filter((one) => one.candidateId).map((one) => [one.candidateId!, one]),
+  /*
+   * Each need's own idea, read by key (RES-2). This was the hundred most
+   * recently updated missions of the project, so a need whose mission had
+   * fallen out of the window read NEVER_STARTED about research that had run —
+   * and with two attempts in the window the map kept the older one.
+   */
+  const byCandidate = await missionsForRounds(
+    open.map((one) => one.candidateId).filter((one): one is string => one !== null),
   );
 
   for (const need of open) {
@@ -232,7 +252,8 @@ export async function assessResearch(projectId: string): Promise<ResearchAssessm
     const field = fieldOf(need, opportunity);
     if (!field) continue;
 
-    const mission = byCandidate.get(need.candidateId);
+    const rounds = byCandidate.get(need.candidateId);
+    const mission = rounds?.latest ?? null;
     if (!mission) {
       out.push({
         need,
@@ -279,7 +300,11 @@ export async function assessResearch(projectId: string): Promise<ResearchAssessm
      * means. So applying its sentence to a card field is carrying evidence
      * across rather than forming a view about it.
      */
-    const supporting = (await citableClaims(mission.orchestrationId)).filter(
+    const supporting = (
+      await Promise.all((rounds?.orchestrationIds ?? []).map((id) => citableClaims(id)))
+    )
+      .flat()
+      .filter(
       (claim) => claim.sourceUrl !== null && claim.claimType !== 'NEGATIVE_EXISTENCE',
     );
     out.push({
@@ -466,7 +491,144 @@ export interface Proposal {
   opportunityId: string;
   terms: ProposedTerm[];
   /** What Brain could not propose, and what would let it. */
-  withheld: { field: string; because: string }[];
+  withheld: {
+    field: string;
+    because: string;
+    /**
+     * Earlier proposals this reading no longer supports, by their exact text.
+     * Withdrawn only while the card still holds that recommendation (RES-6).
+     */
+    retracts?: readonly string[];
+  }[];
+}
+
+/**
+ * The two sentences the old derivation wrote from `RESEARCH_A_QUESTION` alone.
+ *
+ * Being able to research a question is not evidence that Brain can deliver what
+ * a buyer is paying for: a Christmas-tree supply bid, a bug bounty and gig
+ * hauling all read "Brain, with a person reviewing" (RES-6). Named exactly so a
+ * correction withdraws only these and never a person's answer or a proposal
+ * built from anything else.
+ */
+const RESEARCH_ONLY_DELIVERY = Object.freeze([
+  'Researched and assembled by Brain, reviewed before it is sent.',
+]);
+const RESEARCH_ONLY_FULFILMENT = Object.freeze(['Brain, with a person reviewing']);
+
+/** Labor layers that are a physical person on site, whatever else is true. */
+const PHYSICAL = (allocation: LaborAllocation): boolean =>
+  allocation.productionLayer === 'PHYSICAL_OPERATOR' ||
+  allocation.necessityReason === 'PHYSICAL_EXECUTION';
+
+type DeliveryReading =
+  | { kind: 'PROPOSE'; delivery: string; fulfillment: string; basis: string }
+  | { kind: 'WITHHOLD'; because: string };
+
+/**
+ * How this opening would be delivered and by whom, from the rows that say what
+ * delivering it requires (RES-6).
+ *
+ * Two authoritative records, and nothing else:
+ *
+ * - the opening's own `required_capabilities`, each read now through
+ *   `readCapability`;
+ * - the labor kernel's workflow for this opening, its tasks, and who each one's
+ *   live allocation says produces it.
+ *
+ * A physical deliverable — any task allocated to a physical operator, or kept
+ * with a person for physical execution — is never proposed as Brain's. Neither
+ * is an opening whose requirements nobody has recorded, one with a required
+ * capability that is not PRESENT, or one with a task nobody has allocated. In
+ * each case the field stays unknown with the reason, and the missing
+ * capability stays visible as its own need, because concealing an unmet
+ * requirement and proposing past it are the same mistake.
+ */
+export async function deliveryReading(opportunity: CashOpportunity): Promise<DeliveryReading> {
+  const workflow = (await listWorkflows(opportunity.projectId)).find(
+    (one) => one.opportunityId === opportunity.id && one.retiredAt === null,
+  );
+  const tasks = workflow
+    ? (await listTasks(opportunity.projectId)).filter(
+        (one) => one.workflowId === workflow.id && one.retiredAt === null,
+      )
+    : [];
+  const live = new Map<string, LaborAllocation>();
+  if (tasks.length > 0) {
+    for (const allocation of await listAllocations(opportunity.projectId)) {
+      if (allocation.supersededAt === null) live.set(allocation.taskId, allocation);
+    }
+  }
+
+  const physical = tasks.filter((task) => {
+    const allocation = live.get(task.id);
+    return allocation ? PHYSICAL(allocation) : false;
+  });
+  if (physical.length > 0) {
+    return {
+      kind: 'WITHHOLD',
+      because:
+        `Delivering this needs physical work (${physical.map((one) => one.name).join(', ')}), ` +
+        'which Brain cannot do and nobody has been named for. Being able to research it is ' +
+        'not being able to perform it.',
+    };
+  }
+
+  const required = await readCapabilities(opportunity.requiredCapabilities);
+  if (required.length === 0 && tasks.length === 0) {
+    return {
+      kind: 'WITHHOLD',
+      because:
+        'Nothing records what delivering this requires, so who could deliver it is unknown. ' +
+        'Brain being able to research a question is not evidence it can produce what the ' +
+        'buyer is paying for.',
+    };
+  }
+  const notPresent = required.filter((one) => one.state !== 'PRESENT');
+  if (notPresent.length > 0) {
+    return {
+      kind: 'WITHHOLD',
+      because:
+        `Delivering this needs ${notPresent.map((one) => `${one.id} (${one.state})`).join(', ')}, ` +
+        'which Brain does not have now; that gap is raised as its own need.',
+    };
+  }
+  const unallocated = tasks.filter((task) => !live.has(task.id));
+  if (unallocated.length > 0) {
+    return {
+      kind: 'WITHHOLD',
+      because:
+        `Who produces ${unallocated.map((one) => one.name).join(', ')} has not been decided.`,
+    };
+  }
+
+  const people = tasks
+    .map((task) => ({ task, allocation: live.get(task.id)! }))
+    .filter(({ allocation }) => !NON_HUMAN_LAYERS.includes(allocation.productionLayer));
+  const basis =
+    `Required capabilities read now: ${
+      required.map((one) => `${one.id} ${one.state}`).join(', ') || 'none recorded'
+    }. Labor allocations: ${
+      tasks.map((task) => `${task.name} → ${live.get(task.id)!.productionLayer}`).join(', ') ||
+      'no tasks'
+    }.`;
+  if (people.length > 0) {
+    const names = people
+      .map(({ task, allocation }) => `${task.name} by ${allocation.productionLayer.toLowerCase()}`)
+      .join(', ');
+    return {
+      kind: 'PROPOSE',
+      delivery: `Brain for what its capabilities cover; ${names}.`,
+      fulfillment: `Brain with people: ${names}.`,
+      basis,
+    };
+  }
+  return {
+    kind: 'PROPOSE',
+    delivery: `Produced by Brain through ${required.map((one) => one.id).join(', ') || 'its allocated tasks'}, reviewed before it is sent.`,
+    fulfillment: 'Brain, with a person reviewing',
+    basis,
+  };
 }
 
 /**
@@ -675,27 +837,32 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
   // ---------------------------------------------------------------------
   // Delivery, and who does it
   // ---------------------------------------------------------------------
-  const canResearch = await readCapability('RESEARCH_A_QUESTION');
-  out.terms.push({
-    field: 'delivery',
-    value:
-      canResearch.state === 'PRESENT'
-        ? 'Researched and assembled by Brain, reviewed before it is sent.'
-        : 'Done by hand: Brain has no capability here that can produce this.',
-    basis: `The capability register reads ${canResearch.id} as ${canResearch.state}.`,
-    assumptions: 'That what the request asks for is within what that capability actually does.',
-    uncertainty:
-      'A capability being present says Brain can do the kind of work, not that this particular ' +
-      'piece is inside it.',
-  });
-
-  out.terms.push({
-    field: 'fulfillment',
-    value: canResearch.state === 'PRESENT' ? 'Brain, with a person reviewing' : 'A person',
-    basis: 'Follows from the delivery path above.',
-    assumptions: 'That somebody is available to review before anything is sent.',
-    uncertainty: 'Nothing here reserves that person\u2019s time.',
-  });
+  const delivery = await deliveryReading(opportunity);
+  if (delivery.kind === 'PROPOSE') {
+    out.terms.push(
+      {
+        field: 'delivery',
+        value: delivery.delivery,
+        basis: delivery.basis,
+        assumptions: 'That the requirements recorded for this opening are all it needs.',
+        uncertainty:
+          'A requirement nobody has recorded is not in this reading, and a capability being ' +
+          'present says Brain can do that kind of work, not that this piece is inside it.',
+      },
+      {
+        field: 'fulfillment',
+        value: delivery.fulfillment,
+        basis: delivery.basis,
+        assumptions: 'That somebody is available to review before anything is sent.',
+        uncertainty: 'Nothing here reserves that person\u2019s time.',
+      },
+    );
+  } else {
+    out.withheld.push(
+      { field: 'delivery', because: delivery.because, retracts: RESEARCH_ONLY_DELIVERY },
+      { field: 'fulfillment', because: delivery.because, retracts: RESEARCH_ONLY_FULFILMENT },
+    );
+  }
 
   // ---------------------------------------------------------------------
   // The margin, which needs both halves
@@ -822,6 +989,44 @@ export async function applyProposal(input: {
       decidedBy: BRAIN,
     });
     written.push(term.field);
+  }
+
+  /*
+   * A proposal this reading no longer supports is taken back (RES-6), guarded
+   * on the card still holding exactly that recommendation, so a person's
+   * answer — or anything written since — is never touched, and a second tick
+   * withdraws nothing.
+   */
+  const retracted: string[] = [];
+  for (const withheld of input.proposal.withheld) {
+    for (const value of withheld.retracts ?? []) {
+      if (
+        await withdrawRecommendationValue({
+          opportunityId: input.opportunity.id,
+          field: withheld.field,
+          value,
+        })
+      ) {
+        const column = COLUMN[withheld.field];
+        if (column) await clearColumnIfStill({ opportunityId: input.opportunity.id, column, value });
+        retracted.push(withheld.field);
+      }
+    }
+  }
+  if (retracted.length > 0) {
+    await recordCashEvent({
+      projectId: input.opportunity.projectId,
+      opportunityId: input.opportunity.id,
+      kind: 'CASH_TERMS_WITHDRAWN',
+      actorRef: BRAIN,
+      summary:
+        `Brain withdrew its proposal for ${retracted.join(' and ')}: it rested only on being ` +
+        'able to research a question, which is not being able to deliver this.',
+      detail: {
+        fields: retracted,
+        because: input.proposal.withheld.find((one) => retracted.includes(one.field))?.because,
+      },
+    });
   }
 
   if (written.length > 0) {

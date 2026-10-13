@@ -924,11 +924,28 @@ export async function releaseDuplicatesOfArchived(projectId: string): Promise<nu
  */
 export async function openingsWithSourceUrl(
   projectId: string,
-): Promise<Array<{ opportunity: CashOpportunity; sourceUrl: string | null; hasWork: boolean }>> {
+): Promise<
+  Array<{
+    opportunity: CashOpportunity;
+    sourceUrl: string | null;
+    hasWork: boolean;
+    /** The claim's own words, for the canonical-document identity (RES-5). */
+    evidence: { claim: string; title: string | null; excerpt: string | null; locator: string | null };
+  }>
+> {
   const rows = await getDb().all<
-    CashOpportunityRow & { claim_source_url: string | null; has_work: number }
+    CashOpportunityRow & {
+      claim_source_url: string | null;
+      has_work: number;
+      claim_text: string;
+      claim_source_title: string | null;
+      claim_excerpt: string | null;
+      claim_locator: string | null;
+    }
   >(
     `SELECT o.*, c.source_url AS claim_source_url,
+            c.claim AS claim_text, c.source_title AS claim_source_title,
+            c.evidence_excerpt AS claim_excerpt, c.evidence_locator AS claim_locator,
             CASE WHEN EXISTS (SELECT 1 FROM cash_card_facts f
                                WHERE f.opportunity_id = o.id AND f.kind IN ('EVIDENCE', 'PERSON'))
                  THEN 1 ELSE 0 END AS has_work
@@ -941,5 +958,11 @@ export async function openingsWithSourceUrl(
     opportunity: mapOpportunity(row),
     sourceUrl: row.claim_source_url,
     hasWork: Number(row.has_work) === 1,
+    evidence: {
+      claim: row.claim_text,
+      title: row.claim_source_title,
+      excerpt: row.claim_excerpt,
+      locator: row.claim_locator,
+    },
   }));
 }

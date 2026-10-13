@@ -49,7 +49,11 @@
  * evidence overwrite them the moment any arrives.
  */
 import { METHOD, MONETIZATION_METHODS } from '../../../domain/monetization.ts';
-import { listOpportunities, opportunityForClaim } from '../../../repos/cashPortfolio.ts';
+import {
+  getOpportunity,
+  listOpportunities,
+  opportunityForClaim,
+} from '../../../repos/cashPortfolio.ts';
 import { claimedMethods } from '../../../repos/research.ts';
 import { recordCashEvent } from '../../../repos/cashMode.ts';
 import { mayReplace } from '../../../repos/cashCardFacts.ts';
@@ -58,6 +62,7 @@ import {
   pathFactsForProject,
   recordPath,
   recordPathFact,
+  setMergedInto,
   setSourceClaim,
 } from '../../../repos/monetization.ts';
 import type {
@@ -123,6 +128,8 @@ export interface EnumerationReport {
   carried: { pathId: string; attributes: string[] }[];
   /** Possibilities a source named that the table would not have produced. */
   evidenced: string[];
+  /** Paths of a duplicate opening pointed at the primary's this pass (RES-4). */
+  mergedDuplicates: string[];
 }
 
 /**
@@ -141,7 +148,7 @@ export interface EnumerationReport {
  */
 export async function enumeratePossibilities(projectId: string): Promise<EnumerationReport> {
   const opportunities = await listOpportunities({ projectId });
-  const report: EnumerationReport = { added: [], carried: [], evidenced: [] };
+  const report: EnumerationReport = { added: [], carried: [], evidenced: [], mergedDuplicates: [] };
 
   const factsByPath = new Map<string, MonetizationPathFact[]>();
   for (const fact of await pathFactsForProject(projectId)) {
@@ -165,6 +172,14 @@ export async function enumeratePossibilities(projectId: string): Promise<Enumera
 
   for (const opportunity of opportunities) {
     if (opportunity.state === 'ARCHIVED' || opportunity.state === 'DECLINED') continue;
+    /*
+     * A second record of an opening already in the portfolio is not a second
+     * space of possibilities (RES-4). Its paths, where earlier passes made
+     * them, are pointed at the primary's below rather than enumerated again —
+     * production held 2,558 possibilities across 128 openings, 53 of them
+     * duplicates, each with its own space and its own commissions.
+     */
+    if (opportunity.duplicateOfId) continue;
 
     const added: string[] = [];
     const primary = PRIMARY_METHOD[opportunity.mechanism];
@@ -216,8 +231,132 @@ export async function enumeratePossibilities(projectId: string): Promise<Enumera
    * forking the ledger into two entries for one shape of transaction.
    */
   report.evidenced = await promoteDeclaredMethods(projectId);
+  report.mergedDuplicates = await mergeDuplicatePaths(projectId);
 
   return report;
+}
+
+/**
+ * The opening a record stands for: itself, or the primary it duplicates.
+ *
+ * Walks `duplicate_of_id` (bounded, so a cycle somebody wrote by hand cannot
+ * hang a tick), because `markDuplicateOpenings` points at a survivor and a
+ * survivor could later be marked itself.
+ */
+function primaryOf(
+  opportunity: CashOpportunity,
+  byId: ReadonlyMap<string, CashOpportunity>,
+): CashOpportunity {
+  let current = opportunity;
+  for (let hops = 0; hops < 8 && current.duplicateOfId; hops += 1) {
+    const next = byId.get(current.duplicateOfId);
+    if (!next) break;
+    current = next;
+  }
+  return current;
+}
+
+/**
+ * Point every path of a duplicate opening at the primary's path of the same
+ * method (RES-4), and point them back if the duplicate link is undone.
+ *
+ * Through `merged_into_id`, the mechanism §49 already has for "these two
+ * possibilities are one": the absorbed path keeps its id, its facts, its
+ * judgements, its commission history and its rank history; it reads ARCHIVED
+ * through `mergedInto` with the survivor's name, so the allocator stops asking
+ * about it and `abandonPutAway` settles any question still open on it through
+ * the guarded transition it already uses. Nothing is deleted.
+ *
+ * Where the primary has no path of that method yet, one is recorded on it with
+ * the duplicate's own origin and source claim, so evidence that established a
+ * way of being paid is carried rather than dropped.
+ *
+ * Only Brain's own cross-opening merges are reversed: a person's merge is
+ * refused across openings by `mergePaths`, so a path pointing at another
+ * opening's path was pointed there by this function, and undoing it when the
+ * duplicate link is gone (`releaseDuplicatesOfArchived`) is the reversal.
+ * Idempotent: every write is guarded on the column's current value.
+ */
+export async function mergeDuplicatePaths(projectId: string): Promise<string[]> {
+  const opportunities = await listOpportunities({ projectId });
+  const byId = new Map(opportunities.map((one) => [one.id, one]));
+  const paths = await listPaths({ projectId });
+  const pathById = new Map(paths.map((one) => [one.id, one]));
+  const byOpeningMethod = new Map<string, MonetizationPath>();
+  for (const path of paths) {
+    if (path.opportunityId) byOpeningMethod.set(`${path.opportunityId}|${path.method}`, path);
+  }
+
+  const merged: string[] = [];
+  for (const path of paths) {
+    if (!path.opportunityId) continue;
+    const opening = byId.get(path.opportunityId);
+    if (!opening) continue;
+
+    if (path.mergedIntoId) {
+      // Undo Brain's own duplicate merge once the duplicate link is gone.
+      const into = pathById.get(path.mergedIntoId);
+      const crossOpening = into && into.opportunityId !== path.opportunityId;
+      if (crossOpening && primaryOf(opening, byId).id === opening.id) {
+        if (
+          await setMergedInto({ pathId: path.id, intoId: null, expectCurrent: path.mergedIntoId })
+        ) {
+          await recordCashEvent({
+            projectId,
+            opportunityId: path.opportunityId,
+            kind: 'MONETIZATION_PATH_UNMERGED',
+            actorRef: BRAIN,
+            summary:
+              `"${path.title}" is a separate possibility again: the opening it belongs to is no ` +
+              'longer recorded as a duplicate.',
+            detail: { pathId: path.id, wasMergedInto: path.mergedIntoId },
+          });
+        }
+      }
+      continue;
+    }
+
+    if (!opening.duplicateOfId) continue;
+    const primary = primaryOf(opening, byId);
+    if (primary.id === opening.id) continue;
+
+    let survivor = byOpeningMethod.get(`${primary.id}|${path.method}`) ?? null;
+    if (!survivor) {
+      const recorded = await recordPath({
+        projectId,
+        opportunityId: primary.id,
+        method: path.method,
+        title: titleFor(path.method, primary.title),
+        thesis: path.thesis,
+        origin: path.origin,
+        sourceClaimId: path.sourceClaimId,
+      });
+      survivor = recorded.path;
+      byOpeningMethod.set(`${primary.id}|${path.method}`, survivor);
+    }
+    if (survivor.id === path.id || survivor.mergedIntoId) continue;
+
+    if (!(await setMergedInto({ pathId: path.id, intoId: survivor.id, expectCurrent: null }))) {
+      continue;
+    }
+    merged.push(path.id);
+    await recordCashEvent({
+      projectId,
+      opportunityId: path.opportunityId,
+      kind: 'MONETIZATION_PATHS_MERGED',
+      actorRef: BRAIN,
+      summary:
+        `"${path.title}" was merged into "${survivor.title}": its opening is a second record of ` +
+        'the same one, which carries this way of being paid.',
+      detail: {
+        absorbedId: path.id,
+        survivorId: survivor.id,
+        duplicateOpportunityId: opening.id,
+        primaryOpportunityId: primary.id,
+      },
+    });
+  }
+  return merged;
 }
 
 /**
@@ -317,7 +456,16 @@ export async function promoteDeclaredMethods(projectId: string): Promise<string[
   const added: string[] = [];
 
   for (const entry of declared) {
-    const opportunity = await opportunityForClaim(projectId, entry.claim.id);
+    let opportunity = await opportunityForClaim(projectId, entry.claim.id);
+    if (!opportunity) continue;
+    /*
+     * A method declared on a duplicate's claim is a way of monetizing the
+     * opening it duplicates (RES-4), so it is recorded there rather than as a
+     * new possibility on the duplicate. Bounded, for `primaryOf`'s reason.
+     */
+    for (let hops = 0; hops < 8 && opportunity?.duplicateOfId; hops += 1) {
+      opportunity = await getOpportunity(opportunity.duplicateOfId);
+    }
     if (!opportunity) continue;
     if (opportunity.state === 'ARCHIVED' || opportunity.state === 'DECLINED') continue;
 

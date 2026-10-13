@@ -231,6 +231,42 @@ export async function missionsForCandidate(candidateId: string): Promise<Russell
   return rows.map(mapMission);
 }
 
+/**
+ * Every mission the named ideas have had, keyed by idea, oldest attempt first.
+ *
+ * The keyed read a round settlement needs. `listMissions` is a window — the
+ * hundred most recently updated rows of a project — so a reader that looked a
+ * round's mission up there found nothing once the project held more than a
+ * hundred, and an absent row read as "still running" for ever (RES-2). This
+ * asks for exactly the ideas in hand, in bounded batches, through
+ * `idx_russell_missions_candidate`, so its cost is the rounds asked about
+ * rather than the project's history.
+ */
+export async function missionsForCandidates(
+  candidateIds: readonly string[],
+): Promise<Map<string, RussellMission[]>> {
+  const out = new Map<string, RussellMission[]>();
+  const unique = [...new Set(candidateIds)];
+  const BATCH = 200;
+  for (let i = 0; i < unique.length; i += BATCH) {
+    const slice = unique.slice(i, i + BATCH);
+    const rows = await getDb().all<RussellMissionRow>(
+      `SELECT * FROM russell_missions
+        WHERE candidate_id IN (${slice.map(() => '?').join(',')})
+        ORDER BY attempt, created_at, id`,
+      slice,
+    );
+    for (const row of rows) {
+      const mission = mapMission(row);
+      if (!mission.candidateId) continue;
+      const list = out.get(mission.candidateId) ?? [];
+      list.push(mission);
+      out.set(mission.candidateId, list);
+    }
+  }
+  return out;
+}
+
 /** How many mission rows one idea has. The runaway guard's only reader. */
 export async function countMissionsForCandidate(candidateId: string): Promise<number> {
   const rows = await getDb().all<{ n: number }>(

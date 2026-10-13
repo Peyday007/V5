@@ -751,8 +751,12 @@ describe('one sprint, from activation to money in and winding down', () => {
     expect(offer.basis).toBeTruthy();
     expect(offer.assumptions).toBeTruthy();
     expect(offer.uncertainty).toBeTruthy();
-    for (const field of ['acceptance', 'delivery', 'fulfillment']) {
-      expect((await cardFact(piece.id, field))!.kind).toBe('RECOMMENDATION');
+    expect((await cardFact(piece.id, 'acceptance'))!.kind).toBe('RECOMMENDATION');
+    // Who delivers it is not proposed from Brain being able to research a
+    // question (RES-6): nothing records what delivering this needs, so both
+    // stay unknown rather than reading "Brain, with a person reviewing".
+    for (const field of ['delivery', 'fulfillment']) {
+      expect((await cardFact(piece.id, field))?.kind).not.toBe('RECOMMENDATION');
     }
     // And it withholds what it has no basis for: no source states a figure, so
     // no price is invented and then explained.
@@ -768,6 +772,10 @@ describe('one sprint, from activation to money in and winding down', () => {
         priceCents: 120_000,
         // The remaining blank the card still refuses on.
         peakFundingCents: 0,
+        // How it is delivered and by whom — a person's answer now that Brain
+        // does not propose it from being able to research (RES-6).
+        deliveryMethod: 'The drainage survey is done on site by the named contractor.',
+        fulfillmentOwner: 'The named contractor, with the owner reviewing',
         /*
          * And the execution thesis. `markReady` asks for both now: the twelve
          * short-card fields are what a bounded *test* turns on, and these are

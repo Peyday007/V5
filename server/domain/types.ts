@@ -9126,7 +9126,7 @@ export const DEAL_ROUND_PURPOSES = [
 ] as const;
 export type DealRoundPurpose = (typeof DEAL_ROUND_PURPOSES)[number];
 
-export const DEAL_ROUND_STATES = ['OPEN', 'SETTLED'] as const;
+export const DEAL_ROUND_STATES = ['OPEN', 'SETTLED', 'ABANDONED'] as const;
 export type DealRoundState = (typeof DEAL_ROUND_STATES)[number];
 
 export interface DealRoundRow {
@@ -9921,7 +9921,7 @@ export const PUZZLE_ROUND_PURPOSES = [
 ] as const;
 export type PuzzleRoundPurpose = (typeof PUZZLE_ROUND_PURPOSES)[number];
 
-export const PUZZLE_ROUND_STATES = ['OPEN', 'SETTLED'] as const;
+export const PUZZLE_ROUND_STATES = ['OPEN', 'SETTLED', 'ABANDONED'] as const;
 export type PuzzleRoundState = (typeof PUZZLE_ROUND_STATES)[number];
 
 /**

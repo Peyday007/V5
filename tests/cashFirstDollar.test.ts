@@ -48,6 +48,7 @@ import {
   settleSpend,
 } from '../server/services/cash/opportunities.ts';
 import { applyProposal, proposeTerms } from '../server/services/cash/answers.ts';
+import { updateOpportunity } from '../server/repos/cashPortfolio.ts';
 import { advanceWithinAuthority, operate } from '../server/services/cash/operate.ts';
 import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
 import { recordCardFact } from '../server/repos/cashCardFacts.ts';
@@ -223,6 +224,14 @@ async function qualified(title = 'A published intake repair request'): Promise<C
   if (!filled.ok) throw new Error(filled.reason);
   const piece = (await getOpportunity(captured.value.id))!;
   await applyProposal({ opportunity: piece, proposal: await proposeTerms(piece) });
+  /*
+   * How it is delivered and by whom, as a person records it. Brain no longer
+   * proposes these from being able to research a question (RES-6).
+   */
+  await updateOpportunity(piece.id, {
+    delivery_method: 'Delivered by the named operator, as the card describes.',
+    fulfillment_owner: 'The named operator, with the owner reviewing',
+  } as never);
   for (const field of [CAPTURE_KEY, ...qualificationKeys(null)]) {
     await recordCardFact({
       projectId,

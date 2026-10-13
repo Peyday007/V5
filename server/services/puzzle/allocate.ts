@@ -126,7 +126,9 @@ export function allocate(input: {
       continue;
     }
 
-    const settled = history.filter((one) => one.state === 'SETTLED');
+    // ABANDONED (a mission that ended without finishing) is as terminal as
+    // SETTLED for the barren bound and the cool-off, as in every other kernel.
+    const settled = history.filter((one) => one.state !== 'OPEN');
     const barren = settled.filter((one) => (one.found ?? 0) === 0);
     if (barren.length >= BARREN_ROUNDS) {
       declined.push({

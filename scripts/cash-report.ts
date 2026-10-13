@@ -37,7 +37,7 @@ import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { industryView } from '../server/services/industry/view.ts';
 import { dealflowView } from '../server/services/dealflow/view.ts';
 import { listProjects } from '../server/repos/projects.ts';
-import { getCashMode, listCashEvents } from '../server/repos/cashMode.ts';
+import { getCashMode } from '../server/repos/cashMode.ts';
 import { listOpportunities } from '../server/repos/cashPortfolio.ts';
 import { cardFactsFor } from '../server/repos/cashCardFacts.ts';
 import { liveAuthority } from '../server/repos/cashAuthority.ts';
@@ -62,7 +62,10 @@ import type { WorkItem } from '../server/domain/types.ts';
 import { registerCommercialProviders } from '../server/services/cash/providers/register.ts';
 import { commercialProviderStatus, probeProviders } from '../server/services/cash/providers/status.ts';
 import { listInvoices } from '../server/repos/cashInvoices.ts';
-import { latestMissionForCandidate, listMissions } from '../server/repos/russellMissions.ts';
+import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
+import { cashPosition } from '../server/services/cash/money.ts';
+import { totalsByKind } from '../server/repos/cashLedger.ts';
+import { CASH_MONEY_KINDS } from '../server/domain/types.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -107,6 +110,68 @@ function queueShape(items: WorkItem[]): { total: number; byState: Record<string,
     byState[item.state] = (byState[item.state] ?? 0) + 1;
   }
   return { total: items.length, byState };
+}
+
+/**
+ * A complete count by one column, from the database rather than from a list.
+ *
+ * Every population this report states — ideas, missions, work items, packets,
+ * fragments, events — used to be counted off a list a repository read with a
+ * LIMIT (100 ideas, 100 missions, 500 items, 50 events), so it printed
+ * `missions 100 — FAILED=74` beside an uncapped 308 (RES-12a). A sample may
+ * still be printed, and says it is one; a total is an aggregate.
+ */
+async function countBy(sql: string, params: unknown[]): Promise<{ total: number; by: Map<string, number> }> {
+  const rows = await getDb().all<{ k: string | null; n: number }>(sql, params as never[]);
+  const by = new Map<string, number>();
+  let total = 0;
+  for (const row of rows) {
+    const n = Number(row.n);
+    by.set(row.k ?? '—', n);
+    total += n;
+  }
+  return { total, by };
+}
+
+function shown(counts: { by: Map<string, number> }): string {
+  return (
+    [...counts.by.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([k, n]) => `${k}=${n}`)
+      .join(' ') || '—'
+  );
+}
+
+/**
+ * Why an idea is parked, from the field the park was recorded in (RES-12d).
+ *
+ * `candidate.reason` is the judgment's sentence, which for an authority park is
+ * the generic "depends on X, which is not ready…" priority wording. The
+ * decision that parked it is in `judgment`: the compiler's own `refusal`, the
+ * run's own words for research that produced no report, or the authority
+ * sentence in `blockedBy` that the resume matches. Each is printed with where
+ * it came from, and the priority sentence only when nothing more specific was
+ * recorded.
+ */
+function parkReason(candidate: {
+  reason: string | null;
+  judgment: Record<string, unknown>;
+}): { from: string; text: string } {
+  const judgment = candidate.judgment ?? {};
+  const refusal = judgment['refusal'];
+  if (typeof refusal === 'string' && refusal.trim()) {
+    return { from: 'compiler refusal', text: refusal };
+  }
+  const researched = judgment['researchedWithoutReport'];
+  if (researched && typeof researched === 'object') {
+    const why = (researched as Record<string, unknown>)['reason'];
+    if (typeof why === 'string' && why.trim()) return { from: 'research produced no report', text: why };
+  }
+  const blockedBy = judgment['blockedBy'];
+  if (typeof blockedBy === 'string' && blockedBy.trim()) {
+    return { from: 'blocked by', text: blockedBy };
+  }
+  return { from: 'judgment', text: candidate.reason ?? '(no reason recorded)' };
 }
 
 async function reportProject(projectId: string, projectName: string): Promise<boolean> {
@@ -182,27 +247,76 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
     );
   }
 
-  // --- Where the ideas are ------------------------------------------------
-  const candidates = await listCandidates({ projectId });
-  console.log('');
-  console.log(`IDEAS (${candidates.length}) — ${tally(candidates, (one) => one.state)}`);
+  // --- The money ledger (RES-12b) -----------------------------------------
   /*
-   * A parked idea prints the exact field the resume reads, not a paraphrase.
-   *
-   * `resumeAuthorityParkedCandidates` matches `judgment.blockedBy` against the
-   * sentences `checkAuthority` itself composes, and refuses to unpark anything
-   * else — so when a park survives a tick, the one thing worth knowing is
-   * which of those sentences it actually carries. Printing `reason` alone
-   * would be printing a neighbour of the answer.
+   * Read from `cash_money_entries` through the same `cashPosition` every
+   * surface uses, so this is the ledger's own arithmetic rather than a second
+   * opinion: costs subtracted once, a payment not counted as funds until it
+   * settles, held commitments and reserves apart. Bounded to the sprint's own
+   * currency, with any other currency in the ledger named rather than
+   * converted. Nothing here is inferred from an opportunity's estimate, a
+   * capability or a provider's configuration. A read that fails says so, and
+   * is never printed as zero.
    */
-  for (const candidate of candidates.filter((one) => one.state === 'PARKED')) {
-    // Already mapped out of the row by the repository, so it is read rather
-    // than parsed here — the raw column is what `blockedOnStandingAuthority`
-    // reads, and both resolve to the same value.
-    const blockedBy = candidate.judgment['blockedBy'];
-    console.log(`  PARKED ${candidate.id} priority=${candidate.priority ?? '—'}`);
-    console.log(`      blockedBy: ${trim(typeof blockedBy === 'string' ? blockedBy : null)}`);
-    console.log(`      reason:    ${trim(candidate.reason)}`);
+  console.log('');
+  console.log(`MONEY LEDGER (${mode.currency})`);
+  try {
+    const money = await cashPosition({ projectId, currency: mode.currency });
+    const totals = await totalsByKind({ projectId, currency: mode.currency });
+    const entries = await getDb().get<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM cash_money_entries WHERE project_id = ?',
+      [projectId],
+    );
+    const cents = (value: number) => `${(value / 100).toFixed(2)}`;
+    console.log(`  entries               ${Number(entries?.n ?? 0)} (all currencies)`);
+    console.log(`  pipeline (not cash)   ${cents(money.pipelineCents)}`);
+    console.log(`  customer payments     ${cents(money.customerPaymentsCents)} (net of refunds; not yet funds)`);
+    console.log(`  available funds       ${cents(money.availableFundsCents)}`);
+    console.log(`  unpaid commitments    ${cents(money.unpaidCommitmentsCents)}`);
+    console.log(`  held commitments      ${cents(money.heldCommitmentsCents)}`);
+    console.log(`  reserves              ${cents(money.reservesCents)}`);
+    console.log(`  deployable            ${cents(money.deployableCents)}${money.shortfall ? '  SHORTFALL' : ''}`);
+    console.log(`  completed contribution ${cents(money.completedContributionCents)}`);
+    console.log(
+      `  by kind               ${
+        CASH_MONEY_KINDS.filter((kind) => Number(totals[kind] ?? 0) !== 0)
+          .map((kind) => `${kind}=${cents(Number(totals[kind] ?? 0))}`)
+          .join(' ') || 'no entries'
+      }`,
+    );
+    if (money.otherCurrencies.length > 0) {
+      console.log(
+        `  NOT INCLUDED          entries in ${money.otherCurrencies.join(', ')} — not converted at a rate nobody chose`,
+      );
+    }
+  } catch (error) {
+    console.log(
+      `  (the ledger could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)} — this is not zero)`,
+    );
+  }
+
+  // --- Where the ideas are ------------------------------------------------
+  const ideaCounts = await countBy(
+    'SELECT state AS k, COUNT(*) AS n FROM russell_candidates WHERE project_id = ? GROUP BY state',
+    [projectId],
+  );
+  console.log('');
+  console.log(`IDEAS (${ideaCounts.total}) — ${shown(ideaCounts)}`);
+  /*
+   * A parked idea prints the reason it was parked, from the field that decided
+   * it (`parkReason`), in full rather than trimmed to a line — a refusal cut at
+   * 88 characters (RES-13) is a reason nobody can act on. The list is a
+   * bounded sample and says so; the count above is complete.
+   */
+  const parkedTotal = ideaCounts.by.get('PARKED') ?? 0;
+  const parked = await listCandidates({ projectId, states: ['PARKED'], limit: 50 });
+  if (parkedTotal > 0) {
+    console.log(`  PARKED — showing ${parked.length} of ${parkedTotal}`);
+  }
+  for (const candidate of parked) {
+    const why = parkReason(candidate);
+    console.log(`  PARKED ${candidate.id} decided_by=${String(candidate.judgment['decidedBy'] ?? '—')}`);
+    console.log(`      ${why.from}: ${trim(why.text, 400)}`);
   }
 
   const roadmap = await cashRoadmap(projectId);
@@ -223,15 +337,32 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
 
   // --- What the fleet has to do -------------------------------------------
   const orchestrations = await listOrchestrationsByProject(projectId);
-  const items = await listWorkItems(projectId, { limit: 500 });
-  const shape = queueShape(items);
+  const itemCounts = await countBy(
+    'SELECT state AS k, COUNT(*) AS n FROM work_items WHERE project_id = ? GROUP BY state',
+    [projectId],
+  );
+  const itemTypes = await countBy(
+    'SELECT work_type AS k, COUNT(*) AS n FROM work_items WHERE project_id = ? GROUP BY work_type',
+    [projectId],
+  );
+  const shape = {
+    total: itemCounts.total,
+    byState: Object.fromEntries(WORK_ITEM_STATES.map((state) => [state, itemCounts.by.get(state) ?? 0])),
+  };
+  const fragmentCounts = await countBy(
+    `SELECT f.status AS k, COUNT(*) AS n FROM research_fragments f
+       JOIN research_orchestrations o ON o.id = f.orchestration_id
+      WHERE o.project_id = ? GROUP BY f.status`,
+    [projectId],
+  );
   console.log('');
   console.log(`RESEARCH (${orchestrations.length} packets) — ${tally(orchestrations, (one) => one.status)}`);
+  console.log(`  fragments   ${fragmentCounts.total} — ${shown(fragmentCounts)}`);
   console.log(
     `  work items  ${shape.total} total — ` +
       WORK_ITEM_STATES.map((state) => `${state.toLowerCase()}=${shape.byState[state] ?? 0}`).join(' '),
   );
-  console.log(`  by type     ${tally(items, (one) => one.workType)}`);
+  console.log(`  by type     ${shown(itemTypes)}`);
 
   /*
    * Every failed item, named, with the one fact that decides what may be done
@@ -254,10 +385,10 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
    *
    * Read-only, like everything else here.
    */
-  const failed = items.filter((one) => one.state === 'FAILED');
+  const failed = await listWorkItems(projectId, { states: ['FAILED'], limit: 50 });
   if (failed.length > 0) {
     console.log('');
-    console.log(`FAILED WORK ITEMS (${failed.length})`);
+    console.log(`FAILED WORK ITEMS (showing ${failed.length} of ${shape.byState['FAILED'] ?? 0})`);
     for (const item of failed) {
       const packet = item.orchestrationId ? await getOrchestration(item.orchestrationId) : null;
       console.log(
@@ -284,8 +415,26 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
    * launch" look identical from the packet column alone. This is the one thing
    * that tells them apart.
    */
-  const missions = await listMissions({ projectId });
-  console.log(`  missions    ${missions.length} — ${tally(missions, (one) => one.state)}`);
+  const missionCounts = await countBy(
+    'SELECT state AS k, COUNT(*) AS n FROM russell_missions WHERE project_id = ? GROUP BY state',
+    [projectId],
+  );
+  console.log(`  missions    ${missionCounts.total} — ${shown(missionCounts)}`);
+  // A rate needs its window and its denominator: missions created in the last
+  // seven days, by the state each is in now.
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const recentMissions = await countBy(
+    `SELECT state AS k, COUNT(*) AS n FROM russell_missions
+      WHERE project_id = ? AND created_at >= ? GROUP BY state`,
+    [projectId, weekAgo],
+  );
+  const recentFailed = recentMissions.by.get('FAILED') ?? 0;
+  console.log(
+    `  missions created since ${weekAgo.slice(0, 10)}: ${recentMissions.total} — ${shown(recentMissions)}` +
+      (recentMissions.total > 0
+        ? ` (failed ${recentFailed}/${recentMissions.total} = ${Math.round((100 * recentFailed) / recentMissions.total)}%)`
+        : ''),
+  );
   await researchYield(projectId);
 
   // --- What became a piece of work ----------------------------------------
@@ -726,16 +875,19 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
     if (one.outcome) console.log(`      outcome: ${trim(one.outcome, 100)}`);
   }
 
-  const events = await listCashEvents(projectId);
+  const eventCounts = await countBy(
+    'SELECT kind AS k, COUNT(*) AS n FROM cash_events WHERE project_id = ? GROUP BY kind',
+    [projectId],
+  );
   console.log('');
-  console.log(`HISTORY (${events.length}) — ${tally(events, (one) => one.kind)}`);
+  console.log(`HISTORY (${eventCounts.total}) — ${shown(eventCounts)}`);
 
   console.log('');
   console.log(
     `CASH-REPORT: ${projectId} state=${mode.state}` +
       ` research_grant=${discovery ? 'ACTIVE' : 'ABSENT'}` +
       ` commercial_grant=${commercial ? 'PRESENT' : 'ABSENT'}` +
-      ` ideas=${candidates.length}` +
+      ` ideas=${ideaCounts.total} missions=${missionCounts.total} work_items=${shape.total}` +
       ` rounds=${roadmap.rounds.total}` +
       ` queued=${shape.byState['QUEUED'] ?? 0} leased=${shape.byState['LEASED'] ?? 0}` +
       ` succeeded=${shape.byState['SUCCEEDED'] ?? 0} failed=${shape.byState['FAILED'] ?? 0}` +

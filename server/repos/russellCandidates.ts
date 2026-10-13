@@ -128,6 +128,23 @@ export async function getCandidate(id: string): Promise<RussellCandidate | null>
   return rows[0] ? mapCandidate(rows[0]) : null;
 }
 
+/** The state of each named idea, keyed. An id with no row is simply absent. */
+export async function candidateStates(
+  ids: readonly string[],
+): Promise<Map<string, RussellCandidate['state']>> {
+  const out = new Map<string, RussellCandidate['state']>();
+  const unique = [...new Set(ids)];
+  for (let i = 0; i < unique.length; i += 200) {
+    const slice = unique.slice(i, i + 200);
+    const rows = await getDb().all<{ id: string; state: string }>(
+      `SELECT id, state FROM russell_candidates WHERE id IN (${slice.map(() => '?').join(',')})`,
+      slice,
+    );
+    for (const row of rows) out.set(row.id, row.state as RussellCandidate['state']);
+  }
+  return out;
+}
+
 /**
  * An existing candidate with this exact meaning, in this exact scope.
  *

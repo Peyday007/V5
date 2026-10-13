@@ -119,6 +119,14 @@ export interface LedgerEntry {
   judgments: MonetizationPathJudgment[];
   /** What it enables, competes with, waits on. Derived plus recorded. */
   edges: GraphEdge[];
+  /**
+   * What holds it at BLOCKED, as rows rather than the sentence (RES-3): each
+   * open need on its discovery, by the key Brain wrote it under and the idea
+   * already researching it, and the paths it waits on. The allocator reads
+   * these to ask only the question the blocker names.
+   */
+  blockers: { requestKey: string | null; candidateId: string | null }[];
+  waitsOn: string[];
 }
 
 export interface Ledger {
@@ -418,6 +426,17 @@ export async function composeLedger(input: {
       lastEvaluatedAt: path.lastEvaluatedAt,
       judgments: judgmentsByPath.get(path.id) ?? [],
       edges,
+      blockers: (needs.get(path.opportunityId ?? '') ?? []).map((need) => ({
+        requestKey: need.requestKey,
+        candidateId: need.candidateId,
+      })),
+      waitsOn: edges
+        .filter(
+          (edge) =>
+            edge.kind === 'REQUIRES' && edge.toPathId === path.id && edge.source !== 'DERIVED',
+        )
+        .filter((edge) => (firstPass.get(edge.fromPathId) ?? 'UNPROVEN') !== 'ACTIVE')
+        .map((edge) => edge.fromPathId),
     });
   }
 
