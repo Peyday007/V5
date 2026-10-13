@@ -58,6 +58,7 @@ import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './
 import { countIndependentSources, duplicateGroups } from './standards.ts';
 import {
   acceptedClaims,
+  FragmentBudgetRefused,
   listClaims,
   currentFragments,
   getFragment,
@@ -858,6 +859,27 @@ async function assessRepairs(input: {
   return out;
 }
 
+/**
+ * A repair the grant would not pay for.
+ *
+ * `createFragments` charges the standing authority and throws
+ * `FragmentBudgetRefused` when it is spent or expired. `mintRepairs` caught only
+ * `FragmentNotRetryable`, so that refusal escaped `advanceOnce` on every tick:
+ * production, 2026-10-13T01:28:59Z, "the standing authority has expired" thrown
+ * from `mintRepairs` — the packet's status never moved and no reason was ever
+ * written (RES-8, RES-9). It is carried out as a value now, and the caller stops
+ * the packet with the grant's own words.
+ */
+class RepairRefusedByGrant extends Error {
+  constructor(
+    public readonly fragmentKey: string,
+    public readonly detail: string,
+  ) {
+    super(detail);
+    this.name = 'RepairRefusedByGrant';
+  }
+}
+
 async function mintRepairs(input: {
   orchestration: ResearchOrchestration;
   fragments: ResearchFragment[];
@@ -883,6 +905,9 @@ async function mintRepairs(input: {
       });
       if (outcome.status === 'RETRIED') created += 1;
     } catch (error) {
+      if (error instanceof FragmentBudgetRefused) {
+        throw new RepairRefusedByGrant(fragment.fragmentKey, error.detail);
+      }
       // Not retryable is an ordinary answer here — the budget ran out between
       // the check and the call, or a later attempt already exists.
       if (!(error instanceof FragmentNotRetryable)) throw error;
@@ -1466,7 +1491,31 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
    * can be the same search twice.
    */
   if (!items.some((item) => LIVE_ITEM.has(item.state))) {
-    const repaired = await mintRepairs({ orchestration, fragments, items });
+    let repaired = 0;
+    try {
+      repaired = await mintRepairs({ orchestration, fragments, items });
+    } catch (error) {
+      if (!(error instanceof RepairRefusedByGrant)) throw error;
+      /*
+       * The permission behind this packet will not pay for the repair. That is
+       * a person's decision with an answering control (renewing or raising the
+       * grant), and the next advance after it mints the repair. Compared before
+       * it is written, so a packet re-entered every tick rewrites nothing.
+       */
+      const reason =
+        `A repair attempt for ${error.fragmentKey} was refused by the permission this packet ` +
+        `runs under: ${error.detail}. Nothing was researched or spent on it, and every earlier ` +
+        'attempt and accepted claim is kept. Renewing or extending that permission lets the ' +
+        'repair run on the next tick; stopping the work is the other answer.';
+      if (orchestration.status !== 'NEEDS_HUMAN' || orchestration.failureReason !== reason) {
+        await updateOrchestration(orchestrationId, {
+          status: 'NEEDS_HUMAN',
+          failureReason: reason,
+          completedAt: new Date().toISOString(),
+        });
+      }
+      return { orchestrationId, status: 'NEEDS_HUMAN', enqueued: [], waitingOn: `a person: ${reason}` };
+    }
     if (repaired > 0) return await advancePacket(orchestrationId);
   }
 
