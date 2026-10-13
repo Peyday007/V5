@@ -130,6 +130,8 @@ const CONNECTION_PROBLEM_TITLE: Record<string, string> = {
   REAUTH_REQUIRED: 'its Claude connector needs reconnecting',
   RECOVERY_EXHAUSTED: 'Brain has stopped retrying it',
   OUT_OF_SCOPE: 'healthy, with no work it is allowed to take',
+  CANNOT_TAKE_WAITING_WORK: 'healthy, and refused the waiting work for a reason other than its project',
+  MIXED_WORKERS: 'its Claude Routine holds two Brain connectors and uses either',
   RECOVERING: 'recovering by itself',
 };
 

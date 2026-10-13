@@ -409,12 +409,28 @@ function servesProject(candidate: RoutingCandidate, projectId: string): boolean 
  * disagree with the fire about which accounts those are.
  */
 export function servesBinScope(candidate: RoutingCandidate, bin: Bin): boolean {
-  if (bin.pinnedRoutineId && candidate.routine.id !== bin.pinnedRoutineId) return false;
-  return servesProject(candidate, bin.projectId) &&
-    servesFamily(candidate, familyOf(bin)) &&
-    servesRepository(candidate, repositoryIdOf(bin)) &&
-    capable(candidate.routine, requiredCapabilities(bin)) &&
-    deliveryProvenFor(candidate, bin);
+  return binScopeRefusal(candidate, bin) === null;
+}
+
+/** Which of `servesBinScope`'s conditions refused this surface for this bin. */
+export type BinScopeRefusal = 'PINNED_ELSEWHERE' | 'PROJECT' | 'FAMILY' | 'REPOSITORY' | 'CAPABILITY' | 'DELIVERY_FAILED';
+
+/**
+ * `servesBinScope`, saying *which* condition refused, or null when none did.
+ *
+ * One decision with two readers: the boolean above is this, so a reader that
+ * explains a refusal (the connection alerts) cannot name a condition the router
+ * did not apply — "grant the project" over a surface whose membership passes
+ * and whose repository or delivery reading is what refused it (CON-5b).
+ */
+export function binScopeRefusal(candidate: RoutingCandidate, bin: Bin): BinScopeRefusal | null {
+  if (bin.pinnedRoutineId && candidate.routine.id !== bin.pinnedRoutineId) return 'PINNED_ELSEWHERE';
+  if (!servesProject(candidate, bin.projectId)) return 'PROJECT';
+  if (!servesFamily(candidate, familyOf(bin))) return 'FAMILY';
+  if (!servesRepository(candidate, repositoryIdOf(bin))) return 'REPOSITORY';
+  if (!capable(candidate.routine, requiredCapabilities(bin))) return 'CAPABILITY';
+  if (!deliveryProvenFor(candidate, bin)) return 'DELIVERY_FAILED';
+  return null;
 }
 
 /** The workload class of the probe that establishes delivery; it cannot need what it proves. */

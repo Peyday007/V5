@@ -492,6 +492,10 @@ const PLAIN_ACTION: Record<string, string> = {
   RECOVERING: 'Nothing to do: Brain is checking it again by itself and puts it back when a session arrives.',
   RECOVERY_EXHAUSTED: 'Brain has stopped retrying. The owner of this Claude account checks the Routine and its Brain connector in Claude.',
   OUT_OF_SCOPE: 'An administrator decides whether this account should work on the project with waiting work.',
+  CANNOT_TAKE_WAITING_WORK:
+    'It is healthy and in the right project; an administrator decides whether it should be routed to the repository or capability the waiting work needs.',
+  MIXED_WORKERS:
+    'In Claude, this Routine has two Brain connectors and uses either one; its owner removes the one it was not set up with. Brain re-enables it by itself.',
 };
 
 export function withoutDiagnostics(reading: CapacityReading): CapacityReading {

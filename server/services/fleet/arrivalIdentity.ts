@@ -41,8 +41,9 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { getRoutine, setRoutineState } from '../../repos/fleet.ts';
 import { getWorker, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { getToken } from '../../repos/oauth.ts';
-import { endpointOf } from '../../repos/connectors.ts';
-import { sessionSpellings } from '../../domain/sessionRef.ts';
+import { connectorClient, endpointOf, getConnector, listConnectors, type Connector } from '../../repos/connectors.ts';
+import { normalizeSessionRef, sessionSpellings } from '../../domain/sessionRef.ts';
+import type { FleetRoutine } from '../../domain/types.ts';
 import { parseJson } from '../../repos/util.ts';
 
 /** The phrase every wrong-worker quarantine reason carries, so a reader can find it. */
@@ -214,6 +215,191 @@ export async function observeFiredSessionArrival(input: {
   }
 }
 
+/* ------------------------------------------------------------------------- */
+/* Mixed arrivals (CON-3)                                                      */
+/* ------------------------------------------------------------------------- */
+
+/** The phrase a wrong-worker quarantine carries once its arrivals are proven mixed. */
+export const MIXED_ARRIVALS_REASON_MARK = 'its sessions have arrived as both workers';
+
+/** How far back a Routine's arrivals are read to judge whether its configuration is consistent. */
+export const ARRIVAL_MIX_WINDOW_MS = 7 * 24 * 60 * 60_000;
+
+/**
+ * How many sessions in a row must arrive as the registered worker, after the
+ * last that arrived as another, before a Routine whose arrivals were mixed is
+ * believed corrected. One is not evidence for a Routine that chooses between
+ * two connectors per session: production 2-C arrived right twice and wrong
+ * three times in three hours, interleaved, and one right probe lifted it every
+ * time. Three in a row is still reachable by a Routine that genuinely was fixed
+ * (each probe that proves it is one), and is bounded by the automatic budget for
+ * one that was not.
+ */
+export const CONSISTENT_RIGHT_SESSIONS = 3;
+
+export interface ArrivalMix {
+  /** Distinct fired sessions that arrived as the registered worker (at least once). */
+  right: number;
+  /** Distinct fired sessions that arrived only as another worker. */
+  wrong: number;
+  /** The newest wrong-only session, if any. */
+  lastWrongAt: string | null;
+  /** Right sessions that began after the newest wrong-only one. */
+  rightSinceLastWrong: number;
+  /** Whether any right session preceded the newest wrong-only one inside the window. */
+  rightBeforeLastWrong: boolean;
+  /** The workers the wrong-only sessions authenticated as. */
+  otherWorkers: string[];
+}
+
+/**
+ * Who this Routine's fired sessions arrived as, grouped by session, from the
+ * arrival rows check-in writes (`observeFiredSessionArrival`). A session that
+ * arrived through both of a person's connectors counts as right, exactly as
+ * `sessionAlsoArrivedRight` already decides. Recovery-probe sessions count too:
+ * a probe is a session the Routine started, and which connector it chose is the
+ * same question.
+ */
+export async function arrivalMix(routineId: string, now = Date.now()): Promise<ArrivalMix> {
+  const since = new Date(now - ARRIVAL_MIX_WINDOW_MS).toISOString();
+  const rows = await getDb().all<{ event_type: string; at: string; session_ref: string | null; worker_id: string | null }>(
+    `SELECT event_type, at, session_ref, worker_id FROM bin_events
+      WHERE routine_id = ? AND at >= ?
+        AND event_type IN ('DISPATCH_SESSION_ARRIVED', 'DISPATCH_WRONG_WORKER')
+      ORDER BY at, rowid`,
+    [routineId, since],
+  );
+  const sessions = new Map<string, { at: string; right: boolean; worker: string | null }>();
+  for (const row of rows) {
+    const key = normalizeSessionRef(row.session_ref) ?? `${row.event_type}:${row.at}`;
+    const right = row.event_type === 'DISPATCH_SESSION_ARRIVED';
+    const seen = sessions.get(key);
+    if (!seen) sessions.set(key, { at: row.at, right, worker: right ? null : row.worker_id });
+    else if (right) seen.right = true;
+  }
+  const ordered = [...sessions.values()].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  let lastWrongIndex = -1;
+  ordered.forEach((s, i) => {
+    if (!s.right) lastWrongIndex = i;
+  });
+  const wrongSessions = ordered.filter((s) => !s.right);
+  return {
+    right: ordered.length - wrongSessions.length,
+    wrong: wrongSessions.length,
+    lastWrongAt: lastWrongIndex >= 0 ? ordered[lastWrongIndex]!.at : null,
+    rightSinceLastWrong: ordered.slice(lastWrongIndex + 1).filter((s) => s.right).length,
+    rightBeforeLastWrong: lastWrongIndex > 0 && ordered.slice(0, lastWrongIndex).some((s) => s.right),
+    otherWorkers: [...new Set(wrongSessions.map((s) => s.worker).filter((w): w is string => !!w))],
+  };
+}
+
+/** Whether a mix says the Routine chooses between two connectors, rather than having switched once. */
+export function isMixed(mix: ArrivalMix): boolean {
+  return mix.wrong > 0 && mix.rightBeforeLastWrong;
+}
+
+/**
+ * Why a wrong-worker quarantine must not be lifted yet, or null when it may.
+ *
+ * Three readings, kept apart:
+ *
+ *   - **No right session since the last wrong one** — nothing has shown the
+ *     configuration changed. No evidence is not proof of correction.
+ *   - **A clean switch** — only wrong sessions, then right ones: the account
+ *     owner changed the connector. One right session is enough, which is what
+ *     keeps the automatic recovery for a genuinely corrected Routine.
+ *   - **Mixed** — right sessions before the last wrong one: the Routine holds
+ *     both connectors and picks per session. It lifts only after
+ *     `CONSISTENT_RIGHT_SESSIONS` right sessions in a row.
+ */
+export async function wrongWorkerLiftRefusal(
+  routineId: string,
+  now = Date.now(),
+): Promise<{ sentence: string; mix: ArrivalMix } | null> {
+  const mix = await arrivalMix(routineId, now);
+  if (mix.wrong === 0) return null;
+  if (mix.rightSinceLastWrong === 0) {
+    return {
+      mix,
+      sentence:
+        `No session has arrived as its registered worker since the last one that arrived as another (${mix.lastWrongAt}), ` +
+        'so nothing shows the configuration changed.',
+    };
+  }
+  if (!isMixed(mix)) return null;
+  if (mix.rightSinceLastWrong >= CONSISTENT_RIGHT_SESSIONS) return null;
+  return { mix, sentence: mixedSentence(mix) };
+}
+
+function mixedSentence(mix: ArrivalMix): string {
+  return (
+    `In the last ${ARRIVAL_MIX_WINDOW_MS / 86_400_000} days ${mix.right} of its sessions arrived as its registered worker and ` +
+    `${mix.wrong} as ${mix.otherWorkers.join(', ') || 'another worker'}, interleaved (the newest wrong one at ${mix.lastWrongAt}), ` +
+    'so the Claude Routine holds both Brain connectors and picks one per session. Remove the incorrect connector from this ' +
+    `Routine in Claude; Brain lifts the quarantine by itself once ${CONSISTENT_RIGHT_SESSIONS} sessions in a row arrive as ` +
+    `the registered worker (${mix.rightSinceLastWrong} so far).`
+  );
+}
+
+/* ------------------------------------------------------------------------- */
+/* A remedy the account owner can act on (CON-5a)                            */
+/* ------------------------------------------------------------------------- */
+
+function describeConnector(connector: Connector): string {
+  return `the Brain connector at ${connector.resource}${connector.label ? ` ("${connector.label}")` : ''}`;
+}
+
+async function workerLabel(workerId: string): Promise<string> {
+  const worker = await getWorker(workerId);
+  return worker?.label ?? worker?.displayName ?? workerId;
+}
+
+/**
+ * The account owner's remedy, naming connectors by what they can see in Claude
+ * — the connector's URL and label — and resolving which connector authorizes as
+ * which worker from Brain's verified bindings (`connectors.worker_id`, the
+ * client attribution), never from the URL's wording: production had Airyn's
+ * `/mcp` authorizing as the factory worker and `/mcp/factory` as his research
+ * one, the opposite of what the paths suggest.
+ */
+export async function wrongWorkerRemedy(input: {
+  routine: FleetRoutine;
+  expectedWorkerId: string;
+  arrivedWorkerId: string;
+  clientId: string | null;
+  endpoint: string | null;
+  mixed: boolean;
+}): Promise<string> {
+  const inAccount = (await listConnectors()).filter((c) => c.accountId === input.routine.accountId);
+  const right = inAccount.filter((c) => c.workerId === input.expectedWorkerId);
+  const attributed = input.clientId ? await connectorClient(input.clientId) : null;
+  const wrongConnector =
+    (attributed ? await getConnector(attributed.connectorId) : null) ??
+    (inAccount.filter((c) => c.workerId === input.arrivedWorkerId).length === 1
+      ? inAccount.find((c) => c.workerId === input.arrivedWorkerId)!
+      : null);
+  const expected = await workerLabel(input.expectedWorkerId);
+  const arrived = await workerLabel(input.arrivedWorkerId);
+  const wrongText = wrongConnector
+    ? `${describeConnector(wrongConnector)} (verified to authorize as ${arrived})`
+    : `the Brain connector${input.endpoint ? ` at ${input.endpoint}` : ''} that authorizes as ${arrived}`;
+  const rightText =
+    right.length === 1
+      ? `${describeConnector(right[0]!)}, which Brain has verified authorizes as ${expected}`
+      : right.length > 1
+        ? `one of ${right.map(describeConnector).join(' or ')} (each verified to authorize as ${expected})`
+        : `a Brain connector that authorizes as ${expected} — none in this Claude account is verified yet, so ` +
+          'Brain cannot name it; it becomes known the first time a session arrives through it';
+  const owner = input.mixed
+    ? `(account owner) in Claude, remove ${wrongText} from ${input.routine.name}, keeping ${rightText}`
+    : `(account owner) in Claude, set ${input.routine.name}'s Brain connector to ${rightText}, instead of ${wrongText}`;
+  return (
+    `Fix one of: ${owner}; or (operator, if ${input.arrivedWorkerId} is the intended identity) ` +
+    `\`fleet repoint-worker --ref ${input.routine.routineRef} --expect ${input.expectedWorkerId} --worker ${input.arrivedWorkerId}\`, ` +
+    'after which Brain re-enables it by itself.'
+  );
+}
+
 /** The newest wrong-worker arrival recorded for each Routine since `since`. */
 export async function latestWrongWorkerEvidence(since: string): Promise<Map<string, WrongWorkerEvidence>> {
   const rows = await getDb().all<{
@@ -289,11 +475,13 @@ export async function quarantineWrongWorkerSurfaces(now = Date.now()): Promise<s
     if (routine.workerId !== e.expectedWorkerId) continue;
     if (routine.noShowsForgivenAt && e.at <= routine.noShowsForgivenAt) continue;
     if (await sessionAlsoArrivedRight(e.sessionRef, routine.workerId)) continue;
+    const mix = await arrivalMix(routineId, now);
+    const base = wrongWorkerReason({ routineName: routine.name, routineRef: routine.routineRef, evidence: e });
     const moved = await setRoutineState({
       routineId,
       from: 'ENABLED',
       to: 'QUARANTINED',
-      reason: wrongWorkerReason({ routineName: routine.name, routineRef: routine.routineRef, evidence: e }),
+      reason: isMixed(mix) ? `${base} ${MIXED_ARRIVALS_REASON_MARK}: ${mixedSentence(mix)}` : base,
     });
     if (moved) quarantined.push(routineId);
   }

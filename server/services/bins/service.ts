@@ -61,7 +61,14 @@ import { getOrchestration } from '../../repos/research.ts';
 import { recordWorkerArrival } from '../../repos/fleet.ts';
 import { auditAdmission, lineageForWorker } from '../research/auditAdmission.ts';
 import { distinctSessionPossibleAt } from '../research/sessionWindow.ts';
-import { asWorkload, classifyInfraFailure, noteInfraFailure, type InfraFailureKind } from '../../db/infra.ts';
+import {
+  asWorkload,
+  classifyInfraFailure,
+  noteInfraFailure,
+  recentInfraFailures,
+  type InfraFailureKind,
+} from '../../db/infra.ts';
+import { databasePoolReadings } from '../../db/database.ts';
 import { recordUnservedArrival } from '../infra/incidents.ts';
 import {
   claimWork,
@@ -267,13 +274,15 @@ export async function binAdmission(input: {
   principal: Principal;
   /** The session the arriving worker reported, for the review-independence floor. */
   sessionRef?: string | null;
+  /** The routing already read for this request, so check-in does not read it twice. */
+  routing?: WorkerRouting;
 }): Promise<BinAdmission> {
   const lineage = await lineageForWorker({
     workerId: input.workerId,
     credentialId: input.principal.credentialId,
   });
   const admit = auditAdmission(lineage);
-  const routing = await workerRoutingFor(input.workerId, input.principal);
+  const routing = input.routing ?? (await workerRoutingFor(input.workerId, input.principal));
   return async (bin: Bin): Promise<BinAdmissionVerdict> => {
     /*
      * Scope first, and every dimension of it, before anything else is asked.
@@ -515,7 +524,10 @@ export async function checkIn(input: {
   /** Test seam: the instant choosing work must stop. */
   deadline?: number;
 }): Promise<CheckInResult> {
-  const deadline = input.deadline ?? Date.now() + CHECK_IN_ADMISSION_BUDGET_MS;
+  const startedAt = Date.now();
+  const deadline = input.deadline ?? startedAt + CHECK_IN_ADMISSION_BUDGET_MS;
+  // Past half the budget, check-in stops trying to *make* work (CON-1).
+  const deriveCutoff = startedAt + Math.max(0, deadline - startedAt) / 2;
   /*
    * Two phases, and the boundary between them is the fix for a check-in that
    * timed out at sixty seconds because a research audit query did.
@@ -578,7 +590,28 @@ export async function checkIn(input: {
         evidenceLost = kind;
       }
     }
-    const result = await asWorkload(() => chooseWork(input, deadline, choosing));
+    /*
+     * The infrastructure failure is caught *inside* the workload scope (CON-7).
+     * `noteInfraFailure` records the plane current when it is called, and the
+     * catch used to sit outside `asWorkload`, so a workload-pool exhaustion felt
+     * while choosing work was counted as `CONTROL:POOL_CHECKOUT_TIMEOUT` — the
+     * report then blamed the reserved control pool for the workload pool's
+     * condition, which sends a reader to the wrong half of the adapter.
+     */
+    const result = await asWorkload(async (): Promise<CheckInResult | InfraFailureKind> => {
+      try {
+        return await chooseWork(input, deadline, choosing, deriveCutoff);
+      } catch (error) {
+        const kind = classifyInfraFailure(error);
+        if (!kind) throw error;
+        noteInfraFailure(kind, 'check_in:choose');
+        return kind;
+      }
+    });
+    if (typeof result === 'string') {
+      noteSessionUnserved(input, result);
+      return { assigned: false, reason: 'RETRY_LATER' };
+    }
     if (!result.assigned && evidenceLost && !(choosing.infra || choosing.deferred)) {
       noteSessionUnserved(input, evidenceLost);
     }
@@ -594,6 +627,85 @@ export async function checkIn(input: {
     noteSessionUnserved(input, kind);
     return { assigned: false, reason: 'RETRY_LATER' };
   }
+}
+
+/** How recently an infrastructure failure must have been felt to count as pressure. */
+const PRESSURE_WINDOW_MS = 60_000;
+
+/**
+ * Is the database under pressure right now, read from what this process
+ * already measures (`databasePoolReadings`, `recentInfraFailures`) rather than
+ * asked with another query. A caller waiting for a connection, or any
+ * infrastructure failure felt in the last minute, is pressure. On SQLite there
+ * is no pool, so only the second half can answer.
+ */
+export function databaseUnderPressure(now = Date.now()): boolean {
+  const pools = databasePoolReadings();
+  if (pools && (pools.workload.waiting > 0 || (pools.control?.waiting ?? 0) > 0)) return true;
+  return recentInfraFailures(new Date(now - PRESSURE_WINDOW_MS).toISOString()).length > 0;
+}
+
+/**
+ * The gate between a check-in's deadline and the compare-and-swap that hands
+ * out a lease (CON-1).
+ *
+ * `assignNextBin` reads its candidates and then swaps, and the read is the slow
+ * half under a degraded database. Racing the whole call against the deadline
+ * would be wrong in the one way that matters: an abandoned call could still win
+ * a swap after the worker was told RETRY_LATER, leaving a bin LEASED to a
+ * session that believes it holds nothing, with an attempt spent. So the race is
+ * made safe instead of avoided. Every swap is preceded by an admission verdict
+ * (`assignNextBin` takes the hook and only swaps on `ok`), so the gate sits on
+ * that verdict:
+ *
+ *   - once the deadline passes the gate closes, and every later admission is a
+ *     quiet skip — no swap can begin after that instant;
+ *   - an admission that said yes before the gate closed marks a swap as
+ *     *committing*, and the check-in waits for it to finish rather than
+ *     answering, so a lease taken is always a lease reported (§53);
+ *   - the next admission call, or the call returning, is how the gate learns
+ *     that committing swap concluded.
+ *
+ * Nothing about fencing changes: the swap is still the one guarded UPDATE.
+ */
+async function assignBefore(
+  input: Omit<Parameters<typeof assignNextBin>[0], 'admit'>,
+  admit: BinAdmission,
+  deadline: number,
+): Promise<Awaited<ReturnType<typeof assignNextBin>> | typeof TIMED_OUT> {
+  const gate: {
+    closed: boolean;
+    committing: { settle: () => void; settled: Promise<typeof TIMED_OUT> } | null;
+  } = { closed: false, committing: null };
+  const concluded = (): void => {
+    gate.committing?.settle();
+    gate.committing = null;
+  };
+  const gated: BinAdmission = async (bin) => {
+    concluded(); // asked again, so any swap admitted before lost its race
+    if (gate.closed) {
+      return { ok: false, quiet: true, reason: 'The check-in ran out of time to choose work.' };
+    }
+    const verdict = await admit(bin);
+    if (!verdict.ok) return verdict;
+    if (gate.closed) {
+      return { ok: false, quiet: true, reason: 'The check-in ran out of time to choose work.' };
+    }
+    let settle!: () => void;
+    const settled = new Promise<typeof TIMED_OUT>((resolve) => {
+      settle = () => resolve(TIMED_OUT);
+    });
+    gate.committing = { settle, settled };
+    return verdict;
+  };
+  const work = assignNextBin({ ...input, admit: gated });
+  // Abandoned past the deadline, it finishes in the background and is observed.
+  work.catch(() => undefined);
+  const first = await beforeDeadline(work, deadline);
+  if (first !== TIMED_OUT) return first;
+  gate.closed = true;
+  if (!gate.committing) return TIMED_OUT; // no admitted swap exists, and none can begin
+  return Promise.race([work, gate.committing.settled]);
 }
 
 /** A session that arrived and could not be served, for the no-show pass. */
@@ -660,6 +772,7 @@ async function chooseWork(
   input: { principal: Principal; workerId: string; sessionRef?: string | null; leaseMs?: number },
   deadline: number,
   choosing: { infra: InfraFailureKind | null; deferred: boolean },
+  deriveCutoff: number,
 ): Promise<CheckInResult> {
   /*
    * The arrival is credited first, and unconditionally.
@@ -682,32 +795,53 @@ async function chooseWork(
    * work" while its work sat ready. That is the defect one altitude up from the
    * one this boundary exists for.
    */
-  const routing = await workerRoutingFor(input.workerId, input.principal);
+  /*
+   * Every read before the swap is bounded by the same deadline as admission
+   * (CON-1). The routing row and the admission rule are reads, so abandoning one
+   * past the deadline changes nothing; the session is answered RETRY_LATER and
+   * the read finishes harmlessly. The admission rule is built once and shared by
+   * both assignment passes: it used to be built twice, and to read the routing
+   * row a second and third time, all of it outside the budget.
+   */
+  const routing = await beforeDeadline(workerRoutingFor(input.workerId, input.principal), deadline);
+  if (routing === TIMED_OUT) {
+    choosing.deferred = true;
+    return { assigned: false, reason: 'NO_READY_BINS' };
+  }
   const families = classesForFamilies(routing.families);
-
-  let assigned = await assignNextBin({
+  const admission = await beforeDeadline(
+    binAdmission({
+      workerId: input.workerId,
+      principal: input.principal,
+      sessionRef: input.sessionRef ?? null,
+      routing,
+    }),
+    deadline,
+  );
+  if (admission === TIMED_OUT) {
+    choosing.deferred = true;
+    return { assigned: false, reason: 'NO_READY_BINS' };
+  }
+  const assignment = {
     workerId: input.workerId,
     credentialId: input.principal.credentialId,
     projectIds: scopes.map((scope) => scope.projectId),
     sessionRef: input.sessionRef ?? null,
     leaseMs: input.leaseMs,
     families,
-    /*
-     * Asked before the assignment charges an attempt. A bin whose only open
-     * work this session may not take is skipped, costs the bin nothing, and
-     * earns a recorded refusal plus a fire backoff — so the next arrival is a
-     * fresh session rather than the same one a second later.
-     */
-    admit: bounded(
-      await binAdmission({
-        workerId: input.workerId,
-        principal: input.principal,
-        sessionRef: input.sessionRef ?? null,
-      }),
-      deadline,
-      choosing,
-    ),
-  });
+  };
+
+  /*
+   * Asked before the assignment charges an attempt. A bin whose only open work
+   * this session may not take is skipped, costs the bin nothing, and earns a
+   * recorded refusal plus a fire backoff — so the next arrival is a fresh
+   * session rather than the same one a second later.
+   */
+  let assigned = await assignBefore(assignment, bounded(admission, deadline, choosing), deadline);
+  if (assigned === TIMED_OUT) {
+    choosing.deferred = true;
+    return { assigned: false, reason: 'NO_READY_BINS' };
+  }
   if (!assigned) {
     // Past the budget, deriving more work is the part to give up first.
     if (Date.now() >= deadline) {
@@ -718,28 +852,27 @@ async function chooseWork(
      * Nothing was ready — so derive once before saying so, and look again.
      *
      * A factory stage becomes available only when a tick reads what the last one
-     * finished. `startFactoryRemoteLoop` does that every twenty seconds, and
-     * `index.ts` says why that interval matters: a stage that becomes ready inside
-     * an activation is taken by the worker that is still there, so a whole campaign
-     * finishes in one firing instead of one stage per firing.
+     * finished. `startFactoryRemoteLoop` does that every twenty seconds; a worker
+     * that finished a stage and checked in again inside those twenty seconds was
+     * told NO_WORK and ended, and the next stage waited an hour for the next
+     * activation. So the derivation runs here, on the read path, once, scoped to
+     * the caller's projects, and the assignment is retried.
      *
-     * **In production the worker did not wait twenty seconds.** It integrated two
-     * units, pushed, called `brain_bin_complete`, checked in again within the same
-     * minute, was told NO_WORK because the tick had not run yet, and ended — with
-     * its own summary reading "awaiting next Brain check-in". The next stage became
-     * ready seconds later and sat there until the next hourly activation. Nothing
-     * was broken and nothing was lost; the campaign simply took an hour per stage
-     * for want of twenty seconds.
-     *
-     * A timer is the wrong place to answer a question somebody is asking right now.
-     * So the derivation runs here, on the read path, bounded: only after an
-     * assignment found nothing, only for the caller's own scopes, and only once. It
-     * is the same idempotent tick the loop runs — guarded by its own
-     * compare-and-swap, so a tick already in flight simply declines — and it
-     * creates only what the rows already imply. Then the assignment is retried,
-     * because the honest answer to "is there anything to do" is the one computed
-     * from current state rather than from the last time a timer happened to fire.
+     * **But it is the factory tick, which is the source of the hottest
+     * `factory_campaigns` statements (INF-6d), and it is the part of a slow
+     * check-in that made it slower (CON-1).** So it is skipped once half the
+     * budget is spent — a check-in already that slow is answered RETRY_LATER
+     * and asks again, by which time the loop has ticked — and skipped while the
+     * database is under pressure, where the loop's own timer is the cheaper
+     * place for the same work. Skipping it loses nothing: the tick is
+     * idempotent by rows, and the next check-in or the next loop pass makes
+     * exactly what this one would have.
      */
+    if (Date.now() >= deriveCutoff) {
+      choosing.deferred = true;
+      return { assigned: false, reason: 'NO_READY_BINS' };
+    }
+    if (databaseUnderPressure()) return { assigned: false, reason: 'NO_READY_BINS' };
     // Bounded by what is left of the budget. The tick is idempotent and guarded
     // by its own compare-and-swap, so one that outlives this wait simply
     // finishes in the background and the next check-in sees what it made.
@@ -747,23 +880,11 @@ async function chooseWork(
     if (derivedOrLate === TIMED_OUT) choosing.deferred = true;
     const derived = derivedOrLate === true;
     if (!derived) return { assigned: false, reason: 'NO_READY_BINS' };
-    const retried = await assignNextBin({
-      workerId: input.workerId,
-      credentialId: input.principal.credentialId,
-      projectIds: scopes.map((scope) => scope.projectId),
-      sessionRef: input.sessionRef ?? null,
-      leaseMs: input.leaseMs,
-      families,
-      admit: bounded(
-        await binAdmission({
-          workerId: input.workerId,
-          principal: input.principal,
-          sessionRef: input.sessionRef ?? null,
-        }),
-        deadline,
-        choosing,
-      ),
-    });
+    const retried = await assignBefore(assignment, bounded(admission, deadline, choosing), deadline);
+    if (retried === TIMED_OUT) {
+      choosing.deferred = true;
+      return { assigned: false, reason: 'NO_READY_BINS' };
+    }
     if (!retried) return { assigned: false, reason: 'NO_READY_BINS' };
     assigned = retried;
   }

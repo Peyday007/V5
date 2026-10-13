@@ -96,6 +96,57 @@ export interface FleetSnapshot {
 export async function inFlightByRoutine(nowMs: number): Promise<Map<string, number>> {
   const since = new Date(nowMs - IN_FLIGHT_WINDOW_MS).toISOString();
   const now = new Date(nowMs).toISOString();
+  /*
+   * Reused while nothing that can *raise* the count has happened (INF-6e).
+   *
+   * Every fleet read — the tick, Who, People, Build, the alerts — asked this
+   * join afresh, and production ran it 85k times at ~58 ms. A count rises only
+   * when a new fire is SENT, and the watermark below (the newest SENT fire and
+   * how many are inside the window, from the `(state, sent_at)` index) changes
+   * the instant one is — so a new activation is never missed. What the reuse
+   * can lag is a *fall* — a bin finishing, a lease lapsing — and a stale high
+   * count can only under-fire, never fire twice; that lag is bounded by
+   * `IN_FLIGHT_REUSE_MS`. The one rise it cannot see — an old fire's bin taken
+   * over again inside the window — is bounded by the same interval, and the
+   * targets and the fire slot's compare-and-swap still bound the other side.
+   */
+  const reuseMs = inFlightReuseMs();
+  if (reuseMs > 0) {
+    const mark = await getDb().get<{ newest: string | null; n: number }>(
+      "SELECT MAX(sent_at) AS newest, COUNT(*) AS n FROM bin_dispatch WHERE state = 'SENT' AND sent_at >= ?",
+      [since],
+    );
+    const watermark = `${mark?.newest ?? ''}|${Number(mark?.n ?? 0)}`;
+    if (inFlightMemo && inFlightMemo.watermark === watermark && nowMs >= inFlightMemo.at && nowMs - inFlightMemo.at < reuseMs) {
+      return new Map(inFlightMemo.counts);
+    }
+    const counts = await readInFlight(since, now);
+    inFlightMemo = { at: nowMs, watermark, counts };
+    return new Map(counts);
+  }
+  return readInFlight(since, now);
+}
+
+let inFlightMemo: { at: number; watermark: string; counts: Map<string, number> } | null = null;
+
+/**
+ * How long an unchanged in-flight count may be reused. `BRAIN_INFLIGHT_REUSE_MS=0`
+ * turns reuse off, and so does `BRAIN_SHARED_SNAPSHOT_MS=0` (the test suite sets
+ * it, because a test finishes a bin and reads the fleet back inside a second).
+ */
+function inFlightReuseMs(): number {
+  const own = process.env['BRAIN_INFLIGHT_REUSE_MS'];
+  if (own !== undefined && /^\d+$/.test(own)) return Number(own);
+  if (process.env['BRAIN_SHARED_SNAPSHOT_MS'] === '0') return 0;
+  return 20_000;
+}
+
+/** Tests, and a write that knows the count just changed. */
+export function forgetInFlight(): void {
+  inFlightMemo = null;
+}
+
+async function readInFlight(since: string, now: string): Promise<Map<string, number>> {
   const rows = await getDb().all<{ routine_id: string | null; n: number }>(
     `SELECT d.routine_id AS routine_id, COUNT(*) AS n
        FROM bin_dispatch d
