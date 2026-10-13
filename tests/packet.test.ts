@@ -3468,6 +3468,126 @@ describe('the audit passes', () => {
     expect(audits).toHaveLength(1);
     expect(audits[0]!.payload['role']).toBe('PRIMARY');
   });
+
+  /**
+   * RES-8 and RES-9, through the judge's own submission.
+   *
+   * `outcomeFor` promised a repair for any BLOCKED fragment with
+   * `attempt <= maxRepairs`; the planner refuses the last attempt, so a
+   * fragment at 2 of 2 read AWAITING_REPAIR to the judge path and had nothing
+   * to mint, and the empty-queue guard flipped it back to NEEDS_HUMAN on every
+   * tick. And every NEEDS_HUMAN this branch wrote had no reason, so the mission
+   * parked on "a decision only a person can make".
+   */
+  async function judgedWith(blocked: { attempt: number; maxRepairs: number }): Promise<{
+    orchestration: ResearchOrchestration;
+    blockedFragment: ResearchFragment;
+  }> {
+    const orchestration = await filedPacket();
+    const fleet = await auditFleet();
+    await as(fleet.primary, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+      await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+    });
+    await as(fleet.adversarial, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), adversarial: ADVERSARIAL });
+      await call('brain_complete_work', { ...proof(item), summary: 'adversarial in' });
+    });
+    const judgeItem = await as(fleet.judge, () => claimNext('RESEARCH_AUDIT'));
+    // A second question that failed its gate, created while the judge holds its
+    // item — so nothing repairs it before the verdict lands.
+    const blockedFragment = await makeFragment(orchestration, {
+      fragmentKey: 'licence-texas',
+      fragmentIndex: 1,
+      status: 'BLOCKED',
+      ...blocked,
+    });
+    await updateFragment(blockedFragment.id, {
+      blockedReason: '1 required evidence lane(s) have no accepted claim: statute (statute)',
+    });
+    await as(fleet.judge, async () => {
+      await call('brain_submit_audit', { ...proof(judgeItem), judge: judge() });
+      await call('brain_complete_work', { ...proof(judgeItem), summary: 'judged' });
+    });
+    return { orchestration, blockedFragment };
+  }
+
+  it('stops a packet whose blocked fragment is on its last attempt, once, with a question', async () => {
+    const { orchestration } = await judgedWith({ attempt: 2, maxRepairs: 2 });
+
+    const after = (await getOrchestration(orchestration.id))!;
+    expect(after.status).toBe('NEEDS_HUMAN');
+    expect(after.failureReason).toMatch(/^The judge's verdict was MORE_RESEARCH/);
+    expect(after.failureReason).toContain('licence-texas has had 2 of its 2 attempt(s)');
+    expect(after.failureReason).toContain('record what it could not settle');
+    expect(after.failureReason).toContain('stop the work');
+    expect(after.failureReason).not.toContain('no claimable work');
+
+    // Re-advanced, it does not swing back to AWAITING_REPAIR, mints nothing and
+    // rewrites nothing.
+    const fragmentsBefore = (await currentFragments(orchestration.id)).length;
+    const itemsBefore = (await listWorkItems(project.id, { limit: 200 })).filter(
+      (item) => item.orchestrationId === orchestration.id,
+    ).length;
+    for (let i = 0; i < 2; i += 1) {
+      const result = await advancePacket(orchestration.id);
+      expect(result.status).toBe('NEEDS_HUMAN');
+      expect(result.waitingOn).toContain('MORE_RESEARCH');
+    }
+    const again = (await getOrchestration(orchestration.id))!;
+    expect(again.failureReason).toBe(after.failureReason);
+    expect((await currentFragments(orchestration.id)).length).toBe(fragmentsBefore);
+    expect(
+      (await listWorkItems(project.id, { limit: 200 })).filter(
+        (item) => item.orchestrationId === orchestration.id,
+      ),
+    ).toHaveLength(itemsBefore);
+  });
+
+  it('stops with a question when every fragment was accepted and the judge still wants more', async () => {
+    const orchestration = await filedPacket();
+    const fleet = await auditFleet();
+    for (const [identity, body] of [
+      [fleet.primary, { primary: PRIMARY }],
+      [fleet.adversarial, { adversarial: ADVERSARIAL }],
+      [fleet.judge, { judge: judge() }],
+    ] as const) {
+      await as(identity, async () => {
+        const item = await claimNext('RESEARCH_AUDIT');
+        await call('brain_submit_audit', { ...proof(item), ...body });
+        await call('brain_complete_work', { ...proof(item), summary: 'in' });
+      });
+    }
+    const after = (await getOrchestration(orchestration.id))!;
+    expect(after.status).toBe('NEEDS_HUMAN');
+    expect(after.failureReason).toContain('no fragment is blocked');
+    expect(after.failureReason).toContain('record what it could not settle');
+  });
+
+  it('carries a repairable fragment into a real repair attempt, exactly once', async () => {
+    const { orchestration, blockedFragment } = await judgedWith({ attempt: 1, maxRepairs: 2 });
+
+    for (let i = 0; i < 3; i += 1) await advancePacket(orchestration.id);
+
+    const after = (await getOrchestration(orchestration.id))!;
+    expect(after.status).toBe('RESEARCHING');
+    expect(after.failureReason).toBeNull();
+    const attempts = (await currentFragments(orchestration.id)).filter(
+      (fragment) => fragment.fragmentKey === 'licence-texas',
+    );
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]!.attempt).toBe(2);
+    expect(attempts[0]!.parentFragmentId).toBe(blockedFragment.id);
+    // The failed attempt keeps its row and its reason.
+    expect((await getFragment(blockedFragment.id))?.blockedReason).toContain('statute');
+    const research = (await listWorkItems(project.id, { limit: 200 })).filter(
+      (item) => item.workType === 'RESEARCH_FRAGMENT' && item.fragmentId === attempts[0]!.id,
+    );
+    expect(research).toHaveLength(1);
+  });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -4472,5 +4592,86 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
     expect(stopped?.status).toBe('NEEDS_HUMAN');
     expect(stopped?.failureReason).toContain('mandatory');
     expect(stopped?.documentId).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RES-1: why research fails its gate, as a reading
+// ---------------------------------------------------------------------------
+
+describe('the gate-failure distribution', () => {
+  /**
+   * The measurement RES-1 asked for, driven through the real tools so the rows
+   * it counts are the rows the gate actually writes. Three populations kept
+   * apart: fragments by outcome and first cause, claims (including supported
+   * claims inside a fragment that still blocked), and packets.
+   */
+  it('counts blocked fragments by first cause and keeps supported claims separate', async () => {
+    const orchestration = await makeOrchestration();
+    const passing = await makeFragment(orchestration);
+    const failing = await makeFragment(orchestration, {
+      fragmentKey: 'licence-texas',
+      fragmentIndex: 1,
+      requiredEvidence: [
+        { id: 'statute', description: 'statute', necessity: 'REQUIRED' },
+        { id: 'regulator', description: 'regulator guidance', necessity: 'REQUIRED' },
+      ],
+    });
+
+    for (const fragment of [passing, failing]) {
+      const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+      await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+      const [stored] = await listClaimsForFragment(fragment.id);
+      await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+      const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+      await call('brain_submit_verification', {
+        ...proof(verify),
+        verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' }],
+        sufficiency: 'SUFFICIENT',
+      });
+      await call('brain_complete_work', { ...proof(verify), summary: 'gated' });
+    }
+    expect((await getFragment(passing.id))?.status).toBe('ACCEPTED');
+    expect((await getFragment(failing.id))?.status).toBe('BLOCKED');
+
+    const { gateFailureDistribution } = await import('../server/repos/research.ts');
+    const reading = await gateFailureDistribution({
+      projectId: project.id,
+      since: new Date(Date.now() - 3_600_000).toISOString(),
+    });
+    expect(reading.fragments).toEqual({ judged: 2, accepted: 1, blocked: 1 });
+    expect(reading.blockedByCause).toEqual({ REQUIRED_LANE_EMPTY: 1 });
+    // The blocked fragment's claim was supported, and it is counted as such —
+    // a claim being supported and a fragment answering its question are two
+    // different facts.
+    expect(reading.claims.accepted).toBe(2);
+    expect(reading.claims.acceptedInBlocked).toBe(1);
+    expect(reading.packets.total).toBe(1);
+    expect(reading.examples['REQUIRED_LANE_EMPTY']![0]!.fragmentId).toBe(failing.id);
+
+    // A window that ends before the gate ran is a different, empty population.
+    const earlier = await gateFailureDistribution({
+      projectId: project.id,
+      since: new Date(Date.now() - 7_200_000).toISOString(),
+      until: new Date(Date.now() - 3_600_000).toISOString(),
+    });
+    expect(earlier.fragments.judged).toBe(0);
+  });
+
+  it('names a cause it cannot read as unclassified rather than guessing', async () => {
+    const { classifyBlock } = await import('../server/services/research/gate.ts');
+    expect(classifyBlock({ blockedReason: 'something new', verdictDetail: null })).toBe('UNCLASSIFIED');
+    expect(
+      classifyBlock({
+        blockedReason: 'A verification work item for this fragment finished without recording anything.',
+        verdictDetail: null,
+      }),
+    ).toBe('WORK_FAULTED');
+    expect(
+      classifyBlock({
+        blockedReason: 'x',
+        verdictDetail: { claims: [], unresolvedRetrieval: [{}], acceptedClaims: 0, rejectedClaims: 0 },
+      }),
+    ).toBe('SOURCES_UNREADABLE');
   });
 });

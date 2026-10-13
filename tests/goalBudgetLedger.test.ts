@@ -629,3 +629,44 @@ describe('goalBudgetStatus', () => {
     expect((await goalBudgetStatus(goal.id))?.packets.used).toBe(1);
   });
 });
+
+describe('a repair the grant will not pay for', () => {
+  /**
+   * RES-8/9. `createFragments` refuses a repair attempt when the grant is spent
+   * or expired, and that refusal used to escape `advancePacket` on every tick —
+   * production threw "the standing authority has expired" from `mintRepairs`,
+   * so the packet's status never moved and no reason was written.
+   */
+  it('stops the packet once, with the grant’s own words, instead of throwing', async () => {
+    const { advancePacket } = await import('../server/services/research/packetRunner.ts');
+    const { updateFragment, updateOrchestration } = await import('../server/repos/research.ts');
+    const goal = await researchGoal({ maxPackets: 1, maxFragments: 3 });
+    const one = await packet(goal.id, 'one');
+    const [fragment] = await createFragments(fragmentInputs(one.id, ['a']));
+    await updateFragment(fragment!.id, {
+      status: 'BLOCKED',
+      blockedReason: '1 required evidence lane(s) have no accepted claim: official_source',
+      completedAt: new Date().toISOString(),
+    });
+    await updateOrchestration(one.id, { status: 'RESEARCHING' });
+    // The permission lapses — the production shape, "the standing authority has expired".
+    await getDb().run('UPDATE russell_goals SET expires_at = ? WHERE id = ?', [
+      new Date(Date.now() - 1000).toISOString(),
+      goal.id,
+    ]);
+
+    const first = await advancePacket(one.id);
+    expect(first.status).toBe('NEEDS_HUMAN');
+    const after = (await getOrchestration(one.id))!;
+    expect(after.status).toBe('NEEDS_HUMAN');
+    expect(after.failureReason).toContain('A repair attempt for a was refused by the permission');
+    expect(after.failureReason).toContain('has expired');
+    // Nothing was created past the ceiling, and the failed attempt is intact.
+    expect(await fragmentRows(one.id)).toBe(1);
+
+    // Re-advanced, it does not throw and does not rewrite the reason.
+    const again = await advancePacket(one.id);
+    expect(again.status).toBe('NEEDS_HUMAN');
+    expect((await getOrchestration(one.id))!.failureReason).toBe(after.failureReason);
+  });
+});
