@@ -27,6 +27,7 @@ import {
   linkDependencyToDocument,
   listDependenciesForDocument,
   listDependenciesForRun,
+  dependenciesDrifted,
   resolveProjectDependencies,
 } from '../repos/dependencies.ts';
 import { findDocumentByCanonicalName, getDocument } from '../repos/documents.ts';
@@ -275,6 +276,13 @@ export async function refreshProjectDependencies(projectId: string): Promise<{
   broken: string[];
 }> {
   const db = getDb();
+  /*
+   * Read first, and take a connection for a transaction only when a link has
+   * actually moved. The transaction re-derives the answer itself, so a change
+   * landing between this read and it is still applied exactly once; and inside
+   * a caller's transaction this read is part of it, as before.
+   */
+  if (!(await dependenciesDrifted(projectId))) return { resolved: [], broken: [] };
   return db.transaction(async () => {
     const changes = await resolveProjectDependencies(projectId);
     for (const canonicalName of changes.resolved) {

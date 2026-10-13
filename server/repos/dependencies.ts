@@ -110,12 +110,8 @@ export async function linkDependencyToDocument(dependencyId: string, documentId:
  * Re-resolve every dependency in a project against current documents.
  * Returns the canonical names that newly resolved and that newly broke.
  */
-export async function resolveProjectDependencies(projectId: string): Promise<{
-  resolved: string[];
-  broken: string[];
-}> {
-  const db = getDb();
-  const rows = await db.all<DependencyRow & { doc_id: string | null }>(
+async function dependencyLinks(projectId: string): Promise<(DependencyRow & { doc_id: string | null })[]> {
+  return getDb().all<DependencyRow & { doc_id: string | null }>(
     `SELECT d.*, doc.id AS doc_id
      FROM dependencies d
      LEFT JOIN documents doc
@@ -126,6 +122,26 @@ export async function resolveProjectDependencies(projectId: string): Promise<{
      WHERE d.project_id = ?`,
     [projectId],
   );
+}
+
+/**
+ * Whether any dependency's link differs from what current documents say.
+ *
+ * A read and nothing else, so a caller can skip opening a transaction for the
+ * ordinary case where nothing changed (INF-5: a no-change recompute's one
+ * remaining transaction was this refresh, held only to read).
+ */
+export async function dependenciesDrifted(projectId: string): Promise<boolean> {
+  const rows = await dependencyLinks(projectId);
+  return rows.some((row) => (row.doc_id ?? null) !== row.required_document_id);
+}
+
+export async function resolveProjectDependencies(projectId: string): Promise<{
+  resolved: string[];
+  broken: string[];
+}> {
+  const db = getDb();
+  const rows = await dependencyLinks(projectId);
   const resolved: string[] = [];
   const broken: string[] = [];
   for (const row of rows) {

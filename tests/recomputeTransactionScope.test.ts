@@ -43,16 +43,16 @@ async function countTransactions(work: () => Promise<unknown>): Promise<number> 
 }
 
 describe('a recompute that changes nothing opens no transaction of its own', () => {
-  it('opens only the dependency refresh, whatever the number of layers', async () => {
+  it('opens none, whatever the number of layers', async () => {
     const layers = await listLayers(ctx.project.id);
     expect(layers.length).toBeGreaterThan(3);
     await addDocument(ctx, layers[0]!.name, 'v1');
     await recomputeProject(ctx.project.id); // settle
 
-    // The one left is `refreshProjectDependencies`, which owns its own
-    // transaction (dependencies.ts). The recompute used to add one around the
-    // whole thing and one per layer inside it.
-    expect(await countTransactions(() => recomputeProject(ctx.project.id))).toBe(1);
+    // None. The recompute used to add one around the whole thing and one per
+    // layer inside it; the last one left was `refreshProjectDependencies`,
+    // which now reads first and opens its transaction only when a link moved.
+    expect(await countTransactions(() => recomputeProject(ctx.project.id))).toBe(0);
   });
 });
 
@@ -100,5 +100,38 @@ describe('a recompute that does change something', () => {
 
     expect((await getDocument(document.id))!.fileMissing).toBe(false);
     expect((await listEvents(ctx.project.id, 500)).length).toBe(eventsBefore);
+  });
+});
+
+describe('the dependency refresh opens a transaction only when a link moved', () => {
+  it('resolves a newly satisfied dependency once, with its event, and is silent after', async () => {
+    const { createDependency, getDependency } = await import('../server/repos/dependencies.ts');
+    const { refreshProjectDependencies } = await import('../server/services/dependencies.ts');
+    const layer = (await listLayers(ctx.project.id))[0]!;
+    const document = await addDocument(ctx, layer.name, 'v1');
+    await getDb().run("UPDATE documents SET status = 'COMPLETE' WHERE id = ?", [document.id]);
+    const stored = (await getDocument(document.id))!;
+    const dependent = await addDocument(ctx, (await listLayers(ctx.project.id))[1]!.name, 'v1');
+    const dependency = await createDependency({
+      projectId: ctx.project.id,
+      dependentDocumentId: dependent.id,
+      requiredCanonicalName: stored.canonicalName,
+    });
+
+    let changes: Awaited<ReturnType<typeof refreshProjectDependencies>> | null = null;
+    expect(await countTransactions(async () => {
+      changes = await refreshProjectDependencies(ctx.project.id);
+    })).toBe(1);
+    expect(changes!.resolved).toEqual([stored.canonicalName]);
+    expect((await getDependency(dependency.id))!.requiredDocumentId).toBe(document.id);
+    const resolvedEvents = (await listEvents(ctx.project.id, 500)).filter(
+      (e) => e.eventType === 'DEPENDENCY_RESOLVED',
+    );
+    expect(resolvedEvents.length).toBe(1);
+
+    expect(await countTransactions(() => refreshProjectDependencies(ctx.project.id))).toBe(0);
+    expect(
+      (await listEvents(ctx.project.id, 500)).filter((e) => e.eventType === 'DEPENDENCY_RESOLVED').length,
+    ).toBe(1);
   });
 });
