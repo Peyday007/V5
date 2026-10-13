@@ -123,7 +123,7 @@ jobs:
               ;;
             fleet)
               cmd="sh /app/scripts/fleet.sh show"
-              marker='.'
+              marker='^FLEET: OK'
               ;;
             product)
               cmd="sh /app/scripts/closeout-verify.sh"
@@ -182,26 +182,26 @@ jobs:
             # ----------------------------------------------------------------
             routing)
               cmd="sh /app/scripts/admin.sh routing show"
-              marker='.'
+              marker='^ADMIN: OK'
               ;;
             projects)
               cmd="sh /app/scripts/admin.sh projects list"
-              marker='.'
+              marker='^ADMIN: OK'
               ;;
             campaigns)
               cmd="sh /app/scripts/factory.sh campaigns"
               [ -n "$project" ] && cmd="$cmd --project $project"
-              marker='.'
+              marker='^FACTORY: OK'
               ;;
             campaign)
               [ -n "$campaign" ] || { echo "::error::campaign needs a campaign id."; exit 1; }
               cmd="sh /app/scripts/factory.sh status --campaign $campaign"
-              marker='^campaign '
+              marker='^FACTORY: OK'
               ;;
             bins)
               [ -n "$campaign" ] || { echo "::error::bins needs a campaign id."; exit 1; }
               cmd="sh /app/scripts/factory.sh bins --campaign $campaign"
-              marker='.'
+              marker='^FACTORY: OK'
               ;;
             refinement)
               cmd="sh /app/scripts/refinement-report.sh"
