@@ -17,7 +17,7 @@ import { ensureCampaign, factoryNow, getCampaign, patchCampaign } from '../serve
 import { recordReview } from '../server/repos/factoryFleet.ts';
 import { getDb } from '../server/db/database.ts';
 import { decideRelease, excludedPathsIn } from '../server/services/factory/release/gate.ts';
-import { advanceRelease, mayMerge, planRelease } from '../server/services/factory/release/plan.ts';
+import { advanceRelease, mayMerge, planRelease, releaseWaitFor } from '../server/services/factory/release/plan.ts';
 import {
   authorizeAutomaticRelease,
   ReleaseGrantError,
@@ -33,6 +33,8 @@ import {
   MAX_CANCELLED_DEPLOYS,
   deployRefusedAtTip,
   deployReleased,
+  deploySuperseded,
+  readDeploy,
   judgeReleasedVerdict,
   verificationFromLog,
   onCancelledDeploy,
@@ -366,6 +368,73 @@ describe('the release plan and its state machine', () => {
   });
 });
 
+describe('a pass asked about one campaign knows whether waiting is worth it (FAC-5)', () => {
+  it('stops at once for a campaign with no grant, and names the way to give one', async () => {
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    stubForge(['client/src/russell/Build.tsx']);
+    const plan = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf' });
+    expect(plan.action).toBeNull();
+    const wait = await releaseWaitFor(campaign.id);
+    expect(wait.wait).toBe(false);
+    expect(wait.reason).toMatch(/no automatic-release grant/);
+    expect(wait.reason).toMatch(/authorize-release/);
+    // Nothing was recorded for it: no attempt holds the campaign.
+    expect(await listRuns(campaign.id)).toEqual([]);
+  });
+
+  it('keeps waiting for a granted campaign that is not COMPLETE yet, and releases it once it is', async () => {
+    const changeRequest = await approved();
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: changeRequest.baseSha,
+      laneTarget: 1,
+      laneTargetReason: 'initial',
+    });
+    await grant(changeRequest.id);
+    const pending = await releaseWaitFor(campaign.id);
+    expect(pending.wait).toBe(true);
+    expect(pending.reason).toMatch(/once it is COMPLETE/);
+    await completeCampaign(changeRequest);
+    stubForge(['client/src/russell/Build.tsx']);
+    const plan = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf' });
+    expect(plan.action?.action).toBe('RELEASE');
+  });
+
+  it('a grant given after an early exit is recognised by the next pass', async () => {
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    stubForge(['client/src/russell/Build.tsx']);
+    expect((await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf1' })).action).toBeNull();
+    expect((await releaseWaitFor(campaign.id)).wait).toBe(false);
+    await grant(changeRequest.id);
+    const later = await planRelease({ releasableRepository: 'Peyday007/V5', workflowRunId: 'wf2' });
+    expect(later.action).toMatchObject({ action: 'RELEASE', campaignId: campaign.id });
+  });
+
+  it('says there is nothing to wait for about an unknown or cancelled campaign', async () => {
+    expect((await releaseWaitFor('fcp_nonexistent')).wait).toBe(false);
+    const changeRequest = await approved();
+    const campaign = await completeCampaign(changeRequest);
+    await grant(changeRequest.id);
+    await patchCampaign(campaign.id, { state: 'CANCELLED' });
+    expect((await releaseWaitFor(campaign.id)).wait).toBe(false);
+  });
+
+  it('the workflow stops polling on that answer, and keeps the old wait for an older image', () => {
+    const workflow = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
+    const ask = workflow.slice(workflow.indexOf('      - name: Ask'), workflow.indexOf('  gate:'));
+    expect(ask).toMatch(/campaign_flag="--campaign \$campaign"/);
+    expect(ask).toMatch(/\*\[!A-Za-z0-9_-\]\*\) ;;/);
+    expect(ask).toMatch(/RELEASE-WAIT: /);
+    expect(ask).toMatch(/jq -r '\.wait'\)" = "false" \]; then[\s\S]*?break/);
+    expect(ask).toMatch(/tries=15/);
+    const cli = fs.readFileSync('scripts/factory.ts', 'utf8');
+    expect(cli).toMatch(/RELEASE-WAIT: \$\{JSON\.stringify\(await releaseWaitFor\(campaignId\)\)\}/);
+  });
+});
+
 describe('verification inside the released Brain', () => {
   const page = '<html><script type="module" src="/assets/index-x.js"></script></html>';
   function deps(over: Partial<VerifyDeps> & { bundle?: string; health?: number } = {}): VerifyDeps {
@@ -584,16 +653,20 @@ describe('the release workflow’s own readings', () => {
     expect(deployRefusedAtTip([{ name: 'The ref must still be the canonical tip, now', conclusion: 'failure' }])).toBe(true);
     expect(deployRefusedAtTip([{ name: 'The ref must still be the canonical tip, now', conclusion: 'success' }])).toBe(false);
     const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
-    expect(script).toMatch(/watched\.conclusion === 'failure' && !watched\.released && watched\.refusedAtTip/);
+    expect(readDeploy({ conclusion: 'failure', released: false, refusedAtTip: true, superseded: false })).toBe('NOT_RELEASED');
+    expect(script).toMatch(/const notReleasedNoVerdict = reading === 'NOT_RELEASED'/);
   });
 
-  it('every Deploy, however it was dispatched, wakes a waiting Factory release when it ends', () => {
+  it('every Deploy, however it was dispatched, wakes a waiting Factory release exactly once (FAC-4)', () => {
     // A Deploy dispatched with GITHUB_TOKEN raises no workflow_run, so the release's own trigger
-    // could never fire for the Deploy a release dispatched itself.
+    // could never fire for the Deploy a release dispatched itself — the hand-off covers that one.
+    // A Deploy a person dispatched raises workflow_run, so handing off there too made two passes.
     const deploy = fs.readFileSync('.github/workflows/deploy.yml', 'utf8');
     const job = deploy.slice(deploy.indexOf('\n  hand-off:'));
     expect(job).toMatch(/needs: deploy/);
-    expect(job).toMatch(/if: \$\{\{ always\(\) \}\}/);
+    expect(job).toMatch(/if: \$\{\{ always\(\) && \(github\.triggering_actor \|\| github\.actor\) == 'github-actions\[bot\]' \}\}/);
+    const release0 = fs.readFileSync('.github/workflows/factory-release.yml', 'utf8');
+    expect(release0).toMatch(/^  workflow_run:\n    workflows: \[Deploy\]\n    types: \[completed\]/m);
     expect(job).toMatch(/actions: write/);
     expect(job).toMatch(/gh workflow run factory-release\.yml/);
     // It dispatches and holds nothing else: no environment, no deployment credential.
@@ -654,8 +727,15 @@ describe('the release workflow’s own readings', () => {
     expect(gate).toMatch(/POSTGRES: \$\{\{ steps\.postgres\.outcome \}\}/);
     // The release job runs only after the gate; nothing in it starts a test suite alongside Deploy.
     expect(release).toMatch(/needs: \[plan, gate\]/);
-    expect(release).not.toMatch(/postgres-suite/);
-    expect(fs.readFileSync('scripts/factory-release.ts', 'utf8')).not.toMatch(/postgres-suite/);
+    // It never runs or dispatches the suite itself; it may only attest, as the
+    // `brain/postgres-suite` status, the tree its own gate already ran it on (FAC-7).
+    const script = fs.readFileSync('scripts/factory-release.ts', 'utf8');
+    for (const text of [release, script]) {
+      expect(text).not.toMatch(/postgres-suite\.yml|workflow run postgres-suite|test-postgres\.sh/);
+    }
+    expect(script).toMatch(/POSTGRES_STATUS_CONTEXT = 'brain\/postgres-suite'/);
+    expect(script).toMatch(/if \(!movedNote\) await attestPostgres\(mergeSha\)/);
+    expect(release).toMatch(/statuses: write/);
   });
 
   it('merges through the pull request, never by pushing to the protected branch', () => {

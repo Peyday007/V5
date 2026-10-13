@@ -66,12 +66,19 @@ on:
       # `tests/testingWorkflow.test.ts` refuses a second entry.
       - 'production'
 
-# One at a time, and the newest commit is the one worth the twenty minutes: a
-# push that supersedes the commit a run is verifying makes that run's answer
-# about a tree nobody is shipping.
+# One at a time per ref. On a development ref the newest commit is the one worth
+# the time, so an older run is cancelled. On the canonical branch it is not
+# (FAC-7): every commit there may be the one Deploy releases, and cancelling
+# made 92 of 200 runs end without a verdict while 4fcb143, b2e2589, 8cc6fab and
+# 4bff1c2 were released with no completed Postgres run. A running canonical run
+# finishes; GitHub still keeps only the newest *pending* one, which is the tip,
+# and Deploy's postgres-evidence job waits for completed evidence on the exact
+# commit it releases. The branch name is spelled out because an expression
+# cannot read `.github/CANONICAL_BRANCH`; `tests/releaseMachinery.test.ts`
+# holds the two equal.
 concurrency:
   group: postgres-suite-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/production' }}
 
 jobs:
   suite:

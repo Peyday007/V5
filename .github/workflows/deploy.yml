@@ -114,25 +114,62 @@ jobs:
   # 05:30. The same question is asked again in the `deploy` job immediately
   # before `flyctl deploy`, from the same file, because that is the instant it
   # has to be true. See `.github/workflows/canonical-guard.sh`.
+  #
+  # **Superseded is not failed** (FAC-6). Six of seventeen Deploy failures in
+  # one week (433, 436, 438, 440, 443, 446) each spent about 28 minutes of tests
+  # and were then refused by the second asking, because another merge had moved
+  # the branch meanwhile — red runs about code nothing was wrong with. A run
+  # whose only problem is a newer tip now stops as soon as that is known — here,
+  # at the start of the test job, or while its tests run — prints SUPERSEDED,
+  # deploys nothing, and concludes without an error. A wrong ref is still red.
+  # The asking immediately before `flyctl deploy` stays a hard refusal: it is
+  # what stops a stale tree, and the early askings only stop wasting the gate.
   canonical:
     name: Refuse a branch that is not canonical
     runs-on: ubuntu-latest
+    outputs:
+      superseded: ${{ steps.guard.outputs.superseded }}
     steps:
       - uses: actions/checkout@v4
 
       - name: This ref must be the canonical branch
+        id: guard
         run: |
+          set +e
           .github/workflows/canonical-guard.sh \
             "${{ github.ref_name }}" "${{ github.sha }}" "before the test gate"
+          code=$?
+          if [ "$code" = 3 ]; then echo "superseded=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          exit "$code"
+
+      - name: Superseded by a newer canonical tip
+        if: steps.guard.outputs.superseded == 'true'
+        run: echo "::notice::SUPERSEDED — a newer commit is on the canonical branch; this run deploys nothing and is not a verdict about ${{ github.sha }}."
 
   verify:
     needs: canonical
+    if: needs.canonical.outputs.superseded != 'true'
     name: Typecheck and tests
     runs-on: ubuntu-latest
+    outputs:
+      superseded: ${{ steps.fresh.outputs.superseded || steps.tests.outputs.superseded }}
     steps:
       - uses: actions/checkout@v4
 
+      # The freshness question again at the start of the expensive job: a run
+      # can wait in its concurrency group long after the first asking.
+      - name: Still the canonical tip at the start of the tests
+        id: fresh
+        run: |
+          set +e
+          .github/workflows/canonical-guard.sh \
+            "${{ github.ref_name }}" "${{ github.sha }}" "at the start of the test job"
+          code=$?
+          if [ "$code" = 3 ]; then echo "superseded=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          exit "$code"
+
       - uses: actions/setup-node@v4
+        if: steps.fresh.outputs.superseded != 'true'
         with:
           node-version: '22'
           cache: npm
@@ -145,6 +182,7 @@ jobs:
       # code around that still works is checking a different program from the
       # one being shipped.
       - name: Install the OCR tooling the runtime image has
+        if: steps.fresh.outputs.superseded != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -156,22 +194,99 @@ jobs:
       # resolved a different dependency tree than the one that was tested is not
       # the thing that was tested.
       - run: npm ci
+        if: steps.fresh.outputs.superseded != 'true'
 
       - run: npm run typecheck
+        if: steps.fresh.outputs.superseded != 'true'
 
       # The whole suite, against SQLite. The Postgres run needs a server and is
       # a local/pre-merge concern; what this gate exists for is refusing to ship
       # a tree that does not pass its own tests.
-      - run: npm test
+      #
+      # Watched while it runs: once the canonical branch names another commit,
+      # this run can no longer deploy, so finishing its half-hour suite buys
+      # nothing (FAC-6). An unreadable tip is not a newer one — the suite goes
+      # on, and the asking before `flyctl deploy` still decides.
+      - name: The whole suite, stopped if this commit is superseded
+        id: tests
+        if: steps.fresh.outputs.superseded != 'true'
+        run: |
+          # No -e: the watcher's own reads may fail, and the step's verdict is
+          # the suite's exit status, returned by the final `wait`.
+          set +e
+          interval="${SUPERSEDED_POLL_SECONDS:-60}"
+          setsid npm test &
+          pid=$!
+          while kill -0 "$pid" 2>/dev/null; do
+            sleep "$interval"
+            kill -0 "$pid" 2>/dev/null || break
+            # The same one file answers; only its "superseded" (3) stops the suite.
+            .github/workflows/canonical-guard.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" "while the suite runs" > "${RUNNER_TEMP:-/tmp}/guard.txt" 2>&1
+            if [ $? = 3 ]; then
+              cat "${RUNNER_TEMP:-/tmp}/guard.txt"
+              echo "The canonical branch moved while the suite ran; stopping it."
+              kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null
+              wait "$pid" 2>/dev/null
+              echo "superseded=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          wait "$pid"
+
+      - name: Superseded by a newer canonical tip
+        if: steps.fresh.outputs.superseded == 'true' || steps.tests.outputs.superseded == 'true'
+        run: echo "::notice::SUPERSEDED — a newer commit is on the canonical branch; this run deploys nothing and is not a verdict about ${{ github.sha }}."
 
       # A build failure here is a failed workflow rather than a failed
       # deployment: the image is built again inside Fly, but finding out now
       # costs a minute and finding out there costs a rollback.
       - run: npm run build
+        if: steps.fresh.outputs.superseded != 'true' && steps.tests.outputs.superseded != 'true'
+
+  # The Postgres half of the gate, read rather than run again (FAC-7).
+  #
+  # `npm test` above is SQLite. The whole suite against Postgres runs in
+  # `postgres-suite.yml` on every push to the canonical branch — or, for a merge
+  # `factory-release` made, in that release's own gate, which attests the exact
+  # tree it tested as the commit status `brain/postgres-suite`. This job waits,
+  # in parallel with the SQLite suite, for completed evidence about **this
+  # commit** and refuses to deploy without it. See postgres-evidence.sh for
+  # what counts and what does not.
+  postgres-evidence:
+    needs: canonical
+    if: needs.canonical.outputs.superseded != 'true'
+    name: The Postgres suite passed on this commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 160
+    permissions:
+      actions: write
+      contents: read
+      statuses: read
+    outputs:
+      superseded: ${{ steps.evidence.outputs.superseded }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for completed Postgres evidence
+        id: evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          .github/workflows/postgres-evidence.sh "$GITHUB_SHA" 9000
+          code=$?
+          if [ "$code" = 3 ]; then echo "superseded=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          exit "$code"
+
+      - name: Superseded by a newer canonical tip
+        if: steps.evidence.outputs.superseded == 'true'
+        run: echo "::notice::SUPERSEDED — a newer commit is on the canonical branch; this run deploys nothing and is not a verdict about ${{ github.sha }}."
 
   deploy:
     name: Deploy to Fly
-    needs: verify
+    needs: [verify, postgres-evidence]
+    # A superseded run deploys nothing: skipped, never failed (FAC-6).
+    if: needs.verify.outputs.superseded != 'true' && needs.postgres-evidence.outputs.superseded != 'true'
     runs-on: ubuntu-latest
     environment: production
     # Only this job, and only for the release marker below. Every other job
@@ -259,6 +374,7 @@ jobs:
       - name: Refuse to overwrite a newer production revision
         env:
           ALLOW_ROLLBACK: ${{ github.event.inputs.allow_rollback }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -269,6 +385,20 @@ jobs:
             released=$(git rev-parse --verify --quiet "refs/tags/deployed/production^{commit}" || true)
           else
             released=""
+          fi
+
+          # The marker is moved only by a deploy that knew it released, and a
+          # deploy whose CLI failed while the image went live anyway left it
+          # stale (INF-7). So what the machine is running is read too, and a
+          # running commit that descends from the marker is the stronger fact.
+          # Unreadable is ignored rather than trusted: the marker still stands.
+          running=$(timeout 90 flyctl ssh console --app "$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)" \
+            -C "printenv BRAIN_REVISION" 2>/dev/null | tr -d '\r' | grep -E '^[0-9a-f]{40}$' | tail -n 1 || true)
+          if [ -n "$running" ] && git cat-file -e "$running^{commit}" 2>/dev/null; then
+            echo "running now:   $running"
+            if [ -z "$released" ] || git merge-base --is-ancestor "$released" "$running"; then
+              released="$running"
+            fi
           fi
 
           if [ -z "$released" ]; then
@@ -369,6 +499,32 @@ jobs:
           git tag -f deployed/production "$GITHUB_SHA"
           git push -f origin "refs/tags/deployed/production" || \
             echo "::warning::The release succeeded but the deployed/production marker could not be pushed. The next deploy will fall back to the branch check."
+
+      # A failed `flyctl deploy` is a fact about the CLI, not about the machine
+      # (INF-7): read what is running, bounded, and say which of the five it is.
+      - name: What is running after the failed deploy
+        id: observe
+        if: failure() && steps.release.outcome == 'failure'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          previous=""
+          if git fetch origin --quiet "+refs/tags/deployed/production:refs/tags/deployed/production" 2>/dev/null; then
+            previous=$(git rev-parse --verify --quiet "refs/tags/deployed/production^{commit}" || true)
+          fi
+          .github/workflows/observe-revision.sh "$GITHUB_SHA" "$previous" 900 | tee observe.txt
+
+      # The marker means "this commit is what is running", so it follows the
+      # machine: moved when the new revision was observed serving, and only
+      # then. Its own name, so `factory-release` reads "released" from this as
+      # it does from the step above.
+      - name: Record what is running after the failed deploy
+        if: failure() && steps.observe.outputs.outcome == 'NEW_SERVING'
+        run: |
+          set -euo pipefail
+          git tag -f deployed/production "$GITHUB_SHA"
+          git push -f origin "refs/tags/deployed/production" || \
+            echo "::warning::The new revision is serving but the deployed/production marker could not be pushed. The next deploy reads the running revision itself."
 
       # When a deploy fails, say why here rather than sending somebody to a
       # dashboard.
@@ -763,7 +919,22 @@ jobs:
           echo "hosted verification: $before"
           echo "after the restart:   $after"
           if [ "$release" != "success" ]; then
-            echo "::error::No new image was released, so nothing in this commit is live and the app is still serving the previous version. Read the Deploy step; the checks below it were skipped on purpose."
+            # What is running is the observation's to say, never the exit code's.
+            observed='${{ steps.observe.outputs.outcome }}'
+            running='${{ steps.observe.outputs.running }}'
+            echo "observed:            ${observed:-not read} (running ${running:-unknown})"
+            case "$observed" in
+              NEW_SERVING)
+                echo "::error::flyctl deploy failed, but this commit is serving: the machine runs $running and the Brain answers. deployed/production now names it. Its hosted verification did not run, so its verification is unknown, not passed." ;;
+              NEW_NOT_SERVING)
+                echo "::error::flyctl deploy failed and the machine holds this commit, but the Brain had not answered by the end of the window: an incomplete rollout, or a boot still retrying. Nothing here establishes that it serves; the next Deploy reads the running revision again." ;;
+              PREVIOUS_SERVING)
+                echo "::error::No new image was released: the machine still runs the previously released $running. Read the Deploy step; the checks below it were skipped on purpose." ;;
+              OTHER)
+                echo "::error::flyctl deploy failed and the machine runs $running, which is neither this commit nor the last release marker. Read the Deploy step." ;;
+              *)
+                echo "::error::flyctl deploy failed, and what the machine is running could not be read. Nothing is claimed about it, including that it is the previous version." ;;
+            esac
             exit 1
           fi
           # Name the condition, not the step. "Read the two steps above" is
@@ -821,7 +992,8 @@ jobs:
           # Deploy whose verdict fails only on conditions the last release before
           # the merge also failed is not evidence against the change. Names, not
           # details — a detail carries timings that differ on every run.
-          RELEASED='${{ steps.release.outcome == 'success' }}' \
+          RELEASED='${{ steps.release.outcome == 'success' || steps.observe.outputs.outcome == 'NEW_SERVING' }}' \
+          DEPLOY_OUTCOME='${{ steps.release.outcome == 'success' && 'RELEASED' || steps.observe.outputs.outcome || 'NOT_READ' }}' \
           BEFORE='${{ steps.hosted.outcome == 'success' }}' \
           AFTER='${{ steps.hosted_after.outcome == 'success' }}' \
           python3 - <<'PY'
@@ -842,6 +1014,9 @@ jobs:
               'revision': os.environ['GITHUB_SHA'],
               'ranAt': __import__('time').strftime('%Y-%m-%dT%H:%M:%SZ', __import__('time').gmtime()),
               'released': os.environ['RELEASED'] == 'true',
+              # What the machine was observed running — separate from whether
+              # its verification passed, which beforeRestart/afterRestart say.
+              'deployOutcome': os.environ['DEPLOY_OUTCOME'],
               'beforeRestart': os.environ['BEFORE'] == 'true',
               'afterRestart': os.environ['AFTER'] == 'true',
               'complete': complete,
@@ -876,10 +1051,17 @@ jobs:
   # `always()` on purpose: a Deploy that failed or was cancelled is precisely
   # when a waiting release must hear about it. The job dispatches, and nothing
   # else; it holds no deployment credential.
+  #
+  # Only for a Deploy the bot started (FAC-4). A Deploy a person dispatched does
+  # raise `workflow_run`, so handing off there as well started two release passes
+  # a few seconds apart for every human Deploy (runs 91/92, 93/94, 96/97), each
+  # opening its own ssh session against the database. `triggering_actor` rather
+  # than `actor`: a person re-running a bot-dispatched Deploy is a person's event,
+  # and raises workflow_run itself.
   hand-off:
     name: Tell a waiting Factory release this Deploy ended
     needs: deploy
-    if: ${{ always() }}
+    if: ${{ always() && (github.triggering_actor || github.actor) == 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
