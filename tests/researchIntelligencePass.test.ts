@@ -747,15 +747,19 @@ describe('a research campaign, from the objective to the lesson', () => {
      *
      * The report was filed and all three roles argued over it; the judge then
      * said MORE_RESEARCH, and this run has no further search the repair ladder
-     * has not already spent. That is `NEEDS_HUMAN` with a reason naming the
-     * decision — not a failure, and emphatically not a packet that talked
-     * itself into "complete". The gap authorization is present and is
-     * deliberately not enough on its own: `outcomeFor` files short only when
-     * nothing is repairable at all.
+     * has not already spent. A person authorized this packet to record its
+     * gaps, and `outcomeFor` files short exactly when nothing is repairable —
+     * so the honest end is COMPLETE_WITH_GAPS: filed, audited, short, and
+     * terminal, never "complete".
+     *
+     * This read NEEDS_HUMAN "a decision rather than a wait" until RES-8, and
+     * that was the defect rather than the rule: the fragment was on its last
+     * attempt, which `outcomeFor` counted as repairable and the planner never
+     * repairs, so the packet waited on a repair nothing would mint while the
+     * authorization a person had already given went unused.
      */
-    expect(done!.status).toBe('NEEDS_HUMAN');
+    expect(done!.status).toBe('COMPLETE_WITH_GAPS');
     expect(done!.verdict).toBe('MORE_RESEARCH');
-    expect(done!.failureReason).toContain('a decision rather than a wait');
     // And the packet is not empty-handed: a filed, audited report that says what
     // it could not settle.
     expect(done!.documentId).toBeTruthy();
