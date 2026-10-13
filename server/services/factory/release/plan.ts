@@ -13,6 +13,7 @@
  * change, and that is all.
  */
 import {
+  getCampaign,
   getChangeRequest,
   listTerminalCampaigns,
 } from '../../../repos/factory.ts';
@@ -193,6 +194,45 @@ export async function planRelease(input: {
     if (action) return { action, notes };
   }
   return { action: null, notes };
+}
+
+/**
+ * Whether a release pass asked about one campaign should keep asking (FAC-5).
+ *
+ * `planRelease` answers `null` for two different facts — "this campaign has no
+ * automatic-release grant" and "this campaign is not COMPLETE yet" — and the
+ * workflow, triggered by the campaign's own pull request, polled through both
+ * the same way: fifteen one-minute asks while holding the one release slot.
+ * The second deserves the wait, because the pull request is opened a few
+ * seconds before Brain records the campaign COMPLETE. The first does not: no
+ * amount of waiting creates a grant, so the pass ends now with the reason, and
+ * a grant given later is recognised by the next pass — the campaign's next
+ * pull-request event, a Deploy ending, the schedule, or a dispatch. Nothing
+ * here grants, widens or records anything.
+ */
+export interface ReleaseWait {
+  wait: boolean;
+  reason: string;
+}
+
+export async function releaseWaitFor(campaignId: string): Promise<ReleaseWait> {
+  const campaign = await getCampaign(campaignId);
+  if (!campaign) return { wait: false, reason: `No campaign ${campaignId} is recorded, so there is nothing to release.` };
+  if (campaign.state === 'CANCELLED') return { wait: false, reason: `${campaign.id} was cancelled.` };
+  const grant = await liveGrantFor(campaign.changeRequestId);
+  if (!grant) {
+    return {
+      wait: false,
+      reason:
+        `${campaign.id} has no automatic-release grant, so it is not released without a person. ` +
+        'Grant it on Build (or `npm run factory authorize-release`) and the next release pass — its next ' +
+        'pull-request event, a Deploy ending, the schedule or a dispatch — picks it up; otherwise a person merges.',
+    };
+  }
+  if (campaign.state !== 'COMPLETE') {
+    return { wait: true, reason: `${campaign.id} is ${campaign.state}; its release starts once it is COMPLETE.` };
+  }
+  return { wait: false, reason: `${campaign.id} is COMPLETE and was considered by this pass; the notes above say why.` };
 }
 
 /**

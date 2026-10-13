@@ -162,6 +162,28 @@ function treeOf(sha: string): string {
 }
 
 /**
+ * Attest that `sha`'s tree passed the whole Postgres suite in this run's gate.
+ *
+ * A merge made with this workflow's token raises no push event, so
+ * the push-triggered Postgres workflow never sees it; without this, Deploy's evidence job
+ * (FAC-7) would run the identical suite again. Posted only for a commit whose
+ * tree is the gated one — the callers establish that — and best effort: a
+ * status that could not be posted means Deploy asks for a run instead.
+ */
+export const POSTGRES_STATUS_CONTEXT = 'brain/postgres-suite';
+
+async function attestPostgres(sha: string): Promise<void> {
+  if (process.env.GATE_RESULT !== 'success') return;
+  const reply = await gh('POST', `/repos/${REPO}/statuses/${sha}`, {
+    state: 'success',
+    context: POSTGRES_STATUS_CONTEXT,
+    description: 'The whole suite against Postgres passed on this exact tree in the factory-release gate.',
+    target_url: `${process.env.GITHUB_SERVER_URL ?? 'https://github.com'}/${REPO}/actions/runs/${process.env.GITHUB_RUN_ID ?? ''}`,
+  });
+  if (reply.status !== 201) log(`could not attest Postgres evidence on ${sha.slice(0, 12)} (${reply.status}); Deploy will run the suite itself`);
+}
+
+/**
  * Merge the reviewed head through its pull request, exactly as the gate tested
  * it. Returns the merge commit, or null with the reason recorded in Brain.
  */
@@ -198,6 +220,8 @@ async function mergeGated(action: Action): Promise<{ mergeSha: string; deploySha
       return null;
     }
     advance(action.runId, 'MERGED', { 'merge-sha': mergeSha });
+    // The gate tested production's tip itself.
+    await attestPostgres(tip);
     return { mergeSha, deploySha: tip };
   }
 
@@ -277,6 +301,9 @@ async function mergeGated(action: Action): Promise<{ mergeSha: string; deploySha
     return null;
   }
   if (movedNote) log(`merged onto a moved production: ${movedNote}`);
+  // Only an unmoved merge is the gated tree; a re-merge onto a moved tip was
+  // never run against Postgres, and Deploy's evidence job runs it instead.
+  if (!movedNote) await attestPostgres(mergeSha);
   return { mergeSha, deploySha: mergeSha };
 }
 
@@ -355,7 +382,7 @@ function contains(ancestor: string, descendant: string): boolean {
  * failure or a cancellation. Exact-head matching made a resume fail as soon as
  * anything else landed after the merge.
  */
-async function deployRunFor(mergeSha: string, since: string): Promise<WorkflowRun | null> {
+async function deployRunFor(mergeSha: string, since: string, exclude: number[] = []): Promise<WorkflowRun | null> {
   const reply = await gh<{ workflow_runs: WorkflowRun[] }>(
     'GET',
     `/repos/${REPO}/actions/workflows/deploy.yml/runs?branch=production&event=workflow_dispatch&per_page=30`,
@@ -363,8 +390,16 @@ async function deployRunFor(mergeSha: string, since: string): Promise<WorkflowRu
   const runs = (reply.body?.workflow_runs ?? [])
     .filter((run) => run.created_at >= since)
     .filter((run) => run.status !== 'completed' || run.conclusion === 'success')
+    .filter((run) => !exclude.includes(run.id))
     .sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
-  return runs.find((run) => run.head_sha === mergeSha || contains(mergeSha, run.head_sha)) ?? null;
+  for (const run of runs) {
+    if (run.head_sha !== mergeSha && !contains(mergeSha, run.head_sha)) continue;
+    // A completed green run that released nothing (superseded) deploys nothing:
+    // adopting it would wait on a run that is already over and proved nothing.
+    if (run.status === 'completed' && !deployReleased(await stepsOf(run.id))) continue;
+    return run;
+  }
+  return null;
 }
 
 async function dispatchDeploy(action: Action, mergeSha: string, reason: string): Promise<number | null> {
@@ -396,9 +431,29 @@ interface Step {
   conclusion: string | null;
 }
 
-/** Whether a Deploy run actually put a new image live, from its own steps. */
+/**
+ * Whether a Deploy run actually put a new image live, from its own steps.
+ *
+ * Either the release step recorded it, or `flyctl deploy` failed and the
+ * machine was then observed running this commit and answering (INF-7). The
+ * second is a release too: reading it as "nothing released" made a failed CLI
+ * look like a version nobody was running.
+ */
 export function deployReleased(steps: Step[]): boolean {
-  return steps.some((step) => step.name === 'Record what was released' && step.conclusion === 'success');
+  return steps.some(
+    (step) =>
+      (step.name === 'Record what was released' || step.name === 'Record what is running after the failed deploy') &&
+      step.conclusion === 'success',
+  );
+}
+
+/**
+ * Whether a Deploy run stopped because a newer commit is on the canonical
+ * branch (FAC-6). It deploys nothing and concludes without an error, so its
+ * green conclusion must never be read as a release.
+ */
+export function deploySuperseded(steps: Step[]): boolean {
+  return steps.some((step) => step.name === 'Superseded by a newer canonical tip' && step.conclusion === 'success');
 }
 
 /** Whether a Deploy run stopped at its own pre-release tip check: production moved, nothing was released. */
@@ -406,19 +461,54 @@ export function deployRefusedAtTip(steps: Step[]): boolean {
   return steps.some((step) => step.name === 'The ref must still be the canonical tip, now' && step.conclusion === 'failure');
 }
 
-async function watchDeploy(runId: number): Promise<{ conclusion: string; released: boolean; refusedAtTip: boolean }> {
+async function stepsOf(runId: number): Promise<Step[]> {
+  const jobs = await gh<{ jobs: { steps?: Step[] }[] }>('GET', `/repos/${REPO}/actions/runs/${runId}/jobs`);
+  return (jobs.body?.jobs ?? []).flatMap((job) => job.steps ?? []);
+}
+
+interface WatchedDeploy {
+  conclusion: string;
+  released: boolean;
+  refusedAtTip: boolean;
+  superseded: boolean;
+}
+
+async function watchDeploy(runId: number): Promise<WatchedDeploy> {
   const deadline = Date.now() + DEPLOY_WATCH_MS;
   for (;;) {
     const reply = await gh<WorkflowRun>('GET', `/repos/${REPO}/actions/runs/${runId}`);
     const run = reply.body;
     if (run && run.status === 'completed') {
-      const jobs = await gh<{ jobs: { steps?: Step[] }[] }>('GET', `/repos/${REPO}/actions/runs/${runId}/jobs`);
-      const steps = (jobs.body?.jobs ?? []).flatMap((job) => job.steps ?? []);
-      return { conclusion: run.conclusion ?? 'unknown', released: deployReleased(steps), refusedAtTip: deployRefusedAtTip(steps) };
+      const steps = await stepsOf(runId);
+      return {
+        conclusion: run.conclusion ?? 'unknown',
+        released: deployReleased(steps),
+        refusedAtTip: deployRefusedAtTip(steps),
+        superseded: deploySuperseded(steps),
+      };
     }
-    if (Date.now() > deadline) return { conclusion: 'still-running', released: false, refusedAtTip: false };
+    if (Date.now() > deadline) return { conclusion: 'still-running', released: false, refusedAtTip: false, superseded: false };
     await sleep(POLL_MS);
   }
+}
+
+/**
+ * How a finished Deploy run reads to a release, from its conclusion and steps.
+ *
+ *   RELEASED       it put an image live (by the release step, or observed serving)
+ *   NOT_RELEASED   it released nothing and says nothing against the change:
+ *                  cancelled, superseded by a newer tip, or refused at its own tip check
+ *   FAILED         it failed on its own account before releasing
+ *
+ * A green run that released nothing — a superseded one — is NOT_RELEASED, never
+ * RELEASED: verifying it would find the old revision and roll back a healthy
+ * change (FAC-6).
+ */
+export function readDeploy(watched: Omit<WatchedDeploy, 'conclusion'> & { conclusion: string }): 'RELEASED' | 'NOT_RELEASED' | 'FAILED' {
+  if (watched.released) return 'RELEASED';
+  if (watched.conclusion === 'cancelled' || watched.superseded || watched.refusedAtTip) return 'NOT_RELEASED';
+  if (watched.conclusion === 'success') return 'NOT_RELEASED';
+  return 'FAILED';
 }
 
 /**
@@ -541,15 +631,24 @@ export function onCancelledDeploy(input: {
   return { kind: 'REDISPATCH' };
 }
 
-/** Deploy runs created since the merge whose head contains it and that ended without success. */
+/**
+ * Deploy runs created since the merge whose head contains it and that ended
+ * without releasing — cancelled, refused, or superseded. A superseded run
+ * concludes green, so the count reads its steps rather than its conclusion:
+ * counting only non-green runs would let supersession re-dispatch for ever.
+ */
 async function cancelledDeploysFor(mergeSha: string, since: string): Promise<number> {
   const reply = await gh<{ workflow_runs: WorkflowRun[] }>(
     'GET',
     `/repos/${REPO}/actions/workflows/deploy.yml/runs?branch=production&event=workflow_dispatch&per_page=30`,
   );
-  return (reply.body?.workflow_runs ?? [])
-    .filter((run) => run.created_at >= since && run.status === 'completed' && run.conclusion !== 'success')
-    .filter((run) => run.head_sha === mergeSha || contains(mergeSha, run.head_sha)).length;
+  let count = 0;
+  for (const run of reply.body?.workflow_runs ?? []) {
+    if (run.created_at < since || run.status !== 'completed') continue;
+    if (run.head_sha !== mergeSha && !contains(mergeSha, run.head_sha)) continue;
+    if (run.conclusion !== 'success' || !deployReleased(await stepsOf(run.id))) count += 1;
+  }
+  return count;
 }
 
 function mergedAtIso(mergeSha: string): string {
@@ -692,7 +791,8 @@ async function fromDeploying(action: Action, mergeSha: string, deployRunId: numb
     log('RELEASE: WAITING');
     return;
   }
-  if (watched.conclusion === 'success') {
+  const reading = readDeploy(watched);
+  if (watched.conclusion === 'success' && reading === 'RELEASED') {
     advance(action.runId, 'VERIFYING');
     await verify(action, mergeSha);
     return;
@@ -700,12 +800,12 @@ async function fromDeploying(action: Action, mergeSha: string, deployRunId: numb
   // A Deploy refused at its own tip check never released: another merge moved
   // production while it tested (Deploy 443, refused when this mechanism's own
   // merge of #178 landed, 2026-10-11). That says nothing against the change,
-  // and the next Deploy of the branch carries it — the same as an eviction.
-  const notReleasedNoVerdict =
-    watched.conclusion === 'cancelled' || (watched.conclusion === 'failure' && !watched.released && watched.refusedAtTip);
+  // and the next Deploy of the branch carries it — the same as an eviction. A
+  // superseded Deploy is the same fact reported without an error (FAC-6).
+  const notReleasedNoVerdict = reading === 'NOT_RELEASED' || (watched.conclusion === 'cancelled' && watched.released);
   if (notReleasedNoVerdict) {
     const since = mergedAtIso(mergeSha);
-    const successor = watched.released ? null : await deployRunFor(mergeSha, since);
+    const successor = watched.released ? null : await deployRunFor(mergeSha, since, [deployRunId]);
     const next = onCancelledDeploy({
       released: watched.released,
       successorRunId: successor ? successor.id : null,

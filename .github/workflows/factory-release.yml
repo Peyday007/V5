@@ -42,13 +42,18 @@
 # `flyctl deploy` — so it is not paid twice here (CLAUDE.md rule 3).
 #
 # ---------------------------------------------------------------------------
-# Why a timer
+# What starts a pass
 # ---------------------------------------------------------------------------
 #
 # Brain cannot dispatch a workflow: that would need the forge write credential it
-# deliberately does not hold. So the release side asks on a schedule. Fifteen
-# minutes is a bound on how long a finished objective waits to start releasing,
-# not on how long a release takes, and `workflow_dispatch` asks immediately.
+# deliberately does not hold. So passes are started by events: the Factory's own
+# pull request, and a Deploy ending — through `workflow_run` for a Deploy a
+# person dispatched, and through Deploy's `hand-off` job for one this workflow's
+# own token dispatched, which raises no `workflow_run`. Exactly one of the two
+# fires per Deploy (FAC-4). The schedule is a backstop and nothing more:
+# measured, GitHub ran it every three to seven hours rather than every fifteen
+# minutes (FAC-11), so nothing may depend on it. `workflow_dispatch` asks
+# immediately.
 name: Factory release
 
 on:
@@ -59,7 +64,10 @@ on:
   # branches in this repository, so a stranger's pull request does nothing.
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
-  # Resuming a release whose own run died while its Deploy was in flight.
+  # Resuming a release whose own run died while its Deploy was in flight, after
+  # a Deploy a *person* dispatched. A Deploy dispatched with this workflow's own
+  # token raises no workflow_run; Deploy's hand-off job covers that one, and only
+  # that one, so one Deploy is one release pass (FAC-4).
   workflow_run:
     workflows: [Deploy]
     types: [completed]
@@ -123,18 +131,30 @@ jobs:
         id: ask
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -uo pipefail
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           # A Factory pull request is opened a few seconds before Brain records
           # the campaign COMPLETE, so on that event ask again for a while
           # rather than answering "nothing" to a release that is about to exist.
+          # Only while Brain says waiting is worth it (FAC-5): a campaign with no
+          # automatic-release grant will not acquire one by waiting, and polling
+          # it held the one release slot for fifteen minutes (run 38211775607).
           tries=1
-          if [ "$GITHUB_EVENT_NAME" = "pull_request_target" ]; then tries=15; fi
+          campaign_flag=""
+          if [ "$GITHUB_EVENT_NAME" = "pull_request_target" ]; then
+            tries=15
+            campaign="${HEAD_REF#factory/campaign/}"
+            case "$campaign" in
+              ''|*[!A-Za-z0-9_-]*) ;;
+              *) campaign_flag="--campaign $campaign" ;;
+            esac
+          fi
           action=null
           for attempt in $(seq 1 "$tries"); do
             flyctl ssh console --app "$app" -C \
-              "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh release-plan --repository $GITHUB_REPOSITORY --workflow-run $GITHUB_RUN_ID" \
+              "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh release-plan --repository $GITHUB_REPOSITORY --workflow-run $GITHUB_RUN_ID $campaign_flag" \
               2>&1 | tee plan.txt
             if ! grep -q '^FACTORY: OK' plan.txt; then
               echo "::error::Brain did not answer the release plan. Its output is above."
@@ -142,6 +162,12 @@ jobs:
             fi
             action=$(grep -m1 '^RELEASE-PLAN: ' plan.txt | sed 's/^RELEASE-PLAN: //')
             if [ "$action" != "null" ] || [ "$attempt" = "$tries" ]; then break; fi
+            # An image older than RELEASE-WAIT prints none: keep the old bounded wait.
+            wait=$(grep -m1 '^RELEASE-WAIT: ' plan.txt | sed 's/^RELEASE-WAIT: //')
+            if [ -n "$wait" ] && [ "$(printf '%s' "$wait" | jq -r '.wait')" = "false" ]; then
+              echo "Nothing to wait for: $(printf '%s' "$wait" | jq -r '.reason')"
+              break
+            fi
             echo "Nothing to release yet (attempt $attempt of $tries); asking again in 60s."
             sleep 60
           done
@@ -320,6 +346,10 @@ jobs:
       contents: write
       pull-requests: write
       actions: write
+      # To attest, as `brain/postgres-suite`, that the merged tree is the tree
+      # the gate ran the whole Postgres suite on, so Deploy's evidence job need
+      # not run it again (FAC-7).
+      statuses: write
     steps:
       - name: Trusted checkout of the canonical branch
         uses: actions/checkout@v4

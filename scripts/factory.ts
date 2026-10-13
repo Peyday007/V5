@@ -1363,6 +1363,12 @@ async function main(): Promise<void> {
         workflowRunId: flagString(flags, 'workflow-run') ?? null,
       });
       for (const note of plan.notes) process.stdout.write(`note: ${note}\n`);
+      // Asked on a campaign's own pull-request event: say whether waiting for it is worth it.
+      const campaignId = flagString(flags, 'campaign');
+      if (campaignId && plan.action === null) {
+        const { releaseWaitFor } = await import('../server/services/factory/release/plan.ts');
+        process.stdout.write(`RELEASE-WAIT: ${JSON.stringify(await releaseWaitFor(campaignId))}\n`);
+      }
       process.stdout.write(`RELEASE-PLAN: ${JSON.stringify(plan.action)}\n`);
       break;
     }

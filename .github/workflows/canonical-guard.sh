@@ -47,6 +47,7 @@
 # as workflows and ignores everything else.
 #
 # Usage: canonical-guard.sh <ref-name> <commit-sha> <when>
+# Exits 0 on the tip, 3 when superseded by a newer tip, 1 for anything else.
 set -euo pipefail
 
 ref="${1:?the ref name this run is on}"
@@ -71,9 +72,13 @@ if [ -z "$tip" ]; then
 fi
 echo "origin/$canonical: $tip"
 
+# Exit 3, distinct from 1, when the only thing wrong is that the branch moved
+# on: that run is superseded rather than wrong, and a caller that can stop
+# cleanly reports it as such (FAC-6). A caller that cannot — the asking
+# immediately before `flyctl deploy` — treats any non-zero exit as a refusal.
 if [ "$tip" != "$sha" ]; then
   echo "::error::origin/$canonical is now $tip, and this run is deploying $sha. Deploying it would put production back to a tree the branch has moved past. Re-dispatch against the current tip."
-  exit 1
+  exit 3
 fi
 
 echo "on $canonical, and still its tip. Proceeding."
