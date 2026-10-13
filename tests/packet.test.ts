@@ -4408,8 +4408,6 @@ describe('a packet stranded behind a failed prerequisite, to terminal completion
     // two paths that both call the runner, which is where a duplicate would
     // come from if `alreadyCreated` were ever wrong.
     const churn = async (): Promise<void> => {
-      await advancePacket(orchestration.id);
-      await advancePacket(orchestration.id);
       await resumePulledPackets();
     };
 
@@ -4673,5 +4671,162 @@ describe('the gate-failure distribution', () => {
         verdictDetail: { claims: [], unresolvedRetrieval: [{}], acceptedClaims: 0, rejectedClaims: 0 },
       }),
     ).toBe('SOURCES_UNREADABLE');
+  });
+});
+
+/**
+ * Production, request `req_F11L81JQNiBz`: Supabase Storage answered a synthesis
+ * upload `429 too_many_connections` / `SlowDown`. The store refused before it
+ * took anything, but Brain classified every write refusal as an unknown outcome,
+ * so the worker was told "could not be completed" — which reads as a fault —
+ * and the filing waited on the tick's one-per-packet recovery instead of the
+ * worker simply sending the same call again.
+ *
+ * This drives the real submission tool through `callTool` against a real
+ * `SupabaseStorageProvider` whose bucket answers the first upload with that
+ * 429, and then lets the worker retry exactly as the answer tells it to.
+ */
+describe('a synthesis upload the store refused for now', () => {
+  function bucket(refuseUploads: number) {
+    const objects = new Map<string, Buffer>();
+    let refusals = refuseUploads;
+    const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+      const href = String(url);
+      const method = (init?.method ?? 'GET').toUpperCase();
+      const list = /\/storage\/v1\/object\/list\/([^/?]+)$/.exec(href);
+      if (list) {
+        const parsed = JSON.parse(String(init?.body ?? '{}')) as { prefix?: string };
+        const scope = (parsed.prefix ?? '').replace(/^\/+|\/+$/g, '');
+        const seen = new Map<string, { name: string; id: string | null; size: number }>();
+        for (const [key, value] of objects) {
+          if (scope && !key.startsWith(`${scope}/`)) continue;
+          const rest = scope ? key.slice(scope.length + 1) : key;
+          const slash = rest.indexOf('/');
+          const name = slash === -1 ? rest : rest.slice(0, slash);
+          seen.set(name, { name, id: slash === -1 ? key : null, size: value.byteLength });
+        }
+        return new Response(
+          JSON.stringify([...seen.values()].map((e) => ({ name: e.name, id: e.id, metadata: { size: e.size } }))),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      const object = /\/storage\/v1\/object\/([^/]+)\/(.+)$/.exec(href);
+      if (!object) return new Response('unhandled', { status: 500 });
+      const key = object[2]!.split('/').map((s) => decodeURIComponent(s)).join('/');
+      if (method === 'POST' || method === 'PUT') {
+        if (refusals > 0) {
+          refusals -= 1;
+          return new Response(
+            JSON.stringify({ statusCode: '429', error: 'too_many_connections', message: 'SlowDown' }),
+            { status: 429 },
+          );
+        }
+        if (objects.has(key)) return new Response('duplicate', { status: 409 });
+        objects.set(key, Buffer.from(init!.body as Uint8Array));
+        return new Response('{}', { status: 200 });
+      }
+      if (method === 'DELETE') {
+        objects.delete(key);
+        return new Response('{}', { status: 200 });
+      }
+      const found = objects.get(key);
+      if (!found) return new Response('not found', { status: 404 });
+      return new Response(new Uint8Array(found), { status: 200 });
+    }) as unknown as typeof fetch;
+    return { fetchImpl, objects };
+  }
+
+  it('answers retryable, files nothing, and the same call files and reads back once the store takes it', async () => {
+    const { resetStorage, initStorage } = await import('../server/services/storage/index.ts');
+    const { callTool } = await import('../server/mcp/execute.ts');
+    const store = bucket(1);
+    resetStorage();
+    await initStorage({
+      config: {
+        provider: 'supabase',
+        supabaseUrl: 'https://example.supabase.co',
+        serviceRoleKey: 'service-role',
+        bucket: 'brain',
+      },
+      fetchImpl: store.fetchImpl,
+      verify: false,
+    });
+    try {
+      const orchestration = await makeOrchestration();
+      const fragment = await makeFragment(orchestration);
+      const research = await claimFor(orchestration, 'RESEARCH_FRAGMENT', fragment);
+      await call('brain_submit_claims', { ...proof(research), claims: [SOURCED] });
+      const [stored] = await listClaimsForFragment(fragment.id);
+      await call('brain_complete_work', { ...proof(research), summary: 'claims in' });
+      const verify = await claimFor(orchestration, 'RESEARCH_VERIFY', fragment);
+      await call('brain_submit_verification', {
+        ...proof(verify),
+        verdicts: [{ claim_id: stored!.id, supports_claim: true, ...MATCHES, note: 'Reads directly.' }],
+        sufficiency: 'SUFFICIENT',
+      });
+      await call('brain_complete_work', { ...proof(verify), summary: 'verified' });
+
+      const synth = await claimFor(orchestration, 'RESEARCH_SYNTHESIZE', null);
+      const args = {
+        ...proof(synth),
+        report: `California defines a real estate broker at section 10131 [${stored!.id}].`,
+        cited_claim_ids: [stored!.id],
+      };
+      const send = async () =>
+        callTool({
+          toolName: 'brain_submit_synthesis',
+          args,
+          principal: await principalFor(FULL),
+          requestId: `req_${Math.random().toString(36).slice(2)}`,
+          clientName: null,
+          protocolVersion: '2025-11-25',
+          userAgent: null,
+          remoteAddr: null,
+        });
+
+      const refused = (await send()).result as unknown as {
+        isError: boolean;
+        structuredContent: { error: Record<string, unknown> };
+      };
+      expect(refused.isError).toBe(true);
+      expect(refused.structuredContent.error['kind']).toBe('RATE_OR_CAPACITY_RETRYABLE');
+      expect(refused.structuredContent.error['retryable']).toBe(true);
+      // Nothing landed and nothing committed: the packet holds no document.
+      expect(store.objects.size).toBe(0);
+      expect((await getOrchestration(orchestration.id))!.documentId).toBeNull();
+
+      const filed = (await send()).result as unknown as {
+        isError: boolean;
+        structuredContent: Record<string, unknown>;
+      };
+      expect(filed.isError).toBe(false);
+      expect(filed.structuredContent['filed']).toBe(true);
+      const documentId = String(filed.structuredContent['documentId']);
+      const document = await getDocument(documentId);
+      expect(document).toBeTruthy();
+      // Read back through the store it was written to, not from memory.
+      expect(store.objects.size).toBe(1);
+      const bytes = await readObject(document!.storageKey ?? document!.filePath);
+      expect(bytes.toString('utf8')).toContain('section 10131');
+      expect((await getOrchestration(orchestration.id))!.documentId).toBe(documentId);
+    } finally {
+      resetStorage();
+    }
+  });
+
+  it('keeps an upload refused with a 5xx unclassified, because it may have landed', async () => {
+    const { SupabaseStorageProvider, isStoreCapacityRefusal } = await import(
+      '../server/services/storage/index.ts'
+    );
+    for (const [status, retryable] of [[429, true], [500, false], [503, false], [544, false], [403, false]] as const) {
+      const store = new SupabaseStorageProvider({
+        url: 'https://example.supabase.co',
+        serviceRoleKey: 'k',
+        bucket: 'brain',
+        fetchImpl: (async () => new Response('no', { status })) as unknown as typeof fetch,
+      });
+      const error = await store.put({ key: 'projects/p/documents/d/a.md', body: Buffer.from('x') }).catch((e) => e);
+      expect(isStoreCapacityRefusal(error), `HTTP ${status}`).toBe(retryable);
+    }
   });
 });

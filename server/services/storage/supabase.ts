@@ -54,6 +54,12 @@ const TRANSIENT_READ_STATUSES = new Set([429, 500, 502, 503, 504, 544]);
 
 const READ_ATTEMPTS = 3;
 
+/**
+ * The one write refusal that is documented as "not processed": a rate or
+ * connection limit answered before the upload was accepted.
+ */
+const WRITE_NOT_PROCESSED_STATUS = 429;
+
 /** `Retry-After` in seconds, when the store says how long to wait. */
 function retryAfterMs(response: Response, attempt: number): number {
   const header = response.headers.get('retry-after');
@@ -144,6 +150,12 @@ export class SupabaseStorageProvider implements StorageProvider {
       throw new StorageConfigurationError(
         `The document store refused an upload (HTTP ${response.status}).`,
         await safeBody(response),
+        // A 429 is the store refusing to *take* the request — Supabase's
+        // `too_many_connections` / `SlowDown` — so nothing landed and asking
+        // again is safe; production request req_F11L81JQNiBz was exactly this
+        // and was reported as a fault. Every other write refusal stays
+        // unclassified: a 5xx on an upload may have landed (invariant 26).
+        response.status === WRITE_NOT_PROCESSED_STATUS ? response.status : null,
       );
     }
 

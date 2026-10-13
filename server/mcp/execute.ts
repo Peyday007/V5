@@ -326,8 +326,11 @@ async function runTool(tool: McpTool, input: CallInput): Promise<CallOutput> {
      * post-restart gate reported exactly this as "could not be completed",
      * which a worker cannot tell from a fault. The bucket is not inside that
      * transaction, so a file written earlier in the same call may remain there
-     * — the message says so rather than claiming nothing happened — and a
-     * refused *write* is never classified here, because its outcome is unknown.
+     * — the message says so rather than claiming nothing happened. A refused
+     * *write* is classified here only for 429 (production req_F11L81JQNiBz:
+     * `too_many_connections` / `SlowDown` on a synthesis upload), which the
+     * store answers before taking anything; a write refused any other way has
+     * an unknown outcome and stays an internal failure.
      */
     if (isStoreCapacityRefusal(error)) {
       void outsideTransaction(() => asWorkload(() => audit({
@@ -356,7 +359,7 @@ async function runTool(tool: McpTool, input: CallInput): Promise<CallOutput> {
 /** The answer when Brain's document store declined for now. Retryable. */
 function capacityResult(requestId: string): CallToolBody {
   const message =
-    "Brain's document store is temporarily refusing reads (rate limited or busy). Nothing was " +
+    "Brain's document store is temporarily refusing requests (rate limited or busy). Nothing was " +
     "committed to Brain's records and nothing was refused, though the store may still hold a file " +
     `written earlier in this call: send the same call again shortly. Reference ${requestId}.`;
   return {
