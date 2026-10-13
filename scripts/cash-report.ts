@@ -438,6 +438,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   );
   await researchYield(projectId);
   await gateFailures(projectId);
+  await researchAccounting(projectId);
 
   // --- What became a piece of work ----------------------------------------
   const opportunities = await listOpportunities({ projectId });
@@ -971,6 +972,134 @@ async function gateFailures(projectId: string): Promise<void> {
   } catch (error) {
     console.log('');
     console.log(`GATE OUTCOMES (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
+  }
+}
+
+/**
+ * The research work and failures Session F was asked to account for, as reads.
+ *
+ * Three questions nothing deployed could answer from a container (#196):
+ *   - which packet owns each stale research item, and whether it is still
+ *     needed — a QUEUED item never claimed, or a LEASED one whose lease
+ *     lapsed, still under its own attempt ceiling;
+ *   - what cancelled the work under a mission that failed "left RESEARCHING
+ *     with nothing queued" — `work_items.cancelled_reason`, grouped;
+ *   - which Routine, account and host each source-access block came from, and
+ *     which of four different facts it is.
+ * Nothing here writes. Each section is bounded and fails on its own.
+ */
+async function researchAccounting(projectId: string): Promise<void> {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
+  try {
+    console.log('');
+    console.log('STALE RESEARCH WORK (under its own ceiling, untouched for a day, or a lapsed lease)');
+    const stale = await db.all<{
+      id: string; work_type: string; state: string; attempt_count: number; max_attempts: number;
+      updated_at: string; orchestration_id: string | null; o_status: string | null; m_state: string | null;
+    }>(
+      `SELECT w.id, w.work_type, w.state, w.attempt_count, w.max_attempts, w.updated_at, w.orchestration_id,
+              o.status AS o_status,
+              (SELECT m.state FROM russell_missions m WHERE m.orchestration_id = w.orchestration_id
+                ORDER BY m.updated_at DESC LIMIT 1) AS m_state
+         FROM work_items w LEFT JOIN research_orchestrations o ON o.id = w.orchestration_id
+        WHERE w.project_id = ? AND w.work_type LIKE 'RESEARCH_%'
+          AND w.attempt_count < w.max_attempts
+          AND ((w.state = 'QUEUED' AND w.updated_at < ?) OR (w.state = 'LEASED' AND w.lease_expires_at < ?))
+        ORDER BY w.updated_at LIMIT 40`,
+      [projectId, dayAgo, now],
+    );
+    if (stale.length === 0) console.log('  none');
+    for (const row of stale) {
+      console.log(
+        `  ${row.id} ${row.work_type} ${row.state} ${Number(row.attempt_count)}/${Number(row.max_attempts)}` +
+          ` since ${row.updated_at} packet ${row.orchestration_id ?? '—'} ${row.o_status ?? '—'} mission ${row.m_state ?? '—'}`,
+      );
+    }
+  } catch (error) {
+    console.log(`  (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
+  }
+  try {
+    console.log('');
+    console.log("MISSIONS FAILED 'left RESEARCHING with nothing queued' — what cancelled their work");
+    const reasons = await db.all<{ work_type: string; reason: string | null; n: number; example: string }>(
+      `SELECT w.work_type, SUBSTR(COALESCE(w.cancelled_reason, ''), 1, 110) AS reason, COUNT(*) AS n,
+              MIN(m.orchestration_id) AS example
+         FROM russell_missions m
+         JOIN work_items w ON w.orchestration_id = m.orchestration_id AND w.state = 'CANCELLED'
+        WHERE m.project_id = ? AND m.state = 'FAILED' AND m.terminal_reason LIKE '%with nothing queued%'
+        GROUP BY w.work_type, SUBSTR(COALESCE(w.cancelled_reason, ''), 1, 110)
+        ORDER BY COUNT(*) DESC LIMIT 15`,
+      [projectId],
+    );
+    if (reasons.length === 0) console.log('  none');
+    for (const r of reasons) {
+      console.log(`  ${String(Number(r.n)).padStart(4)}  ${r.work_type} ${r.reason || '(no reason recorded)'}  e.g. ${r.example}`);
+    }
+  } catch (error) {
+    console.log(`  (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
+  }
+  try {
+    console.log('');
+    console.log('SOURCE ACCESS BLOCKS by Routine (fragments whose recorded reason names the network)');
+    const rows = await db.all<{ id: string; blocked_reason: string; routine: string | null; session: string | null }>(
+      `SELECT f.id, f.blocked_reason,
+              (SELECT p.executor_routine_id FROM research_passes p WHERE p.fragment_id = f.id
+                 AND p.executor_routine_id IS NOT NULL ORDER BY p.started_at DESC LIMIT 1) AS routine,
+              (SELECT p.executor_session_ref FROM research_passes p WHERE p.fragment_id = f.id
+                 AND p.executor_session_ref IS NOT NULL ORDER BY p.started_at DESC LIMIT 1) AS session
+         FROM research_fragments f
+        WHERE f.project_id = ? AND f.status = 'BLOCKED' AND f.blocked_reason IS NOT NULL
+          AND (f.blocked_reason LIKE '%ENOTFOUND%' OR f.blocked_reason LIKE '%CONNECT%'
+               OR f.blocked_reason LIKE '%403%' OR f.blocked_reason LIKE '%network%'
+               OR f.blocked_reason LIKE '%egress%' OR f.blocked_reason LIKE '%policy%'
+               OR f.blocked_reason LIKE '%unread%' OR f.blocked_reason LIKE '%could not be read%')
+        LIMIT 400`,
+      [projectId],
+    );
+    const kindOf = (reason: string): string =>
+      /ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(reason)
+        ? 'DNS_FAILURE'
+        : /CONNECT[^\n]{0,40}403|proxy|network polic|egress|not allowed by/i.test(reason)
+          ? 'PROVIDER_ENVIRONMENT_DENIED'
+          : /\b(403|401|429)\b|forbidden|robots/i.test(reason)
+            ? 'HOST_REFUSED'
+            : 'UNREADABLE_CONTENT';
+    const routines = new Map<string, { name: string; account: string }>();
+    for (const r of await db.all<{ id: string; name: string; account: string | null }>(
+      `SELECT r.id, r.name, a.name AS account FROM fleet_routines r LEFT JOIN fleet_accounts a ON a.id = r.account_id`,
+    )) {
+      routines.set(r.id, { name: r.name, account: r.account ?? '—' });
+    }
+    // The fallback when a pass carries no Routine: the routed dispatch whose
+    // session that pass reported (`session_<id>` from the worker, `cse_<id>`
+    // on the fire), read from Brain's own bin_events.
+    const viaDispatch = async (session: string | null): Promise<string | null> => {
+      if (!session) return null;
+      const bare = session.replace(/^(session_|cse_)/, '');
+      const hit = await db.get<{ routine_id: string | null }>(
+        `SELECT routine_id FROM bin_events WHERE session_ref IN (?, ?, ?) AND routine_id IS NOT NULL LIMIT 1`,
+        [session, `cse_${bare}`, `session_${bare}`],
+      );
+      return hit?.routine_id ?? null;
+    };
+    const grouped = new Map<string, { n: number; example: string; host: string | null }>();
+    for (const row of rows) {
+      const routine = row.routine ?? (await viaDispatch(row.session));
+      const known = routine ? routines.get(routine) : null;
+      const host = /https?:\/\/([^/\s'")]+)/.exec(row.blocked_reason)?.[1] ?? null;
+      const key = `${kindOf(row.blocked_reason).padEnd(28)} ${known ? `${known.name} (${known.account})` : routine ?? 'unattributed'}`;
+      const entry = grouped.get(key) ?? { n: 0, example: row.id, host };
+      entry.n += 1;
+      grouped.set(key, entry);
+    }
+    if (grouped.size === 0) console.log('  none');
+    for (const [key, entry] of [...grouped].sort((a, b) => b[1].n - a[1].n)) {
+      console.log(`  ${String(entry.n).padStart(4)}  ${key}  e.g. ${entry.example}${entry.host ? ` host ${entry.host}` : ''}`);
+    }
+  } catch (error) {
+    console.log(`  (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
   }
 }
 

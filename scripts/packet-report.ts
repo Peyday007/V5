@@ -267,6 +267,25 @@ async function main(): Promise<void> {
         (item.workerId ? ` held by ${item.workerId}` : ''),
     );
   }
+  /*
+   * Why each finished item stopped, in the words of whatever stopped it.
+   *
+   * A packet whose fragment is still QUEUED beside a CANCELLED research item
+   * was cancelled by somebody, and `cancelled_reason` is the only row that
+   * says who — 37 missions failed "left RESEARCHING with nothing queued" and
+   * no deployed read printed it (RES-10, #196).
+   */
+  const ended = items.filter((item) => item.state === 'CANCELLED' || item.state === 'FAILED');
+  if (ended.length > 0) {
+    console.log('  ended items');
+    for (const item of ended) {
+      console.log(
+        `      ${item.workType} ${item.id} ${item.state} attempt ${item.attemptCount}/${item.maxAttempts}` +
+          ` updated ${item.updatedAt}` +
+          (item.cancelledReason ? ` — ${item.cancelledReason}` : item.resultSummary ? ` — ${item.resultSummary}` : ' — (no reason recorded)'),
+      );
+    }
+  }
 
   /*
    * What the failures actually recorded.

@@ -945,6 +945,11 @@ describe.skipIf(Boolean((process.env.BRAIN_TEST_DATABASE_URL ?? '').trim()))(
       expect(output).toContain(`missions=${missions}`);
       expect(output).toMatch(/NEEDS_HUMAN\s+No fragment cleared its evidence gate; the standing authority has expired/);
       expect(output).toContain('GATE OUTCOMES (fragments judged ');
+      // Session F's accounting reads print as sections, and none collapsed.
+      expect(output).toContain('STALE RESEARCH WORK');
+      expect(output).toContain("MISSIONS FAILED 'left RESEARCHING with nothing queued'");
+      expect(output).toContain('SOURCE ACCESS BLOCKS by Routine');
+      expect(output).not.toContain('(could not be read');
       expect(output).toContain('CASH-REPORT: OK');
     }, 120_000);
   },
