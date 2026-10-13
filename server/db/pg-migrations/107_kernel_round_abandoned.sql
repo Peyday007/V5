@@ -2,7 +2,7 @@
 --
 -- `deal_rounds` and `puzzle_rounds` declared only OPEN and SETTLED, so a round
 -- whose mission FAILED or was CANCELLED had nowhere to go and held its slot
--- for ever. This widens each state CHECK by one value; SQLite 118 is the same
+-- for ever. This widens each state CHECK by one value; SQLite 116 is the same
 -- change, by rebuild.
 --
 -- The constraint names are Postgres's own defaults for the unnamed CHECKs in
