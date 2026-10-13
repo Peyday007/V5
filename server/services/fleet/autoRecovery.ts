@@ -33,13 +33,31 @@ import { getDb } from '../../db/database.ts';
 import { getAccount, getRoutine, listRoutines } from '../../repos/fleet.ts';
 import { liveRecoveryProbe } from '../../repos/recoveryProbes.ts';
 import type { FleetRoutine } from '../../domain/types.ts';
-import { liftableQuarantine, recoveryIneligibility, startRecoveryProbe, type Fire } from './recoveryProbe.ts';
+import {
+  liftableQuarantine,
+  MIXED_ARRIVALS_MARK,
+  probeAmbiguousByOutage,
+  recoveryIneligibility,
+  startRecoveryProbe,
+  type Fire,
+} from './recoveryProbe.ts';
+import { recentInfraFailures } from '../../db/infra.ts';
+import { restartWindowPending } from '../infra/incidents.ts';
 
 export const AUTO_RECOVERY_ACTOR = 'brain:auto-recovery';
 export const AUTO_PROBE_LIMIT = 4;
 /** Wait before the first probe, then after each one that did not prove the surface healthy. */
 export const AUTO_PROBE_BACKOFF_MS = [15 * 60_000, 60 * 60_000, 4 * 60 * 60_000, 12 * 60 * 60_000, 24 * 60 * 60_000];
 const RUN_EVERY_MS = 60_000;
+/**
+ * How many probes of one episode may end inconclusive because of Brain's own
+ * outage without being counted (CON-6). Uncounted but not unlimited: past this,
+ * an "outage" that keeps recurring at exactly this surface is counted like any
+ * other probe that proved nothing, so the budget still binds.
+ */
+export const OUTAGE_PROBE_ALLOWANCE = 3;
+/** Brain probes only while it has felt no infrastructure failure for this long. */
+const HEALTHY_FOR_MS = 5 * 60_000;
 
 let lastRun = 0;
 
@@ -51,6 +69,10 @@ export function resetAutoRecoveryClock(): void {
 interface ProbeHistory {
   /** Consecutive automatic probes since the boundary that did not prove it healthy. */
   failed: number;
+  /** Of the probes since the boundary, those that were inconclusive because Brain was down, not counted. */
+  outages: number;
+  /** Whether the newest probe was one of those. */
+  lastWasOutage: boolean;
   lastAt: string | null;
   lastNextAction: string | null;
   lastState: string | null;
@@ -66,27 +88,62 @@ interface ProbeHistory {
  * ceiling never bind.
  */
 async function historyFor(routine: FleetRoutine): Promise<ProbeHistory> {
-  const rows = await getDb().all<{ state: string; created_at: string; next_action: string | null; requested_by_id: string }>(
-    `SELECT state, created_at, next_action, requested_by_id FROM connector_recovery_probes
+  const rows = await getDb().all<{
+    state: string;
+    created_at: string;
+    next_action: string | null;
+    requested_by_id: string;
+    health: string | null;
+    outcome: string | null;
+  }>(
+    `SELECT state, created_at, next_action, requested_by_id, health, outcome FROM connector_recovery_probes
       WHERE routine_id = ? AND created_at > ? ORDER BY created_at DESC LIMIT 20`,
     [routine.id, routine.noShowsForgivenAt ?? ''],
   );
   let failed = 0;
+  let outages = 0;
   let lastAt: string | null = null;
   let lastNextAction: string | null = null;
   let lastState: string | null = null;
+  let lastWasOutage = false;
+  /*
+   * Oldest first, so the allowance is spent by the earliest outages of the
+   * episode and a later one past it counts — the order the budget was spent in.
+   */
+  const episode: typeof rows = [];
   for (const row of rows) {
     if (row.requested_by_id !== AUTO_RECOVERY_ACTOR) break;
-    if (row.state === 'HEALTHY') break;
-    if (!lastAt) {
-      lastAt = row.created_at;
-      lastNextAction = row.next_action;
-      lastState = row.state;
-    }
+    /*
+     * A HEALTHY probe that did not lift a wrong-worker quarantine because the
+     * Routine's arrivals are mixed (CON-3) proved the connector and not the
+     * surface, so it neither ends the count nor is free.
+     */
+    if (row.state === 'HEALTHY' && !(row.outcome ?? '').includes(MIXED_ARRIVALS_MARK)) break;
+    episode.push(row);
+  }
+  for (const row of [...episode].reverse()) {
     if (row.state === 'FIRING' || row.state === 'FIRED') continue;
+    /*
+     * Brain's own outage is not the surface's failure (CON-6): Caleb 3-B was
+     * declared exhausted, naming its account owner, on a probe whose only
+     * finding was that Brain's database did not answer. Such a probe is not
+     * counted, up to an allowance, and still sets the backoff base below — so
+     * the next probe waits its turn rather than retrying into the outage.
+     */
+    if (probeAmbiguousByOutage(row) && outages < OUTAGE_PROBE_ALLOWANCE) {
+      outages += 1;
+      continue;
+    }
     failed += 1;
   }
-  return { failed, lastAt, lastNextAction, lastState };
+  const newest = episode[0];
+  if (newest) {
+    lastAt = newest.created_at;
+    lastNextAction = newest.next_action;
+    lastState = newest.state;
+    lastWasOutage = probeAmbiguousByOutage(newest);
+  }
+  return { failed, outages, lastWasOutage, lastAt, lastNextAction, lastState };
 }
 
 /** May Brain probe this Routine by itself, and when? Null when never. */
@@ -110,6 +167,15 @@ export async function autoProbeQuarantinedSurfaces(options: { now?: number; fire
   const now = options.now ?? Date.now();
   if (!options.force && now - lastRun < RUN_EVERY_MS) return null;
   lastRun = now;
+  /*
+   * Only in healthy time. A probe fired while Brain itself is failing can only
+   * end inconclusive (CON-6), spends an activation, and — if the outage were
+   * the surface's to pay for — a recovery budget. Brain waits until it has felt
+   * no infrastructure failure for a few minutes and is not mid-restart; the
+   * probe that was due is then simply the next one.
+   */
+  if (restartWindowPending()) return null;
+  if (recentInfraFailures(new Date(now - HEALTHY_FOR_MS).toISOString()).length > 0) return null;
   if (await liveRecoveryProbe()) return null;
   let best: { routine: FleetRoutine; at: number } | null = null;
   for (const routine of await listRoutines()) {
@@ -141,6 +207,8 @@ export interface ExhaustedRecovery {
   lastProbeState: string | null;
   lastProbeAt: string | null;
   nextAction: string | null;
+  /** The last probe proved nothing because Brain itself was unavailable. */
+  lastProbeOutage: boolean;
 }
 
 /** Quarantines Brain has stopped probing by itself: the ones a person now has to look at. */
@@ -160,6 +228,7 @@ export async function autoRecoveryExhausted(): Promise<ExhaustedRecovery[]> {
       lastProbeState: history.lastState,
       lastProbeAt: history.lastAt,
       nextAction: history.lastNextAction,
+      lastProbeOutage: history.lastWasOutage,
     });
   }
   return out;

@@ -386,6 +386,31 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
     : verdict('HEALTHY', 'IDLE_WITH_LIVE_REFRESH', 'The client holds a live refresh token; its next session refreshes as normal.');
 }
 
+/**
+ * The newest authorization-code grant on this connector's clients, read alone
+ * (INF-6a).
+ *
+ * `healthOf` answers far more than this — two LIKE probes over forty-five days
+ * of `identity_events` among them — and the reauthorization pass needed only
+ * this one value to decide anything: a quarantined surface comes back only on a
+ * consent newer than its quarantine. Production measured that pass at 1,330
+ * full health computations in three hours, producing nothing until a consent
+ * row existed. This is one indexed read (`idx_oauth_tokens_client`), and the
+ * full computation runs only once it says a new grant is there — so nothing is
+ * cached and nothing goes stale: the grant is the row that changes, and it is
+ * read every time.
+ */
+export async function lastGrantForConnector(connectorId: string): Promise<string | null> {
+  const row = await getDb().get<{ last_grant: string | null }>(
+    `SELECT MAX(t.created_at) AS last_grant
+       FROM oauth_tokens t
+      WHERE t.kind = 'REFRESH' AND t.parent_token_id IS NULL
+        AND t.client_id IN (SELECT cc.client_id FROM connector_clients cc WHERE cc.connector_id = ?)`,
+    [connectorId],
+  );
+  return row?.last_grant ?? null;
+}
+
 async function authNoShowsSince(connectorId: string, since: string): Promise<number> {
   const row = await getDb().get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM bin_events e

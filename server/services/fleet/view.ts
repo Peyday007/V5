@@ -191,6 +191,10 @@ function plainActionFor(problem: string): string {
       return 'Brain has stopped retrying; the owner of this Claude account checks the Routine in Claude.';
     case 'OUT_OF_SCOPE':
       return 'It is healthy and has no work it may take; an administrator decides which project it serves.';
+    case 'CANNOT_TAKE_WAITING_WORK':
+      return 'It is healthy and in the right project; an administrator decides whether it should take the kind of work waiting.';
+    case 'MIXED_WORKERS':
+      return 'In Claude, this Routine has two Brain connectors and uses either; its owner removes the one it was not set up with.';
     default:
       return 'An administrator looks at it.';
   }

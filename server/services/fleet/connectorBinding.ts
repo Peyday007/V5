@@ -320,12 +320,22 @@ export async function reconcileConnectorBindings(): Promise<{ attached: number; 
 export const NO_SHOW_QUARANTINE_MARK = 'fired sessions never checked in';
 
 export async function recoverReauthorizedSurfaces(now = Date.now()): Promise<string[]> {
-  const { connectorHealth } = await import('./connectorHealth.ts');
+  const { connectorHealth, lastGrantForConnector } = await import('./connectorHealth.ts');
   const { setRoutineState } = await import('../../repos/fleet.ts');
   const recovered: string[] = [];
   for (const routine of await listRoutines()) {
     if (routine.state !== 'QUARANTINED' || !routine.connectorId) continue;
     if (!(routine.stateReason ?? '').includes(NO_SHOW_QUARANTINE_MARK)) continue;
+    /*
+     * The one fact that can change the answer, read first and alone (INF-6a).
+     * Without a consent newer than the quarantine nothing below can move, so the
+     * full health computation — and its scans of `identity_events` — is not
+     * spent finding that out again every ten seconds. With one, health is read
+     * in full exactly as before, so revocation and every other verdict still
+     * decide.
+     */
+    const grant = await lastGrantForConnector(routine.connectorId);
+    if (!grant || grant <= routine.updatedAt) continue;
     const health = await connectorHealth(routine.connectorId, now);
     if (!health || health.state !== 'HEALTHY') continue;
     /*

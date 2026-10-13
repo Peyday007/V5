@@ -51,6 +51,7 @@
  * attempt. That is Step 10's job — a correct basic dispatcher — and
  * capacity-aware routing is explicitly Step 11's.
  */
+import { getDb } from '../../db/database.ts';
 import { reconcileConnectorBindings, recoverReauthorizedSurfaces } from '../fleet/connectorBinding.ts';
 import {
   claimDispatchIntent,
@@ -189,6 +190,23 @@ export interface TickResult {
  */
 let lastConnectorReconcile = 0;
 const CONNECTOR_RECONCILE_EVERY_MS = 5 * 60_000;
+
+/**
+ * The newest no-show the count was last read against (INF-6e). The count can
+ * only *rise* when a `DISPATCH_NO_SHOW` row is written — an arrival or a person
+ * forgiving the surface only lowers it, and lowering it can never make a
+ * quarantine due — so the full count is read only when the newest such row has
+ * changed, which one indexed read (`idx_bin_events_type`) answers whichever
+ * instance wrote it. The backstop re-reads anyway, in case two rows share an
+ * instant across instances.
+ */
+let unansweredMark: { newest: string; at: number } | null = null;
+const UNANSWERED_BACKSTOP_MS = 5 * 60_000;
+
+/** Tests: read the no-show count on the next tick whatever happened. */
+export function forgetUnansweredRead(): void {
+  unansweredMark = null;
+}
 
 export async function dispatchTick(
   options: { burst?: number; projectIds?: string[] } = {},
@@ -350,7 +368,18 @@ export async function dispatchTick(
    * The answering transition is `fleet set-state`, and it is reachable without
    * touching the database — §24's rule that an escalation needs one.
    */
-  const unanswered = await unansweredFiresByRoutine();
+  const newestNoShow =
+    (
+      await getDb().get<{ newest: string | null }>(
+        "SELECT MAX(at) AS newest FROM bin_events WHERE event_type = 'DISPATCH_NO_SHOW'",
+      )
+    )?.newest ?? '';
+  const unansweredDue =
+    !unansweredMark ||
+    unansweredMark.newest !== newestNoShow ||
+    Date.now() - unansweredMark.at >= UNANSWERED_BACKSTOP_MS;
+  const unanswered = unansweredDue ? await unansweredFiresByRoutine() : new Map<string, number>();
+  if (unansweredDue) unansweredMark = { newest: newestNoShow, at: Date.now() };
   for (const [routineId, count] of unanswered) {
     const verdict = shouldQuarantine({ consecutiveNoShows: count, consecutiveFailures: 0 });
     if (!verdict.quarantine) continue;

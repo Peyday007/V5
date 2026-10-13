@@ -778,6 +778,15 @@ async function rotateWithin(input: {
 }): Promise<RefreshRotation> {
   const key = await rotationKey();
   const db = getDb();
+  /*
+   * The presented token's ancestors, read before the transaction opens (CON-2).
+   * A token's `parent_token_id` and `created_at` are written once and never
+   * change, so this walk needs neither the row lock nor the transaction — and
+   * inside it, it was up to sixteen sequential round trips holding one of the
+   * control plane's two reserved connections, on exactly the path a client
+   * takes when it is retrying a lost reply under a slow database.
+   */
+  const ancestorsOutside = await ancestorsOf(input.tokenId);
   return db.transaction(async (): Promise<RefreshRotation> => {
     const now = input.now ?? Date.now();
     const at = new Date(now).toISOString();
@@ -837,16 +846,7 @@ async function rotateWithin(input: {
      * test can arrange and production effectively cannot — but "newer" must
      * mean later in the lineage, never "older and equal on the clock".
      */
-    const ancestors = new Set<string>();
-    for (let cursor = presented.parent_token_id; cursor && ancestors.size < 16; ) {
-      ancestors.add(cursor);
-      const up: { parent_token_id: string | null; created_at: string } | undefined = await db.get(
-        'SELECT parent_token_id, created_at FROM oauth_tokens WHERE id = ?',
-        [cursor],
-      );
-      if (!up || up.created_at < presented.created_at) break;
-      cursor = up.parent_token_id;
-    }
+    const ancestors = ancestorsOutside;
     const newer = (
       await db.all<OAuthTokenRow>(
         `SELECT * FROM oauth_tokens
@@ -904,6 +904,32 @@ async function rotateWithin(input: {
     const minted = await mintPair({ ...base, refresh: successor, parentTokenId: presented.id });
     return { ok: true, outcome: 'RECOVERED', minted };
   });
+}
+
+/**
+ * The lineage above a token, back to the first ancestor older than it (at most
+ * sixteen). Only immutable columns are read, so the answer cannot be changed by
+ * a concurrent rotation and needs no lock. Exactly the walk `rotateWithin` did
+ * inside its transaction, moved out of it.
+ */
+async function ancestorsOf(tokenId: string): Promise<Set<string>> {
+  const db = getDb();
+  const ancestors = new Set<string>();
+  const presented = await db.get<{ parent_token_id: string | null; created_at: string }>(
+    'SELECT parent_token_id, created_at FROM oauth_tokens WHERE id = ?',
+    [tokenId],
+  );
+  if (!presented) return ancestors;
+  for (let cursor = presented.parent_token_id; cursor && ancestors.size < 16; ) {
+    ancestors.add(cursor);
+    const up: { parent_token_id: string | null; created_at: string } | undefined = await db.get(
+      'SELECT parent_token_id, created_at FROM oauth_tokens WHERE id = ?',
+      [cursor],
+    );
+    if (!up || up.created_at < presented.created_at) break;
+    cursor = up.parent_token_id;
+  }
+  return ancestors;
 }
 
 /**

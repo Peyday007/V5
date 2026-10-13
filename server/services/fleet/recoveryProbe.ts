@@ -99,7 +99,12 @@ import { attributeArrival, NO_SHOW_QUARANTINE_MARK, reconcileConnectorBindings }
 import { connectorHealth, forgetRoutingHealth } from './connectorHealth.ts';
 import { connectorOwners } from './memberReconnect.ts';
 import { createProbeBin, ProbeRefused } from './probe.ts';
-import { WRONG_WORKER_MARK, wrongWorkerReason } from './arrivalIdentity.ts';
+import {
+  MIXED_ARRIVALS_REASON_MARK,
+  WRONG_WORKER_MARK,
+  wrongWorkerLiftRefusal,
+  wrongWorkerReason,
+} from './arrivalIdentity.ts';
 import { arrivalIncidentDuring, heldArrivalEvidence, restartWindowPending, unservedArrivalFor } from '../infra/incidents.ts';
 
 /**
@@ -113,6 +118,44 @@ export const RECOVERY_PROBE_WINDOW_MS = 15 * 60_000;
 export const RECOVERY_PROBE_CREATOR = 'connector-recovery-probe';
 
 export class RecoveryProbeRefused extends Error {}
+
+/**
+ * The `health` an AMBIGUOUS probe carries when its ambiguity is Brain's own —
+ * its database did not answer, or its process was replaced, while the probe's
+ * session would have arrived (CON-6). The probe's state stays AMBIGUOUS, which
+ * is true: nothing was learned about the connector. What differs is whose
+ * outage it was, and the automatic recovery budget is for the surface's.
+ */
+export const BRAIN_OUTAGE_HEALTH = 'BRAIN_UNAVAILABLE';
+
+/**
+ * Was this probe's ambiguity Brain's own outage? Read from the mark, and — for
+ * probes settled before the mark existed — from the exact sentences Brain itself
+ * wrote for those two outcomes and no other, so a probe like Caleb 3-B's
+ * (AMBIGUOUS during the 2026-10-12 pooler outage) stops counting against its
+ * surface without any row being rewritten.
+ */
+export function probeAmbiguousByOutage(probe: {
+  state: string;
+  health: string | null;
+  outcome: string | null;
+}): boolean {
+  if (probe.state !== 'AMBIGUOUS') return false;
+  if (probe.health === BRAIN_OUTAGE_HEALTH) return true;
+  const outcome = probe.outcome ?? '';
+  return outcome.includes(OUTAGE_OUTCOME_PHRASE) || outcome.includes(MID_FIRE_OUTCOME_PHRASE);
+}
+
+const OUTAGE_OUTCOME_PHRASE = 'Brain itself was failing while that session would have arrived';
+const MID_FIRE_OUTCOME_PHRASE = 'never recorded (the process stopped mid-fire)';
+
+/**
+ * The phrase a HEALTHY probe's outcome carries when it proved the connector but
+ * did not lift a wrong-worker quarantine, because the Routine's sessions have
+ * been arriving as both workers (CON-3). The automatic budget reads it: such a
+ * probe did not prove the *surface* healthy.
+ */
+export const MIXED_ARRIVALS_MARK = 'not lifted: this Routine’s sessions have arrived as both workers';
 
 /** Why this Routine may not be probed, or null when it may. */
 export async function recoveryIneligibility(routine: FleetRoutine): Promise<string | null> {
@@ -372,6 +415,8 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
     // session was started is unknown, and unknown is not evidence.
     const moved = await settleRecoveryProbe(probe.id, 'FIRING', {
       to: 'AMBIGUOUS',
+      // The process that held it stopped: a Brain restart, not the surface.
+      health: BRAIN_OUTAGE_HEALTH,
       outcome: 'The fire’s outcome was never recorded (the process stopped mid-fire). Nothing was attributed.',
       nextAction: `Probe ${routine.routineRef} again.`,
     });
@@ -424,7 +469,30 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
       if (!won) return false;
       let lifted = 'It was not quarantined.';
       const current = (await getRoutine(routine.id)) ?? routine;
-      if (current.state === 'QUARANTINED') {
+      const mixed =
+        current.state === 'QUARANTINED' && (current.stateReason ?? '').includes(WRONG_WORKER_MARK)
+          ? await wrongWorkerLiftRefusal(routine.id, now)
+          : null;
+      if (current.state === 'QUARANTINED' && mixed) {
+        /*
+         * One right-worker arrival is not a corrected configuration when the
+         * Routine's ordinary sessions have been arriving as both workers
+         * (CON-3): lifting here was the 2-C oscillation — lift, a wrong arrival,
+         * quarantine, a probe that happened to choose the right connector, lift.
+         * The quarantine stays, says so, and this probe is counted against the
+         * automatic budget (`MIXED_ARRIVALS_MARK`), so a Routine that keeps
+         * choosing both reaches a person rather than being probed for ever.
+         */
+        lifted = `${MIXED_ARRIVALS_MARK}. ${mixed.sentence}`;
+        if (!(current.stateReason ?? '').includes(MIXED_ARRIVALS_REASON_MARK)) {
+          await setRoutineState({
+            routineId: routine.id,
+            from: 'QUARANTINED',
+            to: 'QUARANTINED',
+            reason: `${current.stateReason ?? ''} ${MIXED_ARRIVALS_REASON_MARK}: ${mixed.sentence}`.trim(),
+          });
+        }
+      } else if (current.state === 'QUARANTINED') {
         if (liftableQuarantine(current.stateReason)) {
           const moved = await setRoutineState({
             routineId: routine.id,
@@ -572,6 +640,7 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
   if (outage) {
     const moved = await settleRecoveryProbe(probe.id, 'FIRED', {
       to: 'AMBIGUOUS',
+      health: BRAIN_OUTAGE_HEALTH,
       outcome:
         `The provider started ${probe.providerSession}, and Brain itself was failing while that session would have ` +
         'arrived (its database did not answer, or it was restarting). Nothing reaching Brain says nothing about the ' +
@@ -619,6 +688,8 @@ export async function settleRecoveryProbes(now = Date.now()): Promise<{ settled:
     if (!routine || routine.state !== 'QUARANTINED' || !probe.arrivedAt) continue;
     if (!liftableQuarantine(routine.stateReason) || routine.updatedAt > probe.arrivedAt) continue;
     if (routine.connectorId !== probe.connectorId) continue;
+    if ((probe.outcome ?? '').includes(MIXED_ARRIVALS_MARK)) continue;
+    if ((routine.stateReason ?? '').includes(WRONG_WORKER_MARK) && (await wrongWorkerLiftRefusal(routine.id, now))) continue;
     const moved = await setRoutineState({
       routineId: routine.id,
       from: 'QUARANTINED',
