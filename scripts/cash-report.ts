@@ -66,6 +66,7 @@ import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
 import { cashPosition } from '../server/services/cash/money.ts';
 import { totalsByKind } from '../server/repos/cashLedger.ts';
 import { CASH_MONEY_KINDS } from '../server/domain/types.ts';
+import { gateFailureDistribution } from '../server/repos/research.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -436,6 +437,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
         : ''),
   );
   await researchYield(projectId);
+  await gateFailures(projectId);
 
   // --- What became a piece of work ----------------------------------------
   const opportunities = await listOpportunities({ projectId });
@@ -926,6 +928,52 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
  * classification of it. A section that cannot be read says so and the report
  * carries on.
  */
+/** What a mission is stopped on: a parked one waits, an ended one has a terminal reason. */
+const MISSION_REASON_SQL =
+  "CASE WHEN state = 'NEEDS_HUMAN' THEN COALESCE(NULLIF(waiting_on, ''), terminal_reason, '') " +
+  "ELSE COALESCE(terminal_reason, '') END";
+
+/**
+ * Why gated research failed its gate, over one fixed window (RES-1).
+ *
+ * `gateFailureDistribution` is the measurement; this prints its four
+ * populations apart — fragments judged, claims inside them, the packets they
+ * belong to, and failed conditions per claim — because reading one as another
+ * is how "143 blocked, 12 accepted" was compared against a different window.
+ * The window is printed so two readings can be compared only when they match.
+ */
+async function gateFailures(projectId: string): Promise<void> {
+  try {
+    const until = new Date().toISOString();
+    const since = new Date(Date.parse(until) - 7 * 86_400_000).toISOString();
+    const d = await gateFailureDistribution({ projectId, since, until });
+    console.log('');
+    console.log(`GATE OUTCOMES (fragments judged ${since} → ${until})`);
+    console.log(
+      `  fragments judged=${d.fragments.judged} accepted=${d.fragments.accepted} blocked=${d.fragments.blocked}`,
+    );
+    for (const [cause, n] of Object.entries(d.blockedByCause).sort((a, b) => b[1] - a[1])) {
+      const example = d.examples[cause]?.[0];
+      console.log(
+        `    ${String(n).padStart(4)}  ${cause}${example ? `  e.g. ${example.fragmentId} (${example.orchestrationId})` : ''}`,
+      );
+    }
+    console.log(
+      `  claims in those fragments submitted=${d.claims.submitted} accepted=${d.claims.accepted}` +
+        ` accepted-inside-blocked=${d.claims.acceptedInBlocked} unread=${d.claims.unread}`,
+    );
+    const conditions = Object.entries(d.failedConditions).sort((a, b) => b[1] - a[1]);
+    console.log(`  failed conditions per claim ${conditions.map(([k, n]) => `${k}=${n}`).join(' ') || '(none)'}`);
+    console.log(
+      `  packets those fragments belong to ${d.packets.total}: ` +
+        (Object.entries(d.packets.byStatus).map(([k, n]) => `${k}=${n}`).join(' ') || '(none)'),
+    );
+  } catch (error) {
+    console.log('');
+    console.log(`GATE OUTCOMES (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
+  }
+}
+
 async function researchYield(projectId: string): Promise<void> {
   const db = getDb();
   try {
@@ -960,9 +1008,13 @@ async function researchYield(projectId: string): Promise<void> {
     console.log('  questions asked most often');
     for (const t of titles) console.log(`    ${String(Number(t.n)).padStart(4)}x complete=${Number(t.complete)}  ${t.title}`);
     const missionReasons = await db.all<{ state: string; reason: string | null; n: number }>(
-      `SELECT state, SUBSTR(COALESCE(terminal_reason, ''), 1, 90) AS reason, COUNT(*) AS n FROM russell_missions
+      // A parked mission's reason is `waiting_on`: `needsHuman.ts` writes the
+      // packet's own failure reason there and leaves `terminal_reason` empty,
+      // because the mission has not ended. Reading only the terminal column
+      // printed 54 parked missions as "(no reason recorded)" (RES-9).
+      `SELECT state, SUBSTR(${MISSION_REASON_SQL}, 1, 90) AS reason, COUNT(*) AS n FROM russell_missions
         WHERE project_id = ? AND state IN ('FAILED', 'NEEDS_HUMAN')
-        GROUP BY state, SUBSTR(COALESCE(terminal_reason, ''), 1, 90) ORDER BY COUNT(*) DESC LIMIT 10`,
+        GROUP BY state, SUBSTR(${MISSION_REASON_SQL}, 1, 90) ORDER BY COUNT(*) DESC LIMIT 10`,
       [projectId],
     );
     console.log('  why missions stopped');

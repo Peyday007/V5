@@ -841,6 +841,14 @@ describe.skipIf(Boolean((process.env.BRAIN_TEST_DATABASE_URL ?? '').trim()))(
       const { recordMoney } = await import('../server/repos/cashLedger.ts');
 
       for (let i = 0; i < 130; i += 1) await mission(await idea('busy'), 'FAILED');
+      // A parked mission's reason lives in waiting_on, not terminal_reason (RES-9).
+      // The schema already refuses a parked mission with no waiting_on, so the
+      // "(no reason recorded)" lines were the report reading the wrong column.
+      const waiting = await mission(await idea('waiting'), 'RUNNING');
+      await getDb().run(
+        `UPDATE russell_missions SET state = 'NEEDS_HUMAN', waiting_on = ?, terminal_reason = NULL WHERE id = ?`,
+        ['No fragment cleared its evidence gate; the standing authority has expired', waiting.id],
+      );
       const refusal = 'the question names Missouri and Ohio, and splitting it is not Brain\'s call';
       const parked = await idea('parked');
       await getDb().run(
@@ -896,6 +904,8 @@ describe.skipIf(Boolean((process.env.BRAIN_TEST_DATABASE_URL ?? '').trim()))(
       expect(output).toMatch(/available funds\s+487\.50/);
       expect(output).toMatch(/by kind\s+CAPITAL_IN=500\.00 COST=12\.50/);
       expect(output).toContain(`missions=${missions}`);
+      expect(output).toMatch(/NEEDS_HUMAN\s+No fragment cleared its evidence gate; the standing authority has expired/);
+      expect(output).toContain('GATE OUTCOMES (fragments judged ');
       expect(output).toContain('CASH-REPORT: OK');
     }, 120_000);
   },

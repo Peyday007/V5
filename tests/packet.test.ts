@@ -4806,7 +4806,7 @@ describe('a synthesis upload the store refused for now', () => {
       expect(document).toBeTruthy();
       // Read back through the store it was written to, not from memory.
       expect(store.objects.size).toBe(1);
-      const bytes = await readObject(document!.storageKey ?? document!.filePath);
+      const bytes = await readObject(document!.storageKey!);
       expect(bytes.toString('utf8')).toContain('section 10131');
       expect((await getOrchestration(orchestration.id))!.documentId).toBe(documentId);
     } finally {
