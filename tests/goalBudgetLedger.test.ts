@@ -668,5 +668,16 @@ describe('a repair the grant will not pay for', () => {
     const again = await advancePacket(one.id);
     expect(again.status).toBe('NEEDS_HUMAN');
     expect((await getOrchestration(one.id))!.failureReason).toBe(after.failureReason);
+
+    // The answer the reason names: renewing the permission lets the next
+    // advance mint the repair it refused, with nobody touching the packet.
+    await getDb().run('UPDATE russell_goals SET expires_at = ? WHERE id = ?', [
+      new Date(Date.now() + 86_400_000).toISOString(),
+      goal.id,
+    ]);
+    const renewed = await advancePacket(one.id);
+    expect(renewed.status).toBe('RESEARCHING');
+    expect(renewed.enqueued.map((one) => one.workType)).toEqual(['RESEARCH_FRAGMENT']);
+    expect((await getOrchestration(one.id))!.failureReason).toBeNull();
   });
 });
