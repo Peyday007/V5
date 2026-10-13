@@ -35,6 +35,7 @@ deadline=$(( $(date +%s) + ${2:-9000} ))
 interval="${EVIDENCE_POLL_SECONDS:-60}"
 repo="${GITHUB_REPOSITORY:?}"
 canonical=$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)
+ref="${GITHUB_REF_NAME:-$canonical}"
 dispatched=no
 started=$(date +%s)
 
@@ -59,9 +60,11 @@ verdict() {
 }
 
 while :; do
-  tip=$(git ls-remote origin "refs/heads/$canonical" 2>/dev/null | cut -f1)
-  if [ -n "$tip" ] && [ "$tip" != "$sha" ]; then
-    echo "POSTGRES-EVIDENCE: SUPERSEDED origin/$canonical is $tip"
+  # Freshness is canonical-guard.sh's question, asked of the one file.
+  "$(dirname "$0")/canonical-guard.sh" "$ref" "$sha" "while waiting for Postgres evidence" > "${RUNNER_TEMP:-/tmp}/guard.txt" 2>&1
+  if [ $? = 3 ]; then
+    cat "${RUNNER_TEMP:-/tmp}/guard.txt"
+    echo "POSTGRES-EVIDENCE: SUPERSEDED"
     exit 3
   fi
   v=$(verdict)

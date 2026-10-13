@@ -103,7 +103,7 @@ describe('a superseded Deploy stops early, deploys nothing, and reads neutral (F
     setTip(SHA);
     fake('npm', `sleep 2; touch "${state}/finished"; exit 7`);
     fs.writeFileSync(path.join(state, 'step.sh'), tests());
-    const out = runScript(path.relative(ROOT, path.join(state, 'step.sh')), [], { GITHUB_SHA: SHA, SUPERSEDED_POLL_SECONDS: '1' });
+    const out = runScript(path.relative(ROOT, path.join(state, 'step.sh')), [], { GITHUB_SHA: SHA, GITHUB_REF_NAME: 'production', SUPERSEDED_POLL_SECONDS: '1' });
     expect(out.status).toBe(7);
     expect(fs.existsSync(path.join(state, 'finished'))).toBe(true);
     expect(out.outputs).not.toMatch(/superseded=true/);
@@ -115,7 +115,7 @@ describe('a superseded Deploy stops early, deploys nothing, and reads neutral (F
     fake('npm', `sleep 3; echo "${NEWER}" > "${state}/tip"; sleep 30; touch "${state}/finished"; exit 1`);
     fs.writeFileSync(path.join(state, 'step.sh'), tests());
     const started = Date.now();
-    const out = runScript(path.relative(ROOT, path.join(state, 'step.sh')), [], { GITHUB_SHA: SHA, SUPERSEDED_POLL_SECONDS: '1' });
+    const out = runScript(path.relative(ROOT, path.join(state, 'step.sh')), [], { GITHUB_SHA: SHA, GITHUB_REF_NAME: 'production', SUPERSEDED_POLL_SECONDS: '1' });
     expect(out.status).toBe(0);
     expect(out.outputs).toMatch(/superseded=true/);
     expect(fs.existsSync(path.join(state, 'finished'))).toBe(false);

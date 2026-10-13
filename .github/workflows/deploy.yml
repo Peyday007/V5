@@ -214,16 +214,17 @@ jobs:
           # No -e: the watcher's own reads may fail, and the step's verdict is
           # the suite's exit status, returned by the final `wait`.
           set +e
-          canonical=$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)
           interval="${SUPERSEDED_POLL_SECONDS:-60}"
           setsid npm test &
           pid=$!
           while kill -0 "$pid" 2>/dev/null; do
             sleep "$interval"
             kill -0 "$pid" 2>/dev/null || break
-            tip=$(git ls-remote origin "refs/heads/$canonical" 2>/dev/null | cut -f1)
-            if [ -n "$tip" ] && [ "$tip" != "$GITHUB_SHA" ]; then
-              echo "origin/$canonical moved to $tip while the suite ran; stopping it."
+            # The same one file answers; only its "superseded" (3) stops the suite.
+            .github/workflows/canonical-guard.sh "$GITHUB_REF_NAME" "$GITHUB_SHA" "while the suite runs" > "${RUNNER_TEMP:-/tmp}/guard.txt" 2>&1
+            if [ $? = 3 ]; then
+              cat "${RUNNER_TEMP:-/tmp}/guard.txt"
+              echo "The canonical branch moved while the suite ran; stopping it."
               kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null
               wait "$pid" 2>/dev/null
               echo "superseded=true" >> "$GITHUB_OUTPUT"

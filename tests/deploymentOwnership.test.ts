@@ -60,7 +60,7 @@ describe('one branch owns production', () => {
     // beside the deploy rather than before it is not a guard.
     expect(deploy).toMatch(/^ {2}canonical:/m);
     expect(deploy).toMatch(/^ {2}verify:\n {4}needs: canonical/m);
-    expect(deploy).toMatch(/needs: verify/);
+    expect(deploy).toMatch(/needs: \[verify, postgres-evidence\]/);
     // And it refuses an outdated checkout of the right branch too, which is the
     // same failure wearing the correct name.
     const guard = read('.github/workflows/canonical-guard.sh');
@@ -89,8 +89,10 @@ describe('one branch owns production', () => {
   it('asks again immediately before the release, from the same one file', () => {
     const deploy = read('.github/workflows/deploy.yml');
     // Invocations, not mentions: the comments above each step name the file too.
+    // Four: before the test gate, at the start of the test job, while the
+    // suite runs (FAC-6: superseded stops early), and before `flyctl deploy`.
     const asks = [...deploy.matchAll(/^\s+\.github\/workflows\/canonical-guard\.sh/gm)];
-    expect(asks.length).toBe(2);
+    expect(asks.length).toBe(4);
 
     // The second asking is the step directly before the one that ships.
     const before = deploy.slice(0, deploy.indexOf('      - name: Deploy\n'));
