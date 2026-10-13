@@ -31,7 +31,10 @@ import crypto from 'node:crypto';
 import { databasePoolReadings, getDb, outsideTransaction } from '../../db/database.ts';
 import {
   asWorkload,
+  checkoutSummary,
+  connectionChurnReading,
   connectionHolds,
+  eventLoopReading,
   databaseFailureCounts,
   infraFailureCounts,
   latencySummary,
@@ -415,6 +418,11 @@ export function processReadings(): Record<string, unknown> {
     // in total, and the callers that held a pooled connection longest.
     statements: statementCosts(12),
     holds: connectionHolds(12),
+    // INF-2: the wait for a pooled client per pool, connections opened and
+    // closed (INF-3), and how late this process's event loop ran.
+    checkouts: checkoutSummary(),
+    churn: connectionChurnReading(),
+    eventLoop: eventLoopReading(),
     pendingIncidentWrites: pending.size,
   };
 }

@@ -848,7 +848,9 @@ export async function tick(owner: string): Promise<TickReport> {
      * writes one pointer per already-gated claim.
      */
     await runPass(report, 'shared-findings', async () => {
-      report.sharedPromoted = await promoteEligibleClaims();
+      // Not cheap after all (INF-6c): the walk is skipped while nothing has been
+      // decided since the last one, for up to ten minutes. See the function.
+      report.sharedPromoted = await promoteEligibleClaims(200, { quietReuseMs: 10 * 60_000 });
     });
 
     // 1. Finish what ended — but only where the loop can say something true.

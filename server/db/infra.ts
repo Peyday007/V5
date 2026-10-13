@@ -31,6 +31,7 @@
  * `services/infra/incidents.ts` from the listener below.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
 
 /* ------------------------------------------------------------------------- */
 /* Classification                                                            */
@@ -317,6 +318,8 @@ export function resetLatencies(): void {
   latencies.clear();
   statements.clear();
   holds.clear();
+  checkouts.clear();
+  connectionChurn.clear();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -336,14 +339,36 @@ export function resetLatencies(): void {
  *               transaction that waits on something other than the database
  *               holds a connection the whole time and no statement shows it.
  *
+ * **What a statement's time is, said precisely (INF-2).** It used to be one
+ * number from before the pool checkout to the answer, so a statement that
+ * waited three minutes for one of Brain's own connections and a statement the
+ * server took three minutes to run read the same — and production recorded
+ * single-row writes at 154–210 s against a server-side `statement_timeout` of
+ * 120 s, which no executing statement can outlive. The two halves are now
+ * kept apart:
+ *
+ *   wait      `pool.connect()` until a client is in hand: Brain's own pool
+ *             (a ceiling, or something holding a client) — and, for a
+ *             connection being opened, the dial through the pooler.
+ *   response  the client in hand until the answer is back. This is **not**
+ *             server execution time: it also contains the pooler handing the
+ *             session a backend, the network both ways, lock waits on the
+ *             server, and any stall of this process's own event loop, which
+ *             delays the moment the answer is *noticed*. Read it beside the
+ *             event-loop delay and the server's wait events, never alone.
+ *
  * Bounded: past STATEMENT_KEYS the smallest total is evicted, so a process that
  * runs for weeks keeps the statements that cost it most.
  */
 
 interface CostTally {
   count: number;
+  /** Time awaiting the response, a client already in hand. */
   totalMs: number;
   maxMs: number;
+  /** Time waiting to obtain a pooled client first. Zero inside a transaction. */
+  waitTotalMs: number;
+  waitMaxMs: number;
 }
 
 const statements = new Map<string, CostTally>();
@@ -351,36 +376,42 @@ const holds = new Map<string, CostTally>();
 const STATEMENT_KEYS = 300;
 const STATEMENT_TEXT = 160;
 
-function tally(map: Map<string, CostTally>, key: string, ms: number): void {
+function tally(map: Map<string, CostTally>, key: string, ms: number, waitMs: number): void {
   const entry = map.get(key);
   if (entry) {
     entry.count += 1;
     entry.totalMs += ms;
     if (ms > entry.maxMs) entry.maxMs = ms;
+    entry.waitTotalMs += waitMs;
+    if (waitMs > entry.waitMaxMs) entry.waitMaxMs = waitMs;
     return;
   }
   if (map.size >= STATEMENT_KEYS) {
     let smallest: string | null = null;
     let least = Infinity;
     for (const [k, v] of map) {
-      if (v.totalMs < least) {
-        least = v.totalMs;
+      if (v.totalMs + v.waitTotalMs < least) {
+        least = v.totalMs + v.waitTotalMs;
         smallest = k;
       }
     }
     if (smallest !== null) map.delete(smallest);
   }
-  map.set(key, { count: 1, totalMs: ms, maxMs: ms });
+  map.set(key, { count: 1, totalMs: ms, maxMs: ms, waitTotalMs: waitMs, waitMaxMs: waitMs });
 }
 
-/** One statement's execution time, keyed by its parameterised text. */
-export function noteStatement(sql: string, ms: number): void {
-  tally(statements, sql.replace(/\s+/g, ' ').trim().slice(0, STATEMENT_TEXT), ms);
+/**
+ * One statement, keyed by its parameterised text: how long it waited for a
+ * pooled client (`waitMs`, zero inside a transaction) and how long the answer
+ * then took (`responseMs`).
+ */
+export function noteStatement(sql: string, responseMs: number, waitMs = 0): void {
+  tally(statements, sql.replace(/\s+/g, ' ').trim().slice(0, STATEMENT_TEXT), responseMs, waitMs);
 }
 
-/** How long a caller held a pooled connection, keyed by what it was. */
-export function noteConnectionHold(site: string, ms: number): void {
-  tally(holds, site, ms);
+/** How long a caller held a pooled connection, and waited to get it, keyed by what it was. */
+export function noteConnectionHold(site: string, ms: number, waitMs = 0): void {
+  tally(holds, site, ms, waitMs);
 }
 
 export interface CostReading extends CostTally {
@@ -389,9 +420,16 @@ export interface CostReading extends CostTally {
 
 function top(map: Map<string, CostTally>, n: number): CostReading[] {
   return [...map.entries()]
-    .sort((a, b) => b[1].totalMs - a[1].totalMs)
+    .sort((a, b) => b[1].totalMs + b[1].waitTotalMs - (a[1].totalMs + a[1].waitTotalMs))
     .slice(0, n)
-    .map(([key, v]) => ({ key, count: v.count, totalMs: Math.round(v.totalMs), maxMs: Math.round(v.maxMs) }));
+    .map(([key, v]) => ({
+      key,
+      count: v.count,
+      totalMs: Math.round(v.totalMs),
+      maxMs: Math.round(v.maxMs),
+      waitTotalMs: Math.round(v.waitTotalMs),
+      waitMaxMs: Math.round(v.waitMaxMs),
+    }));
 }
 
 export function statementCosts(n = 15): CostReading[] {
@@ -402,6 +440,130 @@ export function connectionHolds(n = 15): CostReading[] {
   return top(holds, n);
 }
 
+/* ------------------------------------------------------------------------- */
+/* Checkout waits and connection churn, per pool                             */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Every wait for a pooled client, per pool — the reading that says whether
+ * Brain's *own* pool is the queue. A long wait with the pool below its ceiling
+ * is a connection being dialled through the pooler; a long wait at the
+ * ceiling is Brain's callers queued behind each other.
+ */
+const checkouts = new Map<string, number[]>();
+
+export function noteCheckout(pool: WorkloadClass, ms: number): void {
+  const samples = checkouts.get(pool) ?? [];
+  samples.push(ms);
+  if (samples.length > LATENCY_SAMPLES) samples.splice(0, samples.length - LATENCY_SAMPLES);
+  checkouts.set(pool, samples);
+}
+
+function summarise(samples: number[]): LatencySummary {
+  const sorted = [...samples].sort((a, b) => a - b);
+  const at = (q: number): number => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0;
+  return { count: sorted.length, p50: Math.round(at(0.5)), p95: Math.round(at(0.95)), max: Math.round(sorted.at(-1) ?? 0) };
+}
+
+export function checkoutSummary(): Record<string, LatencySummary> {
+  return Object.fromEntries([...checkouts.entries()].map(([pool, samples]) => [pool, summarise(samples)]));
+}
+
+/**
+ * Connections each pool opened and closed since this process started (INF-3).
+ *
+ * Every connection Brain opens through Supabase's session-mode pooler costs the
+ * server a `pgbouncer.get_auth` lookup, and every one it closes a `DISCARD
+ * ALL`; `pg_stat_statements` counts both for *every* client of the database,
+ * Supabase Storage included. These counters are Brain's own share, so the two
+ * can be compared over one window instead of the server's total being blamed
+ * on whichever client is being looked at.
+ */
+const connectionChurn = new Map<string, number>();
+const CHURN_SINCE = new Date().toISOString();
+
+export function noteConnectionChurn(pool: WorkloadClass, event: 'OPENED' | 'CLOSED'): void {
+  const key = `${pool}:${event}`;
+  connectionChurn.set(key, (connectionChurn.get(key) ?? 0) + 1);
+}
+
+export function connectionChurnReading(): { since: string; counts: Record<string, number> } {
+  return { since: CHURN_SINCE, counts: Object.fromEntries([...connectionChurn.entries()].sort()) };
+}
+
+/* ------------------------------------------------------------------------- */
+/* Event-loop delay                                                          */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * How late this process's event loop ran, measured rather than guessed (INF-2).
+ *
+ * A statement's response time is measured *by this process*, so a process
+ * whose event loop was blocked — a long synchronous derivation, a CPU-bound
+ * scan in JavaScript, GC — reads every statement that was in flight as slow,
+ * however fast the server answered. Without this reading "the database took
+ * 200 s" and "Brain did not look for 200 s" were indistinguishable.
+ *
+ * The window is the interval between two readings (the liveness write, about
+ * every thirty seconds), so a stall shows in the window it happened in rather
+ * than being averaged into the process's whole life. The worst ever stays.
+ */
+const EVENT_LOOP_RESOLUTION_MS = 20;
+let loopHistogram: IntervalHistogram | null = null;
+let loopWindowStartedAt = Date.now();
+let loopWorstMs = 0;
+let loopWorstAt: string | null = null;
+
+export function ensureEventLoopMonitor(): void {
+  if (loopHistogram) return;
+  try {
+    loopHistogram = monitorEventLoopDelay({ resolution: EVENT_LOOP_RESOLUTION_MS });
+    loopHistogram.enable();
+    loopWindowStartedAt = Date.now();
+  } catch {
+    loopHistogram = null;
+  }
+}
+
+export interface EventLoopReading {
+  /** Length of the window this reading covers, in ms. */
+  windowMs: number;
+  p50: number;
+  p99: number;
+  max: number;
+  /** The longest delay seen since this process started, and when it ended. */
+  worstMs: number;
+  worstAt: string | null;
+  /** Delay figures are beyond the sampling resolution only. */
+  resolutionMs: number;
+}
+
+/** The delay since the last reading, then a fresh window. Null when unmeasurable. */
+export function eventLoopReading(now = Date.now()): EventLoopReading | null {
+  ensureEventLoopMonitor();
+  const histogram = loopHistogram;
+  if (!histogram) return null;
+  const ms = (ns: number): number => (Number.isFinite(ns) ? Math.round(ns / 1e6) : 0);
+  const count = histogram.count;
+  const reading: EventLoopReading = {
+    windowMs: now - loopWindowStartedAt,
+    p50: count > 0 ? ms(histogram.percentile(50)) : 0,
+    p99: count > 0 ? ms(histogram.percentile(99)) : 0,
+    max: count > 0 ? ms(histogram.max) : 0,
+    worstMs: 0,
+    worstAt: null,
+    resolutionMs: EVENT_LOOP_RESOLUTION_MS,
+  };
+  if (reading.max > loopWorstMs) {
+    loopWorstMs = reading.max;
+    loopWorstAt = new Date(now).toISOString();
+  }
+  reading.worstMs = loopWorstMs;
+  reading.worstAt = loopWorstAt;
+  histogram.reset();
+  loopWindowStartedAt = now;
+  return reading;
+}
 /**
  * The first caller frame outside the database layer, as `file:line`. Read
  * only when a transaction opens, never per statement.

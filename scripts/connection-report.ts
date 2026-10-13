@@ -62,12 +62,35 @@ async function section(title: string | null, body: () => Promise<void>): Promise
   }
 }
 
+/** The schema `pg_stat_statements` lives in, or null when it is not installed. */
+async function statementsSchema(): Promise<string | null> {
+  const where = await getDb().get<{ schema: string | null }>(
+    `SELECT n.nspname AS schema FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'pg_stat_statements'`,
+  );
+  return where?.schema ?? null;
+}
+
 /**
- * The database server's own view, Postgres only: the statements running now and
- * how long each has run, which tables are scanned without an index, and — where
- * `pg_stat_statements` is installed — what has cost most in total. Statement
- * text only: `pg_stat_activity` shows parameters as `$n`, never their values,
- * for statements issued with parameters, which is how Brain issues all of them.
+ * The database server's own view, Postgres only, one section per question so
+ * an unreadable one never takes the rest with it (INF-2).
+ *
+ * Statement text only: `pg_stat_activity` shows parameters as `$n`, never their
+ * values, for statements issued with parameters, which is how Brain issues all
+ * of them. A role that is not a superuser sees other roles' rows with the query
+ * withheld, so a count here is server-wide while the text is ours.
+ *
+ * What these readings separate, and what they cannot:
+ *
+ *   * `wait` — a backend `active` with no wait event is executing (CPU); one in
+ *     `IO:*` is waiting on disk, `Lock:*` on another session, `Client:*` on the
+ *     client. A statement Brain measured as slow while the server shows nothing
+ *     active was not slow *on the server*: look at the pool wait, the event
+ *     loop, and the pooler.
+ *   * The pooler's own queue (Supavisor) is not visible from a database
+ *     session at all, and neither is the compute's CPU or disk-IO budget. A
+ *     server showing few active backends while Brain's response times are long
+ *     and its event loop is healthy points at those — the Supabase dashboard is
+ *     where they are read.
  */
 async function databaseActivity(): Promise<void> {
   const db = getDb();
@@ -75,47 +98,136 @@ async function databaseActivity(): Promise<void> {
     console.log('  (SQLite: no server to ask)');
     return;
   }
-  const running = await db.all<{ pid: number; state: string | null; wait: string | null; secs: number; query: string | null }>(
-    `SELECT pid, state, COALESCE(wait_event_type || ':' || wait_event, '') AS wait,
-            EXTRACT(EPOCH FROM (now() - COALESCE(query_start, backend_start)))::int AS secs,
-            LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 180) AS query
-       FROM pg_stat_activity
-      WHERE datname = current_database() AND pid <> pg_backend_pid() AND backend_type = 'client backend'
-      ORDER BY (state = 'idle') ASC, secs DESC
-      LIMIT 25`,
-  );
-  const byState = new Map<string, number>();
-  for (const row of running) byState.set(row.state ?? '?', (byState.get(row.state ?? '?') ?? 0) + 1);
-  console.log(`  connections ${JSON.stringify(Object.fromEntries(byState))}`);
-  for (const row of running.filter((r) => r.state !== 'idle')) {
-    console.log(`  ${String(row.secs).padStart(6)}s ${(row.state ?? '?').padEnd(20)} ${row.wait ?? ''}  ${row.query ?? ''}`);
-  }
-  const scans = await db.all<{ relname: string; seq_scan: number; seq_tup_read: number; idx_scan: number | null; n_live_tup: number }>(
-    `SELECT relname, seq_scan, seq_tup_read, idx_scan, n_live_tup FROM pg_stat_user_tables
-      ORDER BY seq_tup_read DESC LIMIT 12`,
-  );
-  console.log('  tables by rows read sequentially (since the statistics were last reset)');
-  for (const t of scans) {
-    console.log(`    ${t.relname.padEnd(32)} rows=${t.n_live_tup} seq_scans=${t.seq_scan} seq_rows_read=${t.seq_tup_read} idx_scans=${t.idx_scan ?? 0}`);
-  }
-  const where = await db.get<{ schema: string | null }>(
-    `SELECT n.nspname AS schema FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'pg_stat_statements'`,
-  );
-  if (!where?.schema) {
-    console.log('  pg_stat_statements is not installed; the per-process statement costs above are the reading');
+
+  await section('  sessions by client, state and wait event (server-wide)', async () => {
+    const groups = await db.all<{ app: string | null; state: string | null; wait: string | null; n: number; oldest: number | null }>(
+      `SELECT COALESCE(NULLIF(application_name, ''), '(none)') AS app, COALESCE(state, '(hidden)') AS state,
+              COALESCE(wait_event_type || ':' || wait_event, '') AS wait, COUNT(*) AS n,
+              MAX(EXTRACT(EPOCH FROM (now() - COALESCE(state_change, backend_start))))::int AS oldest
+         FROM pg_stat_activity
+        WHERE backend_type = 'client backend' AND pid <> pg_backend_pid()
+        GROUP BY 1, 2, 3 ORDER BY n DESC LIMIT 30`,
+    );
+    for (const g of groups) {
+      console.log(`    ${String(Number(g.n)).padStart(3)}  ${(g.app ?? '').padEnd(22)} ${(g.state ?? '').padEnd(22)} ${(g.wait ?? '').padEnd(28)} longest-in-state=${g.oldest ?? '?'}s`);
+    }
+  });
+
+  await section('  statements running now (this database)', async () => {
+    const running = await db.all<{ pid: number; state: string | null; wait: string | null; secs: number; query: string | null }>(
+      `SELECT pid, state, COALESCE(wait_event_type || ':' || wait_event, '') AS wait,
+              EXTRACT(EPOCH FROM (now() - COALESCE(query_start, backend_start)))::int AS secs,
+              LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 180) AS query
+         FROM pg_stat_activity
+        WHERE datname = current_database() AND pid <> pg_backend_pid() AND backend_type = 'client backend'
+        ORDER BY (state = 'idle') ASC, secs DESC
+        LIMIT 25`,
+    );
+    const byState = new Map<string, number>();
+    for (const row of running) byState.set(row.state ?? '?', (byState.get(row.state ?? '?') ?? 0) + 1);
+    console.log(`    connections ${JSON.stringify(Object.fromEntries(byState))}`);
+    for (const row of running.filter((r) => r.state !== 'idle')) {
+      console.log(`    ${String(row.secs).padStart(6)}s ${(row.state ?? '?').padEnd(20)} ${row.wait ?? ''}  ${row.query ?? ''}`);
+    }
+  });
+
+  await section('  lock waits: who is blocked, and by whom', async () => {
+    const blocked = await db.all<{ pid: number; blockers: string; secs: number | null; wait: string | null; query: string | null }>(
+      `SELECT pid, array_to_string(pg_blocking_pids(pid), ',') AS blockers,
+              EXTRACT(EPOCH FROM (now() - query_start))::int AS secs,
+              COALESCE(wait_event_type || ':' || wait_event, '') AS wait,
+              LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 140) AS query
+         FROM pg_stat_activity
+        WHERE cardinality(pg_blocking_pids(pid)) > 0
+        ORDER BY query_start ASC NULLS LAST LIMIT 20`,
+    );
+    if (blocked.length === 0) {
+      console.log('    none: no session is waiting on another session\'s lock right now');
+      return;
+    }
+    for (const b of blocked) {
+      console.log(`    pid ${b.pid} blocked ${b.secs ?? '?'}s by [${b.blockers}] ${b.wait ?? ''}  ${b.query ?? ''}`);
+    }
+    const ungranted = await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM pg_locks WHERE NOT granted');
+    console.log(`    ungranted lock requests: ${Number(ungranted?.n ?? 0)}`);
+  });
+
+  await section('  tables by rows read sequentially (since the statistics were last reset)', async () => {
+    const reset = await db.get<{ stats_reset: string | null }>(
+      'SELECT stats_reset::text AS stats_reset FROM pg_stat_database WHERE datname = current_database()',
+    );
+    console.log(`    pg_stat_database stats_reset: ${reset?.stats_reset ?? 'never'}`);
+    const scans = await db.all<{ relname: string; seq_scan: number; seq_tup_read: number; idx_scan: number | null; n_live_tup: number }>(
+      `SELECT relname, seq_scan, seq_tup_read, idx_scan, n_live_tup FROM pg_stat_user_tables
+        ORDER BY seq_tup_read DESC LIMIT 12`,
+    );
+    for (const t of scans) {
+      console.log(`    ${t.relname.padEnd(32)} rows=${t.n_live_tup} seq_scans=${t.seq_scan} seq_rows_read=${t.seq_tup_read} idx_scans=${t.idx_scan ?? 0}`);
+    }
+  });
+
+  const schema = await statementsSchema().catch(() => null);
+  if (!schema) {
+    console.log('  pg_stat_statements is not installed or not readable; the per-process statement costs above are the reading');
     return;
   }
-  const costly = await db.all<{ calls: number; total: number; mean: number; query: string }>(
-    `SELECT calls, total_exec_time::bigint AS total, mean_exec_time::numeric(12,1) AS mean,
-            LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 180) AS query
-       FROM ${where.schema}.pg_stat_statements
-      WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
-      ORDER BY total_exec_time DESC LIMIT 15`,
-  );
-  console.log('  statements by total server time (pg_stat_statements)');
-  for (const q of costly) {
-    console.log(`    total=${Number(q.total)}ms calls=${Number(q.calls)} mean=${Number(q.mean)}ms  ${q.query}`);
-  }
+
+  await section('  pg_stat_statements window', async () => {
+    // pg_stat_statements_info exists from Postgres 14; without it the window is unknown.
+    const info = await db.get<{ stats_reset: string | null; dealloc: number | null }>(
+      `SELECT stats_reset::text AS stats_reset, dealloc FROM ${schema}.pg_stat_statements_info`,
+    );
+    console.log(`    stats_reset: ${info?.stats_reset ?? 'unknown'}  dealloc=${info?.dealloc ?? '?'}  read_at: ${new Date().toISOString()}`);
+  });
+
+  await section('  connection churn, server-wide (every client of the pooler, not only Brain)', async () => {
+    // Cumulative since stats_reset above. A rate is the difference between two
+    // reports divided by the time between them, and only while stats_reset is
+    // the same in both. Compare with each process's own `churn` line.
+    const churn = await db.all<{ query: string; calls: number; total: number }>(
+      `SELECT LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 80) AS query, SUM(calls) AS calls, SUM(total_exec_time)::bigint AS total
+         FROM ${schema}.pg_stat_statements
+        WHERE query ILIKE 'DISCARD ALL%' OR query ILIKE '%get_auth%'
+        GROUP BY 1 ORDER BY 2 DESC LIMIT 6`,
+    );
+    if (churn.length === 0) console.log('    no DISCARD ALL or get_auth rows');
+    for (const c of churn) console.log(`    calls=${Number(c.calls)} total=${Number(c.total)}ms  ${c.query}`);
+  });
+
+  await section('  statements by total server time (pg_stat_statements)', async () => {
+    const costly = await db.all<{ calls: number; total: number; mean: number; query: string }>(
+      `SELECT calls, total_exec_time::bigint AS total, mean_exec_time::numeric(12,1) AS mean,
+              LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 180) AS query
+         FROM ${schema}.pg_stat_statements
+        WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+        ORDER BY total_exec_time DESC LIMIT 15`,
+    );
+    for (const q of costly) {
+      console.log(`    total=${Number(q.total)}ms calls=${Number(q.calls)} mean=${Number(q.mean)}ms  ${q.query}`);
+    }
+  });
+}
+
+/**
+ * RES-12c: how many of the alerts printed below need a person, counted from
+ * those same alerts.
+ *
+ * The report used to print "connectors needing a person: 0" from
+ * `connectorHealth.humanActionRequired` — a narrower question (is a connector's
+ * *consent* gone) — directly above alerts naming an account owner or an
+ * operator who had to act: a wrong worker, a recovery that ran out, an
+ * out-of-scope account. Who acts is `connectionAlerts`' decision, and this only
+ * counts it; the connector line above is relabelled as what it is.
+ */
+export function countAlertsNeedingAPerson(alerts: readonly { who: string }[]): {
+  total: number;
+  accountOwner: number;
+  operator: number;
+  nobody: number;
+} {
+  const accountOwner = alerts.filter((a) => a.who === 'ACCOUNT_OWNER').length;
+  const operator = alerts.filter((a) => a.who === 'OPERATOR').length;
+  return { total: accountOwner + operator, accountOwner, operator, nobody: alerts.length - accountOwner - operator };
 }
 
 async function main(): Promise<void> {
@@ -139,12 +251,33 @@ async function main(): Promise<void> {
     for (const [op, l] of Object.entries(latency)) {
       console.log(`    latency      ${op.padEnd(16)} n=${l.count} p50=${l.p50}ms p95=${l.p95}ms max=${l.max}ms`);
     }
-    type Cost = { key: string; count: number; totalMs: number; maxMs: number };
+    // Pool wait and event-loop delay first: they are what separate "the
+    // database answered slowly" from "Brain was not ready to ask, or to hear".
+    const checkouts = (r['checkouts'] ?? {}) as Record<string, { count: number; p50: number; p95: number; max: number }>;
+    for (const [pool, l] of Object.entries(checkouts)) {
+      console.log(`    pool wait    ${pool.padEnd(16)} n=${l.count} p50=${l.p50}ms p95=${l.p95}ms max=${l.max}ms`);
+    }
+    const churn = r['churn'] as { since?: string; counts?: Record<string, number> } | undefined;
+    if (churn?.counts) console.log(`    churn        ${JSON.stringify(churn.counts)} since ${churn.since ?? '?'}`);
+    const loop = r['eventLoop'] as { windowMs: number; p50: number; p99: number; max: number; worstMs: number; worstAt: string | null } | null | undefined;
+    if (loop) {
+      console.log(
+        `    event loop   last ${Math.round(loop.windowMs / 1000)}s: p50=${loop.p50}ms p99=${loop.p99}ms max=${loop.max}ms; worst since start ${loop.worstMs}ms at ${loop.worstAt ?? '-'}`,
+      );
+    } else {
+      console.log('    event loop   (not measured by this revision)');
+    }
+    // `total`/`max` are the time awaiting the response with a client in hand;
+    // `wait` is the time spent obtaining that client first. Neither is pure
+    // server execution — see `server/db/infra.ts`.
+    type Cost = { key: string; count: number; totalMs: number; maxMs: number; waitTotalMs?: number; waitMaxMs?: number };
+    const waits = (c: Cost): string =>
+      c.waitTotalMs === undefined ? '' : ` wait=${c.waitTotalMs}ms wait-max=${c.waitMaxMs ?? 0}ms`;
     for (const c of ((r['holds'] ?? []) as Cost[]).slice(0, 8)) {
-      console.log(`    held         total=${c.totalMs}ms n=${c.count} max=${c.maxMs}ms  ${c.key}`);
+      console.log(`    held         total=${c.totalMs}ms n=${c.count} max=${c.maxMs}ms${waits(c)}  ${c.key}`);
     }
     for (const c of ((r['statements'] ?? []) as Cost[]).slice(0, 10)) {
-      console.log(`    statement    total=${c.totalMs}ms n=${c.count} max=${c.maxMs}ms  ${c.key}`);
+      console.log(`    statement    response=${c.totalMs}ms n=${c.count} max=${c.maxMs}ms${waits(c)}  ${c.key}`);
     }
   }
 
@@ -240,7 +373,7 @@ async function main(): Promise<void> {
   const accounts = new Map(
     (await db.all<{ id: string; name: string }>('SELECT id, name FROM fleet_accounts')).map((a) => [a.id, a.name]),
   );
-  let humanRequired = 0;
+  let connectorsHuman = 0;
   for (const health of await allConnectorHealth()) {
     const mine = routines.filter((r) => r.connector_id === health.connectorId);
     const lastCheckIn = mine.map((r) => r.last_check_in_at).filter((x): x is string => !!x).sort().at(-1) ?? '-';
@@ -255,7 +388,7 @@ async function main(): Promise<void> {
       { noShow: 0, auth: 0, infra: 0 },
     );
     const quarantined = mine.filter((r) => r.state === 'QUARANTINED').map((r) => r.name);
-    if (health.humanActionRequired) humanRequired += 1;
+    if (health.humanActionRequired) connectorsHuman += 1;
     console.log(
       `  ${health.connectorId}  account=${accounts.get(health.accountId) ?? health.accountId}  endpoint=${health.resource}`,
     );
@@ -270,7 +403,7 @@ async function main(): Promise<void> {
     );
     console.log(`    human action required: ${health.humanActionRequired ? `YES — ${health.detail}` : 'NO'}`);
   }
-  console.log(`\nconnectors needing a person: ${humanRequired}`);
+  console.log(`\nconnectors whose own health needs a person: ${connectorsHuman}`);
 
   /*
    * Who actually arrived when a Routine was fired. A wrong-worker arrival is a
@@ -342,6 +475,11 @@ async function main(): Promise<void> {
   console.log('\nALERTS (who has to act, and what)');
   const { connectionAlerts } = await import('../server/services/fleet/connectionAlerts.ts');
   const alerts = await connectionAlerts();
+  const actionable = countAlertsNeedingAPerson(alerts.alerts);
+  console.log(
+    `  need a person: ${actionable.total} (account owner ${actionable.accountOwner}, operator ${actionable.operator}); ` +
+      `Brain is handling ${actionable.nobody} itself`,
+  );
   if (alerts.alerts.length === 0) console.log('  none');
   for (const alert of alerts.alerts) {
     console.log(`  ${alert.routineName} (${alert.accountName})  ${alert.problem}  who=${alert.who}`);
@@ -355,9 +493,12 @@ async function main(): Promise<void> {
   console.log('CONNECTION-REPORT: OK');
 }
 
-main()
-  .catch((error: unknown) => {
-    console.error(`CONNECTION-REPORT: FAILED ${describePoolerRefusal(error) ?? (error instanceof Error ? error.message : String(error))}`);
-    process.exitCode = 1;
-  })
-  .finally(() => closeDatabase().catch(() => undefined));
+// Run only when executed, so the counting rule above can be imported by a test.
+if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '\u0000')) {
+  main()
+    .catch((error: unknown) => {
+      console.error(`CONNECTION-REPORT: FAILED ${describePoolerRefusal(error) ?? (error instanceof Error ? error.message : String(error))}`);
+      process.exitCode = 1;
+    })
+    .finally(() => closeDatabase().catch(() => undefined));
+}

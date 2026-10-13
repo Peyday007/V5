@@ -34,9 +34,9 @@ import {
   synthesisVersion,
   waveForVersion,
 } from '../domain/version.ts';
-import { getDb } from '../db/database.ts';
+import { getDb, inTransaction } from '../db/database.ts';
 import { documentIdsWithAudits, getLatestAuditForLayer } from '../repos/audits.ts';
-import { listDocuments, listDocumentsByLayer, updateDocument } from '../repos/documents.ts';
+import { getDocument, listDocuments, listDocumentsByLayer, updateDocument } from '../repos/documents.ts';
 import { listEventsByLayer, recordEvent } from '../repos/events.ts';
 import { getLayer, listLayers, updateLayer, type UpdateLayerInput } from '../repos/layers.ts';
 import { getProject, updateProject } from '../repos/projects.ts';
@@ -587,43 +587,80 @@ export async function computeLayerState(layerId: string): Promise<LayerStateSnap
  */
 export async function recomputeLayer(layerId: string): Promise<LayerStateSnapshot> {
   const db = getDb();
-  return db.transaction(async () => {
-    const before = await getLayer(layerId);
-    if (!before) throw new Error(`Cannot recompute layer: unknown layer ${layerId}`);
-    const { snapshot, canonicalDocumentId } = await deriveLayer(layerId);
+  if (inTransaction()) return await db.transaction(() => writeLayerState(layerId, null));
+  /*
+   * Outside a transaction, derive first and take a connection for the write
+   * only when there is one (INF-5).
+   *
+   * The derivation is a few dozen reads and was the whole of a recompute's
+   * transaction, so a recompute that changed nothing — the ordinary case —
+   * held a pooled connection for all of it. On Postgres the transaction bought
+   * no consistency for those reads (READ COMMITTED: each statement sees what
+   * has committed by then), only atomicity for the write, and the write is
+   * still atomic: `writeLayerState` re-reads the row inside the transaction and
+   * writes the status and its event together, against the snapshot derived
+   * here. A change committed between the two is picked up by that change's own
+   * recompute, exactly as before.
+   */
+  const derived = await deriveLayer(layerId);
+  const before = await getLayer(layerId);
+  if (!before) throw new Error(`Cannot recompute layer: unknown layer ${layerId}`);
+  if ((await layerPatch(before, derived)) === null) return derived.snapshot;
+  return await db.transaction(() => writeLayerState(layerId, derived));
+}
 
-    // A layer's wave is simply where its furthest document sits: v1 is wave 1,
-    // sibling expansions wave 2, the canonical synthesis wave 3.
-    const policy = (await getProject(before.projectId))?.versionPolicy ?? DEFAULT_VERSION_POLICY;
-    const currentWave = snapshot.currentVersion
-      ? Math.max(1, waveForVersion(snapshot.currentVersion, policy))
-      : 1;
+/** The columns a derived snapshot would change on the layer row, or null when none. */
+async function layerPatch(
+  before: NonNullable<Awaited<ReturnType<typeof getLayer>>>,
+  { snapshot, canonicalDocumentId }: Awaited<ReturnType<typeof deriveLayer>>,
+): Promise<UpdateLayerInput | null> {
+  // A layer's wave is simply where its furthest document sits: v1 is wave 1,
+  // sibling expansions wave 2, the canonical synthesis wave 3.
+  const policy = (await getProject(before.projectId))?.versionPolicy ?? DEFAULT_VERSION_POLICY;
+  const currentWave = snapshot.currentVersion
+    ? Math.max(1, waveForVersion(snapshot.currentVersion, policy))
+    : 1;
 
-    const patch: UpdateLayerInput = {};
-    if (before.status !== snapshot.status) patch.status = snapshot.status;
-    if (before.currentVersion !== snapshot.currentVersion) patch.currentVersion = snapshot.currentVersion;
-    if (before.canonicalDocumentId !== canonicalDocumentId) patch.canonicalDocumentId = canonicalDocumentId;
-    if (before.currentWave !== currentWave) patch.currentWave = currentWave;
-    if (Object.keys(patch).length > 0) await updateLayer(layerId, patch);
+  const patch: UpdateLayerInput = {};
+  if (before.status !== snapshot.status) patch.status = snapshot.status;
+  if (before.currentVersion !== snapshot.currentVersion) patch.currentVersion = snapshot.currentVersion;
+  if (before.canonicalDocumentId !== canonicalDocumentId) patch.canonicalDocumentId = canonicalDocumentId;
+  if (before.currentWave !== currentWave) patch.currentWave = currentWave;
+  return Object.keys(patch).length > 0 ? patch : null;
+}
 
-    if (before.status !== snapshot.status) {
-      await recordEvent({
-        projectId: before.projectId,
-        layerId,
-        entityType: 'LAYER',
-        entityId: layerId,
-        eventType: 'LAYER_STATUS_CHANGED',
-        payload: {
-          from: before.status,
-          to: snapshot.status,
-          statusSource: snapshot.statusSource,
-          reason: snapshot.reason,
-          currentVersion: snapshot.currentVersion,
-        },
-      });
-    }
-    return snapshot;
-  });
+/**
+ * Persist a derived snapshot onto the layer row, inside the caller's
+ * transaction. Derives here when not handed a snapshot.
+ */
+async function writeLayerState(
+  layerId: string,
+  given: Awaited<ReturnType<typeof deriveLayer>> | null,
+): Promise<LayerStateSnapshot> {
+  const before = await getLayer(layerId);
+  if (!before) throw new Error(`Cannot recompute layer: unknown layer ${layerId}`);
+  const derived = given ?? (await deriveLayer(layerId));
+  const { snapshot } = derived;
+  const patch = await layerPatch(before, derived);
+  if (patch) await updateLayer(layerId, patch);
+
+  if (before.status !== snapshot.status) {
+    await recordEvent({
+      projectId: before.projectId,
+      layerId,
+      entityType: 'LAYER',
+      entityId: layerId,
+      eventType: 'LAYER_STATUS_CHANGED',
+      payload: {
+        from: before.status,
+        to: snapshot.status,
+        statusSource: snapshot.statusSource,
+        reason: snapshot.reason,
+        currentVersion: snapshot.currentVersion,
+      },
+    });
+  }
+  return snapshot;
 }
 
 /**
@@ -637,44 +674,42 @@ export async function recomputeDocumentFileState(projectId: string): Promise<{
   restored: string[];
 }> {
   const db = getDb();
-  return db.transaction(async () => {
-    const missing: string[] = [];
-    const restored: string[] = [];
-    for (const document of await listDocuments(projectId)) {
-      // No recorded path means nothing was ever stored for this row (an
-      // expected document); there is no file to have lost.
-      if (!document.filesystemPath) continue;
-      const existence = await objectExistence(storageKeyOf(document));
-      // A store that did not answer says nothing about the file, so it moves
-      // nothing — in either direction.
-      if (existence === 'UNKNOWN') continue;
-      const onDisk = existence === 'PRESENT';
-      if (!onDisk && !document.fileMissing) {
-        await updateDocument(document.id, { fileMissing: true });
-        await recordEvent({
-          projectId,
-          layerId: document.layerId,
-          entityType: 'DOCUMENT',
-          entityId: document.id,
-          eventType: 'DOCUMENT_FILE_MISSING',
-          payload: { canonicalName: document.canonicalName, path: document.filesystemPath },
-        });
-        missing.push(document.canonicalName);
-      } else if (onDisk && document.fileMissing) {
-        await updateDocument(document.id, { fileMissing: false });
-        await recordEvent({
-          projectId,
-          layerId: document.layerId,
-          entityType: 'DOCUMENT',
-          entityId: document.id,
-          eventType: 'DOCUMENT_FILE_RESTORED',
-          payload: { canonicalName: document.canonicalName, path: document.filesystemPath },
-        });
-        restored.push(document.canonicalName);
-      }
-    }
-    return { missing, restored };
-  });
+  const missing: string[] = [];
+  const restored: string[] = [];
+  /*
+   * The store is asked outside any transaction, and a document's flag and its
+   * event are written together in one short transaction each — only for a
+   * document whose answer actually changed (INF-5). The flag is re-read inside
+   * that transaction, so two recomputes noticing the same file produce one
+   * flip and one event.
+   */
+  for (const document of await listDocuments(projectId)) {
+    // No recorded path means nothing was ever stored for this row (an
+    // expected document); there is no file to have lost.
+    if (!document.filesystemPath) continue;
+    const existence = await objectExistence(storageKeyOf(document));
+    // A store that did not answer says nothing about the file, so it moves
+    // nothing — in either direction.
+    if (existence === 'UNKNOWN') continue;
+    const onDisk = existence === 'PRESENT';
+    if (onDisk === !document.fileMissing) continue;
+    const flipped = await db.transaction(async () => {
+      const current = await getDocument(document.id);
+      if (!current || current.fileMissing === !onDisk) return false;
+      await updateDocument(document.id, { fileMissing: !onDisk });
+      await recordEvent({
+        projectId,
+        layerId: current.layerId,
+        entityType: 'DOCUMENT',
+        entityId: current.id,
+        eventType: onDisk ? 'DOCUMENT_FILE_RESTORED' : 'DOCUMENT_FILE_MISSING',
+        payload: { canonicalName: current.canonicalName, path: current.filesystemPath },
+      });
+      return true;
+    });
+    if (flipped) (onDisk ? restored : missing).push(document.canonicalName);
+  }
+  return { missing, restored };
 }
 
 /**
@@ -697,28 +732,34 @@ export async function recomputeRunReadiness(projectId: string): Promise<{ unbloc
       run.dependencyOverride ||
       (await checkRunDependencyRows(projectId, dependenciesByRun.get(run.id) ?? [])).ready;
 
+    // The status and its event commit together; the dependency reads above
+    // do not need to be inside that transaction (INF-5).
     if (!ready && run.status !== 'BLOCKED') {
-      await updateRun(run.id, { status: 'BLOCKED' });
+      await getDb().transaction(async () => {
+        await updateRun(run.id, { status: 'BLOCKED' });
+        await recordEvent({
+          projectId,
+          layerId: run.layerId,
+          entityType: 'RUN',
+          entityId: run.id,
+          eventType: 'DEPENDENCY_MISSING',
+          payload: { runId: run.id, targetVersion: run.targetVersion },
+        });
+      });
       blocked.push(run.id);
-      await recordEvent({
-        projectId,
-        layerId: run.layerId,
-        entityType: 'RUN',
-        entityId: run.id,
-        eventType: 'DEPENDENCY_MISSING',
-        payload: { runId: run.id, targetVersion: run.targetVersion },
-      });
     } else if (ready && run.status === 'BLOCKED') {
-      await updateRun(run.id, { status: 'READY' });
-      unblocked.push(run.id);
-      await recordEvent({
-        projectId,
-        layerId: run.layerId,
-        entityType: 'RUN',
-        entityId: run.id,
-        eventType: 'DEPENDENCY_RESOLVED',
-        payload: { runId: run.id, targetVersion: run.targetVersion },
+      await getDb().transaction(async () => {
+        await updateRun(run.id, { status: 'READY' });
+        await recordEvent({
+          projectId,
+          layerId: run.layerId,
+          entityType: 'RUN',
+          entityId: run.id,
+          eventType: 'DEPENDENCY_RESOLVED',
+          payload: { runId: run.id, targetVersion: run.targetVersion },
+        });
       });
+      unblocked.push(run.id);
     }
   }
   return { unblocked, blocked };
@@ -766,13 +807,19 @@ async function recomputeProjectWithin(projectId: string): Promise<LayerStateSnap
   recomputeDepth += 1;
   try {
     const db = getDb();
-    const snapshots = await db.transaction(async () => {
+    const steps = async (layersAtOnce: boolean): Promise<LayerStateSnapshot[]> => {
       await recomputeDocumentFileState(projectId);
       await refreshProjectDependencies(projectId);
       await recomputeRunReadiness(projectId);
-      const results = await Promise.all(
-        (await listLayers(projectId)).map((layer) => recomputeLayer(layer.id)),
-      );
+      const layers = await listLayers(projectId);
+      const results: LayerStateSnapshot[] = [];
+      if (layersAtOnce) {
+        results.push(...(await Promise.all(layers.map((layer) => recomputeLayer(layer.id)))));
+      } else {
+        // One at a time outside a transaction: each takes its own connection
+        // only when it has something to write, and never several at once.
+        for (const layer of layers) results.push(await recomputeLayer(layer.id));
+      }
 
       // The project's wave is the furthest any layer has reached, so the header
       // advances on its own instead of being edited by hand.
@@ -782,7 +829,19 @@ async function recomputeProjectWithin(projectId: string): Promise<LayerStateSnap
         if (project.currentWave !== wave) await updateProject(projectId, { currentWave: wave });
       }
       return results;
-    });
+    };
+    /*
+     * Inside a caller's transaction (a judge submission, a filing) the
+     * recompute stays part of it, as before. Called on its own, it no longer
+     * wraps itself in one transaction (INF-5): production measured that hold
+     * at 51 s mean and 237 s max, a workload connection out of eight for the
+     * whole derivation. Each step already commits what must commit together —
+     * a document's flag with its event, a dependency refresh, a run's status
+     * with its event, a layer's status with its event — and every step
+     * re-derives from rows, so a recompute interrupted between steps leaves
+     * state the next recompute completes rather than state that is wrong.
+     */
+    const snapshots = inTransaction() ? await db.transaction(() => steps(true)) : await steps(false);
     // Only where the snapshot is written. In cloud mode building it here
     // derived the whole plan after every recompute — inside the judge's and the
     // filing's effect transactions too — and threw it away.

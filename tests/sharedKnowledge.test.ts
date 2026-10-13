@@ -67,7 +67,9 @@ import {
   revokeFinding,
   setFindingHorizon,
   SHARED_PROMOTION_RULE,
+  touchSharedFindingForClaim,
 } from '../server/repos/sharedFindings.ts';
+import { getDb } from '../server/db/database.ts';
 import {
   describeForReader,
   sharedClaimsForProject,
@@ -816,6 +818,52 @@ describe('a finding that should no longer be reused', () => {
     const eligible = await eligibleFindings({ excludeProjectId: ben.projectId });
     expect(eligible.length).toBe(1);
     expect(eligible[0]!.claimId).not.toBe(produced.claimIds[0]);
+  });
+});
+
+describe('the eligible pool is read once while nothing it depends on changed (INF-6c)', () => {
+  it('reuses its answer, and sees a change the moment the module is told of one', async () => {
+    const produced = await anaEstablishesTheFact();
+    await promoteEligibleClaims();
+    expect((await eligibleFindings({ excludeProjectId: ben.projectId })).length).toBe(2);
+
+    // A write that bypasses this module is not seen at once: that is the memo
+    // working, and the reason every real writer goes through `touch*`.
+    await getDb().run(`UPDATE research_claims SET contradiction_state = 'CONTESTED' WHERE id = ?`, [
+      produced.claimIds[0]!,
+    ]);
+    expect((await eligibleFindings({ excludeProjectId: ben.projectId })).length).toBe(2);
+    // Asking about an explicit moment is never answered from the memo.
+    expect((await eligibleFindings({ excludeProjectId: ben.projectId, now: new Date().toISOString() })).length).toBe(1);
+
+    await touchSharedFindingForClaim(produced.claimIds[0]!);
+    expect((await eligibleFindings({ excludeProjectId: ben.projectId })).length).toBe(1);
+  });
+
+  it('stops offering a finding when its horizon passes, with no row written', async () => {
+    await anaEstablishesTheFact();
+    await promoteEligibleClaims();
+    const [first] = await listFindings();
+    await setFindingHorizon({ id: first!.findingId, validUntil: new Date(Date.now() + 700).toISOString() });
+    expect((await eligibleFindings({ excludeProjectId: ben.projectId })).length).toBe(2);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    expect((await eligibleFindings({ excludeProjectId: ben.projectId })).length).toBe(1);
+  });
+
+  it('the tick skips the promotion walk while nothing was decided, and walks again when something was', async () => {
+    const produced = await anaEstablishesTheFact();
+    expect((await promoteEligibleClaims(200, { quietReuseMs: 60_000 })).length).toBe(2);
+    expect((await promoteEligibleClaims(200, { quietReuseMs: 60_000 })).length).toBe(0);
+    // Remove the pointers behind the module's back (test only): a walk would
+    // put them straight back, so an empty answer here proves no walk ran.
+    await getDb().run('DELETE FROM shared_findings');
+    expect(await promoteEligibleClaims(200, { quietReuseMs: 60_000 })).toEqual([]);
+    // A decision moves the generation, so the next tick walks — and finds them.
+    await markContradiction(produced.claimIds[0]!, 'SUPPORTED', 'A second source agrees.');
+    expect((await promoteEligibleClaims(200, { quietReuseMs: 60_000 })).length).toBe(2);
+    // Without the option it always walks, as it did before.
+    await getDb().run('DELETE FROM shared_findings');
+    expect((await promoteEligibleClaims()).length).toBe(2);
   });
 });
 

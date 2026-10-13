@@ -273,38 +273,81 @@ export async function projectionFor(input: {
  * touched only when the answer has actually changed — which keeps the feed
  * quiet and still makes a state change visible on the next poll.
  *
- * Called from the same tick that already runs Russell's loop, so it adds a
- * cadence rather than a service.
+ * **One call is one complete sweep, in pages (INF-6b).** It used to read the
+ * hundred rows with the oldest `updated_at` and stop. A row it touched moved to
+ * the back, but a row whose state had *not* changed stayed at the front — so
+ * once more than a hundred commanded records existed, the same hundred were
+ * re-projected every five seconds and every record behind them was never
+ * looked at again: a mission finishing on record 101 never reached the site.
+ * The sweep now walks every commanded record by a cursor on
+ * `(updated_at, id)`, and a record it touched — which moves behind the cursor —
+ * is not projected twice in one sweep.
  */
 export async function refreshProjections(input: {
   limit?: number;
   at?: string;
-}): Promise<{ touched: string[] }> {
+}): Promise<{ touched: string[]; examined: number }> {
   const at = input.at ?? nowIso();
   const limit = Math.min(Math.max(input.limit ?? 100, 1), 500);
-  const rows = await getDb().all<{ id: string }>(
-    `SELECT id FROM external_records
-      WHERE candidate_id IS NOT NULL
-      ORDER BY updated_at, rowid
-      LIMIT ?`,
-    [limit],
-  );
-
   const touched: string[] = [];
-  for (const row of rows) {
-    const record = await getExternalRecord(row.id);
-    if (!record) continue;
-    const projection = await projectRecord(record, at);
-    const stamped = stateStamp(projection);
-    const previous = typeof record.provenance['projectionStamp'] === 'string'
-      ? (record.provenance['projectionStamp'] as string)
-      : null;
-    if (stamped === previous) continue;
-    await stampProjection(record, stamped);
-    await touchExternalRecord(record.id, at);
-    touched.push(record.id);
+  const seen = new Set<string>();
+  let cursor: { updatedAt: string; id: string } | null = null;
+  for (;;) {
+    const rows: { id: string; updated_at: string }[] = await getDb().all<{ id: string; updated_at: string }>(
+      cursor
+        ? `SELECT id, updated_at FROM external_records
+            WHERE candidate_id IS NOT NULL
+              AND (updated_at > ? OR (updated_at = ? AND id > ?))
+            ORDER BY updated_at, id
+            LIMIT ?`
+        : `SELECT id, updated_at FROM external_records
+            WHERE candidate_id IS NOT NULL
+            ORDER BY updated_at, id
+            LIMIT ?`,
+      cursor ? [cursor.updatedAt, cursor.updatedAt, cursor.id, limit] : [limit],
+    );
+    for (const row of rows) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      const record = await getExternalRecord(row.id);
+      if (!record) continue;
+      const projection = await projectRecord(record, at);
+      const stamped = stateStamp(projection);
+      const previous = typeof record.provenance['projectionStamp'] === 'string'
+        ? (record.provenance['projectionStamp'] as string)
+        : null;
+      if (stamped === previous) continue;
+      await stampProjection(record, stamped);
+      await touchExternalRecord(record.id, at);
+      touched.push(record.id);
+    }
+    const last = rows.at(-1);
+    if (rows.length < limit || !last) break;
+    cursor = { updatedAt: last.updated_at, id: last.id };
   }
-  return { touched };
+  return { touched, examined: seen.size };
+}
+
+/**
+ * How often the background tick sweeps, at most (INF-6b).
+ *
+ * The tick runs every five seconds so that a sweep *can* start promptly, and
+ * it re-projected up to a hundred records on every one of them — production
+ * counted 1,428 runs in two and a half hours, 1,146 s of database time, almost
+ * all of it finding nothing changed. A projection change now reaches the delta
+ * feed within half a minute instead of five seconds. The site's poll derives
+ * the projection live (`projectionsSince`, `projectionFor`), so what it reads
+ * is never stale; this only bounds how soon an *unchanged-looking* row is
+ * moved to the front of the feed.
+ */
+export const PROJECTION_SWEEP_EVERY_MS = 30_000;
+let lastSweepStartedAt = 0;
+
+/** The background tick's entry: a full sweep, unless one started too recently. */
+export async function refreshProjectionsOnSchedule(now = Date.now()): Promise<{ touched: string[]; examined: number } | null> {
+  if (now - lastSweepStartedAt < PROJECTION_SWEEP_EVERY_MS) return null;
+  lastSweepStartedAt = now;
+  return await refreshProjections({});
 }
 
 /**

@@ -38,6 +38,9 @@ import {
   countDatabaseFailure,
   currentWorkloadClass,
   callerSite,
+  ensureEventLoopMonitor,
+  noteCheckout,
+  noteConnectionChurn,
   noteConnectionHold,
   noteStatement,
   type WorkloadClass,
@@ -239,6 +242,11 @@ function readPositiveMs(name: string, fallback: number): number {
   return raw && /^\d+$/.test(raw) && Number(raw) > 0 ? Number(raw) : fallback;
 }
 
+function readCount(name: string, fallback: number): number {
+  const raw = process.env[name];
+  return raw && /^\d+$/.test(raw) ? Number(raw) : fallback;
+}
+
 interface TransactionContext extends TransactionFrame {
   client: PoolClient;
 }
@@ -291,7 +299,16 @@ export class PostgresAdapter implements Database {
       // Short, so an idle workload connection gives its pooler backend back to
       // the other clients sharing the session-mode limit instead of sitting on
       // it for half a minute (see the control pool below for the converse).
-      idleTimeoutMillis: options.idleTimeoutMillis ?? 10_000,
+      //
+      // INF-3: every connection closed through the session pooler costs the
+      // server a `DISCARD ALL` and every one opened a `pgbouncer.get_auth`, and
+      // production counted 64k and 81k of them — for every client of that
+      // database, Supabase Storage's included. Whether Brain's idling-out is
+      // the source is measured, not assumed: `connectionChurnReading` counts
+      // what each pool opened and closed, and the connection report prints it
+      // beside the server's two counts. The two knobs below are how the answer
+      // is applied without a code change; their defaults are what ran before.
+      idleTimeoutMillis: options.idleTimeoutMillis ?? readPositiveMs('BRAIN_DATABASE_IDLE_TIMEOUT_MS', 10_000),
       application_name: options.applicationName ?? 'brain',
       // A connection the far end dropped silently inside a long transaction
       // would otherwise hold its slot — and any row lock, the fence included —
@@ -320,7 +337,12 @@ export class PostgresAdapter implements Database {
     this.#controlMax = controlPlaneShare(total);
     this.#max = total - this.#controlMax;
     this.#connectionTimeoutMs = config.connectionTimeoutMillis ?? 10_000;
-    this.#pool = new Pool({ ...config, max: this.#max });
+    // A floor of workload connections that never idle out (pg-pool's `min`):
+    // the ticks that run every few seconds then stop dialling the pooler, and
+    // a burst above the floor still gives its backends back. Carved out of the
+    // same ceiling, so the app's total against the pooler cannot grow.
+    const floor = Math.min(readCount('BRAIN_DATABASE_POOL_MIN', 0), this.#max);
+    this.#pool = new Pool({ ...config, max: this.#max, min: floor });
     // A pool that emits an error with no listener takes the process down. An
     // idle client dropped by the far end is ordinary; the pool replaces it.
     this.#pool.on('error', () => undefined);
@@ -344,16 +366,12 @@ export class PostgresAdapter implements Database {
      * not lose the first two with it.
      */
     const workloadTimeoutMs = readPositiveMs('BRAIN_DATABASE_STATEMENT_TIMEOUT_MS', WORKLOAD_STATEMENT_TIMEOUT_MS);
-    this.#pool.on('connect', (client: PoolClient) => {
-      client.on('error', () => undefined);
-      for (const setting of [
-        `SET statement_timeout = ${workloadTimeoutMs}`,
-        `SET idle_in_transaction_session_timeout = ${WORKLOAD_IDLE_IN_TRANSACTION_MS}`,
-        `SET client_connection_check_interval = ${CLIENT_CHECK_INTERVAL_MS}`,
-      ]) {
-        client.query(setting).catch(() => undefined);
-      }
-    });
+    this.#sessionSettings.set(this.#pool, [
+      `SET statement_timeout = ${workloadTimeoutMs}`,
+      `SET idle_in_transaction_session_timeout = ${WORKLOAD_IDLE_IN_TRANSACTION_MS}`,
+      `SET client_connection_check_interval = ${CLIENT_CHECK_INTERVAL_MS}`,
+    ]);
+    this.#watch(this.#pool, 'WORKLOAD');
     if (this.#controlMax > 0) {
       /*
        * Held open, never idled out. Supabase's pooler runs in session mode, so a
@@ -387,19 +405,77 @@ export class PostgresAdapter implements Database {
        * it. A server-side `statement_timeout` just inside the client's bound
        * ends it there, and a `lock_timeout` stops a refresh queued behind
        * another on one row from holding a reserved connection for the length of
-       * that other one. Set per session on connect, which is what session-mode
-       * pooling keeps for the life of the connection.
+       * that other one. Set per session, which is what session-mode pooling
+       * keeps for the life of the connection.
        */
-      this.#controlPool.on('connect', (client: PoolClient) => {
-        // Held for the life of the client: this SET runs after pg-pool has taken
-        // the idle listener off, and a drop during it must not be uncaught.
-        client.on('error', () => undefined);
-        client
-          .query(`SET statement_timeout = ${CONTROL_STATEMENT_TIMEOUT_MS}; SET lock_timeout = ${CONTROL_LOCK_TIMEOUT_MS}`)
-          .catch(() => undefined);
-        client.query(`SET client_connection_check_interval = ${CLIENT_CHECK_INTERVAL_MS}`).catch(() => undefined);
-      });
+      this.#sessionSettings.set(this.#controlPool, [
+        `SET statement_timeout = ${CONTROL_STATEMENT_TIMEOUT_MS}`,
+        `SET lock_timeout = ${CONTROL_LOCK_TIMEOUT_MS}`,
+        `SET client_connection_check_interval = ${CLIENT_CHECK_INTERVAL_MS}`,
+      ]);
+      this.#watch(this.#controlPool, 'CONTROL');
     }
+    ensureEventLoopMonitor();
+  }
+
+  /**
+   * The per-session settings each pool's connections carry, applied by
+   * `#checkout` before a new connection's first real statement.
+   */
+  #sessionSettings = new Map<pg.Pool, string[]>();
+  /** Connections whose settings have been applied; a WeakSet so a dropped one is forgotten. */
+  #initialised = new WeakSet<PoolClient>();
+
+  /** Count what each pool opens and closes, and keep a dropped idle client from crashing the process. */
+  #watch(pool: pg.Pool, workload: WorkloadClass): void {
+    pool.on('connect', (client: PoolClient) => {
+      // Held for the life of the client: pg-pool removes its own idle listener
+      // when it hands a client out, and a drop then must not be uncaught.
+      client.on('error', () => undefined);
+      noteConnectionChurn(workload, 'OPENED');
+    });
+    pool.on('remove', () => noteConnectionChurn(workload, 'CLOSED'));
+  }
+
+  /**
+   * Take a client from `pool`, with its session settings applied first.
+   *
+   * **The settings used to be issued from the pool's `connect` event, and that
+   * was the defect (INF-4).** `pg-pool` emits `connect` and hands the client to
+   * the caller in the same turn, so the `SET`s and the caller's first statement
+   * were all queued on one client at once. pg 8 keeps a per-client queue, so
+   * the order happened to hold — and every new connection printed `Calling
+   * client.query() when the client is already executing a query is
+   * deprecated`, which pg 9 makes an error. Chaining them inside the event
+   * handler is worse rather than better: the caller's statement is queued
+   * synchronously, so a `.then` chain lets it run *between* two settings and
+   * the first real statement can run without `statement_timeout`.
+   *
+   * So the settings are awaited here, once per connection, before the client
+   * is handed on: the first real statement on a new connection runs after all
+   * three, and nothing is ever queued behind a running query. They stay one at
+   * a time, each caught alone, because a server that does not know the last one
+   * (`client_connection_check_interval` is Postgres 14+) must not lose the
+   * first two with it — a multi-statement string is one implicit transaction
+   * there and one unknown setting would roll back all three.
+   */
+  async #checkout(pool: pg.Pool, workload: WorkloadClass): Promise<{ client: PoolClient; waitMs: number }> {
+    const started = performance.now();
+    const client = await pool.connect();
+    if (!this.#initialised.has(client)) {
+      this.#initialised.add(client);
+      for (const setting of this.#sessionSettings.get(pool) ?? []) {
+        try {
+          await client.query(setting);
+        } catch {
+          // An unknown setting leaves the others in force; a broken connection
+          // shows itself on the caller's own statement next.
+        }
+      }
+    }
+    const waitMs = performance.now() - started;
+    noteCheckout(workload, waitMs);
+    return { client, waitMs };
   }
 
   /**
@@ -411,7 +487,9 @@ export class PostgresAdapter implements Database {
     if (!this.#controlPool) return 0;
     const clients: PoolClient[] = [];
     try {
-      for (let i = 0; i < this.#controlMax; i += 1) clients.push(await this.#controlPool.connect());
+      for (let i = 0; i < this.#controlMax; i += 1) {
+        clients.push((await this.#checkout(this.#controlPool, 'CONTROL')).client);
+      }
     } catch {
       // On demand, then.
     } finally {
@@ -510,12 +588,12 @@ export class PostgresAdapter implements Database {
     const values = normalise(params);
     const context = this.#transactions.getStore();
     const workload = currentWorkloadClass();
-    const started = performance.now();
+    const timing = { waitMs: 0, started: performance.now() };
     try {
       if (context) {
         return (await context.client.query<T>(translated.sql, values)) as pg.QueryResult<T>;
       }
-      return await this.#pooledQuery<T>(this.#poolFor(workload), translated.sql, values);
+      return await this.#pooledQuery<T>(this.#poolFor(workload), workload, translated.sql, values, timing);
     } catch (error) {
       this.#noteInfra(error);
       const pooled = this.#namePoolTimeout(error, workload);
@@ -526,8 +604,8 @@ export class PostgresAdapter implements Database {
       // part that carries the user's content.
       throw annotate(error, translated.sql);
     } finally {
-      // Includes the wait for a pooled client, which is where saturation shows.
-      noteStatement(translated.sql, performance.now() - started);
+      // The wait for a pooled client and the time after it, kept apart (INF-2).
+      noteStatement(translated.sql, performance.now() - timing.started - timing.waitMs, timing.waitMs);
     }
   }
 
@@ -545,10 +623,13 @@ export class PostgresAdapter implements Database {
    */
   async #pooledQuery<T extends pg.QueryResultRow>(
     pool: pg.Pool,
+    workload: WorkloadClass,
     sql: string,
     values: unknown[],
+    timing: { waitMs: number },
   ): Promise<pg.QueryResult<T>> {
-    const client = await pool.connect();
+    const { client, waitMs } = await this.#checkout(pool, workload);
+    timing.waitMs = waitMs;
     let broken: Error | undefined;
     // pg-pool removes a client's idle error listener when it hands it out, and
     // pg emits 'error' after rejecting the query when the socket drops. With no
@@ -604,9 +685,10 @@ export class PostgresAdapter implements Database {
     if (existing) return await this.#nested(existing, fn);
 
     let client: PoolClient;
+    let waitMs: number;
     const workload = currentWorkloadClass();
     try {
-      client = await this.#poolFor(workload).connect();
+      ({ client, waitMs } = await this.#checkout(this.#poolFor(workload), workload));
     } catch (error) {
       this.#noteInfra(error);
       throw this.#namePoolTimeout(error, workload);
@@ -659,7 +741,7 @@ export class PostgresAdapter implements Database {
     } finally {
       client.removeListener('error', swallow);
       client.release(broken);
-      noteConnectionHold(`transaction ${site}`, performance.now() - heldSince);
+      noteConnectionHold(`transaction ${site}`, performance.now() - heldSince, waitMs);
     }
   }
 

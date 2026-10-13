@@ -13,7 +13,15 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
-import { syncRecords, runCommand, refreshProjections, projectionFor, researchQuestion } from '../server/services/connect/service.ts';
+import {
+  syncRecords,
+  runCommand,
+  refreshProjections,
+  refreshProjectionsOnSchedule,
+  PROJECTION_SWEEP_EVERY_MS,
+  projectionFor,
+  researchQuestion,
+} from '../server/services/connect/service.ts';
 import { findExternalRecord } from '../server/repos/externalRecords.ts';
 import { recordJudgment, getCandidate } from '../server/repos/russellCandidates.ts';
 import { launchMission, transitionMission, askHuman, recordKnowledge } from '../server/repos/russellMissions.ts';
@@ -21,6 +29,7 @@ import { createGoal } from '../server/repos/russellAuthority.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { RESEARCH_WORK } from '../server/services/russell/authority.ts';
 import { nowIso } from '../server/repos/util.ts';
+import { getDb } from '../server/db/database.ts';
 
 let ctx: TestProject;
 
@@ -317,6 +326,68 @@ describe('the delta feed', () => {
     // And the imported content is untouched: a touch may never overwrite a version.
     expect(after!.sourceVersion).toBe(settled!.sourceVersion);
     expect(after!.title).toBe(settled!.title);
+  });
+
+  it('reaches every record, not only the first page, when the earlier ones are unchanged (INF-6b)', async () => {
+    // Three commanded records and a page of one: the old refresh read the
+    // oldest page and stopped, so with unchanged records at the front a change
+    // further back was never seen.
+    await syncRecords({
+      projectId: ctx.project.id,
+      sourceSystem: 'DEAL_DISPATCH',
+      records: ['opp_alpha', 'opp_beta', 'opp_gamma'].map((id, i) => ({
+        ...DELIVERY,
+        sourceRecordId: id,
+        sourceRef: `/opportunities/${id}`,
+        title: `${DELIVERY.title} ${i}`,
+      })),
+    });
+    await authorize();
+    const candidates: Record<string, string> = {};
+    for (const id of ['opp_alpha', 'opp_beta', 'opp_gamma']) {
+      candidates[id] = (
+        await runCommand({
+          projectId: ctx.project.id,
+          sourceSystem: 'DEAL_DISPATCH',
+          sourceRecordId: id,
+          command: 'RESEARCH_FURTHER',
+          actor: { label: 'Dana Reyes' },
+        })
+      ).candidateId;
+    }
+    const first = await refreshProjections({ limit: 1 });
+    expect(first.examined).toBe(3);
+    const quiet = await refreshProjections({ limit: 1 });
+    expect(quiet).toEqual({ touched: [], examined: 3 });
+
+    // Whichever record now sorts last is the one a single page never reached.
+    const rows = await getDb().all<{ source_record_id: string; id: string }>(
+      'SELECT source_record_id, id FROM external_records ORDER BY updated_at, id',
+    );
+    const last = rows.at(-1)!;
+    const { mission } = await launchMission({
+      projectId: ctx.project.id,
+      visibility: 'SHARED',
+      objective: 'Establish roofing capacity',
+      whyNow: 'now',
+      idempotencyKey: `test-${candidates[last.source_record_id]}`,
+      candidateId: candidates[last.source_record_id]!,
+    });
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+
+    const moved = await refreshProjections({ limit: 1 });
+    expect(moved.touched).toEqual([last.id]);
+    expect(moved.examined).toBe(3);
+  });
+
+  it('sweeps on the background schedule at most once per interval', async () => {
+    await register();
+    await authorize();
+    await commandIt();
+    const at = Date.now() + 10 * PROJECTION_SWEEP_EVERY_MS;
+    expect(await refreshProjectionsOnSchedule(at)).not.toBeNull();
+    expect(await refreshProjectionsOnSchedule(at + 1_000)).toBeNull();
+    expect(await refreshProjectionsOnSchedule(at + PROJECTION_SWEEP_EVERY_MS)).not.toBeNull();
   });
 
   it('leaves a record nobody has commanded entirely alone', async () => {

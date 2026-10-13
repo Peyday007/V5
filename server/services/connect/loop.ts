@@ -21,7 +21,7 @@
  * network: an idle Brain spends nothing here, and nothing in it can start
  * paid work.
  */
-import { refreshProjections } from './service.ts';
+import { refreshProjectionsOnSchedule } from './service.ts';
 
 /**
  * Five seconds.
@@ -46,7 +46,7 @@ export function startConnectRefresh(intervalMs = CONNECT_TICK_MS): void {
     // delta feed is the thing a consumer cannot tell from a real change.
     if (running) return;
     running = true;
-    void refreshProjections({})
+    void refreshProjectionsOnSchedule()
       .catch(() => {
         /* swallowed: a throwing timer callback takes the process down, and an
            unattended Brain that dies because one projection could not be
