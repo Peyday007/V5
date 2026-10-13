@@ -60,8 +60,8 @@ closed.
 
 | ID | Status | Notes |
 |---|---|---|
-| INF-1 | OWNER/PROVIDER | Supabase dashboard (CPU, disk-IO budget, pooler) is not readable from Brain. See §5. |
-| INF-2 | AWAITING-VERIFICATION | A's wait/response split, event-loop delay, wait events, locks and `stats_reset` are released; readings in §4. |
+| INF-1 | OWNER/PROVIDER | §4.2: WAL-write waits on single-row updates, Storage 544, pooler checkout refusals — the database is I/O-bound. The dashboard reading and any resize are the owner's. |
+| INF-2 | VERIFIED | §4.2: on `2bb5879` the split reads pool wait p95 0 ms, event loop p99 21 ms, response up to 136 s, server waits `LWLock:WALWrite`. The time is the database host's. |
 | INF-3 | AWAITING-VERIFICATION | Churn counted per pool; decision needs two comparable readings ~60 min apart (§4). |
 | INF-4 | AWAITING-VERIFICATION | Session settings awaited in `#checkout` (A, tested against real Postgres). |
 | INF-5 | AWAITING-VERIFICATION | Recompute rescoped (A); dependency refresh no longer opens a transaction (F). Effect-transaction recomputes (judge/submission) **not changed**: see §6. |
@@ -123,7 +123,56 @@ closed.
 
 ## 4. Production verification
 
-_Filled from the released revision's own readings; see the sections below._
+### 4.1 The release
+
+| Fact | Reading |
+|---|---|
+| Deploy 458 (`7af7cfa`) | Cancelled. Its full SQLite suite failed on `neutralWorkerIdentity`: WS-B's `arrivalIdentity.ts` read a worker's handle directly, and `test:impacted` did not select that guard. Fixed in `2bb5879` (named through `workerIdentity`). |
+| Deploy 459 (`2bb5879`, run 38435096965) | Typecheck plus the whole SQLite suite passed (29 min). Postgres suite 571 passed on the same SHA (70 min). `flyctl deploy` then failed on its health-check deadline. |
+| Why flyctl failed | Supabase Storage answered `544 DatabaseTimeout`. The boot proof retried at 30 s, 60 s and 120 s, and Brain served from 18:18:38Z, so §18's retry worked as designed. flyctl's wait ran out first. |
+| Observed | `NEW_SERVING`: the machine runs `2bb5879`, and the Brain answers. Schema version 107 (migration `107_kernel_round_abandoned` applied). `deployed/production` names `2bb5879`. |
+| Hosted verification | **Did not run**: it is skipped when `flyctl` fails. The release is live, and its verification is unknown, not passed. |
+| Release passes after the Deploy | Exactly one `workflow_run` pass followed Deploy 459 (Factory release 110, success). Pass 109 belongs to the cancelled 458. Scheduled pass 111 (18:22Z) died on `ECHECKOUTTIMEOUT` before reading anything. |
+| `production` tip | `07f9e4d` = `2bb5879` plus a workflow and test change only (closeout-report markers, §4.4). No image change, so no Deploy. |
+
+### 4.2 What the released process measured (connection report, 18:48–18:58Z, `SERVING_REVISION 2bb5879`)
+
+This is the reading INF-1 and INF-2 were waiting for. It moves INF-2 to VERIFIED.
+
+- **Brain is not where the time goes.** On the new process:
+  - workload pool wait was p95 **0 ms** over 500 statements;
+  - event loop was p50 20 ms, p99 21 ms;
+  - statements still took 63–136 s *in response*, with wait ≈ 0 (`SELECT * FROM factory_campaigns …` up to 135.9 s; the single-row lease `UPDATE` up to 63 s).
+- **The server is waiting on its own write-ahead log.** `pg_stat_activity` showed 5 active and 7 idle connections. Three single-row `UPDATE`s were waiting on **`LWLock:WALWrite`** (14–22 s) with no lock waits between sessions. That is storage I/O on the database host, not contention from Brain.
+- **Supabase itself is starved.** Supabase Storage answered `544 DatabaseTimeout` during the boot. Separately, a one-client operator read was refused by the pooler (`ECHECKOUTTIMEOUT` after 15 s, in Session mode) at 18:23Z and again at 18:49Z, with Brain holding 8 workload + 1 control connections.
+
+**INF-1 is now owner evidence, not conjecture: the database is I/O-bound.** The Supabase dashboard's disk-I/O budget and CPU for this window are the next reading; resizing is spending.
+
+### 4.3 Connections and fleet, as read
+
+| ID | Reading |
+|---|---|
+| CON-3 / CON-4 | Airyn 2-B and 2-D are **QUARANTINED**, each with a wrong-worker cause naming session, connector (`/mcp`, client `brnc_e9f3…`) and both remedies. Airyn 2-A and 2-C are ENABLED and checking in (last 18:07:48Z). This is B's behaviour: one activation, then stop. The owner action (§5.3) still stands. |
+| CON-1 / INF-6 | 8 `UNSERVED_ARRIVAL CHECK_IN_BUDGET` incidents, 16:42–18:08Z, every one recorded as Brain's and charged to no surface. `MISSES` shows `infra=1`, `no-show=0`, `auth=0`. |
+| Auth | 3 `INVALID_CREDENTIALS` in 3 h. No credential was reported refused during the outage. |
+| Research fleet | Brain Research A, 1-B, 1-C and 1-D are all ENABLED and attributed to `cnr_8ee3…` / `wkr_1cdd…`. |
+| Caleb | 3-A ENABLED; 3-B QUARANTINED (no-shows, 2026-10-12); 3-C QUARANTINED. CON-8 is unchanged and needs a healthy-time probe. |
+
+### 4.4 Readings that could not be taken, and one defect they exposed
+
+- `cash-report` failed in `initDatabase` (`ECHECKOUTTIMEOUT`).
+- `packet-report orc_c576…` failed in `initStorage` (Storage `544`).
+- The connection report died at its final ALERTS query on a statement timeout. That query has an index (`idx_bin_events_routine`), so the cause is the starvation above, not a missing index.
+
+So RES-1..RES-13 and FAC-15 stay AWAITING-VERIFICATION until the database answers.
+
+**Defect found and fixed (`07f9e4d`).** `closeout-report campaigns` went **green** while `factory.sh` died before printing anything. Its marker was `.`, which matches a stack trace; `fleet`, `routing`, `projects` and `bins` had the same marker. Each now greps the script's own OK line, and `tests/closeoutReportMarkers.test.ts` refuses any marker that a failure would match. The test was run against the old file and failed there.
+
+### 4.5 Still to read
+
+- A second connection report about 60 minutes after the first, for INF-3's churn comparison.
+- The cash, packet, campaign and kernel reports, once the database is answering.
+- The hosted verification for `2bb5879`, by a Deploy taken in healthy time. Re-deploying the same image only to run the harness during an I/O outage would restart a live Brain for nothing.
 
 ## 5. Owner and provider actions (consolidated)
 
