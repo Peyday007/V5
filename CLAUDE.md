@@ -13080,16 +13080,22 @@ went. 2026-10-12 is the reading that finally did.
   154 s, and `INSERT INTO bin_events` up to 210 s. All of this happened while
   `pg_stat_activity` showed **3 active connections**.
   A one-writer row taking minutes with the server nearly idle is not Brain's
-  contention and not a missing index. The server itself is not executing, and
-  that is the signature of an exhausted CPU or disk-IO budget. The first
+  contention and not a missing index. The time was spent outside server
+  execution — a starved compute, the pooler's queue or this process's own event
+  loop all fit, and nothing then measured which (corrected in §62). The first
   connection-report attempt at 20:29Z could not even obtain a pooler
   connection within 10 s. That makes the Supabase dashboard reading the
   outstanding fact, and it is the owner's to take.
 - **By 00:43Z the server was executing again.** Authentication p95 was 85 ms and
   `pg_stat_activity` read 13 idle connections, with no Brain incident in three
-  hours. Whatever was exhausted refilled without any change on Brain's side,
-  which fits a burst budget rather than a load Brain controls. It also means it
-  can run out again.
+  hours, and nothing on Brain's side had changed. **Why it recovered is not
+  established.** An earlier version of this sentence said it "fits a burst
+  budget"; no CPU, disk-IO or pooler reading supports that, and the 207 s
+  single-row writes above were measured as client wall time, which includes the
+  wait for a pooled client and this process's own event loop — a 120 s server
+  `statement_timeout` means none of it was server execution. Corrected rather
+  than kept (§62): the recovery is observed, its cause is open, and it can
+  happen again.
 - **With the database answering, the waste moved to research, and two of its
   causes were the gate's.** On Cash Mode 1, 143 fragments were BLOCKED against
   12 accepted, yet 444 of their 632 claims had been accepted. Classified by
@@ -13104,6 +13110,48 @@ went. 2026-10-12 is the reading that finally did.
   envelope's sentence and not a place; a MISMATCH against it still fails. The
   30 egress refusals are the Routines' own network policy (§22: *the surface
   owns whether a worker may act*), and only their owners can fix them.
+
+## 62. Five repair batches are one release, and a merged PR is not a closed finding.
+
+Session F integrated the WS-A to WS-E batches from the 2026-10-12 failure
+inventory into one release. `docs/SESSION-F-CLOSEOUT-2026-10-13.md` maps every
+finding to VERIFIED, AWAITING-VERIFICATION, AWAITING-AUTHORIZATION, UNRESOLVED,
+OWNER/PROVIDER, DISPROVED or DEFERRED. Only production readings move a finding
+to VERIFIED. The rules this added:
+
+- **Database time is two numbers, and neither one is server execution.**
+  `noteStatement` records the wait for a pooled client separately from the
+  response once a client is in hand. Read the response beside event-loop delay,
+  server wait events and blocking chains. Session `SET`s are awaited in
+  `#checkout`. A recompute outside a caller's transaction opens a transaction
+  only to write a change, and the dependency refresh opens one only when a link
+  moved.
+- **A check-in deadline bounds everything before the lease swap.** Once a lease
+  is taken, the answer is never "nothing". When arrivals are mixed, one
+  right-worker arrival does not lift a wrong-worker quarantine. An alert's cause
+  comes from the predicate that refused the work. An AMBIGUOUS probe caused by
+  Brain's own outage does not count against recovery.
+- **A round settles on its own idea's latest mission, read by key, never from
+  the newest-100 window.** This covers all five kernels and labor. Same-
+  millisecond claims keep their read order.
+- **A blocked monetization path is asked only what its blocker names.** A
+  duplicate opening has no space of its own. Being able to research something
+  does not mean being able to deliver it.
+- **A NEEDS_HUMAN packet always carries a reason.** "Repairable" means what the
+  repair planner will actually mint. A parked mission's reason is stored in
+  `waiting_on`. An expired-grant stop resumes once the grant is renewed.
+- **Deployed and verified are separate facts.** After a failed `flyctl deploy`,
+  the observed revision decides what is running. A superseded Deploy is neutral.
+  Deploy requires completed Postgres evidence on its exact commit. A person's
+  Deploy produces one release pass.
+- **A store refusal before any upload is accepted (429) is retryable.** A 5xx
+  on an upload is still an unknown outcome (invariant 26).
+- **An integration that fails identically twice on an unchanged scope stops**
+  and does not spend its attempts (FAC-2). The claim that a static validator
+  could have predicted the failing test was disproved. This is implemented
+  beside #193 and is held for the owner's merge decision.
+- **Migration numbers are positions.** D's reservation 118 / pg 109 was
+  renumbered to 116 / pg 107 before first application.
 
 ## Repository map
 
