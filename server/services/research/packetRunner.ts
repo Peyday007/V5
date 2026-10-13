@@ -46,6 +46,7 @@ import { outcomeFor, repairable, TERMINAL_ORCHESTRATION } from './outcome.ts';
 import { bundleKeyFor } from './bundling.ts';
 import { AUDIT_VERDICTS } from '../../domain/types.ts';
 import type {
+  RepairPlan,
   ResearchClaim,
   ResearchFragment,
   ResearchOrchestration,
@@ -764,33 +765,66 @@ async function recordUnresolvedGaps(input: {
  *
  * Returns how many it created, so the caller re-derives rather than guessing.
  */
-async function mintRepairs(input: {
+/**
+ * Which blocked fragments a repair would actually be minted for, and why not
+ * for the rest.
+ *
+ * One answer with two readers: `mintRepairs`, which acts on `mintable`, and the
+ * verdict branch, which hands `mintable` to `outcomeFor` and composes a
+ * person's question out of `refused`. They used to ask two different
+ * questions — `outcomeFor` the pure `attempt <= maxRepairs`, `mintRepairs` that
+ * plus the dependency and the planner — so a packet whose only fragment was on
+ * its last attempt read `AWAITING_REPAIR` to one and had nothing to mint for
+ * the other, and the two wrote the status back and forth on every tick
+ * (RES-8). A rule applied by one of two readers is worse than none.
+ *
+ * Read-only: nothing here writes, so asking it costs a read and decides
+ * nothing.
+ */
+interface RepairAssessment {
+  mintable: { fragment: ResearchFragment; plan: RepairPlan }[];
+  refused: { fragment: ResearchFragment; reason: string }[];
+}
+
+async function assessRepairs(input: {
   orchestration: ResearchOrchestration;
   fragments: ResearchFragment[];
-  items: WorkItem[];
-}): Promise<number> {
+}): Promise<RepairAssessment> {
   const { orchestration, fragments } = input;
-  const candidates = repairable(fragments);
-  if (candidates.length === 0) return 0;
+  const out: RepairAssessment = { mintable: [], refused: [] };
+  const blocked = fragments.filter((fragment) => fragment.status === 'BLOCKED');
+  if (blocked.length === 0) return out;
 
-  const { buildRepairPlan, describeRepairPlan } = await import('./repair.ts');
-  const { retryFragment, FragmentNotRetryable } = await import('./reissue.ts');
-  const { listFragments } = await import('../../repos/research.ts');
+  const candidates = new Set(repairable(fragments).map((fragment) => fragment.id));
+  const { buildRepairPlan } = await import('./repair.ts');
+  const doomed = doomedBy(fragments);
+  let history: ResearchFragment[] | null = null;
 
-  let created = 0;
-  for (const fragment of candidates) {
+  for (const fragment of blocked) {
+    if (!candidates.has(fragment.id)) {
+      out.refused.push({
+        fragment,
+        reason:
+          `${fragment.fragmentKey} has had ${fragment.attempt} of its ${fragment.maxRepairs} ` +
+          'attempt(s); the last one is kept as unresolved rather than repeated',
+      });
+      continue;
+    }
     // Doomed by a HARD dependency that never arrived? Repairing this one
     // changes nothing; the dependency is what needs the attempt.
-    if (doomedBy(fragments).has(fragment.fragmentKey)) continue;
-
-    const history = (await listFragments(orchestration.id)).filter(
-      (entry) => entry.fragmentKey === fragment.fragmentKey,
-    );
+    if (doomed.has(fragment.fragmentKey)) {
+      out.refused.push({
+        fragment,
+        reason: `${fragment.fragmentKey} depends on research that ended without being accepted`,
+      });
+      continue;
+    }
+    history ??= await listFragments(orchestration.id);
     const claims = await listClaimsForFragment(fragment.id);
     const plan = buildRepairPlan({
       fragment,
       gate: gateShapeFor(fragment, claims),
-      history,
+      history: history.filter((entry) => entry.fragmentKey === fragment.fragmentKey),
       claims,
       // Splitting is decided on the in-process path by `shouldSplit`, which
       // reads the failed attempt's own passes. This path has the claims but not
@@ -807,15 +841,37 @@ async function mintRepairs(input: {
      * strategy this failure suggests has already been tried, or when the budget
      * is down to its last attempt. That is an instruction to stop, and creating
      * an attempt carrying it would be a fragment whose assignment is "do not
-     * attempt this". It is left for the gap pass below, which is where an
-     * honestly unresolved fragment belongs.
-     *
-     * Note this stops one attempt earlier than `retryFragment` would refuse.
-     * The planner is the stricter of the two and it is the one that knows what
-     * has been searched, so it decides.
+     * attempt this". It is left for the gap pass, which is where an honestly
+     * unresolved fragment belongs.
      */
-    if (plan.strategies.every((strategy) => strategy === 'MARK_UNRESOLVED')) continue;
+    if (plan.strategies.every((strategy) => strategy === 'MARK_UNRESOLVED')) {
+      out.refused.push({
+        fragment,
+        reason:
+          `every search strategy ${fragment.fragmentKey}'s failure suggests has already been ` +
+          'tried, so another attempt would repeat a search',
+      });
+      continue;
+    }
+    out.mintable.push({ fragment, plan });
+  }
+  return out;
+}
 
+async function mintRepairs(input: {
+  orchestration: ResearchOrchestration;
+  fragments: ResearchFragment[];
+  items: WorkItem[];
+}): Promise<number> {
+  const { orchestration, fragments } = input;
+  const { mintable } = await assessRepairs({ orchestration, fragments });
+  if (mintable.length === 0) return 0;
+
+  const { describeRepairPlan } = await import('./repair.ts');
+  const { retryFragment, FragmentNotRetryable } = await import('./reissue.ts');
+
+  let created = 0;
+  for (const { fragment, plan } of mintable) {
     try {
       const outcome = await retryFragment({
         fragmentId: fragment.id,
@@ -1076,15 +1132,26 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
   if (live.length > 0) return result;
 
   if (result.status === 'AWAITING_REPAIR') {
-    const waiting = (await currentFragments(orchestrationId)).some(
-      (fragment) => fragment.nextRetryAt !== null,
-    );
+    const fragments = await currentFragments(orchestrationId);
+    const waiting = fragments.some((fragment) => fragment.nextRetryAt !== null);
     if (waiting) return result;
+    /*
+     * Reachable now only through a race — the verdict branch asks
+     * `assessRepairs` before it writes AWAITING_REPAIR — so when it does happen
+     * it names the refusals rather than only that nothing is pending.
+     */
+    const orchestration = await getOrchestration(orchestrationId);
+    const repairs = orchestration
+      ? await assessRepairs({ orchestration, fragments })
+      : { mintable: [], refused: [] };
+    const detail = repairs.refused.map((entry) => entry.reason).join('; ');
     await updateOrchestration(orchestrationId, {
       status: 'NEEDS_HUMAN',
       failureReason:
         'The packet was left awaiting a repair that has no claimable work and no scheduled ' +
-        'time to return. Nothing would ever pick it up, so it is a decision rather than a wait.',
+        'time to return' +
+        (detail ? ` (${detail})` : '') +
+        '. Nothing would ever pick it up, so it is a decision rather than a wait.',
       completedAt: new Date().toISOString(),
     });
     return { ...result, status: 'NEEDS_HUMAN', waitingOn: 'a person: no repair is actually pending' };
@@ -1781,11 +1848,19 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
   if (accepted.length === 0) {
     // A packet where nothing cleared the gate is not a failure to retry; it is
     // a result a person needs to see. Repair is planned, not automatic — §15.
+    //
+    // The reason keeps its first sentence verbatim — reports group on it — and
+    // then says *which* gate condition stopped each fragment and why no further
+    // attempt is being made, from the fragment's own recorded blocked reason
+    // and `assessRepairs`. "Repair or narrow the fragments" told a person to do
+    // what the runner had just decided could not be done, about fragments it
+    // did not name (RES-1, RES-9).
+    const repairs = await assessRepairs({ orchestration, fragments });
     await updateOrchestration(orchestration.id, {
       status: 'NEEDS_HUMAN',
       failureReason:
         'No fragment cleared its evidence gate, so there is nothing to synthesize. ' +
-        'Repair or narrow the fragments and approve a new plan.',
+        noFragmentClearedDetail(fragments, repairs),
       completedAt: new Date().toISOString(),
     });
     return {
@@ -2056,21 +2131,45 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
    * changes nothing writes nothing. It re-judges no evidence and overrides no
    * verdict — §8 gives the verdict to the judge and this does not take it back.
    */
-  const outcome = outcomeFor({ verdict, orchestration, fragments });
+  /*
+   * Asked of the planner, not of the attempt count alone — see
+   * `assessRepairs`. The pure answer promised a repair `mintRepairs` would
+   * never make, and the packet oscillated for ever.
+   */
+  const repairs = await assessRepairs({ orchestration, fragments });
+  const outcome = outcomeFor({
+    verdict,
+    orchestration,
+    fragments,
+    repairableNow: repairs.mintable.map((entry) => entry.fragment),
+  });
+  /*
+   * A packet that stops here for a person says what the person is deciding.
+   *
+   * This branch wrote `NEEDS_HUMAN` with no reason, and so did the judge's own
+   * submission, so the mission parked on the fallback "the packet stopped at a
+   * decision only a person can make" — true and unanswerable (RES-9). The
+   * question is composed from rows: the verdict, why each blocked fragment
+   * cannot be attempted again, and the two answers that exist.
+   */
+  const reason = outcome === 'NEEDS_HUMAN' ? verdictStopReason(verdict, repairs) : null;
   if (outcome === orchestration.status) {
+    if (reason && orchestration.failureReason !== reason) {
+      await updateOrchestration(orchestration.id, { failureReason: reason });
+    }
     return {
       orchestrationId,
       status: orchestration.status,
       enqueued: [],
-      waitingOn:
-        orchestration.status === 'NEEDS_HUMAN'
-          ? 'a person: the judge asked for more research and this run has nothing left to attempt'
-          : null,
+      waitingOn: reason ? `a person: ${reason}` : null,
     };
   }
 
   await updateOrchestration(orchestration.id, {
     status: outcome,
+    // The reason travels with the status. A packet leaving NEEDS_HUMAN must not
+    // keep showing why it stopped, and one entering it must say why.
+    failureReason: reason,
     // A packet going back for repair has not completed. Stamping it would leave
     // a completion time on a run that then carries on.
     completedAt: TERMINAL_ORCHESTRATION.has(outcome) ? new Date().toISOString() : null,
@@ -2086,11 +2185,62 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     orchestrationId,
     status: outcome,
     enqueued: [],
-    waitingOn:
-      outcome === 'NEEDS_HUMAN'
-        ? 'a person: the judge asked for more research and this run has nothing left to attempt'
-        : null,
+    waitingOn: reason ? `a person: ${reason}` : null,
   };
+}
+
+/**
+ * The question a packet asks when its judge wanted more and nothing can be
+ * attempted again.
+ *
+ * Every clause is a row: the verdict, each blocked fragment's refusal from
+ * `assessRepairs`, and the two answers this state actually has —
+ * `authorizeUnresolvedGaps` (Needs You's "record what could not be settled",
+ * or `scripts/authorize-gap-policy.ts`), after which the next advance files the
+ * report short with its open requirements named; or stopping the work. It
+ * names no default, because filing short over an uncovered mandatory
+ * requirement is the decision invariant 20 reserves to a person.
+ */
+/**
+ * What each blocked fragment failed on, and why it is not being tried again.
+ *
+ * The first clause of each fragment's own `blockedReason` — the gate's own
+ * words, never a summary of them — and its refusal from `assessRepairs`.
+ * Bounded so a packet with many fragments still reads as a sentence.
+ */
+export function noFragmentClearedDetail(
+  fragments: ResearchFragment[],
+  repairs: RepairAssessment,
+): string {
+  const refusals = new Map(repairs.refused.map((entry) => [entry.fragment.id, entry.reason]));
+  const parts = fragments
+    .filter((fragment) => fragment.status === 'BLOCKED')
+    .slice(0, 4)
+    .map((fragment) => {
+      const failed = (fragment.blockedReason ?? 'no reason recorded').split(/(?<=\.)\s/)[0]!.slice(0, 220);
+      const refusal = refusals.get(fragment.id);
+      return `${fragment.fragmentKey} (attempt ${fragment.attempt}): ${failed}` + (refusal ? ` Not retried: ${refusal}.` : '');
+    });
+  const more = fragments.filter((fragment) => fragment.status === 'BLOCKED').length - parts.length;
+  return (
+    (parts.length > 0 ? parts.join(' ') : 'No fragment recorded a blocked reason.') +
+    (more > 0 ? ` (${more} more blocked fragment(s) not listed.)` : '') +
+    ' Every claim the gate accepted is kept and stays citable. Continuing needs a narrower or ' +
+    'different question, approved as a new plan, or stopping the work.'
+  );
+}
+
+export function verdictStopReason(verdict: string, repairs: RepairAssessment): string {
+  const why =
+    repairs.refused.length > 0
+      ? repairs.refused.map((entry) => entry.reason).join('; ')
+      : 'no fragment is blocked, so there is nothing to attempt again';
+  return (
+    `The judge's verdict was ${verdict}: the report needs more research before it can stand, ` +
+    `and none can be attempted on this packet (${why}). A person decides between two answers: ` +
+    'authorize this packet to record what it could not settle — it is then filed short, with ' +
+    'each open requirement named — or stop the work. Either answer resumes it on the next tick.'
+  );
 }
 
 /**
@@ -2221,7 +2371,27 @@ export async function reconcileArguedAuditRoles(
 export async function concludeUnworkablePackets(
   limit: number,
 ): Promise<{ orchestrationId: string; retired: number }[]> {
-  const live = ['PLANNING', 'RESEARCHING', 'VERIFYING', 'SYNTHESIZING', 'AUDITING', 'AWAITING_REPAIR'];
+  /*
+   * NEEDS_HUMAN is not terminal (it is re-entered every tick), so the terminal
+   * sweep never reaches it, and it was absent here too — so a parked packet
+   * holding only items past their ceilings kept them `LEASED` for ever:
+   * `wki_207ff7c14abf46c19fd8` at 4/2 and `wki_7b51a43e958f42f7b5ba` at 5/2
+   * since 2026-09-17/19 (RES-10). Retiring them is safe for the same reason it
+   * is safe on a working packet: nothing can attempt them, and the advance that
+   * follows reads the packet's own rows — the fragment whose item retired is
+   * faulted with its reason, and any repair still allowed is minted by the same
+   * `mintRepairs` every advance already runs. It answers nobody's question and
+   * changes no decision a person has been asked for.
+   */
+  const live = [
+    'PLANNING',
+    'RESEARCHING',
+    'VERIFYING',
+    'SYNTHESIZING',
+    'AUDITING',
+    'AWAITING_REPAIR',
+    'NEEDS_HUMAN',
+  ];
   const now = queueNow();
   const rows = await getDb().all<{ id: string }>(
     `SELECT DISTINCT o.id AS id

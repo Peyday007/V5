@@ -47,6 +47,7 @@ import { createRun } from '../server/repos/runs.ts';
 import {
   createOrchestration,
   updateOrchestration,
+  getOrchestration,
   startPass,
   finishPass,
   getPass,
@@ -1128,6 +1129,46 @@ describe('a live packet whose every item is past its ceiling', () => {
 
     // Idempotent by the state it produces: nothing left to select.
     expect(await concludeUnworkablePackets(10)).toHaveLength(0);
+  });
+
+  /**
+   * RES-10. A parked packet is not terminal, so the terminal sweep never reached
+   * it, and it was missing from this sweep's statuses too — production held
+   * `wki_207ff7c14abf46c19fd8` at 4/2 and `wki_7b51a43e958f42f7b5ba` at 5/2 on
+   * lapsed leases for weeks. Retired with their rows kept, and the packet is
+   * then whatever its own rows say, with a reason.
+   */
+  it('reaches a parked packet holding only spent items', async () => {
+    const { orchestrationId, ids } = await packetWithItems();
+    await spend(ids[0]!, 'LEASED');
+    await spend(ids[1]!, 'LEASED');
+    await updateOrchestration(orchestrationId, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'an earlier stop',
+    });
+
+    const first = await concludeUnworkablePackets(10);
+    expect(first.map((entry) => entry.orchestrationId)).toContain(orchestrationId);
+    for (const id of ids) {
+      const item = (await getWorkItem(id))!;
+      expect(item.state).toBe('CANCELLED');
+      expect(item.attemptCount).toBeGreaterThan(item.maxAttempts);
+    }
+    const after = await getOrchestration(orchestrationId);
+    expect(after?.status).not.toBe('COMPLETE');
+    expect(after?.failureReason ?? after?.cancelReason ?? '').not.toBe('');
+    expect(await concludeUnworkablePackets(10)).toHaveLength(0);
+  });
+
+  it('leaves a parked packet alone while one of its items could still be attempted', async () => {
+    const { orchestrationId, ids } = await packetWithItems();
+    await spend(ids[0]!, 'LEASED');
+    await updateOrchestration(orchestrationId, { status: 'NEEDS_HUMAN' });
+
+    expect(
+      (await concludeUnworkablePackets(10)).map((entry) => entry.orchestrationId),
+    ).not.toContain(orchestrationId);
+    expect((await getWorkItem(ids[1]!))!.state).toBe('QUEUED');
   });
 
   it('does not touch a packet that has finished — that is the other sweep', async () => {

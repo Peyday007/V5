@@ -1529,3 +1529,114 @@ export async function markContradiction(
   await touchSharedFindingForClaim(id);
   return getClaim(id);
 }
+
+/**
+ * Where gated research went in one project over one window, counted from rows.
+ *
+ * The measurement RES-1 asked for, as a function rather than a one-off query,
+ * so a report can print it (Session D's Cash report) and a test can hold it.
+ * Four populations kept apart, because they answer different questions and the
+ * inventory found them being read as one:
+ *
+ *   - **fragments** judged in the window, by outcome and, when BLOCKED, by
+ *     first cause (`classifyBlock`) — "why research fails its gate";
+ *   - **claims** inside those fragments: submitted, accepted, and accepted
+ *     *inside a BLOCKED fragment* — supported evidence that survives a fragment
+ *     that did not answer its question, and stays citable;
+ *   - **packets** those fragments belong to, by current status;
+ *   - **failed conditions**, summed per claim, from the gate's own record.
+ *
+ * The window is on `completed_at`, the instant the gate wrote its verdict, so a
+ * repeated reading of the same window is the same population. Bounded: one
+ * read of fragments and one aggregate over claims.
+ */
+export interface GateFailureDistribution {
+  projectId: string;
+  since: string;
+  until: string;
+  fragments: { judged: number; accepted: number; blocked: number };
+  blockedByCause: Record<string, number>;
+  failedConditions: Record<string, number>;
+  claims: { submitted: number; accepted: number; acceptedInBlocked: number; unread: number };
+  packets: { total: number; byStatus: Record<string, number> };
+  /** A few blocked fragments per cause, so a reader can open one. */
+  examples: Record<string, { fragmentId: string; orchestrationId: string; fragmentKey: string }[]>;
+}
+
+export async function gateFailureDistribution(input: {
+  projectId: string;
+  since: string;
+  until?: string;
+}): Promise<GateFailureDistribution> {
+  const { classifyBlock } = await import('../services/research/gate.ts');
+  const until = input.until ?? new Date().toISOString();
+  const rows = await getDb().all<{
+    id: string;
+    orchestration_id: string;
+    fragment_key: string;
+    status: string;
+    blocked_reason: string | null;
+    verdict_detail: string | null;
+  }>(
+    `SELECT id, orchestration_id, fragment_key, status, blocked_reason, verdict_detail
+       FROM research_fragments
+      WHERE project_id = ? AND status IN ('ACCEPTED','BLOCKED')
+        AND completed_at >= ? AND completed_at < ?`,
+    [input.projectId, input.since, until],
+  );
+  const out: GateFailureDistribution = {
+    projectId: input.projectId,
+    since: input.since,
+    until,
+    fragments: { judged: rows.length, accepted: 0, blocked: 0 },
+    blockedByCause: {},
+    failedConditions: {},
+    claims: { submitted: 0, accepted: 0, acceptedInBlocked: 0, unread: 0 },
+    packets: { total: 0, byStatus: {} },
+    examples: {},
+  };
+  const packetIds = new Set<string>();
+  for (const row of rows) {
+    packetIds.add(row.orchestration_id);
+    const detail = parseJson<{
+      claims?: { accepted: boolean; failedCondition: string | null }[];
+      unresolvedRetrieval?: unknown[];
+    } | null>(row.verdict_detail, null);
+    const judged = Array.isArray(detail?.claims) ? detail.claims : [];
+    const acceptedHere = judged.filter((claim) => claim.accepted).length;
+    out.claims.submitted += judged.length + (detail?.unresolvedRetrieval?.length ?? 0);
+    out.claims.accepted += acceptedHere;
+    out.claims.unread += detail?.unresolvedRetrieval?.length ?? 0;
+    for (const claim of judged) {
+      if (claim.failedCondition) {
+        out.failedConditions[claim.failedCondition] = (out.failedConditions[claim.failedCondition] ?? 0) + 1;
+      }
+    }
+    if (row.status === 'ACCEPTED') {
+      out.fragments.accepted += 1;
+      continue;
+    }
+    out.fragments.blocked += 1;
+    out.claims.acceptedInBlocked += acceptedHere;
+    const cause = classifyBlock({ blockedReason: row.blocked_reason, verdictDetail: detail });
+    out.blockedByCause[cause] = (out.blockedByCause[cause] ?? 0) + 1;
+    const list = (out.examples[cause] ??= []);
+    if (list.length < 3) {
+      list.push({ fragmentId: row.id, orchestrationId: row.orchestration_id, fragmentKey: row.fragment_key });
+    }
+  }
+  const ids = [...packetIds];
+  out.packets.total = ids.length;
+  for (let at = 0; at < ids.length; at += 500) {
+    const batch = ids.slice(at, at + 500);
+    const statuses = await getDb().all<{ status: string; n: number }>(
+      `SELECT status, COUNT(*) AS n FROM research_orchestrations
+        WHERE id IN (${batch.map(() => '?').join(', ')}) GROUP BY status`,
+      batch,
+    );
+    for (const entry of statuses) {
+      out.packets.byStatus[entry.status] = (out.packets.byStatus[entry.status] ?? 0) + Number(entry.n);
+    }
+  }
+  return out;
+}

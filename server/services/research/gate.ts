@@ -756,3 +756,76 @@ function sameSubject(a: ResearchClaim, b: ResearchClaim): boolean {
 export function fragmentPasses(result: GateResult): boolean {
   return result.integrity === 'PASS' && result.sufficiency === 'SUFFICIENT';
 }
+
+/**
+ * Why a fragment ended BLOCKED, as one first cause, read from what the gate
+ * already wrote.
+ *
+ * RES-1 had no answer because nothing printed it: `blocked_reason` is a run of
+ * the gate's own sentences, and "308 missions failed: no fragment cleared its
+ * gate" said nothing about which of seven conditions did it. This reads the
+ * stored `GateResult` (and, where there is none, the blocked reason's own
+ * opening words, which the runner writes and nothing else does) and names the
+ * *first* cause in a fixed order — the order a remedy would have to be applied
+ * in, so a fragment is counted once and under the cause that would have to move
+ * first.
+ *
+ * Pure and re-judging nothing: it classifies a verdict already recorded, and
+ * an unrecognised shape is `UNCLASSIFIED` rather than a guess, so the count of
+ * what this cannot explain is itself part of the reading.
+ */
+export const BLOCK_CAUSES = [
+  /** A work item finished without recording anything; no gate ran. */
+  'WORK_FAULTED',
+  /** Never researched: a dependency it needed ended without acceptance. */
+  'DEPENDENCY',
+  /** No claim was submitted at all. */
+  'NO_CLAIMS',
+  /** Every claim's source was unreadable — a source-access fact, not a refusal. */
+  'SOURCES_UNREADABLE',
+  /** Claims were judged and none survived. */
+  'NOTHING_SURVIVED',
+  /** A REQUIRED lane has no accepted claim (or not enough examples). */
+  'REQUIRED_LANE_EMPTY',
+  /** Most claims rejected, so the rest cannot be relied on. */
+  'MOSTLY_REJECTED',
+  /** The accepted claims rest on too few independent publishers. */
+  'INDEPENDENT_SOURCES_SHORT',
+  /** Every lane covered, and the verifier still judged the answer incomplete. */
+  'VERIFIER_INSUFFICIENT',
+  'UNCLASSIFIED',
+] as const;
+export type BlockCause = (typeof BLOCK_CAUSES)[number];
+
+export function classifyBlock(fragment: {
+  blockedReason: string | null;
+  verdictDetail: unknown;
+}): BlockCause {
+  const reason = fragment.blockedReason ?? '';
+  if (/^A [a-z ]+ work item for this fragment finished without recording/.test(reason)) {
+    return 'WORK_FAULTED';
+  }
+  // DEPENDENCY_DOOM_PREFIX lives in the packet runner; the words are repeated
+  // here rather than imported, because the runner imports this module.
+  if (reason.startsWith('Not researched: it depends on')) return 'DEPENDENCY';
+
+  const gate = fragment.verdictDetail as Partial<GateResult> | null;
+  if (!gate || typeof gate !== 'object' || !Array.isArray(gate.claims)) return 'UNCLASSIFIED';
+  const unread = Array.isArray(gate.unresolvedRetrieval) ? gate.unresolvedRetrieval.length : 0;
+  const accepted = Number(gate.acceptedClaims ?? 0);
+  const rejected = Number(gate.rejectedClaims ?? 0);
+  if (gate.claims.length === 0 && unread === 0) return 'NO_CLAIMS';
+  if (accepted === 0 && rejected === 0 && unread > 0) return 'SOURCES_UNREADABLE';
+  if (accepted === 0) return 'NOTHING_SURVIVED';
+  const coverage = Array.isArray(gate.coverage) ? gate.coverage : [];
+  if (coverage.some((lane) => lane.necessity === 'REQUIRED' && !lane.meetsThreshold)) {
+    return 'REQUIRED_LANE_EMPTY';
+  }
+  if (gate.integrity === 'FAIL') return 'MOSTLY_REJECTED';
+  const reasons = Array.isArray(gate.reasons) ? gate.reasons : [];
+  if (reasons.some((line) => line.includes('independent source(s), below'))) {
+    return 'INDEPENDENT_SOURCES_SHORT';
+  }
+  if (gate.sufficiency === 'INSUFFICIENT') return 'VERIFIER_INSUFFICIENT';
+  return 'UNCLASSIFIED';
+}
