@@ -391,8 +391,19 @@ describe('the whole causal chain, from a discovery to a rank that moved', () => 
   it('runs from the durable tick rather than only from a direct call', async () => {
     await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
     const pass = await operate(projectId);
-    expect(pass.monetization.commissions.opened.length).toBeGreaterThan(0);
-    expect((await listCommissions({ projectId, state: 'OPEN' })).length).toBeGreaterThan(0);
+    /*
+     * The tick reaches the allocator, and what it decides there is RES-3's:
+     * the operating pass raised needs for the opening's payer and access and
+     * started their research, so every possibility on it is BLOCKED by
+     * questions already being asked elsewhere. Asking any other attribute of
+     * a blocked path is what spent sixty-one commissions for two answers.
+     */
+    const declined = pass.monetization.commissions.declined.map((one) => one.why);
+    expect(declined.some((why) => why.includes('already being researched by the need'))).toBe(
+      true,
+    );
+    expect(pass.monetization.commissions.opened).toHaveLength(0);
+    expect(await listCommissions({ projectId, state: 'OPEN' })).toHaveLength(0);
   });
 });
 

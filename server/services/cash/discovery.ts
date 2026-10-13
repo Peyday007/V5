@@ -73,9 +73,13 @@ import {
   createOpportunity,
   fillOpportunitySignal,
   listOpportunities,
+  openingsWithSourceUrl,
   opportunityForClaim,
   updateOpportunity,
 } from '../../repos/cashPortfolio.ts';
+import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
+import { describesOwnAction } from '../research/actorScope.ts';
+import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import {
   closeRound,
@@ -85,10 +89,11 @@ import {
 } from '../../repos/cashDiscovery.ts';
 import { openIndustryRoundsByCandidate } from '../../repos/industry.ts';
 import { getClaim, signalledClaims } from '../../repos/research.ts';
-import { listMissions } from '../../repos/russellMissions.ts';
+import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
+import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
 import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
 import { discoveryAllowed } from './lifecycle.ts';
-import { existingOpeningFor, markDuplicateOpenings } from './duplicates.ts';
+import { existingOpeningFor, markDuplicateOpenings, openingSourceKey } from './duplicates.ts';
 import {
   ensureDiscoveryAuthority,
   resumeAuthorityParkedCandidates,
@@ -300,6 +305,7 @@ export async function openDiscovery(input: {
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
     if (next === null) continue;
+    const held = await heldExclusions({ projectId: input.projectId, bucket, history });
 
     /*
      * The candidate and its round commit together, in one transaction.
@@ -322,7 +328,7 @@ export async function openDiscovery(input: {
           conversationId: null,
           sourceMessageId: null,
           title: next === 1 ? bucket.title : `${bucket.title} (round ${next})`,
-          statement: questionFor(bucket, mode.objective, next, history),
+          statement: questionFor(bucket, mode.objective, next, history, held),
         });
 
         const result = await openRound({
@@ -427,6 +433,7 @@ export function questionFor(
   objective: string,
   round: number,
   history: readonly CashDiscoveryRound[],
+  held: HeldExclusions = { lines: [], omitted: 0 },
 ): string {
   const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`];
   if (round > 1) {
@@ -437,7 +444,103 @@ export function questionFor(
         'so plainly where nothing has.',
     );
   }
+  if (held.lines.length > 0) {
+    parts.push(
+      'Brain already holds the openings listed below, so do not report them again as new ' +
+        'openings. A different request published at the same address, or a materially new ' +
+        'revision of one, is still new.' +
+        held.lines.map((line) => `\n- already listed: ${line}`).join('') +
+        (held.omitted > 0
+          ? `\n- ${held.omitted} further held opening(s) are not listed here.`
+          : ''),
+    );
+  }
   return parts.join(' ');
+}
+
+/** The held openings a bucket question names, bounded, and how many it left out. */
+export interface HeldExclusions {
+  lines: string[];
+  omitted: number;
+}
+
+/** At most this many held openings are named in one question. */
+export const MAX_HELD_EXCLUSIONS = 25;
+
+/**
+ * The openings this project already holds, as exclusions for the next round of
+ * a bucket (RES-5).
+ *
+ * A later round said how many openings earlier ones filed and never which, so a
+ * worker re-reported the same RFQ dozens of times. This names them — the
+ * source key (`openingSourceKey`, the identity the duplicate check uses) and,
+ * where it is safe, a short title.
+ *
+ * Bounded, and the bound says so rather than truncating silently: the openings
+ * this bucket's own rounds filed come first, then other live openings of the
+ * same mechanism, newest first; anything past `MAX_HELD_EXCLUSIONS` is counted
+ * in the question as not listed.
+ *
+ * The question is compiled verbatim into the fragment, so two things a line may
+ * not carry are refused per line rather than trusted: **a jurisdiction** — the
+ * compiler reads states out of the question's prose, and a held title naming
+ * Missouri would turn a national bucket into a Missouri one (§25's Westbrook
+ * defect) — and **a phrase an approval envelope would read as Brain's own
+ * action**, which would get the whole round refused. A line whose title trips
+ * either falls back to its key alone; a key that trips either is counted, not
+ * named.
+ */
+export async function heldExclusions(input: {
+  projectId: string;
+  bucket: SearchBucket;
+  history: readonly CashDiscoveryRound[];
+}): Promise<HeldExclusions> {
+  const mine = new Set(input.history.map((one) => one.id));
+  const held = (await openingsWithSourceUrl(input.projectId))
+    .filter(({ opportunity }) => !opportunity.duplicateOfId && opportunity.state !== 'DECLINED')
+    .filter(
+      ({ opportunity }) =>
+        (opportunity.discoveryRoundId !== null && mine.has(opportunity.discoveryRoundId)) ||
+        opportunity.mechanism === input.bucket.mechanism,
+    )
+    .sort((a, b) => {
+      const ownA = a.opportunity.discoveryRoundId && mine.has(a.opportunity.discoveryRoundId) ? 0 : 1;
+      const ownB = b.opportunity.discoveryRoundId && mine.has(b.opportunity.discoveryRoundId) ? 0 : 1;
+      if (ownA !== ownB) return ownA - ownB;
+      return a.opportunity.createdAt < b.opportunity.createdAt ? 1 : -1;
+    });
+
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  let omitted = 0;
+  for (const { opportunity, sourceUrl } of held) {
+    const key = openingSourceKey(sourceUrl);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    if (lines.length >= MAX_HELD_EXCLUSIONS) {
+      omitted += 1;
+      continue;
+    }
+    // Punctuation that ends a clause or joins two questions is removed from the
+    // title: the fragment planner splits a question on ", and", and the action
+    // screen reads clause by clause.
+    const title = clamp(opportunity.title.replace(/[.,;:!?\u2014\u2013\n"]+/g, ' '), 80);
+    const withTitle = `"${title}" at ${key}`;
+    if (safeExclusion(withTitle)) lines.push(withTitle);
+    else if (safeExclusion(key)) lines.push(key);
+    else omitted += 1;
+  }
+  return { lines, omitted };
+}
+
+/** Neither a jurisdiction the compiler would read nor an action an envelope would refuse. */
+function safeExclusion(text: string): boolean {
+  if (statesNamedIn(text).length > 0) return false;
+  if (/\b(?:and also|as well as|in addition to)\b/i.test(text)) return false;
+  const line = `already listed: ${text}`;
+  return Object.values(APPROVAL_ENVELOPES).every(
+    (envelope) => !describesOwnAction(line, envelope.forbiddenActions),
+  );
 }
 
 /**
@@ -534,34 +637,44 @@ export async function harvest(input: {
    * industry Brain believes something is in.
    */
   const kernelByCandidate = await openIndustryRoundsByCandidate(input.projectId);
-  const missions = await listMissions({ projectId: input.projectId });
+  /*
+   * Read by the rounds' own candidate ids, never through `listMissions` — that
+   * is the hundred most recently updated missions of the project, and a round
+   * whose mission had fallen out of it was neither harvested against nor ever
+   * closed (RES-2).
+   */
+  const roundMissions = await missionsForRounds([
+    ...live.keys(),
+    ...kernelByCandidate.keys(),
+  ]);
   const roundByOrchestration = new Map<
     string,
-    { round: CashDiscoveryRound; bucket: SearchBucket; missionDone: boolean }
+    { round: CashDiscoveryRound; bucket: SearchBucket }
   >();
   const nodeByOrchestration = new Map<string, string>();
-  const missionByOrchestration = new Map<string, string>();
-  for (const mission of missions) {
-    if (!mission.orchestrationId) continue;
-    missionByOrchestration.set(mission.orchestrationId, mission.id);
-    if (!mission.candidateId) continue;
-    const entry = live.get(mission.candidateId);
-    if (entry) {
-      roundByOrchestration.set(mission.orchestrationId, {
-        ...entry,
-        missionDone: mission.state === 'DONE',
-      });
-    }
-    const kernel = kernelByCandidate.get(mission.candidateId);
-    if (kernel && kernel.purpose === 'SCAN' && kernel.nodeId) {
-      nodeByOrchestration.set(mission.orchestrationId, kernel.nodeId);
+  for (const [candidateId, entry] of live) {
+    for (const orchestrationId of roundMissions.get(candidateId)?.orchestrationIds ?? []) {
+      roundByOrchestration.set(orchestrationId, entry);
     }
   }
+  for (const [candidateId, kernel] of kernelByCandidate) {
+    if (kernel.purpose !== 'SCAN' || !kernel.nodeId) continue;
+    for (const orchestrationId of roundMissions.get(candidateId)?.orchestrationIds ?? []) {
+      nodeByOrchestration.set(orchestrationId, kernel.nodeId);
+    }
+  }
+  /** The mission behind an orchestration, by key, for the event's provenance. */
+  const missionIdOf = new Map<string, string | null>();
+  const missionFor = async (orchestrationId: string): Promise<string | null> => {
+    if (!missionIdOf.has(orchestrationId)) {
+      missionIdOf.set(orchestrationId, (await getMissionByOrchestration(orchestrationId))?.id ?? null);
+    }
+    return missionIdOf.get(orchestrationId) ?? null;
+  };
 
   const signalled = await signalledClaims({ projectId: input.projectId, limit: limit * 4 });
 
   const out: Harvested[] = [];
-  const foundPerRound = new Map<string, number>();
 
   for (const entry of signalled) {
     if (out.length >= limit) break;
@@ -597,6 +710,12 @@ export async function harvest(input: {
       projectId: input.projectId,
       sourceUrl: claim.sourceUrl,
       signal,
+      evidence: {
+        claim: claim.claim,
+        title: claim.sourceTitle,
+        excerpt: claim.evidenceExcerpt,
+        locator: claim.evidenceLocator,
+      },
     });
 
     const created = await createOpportunity({
@@ -650,7 +769,7 @@ export async function harvest(input: {
       signal_observed_at: claim.sourceDate ?? claim.retrievedAt ?? null,
     });
 
-    const missionId = missionByOrchestration.get(entry.orchestrationId) ?? null;
+    const missionId = await missionFor(entry.orchestrationId);
     await recordCashEvent({
       projectId: input.projectId,
       opportunityId: created.id,
@@ -670,9 +789,6 @@ export async function harvest(input: {
       },
     });
 
-    if (context) {
-      foundPerRound.set(context.round.id, (foundPerRound.get(context.round.id) ?? 0) + 1);
-    }
     out.push({ opportunity: withSignal ?? created, claimId: claim.id, missionId });
   }
 
@@ -690,80 +806,71 @@ export async function harvest(input: {
    * because its claims have not all arrived.
    */
   if (out.length < limit) {
-    for (const entry of roundByOrchestration.values()) {
-      if (!entry.missionDone) continue;
-      await closeRound({
-        id: entry.round.id,
-        to: 'HARVESTED',
-        found: foundPerRound.get(entry.round.id) ?? 0,
-      });
-    }
-    await closeStoppedRounds({ projectId: input.projectId, live, missions });
+    await closeEndedRounds({ projectId: input.projectId, live, roundMissions });
   }
   return out;
 }
 
-/** Mission states in which a round's research has stopped without finishing. */
-const ROUND_STOPPED = new Set(['FAILED', 'CANCELLED', 'NEEDS_HUMAN']);
-
 /**
- * Close a round whose research stopped, so its bucket can be asked again.
+ * Close every live round whose research has ended, so its bucket can be asked
+ * again — and record what it found.
  *
- * `closeRound` has always accepted `ABANDONED` and nothing ever wrote it: a
- * round was closed only when its mission reached `DONE`. So a mission that
- * failed, was cancelled, or parked at a decision left its round `OPEN` for
- * ever, and an open round is exactly what `nextRoundFor` refuses to ask past.
- * Production, Cash Mode 1: all ten buckets sat at round 1, `open=10
- * harvested=0`, every one parked — broad discovery had stopped while every row
- * read as waiting.
+ * DONE is `HARVESTED`. FAILED or CANCELLED is `ABANDONED`, and so is a mission
+ * parked at a decision (`NEEDS_HUMAN`): that last one is this module's own
+ * earlier correction and is kept — production Cash Mode 1 had all ten buckets
+ * at round 1, every one parked, and broad discovery had stopped while every row
+ * read as waiting. Closing the round ends nothing: the parked mission is left
+ * exactly where it is, waiting for its person, and the bucket may be asked
+ * again after its cool-off.
  *
- * Only a round whose idea actually became a mission: an idea parked before it
- * launched (no grant, a refused specification) is answered by its own
- * resumption, and closing it would record a round that researched nothing.
+ * An idea that never became a mission is left OPEN — answered by its own
+ * resumption — except one the archive already answered (`REJECTED`), which is
+ * a positive terminal row rather than an absence, and nothing will ever launch.
  *
- * `found` is counted from the openings that name this round, rather than
- * tallied by this pass, because the claims of a stopped packet were harvested
- * on earlier ticks. And the parked mission is left exactly where it is: closing
- * the round ends nothing, it lets the bucket ask again after the cool-off, and
- * `nextRoundFor`'s barren rule still stops a bucket whose last three rounds
- * found nothing.
+ * The missions are read by the rounds' own candidate ids (RES-2). `found` is
+ * counted from the openings that name this round, for both outcomes, because a
+ * round's claims are harvested on the passes they are gated — routinely earlier
+ * ones — and a tally of this pass would record a productive round as barren.
+ * Guarded on OPEN by `closeRound`, so a second tick or a restart reading the
+ * same ended mission closes nothing and writes no second event.
  */
-async function closeStoppedRounds(input: {
+async function closeEndedRounds(input: {
   projectId: string;
   live: Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>;
-  missions: Awaited<ReturnType<typeof listMissions>>;
+  roundMissions: Map<string, RoundMissions>;
 }): Promise<string[]> {
-  const latest = new Map<string, (typeof input.missions)[number]>();
-  for (const mission of input.missions) {
-    if (!mission.candidateId) continue;
-    const seen = latest.get(mission.candidateId);
-    if (!seen || mission.createdAt > seen.createdAt) latest.set(mission.candidateId, mission);
-  }
   const closed: string[] = [];
   let opportunities: CashOpportunity[] | null = null;
   for (const [candidateId, entry] of input.live) {
-    const mission = latest.get(candidateId);
-    if (!mission || !ROUND_STOPPED.has(mission.state)) continue;
+    const missions = input.roundMissions.get(candidateId);
+    const mission = missions?.latest ?? null;
+    const to: 'HARVESTED' | 'ABANDONED' | null =
+      missions?.outcome ?? (mission?.state === 'NEEDS_HUMAN' ? 'ABANDONED' : null);
+    if (!to) continue;
     opportunities ??= await listOpportunities({ projectId: input.projectId });
     const found = opportunities.filter((one) => one.discoveryRoundId === entry.round.id).length;
-    if (!(await closeRound({ id: entry.round.id, to: 'ABANDONED', found }))) continue;
+    if (!(await closeRound({ id: entry.round.id, to, found }))) continue;
+    closed.push(entry.round.id);
+    if (to === 'HARVESTED') continue;
+    const why = mission
+      ? `its research is ${mission.state.toLowerCase()}`
+      : 'the archive already answered it, so nothing launched';
     await recordCashEvent({
       projectId: input.projectId,
       kind: 'CASH_DISCOVERY_ROUND_STOPPED',
       actorRef: 'BRAIN',
       summary:
         `Discovery round ${entry.round.round} of "${entry.bucket.title}" stopped without ` +
-        `finishing (its research is ${mission.state.toLowerCase()}), having filed ${found} ` +
+        `finishing (${why}), having filed ${found} ` +
         'opening(s). The bucket will be asked again after its cool-off.',
       detail: {
         roundId: entry.round.id,
         bucketId: entry.bucket.id,
-        missionId: mission.id,
-        missionState: mission.state,
+        missionId: mission?.id ?? null,
+        missionState: mission?.state ?? null,
         found,
       },
     });
-    closed.push(entry.round.id);
   }
   return closed;
 }

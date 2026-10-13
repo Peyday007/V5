@@ -29,7 +29,8 @@
  */
 import { getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
 import { createCandidate } from '../../../repos/russellCandidates.ts';
-import { latestMissionForCandidate, listMissions } from '../../../repos/russellMissions.ts';
+import { latestMissionForCandidate } from '../../../repos/russellMissions.ts';
+import { missionsForRounds } from '../../russell/roundMissions.ts';
 import { citableClaims } from '../../../repos/research.ts';
 import { mayReplace } from '../../../repos/cashCardFacts.ts';
 import {
@@ -465,23 +466,18 @@ async function settleFinished(input: {
   const live = await openCommissionsByCandidate(input.projectId);
   if (live.size === 0) return { recorded, settled };
 
-  const missions = await listMissions({ projectId: input.projectId });
-  const byCommission = new Map<
-    string,
-    { commission: MonetizationCommission; orchestrationId: string | null; state: string }
-  >();
-  for (const mission of missions) {
-    if (!mission.candidateId) continue;
-    const commission = live.get(mission.candidateId);
-    if (!commission) continue;
-    byCommission.set(commission.id, {
-      commission,
-      orchestrationId: mission.orchestrationId,
-      state: mission.state,
-    });
-  }
+  /*
+   * Each commission's own idea, read by key (RES-2). This was the hundred most
+   * recently updated missions of the project, so a commission whose mission had
+   * fallen out of that window was never settled and held its slot for ever —
+   * and with two attempts in the window the map kept whichever came last in
+   * newest-first order, which is the *older* one.
+   */
+  const rounds = await missionsForRounds([...live.keys()]);
 
-  for (const { commission, orchestrationId, state } of byCommission.values()) {
+  for (const [candidateId, commission] of live) {
+    const entry = rounds.get(candidateId);
+    const state = entry?.latest?.state ?? null;
     /*
      * A run that is still going is not settled, and saying so costs nothing.
      *
@@ -491,11 +487,17 @@ async function settleFinished(input: {
      * so a clock started at launch would cancel live work doing exactly what
      * it should. What bounds this instead is the *mission*, which has its own
      * attempt ceiling and its own terminal states; when it reaches one, so
-     * does the commission.
+     * does the commission. An idea with no mission yet is not finished either:
+     * an absent row is never read as a failure.
      */
-    if (state !== 'DONE' && state !== 'FAILED' && state !== 'CANCELLED') continue;
+    if (!entry || !state || (state !== 'DONE' && state !== 'FAILED' && state !== 'CANCELLED')) {
+      continue;
+    }
 
-    const claims = orchestrationId ? await citableClaims(orchestrationId) : [];
+    // Every attempt's claims, because a redo answers the same question.
+    const claims = (
+      await Promise.all(entry.orchestrationIds.map((id) => citableClaims(id)))
+    ).flat();
     const filed = await fileAnswers({
       projectId: input.projectId,
       pathId: commission.pathId,

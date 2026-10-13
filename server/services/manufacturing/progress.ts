@@ -33,7 +33,7 @@
  * operator detail, and a progress line a project member reads is not where it
  * belongs.
  */
-import { listMissions } from '../../repos/russellMissions.ts';
+import { missionsForRounds } from '../russell/roundMissions.ts';
 import { listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
 import type { ManufacturingRound, RussellMission, WorkItem } from '../../domain/types.ts';
 
@@ -95,28 +95,20 @@ export interface RoundReadingProgress {
  * the project rather than about any one round.
  */
 export async function readProgress(
-  projectId: string,
+  _projectId: string,
   rounds: readonly ManufacturingRound[],
 ): Promise<RoundReadingProgress[]> {
   const open = rounds.filter((one) => one.state === 'OPEN');
   if (open.length === 0) return [];
 
-  const missions = await listMissions({ projectId });
+  /*
+   * By the open rounds' own candidate ids, newest attempt last (RES-2). This
+   * read the hundred most recently updated missions of the project, so a round
+   * whose mission had fallen out of that window read as never launched.
+   */
   const byCandidate = new Map<string, RussellMission>();
-  for (const mission of missions) {
-    if (!mission.candidateId) continue;
-    /*
-     * Newest wins, because a candidate can be launched more than once.
-     *
-     * `russell_missions` is append-only and a re-launch writes a second row;
-     * reading the first would report a superseded attempt's state for ever.
-     * `linkFiledWork` took the *last* element of a newest-first list and got
-     * the older audit every time (§24) — the same mistake, one table along.
-     */
-    const existing = byCandidate.get(mission.candidateId);
-    if (!existing || mission.createdAt > existing.createdAt) {
-      byCandidate.set(mission.candidateId, mission);
-    }
+  for (const [candidateId, entry] of await missionsForRounds(open.map((one) => one.candidateId))) {
+    if (entry.latest) byCandidate.set(candidateId, entry.latest);
   }
 
   const out: RoundReadingProgress[] = [];

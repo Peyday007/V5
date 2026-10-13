@@ -1045,9 +1045,12 @@ describe('Brain forms a commercial view, and never calls it a fact', () => {
 
     const proposed = await proposeCommercialTerms(projectId);
     expect(proposed).toHaveLength(1);
-    expect(proposed[0]!.fields).toEqual(
-      expect.arrayContaining(['offer', 'acceptance', 'delivery', 'fulfillment']),
-    );
+    expect(proposed[0]!.fields).toEqual(expect.arrayContaining(['offer', 'acceptance']));
+    // Who delivers it is not proposed from Brain being able to research a
+    // question (RES-6): nothing records what delivering this requires, so both
+    // stay unknown and are researched as card questions instead.
+    expect(proposed[0]!.fields).not.toContain('delivery');
+    expect(proposed[0]!.fields).not.toContain('fulfillment');
 
     const offer = (await cardFact(captured.value.id, 'offer'))!;
     // A recommendation, and never renderable as a reading: all three of basis,

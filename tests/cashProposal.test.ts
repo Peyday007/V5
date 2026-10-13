@@ -331,6 +331,15 @@ describe('Brain acts inside the standing authority', () => {
     const proposal = await proposeTerms(piece);
     await applyProposal({ opportunity: piece, proposal });
     /*
+     * Who delivers it, from a person. Brain no longer proposes this from being
+     * able to research a question (RES-6), so a card is only complete once the
+     * delivery path is actually known — here, recorded as somebody would.
+     */
+    await updateOpportunity(piece.id, {
+      delivery_method: 'Repaired on site by the named contractor.',
+      fulfillment_owner: 'The named contractor, with the owner reviewing',
+    } as never);
+    /*
      * And the rest of the execution thesis.
      *
      * `markReady` asks for more than the short card now — whether we are

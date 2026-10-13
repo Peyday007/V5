@@ -86,8 +86,94 @@ export function openingSourceKey(url: string | null | undefined): string | null 
   return `${host}${path}${query}`;
 }
 
-function identity(url: string | null, signal: OpportunitySignal | null): string | null {
-  const key = openingSourceKey(url);
+/** The claim's own words, which may establish which document it is about. */
+export interface OpeningEvidence {
+  claim?: string | null;
+  title?: string | null;
+  excerpt?: string | null;
+  locator?: string | null;
+}
+
+/**
+ * A procurement reference: the kind of solicitation, then its number.
+ *
+ * The number must carry a digit, and either an explicit marker (`No.`, `#`,
+ * `Number`) or a shape a year cannot have — letters with digits, or a hyphen —
+ * so "Bid 2026" is not read as a reference. Matched case-sensitively on the
+ * kind's capitals, because "bid" and "rfp" in a sentence are ordinary words.
+ */
+const REFERENCE =
+  /\b(?:RFQ|RFP|RFI|RFB|IFB|ITB|Bid|Solicitation|Tender|Contract)\s*(No\.?|Number|#)?\s*[:#]?\s*([A-Z0-9][A-Z0-9-]{2,}[A-Z0-9])\b/g;
+
+function references(text: string): string[] {
+  const out: string[] = [];
+  for (const match of text.matchAll(REFERENCE)) {
+    const marker = match[1];
+    const token = match[2]!;
+    if (!/\d/.test(token)) continue;
+    const shaped = /[A-Z]/i.test(token) && /\d/.test(token);
+    if (!marker && !shaped && !token.includes('-')) continue;
+    out.push(token.toUpperCase().replace(/-+/g, '-'));
+  }
+  return out;
+}
+
+function hostOf(key: string): string {
+  return key.split(/[/?]/, 1)[0]!;
+}
+
+/**
+ * Which document an opening is about, where the claim's own evidence says so
+ * (RES-5).
+ *
+ * An index page and the document it links to were two keys, so the same RFQ
+ * found through each became two openings and both were dived. Two kinds of
+ * evidence identify the document, and both must be on the source's own host:
+ *
+ * 1. exactly one procurement reference (`RFQ #09-11-26-39DPA`) in the claim,
+ *    its source title or its excerpt — the reference is the document's
+ *    identity whichever page it was read on;
+ * 2. otherwise, exactly one other URL on the same host in the excerpt or the
+ *    locator — the index claim naming the document it describes.
+ *
+ * Anything else — no reference, two references, links to two documents, a
+ * link to another host — is no evidence, and the source key stands. Titles are
+ * never compared and a shared publisher, index page or buyer joins nothing:
+ * two different requests on one listing page now read as two openings when
+ * each claim names its own reference, which is the opposite of a merge.
+ */
+export function canonicalDocumentKey(
+  url: string | null | undefined,
+  evidence: OpeningEvidence = {},
+): string | null {
+  const source = openingSourceKey(url);
+  if (!source) return null;
+  const host = hostOf(source);
+
+  const words = [evidence.claim, evidence.title, evidence.excerpt]
+    .filter((one): one is string => typeof one === 'string')
+    .join(' \n ');
+  const refs = [...new Set(references(words))];
+  if (refs.length === 1) return `${host}#ref:${refs[0]}`;
+  if (refs.length > 1) return source;
+
+  const linked = new Set<string>();
+  for (const text of [evidence.excerpt, evidence.locator]) {
+    for (const match of (text ?? '').matchAll(/https?:\/\/[^\s"'<>)\]]+/g)) {
+      const key = openingSourceKey(match[0].replace(/[.,;:]+$/, ''));
+      if (key && key !== source && hostOf(key) === host) linked.add(key);
+    }
+  }
+  if (linked.size === 1) return [...linked][0]!;
+  return source;
+}
+
+function identity(
+  url: string | null,
+  signal: OpportunitySignal | null,
+  evidence: OpeningEvidence = {},
+): string | null {
+  const key = canonicalDocumentKey(url, evidence);
   return key && signal ? `${OPENING_FAMILY[signal]}|${key}` : null;
 }
 
@@ -112,8 +198,10 @@ function survivorFirst(a: Opening, b: Opening): number {
 
 async function identities(projectId: string): Promise<Map<string, Opening[]>> {
   const groups = new Map<string, Opening[]>();
-  for (const { opportunity, sourceUrl, hasWork } of await openingsWithSourceUrl(projectId)) {
-    const key = identity(sourceUrl, opportunity.opportunitySignal);
+  for (const { opportunity, sourceUrl, hasWork, evidence } of await openingsWithSourceUrl(
+    projectId,
+  )) {
+    const key = identity(sourceUrl, opportunity.opportunitySignal, evidence);
     if (!key) continue;
     const group = groups.get(key) ?? [];
     group.push({ opportunity, hasWork });
@@ -130,8 +218,9 @@ export async function existingOpeningFor(input: {
   projectId: string;
   sourceUrl: string | null;
   signal: OpportunitySignal | null;
+  evidence?: OpeningEvidence;
 }): Promise<CashOpportunity | null> {
-  const key = identity(input.sourceUrl, input.signal);
+  const key = identity(input.sourceUrl, input.signal, input.evidence);
   if (!key) return null;
   const groups = await identities(input.projectId);
   const group = (groups.get(key) ?? []).filter((one) => !one.opportunity.duplicateOfId);

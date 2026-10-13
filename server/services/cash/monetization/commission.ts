@@ -70,6 +70,7 @@ import { ATTRIBUTE } from '../../../domain/monetization.ts';
 import { CRITERIA, compareOn } from './rank.ts';
 import type { RankableEntry } from './rank.ts';
 import type { LedgerEntry } from './ledger.ts';
+import { questionKey } from '../conditions.ts';
 import { MONETIZATION_ATTRIBUTES } from '../../../domain/types.ts';
 import type {
   MonetizationAttribute,
@@ -225,6 +226,93 @@ export function decisiveCriteria(
   return live;
 }
 
+/**
+ * Never commissioned, whatever the path's state (RES-3).
+ *
+ * `probabilityOfSuccess` is the one attribute a `RECOMMENDATION` may not
+ * answer (§49): Brain does not produce a probability. Commissioning research
+ * for it spent activations on a question whose usual honest answer is "nothing
+ * published", and nothing in the ranking is waiting on it. A person may still
+ * record one, and a source that happens to publish a rate is still filed when
+ * some other question's research turns it up.
+ */
+export const NEVER_COMMISSIONED: ReadonlySet<MonetizationAttribute> = Object.freeze(
+  new Set<MonetizationAttribute>(['probabilityOfSuccess']),
+);
+
+/**
+ * The card field a `question:` need is about, and the attribute of a path that
+ * asks the same thing. A field with no counterpart here names no attribute.
+ */
+const CARD_FIELD_ATTRIBUTE: Readonly<Record<string, MonetizationAttribute>> = Object.freeze({
+  payer: 'requiredRelationships',
+  access: 'requiredRelationships',
+  price: 'expectedRevenue',
+  delivery: 'requiredCapability',
+  fulfillment: 'requiredCapability',
+  cashDates: 'timeToCash',
+  exposure: 'requiredCapital',
+  economics: 'directCosts',
+});
+
+export interface BlockerReading {
+  /** The attributes the blocker itself names, which are all a BLOCKED path is asked. */
+  named: ReadonlySet<MonetizationAttribute>;
+  /** Why nothing else is asked — the blocker in words, from rows. */
+  why: string;
+}
+
+/**
+ * What the blocker on a BLOCKED path names, read from the rows that block it.
+ *
+ * The allocator used to admit **every** open attribute of a BLOCKED path, so a
+ * path held up by a missing integration was asked ten unrelated questions in a
+ * row and none of them could lift the block (RES-3). Now:
+ *
+ * - a capability need (`capability:<opening>:…`) names `requiredCapability`;
+ * - a card-field need (`question:<opening>:<field>`) names that field's
+ *   counterpart, unless the need already has its own research — then it is
+ *   being asked there and asking it here would be the same search twice;
+ * - a recorded requirement on another path names nothing on this one: that
+ *   path is asked about on its own.
+ *
+ * Keys are matched by constructing them again, never by parsing prose.
+ */
+export function blockerAttributes(entry: LedgerEntry): BlockerReading {
+  const named = new Set<MonetizationAttribute>();
+  const reasons: string[] = [];
+  const opening = entry.path.opportunityId;
+  for (const blocker of entry.blockers) {
+    const key = blocker.requestKey;
+    if (!key || !opening) continue;
+    if (key.startsWith(`capability:${opening}:`)) {
+      named.add('requiredCapability');
+      continue;
+    }
+    for (const [field, attribute] of Object.entries(CARD_FIELD_ATTRIBUTE)) {
+      if (key !== questionKey(opening, field)) continue;
+      if (blocker.candidateId) {
+        reasons.push(`its ${field} is already being researched by the need that blocks it`);
+      } else {
+        named.add(attribute);
+      }
+    }
+  }
+  if (entry.waitsOn.length > 0) {
+    reasons.push(
+      `it waits on ${entry.waitsOn.length} other path${entry.waitsOn.length === 1 ? '' : 's'}, ` +
+        'which are asked about on their own',
+    );
+  }
+  return {
+    named,
+    why:
+      reasons.length > 0
+        ? reasons.join('; ')
+        : 'what blocks it is not something this question could answer',
+  };
+}
+
 /** One question Brain proposes to ask. */
 export interface CommissionAsk {
   pathId: string;
@@ -335,7 +423,30 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
     const contradictedHere = MONETIZATION_ATTRIBUTES.filter((attribute) =>
       input.contradicted.has(`${entry.path.id}::${attribute}`),
     );
-    for (const attribute of [...entry.unknowns, ...contradictedHere]) {
+    const blocker = entry.status === 'BLOCKED' ? blockerAttributes(entry) : null;
+    for (const attribute of [...new Set([...entry.unknowns, ...contradictedHere])]) {
+      if (NEVER_COMMISSIONED.has(attribute)) {
+        declined.push({
+          subject: `${entry.path.title} — ${ATTRIBUTE[attribute].label}`,
+          why:
+            'Brain does not produce a probability, so this is never commissioned; a published ' +
+            'rate is still filed when other research turns one up',
+        });
+        continue;
+      }
+      /*
+       * A BLOCKED path is asked only what its blocker names (RES-3). Every
+       * other open attribute stays open and visible, and becomes askable
+       * through the ordinary rules the moment the blocker is resolved and the
+       * path is no longer BLOCKED — the existing allocator, not a stall.
+       */
+      if (blocker && !blocker.named.has(attribute)) {
+        declined.push({
+          subject: `${entry.path.title} — ${ATTRIBUTE[attribute].label}`,
+          why: `the path is blocked and this does not bear on what blocks it: ${blocker.why}`,
+        });
+        continue;
+      }
       const history = byPathAttribute.get(`${entry.path.id}::${attribute}`) ?? [];
 
       if (history.some((one) => one.state === 'OPEN')) {
@@ -407,8 +518,17 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
         continue;
       }
 
-      const moves = feeds(attribute).filter((one) => decisive.has(one));
-      if (moves.length === 0) {
+      /*
+       * `EVIDENCE_DEPTH` and `ANSWERED` move whenever *anything* is answered,
+       * so counting them made the "could not change a decision" filter
+       * decline almost nothing (RES-3). An answer must reach a criterion that
+       * is about *this* attribute. A blocker's own question is exempt: what it
+       * would change is the status, which is the point of asking it.
+       */
+      const moves = feeds(attribute).filter(
+        (one) => decisive.has(one) && !ALWAYS.includes(one),
+      );
+      if (moves.length === 0 && !blocker) {
         declined.push({
           subject: `${entry.path.title} — ${ATTRIBUTE[attribute].label}`,
           why:
@@ -524,9 +644,9 @@ function admit(input: {
       ...base,
       ruleRank: 10,
       reason:
-        `This possibility is blocked — ${entry.statusBecause} — and its ${label} is one of the ` +
-        `questions still open. Settling it is what would let it be acted on rather than ` +
-        `waited on.${again}`,
+        `This possibility is blocked — ${entry.statusBecause} — and its ${label} is what that ` +
+        `blocker names. It is the only question asked of a blocked path; settling it is what ` +
+        `bears on whether it can be acted on rather than waited on.${again}`,
     };
   }
 

@@ -36,7 +36,7 @@
  */
 import { getDb } from '../../db/database.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
-import { listMissions } from '../../repos/russellMissions.ts';
+import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
 import { capabilityClaims } from '../../repos/research.ts';
 import { recordEvent } from '../../repos/events.ts';
 import {
@@ -360,39 +360,42 @@ export async function absorb(input: { projectId: string; limit?: number }): Prom
    * question for it, and absorbing its claims would put findings into the
    * ladder under a category nothing chose.
    */
-  const missions = await listMissions({ projectId: input.projectId });
-  const byOrchestration = new Map<string, { round: ManufacturingRound; missionDone: boolean }>();
-  for (const mission of missions) {
-    if (!mission.orchestrationId || !mission.candidateId) continue;
-    const round = live.get(mission.candidateId);
-    if (round) {
-      byOrchestration.set(mission.orchestrationId, {
-        round,
-        missionDone: mission.state === 'DONE',
-      });
+  const rounds = await missionsForRounds([...live.keys()]);
+  const byOrchestration = new Map<string, ManufacturingRound>();
+  for (const [candidateId, round] of live) {
+    for (const orchestrationId of rounds.get(candidateId)?.orchestrationIds ?? []) {
+      byOrchestration.set(orchestrationId, round);
     }
   }
-  if (byOrchestration.size === 0) return out;
 
   const byCategoryId = new Map((await listCategories(program.id)).map((one) => [one.id, one]));
 
-  const claims = await capabilityClaims({
+  const fileAll = async (
+    entries: readonly { claim: ResearchClaim; orchestrationId: string }[],
+  ): Promise<void> => {
+    for (const entry of entries) {
+      const round = byOrchestration.get(entry.orchestrationId);
+      if (!round) continue;
+      await file({
+        programId: program.id,
+        projectId: input.projectId,
+        claim: entry.claim,
+        round,
+        byCategoryId,
+        out,
+      });
+    }
+  };
+
+  // Rounds still being worked on: what has been gated so far, within budget.
+  const working = [...live]
+    .filter(([candidateId]) => !rounds.get(candidateId)?.outcome)
+    .flatMap(([candidateId]) => rounds.get(candidateId)?.orchestrationIds ?? []);
+  const workingClaims = await capabilityClaims({
     projectId: input.projectId,
-    orchestrationIds: [...byOrchestration.keys()],
+    orchestrationIds: working,
     limit,
   });
-  for (const entry of claims) {
-    const context = byOrchestration.get(entry.orchestrationId);
-    if (!context) continue;
-    await file({
-      programId: program.id,
-      projectId: input.projectId,
-      claim: entry.claim,
-      round: context.round,
-      byCategoryId,
-      out,
-    });
-  }
 
   /*
    * A round settles by its own bookkeeping rather than by the loop ending.
@@ -403,27 +406,41 @@ export async function absorb(input: { projectId: string; limit?: number }): Prom
    * looking like it was still running, which is the state this whole kernel is
    * built to make impossible.
    */
-  for (const [orchestrationId, { round, missionDone }] of byOrchestration) {
-    if (!missionDone) continue;
-    /*
-     * Derived from the rows this orchestration's findings filed, rather than
-     * tallied from what this pass wrote.
-     *
-     * Tallying is only correct while every pass that absorbs a round also
-     * closes it, and a tick that dies between the two breaks exactly that: the
-     * findings are filed, the round is still OPEN, and the next pass writes
-     * nothing because every insert conflicts. It would then record a round that
-     * established five things as having established none — and `found` is what
-     * barrenness is decided against, so the category would be declined as one
-     * nobody should look at again.
-     *
-     * Counting *rows* rather than declared claims is what keeps this identical
-     * to the tally on every path except the one it was wrong on: two claims
-     * naming the same category file one row, and counting claims would have
-     * counted two.
-     */
-    const found = await countFiledFromOrchestration(orchestrationId);
-    if (await closeManufacturingRound({ id: round.id, to: 'HARVESTED', found })) {
+  /*
+   * Rounds whose idea has ended file every claim they produced first — a
+   * complete, paged read rather than the pass's budget, in claim order across
+   * all of them — then close. DONE is HARVESTED; FAILED or CANCELLED is
+   * ABANDONED (RES-2).
+   *
+   * `found` is derived from the rows each round's findings filed rather than
+   * tallied from this pass, so a tick dying between filing and closing cannot
+   * record a productive round as barren; counting rows rather than claims
+   * keeps two claims naming one category one finding. Summed over every
+   * attempt's orchestration, because a redo files under the same round.
+   */
+  const ending = [...live].filter(([candidateId]) => rounds.get(candidateId)?.outcome);
+  const endingClaims: { claim: ResearchClaim; orchestrationId: string }[] = [];
+  for (const [candidateId] of ending) {
+    const entry = rounds.get(candidateId)!;
+    endingClaims.push(
+      ...(await everyPage((offset, size) =>
+        capabilityClaims({
+          projectId: input.projectId,
+          orchestrationIds: entry.orchestrationIds,
+          limit: size,
+          offset,
+        }),
+      )),
+    );
+  }
+  await fileAll(byClaimTime([...workingClaims, ...endingClaims]));
+  for (const [candidateId, round] of ending) {
+    const entry = rounds.get(candidateId)!;
+    let found = 0;
+    for (const orchestrationId of entry.orchestrationIds) {
+      found += await countFiledFromOrchestration(orchestrationId);
+    }
+    if (await closeManufacturingRound({ id: round.id, to: entry.outcome!, found })) {
       out.settled.push({ roundId: round.id, found });
     }
   }

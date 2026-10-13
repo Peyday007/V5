@@ -28,7 +28,7 @@
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
-import { listMissions } from '../../repos/russellMissions.ts';
+import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
 import { structuralClaims } from '../../repos/research.ts';
 import {
   closeIndustryRound,
@@ -289,39 +289,36 @@ export async function absorb(input: {
    * rather than a gap: nobody asked a kernel question for it, and absorbing
    * its claims would put findings into the map under a subject nothing chose.
    */
-  const missions = await listMissions({ projectId: input.projectId });
-  const byOrchestration = new Map<string, { round: IndustryRound; missionDone: boolean }>();
-  for (const mission of missions) {
-    if (!mission.orchestrationId || !mission.candidateId) continue;
-    const round = live.get(mission.candidateId);
-    if (round) {
-      byOrchestration.set(mission.orchestrationId, {
-        round,
-        missionDone: mission.state === 'DONE',
-      });
+  const rounds = await missionsForRounds([...live.keys()]);
+  const byOrchestration = new Map<string, IndustryRound>();
+  for (const [candidateId, round] of live) {
+    for (const orchestrationId of rounds.get(candidateId)?.orchestrationIds ?? []) {
+      byOrchestration.set(orchestrationId, round);
     }
   }
-  if (byOrchestration.size === 0) return out;
 
   const nodes = await listNodes(input.projectId);
   const byNodeId = new Map(nodes.map((one) => [one.id, one]));
 
-  const claims = await structuralClaims({
+  const fileAll = async (
+    entries: readonly { claim: ResearchClaim; orchestrationId: string }[],
+  ): Promise<void> => {
+    for (const entry of entries) {
+      const round = byOrchestration.get(entry.orchestrationId);
+      if (!round) continue;
+      await file({ projectId: input.projectId, claim: entry.claim, round, byNodeId, out });
+    }
+  };
+
+  // Rounds still being worked on: what has been gated so far, within budget.
+  const working = [...live]
+    .filter(([candidateId]) => !rounds.get(candidateId)?.outcome)
+    .flatMap(([candidateId]) => rounds.get(candidateId)?.orchestrationIds ?? []);
+  const workingClaims = await structuralClaims({
     projectId: input.projectId,
-    orchestrationIds: [...byOrchestration.keys()],
+    orchestrationIds: working,
     limit,
   });
-  for (const entry of claims) {
-    const context = byOrchestration.get(entry.orchestrationId);
-    if (!context) continue;
-    await file({
-      projectId: input.projectId,
-      claim: entry.claim,
-      round: context.round,
-      byNodeId,
-      out,
-    });
-  }
 
   /*
    * What a SCAN round produced is openings, and they are not filed here.
@@ -358,29 +355,45 @@ export async function absorb(input: {
    * again while looking like it was still running, which is the state this
    * whole kernel is built to make impossible.
    */
-  for (const [orchestrationId, { round, missionDone }] of byOrchestration) {
-    if (!missionDone) continue;
+  /*
+   * A round whose idea has ended files every claim it produced first — a
+   * complete, paged read rather than the pass's budget, in claim order across
+   * every round ending this pass — so nothing it established is left behind a
+   * closed round. DONE is HARVESTED; FAILED or CANCELLED is ABANDONED (RES-2):
+   * it answered as far as it ever will, and left OPEN it held its slot for ever.
+   */
+  const ending = [...live].filter(([candidateId]) => rounds.get(candidateId)?.outcome);
+  const endingClaims: { claim: ResearchClaim; orchestrationId: string }[] = [];
+  for (const [candidateId] of ending) {
+    const entry = rounds.get(candidateId)!;
+    endingClaims.push(
+      ...(await everyPage((offset, size) =>
+        structuralClaims({
+          projectId: input.projectId,
+          orchestrationIds: entry.orchestrationIds,
+          limit: size,
+          offset,
+        }),
+      )),
+    );
+  }
+  await fileAll(byClaimTime([...workingClaims, ...endingClaims]));
+  for (const [candidateId, round] of ending) {
+    const entry = rounds.get(candidateId)!;
     /*
-     * Derived from the rows this orchestration's findings filed, rather than
-     * tallied from what this pass wrote.
-     *
-     * Tallying is correct only while every pass that absorbs a round also
-     * closes it, and a tick dying between the two breaks exactly that: the
-     * findings are filed, the round is still OPEN, and the next pass writes
-     * nothing because every insert conflicts. It would then record a round that
-     * established five subjects as having established none — and `found` is
-     * what barrenness is decided against, so the subject would be documented as
-     * one nobody should look at again, from an accident of timing.
-     *
-     * The openings half was already derived, read from `cash_opportunities` by
-     * orchestration. This makes the other half the same shape, so the whole
-     * number is the same however many times it is asked — which is the property
-     * a crash window needs.
+     * Derived from the rows this round's findings filed, rather than tallied
+     * from what this pass wrote: tallying is correct only while every pass
+     * that absorbs a round also closes it, and a tick dying between the two
+     * would record a productive round as barren. Summed over every attempt's
+     * orchestration, because a redo files under the same round.
      */
-    const found =
-      (await countFiledFromOrchestration(orchestrationId)) +
-      (round.purpose === 'SCAN' ? (openingsPerOrchestration.get(orchestrationId) ?? 0) : 0);
-    if (await closeIndustryRound({ id: round.id, to: 'HARVESTED', found })) {
+    let found = 0;
+    for (const orchestrationId of entry.orchestrationIds) {
+      found +=
+        (await countFiledFromOrchestration(orchestrationId)) +
+        (round.purpose === 'SCAN' ? (openingsPerOrchestration.get(orchestrationId) ?? 0) : 0);
+    }
+    if (await closeIndustryRound({ id: round.id, to: entry.outcome!, found })) {
       out.settled.push({ roundId: round.id, found });
     }
   }

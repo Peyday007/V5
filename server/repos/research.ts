@@ -1245,6 +1245,8 @@ export async function dealClaims(input: {
   projectId: string;
   orchestrationIds: readonly string[];
   limit?: number;
+  /** Rows to skip, for a caller paging through every claim of a round. */
+  offset?: number;
 }): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
   if (input.orchestrationIds.length === 0) return [];
   const holes = input.orchestrationIds.map(() => '?').join(', ');
@@ -1257,8 +1259,8 @@ export async function dealClaims(input: {
         AND c.orchestration_id IN (${holes})
         AND f.status IN ('ACCEPTED', 'BLOCKED')
       ORDER BY c.created_at, c.rowid
-      LIMIT ?`,
-    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 200)],
+      LIMIT ? OFFSET ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 200), Math.max(0, input.offset ?? 0)],
   );
   return rows.map((row) => {
     const claim = mapClaim(row);
@@ -1282,6 +1284,8 @@ export async function puzzleClaims(input: {
   projectId: string;
   orchestrationIds: readonly string[];
   limit?: number;
+  /** Rows to skip, for a caller paging through every claim of a round. */
+  offset?: number;
 }): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
   if (input.orchestrationIds.length === 0) return [];
   const holes = input.orchestrationIds.map(() => '?').join(', ');
@@ -1294,8 +1298,8 @@ export async function puzzleClaims(input: {
         AND c.orchestration_id IN (${holes})
         AND f.status IN ('ACCEPTED', 'BLOCKED')
       ORDER BY c.created_at, c.rowid
-      LIMIT ?`,
-    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 200)],
+      LIMIT ? OFFSET ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 200), Math.max(0, input.offset ?? 0)],
   );
   return rows.map((row) => {
     const claim = mapClaim(row);
@@ -1319,6 +1323,8 @@ export async function structuralClaims(input: {
    */
   orchestrationIds: readonly string[];
   limit?: number;
+  /** Rows to skip, for a caller paging through every claim of a round. */
+  offset?: number;
 }): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
   if (input.orchestrationIds.length === 0) return [];
   const holes = input.orchestrationIds.map(() => '?').join(', ');
@@ -1331,8 +1337,8 @@ export async function structuralClaims(input: {
         AND c.orchestration_id IN (${holes})
         AND f.status IN ('ACCEPTED', 'BLOCKED')
       ORDER BY c.created_at, c.rowid
-      LIMIT ?`,
-    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 100)],
+      LIMIT ? OFFSET ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 100), Math.max(0, input.offset ?? 0)],
   );
   return rows.map((row) => {
     const claim = mapClaim(row);
@@ -1400,6 +1406,8 @@ export async function capabilityClaims(input: {
   projectId: string;
   orchestrationIds: readonly string[];
   limit?: number;
+  /** Rows to skip, for a caller paging through every claim of a round. */
+  offset?: number;
 }): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
   if (input.orchestrationIds.length === 0) return [];
   const holes = input.orchestrationIds.map(() => '?').join(', ');
@@ -1412,8 +1420,8 @@ export async function capabilityClaims(input: {
         AND c.orchestration_id IN (${holes})
         AND f.status IN ('ACCEPTED', 'BLOCKED')
       ORDER BY c.created_at, c.rowid
-      LIMIT ?`,
-    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 100)],
+      LIMIT ? OFFSET ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 100), Math.max(0, input.offset ?? 0)],
   );
   return rows.map((row) => {
     const claim = mapClaim(row);

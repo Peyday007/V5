@@ -878,16 +878,15 @@ export async function openPuzzleRound(input: {
 export async function settlePuzzleRound(input: {
   roundId: string;
   found: number;
-}): Promise<PuzzleRound | null> {
-  await getDb().run(
-    `UPDATE puzzle_rounds SET state = 'SETTLED', found = ?, settled_at = ?
+  /** SETTLED when its mission finished; ABANDONED when it ended without (RES-2). */
+  to?: 'SETTLED' | 'ABANDONED';
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE puzzle_rounds SET state = ?, found = ?, settled_at = ?
       WHERE id = ? AND state = 'OPEN'`,
-    [input.found, nowIso(), input.roundId],
+    [input.to ?? 'SETTLED', input.found, nowIso(), input.roundId],
   );
-  const rows = await getDb().all<PuzzleRoundRow>('SELECT * FROM puzzle_rounds WHERE id = ?', [
-    input.roundId,
-  ]);
-  return rows[0] ? mapRound(rows[0]) : null;
+  return result.changes > 0;
 }
 
 export async function listPuzzleRounds(projectId: string): Promise<PuzzleRound[]> {

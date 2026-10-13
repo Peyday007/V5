@@ -39,7 +39,7 @@
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
-import { listMissions } from '../../repos/russellMissions.ts';
+import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
 import { dealClaims } from '../../repos/research.ts';
 import {
   attachDecisionMaker,
@@ -407,69 +407,90 @@ export async function fileFindings(input: {
    * and filing its claims would put facts into the map under a subject nothing
    * chose.
    */
-  const missions = await listMissions({ projectId: input.projectId });
-  const byOrchestration = new Map<string, { round: DealRound; missionDone: boolean }>();
-  for (const mission of missions) {
-    if (!mission.orchestrationId || !mission.candidateId) continue;
-    const round = live.get(mission.candidateId);
-    if (round) {
-      byOrchestration.set(mission.orchestrationId, {
-        round,
-        missionDone: mission.state === 'DONE',
-      });
-    }
-  }
-  if (byOrchestration.size === 0) return out;
+  const rounds = await missionsForRounds([...live.keys()]);
 
-  const foundPerRound = new Map<string, number>();
-  const claims = await dealClaims({
+  /*
+   * One round's claims, filed. `found` counts what the round *established*,
+   * not what this pass wrote.
+   *
+   * The difference is the whole of §38's recorded defect: a round's claims are
+   * filed on the pass they are gated, and the round only settles on a later
+   * pass. A claim that collided with a row an earlier pass wrote established
+   * that row; a refused one established nothing, and is the only thing that
+   * does not count.
+   */
+  const fileAll = async (
+    entries: readonly { claim: ResearchClaim; orchestrationId: string }[],
+    roundFor: (orchestrationId: string) => DealRound | undefined,
+  ): Promise<Map<string, number>> => {
+    const found = new Map<string, number>();
+    for (const entry of entries) {
+      const round = roundFor(entry.orchestrationId);
+      if (!round) continue;
+      const filed = await file({ projectId: input.projectId, claim: entry.claim, round, out });
+      if (filed !== 'REFUSED') found.set(round.id, (found.get(round.id) ?? 0) + 1);
+    }
+    return found;
+  };
+
+  /*
+   * Rounds still being worked on: what has been gated so far, within the
+   * pass's budget, so the map fills while the mission runs.
+   */
+  const working = new Map<string, DealRound>();
+  for (const [candidateId, round] of live) {
+    const entry = rounds.get(candidateId);
+    if (entry?.outcome) continue;
+    for (const orchestrationId of entry?.orchestrationIds ?? []) working.set(orchestrationId, round);
+  }
+  const workingClaims = await dealClaims({
     projectId: input.projectId,
-    orchestrationIds: [...byOrchestration.keys()],
+    orchestrationIds: [...working.keys()],
     limit: Math.max(1, input.limit ?? 200),
   });
 
-  for (const entry of claims) {
-    const context = byOrchestration.get(entry.orchestrationId);
-    if (!context) continue;
-    const filed = await file({
-      projectId: input.projectId,
-      claim: entry.claim,
-      round: context.round,
-      out,
-    });
-    /*
-     * `found` counts what the round *established*, not what this pass wrote.
-     *
-     * The difference is the whole of §38's recorded defect, and it is
-     * reachable here: a round's claims are filed on the pass they are gated,
-     * and the round only settles on the pass its mission reaches DONE — which
-     * is routinely a later one. Counting creations would then record `found =
-     * 0` for a round that had produced everything it produced, and
-     * `BARREN_ROUNDS` of those retires the question that was working best.
-     *
-     * A claim that collided with a row an earlier pass wrote established that
-     * row. A refused one established nothing, and is the only thing that does
-     * not count.
-     */
-    if (filed !== 'REFUSED') {
-      foundPerRound.set(context.round.id, (foundPerRound.get(context.round.id) ?? 0) + 1);
-    }
-  }
-
   /*
-   * A round settles by its own bookkeeping rather than by the loop ending.
-   *
-   * `found` is what the next round is decided against, so a round whose
-   * mission has finished records what it produced — **including nothing**.
-   * Leaving a barren round OPEN would stop it ever being asked again while
-   * looking like it was still running, which is the state this kernel exists
-   * to make impossible.
+   * Rounds whose idea has ended settle now, on a complete read of their own
+   * claims, so `found` is what the round established rather than what one page
+   * held. DONE is SETTLED; FAILED or CANCELLED is ABANDONED — a mission that
+   * ended without finishing has answered as far as it ever will, and leaving
+   * its round OPEN held the slot for ever (RES-2). A failed mission's gated
+   * claims are still filed, and the allocator reads both terminal states.
    */
-  for (const [, { round, missionDone }] of byOrchestration) {
-    if (!missionDone) continue;
+  const ending = [...live].filter(([candidateId]) => rounds.get(candidateId)?.outcome);
+  const endingRound = new Map<string, DealRound>();
+  const endingClaims: { claim: ResearchClaim; orchestrationId: string }[] = [];
+  for (const [candidateId, round] of ending) {
+    const entry = rounds.get(candidateId)!;
+    for (const id of entry.orchestrationIds) endingRound.set(id, round);
+    endingClaims.push(
+      ...(await everyPage((offset, limit) =>
+        dealClaims({
+          projectId: input.projectId,
+          orchestrationIds: entry.orchestrationIds,
+          limit,
+          offset,
+        }),
+      )),
+    );
+  }
+  // One pass in claim order across working and ending rounds alike.
+  const foundPerRound = await fileAll(
+    byClaimTime([...workingClaims, ...endingClaims]),
+    (id) => working.get(id) ?? endingRound.get(id),
+  );
+  for (const [candidateId, round] of ending) {
+    const entry = rounds.get(candidateId)!;
     const found = foundPerRound.get(round.id) ?? 0;
-    const settled = await settleDealRound({ roundId: round.id, found });
-    if (settled?.state === 'SETTLED') out.settled.push({ roundId: round.id, found });
+    if (
+      await settleDealRound({
+        roundId: round.id,
+        found,
+        to: entry.outcome === 'HARVESTED' ? 'SETTLED' : 'ABANDONED',
+      })
+    ) {
+      out.settled.push({ roundId: round.id, found });
+    }
   }
 
   const written =

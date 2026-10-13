@@ -279,6 +279,26 @@ export async function withdrawRecommendationsResting(input: {
 }
 
 /**
+ * Take back one recommendation Brain composed, by its exact text.
+ *
+ * Guarded on the kind and the value in the statement that deletes it, so a
+ * person's answer, evidence, or a recommendation Brain has since rewritten is
+ * never touched, and two ticks withdraw it once.
+ */
+export async function withdrawRecommendationValue(input: {
+  opportunityId: string;
+  field: string;
+  value: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `DELETE FROM cash_card_facts
+      WHERE opportunity_id = ? AND field = ? AND kind = 'RECOMMENDATION' AND value = ?`,
+    [input.opportunityId, input.field, input.value],
+  );
+  return result.changes > 0;
+}
+
+/**
  * Clear an opportunity column only while it still holds the value being
  * withdrawn, in the statement that changes it — so a person's answer written
  * after the reader looked is never nulled.

@@ -647,20 +647,25 @@ export async function dealRoundForCandidate(candidateId: string): Promise<DealRo
   return rows[0] ? mapRound(rows[0]) : null;
 }
 
+/**
+ * Close one open round, guarded on it still being OPEN.
+ *
+ * `SETTLED` when its mission finished, `ABANDONED` when it ended without
+ * finishing (RES-2). Returns whether *this* call closed it, so a second tick or
+ * a restart reading the same ended mission reports nothing and writes nothing.
+ */
 export async function settleDealRound(input: {
   roundId: string;
   found: number;
-}): Promise<DealRound | null> {
+  to?: 'SETTLED' | 'ABANDONED';
+}): Promise<boolean> {
   const at = nowIso();
-  await getDb().run(
-    `UPDATE deal_rounds SET state = 'SETTLED', harvested_at = ?, found = ?, updated_at = ?
+  const result = await getDb().run(
+    `UPDATE deal_rounds SET state = ?, harvested_at = ?, found = ?, updated_at = ?
       WHERE id = ? AND state = 'OPEN'`,
-    [at, input.found, at, input.roundId],
+    [input.to ?? 'SETTLED', at, input.found, at, input.roundId],
   );
-  const rows = await getDb().all<DealRoundRow>('SELECT * FROM deal_rounds WHERE id = ?', [
-    input.roundId,
-  ]);
-  return rows[0] ? mapRound(rows[0]) : null;
+  return result.changes > 0;
 }
 
 /* --------------------------------------------------------------------------

@@ -37,7 +37,7 @@
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
-import { listMissions } from '../../repos/russellMissions.ts';
+import { byClaimTime, everyPage, missionsForRounds } from '../russell/roundMissions.ts';
 import { puzzleClaims } from '../../repos/research.ts';
 import {
   createPuzzleFormat,
@@ -415,56 +415,67 @@ export async function filePuzzleFindings(input: {
    * and filing its claims would put facts into the map under a subject nothing
    * chose.
    */
-  const missions = await listMissions({ projectId: input.projectId });
-  const byOrchestration = new Map<string, { round: PuzzleRound; missionDone: boolean }>();
-  for (const mission of missions) {
-    if (!mission.orchestrationId || !mission.candidateId) continue;
-    const round = live.get(mission.candidateId);
-    if (round) {
-      byOrchestration.set(mission.orchestrationId, {
-        round,
-        missionDone: mission.state === 'DONE',
-      });
-    }
-  }
-  if (byOrchestration.size === 0) return out;
+  const rounds = await missionsForRounds([...live.keys()]);
 
-  const foundPerRound = new Map<string, number>();
-  const claims = await puzzleClaims({
+  /*
+   * `found` counts what a round *established*, not what this pass wrote —
+   * §38's recorded defect: a round's claims are filed on the pass they are
+   * gated and the round settles on a later one, so counting creations would
+   * record a productive round as barren.
+   */
+  // Rounds still being worked on: what has been gated so far, within budget.
+  const working = [...live]
+    .filter(([candidateId]) => !rounds.get(candidateId)?.outcome)
+    .flatMap(([candidateId]) => rounds.get(candidateId)?.orchestrationIds ?? []);
+  const workingClaims = await puzzleClaims({
     projectId: input.projectId,
-    orchestrationIds: [...byOrchestration.keys()],
+    orchestrationIds: working,
     limit: Math.max(1, input.limit ?? 200),
   });
 
-  for (const entry of claims) {
-    const context = byOrchestration.get(entry.orchestrationId);
-    if (!context) continue;
+  /*
+   * A round whose idea has ended settles on a complete, paged read of its own
+   * claims. DONE is SETTLED; FAILED or CANCELLED is ABANDONED (RES-2) — it
+   * answered as far as it ever will, and left OPEN it held its slot for ever.
+   */
+  const ending = [...live].filter(([candidateId]) => rounds.get(candidateId)?.outcome);
+  const endingRound = new Map<string, string>();
+  const endingClaims: { claim: ResearchClaim; orchestrationId: string }[] = [];
+  for (const [candidateId, round] of ending) {
+    const entry = rounds.get(candidateId)!;
+    for (const id of entry.orchestrationIds) endingRound.set(id, round.id);
+    endingClaims.push(
+      ...(await everyPage((offset, size) =>
+        puzzleClaims({
+          projectId: input.projectId,
+          orchestrationIds: entry.orchestrationIds,
+          limit: size,
+          offset,
+        }),
+      )),
+    );
+  }
+  // One pass in claim order across working and ending rounds alike.
+  const foundPerRound = new Map<string, number>();
+  for (const entry of byClaimTime([...workingClaims, ...endingClaims])) {
     const filed = await file({ projectId: input.projectId, claim: entry.claim, out });
-    /*
-     * `found` counts what the round *established*, not what this pass wrote.
-     *
-     * §38 records the defect exactly: a round's claims are filed on the pass
-     * they are gated and the round settles on the pass its mission reaches
-     * DONE, which is routinely a later one. Counting creations would record
-     * `found = 0` for a round that produced everything it produced, and
-     * `BARREN_ROUNDS` of those retires the question that was working best.
-     */
-    if (filed !== 'REFUSED') {
-      foundPerRound.set(context.round.id, (foundPerRound.get(context.round.id) ?? 0) + 1);
+    const roundId = endingRound.get(entry.orchestrationId);
+    if (roundId && filed !== 'REFUSED') {
+      foundPerRound.set(roundId, (foundPerRound.get(roundId) ?? 0) + 1);
     }
   }
-
-  /*
-   * A round settles by its own bookkeeping rather than by the loop ending.
-   * A round whose mission has finished records what it produced — **including
-   * nothing** — because leaving a barren round OPEN would stop it ever being
-   * asked again while looking like it was still running.
-   */
-  for (const [, { round, missionDone }] of byOrchestration) {
-    if (!missionDone) continue;
+  for (const [candidateId, round] of ending) {
+    const entry = rounds.get(candidateId)!;
     const found = foundPerRound.get(round.id) ?? 0;
-    const settled = await settlePuzzleRound({ roundId: round.id, found });
-    if (settled?.state === 'SETTLED') out.settled.push({ roundId: round.id, found });
+    if (
+      await settlePuzzleRound({
+        roundId: round.id,
+        found,
+        to: entry.outcome === 'HARVESTED' ? 'SETTLED' : 'ABANDONED',
+      })
+    ) {
+      out.settled.push({ roundId: round.id, found });
+    }
   }
 
   const written =
