@@ -38,6 +38,9 @@ import type {
 } from '../../domain/factory.ts';
 import {
   chargeAndReopenUnit,
+  listAmendments,
+  refundAttempt,
+  reopenUnit,
   claimCampaignTick,
   extendCampaignTick,
   getCampaign,
@@ -809,6 +812,93 @@ async function noteIngestRefused(
   });
 }
 
+/**
+ * The stage a campaign stopped at because its integration failed the same way
+ * twice on an unchanged scope (FAC-2). A constant, so the per-tick gate can tell
+ * this stop from the review path's scope stop, which shares the blocker kind.
+ */
+const INTEGRATION_REPEAT_STAGE = 'integration failed twice, identically, on an unchanged scope';
+
+/**
+ * Whether this work-rejection repeats the previous one with nothing changed.
+ *
+ * Production, fcp_f359799f4b4748cd9641: integration failed in
+ * `tests/goalOwnership.test.ts`, a pre-existing test no unit owned and no
+ * acceptance named, and every unit went back with the same scope to fail the
+ * same way until its attempts were gone. No static check could have predicted
+ * which existing test a change breaks — that claim in the inventory was
+ * disproved — but the *second* identical failure is a fact on the ledger, and a
+ * third attempt against it can only fail again.
+ *
+ * Identical is read from rows the ingest wrote, never from the worker's prose:
+ * the previous work-rejection (not a surface block) had no conflicts, the same
+ * failed commands and the same units, and no contract amendment or stage
+ * re-authorization has been recorded since. Anything else — a different
+ * command failing, a unit added, a scope widened — is new information and is
+ * charged the ordinary way.
+ */
+async function identicalWorkRejection(
+  campaign: FactoryCampaign,
+  changeRequestId: string,
+  failedCommands: readonly string[],
+  unitKeys: readonly string[],
+): Promise<{ at: string; binId: string | null } | null> {
+  const events = await listFactoryEvents(campaign.id, {
+    kinds: [FACTORY_EVENT_KINDS.integrationRejected, FACTORY_EVENT_KINDS.stageReauthorized],
+    limit: 5000,
+  });
+  let previous: (typeof events)[number] | null = null;
+  for (const event of events) {
+    if (event.kind === FACTORY_EVENT_KINDS.stageReauthorized) {
+      previous = null;
+      continue;
+    }
+    const detail = (event.detail ?? {}) as { surface?: unknown };
+    if (detail.surface === true) continue;
+    previous = event;
+  }
+  if (!previous) return null;
+  const detail = (previous.detail ?? {}) as {
+    conflicts?: unknown;
+    failedCommands?: unknown;
+    units?: unknown;
+    binId?: unknown;
+  };
+  const same = (a: unknown, b: readonly string[]): boolean =>
+    Array.isArray(a) &&
+    a.length === b.length &&
+    [...a].map(String).sort().every((value, at) => value === [...b].sort()[at]);
+  if (!Array.isArray(detail.conflicts) || detail.conflicts.length > 0) return null;
+  if (!same(detail.failedCommands, failedCommands) || failedCommands.length === 0) return null;
+  if (!same(detail.units, unitKeys)) return null;
+  const amended = (await listAmendments(changeRequestId)).some((one) => one.createdAt > previous!.at);
+  if (amended) return null;
+  return { at: previous.at, binId: typeof detail.binId === 'string' ? detail.binId : null };
+}
+
+/**
+ * Has a person answered an integration-repeat stop since it was recorded?
+ *
+ * An amendment to the contract (the scope widened to the failing file) or a
+ * stage re-authorization (another attempt is wanted on purpose), recorded after
+ * the newest integration rejection. Read per tick, so the stop lifts on the
+ * pass after the answer and on no other.
+ */
+async function integrationRepeatAnswered(
+  campaign: FactoryCampaign,
+  changeRequestId: string,
+): Promise<boolean> {
+  const rejections = await listFactoryEvents(campaign.id, {
+    kinds: [FACTORY_EVENT_KINDS.integrationRejected],
+    limit: 5000,
+  });
+  const since = rejections.at(-1)?.at;
+  if (!since) return true;
+  if ((await listAmendments(changeRequestId)).some((one) => one.createdAt > since)) return true;
+  const reauthorized = await lastReauthorization(campaign.id);
+  return reauthorized !== null && reauthorized > since;
+}
+
 async function ingestIntegrateBin(
   campaign: FactoryCampaign,
   changeRequest: FactoryChangeRequest,
@@ -880,7 +970,54 @@ async function ingestIntegrateBin(
      * are things it reported about what it ran, and Brain reads them.
      */
     const aboutTheWork = parsed.value.conflicts.length > 0 || failed.length > 0;
-    if (aboutTheWork) {
+    const repeat =
+      aboutTheWork && parsed.value.conflicts.length === 0
+        ? await identicalWorkRejection(
+            campaign,
+            changeRequest.id,
+            failed.map((command) => command.command),
+            implemented.map((unit) => unit.unitKey),
+          )
+        : null;
+    if (repeat) {
+      /*
+       * The same failure, on the same scope, a second time. Another attempt
+       * cannot pass, so none is spent: the units go back uncharged, the
+       * campaign stops naming what failed and the two answers that exist, and
+       * the gate in the tick keeps it stopped until one of them is recorded.
+       */
+      for (const unit of implemented) {
+        if (await alreadyActedOn(campaign.id, unit.id, bin.id)) continue;
+        const detail =
+          `${why} This is the same failure, on the same scope, as the integration rejected at ` +
+          `${repeat.at}; this attempt is not charged.`;
+        /*
+         * The attempt this integration consumed was spent against a scope the
+         * ledger now shows cannot pass, so it is given back before the unit is
+         * reopened — otherwise a three-attempt unit, whose acceptance already
+         * charged its third, would retire here and the answer a person gives
+         * (widen the scope) would have no attempt left to use. Bounded: the
+         * campaign stays stopped until a person answers, and a failure after an
+         * amendment is no longer identical, so it is charged the ordinary way.
+         */
+        await refundAttempt(unit.id, unit.attempt);
+        await reopenUnit(unit.id, 'VERIFICATION_FAILED', detail);
+        await recordFactoryEvent({
+          campaignId: campaign.id,
+          unitId: unit.id,
+          kind: FACTORY_EVENT_KINDS.unitFailed,
+          evidenceClass: 'MEASURED',
+          detail: {
+            unitKey: unit.unitKey,
+            category: 'VERIFICATION_FAILED',
+            binId: bin.id,
+            charged: false,
+            repeatOf: repeat.binId,
+            detail: detail.slice(0, 500),
+          },
+        });
+      }
+    } else if (aboutTheWork) {
       for (const unit of implemented) {
         if (await alreadyActedOn(campaign.id, unit.id, bin.id)) continue;
         await refuseUnit(
@@ -908,8 +1045,28 @@ async function ingestIntegrateBin(
         conflicts: parsed.value.conflicts,
         failedCommands: failed.map((command) => command.command),
         units: implemented.map((unit) => unit.unitKey),
+        ...(repeat ? { repeatOf: repeat.binId, repeatAt: repeat.at } : {}),
       },
     });
+    if (repeat) {
+      const detail =
+        `Integration failed the same way twice on an unchanged scope: ${why} ` +
+        `Units ${implemented.map((unit) => unit.unitKey).join(', ')} own none of what failed, so ` +
+        'another attempt with the same scope can only fail again. Either amend mutation_scope to ' +
+        'cover the failing file (the next tick re-implements against it), or re-authorize the ' +
+        'stage if another attempt is wanted as it is. No attempt was spent on this one.';
+      await patchCampaign(campaign.id, {
+        state: 'BLOCKED',
+        blockerKind: 'SCOPE_AMENDMENT_REQUIRED',
+        blockerDetail: detail,
+        stageDetail: INTEGRATION_REPEAT_STAGE,
+      });
+      report.ingested.push(`integrate:${bin.id}`);
+      report.notes.push(detail);
+      report.state = 'BLOCKED';
+      report.stage = INTEGRATION_REPEAT_STAGE;
+      return true;
+    }
     if (!aboutTheWork) {
       const { isRepositoryAccessRefusal } = await import('../dispatch/deliveryEvidence.ts');
       if (isRepositoryAccessRefusal(why)) await creditDelivery(bin, changeRequest.repository, 'FAILED', { detail: why });
@@ -1588,6 +1745,16 @@ async function runRemoteTick(
   await reconcileRepairs(campaign.id);
 
   const fresh = (await getCampaign(campaign.id)) ?? campaign;
+  if (
+    fresh.state === 'BLOCKED' &&
+    fresh.stageDetail === INTEGRATION_REPEAT_STAGE &&
+    !(await integrationRepeatAnswered(fresh, changeRequest.id))
+  ) {
+    report.state = 'BLOCKED';
+    report.stage = INTEGRATION_REPEAT_STAGE;
+    report.notes.push('waiting on a scope amendment or a re-authorization after a repeated integration failure');
+    return report;
+  }
   const units = await listUnits(fresh.id);
   /*
    * The bins as *this pass* may judge them, rather than the newest read of the
@@ -2236,6 +2403,50 @@ export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTick
   }
 }
 
+/**
+ * How long a campaign stopped on a person's decision is left untouched while
+ * nothing about it changes, at most (INF-6d).
+ *
+ * The 20-second loop ticked every BLOCKED campaign — five of them waiting on a
+ * person since September — and each tick claims the campaign's tick lease,
+ * heartbeats it and reads its bins, units and ledger, to learn what the rows
+ * already said. A tick is worth taking when something it reads could have
+ * moved: the campaign, its units, its bins, its ledger or its contract. That is
+ * the watermark; the backstop re-asks anyway so nothing waits on it for ever.
+ * Only PERSON-wait blockers are skipped; an AUTOMATIC one is re-examined every
+ * pass, which is what it means.
+ */
+const PERSON_WAIT_RECHECK_MS = 10 * 60_000;
+const quietBlocked = new Map<string, { mark: string; at: number }>();
+
+async function blockedWatermark(campaign: FactoryCampaign): Promise<string> {
+  const { getDb } = await import('../../db/database.ts');
+  const row = await getDb().get<Record<string, string | null>>(
+    `SELECT
+        (SELECT updated_at FROM factory_campaigns WHERE id = ?) AS c,
+        (SELECT MAX(updated_at) FROM factory_work_units WHERE campaign_id = ?) AS u,
+        (SELECT MAX(updated_at) FROM bins WHERE factory_campaign_id = ?) AS b,
+        (SELECT MAX(at) FROM factory_events WHERE campaign_id = ?) AS e,
+        (SELECT MAX(created_at) FROM factory_contract_amendments WHERE change_request_id = ?) AS a`,
+    [campaign.id, campaign.id, campaign.id, campaign.id, campaign.changeRequestId],
+  );
+  return ['c', 'u', 'b', 'e', 'a'].map((key) => row?.[key] ?? '').join('|');
+}
+
+async function quietlyBlocked(campaign: FactoryCampaign, now: number): Promise<boolean> {
+  if (campaign.state !== 'BLOCKED' || !campaign.blockerKind) return false;
+  const { BLOCKER_WAIT } = await import('./line.ts');
+  if (BLOCKER_WAIT[campaign.blockerKind]?.wait !== 'PERSON') return false;
+  const seen = quietBlocked.get(campaign.id);
+  if (!seen || now - seen.at >= PERSON_WAIT_RECHECK_MS) return false;
+  return seen.mark === (await blockedWatermark(campaign));
+}
+
+/** Forget what was seen, for a test that drives the loop by hand. */
+export function resetQuietBlocked(): void {
+  quietBlocked.clear();
+}
+
 /** Every live remote campaign, one tick each. What a scheduled dispatcher calls. */
 export async function tickAllRemoteCampaigns(
   /*
@@ -2250,8 +2461,17 @@ export async function tickAllRemoteCampaigns(
   for (const campaign of await listLiveCampaigns()) {
     if (campaign.executionMode !== 'REMOTE') continue;
     if (scope.projectIds && !scope.projectIds.has(campaign.projectId)) continue;
+    const now = Date.now();
+    if (await quietlyBlocked(campaign, now).catch(() => false)) continue;
     try {
-      reports.push(await tickRemoteCampaign(campaign.id));
+      const ticked = await tickRemoteCampaign(campaign.id);
+      reports.push(ticked);
+      const after = await getCampaign(campaign.id);
+      if (after && after.state === 'BLOCKED') {
+        quietBlocked.set(campaign.id, { mark: await blockedWatermark(after), at: now });
+      } else {
+        quietBlocked.delete(campaign.id);
+      }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       reports.push(

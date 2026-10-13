@@ -2761,6 +2761,77 @@ describe('an integration blocked before the work was judged costs the work nothi
   });
 
   /*
+   * FAC-2, production fcp_f359799f…: integration failed on a pre-existing test
+   * no unit owned, and every unit went back with the same scope to fail the same
+   * way until its attempts were gone. The first failure is charged as before;
+   * the second identical one on an unchanged scope is not, and the campaign
+   * stops naming the two answers until one of them is recorded.
+   */
+  it('stops, uncharged, when integration fails identically twice on an unchanged scope', async () => {
+    const { getUnitByKey, getCampaign, recordAmendment } = await import('../server/repos/factory.ts');
+    const failing = {
+      outcome: 'BLOCKED',
+      integrationBranch: 'factory/campaign/only',
+      merged: [],
+      conflicts: [],
+      commands: [{ command: 'npm test', exitCode: 1 }],
+      summary: 'the suite failed on the merged tree',
+      blockedReason: '`npm test` exited 1 in tests/owned-by-nobody.test.ts.',
+    };
+    await integrateReporting(failing);
+    const first = await getUnitByKey(campaignId, 'only-unit');
+    expect(first?.state).toBe('READY');
+
+    await implementOneUnit();
+    expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('IMPLEMENTED');
+    await integrateReporting(failing);
+
+    const second = await getUnitByKey(campaignId, 'only-unit');
+    expect(second?.state).toBe('READY');
+    expect(second?.attempt).toBe(first?.attempt);
+    const stopped = (await getCampaign(campaignId))!;
+    expect(stopped.state).toBe('BLOCKED');
+    expect(stopped.blockerKind).toBe('SCOPE_AMENDMENT_REQUIRED');
+    expect(stopped.blockerDetail).toContain('amend mutation_scope');
+
+    // Nothing is handed out while nobody has answered.
+    for (let i = 0; i < 2; i += 1) {
+      const tick = await tickRemoteCampaign(campaignId);
+      expect(tick.state).toBe('BLOCKED');
+      expect(tick.created).toEqual([]);
+    }
+    expect((await getUnitByKey(campaignId, 'only-unit'))?.attempt).toBe(first?.attempt);
+
+    // INF-6d: the scheduled pass ticks a campaign stopped on a person once, then
+    // leaves it alone while none of its rows move.
+    const { tickAllRemoteCampaigns } = await import('../server/services/factory/remoteLoop.ts');
+    const mine = async () =>
+      (await tickAllRemoteCampaigns()).filter((one) => one.campaignId === campaignId).length;
+    expect(await mine()).toBe(1);
+    expect(await mine()).toBe(0);
+
+    // A person widens the scope: the next tick works against it.
+    await recordAmendment({
+      changeRequestId: stopped.changeRequestId,
+      campaignId,
+      field: 'mutation_scope',
+      oldValue: '["**"]',
+      newValue: '["**","tests/owned-by-nobody.test.ts"]',
+      reason: 'the failing test belongs to this change',
+      actorType: 'PERSON',
+      actorId: approverId,
+      affectedWork: ['only-unit'],
+      requiresReverification: true,
+    });
+    // The amendment moved the watermark, so the scheduled pass looks again.
+    const resumedAll = (await tickAllRemoteCampaigns()).find((one) => one.campaignId === campaignId);
+    expect(resumedAll).toBeTruthy();
+    const resumed = resumedAll!;
+    expect(resumed.state).not.toBe('BLOCKED');
+    expect(resumed.created.some((entry) => entry.startsWith('units:'))).toBe(true);
+  });
+
+  /*
    * Deferred, never stopped — and this is the correction to the first version of
    * this rule rather than a softening of it. Brain cannot tell which surface will
    * arrive, so a stage only some surfaces can perform is offered to whoever turns
