@@ -75,7 +75,7 @@ closed.
 
 | ID | Status | Notes |
 |---|---|---|
-| CON-1 | AWAITING-VERIFICATION | B: whole pre-swap path bounded; no factory derivation under pressure. |
+| CON-1 | VERIFIED | §4.6. |
 | CON-2 | AWAITING-VERIFICATION | B: refresh lineage walk moved out of the transaction; remainder depends on A's split. |
 | CON-3 | AWAITING-VERIFICATION | B: mixed arrivals no longer lift on one right arrival. Baseline 15:21Z: Airyn 2-C 45 right / 49 wrong. 24-h observation required. |
 | CON-4 | OWNER/PROVIDER | Airyn: remove the `/mcp` Brain connector from 2-B, 2-C, 2-D (keep `/mcp/factory`, which authorizes as `wkr_9826…`). Verified from bindings, not URL wording. |
@@ -184,12 +184,45 @@ So RES-1..RES-13 and FAC-15 stay AWAITING-VERIFICATION until the database answer
 
 **No research is moving.** Since the restart at 18:18Z the connection report shows no fired session arriving and no work done. Earlier in the three-hour window, two sessions did check in: 1-B at 17:33Z, and Airyn 2-C at 18:07Z (one arrival as the right worker, one as the wrong one). The dispatcher's own reads take up to 63 s per statement on this database. Everything points the same way: the work is not refused, the database simply cannot answer fast enough to hand any of it out. RES-* and FAC-15 remain AWAITING-VERIFICATION. The next step is the owner's Supabase reading (INF-1), not another Brain change.
 
-### 4.6 Still to read
+### 4.6 Third reading (22:29Z, `2bb5879`): the database answered, and work is flowing
 
-- A second connection report about 60 minutes after the first, for INF-3's churn comparison.
-- The cash, packet, campaign and kernel reports, once the database is answering.
-- The hosted verification for `2bb5879`, by a Deploy taken in healthy time. Re-deploying the same image only to run the harness during an I/O outage would restart a live Brain for nothing.
+All three reads completed: `CONNECTION-REPORT: OK`, `CASH-REPORT: OK`, `PACKET-REPORT: OK`.
 
+**The connection path in healthy time:**
+- `authenticate` p95 54 ms over 500 calls.
+- `brain_check_in` p95 4.9 s over 161 calls.
+- Pool wait p95 0 ms on both pools; event loop p99 21 ms.
+- No credential refusals.
+- One `UNSERVED_ARRIVAL` (20:43Z, `CHECK_IN_BUDGET`), charged to nobody. 1-D's one miss is `infra=1`, not a no-show.
+
+**Work:**
+- Since 20:25Z, Brain Research 1-B, 1-C and 1-D each have 5 arrivals, Airyn 2-A has 29 and Airyn 2-C has 27.
+- `wkr_1cdd…` was assigned 20 bins and claimed 16 items on Cash Mode 1.
+- `wkr_9826…` (Airyn) was assigned 97 bins and released 95, with 10 completions refused. That is the mixed-connector pattern below spending activations.
+
+**What is still slow:** `oauth_token` p95 42.7 s, and `UPDATE factory_campaigns … lease` up to 152 s. The first is the refresh lineage walk (CON-2's remainder). The second sat inside the outage window.
+
+| ID | Status | Reading |
+|---|---|---|
+| CON-1, INF-6a/b/c/e | VERIFIED | Check-in is bounded (p95 4.9 s, inside 60 s). The unserved arrival was recorded as Brain's and was not charged. |
+| CON-3 | VERIFIED (behaviour); OWNER for the fix | Airyn 2-B, 2-C and 2-D read `MIXED_WORKERS`, `who=ACCOUNT_OWNER`, with week counts (2-C: 403 right, 52 wrong, interleaved) and both remedies. One right arrival no longer lifts anything. |
+| CON-6 | VERIFIED | Caleb 3-B and Factory surface 3 read `RECOVERING`, `who=NOBODY`, with the next probe time. Caleb 3-C reads `RECOVERY_EXHAUSTED`, `who=ACCOUNT_OWNER` (last probe `NO_MCP`). |
+| CON-8, CON-9 | OWNER/PROVIDER | Caleb 3-C and Factory surface 3: as above. |
+| INF-3 | AWAITING-DECISION | The workload pool opened 1 380 connections in 4 h 15 m, about 5.4 per minute, against 2.8 per minute in the first reading. That is churn, not relief. A longer idle timeout (now 10 s) is the candidate change; it is a decision, not a fix. |
+| RES-1 | UNRESOLVED | Over 7 days, 782 fragments were judged: 67 accepted, 715 blocked. Of the blocked, **334 are `UNCLASSIFIED`**; the rest are `VERIFIER_INSUFFICIENT` 144, `REQUIRED_LANE_EMPTY` 98, `SOURCES_UNREADABLE` 62 and smaller causes. Next action: widen `classifyBlock` against the recorded reasons of the 334. |
+| RES-9 | PARTIAL | Every mission row now carries a reason. **13 NEEDS_HUMAN packets still show "(no reason recorded)"**; whether they predate C's writer is not yet read. Next action: list them with their `updated_at`. |
+| RES-10, RES-12 | VERIFIED | The packet report prints each ended item's reason. The cash report lists stale under-ceiling items with their packet and mission, and the cancellations behind the 37 "left RESEARCHING" missions. Parked missions read `waiting_on`. |
+| RES-3 | AWAITING-VERIFICATION | 66 asked, **2 answered**, 58 unresolved, 6 open: no movement yet since the 15:21Z baseline. |
+| RES-5 | AWAITING-VERIFICATION | 173 openings, 86 of them re-found (26 distinct); 1 689 possibilities merged. Whether re-finding continues after the release needs a dated count. |
+| Source access | OWNER/PROVIDER | Blocks are now attributed to the Routine that hit them. Mostly `DNS_FAILURE` (134 unattributed, plus 35 on Airyn 2-A, 31 on 2-C, and a few on Brain Research A) and `UNREADABLE_CONTENT`. These are the Routines' network environments. |
+| Storage | VERIFIED | 117 documents in Cash Mode 1, every one present in the bucket. |
+
+**One new defect, in `orc_c576…`.** The packet is `CANCELLED`, yet its bin `bin_2b9d…` sits at `NEEDS_HUMAN`, telling a person to decide about a packet that is already over. Its fragment also still reads `QUEUED`. That is an escalation nobody can answer (§24). It dates from 2026-10-07. Next action: when its packet is terminal, a parked bin should be reconciled to terminal.
+
+### 4.7 Still to read
+
+- The hosted verification for `2bb5879`, by a Deploy taken in healthy time.
+- The kernel reports (labor, puzzle, goals, manufacturing, design, capability).
 ## 5. Owner and provider actions (consolidated)
 
 1. **Merge #193** at `1d690f8`, or reply on it authorizing Session F to merge. Unblocks FAC-1, FAC-2, INF-6d.
