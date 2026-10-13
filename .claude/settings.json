@@ -97,7 +97,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|mcp__Claude_Code_Remote__send_later",
+        "matcher": "Bash|mcp__claude-code-remote__send_later|mcp__Claude_Code_Remote__send_later",
         "hooks": [
           {
             "type": "command",
