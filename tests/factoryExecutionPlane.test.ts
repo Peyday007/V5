@@ -1971,6 +1971,83 @@ describe('a unit out of attempts stops the campaign before any review', () => {
   });
 
   /*
+   * Production, fcp_f359799f4b4748cd9641: two units at 3/3 FAILED and two units
+   * BLOCKED behind them read EXECUTING, "units in flight", for two weeks,
+   * because a unit waiting on a dependency counted as in flight and the check
+   * that names the failed unit was never reached.
+   */
+  it('blocks when the only outstanding units wait on the one that failed', async () => {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'exhausted-with-dependent',
+      objective: 'Something whose first unit runs out of attempts and whose second waits on it.',
+      expectedOutcome: 'A person sees why it stopped instead of a campaign in flight for ever.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    const unit = (key: string, state: 'FAILED' | 'BLOCKED', dependsOn: string[] = []) =>
+      ensureUnit({
+        campaignId: campaign.id,
+        unitKey: key,
+        kind: 'IMPLEMENTATION',
+        role: 'IMPLEMENTER',
+        title: key,
+        objective: 'Do one bounded thing.',
+        acceptance: ['it is done'],
+        ownedPaths: [`${key}.html`],
+        requiredContext: [],
+        verification: [],
+        expectedArtifact: 'a change',
+        risk: 'LOW',
+        criticalPath: true,
+        priority: 5,
+        modelClass: 'FAST',
+        dependsOn,
+        state,
+      });
+    const first = await unit('first', 'FAILED');
+    await unit('second', 'BLOCKED', ['first']);
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run(
+      `UPDATE factory_work_units SET failure_category = ?, failure_detail = ? WHERE id = ?`,
+      ['VERIFICATION_FAILED', 'a test outside the unit\'s paths still asserts the old shape', first.unit.id],
+    );
+
+    stubForge({});
+    await tickRemoteCampaign(campaign.id);
+    const after = await getCampaign(campaign.id);
+    expect(after?.state).toBe('BLOCKED');
+    expect(after?.blockerKind).toBe('UNIT_EXHAUSTED_ATTEMPTS');
+    expect(after?.blockerDetail).toContain('old shape');
+  });
+
+  /*
    * The answering transition, which did not exist: the blocker's remedy said
    * "raise its ceiling or replan the work" and nothing could raise a unit's
    * ceiling or move a FAILED unit back out, so the only way past was retiring

@@ -1777,7 +1777,20 @@ async function runRemoteTick(
     return report;
   }
 
-  if (outstanding.length > 0) {
+  /*
+   * A unit waiting on a dependency is not in flight when that dependency has
+   * retired. BLOCKED here means "waiting on another unit to integrate", and a
+   * FAILED unit never will — so a campaign whose only outstanding units were
+   * BLOCKED behind it read EXECUTING, "units in flight", needs a person: no,
+   * for ever, and never reached the check below that names the unit and its
+   * remedy. Production, fcp_f359799f4b4748cd9641: two units at 3/3 FAILED, two
+   * BLOCKED behind them, EXECUTING for two weeks. Only a unit actually with a
+   * worker keeps the campaign in flight while another has failed, because its
+   * report still has to be read.
+   */
+  const failedUnits = units.filter((unit) => unit.state === 'FAILED');
+  const working = outstanding.filter((unit) => unit.state !== 'BLOCKED');
+  if (outstanding.length > 0 && (failedUnits.length === 0 || working.length > 0)) {
     report.notes.push(`${outstanding.length} unit(s) still in flight`);
     await patchCampaign(fresh.id, {
       state: 'EXECUTING',
