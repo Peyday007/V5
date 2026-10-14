@@ -13886,7 +13886,9 @@ and do not add a feature branch to `postgres-suite.yml`'s push trigger:
 
 **The full cross-system gate is paid once, on the SHA that is integrated and
 released:** the `Postgres suite` workflow runs the whole suite against Postgres
-on every push to the canonical branch, and `Deploy`'s own test job runs it
+on every push to the canonical branch — as four `vitest --shard` jobs, each with
+its own cluster, and a verdict job that fails unless every shard passed and
+their own reports show every test file ran exactly once — and `Deploy`'s own test job runs it
 against SQLite on the commit it releases. A merge is not done until the first is
 green, and a release is not done until the second is. Both stay dispatchable by
 hand for a deliberate full run.

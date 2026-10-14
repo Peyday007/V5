@@ -81,13 +81,53 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/production' }}
 
 jobs:
-  suite:
-    name: The whole suite, against Postgres
+  # ---------------------------------------------------------------------------
+  # Four shards, one verdict
+  # ---------------------------------------------------------------------------
+  #
+  # Run 580 spent 71m09s in one `npm test` against one cluster, and every
+  # release waited on it. The suite is split by vitest's own `--shard` across
+  # four jobs, each on its own runner with its own cluster, so no shard shares
+  # a database, a lock table or a schema with another.
+  #
+  # Nothing about what counts moved. Deploy's postgres-evidence.sh reads the
+  # *run's* conclusion on the exact commit, and a run concludes success only
+  # when every job in it does; `verdict` below makes that explicit and is the
+  # one job a reader has to look at. A shard that fails, is cancelled or never
+  # ran makes the run fail, and the commit is not deployed.
+  partition:
+    name: Typecheck, and list the whole suite
     runs-on: ubuntu-latest
-    # The suite outgrew sixty minutes: on 2026-10-06 a green-bound run took 55
-    # and the next two attempts on ec8a755 were stopped at 60 with ~3 860 of
-    # ~5 475 tests passed and none failing. A bound the gate cannot finish
-    # inside is not a gate, so it is 120 — still a ceiling on a hung run.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      # What the shards are checked against in `verdict`: the whole suite, as
+      # vitest itself lists it from this tree and this config.
+      - name: List the whole suite
+        run: .github/workflows/postgres-shards.sh all postgres-suite-files.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: postgres-suite-files
+          path: postgres-suite-files.txt
+          if-no-files-found: error
+
+  suite:
+    name: The whole suite, against Postgres (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    strategy:
+      # Every shard runs to its end, so one red run names every failure in the
+      # suite rather than the first shard's. The verdict is the same either way.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    # The whole suite once needed 120 (it outgrew sixty on 2026-10-06); a
+    # quarter of it gets the same ceiling, as a bound on a hung shard.
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -184,15 +224,30 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run typecheck
-
       # `sslmode=disable` is required rather than tidy: a unix socket cannot do
       # TLS, and the Postgres adapter asks for it by default whenever the URL
       # does not say otherwise.
       - name: The suite
         env:
           BRAIN_TEST_DATABASE_URL: postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable
-        run: npm test
+        run: >-
+          npx vitest run --shard=${{ matrix.shard }}/4
+          --reporter=default --reporter=json
+          --outputFile.json=postgres-shard-report.json
+
+      # What this shard actually ran, read from its own report, for `verdict`
+      # to hold against the whole suite. Uploaded whatever the suite said, so a
+      # red shard still accounts for its files; a shard that never finished
+      # writes no report and the verdict refuses it.
+      - name: What this shard ran
+        if: always()
+        run: .github/workflows/postgres-shards.sh ran postgres-shard-report.json postgres-shard-${{ matrix.shard }}.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postgres-shard-${{ matrix.shard }}
+          path: postgres-shard-${{ matrix.shard }}.txt
+          if-no-files-found: ignore
 
       # Useful on a failure, and quiet about the ordinary case.
       #
@@ -212,3 +267,38 @@ jobs:
           else
             echo "No schema left, which is what a finished run should leave: the suite drops what it created."
           fi
+
+  # The one verdict. `if: always()` so it runs — and fails — when a shard
+  # failed, was cancelled or was skipped, rather than being skipped itself.
+  verdict:
+    name: The Postgres suite passed on this commit
+    needs: [partition, suite]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Every shard succeeded
+        env:
+          PARTITION: ${{ needs.partition.result }}
+          SUITE: ${{ needs.suite.result }}
+        run: |
+          echo "typecheck and listing: $PARTITION"
+          echo "shards:                $SUITE"
+          if [ "$PARTITION" != success ] || [ "$SUITE" != success ]; then
+            echo "::error::Not every job passed (listing $PARTITION, shards $SUITE). This commit has no Postgres evidence."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/workflows
+      - uses: actions/download-artifact@v4
+        with:
+          path: lists
+      # The shard count is the matrix's above; tests/testingWorkflow.test.ts
+      # holds the two equal.
+      - name: Every test file ran in exactly one shard
+        run: |
+          .github/workflows/postgres-shards.sh check lists/postgres-suite-files/postgres-suite-files.txt \
+            lists/postgres-shard-1/postgres-shard-1.txt lists/postgres-shard-2/postgres-shard-2.txt \
+            lists/postgres-shard-3/postgres-shard-3.txt lists/postgres-shard-4/postgres-shard-4.txt
+          echo "POSTGRES-SUITE: PASS ${{ github.sha }}"

@@ -42,6 +42,60 @@ describe('the full Postgres suite runs on the integrated SHA only', () => {
   });
 });
 
+describe('the Postgres suite is sharded without shrinking', () => {
+  const suite = read('.github/workflows/postgres-suite.yml');
+  const job = (name: string) => {
+    const start = suite.indexOf(`\n  ${name}:\n`);
+    expect(start).toBeGreaterThan(-1);
+    const rest = suite.slice(start + 1);
+    const end = rest.slice(1).search(/\n {2}[a-z][\w-]*:\n/);
+    return end === -1 ? rest : rest.slice(0, end + 1);
+  };
+
+  it('runs every shard of one count, each against its own cluster', () => {
+    const shards = job('suite');
+    const matrix = /shard: \[([\d, ]+)\]/.exec(shards)?.[1]?.split(',').map((n) => Number(n.trim()));
+    expect(matrix).toEqual([1, 2, 3, 4]);
+    expect(shards).toContain('npx vitest run --shard=${{ matrix.shard }}/4');
+    // A cluster per job: the start step is inside the matrix job, not shared.
+    expect(shards).toContain('ALTER SYSTEM SET max_locks_per_transaction');
+    expect(shards).toContain('BRAIN_TEST_DATABASE_URL');
+    expect(shards).not.toMatch(/\bnpm test\b(?!`)/);
+  });
+
+  it('still typechecks, and lists the whole suite for the verdict to hold the shards against', () => {
+    const partition = job('partition');
+    expect(partition).toContain('npm run typecheck');
+    expect(partition).toContain('postgres-shards.sh all postgres-suite-files.txt');
+    expect(fs.existsSync(path.join(ROOT, '.github/workflows/postgres-shards.sh'))).toBe(true);
+    // Each shard reports what it ran, even when it went red.
+    const shards = job('suite');
+    expect(shards).toContain('--outputFile.json=postgres-shard-report.json');
+    expect(shards).toMatch(/- name: What this shard ran\n\s+if: always\(\)/);
+  });
+
+  it('reaches one verdict that fails unless every shard passed and together they ran the whole suite once', () => {
+    const verdict = job('verdict');
+    expect(verdict).toContain('needs: [partition, suite]');
+    // Runs, and fails, when a shard failed, was cancelled or was skipped.
+    expect(verdict).toContain('if: ${{ always() }}');
+    expect(verdict).toMatch(/\[ "\$PARTITION" != success \] \|\| \[ "\$SUITE" != success \]/);
+    expect(verdict).toMatch(/exit 1/);
+    for (const n of [1, 2, 3, 4]) expect(verdict).toContain(`postgres-shard-${n}/postgres-shard-${n}.txt`);
+    expect(verdict).toContain('postgres-shards.sh check');
+    // Every other job feeds the verdict, so the run's conclusion — what
+    // postgres-evidence.sh reads — is never success with a job left out.
+    const jobs = [...suite.slice(suite.indexOf('\njobs:\n')).matchAll(/^ {2}([a-z][\w-]*):\n/gm)].map((m) => m[1]);
+    expect(jobs.sort()).toEqual(['partition', 'suite', 'verdict']);
+  });
+
+  it('Deploy still reads the run conclusion on the exact commit', () => {
+    const evidence = read('.github/workflows/postgres-evidence.sh');
+    expect(evidence).toContain('postgres-suite.yml/runs?head_sha=$sha');
+    expect(evidence).toMatch(/\.status == "completed" and \.conclusion == "success"/);
+  });
+});
+
 describe('ordinary development has a focused runner', () => {
   it('is wired to npm and exists', () => {
     const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string> };
