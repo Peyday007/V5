@@ -342,7 +342,7 @@ the runner) and cash report run 38576721902. Both read the process serving
 **Release candidate:** `ec1f4565` on `claude/brain-v5-session-f-integration-gmupqr`.
 - It is a fast-forward of `production` (`d028e4c1`).
 - Typecheck is clean, and 1,350 impacted tests passed locally.
-- Postgres evidence is run 38575239034 (see §4.10).
+- Postgres run 38575239034 on `ec1f4565` failed 1 of 5,833: `releaseMachinery` › *a newer tip makes it superseded*. The test inherited the feature branch's `GITHUB_REF_NAME`, so the canonical guard refused the ref before reporting supersession. It passes on `production`, where the variable names the canonical branch. The test now pins the ref, and was reproduced and fixed locally under both names. The evidence script is unchanged. A fresh Postgres run is required on the new tip.
 
 **Pressure:**
 - The live process went back to `SHEDDING` at 12:16:49Z and was still shedding at 14:11Z.
@@ -391,7 +391,7 @@ the runner) and cash report run 38576721902. Both read the process serving
 
 ## 5. Owner and provider actions (consolidated)
 
-0. **Fast-forward `production` to `ec1f4565`** (`git push origin ec1f4565:production`), then dispatch Deploy. Sessions are forbidden from pushing `production`.
+0. **Fast-forward `production` to the tip of `claude/brain-v5-session-f-integration-gmupqr`** (`git push origin claude/brain-v5-session-f-integration-gmupqr:production`) once its Postgres suite run is green, then dispatch Deploy. Sessions are forbidden from pushing `production`.
 1. **Merge #193** at `1d690f8`, or reply on it authorizing Session F to merge. Unblocks FAC-1, FAC-2, INF-6d.
 2. **GitHub → Settings → Actions → General → Workflow permissions:** allow Actions to create and approve pull requests (FAC-3, rollback).
 3. **Airyn (CON-4):** in Claude, on Routines Airyn 2-B, 2-C and 2-D, remove the Brain connector at `/mcp` (it authorizes as the Factory worker `wkr_f8e118…`); keep the one at `/mcp/factory` (`wkr_9826…`).

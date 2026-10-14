@@ -236,6 +236,10 @@ esac`,
   const evidence = (deadline = '0', env: Record<string, string> = {}) =>
     runScript('.github/workflows/postgres-evidence.sh', [SHA, deadline], {
       GITHUB_REPOSITORY: 'Peyday007/V5',
+      // Deploy runs on the canonical branch. Pinned, because a suite run on a
+      // feature branch inherits that branch's name and the guard then refuses
+      // the ref before it can say the commit was superseded.
+      GITHUB_REF_NAME: 'production',
       EVIDENCE_POLL_SECONDS: '0',
       ...env,
     });
