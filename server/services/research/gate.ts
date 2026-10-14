@@ -793,9 +793,26 @@ export const BLOCK_CAUSES = [
   'INDEPENDENT_SOURCES_SHORT',
   /** Every lane covered, and the verifier still judged the answer incomplete. */
   'VERIFIER_INSUFFICIENT',
+  /**
+   * Blocked without the gate judging anything, and the recorded reason names
+   * the network: a DNS failure, a proxy or egress refusal, a host that refused
+   * this client. A fact about the worker's environment, not about the evidence.
+   */
+  'SOURCE_ACCESS',
+  /**
+   * Blocked without the gate judging anything, for a reason Brain did not
+   * compose: almost always a worker's own `brain_report_blocker`, whose reason
+   * is kept whole on the fragment. Its words, not a category, say why.
+   */
+  'NO_GATE_VERDICT',
+  /** The gate judged it, and none of the causes above fits. */
   'UNCLASSIFIED',
 ] as const;
 export type BlockCause = (typeof BLOCK_CAUSES)[number];
+
+/** The network failures a worker's blocker names; the cash report's source-access section uses the same words. */
+const SOURCE_ACCESS_WORDS =
+  /ENOTFOUND|EAI_AGAIN|getaddrinfo|DNS|CONNECT[^\n]{0,40}403|proxy|network polic|egress|not allowed by|ECONNREFUSED|ETIMEDOUT|\b(403|401|429)\b|forbidden|robots/i;
 
 export function classifyBlock(fragment: {
   blockedReason: string | null;
@@ -810,7 +827,11 @@ export function classifyBlock(fragment: {
   if (reason.startsWith('Not researched: it depends on')) return 'DEPENDENCY';
 
   const gate = fragment.verdictDetail as Partial<GateResult> | null;
-  if (!gate || typeof gate !== 'object' || !Array.isArray(gate.claims)) return 'UNCLASSIFIED';
+  if (!gate || typeof gate !== 'object' || !Array.isArray(gate.claims)) {
+    // Production, 2026-10-13: 334 of 715 blocked fragments read UNCLASSIFIED,
+    // because every block that never reached the gate landed here.
+    return SOURCE_ACCESS_WORDS.test(reason) ? 'SOURCE_ACCESS' : 'NO_GATE_VERDICT';
+  }
   const unread = Array.isArray(gate.unresolvedRetrieval) ? gate.unresolvedRetrieval.length : 0;
   const accepted = Number(gate.acceptedClaims ?? 0);
   const rejected = Number(gate.rejectedClaims ?? 0);

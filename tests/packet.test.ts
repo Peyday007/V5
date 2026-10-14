@@ -4658,7 +4658,21 @@ describe('the gate-failure distribution', () => {
 
   it('names a cause it cannot read as unclassified rather than guessing', async () => {
     const { classifyBlock } = await import('../server/services/research/gate.ts');
-    expect(classifyBlock({ blockedReason: 'something new', verdictDetail: null })).toBe('UNCLASSIFIED');
+    // Nothing the gate judged: said as that, not as a gate cause Brain cannot read.
+    expect(classifyBlock({ blockedReason: 'something new', verdictDetail: null })).toBe('NO_GATE_VERDICT');
+    expect(
+      classifyBlock({ blockedReason: 'getaddrinfo ENOTFOUND www.stlouis-mo.gov', verdictDetail: null }),
+    ).toBe('SOURCE_ACCESS');
+    expect(
+      classifyBlock({ blockedReason: 'proxy answered CONNECT 403 for www.nj.gov', verdictDetail: null }),
+    ).toBe('SOURCE_ACCESS');
+    // The gate judged it and no rule fits: still unclassified rather than guessed.
+    expect(
+      classifyBlock({
+        blockedReason: 'x',
+        verdictDetail: { claims: [{}], unresolvedRetrieval: [], acceptedClaims: 1, rejectedClaims: 0, coverage: [], reasons: [] },
+      }),
+    ).toBe('UNCLASSIFIED');
     expect(
       classifyBlock({
         blockedReason: 'A verification work item for this fragment finished without recording anything.',
