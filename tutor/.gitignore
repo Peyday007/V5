@@ -1,0 +1,8 @@
+node_modules
+client/dist/
+data/
+bridge/build/
+forge/FORGE_JAR
+forge/FORGE_ASSETS_DIR
+.env
+*.log
