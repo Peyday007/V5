@@ -13185,6 +13185,15 @@ and no lease, queue item or authorization moves.
 liveness row and in `npm run report:connections`. Each Russell tick lists what it
 deferred.
 
+**Redundant reads are removed where the reading proves them.** Two were cut,
+and both were measured on a healthy database:
+- **Card facts:** `cash_card_facts` was read one field at a time per
+  opportunity per tick, 360 198 reads in 9.7 hours. It is one read per card now
+  (`cardFactMap`).
+- **Token history:** connector health's 45-day token-history `LIKE` scan
+  (64 639 calls, mean 118 ms) is cached until the token endpoint writes
+  another token event.
+
 **It cannot make an undersized database faster.** It stops Brain adding
 optional writers to a write-ahead log that is already queued. If the host's own
 I/O budget is spent, that is a Supabase capacity fact, and the report says so

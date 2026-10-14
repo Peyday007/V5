@@ -63,6 +63,7 @@ import {
   clearColumnIfStill,
   withdrawEvidenceFact,
   withdrawRecommendationsResting,
+  cardFactMap,
 } from '../../repos/cashCardFacts.ts';
 import {
   DISQUALIFIED_FIELD,
@@ -245,7 +246,8 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
       return { kind: 'IN_FLIGHT', state: opportunity.validationState };
     }
     if (opportunity.validationState === 'NEEDS_PERSON') return { kind: 'AWAITING_PERSON' };
-    const disqualified = await cardFact(opportunity.id, DISQUALIFIED_FIELD);
+    const fact = await cardFactMap(opportunity.id);
+    const disqualified = fact(DISQUALIFIED_FIELD);
     if (disqualified?.value) return { kind: 'DISQUALIFIED', reason: disqualified.value };
     /*
      * One bounded round more, to classify what an older dive left unclassified.
@@ -259,8 +261,8 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
      */
     const classifying =
       opportunity.validationRounds < MAX_VALIDATION_ROUNDS + CLASSIFICATION_ROUNDS &&
-      Boolean((await cardFact(opportunity.id, UNCLASSIFIED_DISQUALIFIER_FIELD))?.value) &&
-      !(await cardFact(opportunity.id, RULED_OUT_CLEARED_FIELD))?.value;
+      Boolean(fact(UNCLASSIFIED_DISQUALIFIER_FIELD)?.value) &&
+      !fact(RULED_OUT_CLEARED_FIELD)?.value;
     if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS && !classifying) {
       return {
         kind: 'ROUNDS_SPENT',
@@ -1368,13 +1370,14 @@ export async function proposeEngineTerms(projectId: string): Promise<string[]> {
       continue;
     }
 
-    const price = await cardFact(opportunity.id, 'revenueRange');
-    const costs = await cardFact(opportunity.id, 'directCosts');
-    const payer = await cardFact(opportunity.id, 'payer');
-    const disqualifiers = await cardFact(opportunity.id, 'disqualifiers');
-    const labor = await cardFact(opportunity.id, 'laborNeeds');
-    const delivery = await cardFact(opportunity.id, 'delivery');
-    const hours = await cardFact(opportunity.id, 'hours');
+    const fact = await cardFactMap(opportunity.id);
+    const price = fact('revenueRange');
+    const costs = fact('directCosts');
+    const payer = fact('payer');
+    const disqualifiers = fact('disqualifiers');
+    const labor = fact('laborNeeds');
+    const delivery = fact('delivery');
+    const hours = fact('hours');
 
     const proposals: {
       field: string;

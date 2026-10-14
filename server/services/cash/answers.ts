@@ -67,6 +67,7 @@ import { listNeeds } from '../../repos/cashPortfolio.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
 import {
   cardFact,
+  cardFactMap,
   clearColumnIfStill,
   mayReplace,
   recordCardFact,
@@ -659,7 +660,10 @@ export async function deliveryReading(opportunity: CashOpportunity): Promise<Del
  */
 export async function proposeTerms(opportunity: CashOpportunity): Promise<Proposal> {
   const out: Proposal = { opportunityId: opportunity.id, terms: [], withheld: [] };
-  const signal = await cardFact(opportunity.id, 'buyingEvidence');
+  // One read for the whole card: this composes and writes nothing, so every
+  // field it asks about is the same row a per-field read would have returned.
+  const fact = await cardFactMap(opportunity.id);
+  const signal = fact('buyingEvidence');
   const request = signal?.value ?? opportunity.buyingSignal;
 
   if (!request) {
@@ -722,7 +726,7 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
   // reading rather than guessing. `readMoneyFigures` is what keeps the
   // difference — it refuses a bare number, shorthand and a percentage, so its
   // failure mode is missing a figure rather than producing one.
-  const economics = await cardFact(opportunity.id, 'economics');
+  const economics = fact('economics');
   const sources: { text: string; claimId: string | null }[] = [];
   if (economics && economics.kind === 'EVIDENCE') {
     sources.push({ text: economics.value, claimId: economics.claimId });
@@ -794,7 +798,7 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
   // actually be spent. A cost sentence with no figure in it — "nothing to buy",
   // "a few tools" — proposes nothing, because a zero read out of prose is the
   // single most flattering thing this card could say.
-  const costs = await cardFact(opportunity.id, 'directCosts');
+  const costs = fact('directCosts');
   const costCents =
     costs && costs.kind === 'EVIDENCE' ? figureFor('exposure', costs.value, opportunity.currency) : null;
   /*
@@ -804,7 +808,7 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
    * will actually hold after this pass, so the economics sentence and
    * `peak_funding_cents` can never disagree.
    */
-  const exposureFact = await cardFact(opportunity.id, 'exposure');
+  const exposureFact = fact('exposure');
   const mayPropose =
     costCents !== null &&
     (exposureFact ? exposureFact.kind === 'RECOMMENDATION' : opportunity.peakFundingCents === null);
@@ -869,7 +873,7 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
   // ---------------------------------------------------------------------
   // The price the card will actually hold after this pass: the proposal only
   // where `applyProposal` would write it, otherwise what is already there.
-  const priceProposable = mayReplace(await cardFact(opportunity.id, 'price'), 'RECOMMENDATION');
+  const priceProposable = mayReplace(fact('price'), 'RECOMMENDATION');
   const price = (priceProposable ? low?.cents : undefined) ?? opportunity.priceCents;
   const exposure = exposureCents;
   if (price !== null && price !== undefined && exposure !== null) {

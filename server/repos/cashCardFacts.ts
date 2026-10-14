@@ -190,6 +190,16 @@ export async function cardFact(
   return rows[0] ? mapFact(rows[0]) : null;
 }
 
+/**
+ * Every fact on one card, keyed by field, in one read. For a caller that would
+ * otherwise ask `cardFact` once per field: in production that was 360 198
+ * single-field reads in under ten hours, one per field per opportunity per tick.
+ */
+export async function cardFactMap(opportunityId: string): Promise<(field: string) => CashCardFact | null> {
+  const byField = new Map((await cardFactsFor(opportunityId)).map((fact) => [fact.field, fact]));
+  return (field) => byField.get(field) ?? null;
+}
+
 export async function cardFactsFor(opportunityId: string): Promise<CashCardFact[]> {
   const rows = await getDb().all<CashCardFactRow>(
     'SELECT * FROM cash_card_facts WHERE opportunity_id = ? ORDER BY field',
