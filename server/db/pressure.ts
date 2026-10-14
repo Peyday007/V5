@@ -19,8 +19,8 @@
  *   a connection before it fails — or when three or more statements could not
  *   be answered at all. Past that point the callers behind a slow statement
  *   are timing out, which is the condition load shedding exists for.
- * - **Leave** only after five continuous minutes with no failure and a 90th
- *   percentile below a fifth of the entry bound. The hysteresis is what stops
+ * - **Leave** only after five continuous minutes below the failure count and
+ *   with a 90th percentile below a fifth of the entry bound. The hysteresis is what stops
  *   shedding from oscillating: deferring optional work is itself what makes
  *   the numbers recover.
  * - **Too few samples is no reading.** Fewer than `MIN_SAMPLES` statements in
@@ -32,7 +32,7 @@
  * deferred pass derives from rows, so the next tick at NORMAL picks up exactly
  * where it would have.
  */
-import { databaseFailuresSince, statementTimesSince } from './infra.ts';
+import { databaseFailuresSince, statementTimesSince, type InfraFailureKind } from './infra.ts';
 
 export type DatabasePressure = 'NORMAL' | 'SHEDDING';
 
@@ -45,19 +45,39 @@ export const ENTER_FAILURES = 3;
 export const RECOVER_AFTER_MS = 5 * 60_000;
 export const MIN_SAMPLES = 20;
 
+/**
+ * The failures that mean the database is not keeping up. A lost connection is
+ * deliberately not one: the pooler closes idle and broken clients in ordinary
+ * operation, and production (2026-10-14, `d5fce97`) felt a steady few every two
+ * minutes with a 90th percentile of 68 ms, which counted as overload kept Brain
+ * shedding long after the stall that started it had passed. Real overload
+ * still shows as timeouts and as the 90th percentile.
+ */
+export const OVERLOAD_KINDS: ReadonlySet<InfraFailureKind> = new Set([
+  'POOL_CHECKOUT_TIMEOUT',
+  'POOLER_CHECKOUT_TIMEOUT',
+  'POOLER_REFUSED',
+  'STATEMENT_TIMEOUT',
+  'DATABASE_UNAVAILABLE',
+]);
+
 export interface PressureReading {
   state: DatabasePressure;
   /** Why it is in this state, in words a report can print. */
   reason: string;
   p90Ms: number | null;
   samples: number;
+  /** Failures in the window that mean overload (`OVERLOAD_KINDS`). */
   failures: number;
+  /** Every felt failure in the window, by kind, overload or not. */
+  byKind: Partial<Record<InfraFailureKind, number>>;
   since: string;
 }
 
 interface Window {
   times: number[];
   failures: number;
+  byKind?: Partial<Record<InfraFailureKind, number>>;
 }
 
 function p90(times: number[]): number | null {
@@ -73,9 +93,15 @@ export function overloaded(window: Window): boolean {
   return (p90(window.times) ?? 0) >= ENTER_P90_MS;
 }
 
-/** Healthy right now, by the stricter leave rule. Unknown is not healthy. */
+/**
+ * Healthy right now, by the stricter leave rule. Unknown is not healthy.
+ *
+ * Failures below the entry count do not hold it: a steady one or two in two
+ * minutes beside a fast 90th percentile is not overload, and requiring none
+ * at all made recovery depend on the quietest two minutes the pooler allows.
+ */
 export function healthy(window: Window): boolean {
-  if (window.failures > 0) return false;
+  if (window.failures >= ENTER_FAILURES) return false;
   if (window.times.length < MIN_SAMPLES) return false;
   return (p90(window.times) ?? Infinity) < LEAVE_P90_MS;
 }
@@ -91,10 +117,10 @@ const listeners: ((reading: PressureReading) => void)[] = [];
  * samples. Cheap: it reads two in-memory arrays and touches no database.
  */
 export function databasePressure(now = Date.now()): PressureReading {
-  return advance(
-    { times: statementTimesSince(now - WINDOW_MS), failures: databaseFailuresSince(now - WINDOW_MS) },
-    now,
-  );
+  const byKind = databaseFailuresSince(now - WINDOW_MS);
+  let failures = 0;
+  for (const [kind, n] of Object.entries(byKind)) if (OVERLOAD_KINDS.has(kind as InfraFailureKind)) failures += n ?? 0;
+  return advance({ times: statementTimesSince(now - WINDOW_MS), failures, byKind }, now);
 }
 
 /** The state machine over one window. Exported for tests. */
@@ -105,6 +131,7 @@ export function advance(window: Window, now: number): PressureReading {
     p90Ms: p90(window.times),
     samples: window.times.length,
     failures: window.failures,
+    byKind: window.byKind ?? {},
     since: new Date(since).toISOString(),
   });
   if (state === 'NORMAL') {
@@ -129,7 +156,7 @@ export function advance(window: Window, now: number): PressureReading {
     state = 'NORMAL';
     since = now;
     healthySince = null;
-    reason = `recovered: ${RECOVER_AFTER_MS / 60_000} minutes with no failure and a 90th percentile under ${LEAVE_P90_MS}ms`;
+    reason = `recovered: ${RECOVER_AFTER_MS / 60_000} minutes with fewer than ${ENTER_FAILURES} overload failures per window and a 90th percentile under ${LEAVE_P90_MS}ms`;
     notify(reading());
   }
   return reading();

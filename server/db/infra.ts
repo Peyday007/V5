@@ -223,22 +223,24 @@ const databaseCounts = new Map<string, number>();
 export function countDatabaseFailure(kind: InfraFailureKind): void {
   const key = `${currentWorkloadClass()}:${kind}`;
   databaseCounts.set(key, (databaseCounts.get(key) ?? 0) + 1);
-  recentDatabaseFailures.push(Date.now());
+  recentDatabaseFailures.push({ at: Date.now(), kind });
   if (recentDatabaseFailures.length > RECENT_LIMIT) recentDatabaseFailures.splice(0, recentDatabaseFailures.length - RECENT_LIMIT);
 }
 
 /**
- * When each felt failure happened, for the pressure reading (`db/pressure.ts`).
- * Every kind counts: a pool or pooler checkout timeout, a statement timeout, a
- * lost connection and an unavailable database are all the database not
- * answering, which is the one fact load shedding needs.
+ * When each felt failure happened and what kind it was, for the pressure
+ * reading (`db/pressure.ts`), which decides which kinds mean overload.
  */
-const recentDatabaseFailures: number[] = [];
+const recentDatabaseFailures: { at: number; kind: InfraFailureKind }[] = [];
 
-export function databaseFailuresSince(sinceMs: number): number {
-  let n = 0;
-  for (let i = recentDatabaseFailures.length - 1; i >= 0 && recentDatabaseFailures[i]! >= sinceMs; i--) n++;
-  return n;
+/** Felt failures since a moment, by kind. */
+export function databaseFailuresSince(sinceMs: number): Partial<Record<InfraFailureKind, number>> {
+  const out: Partial<Record<InfraFailureKind, number>> = {};
+  for (let i = recentDatabaseFailures.length - 1; i >= 0 && recentDatabaseFailures[i]!.at >= sinceMs; i--) {
+    const kind = recentDatabaseFailures[i]!.kind;
+    out[kind] = (out[kind] ?? 0) + 1;
+  }
+  return out;
 }
 
 export function databaseFailureCounts(): Record<string, number> {

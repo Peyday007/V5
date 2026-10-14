@@ -52,7 +52,7 @@ describe('database pressure: entering and leaving', () => {
   it('one bad window restarts the recovery clock', () => {
     advance({ times: slow(), failures: 0 }, 0);
     advance({ times: fast(), failures: 0 }, 1_000);
-    advance({ times: fast(), failures: 1 }, 200_000);
+    advance({ times: fast(), failures: ENTER_FAILURES }, 200_000);
     expect(advance({ times: fast(), failures: 0 }, 1_000 + RECOVER_AFTER_MS).state).toBe('SHEDDING');
   });
 
@@ -61,6 +61,12 @@ describe('database pressure: entering and leaving', () => {
     expect(advance({ times: middling, failures: 0 }, 0).state).toBe('NORMAL');
     advance({ times: slow(), failures: 0 }, 1);
     expect(advance({ times: middling, failures: 0 }, 1 + RECOVER_AFTER_MS * 2).state).toBe('SHEDDING');
+  });
+
+  it('a steady one or two failures beside a fast 90th percentile does not hold it', () => {
+    advance({ times: slow(), failures: 0 }, 0);
+    advance({ times: fast(), failures: ENTER_FAILURES - 1 }, 1_000);
+    expect(advance({ times: fast(), failures: ENTER_FAILURES - 1 }, 1_000 + RECOVER_AFTER_MS).state).toBe('NORMAL');
   });
 
   it('silence is not recovery', () => {
@@ -73,6 +79,15 @@ describe('database pressure from what the adapter felt', () => {
   beforeEach(() => {
     resetInfraCounters();
     resetPressure();
+  });
+
+  it('does not read lost connections as overload, and says what it felt', () => {
+    for (let i = 0; i < 30; i++) noteStatement('SELECT 1', 5);
+    for (let i = 0; i < 10; i++) countDatabaseFailure('CONNECTION_LOST');
+    const reading = databasePressure();
+    expect(reading.state).toBe('NORMAL');
+    expect(reading.failures).toBe(0);
+    expect(reading.byKind.CONNECTION_LOST).toBe(10);
   });
 
   it('reads the process\'s own statement times and failures', () => {
@@ -90,7 +105,7 @@ describe('the Russell tick under pressure', () => {
   });
 
   it('defers optional passes and records them, and runs everything else', async () => {
-    for (let i = 0; i < ENTER_FAILURES; i++) countDatabaseFailure('CONNECTION_LOST');
+    for (let i = 0; i < ENTER_FAILURES; i++) countDatabaseFailure('STATEMENT_TIMEOUT');
     expect(databasePressure().state).toBe('SHEDDING');
     const report = { passFailures: [] as { pass: string; error: string }[], deferred: [] as string[] };
     const ran: string[] = [];

@@ -199,12 +199,24 @@ export async function listPaths(input: {
 export async function markEvaluated(pathIds: string[], at: string): Promise<void> {
   if (pathIds.length === 0) return;
   const placeholders = pathIds.map(() => '?').join(', ');
+  /*
+   * Only rows whose stamp is older than `EVALUATED_STAMP_MS`. Restamping every
+   * path on every pass was the largest writer of the database's log: on
+   * production, 6.4 million updates of 3 695 rows and about 2.5 GB of WAL in
+   * eight days, to move a timestamp nothing decides on. A stamp at most an hour
+   * old still answers "was this looked at since Brain last learned something";
+   * a position that moved is recorded with its own instant on the snapshot.
+   */
+  const stale = new Date(new Date(at).getTime() - EVALUATED_STAMP_MS).toISOString();
   await getDb().run(
     `UPDATE monetization_paths SET last_evaluated_at = ?, updated_at = ?
-      WHERE id IN (${placeholders})`,
-    [at, at, ...pathIds],
+      WHERE id IN (${placeholders}) AND (last_evaluated_at IS NULL OR last_evaluated_at < ?)`,
+    [at, at, ...pathIds, stale],
   );
 }
+
+/** How old a path's last-evaluated stamp may be before a pass rewrites it. */
+export const EVALUATED_STAMP_MS = 60 * 60_000;
 
 /**
  * Point one possibility at another, or stop pointing.

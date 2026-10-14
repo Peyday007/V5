@@ -330,9 +330,14 @@ async function main(): Promise<void> {
     } else {
       console.log('    event loop   (not measured by this revision)');
     }
-    const pressure = r['pressure'] as { state: string; reason: string; p90Ms: number | null; samples: number; failures: number; since: string } | undefined;
+    const pressure = r['pressure'] as { state: string; reason: string; p90Ms: number | null; samples: number; failures: number; byKind?: Record<string, number>; since: string } | undefined;
     if (pressure) {
-      console.log(`    pressure     ${pressure.state} since ${pressure.since}: ${pressure.reason} (now p90=${pressure.p90Ms ?? '-'}ms over ${pressure.samples} statements, ${pressure.failures} failure(s) in 120s)`);
+      console.log(`    pressure     ${pressure.state} since ${pressure.since}: ${pressure.reason} (now p90=${pressure.p90Ms ?? '-'}ms over ${pressure.samples} statements, ${pressure.failures} overload failure(s) in 120s, felt ${JSON.stringify(pressure.byKind ?? {})})`);
+    }
+    // What the adapter felt since start, by pool and kind, whether or not a
+    // caller turned it into an incident.
+    if (r['databaseFailures'] && Object.keys(r['databaseFailures'] as object).length > 0) {
+      console.log(`    db felt      ${JSON.stringify(r['databaseFailures'])}`);
     }
     // `total`/`max` are the time awaiting the response with a client in hand;
     // `wait` is the time spent obtaining that client first. Neither is pure
