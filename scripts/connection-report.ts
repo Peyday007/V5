@@ -166,6 +166,47 @@ async function databaseActivity(): Promise<void> {
     }
   });
 
+  await section('  capacity: the server\'s own configuration and what it has done since its statistics began', async () => {
+    const settings = await db.all<{ name: string; setting: string; unit: string | null }>(
+      `SELECT name, setting, unit FROM pg_settings
+        WHERE name IN ('max_connections','superuser_reserved_connections','shared_buffers','synchronous_commit',
+                       'wal_buffers','max_wal_size','checkpoint_timeout','effective_io_concurrency','statement_timeout',
+                       'autovacuum','track_io_timing','work_mem')
+        ORDER BY name`,
+    );
+    console.log(`    settings ${settings.map((s) => `${s.name}=${s.setting}${s.unit ?? ''}`).join(' ')}`);
+    const d = await db.get<Record<string, string | number | null>>(
+      `SELECT pg_database_size(current_database()) AS size_bytes, numbackends, xact_commit, xact_rollback,
+              blks_read, blks_hit, temp_files, temp_bytes, deadlocks, blk_read_time, blk_write_time,
+              stats_reset::text AS stats_reset
+         FROM pg_stat_database WHERE datname = current_database()`,
+    );
+    if (d) {
+      const read = Number(d['blks_read']);
+      const hit = Number(d['blks_hit']);
+      const ratio = read + hit > 0 ? ((100 * hit) / (read + hit)).toFixed(2) : '?';
+      console.log(`    database size=${Math.round(Number(d['size_bytes']) / 1048576)}MB backends=${d['numbackends']} commits=${d['xact_commit']} rollbacks=${d['xact_rollback']} cache_hit=${ratio}% blocks_read=${read} temp_files=${d['temp_files']} temp_bytes=${d['temp_bytes']} read_time=${d['blk_read_time']}ms write_time=${d['blk_write_time']}ms since ${d['stats_reset'] ?? 'never'}`);
+    }
+  });
+
+  await section('  write-ahead log (pg_stat_wal; Postgres 14+)', async () => {
+    const w = await db.get<Record<string, string | number | null>>(
+      `SELECT wal_records, wal_fpi, wal_bytes::bigint AS wal_bytes, wal_buffers_full, stats_reset::text AS stats_reset FROM pg_stat_wal`,
+    );
+    if (w) console.log(`    records=${w['wal_records']} full_page_images=${w['wal_fpi']} bytes=${Math.round(Number(w['wal_bytes']) / 1048576)}MB buffers_full=${w['wal_buffers_full']} since ${w['stats_reset'] ?? 'never'}`);
+  });
+
+  await section('  tables by rows written (updates rewrite a row; HOT updates are the cheap kind)', async () => {
+    const t = await db.all<{ relname: string; ins: number; upd: number; hot: number; del: number; dead: number; live: number; total_bytes: number }>(
+      `SELECT relname, n_tup_ins AS ins, n_tup_upd AS upd, n_tup_hot_upd AS hot, n_tup_del AS del,
+              n_dead_tup AS dead, n_live_tup AS live, pg_total_relation_size(relid) AS total_bytes
+         FROM pg_stat_user_tables ORDER BY (n_tup_ins + n_tup_upd + n_tup_del) DESC LIMIT 12`,
+    );
+    for (const r of t) {
+      console.log(`    ${r.relname.padEnd(32)} ins=${r.ins} upd=${r.upd} hot=${r.hot} del=${r.del} dead=${r.dead} live=${r.live} size=${Math.round(Number(r.total_bytes) / 1048576)}MB`);
+    }
+  });
+
   const schema = await statementsSchema().catch(() => null);
   if (!schema) {
     console.log('  pg_stat_statements is not installed or not readable; the per-process statement costs above are the reading');
@@ -206,6 +247,28 @@ async function databaseActivity(): Promise<void> {
       console.log(`    total=${Number(q.total)}ms calls=${Number(q.calls)} mean=${Number(q.mean)}ms  ${q.query}`);
     }
   });
+
+  // What a statement costs the disk rather than the clock: blocks it had to
+  // read from storage, and write-ahead log it generated. Under an I/O budget
+  // these are the two numbers that spend it; time alone cannot tell a slow
+  // statement from one that waited behind somebody else's write.
+  for (const [title, order] of [
+    ['  statements by blocks read from disk (pg_stat_statements)', 'shared_blks_read'],
+    ['  statements by write-ahead log generated (pg_stat_statements)', 'wal_bytes'],
+  ] as const) {
+    await section(title, async () => {
+      const rows = await db.all<{ calls: number; read: number; dirtied: number; wal: number; query: string }>(
+        `SELECT calls, shared_blks_read AS read, shared_blks_dirtied AS dirtied, wal_bytes::bigint AS wal,
+                LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 160) AS query
+           FROM ${schema}.pg_stat_statements
+          WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+          ORDER BY ${order} DESC LIMIT 12`,
+      );
+      for (const q of rows) {
+        console.log(`    calls=${Number(q.calls)} blks_read=${Number(q.read)} dirtied=${Number(q.dirtied)} wal=${Math.round(Number(q.wal) / 1048576)}MB  ${q.query}`);
+      }
+    });
+  }
 }
 
 /**
@@ -266,6 +329,10 @@ async function main(): Promise<void> {
       );
     } else {
       console.log('    event loop   (not measured by this revision)');
+    }
+    const pressure = r['pressure'] as { state: string; reason: string; p90Ms: number | null; samples: number; failures: number; since: string } | undefined;
+    if (pressure) {
+      console.log(`    pressure     ${pressure.state} since ${pressure.since}: ${pressure.reason} (now p90=${pressure.p90Ms ?? '-'}ms over ${pressure.samples} statements, ${pressure.failures} failure(s) in 120s)`);
     }
     // `total`/`max` are the time awaiting the response with a client in hand;
     // `wait` is the time spent obtaining that client first. Neither is pure

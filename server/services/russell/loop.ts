@@ -170,6 +170,7 @@ import { advanceGoals, type GoalTickReport } from '../goals/tick.ts';
 import { advanceResearchGoals, type GoalContinuationReport } from '../research/goalContinuation.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 import { watchIdleOnTick } from '../engineering/watchdog.ts';
+import { databasePressure } from '../../db/pressure.ts';
 
 export interface TickReport {
   /**
@@ -195,6 +196,12 @@ export interface TickReport {
    * every pass derives from rows and is idempotent by them.
    */
   passFailures: { pass: string; error: string }[];
+  /**
+   * Optional passes this tick did not start because the database was under
+   * pressure (`db/pressure.ts`). Not failures: each derives from rows, so the
+   * first tick back at NORMAL does exactly what this one would have.
+   */
+  deferred?: string[];
   /** Why it did not run, when it did not. An ordinary outcome, not an error. */
   skipped: string | null;
   generation: number | null;
@@ -646,10 +653,11 @@ export interface TickReport {
 export const PASS_FAILURE_PREFIX = 'passes: ';
 
 export async function runPass(
-  report: Pick<TickReport, 'passFailures'>,
+  report: Pick<TickReport, 'passFailures' | 'deferred'>,
   name: string,
   fn: () => Promise<unknown>,
 ): Promise<boolean> {
+  if (DEFERRABLE_UNDER_PRESSURE.has(name) && shedding(report, name)) return false;
   /*
    * Isolating passes must not turn a database outage into forty-five timeouts
    * in a row: once three passes on this tick have failed because the database
@@ -676,6 +684,38 @@ export async function runPass(
 }
 
 const INFRA_MARK = 'infra: ';
+
+/**
+ * The passes that start optional work: new questions, promotions, scans and
+ * kernels whose output nobody is waiting on this minute. Under database
+ * pressure (`db/pressure.ts`) they wait for the next tick at NORMAL.
+ *
+ * Everything else keeps running, because it is what pressure must not stop:
+ * writing back finished missions, the park and terminal-packet
+ * reconciliations, answers a person gave, launches and their repairs, bin
+ * reconciliation, reservations and goals. Serving a worker — authentication,
+ * check-in, claims, leases, submissions — is not on this tick at all and is
+ * never shed. A pass is added here only when deferring it loses nothing but
+ * time.
+ */
+export const DEFERRABLE_UNDER_PRESSURE: ReadonlySet<string> = new Set([
+  'shared-findings',
+  'retrospectives',
+  'capability-sources',
+  'capability-packets',
+  'self-model',
+  'design-kernel',
+  'execution-lineage',
+  'frontier',
+  'lens-inquiries',
+]);
+
+/** True, and recorded on the report, when optional work should wait. */
+export function shedding(report: Pick<TickReport, 'deferred'>, what: string): boolean {
+  if (databasePressure().state !== 'SHEDDING') return false;
+  (report.deferred ??= []).push(what);
+  return true;
+}
 export const MAX_INFRA_FAILURES_PER_TICK = 3;
 
 const EMPTY: TickReport = {
@@ -763,6 +803,7 @@ export async function tick(owner: string): Promise<TickReport> {
     ...EMPTY,
     ran: true,
     passFailures: [],
+    deferred: [],
     generation: claim.generation,
     wroteBack: [],
     recovered: [],
@@ -1553,7 +1594,11 @@ export async function tick(owner: string): Promise<TickReport> {
        * roles before a single claim can be harvested from it.
        */
       for (const project of await listProjects()) {
-        try {
+        // Discovery and the five kernels start new questions; under database
+        // pressure they wait (`db/pressure.ts`). `operate` below still runs,
+        // because it advances work already in flight.
+        const shedKernels = shedding(report, `discovery-and-kernels ${project.id}`);
+        if (!shedKernels) try {
           const run = await runDiscovery(project.id);
           /*
            * Reported when anything happened at all, which now includes the two
@@ -1586,7 +1631,7 @@ export async function tick(owner: string): Promise<TickReport> {
           /* a sprint whose discovery could not run is left as it was */
         }
 
-        try {
+        if (!shedKernels) try {
           /*
            * And the axis the ten buckets never had: *where* to look.
            *
@@ -1635,7 +1680,7 @@ export async function tick(owner: string): Promise<TickReport> {
           /* a map that could not be advanced is left exactly as it was */
         }
 
-        try {
+        if (!shedKernels) try {
           /*
            * And the axis that says who or what actually produces the work.
            *
@@ -1691,7 +1736,7 @@ export async function tick(owner: string): Promise<TickReport> {
           /* a labor map that could not be advanced is left exactly as it was */
         }
 
-        try {
+        if (!shedKernels) try {
           /*
            * 1a-iv-f. The cross-border dealflow kernel.
            *
@@ -1745,7 +1790,7 @@ export async function tick(owner: string): Promise<TickReport> {
           /* a dealflow pass that could not run leaves every row exactly as it was */
         }
 
-        try {
+        if (!shedKernels) try {
           /*
            * 1a-iv-g. The puzzle products and production kernel.
            *
@@ -1815,7 +1860,7 @@ export async function tick(owner: string): Promise<TickReport> {
           /* a puzzle pass that could not run leaves every row exactly as it was */
         }
 
-        try {
+        if (!shedKernels) try {
           /*
            * And the long-horizon question the sprints run underneath.
            *

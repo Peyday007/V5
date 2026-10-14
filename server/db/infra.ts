@@ -223,6 +223,22 @@ const databaseCounts = new Map<string, number>();
 export function countDatabaseFailure(kind: InfraFailureKind): void {
   const key = `${currentWorkloadClass()}:${kind}`;
   databaseCounts.set(key, (databaseCounts.get(key) ?? 0) + 1);
+  recentDatabaseFailures.push(Date.now());
+  if (recentDatabaseFailures.length > RECENT_LIMIT) recentDatabaseFailures.splice(0, recentDatabaseFailures.length - RECENT_LIMIT);
+}
+
+/**
+ * When each felt failure happened, for the pressure reading (`db/pressure.ts`).
+ * Every kind counts: a pool or pooler checkout timeout, a statement timeout, a
+ * lost connection and an unavailable database are all the database not
+ * answering, which is the one fact load shedding needs.
+ */
+const recentDatabaseFailures: number[] = [];
+
+export function databaseFailuresSince(sinceMs: number): number {
+  let n = 0;
+  for (let i = recentDatabaseFailures.length - 1; i >= 0 && recentDatabaseFailures[i]! >= sinceMs; i--) n++;
+  return n;
 }
 
 export function databaseFailureCounts(): Record<string, number> {
@@ -280,6 +296,8 @@ export function resetInfraCounters(): void {
   counts.clear();
   databaseCounts.clear();
   recent.length = 0;
+  recentDatabaseFailures.length = 0;
+  recentStatements.length = 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -407,6 +425,18 @@ function tally(map: Map<string, CostTally>, key: string, ms: number, waitMs: num
  */
 export function noteStatement(sql: string, responseMs: number, waitMs = 0): void {
   tally(statements, sql.replace(/\s+/g, ' ').trim().slice(0, STATEMENT_TEXT), responseMs, waitMs);
+  recentStatements.push({ at: Date.now(), ms: responseMs + waitMs });
+  if (recentStatements.length > RECENT_STATEMENTS) recentStatements.splice(0, recentStatements.length - RECENT_STATEMENTS);
+}
+
+/** Every statement's total time (wait plus response) with when it finished, newest last. */
+const recentStatements: { at: number; ms: number }[] = [];
+const RECENT_STATEMENTS = 2000;
+
+export function statementTimesSince(sinceMs: number): number[] {
+  const out: number[] = [];
+  for (let i = recentStatements.length - 1; i >= 0 && recentStatements[i]!.at >= sinceMs; i--) out.push(recentStatements[i]!.ms);
+  return out;
 }
 
 /** How long a caller held a pooled connection, and waited to get it, keyed by what it was. */

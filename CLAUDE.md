@@ -13153,6 +13153,43 @@ to VERIFIED. The rules this added:
 - **Migration numbers are positions.** D's reservation 118 / pg 109 was
   renumbered to 116 / pg 107 before first application.
 
+## 63. Under database pressure Brain defers optional work by itself, and says when it stopped.
+
+`server/db/pressure.ts` reads two things this process already measures: how long
+its statements take (pool wait plus response) and how many the database could
+not answer.
+
+- **When it sheds.** It enters `SHEDDING` when, over two minutes, the 90th
+  percentile reaches the pool checkout timeout (10 s, the time a queued caller
+  may wait) or three statements failed.
+- **When it recovers.** It leaves only after five continuous minutes with no
+  failure and a 90th percentile under 2 s.
+- **No reading, no decision.** Fewer than 20 statements decide nothing, and
+  silence is not recovery.
+
+These limits are this deployment's own bounds, not a universal target.
+
+**Shedding changes which passes start, and nothing else.**
+`DEFERRABLE_UNDER_PRESSURE` in the Russell loop names the passes that start
+optional work: promotions, scans, the frontier, lens inquiries, capability and
+design work. Discovery and the five kernels are gated per project.
+
+**What is never deferred.** Serving a worker (authentication, check-in, claims,
+leases, submissions) is not on that tick. Writeback, park and terminal
+reconciliation, answered requests, launches, bin reconciliation and
+reservations still run. Every deferred pass derives from rows, so the first tick
+at `NORMAL` does exactly what the skipped one would have. Nothing is cancelled,
+and no lease, queue item or authorization moves.
+
+**Where it shows.** The state, its reason and the live reading are on the
+liveness row and in `npm run report:connections`. Each Russell tick lists what it
+deferred.
+
+**It cannot make an undersized database faster.** It stops Brain adding
+optional writers to a write-ahead log that is already queued. If the host's own
+I/O budget is spent, that is a Supabase capacity fact, and the report says so
+from its readings.
+
 ## Repository map
 
 ```
@@ -13165,6 +13202,7 @@ server/
   db/
     types.ts            the async Database interface both backends implement
     infra.ts            what a database failure is, and the control plane that must survive one
+    pressure.ts         whether the database is answering well enough to start optional work
     driver.ts           SQLite driver abstraction (node:sqlite, or better-sqlite3 if installed)
     dialect.ts          ? -> $n and rowid -> seq, by walking the statement
     adapters/

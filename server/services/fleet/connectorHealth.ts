@@ -169,6 +169,67 @@ export async function connectorHealthByRoutine(now = Date.now()): Promise<Map<st
 /** For tests and for a write that knows the answer just changed. */
 export function forgetRoutingHealth(): void {
   routingCache = null;
+  tokenHistoryCache.clear();
+}
+
+/**
+ * The token endpoint's refusals and recovered refreshes for a worker's
+ * clients, read once and kept until the endpoint writes another token event.
+ *
+ * Measured on 2026-10-13: the refusal read was the costliest identity read on
+ * the database — 61 145 calls at a mean of 112 ms (1.7 s on a degraded host),
+ * because it filters every `OAUTH_TOKEN` row of a worker over 45 days with a
+ * `LIKE` on its metadata, and every health reading asked it again. The answer
+ * only changes when a token event is written, and `routes/oauth.ts` calls
+ * `forgetTokenHistory` after every one, so the cached answer is the answer;
+ * `TOKEN_HISTORY_MS` bounds it all the same, for a token event written by any
+ * other path.
+ */
+const TOKEN_HISTORY_MS = 5 * 60_000;
+type TokenRow = { created_at: string; metadata: string | null };
+const tokenHistoryCache = new Map<string, { at: number; denials: TokenRow[]; recovered: TokenRow[] }>();
+
+async function tokenHistory(
+  workerId: string,
+  clientIds: string[],
+  now: number,
+): Promise<{ denials: TokenRow[]; recovered: TokenRow[] }> {
+  const key = `${workerId}|${[...clientIds].sort().join(',')}`;
+  const cached = tokenHistoryCache.get(key);
+  if (cached && now - cached.at < TOKEN_HISTORY_MS && now >= cached.at) return cached;
+  // Narrowed by client in SQL: a worker shared by several accounts records
+  // every account's refreshes under one target, and the newest fifty of
+  // those need not include this connector's at all. The metadata is
+  // `toJson` output, so the key is written without spaces.
+  const clientLikes = clientIds.map((id) => `%"clientId":"${id}"%`);
+  const after = new Date(now - 45 * 24 * 3_600_000).toISOString();
+  const denials = await getDb().all<TokenRow>(
+    `SELECT created_at, metadata FROM identity_events
+      WHERE action = 'OAUTH_TOKEN' AND result = 'DENIED' AND target_id = ? AND created_at > ?
+        AND (${clientIds.map(() => 'metadata LIKE ?').join(' OR ')})
+      ORDER BY created_at DESC LIMIT 20`,
+    [workerId, after, ...clientLikes],
+  );
+  const recovered = await getDb().all<TokenRow>(
+    `SELECT created_at, metadata FROM identity_events
+      WHERE action = 'OAUTH_TOKEN' AND result = 'SUCCESS' AND target_id = ? AND created_at > ?
+        AND metadata LIKE '%"recovered"%'
+        AND (${clientIds.map(() => 'metadata LIKE ?').join(' OR ')})
+      ORDER BY created_at DESC LIMIT 20`,
+    [workerId, after, ...clientLikes],
+  );
+  const entry = { at: now, denials, recovered };
+  tokenHistoryCache.set(key, entry);
+  return entry;
+}
+
+/** A token event was written for this worker (or, with null, for anybody). */
+export function forgetTokenHistory(workerId: string | null): void {
+  if (!workerId) {
+    tokenHistoryCache.clear();
+    return;
+  }
+  for (const key of [...tokenHistoryCache.keys()]) if (key.startsWith(`${workerId}|`)) tokenHistoryCache.delete(key);
 }
 
 async function healthOf(connector: Connector, now: number): Promise<ConnectorHealth> {
@@ -281,26 +342,7 @@ async function healthOf(connector: Connector, now: number): Promise<ConnectorHea
 
   // The newest refusal the token endpoint recorded for this connector's clients.
   if (connector.workerId) {
-    // Narrowed by client in SQL: a worker shared by several accounts records
-    // every account's refreshes under one target, and the newest fifty of
-    // those need not include this connector's at all. The metadata is
-    // `toJson` output, so the key is written without spaces.
-    const clientLikes = clientIds.map((id) => `%"clientId":"${id}"%`);
-    const denials = await getDb().all<{ created_at: string; metadata: string | null }>(
-      `SELECT created_at, metadata FROM identity_events
-        WHERE action = 'OAUTH_TOKEN' AND result = 'DENIED' AND target_id = ? AND created_at > ?
-          AND (${clientIds.map(() => 'metadata LIKE ?').join(' OR ')})
-        ORDER BY created_at DESC LIMIT 20`,
-      [connector.workerId, new Date(now - 45 * 24 * 3_600_000).toISOString(), ...clientLikes],
-    );
-    const recovered = await getDb().all<{ created_at: string; metadata: string | null }>(
-      `SELECT created_at, metadata FROM identity_events
-        WHERE action = 'OAUTH_TOKEN' AND result = 'SUCCESS' AND target_id = ? AND created_at > ?
-          AND metadata LIKE '%"recovered"%'
-          AND (${clientIds.map(() => 'metadata LIKE ?').join(' OR ')})
-        ORDER BY created_at DESC LIMIT 20`,
-      [connector.workerId, new Date(now - 45 * 24 * 3_600_000).toISOString(), ...clientLikes],
-    );
+    const { denials, recovered } = await tokenHistory(connector.workerId, clientIds, now);
     const mine = (rows: { created_at: string; metadata: string | null }[]) =>
       rows
         .map((r) => ({ at: r.created_at, meta: safeJson(r.metadata) }))

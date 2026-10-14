@@ -27,6 +27,7 @@
  * that did not answer. Excusing on every incident would keep a dead surface in
  * routing for as long as the database had a bad afternoon.
  */
+import { databasePressure } from '../../db/pressure.ts';
 import crypto from 'node:crypto';
 import { databasePoolReadings, getDb, outsideTransaction } from '../../db/database.ts';
 import {
@@ -423,6 +424,9 @@ export function processReadings(): Record<string, unknown> {
     checkouts: checkoutSummary(),
     churn: connectionChurnReading(),
     eventLoop: eventLoopReading(),
+    // Whether optional work is being deferred because the database is not
+    // answering well enough (`db/pressure.ts`), and why.
+    pressure: databasePressure(),
     pendingIncidentWrites: pending.size,
   };
 }
