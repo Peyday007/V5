@@ -33,7 +33,7 @@ export function DecisionPanel({ state, submit, busy, onCard }: { state: any; sub
         <>
           {d.offeredCards?.length > 0 && (
             <div className="offered">{d.offeredCards.map((c: any) => (
-              <span key={c.id} data-action={`card:${c.id}`}><GameCard c={c} selectable onClick={() => submit({ id: `card:${c.id}` })} /></span>
+              <span key={c.id} data-action={`card:${c.id}`}><GameCard c={c} selectable selected={acts.some((a) => a.id === `card:${c.id}` && a.selected)} onClick={() => submit({ id: `card:${c.id}` })} /></span>
             ))}</div>
           )}
           {plays.length > 0 && (
@@ -52,7 +52,7 @@ export function DecisionPanel({ state, submit, busy, onCard }: { state: any; sub
             <div className="plays">
               {groupLabel(other).map(([label, list]) => (
                 <div key={label}><h4>{label}</h4>{list.map((a) => (
-                  <button key={a.id} data-action={a.id} disabled={busy} className="play" onClick={() => submit({ id: a.id })}>{a.label}</button>
+                  <button key={a.id} data-action={a.id} disabled={busy} className={a.selected ? 'play on' : 'play'} aria-pressed={a.selected ? true : undefined} onClick={() => submit({ id: a.id })}>{a.selected ? '✓ ' : ''}{a.label}</button>
                 ))}</div>
               ))}
             </div>

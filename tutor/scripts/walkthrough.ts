@@ -187,8 +187,12 @@ function choose(s: any, d: any): string | null {
     return 'ok';
   }
   if (/PayMana/.test(d.type)) return pick((a: any) => /auto/i.test(a.label)) ?? pick((a: any) => a.category === 'manaSource') ?? (ids.includes('ok') ? 'ok' : ids[0] ?? null);
-  const target = pick((a: any) => a.id.startsWith('card:') || a.id.startsWith('player:'));
-  if (target && !triedThisTurn.has(`${s.revision}:${target}`)) { triedThisTurn.add(`${s.revision}:${target}`); return target; }
+  // Choose one option the decision has not already got chosen; once something is chosen, confirm.
+  const chosen = (d.actions ?? []).some((a: any) => a.selected);
+  if (chosen && ids.includes('ok')) return 'ok';
+  const key = (id: string) => `${s.turn}:${d.type}:${d.prompt}:${id}`;
+  const target = pick((a: any) => (a.id.startsWith('card:') || a.id.startsWith('player:')) && !a.selected && !triedThisTurn.has(key(a.id)));
+  if (target) { triedThisTurn.add(key(target)); return target; }
   return ids.includes('ok') ? 'ok' : ids.includes('cancel') ? 'cancel' : ids[0] ?? null;
 }
 

@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "cards:sync": "tsx --env-file-if-exists=.env scripts/sync-cards.ts",
-    "walkthrough": "tsx --env-file-if-exists=.env scripts/walkthrough.ts"
+    "walkthrough": "tsx --env-file-if-exists=.env scripts/walkthrough.ts",
+    "scenarios": "tsx --env-file-if-exists=.env scripts/scenarios.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

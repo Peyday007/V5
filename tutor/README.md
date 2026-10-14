@@ -68,6 +68,7 @@ See `env.example`. All of them are read by the server only, and nothing is sent 
 | `ANTHROPIC_API_KEY` | *(empty)* | Turns on live model coaching; leave empty to run without it |
 | `TUTOR_MODEL` | `claude-opus-5-5` | Model used for coaching and card-photo reading |
 | `SCRYFALL_USER_AGENT` | `MTGDeckTutor/0.1` | Identifies the app to Scryfall, as its API asks |
+| `TUTOR_BRIDGE_SCENARIOS` | *(unset)* | Tests only: allow set-up positions (bridge and server) |
 
 ## Using it
 
@@ -137,7 +138,21 @@ npm run typecheck
 npx vitest run               # parsing, resolution, the four issue kinds, hidden-info filtering, recommendation legality
 npm run walkthrough          # real browser against the running app + bridge (see below)
 npx tsx scripts/recognize-demo.ts   # screenshot-of-a-decklist → recognition preview
+npm run scenarios            # blocking, responding on the stack, commander-zone choice (see below)
 ```
+
+`npm run scenarios` plays three focused positions through the browser. Each is set up with
+Forge's own game-state format, the one its puzzle mode and developer "Setup Game State" use;
+Forge decides everything after that.
+
+- **block**: the AI attacks, and you declare a blocker by clicking cards.
+- **respond**: with an opposing Lightning Bolt on the stack, you ask the tutor "What can I do?",
+  cast your own Bolt in response, target their creature, and pay by tapping a chosen Mountain.
+- **commander**: you cast Caesar from the command zone, with its cast count and tax tracked.
+  When it is exiled, Forge asks whether it returns to the command zone (CR 903.9a).
+
+It needs both the bridge and the server started with `TUTOR_BRIDGE_SCENARIOS=1`. Without that
+flag a set-up position is refused.
 
 `npm run walkthrough` drives Chromium through the whole flow. It decides each click from the
 state shown and clicks the control the UI rendered, then saves screenshots and `results.json`

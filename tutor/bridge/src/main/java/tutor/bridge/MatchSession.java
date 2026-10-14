@@ -547,8 +547,42 @@ final class MatchSession {
                 }
                 for (Player p : g.getPlayers()) d.action("player:" + p.getId(), "Select " + p.getName(), "select").addProperty("playerId", p.getId());
             }
+            markChosen(d, input);
         }
         return d;
+    }
+
+    /**
+     * In a multi-select (several targets, several cards), clicking a chosen option again
+     * un-chooses it. Marks what is already chosen so the player can see it, and so the label says
+     * what the click will do.
+     */
+    private static void markChosen(Decision d, Object input) {
+        java.util.Set<String> chosen = new java.util.HashSet<>();
+        try {
+            if (input instanceof forge.gamemodes.match.input.InputSelectManyBase<?> many) {
+                for (Object o : many.getSelected()) chosen.add(entityId(o));
+            } else if (input instanceof forge.gamemodes.match.input.InputSelectTargets) {
+                java.lang.reflect.Field f = input.getClass().getDeclaredField("sa");
+                f.setAccessible(true);
+                SpellAbility sa = (SpellAbility) f.get(input);
+                if (sa != null && sa.getTargets() != null) for (Object o : sa.getTargets()) chosen.add(entityId(o));
+            }
+        } catch (Exception ignored) { return; }
+        if (chosen.isEmpty()) return;
+        for (var e : d.actions) {
+            JsonObject a = e.getAsJsonObject();
+            if (!chosen.contains(a.get("id").getAsString())) continue;
+            a.addProperty("selected", true);
+            a.addProperty("label", a.get("label").getAsString().replaceFirst("^Select ", "Deselect "));
+        }
+        d.view.addProperty("chosenCount", chosen.size());
+    }
+
+    private static String entityId(Object o) {
+        if (o instanceof Card c) return "card:" + c.getId();
+        if (o instanceof Player p) return "player:" + p.getId();
+        return "";
     }
 
     private void relabelPass(Decision d, Game g) {
