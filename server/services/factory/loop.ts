@@ -228,12 +228,23 @@ export async function tickCampaign(
   // execution tick waits for its lanes, so without this the lease expires under a
   // live dispatcher and a second one joins in — two dispatchers dispatching past
   // the lane target and racing each other into the integration branch.
+  // One beat in flight at a time. A beat waits on the campaign row, and under
+  // pressure it waited 11.5 s on average (152 s at worst) against a 15 s
+  // interval, so beats piled up, each holding a pooled connection to say the
+  // same thing. A skipped beat is harmless: the lease is two minutes.
+  let beating = false;
   const keepTick = setInterval(() => {
-    void extendCampaignTick(campaignId, owner, claim.generation).catch((error: unknown) => {
-      // A missed beat is harmless — the lease is guarded on owner and generation —
-      // and an escaped rejection is how Node exits (§18). Deploy 344 did both.
-      console.error(`[factory] campaign tick heartbeat failed for ${campaignId}; the tick carries on:`, error);
-    });
+    if (beating) return;
+    beating = true;
+    void extendCampaignTick(campaignId, owner, claim.generation)
+      .catch((error: unknown) => {
+        // A missed beat is harmless — the lease is guarded on owner and generation —
+        // and an escaped rejection is how Node exits (§18). Deploy 344 did both.
+        console.error(`[factory] campaign tick heartbeat failed for ${campaignId}; the tick carries on:`, error);
+      })
+      .finally(() => {
+        beating = false;
+      });
   }, CAMPAIGN_TICK_HEARTBEAT_MS);
   try {
     return await runTick(campaignId, options);
