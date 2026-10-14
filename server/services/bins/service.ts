@@ -52,6 +52,7 @@ import {
   recordBinRefusal,
   releaseBin,
   reopenNeedsHumanBin,
+  resolveNeedsHumanBin,
   terminateUnleasedBin,
   type BinProof,
   type ReopenOutcome,
@@ -1418,6 +1419,7 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
   // One statement for the page: only bins with a withheld, unclaimed
   // generation can be credited anything, so only those are asked.
   const creditable = await binsWithWithheldUnclaimed(chargeable.map((bin) => bin.id));
+  const closedWithPacket: ReconcileReport['details'] = [];
   for (const bin of chargeable) {
     const credited = creditable.has(bin.id) ? await creditRefusedAssignments(bin.id) : 0;
 
@@ -1448,6 +1450,31 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
      * `reopenParkedBin` still refuses anything whose contract answers HUMAN.
      */
     if (bin.state !== 'NEEDS_HUMAN') continue;
+    /*
+     * A parked research bin whose packet was CANCELLED is waiting on nobody.
+     *
+     * The contract parks a bin HUMAN when its packet is terminal without having
+     * filed, which is right for a FAILED packet a person may redo. A CANCELLED
+     * packet is the opposite fact: whoever asked the question stopped wanting
+     * the answer (`concludeAbandonedParks`, a person's STOP), so "a person must
+     * decide" about it is a decision with no answer. Production, 2026-10-13:
+     * `bin_2b9db512cef74f4ba518` under the cancelled `orc_c576fa7b25b348c69249`,
+     * re-asked and refused on every tick since 2026-10-07. The bin follows its
+     * packet to CANCELLED, guarded on the generation, keeping every event and
+     * attempt; if the packet is ever restored, the launch builds it a new bin.
+     */
+    if (bin.completionContract === 'RESEARCH_PACKET_V1' && bin.orchestrationId) {
+      const packet = await getOrchestration(bin.orchestrationId);
+      if (packet?.status === 'CANCELLED') {
+        const reason =
+          `Its packet ${packet.id} was cancelled, so nobody is waiting on this bin and there is ` +
+          'nothing for a person to decide. Closed with its packet; every attempt and event keeps its row.';
+        if (await resolveNeedsHumanBin(bin.id, bin.leaseGeneration, 'CANCELLED', reason)) {
+          closedWithPacket.push({ binId: bin.id, disposition: 'CLOSED_WITH_PACKET', reason });
+        }
+        continue;
+      }
+    }
     const now = await getBinHead(bin.id);
     if (!now || now.state !== 'NEEDS_HUMAN' || now.attemptCount >= now.maxAttempts) continue;
     await reopenParkedBin({
@@ -1470,7 +1497,7 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
     states: ['DRAFT', 'READY', 'LEASED'],
     limit: 500,
   });
-  const report: ReconcileReport = { examined: bins.length, healthy: 0, escalated: 0, details: [] };
+  const report: ReconcileReport = { examined: bins.length, healthy: 0, escalated: 0, details: [...closedWithPacket] };
 
   for (const bin of bins) {
     // Live work. Somebody holds it and the lease has not run out.
