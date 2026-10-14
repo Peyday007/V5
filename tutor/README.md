@@ -209,3 +209,51 @@ client/ (React)  ──HTTP──>  server/ (Node, Express, SQLite)  ──HTTP�
 - **The match state lives in the bridge's memory.** Restarting the bridge ends running games;
   saved decks and match records are kept.
 - **One active match at a time.** Starting a new match ends the previous one in the bridge.
+
+## Verified results (2026-10-14)
+
+These runs used Forge `b6f135e649de6ab8fd98df3cf8b32905b02340ba`, the Scryfall Oracle data
+updated 2026-10-14, and the Comprehensive Rules effective September 25, 2026. Every browser run
+used headless Chromium against the real server and bridge. Only *live model coaching* is
+untested, because no API key was available.
+
+- **Unit tests** (`npx vitest run`): 11/11 pass. They cover:
+  - parsing (text and CSV);
+  - the Hail, Caesar fixture: Caesar is the commander, Mr. House is in the 99, the basic land
+    counts are 5/4/5, the total is 100, and the deck is playable;
+  - the four issue kinds, each with its own message and fix:
+    - a typo with a suggestion;
+    - an ambiguous name;
+    - banned, color identity, singleton and deck size;
+    - an unsupported card;
+  - no guessed commander;
+  - hidden information kept out of the tutor and the model prompt;
+  - model recommendations limited to legal actions;
+  - stale-answer handling.
+- **Walkthrough, 1 AI, attacking style**: 15/16 checks.
+  - Import, reload and the guide work, and tapping a card opens its explanation.
+  - 12 turns of a real Forge game:
+    - lands, spells and mana payment;
+    - casting the commander from the command zone (tax 2 shown);
+    - attack declarations;
+    - mode and sacrifice choices;
+    - targets.
+  - The tutor recommends a legal action and explains why a card can't be played.
+  - The review and the phone layout work, and no click was lost.
+  - The one failure: the AI happened not to attack into an untapped blocker in this game.
+- **Walkthrough, 1 AI, defending style**: 15/16 checks.
+  - Blocks were declared through the UI.
+  - Caesar was destroyed, Forge asked whether it goes to the command zone, and it returned
+    there with its cast count kept.
+  - The one failure: no targeted spell came up in that game. Targeting is covered by the other
+    runs.
+- **Walkthrough, 3 AI (four-player Commander)**: the game ran through turn 10 with all four
+  players acting and no lost clicks. My seat got two turns in that span and had nothing castable.
+  An earlier bridge-level 1-vs-3 game reached turn 13.
+- **Scenarios** (`npm run scenarios`): 11/11.
+  - Blocking.
+  - Responding on the stack with targeting and a chosen land for mana.
+  - Commander cast from the command zone, tax, and the CR 903.9a command-zone choice.
+- **Recognition** (`scripts/recognize-demo.ts`): from a rendered decklist screenshot, 6 lines
+  matched exactly. A misspelled "Lightnig Bolt" was offered as "close", with Lightning Bolt
+  among its candidates, not auto-corrected.
