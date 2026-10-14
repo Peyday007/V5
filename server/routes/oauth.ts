@@ -65,7 +65,7 @@ import {
 import type { Principal, Worker, WorkerInvitation } from '../domain/types.ts';
 import { attachClient, connectorClient, endpointOf, getConnector, repointConnectorWorker } from '../repos/connectors.ts';
 import { reconnectTargetById, reconnectTargets, type ReconnectTarget } from '../services/fleet/connectorContinuity.ts';
-import { forgetRoutingHealth, forgetTokenHistory } from '../services/fleet/connectorHealth.ts';
+import { forgetRoutingHealth, forgetTokenHistory, tokenEventChangesHistory } from '../services/fleet/connectorHealth.ts';
 import { touchConnectorRoutines } from '../services/fleet/connectorBinding.ts';
 import {
   MEMBER_RECONNECT_SENTENCE,
@@ -422,9 +422,10 @@ async function audit(input: {
     // An audit that cannot be written must not turn an authorization into
     // something else.
   }
-  // A token event is what connector health's refusal history is read from;
-  // the cached reading of it is no longer the history once one is written.
-  if (input.action === 'OAUTH_TOKEN') forgetTokenHistory(input.targetId);
+  // The cached token history is stale only once a row it reads is written.
+  if (input.action === 'OAUTH_TOKEN' && tokenEventChangesHistory(input.result, input.metadata)) {
+    forgetTokenHistory(input.targetId);
+  }
 }
 
 /**

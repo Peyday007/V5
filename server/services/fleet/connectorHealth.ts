@@ -223,6 +223,20 @@ async function tokenHistory(
   return entry;
 }
 
+/**
+ * Whether a token event changes what `tokenHistory` reads. It reads refusals
+ * and successes carrying `recovered`, and nothing else, so an ordinary
+ * successful refresh leaves the cached reading true. Clearing on every refresh
+ * made the cache one in name only: production, 2026-10-14 on 412f9a0, re-ran
+ * the 45-day LIKE scan 53 times in 49 minutes at a mean of 14 s (max 60 s).
+ */
+export function tokenEventChangesHistory(
+  result: 'SUCCESS' | 'DENIED' | 'FAILED',
+  metadata: Record<string, unknown> | undefined,
+): boolean {
+  return result === 'DENIED' || (metadata !== undefined && 'recovered' in metadata);
+}
+
 /** A token event was written for this worker (or, with null, for anybody). */
 export function forgetTokenHistory(workerId: string | null): void {
   if (!workerId) {

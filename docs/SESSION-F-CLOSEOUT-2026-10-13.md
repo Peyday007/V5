@@ -389,10 +389,66 @@ the runner) and cash report run 38576721902. Both read the process serving
 - FAC-2 and INF-6d wait on it at local `c33806c2`.
 - The five `UNIT_EXHAUSTED_ATTEMPTS` campaigns are not re-examined until FAC-2 is live, because without it they would spend attempts again.
 
+### 4.10 Releases under the owner's full-execution authorization (2026-10-14 evening)
+
+**Permissions.**
+- A session may not `git push` to `production`: `.claude/settings.json` denies it.
+- GitHub authenticates the session as the owner (`Peyday007`), and `production` has no branch protection and no rulesets.
+- Under the owner's authorization, `production` was therefore advanced only by merging pull requests through GitHub's API. No push to `production` and no force push was made.
+
+**Release 1: PR #199, merged as `fd673c6`, Deploy 462 (run 38603183776).**
+- The merged tree is identical to the tested `9f7fbfb6`.
+- Postgres evidence for that tree: run 38586218499.
+- Deploy's own SQLite gate passed, and its Postgres evidence step passed.
+- **Released.** The connection report (run 38616546773) reads `SERVING_REVISION fd673c6`.
+- Both hosted verifications failed on the database, not on the change:
+  - *before the restart:* the shared-Cash read answered `503`, which is retryable;
+  - *after the restart:* the verification harness could not open storage, because Supabase Storage answered `544 DatabaseTimeout`.
+
+**What the database showed at 18:37Z.**
+- `SELECT version()` took 16 s.
+- Top statements by server time since 2026-10-05:
+  - `SELECT * FROM factory_campaigns WHERE state NOT IN …`: 101k calls, mean 137 ms. The table is 9 MB for 86 rows.
+  - the campaign lease UPDATE: mean **10.8 s** per single-row update, which means it was waiting on locks.
+  - Storage's own `storage.search`.
+  - the identity-events `LIKE` probes.
+  - `monetization_paths`: 6.6M updates on 3.7k rows.
+- 36 GB of temporary files.
+- The new process (`fd673c6`) reads NORMAL, but its p90 is 3 s.
+
+**Release 2: PR #201, merged as `412f9a0`, Deploy 463 (run 38618112946).**
+- Contents: #193 (now merged), FAC-2 and INF-6d.
+- Tested as `2638faca`: impacted 190/190, full Postgres suite run 38603390452.
+- Another session merged #200 (Postgres suite sharding, CI only) just before it, so Deploy 463 gates the combined tree itself.
+
+**Deploy 463 result.** The machine runs `412f9a0` and serves (`NEW_SERVING`).
+- The job is red because boot spent 8 minutes retrying. Supabase Storage answered `544 DatabaseTimeout` and then `429 too_many_connections`.
+- That outlasted Fly's health-check wait, so the hosted verification never ran.
+- A connection report at 19:39Z could not reach the pooler at all. Later factory reads hit `ECHECKOUTTIMEOUT`.
+
+**Token refresh was the measured worker-facing cost on `412f9a0`.**
+- `oauth_token` p50 was 31 s.
+- Connector health's 45-day `LIKE` scan of `identity_events` ran 53 times in 49 minutes, mean 14 s, max 60 s.
+- The cache is meant to hold that scan, but the token endpoint cleared it on every token event.
+- Fixed in `99052be1`: only a refusal or a recovered refresh clears it. Regression test: `tests/tokenHistoryCache.test.ts`, which fails against the old code.
+
+**FAC-15, the blocked campaigns, read one by one on `412f9a0`.** All six are `UNIT_EXHAUSTED_ATTEMPTS`. None should resume by itself.
+
+| campaign | why | what resumes it |
+|---|---|---|
+| `fcp_f359799f` (Goals decisions) | Integration failed 3× on `tests/goalOwnership.test.ts`, which no unit owned. This is the FAC-2 shape. | A person: retire and resubmit with that test in scope. An amendment cannot widen scope. |
+| `fcp_3fd18a62` (Cash forecast) | Same shape: `tests/cashDashboard.test.ts`. | Same. |
+| `fcp_4bc9ef45` (hyphen normalisation) | Same shape: `tests/documents.test.ts`. | Same. |
+| `fcp_03a8a0ad` (monetization controls) | 2 of 3 units integrated. The repair of a self-review finding cannot be made in code. The cause was fixed in §27. | A person: `reauthorize` the review so a different session reviews it. |
+| `fcp_1177064e` (scope boundary) | Unit integrated. The review bin `bin_a587268437604198b615` is parked at NEEDS_HUMAN. | A person: `answer-bin`. |
+| `fcp_194bd62b` (lane split) | 1 of 2 units integrated, and the repair unit is ready at 0/3. Its bin `bin_eaef6ea7fc1342bc8071` is parked at NEEDS_HUMAN. | A person: `answer-bin`. |
+
+FAC-2 is now live, so a new campaign of the first shape stops after the second identical failure, without spending its third attempt.
+
 ## 5. Owner and provider actions (consolidated)
 
-0. **Fast-forward `production` to the tip of `claude/brain-v5-session-f-integration-gmupqr`** (`git push origin claude/brain-v5-session-f-integration-gmupqr:production`) once its Postgres suite run is green, then dispatch Deploy. Sessions are forbidden from pushing `production`.
-1. **Merge #193** at `1d690f8`, or reply on it authorizing Session F to merge. Unblocks FAC-1, FAC-2, INF-6d.
+0. ~~Advance production~~: done by PR merges #199 and #201 under the owner's authorization (§4.10).
+1. ~~**Merge #193**~~ merged via #201 (§4.10). **Merge #193** at `1d690f8`, or reply on it authorizing Session F to merge. Unblocks FAC-1, FAC-2, INF-6d.
 2. **GitHub → Settings → Actions → General → Workflow permissions:** allow Actions to create and approve pull requests (FAC-3, rollback).
 3. **Airyn (CON-4):** in Claude, on Routines Airyn 2-B, 2-C and 2-D, remove the Brain connector at `/mcp` (it authorizes as the Factory worker `wkr_f8e118…`); keep the one at `/mcp/factory` (`wkr_9826…`).
 4. **Caleb:** in Claude, check that Routines Caleb 3-B and 3-C still run and have their Brain connector attached; then `connectors probe <trig>`. 3-A and 3-D are being re-probed by Brain. **CON-9:** Factory surface 3 (`trig_01EhddNqYaQGC49fF9NVBcnT`) — confirm its Brain connector is attached in Claude.
