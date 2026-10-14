@@ -301,12 +301,37 @@ minute costs the server roughly 0.6 s a minute (`get_auth` 30 ms plus
 reads (~230 a minute) are cheap per call; they are a candidate, not a measured
 problem.
 
-### 4.8 Still to read
+### 4.8 Deploy 461 and the morning reading (2026-10-14)
 
-- After the next release: whether pressure reads NORMAL in healthy time, the
-  failure kinds it reports, the monetization WAL rate, and gate outcomes under
-  the new categories.
-- The kernel reports (labor, puzzle, goals, manufacturing, design, capability).
+- **Deploy 461 (`d028e4c1`) did not release.** Its test job failed on
+  `campaignTickHeartbeat`: the guard expected `void extendCampaignTick` to open
+  the timer callback, and the overnight single-flight beat put
+  `if (beating) return; beating = true;` first. That same prelude hid both
+  heartbeats from the companion check that every timer promise carries a catch.
+  Fixed on the branch (`fa550912`): both patterns accept the prelude, and the
+  catch check reads to the end of the callback. Verified by removing a
+  heartbeat's `.catch`; the guard names `loop.ts`.
+- **The Postgres suite on `d028e4c1` also failed `signInIdentity`.** This is a
+  false finding: the PIN `232323` occurs inside the random event id
+  `iev_40a2323237974656b146`. Minted ids are now blanked before the secret
+  search. A PIN placed in a recorded value is still caught (checked).
+- **`fleet_policy` reads (~230/min)** are now one read per dispatch snapshot
+  (`c215e830`). The impacted tests passed on SQLite and Postgres (1,334/1,334).
+- **The release is blocked on a person.** `.claude/settings.json` forbids a
+  session from pushing `production`, and this run did not route around that.
+  The branch is a fast-forward of `production`, and `production` itself fails
+  the test gate until it takes `fa550912`.
+- **Pressure on the live process (`d5fce97`, the connection report at
+  ~08:40Z):** it shed from 06:24Z and recovered at **08:25:46Z** under the old
+  rule ("no failure for 5 minutes"). It now reads NORMAL: p90 19 ms over 2,000
+  statements, 0 overload failures. The worst event-loop stall since start was
+  **35.8 s at 06:24:42Z**, the same instant shedding began, so that stall was
+  this process's own loop rather than the database. The fix that keeps a few
+  CONNECTION_LOST from holding shedding (`OVERLOAD_KINDS`) is in `d028e4c1` and
+  is not yet live.
+- **Not read this run:** the kernel reports, the monetization WAL rate after
+  the throttle, and gate outcomes under the new categories. All of these need
+  the next release to be live to mean anything.
 
 ## 5. Owner and provider actions (consolidated)
 

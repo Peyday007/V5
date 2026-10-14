@@ -609,6 +609,14 @@ it('writes down what happened and never what was typed', async () => {
      * body at any depth, because a secret in a nested `metadata` bag is the
      * same secret.
      */
+    // Identifiers Brain minted are random hex, so a six-digit PIN can occur in
+    // one by chance: the Postgres suite on d028e4c1 failed on `232323` inside
+    // `iev_40a2323237974656b146`. An id is not something anybody typed, so the
+    // ids are blanked before the search and every other byte is still read.
+    const withoutMintedIds = log.text.replace(
+      /"(id|actorId|credentialId|targetId|requestId|enrollmentId)":"[a-z]{2,6}_[A-Za-z0-9_-]{8,}"/g,
+      '"$1":"<id>"',
+    );
     for (const secret of [
       '202020',
       '212121',
@@ -626,7 +634,7 @@ it('writes down what happened and never what was typed', async () => {
       OWNER_PIN,
       OWNER_PASSWORD,
     ]) {
-      expect(log.text, `a secret reached the identity trail`).not.toContain(secret);
+      expect(withoutMintedIds, `a secret reached the identity trail`).not.toContain(secret);
     }
     expect(log.text).not.toMatch(/scrypt\$/);
     expect(log.text).not.toMatch(/"token"|tokenDigest|pin_verifier|pinVerifier/);
