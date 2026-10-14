@@ -445,6 +445,35 @@ the runner) and cash report run 38576721902. Both read the process serving
 
 FAC-2 is now live, so a new campaign of the first shape stops after the second identical failure, without spending its third attempt.
 
+### 4.11 Release 3 and the live reading (2026-10-14, 21:00–22:30Z)
+
+**PR #202 merged as `30469a1`, Deploy 464 (run 38635855179).**
+- Contents: the token-history cache fix and the closeout record.
+- Postgres evidence: run 38632658300 on `99052be1`.
+- Released and serving (`SERVING_REVISION 30469a1`).
+- **The deployment verification passed in parts, across two runs of the same commit:**
+  - Run 1: before the restart 260/261. The one failure was a single `503`, a database blip. After the restart 280/280.
+  - Run 2 (the one permitted re-run, failed job only): before the restart 261/261. After the restart 278/280: the scenario engine's 50,000-evaluation run did not answer within its 30 s bound, and the follow-on reproduction check failed because of that. The same run took 0.95 s in run 1, and the scenario engine was not changed.
+  - Every check passed in at least one of the two runs. No single run was green end to end.
+  - The scenario cold start after a restart is recorded as **UNRESOLVED**. Its cause is not established, and it is not part of this campaign.
+
+**The live system on `30469a1`** (connection report run 38643061037, cash report run 38643064790):
+- **Pressure:** NORMAL, p90 29 ms, nothing felt.
+- **Latency:**
+  - `oauth_token` p50 297 ms (31 s on `412f9a0`);
+  - authenticate p95 73 ms;
+  - check-in p95 1.7 s.
+- **Connections:** Airyn 2-A, Brain Research 1-B and 1-C all arrived as their registered workers, and no fire went unanswered.
+- **Research:**
+  - workers submitted claims and a verification and completed work, all successfully;
+  - 22 packets are researching and 9 completed today;
+  - monetization research has asked 66 questions, 2 answered and 6 open.
+- **Cash:**
+  - 1 opportunity ready to test, 0 qualified;
+  - nothing in the money ledger;
+  - no commercial grant, and no messaging or billing provider.
+  - It is technically ready but cannot sell anything until those external prerequisites exist.
+
 ## 5. Owner and provider actions (consolidated)
 
 0. ~~Advance production~~: done by PR merges #199 and #201 under the owner's authorization (§4.10).
