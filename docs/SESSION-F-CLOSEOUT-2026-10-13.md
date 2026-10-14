@@ -421,6 +421,30 @@ the runner) and cash report run 38576721902. Both read the process serving
 - Tested as `2638faca`: impacted 190/190, full Postgres suite run 38603390452.
 - Another session merged #200 (Postgres suite sharding, CI only) just before it, so Deploy 463 gates the combined tree itself.
 
+**Deploy 463 result.** The machine runs `412f9a0` and serves (`NEW_SERVING`).
+- The job is red because boot spent 8 minutes retrying. Supabase Storage answered `544 DatabaseTimeout` and then `429 too_many_connections`.
+- That outlasted Fly's health-check wait, so the hosted verification never ran.
+- A connection report at 19:39Z could not reach the pooler at all. Later factory reads hit `ECHECKOUTTIMEOUT`.
+
+**Token refresh was the measured worker-facing cost on `412f9a0`.**
+- `oauth_token` p50 was 31 s.
+- Connector health's 45-day `LIKE` scan of `identity_events` ran 53 times in 49 minutes, mean 14 s, max 60 s.
+- The cache is meant to hold that scan, but the token endpoint cleared it on every token event.
+- Fixed in `99052be1`: only a refusal or a recovered refresh clears it. Regression test: `tests/tokenHistoryCache.test.ts`, which fails against the old code.
+
+**FAC-15, the blocked campaigns, read one by one on `412f9a0`.** All six are `UNIT_EXHAUSTED_ATTEMPTS`. None should resume by itself.
+
+| campaign | why | what resumes it |
+|---|---|---|
+| `fcp_f359799f` (Goals decisions) | Integration failed 3× on `tests/goalOwnership.test.ts`, which no unit owned. This is the FAC-2 shape. | A person: retire and resubmit with that test in scope. An amendment cannot widen scope. |
+| `fcp_3fd18a62` (Cash forecast) | Same shape: `tests/cashDashboard.test.ts`. | Same. |
+| `fcp_4bc9ef45` (hyphen normalisation) | Same shape: `tests/documents.test.ts`. | Same. |
+| `fcp_03a8a0ad` (monetization controls) | 2 of 3 units integrated. The repair of a self-review finding cannot be made in code. The cause was fixed in §27. | A person: `reauthorize` the review so a different session reviews it. |
+| `fcp_1177064e` (scope boundary) | Unit integrated. The review bin `bin_a587268437604198b615` is parked at NEEDS_HUMAN. | A person: `answer-bin`. |
+| `fcp_194bd62b` (lane split) | 1 of 2 units integrated, and the repair unit is ready at 0/3. Its bin `bin_eaef6ea7fc1342bc8071` is parked at NEEDS_HUMAN. | A person: `answer-bin`. |
+
+FAC-2 is now live, so a new campaign of the first shape stops after the second identical failure, without spending its third attempt.
+
 ## 5. Owner and provider actions (consolidated)
 
 0. ~~Advance production~~: done by PR merges #199 and #201 under the owner's authorization (§4.10).
