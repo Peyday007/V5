@@ -1117,8 +1117,9 @@ async function researchYield(projectId: string): Promise<void> {
     const days = new Map<string, string[]>();
     for (const row of byDay) days.set(row.day, [...(days.get(row.day) ?? []), `${row.status}=${Number(row.n)}`]);
     for (const [day, counts] of days) console.log(`  ${day}  ${counts.join(' ')}`);
-    const reasons = await db.all<{ status: string; reason: string | null; n: number }>(
-      `SELECT status, SUBSTR(COALESCE(cancel_reason, failure_reason, ''), 1, 90) AS reason, COUNT(*) AS n
+    const reasons = await db.all<{ status: string; reason: string | null; n: number; newest: string | null }>(
+      `SELECT status, SUBSTR(COALESCE(cancel_reason, failure_reason, ''), 1, 90) AS reason, COUNT(*) AS n,
+              MAX(updated_at) AS newest
          FROM research_orchestrations
         WHERE project_id = ? AND queued_at >= ? AND status IN ('CANCELLED', 'FAILED', 'NEEDS_HUMAN', 'AWAITING_REPAIR')
         GROUP BY status, SUBSTR(COALESCE(cancel_reason, failure_reason, ''), 1, 90)
@@ -1126,7 +1127,17 @@ async function researchYield(projectId: string): Promise<void> {
       [projectId, since],
     );
     console.log('  why packets stopped');
-    for (const r of reasons) console.log(`    ${String(Number(r.n)).padStart(4)}  ${r.status.padEnd(15)} ${r.reason || '(no reason recorded)'}`);
+    for (const r of reasons) console.log(`    ${String(Number(r.n)).padStart(4)}  ${r.status.padEnd(15)} ${r.reason || '(no reason recorded)'}  newest ${r.newest ?? '-'}`);
+    // RES-9: a stopped packet with no reason is a defect only if a writer still
+    // produces one, so name them with when each last moved.
+    const reasonless = await db.all<{ id: string; status: string; updated_at: string }>(
+      `SELECT id, status, updated_at FROM research_orchestrations
+        WHERE project_id = ? AND status IN ('FAILED', 'NEEDS_HUMAN', 'AWAITING_REPAIR')
+          AND COALESCE(cancel_reason, failure_reason, '') = ''
+        ORDER BY updated_at DESC LIMIT 8`,
+      [projectId],
+    );
+    for (const r of reasonless) console.log(`      reasonless ${r.id} ${r.status} updated ${r.updated_at}`);
     const titles = await db.all<{ title: string; n: number; complete: number }>(
       `SELECT SUBSTR(title, 1, 70) AS title, COUNT(*) AS n,
               SUM(CASE WHEN status = 'COMPLETE' THEN 1 ELSE 0 END) AS complete
