@@ -333,12 +333,69 @@ problem.
   the throttle, and gate outcomes under the new categories. All of these need
   the next release to be live to mean anything.
 
+### 4.9 Afternoon reading (2026-10-14, ~14:10Z, still `d5fce97`)
+
+Readings: connection report run 38576716627 (rerun after a Fly DNS failure on
+the runner) and cash report run 38576721902. Both read the process serving
+`d5fce97`, because nothing newer was released.
+
+**Release candidate:** `ec1f4565` on `claude/brain-v5-session-f-integration-gmupqr`.
+- It is a fast-forward of `production` (`d028e4c1`).
+- Typecheck is clean, and 1,350 impacted tests passed locally.
+- Postgres evidence is run 38575239034 (see §4.10).
+
+**Pressure:**
+- The live process went back to `SHEDDING` at 12:16:49Z and was still shedding at 14:11Z.
+- At 14:11Z it read p90 876 ms with 2 failures in 120 s. Failures since 06:14Z: CONNECTION_LOST 57, POOL_CHECKOUT_TIMEOUT 28, STATEMENT_TIMEOUT 7.
+- Under the old rule a trickle of CONNECTION_LOST keeps it shedding. `d028e4c1` is the fix, and it is not live.
+- Workers feel it directly: check-in p95 34 s, `/oauth/token` p50 10 s, authenticate p95 15 s.
+- The two costliest statements by call count are fixed in the candidate:
+  - `fleet_policy`: 83,646 calls (fixed in `c215e830`);
+  - `cash_card_facts` by field: 83,891 calls (fixed in `d028e4c1`).
+- The `factory_campaigns` lease UPDATE spent 3,589 s and the `identity_events` OAUTH LIKE probe 3,791 s. Neither is changed by the candidate.
+
+**The 35.8 s event-loop stall (06:24:42Z):**
+- It is still the worst on that process and has not recurred. In the last 60 s the loop's max delay was 32 ms.
+- Its cause is **not established**. It coincided with shedding beginning, and nothing recorded what ran on the loop at that instant.
+- Unresolved.
+
+**Airyn 2-A is a different case from 2-B/C/D:**
+- Its misses were 5 ordinary no-shows plus 2 infrastructure misses. None was a wrong-worker arrival.
+- It is now `ENABLED` with 191 arrivals, all as the registered `wkr_9826…`. Brain's own recovery lifted the quarantine, and nobody needs to act.
+- 2-B, 2-C and 2-D remain `MIXED_WORKERS`: the Routine holds both of Airyn's connectors. 2-C arrived wrongly again at 03:38:56Z. This needs the account owner (§5 item 3).
+
+**Caleb 3-A to 3-D are all quarantined for no-shows:**
+- 3-A and 3-D are `RECOVERING`, with Brain probing them by itself.
+- 3-B and 3-C are `RECOVERY_EXHAUSTED` (the last probe read NO_MCP). They need the account owner.
+
+**Research:**
+- 9 packets completed today and 18 on 10-13.
+- Over the last 7 days, 89 of 901 fragments were accepted.
+- 1,336 of 1,906 claims were accepted, 944 of them inside blocked fragments.
+- 404 blocked fragments carry no classified reason.
+
+**Cash:**
+- Portfolio: 198 entries.
+  - 156 `SIGNAL`
+  - 41 `CANDIDATE`
+  - 1 `READY_TO_TEST`
+  - 0 qualified-and-executing
+- Ledger entries: 0. Invoices: 0. Commercial grant: absent. Messaging and billing providers: missing.
+- **No commercial deliverable exists.** Growing idea and opportunity counts are not outcomes.
+- The cash report's last section ("SOURCE ACCESS BLOCKS") hit a statement timeout. That is the shedding above.
+
+**Factory:**
+- #193 is still open and unmerged (clean, head `1d690f8`).
+- FAC-2 and INF-6d wait on it at local `c33806c2`.
+- The five `UNIT_EXHAUSTED_ATTEMPTS` campaigns are not re-examined until FAC-2 is live, because without it they would spend attempts again.
+
 ## 5. Owner and provider actions (consolidated)
 
+0. **Fast-forward `production` to `ec1f4565`** (`git push origin ec1f4565:production`), then dispatch Deploy. Sessions are forbidden from pushing `production`.
 1. **Merge #193** at `1d690f8`, or reply on it authorizing Session F to merge. Unblocks FAC-1, FAC-2, INF-6d.
 2. **GitHub → Settings → Actions → General → Workflow permissions:** allow Actions to create and approve pull requests (FAC-3, rollback).
 3. **Airyn (CON-4):** in Claude, on Routines Airyn 2-B, 2-C and 2-D, remove the Brain connector at `/mcp` (it authorizes as the Factory worker `wkr_f8e118…`); keep the one at `/mcp/factory` (`wkr_9826…`).
-4. **Caleb (CON-9):** Factory surface 3 (`trig_01EhddNqYaQGC49fF9NVBcnT`) — confirm its Brain connector is attached in Claude.
+4. **Caleb:** in Claude, check that Routines Caleb 3-B and 3-C still run and have their Brain connector attached; then `connectors probe <trig>`. 3-A and 3-D are being re-probed by Brain. **CON-9:** Factory surface 3 (`trig_01EhddNqYaQGC49fF9NVBcnT`) — confirm its Brain connector is attached in Claude.
 5. **Supabase dashboard (INF-1):** read CPU, disk-IO budget and pooler connections beside the next connection report. Resizing is spending and is only justified by that reading.
 6. **Optional:** `BRAIN_DATABASE_URL` as an Actions secret for the deploy pre-flight (INF-9).
 7. **Revenue (RES-11):** commercial grant for Cash Mode 1; Resend and Stripe secrets (sandbox first). Without them the commercial journey cannot be claimed operational.
