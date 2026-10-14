@@ -11,7 +11,8 @@ import { deliveryReadings } from '../../repos/deliveryProofs.ts';
 import { getDb, outsideTransaction } from '../../db/database.ts';
 import { asWorkload } from '../../db/infra.ts';
 import {
-  currentPolicy,
+  currentPolicies,
+  policyKey,
   effectiveTarget,
   listAccounts,
   listRoutines,
@@ -218,13 +219,14 @@ export function forgetSharedFleetSnapshot(): void {
  */
 export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
   const nowIso = now.toISOString();
-  const [accounts, routines, fleetPolicy, perRoutine, allowanceReports] = await Promise.all([
+  const [accounts, routines, policies, perRoutine, allowanceReports] = await Promise.all([
     listAccounts(),
     listRoutines(),
-    currentPolicy('FLEET', null),
+    currentPolicies(),
     inFlightByRoutine(now.getTime()),
     latestAllowanceReports(),
   ]);
+  const fleetPolicy = policies.get(policyKey('FLEET', null)) ?? null;
   const readingsByRoutine = await deliveryReadings();
   // Read defensively: a failure here is an unknown, which routes as it always did.
   const healthByRoutine = await connectorHealthByRoutine(now.getTime()).catch(
@@ -263,10 +265,8 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
       missingSecrets.push({ routineId: routine.id, secretName: routine.tokenSecretName });
       continue;
     }
-    const [routinePolicy, accountPolicy] = await Promise.all([
-      currentPolicy('ROUTINE', routine.id),
-      currentPolicy('ACCOUNT', account.id),
-    ]);
+    const routinePolicy = policies.get(policyKey('ROUTINE', routine.id)) ?? null;
+    const accountPolicy = policies.get(policyKey('ACCOUNT', account.id)) ?? null;
     candidates.push({
       routine,
       account,
