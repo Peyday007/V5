@@ -219,10 +219,95 @@ All three reads completed: `CONNECTION-REPORT: OK`, `CASH-REPORT: OK`, `PACKET-R
 
 **One new defect, in `orc_c576…`.** The packet is `CANCELLED`, yet its bin `bin_2b9d…` sits at `NEEDS_HUMAN`, telling a person to decide about a packet that is already over. Its fragment also still reads `QUEUED`. That is an escalation nobody can answer (§24). It dates from 2026-10-07. Next action: when its packet is terminal, a parked bin should be reconciled to terminal.
 
-### 4.7 Still to read
+### 4.7 Database stabilization and the overnight run (2026-10-14)
 
-- The hosted verification for `2bb5879`, by a Deploy taken in healthy time.
+**Release.** Deploy 460 released `d5fce97` (database pressure, the token-history
+cache, the per-card read, and the extended connection report): `release: success`.
+The hosted verification passed **261/261** before the restart. After the restart
+it scored 278/280; the two failures were the scenario engine's 50 000-evaluation
+run, which took **30.5 s against its 20 s budget** (945 ms before the restart),
+and the reproduction check that depends on it.
+
+That slowdown is the machine, not the scenario code:
+- On the same image, the first process's event loop was healthy (p99 24 ms) for
+  five minutes.
+- The second process stalled for 35.8 s at 06:24Z, ten minutes after the
+  harness had run its whole suite inside the same `shared-cpu-1x` machine.
+- A 32× slowdown matches a shared Fly CPU throttled to its baseline (about a
+  sixteenth of a core) once its burst budget is spent.
+- The previous three deploys measured the same check at 800–940 ms after
+  their restarts.
+
+It is recorded as unresolved, not fixed: the remedy is either a bigger machine
+(spending, so the owner's call) or a harness that does not run inside the
+machine it is measuring.
+
+**Before and after.** The "before" reading is `2bb5879`, healthy, over 9.7 hours.
+The "after" readings are `d5fce97`.
+
+| Reading | Before | After |
+|---|---|---|
+| `cash_card_facts` single-field reads | 360 198 in 9.7 h (~620/min) | 8 066 in 33 min (~245/min, −60%) |
+| connector token-history `LIKE` reads | 5 892 in 9.7 h, mean 118 ms | absent from the new process's top statements |
+| authenticate p95 | 91 ms | 800 ms during the post-restart stall; to be re-read |
+| event loop p99 | 67 ms | 401 ms 30 min after restart (worst 35.8 s at 06:24Z) |
+
+**What the new database sections established.**
+- **Write volume.** 10.3 GB of WAL since 2026-10-05.
+- **The largest writer was Brain's own bookkeeping:** `UPDATE monetization_paths
+  SET last_evaluated_at` wrote about **2.5 GB** across 6.4 M updates of 3 695
+  rows, restamping every path on every pass. Fixed overnight: the stamp now rewrites only when older than an hour.
+- **Other large writers:** `russell_frontier` 828 MB, `bin_events` inserts
+  1.26 GB, and factory campaign lease claim, release and state updates about
+  470 MB.
+- **The frontier stamp is not throttled.** It decides what counts as resolved,
+  so changing it is a design change, not a tuning.
+- **The database itself:** cache hit 99.93%, `max_connections` 60,
+  `shared_buffers` 280 MB, `synchronous_commit` on, 32 GB of temp files.
+
+**A defect in my own change, found by the reading and fixed.** SHEDDING began at
+the 06:24Z stall and did not leave, although statements had recovered (p90
+68 ms). The leave rule required *zero* failures, and a steady few lost
+connections per two minutes kept that false. So discovery and the kernels were
+deferred from 06:24Z until the fix was released. The fix: only timeout and
+unavailable kinds count as overload, fewer than the entry count no longer
+blocks recovery, and the reading now prints every failure kind it felt.
+
+**Fixes committed overnight** (all on `production`, released together after
+Deploy 460):
+- `reconcileBins` closes a parked research bin whose packet is CANCELLED
+  (`bin_2b9d…`, which had been re-asked on every tick since 2026-10-07).
+- Gate outcomes name the 391 "UNCLASSIFIED" blocks: `SOURCE_ACCESS` (the reason
+  names DNS, a proxy or a host refusal), or `NO_GATE_VERDICT` (a worker's own
+  blocker). `UNCLASSIFIED` is kept for a gate verdict no rule fits.
+- The cash report dates every stopped-packet reason and lists reasonless
+  packets with their last update (RES-9).
+- Campaign tick heartbeats are single-flight. The one-row lease `UPDATE`
+  averaged 11.5 s (152 s worst) against a 15 s interval, so beats stacked up,
+  each holding a pooled connection.
+- The pressure leave rule above, and the monetization evaluation stamp.
+
+**Is Brain doing useful work?** Yes. Over the eight hours to 06:29Z:
+- **Ideas:** 589 → 612.
+- **Missions:** 535 → 587.
+- **Work items succeeded:** 1 157 → 1 258.
+- **Opportunities:** 173 → 190, of which 19 closed.
+- **Research fragments accepted:** 83 this week against 67 in the previous
+  reading's window.
+
+**Not changed, on purpose.** Pool churn (INF-3): about 6 new connections a
+minute costs the server roughly 0.6 s a minute (`get_auth` 30 ms plus
+`DISCARD ALL` 68 ms), so it is not worth a change. `fleet_policy` per-routine
+reads (~230 a minute) are cheap per call; they are a candidate, not a measured
+problem.
+
+### 4.8 Still to read
+
+- After the next release: whether pressure reads NORMAL in healthy time, the
+  failure kinds it reports, the monetization WAL rate, and gate outcomes under
+  the new categories.
 - The kernel reports (labor, puzzle, goals, manufacturing, design, capability).
+
 ## 5. Owner and provider actions (consolidated)
 
 1. **Merge #193** at `1d690f8`, or reply on it authorizing Session F to merge. Unblocks FAC-1, FAC-2, INF-6d.
