@@ -1971,6 +1971,83 @@ describe('a unit out of attempts stops the campaign before any review', () => {
   });
 
   /*
+   * Production, fcp_f359799f4b4748cd9641: two units at 3/3 FAILED and two units
+   * BLOCKED behind them read EXECUTING, "units in flight", for two weeks,
+   * because a unit waiting on a dependency counted as in flight and the check
+   * that names the failed unit was never reached.
+   */
+  it('blocks when the only outstanding units wait on the one that failed', async () => {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'exhausted-with-dependent',
+      objective: 'Something whose first unit runs out of attempts and whose second waits on it.',
+      expectedOutcome: 'A person sees why it stopped instead of a campaign in flight for ever.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    const unit = (key: string, state: 'FAILED' | 'BLOCKED', dependsOn: string[] = []) =>
+      ensureUnit({
+        campaignId: campaign.id,
+        unitKey: key,
+        kind: 'IMPLEMENTATION',
+        role: 'IMPLEMENTER',
+        title: key,
+        objective: 'Do one bounded thing.',
+        acceptance: ['it is done'],
+        ownedPaths: [`${key}.html`],
+        requiredContext: [],
+        verification: [],
+        expectedArtifact: 'a change',
+        risk: 'LOW',
+        criticalPath: true,
+        priority: 5,
+        modelClass: 'FAST',
+        dependsOn,
+        state,
+      });
+    const first = await unit('first', 'FAILED');
+    await unit('second', 'BLOCKED', ['first']);
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run(
+      `UPDATE factory_work_units SET failure_category = ?, failure_detail = ? WHERE id = ?`,
+      ['VERIFICATION_FAILED', 'a test outside the unit\'s paths still asserts the old shape', first.unit.id],
+    );
+
+    stubForge({});
+    await tickRemoteCampaign(campaign.id);
+    const after = await getCampaign(campaign.id);
+    expect(after?.state).toBe('BLOCKED');
+    expect(after?.blockerKind).toBe('UNIT_EXHAUSTED_ATTEMPTS');
+    expect(after?.blockerDetail).toContain('old shape');
+  });
+
+  /*
    * The answering transition, which did not exist: the blocker's remedy said
    * "raise its ceiling or replan the work" and nothing could raise a unit's
    * ceiling or move a FAILED unit back out, so the only way past was retiring
@@ -2681,6 +2758,77 @@ describe('an integration blocked before the work was judged costs the work nothi
     const later = await getUnitByKey(campaignId, 'only-unit');
     expect(later?.state).toBe('READY');
     expect(later?.attempt).toBe(after?.attempt);
+  });
+
+  /*
+   * FAC-2, production fcp_f359799f…: integration failed on a pre-existing test
+   * no unit owned, and every unit went back with the same scope to fail the same
+   * way until its attempts were gone. The first failure is charged as before;
+   * the second identical one on an unchanged scope is not, and the campaign
+   * stops naming the two answers until one of them is recorded.
+   */
+  it('stops, uncharged, when integration fails identically twice on an unchanged scope', async () => {
+    const { getUnitByKey, getCampaign, recordAmendment } = await import('../server/repos/factory.ts');
+    const failing = {
+      outcome: 'BLOCKED',
+      integrationBranch: 'factory/campaign/only',
+      merged: [],
+      conflicts: [],
+      commands: [{ command: 'npm test', exitCode: 1 }],
+      summary: 'the suite failed on the merged tree',
+      blockedReason: '`npm test` exited 1 in tests/owned-by-nobody.test.ts.',
+    };
+    await integrateReporting(failing);
+    const first = await getUnitByKey(campaignId, 'only-unit');
+    expect(first?.state).toBe('READY');
+
+    await implementOneUnit();
+    expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('IMPLEMENTED');
+    await integrateReporting(failing);
+
+    const second = await getUnitByKey(campaignId, 'only-unit');
+    expect(second?.state).toBe('READY');
+    expect(second?.attempt).toBe(first?.attempt);
+    const stopped = (await getCampaign(campaignId))!;
+    expect(stopped.state).toBe('BLOCKED');
+    expect(stopped.blockerKind).toBe('SCOPE_AMENDMENT_REQUIRED');
+    expect(stopped.blockerDetail).toContain('amend mutation_scope');
+
+    // Nothing is handed out while nobody has answered.
+    for (let i = 0; i < 2; i += 1) {
+      const tick = await tickRemoteCampaign(campaignId);
+      expect(tick.state).toBe('BLOCKED');
+      expect(tick.created).toEqual([]);
+    }
+    expect((await getUnitByKey(campaignId, 'only-unit'))?.attempt).toBe(first?.attempt);
+
+    // INF-6d: the scheduled pass ticks a campaign stopped on a person once, then
+    // leaves it alone while none of its rows move.
+    const { tickAllRemoteCampaigns } = await import('../server/services/factory/remoteLoop.ts');
+    const mine = async () =>
+      (await tickAllRemoteCampaigns()).filter((one) => one.campaignId === campaignId).length;
+    expect(await mine()).toBe(1);
+    expect(await mine()).toBe(0);
+
+    // A person widens the scope: the next tick works against it.
+    await recordAmendment({
+      changeRequestId: stopped.changeRequestId,
+      campaignId,
+      field: 'mutation_scope',
+      oldValue: '["**"]',
+      newValue: '["**","tests/owned-by-nobody.test.ts"]',
+      reason: 'the failing test belongs to this change',
+      actorType: 'PERSON',
+      actorId: approverId,
+      affectedWork: ['only-unit'],
+      requiresReverification: true,
+    });
+    // The amendment moved the watermark, so the scheduled pass looks again.
+    const resumedAll = (await tickAllRemoteCampaigns()).find((one) => one.campaignId === campaignId);
+    expect(resumedAll).toBeTruthy();
+    const resumed = resumedAll!;
+    expect(resumed.state).not.toBe('BLOCKED');
+    expect(resumed.created.some((entry) => entry.startsWith('units:'))).toBe(true);
   });
 
   /*
