@@ -301,19 +301,101 @@ minute costs the server roughly 0.6 s a minute (`get_auth` 30 ms plus
 reads (~230 a minute) are cheap per call; they are a candidate, not a measured
 problem.
 
-### 4.8 Still to read
+### 4.8 Deploy 461 and the morning reading (2026-10-14)
 
-- After the next release: whether pressure reads NORMAL in healthy time, the
-  failure kinds it reports, the monetization WAL rate, and gate outcomes under
-  the new categories.
-- The kernel reports (labor, puzzle, goals, manufacturing, design, capability).
+- **Deploy 461 (`d028e4c1`) did not release.** Its test job failed on
+  `campaignTickHeartbeat`: the guard expected `void extendCampaignTick` to open
+  the timer callback, and the overnight single-flight beat put
+  `if (beating) return; beating = true;` first. That same prelude hid both
+  heartbeats from the companion check that every timer promise carries a catch.
+  Fixed on the branch (`fa550912`): both patterns accept the prelude, and the
+  catch check reads to the end of the callback. Verified by removing a
+  heartbeat's `.catch`; the guard names `loop.ts`.
+- **The Postgres suite on `d028e4c1` also failed `signInIdentity`.** This is a
+  false finding: the PIN `232323` occurs inside the random event id
+  `iev_40a2323237974656b146`. Minted ids are now blanked before the secret
+  search. A PIN placed in a recorded value is still caught (checked).
+- **`fleet_policy` reads (~230/min)** are now one read per dispatch snapshot
+  (`c215e830`). The impacted tests passed on SQLite and Postgres (1,334/1,334).
+- **The release is blocked on a person.** `.claude/settings.json` forbids a
+  session from pushing `production`, and this run did not route around that.
+  The branch is a fast-forward of `production`, and `production` itself fails
+  the test gate until it takes `fa550912`.
+- **Pressure on the live process (`d5fce97`, the connection report at
+  ~08:40Z):** it shed from 06:24Z and recovered at **08:25:46Z** under the old
+  rule ("no failure for 5 minutes"). It now reads NORMAL: p90 19 ms over 2,000
+  statements, 0 overload failures. The worst event-loop stall since start was
+  **35.8 s at 06:24:42Z**, the same instant shedding began, so that stall was
+  this process's own loop rather than the database. The fix that keeps a few
+  CONNECTION_LOST from holding shedding (`OVERLOAD_KINDS`) is in `d028e4c1` and
+  is not yet live.
+- **Not read this run:** the kernel reports, the monetization WAL rate after
+  the throttle, and gate outcomes under the new categories. All of these need
+  the next release to be live to mean anything.
+
+### 4.9 Afternoon reading (2026-10-14, ~14:10Z, still `d5fce97`)
+
+Readings: connection report run 38576716627 (rerun after a Fly DNS failure on
+the runner) and cash report run 38576721902. Both read the process serving
+`d5fce97`, because nothing newer was released.
+
+**Release candidate:** `ec1f4565` on `claude/brain-v5-session-f-integration-gmupqr`.
+- It is a fast-forward of `production` (`d028e4c1`).
+- Typecheck is clean, and 1,350 impacted tests passed locally.
+- Postgres run 38575239034 on `ec1f4565` failed 1 of 5,833: `releaseMachinery` › *a newer tip makes it superseded*. The test inherited the feature branch's `GITHUB_REF_NAME`, so the canonical guard refused the ref before reporting supersession. It passes on `production`, where the variable names the canonical branch. The test now pins the ref, and was reproduced and fixed locally under both names. The evidence script is unchanged. A fresh Postgres run is required on the new tip.
+
+**Pressure:**
+- The live process went back to `SHEDDING` at 12:16:49Z and was still shedding at 14:11Z.
+- At 14:11Z it read p90 876 ms with 2 failures in 120 s. Failures since 06:14Z: CONNECTION_LOST 57, POOL_CHECKOUT_TIMEOUT 28, STATEMENT_TIMEOUT 7.
+- Under the old rule a trickle of CONNECTION_LOST keeps it shedding. `d028e4c1` is the fix, and it is not live.
+- Workers feel it directly: check-in p95 34 s, `/oauth/token` p50 10 s, authenticate p95 15 s.
+- The two costliest statements by call count are fixed in the candidate:
+  - `fleet_policy`: 83,646 calls (fixed in `c215e830`);
+  - `cash_card_facts` by field: 83,891 calls (fixed in `d028e4c1`).
+- The `factory_campaigns` lease UPDATE spent 3,589 s and the `identity_events` OAUTH LIKE probe 3,791 s. Neither is changed by the candidate.
+
+**The 35.8 s event-loop stall (06:24:42Z):**
+- It is still the worst on that process and has not recurred. In the last 60 s the loop's max delay was 32 ms.
+- Its cause is **not established**. It coincided with shedding beginning, and nothing recorded what ran on the loop at that instant.
+- Unresolved.
+
+**Airyn 2-A is a different case from 2-B/C/D:**
+- Its misses were 5 ordinary no-shows plus 2 infrastructure misses. None was a wrong-worker arrival.
+- It is now `ENABLED` with 191 arrivals, all as the registered `wkr_9826…`. Brain's own recovery lifted the quarantine, and nobody needs to act.
+- 2-B, 2-C and 2-D remain `MIXED_WORKERS`: the Routine holds both of Airyn's connectors. 2-C arrived wrongly again at 03:38:56Z. This needs the account owner (§5 item 3).
+
+**Caleb 3-A to 3-D are all quarantined for no-shows:**
+- 3-A and 3-D are `RECOVERING`, with Brain probing them by itself.
+- 3-B and 3-C are `RECOVERY_EXHAUSTED` (the last probe read NO_MCP). They need the account owner.
+
+**Research:**
+- 9 packets completed today and 18 on 10-13.
+- Over the last 7 days, 89 of 901 fragments were accepted.
+- 1,336 of 1,906 claims were accepted, 944 of them inside blocked fragments.
+- 404 blocked fragments carry no classified reason.
+
+**Cash:**
+- Portfolio: 198 entries.
+  - 156 `SIGNAL`
+  - 41 `CANDIDATE`
+  - 1 `READY_TO_TEST`
+  - 0 qualified-and-executing
+- Ledger entries: 0. Invoices: 0. Commercial grant: absent. Messaging and billing providers: missing.
+- **No commercial deliverable exists.** Growing idea and opportunity counts are not outcomes.
+- The cash report's last section ("SOURCE ACCESS BLOCKS") hit a statement timeout. That is the shedding above.
+
+**Factory:**
+- #193 is still open and unmerged (clean, head `1d690f8`).
+- FAC-2 and INF-6d wait on it at local `c33806c2`.
+- The five `UNIT_EXHAUSTED_ATTEMPTS` campaigns are not re-examined until FAC-2 is live, because without it they would spend attempts again.
 
 ## 5. Owner and provider actions (consolidated)
 
+0. **Fast-forward `production` to the tip of `claude/brain-v5-session-f-integration-gmupqr`** (`git push origin claude/brain-v5-session-f-integration-gmupqr:production`) once its Postgres suite run is green, then dispatch Deploy. Sessions are forbidden from pushing `production`.
 1. **Merge #193** at `1d690f8`, or reply on it authorizing Session F to merge. Unblocks FAC-1, FAC-2, INF-6d.
 2. **GitHub → Settings → Actions → General → Workflow permissions:** allow Actions to create and approve pull requests (FAC-3, rollback).
 3. **Airyn (CON-4):** in Claude, on Routines Airyn 2-B, 2-C and 2-D, remove the Brain connector at `/mcp` (it authorizes as the Factory worker `wkr_f8e118…`); keep the one at `/mcp/factory` (`wkr_9826…`).
-4. **Caleb (CON-9):** Factory surface 3 (`trig_01EhddNqYaQGC49fF9NVBcnT`) — confirm its Brain connector is attached in Claude.
+4. **Caleb:** in Claude, check that Routines Caleb 3-B and 3-C still run and have their Brain connector attached; then `connectors probe <trig>`. 3-A and 3-D are being re-probed by Brain. **CON-9:** Factory surface 3 (`trig_01EhddNqYaQGC49fF9NVBcnT`) — confirm its Brain connector is attached in Claude.
 5. **Supabase dashboard (INF-1):** read CPU, disk-IO budget and pooler connections beside the next connection report. Resizing is spending and is only justified by that reading.
 6. **Optional:** `BRAIN_DATABASE_URL` as an Actions secret for the deploy pre-flight (INF-9).
 7. **Revenue (RES-11):** commercial grant for Cash Mode 1; Resend and Stripe secrets (sandbox first). Without them the commercial journey cannot be claimed operational.

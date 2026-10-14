@@ -930,6 +930,28 @@ export async function currentPolicy(
   return await getPolicyRow(scope, scopeId);
 }
 
+/**
+ * Every scope's policy in force, from one read, keyed `SCOPE:id` (`FLEET:` for
+ * the fleet). For a reader that would otherwise ask `currentPolicy` once per
+ * Routine and account: the dispatch snapshot did, twice per Routine on every
+ * ten-second tick (production: ~230 reads a minute). Policy rows are written
+ * only by an operator, so the table is small and the answer is the same rows.
+ */
+export async function currentPolicies(): Promise<Map<string, FleetPolicy>> {
+  const rows = await getDb().all<FleetPolicyRow>('SELECT * FROM fleet_policy');
+  const out = new Map<string, FleetPolicy>();
+  for (const row of rows) {
+    const key = policyKey(row.scope as PolicyScope, row.scope_id);
+    const held = out.get(key);
+    if (!held || row.version > held.version) out.set(key, mapPolicy(row));
+  }
+  return out;
+}
+
+export function policyKey(scope: PolicyScope, scopeId: string | null): string {
+  return `${scope}:${scopeId ?? ''}`;
+}
+
 export async function policyHistory(
   scope: PolicyScope,
   scopeId: string | null = null,

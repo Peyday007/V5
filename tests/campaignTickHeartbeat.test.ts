@@ -18,6 +18,9 @@ function files(dir: string): string[] {
   });
 }
 
+// A single-flight beat (`if (beating) return; beating = true;`) may come first:
+// it stops beats piling up behind a slow database, and the catch check below
+// must still reach the promise after it.
 describe('a promise fired from a timer', () => {
   const sources = files('server').map((path) => ({ path, source: readFileSync(path, 'utf8') }));
 
@@ -27,13 +30,13 @@ describe('a promise fired from a timer', () => {
 
   it('includes the heartbeats deploy 344 lost', () => {
     const remote = sources.find((s) => s.path.endsWith('factory/remoteLoop.ts'))!;
-    expect(remote.source).toMatch(/setInterval\(\(\) => \{\s*void extendCampaignTick/);
+    expect(remote.source).toMatch(/setInterval\(\(\) => \{\s*(?:if \(\w+\) return;\s*\w+ = true;\s*)?void extendCampaignTick/);
   });
 
   it('always carries its own catch', () => {
     const bare: string[] = [];
     for (const { path, source } of sources) {
-      for (const m of source.matchAll(/setInterval\(\(\) => \{\s*void ([^;]*);/g)) {
+      for (const m of source.matchAll(/setInterval\(\(\) => \{\s*(?:if \(\w+\) return;\s*\w+ = true;\s*)?void ([\s\S]*?)\n\s*\},\s*[\w.]+\)/g)) {
         if (!m[1]!.includes('.catch(')) bare.push(`${path}: void ${m[1]!.slice(0, 60)}`);
       }
     }
