@@ -73,6 +73,11 @@ interface ProbeHistory {
   outages: number;
   /** Whether the newest probe was one of those. */
   lastWasOutage: boolean;
+  /**
+   * Whether the newest probe proved the right worker on a Routine whose mixed
+   * history still needs more right sessions in a row. Progress, not failure.
+   */
+  lastWasProgress: boolean;
   lastAt: string | null;
   lastNextAction: string | null;
   lastState: string | null;
@@ -106,6 +111,7 @@ async function historyFor(routine: FleetRoutine): Promise<ProbeHistory> {
   let lastNextAction: string | null = null;
   let lastState: string | null = null;
   let lastWasOutage = false;
+  let lastWasProgress = false;
   /*
    * Oldest first, so the allowance is spent by the earliest outages of the
    * episode and a later one past it counts — the order the budget was spent in.
@@ -134,6 +140,19 @@ async function historyFor(routine: FleetRoutine): Promise<ProbeHistory> {
       outages += 1;
       continue;
     }
+    /*
+     * A probe that proved the registered worker, on a Routine whose mixed
+     * history needs CONSISTENT_RIGHT_SESSIONS in a row before it lifts, is
+     * progress toward the lift and is not counted. It used to be: production
+     * Airyn 2-B, 2026-10-15, after the account owner corrected the connector,
+     * needed three right sessions, and each one spent the four-probe budget
+     * and stretched the backoff (15m, 1h, 4h, 12h) — sixteen hours to a lift
+     * that one more transient miss would have turned into "needs a person".
+     * Still bounded: every wrong-worker, NO_MCP or refused probe counts, and
+     * at most CONSISTENT_RIGHT_SESSIONS - 1 right ones can stand between two
+     * of them, so an episode is at most about 4 × 3 + 3 probes.
+     */
+    if (row.state === 'HEALTHY' && (row.outcome ?? '').includes(MIXED_ARRIVALS_MARK)) continue;
     failed += 1;
   }
   const newest = episode[0];
@@ -142,8 +161,9 @@ async function historyFor(routine: FleetRoutine): Promise<ProbeHistory> {
     lastNextAction = newest.next_action;
     lastState = newest.state;
     lastWasOutage = probeAmbiguousByOutage(newest);
+    lastWasProgress = newest.state === 'HEALTHY' && (newest.outcome ?? '').includes(MIXED_ARRIVALS_MARK);
   }
-  return { failed, outages, lastWasOutage, lastAt, lastNextAction, lastState };
+  return { failed, outages, lastWasOutage, lastWasProgress, lastAt, lastNextAction, lastState };
 }
 
 /** May Brain probe this Routine by itself, and when? Null when never. */
@@ -155,7 +175,11 @@ async function dueAt(routine: FleetRoutine): Promise<{ at: number; history: Prob
   const history = await historyFor(routine);
   if (history.failed >= AUTO_PROBE_LIMIT) return null;
   const base = history.lastAt ?? routine.updatedAt;
-  const wait = AUTO_PROBE_BACKOFF_MS[Math.min(history.failed, AUTO_PROBE_BACKOFF_MS.length - 1)]!;
+  // After progress, the next right session is asked for soon: waiting longer
+  // would only delay a lift the evidence is already moving toward.
+  const wait = history.lastWasProgress
+    ? AUTO_PROBE_BACKOFF_MS[0]!
+    : AUTO_PROBE_BACKOFF_MS[Math.min(history.failed, AUTO_PROBE_BACKOFF_MS.length - 1)]!;
   return { at: Date.parse(base) + wait, history };
 }
 

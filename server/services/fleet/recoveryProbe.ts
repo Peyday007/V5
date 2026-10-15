@@ -479,9 +479,11 @@ export async function settleRecoveryProbeNow(probe: RecoveryProbe, now = Date.no
          * Routine's ordinary sessions have been arriving as both workers
          * (CON-3): lifting here was the 2-C oscillation — lift, a wrong arrival,
          * quarantine, a probe that happened to choose the right connector, lift.
-         * The quarantine stays, says so, and this probe is counted against the
-         * automatic budget (`MIXED_ARRIVALS_MARK`), so a Routine that keeps
-         * choosing both reaches a person rather than being probed for ever.
+         * The quarantine stays and says so (`MIXED_ARRIVALS_MARK`). This probe
+         * is progress toward the lift and is not counted against the automatic
+         * budget (autoRecovery.ts); every probe that arrives wrong or not at all
+         * still is, so a Routine that keeps choosing both reaches a person
+         * rather than being probed for ever.
          */
         lifted = `${MIXED_ARRIVALS_MARK}. ${mixed.sentence}`;
         if (!(current.stateReason ?? '').includes(MIXED_ARRIVALS_REASON_MARK)) {
