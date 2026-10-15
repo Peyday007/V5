@@ -36,6 +36,7 @@ import { idOf, looksModern, validateModernRequest } from './validate.ts';
 import { answerEscapedFailure } from '../routes/escape.ts';
 import { CREDENTIAL_NOT_CHECKED, prepareUnavailable } from '../routes/unavailable.ts';
 import { classifyInfraFailure, noteInfraFailure, noteLatency, SLOW_ARRIVAL_MS } from '../db/infra.ts';
+import { noteCredentiallessRequest } from '../services/infra/incidents.ts';
 
 const INFRA_BUSY =
   'Brain is temporarily busy (its database did not answer in time). This is not an authorization problem: send the same request again shortly.';
@@ -435,6 +436,7 @@ export function mcpRouter(): Router {
 
       if (!auth.ok) {
         if (auth.reason !== 'NO_CREDENTIALS') await auditRefusal(req, auth.reason);
+        else noteCredentiallessRequest(pathOf(req), req.header('user-agent'));
         /**
          * The discovery pointer, which Step 7 deliberately did not emit.
          *

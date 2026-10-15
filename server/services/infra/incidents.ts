@@ -407,6 +407,55 @@ export async function touchLiveness(force = false): Promise<void> {
   });
 }
 
+/*
+ * Requests that reached the MCP door with no credential at all.
+ *
+ * They are deliberately not audited row by row (mcp/endpoint.ts: a scanner
+ * would bury the rows worth reading), and that left a recovery probe unable to
+ * tell "the Routine never called Brain" from "it called, and Claude's connector
+ * sent no token" — production Airyn 2-B, 2026-10-15, two NO_MCP probes with no
+ * way to say which. So each process keeps a bounded tally by endpoint and client
+ * family, and the newest few instants, in its readings. No header value beyond
+ * the user agent's first word is kept, and nothing is written per request.
+ */
+const CREDENTIALLESS_KEYS = 24;
+const CREDENTIALLESS_RECENT = 40;
+const credentialless = new Map<string, { count: number; first: string; last: string }>();
+const credentiallessRecent: Array<{ at: string; key: string }> = [];
+
+/** The first word of a user agent, lower-cased and bounded: a client family, never a fingerprint. */
+export function clientFamily(userAgent: string | null | undefined): string {
+  const word = (userAgent ?? '').trim().split(/[\s/;(]/)[0] ?? '';
+  return (word.toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 32)) || 'none';
+}
+
+export function noteCredentiallessRequest(path: string, userAgent: string | null | undefined, at = new Date()): void {
+  const key = `${path.slice(0, 40)} ${clientFamily(userAgent)}`;
+  const iso = at.toISOString();
+  const seen = credentialless.get(key);
+  if (seen) {
+    seen.count += 1;
+    seen.last = iso;
+  } else if (credentialless.size < CREDENTIALLESS_KEYS) {
+    credentialless.set(key, { count: 1, first: iso, last: iso });
+  }
+  credentiallessRecent.push({ at: iso, key });
+  if (credentiallessRecent.length > CREDENTIALLESS_RECENT) credentiallessRecent.shift();
+}
+
+/** Tests. */
+export function resetCredentiallessRequests(): void {
+  credentialless.clear();
+  credentiallessRecent.length = 0;
+}
+
+export function credentiallessReading(): { byClient: Array<{ key: string; count: number; first: string; last: string }>; recent: Array<{ at: string; key: string }> } {
+  return {
+    byClient: [...credentialless.entries()].map(([key, v]) => ({ key, ...v })).sort((a, b) => b.count - a.count),
+    recent: [...credentiallessRecent],
+  };
+}
+
 /** What this process can say about its own connection system, right now. */
 export function processReadings(): Record<string, unknown> {
   return {
@@ -428,6 +477,7 @@ export function processReadings(): Record<string, unknown> {
     // answering well enough (`db/pressure.ts`), and why.
     pressure: databasePressure(),
     pendingIncidentWrites: pending.size,
+    credentialless: credentiallessReading(),
   };
 }
 
