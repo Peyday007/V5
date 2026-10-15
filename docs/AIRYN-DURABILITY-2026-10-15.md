@@ -146,3 +146,31 @@ recovery is exhausted.
 
 One-shot readings are scheduled for 2026-10-16, 10-17 and 10-18 at 17:50Z.
 Their results will be appended here. None of them has happened yet.
+
+## 5. After the fixes were released (21:33Z, revision `1c61b18`)
+
+`1c61b18` was released at about 21:25Z. It contains #204, #206, #207 (connector
+handshake answered from a recent proof, slow answers recorded as Brain's
+incident) and #208 (calls that arrive without a token are counted). The first
+reading on that revision:
+
+- Two new processes, both `pressure NORMAL`, with no infrastructure failures
+  felt and no requests without a token since they started. The last process on
+  the old revision `15c8381` had recorded authenticate at p95 15.2 s (max
+  40.6 s) and token refresh at p95 39.2 s (max 52.6 s), with 29 control-plane
+  connections lost. Those are the numbers #207 targets.
+- Even so, slow statements are still present at boot: a 40 s scan of
+  `research_orchestrations` and a 50 s `design_surfaces` update. The database
+  is still slow at times. #207 means a connector handshake no longer waits on
+  it.
+- 2-A is ENABLED. 2-B, 2-C and 2-D are QUARANTINED for mixed workers, judged
+  from their seven-day history. The newest wrong-worker arrivals were on 10-12
+  (2-B, 2-D) and 10-13 22:20Z (2-C). Each needs 3 right sessions in a row to
+  lift: 2-B and 2-D have 1, and 2-C has 0. With #206, Brain now probes every
+  15 minutes after each right-worker probe, and runs one slow probe a day after
+  the fast budget is spent. Lifting needs nobody, as long as Claude keeps
+  starting sessions that reach Brain.
+
+Not yet observed on `1c61b18`: an Airyn session arriving through the new
+handshake path, and a quarantine lifting. The scheduled readings below will
+record both or their absence.
