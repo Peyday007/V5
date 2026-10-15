@@ -58,6 +58,7 @@ import { queueUnreadDocuments } from './services/documents/queue.ts';
 import { recoverInterruptedResearch } from './services/research/queue.ts';
 import { recoverDispatchAtBoot, startDispatcher } from './services/dispatch/loop.ts';
 import { recordProcessStart, startInfraIncidentRecorder } from './services/infra/incidents.ts';
+import { settleTokenTouches } from './services/identity/tokenTouch.ts';
 import { startRussell } from './services/russell/loop.ts';
 import { startConnectRefresh } from './services/connect/loop.ts';
 import { startFactoryRemoteLoop } from './services/factory/remoteLoop.ts';
@@ -429,15 +430,30 @@ function installShutdown(server: Server): void {
     if (closing) return;
     closing = true;
     console.log(`[brain] ${signal} received — shutting down.`);
-    server.close(async () => {
+    // Stop accepting; do not wait for the callback, which a held-open
+    // keep-alive connection can delay past the hard exit below.
+    server.close();
+    void (async () => {
+      /*
+       * Token uses held in memory are written before the database closes.
+       * They were lost on every deploy: a rotated successor whose only uses
+       * were still pending read afterwards as a reply nobody picked up, and
+       * three quiet fires later as a client that stopped retrying — a
+       * reconnect asked of a person because a restart dropped a write.
+       * Bounded, so a database that cannot answer does not hold the exit.
+       */
+      await Promise.race([
+        settleTokenTouches().catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, 3000).unref()),
+      ]);
       try {
         await closeDatabase();
       } catch {
         // Closing a database that is already closed is not worth a crash on exit.
       }
       process.exit(0);
-    });
-    // A held-open keep-alive connection must not stop the process exiting.
+    })();
+    // Whatever happens above, the process exits.
     setTimeout(() => process.exit(0), 5000).unref();
   };
   process.on('SIGINT', () => shutdown('SIGINT'));

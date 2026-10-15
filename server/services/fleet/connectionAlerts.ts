@@ -126,6 +126,16 @@ async function exhaustedAction(routine: FleetRoutine, lastState: string | null):
   );
 }
 
+/**
+ * Past the fast budget Brain still checks once a day, so a fix made on the
+ * Claude side without telling anybody is noticed by itself (§62's correction to
+ * §59). Said, so the owner knows they need not come back and press anything.
+ */
+async function slowCheckSentence(routineId: string): Promise<string> {
+  const next = await nextAutoProbeAt(routineId);
+  return next ? ` Brain checks it again by itself at ${next}, once a day, and lifts it the moment a right session arrives.` : '';
+}
+
 /** How long an eligible surface may go unfired, with work waiting it cannot take, before that is a finding. */
 export const IDLE_FINDING_MS = 24 * 60 * 60_000;
 
@@ -220,7 +230,8 @@ export async function connectionAlerts(now = Date.now()): Promise<ConnectionAler
           problem: 'RECOVERY_EXHAUSTED',
           detail:
             `Quarantined (${firstSentences(reason, 1)}) and Brain probed it ${ran.attempts} times by itself without proving it ` +
-            `healthy; the last probe read ${ran.lastProbeState ?? 'unknown'} at ${ran.lastProbeAt ?? 'unknown'}.`,
+            `healthy; the last probe read ${ran.lastProbeState ?? 'unknown'} at ${ran.lastProbeAt ?? 'unknown'}.` +
+            (await slowCheckSentence(routine.id)),
           action: await exhaustedAction(routine, ran.lastProbeState),
           who: 'ACCOUNT_OWNER',
           since: ran.lastProbeAt,

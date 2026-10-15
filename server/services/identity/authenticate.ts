@@ -18,6 +18,7 @@
  * query parameter that carries a credential — a credential in a query string is
  * refused outright rather than accepted with a warning.
  */
+import { forgetProof, rememberProof } from './recentProof.ts';
 import type { Request } from 'express';
 import type { DenialReason, Principal, ProjectMembership } from '../../domain/types.ts';
 import {
@@ -74,7 +75,8 @@ export const DEVICE_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const PASSWORD_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 export type AuthOutcome =
-  | { ok: true; principal: Principal }
+  /** `expiresAt` is the presented credential's own expiry, when it has one. */
+  | { ok: true; principal: Principal; expiresAt?: string | null }
   | { ok: false; reason: DenialReason };
 
 /**
@@ -167,7 +169,7 @@ function hasCredentialInQuery(req: Request): boolean {
   return false;
 }
 
-function bearerToken(req: Request): string | null {
+export function bearerToken(req: Request): string | null {
   const header = req.header('authorization');
   if (!header) return null;
   const match = /^Bearer\s+(.+)$/i.exec(header);
@@ -206,9 +208,20 @@ export async function authenticateRequest(req: Request): Promise<AuthOutcome> {
   const bearer = bearerToken(req);
   const machine = bearer !== null && !parseBridgeCredential(bearer);
   try {
-    return await (machine
+    const outcome = await (machine
       ? asControlPlane(() => authenticateOnControlPlane(req))
       : asWorkload(() => authenticateOnControlPlane(req)));
+    /*
+     * What the database just decided about a machine bearer is what the MCP
+     * handshake may lean on when the database next cannot answer
+     * (`recentProof.ts`). A refusal is forgotten in the same breath, so a
+     * revocation is honoured the first time the database answers again.
+     */
+    if (machine && bearer) {
+      if (outcome.ok) rememberProof(bearer, outcome.principal, outcome.expiresAt ?? null);
+      else forgetProof(bearer);
+    }
+    return outcome;
   } finally {
     noteLatency('authenticate', Date.now() - started);
   }
@@ -378,6 +391,7 @@ async function authenticateWorker(presented: string, _req: Request): Promise<Aut
       memberships: await membershipsFor('WORKER', worker.id),
       requestId: '',
     },
+    expiresAt: credential.expiresAt,
   };
 }
 
@@ -427,6 +441,7 @@ async function authenticateOAuth(presented: string): Promise<AuthOutcome> {
       memberships: await membershipsFor('WORKER', worker.id),
       requestId: '',
     },
+    expiresAt: token.expiresAt,
   };
 }
 

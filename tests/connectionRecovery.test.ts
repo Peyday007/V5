@@ -47,11 +47,16 @@ import {
 import {
   AUTO_PROBE_LIMIT,
   AUTO_RECOVERY_ACTOR,
+  SLOW_PROBE_EVERY_MS,
+  SLOW_PROBE_LIMIT,
+  nextAutoProbeAt,
   autoProbeQuarantinedSurfaces,
   autoRecoveryExhausted,
 } from '../server/services/fleet/autoRecovery.ts';
 import { connectionAlerts } from '../server/services/fleet/connectionAlerts.ts';
-import { RECOVERY_PROBE_WINDOW_MS, settleRecoveryProbes, startRecoveryProbe, type Fire } from '../server/services/fleet/recoveryProbe.ts';
+import { attachClient, bindRoutineConnector, ensureConnector } from '../server/repos/connectors.ts';
+import { recoverReauthorizedSurfaces, touchConnectorRoutines } from '../server/services/fleet/connectorBinding.ts';
+import { MIXED_ARRIVALS_MARK, RECOVERY_PROBE_WINDOW_MS, settleRecoveryProbes, startRecoveryProbe, type Fire } from '../server/services/fleet/recoveryProbe.ts';
 import { getRecoveryProbe } from '../server/repos/recoveryProbes.ts';
 import { shouldQuarantine } from '../server/services/dispatch/scaler.ts';
 import { capacityReading, withoutDiagnostics } from '../server/services/fleet/capacity.ts';
@@ -400,28 +405,69 @@ describe('a quarantine Brain derived is probed again by Brain', () => {
     expect((await getRoutine(s.routineId))!.state).toBe('ENABLED');
   });
 
-  it('stops after its ceiling and hands it to the account owner', async () => {
+  it('past its fast budget it names the account owner, keeps checking once a day, and then stops', async () => {
     const s = await surface('auto-dead', research);
     await setRoutineState({ routineId: s.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: NO_SHOW_REASON });
     let n = 0;
     const fire: Fire = async ({ target }) => ({ ok: true, sessionRef: `cse_DEAD${(n += 1)}`, fireEventId: 'f', routineId: target.routineId });
     let clock = Date.now();
     const started: string[] = [];
-    for (let i = 0; i < AUTO_PROBE_LIMIT + 2; i += 1) {
-      clock += 25 * 60 * 60_000; // past any backoff
+    const probeOnce = async (): Promise<string | null> => {
       const id = await autoProbeQuarantinedSurfaces({ force: true, fire, now: clock });
-      if (!id) continue;
+      if (!id) return null;
       started.push(id);
       await settleRecoveryProbes(later(clock)); // nothing arrives: NO_MCP
       expect((await getRecoveryProbe(id))!.state).toBe('NO_MCP');
+      return id;
+    };
+    for (let i = 0; i < AUTO_PROBE_LIMIT; i += 1) {
+      clock += 25 * 60 * 60_000; // past any backoff
+      await probeOnce();
     }
     expect(started).toHaveLength(AUTO_PROBE_LIMIT);
     expect((await getRoutine(s.routineId))!.state).toBe('QUARANTINED');
     const exhausted = await autoRecoveryExhausted();
     expect(exhausted.map((e) => e.routineId)).toEqual([s.routineId]);
     const { alerts, stalled } = await connectionAlerts();
-    expect(alerts.find((a) => a.routineId === s.routineId)?.problem).toBe('RECOVERY_EXHAUSTED');
+    const alert = alerts.find((a) => a.routineId === s.routineId)!;
+    expect(alert.problem).toBe('RECOVERY_EXHAUSTED');
+    expect(alert.detail).toContain('once a day');
     expect(stalled.map((a) => a.accountId)).toEqual([s.accountId]);
+
+    // Not sooner than a day after the last one...
+    const last = (await getRecoveryProbe(started[started.length - 1]!))!;
+    const next = await nextAutoProbeAt(s.routineId);
+    expect(Date.parse(next!) - Date.parse(last.createdAt)).toBe(SLOW_PROBE_EVERY_MS);
+    // ...then daily, up to the slow bound, and never again after it.
+    for (let i = 0; i < SLOW_PROBE_LIMIT; i += 1) {
+      clock += 25 * 60 * 60_000;
+      await probeOnce();
+    }
+    expect(started).toHaveLength(SLOW_PROBE_LIMIT);
+    clock += 30 * 24 * 60 * 60_000;
+    expect(await autoProbeQuarantinedSurfaces({ force: true, fire, now: clock })).toBeNull();
+  });
+
+  it('a daily check after the fast budget lifts a surface whose owner fixed it without telling anybody', async () => {
+    const s = await surface('auto-late-fix', research);
+    await setRoutineState({ routineId: s.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: NO_SHOW_REASON });
+    const token = await connector(research, 'https://brain.example/mcp');
+    let n = 0;
+    const fire: Fire = async ({ target }) => ({ ok: true, sessionRef: `cse_LATE${(n += 1)}`, fireEventId: 'f', routineId: target.routineId });
+    let clock = Date.now();
+    for (let i = 0; i < AUTO_PROBE_LIMIT; i += 1) {
+      clock += 25 * 60 * 60_000;
+      await autoProbeQuarantinedSurfaces({ force: true, fire, now: clock });
+      await settleRecoveryProbes(later(clock));
+    }
+    // Three days later the Routine works again, and nobody said so.
+    clock += 3 * 24 * 60 * 60_000;
+    const id = await autoProbeQuarantinedSurfaces({ force: true, fire, now: clock });
+    expect(id).not.toBeNull();
+    await arrive(research, token.accessId, `cse_LATE${n}`, [projectId]);
+    await settleRecoveryProbes(clock);
+    expect((await getRecoveryProbe(id!))!.state).toBe('HEALTHY');
+    expect((await getRoutine(s.routineId))!.state).toBe('ENABLED');
   });
 
   it('never probes a surface a person took out of routing', async () => {
@@ -464,5 +510,134 @@ describe('a healthy account with nothing it may take (Caleb)', () => {
     await researchBin();
     const { alerts } = await connectionAlerts();
     expect(alerts.find((a) => a.routineId === s.routineId)).toBeUndefined();
+  });
+});
+
+/*
+ * 2026-10-15 durability pass: the recovery defects found by walking the whole
+ * lifecycle rather than one probe. Each was run against the code it replaced.
+ */
+describe('recovery that does not need a person to come back', () => {
+  async function probeRow(routineId: string, accountId: string, state: string, outcome: string | null, at: number): Promise<void> {
+    await getDb().run(
+      `INSERT INTO connector_recovery_probes (id, routine_id, account_id, state, outcome, requested_by_id, authority_channel, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'SYSTEM', ?, ?)`,
+      [`crp_${Math.random().toString(16).slice(2)}`, routineId, accountId, state, outcome, AUTO_RECOVERY_ACTOR,
+        new Date(at).toISOString(), new Date(at + 60_000).toISOString()] as never[],
+    );
+  }
+
+  it('a probe that arrived right but could not lift a mixed history is progress, not a failure', async () => {
+    const s = await surface('mixed-fixed', research);
+    await setRoutineState({ routineId: s.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: NO_SHOW_REASON });
+    const t0 = Date.now();
+    // Two probes proved nothing; the owner then fixed the connector, and the
+    // next two arrived right but were held back by the mixed history.
+    await probeRow(s.routineId, s.accountId, 'NO_MCP', null, t0 + 1_000);
+    await probeRow(s.routineId, s.accountId, 'NO_MCP', null, t0 + 2_000);
+    await probeRow(s.routineId, s.accountId, 'HEALTHY', `${MIXED_ARRIVALS_MARK}; 1 of 3`, t0 + 3_000);
+    const last = t0 + 4_000;
+    await probeRow(s.routineId, s.accountId, 'HEALTHY', `${MIXED_ARRIVALS_MARK}; 2 of 3`, last);
+    // Before: four counted failures — exhausted, a person to act, two thirds of the way to the lift.
+    expect(await autoRecoveryExhausted()).toEqual([]);
+    // And the third right session is asked for on the short backoff, not in twelve hours.
+    const next = await nextAutoProbeAt(s.routineId);
+    expect(Date.parse(next!) - last).toBe(15 * 60_000);
+  });
+
+  it('a member reconnecting their own connector lifts a no-show quarantine, even after probes have fired', async () => {
+    const s = await surface('member-reconnect', research);
+    const made = await ensureConnector({ accountId: s.accountId, resource: '/mcp', workerId: research });
+    await bindRoutineConnector(s.routineId, made.id);
+    const before = await connector(research, 'https://brain.example/mcp');
+    await attachClient({ clientId: before.clientId, connectorId: made.id, source: 'OPERATOR' });
+    await setRoutineState({ routineId: s.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: NO_SHOW_REASON });
+    // A probe fires (moving updated_at), then the member reconnects: a new
+    // client, a new grant, and the exchange's own touch of the Routines after it.
+    await new Promise((r) => setTimeout(r, 5));
+    await getDb().run('UPDATE fleet_routines SET updated_at = ? WHERE id = ?', [new Date().toISOString(), s.routineId]);
+    await new Promise((r) => setTimeout(r, 5));
+    const client = await registerClient({
+      clientName: 'reconnected',
+      redirectUris: ['https://claude.ai/api/mcp/auth_callback'],
+      secretDigest: null,
+      tokenAuthMethod: 'none',
+    });
+    await attachClient({ clientId: client.clientId, connectorId: made.id, source: 'MEMBER_RECONNECT' });
+    const minted = await issueGrant({ clientId: client.clientId, workerId: research, scope: '', resource: 'https://brain.example/mcp' });
+    const parsed = parseOAuthToken(minted.access)!;
+    await touchToken((await findLiveToken(parsed.prefix, parsed.secret, 'ACCESS'))!.id);
+    await new Promise((r) => setTimeout(r, 5));
+    await touchConnectorRoutines(made.id);
+    forgetRoutingHealth();
+    expect(await recoverReauthorizedSurfaces()).toEqual([s.routineId]);
+    expect((await getRoutine(s.routineId))!.state).toBe('ENABLED');
+
+    // And again, and again: each later quarantine is answered by the next reconnect.
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      await new Promise((r) => setTimeout(r, 5));
+      await setRoutineState({ routineId: s.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: NO_SHOW_REASON });
+      // A consent from before this quarantine lifts nothing.
+      forgetRoutingHealth();
+      expect(await recoverReauthorizedSurfaces()).toEqual([]);
+      await new Promise((r) => setTimeout(r, 5));
+      const again = await registerClient({
+        clientName: `reconnected ${cycle}`,
+        redirectUris: ['https://claude.ai/api/mcp/auth_callback'],
+        secretDigest: null,
+        tokenAuthMethod: 'none',
+      });
+      await attachClient({ clientId: again.clientId, connectorId: made.id, source: 'MEMBER_RECONNECT' });
+      const m = await issueGrant({ clientId: again.clientId, workerId: research, scope: '', resource: 'https://brain.example/mcp' });
+      const p = parseOAuthToken(m.access)!;
+      await touchToken((await findLiveToken(p.prefix, p.secret, 'ACCESS'))!.id);
+      await touchConnectorRoutines(made.id);
+      forgetRoutingHealth();
+      expect(await recoverReauthorizedSurfaces()).toEqual([s.routineId]);
+    }
+  });
+
+  it('a state change records when it happened; a reason rewritten in place does not move it', async () => {
+    const s = await surface('state-time', research);
+    await setRoutineState({ routineId: s.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: NO_SHOW_REASON });
+    const at = (await getRoutine(s.routineId))!.stateChangedAt;
+    expect(at).not.toBeNull();
+    await new Promise((r) => setTimeout(r, 5));
+    await setRoutineState({ routineId: s.routineId, from: 'QUARANTINED', to: 'QUARANTINED', reason: `${NO_SHOW_REASON} (rewritten)` });
+    expect((await getRoutine(s.routineId))!.stateChangedAt).toBe(at);
+  });
+
+  it('a session that checks in without its session id is credited to the one open fire on its connector', async () => {
+    const s = await surface('sessionless', research);
+    const made = await ensureConnector({ accountId: s.accountId, resource: '/mcp', workerId: research });
+    await bindRoutineConnector(s.routineId, made.id);
+    const token = await connector(research, 'https://brain.example/mcp');
+    await attachClient({ clientId: token.clientId, connectorId: made.id, source: 'OPERATOR' });
+    const bin = await researchBin();
+    await fire(bin, s, 'cse_NOREF1');
+    // Arrives, names no session, is offered nothing.
+    const result = await arrive(research, token.accessId, null, []);
+    expect(result.assigned).toBe(false);
+    expect(await events(s.routineId, 'DISPATCH_SESSION_ARRIVED')).toBe(1);
+    await reopenNoShowDispatches(0, 50);
+    expect(await events(s.routineId, 'DISPATCH_NO_SHOW')).toBe(0);
+    // A second check-in of the same session records nothing new.
+    await arrive(research, token.accessId, null, []);
+    expect(await events(s.routineId, 'DISPATCH_SESSION_ARRIVED')).toBe(1);
+  });
+
+  it('a sessionless arrival with two open fires on its connector is credited to neither', async () => {
+    const a = await surface('sessionless-a', research);
+    const b = await surface('sessionless-b', research);
+    const made = await ensureConnector({ accountId: a.accountId, resource: '/mcp', workerId: research });
+    await bindRoutineConnector(a.routineId, made.id);
+    await bindRoutineConnector(b.routineId, made.id);
+    const token = await connector(research, 'https://brain.example/mcp');
+    await attachClient({ clientId: token.clientId, connectorId: made.id, source: 'OPERATOR' });
+    await fire(await researchBin(), a, 'cse_TWO1');
+    await fire(await researchBin(), b, 'cse_TWO2');
+    await arrive(research, token.accessId, null, []);
+    expect(await events(a.routineId, 'DISPATCH_SESSION_ARRIVED')).toBe(0);
+    expect(await events(b.routineId, 'DISPATCH_SESSION_ARRIVED')).toBe(0);
   });
 });

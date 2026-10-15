@@ -76,7 +76,7 @@ import { MCP_PATHS } from '../mcp/endpoint.ts';
 import { card, esc, page } from './pages.ts';
 import { workerIdentity } from '../services/identity/authenticate.ts';
 import { answerEscapedFailure } from './escape.ts';
-import { asControlPlane, asWorkload, noteLatency } from '../db/infra.ts';
+import { asControlPlane, asWorkload, noteInfraFailure, noteLatency, SLOW_ARRIVAL_MS } from '../db/infra.ts';
 import { afterCommit, getDb } from '../db/database.ts';
 import { tokenUseHeld } from '../services/identity/tokenTouch.ts';
 
@@ -1472,7 +1472,13 @@ export function oauthRouter(): Router {
 
       res.status(400).json({ error: 'unsupported_grant_type' });
     })
-      .finally(() => noteLatency('oauth_token', Date.now() - tokenStarted))
+      .finally(() => {
+        const took = Date.now() - tokenStarted;
+        noteLatency('oauth_token', took);
+        // A refresh answered after the client stopped waiting (production p95
+        // 52 s on 15c8381): the session behind it never connected.
+        if (took > SLOW_ARRIVAL_MS) noteInfraFailure('SLOW_ANSWER', 'oauth:token');
+      })
       .catch(answerEscapedFailure(res, 'oauth:token'));
   });
 
