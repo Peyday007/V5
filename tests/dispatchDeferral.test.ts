@@ -503,6 +503,38 @@ describe('a fire nobody answered', () => {
     expect((await unansweredFiresByRoutine()).get(routine)).toBe(1);
   });
 
+  /*
+   * Production, Caleb 3-B, 2026-10-11: no-shows at 19:49 and 23:15 with four
+   * right-worker arrivals between them, and the surface was quarantined as
+   * "3 consecutive fired sessions never checked in". The count's arrival
+   * boundary was `worker_sessions`, which is written once per credential when
+   * a bin is taken, so a check-in that took nothing — or one whose credential
+   * a sibling Routine on the same connector had already recorded — reset
+   * nothing. A recorded arrival of the registered worker is an answer.
+   */
+  it('counts unanswered fires only since the Routine’s last recorded arrival', async () => {
+    const binId = await aReadyBin();
+    await aFleet();
+    const routine = (await routineId())!;
+    const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString();
+    const event = async (eventType: string, minutesAgo: number) => {
+      await recordBinEvent({ eventType, binId, projectId, routineId: routine });
+      await getDb().run(
+        `UPDATE bin_events SET at = ? WHERE id = (SELECT id FROM bin_events WHERE bin_id = ? AND routine_id = ? AND event_type = ? ORDER BY rowid DESC LIMIT 1)`,
+        [at(minutesAgo), binId, routine, eventType],
+      );
+    };
+    await event('DISPATCH_NO_SHOW', 300);
+    await event('DISPATCH_NO_SHOW', 240);
+    await event('DISPATCH_SESSION_ARRIVED', 200);
+    await event('DISPATCH_NO_SHOW', 60);
+    expect((await unansweredFiresByRoutine()).get(routine)).toBe(1);
+    // A wrong-worker arrival is not this Routine answering.
+    await event('DISPATCH_WRONG_WORKER', 30);
+    await event('DISPATCH_NO_SHOW', 10);
+    expect((await unansweredFiresByRoutine()).get(routine)).toBe(2);
+  });
+
   it('never races a fire Brain still believes is running', async () => {
     const binId = await aReadyBin();
     await aFleet();

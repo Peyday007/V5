@@ -31,6 +31,7 @@ import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { allConnectorHealth } from '../server/services/fleet/connectorHealth.ts';
 import { listIncidentsSince } from '../server/services/infra/incidents.ts';
+import { unansweredFiresByRoutine } from '../server/repos/fleet.ts';
 
 function arg(name: string): string | null {
   const i = process.argv.indexOf(`--${name}`);
@@ -291,6 +292,80 @@ export function countAlertsNeedingAPerson(alerts: readonly { who: string }[]): {
   const accountOwner = alerts.filter((a) => a.who === 'ACCOUNT_OWNER').length;
   const operator = alerts.filter((a) => a.who === 'OPERATOR').length;
   return { total: accountOwner + operator, accountOwner, operator, nobody: alerts.length - accountOwner - operator };
+}
+
+export interface WarningInput {
+  name: string;
+  /** Real no-shows since the Routine's last recorded arrival (or lifted quarantine). */
+  unansweredSinceArrival: number;
+  fires24h: number;
+  arrivals24h: number;
+  /** Other live Routines on the same connector that are quarantined now. */
+  quarantinedSiblings: string[];
+}
+
+/**
+ * The warning signs measured against production history, 2026-09-16 to
+ * 2026-10-15 (docs/CONNECTION-PREDICTION-2026-10-15.md). Each fires on rows
+ * alone and says which reading it is; none of them predicts more than about
+ * two hours ahead, and the report says so rather than implying more.
+ *
+ *   FIRST_NO_SHOW  a real no-show since the last arrival: precedes every
+ *                  no-show quarantine (median ~1.6h ahead), but 25 of 39 such
+ *                  first no-shows were not followed by one within 24h.
+ *   SIBLING_DOWN   another Routine on the same connector is quarantined: in
+ *                  10 of 14 cases a live sibling followed within 24h, almost
+ *                  all within 40 minutes, because a connector fails as a unit.
+ *   FEW_ARRIVALS   at least 4 fires and under half arriving in 24h: measured
+ *                  only since arrivals were recorded (2026-10-11); about half
+ *                  of the hours it fired were followed by a quarantine.
+ */
+export function warningsFor(input: WarningInput): string[] {
+  const out: string[] = [];
+  if (input.unansweredSinceArrival >= 1) {
+    out.push(`FIRST_NO_SHOW ${input.unansweredSinceArrival} unanswered fire(s) since its last arrival; three quarantine it`);
+  }
+  if (input.quarantinedSiblings.length > 0) {
+    out.push(`SIBLING_DOWN ${input.quarantinedSiblings.join(', ')} on the same connector is quarantined`);
+  }
+  if (input.fires24h >= 4 && input.arrivals24h * 2 < input.fires24h) {
+    out.push(`FEW_ARRIVALS ${input.arrivals24h} of ${input.fires24h} fires in 24h arrived`);
+  }
+  return out;
+}
+
+async function earlyWarning(): Promise<void> {
+  const db = getDb();
+  const routines = await db.all<{ id: string; name: string; state: string; connector_id: string | null }>(
+    `SELECT id, name, state, connector_id FROM fleet_routines WHERE state <> 'RETIRED' ORDER BY name`,
+  );
+  const unanswered = await unansweredFiresByRoutine();
+  const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
+  let any = false;
+  for (const r of routines) {
+    if (r.state !== 'ENABLED') continue;
+    const counts = await db.all<{ event_type: string; n: number }>(
+      `SELECT event_type, COUNT(*) AS n FROM bin_events
+        WHERE routine_id = ? AND at >= ? AND event_type IN ('DISPATCH_SENT', 'DISPATCH_SESSION_ARRIVED')
+        GROUP BY event_type`,
+      [r.id, since],
+    );
+    const n = (t: string) => Number(counts.find((c) => c.event_type === t)?.n ?? 0);
+    const warnings = warningsFor({
+      name: r.name,
+      unansweredSinceArrival: unanswered.get(r.id) ?? 0,
+      fires24h: n('DISPATCH_SENT'),
+      arrivals24h: n('DISPATCH_SESSION_ARRIVED'),
+      quarantinedSiblings: routines
+        .filter((s) => s.id !== r.id && s.connector_id && s.connector_id === r.connector_id && s.state === 'QUARANTINED')
+        .map((s) => s.name),
+    });
+    if (warnings.length === 0) continue;
+    any = true;
+    console.log(`  ${r.name}`);
+    for (const w of warnings) console.log(`    ${w}`);
+  }
+  if (!any) console.log('  none');
 }
 
 /** The dispatch events that say what happened to a fire, in the order they can happen. */
@@ -644,6 +719,8 @@ async function main(): Promise<void> {
     if ((lastAt.get(key) ?? '') < row.last) lastAt.set(key, row.last);
   }
   for (const [key, counts] of grouped) console.log(`  ${key}  ${counts.join(' ')}  last=${lastAt.get(key)}`);
+
+  await section('\nEARLY WARNING (enabled Routines showing what preceded past quarantines)', () => earlyWarning());
 
   console.log('\nALERTS (who has to act, and what)');
   const { connectionAlerts } = await import('../server/services/fleet/connectionAlerts.ts');
