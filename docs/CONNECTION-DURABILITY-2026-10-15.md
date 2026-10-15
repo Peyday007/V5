@@ -71,3 +71,14 @@ history scan: 441 runs in about 6 h, mean 12 s, max 73 s.
   configuration (which connectors each Routine holds, and whether it starts).
   Only the account owner, or a session signed in to that account, can read or
   change it.
+
+## After release, 2026-10-15 21:39Z
+
+The release went out in Deploy 38805467065 on `1c61b183`, which contains #207. The connection report read it back as `SERVING_REVISION 1c61b183`.
+- **Both hosted verifications never ran.** The harness itself could not get a pooler connection (`ECHECKOUTTIMEOUT … after 15000ms`). That is the database condition above. It is not a check that failed.
+- **Already seen in production:** a 29.4 s token refresh was recorded as `SLOW_ANSWER @ oauth:token`, on the arrival path. Before this change, the session behind it would have been a no-show.
+- **Already seen in production:** exhausted alerts now say when Brain will check again.
+- **Already seen in production:** no unanswered fires in the window since the restart.
+- **Already seen in production:** Airyn 2-B's right-worker arrivals rose from 2 to 3.
+- **Not established yet:** durability over days. The scheduled 24 h, 48 h and 72 h Airyn readings are where it is read.
+- **Seen in CI:** the Postgres gate on `2bc9b4a` failed twice in `independenceEvidence` setup (a test schema vanished mid-migration). The same suite passed on `1c61b183`. The cause is a test-harness race, not this change, and it is not fixed here.
