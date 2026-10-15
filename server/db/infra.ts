@@ -49,7 +49,23 @@ export type InfraFailureKind =
   /** The connection broke, or could not be opened, or the server is going away. */
   | 'CONNECTION_LOST'
   /** The database or its storage API answered that it is unavailable. */
-  | 'DATABASE_UNAVAILABLE';
+  | 'DATABASE_UNAVAILABLE'
+  /**
+   * The database answered, but only after the connecting client's own budget
+   * had run out (`SLOW_ARRIVAL_MS`). Nothing failed on Brain's side, and the
+   * session on the other end still gave up: a Claude connector that waited 30 s
+   * for `initialize` or a token refresh marks itself failed for that session.
+   * Without this the only trace was a fired session that "never checked in".
+   */
+  | 'SLOW_ANSWER';
+
+/**
+ * How long an answer on a session's arrival path may take before the client is
+ * presumed to have given up. Claude's MCP connect timeout is about 30 s; this
+ * is under it, so an answer that late is counted even when the client's clock
+ * started a moment before Brain's.
+ */
+export const SLOW_ARRIVAL_MS = 25_000;
 
 /** SQLSTATEs that say the server, not the statement, is the problem. */
 const UNAVAILABLE_SQLSTATES = new Set([

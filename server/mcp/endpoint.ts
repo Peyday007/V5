@@ -16,7 +16,8 @@
  */
 import express, { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
-import { authenticateRequest } from '../services/identity/authenticate.ts';
+import { authenticateRequest, bearerToken } from '../services/identity/authenticate.ts';
+import { recentProof } from '../services/identity/recentProof.ts';
 import { recordIdentityEvent } from '../repos/identity.ts';
 import { contextFromRequest } from '../services/identity/context.ts';
 import type { AuthMethod, DenialReason, Principal } from '../domain/types.ts';
@@ -34,7 +35,7 @@ import {
 import { idOf, looksModern, validateModernRequest } from './validate.ts';
 import { answerEscapedFailure } from '../routes/escape.ts';
 import { CREDENTIAL_NOT_CHECKED, prepareUnavailable } from '../routes/unavailable.ts';
-import { classifyInfraFailure } from '../db/infra.ts';
+import { classifyInfraFailure, noteInfraFailure, noteLatency, SLOW_ARRIVAL_MS } from '../db/infra.ts';
 import { noteCredentiallessRequest } from '../services/infra/incidents.ts';
 
 const INFRA_BUSY =
@@ -193,6 +194,100 @@ function originIsAcceptable(req: Request): boolean {
  */
 const DOOR_METHODS: readonly AuthMethod[] = ['WORKER_BEARER', 'OAUTH_BEARER'];
 
+/**
+ * The challenge a refusal carries.
+ *
+ * With no credential at all it is the bare discovery pointer: the client has
+ * nothing yet and must go through the authorization server. With a credential
+ * that was presented and refused it also says `error="invalid_token"` (RFC 6750
+ * §3.1), which is the one signal that tells an OAuth client to *refresh* the
+ * token it holds rather than start the connection over. Without it an expired
+ * access token reads the same as a connector that was never connected, and the
+ * cheap recovery — one refresh — is left to the client's guess.
+ *
+ * It names no reason. Unknown, revoked and expired are still one answer, so
+ * the challenge tells a caller nothing it did not already hold.
+ */
+export function bearerChallenge(issuer: string, path: string, reason: DenialReason): string {
+  const metadata = `resource_metadata="${issuer}/.well-known/oauth-protected-resource${path}"`;
+  if (reason === 'NO_CREDENTIALS') return `Bearer realm="brain", ${metadata}`;
+  return `Bearer realm="brain", error="invalid_token", ${metadata}`;
+}
+
+/**
+ * The methods that open a connector and nothing more: they read no row, write
+ * nothing and answer every caller identically (§21). Both eras' names.
+ */
+export const HANDSHAKE_METHODS: ReadonlySet<string> = new Set([
+  'initialize',
+  'notifications/initialized',
+  'ping',
+  'tools/list',
+  'prompts/list',
+  'resources/list',
+  'resources/templates/list',
+  'server/discover',
+]);
+
+/**
+ * How long the handshake waits for the database before a recent proof may
+ * answer. Claude's connect timeout is about thirty seconds for `initialize`
+ * and `tools/list` together, so each gets well under half of it.
+ */
+export const HANDSHAKE_AUTH_BUDGET_MS = 8_000;
+let handshakeBudgetMs = HANDSHAKE_AUTH_BUDGET_MS;
+
+/** For tests: a shorter wait, so a slow database can be simulated in milliseconds. */
+export function setHandshakeBudgetForTests(ms: number | null): void {
+  handshakeBudgetMs = ms ?? HANDSHAKE_AUTH_BUDGET_MS;
+}
+
+export function isHandshake(body: unknown): boolean {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  const method = (body as { method?: unknown }).method;
+  return typeof method === 'string' && HANDSHAKE_METHODS.has(method);
+}
+
+/**
+ * `principalFor`, except that the handshake survives a database that cannot
+ * answer (`services/identity/recentProof.ts`).
+ *
+ * The database is always asked, and when it answers in time its answer is the
+ * answer — a refusal included, which also forgets the proof. Only when it
+ * throws, or has not answered within `HANDSHAKE_AUTH_BUDGET_MS`, does a proof
+ * this process took within the last fifteen minutes stand in, and then only for
+ * a handshake method. A tool call never reaches this branch.
+ */
+async function principalForHandshakeOr(
+  req: Request,
+  body: unknown,
+): Promise<{ ok: true; principal: Principal } | { ok: false; reason: DenialReason }> {
+  const bearer = bearerToken(req);
+  const proven = bearer && isHandshake(body) ? recentProof(bearer) : null;
+  if (!proven || !DOOR_METHODS.includes(proven.authMethod)) return principalFor(req);
+
+  const authoritative = principalFor(req);
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<'LATE'>((resolve) => {
+    timer = setTimeout(() => resolve('LATE'), handshakeBudgetMs);
+    timer.unref();
+  });
+  const started = Date.now();
+  try {
+    const first = await Promise.race([authoritative, late]);
+    if (first !== 'LATE') return first;
+    // Still running; its eventual answer (or refusal) still updates the proof.
+    authoritative.catch(() => undefined);
+  } catch (error) {
+    // An unclassified error is a defect, not an outage, and is not covered.
+    if (!classifyInfraFailure(error)) throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  noteLatency('handshake_on_proof', Date.now() - started);
+  return { ok: true, principal: proven };
+}
+
 async function principalFor(
   req: Request,
 ): Promise<{ ok: true; principal: Principal } | { ok: false; reason: DenialReason }> {
@@ -321,8 +416,12 @@ export function mcpRouter(): Router {
       }
 
       let auth: Awaited<ReturnType<typeof principalFor>>;
+      const authStarted = Date.now();
       try {
-        auth = await principalFor(req);
+        auth = await principalForHandshakeOr(req, req.body);
+        // Answered, but later than the connecting client waits: Brain's failure,
+        // on the arrival path, so the session that gave up is not a no-show.
+        if (Date.now() - authStarted > SLOW_ARRIVAL_MS) noteInfraFailure('SLOW_ANSWER', 'mcp:authenticate');
       } catch (error) {
         /*
          * Fail closed — not being able to tell who this is is not permission —
@@ -356,10 +455,7 @@ export function mcpRouter(): Router {
         // 9728 asks of a resource that has one. A connector reaching the factory
         // door is pointed at the factory door's own metadata; both documents name
         // the same authorization server, because there is only one.
-        res.setHeader(
-          'WWW-Authenticate',
-          `Bearer realm="brain", resource_metadata="${issuer}/.well-known/oauth-protected-resource${pathOf(req)}"`,
-        );
+        res.setHeader('WWW-Authenticate', bearerChallenge(issuer, pathOf(req), auth.reason));
         refuse(res, 401, TRANSPORT_REFUSED, 'Not authorized. Connect through this Brain, or present a worker credential.');
         return;
       }

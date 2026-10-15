@@ -23,6 +23,7 @@ import {
   asControlPlane,
   classifyInfraFailure,
   infraFailureCounts,
+  noteInfraFailure,
   resetInfraCounters,
 } from '../server/db/infra.ts';
 import { PostgresAdapter } from '../server/db/adapters/postgres.ts';
@@ -39,7 +40,8 @@ import {
   reopenNoShowDispatches,
 } from '../server/repos/bins.ts';
 import { connectorHealth, forgetRoutingHealth } from '../server/services/fleet/connectorHealth.ts';
-import { mcpRouter } from '../server/mcp/endpoint.ts';
+import { mcpRouter, setHandshakeBudgetForTests } from '../server/mcp/endpoint.ts';
+import { resetRecentProofs } from '../server/services/identity/recentProof.ts';
 import { oauthRouter } from '../server/routes/oauth.ts';
 import { requestContext, requireAuthentication } from '../server/routes/guard.ts';
 import { checkIn } from '../server/services/bins/service.ts';
@@ -1600,5 +1602,141 @@ describe('the rest of the chain does not turn a database failure into a verdict'
     });
     for (let i = 0; i < 20 && seen.length < 2; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
     expect(seen).toEqual(['outside', 'savepoint released']);
+  });
+});
+
+/* ------------------------------------------------------------------------ */
+/* 2026-10-15: the connector's handshake does not wait on the database        */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Reproduced from this repository's own Claude session: `Factory_Brain` failed
+ * to connect after 30 000 ms and its first call answered 503, while the next
+ * call authenticated normally. A Claude Code session opens its connector once,
+ * with a few quick retries; a handshake that fails then leaves the session with
+ * no Brain tools for its whole life, which Brain records as a fired session that
+ * never checked in.
+ */
+describe('the connector handshake survives a database that cannot answer', () => {
+  async function legacyInitialize(bearer: string) {
+    const response = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+        authorization: `Bearer ${bearer}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'claude-code', version: '1' } },
+      }),
+    });
+    return { status: response.status, text: await response.text() };
+  }
+
+  beforeEach(() => {
+    resetRecentProofs();
+    setHandshakeBudgetForTests(null);
+  });
+  afterEach(() => setHandshakeBudgetForTests(null));
+
+  it('a credential proved minutes ago completes initialize and tools/list during an outage; a tool call still waits for the database', async () => {
+    const c = await connector('handshake');
+    expect((await whoami(c.access)).status).toBe(200); // the proof
+    injectFault(EVERYTHING);
+    const init = await legacyInitialize(c.access);
+    expect(init.status).toBe(200);
+    expect(init.text).toContain('serverInfo');
+    const list = await mcp('tools/list', {}, c.access);
+    expect(list.status).toBe(200);
+    expect(JSON.stringify(list.body)).toContain('brain_check_in');
+    // Anything that does something is still authenticated against rows.
+    expect((await whoami(c.access)).status).toBe(503);
+    restore!();
+    expect((await whoami(c.access)).status).toBe(200);
+  });
+
+  it('a slow database: the handshake answers within its budget on the proof', async () => {
+    const c = await connector('handshake-slow');
+    expect((await whoami(c.access)).status).toBe(200);
+    setHandshakeBudgetForTests(100);
+    const db = getDb() as Database & Record<string, unknown>;
+    const originalGet = db.get;
+    db.get = (async (sql: string, params?: never[]) => {
+      if (sql.includes('oauth_tokens')) await new Promise((r) => setTimeout(r, 1_500));
+      return originalGet.call(db, sql, params);
+    }) as Database['get'];
+    try {
+      const started = Date.now();
+      const init = await legacyInitialize(c.access);
+      expect(init.status).toBe(200);
+      expect(Date.now() - started).toBeLessThan(1_200);
+    } finally {
+      db.get = originalGet;
+    }
+  });
+
+  it('with no proof the outage is still a retryable 503, never a grant', async () => {
+    const c = await connector('handshake-cold');
+    injectFault(EVERYTHING);
+    const init = await legacyInitialize(c.access);
+    expect(init.status).toBe(503);
+    expect(init.text).not.toMatch(/Not authorized/);
+  });
+
+  it('a credential the database refused is forgotten at once: no proof survives a revocation', async () => {
+    const c = await connector('handshake-revoked');
+    expect((await whoami(c.access)).status).toBe(200);
+    await getDb().run('UPDATE oauth_tokens SET revoked_at = ? WHERE kind = ?', [new Date().toISOString(), 'ACCESS']);
+    expect((await whoami(c.access)).status).toBe(401);
+    injectFault(EVERYTHING);
+    expect((await legacyInitialize(c.access)).status).toBe(503);
+  });
+
+  it('a refused credential is told it is invalid, so the client refreshes rather than starting over', async () => {
+    await connector('challenge');
+    const refused = await whoami('brnt_notatoken_notasecret');
+    expect(refused.status).toBe(401);
+    expect(refused.headers.get('www-authenticate')).toContain('error="invalid_token"');
+    const bare = await fetch(`${base}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    expect(bare.status).toBe(401);
+    const challenge = bare.headers.get('www-authenticate')!;
+    expect(challenge).toContain('resource_metadata=');
+    expect(challenge).not.toContain('error=');
+  });
+});
+
+describe('an answer later than the client waits is Brain’s failure, not a no-show', () => {
+  it('a slow authentication at the MCP door becomes an arrival-path incident that excuses the fire', async () => {
+    const c = await connector('slow-answer');
+    startInfraIncidentRecorder();
+    const sentAt = new Date(Date.now() - 2 * 3_600_000);
+    const before = new Date(Date.now() - 1_000).toISOString();
+    // What the door records when authentication succeeded after SLOW_ARRIVAL_MS.
+    noteInfraFailure('SLOW_ANSWER', 'mcp:authenticate');
+    await settleInfraIncidents();
+    const incident = await arrivalIncidentDuring(before);
+    expect(incident?.kind).toBe('SLOW_ANSWER');
+    // Moved into the fire's own window, it excuses exactly as an outage would.
+    await getDb().run('UPDATE infra_incidents SET started_at = ?, ended_at = ? WHERE kind = ?', [
+      new Date(sentAt.getTime() + 20_000).toISOString(),
+      new Date(sentAt.getTime() + 40_000).toISOString(),
+      'SLOW_ANSWER',
+    ]);
+    await unansweredFire(c.routineId, sentAt);
+    expect(await eventsOf('DISPATCH_INFRA_NO_SHOW', c.routineId)).toBe(1);
+    expect(await eventsOf('DISPATCH_NO_SHOW', c.routineId)).toBe(0);
+  });
+
+  it('the door and the token endpoint both record it, and neither counts it as overload', async () => {
+    const fs = await import('node:fs');
+    const endpoint = fs.readFileSync('server/mcp/endpoint.ts', 'utf8');
+    const oauth = fs.readFileSync('server/routes/oauth.ts', 'utf8');
+    expect(endpoint).toMatch(/SLOW_ARRIVAL_MS\) noteInfraFailure\('SLOW_ANSWER', 'mcp:authenticate'\)/);
+    expect(oauth).toMatch(/SLOW_ARRIVAL_MS\) noteInfraFailure\('SLOW_ANSWER', 'oauth:token'\)/);
+    const { OVERLOAD_KINDS } = await import('../server/db/pressure.ts');
+    expect(OVERLOAD_KINDS.has('SLOW_ANSWER')).toBe(false);
   });
 });

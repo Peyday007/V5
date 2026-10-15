@@ -44,7 +44,7 @@ import { checkIn, requestCompletion, submitUnit } from '../server/services/bins/
 import { UNIT_TRANSFORMS } from '../server/services/bins/contracts.ts';
 import { forgetRoutingHealth } from '../server/services/fleet/connectorHealth.ts';
 import { quarantineWrongWorkerSurfaces, CONSISTENT_RIGHT_SESSIONS } from '../server/services/fleet/arrivalIdentity.ts';
-import { AUTO_PROBE_LIMIT, autoProbeQuarantinedSurfaces, resetAutoRecoveryClock } from '../server/services/fleet/autoRecovery.ts';
+import { AUTO_PROBE_LIMIT, SLOW_PROBE_LIMIT, autoProbeQuarantinedSurfaces, autoRecoveryExhausted, resetAutoRecoveryClock } from '../server/services/fleet/autoRecovery.ts';
 import { RECOVERY_PROBE_WINDOW_MS, settleRecoveryProbes, type Fire } from '../server/services/fleet/recoveryProbe.ts';
 import { shouldQuarantine } from '../server/services/dispatch/scaler.ts';
 import { noteInfraFailure, resetInfraCounters } from '../server/db/infra.ts';
@@ -599,7 +599,10 @@ describe("Airyn's four Routines over simulated time", () => {
       await settleRecoveryProbes(clock);
     }
     expect((await getRoutine(b.id))!.state).toBe('QUARANTINED');
-    expect(probes).toBeLessThanOrEqual(AUTO_PROBE_LIMIT * CONSISTENT_RIGHT_SESSIONS + CONSISTENT_RIGHT_SESSIONS);
+    // A person is named once the fast budget is spent (§64)...
+    expect((await autoRecoveryExhausted()).map((e) => e.routineId)).toContain(b.id);
+    // ...and Brain's own daily check after it is still bounded.
+    expect(probes).toBeLessThanOrEqual(SLOW_PROBE_LIMIT * CONSISTENT_RIGHT_SESSIONS + CONSISTENT_RIGHT_SESSIONS);
     expect(probes).toBeGreaterThan(AUTO_PROBE_LIMIT);
   });
 });

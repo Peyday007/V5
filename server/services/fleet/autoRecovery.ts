@@ -46,6 +46,17 @@ import { restartWindowPending } from '../infra/incidents.ts';
 
 export const AUTO_RECOVERY_ACTOR = 'brain:auto-recovery';
 export const AUTO_PROBE_LIMIT = 4;
+/**
+ * Past `AUTO_PROBE_LIMIT` the owner is named — and Brain still asks, once a
+ * day, up to this many probes in all. The fast budget assumed a person would
+ * act once named; production showed the opposite shape: the account owner
+ * fixes the Claude Routine (its connector choice, a lapsed subscription) and
+ * tells nobody, and with nothing left to ask the surface stayed quarantined
+ * until somebody happened to probe it by hand (Caleb 3-B, 3-C, Factory
+ * surface 3). One activation a day for two weeks is the bound.
+ */
+export const SLOW_PROBE_LIMIT = AUTO_PROBE_LIMIT + 14;
+export const SLOW_PROBE_EVERY_MS = 24 * 60 * 60_000;
 /** Wait before the first probe, then after each one that did not prove the surface healthy. */
 export const AUTO_PROBE_BACKOFF_MS = [15 * 60_000, 60 * 60_000, 4 * 60 * 60_000, 12 * 60 * 60_000, 24 * 60 * 60_000];
 const RUN_EVERY_MS = 60_000;
@@ -102,7 +113,7 @@ async function historyFor(routine: FleetRoutine): Promise<ProbeHistory> {
     outcome: string | null;
   }>(
     `SELECT state, created_at, next_action, requested_by_id, health, outcome FROM connector_recovery_probes
-      WHERE routine_id = ? AND created_at > ? ORDER BY created_at DESC LIMIT 20`,
+      WHERE routine_id = ? AND created_at > ? ORDER BY created_at DESC LIMIT 40`,
     [routine.id, routine.noShowsForgivenAt ?? ''],
   );
   let failed = 0;
@@ -173,13 +184,16 @@ async function dueAt(routine: FleetRoutine): Promise<{ at: number; history: Prob
   if (!account || account.kind !== 'CAPACITY') return null;
   if (await recoveryIneligibility(routine)) return null;
   const history = await historyFor(routine);
-  if (history.failed >= AUTO_PROBE_LIMIT) return null;
-  const base = history.lastAt ?? routine.updatedAt;
+  if (history.failed >= SLOW_PROBE_LIMIT) return null;
+  // The quarantine's own instant, not `updatedAt`, which every touch moves.
+  const base = history.lastAt ?? routine.stateChangedAt ?? routine.updatedAt;
   // After progress, the next right session is asked for soon: waiting longer
   // would only delay a lift the evidence is already moving toward.
   const wait = history.lastWasProgress
     ? AUTO_PROBE_BACKOFF_MS[0]!
-    : AUTO_PROBE_BACKOFF_MS[Math.min(history.failed, AUTO_PROBE_BACKOFF_MS.length - 1)]!;
+    : history.failed >= AUTO_PROBE_LIMIT
+      ? SLOW_PROBE_EVERY_MS
+      : AUTO_PROBE_BACKOFF_MS[Math.min(history.failed, AUTO_PROBE_BACKOFF_MS.length - 1)]!;
   return { at: Date.parse(base) + wait, history };
 }
 
