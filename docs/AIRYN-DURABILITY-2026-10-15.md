@@ -63,7 +63,13 @@ time can show that.
   session and nothing reached Brain within 15 minutes. 2-C's probe through
   the same connector reached Brain nine minutes earlier, so Brain was
   answering.
-- **2-D**. Probed after 2-C's automatic probe settled (see below).
+  Brain's automatic follow-up at 18:06 (`crp_e20fdd0a…`) also read
+  **NO_MCP**. Two separate sessions started by Claude never reached Brain.
+  This is 2-B's Claude Routine: it has no working Brain connector attached.
+- **2-D**. Probe `crp_8e433e81…` at 18:44: **AMBIGUOUS, BRAIN_UNAVAILABLE**.
+  Brain's database was failing while the session would have arrived. Nothing
+  was concluded or charged, and Brain re-probes it by itself once healthy.
+  Correct behavior, and no evidence about 2-D's configuration yet.
 
 ## 4. Monitoring
 
