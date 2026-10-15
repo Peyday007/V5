@@ -195,6 +195,28 @@ describe('a repair plan', () => {
     expect(text).toMatch(/2 attempts remain/);
   });
 
+  /*
+   * Production, Cash Mode 1 (`orc_aca8bfb9c38947059e4b`): attempt 1 could not
+   * resolve the publisher's host and recorded no claim; the plan told attempt
+   * 2 that independent corroboration was missing, and attempt 2 blocked on a
+   * demand only that publisher could ever satisfy.
+   */
+  it('names a reading failure as one, rather than asking for corroboration of nothing', () => {
+    const plan = buildRepairPlan({
+      fragment: fragment({
+        blockedReason: 'Access refused: getaddrinfo ENOTFOUND artisanalsudoku.substack.com.',
+      }),
+      gate: gate({ acceptedClaims: 0, independentSources: 0 }),
+      history: [fragment()],
+      claims: [],
+      splitRequired: false,
+      remainingBudget: 2,
+    });
+    expect(plan.missingEvidence).not.toMatch(/different publishers/i);
+    expect(plan.missingEvidence).toMatch(/nothing needs corroborating/);
+    expect(plan.missingEvidence).toMatch(/ENOTFOUND/);
+  });
+
   /**
    * The failure the first fresh acceptance packet was told it had, and did not.
    *

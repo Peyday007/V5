@@ -274,6 +274,21 @@ export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
           'has nothing in it.'
         : missingLanes.length > 0
         ? `No accepted evidence in: ${missingLanes.join(', ')}.`
+        : /*
+           * Nothing was accepted at all, so the failure is not corroboration.
+           *
+           * With zero accepted claims the source count is zero too, and the
+           * branch below then told the next attempt that "the same fact from
+           * different publishers" was missing. Production, Cash Mode 1
+           * (`orc_aca8bfb9c38947059e4b`): attempt 1 could not resolve the one
+           * publisher's host; attempt 2 read that as a demand to corroborate a
+           * publisher's own submission terms independently — which only that
+           * publisher can state — and blocked on it. The failure was reading,
+           * and the plan has to say so.
+           */
+          gate.acceptedClaims === 0 && fragment.blockedReason
+          ? `No claim was accepted on the last attempt, so nothing needs corroborating yet. ` +
+            `It ended: ${fragment.blockedReason.slice(0, 400)}`
         : gate.independentSources < fragment.minIndependentSources
           ? `Corroboration is missing: the accepted evidence rests on ${gate.independentSources} ` +
             `independent source(s) and this fragment needs ${fragment.minIndependentSources}, so ` +

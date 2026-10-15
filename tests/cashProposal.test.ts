@@ -37,6 +37,7 @@ import { capture, fillCard } from '../server/services/cash/opportunities.ts';
 import { applyProposal, proposeTerms } from '../server/services/cash/answers.ts';
 import type { ProposedTerm } from '../server/services/cash/answers.ts';
 import { advanceWithinAuthority } from '../server/services/cash/operate.ts';
+import { markReady } from '../server/services/cash/opportunities.ts';
 import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
 import { readMoneyFigures } from '../server/services/cash/figures.ts';
 import { cardFact, recordCardFact } from '../server/repos/cashCardFacts.ts';
@@ -376,6 +377,33 @@ describe('Brain acts inside the standing authority', () => {
       (one) => one.kind === 'CASH_OPPORTUNITY_READY' && one.opportunityId === piece.id,
     )!;
     expect(event.actorRef).toBe('BRAIN');
+  });
+
+  /*
+   * Production, Cash Mode 1: `cop_6ec9dafa33f44c268b1d` read "USD -795.00
+   * expected" and Brain marked it READY by itself — the card's own economics
+   * line called it a reason to decline, and nothing read that line.
+   */
+  it('declines a complete card whose own economics are not positive, and never contacts for it', async () => {
+    await granted();
+    const piece = await readyToTest();
+    await updateOpportunity(piece.id, { peak_funding_cents: 80_000, price_cents: 500 } as never);
+
+    const advanced = await advanceWithinAuthority(projectId);
+    expect(advanced.took.some((one) => one.opportunityId === piece.id)).toBe(false);
+    expect(advanced.withheld.find((one) => one.opportunityId === piece.id)!.because).toContain(
+      'reason to decline',
+    );
+    expect((await getOpportunity(piece.id))!.state).toBe('DISCOVERED');
+
+    // A person may still decide otherwise, and once they have, Brain still
+    // does not reach out on it.
+    expect((await markReady({ opportunityId: piece.id, actorRef: 'usr_person' })).ok).toBe(true);
+    const after = await advanceWithinAuthority(projectId);
+    expect(after.withheld.find((one) => one.opportunityId === piece.id)!.because).toContain(
+      'reason to decline',
+    );
+    expect(after.took.some((one) => one.opportunityId === piece.id)).toBe(false);
   });
 
   it('leaves an incomplete card alone rather than reporting it as withheld every tick', async () => {

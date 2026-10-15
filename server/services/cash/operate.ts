@@ -76,6 +76,7 @@ import { recordWorkModelReclassification, type Reclassification } from './reclas
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
+import { formatMoney } from './figures.ts';
 import { commercialOperationsFor, sendCommercialEffect } from './effects.ts';
 import { composeBuyerMessage } from './outreach.ts';
 import { runInvoicing, type InvoicingPass } from './invoicing.ts';
@@ -637,6 +638,37 @@ export interface AuthorityAdvance {
 /** How many buyers one pass may write to. See the loop below. */
 export const MAX_CONTACTS_PER_PASS = 3;
 
+/**
+ * Why Brain declines a piece on its own economics, or null.
+ *
+ * The card's economics line has always said that a margin at or below zero "is
+ * a reason to decline rather than a reason to raise the price" — and nothing
+ * read it. Production, Cash Mode 1: `cop_6ec9dafa33f44c268b1d` reads "USD
+ * -795.00 expected, being USD 5.00 less USD 800.00 of money out", and Brain
+ * marked it READY by itself, the one piece in the portfolio to get there. With
+ * a commercial grant in place the next loop would have contacted somebody about
+ * it.
+ *
+ * Read from the two columns that line is composed from, so the rule and the
+ * sentence cannot disagree. Unknown is not a decline: with either figure
+ * missing this answers null and the card's own gate decides as before. Only
+ * what *Brain* does is affected — a person may still mark the piece ready, and
+ * that is their decision, made knowing the card.
+ */
+export function declinedOnEconomics(opportunity: CashOpportunity): string | null {
+  const price = opportunity.priceCents;
+  const exposure = opportunity.peakFundingCents;
+  if (price === null || exposure === null) return null;
+  const margin = price - exposure;
+  if (margin > 0) return null;
+  return (
+    `Its own economics read ${formatMoney(margin, opportunity.currency)} — ` +
+    `${formatMoney(price, opportunity.currency)} less ${formatMoney(exposure, opportunity.currency)} ` +
+    'of money out — which is a reason to decline, so Brain neither readies nor contacts anyone ' +
+    'for it. A person may still decide otherwise.'
+  );
+}
+
 export async function advanceWithinAuthority(projectId: string): Promise<AuthorityAdvance> {
   const out: AuthorityAdvance = { took: [], withheld: [] };
   const mode = await getCashMode(projectId);
@@ -667,6 +699,11 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
     // a piece being worked on, and reporting every one of them as withheld
     // every tick would bury the ones that are actually stuck.
     if (!evidenceCard(opportunity).readiness.ready) continue;
+    const declined = declinedOnEconomics(opportunity);
+    if (declined) {
+      out.withheld.push({ opportunityId: opportunity.id, because: declined });
+      continue;
+    }
     const ready = await markReady({ opportunityId: opportunity.id, actorRef: BRAIN });
     if (ready.ok) {
       out.took.push({
@@ -681,6 +718,13 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
 
   for (const opportunity of await listOpportunities({ projectId, states: ['READY'] })) {
     if (opportunity.duplicateOfId) continue;
+    // Before the deadline, the grant and the capability: a piece Brain should
+    // not be pursuing at all is not waiting for any of them.
+    const declined = declinedOnEconomics(opportunity);
+    if (declined) {
+      out.withheld.push({ opportunityId: opportunity.id, because: declined });
+      continue;
+    }
     /*
      * Not after its published deadline. A piece marked ready before the date
      * passed would otherwise still get a buyer message after it — contacting
