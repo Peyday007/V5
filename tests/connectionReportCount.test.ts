@@ -33,3 +33,18 @@ describe('the connection report counts what it shows', () => {
     expect(typeof mod.countAlertsNeedingAPerson).toBe('function');
   });
 });
+
+describe('the early warning reads only what preceded past quarantines', () => {
+  const quiet = { name: 'R', unansweredSinceArrival: 0, fires24h: 10, arrivals24h: 9, quarantinedSiblings: [] };
+  it('says nothing about a Routine that is answering', async () => {
+    const { warningsFor } = await import('../scripts/connection-report.ts');
+    expect(warningsFor(quiet)).toEqual([]);
+    // Too few fires to call a ratio.
+    expect(warningsFor({ ...quiet, fires24h: 3, arrivals24h: 0 })).toEqual([]);
+  });
+  it('names each sign that preceded a quarantine', async () => {
+    const { warningsFor } = await import('../scripts/connection-report.ts');
+    const w = warningsFor({ name: 'R', unansweredSinceArrival: 1, fires24h: 6, arrivals24h: 2, quarantinedSiblings: ['S'] });
+    expect(w.map((x) => x.split(' ')[0])).toEqual(['FIRST_NO_SHOW', 'SIBLING_DOWN', 'FEW_ARRIVALS']);
+  });
+});

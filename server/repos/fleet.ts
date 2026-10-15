@@ -783,6 +783,17 @@ export async function unansweredFiresByRoutine(): Promise<Map<string, number>> {
               (SELECT r.no_shows_forgiven_at FROM fleet_routines r
                 WHERE r.id = e.routine_id),
               '')
+        -- And later than this Routine's last recorded arrival of its
+        -- registered worker. worker_sessions is written once per credential
+        -- and only when a bin is taken, so a check-in that found nothing to
+        -- take — or whose credential a sibling Routine on the same connector
+        -- recorded first — moved no boundary, and Caleb 3-B was quarantined
+        -- as "3 consecutive" with four arrivals between its no-shows.
+        AND e.at > COALESCE(
+              (SELECT MAX(a.at) FROM bin_events a
+                WHERE a.routine_id = e.routine_id
+                  AND a.event_type = 'DISPATCH_SESSION_ARRIVED'),
+              '')
       GROUP BY e.routine_id`,
   );
   return new Map(rows.map((row) => [row.routine_id, Number(row.n)]));
