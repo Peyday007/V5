@@ -506,6 +506,13 @@ async function main(): Promise<void> {
     } else {
       console.log('    event loop   (not measured by this revision)');
     }
+    // Requests that reached /mcp with no credential: a Routine's connector that
+    // lost its token shows here, where a Routine that never called shows nothing.
+    const bare = r['credentialless'] as { byClient: Array<{ key: string; count: number; first: string; last: string }>; recent: Array<{ at: string; key: string }> } | undefined;
+    if (bare) {
+      if (bare.byClient.length === 0) console.log('    no-token     none since start');
+      for (const c of bare.byClient) console.log(`    no-token     ${c.key}  n=${c.count} first=${c.first} last=${c.last}`);
+    }
     const pressure = r['pressure'] as { state: string; reason: string; p90Ms: number | null; samples: number; failures: number; byKind?: Record<string, number>; since: string } | undefined;
     if (pressure) {
       console.log(`    pressure     ${pressure.state} since ${pressure.since}: ${pressure.reason} (now p90=${pressure.p90Ms ?? '-'}ms over ${pressure.samples} statements, ${pressure.failures} overload failure(s) in 120s, felt ${JSON.stringify(pressure.byKind ?? {})})`);
