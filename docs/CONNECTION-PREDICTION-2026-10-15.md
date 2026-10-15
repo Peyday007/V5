@@ -103,3 +103,22 @@ Routine:
 
 Each is labelled with the precision measured here, and none claims more
 lead time than about two hours.
+
+## Classification now (live report on `15c8381`, 2026-10-15)
+
+| Routine | class | evidence | prevention |
+|---|---|---|---|
+| Brain Research 1-B, 1-C, 1-D | HEALTHY | 1-C/1-D: 50 of ~51 fires arrived in 24h; last real no-show ≥2 days ago | none |
+| Brain Research A | WARNING | `FEW_ARRIVALS` 6 of 16 fires arrived in 24h; no real no-show since 10-14 | watch; nothing to do yet |
+| Airyn 2-A | WARNING | `SIBLING_DOWN` (2-B/C/D); quarantined and lifted itself 10-15 04:01 | account owner fixes the siblings' connector choice |
+| Caleb 3-A | HIGH RISK | quarantined 10-14 and 10-15 (lifted by probe); `SIBLING_DOWN` 3-B/C/D; `FEW_ARRIVALS` 28 of 58 | account owner checks the Claude Routines on this account |
+| Caleb 3-D | ALREADY BROKEN (Brain recovering) | 4 no-shows, last arrival 10-13; probes NO_MCP/AMBIGUOUS | Brain re-probes; then account owner |
+| Caleb 3-B, 3-C, Factory surface 3 | ALREADY BROKEN | RECOVERY_EXHAUSTED; every probe NO_MCP | account owner: Routine still runs, connector attached |
+| Airyn 2-B, 2-C, 2-D | ALREADY BROKEN | MIXED_WORKERS: the Claude Routine holds both connectors | account owner removes the `/mcp` connector from them |
+| Factory surface 1, 2 | UNKNOWN | connectors HEALTHY, but no fire since 10-12 (no Factory work) | none until work exists |
+| V2 | ALREADY BROKEN (operator hold) | AUTH 403 org entitlement, held since 09-05 | owner/operator decision |
+
+The pooler refused the report's own connection on 3 of 4 tries between
+12:40Z and 14:20Z on 10-15. That is database saturation, and it is Brain's
+infrastructure, not a connector failure. The history says it does not cause
+quarantines (above).

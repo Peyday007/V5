@@ -13231,7 +13231,8 @@ with no Brain tools and was recorded as a fired session that never checked in.
   quarantine and was never honoured. Migration 117 / pg 108.
 - **A correction to §59: Brain does not stop after four probes.** A probe that
   arrived as the right worker but could not lift a mixed history is progress,
-  not failure, and the next one follows after 15 minutes. After the fast budget
+  not failure, and the next one follows after 15 minutes (#206 reached this
+  first and its version ships). After the fast budget
   the owner is named and Brain still probes once a day, up to
   `SLOW_PROBE_LIMIT`, because an owner who fixes the Claude Routine usually
   tells nobody. Bounded, as every probe is a real activation.
