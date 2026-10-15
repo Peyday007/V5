@@ -501,4 +501,105 @@ describe("Airyn's four Routines over simulated time", () => {
       expect((await getRoutine(c.id))!.state).toBe('ENABLED');
     }
   });
+
+  it('2-B in production: a corrected mixed Routine with one transient miss lifts within the hour, without spending its budget', async () => {
+    const routines = await airyn();
+    const right = await connector(research, 'https://brain.example/mcp/factory');
+    const wrong = await connector(factory, 'https://brain.example/mcp');
+    const b = routines[1]!;
+    // Right sessions, then wrong ones: the Routine held both connectors.
+    for (const [k, mixWrong] of [false, false, true].entries()) {
+      at(clock + HOUR);
+      await fire(b, `hist_${k}`);
+      if (mixWrong) await arriveAndWork(factory, wrong, `hist_${k}`, []);
+      else await arriveAndWork(research, right, `hist_${k}`, [projectId]);
+    }
+    at(clock + 5 * 60_000);
+    await judge();
+    expect((await getRoutine(b.id))!.state).toBe('QUARANTINED');
+
+    // Airyn corrects it. The first probe after the correction is a transient
+    // NO_MCP (production 17:50 and 18:06); every later session arrives right.
+    let n = 0;
+    let arriving = false;
+    const probeFire: Fire = async ({ target }) => ({ ok: true, sessionRef: `cse_B${(n += 1)}`, fireEventId: 'f', routineId: target.routineId });
+    const principal = () =>
+      ({
+        type: 'WORKER', id: research, handle: research, displayName: research, isBrainAdmin: false, mustChangePassword: false,
+        credentialId: right.accessId, authMethod: 'OAUTH_BEARER',
+        memberships: [{ projectId, principalType: 'WORKER', principalId: research, role: 'MEMBER', scopes: SCOPES, active: true }],
+        requestId: `req_b${n}`,
+      }) as unknown as Principal;
+    const startedAt = clock;
+    let firstRightAt: number | null = null;
+    const outcomes: string[] = [];
+    for (let minute = 0; minute < 48 * 60 && (await getRoutine(b.id))!.state === 'QUARANTINED'; minute += 5) {
+      at(startedAt + minute * 60_000);
+      const id = await autoProbeQuarantinedSurfaces({ force: true, fire: probeFire, now: clock });
+      if (!id) {
+        await settleRecoveryProbes(clock);
+        continue;
+      }
+      if (arriving) {
+        await touchToken(right.accessId);
+        await checkIn({ principal: principal(), workerId: research, sessionRef: `session_B${n}` });
+        firstRightAt ??= clock;
+        await settleRecoveryProbes(clock);
+        outcomes.push('HEALTHY');
+      } else {
+        at(clock + RECOVERY_PROBE_WINDOW_MS + 1_000);
+        await settleRecoveryProbes(clock);
+        outcomes.push('NO_MCP');
+        arriving = true;
+      }
+    }
+    expect((await getRoutine(b.id))!.state).toBe('ENABLED');
+    expect(outcomes).toEqual(['NO_MCP', 'HEALTHY', 'HEALTHY', 'HEALTHY']);
+    // The three right sessions are asked for at the shortest backoff, not 1h, 4h, 12h.
+    expect(clock - firstRightAt!).toBeLessThan(HOUR);
+  });
+
+  it('a Routine that keeps choosing both connectors still reaches a person', async () => {
+    const routines = await airyn();
+    const right = await connector(research, 'https://brain.example/mcp/factory');
+    const wrong = await connector(factory, 'https://brain.example/mcp');
+    const b = routines[1]!;
+    for (const [k, mixWrong] of [false, true].entries()) {
+      at(clock + HOUR);
+      await fire(b, `alt_${k}`);
+      if (mixWrong) await arriveAndWork(factory, wrong, `alt_${k}`, []);
+      else await arriveAndWork(research, right, `alt_${k}`, [projectId]);
+    }
+    at(clock + 5 * 60_000);
+    await judge();
+    // Every probe session alternates: right, right, wrong — never three in a row.
+    let n = 0;
+    const fire2: Fire = async ({ target }) => ({ ok: true, sessionRef: `cse_ALT${(n += 1)}`, fireEventId: 'f', routineId: target.routineId });
+    let probes = 0;
+    for (let step = 0; step < 60; step += 1) {
+      at(clock + 25 * HOUR);
+      const id = await autoProbeQuarantinedSurfaces({ force: true, fire: fire2, now: clock });
+      if (!id) break;
+      probes += 1;
+      const isWrong = probes % 3 === 0;
+      const c = isWrong ? wrong : right;
+      const worker = isWrong ? factory : research;
+      await touchToken(c.accessId);
+      await checkIn({
+        principal: {
+          type: 'WORKER', id: worker, handle: worker, displayName: worker, isBrainAdmin: false, mustChangePassword: false,
+          credentialId: c.accessId, authMethod: 'OAUTH_BEARER',
+          memberships: isWrong ? [] : [{ projectId, principalType: 'WORKER', principalId: worker, role: 'MEMBER', scopes: SCOPES, active: true }],
+          requestId: `req_alt${n}`,
+        } as unknown as Principal,
+        workerId: worker,
+        sessionRef: `session_ALT${n}`,
+      });
+      at(clock + RECOVERY_PROBE_WINDOW_MS + 1_000);
+      await settleRecoveryProbes(clock);
+    }
+    expect((await getRoutine(b.id))!.state).toBe('QUARANTINED');
+    expect(probes).toBeLessThanOrEqual(AUTO_PROBE_LIMIT * CONSISTENT_RIGHT_SESSIONS + CONSISTENT_RIGHT_SESSIONS);
+    expect(probes).toBeGreaterThan(AUTO_PROBE_LIMIT);
+  });
 });
