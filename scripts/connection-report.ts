@@ -658,7 +658,12 @@ async function main(): Promise<void> {
    * Claude Routine choosing another Brain connector: the connector works, the
    * selection is wrong, and no reconnect fixes it.
    */
-  console.log('\nARRIVALS (fired sessions that checked in, by Routine)');
+  // Before the three window-wide aggregates below, which are the reads most
+  // likely to time out exactly when the database is slow — and each is now its
+  // own part, so a timeout in one no longer ends the report.
+  await section('\nEARLY WARNING (enabled Routines showing what preceded past quarantines)', () => earlyWarning());
+
+  await section('\nARRIVALS (fired sessions that checked in, by Routine)', async () => {
   const arrivals = await db.all<{ routine_id: string | null; event_type: string; n: number; last: string; worker: string | null }>(
     `SELECT routine_id, event_type, COUNT(*) AS n, MAX(at) AS last, MAX(worker_id) AS worker FROM bin_events
       WHERE event_type IN ('DISPATCH_SESSION_ARRIVED', 'DISPATCH_WRONG_WORKER') AND at >= ?
@@ -672,6 +677,7 @@ async function main(): Promise<void> {
         `n=${Number(a.n)} last=${a.last} as=${a.worker ?? '-'}`,
     );
   }
+  });
 
   /*
    * What each worker's sessions actually called, from the audit row every MCP
@@ -679,7 +685,7 @@ async function main(): Promise<void> {
    * "nothing reached Brain" cannot: did a session arrive and call something
    * other than check-in, or call nothing at all.
    */
-  console.log('\nMCP CALLS (by worker and tool)');
+  await section('\nMCP CALLS (by worker and tool)', async () => {
   const calls = await db.all<{ actor_id: string | null; target_id: string | null; result: string; n: number; last: string }>(
     `SELECT actor_id, target_id, result, COUNT(*) AS n, MAX(created_at) AS last FROM identity_events
       WHERE action = 'MCP_TOOL_CALL' AND actor_type = 'WORKER' AND created_at >= ?
@@ -690,6 +696,7 @@ async function main(): Promise<void> {
   for (const c of calls) {
     console.log(`  ${c.actor_id ?? '-'}  ${c.target_id ?? '-'}  ${c.result}  n=${Number(c.n)} last=${c.last}`);
   }
+  });
 
   /*
    * Work, by worker and project, from the bin ledger.
@@ -701,7 +708,7 @@ async function main(): Promise<void> {
    * Brain accepted and refused. Every figure is a `bin_events` row Brain wrote
    * with the authenticated worker on it; nothing a worker said contributes.
    */
-  console.log('\nWORK (what sessions did once in, by worker and project)');
+  await section('\nWORK (what sessions did once in, by worker and project)', async () => {
   const work = await db.all<{ worker_id: string; project_id: string | null; event_type: string; n: number; last: string }>(
     `SELECT worker_id, project_id, event_type, COUNT(*) AS n, MAX(at) AS last FROM bin_events
       WHERE worker_id IS NOT NULL AND at >= ?
@@ -719,8 +726,7 @@ async function main(): Promise<void> {
     if ((lastAt.get(key) ?? '') < row.last) lastAt.set(key, row.last);
   }
   for (const [key, counts] of grouped) console.log(`  ${key}  ${counts.join(' ')}  last=${lastAt.get(key)}`);
-
-  await section('\nEARLY WARNING (enabled Routines showing what preceded past quarantines)', () => earlyWarning());
+  });
 
   console.log('\nALERTS (who has to act, and what)');
   const { connectionAlerts } = await import('../server/services/fleet/connectionAlerts.ts');
