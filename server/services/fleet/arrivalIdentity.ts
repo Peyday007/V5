@@ -116,7 +116,7 @@ export async function observeFiredSessionArrival(input: {
 }): Promise<ArrivalVerdict> {
   {
     const spellings = sessionSpellings(input.sessionRef);
-    if (spellings.length === 0) return { kind: 'NONE' };
+    if (spellings.length === 0) return observeSessionlessArrival(input);
     const now = input.now ?? Date.now();
     const since = new Date(now - ARRIVAL_LOOKBACK_MS).toISOString();
     const ph = spellings.map(() => '?').join(', ');
@@ -214,6 +214,90 @@ export async function observeFiredSessionArrival(input: {
     }
     return verdict;
   }
+}
+
+/**
+ * A session that checked in without saying which provider session it is.
+ *
+ * `session_ref` is optional, and a Routine whose prompt omits it — or whose
+ * environment hands it the unexpanded placeholder, which check-in discards —
+ * used to leave no arrival at all. Its fires then read as unanswered whenever
+ * its bin was not taken, the quarantine count never reset, and every recovery
+ * probe of it settled AMBIGUOUS: a correctly connected Routine walking toward
+ * quarantine because of a missing argument.
+ *
+ * Brain can still say which fire this is, from its own rows, in exactly one
+ * case: the credential belongs to one connector, and that connector's Routines
+ * hold exactly one fire, sent within the in-flight window to a Routine
+ * registered for this very worker, that nothing has answered yet. Then that is
+ * this session's fire — and the arrival is recorded under the session Brain
+ * fired, which is the spelling the no-show pass looks for. Two candidates, a
+ * worker credential with no connector, or a recovery probe's bin (which settles
+ * itself) is nothing: an attribution that cannot be established reads as absent.
+ */
+async function observeSessionlessArrival(input: {
+  workerId: string;
+  credentialId: string | null;
+  now?: number;
+}): Promise<ArrivalVerdict> {
+  if (!input.credentialId) return { kind: 'NONE' };
+  const token = await getToken(input.credentialId);
+  if (!token) return { kind: 'NONE' };
+  const client = await connectorClient(token.clientId);
+  if (!client) return { kind: 'NONE' };
+  const now = input.now ?? Date.now();
+  const since = new Date(now - ATTRIBUTION_WINDOW_MS).toISOString();
+  const open = await getDb().all<{
+    bin_id: string;
+    routine_id: string;
+    routine_ref: string | null;
+    lease_generation: number;
+    project_id: string;
+    session_ref: string;
+  }>(
+    `SELECT d.bin_id AS bin_id, d.routine_id AS routine_id, d.routine_ref AS routine_ref,
+            d.lease_generation AS lease_generation, b.project_id AS project_id, d.session_ref AS session_ref
+       FROM bin_dispatch d
+       JOIN bins b ON b.id = d.bin_id
+       JOIN fleet_routines r ON r.id = d.routine_id
+      WHERE d.state = 'SENT' AND d.sent_at >= ? AND d.session_ref IS NOT NULL
+        AND r.connector_id = ? AND r.worker_id = ?
+        AND NOT EXISTS (SELECT 1 FROM connector_recovery_probes p WHERE p.bin_id = d.bin_id)
+        AND NOT EXISTS (SELECT 1 FROM bin_events e
+                         WHERE e.bin_id = d.bin_id AND e.session_ref = d.session_ref
+                           AND e.event_type IN ('DISPATCH_SESSION_ARRIVED', 'DISPATCH_WRONG_WORKER'))
+      LIMIT 2`,
+    [since, client.connectorId, input.workerId],
+  );
+  if (open.length !== 1) return { kind: 'NONE' };
+  const fired = open[0]!;
+  const routine = await getRoutine(fired.routine_id);
+  if (!routine) return { kind: 'NONE' };
+  await recordBinEvent({
+    eventType: 'DISPATCH_SESSION_ARRIVED',
+    binId: fired.bin_id,
+    projectId: fired.project_id,
+    leaseGeneration: fired.lease_generation,
+    routineRef: fired.routine_ref,
+    routineId: routine.id,
+    accountId: routine.accountId,
+    workerId: input.workerId,
+    sessionRef: fired.session_ref,
+    evidenceClass: 'MEASURED',
+    outcome: 'ARRIVED',
+    measures: {
+      expectedWorkerId: routine.workerId,
+      arrivedWorkerId: input.workerId,
+      credentialId: input.credentialId,
+      clientId: token.clientId,
+      endpoint: endpointOf(token.resource),
+      attributedBy: 'SOLE_OPEN_FIRE_ON_CONNECTOR',
+    },
+    reason:
+      `A session arrived as ${routine.name}'s registered worker without naming its provider session; ` +
+      'it is the only unanswered fire on that connector, so it is credited to it.',
+  });
+  return { kind: 'MATCH', routineId: routine.id, binId: fired.bin_id };
 }
 
 /* ------------------------------------------------------------------------- */

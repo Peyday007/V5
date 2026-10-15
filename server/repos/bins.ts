@@ -3058,15 +3058,23 @@ export async function reopenNoShowDispatches(
         unjudged = true;
       }
       const { classifyInfraFailure } = await import('../db/infra.ts');
+      // The worker the fire was for, so a session that checked in without
+      // naming itself still matches held evidence by worker. A read that fails
+      // here leaves it unknown; the held check then matches by session only.
+      let firedWorker: string | null = null;
+      try {
+        firedWorker = (await getRoutine(row.routine_id))?.workerId ?? null;
+      } catch {
+        firedWorker = null;
+      }
       // What this process already knows, before any read that could fail.
-      infraIncident = heldArrivalEvidence(row.session_ref, row.sent_at);
+      infraIncident = heldArrivalEvidence(row.session_ref, row.sent_at, firedWorker);
       const heldInMemory = infraIncident !== null;
       try {
         if (!infraIncident) {
           // This fire's own session arriving and going unserved is the most
           // direct evidence; a fleet-wide authentication outage or a restart is
           // the other.
-          const firedWorker = (await getRoutine(row.routine_id))?.workerId ?? null;
           infraIncident =
             (await unservedArrivalFor(row.session_ref, row.sent_at, firedWorker)) ??
             (await arrivalIncidentDuring(row.sent_at));

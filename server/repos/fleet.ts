@@ -93,6 +93,7 @@ function mapRoutine(row: FleetRoutineRow): FleetRoutine {
     consecutiveFailures: row.consecutive_failures,
     consecutiveNoShows: row.consecutive_no_shows,
     noShowsForgivenAt: row.no_shows_forgiven_at ?? null,
+    stateChangedAt: row.state_changed_at ?? null,
     connectorId: row.connector_id ?? null,
     totalFires: row.total_fires,
     totalRefusals: row.total_refusals,
@@ -356,13 +357,21 @@ export async function setRoutineState(input: {
   const result = await getDb().run(
     forgiving
       ? `UPDATE fleet_routines
-            SET state = ?, state_reason = ?, updated_at = ?, no_shows_forgiven_at = ?
+            SET state = ?, state_reason = ?, updated_at = ?, no_shows_forgiven_at = ?,
+                state_changed_at = ?
           WHERE id = ? AND state = ?`
-      : `UPDATE fleet_routines SET state = ?, state_reason = ?, updated_at = ?
-          WHERE id = ? AND state = ?`,
+      : input.from !== input.to
+        ? `UPDATE fleet_routines SET state = ?, state_reason = ?, updated_at = ?, state_changed_at = ?
+            WHERE id = ? AND state = ?`
+        : // A reason rewritten in place (QUARANTINED -> QUARANTINED) is not a
+          // change of state, so it leaves `state_changed_at` where it was.
+          `UPDATE fleet_routines SET state = ?, state_reason = ?, updated_at = ?
+            WHERE id = ? AND state = ?`,
     (forgiving
-      ? [input.to, input.reason, at, at, input.routineId, input.from]
-      : [input.to, input.reason, at, input.routineId, input.from]) as never[],
+      ? [input.to, input.reason, at, at, at, input.routineId, input.from]
+      : input.from !== input.to
+        ? [input.to, input.reason, at, at, input.routineId, input.from]
+        : [input.to, input.reason, at, input.routineId, input.from]) as never[],
   );
   return result.changes === 1;
 }

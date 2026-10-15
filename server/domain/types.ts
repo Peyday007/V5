@@ -5242,6 +5242,7 @@ export interface FleetRoutineRow {
   consecutive_failures: number;
   consecutive_no_shows: number;
   no_shows_forgiven_at: string | null;
+  state_changed_at?: string | null;
   connector_id?: string | null;
   total_fires: number;
   total_refusals: number;
@@ -5278,6 +5279,11 @@ export interface FleetRoutine {
    * of QUARANTINED, and only ever forward.
    */
   noShowsForgivenAt: string | null;
+  /**
+   * When `state` last moved. Migration 117. Null for a row whose state has not
+   * moved since then; readers fall back to `updatedAt`.
+   */
+  stateChangedAt: string | null;
   /** The logical connector this Routine's sessions authenticate through. Migration 100. */
   connectorId: string | null;
   totalFires: number;

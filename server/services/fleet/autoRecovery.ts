@@ -46,6 +46,17 @@ import { restartWindowPending } from '../infra/incidents.ts';
 
 export const AUTO_RECOVERY_ACTOR = 'brain:auto-recovery';
 export const AUTO_PROBE_LIMIT = 4;
+/**
+ * Past `AUTO_PROBE_LIMIT` the owner is named — and Brain still asks, once a
+ * day, up to this many probes in all. The fast budget assumed a person would
+ * act once named; production showed the opposite shape: the account owner
+ * fixes the Claude Routine (its connector choice, a lapsed subscription) and
+ * tells nobody, and with nothing left to ask, the surface stayed quarantined
+ * until somebody happened to probe it by hand. One activation a day for two
+ * weeks is the bound, and it is still a bound.
+ */
+export const SLOW_PROBE_LIMIT = AUTO_PROBE_LIMIT + 14;
+export const SLOW_PROBE_EVERY_MS = 24 * 60 * 60_000;
 /** Wait before the first probe, then after each one that did not prove the surface healthy. */
 export const AUTO_PROBE_BACKOFF_MS = [15 * 60_000, 60 * 60_000, 4 * 60 * 60_000, 12 * 60 * 60_000, 24 * 60 * 60_000];
 const RUN_EVERY_MS = 60_000;
@@ -73,6 +84,11 @@ interface ProbeHistory {
   outages: number;
   /** Whether the newest probe was one of those. */
   lastWasOutage: boolean;
+  /**
+   * Consecutive newest probes that arrived as the right worker but did not
+   * lift a mixed-arrival quarantine: progress toward the lift, not failure.
+   */
+  rightStreak: number;
   lastAt: string | null;
   lastNextAction: string | null;
   lastState: string | null;
@@ -97,7 +113,7 @@ async function historyFor(routine: FleetRoutine): Promise<ProbeHistory> {
     outcome: string | null;
   }>(
     `SELECT state, created_at, next_action, requested_by_id, health, outcome FROM connector_recovery_probes
-      WHERE routine_id = ? AND created_at > ? ORDER BY created_at DESC LIMIT 20`,
+      WHERE routine_id = ? AND created_at > ? ORDER BY created_at DESC LIMIT 40`,
     [routine.id, routine.noShowsForgivenAt ?? ''],
   );
   let failed = 0;
@@ -121,8 +137,21 @@ async function historyFor(routine: FleetRoutine): Promise<ProbeHistory> {
     if (row.state === 'HEALTHY' && !(row.outcome ?? '').includes(MIXED_ARRIVALS_MARK)) break;
     episode.push(row);
   }
+  let rightStreak = 0;
+  for (const row of episode) {
+    if (!mixedButRight(row)) break;
+    rightStreak += 1;
+  }
   for (const row of [...episode].reverse()) {
     if (row.state === 'FIRING' || row.state === 'FIRED') continue;
+    /*
+     * A probe that arrived as the right worker and did not lift only because
+     * the Routine's earlier arrivals were mixed is the lift in progress — the
+     * owner fixed the connector and three right sessions in a row are needed.
+     * Counting it as a failure exhausted a Routine whose owner had fixed it
+     * after the second probe, at two right sessions of three.
+     */
+    if (mixedButRight(row)) continue;
     /*
      * Brain's own outage is not the surface's failure (CON-6): Caleb 3-B was
      * declared exhausted, naming its account owner, on a probe whose only
@@ -143,7 +172,11 @@ async function historyFor(routine: FleetRoutine): Promise<ProbeHistory> {
     lastState = newest.state;
     lastWasOutage = probeAmbiguousByOutage(newest);
   }
-  return { failed, outages, lastWasOutage, lastAt, lastNextAction, lastState };
+  return { failed, outages, lastWasOutage, rightStreak, lastAt, lastNextAction, lastState };
+}
+
+function mixedButRight(row: { state: string; outcome: string | null }): boolean {
+  return row.state === 'HEALTHY' && (row.outcome ?? '').includes(MIXED_ARRIVALS_MARK);
 }
 
 /** May Brain probe this Routine by itself, and when? Null when never. */
@@ -153,9 +186,15 @@ async function dueAt(routine: FleetRoutine): Promise<{ at: number; history: Prob
   if (!account || account.kind !== 'CAPACITY') return null;
   if (await recoveryIneligibility(routine)) return null;
   const history = await historyFor(routine);
-  if (history.failed >= AUTO_PROBE_LIMIT) return null;
-  const base = history.lastAt ?? routine.updatedAt;
-  const wait = AUTO_PROBE_BACKOFF_MS[Math.min(history.failed, AUTO_PROBE_BACKOFF_MS.length - 1)]!;
+  if (history.failed >= SLOW_PROBE_LIMIT) return null;
+  // The quarantine's own instant, not `updatedAt`, which every touch moves.
+  const base = history.lastAt ?? routine.stateChangedAt ?? routine.updatedAt;
+  const wait =
+    history.rightStreak > 0
+      ? AUTO_PROBE_BACKOFF_MS[0]!
+      : history.failed >= AUTO_PROBE_LIMIT
+        ? SLOW_PROBE_EVERY_MS
+        : AUTO_PROBE_BACKOFF_MS[Math.min(history.failed, AUTO_PROBE_BACKOFF_MS.length - 1)]!;
   return { at: Date.parse(base) + wait, history };
 }
 

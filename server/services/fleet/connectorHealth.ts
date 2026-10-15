@@ -185,7 +185,15 @@ export function forgetRoutingHealth(): void {
  * `TOKEN_HISTORY_MS` bounds it all the same, for a token event written by any
  * other path.
  */
-const TOKEN_HISTORY_MS = 5 * 60_000;
+/*
+ * An hour, not five minutes. Production, 2026-10-15 on 15c8381: this scan was
+ * still the costliest statement in the database — 441 runs in six hours at a
+ * mean of 12 s (max 73 s), about six connectors times the five-minute expiry —
+ * on the same degraded host where authentication reached 40 s and a refresh
+ * 52 s, both past Claude's connect timeout. The expiry is the backstop, not the
+ * mechanism: every token event that changes the answer clears it by name.
+ */
+const TOKEN_HISTORY_MS = 60 * 60_000;
 type TokenRow = { created_at: string; metadata: string | null };
 const tokenHistoryCache = new Map<string, { at: number; denials: TokenRow[]; recovered: TokenRow[] }>();
 

@@ -13199,6 +13199,51 @@ optional writers to a write-ahead log that is already queued. If the host's own
 I/O budget is spent, that is a Supabase capacity fact, and the report says so
 from its readings.
 
+## 64. A connector opens once, and Brain answers within the time it waits.
+
+A Claude Code session opens its Brain connector when the session starts: about
+30 s, three quick retries, then the server is marked failed for that session
+(code.claude.com/docs/en/mcp). On 2026-10-15 production authentication reached
+p95 15 s and max 40 s, a refresh p95 52 s, and this repository's own session saw
+`Factory_Brain` time out at 30 s and then answer 503. Every such session ended
+with no Brain tools and was recorded as a fired session that never checked in.
+`docs/CONNECTION-DURABILITY-2026-10-15.md` is the whole matrix.
+
+- **The handshake may lean on a recent proof, and nothing else may.**
+  `services/identity/recentProof.ts` remembers, per process, a machine bearer
+  the database authenticated in the last 15 minutes. Only handshake methods
+  (`initialize`, `tools/list`, `ping`, …) may answer on it, only when the
+  database check throws or has not answered within 8 s, and a refused credential
+  is forgotten at once. Every tool call still authenticates against current
+  rows. This is §17's "read on every request" holding where it matters: the
+  handshake reads nothing, writes nothing and answers everybody alike (§21).
+- **An answer later than the client waits is Brain's failure.** `SLOW_ANSWER`
+  (> `SLOW_ARRIVAL_MS`, 25 s) at `mcp:authenticate` or `oauth:token` is an
+  arrival-path incident, so the session that gave up is an infra miss rather
+  than a no-show or a NO_MCP probe. It is not an overload kind.
+- **A refused bearer is told `error="invalid_token"`**, so a client refreshes
+  rather than starting over. It names no reason (invariant 23).
+- **Shutdown writes the token uses it holds** before the database closes, so a
+  restart cannot turn a working connector into `CLIENT_STOPPED_RETRYING`.
+- **"After the quarantine" is `state_changed_at`, never `updated_at`.** Every
+  fire, probe fire, delivery proof and the token exchange's own touch move
+  `updated_at`, so a member's own reconnect was read as older than the
+  quarantine and was never honoured. Migration 117 / pg 108.
+- **A correction to §59: Brain does not stop after four probes.** A probe that
+  arrived as the right worker but could not lift a mixed history is progress,
+  not failure, and the next one follows after 15 minutes. After the fast budget
+  the owner is named and Brain still probes once a day, up to
+  `SLOW_PROBE_LIMIT`, because an owner who fixes the Claude Routine usually
+  tells nobody. Bounded, as every probe is a real activation.
+- **A session without `session_ref` is credited only when Brain can tell which
+  fire it was:** its credential's connector holds exactly one open fire for that
+  worker in the window. With two, it is credited to neither.
+
+What Brain cannot fix is named, not worked around. A Claude Routine that holds
+the wrong connector (Airyn 2-B/C/D), or whose sessions never reach Brain (Airyn
+2-B, Caleb 3-B/C/D, Factory surface 3), is the account owner's to change in
+Claude. Brain cannot read another account's Routine configuration.
+
 ## Repository map
 
 ```
@@ -13307,6 +13352,7 @@ server/
       passkeyAuth.ts    the relying party, the challenge, and one refusal for everything
       passwordDoor.ts   who may still present a password, derived per account from rows
       tokenTouch.ts     a token's use, written even when the database was busy
+      recentProof.ts    a bearer proved recently, so the handshake survives a slow database
       context.ts        the request's principal, and why it is also on the request
       policy.ts         roles, scopes, and the one authorization decision
       authenticate.ts   cookie or bearer -> principal, from server rows only

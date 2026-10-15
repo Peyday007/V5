@@ -334,8 +334,17 @@ export async function recoverReauthorizedSurfaces(now = Date.now()): Promise<str
      * in full exactly as before, so revocation and every other verdict still
      * decide.
      */
+    /*
+     * "After the quarantine" is the instant the state moved, never `updatedAt`:
+     * every fire — a recovery probe's included — and the touch the code
+     * exchange performs after minting the grant all move that column, so a
+     * member's own reconnect read as older than the quarantine and was never
+     * honoured. A row from before migration 117 has no state time and keeps
+     * the old, stricter reading.
+     */
+    const quarantinedAt = routine.stateChangedAt ?? routine.updatedAt;
     const grant = await lastGrantForConnector(routine.connectorId);
-    if (!grant || grant <= routine.updatedAt) continue;
+    if (!grant || grant <= quarantinedAt) continue;
     const health = await connectorHealth(routine.connectorId, now);
     if (!health || health.state !== 'HEALTHY') continue;
     /*
@@ -347,7 +356,7 @@ export async function recoverReauthorizedSurfaces(now = Date.now()): Promise<str
      * every three fires. `lastGrantAt` is an authorization-code grant
      * (`parent_token_id IS NULL`), which only a person's consent produces.
      */
-    const since = routine.updatedAt;
+    const since = quarantinedAt;
     const fresh = health.lastGrantAt && health.lastGrantAt > since ? health.lastGrantAt : null;
     if (!fresh) continue;
     const moved = await setRoutineState({
