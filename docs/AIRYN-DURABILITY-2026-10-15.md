@@ -71,6 +71,66 @@ time can show that.
   was concluded or charged, and Brain re-probes it by itself once healthy.
   Correct behavior, and no evidence about 2-D's configuration yet.
 
+## 3a. Later the same evening: every Routine arrives as the right worker
+
+Read at 19:30Z, revision `15c8381`:
+
+- **2-C**: right-worker sessions at 17:43 and 18:22; a third probe fired at
+  19:28.
+- **2-D**: right at 19:00. This was Brain's own re-probe after the
+  BRAIN_UNAVAILABLE one.
+- **2-B**: right at 19:28, after its two NO_MCP probes.
+
+Every one of these arrivals authenticated as `wkr_9826…`. No session has
+arrived as the factory worker since 2026-10-14 16:02. So the corrected
+configuration is proven from session identities, on all four Routines.
+
+## 3b. Root causes of the remaining interruptions
+
+**2-B, NO_MCP at 17:50 and 18:06, then right at 19:28.** Claude started both
+sessions. Neither reached Brain, while 2-C reached Brain through the same
+account connector at 17:43 and 18:22. A Claude connector belongs to the
+account, so neither the connector nor its tokens can be the cause. The
+difference is 2-B's own Routine, and it cleared without anything changing on
+Brain's side.
+
+The most likely explanation is Airyn editing 2-B's Routine during that window.
+The NO_MCPs fall in the hour his correction was being made. This cannot be
+proven from Brain. What would settle it is in Claude:
+- 2-B's run history for sessions `cse_01PmJGpLwHGNWjDn28FDTdzY` (17:50Z) and
+  `cse_01VfESiXDJAzNgbEqEVUCphL` (18:06Z);
+- when the Routine was last edited.
+
+**2-A, 02:55–03:23 on 10-15: account-level.** Claude accepted 13 fires and
+returned sessions, and none of them reached Brain. Four sessions had arrived
+at 02:51 within one second. Over the same window, Research Routines on a
+different Claude account kept arriving. That pattern fits a Claude
+account-level limit, such as a usage window or a cap on concurrent sessions.
+Brain was firing 2-A in bursts of 3–4 within seconds, because it was Airyn's
+only enabled Routine. Recovery by Brain's probe at 04:01 needed nobody. The
+same evidence lives in Claude: Airyn's run history for 2-A between 02:55 and
+03:25 UTC.
+
+**Brain-side defects found and fixed:**
+
+1. The no-show quarantine count ignored arrivals that took no bin (#204,
+   deployed). Isolated misses accumulated across days into false quarantines.
+   The 7-day simulation fails without the fix.
+2. A right-worker probe on a corrected Routine with mixed history counted as a
+   *failed* probe (#206). Recovery took about 16 hours and sat one miss away
+   from needing a person; now it takes under an hour. The simulation
+   reproduces both figures.
+3. A request reaching `/mcp` with no token left no trace (this branch). A
+   NO_MCP probe could not tell "never called" from "called with no token". The
+   connection report now prints a per-process tally by endpoint and client
+   family.
+
+**What Brain cannot fix:** a Claude Routine whose connector selection is wrong,
+a Claude account that stops running sessions, and a Routine that is edited
+while it runs. Brain detects all three, stops spending activations on them,
+recovers by itself once they clear, and names the account owner only when
+recovery is exhausted.
+
 ## 4. Monitoring
 
 One-shot readings are scheduled for 2026-10-16, 10-17 and 10-18 at 17:50Z.
