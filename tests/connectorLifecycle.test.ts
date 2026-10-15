@@ -524,7 +524,9 @@ describe('recovery needs nobody but the person who consents', () => {
       await setRoutineState({ routineId: one.routineId, from: 'ENABLED', to: 'QUARANTINED', reason });
     }
     // Backdate the quarantine so the new consent is unambiguously after it.
-    await getDb().run('UPDATE fleet_routines SET updated_at = ?', [new Date(Date.now() - 60_000).toISOString()]);
+    // `state_changed_at` is the quarantine's instant (migration 117); `updated_at` moves on every touch.
+    const backdated = new Date(Date.now() - 60_000).toISOString();
+    await getDb().run('UPDATE fleet_routines SET updated_at = ?, state_changed_at = ?', [backdated, backdated]);
     // Only Caleb's connector is re-authorized: a fresh consent on its own client.
     await issueGrant({ clientId: caleb.clientId, workerId, scope: '', resource: RESOURCE });
     // Airyn's newest token predates the quarantine.
@@ -556,7 +558,8 @@ describe('recovery needs nobody but the person who consents', () => {
       new Date(Date.now() - 120_000).toISOString(),
       owner.clientId,
     ]);
-    await getDb().run('UPDATE fleet_routines SET updated_at = ? WHERE id = ?', [
+    await getDb().run('UPDATE fleet_routines SET updated_at = ?, state_changed_at = ? WHERE id = ?', [
+      new Date(Date.now() - 60_000).toISOString(),
       new Date(Date.now() - 60_000).toISOString(),
       owner.routineId,
     ]);
