@@ -94,7 +94,15 @@ account, so neither the connector nor its tokens can be the cause. The
 difference is 2-B's own Routine, and it cleared without anything changing on
 Brain's side.
 
-The most likely explanation is Airyn editing 2-B's Routine during that window.
+**The most likely explanation is Brain, not Claude.** Brain failed check-ins at
+17:43–17:46 (pool checkout timeouts). At the time its authentication ran at
+p95 15 s, max 40 s, and its token refresh at p95 53 s
+(`docs/CONNECTION-DURABILITY-2026-10-15.md`). Claude's MCP client gives a
+connector about 30 s to connect; after that the session runs without Brain's
+tools and never calls Brain. #207 fixes this: the connector handshake answers
+from a recent proof instead of waiting on the database, and a slow answer is
+recorded as Brain's incident, so the miss is not charged. The other
+possibility is that Airyn was editing 2-B's Routine during that window.
 The NO_MCPs fall in the hour his correction was being made. This cannot be
 proven from Brain. What would settle it is in Claude:
 - 2-B's run history for sessions `cse_01PmJGpLwHGNWjDn28FDTdzY` (17:50Z) and
@@ -105,7 +113,10 @@ proven from Brain. What would settle it is in Claude:
 returned sessions, and none of them reached Brain. Four sessions had arrived
 at 02:51 within one second. Over the same window, Research Routines on a
 different Claude account kept arriving. That pattern fits a Claude
-account-level limit, such as a usage window or a cap on concurrent sessions.
+account-level limit, such as a usage window or a cap on concurrent sessions. It is not settled.
+In the same window Research A took 106 s from fire to arrival, so Brain may
+have been answering slowly. Before #207 a slow-but-successful authentication
+left no record, so this cannot be decided after the fact; next time it will be.
 Brain was firing 2-A in bursts of 3–4 within seconds, because it was Airyn's
 only enabled Routine. Recovery by Brain's probe at 04:01 needed nobody. The
 same evidence lives in Claude: Airyn's run history for 2-A between 02:55 and
