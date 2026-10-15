@@ -293,12 +293,113 @@ export function countAlertsNeedingAPerson(alerts: readonly { who: string }[]): {
   return { total: accountOwner + operator, accountOwner, operator, nobody: alerts.length - accountOwner - operator };
 }
 
+/** The dispatch events that say what happened to a fire, in the order they can happen. */
+export const HISTORY_EVENT_TYPES = [
+  'DISPATCH_SENT',
+  'DISPATCH_SESSION_ARRIVED',
+  'DISPATCH_WRONG_WORKER',
+  'DISPATCH_NO_SHOW',
+  'DISPATCH_AUTH_NO_SHOW',
+  'DISPATCH_INFRA_NO_SHOW',
+  'DISPATCH_RETRY',
+  'DISPATCH_ABANDONED',
+  'DISPATCH_REVIVED',
+  'DISPATCH_EXHAUSTED',
+  'RECOVERY_PROBE_FIRED',
+] as const;
+
+/**
+ * `--history`: the connection system's past as one row per fact, for
+ * reconstructing what preceded each disconnection, quarantine and exhausted
+ * recovery. One line per row, `|`-separated, prefixed by what the row is:
+ *
+ *   R  a Routine as it stands now, with the last instant a quarantine was lifted
+ *   E  a dispatch event for a Routine (indexed by routine and time)
+ *   P  a recovery probe and what it established
+ *   I  an infrastructure incident Brain recorded about itself
+ *   T  a token refusal, or a refresh recovered after a lost reply
+ *   S  OAuth token successes per target per hour, so a client that stopped
+ *      refreshing is visible as a gap
+ *
+ * Ids, categories and timestamps only; no secret, token, prompt or reason text
+ * a worker wrote. Every part is read separately, so one that times out is said
+ * to have failed and the rest still prints.
+ */
+async function history(since: string): Promise<void> {
+  const db = getDb();
+  const routines = await db.all<{
+    id: string; name: string; state: string; state_reason: string | null; updated_at: string;
+    no_shows_forgiven_at: string | null; worker_id: string | null; connector_id: string | null;
+  }>('SELECT id, name, state, state_reason, updated_at, no_shows_forgiven_at, worker_id, connector_id FROM fleet_routines ORDER BY name');
+  const names = new Map(routines.map((r) => [r.id, r.name]));
+  for (const r of routines) {
+    const reason = (r.state_reason ?? '').replace(/[|\n]/g, ' ').slice(0, 60);
+    console.log(`R|${r.id}|${r.name}|${r.state}|${r.updated_at}|${r.no_shows_forgiven_at ?? '-'}|${r.worker_id ?? '-'}|${r.connector_id ?? '-'}|${reason}`);
+  }
+  const types = HISTORY_EVENT_TYPES.map((t) => `'${t}'`).join(',');
+  for (const r of routines) {
+    if (r.state === 'RETIRED') continue;
+    await section(null, async () => {
+      const rows = await db.all<{ event_type: string; at: string; worker_id: string | null; outcome: string | null; session_ref: string | null }>(
+        `SELECT event_type, at, worker_id, outcome, session_ref FROM bin_events
+          WHERE routine_id = ? AND at >= ? AND event_type IN (${types}) ORDER BY at`,
+        [r.id, since],
+      );
+      for (const e of rows) {
+        console.log(`E|${r.name}|${e.event_type}|${e.at}|${e.worker_id ?? '-'}|${e.outcome ?? '-'}|${e.session_ref ? 'session' : '-'}`);
+      }
+    });
+  }
+  await section(null, async () => {
+    const probes = await db.all<{ routine_id: string; state: string; created_at: string; fired_at: string | null; arrived_at: string | null; settled_at: string | null; health: string | null }>(
+      'SELECT routine_id, state, created_at, fired_at, arrived_at, settled_at, health FROM connector_recovery_probes WHERE created_at >= ? ORDER BY created_at',
+      [since],
+    );
+    for (const p of probes) {
+      console.log(`P|${names.get(p.routine_id) ?? p.routine_id}|${p.state}|${p.created_at}|${p.fired_at ?? '-'}|${p.arrived_at ?? '-'}|${p.settled_at ?? '-'}|${p.health ?? '-'}`);
+    }
+  });
+  await section(null, async () => {
+    const incidents = await listIncidentsSince(since, 5000);
+    for (const i of incidents) {
+      console.log(`I|${i.kind}|${i.surface}|${i.startedAt}|${i.endedAt}|${i.occurrences}|${i.affectsArrival ? 1 : 0}|${i.workerId ?? '-'}`);
+    }
+  });
+  await section(null, async () => {
+    const refusals = await db.all<{ action: string; result: string; reason: string | null; target_id: string | null; created_at: string; metadata: string | null }>(
+      `SELECT action, result, reason, target_id, created_at, metadata FROM identity_events
+        WHERE action IN ('OAUTH_TOKEN', 'MCP_AUTHENTICATE') AND created_at >= ?
+          AND (result = 'DENIED' OR (result = 'SUCCESS' AND metadata LIKE '%"recovered"%'))
+        ORDER BY created_at`,
+      [since],
+    );
+    for (const t of refusals) {
+      const recovered = safeJson(t.metadata)['recovered'];
+      console.log(`T|${t.action}|${t.result}|${t.reason ?? '-'}|${t.target_id ?? '-'}|${t.created_at}|${typeof recovered === 'string' ? recovered : '-'}`);
+    }
+  });
+  await section(null, async () => {
+    const hourly = await db.all<{ hour: string; target_id: string | null; n: number }>(
+      `SELECT SUBSTR(created_at, 1, 13) AS hour, target_id, COUNT(*) AS n FROM identity_events
+        WHERE action = 'OAUTH_TOKEN' AND result = 'SUCCESS' AND created_at >= ?
+        GROUP BY SUBSTR(created_at, 1, 13), target_id ORDER BY hour`,
+      [since],
+    );
+    for (const h of hourly) console.log(`S|${h.hour}|${h.target_id ?? '-'}|${Number(h.n)}`);
+  });
+  console.log('CONNECTION-REPORT: OK');
+}
+
 async function main(): Promise<void> {
   await initDatabase();
   const hours = Number(arg('hours') ?? '24');
   const since = new Date(Date.now() - (Number.isFinite(hours) && hours > 0 ? hours : 24) * 3_600_000).toISOString();
   const db = getDb();
   console.log(`window: since ${since}`);
+  if (process.argv.includes('--history')) {
+    await history(since);
+    return;
+  }
 
   console.log('\nPROCESSES');
   const procs = await db.all<{ instance_id: string; started_at: string; alive_at: string; readings: string | null }>(

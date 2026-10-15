@@ -11,6 +11,11 @@ on:
         description: 'How many hours back to read (1-168).'
         required: false
         default: '24'
+      history:
+        description: 'Print the history rows (one per dispatch event, probe, incident and token refusal) instead of the summary.'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: brain-console-connection-report
@@ -28,14 +33,17 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           HOURS: ${{ inputs.hours }}
+          HISTORY: ${{ inputs.history }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           case "$HOURS" in
             ''|*[!0-9]*) HOURS=24 ;;
           esac
+          mode=""
+          if [ "$HISTORY" = "true" ]; then mode="--history"; fi
           set +e
           flyctl ssh console --app "$app" \
-            -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/connection-report.sh --hours $HOURS" \
+            -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/connection-report.sh --hours $HOURS $mode" \
             2>&1 | tee connection-report.txt
           set -e
           grep -q '^CONNECTION-REPORT: OK' connection-report.txt
