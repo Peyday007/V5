@@ -49,6 +49,23 @@ if (!goal) {
   for (const o of opps) {
     console.log(`    ${o.id} ${o.state} ${o.opportunity_signal} closes=${o.expires_at ?? '-'} ${o.created_at} :: ${String(o.title).slice(0, 140)} <- ${o.source}`);
   }
+  // Every opening filed in this project in the last 24 hours, by whichever
+  // packet filed it, so continuation can be read from rows.
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const recent = await db.all(
+    `SELECT o.id, o.state, o.opportunity_signal, o.title, o.created_at, o.orchestration_id, o.duplicate_of_id,
+            c.source_url, w.id AS worker_id
+       FROM cash_opportunities o
+       LEFT JOIN research_claims c ON c.id = o.source_claim_id
+       LEFT JOIN research_passes p ON p.id = c.pass_id
+       LEFT JOIN workers w ON w.id = p.executor_worker_id
+      WHERE o.project_id = ? AND o.created_at >= ? ORDER BY o.created_at`,
+    [goal.project_id, since],
+  ).catch((error) => { console.log(`  recent read failed: ${error.message}`); return []; });
+  console.log(`  opportunities filed in the last 24h: ${recent.length}`);
+  for (const o of recent) {
+    console.log(`    ${o.created_at} ${o.id} ${o.opportunity_signal}${o.duplicate_of_id ? ' dup' : ''} orc=${o.orchestration_id} worker=${o.worker_id ?? '-'} :: ${String(o.title).slice(0, 110)} <- ${o.source_url ?? '-'}`);
+  }
 }
 await closeDatabase();
 console.log('ADMIN: OK');
