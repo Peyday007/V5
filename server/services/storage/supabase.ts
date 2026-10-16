@@ -53,6 +53,8 @@ interface SupabaseListEntry {
 const TRANSIENT_READ_STATUSES = new Set([429, 500, 502, 503, 504, 544]);
 
 const READ_ATTEMPTS = 3;
+/** The most entries one listing request returns; a page this full may be truncated. */
+const LIST_PAGE = 1000;
 
 /**
  * The one write refusal that is documented as "not processed": a rate or
@@ -283,6 +285,23 @@ export class SupabaseStorageProvider implements StorageProvider {
     return entries.some((entry) => entry.name === name);
   }
 
+  /**
+   * One listing of a folder, so a recompute asking about a hundred documents in
+   * four layers makes four requests rather than a hundred. Each request is a
+   * `storage.search` on the same Postgres as Brain; production ran 389 283 of
+   * them by 2026-10-16, the largest single consumer of server time in a
+   * healthy window. A page that comes back full may have been cut short, so it
+   * answers null and the caller asks key by key, exactly as before.
+   */
+  async namesIn(prefix: string): Promise<string[] | null> {
+    const clean = prefix.replace(/^\/+|\/+$/g, '');
+    if (clean) assertSafeKey(clean);
+    const entries = await this.#listRaw(clean);
+    if (entries.length >= LIST_PAGE) return null;
+    // Supabase reports a folder as an entry with no id.
+    return entries.filter((entry) => entry.id).map((entry) => entry.name);
+  }
+
   async move(fromKey: string, toKey: string): Promise<StoredObjectMeta> {
     const from = assertSafeKey(fromKey);
     const to = assertSafeKey(toKey);
@@ -352,7 +371,7 @@ export class SupabaseStorageProvider implements StorageProvider {
           headers: this.#headers({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             prefix,
-            limit: 1000,
+            limit: LIST_PAGE,
             offset: 0,
             ...(search ? { search } : {}),
             sortBy: { column: 'name', order: 'asc' },

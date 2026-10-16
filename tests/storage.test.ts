@@ -34,6 +34,7 @@ import {
   safeSegment,
 } from '../server/services/storage/keys.ts';
 import { initStorage, resetStorage, getStorage } from '../server/services/storage/index.ts';
+import { objectExistence, prefetchExistence, withExistenceMemo } from '../server/services/storage.ts';
 
 const sha256 = (b: Buffer) => crypto.createHash('sha256').update(b).digest('hex');
 
@@ -620,6 +621,57 @@ describe('choosing where documents are kept', () => {
     expect(store.kind).toBe('supabase');
     // A real request was made. Having the variables set is not the same fact.
     expect(fake.calls.some((c) => c.url.includes('/object/list/brain'))).toBe(true);
+  });
+});
+
+describe('a recompute asks the bucket once per folder, not once per document', () => {
+  /*
+   * Each `exists` is a listing with a search term, and Supabase answers it with
+   * `storage.search` on the same Postgres as Brain: 389 283 of them by
+   * 2026-10-16, the largest consumer of server time in a healthy window.
+   */
+  const config = {
+    provider: 'supabase' as const,
+    supabaseUrl: 'https://example.supabase.co',
+    serviceRoleKey: 'k',
+    bucket: 'brain',
+  };
+  afterEach(() => resetStorage());
+
+  it('answers present and absent from one listing per folder', async () => {
+    const objects = new Map<string, Buffer>([
+      ['projects/p/documents/a/one.pdf', Buffer.from('1')],
+      ['projects/p/documents/a/two.pdf', Buffer.from('2')],
+      ['projects/p/documents/b/three.pdf', Buffer.from('3')],
+    ]);
+    const fake = fakeSupabase({ objects });
+    await initStorage({ config, fetchImpl: fake.fetchImpl, verify: false });
+    const keys = [
+      'projects/p/documents/a/one.pdf',
+      'projects/p/documents/a/two.pdf',
+      'projects/p/documents/a/gone.pdf',
+      'projects/p/documents/b/three.pdf',
+    ];
+    const answers = await withExistenceMemo(async () => {
+      await prefetchExistence(keys);
+      return Promise.all(keys.map((key) => objectExistence(key)));
+    });
+    expect(answers).toEqual(['PRESENT', 'PRESENT', 'ABSENT', 'PRESENT']);
+    const lists = fake.calls.filter((c) => c.url.includes('/object/list/'));
+    // Folder a once (three keys), folder b's single key asked as before.
+    expect(lists).toHaveLength(2);
+    expect(lists.filter((c) => String(c.body).includes('"search"'))).toHaveLength(1);
+  });
+
+  it('a store that does not answer leaves the whole folder UNKNOWN, never absent', async () => {
+    const fake = fakeSupabase({ fail: 544 });
+    await initStorage({ config, fetchImpl: fake.fetchImpl, verify: false });
+    const keys = ['projects/p/documents/a/one.pdf', 'projects/p/documents/a/two.pdf'];
+    const answers = await withExistenceMemo(async () => {
+      await prefetchExistence(keys);
+      return Promise.all(keys.map((key) => objectExistence(key)));
+    });
+    expect(answers).toEqual(['UNKNOWN', 'UNKNOWN']);
   });
 });
 
