@@ -55,7 +55,6 @@ import { createCandidate, getCandidate, transitionCandidate } from '../../repos/
 import { latestMissionForCandidate, missionsForCandidate } from '../../repos/russellMissions.ts';
 import { citableClaims, getClaim, getFragment, getOrchestration, listPasses } from '../../repos/research.ts';
 import {
-  cardFact,
   cardFactsFor,
   mayReplace,
   recordEvidenceFact,
@@ -77,7 +76,7 @@ import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
 import { researchMissionSlotsFull } from '../russell/launch.ts';
-import type { CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
+import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
 
 /** How many deep dives one project may have in flight. Provider capacity. */
 export const MAX_VALIDATIONS_IN_FLIGHT = 2;
@@ -1126,9 +1125,37 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
   if (!(await getCashMode(projectId))) return [];
   const out: AppliedValidation[] = [];
 
+  /*
+   * One read per card, and one per fragment, per pass.
+   *
+   * This walks every citable claim of every finished dive on every tick, and
+   * almost every claim is a replay that writes nothing — so asking the
+   * database once per claim per field (`cardFact`), once per claim for its
+   * fragment, and re-reading the whole packet once per claim to learn whether
+   * it ruled anything out was 219 825 single-field reads, 82 503 fragment reads
+   * and a citable-claims join per claim in eight hours of production
+   * (2026-10-15/16). The answers are the same rows read once: the card is
+   * re-read after each write, so a later claim on the same field still sees
+   * what an earlier one just wrote, exactly as before.
+   */
+  const fragmentDeclares = new Map<string, boolean>();
+  const declares = async (fragmentId: string | null): Promise<boolean> => {
+    if (!fragmentId) return false;
+    const known = fragmentDeclares.get(fragmentId);
+    if (known !== undefined) return known;
+    const answer = await declaresRuledOut(fragmentId);
+    fragmentDeclares.set(fragmentId, answer);
+    return answer;
+  };
+
   for (const opportunity of await listOpportunities({ projectId })) {
+    let card: ((field: string) => CashCardFact | null) | null = null;
     for (const orchestrationId of await finishedDivePackets(opportunity)) {
-      for (const claim of await citableClaims(orchestrationId)) {
+      const claims = await citableClaims(orchestrationId);
+      const ruledOut = claims.some(
+        (one) => one.evidenceLane === RULED_OUT_LANE && one.claimType !== 'NEGATIVE_EXISTENCE',
+      );
+      for (const claim of claims) {
         if (!claim.sourceUrl) continue;
         const lane = claim.evidenceLane ?? '';
         const fields: string[] = [];
@@ -1162,7 +1189,7 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
          * a statement nobody classified, recorded as a *possible* disqualifier
          * that blocks qualification and says so — never as clear.
          */
-        const classifying = await declaresRuledOut(claim.fragmentId);
+        const classifying = await declares(claim.fragmentId);
         if (claim.claimType !== 'NEGATIVE_EXISTENCE') {
           if (lane === RULED_OUT_LANE) {
             fields.push(DISQUALIFIED_FIELD);
@@ -1172,14 +1199,15 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
         } else if (
           lane === DISQUALIFIER_LANE &&
           classifying &&
-          !(await packetRuledOut(orchestrationId))
+          !ruledOut
         ) {
           // A dive that was offered `ruled_out`, used none, and documented that
           // nothing excludes it: the one answer that clears an unclassified one.
           fields.push(RULED_OUT_CLEARED_FIELD);
         }
         for (const field of fields) {
-          const existing = await cardFact(opportunity.id, field);
+          card ??= await cardFactMap(opportunity.id);
+          const existing = card(field);
           // Already this claim: nothing to do, which is what a replay must find.
           if (existing?.claimId === claim.id) continue;
           // A person's answer stands, and so does an earlier piece of evidence:
@@ -1194,6 +1222,8 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
             value,
             claimId: claim.id,
           });
+          // Whatever happened, the card may have moved: read it again before the next claim.
+          card = null;
           if (!written) continue;
           /*
            * The column as well as the fact, where the field has one.
@@ -1275,13 +1305,6 @@ async function withdrawAbsencesWrittenAsAnswers(
       });
     });
   }
-}
-
-/** Whether any citable claim of this packet declared the opening ruled out. */
-async function packetRuledOut(orchestrationId: string): Promise<boolean> {
-  return (await citableClaims(orchestrationId)).some(
-    (claim) => claim.evidenceLane === RULED_OUT_LANE && claim.claimType !== 'NEGATIVE_EXISTENCE',
-  );
 }
 
 /** Whether a dive's fragment offered its worker the `ruled_out` lane. */
@@ -1577,7 +1600,9 @@ export async function proposeEngineTerms(projectId: string): Promise<string[]> {
     });
 
     for (const proposal of proposals) {
-      const existing = await cardFact(opportunity.id, proposal.field);
+      // The map read above: the write below is guarded in its own statement, so a
+      // person answering in between still keeps their answer.
+      const existing = fact(proposal.field);
       if (!mayReplace(existing, 'RECOMMENDATION')) continue;
       // Into an empty field only, decided in the statement that writes: a
       // person answering between the read above and this write keeps their

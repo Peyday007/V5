@@ -215,8 +215,11 @@ let sweptThisProcess = false;
  * Best-effort throughout: a sweep that cannot run is a leak to clean up later,
  * and never a reason to fail somebody's test.
  */
-async function sweepStaleSchemas(admin: { query: (sql: string) => Promise<unknown> }): Promise<void> {
-  if (sweptThisProcess) return;
+export async function sweepStaleSchemas(
+  admin: { query: (sql: string) => Promise<unknown> },
+  options: { again?: boolean } = {},
+): Promise<void> {
+  if (sweptThisProcess && !options.again) return;
   sweptThisProcess = true;
   try {
     const locked = (await admin.query(
@@ -228,7 +231,16 @@ async function sweepStaleSchemas(admin: { query: (sql: string) => Promise<unknow
   }
 
   try {
-    const cutoff = new Date(Date.now() - STALE_AFTER_MS).toISOString();
+    /*
+     * The server's clock, never this process's. A suite may fake `Date` before
+     * it opens a database — `airynDurability` sets it to 2026-11-02 — and a
+     * cutoff computed from that "now" made every sibling's freshly created
+     * schema look a fortnight stale, so this sweep dropped live schemas out
+     * from under their files mid-migration ("no schema has been selected to
+     * create in", "deadlock detected"). That failed shard 4 of the Postgres
+     * suite on every run of 2026-10-16 and blocked three releases.
+     */
+    const staleSeconds = Math.round(STALE_AFTER_MS / 1000);
     const listed = (await admin.query(
       `SELECT n.nspname AS name,
               (SELECT 1 FROM pg_class c
@@ -246,7 +258,7 @@ async function sweepStaleSchemas(admin: { query: (sql: string) => Promise<unknow
       try {
         if (row.marked !== null && row.marked !== undefined) {
           const age = (await admin.query(
-            `SELECT 1 FROM ${name}.${MARKER_TABLE} WHERE created_at > '${cutoff}'::timestamptz`,
+            `SELECT 1 FROM ${name}.${MARKER_TABLE} WHERE created_at > now() - interval '${staleSeconds} seconds'`,
           )) as { rows?: unknown[] };
           // Young enough that a sibling may still be running in it.
           if ((age.rows?.length ?? 0) > 0) continue;

@@ -969,8 +969,11 @@ export async function applyProposal(input: {
   proposal: Proposal;
 }): Promise<string[]> {
   const written: string[] = [];
+  // One read of the card, not one per term: the terms name distinct fields, so
+  // nothing written below changes what a later term reads.
+  const card = input.proposal.terms.length > 0 ? await cardFactMap(input.opportunity.id) : () => null;
   for (const term of input.proposal.terms) {
-    const existing = await cardFact(input.opportunity.id, term.field);
+    const existing = card(term.field);
     if (!mayReplace(existing, 'RECOMMENDATION')) continue;
 
     const column = COLUMN[term.field];

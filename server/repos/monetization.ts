@@ -676,19 +676,28 @@ export async function recordSnapshot(input: {
 /**
  * The most recent recorded position of every path in a project.
  *
- * Read as the whole history ordered oldest-first and folded, rather than as a
- * correlated subquery per path. The history is small — one row per *movement*
- * rather than per pass — and a `SELECT DISTINCT ... ORDER BY MAX(...)` is
- * precisely the shape this codebase's conventions warn about: it passes on
- * SQLite and throws on Postgres unless the aggregate is named in the select
- * list. Folding in TypeScript is sayable in both dialects by construction.
+ * Only the newest row per path leaves the database. This once read the whole
+ * history and folded it here, on the reasoning that the history is small —
+ * one row per *movement*. It was not: production held 89 636 rows and the
+ * read took 5.8 s on average (37.8 s at worst), 284 times in eight hours,
+ * shipping some 32 MB per call into a single-CPU process (2026-10-16). The
+ * `NOT EXISTS` is answered by `idx_monetization_snapshots_path (path_id,
+ * evaluated_at)` and is sayable in both dialects, which is the property the
+ * fold existed for — a `SELECT DISTINCT … ORDER BY MAX(…)` still is not.
+ * The tie is broken by id, exactly as the oldest-first fold broke it.
  */
 export async function latestSnapshots(
   projectId: string,
 ): Promise<Map<string, MonetizationRankSnapshot>> {
   const rows = await getDb().all<MonetizationRankSnapshotRow>(
-    `SELECT * FROM monetization_rank_snapshots
-      WHERE project_id = ? ORDER BY evaluated_at, id`,
+    `SELECT s.* FROM monetization_rank_snapshots s
+      WHERE s.project_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM monetization_rank_snapshots t
+           WHERE t.path_id = s.path_id
+             AND (t.evaluated_at > s.evaluated_at
+                  OR (t.evaluated_at = s.evaluated_at AND t.id > s.id)))
+      ORDER BY s.evaluated_at, s.id`,
     [projectId],
   );
   const out = new Map<string, MonetizationRankSnapshot>();
