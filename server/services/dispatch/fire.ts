@@ -45,6 +45,7 @@
  * is configured without going anywhere near the value.
  */
 import { recordBinEvent } from '../../repos/bins.ts';
+import { sanitizeProviderDetail } from '../effects/failureDetail.ts';
 
 /** The dated beta this endpoint ships under. Requests without it get a 400. */
 export const ROUTINE_BETA = 'experimental-cc-routine-2026-04-01';
@@ -256,9 +257,14 @@ export async function fireRoutine(
       };
     }
 
-    // The body may carry the provider's own message. It is bounded and stored,
-    // and it cannot contain the token: the token went out in a header and this
-    // endpoint has no read access to echo anything back with.
+    // The body may carry the provider's own message. It cannot contain the
+    // Anthropic bearer token itself — that went out in a header and this
+    // endpoint has no read access to echo anything back with — but it is
+    // still somebody else's text, so it is redacted the same way any other
+    // provider text is (see failureDetail.ts) before it is bounded and
+    // stored: this becomes `fleet_routines.state_reason` and a bin event, and
+    // §17 draws no exception for "the provider shouldn't be able to echo
+    // this back".
     const detail = await response.text().catch(() => '');
     const kind: FireErrorKind =
       response.status === 401 || response.status === 403
@@ -277,7 +283,7 @@ export async function fireRoutine(
     return {
       ok: false,
       kind,
-      message: `${response.status} ${detail.slice(0, 400)}`.trim(),
+      message: `${response.status} ${sanitizeProviderDetail(detail)}`.trim(),
       retryAfterMs: retryAfterMs(response.headers.get('retry-after')),
       routineId: config.routineId,
     };
@@ -288,9 +294,7 @@ export async function fireRoutine(
       kind: 'NETWORK',
       message: aborted
         ? 'The fire request timed out. Whether a session was created is unknown.'
-        : error instanceof Error
-          ? error.message.slice(0, 400)
-          : String(error).slice(0, 400),
+        : sanitizeProviderDetail(error instanceof Error ? error.message : String(error)),
       retryAfterMs: null,
       routineId: config.routineId,
     };
