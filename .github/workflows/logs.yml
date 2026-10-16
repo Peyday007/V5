@@ -6,10 +6,10 @@
 # replaces the machine, and replacing the machine is how you lose the log you
 # came for.
 #
-# **This is strictly read-only and it is the whole of what it does.** Three
-# commands, all of which only read: `flyctl logs`, `flyctl status` and
-# `flyctl secrets list` — the last one printing names alone, and allowed by its
-# whole form rather than by its first word, because `secrets set`, `unset` and
+# **This is strictly read-only and it is the whole of what it does.** Four
+# commands, all of which only read: `flyctl logs`, `flyctl status`,
+# `flyctl machine status` and `flyctl secrets list` — the last one printing
+# names alone, and allowed by its whole form rather than by its first word, because `secrets set`, `unset` and
 # `import` sit under that same word and each one replaces a deployment secret
 # and restarts the machine. There is no `ssh console` here, no script, and no
 # input that reaches a shell — `SECONDS` is compared against a numeric class and
@@ -109,6 +109,19 @@ jobs:
 
           echo "::group::Machine state"
           flyctl status --app "$app" 2>&1 | tail -40 || true
+          echo "::endgroup::"
+
+          # Why a machine last stopped. `flyctl logs` keeps a short buffer, so
+          # by the time somebody reads it the lines from an exit are often
+          # gone (2026-10-16: the process died at 22:02, Fly held nothing from
+          # before 22:11). Fly's own event log keeps each start and exit with
+          # its exit code and whether the kernel OOM-killed it. Exactly
+          # `machine status`: its siblings under `machine` stop, restart and
+          # destroy, so only the whole form is allowed.
+          echo "::group::Machine events (exit code, OOM)"
+          for id in $(flyctl status --app "$app" --json 2>/dev/null | jq -r '.Machines[]?.id' 2>/dev/null); do
+            flyctl machine status "$id" --app "$app" --display-config=false 2>&1 | tail -30 || true
+          done
           echo "::endgroup::"
 
           # How many clients this deployment is entitled to open, which is a

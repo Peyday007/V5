@@ -1,0 +1,79 @@
+# The Fast Cash research goal on Cash Mode 1, opened and read without a terminal.
+#
+# `create` opens one research goal through the same `admin research goal
+# create` an operator would type, with the assignment read from the committed,
+# reviewed file beside this workflow — never from an input, so nothing a
+# dispatcher types reaches a shell. After that the Russell tick's own
+# continuation pass starts every packet (§52); this workflow starts none.
+# `list` reads the goals and writes nothing.
+#
+# The goal is CAPPED: packets, fragments and a deadline, money pinned at zero,
+# read-only research only. It authorizes no contact, purchase, bid or listing.
+name: Fast Cash goal
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'create | list | explain'
+        required: true
+        default: list
+      admin:
+        description: '--admin <email>: the administrator the goal is recorded against (create only)'
+        required: false
+        default: ''
+
+concurrency:
+  group: brain-console-fast-cash-goal
+  cancel-in-progress: false
+
+jobs:
+  goal:
+    name: Fast Cash goal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - uses: ./.github/actions/await-release
+
+      - name: Run
+        timeout-minutes: 10
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          G_COMMAND: ${{ inputs.command }}
+          G_ADMIN: ${{ inputs.admin }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          case "$G_ADMIN" in
+            '') ;;
+            *[!A-Za-z0-9_.@+-]*) echo "::error::Refusing the administrator address."; exit 1 ;;
+          esac
+          base='cd /app && BRAIN_DATABASE_POOL_SIZE=1 BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000 node --import tsx scripts/admin.ts'
+          case "$G_COMMAND" in
+            list)
+              script="$base research goal list cash-mode-1"
+              ;;
+            explain)
+              # The committed, read-only reading beside this file, written to
+              # /tmp on the machine and run from /app.
+              code=$(base64 -w0 .github/workflows/fast-cash-explain.mjs)
+              script="echo $code | base64 -d > /tmp/fast-cash-explain.mjs && cd /app && BRAIN_DATABASE_POOL_SIZE=1 BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000 node --import tsx /tmp/fast-cash-explain.mjs"
+              ;;
+            create)
+              if [ -z "$G_ADMIN" ]; then echo "::error::create needs --admin."; exit 1; fi
+              assignment=$(cat .github/workflows/fast-cash-assignment.txt)
+              # Single-quote the assignment for the remote shell.
+              quoted=$(printf "%s" "$assignment" | sed "s/'/'\\\\''/g")
+              script="$base research goal create cash-mode-1 --name 'Fast Cash: actionable deals' --max-packets 12 --max-fragments 60 --deadline 2026-10-23T23:00:00Z --layer 'Opportunity Research' --admin $G_ADMIN --assignment '$quoted'"
+              ;;
+            *) echo "::error::Refusing '$G_COMMAND': create, list or explain."; exit 1 ;;
+          esac
+          # Carried as base64 so no character of it is parsed by flyctl's own
+          # argument splitter; decoded and run by the machine's shell.
+          payload=$(printf "%s" "$script" | base64 -w0)
+          set +e
+          flyctl ssh console --app "$app" -C "sh -c 'echo $payload | base64 -d | sh'" 2>&1 | tee goal.txt
+          set -e
+          grep -q '^ADMIN: OK' goal.txt
