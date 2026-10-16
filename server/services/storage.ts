@@ -282,14 +282,62 @@ const PREFETCH_CONCURRENCY = 16;
  * nothing rather than asking for nothing.
  */
 export async function prefetchExistence(keys: Array<string | null | undefined>): Promise<void> {
-  if (!existenceMemo.getStore()) return;
-  const queue = [...new Set(keys.filter((key): key is string => Boolean(key)))];
+  const memo = existenceMemo.getStore();
+  if (!memo) return;
+  const wanted = [...new Set(keys.filter((key): key is string => Boolean(key) && !memo.has(key as string)))];
+  const queue = await answerByFolder(memo, wanted);
   const workers = Array.from({ length: Math.min(PREFETCH_CONCURRENCY, queue.length) }, async () => {
     for (let key = queue.shift(); key !== undefined; key = queue.shift()) {
       await objectExists(key);
     }
   });
   await Promise.all(workers);
+}
+
+/**
+ * Answer every key that shares a folder with another from one listing of that
+ * folder, into the memo, and return the keys still to be asked one at a time.
+ *
+ * The answer is the same one `exists` gives — a name in the folder's listing,
+ * read now — so nothing here is a cache: it is the identical question asked
+ * once per folder instead of once per key. A store that did not answer leaves
+ * every key in that folder UNKNOWN, exactly as a failed `exists` would; a
+ * listing that may have been cut short answers nothing and falls back.
+ */
+async function answerByFolder(
+  memo: Map<string, Promise<'PRESENT' | 'ABSENT' | 'UNKNOWN'>>,
+  keys: string[],
+): Promise<string[]> {
+  const store = getStorage();
+  if (!store.namesIn) return keys;
+  const byFolder = new Map<string, string[]>();
+  for (const key of keys) {
+    const slash = key.lastIndexOf('/');
+    if (slash <= 0) continue;
+    const folder = key.slice(0, slash);
+    byFolder.set(folder, [...(byFolder.get(folder) ?? []), key]);
+  }
+  const rest = new Set(keys);
+  const folders = [...byFolder.entries()].filter(([, inFolder]) => inFolder.length > 1);
+  await Promise.all(
+    folders.map(async ([folder, inFolder]) => {
+      let names: Set<string> | null | 'UNKNOWN';
+      try {
+        const listed = await store.namesIn!(folder);
+        names = listed ? new Set(listed) : null;
+      } catch {
+        names = 'UNKNOWN';
+      }
+      if (names === null) return;
+      for (const key of inFolder) {
+        const answer =
+          names === 'UNKNOWN' ? 'UNKNOWN' : names.has(key.slice(folder.length + 1)) ? 'PRESENT' : 'ABSENT';
+        memo.set(key, Promise.resolve(answer));
+        rest.delete(key);
+      }
+    }),
+  );
+  return [...rest];
 }
 
 export async function objectSize(key: string): Promise<number | null> {

@@ -61,6 +61,13 @@ export interface StorageProvider {
   openRead(key: string): Promise<ObjectStream>;
   head(key: string): Promise<StoredObjectMeta | null>;
   exists(key: string): Promise<boolean>;
+  /**
+   * The names of the objects directly inside one folder, in one request, or
+   * null when the answer might be incomplete (a page that came back full).
+   * Optional: a store where asking one key at a time is already cheap does not
+   * implement it, and callers fall back to `exists`.
+   */
+  namesIn?(prefix: string): Promise<string[] | null>;
   /** Move an object to a new key, keeping its bytes. */
   move(fromKey: string, toKey: string): Promise<StoredObjectMeta>;
   /**
