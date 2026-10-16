@@ -1,0 +1,16 @@
+Hi — I'd build this in Python (runs on any office PC, no Excel macros to enable), packaged as a double-click launcher plus an optional Windows Task Scheduler entry for the weekly sweep.
+
+The detail that matters for your broken formulas: a date in a spreadsheet should stay a real date, not become text. So:
+- Cells that already hold dates keep their value and get DD-MM-YYYY display, so lookups and mail-merges keep working.
+- Dates typed as text ("7 Oct 2026", "2026-10-06", "16.10.26") become real dates shown as DD-MM-YYYY.
+- Dates inside sentences and column headers ("Shipped Oct 3, 2026") are rewritten in place.
+- Invoice numbers, version tags and phone numbers are left alone.
+- Ambiguous input like 03/04/2026 follows a policy you choose (day-first by default), and every change goes into a log so nothing is silent.
+
+I built a working preview of the detection rules today and ran it on a messy sample workbook and text report. I can send the before/after files and the change log in chat.
+
+Deliverables: the tool, a one-page set-up guide for colleagues, a changelog, and a run on a copy of your real files before anything touches the originals. It covers .xlsx/.xls/.csv/.txt, and .docx if you need it.
+
+Timeline: a first version within 24 hours of receiving 2-3 sample files, and the finished handover in 3 days.
+
+One question: should 03/04/2026 always be read as 3 April, or do some of your sources write month-first?

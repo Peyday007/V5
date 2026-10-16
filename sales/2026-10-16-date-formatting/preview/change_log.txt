@@ -1,0 +1,19 @@
+Orders!C1: '1st Oct 2026' -> '01-10-2026'
+Orders!A2: '2026/10/05' left unchanged  [part of an identifier]
+Orders!B2: real date kept, display format 'mm/dd/yyyy' -> 'DD-MM-YYYY'
+Orders!C2: text date '16/10/2026' -> real date shown as 16-10-2026
+Orders!D2: 'Oct 3, 2026' -> '03-10-2026'
+Orders!E2: '1.2.10' left unchanged  [column 'Version' is an identifier column]
+Orders!A3: '2026/10/06' left unchanged  [part of an identifier]
+Orders!B3: text date '2026-10-06' -> real date shown as 06-10-2026
+Orders!C3: text date '10/16/2026' -> real date shown as 16-10-2026
+Orders!D3: '03/04/2026' -> '03-04-2026'  [ambiguous, day-first policy applied]
+Orders!A4: '2026/10/07' left unchanged  [part of an identifier]
+Orders!B4: text date '7 Oct 2026' -> real date shown as 07-10-2026
+Orders!C4: text date '16.10.26' -> real date shown as 16-10-2026
+Orders!D4: '15th October, 2026' -> '15-10-2026'
+sample_report_before.txt:1: '2026-10-12' -> '12-10-2026'
+sample_report_before.txt:1: '16/10/2026' -> '16-10-2026'
+sample_report_before.txt:2: '15-Oct-2026' -> '15-10-2026'
+sample_report_before.txt:2: 'October 14th 2026' -> '14-10-2026'
+sample_report_before.txt:3: '4.10.2026' left unchanged  [labelled as a version/build]

@@ -1,0 +1,3 @@
+Weekly report for 12-10-2026 to 16-10-2026
+Meeting moved from 14-10-2026 to 15-10-2026. Call +91 98765 43210.
+Build 4.10.2026 is a version tag, not a date? (left as is if not a valid date)
