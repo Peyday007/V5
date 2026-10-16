@@ -1951,6 +1951,8 @@ const SECTIONS = [
    */
   'rs-cash-work',
   'rs-cash-best',
+  // Openings found this week, newest first, said to be preliminary.
+  'rs-cash-fresh',
   /*
    * The possibility ledger, and it is in this list for the reason the list
    * exists. Everything structural in it — which ways of being paid exist on a
