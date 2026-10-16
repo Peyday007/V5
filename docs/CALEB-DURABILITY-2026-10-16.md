@@ -87,7 +87,43 @@ after release. That reading does not establish the fix failed: the same process
 took up to 56 s for a single-row lookup of `research_orchestrations` by id, and
 was SHEDDING. The database itself was the bottleneck.
 
-## 6. Monitoring
+## 6. Live checks after the reported correction (2026-10-16 21:41Z–23:27Z)
+
+Brain's own daily checks came due first. Three operator probes followed, one
+for each Routine, in healthy time and one at a time. A person's probe buys a
+fresh budget, so none of this spends one.
+
+| Routine | probe | started (UTC) | result |
+|---|---|---|---|
+| 3-C | automatic `crp_…` | 21:41 | AMBIGUOUS: Brain unavailable (restarts 21:55–22:13). No evidence either way. |
+| Factory 3 | automatic | 21:57 | AMBIGUOUS: Brain unavailable. No evidence either way. |
+| 3-B | automatic | 22:15 | **NO_MCP**: Claude started the session; nothing reached Brain in 15 min. |
+| 3-C | operator `crp_d2479a89…` | 22:38 | **NO_MCP**: session `cse_01K6XWh9…` started; nothing reached Brain. |
+| 3-C | automatic `crp_33f115d8…` | 22:54 | **NO_MCP**: session `cse_01DSBcJN…`. |
+| 3-D | operator `crp_0052b65c…` | 23:11 | **NO_MCP**. |
+
+Brain recorded no incident between 22:14Z and 23:27Z.
+
+In the same three hours, 3-A was fired 22 times and arrived 16 times, every
+time as worker-04, through the same connector `cnr_34c90326…`. So the
+connector authenticates. What does not happen is that 3-B, 3-C or 3-D call
+Brain at all. That is the Claude Routine's configuration:
+- its Brain connector is not attached or not enabled; or
+- the Routine fails before any tool call.
+
+Brain cannot read either.
+
+Verdicts on 2026-10-16:
+
+| Routine | verdict | basis |
+|---|---|---|
+| 3-A | **Working** | 30 right-worker arrivals on 10-16, real bins and audits completed, hourly refresh, no auth refusal in 96 h |
+| 3-B | **Broken** | NO_MCP in healthy time after the reported correction |
+| 3-C | **Broken** | NO_MCP twice in healthy time after the reported correction |
+| 3-D | **Broken** | NO_MCP in healthy time after the reported correction |
+| Factory 3 | **Broken** (connection); Factory execution **untested** | No Brain connector in Caleb's account authorizes as worker-10. None was registered in the last 72 h. Its last arrival was as worker-04. |
+
+## 7. Monitoring
 
 One-shot readings are scheduled and confirmed enabled:
 
