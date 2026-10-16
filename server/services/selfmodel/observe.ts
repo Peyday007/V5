@@ -466,16 +466,31 @@ function observeModules(index: TextIndex): ComponentObservation[] {
  * something. A registered Routine with a secret is `CONFIGURED`, which is a
  * different word on purpose.
  */
+/** How far a fleet account's fires are counted before the reading says "or more". */
+export const FIRE_COUNT_BOUND = 1000;
+
 async function observeFleet(index: TextIndex): Promise<ComponentObservation[]> {
   const db = getDb();
   const out: ComponentObservation[] = [];
 
   for (const account of await listAccounts()) {
+    /*
+     * Counted up to a bound, not to the end. The readings below need "has it
+     * been fired, and roughly how often", and an exact count walked every
+     * DISPATCH_SENT row of an account through the heap of the largest table in
+     * the database (661 MB, 478 k rows on 2026-10-16) — on every deployment,
+     * because a new revision makes the reading stale. On a 455 MB database
+     * host that evicted the whole cache in the boot window and took up to
+     * 120 s (the statement timeout).
+     */
     const fired = await db.get<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'DISPATCH_SENT' AND account_id = ?`,
+      `SELECT COUNT(*) AS n FROM (
+         SELECT 1 FROM bin_events WHERE account_id = ? AND event_type = 'DISPATCH_SENT' LIMIT ${FIRE_COUNT_BOUND}
+       ) bounded`,
       [account.id] as never[],
     );
     const n = Number(fired?.n ?? 0);
+    const many = n >= FIRE_COUNT_BOUND ? `${FIRE_COUNT_BOUND} or more` : String(n);
     out.push({
       kind: 'FLEET_ACCOUNT',
       name: account.name,
@@ -486,11 +501,11 @@ async function observeFleet(index: TextIndex): Promise<ComponentObservation[]> {
         CONNECTED: yes('registered in fleet_accounts'),
         DEPLOYED: yes('the row is in this database'),
         OBSERVED_ACTIVE:
-          n > 0 ? yes(`${n} dispatch(es) attributed to it`) : no('no dispatch is attributed to it'),
+          n > 0 ? yes(`${many} dispatch(es) attributed to it`) : no('no dispatch is attributed to it'),
         EVALUATED: unknown('an account is not something a suite can cover'),
         PRODUCTION_PROVEN:
           n > 0
-            ? yes(`${n} fire(s) recorded against it`)
+            ? yes(`${many} fire(s) recorded against it`)
             : no('nothing has been fired through it, so its capacity is configured rather than proven'),
       },
     });
