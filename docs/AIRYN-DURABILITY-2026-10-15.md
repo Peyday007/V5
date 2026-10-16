@@ -94,7 +94,15 @@ account, so neither the connector nor its tokens can be the cause. The
 difference is 2-B's own Routine, and it cleared without anything changing on
 Brain's side.
 
-The most likely explanation is Airyn editing 2-B's Routine during that window.
+**The most likely explanation is Brain, not Claude.** Brain failed check-ins at
+17:43–17:46 (pool checkout timeouts). At the time its authentication ran at
+p95 15 s, max 40 s, and its token refresh at p95 53 s
+(`docs/CONNECTION-DURABILITY-2026-10-15.md`). Claude's MCP client gives a
+connector about 30 s to connect; after that the session runs without Brain's
+tools and never calls Brain. #207 fixes this: the connector handshake answers
+from a recent proof instead of waiting on the database, and a slow answer is
+recorded as Brain's incident, so the miss is not charged. The other
+possibility is that Airyn was editing 2-B's Routine during that window.
 The NO_MCPs fall in the hour his correction was being made. This cannot be
 proven from Brain. What would settle it is in Claude:
 - 2-B's run history for sessions `cse_01PmJGpLwHGNWjDn28FDTdzY` (17:50Z) and
@@ -105,7 +113,10 @@ proven from Brain. What would settle it is in Claude:
 returned sessions, and none of them reached Brain. Four sessions had arrived
 at 02:51 within one second. Over the same window, Research Routines on a
 different Claude account kept arriving. That pattern fits a Claude
-account-level limit, such as a usage window or a cap on concurrent sessions.
+account-level limit, such as a usage window or a cap on concurrent sessions. It is not settled.
+In the same window Research A took 106 s from fire to arrival, so Brain may
+have been answering slowly. Before #207 a slow-but-successful authentication
+left no record, so this cannot be decided after the fact; next time it will be.
 Brain was firing 2-A in bursts of 3–4 within seconds, because it was Airyn's
 only enabled Routine. Recovery by Brain's probe at 04:01 needed nobody. The
 same evidence lives in Claude: Airyn's run history for 2-A between 02:55 and
@@ -135,3 +146,72 @@ recovery is exhausted.
 
 One-shot readings are scheduled for 2026-10-16, 10-17 and 10-18 at 17:50Z.
 Their results will be appended here. None of them has happened yet.
+
+## 5. After the fixes were released (21:33Z, revision `1c61b18`)
+
+`1c61b18` was released at about 21:25Z. It contains #204, #206, #207 (connector
+handshake answered from a recent proof, slow answers recorded as Brain's
+incident) and #208 (calls that arrive without a token are counted). The first
+reading on that revision:
+
+- Two new processes, both `pressure NORMAL`, with no infrastructure failures
+  felt and no requests without a token since they started. The last process on
+  the old revision `15c8381` had recorded authenticate at p95 15.2 s (max
+  40.6 s) and token refresh at p95 39.2 s (max 52.6 s), with 29 control-plane
+  connections lost. Those are the numbers #207 targets.
+- Even so, slow statements are still present at boot: a 40 s scan of
+  `research_orchestrations` and a 50 s `design_surfaces` update. The database
+  is still slow at times. #207 means a connector handshake no longer waits on
+  it.
+- 2-A is ENABLED. 2-B, 2-C and 2-D are QUARANTINED for mixed workers, judged
+  from their seven-day history. The newest wrong-worker arrivals were on 10-12
+  (2-B, 2-D) and 10-13 22:20Z (2-C). Each needs 3 right sessions in a row to
+  lift: 2-B and 2-D have 1, and 2-C has 0. With #206, Brain now probes every
+  15 minutes after each right-worker probe, and runs one slow probe a day after
+  the fast budget is spent. Lifting needs nobody, as long as Claude keeps
+  starting sessions that reach Brain.
+
+Not yet observed on `1c61b18`: an Airyn session arriving through the new
+handshake path, and a quarantine lifting. The scheduled readings below will
+record both or their absence.
+
+## 6. 24-hour reading (2026-10-16 ~18:20Z, revision `f02318e`)
+
+Taken by the scheduled reading. The first two attempts failed at 17:51Z:
+`could not reach aws-0-us-east-2.pooler.supabase.com`. The serving process
+had restarted at 17:44Z and recovered by 17:49Z (`pressure NORMAL`).
+
+Since the baseline (2026-10-15 17:45Z):
+
+| Routine | state now | lifted | fires | arrived as worker-12 | arrived as worker-10 | real no-shows | infra misses |
+|---|---|---|---|---|---|---|---|
+| 2-A | ENABLED | — | 110 | 75 | 0 | 0 | 1 |
+| 2-B | ENABLED | 10-15 22:47Z, by Brain's probe | 80 | 61 | 0 | 0 | 3 |
+| 2-C | ENABLED | 10-15 22:30Z, by Brain's probe | 80 | 57 | 0 | 0 | 2 |
+| 2-D | ENABLED | 10-15 23:48Z, by Brain's probe | 73 | 52 | 0 | 0 | 1 |
+
+- Probe outcomes since the baseline: 2-B had 2 NO_MCP (17:50Z and 18:06Z),
+  then 3 HEALTHY. 2-C had 1 NO_MCP (19:28Z), then HEALTHY. 2-D had 3
+  AMBIGUOUS (Brain was unavailable at the time) and 1 NO_MCP (22:31Z), then 3
+  HEALTHY. Every probe after the release of `1c61b18` was HEALTHY except one
+  NO_MCP on 2-D at 22:31Z.
+- Fires minus arrivals is not a count of no-shows. An arrival is recorded only
+  when the session reports the provider session it was fired as, and every
+  fire that went unanswered is accounted for in the infra column.
+- The infra misses were charged to nobody. Seven Brain-side incidents
+  (`CHECK_IN_BUDGET`, `POOL_CHECKOUT_TIMEOUT`, and two restarts at 07:00Z and
+  07:18Z) excused them, as designed.
+- EARLY WARNING lists nothing for Airyn. Its only `SIBLING_DOWN` line is for
+  Caleb's connector, which is out of scope here.
+- No Airyn Routine has fired since 14:22Z, and neither has any other Routine
+  in the fleet. Nothing in the rows says Airyn's connection is the reason;
+  whether there was no ready work is not read here.
+
+Compared with the baseline, the change is for the better: the wrong-worker
+quarantines lifted by themselves within about six hours, and nobody acted.
+
+One Brain defect is visible in this reading. `unansweredFiresByRoutine` is the
+database's costliest statement on the serving process: 70 calls, mean about
+55 s, max 124 s. It runs three correlated subqueries for every
+`DISPATCH_NO_SHOW` row ever written. That is load on the same database whose
+slowness causes the remaining misses.
