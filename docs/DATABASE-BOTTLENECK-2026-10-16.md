@@ -116,3 +116,38 @@ Each has a test on both backends (`tests/databaseWaste.test.ts`,
 - **The 45-day token-history scan** after a restart (cold per-process cache).
   An index that would serve it is a build on a 121 MB write-hot table, which
   §61 forbids in the boot path.
+
+## After the resize to Small (2026-10-16, 20:28Z)
+
+The owner resized the compute to Small. Five connection reports were taken
+afterwards, plus Fly's own log and event log. Nothing on Brain's side changed
+for the resize.
+
+| reading | Nano (before) | Small, 21:06 → 23:13Z (2 h 07 m) |
+|---|---|---|
+| `MemTotal` / `MemAvailable` | 455 MB / 105 MB | 2 025 MB / 986 MB |
+| CPU iowait | 26.6 % of all CPU time | **0.3 %** |
+| root disk (`nvme0n1`) reads | ~15 GB/h average, busy ~32 % | ~0.36 GB/h, busy 0.3 % |
+| data disk (`nvme1n1`) busy | — | 0.8 % |
+| authenticate p95 | up to 15 s | 49–238 ms |
+| `brain_check_in` p95 | 3.6–194 s | 0.6–1.0 s |
+| load-shedding pressure | SHEDDING repeatedly | NORMAL throughout |
+| unanswered fires (misses) | many | none |
+
+The deploy of `4f6ecb3` (run 38968867822) was the first today to pass both
+hosted verifications: 261/261 before the restart and 280/280 after it, with the
+judge path and a Factory campaign inside. Its boot saw no Storage `544`.
+
+**One outage after the resize was not the database.** The Brain process
+stopped writing liveness at 22:02:35Z. Fly's proxy then answered `PM02 could
+not wake up machine due to an internal communication error` until it recorded
+`crash exit_code=-1, oom_killed=false` at 22:12:49 and restarted the machine
+(healthy 22:13:52). Supabase was idle throughout (13 idle sessions, no locks).
+This is the Fly host losing the VM, and `logs.yml` now reads that event log
+(#219).
+
+**What still stands, on Brain's side:** the Brain VM (`shared-cpu-1x`, 1 GB)
+showed event-loop stalls of 21 s, 8.7 s and 13.9 s after the deploy, and one
+failed health check at 22:23:25Z. The process before the deploy (2 h) never
+stalled worse than 662 ms. The cause is not measured: Brain records no CPU or
+memory reading of its own, and Fly's metrics are where it would be read.
