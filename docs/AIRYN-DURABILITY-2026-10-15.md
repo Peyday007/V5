@@ -174,3 +174,44 @@ reading on that revision:
 Not yet observed on `1c61b18`: an Airyn session arriving through the new
 handshake path, and a quarantine lifting. The scheduled readings below will
 record both or their absence.
+
+## 6. 24-hour reading (2026-10-16 ~18:20Z, revision `f02318e`)
+
+Taken by the scheduled reading. The first two attempts failed at 17:51Z:
+`could not reach aws-0-us-east-2.pooler.supabase.com`. The serving process
+had restarted at 17:44Z and recovered by 17:49Z (`pressure NORMAL`).
+
+Since the baseline (2026-10-15 17:45Z):
+
+| Routine | state now | lifted | fires | arrived as worker-12 | arrived as worker-10 | real no-shows | infra misses |
+|---|---|---|---|---|---|---|---|
+| 2-A | ENABLED | — | 110 | 75 | 0 | 0 | 1 |
+| 2-B | ENABLED | 10-15 22:47Z, by Brain's probe | 80 | 61 | 0 | 0 | 3 |
+| 2-C | ENABLED | 10-15 22:30Z, by Brain's probe | 80 | 57 | 0 | 0 | 2 |
+| 2-D | ENABLED | 10-15 23:48Z, by Brain's probe | 73 | 52 | 0 | 0 | 1 |
+
+- Probe outcomes since the baseline: 2-B had 2 NO_MCP (17:50Z and 18:06Z),
+  then 3 HEALTHY. 2-C had 1 NO_MCP (19:28Z), then HEALTHY. 2-D had 3
+  AMBIGUOUS (Brain was unavailable at the time) and 1 NO_MCP (22:31Z), then 3
+  HEALTHY. Every probe after the release of `1c61b18` was HEALTHY except one
+  NO_MCP on 2-D at 22:31Z.
+- Fires minus arrivals is not a count of no-shows. An arrival is recorded only
+  when the session reports the provider session it was fired as, and every
+  fire that went unanswered is accounted for in the infra column.
+- The infra misses were charged to nobody. Seven Brain-side incidents
+  (`CHECK_IN_BUDGET`, `POOL_CHECKOUT_TIMEOUT`, and two restarts at 07:00Z and
+  07:18Z) excused them, as designed.
+- EARLY WARNING lists nothing for Airyn. Its only `SIBLING_DOWN` line is for
+  Caleb's connector, which is out of scope here.
+- No Airyn Routine has fired since 14:22Z, and neither has any other Routine
+  in the fleet. Nothing in the rows says Airyn's connection is the reason;
+  whether there was no ready work is not read here.
+
+Compared with the baseline, the change is for the better: the wrong-worker
+quarantines lifted by themselves within about six hours, and nobody acted.
+
+One Brain defect is visible in this reading. `unansweredFiresByRoutine` is the
+database's costliest statement on the serving process: 70 calls, mean about
+55 s, max 124 s. It runs three correlated subqueries for every
+`DISPATCH_NO_SHOW` row ever written. That is load on the same database whose
+slowness causes the remaining misses.
