@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'create | list'
+        description: 'create | list | explain'
         required: true
         default: list
       admin:
@@ -55,6 +55,12 @@ jobs:
             list)
               script="$base research goal list cash-mode-1"
               ;;
+            explain)
+              # The committed, read-only reading beside this file, written to
+              # /tmp on the machine and run from /app.
+              code=$(base64 -w0 .github/workflows/fast-cash-explain.mjs)
+              script="echo $code | base64 -d > /tmp/fast-cash-explain.mjs && cd /app && BRAIN_DATABASE_POOL_SIZE=1 BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000 node --import tsx /tmp/fast-cash-explain.mjs"
+              ;;
             create)
               if [ -z "$G_ADMIN" ]; then echo "::error::create needs --admin."; exit 1; fi
               assignment=$(cat .github/workflows/fast-cash-assignment.txt)
@@ -62,7 +68,7 @@ jobs:
               quoted=$(printf "%s" "$assignment" | sed "s/'/'\\\\''/g")
               script="$base research goal create cash-mode-1 --name 'Fast Cash: actionable deals' --max-packets 12 --max-fragments 60 --deadline 2026-10-23T23:00:00Z --layer 'Opportunity Research' --admin $G_ADMIN --assignment '$quoted'"
               ;;
-            *) echo "::error::Refusing '$G_COMMAND': create or list."; exit 1 ;;
+            *) echo "::error::Refusing '$G_COMMAND': create, list or explain."; exit 1 ;;
           esac
           # Carried as base64 so no character of it is parsed by flyctl's own
           # argument splitter; decoded and run by the machine's shell.
