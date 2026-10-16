@@ -63,6 +63,89 @@ async function section(title: string | null, body: () => Promise<void>): Promise
   }
 }
 
+/**
+ * The database host's own readings: CPU (including iowait and steal), memory,
+ * disk throughput and operations, read from Supabase's Prometheus endpoint.
+ *
+ * Postgres cannot see its host's disk budget or CPU throttling; this endpoint
+ * can, and it authenticates with the service-role key Brain already holds for
+ * storage — so nobody has to open a dashboard to learn whether the time went
+ * to the host. The key goes into one `Authorization` header and nowhere else.
+ * Counters are printed raw with the instant they were read, so two reports
+ * are a rate; only the families that answer *is the host the bottleneck* are
+ * kept.
+ */
+export const HOST_METRIC_FAMILIES = [
+  'node_cpu_seconds_total',
+  'node_load1',
+  'node_load5',
+  'node_memory_MemTotal_bytes',
+  'node_memory_MemAvailable_bytes',
+  'node_disk_read_bytes_total',
+  'node_disk_written_bytes_total',
+  'node_disk_reads_completed_total',
+  'node_disk_writes_completed_total',
+  'node_disk_io_time_seconds_total',
+  'node_pressure_io_waiting_seconds_total',
+  'node_pressure_io_stalled_seconds_total',
+  'node_pressure_cpu_waiting_seconds_total',
+  'node_filesystem_avail_bytes',
+  'node_filesystem_size_bytes',
+] as const;
+
+/** Sum a Prometheus text exposition into `family{label=…}` → value, for the kept families only. */
+export function summarizeHostMetrics(text: string): Map<string, number> {
+  const out = new Map<string, number>();
+  const keep = new Set<string>(HOST_METRIC_FAMILIES);
+  for (const line of text.split('\n')) {
+    if (!line || line.startsWith('#')) continue;
+    const m = /^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+(\S+)/.exec(line);
+    if (!m || !keep.has(m[1]!)) continue;
+    const value = Number(m[3]);
+    if (!Number.isFinite(value)) continue;
+    const labels = m[2] ?? '';
+    let key: string = m[1]!;
+    // CPU is folded by mode across cores; disks and filesystems keep their device.
+    if (m[1] === 'node_cpu_seconds_total') {
+      key += `{mode=${/mode="([^"]*)"/.exec(labels)?.[1] ?? '?'}}`;
+    } else if (m[1]!.startsWith('node_disk_')) {
+      const device = /device="([^"]*)"/.exec(labels)?.[1] ?? '?';
+      if (/^(loop|ram)/.test(device)) continue;
+      key += `{device=${device}}`;
+    } else if (m[1]!.startsWith('node_filesystem_')) {
+      const mount = /mountpoint="([^"]*)"/.exec(labels)?.[1] ?? '?';
+      if (mount !== '/' && mount !== '/data') continue;
+      key += `{mount=${mount}}`;
+    }
+    out.set(key, (out.get(key) ?? 0) + value);
+  }
+  return out;
+}
+
+async function hostMetrics(): Promise<void> {
+  const url = process.env['SUPABASE_URL'];
+  const key = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+  if (!url || !key) {
+    console.log('    not configured: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are both needed');
+    return;
+  }
+  const endpoint = new URL('/customer/v1/privileged/metrics', url);
+  const response = await fetch(endpoint, {
+    headers: { Authorization: `Basic ${Buffer.from(`service_role:${key}`).toString('base64')}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) {
+    console.log(`    the metrics endpoint answered ${response.status} at ${endpoint.host}`);
+    return;
+  }
+  const readAt = new Date().toISOString();
+  const metrics = summarizeHostMetrics(await response.text());
+  console.log(`    read_at=${readAt} families=${metrics.size}`);
+  for (const [name, value] of [...metrics.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    console.log(`    ${name} ${Number.isInteger(value) ? value : value.toFixed(3)}`);
+  }
+}
+
 /** The schema `pg_stat_statements` lives in, or null when it is not installed. */
 async function statementsSchema(): Promise<string | null> {
   const where = await getDb().get<{ schema: string | null }>(
@@ -256,17 +339,22 @@ async function databaseActivity(): Promise<void> {
   for (const [title, order] of [
     ['  statements by blocks read from disk (pg_stat_statements)', 'shared_blks_read'],
     ['  statements by write-ahead log generated (pg_stat_statements)', 'wal_bytes'],
+    // Sorts and hashes that did not fit in work_mem write to disk too, and on a
+    // small host they can out-write the WAL itself (50 GB of temp files by
+    // 2026-10-16 against 11.5 GB of WAL).
+    ['  statements by temporary blocks written (sorts spilling to disk; pg_stat_statements)', 'temp_blks_written'],
   ] as const) {
     await section(title, async () => {
-      const rows = await db.all<{ calls: number; read: number; dirtied: number; wal: number; query: string }>(
+      const rows = await db.all<{ calls: number; read: number; dirtied: number; wal: number; temp: number; query: string }>(
         `SELECT calls, shared_blks_read AS read, shared_blks_dirtied AS dirtied, wal_bytes::bigint AS wal,
+                temp_blks_written AS temp,
                 LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 160) AS query
            FROM ${schema}.pg_stat_statements
           WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
           ORDER BY ${order} DESC LIMIT 12`,
       );
       for (const q of rows) {
-        console.log(`    calls=${Number(q.calls)} blks_read=${Number(q.read)} dirtied=${Number(q.dirtied)} wal=${Math.round(Number(q.wal) / 1048576)}MB  ${q.query}`);
+        console.log(`    calls=${Number(q.calls)} blks_read=${Number(q.read)} dirtied=${Number(q.dirtied)} wal=${Math.round(Number(q.wal) / 1048576)}MB temp=${Math.round((Number(q.temp) * 8) / 1024)}MB  ${q.query}`);
       }
     });
   }
@@ -537,6 +625,7 @@ async function main(): Promise<void> {
   }
 
   await section('DATABASE (what the server itself is doing now)', () => databaseActivity());
+  await section('DATABASE HOST (Supabase\'s own metrics: CPU, memory, disk; counters, so two reports are a rate)', () => hostMetrics());
 
   console.log('\nINCIDENTS (Brain infrastructure, never charged to a worker)');
   const incidents = await listIncidentsSince(since, 500);
