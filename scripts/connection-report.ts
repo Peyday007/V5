@@ -132,7 +132,7 @@ async function hostMetrics(): Promise<void> {
   const endpoint = new URL('/customer/v1/privileged/metrics', url);
   const response = await fetch(endpoint, {
     headers: { Authorization: `Basic ${Buffer.from(`service_role:${key}`).toString('base64')}` },
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(60_000),
   });
   if (!response.ok) {
     console.log(`    the metrics endpoint answered ${response.status} at ${endpoint.host}`);
@@ -305,56 +305,91 @@ async function databaseActivity(): Promise<void> {
     console.log(`    stats_reset: ${info?.stats_reset ?? 'unknown'}  dealloc=${info?.dealloc ?? '?'}  read_at: ${new Date().toISOString()}`);
   });
 
+  /*
+   * One read of the statement texts, not seven.
+   *
+   * Asking `pg_stat_statements` for its `query` column materializes every
+   * stored text, and Brain's long `IN (…)` lists make those texts large: each
+   * of the report's seven reads used to spill about 100 MB of temporary files
+   * (2026-10-16), so a single report wrote more to disk than an hour of Brain's
+   * WAL — on the host whose disk this report exists to diagnose. The numbers
+   * are read without texts (`pg_stat_statements(false)`), ranked here, and the
+   * texts are fetched once, for the rows that will be printed.
+   */
+  type Stat = { queryid: string; calls: number; total: number; mean: number; read: number; dirtied: number; wal: number; temp: number };
+  const stats = (await db.all<Record<string, string | number>>(
+    `SELECT queryid::text AS queryid, calls, total_exec_time AS total, mean_exec_time AS mean,
+            shared_blks_read AS read, shared_blks_dirtied AS dirtied, wal_bytes AS wal, temp_blks_written AS temp
+       FROM ${schema}.pg_stat_statements(false)
+      WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())`,
+  ).catch(() => [])).map((r) => ({
+    queryid: String(r['queryid']),
+    calls: Number(r['calls']),
+    total: Number(r['total']),
+    mean: Number(r['mean']),
+    read: Number(r['read']),
+    dirtied: Number(r['dirtied']),
+    wal: Number(r['wal']),
+    temp: Number(r['temp']),
+  })) as Stat[];
+  const top = (by: keyof Stat, n: number): Stat[] =>
+    [...stats].sort((a, b) => Number(b[by]) - Number(a[by])).slice(0, n);
+  const rankings: Array<[string, keyof Stat, number]> = [
+    ['  statements by total server time (pg_stat_statements)', 'total', 15],
+    // What a statement costs the disk rather than the clock: blocks it had to
+    // read from storage, and write-ahead log it generated. Under an I/O budget
+    // these are the two numbers that spend it; time alone cannot tell a slow
+    // statement from one that waited behind somebody else's write.
+    ['  statements by blocks read from disk (pg_stat_statements)', 'read', 12],
+    ['  statements by write-ahead log generated (pg_stat_statements)', 'wal', 12],
+    // Sorts, hashes and materializations that did not fit in work_mem write to
+    // disk too, and on a small host they can out-write the WAL itself.
+    ['  statements by temporary blocks written (spilling to disk; pg_stat_statements)', 'temp', 12],
+  ];
+  const wanted = new Set(rankings.flatMap(([, by, n]) => top(by, n).map((q) => q.queryid)));
+  const ids = [...wanted].filter((id) => /^-?\d+$/.test(id));
+  const texts = new Map<string, string>();
+  const churn: Array<{ query: string; calls: number; total: number }> = [];
+  await section('  pg_stat_statements size (what every reader of it, Supabase\'s exporter included, has to load)', async () => {
+    const rows = await db.all<{ queryid: string; len: number; calls: number; total: number; text: string | null; churn: number }>(
+      `SELECT queryid::text AS queryid, length(query) AS len, calls, total_exec_time::bigint AS total,
+              CASE WHEN queryid IN (${ids.length ? ids.join(',') : '0'})
+                     OR query ILIKE 'DISCARD ALL%' OR query ILIKE '%get_auth%'
+                   THEN LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 180) END AS text,
+              CASE WHEN query ILIKE 'DISCARD ALL%' OR query ILIKE '%get_auth%' THEN 1 ELSE 0 END AS churn
+         FROM ${schema}.pg_stat_statements`,
+    );
+    let bytes = 0;
+    let longest = 0;
+    for (const r of rows) {
+      const len = Number(r.len);
+      bytes += len;
+      longest = Math.max(longest, len);
+      if (r.text) texts.set(String(r.queryid), r.text);
+      if (Number(r.churn) === 1 && r.text) churn.push({ query: r.text.slice(0, 80), calls: Number(r.calls), total: Number(r.total) });
+    }
+    console.log(`    entries=${rows.length} text=${Math.round(bytes / 1048576)}MB longest=${Math.round(longest / 1024)}KB`);
+  });
+
   await section('  connection churn, server-wide (every client of the pooler, not only Brain)', async () => {
     // Cumulative since stats_reset above. A rate is the difference between two
     // reports divided by the time between them, and only while stats_reset is
     // the same in both. Compare with each process's own `churn` line.
-    const churn = await db.all<{ query: string; calls: number; total: number }>(
-      `SELECT LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 80) AS query, SUM(calls) AS calls, SUM(total_exec_time)::bigint AS total
-         FROM ${schema}.pg_stat_statements
-        WHERE query ILIKE 'DISCARD ALL%' OR query ILIKE '%get_auth%'
-        GROUP BY 1 ORDER BY 2 DESC LIMIT 6`,
-    );
     if (churn.length === 0) console.log('    no DISCARD ALL or get_auth rows');
-    for (const c of churn) console.log(`    calls=${Number(c.calls)} total=${Number(c.total)}ms  ${c.query}`);
-  });
-
-  await section('  statements by total server time (pg_stat_statements)', async () => {
-    const costly = await db.all<{ calls: number; total: number; mean: number; query: string }>(
-      `SELECT calls, total_exec_time::bigint AS total, mean_exec_time::numeric(12,1) AS mean,
-              LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 180) AS query
-         FROM ${schema}.pg_stat_statements
-        WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
-        ORDER BY total_exec_time DESC LIMIT 15`,
-    );
-    for (const q of costly) {
-      console.log(`    total=${Number(q.total)}ms calls=${Number(q.calls)} mean=${Number(q.mean)}ms  ${q.query}`);
+    for (const c of churn.sort((a, b) => b.calls - a.calls).slice(0, 6)) {
+      console.log(`    calls=${c.calls} total=${c.total}ms  ${c.query}`);
     }
   });
 
-  // What a statement costs the disk rather than the clock: blocks it had to
-  // read from storage, and write-ahead log it generated. Under an I/O budget
-  // these are the two numbers that spend it; time alone cannot tell a slow
-  // statement from one that waited behind somebody else's write.
-  for (const [title, order] of [
-    ['  statements by blocks read from disk (pg_stat_statements)', 'shared_blks_read'],
-    ['  statements by write-ahead log generated (pg_stat_statements)', 'wal_bytes'],
-    // Sorts and hashes that did not fit in work_mem write to disk too, and on a
-    // small host they can out-write the WAL itself (50 GB of temp files by
-    // 2026-10-16 against 11.5 GB of WAL).
-    ['  statements by temporary blocks written (sorts spilling to disk; pg_stat_statements)', 'temp_blks_written'],
-  ] as const) {
+  for (const [title, by, n] of rankings) {
     await section(title, async () => {
-      const rows = await db.all<{ calls: number; read: number; dirtied: number; wal: number; temp: number; query: string }>(
-        `SELECT calls, shared_blks_read AS read, shared_blks_dirtied AS dirtied, wal_bytes::bigint AS wal,
-                temp_blks_written AS temp,
-                LEFT(regexp_replace(query, '\\s+', ' ', 'g'), 160) AS query
-           FROM ${schema}.pg_stat_statements
-          WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
-          ORDER BY ${order} DESC LIMIT 12`,
-      );
-      for (const q of rows) {
-        console.log(`    calls=${Number(q.calls)} blks_read=${Number(q.read)} dirtied=${Number(q.dirtied)} wal=${Math.round(Number(q.wal) / 1048576)}MB temp=${Math.round((Number(q.temp) * 8) / 1024)}MB  ${q.query}`);
+      for (const q of top(by, n)) {
+        const text = texts.get(q.queryid) ?? `(queryid ${q.queryid})`;
+        if (by === 'total') {
+          console.log(`    total=${Math.round(q.total)}ms calls=${q.calls} mean=${q.mean.toFixed(1)}ms  ${text}`);
+        } else {
+          console.log(`    calls=${q.calls} blks_read=${q.read} dirtied=${q.dirtied} wal=${Math.round(q.wal / 1048576)}MB temp=${Math.round((q.temp * 8) / 1024)}MB  ${text}`);
+        }
       }
     });
   }
