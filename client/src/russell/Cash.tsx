@@ -299,6 +299,7 @@ export function CashView_({
       <Decisions page={page} projectId={rootId} onChanged={view.reload} />
       <YourWork page={page} onChanged={view.reload} />
       <BestOpportunities page={page} onChanged={view.reload} />
+      <FreshOpenings page={page} />
       {/*
         * How each of those could actually be monetized, in full.
         *
@@ -2562,6 +2563,77 @@ function OpportunityMoney({
       )}
       {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
     </div>
+  );
+}
+
+/**
+ * Openings found this week that are still open — sourced leads, said plainly
+ * to be preliminary.
+ *
+ * The full portfolio is in rank order, so a lead found tonight sat behind every
+ * older price page and nobody saw it. This lists them newest first with the
+ * published page they rest on, when it was read, when it closes, and the other
+ * facts the research recorded about it. It does not call any of them qualified
+ * or ready: the tier beside each is the server's, and the card is still blank
+ * until the deep dive fills it.
+ */
+function FreshOpenings({ page }: { page: CashPage }): JSX.Element {
+  const fresh = page.frontier.fresh ?? [];
+  const tierOf = new Map(page.frontier.opportunities.map((one) => [one.id, one.tier]));
+  return (
+    <section className="rs-card rs-cash-fresh">
+      <h3>New openings this week — preliminary</h3>
+      {fresh.length === 0 ? (
+        <p className="rs-hint">
+          Nothing new and still open has been found in the last seven days.
+        </p>
+      ) : (
+        <>
+          <p className="rs-hint">
+            Sourced leads that are open now. None of these is qualified yet: each rests on the
+            published page linked beside it, and what is still unknown is named under it.
+          </p>
+          <ul className="rs-list">
+            {fresh.map((one) => {
+              const tier = tierOf.get(one.opportunityId);
+              return (
+                <li key={one.opportunityId} className="rs-group">
+                  <p className="rs-item-title">{one.title}</p>
+                  <p className="rs-badge">
+                    Preliminary{tier ? ` · ${TIER_LABEL[tier.tier] ?? tier.tier}` : ''}
+                  </p>
+                  <p className="rs-item-meta">
+                    {one.sourceUrl ? (
+                      <a href={one.sourceUrl} target="_blank" rel="noreferrer noopener">
+                        {one.sourcePublisher ?? one.sourceUrl}
+                      </a>
+                    ) : (
+                      (one.sourcePublisher ?? 'Source not recorded')
+                    )}
+                    {one.observedAt ? ` · read ${one.observedAt.slice(0, 16).replace('T', ' ')}` : ''}
+                    {` · filed ${one.discoveredAt.slice(0, 16).replace('T', ' ')}`}
+                    {one.closesOn ? ` · closes ${one.closesOn}` : ' · no closing date published'}
+                  </p>
+                  {one.excerpt ? <p className="rs-decision-why">“{one.excerpt}”</p> : null}
+                  {one.evidence.length > 0 ? (
+                    <ul className="rs-list">
+                      {one.evidence.map((fact, index) => (
+                        <li key={index} className="rs-item-meta">
+                          {fact.lane ? `${fact.lane}: ` : ''}
+                          {fact.claim}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {tier ? <FirstBlocker tier={tier} /> : null}
+                  <p className="rs-detail-id">{one.opportunityId}</p>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }
 

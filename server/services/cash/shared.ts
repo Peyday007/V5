@@ -65,6 +65,7 @@
  */
 import { listCashEvents } from '../../repos/cashMode.ts';
 import { listNeeds, listOpportunities } from '../../repos/cashPortfolio.ts';
+import { getClaim, listClaimsForFragment } from '../../repos/research.ts';
 import { evidenceCard } from './card.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
@@ -488,6 +489,76 @@ export interface SharedOpportunity {
  * payload widens nothing: everything in here was already leaving the server for
  * every member of this Brain.
  */
+export interface SharedFreshOpening {
+  opportunityId: string;
+  title: string;
+  /** The published opening itself. */
+  sourceUrl: string | null;
+  sourcePublisher: string | null;
+  /** When Brain filed it. */
+  discoveredAt: string;
+  /** When the source was read, as the worker recorded it. */
+  observedAt: string | null;
+  closesOn: string | null;
+  signal: string | null;
+  excerpt: string | null;
+  /** The other accepted claims about it, as published facts with their lane. */
+  evidence: { lane: string | null; claim: string; sourceUrl: string | null }[];
+}
+
+/** How far back an opening counts as new. */
+export const FRESH_WINDOW_DAYS = 7;
+const FRESH_SHOWN = 12;
+
+async function freshOpenings(
+  opportunities: readonly CashOpportunity[],
+  now: Date = new Date(),
+): Promise<SharedFreshOpening[]> {
+  const since = new Date(now.getTime() - FRESH_WINDOW_DAYS * 86_400_000).toISOString();
+  const today = now.toISOString().slice(0, 10);
+  const recent = opportunities
+    .filter(
+      (one) =>
+        one.createdAt >= since &&
+        one.sourceClaimId !== null &&
+        one.duplicateOfId === null &&
+        one.state !== 'ARCHIVED' &&
+        one.state !== 'DECLINED' &&
+        (one.expiresAt === null || one.expiresAt.slice(0, 10) >= today),
+    )
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .slice(0, FRESH_SHOWN);
+  const byFragment = new Map<string, Awaited<ReturnType<typeof listClaimsForFragment>>>();
+  const out: SharedFreshOpening[] = [];
+  for (const one of recent) {
+    const claim = one.sourceClaimId ? await getClaim(one.sourceClaimId) : null;
+    if (!claim) continue;
+    let siblings: Awaited<ReturnType<typeof listClaimsForFragment>> = [];
+    if (claim.fragmentId) {
+      if (!byFragment.has(claim.fragmentId)) {
+        byFragment.set(claim.fragmentId, await listClaimsForFragment(claim.fragmentId));
+      }
+      siblings = byFragment.get(claim.fragmentId) ?? [];
+    }
+    out.push({
+      opportunityId: one.id,
+      title: one.title,
+      sourceUrl: claim.sourceUrl,
+      sourcePublisher: claim.sourcePublisher,
+      discoveredAt: one.createdAt,
+      observedAt: claim.retrievedAt ?? claim.sourceDate,
+      closesOn: claim.closesOn ?? (one.expiresAt ? one.expiresAt.slice(0, 10) : null),
+      signal: claim.opportunitySignal,
+      excerpt: claim.evidenceExcerpt,
+      evidence: siblings
+        .filter((other) => other.accepted && other.opportunitySignal === null)
+        .slice(0, 8)
+        .map((other) => ({ lane: other.evidenceLane, claim: other.claim, sourceUrl: other.sourceUrl })),
+    });
+  }
+  return out;
+}
+
 export interface SharedFrontier {
   /** The sprint itself, minus anything a person decided about spending. */
   mode: {
@@ -508,6 +579,20 @@ export interface SharedFrontier {
    */
   commercialGrant: 'PRESENT' | 'ABSENT';
   opportunities: SharedOpportunity[];
+  /**
+   * Openings found in the last week that are still open, newest first, each
+   * with the published passage it rests on and the other accepted claims its
+   * fragment recorded about it (price, terms, deadline, delivery).
+   *
+   * Preliminary by construction: these are sourced leads, not qualified work,
+   * and the page says so. They are listed apart because the full portfolio is
+   * in rank order, where a lead found tonight sits behind every older price
+   * page and nobody would see it. Every value here is accepted discovery
+   * evidence — a URL, a publisher, a quoted passage — which is exactly what
+   * `buyingSignal` already shares; no card value and no money figure of the
+   * operation's crosses.
+   */
+  fresh: SharedFreshOpening[];
   /**
    * How many pieces are at each tier.
    *
@@ -707,6 +792,7 @@ export async function sharedFrontier(input: {
     discovery,
     commercialGrant: authority !== null ? 'PRESENT' : 'ABSENT',
     opportunities: shared,
+    fresh: await freshOpenings(opportunities),
     ...chooseBest(
       shared.filter((one) => one.state !== 'ARCHIVED' && one.state !== 'DECLINED'),
       (one) => one.tier,

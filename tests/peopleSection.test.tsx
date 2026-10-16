@@ -992,6 +992,7 @@ describe('an ordinary member reading the shared frontier', () => {
       // exist. A member's copy says that work belongs to whoever owns a job.
       'rs-cash-work',
       'rs-cash-best',
+      'rs-cash-fresh',
       'rs-cash-monetization',
       'rs-cash-money-row',
       'rs-cash-portfolio',
