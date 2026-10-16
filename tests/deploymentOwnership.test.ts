@@ -734,7 +734,7 @@ describe('and the log surface reads, and only reads', () => {
      * deployment secret and restart the machine. A set holding `secrets` would
      * admit all four, so what is allowed is the whole command.
      */
-    const READS = new Set(['logs', 'status', 'secrets list']);
+    const READS = new Set(['logs', 'status', 'secrets list', 'machine status']);
     const used = [...logs.matchAll(/flyctl\s+([a-z-]+(?:\s+[a-z-]+)?)/g)].map((m) => m[1] ?? '');
     expect(used.length).toBeGreaterThan(0);
     for (const one of used) {
