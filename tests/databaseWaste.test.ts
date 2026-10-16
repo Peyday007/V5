@@ -71,3 +71,18 @@ describe('the report reads the database host', () => {
     expect([...m.keys()].some((k) => k.includes('loop0') || k.includes('/boot') || k.startsWith('pg_'))).toBe(false);
   });
 });
+
+describe('the self-model counts an account\'s fires up to a bound', () => {
+  /*
+   * It runs on every deployment, in the boot window, and an exact count walked
+   * every DISPATCH_SENT row of the largest table in the database (661 MB) —
+   * up to 120 s on a 455 MB host (2026-10-16). Asserted against the source,
+   * because the cost only shows on a database that size.
+   */
+  it('reads at most FIRE_COUNT_BOUND rows per account', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const source = await readFile('server/services/selfmodel/observe.ts', 'utf8');
+    expect(source).toMatch(/FROM bin_events WHERE account_id = \? AND event_type = 'DISPATCH_SENT' LIMIT \$\{FIRE_COUNT_BOUND\}/);
+    expect(source).not.toMatch(/SELECT COUNT\(\*\) AS n FROM bin_events WHERE event_type = 'DISPATCH_SENT' AND account_id = \?`/);
+  });
+});
