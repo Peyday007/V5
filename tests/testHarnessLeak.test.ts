@@ -11,10 +11,10 @@
  *
  * Two assertions, and the first is the one no behavioural test can make.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { freshProject, postgresTestConnection, teardown } from './helpers.ts';
+import { freshProject, postgresTestConnection, sweepStaleSchemas, teardown } from './helpers.ts';
 import { registerSchemaCleanup, releaseTestSchemas } from './pgSchemas.ts';
 
 describe('the test harness does not leak a Postgres schema', () => {
@@ -109,6 +109,47 @@ describe('the test harness does not leak a Postgres schema', () => {
       );
       expect(marked.rows[0]?.marked).toBe(true);
     } finally {
+      await admin.end();
+    }
+  });
+
+  /*
+   * A suite that fakes the clock must not make a live sibling look stale.
+   *
+   * `airynDurability` sets `Date` to 2026-11-02 before it opens a database, and
+   * the sweep computed its cutoff from that "now": every sibling schema made
+   * minutes earlier read as a fortnight old and was dropped mid-migration. The
+   * Postgres suite failed shard 4 on every run of 2026-10-16 that way.
+   */
+  it('ages a schema by the server\'s clock, so a faked Date drops no live sibling', async () => {
+    const postgres = postgresTestConnection();
+    if (!postgres) return;
+    const pg = await import('pg');
+    const admin = new pg.default.Client({ connectionString: postgres.connectionString });
+    await admin.connect();
+    const sibling = `brain_t_0sibling_${Math.random().toString(36).slice(2, 10)}`;
+    try {
+      await admin.query('BEGIN');
+      await admin.query(`CREATE SCHEMA ${sibling}`);
+      await admin.query(`CREATE TABLE ${sibling}.__brain_test_schema (created_at timestamptz NOT NULL)`);
+      await admin.query(`INSERT INTO ${sibling}.__brain_test_schema (created_at) VALUES (now())`);
+      await admin.query('COMMIT');
+
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(Date.parse('2099-01-01T00:00:00.000Z'));
+      try {
+        await sweepStaleSchemas(admin, { again: true });
+      } finally {
+        vi.useRealTimers();
+      }
+
+      const left = await admin.query(
+        'SELECT 1 FROM information_schema.schemata WHERE schema_name = $1',
+        [sibling],
+      );
+      expect(left.rowCount).toBe(1);
+    } finally {
+      await admin.query(`DROP SCHEMA IF EXISTS ${sibling} CASCADE`).catch(() => undefined);
       await admin.end();
     }
   });
