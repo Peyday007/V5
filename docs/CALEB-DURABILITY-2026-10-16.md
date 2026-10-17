@@ -143,3 +143,33 @@ Each reading records, per Routine:
 - automatic recovery.
 
 Nothing below this line has been observed yet.
+
+## 8. 24-hour reading (2026-10-17 21:00Z–21:32Z, revision `f377811`)
+
+| Routine | state | fires (26 h) | right-worker arrivals | wrong-worker | real no-shows | probes |
+|---|---|---|---|---|---|---|
+| 3-A | QUARANTINED 20:59Z, then **lifted by Brain's own probe 21:15Z** | 113 | 32 (none from 02:28Z to 21:15Z) | 0 | 3 (06:17Z, 14:27Z, 20:59Z) | 1 HEALTHY |
+| 3-B | QUARANTINED (unchanged) | 0 | 0 | 0 | 0 | 1 NO_MCP |
+| 3-C | QUARANTINED (unchanged) | 0 | 0 | 0 | 0 | 6 NO_MCP, 1 AMBIGUOUS (outage) |
+| 3-D | QUARANTINED (unchanged) | 0 | 0 | 0 | 0 | 5 NO_MCP, 1 AMBIGUOUS (outage) |
+| Factory 3 | QUARANTINED WRONG_WORKER (unchanged) | 0 | 0 | 0 | 0 | 1 AMBIGUOUS (outage) |
+
+- **3-A went silent for about 19 hours.** From 02:28Z to 21:15Z it was fired
+  about 35 times and not one session checked in. Only 3 of those fires were
+  charged as no-shows; the rest were bins other sessions took. In the last
+  12 h, worker-04 made **no tool call at all**.
+- **Yet the connector kept authenticating the whole time**: an hourly refresh
+  on `brnc_a5768acc…` (latest 20:23Z) and an authentication at 20:56Z. So
+  Caleb's sessions were reaching Brain's door and doing nothing there. That is
+  Claude-side behaviour Brain cannot see the cause of.
+- Brain's automatic probe at 21:14Z read HEALTHY and lifted the quarantine.
+  3-A arrived again at 21:27Z and 21:32Z. Nobody acted.
+- Brain recorded no incident of its own in that window. The only MCP
+  authentication refusals are EXPIRED, around the 10-16 restarts, and none
+  since 00:29Z.
+- 3-B, 3-C and 3-D: every probe in healthy time still reads NO_MCP. Factory 3
+  has no connector for worker-10.
+
+Compared with the baseline: **worse for 3-A** (one 19-hour silence and a
+quarantine, recovered automatically), and **unchanged for the other four**
+(still need Caleb).
