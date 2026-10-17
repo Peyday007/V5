@@ -215,3 +215,28 @@ database's costliest statement on the serving process: 70 calls, mean about
 55 s, max 124 s. It runs three correlated subqueries for every
 `DISPATCH_NO_SHOW` row ever written. That is load on the same database whose
 slowness causes the remaining misses.
+
+## 7. 48-hour reading (2026-10-17 17:51Z, revision `f377811`)
+
+Readings: `connection-report` summary over 24 h, and history over 30 h.
+
+| Routine | state | fires (30 h) | right-worker arrivals | wrong-worker | real no-shows | infra misses |
+|---|---|---|---|---|---|---|
+| 2-A | ENABLED | 135 | 91 | 0 | 2 (12:13Z, 15:34Z) | 0 |
+| 2-B | ENABLED | 135 | 99 | 0 | 0 | 0 |
+| 2-C | ENABLED | 136 | 103 | 0 | 2 (05:25Z, 09:22Z) | 1 |
+| 2-D | ENABLED | 136 | 89 | 0 | 1 (11:28Z) | 0 |
+
+- Every arrival is the research worker `wkr_9826789954a34b338620`, through
+  `cnr_4d76d221…` at `/mcp/factory`.
+- No real no-show came within one arrival of another. No Routine came close to
+  three in a row, and none was quarantined.
+- No recovery probe was needed and none ran. Last check-ins: 17:30Z–17:47Z.
+- EARLY WARNING lists nothing for Airyn.
+- The no-show query (#215) is no longer among the ten costliest statements on a
+  process that has served for 17 h. Pressure is NORMAL, with p90 82 ms over
+  2,000 statements. The database was resized to Small in the same window
+  (#220), so this reading cannot say how much of the drop is the query fix.
+
+Compared with the 24-hour reading nothing got worse: about the same arrival
+rate, no wrong-worker sessions, and no person needed.
