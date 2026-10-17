@@ -802,7 +802,86 @@ export async function unansweredFiresByRoutine(): Promise<Map<string, number>> {
         AND e.at > COALESCE(a.t, '')
       GROUP BY e.routine_id`,
   );
-  return new Map(rows.map((row) => [row.routine_id, Number(row.n)]));
+  const counts = new Map(rows.map((row) => [row.routine_id, Number(row.n)]));
+  // The larger of the two readings per Routine: the reopen's `DISPATCH_NO_SHOW`
+  // rows, and this Routine's own fires that no session ever answered.
+  for (const [routineId, n] of await unarrivedOwnFiresByRoutine()) {
+    if (n > (counts.get(routineId) ?? 0)) counts.set(routineId, n);
+  }
+  return counts;
+}
+
+/** How old a fire must be before its silence counts, and how far back to look. */
+export const OWN_FIRE_SETTLE_MS = 30 * 60_000;
+export const OWN_FIRE_LOOKBACK_MS = 24 * 60 * 60_000;
+
+/**
+ * A Routine's own fires whose session never arrived — even when another
+ * session took the bin.
+ *
+ * `DISPATCH_NO_SHOW` is written only when the fired-for bin is still waiting at
+ * the same generation, which is right for a reopen and wrong as the only
+ * evidence of a dead surface: in a pool another account's running session takes
+ * that bin first, the generation moves, and the dead surface's silence is never
+ * recorded. Production, 2026-10-17: Caleb 3-A was fired 54 times in a row from
+ * 02:33Z with no session arriving, every fire returning a provider session, and
+ * read `unanswered=2` the whole time — so the three-strike quarantine that
+ * exists precisely for this never tripped.
+ *
+ * This reads the fact directly. A `DISPATCH_SENT` row carries the provider
+ * session Brain was given, and the arrival row (`DISPATCH_SESSION_ARRIVED`, or
+ * `DISPATCH_WRONG_WORKER`, which is also an answer) carries the same session id
+ * — so "this fire's own session arrived" is an exact join, not an inference.
+ * A fire counts when it is older than `OWN_FIRE_SETTLE_MS` (the same thirty
+ * minutes an activation counts as in flight), later than every boundary the
+ * no-show count already respects, and — the protection §53 requires — at least
+ * one other session arrived at Brain inside its window, which is evidence Brain
+ * was answering. A fire during Brain's own outage, when nothing arrived from
+ * anywhere, is never counted against the surface.
+ */
+export async function unarrivedOwnFiresByRoutine(nowMs: number = Date.now()): Promise<Map<string, number>> {
+  const since = new Date(nowMs - OWN_FIRE_LOOKBACK_MS).toISOString();
+  const settled = new Date(nowMs - OWN_FIRE_SETTLE_MS).toISOString();
+  const fires = await getDb().all<{ routine_id: string; at: string }>(
+    `SELECT f.routine_id AS routine_id, f.at AS at
+       FROM bin_events f
+       LEFT JOIN fleet_routines r ON r.id = f.routine_id
+       LEFT JOIN (SELECT routine_id, MAX(at) AS t
+                    FROM bin_events
+                   WHERE event_type IN ('DISPATCH_SESSION_ARRIVED', 'DISPATCH_WRONG_WORKER')
+                     AND routine_id IS NOT NULL AND at >= ?
+                   GROUP BY routine_id) a
+              ON a.routine_id = f.routine_id
+      WHERE f.event_type = 'DISPATCH_SENT'
+        AND f.routine_id IS NOT NULL
+        AND f.session_ref IS NOT NULL
+        AND f.at >= ? AND f.at <= ?
+        AND f.at > COALESCE(a.t, '')
+        AND f.at > COALESCE(r.no_shows_forgiven_at, '')
+        AND f.at > COALESCE(r.state_changed_at, '')
+        AND NOT EXISTS (
+          SELECT 1 FROM bin_events x
+           WHERE x.session_ref = f.session_ref
+             AND x.event_type IN ('DISPATCH_SESSION_ARRIVED', 'DISPATCH_WRONG_WORKER'))`,
+    [since, since, settled],
+  );
+  if (fires.length === 0) return new Map();
+  const arrivals = (
+    await getDb().all<{ at: string }>(
+      `SELECT at FROM bin_events
+        WHERE event_type = 'DISPATCH_SESSION_ARRIVED' AND at >= ?
+        ORDER BY at`,
+      [since],
+    )
+  ).map((row) => Date.parse(row.at));
+  const out = new Map<string, number>();
+  for (const fire of fires) {
+    const from = Date.parse(fire.at);
+    const to = from + OWN_FIRE_SETTLE_MS;
+    if (!arrivals.some((at) => at > from && at <= to)) continue;
+    out.set(fire.routine_id, (out.get(fire.routine_id) ?? 0) + 1);
+  }
+  return out;
 }
 
 /**

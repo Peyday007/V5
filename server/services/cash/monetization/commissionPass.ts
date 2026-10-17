@@ -27,12 +27,15 @@
  * already paid for. §30 draws this line for discovery and for the deep dive;
  * this is the same line, at a third question.
  */
-import { getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
+import { cashNow, getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
 import { createCandidate } from '../../../repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../../../repos/russellMissions.ts';
 import { missionsForRounds } from '../../russell/roundMissions.ts';
 import { citableClaims } from '../../../repos/research.ts';
-import { mayReplace } from '../../../repos/cashCardFacts.ts';
+import { cardFactsForProject, mayReplace } from '../../../repos/cashCardFacts.ts';
+import { listOpportunities } from '../../../repos/cashPortfolio.ts';
+import { closedBy } from '../closing.ts';
+import { DISQUALIFIED_FIELD } from '../engineCard.ts';
 import {
   commissionsFor,
   contradictedPathAnswers,
@@ -251,9 +254,20 @@ export async function runCommissions(input: {
     if (mission?.state === 'NEEDS_HUMAN') continue;
     holding += 1;
   }
+  /*
+   * A question about an opening that can no longer be pursued is not worth an
+   * activation. Production, 2026-10-17: duplicates, disqualified and expired
+   * openings kept earning research bins that friends' Claude sessions were
+   * fired at and handed back. The same four conditions `whyNotDiving` already
+   * refuses a deep dive on, read once here, so the two readers agree.
+   */
+  const closed = await closedOpportunities(input.projectId);
+  const live = input.ledger.entries.filter(
+    (one) => !(one.subject?.kind === 'OPPORTUNITY' && closed.has(one.subject.id)),
+  );
   const plan = allocateCommissions({
-    entries: input.ledger.entries,
-    rankable: input.ledger.entries.map(rankableOf),
+    entries: live,
+    rankable: live.map(rankableOf),
     commissions,
     contradicted: await contradictedPathAnswers(input.projectId),
     slots: Math.max(0, MAX_OPEN_COMMISSIONS - holding),
@@ -777,3 +791,26 @@ export async function commissionHistory(pathId: string): Promise<MonetizationCom
 }
 
 export { ANSWERED as MONETIZATION_ANSWER_EVENT };
+
+/**
+ * Openings no question should be asked about: a duplicate, declined or
+ * archived, past its own expiry, or carrying a recorded disqualification.
+ */
+export async function closedOpportunities(projectId: string): Promise<Set<string>> {
+  const now = cashNow();
+  const closed = new Set<string>();
+  for (const one of await listOpportunities({ projectId })) {
+    if (
+      one.duplicateOfId ||
+      one.state === 'DECLINED' ||
+      one.state === 'ARCHIVED' ||
+      closedBy(one.expiresAt, now)
+    ) {
+      closed.add(one.id);
+    }
+  }
+  for (const fact of await cardFactsForProject(projectId)) {
+    if (fact.field === DISQUALIFIED_FIELD && fact.value.trim().length > 0) closed.add(fact.opportunityId);
+  }
+  return closed;
+}

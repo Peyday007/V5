@@ -38,6 +38,120 @@ import { connectorHealthByRoutine } from '../fleet/connectorHealth.ts';
  */
 export const IN_FLIGHT_WINDOW_MS = 30 * 60_000;
 
+/**
+ * Sessions one concurrency slot may start in an hour.
+ *
+ * An account's target bounds how many of its sessions run *at once*; nothing
+ * bounded how many were *started*. A session that is handed a bin and hands it
+ * back frees its slot within a minute, so a target of four still let one
+ * account be fired 48 times in an hour (Airyn 2-A, 2026-10-12 05h). Six starts
+ * per slot per hour is one every ten minutes per slot — more than any useful
+ * session needs, since a session that is doing work holds its slot for longer
+ * than that — and an account with no target is held to `DEFAULT_ACCOUNT_
+ * ACTIVATIONS_PER_HOUR`, because "no target" was never a decision to allow
+ * unlimited starts. It is a ceiling on spending, so it binds through the same
+ * `ACCOUNT_TARGETS_REACHED` wait a target does: the bin waits, nothing is lost.
+ */
+export const ACTIVATIONS_PER_SLOT_PER_HOUR = 6;
+export const DEFAULT_ACCOUNT_ACTIVATIONS_PER_HOUR = 12;
+
+export function accountActivationBudget(accountTarget: number | null): number {
+  return accountTarget === null
+    ? DEFAULT_ACCOUNT_ACTIVATIONS_PER_HOUR
+    : Math.max(1, accountTarget) * ACTIVATIONS_PER_SLOT_PER_HOUR;
+}
+
+/** Sessions Brain started per account in the last hour, from its own dispatch rows. */
+async function firesLastHourByAccount(
+  nowMs: number,
+  accountOfRoutine: Map<string, string>,
+): Promise<Map<string, number>> {
+  const since = new Date(nowMs - 60 * 60_000).toISOString();
+  const rows = await getDb().all<{ routine_id: string | null; n: number }>(
+    `SELECT routine_id, COUNT(*) AS n FROM bin_dispatch
+      WHERE state = 'SENT' AND sent_at >= ? AND routine_id IS NOT NULL
+      GROUP BY routine_id`,
+    [since],
+  );
+  const out = new Map<string, number>();
+  for (const row of rows) {
+    const account = row.routine_id ? accountOfRoutine.get(row.routine_id) : undefined;
+    if (account) out.set(account, (out.get(account) ?? 0) + Number(row.n));
+  }
+  return out;
+}
+
+/**
+ * Routines whose sessions recently could not reach the web.
+ *
+ * A research fragment is blocked with the environment's own words when the
+ * session's sandbox refuses the source (`ENOTFOUND`, `EAI_AGAIN`, an egress
+ * policy). That is a fact about the surface, not the question: production,
+ * 2026-10-17, Airyn 2-A held 45 DNS failures and kept being fired for research,
+ * each session ending "No network egress to source hosts (ENOTFOUND)".
+ *
+ * A Routine with at least `NETWORK_BLOCK_THRESHOLD` such blocks attributed to
+ * its sessions inside `NETWORK_BLOCK_WINDOW_MS`, and no accepted fragment in the
+ * same window, is not fired for research. It is not quarantined and is still
+ * fired for other work; the window is the recovery — once it passes with no new
+ * block the Routine is eligible again and its next session tests it, so a
+ * repaired environment comes back without anybody remembering to clear it.
+ */
+export const NETWORK_BLOCK_THRESHOLD = 3;
+export const NETWORK_BLOCK_WINDOW_MS = 6 * 60 * 60_000;
+const NETWORK_BLOCK_PATTERNS = ['%ENOTFOUND%', '%EAI_AGAIN%', '%getaddrinfo%', '%egress%', '%network polic%'];
+
+/**
+ * Read at most every five minutes. The window it judges is six hours, so a
+ * fresher answer changes nothing, and the dispatch tick runs every ten seconds
+ * on a database §61 measured as the shared bottleneck.
+ */
+const NETWORK_BLOCK_CACHE_MS = 5 * 60_000;
+let networkBlockCache: { at: number; value: Set<string> } | null = null;
+
+export function resetNetworkBlockCache(): void {
+  networkBlockCache = null;
+}
+
+export async function networkBlockedRoutines(nowMs: number): Promise<Set<string>> {
+  if (networkBlockCache && nowMs - networkBlockCache.at >= 0 && nowMs - networkBlockCache.at < NETWORK_BLOCK_CACHE_MS) {
+    return networkBlockCache.value;
+  }
+  const value = await readNetworkBlockedRoutines(nowMs);
+  networkBlockCache = { at: nowMs, value };
+  return value;
+}
+
+async function readNetworkBlockedRoutines(nowMs: number): Promise<Set<string>> {
+  const since = new Date(nowMs - NETWORK_BLOCK_WINDOW_MS).toISOString();
+  const like = NETWORK_BLOCK_PATTERNS.map(() => 'f.blocked_reason LIKE ?').join(' OR ');
+  const routineOf =
+    `(SELECT p.executor_routine_id FROM research_passes p WHERE p.fragment_id = f.id` +
+    ` AND p.executor_routine_id IS NOT NULL ORDER BY p.started_at DESC LIMIT 1)`;
+  const blocked = await getDb().all<{ routine_id: string | null; n: number }>(
+    `SELECT routine_id, COUNT(*) AS n FROM (
+       SELECT ${routineOf} AS routine_id FROM research_fragments f
+        WHERE f.status = 'BLOCKED' AND f.updated_at >= ? AND f.blocked_reason IS NOT NULL AND (${like})
+     ) x WHERE routine_id IS NOT NULL GROUP BY routine_id`,
+    [since, ...NETWORK_BLOCK_PATTERNS],
+  );
+  const accepted = await getDb().all<{ routine_id: string | null }>(
+    `SELECT DISTINCT routine_id FROM (
+       SELECT ${routineOf} AS routine_id FROM research_fragments f
+        WHERE f.status = 'ACCEPTED' AND f.accepted_at >= ?
+     ) x WHERE routine_id IS NOT NULL`,
+    [since],
+  );
+  const working = new Set(accepted.map((row) => row.routine_id).filter((id): id is string => !!id));
+  const out = new Set<string>();
+  for (const row of blocked) {
+    if (row.routine_id && Number(row.n) >= NETWORK_BLOCK_THRESHOLD && !working.has(row.routine_id)) {
+      out.add(row.routine_id);
+    }
+  }
+  return out;
+}
+
 export interface FleetSnapshot {
   candidates: RoutingCandidate[];
   fleetPolicy: FleetPolicy | null;
@@ -234,6 +348,12 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
   );
 
   const accountById = new Map<string, FleetAccount>(accounts.map((a) => [a.id, a]));
+  // Both read defensively: an unreadable count routes as it always did.
+  const firesLastHour = await firesLastHourByAccount(
+    now.getTime(),
+    new Map(routines.map((routine) => [routine.id, routine.accountId])),
+  ).catch(() => new Map<string, number>());
+  const networkBlocked = await networkBlockedRoutines(now.getTime()).catch(() => new Set<string>());
   const perAccount = new Map<string, number>();
   for (const routine of routines) {
     const n = perRoutine.get(routine.id) ?? 0;
@@ -271,9 +391,10 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
       routine,
       account,
       connectorHealth: healthByRoutine.get(routine.id) ?? null,
-      servesFamilies: routine.workerId
-        ? scopeByWorker.get(routine.workerId)?.families ?? null
-        : null,
+      servesFamilies: withoutResearchIf(
+        networkBlocked.has(routine.id),
+        routine.workerId ? scopeByWorker.get(routine.workerId)?.families ?? null : null,
+      ),
       servesRepositories: routine.workerId
         ? scopeByWorker.get(routine.workerId)?.repositories ?? null
         : null,
@@ -306,6 +427,10 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
       accountInFlight: perAccount.get(account.id) ?? 0,
       routineTarget: routinePolicy ? effectiveTarget(routinePolicy, nowIso).target : null,
       accountTarget: accountPolicy ? effectiveTarget(accountPolicy, nowIso).target : null,
+      accountFiresLastHour: firesLastHour.get(account.id) ?? 0,
+      accountActivationBudget: accountActivationBudget(
+        accountPolicy ? effectiveTarget(accountPolicy, nowIso).target : null,
+      ),
       allowanceReport: allowanceReports.get(account.id) ?? null,
     });
   }
@@ -314,6 +439,16 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
   for (const n of perRoutine.values()) fleetInFlight += n;
 
   return { candidates, fleetPolicy, fleetInFlight, missingSecrets };
+}
+
+/**
+ * A network-blocked Routine's families without RESEARCH. An unknown scope
+ * (`null`) becomes the non-research families explicitly, because "fire it for
+ * anything" is exactly what a known block must not mean.
+ */
+function withoutResearchIf(blocked: boolean, families: string[] | null): string[] | null {
+  if (!blocked) return families;
+  return (families ?? ['RESEARCH', 'GENERAL']).filter((family) => family !== 'RESEARCH');
 }
 
 /** What one worker may be handed, in the dimensions the fire decides on. */

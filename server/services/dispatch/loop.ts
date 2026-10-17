@@ -54,7 +54,12 @@
 import { getDb } from '../../db/database.ts';
 import { reconcileConnectorBindings, recoverReauthorizedSurfaces } from '../fleet/connectorBinding.ts';
 import {
+  BIN_REFIRE_COOLDOWN_MS,
+  BIN_REFIRE_LIMIT,
+  BIN_REFIRE_WINDOW_MS,
+  binWorkReady,
   claimDispatchIntent,
+  deferBinFires,
   ensureDispatchIntent,
   getBin,
   isDispatchable,
@@ -63,6 +68,7 @@ import {
   markDispatchFailed,
   markDispatchSent,
   rearmSurfaceDeferredIntents,
+  recentFiresForBin,
   recordBinEvent,
   supersedeStaleIntents,
   reopenNoShowDispatches,
@@ -119,6 +125,14 @@ export const OPERATOR_RESOLVED_KINDS: readonly string[] = [
 
 /** Ten minutes, because the re-arm is what ends this wait rather than the clock. */
 const SCOPE_DEFER_MS = 10 * 60_000;
+
+/**
+ * How long an intent whose bin has nothing claimable waits before it is asked
+ * again. Short enough that work becoming claimable is picked up within a few
+ * minutes; long enough that a packet waiting on a person writes a handful of
+ * deferral rows an hour rather than one a tick.
+ */
+const NO_CLAIMABLE_WORK_DEFER_MS = 5 * 60_000;
 
 /**
  * How often the loop wakes.
@@ -520,6 +534,52 @@ export async function dispatchTick(
         kind: 'SUPERSEDED',
         message: 'The bin was taken or moved on before this intent was sent.',
       });
+      continue;
+    }
+
+    /*
+     * No session is started for a bin with nothing a session could do.
+     *
+     * `workReadySql` already keeps such a bin from earning an intent; this is
+     * the same question asked of an intent created before its work stopped
+     * being claimable (a fragment that blocked a moment ago, a no-show the
+     * reopen put back). The intent waits rather than failing — no attempt is
+     * charged — and is asked again after the backoff, by which time the work
+     * has either become claimable and it fires, or it waits again.
+     */
+    if (!(await binWorkReady(bin))) {
+      await markDispatchDeferred(intent.id, {
+        refusal: 'NO_CLAIMABLE_WORK',
+        message:
+          'Nothing in this bin is claimable now: every open item is waiting on a dependency, a ' +
+          'backoff or another lease, or the packet is between stages. No session is started ' +
+          'until there is work one could do.',
+        retryAfterMs: NO_CLAIMABLE_WORK_DEFER_MS,
+      });
+      result.deferred += 1;
+      continue;
+    }
+
+    /*
+     * And a bin that keeps being handed back stops earning sessions for a while.
+     *
+     * The backstop under the work gate: whatever the reason sessions keep
+     * returning a bin unfinished, `BIN_REFIRE_LIMIT` sessions inside the window
+     * have already learned it. The bin stays READY and any running session may
+     * still take it; only *starting* another one waits, through the existing
+     * `dispatch_not_before` fire backoff the assigner deliberately ignores.
+     */
+    if ((await recentFiresForBin(bin.id)) >= BIN_REFIRE_LIMIT) {
+      await deferBinFires(bin.id, BIN_REFIRE_COOLDOWN_MS);
+      await markDispatchDeferred(intent.id, {
+        refusal: 'BIN_REFIRE_GUARD',
+        message:
+          `This bin has already had ${BIN_REFIRE_LIMIT} sessions started for it in the last ` +
+          `${Math.round(BIN_REFIRE_WINDOW_MS / 60_000)} minutes without finishing. No further ` +
+          'session is started for it until the cool-off passes.',
+        retryAfterMs: BIN_REFIRE_COOLDOWN_MS,
+      });
+      result.deferred += 1;
       continue;
     }
 

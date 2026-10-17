@@ -1255,6 +1255,11 @@ async function deferFire(binId: string, until: string): Promise<void> {
   );
 }
 
+/** `deferFire` for the dispatcher's re-fire guard: no new session before `now + ms`. */
+export async function deferBinFires(binId: string, ms: number): Promise<void> {
+  await deferFire(binId, new Date(Date.now() + ms).toISOString());
+}
+
 /**
  * Write down that this bin refused this session, and when to ask again.
  *
@@ -1520,6 +1525,90 @@ export const DISPATCHABLE_SQL = `(${claimableStateSql('')} AND attempt_count < m
  */
 export const FIREABLE_SQL = '(dispatch_not_before IS NULL OR dispatch_not_before <= ?)';
 
+/**
+ * Whether a bin has work a fired session could actually start, right now.
+ *
+ * A research packet's bin is a container; the work is its queue items. When
+ * none of them is claimable — every open item is waiting on a dependency, a
+ * backoff, or another lease, or the packet is between stages — a fired session
+ * arrives, is handed the bin, finds nothing, and hands it back. The hand-back
+ * advances the generation, the new generation earns a new dispatch intent, and
+ * the next Routine is fired for the same nothing.
+ *
+ * Production, 2026-10-17: `bin_63116d5b02044be6ae4c` was fired five times in
+ * 2 min 29 s (Airyn 2-A, Caleb 3-A, Airyn 2-D, Airyn 2-C, Airyn 2-A), each
+ * session's checkpoint reading "brain_bin_next_item returned no claimable item
+ * (open work waiting on dependency/backoff). No research or submissions made",
+ * and the bin exhausted its five attempts on nothing. Over that week 5,615 such
+ * hand-backs, 97% of one account's assignments.
+ *
+ * So the dispatcher asks the claim's own question — `CLAIMABLE_SQL`, over the
+ * same `binScopeSql` confinement `claimWork` uses — before it spends a fire.
+ * The assigner does not read this: a session that is already running is still
+ * handed the bin the moment it asks, so nothing becomes harder to *take*; only
+ * *starting* a new session waits for work to exist. The condition is re-derived
+ * on every tick, so the first tick after an item becomes claimable (its backoff
+ * passes, its dependency is enqueued, a lease lapses, a person answers the
+ * packet's question) creates the intent and fires.
+ *
+ * Fail-open in exactly two shapes, both deliberately: a bin of any other
+ * contract, and a research bin whose scope holds no work items at all (nothing
+ * is known about it, so it routes as it always did). And one positive case
+ * besides claimable work: a packet that has filed with nothing left open needs
+ * one session to close its bin, so that still fires.
+ *
+ * Two `?`, both bound to now: the queued branch and the lapsed-lease branch.
+ */
+export function workReadySql(prefix: string): string {
+  const scope =
+    `(w.bin_id = ${prefix}id OR (w.bin_id IS NULL AND ${prefix}orchestration_id IS NOT NULL` +
+    ` AND w.orchestration_id = ${prefix}orchestration_id))`;
+  return (
+    `(${prefix}completion_contract <> 'RESEARCH_PACKET_V1' OR ${prefix}orchestration_id IS NULL` +
+    ` OR NOT EXISTS (SELECT 1 FROM work_items w WHERE ${scope})` +
+    ` OR EXISTS (SELECT 1 FROM work_items w WHERE ${scope}` +
+    ` AND ((w.state = 'QUEUED' AND w.available_at <= ?) OR (w.state = 'LEASED' AND w.lease_expires_at <= ?))` +
+    ` AND w.attempt_count < w.max_attempts)` +
+    ` OR (NOT EXISTS (SELECT 1 FROM work_items w WHERE ${scope} AND w.state IN ('QUEUED', 'LEASED'))` +
+    ` AND EXISTS (SELECT 1 FROM research_orchestrations o WHERE o.id = ${prefix}orchestration_id` +
+    ` AND o.status IN ('COMPLETE', 'COMPLETE_WITH_GAPS'))))`
+  );
+}
+
+/** The same question for one bin already in memory. */
+export async function binWorkReady(bin: { id: string }, now: string = binNow()): Promise<boolean> {
+  const row = await getDb().get<{ ready: number }>(
+    `SELECT 1 AS ready FROM bins b WHERE b.id = ? AND ${workReadySql('b.')}`,
+    [bin.id, now, now],
+  );
+  return row !== undefined && row !== null;
+}
+
+/**
+ * How many fires one bin may earn inside `BIN_REFIRE_WINDOW_MS` before the
+ * dispatcher stops starting sessions for it.
+ *
+ * A backstop under `workReadySql`, not a replacement for it: whatever the
+ * reason a bin keeps being handed back — a source the surface cannot reach, a
+ * role the arriving session may not take, a gate this predicate does not know
+ * about — three sessions in half an hour is enough to learn it, and a fourth is
+ * an activation out of somebody's fixed allowance spent learning it again.
+ */
+export const BIN_REFIRE_LIMIT = 3;
+export const BIN_REFIRE_WINDOW_MS = 30 * 60_000;
+/** How long a bin that hit the limit waits before it may earn another fire. */
+export const BIN_REFIRE_COOLDOWN_MS = 30 * 60_000;
+
+/** Sessions Brain started for this bin within the window, any generation. */
+export async function recentFiresForBin(binId: string, nowMs: number = Date.now()): Promise<number> {
+  const since = new Date(nowMs - BIN_REFIRE_WINDOW_MS).toISOString();
+  const row = await getDb().get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM bin_dispatch WHERE bin_id = ? AND state = 'SENT' AND sent_at >= ?`,
+    [binId, since],
+  );
+  return Number(row?.n ?? 0);
+}
+
 /** The same question asked of a row already in memory. */
 export function isDispatchable(bin: Bin, now: string = binNow()): boolean {
   // The fire backoff, asked of the dispatcher's own readers only. See
@@ -1556,10 +1645,10 @@ export async function listDispatchableBinHeads(
   // filtered, so which bins are considered in a tick does not change.
   const rows = await getDb().all<BinRow>(
     `SELECT ${BIN_HEAD_COLUMNS} FROM bins
-      WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL}
+      WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
       ORDER BY priority DESC, created_at, rowid
       LIMIT ?`,
-    [now, now, Math.min(500, Math.max(1, limit))],
+    [now, now, now, now, Math.min(500, Math.max(1, limit))],
   );
   const heads = rows.map(mapBinHead);
   if (!options.onlyWithoutIntent || heads.length === 0) return heads;
@@ -1582,10 +1671,10 @@ export async function listDispatchableBins(limit = 200): Promise<Bin[]> {
   const now = binNow();
   const rows = await getDb().all<BinRow>(
     `SELECT * FROM bins
-      WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL}
+      WHERE ${DISPATCHABLE_SQL} AND ${FIREABLE_SQL} AND ${workReadySql('bins.')}
       ORDER BY priority DESC, created_at, rowid
       LIMIT ?`,
-    [now, now, Math.min(500, Math.max(1, limit))],
+    [now, now, now, now, Math.min(500, Math.max(1, limit))],
   );
   return rows.map(mapBin);
 }
