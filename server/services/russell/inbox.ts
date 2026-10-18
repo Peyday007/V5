@@ -48,6 +48,7 @@ import { connectionView } from '../capacity/connection.ts';
 import { connectionForUser } from '../../repos/capacityConnections.ts';
 import { getUser } from '../../repos/identity.ts';
 import type { JourneyStepKind } from '../cash/journey/view.ts';
+import { RECONSIDER_REQUEST_PREFIX } from '../cash/reconsider.ts';
 
 /** The kinds of decision a person is asked for, in the order they are shown. */
 export const INBOX_CATEGORIES = [
@@ -257,14 +258,26 @@ export async function inboxFor(input: {
     ) {
       continue;
     }
+    /*
+     * "The condition you named changed — reconsider?" (cash/reconsider.ts): a
+     * piece a person stopped, which Brain asks about and never moves itself.
+     * Ignoring it costs nothing but the look, so it says so.
+     */
+    const reconsider = request.resumeKey.startsWith(RECONSIDER_REQUEST_PREFIX);
     items.push({
       id: `request:${request.id}`,
       category: request.missionId ? 'RESEARCH_JUDGMENT' : 'JUDGMENT',
       title: request.authorityNeeded,
       reason: request.whyNotRussell,
-      ifIgnored: 'The work this is about stays stopped at this question.',
+      ifIgnored: reconsider
+        ? 'It stays where you put it, with your reason kept. Nothing moves without your answer.'
+        : 'The work this is about stays stopped at this question.',
       requestedAction: 'Choose one of the answers below.',
-      affects: request.missionId ? 'A piece of research' : 'This project',
+      affects: request.missionId
+        ? 'A piece of research'
+        : reconsider
+          ? 'An opportunity you stopped'
+          : 'This project',
       continuing: CONTINUING,
       urgency: request.urgency,
       since: request.createdAt,

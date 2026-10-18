@@ -742,6 +742,9 @@ export interface ResumeResult {
 /** What `authorityResumeKey` builds, read back here. One string, two readers. */
 const CAPABILITY_AUTHORITY_PREFIX = 'capability-authority:';
 
+/** `RECONSIDER_REQUEST_PREFIX` in cash/reconsider.ts, restated so this module loads it lazily. */
+const CASH_RECONSIDER_PREFIX = 'cash-reconsider:';
+
 /**
  * Record a person's answer against the gap it was raised for.
  *
@@ -858,6 +861,18 @@ export async function resumeAnsweredRequest(
    */
   if (!request.missionId && request.resumeKey.startsWith(CAPABILITY_AUTHORITY_PREFIX)) {
     return resumeCapabilityAuthority(request);
+  }
+  /*
+   * "The condition you named changed — reconsider?" (cash/reconsider.ts). Not
+   * about a mission either, so it is answered before the mission check for the
+   * same reason as the capability card above: otherwise the answer would be
+   * marked resumed having carried out nothing. Loaded lazily, because the cash
+   * service imports more of Brain than this module should at load time.
+   */
+  if (!request.missionId && request.resumeKey.startsWith(CASH_RECONSIDER_PREFIX)) {
+    const { resumeReconsiderRequest } = await import('../cash/reconsider.ts');
+    const result = await resumeReconsiderRequest(request);
+    return { ...result, missionId: null };
   }
   if (!request.missionId) {
     return { ok: true, reason: 'the request was not about a mission', missionId: null, settled: true };

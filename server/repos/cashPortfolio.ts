@@ -283,6 +283,56 @@ export async function listOpportunities(input: {
   return rows.map(mapOpportunity);
 }
 
+/**
+ * Every piece written at or after `since`, in any state.
+ *
+ * What the capability-need pass reads instead of the whole portfolio: a piece
+ * created, edited, moved or flagged for reconsideration since the last pass
+ * bumped `updated_at`, and nothing else can have changed what it requires.
+ */
+export async function opportunitiesTouchedSince(
+  projectId: string,
+  since: string,
+): Promise<CashOpportunity[]> {
+  const rows = await getDb().all<CashOpportunityRow>(
+    `SELECT * FROM cash_opportunities
+      WHERE project_id = ? AND updated_at >= ?
+      ORDER BY created_at DESC, id DESC`,
+    [projectId, since],
+  );
+  return rows.map(mapOpportunity);
+}
+
+/**
+ * Pieces in these states that require any of these capabilities.
+ *
+ * Read only when a capability's reading changed, so it costs nothing on an
+ * ordinary tick. The LIKE narrows (its `_` may over-match); the exact test is
+ * on the parsed column.
+ */
+export async function opportunitiesRequiring(input: {
+  projectId: string;
+  capabilityIds: readonly string[];
+  states: readonly CashOpportunityState[];
+}): Promise<CashOpportunity[]> {
+  if (input.capabilityIds.length === 0 || input.states.length === 0) return [];
+  const rows = await getDb().all<CashOpportunityRow>(
+    `SELECT * FROM cash_opportunities
+      WHERE project_id = ? AND state IN (${input.states.map(() => '?').join(', ')})
+        AND (${input.capabilityIds.map(() => 'required_capabilities LIKE ?').join(' OR ')})
+      ORDER BY created_at DESC, id DESC`,
+    [
+      input.projectId,
+      ...input.states,
+      ...input.capabilityIds.map((id) => `%"${id}"%`),
+    ],
+  );
+  const wanted = new Set(input.capabilityIds);
+  return rows
+    .map(mapOpportunity)
+    .filter((one) => one.requiredCapabilities.some((id) => wanted.has(id)));
+}
+
 /** The opportunity harvested from one claim, if that claim produced one. */
 export async function opportunityForClaim(
   projectId: string,
@@ -590,6 +640,21 @@ function mapNeed(row: CashNeedRow): CashNeed {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/**
+ * Give a need raised before blocker keys existed the key its cause names.
+ *
+ * Guarded on the column still being empty, so a key once written is never
+ * replaced — the need's identity stays `request_key`, and this only lets the
+ * fan-out's indexed read find a need that was there all along.
+ */
+export async function setNeedBlockerKeyIfUnset(needId: string, key: BlockerKey): Promise<boolean> {
+  const result = await getDb().run(
+    'UPDATE cash_needs SET blocker_key = ? WHERE id = ? AND blocker_key IS NULL',
+    [key, needId],
+  );
+  return result.changes === 1;
 }
 
 export async function createNeed(input: {
