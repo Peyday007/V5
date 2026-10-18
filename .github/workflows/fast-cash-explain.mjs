@@ -66,6 +66,53 @@ if (!goal) {
   for (const o of recent) {
     console.log(`    ${o.created_at} ${o.id} ${o.opportunity_signal}${o.duplicate_of_id ? ' dup' : ''} orc=${o.orchestration_id} worker=${o.worker_id ?? '-'} :: ${String(o.title).slice(0, 110)} <- ${o.source_url ?? '-'}`);
   }
+  // Who abandons work: identity, binding and how each lease ended, read-only.
+  const since48 = new Date(Date.now() - 48 * 3600_000).toISOString();
+  const who = (sql, params) => db.all(sql, params).catch((error) => { console.log(`  read failed: ${error.message}`); return []; });
+  const byWorker = await who(
+    `SELECT l.worker_id, l.outcome, COUNT(*) AS n, AVG(l.heartbeat_count) AS hb
+       FROM work_leases l WHERE l.project_id = ? AND l.claimed_at >= ? GROUP BY l.worker_id, l.outcome ORDER BY l.worker_id`,
+    [goal.project_id, since48],
+  );
+  console.log('  leases in this project, last 48h, by worker and outcome:');
+  for (const r of byWorker) console.log(`    ${r.worker_id} ${r.outcome ?? 'OPEN'} n=${r.n} avg-heartbeats=${Number(r.hb).toFixed(1)}`);
+  const ids = [...new Set(byWorker.map((r) => r.worker_id))];
+  for (const id of ids) {
+    const w = await db.get('SELECT id, name, display_name, worker_type, status, created_at FROM workers WHERE id = ?', [id]).catch(() => null);
+    console.log(`  worker ${id} name=${w?.name ?? '?'} display=${w?.display_name ?? '?'} type=${w?.worker_type ?? '?'} status=${w?.status ?? '?'} created=${w?.created_at ?? '?'}`);
+    const routing = await db.get('SELECT families, repositories, capabilities FROM worker_routing WHERE worker_id = ?', [id]).catch(() => null);
+    console.log(`    routing ${routing ? `${routing.families} repos=${routing.repositories} caps=${routing.capabilities}` : 'none (scopes imply)'}`);
+    for (const r of await who(
+      `SELECT r.id, r.name, r.state, r.state_reason, r.routine_ref, a.name AS account FROM fleet_routines r
+         LEFT JOIN fleet_accounts a ON a.id = r.account_id WHERE r.worker_id = ? ORDER BY r.name`, [id])) {
+      console.log(`    routine ${r.name} ${r.state} account=${r.account} ref=${String(r.routine_ref).slice(0, 14)} reason=${String(r.state_reason ?? '-').slice(0, 120)}`);
+    }
+    for (const c of await who('SELECT id, account_id, resource, label FROM connectors WHERE worker_id = ?', [id])) {
+      console.log(`    connector ${c.id} account=${c.account_id} resource=${c.resource} label=${c.label ?? '-'}`);
+    }
+    const sessions = await who(
+      `SELECT s.routine_id, r.name, COUNT(*) AS n, MAX(s.observed_at) AS last FROM worker_sessions s
+         LEFT JOIN fleet_routines r ON r.id = s.routine_id WHERE s.worker_id = ? AND s.observed_at >= ? GROUP BY s.routine_id, r.name`, [id, since48]);
+    for (const s of sessions) console.log(`    sessions via ${s.name ?? s.routine_id} n=${s.n} last=${s.last}`);
+  }
+  const target = 'wkr_9826789954a34b338620';
+  console.log(`  last 25 leases of ${target} (any project):`);
+  for (const l of await who(
+    `SELECT l.work_item_id, i.work_type, l.claimed_at, l.last_heartbeat_at, l.heartbeat_count, l.expires_at, l.ended_at, l.outcome, l.detail, l.credential_id
+       FROM work_leases l LEFT JOIN work_items i ON i.id = l.work_item_id
+      WHERE l.worker_id = ? ORDER BY l.claimed_at DESC LIMIT 25`, [target])) {
+    console.log(`    ${l.claimed_at} ${l.work_item_id} ${l.work_type} hb=${l.heartbeat_count} lastHb=${l.last_heartbeat_at ?? '-'} ended=${l.ended_at ?? '-'} ${l.outcome ?? 'OPEN'} cred=${String(l.credential_id ?? '-').slice(0, 12)} ${String(l.detail ?? '').slice(0, 100)}`);
+  }
+  console.log(`  bin events of ${target}, last 48h, by type:`);
+  for (const e of await who(
+    `SELECT event_type, outcome, COUNT(*) AS n, MAX(at) AS last FROM bin_events WHERE worker_id = ? AND at >= ? GROUP BY event_type, outcome ORDER BY n DESC`, [target, since48])) {
+    console.log(`    ${e.event_type} ${e.outcome ?? '-'} n=${e.n} last=${e.last}`);
+  }
+  console.log(`  last 20 bin events of ${target}:`);
+  for (const e of await who(
+    `SELECT at, event_type, bin_id, routine_id, session_ref, outcome, reason FROM bin_events WHERE worker_id = ? ORDER BY at DESC LIMIT 20`, [target])) {
+    console.log(`    ${e.at} ${e.event_type} ${e.bin_id ?? '-'} routine=${e.routine_id ?? '-'} session=${String(e.session_ref ?? '-').slice(0, 16)} ${e.outcome ?? ''} ${String(e.reason ?? '').slice(0, 140)}`);
+  }
 }
 await closeDatabase();
 console.log('ADMIN: OK');
