@@ -814,10 +814,13 @@ export type BlockCause = (typeof BLOCK_CAUSES)[number];
 const SOURCE_ACCESS_WORDS =
   /ENOTFOUND|EAI_AGAIN|getaddrinfo|DNS|CONNECT[^\n]{0,40}403|proxy|network polic|egress|not allowed by|ECONNREFUSED|ETIMEDOUT|\b(403|401|429)\b|forbidden|robots/i;
 
-export function classifyBlock(fragment: {
+/** What `classifyBlock` reads: the two things the gate and the runner already wrote. */
+export interface ClassifyBlockInput {
   blockedReason: string | null;
   verdictDetail: unknown;
-}): BlockCause {
+}
+
+export function classifyBlock(fragment: ClassifyBlockInput): BlockCause {
   const reason = fragment.blockedReason ?? '';
   if (/^A [a-z ]+ work item for this fragment finished without recording/.test(reason)) {
     return 'WORK_FAULTED';
@@ -849,4 +852,79 @@ export function classifyBlock(fragment: {
   }
   if (gate.sufficiency === 'INSUFFICIENT') return 'VERIFIER_INSUFFICIENT';
   return 'UNCLASSIFIED';
+}
+
+/**
+ * The cause a reader should use: the stored column first, the classifier for a
+ * legacy row written before `block_cause` existed.
+ *
+ * One function so every report reads the same answer. A report that
+ * re-classified a row the column already answers would disagree with the
+ * column the day the classifier changes, and the column is what the repair
+ * ladder was chosen from.
+ */
+export function blockCauseOf(fragment: ClassifyBlockInput & { blockCause?: string | null }): BlockCause {
+  const stored = fragment.blockCause;
+  if (stored && (BLOCK_CAUSES as readonly string[]).includes(stored)) return stored as BlockCause;
+  return classifyBlock(fragment);
+}
+
+/** Causes about reaching a source, rather than about what a source said. */
+export const UNREADABLE_CAUSES: ReadonlySet<BlockCause> = new Set<BlockCause>([
+  'SOURCE_ACCESS',
+  'SOURCES_UNREADABLE',
+]);
+
+/** A host, lower-cased and without `www.`, or null when it will not parse. */
+export function hostOf(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    return host.length > 0 ? host : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Host names a blocker's own words mention: URLs first, then bare names. */
+function hostsInText(text: string): string[] {
+  const found: string[] = [];
+  for (const match of text.matchAll(/https?:\/\/[^\s"'<>)\]]+/gi)) {
+    const host = hostOf(match[0]);
+    if (host) found.push(host);
+  }
+  if (found.length > 0) return found;
+  for (const match of text.matchAll(
+    /\b((?:[a-z0-9-]+\.)+(?:gov|com|org|net|edu|us|io|uk|ca|au|de|info|biz|co)(?:\.[a-z]{2})?)\b/gi,
+  )) {
+    found.push(match[1]!.toLowerCase().replace(/^www\./, ''));
+  }
+  return found;
+}
+
+/**
+ * The one host that dominated an unreadable or refused block, or null.
+ *
+ * "Dominates" is a strict majority of the observations: the unread claims'
+ * source hosts for SOURCES_UNREADABLE, the hosts the blocker's own words name
+ * for SOURCE_ACCESS. A tie or a spread names nobody, because a fragment stopped
+ * by four different hosts is not recovered by one of them answering. Pure, and
+ * it changes no rule: it reads what the gate and the runner already wrote.
+ */
+export function blockHostFor(input: ClassifyBlockInput & { cause: BlockCause }): string | null {
+  if (!UNREADABLE_CAUSES.has(input.cause)) return null;
+  const observed: string[] = [];
+  const gate = input.verdictDetail as Partial<GateResult> | null;
+  if (input.cause === 'SOURCES_UNREADABLE' && gate && Array.isArray(gate.unresolvedRetrieval)) {
+    for (const entry of gate.unresolvedRetrieval) {
+      const host = hostOf(entry?.sourceUrl ?? null);
+      if (host) observed.push(host);
+    }
+  }
+  if (observed.length === 0) observed.push(...hostsInText(input.blockedReason ?? ''));
+  if (observed.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const host of observed) counts.set(host, (counts.get(host) ?? 0) + 1);
+  const [best, n] = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]!;
+  return n * 2 > observed.length ? best : null;
 }

@@ -49,7 +49,9 @@ import { DEPENDENCY_DOOM_PREFIX, advancePacket } from './packetRunner.ts';
 import { dependencyKeys } from '../../domain/dependencies.ts';
 import { retryFragment } from './reissue.ts';
 import { TERMINAL_ORCHESTRATION } from './outcome.ts';
-import { recordEvent } from '../../repos/events.ts';
+import { listEventsByEntity, recordEvent } from '../../repos/events.ts';
+import { getDb } from '../../db/database.ts';
+import { hostOf } from './gate.ts';
 import type { AdvanceResult } from './packetRunner.ts';
 
 export class SurfaceRecoveryRefused extends Error {
@@ -104,8 +106,18 @@ export interface SurfaceRecoveryResult {
   advanced: AdvanceResult | null;
 }
 
-/** Does this recorded failure name the surface rather than the search? */
+/**
+ * Does this recorded failure name the surface rather than the search?
+ *
+ * Brain's own words at the time it gave up, in either of two forms: the
+ * sentences above, or the structured cause `classifyBlock` stored in the same
+ * statement that blocked the fragment. SOURCE_ACCESS and SOURCES_UNREADABLE
+ * are both reached only when the gate judged nothing — no claim accepted and
+ * none rejected — so neither can be a fragment whose evidence fell short. The
+ * discriminator is unchanged in what it admits; it now also reads the column.
+ */
 export function namesSurfaceFailure(fragment: ResearchFragment): boolean {
+  if (fragment.blockCause === 'SOURCE_ACCESS' || fragment.blockCause === 'SOURCES_UNREADABLE') return true;
   const recorded = `${fragment.blockedReason ?? ''}\n${fragment.repairReason ?? ''}`;
   return SURFACE_FAILURE_MARKERS.some((marker) => marker.test(recorded));
 }
@@ -363,4 +375,193 @@ async function restoreStrandedDependents(input: {
     if (!changed) break;
   }
   return restored;
+}
+
+// ---------------------------------------------------------------------------
+// The automatic caller
+// ---------------------------------------------------------------------------
+
+/** One automatic attempt at recovery, and what came of it. */
+export interface AutomaticSurfaceRecovery {
+  fragmentId: string;
+  fragmentKey: string;
+  orchestrationId: string;
+  host: string;
+  probeBinId: string;
+  outcome: 'RECOVERED' | 'REFUSED';
+  /** The refusal's own reasons, when refused; empty when recovered. */
+  reasons: string[];
+  newFragmentId: string | null;
+}
+
+const AUTOMATIC_RECOVERY_INTERVAL_MS = 10 * 60 * 1000;
+let lastAutomaticRecoveryAt = 0;
+
+/** Test seam: the throttle is process state, and a suite runs many passes. */
+export function resetAutomaticSurfaceRecoveryThrottle(): void {
+  lastAutomaticRecoveryAt = 0;
+}
+
+/**
+ * The refusal of an automatic attempt, keyed by (fragment, probe). A recovery
+ * needs no second row: the control itself writes `RESEARCH_SURFACE_RECOVERY`
+ * naming the previous fragment and the probe it relied on.
+ */
+const REFUSED_EVENT = 'RESEARCH_SURFACE_RECOVERY_REFUSED' as const;
+
+/**
+ * Recover, automatically, a BLOCKED fragment whose dominant host a worker's
+ * probe has since read.
+ *
+ * The operator-only control (`recoverFragmentAfterSurfaceChange`) is the whole
+ * of the decision and is called exactly as an operator would call it: every
+ * guard in it applies unchanged — the packet may not be terminal, the
+ * fragment's own recorded cause must name the surface, the RETRIEVED reading
+ * must post-date the block, the ceiling is raised and the counter never
+ * reset. What this adds is only the noticing: `block_host` names the host the
+ * fragment could not read, and a completed `SURFACE_PROBE_V1` bin that later
+ * reads that host RETRIEVED is the evidence the control asks for.
+ *
+ * At most once per (fragment, reading): the outcome — recovered or refused —
+ * is written as an event on the run before the next candidate is considered,
+ * and a pair with a recorded outcome is never tried again. A refusal is
+ * therefore not retried every pass; a *new* probe reading is a new pair.
+ *
+ * Derived from rows on the durable tick rather than hooked to a probe
+ * completing, so it reaches fragments already stranded. Throttled: it is a
+ * backlog, not a ten-second concern.
+ */
+export async function recoverReachableFragments(
+  limit: number,
+  options: { force?: boolean } = {},
+): Promise<AutomaticSurfaceRecovery[]> {
+  const now = Date.now();
+  if (!options.force && now - lastAutomaticRecoveryAt < AUTOMATIC_RECOVERY_INTERVAL_MS) return [];
+  lastAutomaticRecoveryAt = now;
+
+  const db = getDb();
+  const terminal = [...TERMINAL_ORCHESTRATION];
+  const candidates = await db.all<{
+    id: string;
+    orchestration_id: string;
+    fragment_key: string;
+    block_host: string;
+    blocked_at: string;
+    run_id: string;
+    project_id: string;
+    layer_id: string;
+  }>(
+    `SELECT f.id, f.orchestration_id, f.fragment_key, f.block_host,
+            COALESCE(f.completed_at, f.updated_at) AS blocked_at,
+            o.run_id, o.project_id, o.layer_id
+       FROM research_fragments f
+       JOIN research_orchestrations o ON o.id = f.orchestration_id
+      WHERE f.block_host IS NOT NULL AND f.status = 'BLOCKED'
+        AND o.status NOT IN (${terminal.map(() => '?').join(', ')})
+        AND NOT EXISTS (
+          SELECT 1 FROM research_fragments n
+           WHERE n.orchestration_id = f.orchestration_id
+             AND n.fragment_key = f.fragment_key AND n.attempt > f.attempt)
+      ORDER BY f.id
+      LIMIT ?`,
+    [...terminal, Math.max(1, limit)],
+  );
+  if (candidates.length === 0) return [];
+
+  const earliest = candidates.map((c) => c.blocked_at).sort()[0]!;
+  const probes = await db.all<{ id: string }>(
+    `SELECT id FROM bins
+      WHERE state = 'COMPLETE' AND completion_contract = 'SURFACE_PROBE_V1' AND updated_at > ?
+      ORDER BY updated_at, id`,
+    [earliest],
+  );
+  if (probes.length === 0) return [];
+  const readings: { probeBinId: string; host: string; recordedAt: string }[] = [];
+  for (const { id } of probes) {
+    const bin = await getBin(id);
+    if (!bin) continue;
+    for (const reading of await readSurfaceProbe(bin)) {
+      if (reading.outcome !== 'RETRIEVED') continue;
+      const host = hostOf(/^https?:/i.test(reading.host) ? reading.host : `https://${reading.host}`);
+      if (host) readings.push({ probeBinId: id, host, recordedAt: reading.recordedAt });
+    }
+  }
+
+  const out: AutomaticSurfaceRecovery[] = [];
+  for (const candidate of candidates) {
+    const reading = readings.find(
+      (entry) => entry.host === candidate.block_host && entry.recordedAt > candidate.blocked_at,
+    );
+    if (!reading) continue;
+
+    // Once per (fragment, reading). Bounded by the run's own events.
+    const prior = await listEventsByEntity('RUN', candidate.run_id);
+    const already = prior.some(
+      (event) =>
+        (event.eventType === REFUSED_EVENT || event.eventType === 'RESEARCH_SURFACE_RECOVERY') &&
+        (event.payload as { previousFragmentId?: string; fragmentId?: string; probeBinId?: string } | null)?.probeBinId ===
+          reading.probeBinId &&
+        [
+          (event.payload as { previousFragmentId?: string }).previousFragmentId,
+          (event.payload as { fragmentId?: string }).fragmentId,
+        ].includes(candidate.id),
+    );
+    if (already) continue;
+
+    let entry: AutomaticSurfaceRecovery;
+    try {
+      const result = await recoverFragmentAfterSurfaceChange({
+        fragmentKey: candidate.fragment_key,
+        orchestrationId: candidate.orchestration_id,
+        probeBinId: reading.probeBinId,
+        reason:
+          `${candidate.block_host} could not be read when this fragment was blocked, and probe ` +
+          `${reading.probeBinId} read it RETRIEVED at ${reading.recordedAt}.`,
+        actor: { type: 'SYSTEM', id: 'surface-recovery' },
+        grantAttempts: 1,
+      });
+      entry = {
+        fragmentId: candidate.id,
+        fragmentKey: candidate.fragment_key,
+        orchestrationId: candidate.orchestration_id,
+        host: candidate.block_host,
+        probeBinId: reading.probeBinId,
+        outcome: 'RECOVERED',
+        reasons: [],
+        newFragmentId: result.newFragmentId,
+      };
+    } catch (error) {
+      if (!(error instanceof SurfaceRecoveryRefused)) throw error;
+      entry = {
+        fragmentId: candidate.id,
+        fragmentKey: candidate.fragment_key,
+        orchestrationId: candidate.orchestration_id,
+        host: candidate.block_host,
+        probeBinId: reading.probeBinId,
+        outcome: 'REFUSED',
+        reasons: error.reasons,
+        newFragmentId: null,
+      };
+    }
+    if (entry.outcome === 'REFUSED') await recordEvent({
+      projectId: candidate.project_id,
+      layerId: candidate.layer_id,
+      entityType: 'RUN',
+      entityId: candidate.run_id,
+      eventType: REFUSED_EVENT,
+      payload: {
+        orchestrationId: candidate.orchestration_id,
+        fragmentId: candidate.id,
+        fragmentKey: candidate.fragment_key,
+        host: candidate.block_host,
+        probeBinId: reading.probeBinId,
+        readingAt: reading.recordedAt,
+        outcome: entry.outcome,
+        reasons: entry.reasons,
+        newFragmentId: entry.newFragmentId,
+      },
+    });
+    out.push(entry);
+  }
+  return out;
 }

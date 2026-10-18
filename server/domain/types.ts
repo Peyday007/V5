@@ -202,6 +202,7 @@ export const EVENT_TYPES = [
   'RESEARCH_FRAGMENT_REJECTED',
   'RESEARCH_FRAGMENT_UNBLOCKED',
   'RESEARCH_SURFACE_RECOVERY',
+  'RESEARCH_SURFACE_RECOVERY_REFUSED',
   'RESEARCH_BLOCKED',
   'RESEARCH_PAUSED_QUOTA',
   'RESEARCH_REPLANNED',
@@ -2045,6 +2046,12 @@ export interface ResearchOrchestrationRow {
 
 export interface ResearchFragmentRow {
   next_retry_at?: string | null;
+  /** `classifyBlock`'s answer, written with status BLOCKED (migration 119 / pg 110). */
+  block_cause?: string | null;
+  /** The one host that dominated an unreadable or refused block, when one did. */
+  block_host?: string | null;
+  /** The archive content marker this fragment's search was launched against. */
+  archive_marker?: string | null;
   requirement_ids: string;
   evidence_lane: string | null;
   why_it_matters: string | null;
@@ -3231,6 +3238,16 @@ export interface ResearchFragment {
    * awaiting anything.
    */
   nextRetryAt: string | null;
+  /**
+   * Why it was blocked, as `classifyBlock` named it in the statement that set
+   * BLOCKED. Null on a fragment that is not BLOCKED, and on a legacy row
+   * written before the column existed — readers classify those as before.
+   */
+  blockCause: string | null;
+  /** The host that dominated a SOURCE_ACCESS or SOURCES_UNREADABLE block. */
+  blockHost: string | null;
+  /** The archive marker its search was launched against; null when unknown. */
+  archiveMarker: string | null;
   status: FragmentStatus;
   attempt: number;
   parentFragmentId: string | null;
