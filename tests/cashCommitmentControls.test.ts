@@ -426,7 +426,10 @@ describe('committing spend, and settling it', () => {
     expect(after!.spentCents).toBe(15_000);
 
     // A fresh GET happened — the figure did not just change on the client.
-    expect(viewFetchCount).toBeGreaterThan(fetchesBeforeSettle);
+    // Waited for: the success sentence comes from the settle's own reply, and
+    // the re-read is issued after it, so an immediate check raced that read
+    // and failed Deploy 39170998885 with "expected 2 to be greater than 2".
+    await waitFor(() => expect(viewFetchCount).toBeGreaterThan(fetchesBeforeSettle));
 
     // What the page now shows is exactly what a fresh, independent read of the
     // server says right now — proof that the number came from the server
