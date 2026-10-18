@@ -25,6 +25,9 @@ const PREFIX = 'brain-test-';
 // for five seconds (`sharedFleetSnapshot`) would hand it the fleet from before.
 // The one suite that tests the sharing sets it back itself.
 process.env['BRAIN_SHARED_SNAPSHOT_MS'] ??= '0';
+// The standing pass is throttled to every five minutes in production (§61);
+// tests call operate() back to back and read its standing each time.
+process.env['BRAIN_STANDING_INTERVAL_MS'] ??= '0';
 
 /**
  * Old enough that no live suite could own it.

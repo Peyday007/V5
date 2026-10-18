@@ -648,3 +648,20 @@ describe('a wound-down sprint records what changed and starts nothing', () => {
     expect((await getOpportunity(id))!.validationState).toBeNull();
   });
 });
+
+describe('the standing pass on the Russell tick', () => {
+  it('runs at most once per interval, unless a reconsideration triggered', async () => {
+    const previous = process.env['BRAIN_STANDING_INTERVAL_MS'];
+    process.env['BRAIN_STANDING_INTERVAL_MS'] = String(5 * 60_000);
+    try {
+      await piece('A piece to have a standing');
+      const first = await operate(projectId, new Date(Date.now() + 10 * 60_000).toISOString());
+      expect(first.standing && 'changes' in first.standing).toBe(true);
+      const second = await operate(projectId, new Date(Date.now() + 10 * 60_000 + 1000).toISOString());
+      expect(second.standing && 'skipped' in second.standing).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env['BRAIN_STANDING_INTERVAL_MS'];
+      else process.env['BRAIN_STANDING_INTERVAL_MS'] = previous;
+    }
+  });
+});

@@ -1126,7 +1126,7 @@ export async function operate(
     | { error: string }
     | null;
   /** Reopen watches recorded on derived dead ends, and standing changes written. */
-  standing?: { derived: DerivedCondition[]; changes: StandingChange[] } | { error: string };
+  standing?: { derived: DerivedCondition[]; changes: StandingChange[] } | { error: string } | { skipped: string };
 }> {
   if (!(await getCashMode(projectId))) {
     return {
@@ -1272,11 +1272,18 @@ export async function operate(
    * Composed once and read by both. Its own failure domain, for the same reason
    * as the reconsideration pass.
    */
-  let standing: { derived: DerivedCondition[]; changes: StandingChange[] } | { error: string };
+  let standing:
+    | { derived: DerivedCondition[]; changes: StandingChange[] }
+    | { error: string }
+    | { skipped: string };
   try {
+    if (!standingDue(projectId, now ? Date.parse(now) : Date.now(), triggeredThisTick(reconsidered))) {
+      standing = { skipped: 'standing was composed recently; nothing triggered since' };
+    } else {
     const standings = await projectStandings(projectId);
     const derived = await recordDerivedReopenConditions(projectId, standings);
     standing = { derived, changes: await recordStandingChanges(projectId, standings) };
+    }
   } catch (error) {
     standing = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
   }
@@ -1367,3 +1374,30 @@ async function runMonetizationLedger(
 }
 
 export type { CashOpportunity };
+
+/**
+ * The standing pass reads every opportunity in the project (one dive check per
+ * piece), so on the 30-second Russell tick it is the one remaining full read of
+ * the portfolio. Standing is history, not a control: nothing waits on it, and
+ * a standing event written five minutes late describes the same change. So it
+ * runs at most every `BRAIN_STANDING_INTERVAL_MS` per project (default five
+ * minutes, §61), and at once on any tick whose reconsideration pass triggered
+ * something, because that is exactly when standing moved.
+ */
+const standingRanAt = new Map<string, number>();
+
+function standingDue(projectId: string, nowMs: number, triggered: boolean): boolean {
+  const interval = Number(process.env['BRAIN_STANDING_INTERVAL_MS'] ?? 5 * 60_000);
+  const last = standingRanAt.get(projectId);
+  const due = triggered || !Number.isFinite(interval) || interval <= 0 || last === undefined ||
+    nowMs - last >= interval || nowMs < last;
+  if (due) standingRanAt.set(projectId, nowMs);
+  return due;
+}
+
+function triggeredThisTick(reconsidered: unknown): boolean {
+  if (!reconsidered || typeof reconsidered !== 'object' || !('triggered' in reconsidered)) return false;
+  const triggered = (reconsidered as { triggered: unknown }).triggered;
+  return Array.isArray(triggered) ? triggered.length > 0 : Boolean(triggered);
+}
+
