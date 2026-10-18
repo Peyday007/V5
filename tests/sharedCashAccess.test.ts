@@ -755,6 +755,8 @@ describe('both roles are shown the same shared frontier, byte for byte', () => {
       mayGrantAuthority: true,
       mayViewPrivateJob: true,
       mayActOnJob: true,
+      mayReconsider: true,
+      reconsiderRefusal: null,
     });
     /*
      * All four false, including the two reads. A shared payload has no private
@@ -766,6 +768,8 @@ describe('both roles are shown the same shared frontier, byte for byte', () => {
       mayGrantAuthority: false,
       mayViewPrivateJob: false,
       mayActOnJob: false,
+      mayReconsider: false,
+      reconsiderRefusal: expect.stringMatching(/whoever runs this operation/),
     });
   });
 });
@@ -1075,5 +1079,126 @@ describe('the live proof is in the gate that runs on the deployed image', () => 
     expect(script).toContain("another operation's Cash is refused exactly as a missing one is");
     expect(script).toContain('a member cannot activate or wind down the sprint');
     expect(script).toContain('a member cannot grant commercial authority');
+  });
+});
+
+/**
+ * Standing crosses by name, and nothing private rides with it
+ * (OPPORTUNITY-INTELLIGENCE §3.6, workstream E).
+ *
+ * A member is told each piece's standing kind, its cause, the blocker keys it
+ * waits or would reopen on, and counts. A declined reason is the owner's, a
+ * claimed piece's standing is the job's, and the owner's standing surface —
+ * recorded sentences, reopen conditions, the reconsider control's state — is
+ * absent from the member's payload rather than blanked in it.
+ */
+describe('standing crosses by name, and nothing private rides with it', () => {
+  const PRIVATE_REASON = 'PRIVATE-DECLINE-REASON-7731 the owner thinks the buyer is unreliable';
+  let declinedId = '';
+
+  beforeAll(async () => {
+    const captured = await call<{ opportunity: { id: string } }>(
+      'POST',
+      `/api/projects/${root}/cash/opportunities`,
+      {
+        cookie: adminCookie,
+        body: {
+          title: 'A second opening somebody passed on',
+          mechanism: 'EXPLICIT_PAID_REQUEST',
+          source: 'A forum post',
+        },
+      },
+    );
+    declinedId = captured.body.opportunity.id;
+    const declined = await call('POST', `/api/cash/opportunities/${declinedId}/decline`, {
+      cookie: adminCookie,
+      body: { reason: PRIVATE_REASON, reopenWhen: ['CAPABILITY:SEND_A_MESSAGE'] },
+    });
+    expect(declined.status, declined.text).toBe(200);
+  });
+
+  it('tells a member the kind, the cause and the keys, and not the reason', async () => {
+    const member = await call<{
+      opportunities: { id: string; standing: { kind: string | null; cause: string | null; keys: string[]; sentence: string; withheld: boolean } }[];
+      standing: { reopenOn: { key: string; count: number }[]; byKind: Record<string, number> };
+    }>('GET', CASH(), { cookie: memberCookie });
+    const one = member.body.opportunities.find((each) => each.id === declinedId)!;
+    expect(one.standing.kind).toBe('DORMANT');
+    expect(one.standing.cause).toBe('DECLINED');
+    expect(one.standing.keys).toEqual(['CAPABILITY:SEND_A_MESSAGE']);
+    expect(one.standing.sentence).toContain('CAPABILITY:SEND_A_MESSAGE');
+    expect(member.body.standing.reopenOn.find((g) => g.key === 'CAPABILITY:SEND_A_MESSAGE')?.count).toBe(1);
+    expect(member.text).not.toContain('PRIVATE-DECLINE-REASON-7731');
+
+    // The owner really has it, so its absence above proves something.
+    const owner = await call<{
+      myCurrentWork: {
+        dormant: { opportunity: { id: string }; standing: { because: string } }[];
+        standingSurface: { reconsider: Record<string, { allowed: boolean }> };
+      };
+    }>('GET', CASH(), { cookie: adminCookie });
+    const mine = owner.body.myCurrentWork.dormant.find((p) => p.opportunity.id === declinedId)!;
+    expect(mine.standing.because).toContain('PRIVATE-DECLINE-REASON-7731');
+    expect(owner.body.myCurrentWork.standingSurface.reconsider[declinedId]?.allowed).toBe(true);
+  });
+
+  it('withholds a claimed piece’s standing entirely', async () => {
+    const member = await call<{
+      opportunities: { id: string; standing: { kind: string | null; keys: string[]; withheld: boolean } }[];
+      standing: { withheld: number; history: { entries: Record<string, unknown[]> } };
+    }>('GET', CASH(), { cookie: memberCookie });
+    const claimed = member.body.opportunities.find((each) => each.id === opportunityId)!;
+    expect(claimed.standing.withheld).toBe(true);
+    expect(claimed.standing.kind).toBeNull();
+    expect(claimed.standing.keys).toEqual([]);
+    expect(member.body.standing.withheld).toBeGreaterThanOrEqual(1);
+    expect(member.body.standing.history.entries[opportunityId]).toBeUndefined();
+  });
+
+  it('sends a member no owner standing surface, no conditions, no recorded sentence and no cash wait', async () => {
+    const member = await call<{ standing: { history: { entries: Record<string, { because: string | null }[]> } } }>(
+      'GET',
+      CASH(),
+      { cookie: memberCookie },
+    );
+    for (const forbidden of ['standingSurface', 'reopenConditions', 'reconsider', 'observedAtRecord', 'actorRef']) {
+      expect(member.text, forbidden).not.toContain(`"${forbidden}":`);
+    }
+    expect(member.text).not.toContain('"CASH"');
+    for (const list of Object.values(member.body.standing.history.entries)) {
+      for (const entry of list) expect(entry.because).toBeNull();
+    }
+  });
+
+  it('lists a reconsideration for both, with the reason only for the owner', async () => {
+    const REASON = 'PRIVATE-RECONSIDER-REASON-5518 a new channel opened';
+    const moved = await call('POST', `/api/cash/opportunities/${declinedId}/reconsider`, {
+      cookie: adminCookie,
+      body: { reason: REASON },
+    });
+    expect(moved.status, moved.text).toBe(200);
+    const member = await call<{
+      standing: { reconsidered: { opportunityId: string; via: string; summary?: unknown }[] };
+    }>('GET', CASH(), { cookie: memberCookie });
+    const shared = member.body.standing.reconsidered.find((one) => one.opportunityId === declinedId);
+    expect(shared?.via).toBe('PERSON');
+    expect(shared).not.toHaveProperty('summary');
+    expect(member.text).not.toContain('PRIVATE-RECONSIDER-REASON-5518');
+    expect(member.text).not.toContain('PRIVATE-DECLINE-REASON-7731');
+
+    const owner = await call<{
+      myCurrentWork: { standingSurface: { reconsidered: { opportunityId: string; summary: string | null }[] } };
+    }>('GET', CASH(), { cookie: adminCookie });
+    const mine = owner.body.myCurrentWork.standingSurface.reconsidered.find(
+      (one) => one.opportunityId === declinedId,
+    );
+    expect(mine?.summary).toMatch(/Reconsidered/);
+  });
+
+  it('still embeds in the owner’s payload exactly what a member is sent', async () => {
+    const owner = await call<{ frontier: Record<string, unknown> }>('GET', CASH(), { cookie: adminCookie });
+    const member = await call<Record<string, unknown>>('GET', CASH(), { cookie: memberCookie });
+    const { scope: _s, capabilities: _c, ...frontier } = member.body;
+    expect(owner.body.frontier).toEqual(frontier);
   });
 });

@@ -385,6 +385,52 @@ export async function projectStandings(
     });
   }
 
+  const rows = await readStandingRows(projectId, opportunities);
+  const position = await cashPosition({ projectId, currency: mode.currency });
+  const plan = assemble({
+    opportunities,
+    tiers,
+    deployableCents: position.deployableCents,
+    maxConcurrent: authority?.maxConcurrent ?? 0,
+    discoveryOpen: mode.state === 'ACTIVE',
+    standingInputs: rows.standingInputs,
+    diveRoom: rows.diveRoom,
+  });
+  for (const placement of plan.placements) {
+    out.set(placement.opportunity.id, {
+      opportunity: placement.opportunity,
+      standing: placement.standing,
+    });
+  }
+  return out;
+}
+
+/**
+ * The rows `standingFor` reads beyond the placement, for every piece in a
+ * project, read once: the open needs, the reopen conditions, the deep dive's
+ * own refusal and the sprint's dive room.
+ *
+ * Exported so the read path (`cashView`, the shared frontier) and the pass
+ * (`projectStandings`) derive standing from one set of reads rather than two
+ * that agree today: the page and the recorded history must describe the same
+ * answer.
+ */
+export interface StandingRowsReading {
+  standingInputs: Record<
+    string,
+    { dive: DiveRefusal | null; needs: CashNeed[]; reopenConditions: CashReopenCondition[] }
+  >;
+  diveRoom: DiveRoom;
+  /** The dive refusal per evaluating piece, as read. */
+  dives: Record<string, DiveRefusal>;
+  /** The sprint's own reading of whether it can start a dive. */
+  sprint: Awaited<ReturnType<typeof sprintCanRefine>>;
+}
+
+export async function readStandingRows(
+  projectId: string,
+  opportunities: readonly CashOpportunity[],
+): Promise<StandingRowsReading> {
   const needs = new Map<string, CashNeed[]>();
   for (const need of await listNeeds({ projectId, states: ['OPEN'] })) {
     if (!need.opportunityId) continue;
@@ -417,14 +463,7 @@ export async function projectStandings(
                   ? 'no research authority is live for this project'
                   : 'Cash Mode is not active here',
           };
-
-  const position = await cashPosition({ projectId, currency: mode.currency });
-  const plan = assemble({
-    opportunities,
-    tiers,
-    deployableCents: position.deployableCents,
-    maxConcurrent: authority?.maxConcurrent ?? 0,
-    discoveryOpen: mode.state === 'ACTIVE',
+  return {
     standingInputs: Object.fromEntries(
       opportunities.map((one) => [
         one.id,
@@ -436,14 +475,9 @@ export async function projectStandings(
       ]),
     ),
     diveRoom,
-  });
-  for (const placement of plan.placements) {
-    out.set(placement.opportunity.id, {
-      opportunity: placement.opportunity,
-      standing: placement.standing,
-    });
-  }
-  return out;
+    dives,
+    sprint,
+  };
 }
 
 /**

@@ -20,6 +20,8 @@ import type { CashReadiness } from '../../../server/services/cash/readiness.ts';
 import type { CashRoadmap } from '../../../server/services/cash/roadmap.ts';
 import type { CashForecast } from '../../../server/services/cash/forecast.ts';
 import type { SharedCashView } from '../../../server/services/cash/shared.ts';
+import type { OwnerStandingSurface } from '../../../server/services/cash/standingSurface.ts';
+import type { Standing, StandingKind } from '../../../server/domain/types.ts';
 import type { OfferDraft } from '../../../server/services/cash/offer.ts';
 import type { ExecutionRecord } from '../../../server/services/cash/record.ts';
 import type { EffectResult } from '../../../server/services/cash/perform.ts';
@@ -67,6 +69,13 @@ export interface CashCapabilities {
   mayGrantAuthority: boolean;
   mayViewPrivateJob: boolean;
   mayActOnJob: boolean;
+  /**
+   * Whether the reconsider control may be offered, and why not. Optional for
+   * the deploy reason every newer field here is: a payload without it reads
+   * as *not offered*, which is the fail-closed direction.
+   */
+  mayReconsider?: boolean;
+  reconsiderRefusal?: string | null;
 }
 
 export type CashViewReading = (({ scope: 'FULL' } & CashView) | SharedCashView) & {
@@ -149,6 +158,11 @@ export interface Placement {
    * between one blank badge and the whole section coming down.
    */
   tier?: TierReadingView;
+  /**
+   * The one explained answer to "is this moving, and if not, on what", from
+   * `services/cash/standing.ts`. Optional for the deploy reason `tier` is.
+   */
+  standing?: Standing;
 }
 
 /** One line of the Signal / Candidate / Qualified / Ready reading. */
@@ -378,6 +392,16 @@ export interface CashView {
      * same deploy reason as `offers`.
      */
     journey?: JourneyView;
+    /**
+     * Every live piece that is moving or waiting on something named, in rank
+     * order and unbounded; the page pages it. Optional for the deploy reason.
+     */
+    actionable?: Placement[];
+    /** The stopped pieces, each with what would reopen it. */
+    dormant?: Placement[];
+    byStanding?: Record<StandingKind, number>;
+    /** Groups, history, reconsiderations, reopen conditions and the control's state half. */
+    standingSurface?: OwnerStandingSurface;
   };
   whatBrainHasDone: CashEvent[];
   whatBrainNeeds: (CashNeed & { researchStatus: string | null })[];
