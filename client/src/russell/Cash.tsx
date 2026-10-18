@@ -601,7 +601,68 @@ function Decisions({
         mayGrant={page.capabilities.mayGrantAuthority}
         onChanged={onChanged}
       />
+      <PreparedDecisions view={view} />
     </section>
+  );
+}
+
+/**
+ * Decisions Brain prepared and did not send.
+ *
+ * Everything a person needs to act outside Brain on one preliminary opening,
+ * in the server's own words. There is no control: submitting, registering and
+ * bidding are things a person does on the buyer's own platform, and a button
+ * here that pretended otherwise would be the one lie this section must not
+ * tell. The badge says what the row says — prepared by Brain, not sent.
+ */
+function PreparedDecisions({ view }: { view: CashView }): JSX.Element | null {
+  const prepared = view.prepared ?? [];
+  if (prepared.length === 0) return null;
+  const titleOf = new Map(view.frontier.opportunities.map((one) => [one.id, one.title]));
+  return (
+    <div className="rs-cash-prepared">
+      <h4>Prepared by Brain, not sent</h4>
+      <p className="rs-hint">
+        Drafts for you to review. Nothing below has been submitted, bid on, registered for or paid
+        for, and none of it is your approval. Each opening is still preliminary.
+      </p>
+      <ul className="rs-list">
+        {prepared.map((one) => (
+          <li key={one.id} id={`prep-${one.opportunityId}`} className="rs-group">
+            <p className="rs-item-title">{titleOf.get(one.opportunityId) ?? one.opportunityId}</p>
+            <p className="rs-badge">Preliminary · prepared, not sent · v{one.version}</p>
+            <p className="rs-item-meta">
+              <a href={one.buyerRequestUrl} target="_blank" rel="noreferrer noopener">
+                Buyer&rsquo;s request
+              </a>
+              {` · read ${one.observedAt.slice(0, 16).replace('T', ' ')} · ${one.observedStatus}`}
+            </p>
+            <p className="rs-decision-why">“{one.buyerRequest}”</p>
+            <p className="rs-item-meta"><strong>Scope:</strong> {one.scope}</p>
+            <p className="rs-item-meta"><strong>Price (proposal):</strong> {one.priceProposal}</p>
+            <p className="rs-item-meta"><strong>What the price rests on:</strong> {one.priceBasis}</p>
+            <p className="rs-item-meta"><strong>Fulfilment:</strong> {one.fulfillment}</p>
+            <p className="rs-item-meta"><strong>When cash would arrive (estimate):</strong> {one.cashTiming}</p>
+            <p className="rs-item-meta"><strong>Still open</strong></p>
+            <ul className="rs-list">
+              {one.openQuestions.map((question, index) => (
+                <li key={index} className="rs-item-meta">{question}</li>
+              ))}
+            </ul>
+            <p className="rs-item-meta"><strong>Proposal, ready to submit (not sent)</strong></p>
+            <p className="rs-cash-offer-text">{one.proposalText}</p>
+            <p className="rs-item-meta"><strong>What prevents submitting it</strong></p>
+            <ul className="rs-list">
+              {one.submissionBlockers.map((blocker, index) => (
+                <li key={index} className="rs-item-meta">{blocker}</li>
+              ))}
+            </ul>
+            <p className="rs-decision-what"><strong>Your decision:</strong> {one.decisionNeeded}</p>
+            <p className="rs-detail-id">{one.opportunityId}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -2588,6 +2649,7 @@ function OpportunityMoney({
 function FreshOpenings({ page }: { page: CashPage }): JSX.Element {
   const fresh = page.frontier.fresh ?? [];
   const tierOf = new Map(page.frontier.opportunities.map((one) => [one.id, one.tier]));
+  const prepared = new Set((page.full?.prepared ?? []).map((one) => one.opportunityId));
   return (
     <section className="rs-card rs-cash-fresh">
       <h3>New openings this week — preliminary</h3>
@@ -2657,6 +2719,14 @@ function FreshOpenings({ page }: { page: CashPage }): JSX.Element {
                         ))}
                       </ul>
                     </>
+                  ) : null}
+                  {prepared.has(one.opportunityId) ? (
+                    <p className="rs-item-meta">
+                      <a href={`#prep-${one.opportunityId}`}>
+                        Prepared decision, not sent: request, scope, price, proposal and what blocks
+                        submitting it
+                      </a>
+                    </p>
                   ) : null}
                   <p className="rs-detail-id">{one.opportunityId}</p>
                 </li>

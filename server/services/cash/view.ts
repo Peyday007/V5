@@ -15,6 +15,8 @@
  *
  * It writes nothing.
  */
+import { preparedDecisions } from './prepared.ts';
+import type { PreparedDecision } from '../../repos/cashPrepared.ts';
 import { cashNow, listCashEvents } from '../../repos/cashMode.ts';
 import { listMoneyEntries } from '../../repos/cashLedger.ts';
 import { listCommitments } from '../../repos/cashAuthority.ts';
@@ -248,6 +250,15 @@ export interface CashView {
    * what is happening — which is how a person learns to stop believing either.
    */
   monetizationWork: CommissionView;
+  /**
+   * Decisions Brain prepared for the owner and did not send, latest version
+   * per opening: the buyer's request as published, scope, price and basis,
+   * fulfilment, cash timing, open questions, a finished proposal and what
+   * stands in the way of submitting it. Private to the owner's reading: a
+   * proposed price is what this operation would charge (§34). It moves no
+   * state; see `services/cash/prepared.ts`.
+   */
+  prepared: PreparedDecision[];
 }
 
 export async function cashView(input: {
@@ -527,5 +538,6 @@ export async function cashView(input: {
       placements: plan.placements,
       now,
     }),
+    prepared: await preparedDecisions(input.projectId),
   };
 }

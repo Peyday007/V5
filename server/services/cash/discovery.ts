@@ -409,8 +409,22 @@ export function nextRoundFor(history: CashDiscoveryRound[], now: string): number
   const settledAt = last.harvestedAt ?? last.openedAt;
   if (Date.parse(now) - Date.parse(settledAt) < ROUND_COOL_OFF_MS) return null;
 
+  /*
+   * Barren is "finished and found nothing", never "did not finish". An
+   * ABANDONED round's research stopped — failed, cancelled, or parked at a
+   * decision — so its zero is an absence of evidence rather than evidence of
+   * absence. Production Cash Mode 1, 2026-10-18: nine of ten buckets had
+   * stopped for ever on rounds whose sessions could not read the web at all,
+   * which is a fact about a surface rather than about the market. Such a bucket
+   * is asked again after the cool-off, which is what bounds it.
+   */
   const recent = ordered.slice(-BARREN_ROUNDS);
-  if (recent.length >= BARREN_ROUNDS && recent.every((one) => one.found === 0)) return null;
+  if (
+    recent.length >= BARREN_ROUNDS &&
+    recent.every((one) => one.state === 'HARVESTED' && one.found === 0)
+  ) {
+    return null;
+  }
 
   return last.round + 1;
 }

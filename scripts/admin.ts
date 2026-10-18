@@ -49,6 +49,8 @@
  *   npm run admin -- packets list <project>
  *   npm run admin -- packets approve <orchestration> --admin someone@example.com
  *   npm run admin -- packets retry-fragment <fragment> --admin someone@example.com
+ *   npm run admin -- cash prepare <project> --json-b64 <base64 JSON>   (Brain's draft; never sent)
+ *   npm run admin -- cash prepared <project>
  *   npm run admin -- packets reissue <workItem> --admin someone@example.com
  *   npm run admin -- packets syntheses <project>
  *   npm run admin -- packets recover-synthesis <workItem> --admin someone@example.com
@@ -107,6 +109,7 @@ import {
   revokeMembership,
   setWorkerStatus,
 } from '../server/repos/identity.ts';
+import { PreparedDecisionError, prepareDecision, preparedDecisions } from '../server/services/cash/prepared.ts';
 import { createProject, getProject, getProjectBySlug, listProjects } from '../server/repos/projects.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { foundationReading } from '../server/services/identity/foundation.ts';
@@ -1655,6 +1658,35 @@ async function main(): Promise<void> {
         console.log(
           `  ${item.id}  ${item.workType.padEnd(24)} ${item.state.padEnd(12)} attempts ${item.attemptCount}`,
         );
+      }
+      break;
+    }
+    /*
+     * A decision Brain prepared and did not send: recorded as Brain's draft,
+     * never as a person's answer, and moving no state. The body is the JSON
+     * committed under fast-cash/prepared/, carried base64 so no shell parses it.
+     */
+    case 'cash prepare': {
+      const project = await projectFrom(rest[0] ?? fail('Name a project.'));
+      const encoded = flag('json-b64') ?? fail('Pass --json-b64 <base64 of the prepared decision>.');
+      const body: unknown = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+      try {
+        const { decision, written } = await prepareDecision({ projectId: project.id, body });
+        console.log(
+          `  ${decision.opportunityId}  v${decision.version}  ${written ? 'recorded' : 'unchanged'}  ${decision.id}  PREPARED_NOT_SENT`,
+        );
+      } catch (error) {
+        if (error instanceof PreparedDecisionError) fail(error.message);
+        throw error;
+      }
+      break;
+    }
+    case 'cash prepared': {
+      const project = await projectFrom(rest[0] ?? fail('Name a project.'));
+      for (const one of await preparedDecisions(project.id)) {
+        console.log(`  ${one.opportunityId}  v${one.version}  ${one.id}  observed ${one.observedAt}  ${one.observedStatus}`);
+        console.log(`    price: ${one.priceProposal}`);
+        for (const blocker of one.submissionBlockers) console.log(`    blocks submission: ${blocker}`);
       }
       break;
     }
