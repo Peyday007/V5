@@ -57,6 +57,16 @@ if (!goal) {
   for (const o of opps) {
     console.log(`    ${o.id} ${o.state} ${o.opportunity_signal} closes=${o.expires_at ?? '-'} ${o.created_at} :: ${String(o.title).slice(0, 140)} <- ${o.source}`);
   }
+  // Any claim beside a goal opening that states an estimate (melt, spot,
+  // ceiling) rather than what the source published, since the page shows them.
+  const estimateRows = await db.all(
+    `SELECT c.id, c.accepted, c.evidence_lane, c.claim FROM research_claims c
+      WHERE c.fragment_id IN (SELECT fragment_id FROM cash_opportunities o JOIN research_orchestrations r ON r.id = o.orchestration_id WHERE r.goal_id = ?)
+        AND (LOWER(c.claim) LIKE '%melt%' OR LOWER(c.claim) LIKE '%spot%' OR LOWER(c.claim) LIKE '%ceiling%' OR LOWER(c.claim) LIKE '%estimat%')`,
+    [goal.id],
+  ).catch((error) => { console.log(`  estimate read failed: ${error.message}`); return []; });
+  console.log(`  claims beside goal openings that mention melt/spot/ceiling/estimate: ${estimateRows.length}`);
+  for (const r of estimateRows) console.log(`    ${r.id} accepted=${r.accepted} lane=${r.evidence_lane} :: ${String(r.claim).slice(0, 220)}`);
   // Every opening filed in this project in the last 24 hours, by whichever
   // packet filed it, so continuation can be read from rows.
   const since = new Date(Date.now() - 24 * 3600_000).toISOString();
