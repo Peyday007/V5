@@ -173,3 +173,35 @@ Nothing below this line has been observed yet.
 Compared with the baseline: **worse for 3-A** (one 19-hour silence and a
 quarantine, recovered automatically), and **unchanged for the other four**
 (still need Caleb).
+
+## 9. 48-hour reading (2026-10-18 21:20Z, revision `6da7f5b`)
+
+The report's own run (`39167432587`) covers 26 h of history.
+
+| Routine | state | fires | right-worker arrivals | wrong-worker | real no-shows | probes |
+|---|---|---|---|---|---|---|
+| 3-A | QUARANTINED: **operator hold** ("54 consecutive fired sessions never checked in") | 22 | 15, all 10-17 21:15Z–22:17Z | 0 | 1 | 1 HEALTHY (10-17 21:15Z) |
+| 3-B | QUARANTINED (unchanged) | 0 | 0 | 0 | 0 | 1 NO_MCP |
+| 3-C | **lifted by Brain's probe 10-18 15:56Z**, re-quarantined 17:54Z | 16 | 14, 15:56Z–16:45Z | 0 | 2 (at re-quarantine) + earlier | HEALTHY 15:56Z; NO_MCP 18:10Z and 19:10Z |
+| 3-D | QUARANTINED (unchanged) | 0 | 0 | 0 | 0 | 1 NO_MCP |
+| Factory 3 | QUARANTINED WRONG_WORKER (unchanged) | 0 | 0 | **1, as worker-04** (10-17 21:58Z) | 0 | 1 AMBIGUOUS |
+
+- Every Caleb session that reached Brain arrived as worker-04. The only
+  wrong-worker arrival was Factory 3 again, through `/mcp`. No refused
+  authentication or refresh came from this account, and the connector kept
+  refreshing hourly.
+- **The pattern across Caleb's Routines is bursts, then silence.** 3-A worked
+  for an hour on 10-17 and then answered nothing. 3-C worked for 50 minutes on
+  10-18 for the first time since 10-12, and then answered nothing. Brain's own
+  probes caught both bursts, which is the automatic recovery working.
+- What stops the sessions in between is on the Claude side, where Brain
+  cannot see:
+  - the sessions do not call Brain at all;
+  - nothing in Brain's rows names a cause;
+  - it is consistent with a usage limit on the account, or with Routines being
+    edited, but neither is established.
+- 3-A is now held by an operator. Brain will not lift that hold by itself.
+
+Compared with the 24-hour reading: 3-C showed it *can* work and then stopped
+again, 3-A moved from automatic recovery to an operator hold, and 3-B, 3-D and
+Factory 3 are unchanged.
