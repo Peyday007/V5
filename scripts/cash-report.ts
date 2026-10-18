@@ -959,6 +959,14 @@ async function gateFailures(projectId: string): Promise<void> {
         `    ${String(n).padStart(4)}  ${cause}${example ? `  e.g. ${example.fragmentId} (${example.orchestrationId})` : ''}`,
       );
     }
+    // The column is read first; a row from before it existed is classified as before.
+    console.log(
+      `  cause read from block_cause=${d.causeSource.stored} classified from a legacy row=${d.causeSource.legacy}`,
+    );
+    const hosts = Object.entries(d.blockedByHost).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    if (hosts.length > 0) {
+      console.log(`  blocked by one dominant host ${hosts.map(([h, n]) => `${h}=${n}`).join(' ')}`);
+    }
     console.log(
       `  claims in those fragments submitted=${d.claims.submitted} accepted=${d.claims.accepted}` +
         ` accepted-inside-blocked=${d.claims.acceptedInBlocked} unread=${d.claims.unread}`,

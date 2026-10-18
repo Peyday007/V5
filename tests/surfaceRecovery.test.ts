@@ -40,8 +40,10 @@ import {
 import {
   namesSurfaceFailure,
   recoverFragmentAfterSurfaceChange,
+  recoverReachableFragments,
   SurfaceRecoveryRefused,
 } from '../server/services/research/surfaceRecovery.ts';
+import { getDb } from '../server/db/database.ts';
 import { listEvents } from '../server/repos/events.ts';
 import { TERMINAL_ORCHESTRATION } from '../server/services/research/outcome.ts';
 import type { BinManifest } from '../server/domain/types.ts';
@@ -564,5 +566,70 @@ describe('what recovery refuses on principle', () => {
     expect(payload['maxRepairsAfter']).toBe(4);
     expect(payload['authorizedBy']).toBe('SYSTEM:step10-surface-recovery');
     expect(String(payload['reachedHosts'])).toMatch(/legislature\.mi\.gov/);
+  });
+});
+
+/* ========================================================================= */
+
+describe('automatic recovery once a probe reads the host that stopped a fragment', () => {
+  it('stores the dominant host when the block is written', async () => {
+    const orchestrationId = await blockedPacket();
+    const fragment = (await currentFragments(orchestrationId)).find((f) => f.fragmentKey === 'licence-trigger')!;
+    expect(fragment.blockCause).toBe('SOURCE_ACCESS');
+    expect(fragment.blockHost).toBe('legislature.mi.gov');
+  });
+
+  it('recovers through the guarded control, once per (fragment, reading)', async () => {
+    const orchestrationId = await blockedPacket();
+    const before = (await currentFragments(orchestrationId)).find((f) => f.fragmentKey === 'licence-trigger')!;
+    await makeProbe({ 'https://www.legislature.mi.gov/': 'RETRIEVED 200 51200 bytes' });
+
+    const first = await recoverReachableFragments(10, { force: true });
+    expect(first).toHaveLength(1);
+    expect(first[0]!.outcome).toBe('RECOVERED');
+    expect(first[0]!.fragmentId).toBe(before.id);
+    const after = (await currentFragments(orchestrationId)).find((f) => f.fragmentKey === 'licence-trigger')!;
+    expect(after.attempt).toBe(before.attempt + 1);
+    // The ceiling rose; the counter is history.
+    expect((await getFragment(before.id))!.status).toBe('BLOCKED');
+
+    // The same reading never recovers the same fragment again.
+    expect(await recoverReachableFragments(10, { force: true })).toEqual([]);
+    const events = (await listEvents(projectId)).filter((e) => e.eventType === 'RESEARCH_SURFACE_RECOVERY');
+    expect(events).toHaveLength(1);
+  });
+
+  it('never touches a terminal packet', async () => {
+    const orchestrationId = await blockedPacket();
+    await updateOrchestration(orchestrationId, { status: 'COMPLETE_WITH_GAPS' });
+    await makeProbe({ 'https://www.legislature.mi.gov/': 'RETRIEVED 200 51200 bytes' });
+    expect(await recoverReachableFragments(10, { force: true })).toEqual([]);
+    const fragment = (await currentFragments(orchestrationId)).find((f) => f.fragmentKey === 'licence-trigger')!;
+    expect(fragment.attempt).toBe(2);
+  });
+
+  it('needs a reading from after the block, of the same host', async () => {
+    const orchestrationId = await blockedPacket({ blockedAt: new Date(Date.now() + 60_000).toISOString() });
+    await makeProbe({ 'https://www.legislature.mi.gov/': 'RETRIEVED 200' });
+    await makeProbe({ 'https://elsewhere.example/': 'RETRIEVED 200' });
+    expect(await recoverReachableFragments(10, { force: true })).toEqual([]);
+    void orchestrationId;
+  });
+
+  it('records a refusal once, and does not retry it on the next pass', async () => {
+    // Insufficiency, with a host forced onto the row: the control's own
+    // discriminator refuses it, and the refusal is remembered per reading.
+    const orchestrationId = await blockedPacket({ blockedReason: INSUFFICIENCY_BLOCK });
+    const fragment = (await currentFragments(orchestrationId)).find((f) => f.fragmentKey === 'licence-trigger')!;
+    expect(fragment.blockCause).toBe('NO_GATE_VERDICT');
+    await getDb().run('UPDATE research_fragments SET block_host = ? WHERE id = ?', ['legislature.mi.gov', fragment.id]);
+    await makeProbe({ 'https://www.legislature.mi.gov/': 'RETRIEVED 200' });
+
+    const first = await recoverReachableFragments(10, { force: true });
+    expect(first).toHaveLength(1);
+    expect(first[0]!.outcome).toBe('REFUSED');
+    expect(first[0]!.reasons.join(' ')).toMatch(/not blocked by an execution-surface failure/);
+    expect(await recoverReachableFragments(10, { force: true })).toEqual([]);
+    expect((await getFragment(fragment.id))!.attempt).toBe(2);
   });
 });

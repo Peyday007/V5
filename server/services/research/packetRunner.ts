@@ -53,7 +53,7 @@ import type {
   WorkItem,
   WorkerScope,
 } from '../../domain/types.ts';
-import { exampleIdentity, laneFloor } from './gate.ts';
+import { blockCauseOf, exampleIdentity, laneFloor } from './gate.ts';
 import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './gate.ts';
 import { countIndependentSources, duplicateGroups } from './standards.ts';
 import {
@@ -834,6 +834,13 @@ async function assessRepairs(input: {
       // so more clearly than a guess here would.
       splitRequired: false,
       remainingBudget: Math.max(0, fragment.maxRepairs - fragment.attempt + 1),
+      // The stored cause chooses the ladder (the classifier for a legacy row),
+      // and the packet's own envelope narrows the unreadable rungs to source
+      // classes it already admits.
+      blockCause: blockCauseOf(fragment),
+      envelope: orchestration.approvalEnvelopeId
+        ? getApprovalEnvelope(orchestration.approvalEnvelopeId)
+        : null,
     });
     /**
      * The ladder is exhausted, so there is no repair to make.
@@ -898,6 +905,7 @@ async function mintRepairs(input: {
       const outcome = await retryFragment({
         fragmentId: fragment.id,
         reason: describeRepairPlan(plan),
+        repairPlan: plan,
         actor: { type: 'SYSTEM', id: 'packet-runner' },
         // Never from inside the runner: see the option's own note. The caller
         // re-derives as soon as this loop finishes.

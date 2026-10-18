@@ -33,6 +33,7 @@
  */
 import type {
   ActorType,
+  RepairPlan,
   ResearchFragment,
   ResearchOrchestration,
   WorkItem,
@@ -524,6 +525,14 @@ export async function retryFragment(input: {
    * anyway, so the nested advance is duplicated work with a race in it.
    */
   advance?: boolean;
+  /**
+   * The planned repair this attempt carries, when the packet runner planned
+   * one. Stored on the new attempt so the next plan can see which strategies
+   * were already used: `buildRepairPlan` filters against every earlier
+   * attempt's `repairPlan`, and an attempt that recorded none made that rule
+   * — no two attempts the same search — unable to apply on this path.
+   */
+  repairPlan?: RepairPlan | null;
 }): Promise<RetryResult> {
   const previous = await getFragment(input.fragmentId);
   if (!previous) throw new FragmentNotRetryable('No such fragment.');
@@ -608,6 +617,10 @@ export async function retryFragment(input: {
           priority: previous.priority,
           estimatedEffort: previous.estimatedEffort,
           maxRepairs: previous.maxRepairs,
+          // The archive the question was judged against does not change because
+          // the search strategy did: a repair is the same question, searched
+          // differently, against the same evidence.
+          archiveMarker: previous.archiveMarker,
 
           attempt,
           parentFragmentId: previous.id,
@@ -619,6 +632,7 @@ export async function retryFragment(input: {
             [previous.integrityVerdict, previous.sufficiencyVerdict]
               .filter((part) => part !== null)
               .join(' / ') || 'no verdict recorded',
+          repairPlan: input.repairPlan ?? null,
           status: 'QUEUED',
         },
       ]);

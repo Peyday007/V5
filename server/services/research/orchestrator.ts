@@ -72,7 +72,8 @@ import { enqueueExtraction } from '../documents/queue.ts';
 import { isAuditable } from '../documents/quality.ts';
 import { registerRunArtifact, targetVersionForRun } from '../runArtifacts.ts';
 import { selectRelevantSegments } from '../sources/ingest.ts';
-import { fragmentPasses, type GateResult } from './gate.ts';
+import { classifyBlock, fragmentPasses, type GateResult } from './gate.ts';
+import { guidanceFor } from './guidance.ts';
 import { gateFragment, recordFragmentClaims, type ClaimVerification } from './submission.ts';
 // One ledger builder, so a packet filed by a worker and one filed in process
 // carry the same evidence trail rather than two similar ones.
@@ -467,6 +468,7 @@ async function planFragments(
     assignment: orchestration.assignment,
     passages: await relevantPassages(project.id, `${orchestration.title} ${orchestration.assignment}`),
     existingDocuments: documents,
+    guidance: await guidanceFor({ projectId: project.id, fragment: null, siblings: [], surface: null }),
   });
 
   const { value } = await callProvider(
@@ -659,6 +661,15 @@ async function runBundle(input: {
     });
   }
 
+  const bundleKeys = new Set(bundle.fragments.map((fragment) => fragment.fragmentKey));
+  const guidance = await guidanceFor({
+    projectId: orchestration.projectId,
+    fragment: bundle.fragments[0]!,
+    siblings: (await currentFragments(orchestration.id))
+      .filter((fragment) => !bundleKeys.has(fragment.fragmentKey))
+      .map((fragment) => ({ fragmentKey: fragment.fragmentKey, question: fragment.question })),
+    surface: null,
+  });
   const prompt = bundled
     ? buildBundledResearchPrompt({
         project: input.project,
@@ -667,6 +678,7 @@ async function runBundle(input: {
         dependencyClaims: dependencies,
         rationale: bundle.rationale,
         repairs,
+        guidance,
       })
     : buildFragmentResearchPrompt({
         project: input.project,
@@ -674,6 +686,7 @@ async function runBundle(input: {
         fragment: bundle.fragments[0]!,
         dependencyClaims: dependencies,
         repair: repairs.get(bundle.fragments[0]!.fragmentKey) ?? null,
+        guidance,
       });
 
   const keys = bundle.fragments.map((fragment) => fragment.fragmentKey);
@@ -968,6 +981,7 @@ async function planRepair(
     claims: await listClaimsForFragment(fragment.id),
     splitRequired: false,
     remainingBudget: cap - attempts,
+    blockCause: classifyBlock({ blockedReason: gate.reasons.join(' '), verdictDetail: gate }),
   });
 
   const [repaired] = await createFragments([
