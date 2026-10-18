@@ -2633,7 +2633,31 @@ function FreshOpenings({ page }: { page: CashPage }): JSX.Element {
                       ))}
                     </ul>
                   ) : null}
-                  {tier ? <FirstBlocker tier={tier} /> : null}
+                  {one.doesNotEstablish ? (
+                    <p className="rs-item-meta">
+                      <strong>What this does not establish:</strong> {one.doesNotEstablish}.
+                    </p>
+                  ) : null}
+                  {(one.unresolvedChecks ?? []).length > 0 || (tier?.toAdvance.length ?? 0) > 0 ? (
+                    <>
+                      <p className="rs-item-meta">
+                        <strong>Unresolved checks</strong>
+                      </p>
+                      <ul className="rs-list rs-cash-unresolved">
+                        {(one.unresolvedChecks ?? []).map((check, index) => (
+                          <li key={`c${index}`} className="rs-item-meta">
+                            {check}
+                          </li>
+                        ))}
+                        {(tier?.toAdvance ?? []).map((step) => (
+                          <li key={step.key} className="rs-item-meta">
+                            {step.label}: not established. Next: {step.task}{' '}
+                            {OWNER_SENTENCE[step.owner] ?? ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
                   <p className="rs-detail-id">{one.opportunityId}</p>
                 </li>
               );

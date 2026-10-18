@@ -1442,6 +1442,31 @@ export async function signalledClaims(input: {
            WHERE v.validation_orchestration_id = o.id
         )
         /*
+         * Nor any other question about an opening that already exists.
+         *
+         * The rule above named the dive by its current orchestration, which a
+         * second round replaces, and it named nothing else that asks about one
+         * opening: a need ("Payer for …", "Access for …") and a monetization
+         * commission research the same opening, and their claims restate it.
+         * Production, 2026-10-18: one discovery round filed three Freelancer
+         * openings, and the questions about them filed thirty-five more — the
+         * same two projects read through the API URL or a regional mirror, so
+         * the source-URL twin check missed most of them — and each new
+         * "opening" raised needs of its own. The same tail-chasing loop, one
+         * door along. A question is linked to the opening it is about through
+         * its candidate, so these are read through the mission that ran it.
+         */
+        AND NOT EXISTS (
+          SELECT 1 FROM russell_missions m
+           WHERE m.orchestration_id = o.id
+             AND m.candidate_id IS NOT NULL
+             AND (
+               EXISTS (SELECT 1 FROM cash_needs n WHERE n.candidate_id = m.candidate_id)
+               OR EXISTS (SELECT 1 FROM monetization_commissions mc WHERE mc.candidate_id = m.candidate_id)
+               OR EXISTS (SELECT 1 FROM cash_opportunities q WHERE q.candidate_id = m.candidate_id)
+             )
+        )
+        /*
          * Not a claim that is already an opportunity.
          *
          * The ordering above promised that a bounded pass makes progress

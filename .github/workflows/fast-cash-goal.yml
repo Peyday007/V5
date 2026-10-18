@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'create | list | explain'
+        description: 'create | list | explain | retry'
         required: true
         default: list
       admin:
@@ -61,6 +61,19 @@ jobs:
               code=$(base64 -w0 .github/workflows/fast-cash-explain.mjs)
               script="echo $code | base64 -d > /tmp/fast-cash-explain.mjs && cd /app && BRAIN_DATABASE_POOL_SIZE=1 BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000 node --import tsx /tmp/fast-cash-explain.mjs"
               ;;
+            retry)
+              # One more attempt for each round-1 fragment named in the committed
+              # file beside this workflow, through the supported
+              # `admin packets retry-fragment`. Nothing a dispatcher types names a
+              # fragment; the command itself refuses one that is not BLOCKED or
+              # has used its repairs.
+              if [ -z "$G_ADMIN" ]; then echo "::error::retry needs --admin."; exit 1; fi
+              reason="Retried after the surfaces with no web egress, Airyn 2-A to 2-D, were put on an operator hold: the earlier attempt was blocked because its session could not read the sources."
+              script=""
+              for id in $(grep -E '^frg_[a-z0-9]+$' .github/workflows/fast-cash-retry.txt); do
+                script="$script$base packets retry-fragment $id --admin $G_ADMIN --reason '$reason'; "
+              done
+              ;;
             create)
               if [ -z "$G_ADMIN" ]; then echo "::error::create needs --admin."; exit 1; fi
               assignment=$(cat .github/workflows/fast-cash-assignment.txt)
@@ -68,7 +81,7 @@ jobs:
               quoted=$(printf "%s" "$assignment" | sed "s/'/'\\\\''/g")
               script="$base research goal create cash-mode-1 --name 'Fast Cash: actionable deals' --max-packets 12 --max-fragments 60 --deadline 2026-10-23T23:00:00Z --layer 'Opportunity Research' --admin $G_ADMIN --assignment '$quoted'"
               ;;
-            *) echo "::error::Refusing '$G_COMMAND': create, list or explain."; exit 1 ;;
+            *) echo "::error::Refusing '$G_COMMAND': create, list, explain or retry."; exit 1 ;;
           esac
           # Carried as base64 so no character of it is parsed by flyctl's own
           # argument splitter; decoded and run by the machine's shell.
