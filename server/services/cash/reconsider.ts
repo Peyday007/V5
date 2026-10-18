@@ -56,6 +56,7 @@ import {
   getWatermark,
   recordReopenCondition,
   reopenConditionsForProject,
+  retireSiblingConditions,
   triggerReopenCondition,
 } from '../../repos/cashReconsideration.ts';
 import { cardFactsFor } from '../../repos/cashCardFacts.ts';
@@ -945,8 +946,15 @@ export async function fanOut(
         }
         if (person) {
           target.requestId = await askPerson(projectId, piece, condition, change);
-        } else if (!(await flag(piece.id, change.changeRef, at))) {
-          throw new Lost();
+        } else {
+          if (!(await flag(piece.id, change.changeRef, at))) throw new Lost();
+          // One reopening per dormancy: its other watches stop guarding it.
+          await retireSiblingConditions({
+            opportunityId: piece.id,
+            exceptConditionId: condition.id,
+            changeRef: change.changeRef,
+            at,
+          });
         }
         await triggeredEvent(projectId, target, change);
         return true;
