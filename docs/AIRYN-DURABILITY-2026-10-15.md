@@ -240,3 +240,36 @@ Readings: `connection-report` summary over 24 h, and history over 30 h.
 
 Compared with the 24-hour reading nothing got worse: about the same arrival
 rate, no wrong-worker sessions, and no person needed.
+
+## 8. 72-hour reading and verdict (2026-10-18 17:51Z, revision `5da8b29`)
+
+Readings: `connection-report` summary over 72 h, and history over 30 h.
+
+| Routine | arrivals (72 h) | wrong-worker | real no-shows | infra misses | automatic lifts (30 h) | state now |
+|---|---|---|---|---|---|---|
+| 2-A | 214 | 0 | 4 | 1 | — | QUARANTINED (operator hold) |
+| 2-B | 211 | 0 | 2 | 4 | 1 (14:01Z, HEALTHY) | QUARANTINED (operator hold) |
+| 2-C | 207 | 0 | 7 | 2 | 1 (03:41Z, HEALTHY) | QUARANTINED (operator hold) |
+| 2-D | 183 | 0 | 3 | 1 | — | QUARANTINED (operator hold) |
+
+- Over three days every arrival was the research worker, through
+  `/mcp/factory`. No wrong-worker session, no refused authentication and no
+  refused refresh came from this account. The connector refreshed hourly up
+  to 16:00Z.
+- Two short no-show quarantines (2-C, 2-B) were lifted by Brain's own probe,
+  with nobody involved.
+- **At 16:54–16:56Z an operator put all four Routines on hold, and Caleb 3-A
+  as well.** The recorded reason: the Claude Routine environment has no
+  outbound web access to research sources:
+  - proxy `CONNECT 403` for freelancer.com;
+  - no DNS for kvk.nl;
+  - domainnamewire.com and appraise.net unreachable.
+
+  As a result the worker let 178 leases expire, had 131 cancelled in 48 h, and
+  filed INSUFFICIENT verdicts on sources it could not read. That is not a
+  connection failure. Brain does not lift an operator's hold by itself.
+
+**Verdict: the Brain connection is fixed** (Stable on all four for three
+days). **The Routines are not usable for research until Airyn allows outbound
+web access in their Claude environment**, and an operator then re-enables
+them.
