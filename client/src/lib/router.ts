@@ -41,6 +41,8 @@ export type Route =
    * in a month or two would take it down with one.
    */
   | { name: 'LABOR' }
+  /** The puzzle kernel, and the one read only a person can record. */
+  | { name: 'PUZZLES' }
   /** Scenario modelling: simulate a decision and compare strategies (§60). */
   | { name: 'SCENARIOS' }
   | { name: 'SEARCH' }
@@ -109,6 +111,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'MACHINES' };
     case 'labor':
       return { name: 'LABOR' };
+    case 'puzzles':
+      return { name: 'PUZZLES' };
     case 'scenarios':
       return { name: 'SCENARIOS' };
     case 'search':
@@ -158,6 +162,8 @@ export function pathFor(route: Route): string {
       return '/machines';
     case 'LABOR':
       return '/labor';
+    case 'PUZZLES':
+      return '/puzzles';
     case 'SCENARIOS':
       return '/scenarios';
     case 'SEARCH':
