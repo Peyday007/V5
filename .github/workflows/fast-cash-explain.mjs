@@ -203,6 +203,27 @@ if (!goal) {
     }
     console.log(`  ${r.opened_at} ${r.id} ${r.bucket_id} r${r.round} ${r.state} found=${r.found} harvested=${r.harvested_at ?? '-'} cand=${r.cand_state ?? '-'} mission=${r.mission_id ?? '-'} ${r.mission_state ?? ''} packet=${packet} :: ${claims} :: ${opps}`);
   }
+  // When each bucket may next be asked, by discovery.ts's own rule: no live
+  // round, 24h after the last settled, and not after three barren rounds.
+  console.log('discovery buckets: when each may next be asked (nextRoundFor):');
+  const { nextRoundFor, ROUND_COOL_OFF_MS } = await import('/app/server/services/cash/discovery.ts');
+  const { listRounds } = await import('/app/server/repos/cashDiscovery.ts');
+  const all = await listRounds(goal.project_id).catch((error) => { console.log(`  read failed: ${error.message}`); return []; });
+  const byBucket = new Map();
+  for (const r of all) { const list = byBucket.get(r.bucketId) ?? []; list.push(r); byBucket.set(r.bucketId, list); }
+  const nowIso = new Date().toISOString();
+  for (const [bucket, history] of byBucket) {
+    const ordered = [...history].sort((a, b) => a.round - b.round);
+    const last = ordered[ordered.length - 1];
+    const settled = last.harvestedAt ?? last.openedAt;
+    const next = nextRoundFor(history, nowIso);
+    const barren = ordered.slice(-3).length >= 3 && ordered.slice(-3).every((one) => one.found === 0);
+    const eligibleAt = new Date(Date.parse(settled) + ROUND_COOL_OFF_MS).toISOString();
+    const why = history.some((one) => one.state === 'OPEN') ? 'a round is live'
+      : barren ? 'stopped: last 3 rounds found nothing'
+      : next !== null ? `eligible now (round ${next})` : `cool-off until ${eligibleAt}`;
+    console.log(`  ${bucket.padEnd(28)} last r${last.round} ${last.state} found=${ordered.map((o) => o.found).join(',')} settled=${settled} :: ${why}`);
+  }
   console.log('prepared decisions (Brain drafts, not sent):');
   const prepared = await db.all(
     `SELECT opportunity_id, version, id, observed_at, observed_status, created_at FROM cash_prepared_decisions
