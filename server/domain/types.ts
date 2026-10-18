@@ -11084,3 +11084,28 @@ export interface ScenarioRunRow {
   started_at: string;
   finished_at: string | null;
 }
+
+/** A decision Brain prepared for a person and did not send (migration 120 / pg 111). */
+export interface CashPreparedDecisionRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string;
+  version: number;
+  content_hash: string;
+  buyer_request: string;
+  buyer_request_url: string;
+  observed_at: string;
+  observed_status: string;
+  scope: string;
+  price_proposal: string;
+  price_basis: string;
+  fulfillment: string;
+  cash_timing: string;
+  open_questions: string;
+  proposal_text: string;
+  submission_blockers: string;
+  decision_needed: string;
+  prepared_by: 'BRAIN';
+  state: 'PREPARED_NOT_SENT';
+  created_at: string;
+}

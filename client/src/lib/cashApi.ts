@@ -19,6 +19,7 @@ import type { CashReadiness } from '../../../server/services/cash/readiness.ts';
  */
 import type { CashRoadmap } from '../../../server/services/cash/roadmap.ts';
 import type { CashForecast } from '../../../server/services/cash/forecast.ts';
+import type { PreparedDecision } from '../../../server/repos/cashPrepared.ts';
 import type { SharedCashView } from '../../../server/services/cash/shared.ts';
 import type { OwnerStandingSurface } from '../../../server/services/cash/standingSurface.ts';
 import type { Standing, StandingKind } from '../../../server/domain/types.ts';
@@ -439,6 +440,8 @@ export interface CashView {
    * sentence, both of which quote the ledger.
    */
   monetizationWork?: CommissionView;
+  /** Decisions Brain prepared and did not send; optional so a bundle ahead of its server renders none. */
+  prepared?: PreparedDecision[];
   decisionsForMe: { items: ReviewItem[]; underlyingCount: number; summary: string };
   vocabulary: {
     mechanisms: string[];

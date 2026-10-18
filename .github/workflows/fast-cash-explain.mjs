@@ -35,8 +35,9 @@ if (!goal) {
     for (const a of asks) console.log(`    ask ${a.id} ${a.state} ${a.created_at} key=${a.resume_key} :: ${String(a.authority_needed).slice(0, 200)} choices=${String(a.choices).slice(0, 300)}`);
     const bins = await db.all('SELECT id, state, attempt_count, max_attempts FROM bins WHERE orchestration_id = ? ORDER BY created_at', [p.id]);
     for (const b of bins) console.log(`    bin ${b.id} ${b.state} ${b.attempt_count}/${b.max_attempts}`);
-    const items = await db.all('SELECT id, work_type, state, attempt_count, worker_id, updated_at FROM work_items WHERE payload LIKE ? ORDER BY created_at', [`%${p.id}%`]).catch(() => []);
-    for (const i of items) console.log(`    item ${i.id} ${i.work_type} ${i.state} att=${i.attempt_count} worker=${i.worker_id ?? '-'} ${i.updated_at}`);
+    const items = await db.all('SELECT id, work_type, state, attempt_count, max_attempts, worker_id, lease_expires_at, created_at FROM work_items WHERE payload LIKE ? ORDER BY created_at', [`%${p.id}%`]).catch((error) => { console.log(`    item read failed: ${error.message}`); return []; });
+    for (const i of items.slice(-12)) console.log(`    item ${i.id} ${i.work_type} ${i.state} att=${i.attempt_count}/${i.max_attempts} worker=${i.worker_id ?? '-'} lease=${i.lease_expires_at ?? '-'} created=${i.created_at}`);
+    for (const e of await db.all(`SELECT at, event_type, worker_id, routine_id, outcome, reason FROM bin_events WHERE orchestration_id = ? ORDER BY at DESC LIMIT 12`, [p.id]).catch(() => [])) console.log(`    event ${e.at} ${e.event_type} ${e.outcome ?? ''} worker=${e.worker_id ?? '-'} routine=${e.routine_id ?? '-'} ${String(e.reason ?? '').slice(0, 140)}`);
   }
   const inventory = await inventoryProject(goal.project_id);
   console.log(`  archive: documentsPending=${inventory.documentsPending} claims=${inventory.claims.length}`);
@@ -166,6 +167,69 @@ if (!goal) {
     `SELECT at, event_type, bin_id, routine_id, session_ref, outcome, reason FROM bin_events WHERE worker_id = ? ORDER BY at DESC LIMIT 20`, [target])) {
     console.log(`    ${e.at} ${e.event_type} ${e.bin_id ?? '-'} routine=${e.routine_id ?? '-'} session=${String(e.session_ref ?? '-').slice(0, 16)} ${e.outcome ?? ''} ${String(e.reason ?? '').slice(0, 140)}`);
   }
+}
+
+// Discovery rounds of the last 24 hours, so a cycle after a change can be read
+// as a cycle: the question, its mission, its packet, what it found, and how many
+// of the openings it filed were duplicates.
+{
+  const since24 = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  console.log('discovery rounds opened in the last 24h:');
+  const rounds = await db.all(
+    `SELECT r.id, r.bucket_id, r.round, r.state, r.opened_at, r.harvested_at, r.found, r.candidate_id,
+            c.state AS cand_state, m.id AS mission_id, m.state AS mission_state, m.orchestration_id
+       FROM cash_discovery_rounds r
+       LEFT JOIN russell_candidates c ON c.id = r.candidate_id
+       LEFT JOIN russell_missions m ON m.candidate_id = r.candidate_id
+      WHERE r.project_id = ? AND r.opened_at >= ?
+      ORDER BY r.opened_at`, [goal.project_id, since24],
+  ).catch((error) => { console.log(`  rounds read failed: ${error.message}`); return []; });
+  for (const r of rounds) {
+    let packet = '-';
+    let claims = '-';
+    let opps = '-';
+    if (r.orchestration_id) {
+      const o = await db.get(`SELECT status, created_at FROM research_orchestrations WHERE id = ?`, [r.orchestration_id]);
+      packet = `${r.orchestration_id} ${o?.status ?? '?'}`;
+      const c = await db.get(
+        `SELECT COUNT(*) AS n, SUM(CASE WHEN accepted = 1 THEN 1 ELSE 0 END) AS accepted,
+                SUM(CASE WHEN accepted = 1 AND opportunity_signal IS NOT NULL THEN 1 ELSE 0 END) AS signalled
+           FROM research_claims WHERE orchestration_id = ?`, [r.orchestration_id]);
+      claims = `${c?.n ?? 0} claims, ${c?.accepted ?? 0} accepted, ${c?.signalled ?? 0} signalled`;
+      const q = await db.get(
+        `SELECT COUNT(*) AS n, SUM(CASE WHEN state = 'DUPLICATE' OR duplicate_of_id IS NOT NULL THEN 1 ELSE 0 END) AS dup
+           FROM cash_opportunities WHERE orchestration_id = ?`, [r.orchestration_id]).catch(() => null);
+      opps = q ? `${q.n} openings (${q.dup ?? 0} dup)` : 'openings unreadable';
+    }
+    console.log(`  ${r.opened_at} ${r.id} ${r.bucket_id} r${r.round} ${r.state} found=${r.found} harvested=${r.harvested_at ?? '-'} cand=${r.cand_state ?? '-'} mission=${r.mission_id ?? '-'} ${r.mission_state ?? ''} packet=${packet} :: ${claims} :: ${opps}`);
+  }
+  // When each bucket may next be asked, by discovery.ts's own rule: no live
+  // round, 24h after the last settled, and not after three barren rounds.
+  console.log('discovery buckets: when each may next be asked (nextRoundFor):');
+  const { nextRoundFor, ROUND_COOL_OFF_MS } = await import('/app/server/services/cash/discovery.ts');
+  const { listRounds } = await import('/app/server/repos/cashDiscovery.ts');
+  const all = await listRounds(goal.project_id).catch((error) => { console.log(`  read failed: ${error.message}`); return []; });
+  const byBucket = new Map();
+  for (const r of all) { const list = byBucket.get(r.bucketId) ?? []; list.push(r); byBucket.set(r.bucketId, list); }
+  const nowIso = new Date().toISOString();
+  for (const [bucket, history] of byBucket) {
+    const ordered = [...history].sort((a, b) => a.round - b.round);
+    const last = ordered[ordered.length - 1];
+    const settled = last.harvestedAt ?? last.openedAt;
+    const next = nextRoundFor(history, nowIso);
+    const barren = ordered.slice(-3).length >= 3 && ordered.slice(-3).every((one) => one.found === 0);
+    const eligibleAt = new Date(Date.parse(settled) + ROUND_COOL_OFF_MS).toISOString();
+    const why = history.some((one) => one.state === 'OPEN') ? 'a round is live'
+      : barren ? 'stopped: last 3 rounds found nothing'
+      : next !== null ? `eligible now (round ${next})` : `cool-off until ${eligibleAt}`;
+    console.log(`  ${bucket.padEnd(28)} last r${last.round} ${last.state} found=${ordered.map((o) => o.found).join(',')} settled=${settled} :: ${why}`);
+  }
+  console.log('prepared decisions (Brain drafts, not sent):');
+  const prepared = await db.all(
+    `SELECT opportunity_id, version, id, observed_at, observed_status, created_at FROM cash_prepared_decisions
+      WHERE project_id = ? ORDER BY created_at DESC LIMIT 20`, [goal.project_id],
+  ).catch((error) => { console.log(`  prepared read failed: ${error.message}`); return []; });
+  for (const p of prepared) console.log(`  ${p.opportunity_id} v${p.version} ${p.id} observed=${p.observed_at} ${p.observed_status} recorded=${p.created_at}`);
 }
 await closeDatabase();
 console.log('ADMIN: OK');

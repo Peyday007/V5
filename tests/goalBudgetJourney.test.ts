@@ -323,6 +323,58 @@ describe('a goal approved once continues without another approval', () => {
   });
 });
 
+describe('a goal round that nothing could answer', () => {
+  it('ends FAILED rather than parking with nobody to ask, and the goal starts its next round', async () => {
+    const goal = await newGoal();
+    await advanceResearchGoals();
+    const [one] = await packetsOf(goal.id);
+    const plan = await claimOf('RESEARCH_PLAN');
+    await call('brain_propose_fragments', {
+      ...proof(plan),
+      fragments: [
+        {
+          key: 'telemarketing-employment',
+          question: QUESTION,
+          geography: 'United States',
+          timeframe: '2024',
+          required_evidence: ['official statistics'],
+          completion_criteria: ['a sourced figure from a statistical agency'],
+        },
+      ],
+    });
+    await call('brain_complete_work', { ...proof(plan), result_ref: 'planned', summary: 'plan proposed' });
+    await advancePacket(one!.id);
+
+    // The fragment is blocked with every repair spent, and its work is gone,
+    // which is where a round whose sources could never be read ends up.
+    const [fragment] = await currentFragments(one!.id);
+    await getDb().run(
+      `UPDATE research_fragments SET status = 'BLOCKED', attempt = max_repairs + 1,
+              blocked_reason = 'No source could be read.' WHERE id = ?`,
+      [fragment!.id],
+    );
+    await getDb().run(
+      `UPDATE work_items SET state = 'CANCELLED' WHERE orchestration_id = ? AND state = 'QUEUED'`,
+      [one!.id],
+    );
+
+    const advanced = await advancePacket(one!.id);
+    expect(advanced.status).toBe('FAILED');
+    const after = await getDb().get<{ status: string; failure_reason: string }>(
+      'SELECT status, failure_reason FROM research_orchestrations WHERE id = ?',
+      [one!.id],
+    );
+    expect(after?.status).toBe('FAILED');
+    expect(after?.failure_reason).toMatch(/No fragment cleared its evidence gate/);
+    // The fragment and its reason are kept.
+    expect((await currentFragments(one!.id))[0]?.blockedReason).toBe('No source could be read.');
+
+    await advanceResearchGoals();
+    expect((await packetsOf(goal.id)).map((p) => p.goal_packet_key)).toEqual(['round-1', 'round-2']);
+    expect(await requestsFor(goal.id)).toHaveLength(0);
+  });
+});
+
 describe('a ceiling stops the goal and asks a person once', () => {
   it('creates nothing, raises exactly one request across repeated ticks, and touches nothing earlier', async () => {
     const goal = await newGoal({ maxPackets: 1 });

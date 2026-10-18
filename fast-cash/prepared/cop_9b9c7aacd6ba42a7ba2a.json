@@ -1,0 +1,25 @@
+{
+  "opportunityId": "cop_9b9c7aacd6ba42a7ba2a",
+  "buyerRequest": "I have a collection of PDF files packed with both numbers and text that must be keyed into a clean, editable format. Every character—whether it’s a figure, a code, or a line of narrative—has to match the original exactly. … Open each PDF (all content is digital, no scanning required). Transcribe the mixed data into the spreadsheet template I provide, preserving layout, capitalization, and any special symbols. Double-check totals, dates, and IDs so the final sheet is free of typos and mis-aligned columns. Once finished, send back the completed file plus a quick note outlining any anomalies you spotted while typing. Accuracy is more important than speed; I’ll spot-check several pages before sign-off. (Freelancer project 40774287, “Precise Entry From PDFs”, posted 2026-10-18 16:27Z, fixed price INR 12,500–37,500.)",
+  "buyerRequestUrl": "https://www.freelancer.com/projects/data-cleansing/precise-entry-from-pdfs",
+  "observedAt": "2026-10-18T19:25:00Z",
+  "observedStatus": "Read from Freelancer's public projects API: status active, open for bidding, 30 bids, average bid INR 18,005.",
+  "scope": "Key every PDF the client supplies into their spreadsheet template, character for character, keeping layout, capitalisation and special symbols. Then run a second pass that reconciles totals, dates and IDs against the source. Deliver the completed file and an anomalies note that names file and page for each item. Accuracy is the deliverable: the first PDF is offered free as a sample so the client can spot-check before awarding. Volume is not stated and must be fixed before the price is final.",
+  "priceProposal": "INR 16,000 fixed, for the volume the client confirms (proposal, not validated). After Freelancer's 10% fixed-price fee, INR 14,400 would be received.",
+  "priceBasis": "The low-middle of the published INR 12,500–37,500 budget and just under the published average bid of INR 18,005. The fee is Freelancer's published 10% or USD 5, whichever is greater. No conversion rate is applied, and the USD value is not established. There is no effort estimate, because the number of PDFs and rows is unknown, so no hourly rate or margin is claimed.",
+  "fulfillment": "The owner keys the data. The work is desk-only and needs no tools beyond a spreadsheet. The other route is a data-entry subcontractor paid out of the milestone, at a cost not established. A second-pass check by a different person is what makes the accuracy promise credible.",
+  "cashTiming": "If awarded, delivery takes days for a small batch. The client then releases the milestone after spot-checking, and Freelancer pays out on its own schedule. This is an estimate: about 1–2 weeks from award to cash.",
+  "openQuestions": [
+    "How many PDFs, and roughly how many rows or fields each? Price and effort both depend on it.",
+    "What does the template look like, and are there merged cells or formulas to preserve?",
+    "Is the client's payment method verified, and what are their reviews? Neither was read.",
+    "Who keys it: the owner, or a subcontractor at what cost?"
+  ],
+  "proposalText": "Accuracy over speed is exactly how I work. I'll key every PDF into your template character for character: figures, codes, capitalisation and symbols as they appear. Then I'll run a second pass that reconciles totals, dates and IDs against the source. You'll get the completed file plus an anomalies note listing anything I couldn't resolve, with the file and page for each. I'm happy to do the first PDF free as a sample, so you can spot-check the accuracy before awarding. How many PDFs are there, and roughly how many rows each? I'll confirm a fixed price and delivery date as soon as I know the volume.",
+  "submissionBlockers": [
+    "A Freelancer.com account is required to bid. Brain holds none, and registering one is a person's decision that Brain will not take.",
+    "Freelancer requires a minimum unreserved account balance before any bid. The published standard amount is USD 20.00, and it can be higher for some bids. Funding it is spending money, which is outside Brain's zero-spend authority.",
+    "A free account gets 6 bids a month initially. That is enough for this bid, but it is a bound if several are submitted."
+  ],
+  "decisionNeeded": "Whether to submit this bid from your own Freelancer account at INR 16,000, after asking the volume question. If you have no account, whether to create one and hold the USD 20 minimum balance."
+}

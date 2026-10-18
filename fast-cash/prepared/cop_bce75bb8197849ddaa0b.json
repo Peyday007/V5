@@ -1,0 +1,25 @@
+{
+  "opportunityId": "cop_bce75bb8197849ddaa0b",
+  "buyerRequest": "I need a WordPress-based portfolio that puts my work front and center, loads quickly on mobile, and feels effortless for visitors to navigate. Core pages will showcase projects in a clean image gallery, highlight client testimonials for credibility, and include a straightforward contact form that routes messages to my inbox. … I would also like the flexibility to offer a few digital products for download. A light-weight setup with WooCommerce or Easy Digital Downloads is enough … Build or adapt a modern, fully responsive theme. Configure gallery, testimonial, and contact form sections exactly to spec. Set up the digital product workflow (product page, cart, secure file delivery, confirmation email). Optimize for speed, basic on-page SEO, and hook up Google Analytics. Provide a brief hand-off video or document so I can add new work myself. I’ll supply brand assets, copy, and product files. (Freelancer project 40771439, “WordPress Portfolio Site Build”, posted 2026-10-16 14:46Z, fixed price USD 250–750.)",
+  "buyerRequestUrl": "https://www.freelancer.com/projects/woocommerce/wordpress-portfolio-site-build",
+  "observedAt": "2026-10-18T19:25:00Z",
+  "observedStatus": "Read from Freelancer's public projects API: status active, open for bidding, 219 bids, average bid USD 386.",
+  "scope": "Adapt a lightweight responsive theme rather than build a custom one. Add a project gallery, testimonials and a contact form routed to the client's inbox. Set up Easy Digital Downloads with a product page, cart, secure file delivery and confirmation email. Add speed basics (caching, image compression), basic on-page SEO and Google Analytics. Include a 10-minute hand-off video on adding new work. The client supplies brand assets, copy and product files. Hosting, domain and premium plugins are the client's and are excluded.",
+  "priceProposal": "USD 450 fixed (proposal, not validated). After Freelancer's 10% fixed-price fee, USD 405 would be received.",
+  "priceBasis": "Inside the published USD 250–750 budget and above the published average bid of USD 386. It is justified only by the full scope above, including the download store and the hand-off video. The fee is Freelancer's published 10%. No subcontractor rate has been established, so no margin is claimed.",
+  "fulfillment": "The owner builds it with WordPress and Easy Digital Downloads, or a WordPress subcontractor builds it from this scope and is paid out of the milestone. The subcontractor's cost is not established. The owner's own WordPress skill and hours are the deciding unknown.",
+  "cashTiming": "If awarded, the build takes about 5–10 days. The client then releases the milestone on launch, and Freelancer pays out on its own schedule. This is an estimate: about 2–3 weeks from award to cash.",
+  "openQuestions": [
+    "Who builds it, and at what cost? A subcontractor quote decides whether USD 405 net leaves any margin.",
+    "With 219 bids, an account with no reviews is unlikely to win. Is there an account with WordPress reviews?",
+    "Hosting and domain: does the client already have them? The scope assumes so.",
+    "Is the client's payment method verified, and what are their reviews? Neither was read."
+  ],
+  "proposalText": "I can take this from theme to launch in about a week. I'll adapt a fast, lightweight theme rather than pile on a page builder, so it scores well on mobile. Your project gallery, testimonials and a contact form will be set up exactly to your spec, with the form delivering to your inbox. For the downloads, I'd use Easy Digital Downloads rather than full WooCommerce: product page, cart, secure file delivery and confirmation email, with nothing heavier than you need. I'll add caching and image compression, basic on-page SEO and Google Analytics, and finish with a short hand-off video showing how to add new work yourself. Fixed price USD 450 for all of it, using your brand assets, copy and files. Do you already have hosting and a domain, and roughly how many projects and products will be live at launch?",
+  "submissionBlockers": [
+    "A Freelancer.com account is required to bid. Brain holds none, and registering one is a person's decision that Brain will not take.",
+    "Freelancer requires a minimum unreserved account balance before any bid. The published standard amount is USD 20.00, and it can be higher for some bids. Funding it is spending money, which is outside Brain's zero-spend authority.",
+    "Not a hard blocker, but decisive for winning: 219 bids are already in, and the delivery route (the owner, or a subcontractor at a known cost) is not settled."
+  ],
+  "decisionNeeded": "Whether to bid USD 450 from your own Freelancer account. Do so only if you or a subcontractor you trust can deliver a WordPress and Easy Digital Downloads site within that net. Otherwise decline."
+}

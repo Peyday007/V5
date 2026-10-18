@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'create | list | explain | retry'
+        description: 'create | list | explain | retry | prepare'
         required: true
         default: list
       admin:
@@ -74,6 +74,17 @@ jobs:
                 script="$script$base packets retry-fragment $id --admin $G_ADMIN --reason '$reason'; "
               done
               ;;
+            prepare)
+              # Each prepared decision committed under fast-cash/prepared/, recorded
+              # as Brain's draft through `admin cash prepare`. It submits nothing
+              # and moves no state; a replay of an unchanged file writes nothing.
+              script=""
+              for f in fast-cash/prepared/cop_*.json; do
+                b=$(base64 -w0 "$f")
+                script="$script$base cash prepare cash-mode-1 --json-b64 $b && "
+              done
+              script="$script$base cash prepared cash-mode-1"
+              ;;
             create)
               if [ -z "$G_ADMIN" ]; then echo "::error::create needs --admin."; exit 1; fi
               assignment=$(cat .github/workflows/fast-cash-assignment.txt)
@@ -81,7 +92,7 @@ jobs:
               quoted=$(printf "%s" "$assignment" | sed "s/'/'\\\\''/g")
               script="$base research goal create cash-mode-1 --name 'Fast Cash: actionable deals' --max-packets 12 --max-fragments 60 --deadline 2026-10-23T23:00:00Z --layer 'Opportunity Research' --admin $G_ADMIN --assignment '$quoted'"
               ;;
-            *) echo "::error::Refusing '$G_COMMAND': create, list, explain or retry."; exit 1 ;;
+            *) echo "::error::Refusing '$G_COMMAND': create, list, explain, retry or prepare."; exit 1 ;;
           esac
           # Carried as base64 so no character of it is parsed by flyctl's own
           # argument splitter; decoded and run by the machine's shell.
