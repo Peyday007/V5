@@ -228,7 +228,7 @@ if (!goal) {
   // Mission slots: what a queued discovery idea is waiting on, from the grant
   // `launch()` resolves and the reservations it counts (spendTotals' own SQL).
   console.log('research mission slots:');
-  const { checkAuthority } = await import('/app/server/services/russell/authority.ts');
+  const { checkAuthority } = await import('/app/server/repos/russellAuthority.ts');
   const auth = await checkAuthority({ projectId: goal.project_id, workClass: 'RESEARCH' }).catch((error) => ({ ok: false, reason: error.message }));
   if (!auth.ok || !auth.goal) {
     console.log(`  no research grant governs: ${auth.reason ?? JSON.stringify(auth).slice(0, 200)}`);
