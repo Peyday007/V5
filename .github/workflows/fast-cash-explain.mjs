@@ -168,5 +168,47 @@ if (!goal) {
     console.log(`    ${e.at} ${e.event_type} ${e.bin_id ?? '-'} routine=${e.routine_id ?? '-'} session=${String(e.session_ref ?? '-').slice(0, 16)} ${e.outcome ?? ''} ${String(e.reason ?? '').slice(0, 140)}`);
   }
 }
+
+// Discovery rounds of the last 24 hours, so a cycle after a change can be read
+// as a cycle: the question, its mission, its packet, what it found, and how many
+// of the openings it filed were duplicates.
+{
+  const since24 = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  console.log('discovery rounds opened in the last 24h:');
+  const rounds = await db.all(
+    `SELECT r.id, r.bucket_id, r.round, r.state, r.opened_at, r.harvested_at, r.found, r.candidate_id,
+            c.state AS cand_state, m.id AS mission_id, m.state AS mission_state, m.orchestration_id
+       FROM cash_discovery_rounds r
+       LEFT JOIN russell_candidates c ON c.id = r.candidate_id
+       LEFT JOIN russell_missions m ON m.candidate_id = r.candidate_id
+      WHERE r.project_id = ? AND r.opened_at >= ?
+      ORDER BY r.opened_at`, [goal.project_id, since24],
+  ).catch((error) => { console.log(`  rounds read failed: ${error.message}`); return []; });
+  for (const r of rounds) {
+    let packet = '-';
+    let claims = '-';
+    let opps = '-';
+    if (r.orchestration_id) {
+      const o = await db.get(`SELECT status, created_at FROM research_orchestrations WHERE id = ?`, [r.orchestration_id]);
+      packet = `${r.orchestration_id} ${o?.status ?? '?'}`;
+      const c = await db.get(
+        `SELECT COUNT(*) AS n, SUM(CASE WHEN accepted = 1 THEN 1 ELSE 0 END) AS accepted,
+                SUM(CASE WHEN accepted = 1 AND opportunity_signal IS NOT NULL THEN 1 ELSE 0 END) AS signalled
+           FROM research_claims WHERE orchestration_id = ?`, [r.orchestration_id]);
+      claims = `${c?.n ?? 0} claims, ${c?.accepted ?? 0} accepted, ${c?.signalled ?? 0} signalled`;
+      const q = await db.get(
+        `SELECT COUNT(*) AS n, SUM(CASE WHEN state = 'DUPLICATE' OR duplicate_of_id IS NOT NULL THEN 1 ELSE 0 END) AS dup
+           FROM cash_opportunities WHERE orchestration_id = ?`, [r.orchestration_id]).catch(() => null);
+      opps = q ? `${q.n} openings (${q.dup ?? 0} dup)` : 'openings unreadable';
+    }
+    console.log(`  ${r.opened_at} ${r.id} ${r.bucket_id} r${r.round} ${r.state} found=${r.found} harvested=${r.harvested_at ?? '-'} cand=${r.cand_state ?? '-'} mission=${r.mission_id ?? '-'} ${r.mission_state ?? ''} packet=${packet} :: ${claims} :: ${opps}`);
+  }
+  console.log('prepared decisions (Brain drafts, not sent):');
+  const prepared = await db.all(
+    `SELECT opportunity_id, version, id, observed_at, observed_status, created_at FROM cash_prepared_decisions
+      WHERE project_id = ? ORDER BY created_at DESC LIMIT 20`, [goal.project_id],
+  ).catch((error) => { console.log(`  prepared read failed: ${error.message}`); return []; });
+  for (const p of prepared) console.log(`  ${p.opportunity_id} v${p.version} ${p.id} observed=${p.observed_at} ${p.observed_status} recorded=${p.created_at}`);
+}
 await closeDatabase();
 console.log('ADMIN: OK');

@@ -38,6 +38,7 @@
  * approval is a separate entry point a person calls, and the ordinary advance
  * refuses to queue a PLANNED fragment.
  */
+import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { envelopeAvailable, getApprovalEnvelope, planFitsEnvelope } from './approvalEnvelope.ts';
 import { getProject } from '../../repos/projects.ts';
 import { authorityNow, getGoal } from '../../repos/russellAuthority.ts';
@@ -1913,6 +1914,38 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     // what the runner had just decided could not be done, about fragments it
     // did not name (RES-1, RES-9).
     const repairs = await assessRepairs({ orchestration, fragments });
+    /*
+     * A research goal's round with no mission has nobody to ask. Parked at
+     * NEEDS_HUMAN it was live to `goalContinuation`, so the goal could never
+     * start its next round, and no supported transition moved it on. Such a
+     * round answered nothing, which is FAILED, and FAILED is exactly what lets
+     * the goal continue — bounded by its own packet ceiling, which asks a
+     * person when it is reached. Every fragment, claim and refusal keeps its
+     * row. A packet behind a mission still parks, because a mission's park has
+     * a person and a card.
+     */
+    const goalRoundWithNobodyToAsk =
+      orchestration.goalId !== null &&
+      orchestration.goalId !== undefined &&
+      repairs.mintable.length === 0 &&
+      !(await getMissionByOrchestration(orchestration.id));
+    if (goalRoundWithNobodyToAsk) {
+      await updateOrchestration(orchestration.id, {
+        status: 'FAILED',
+        failureReason:
+          'No fragment cleared its evidence gate, so there is nothing to synthesize. ' +
+          noFragmentClearedDetail(fragments, repairs) +
+          ' This round belongs to a research goal with no mission, so it ends here and the goal ' +
+          'may start its next round.',
+        completedAt: new Date().toISOString(),
+      });
+      return {
+        orchestrationId,
+        status: 'FAILED',
+        enqueued: [],
+        waitingOn: 'nothing: the goal decides whether another round starts',
+      };
+    }
     await updateOrchestration(orchestration.id, {
       status: 'NEEDS_HUMAN',
       failureReason:
