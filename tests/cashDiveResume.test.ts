@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
+import { registerResearchSurfaces } from './helpers/researchSurfaces.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { createCandidate, getCandidate, recordJudgment, transitionCandidate } from '../server/repos/russellCandidates.ts';
@@ -115,8 +116,11 @@ describe('resuming a deep dive that never launched', () => {
     await transitionCandidate({ candidateId: d1, from: 'QUEUED', to: 'PARKED' });
     const parked = await opening('parked dive', [d1], d1);
 
-    expect((await whyNotDiving((await getOpportunity(neither))!)).kind).toBe('ROUNDS_SPENT');
+    expect((await whyNotDiving((await getOpportunity(neither))!)).kind).toBe('EPOCH_SPENT');
 
+    // Room for both in one pass: the room is derived from the surfaces that
+    // could run them, and with none registered it is the floor of one.
+    await registerResearchSurfaces(projectId, 4);
     const resumed = await resumeUnlaunchedDives(projectId);
     expect(resumed.sort()).toEqual([neither, oneRan].sort());
 

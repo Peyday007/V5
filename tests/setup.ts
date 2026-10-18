@@ -25,6 +25,9 @@ const PREFIX = 'brain-test-';
 // for five seconds (`sharedFleetSnapshot`) would hand it the fleet from before.
 // The one suite that tests the sharing sets it back itself.
 process.env['BRAIN_SHARED_SNAPSHOT_MS'] ??= '0';
+// The standing pass is throttled to every five minutes in production (§61);
+// tests call operate() back to back and read its standing each time.
+process.env['BRAIN_STANDING_INTERVAL_MS'] ??= '0';
 
 /**
  * Old enough that no live suite could own it.
@@ -36,6 +39,21 @@ process.env['BRAIN_SHARED_SNAPSHOT_MS'] ??= '0';
  */
 export const STALE_AFTER_MS = 60 * 60 * 1000;
 
+/**
+ * `scripts/test-postgres.sh` keeps its throwaway cluster at
+ * `brain-test-pg-<port>`, which shares this prefix and is not a data root. Its
+ * top-level directory is written once at `initdb` and never again (the server
+ * writes inside `data/`), so its mtime is the cluster's age, not its activity.
+ * Swept by age, every Postgres run longer than an hour lost its live database
+ * to the next test file's setup: "could not open file base/…", then
+ * ECONNREFUSED. Observed in three parallel runs on 2026-10-18.
+ */
+const NOT_A_DATA_ROOT = 'brain-test-pg-';
+
+export function isSweepableRoot(entry: string): boolean {
+  return entry.startsWith(PREFIX) && !entry.startsWith(NOT_A_DATA_ROOT);
+}
+
 function sweepStaleRoots(): void {
   const tmp = os.tmpdir();
   const cutoff = Date.now() - STALE_AFTER_MS;
@@ -46,7 +64,7 @@ function sweepStaleRoots(): void {
     return;
   }
   for (const entry of entries) {
-    if (!entry.startsWith(PREFIX)) continue;
+    if (!isSweepableRoot(entry)) continue;
     const full = path.join(tmp, entry);
     try {
       if (fs.statSync(full).mtimeMs > cutoff) continue;

@@ -13,7 +13,8 @@
  *   - a hand-back preserves the bin, its attempts and its work;
  *   - the moment an item becomes claimable the bin fires by itself;
  *   - a bin fired repeatedly in a short window is cooled off, not fired again;
- *   - an account past its hourly activation budget is not fired;
+ *   - an account whose recent sessions did no work is not fired, and one whose
+ *     sessions are productive is never refused for how many it started;
  *   - a Routine whose sessions cannot reach the web is not fired for research;
  *   - a fired session that never arrives is counted, but not during an outage.
  */
@@ -38,7 +39,11 @@ import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import {
   networkBlockedRoutines,
   resetNetworkBlockCache,
-  accountActivationBudget,
+  classifyStart,
+  productivityByAccount,
+  resetProductivityCache,
+  ARRIVAL_SETTLE_MS,
+  UNPRODUCTIVE_STARTS_THRESHOLD,
 } from '../server/services/dispatch/candidates.ts';
 import { getDb } from '../server/db/database.ts';
 import { newId } from '../server/repos/util.ts';
@@ -289,39 +294,158 @@ describe('repeated fires at one bin', () => {
   });
 });
 
-describe("an account's hourly activation budget", () => {
-  it('stops firing once the budget of sessions has started', async () => {
-    await setPolicy({ scope: 'ACCOUNT', scopeId: accountId, target: 3, actor: 'test', reason: 'cap' });
-    const budget = accountActivationBudget(3);
-    // Outside the in-flight window, so only the hourly budget can refuse.
-    const now = new Date(Date.now() - 45 * 60_000).toISOString();
-    for (let index = 0; index < budget; index += 1) {
-      const done = await createBin({
-        projectId,
-        kind: 'RESEARCH_PACKET',
-        title: `done ${index}`,
-        objective: 'done',
-        manifest: manifest(),
-        completionContract: 'RESEARCH_PACKET_V1',
-        createdByType: 'SYSTEM',
-        createdById: 'test',
-        ready: false,
-      });
-      await getDb().run("UPDATE bins SET state = 'COMPLETE' WHERE id = ?", [done.id]);
-      await getDb().run(
-        `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
-           next_attempt_at, routine_id, created_at, updated_at, sent_at)
-         VALUES (?, ?, 0, 'SENT', 1, 5, ?, ?, ?, ?, ?)`,
-        [newId('bdi'), done.id, now, routineId, now, now, now],
-      );
+/** A finished bin with one SENT fire at `sentAt`, as a session that started for it. */
+async function pastFire(input: { sentAt: string; session: string; generation?: number }): Promise<string> {
+  const done = await createBin({
+    projectId,
+    kind: 'RESEARCH_PACKET',
+    title: `past ${input.session}`,
+    objective: 'done',
+    manifest: manifest(),
+    completionContract: 'RESEARCH_PACKET_V1',
+    createdByType: 'SYSTEM',
+    createdById: 'test',
+    ready: false,
+  });
+  const generation = input.generation ?? 0;
+  await getDb().run("UPDATE bins SET state = 'COMPLETE', lease_generation = ? WHERE id = ?", [
+    generation + 1,
+    done.id,
+  ]);
+  await getDb().run(
+    `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count, max_attempts,
+       next_attempt_at, routine_id, session_ref, created_at, updated_at, sent_at)
+     VALUES (?, ?, ?, 'SENT', 1, 5, ?, ?, ?, ?, ?, ?)`,
+    [newId('bdi'), done.id, generation, input.sentAt, routineId, input.session, input.sentAt, input.sentAt, input.sentAt],
+  );
+  return done.id;
+}
+
+async function binEvent(input: {
+  type: string;
+  at: string;
+  binId?: string | null;
+  generation?: number | null;
+  session?: string | null;
+  outcome?: string | null;
+}): Promise<void> {
+  await getDb().run(
+    `INSERT INTO bin_events (id, event_type, at, bin_id, lease_generation, session_ref, outcome, measures)
+     VALUES (?, ?, ?, ?, ?, ?, ?, '{}')`,
+    [
+      newId('bev'),
+      input.type,
+      input.at,
+      input.binId ?? null,
+      input.generation ?? null,
+      input.session ?? null,
+      input.outcome ?? null,
+    ],
+  );
+}
+
+const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
+
+describe('the adaptive account control: only unproductive starts count', () => {
+  beforeEach(() => resetProductivityCache());
+
+  it('classifies a start from what its session did, and judges no outage', () => {
+    const now = Date.now();
+    const old = now - ARRIVAL_SETTLE_MS - 60_000;
+    const base = { sentAtMs: old, nowMs: now, arrived: true, brainAnswering: true };
+    expect(classifyStart({ ...base, leases: [{ productive: true, live: false }] })).toBe('PRODUCTIVE');
+    expect(classifyStart({ ...base, leases: [{ productive: false, live: true }] })).toBe('PENDING');
+    expect(classifyStart({ ...base, leases: [{ productive: false, live: false }] })).toBe('UNPRODUCTIVE_NO_WORK');
+    expect(classifyStart({ ...base, leases: [] })).toBe('UNPRODUCTIVE_NO_WORK');
+    expect(classifyStart({ ...base, arrived: false, leases: [] })).toBe('UNPRODUCTIVE_NEVER_ARRIVED');
+    // Nothing arrived from anywhere: Brain's outage, charged to nobody.
+    expect(classifyStart({ ...base, arrived: false, brainAnswering: false, leases: [] })).toBe('NOT_JUDGED');
+    // Too recent to judge.
+    expect(classifyStart({ ...base, sentAtMs: now - 60_000, arrived: false, leases: [] })).toBe('PENDING');
+  });
+
+  it('refuses an account whose sessions repeatedly never arrived', async () => {
+    for (let index = 0; index < UNPRODUCTIVE_STARTS_THRESHOLD; index += 1) {
+      const sent = minutesAgo(40 - index);
+      await pastFire({ sentAt: sent, session: `cse_never_${index}` });
+      // Somebody else's session arrived inside its window, so Brain was answering.
+      await binEvent({ type: 'DISPATCH_SESSION_ARRIVED', at: minutesAgo(38 - index), session: `cse_other_${index}` });
     }
+    const counted = await productivityByAccount(Date.now(), new Map([[routineId, accountId]]));
+    expect(counted.get(accountId)?.unproductive).toBe(UNPRODUCTIVE_STARTS_THRESHOLD);
+
     const orchestrationId = await packet();
     await researchBin(orchestrationId);
     await itemAvailableAt(orchestrationId, aMinuteAgo());
     const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
     expect(result.fired).toBe(0);
-    expect(result.unrouted['ACCOUNT_TARGETS_REACHED']).toBe(1);
+    expect(result.unrouted['ACCOUNT_SESSIONS_UNPRODUCTIVE']).toBe(1);
     expect(fires).toBe(0);
+  });
+
+  it('refuses an account whose sessions keep handing work back unclaimed', async () => {
+    for (let index = 0; index < UNPRODUCTIVE_STARTS_THRESHOLD; index += 1) {
+      const session = `cse_handback_${index}`;
+      const binId = await pastFire({ sentAt: minutesAgo(10 + index), session });
+      // It arrived, was handed the bin at the next generation, and the lease
+      // ended (the bin moved on) without a claim.
+      await binEvent({ type: 'BIN_ASSIGNED', at: minutesAgo(9 + index), binId, generation: 1, session: `claude-code-session_handback_${index}` });
+      await binEvent({ type: 'BIN_RELEASED', at: minutesAgo(9 + index), binId, generation: 1 });
+    }
+    const counted = await productivityByAccount(Date.now(), new Map([[routineId, accountId]]));
+    expect(counted.get(accountId)?.unproductive).toBe(UNPRODUCTIVE_STARTS_THRESHOLD);
+    const orchestrationId = await packet();
+    await researchBin(orchestrationId);
+    await itemAvailableAt(orchestrationId, aMinuteAgo());
+    const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(result.fired).toBe(0);
+    expect(result.unrouted['ACCOUNT_SESSIONS_UNPRODUCTIVE']).toBe(1);
+  });
+
+  it('never refuses an account for how many productive sessions it started', async () => {
+    // Far more starts in the hour than the old fixed budget allowed (6 per slot).
+    for (let index = 0; index < 20; index += 1) {
+      const session = `cse_worked_${index}`;
+      const binId = await pastFire({ sentAt: minutesAgo(50 - index), session });
+      await binEvent({ type: 'BIN_ASSIGNED', at: minutesAgo(49 - index), binId, generation: 1, session });
+      await binEvent({ type: 'BIN_ITEM_CLAIMED', at: minutesAgo(49 - index), binId, generation: 1 });
+    }
+    const counted = await productivityByAccount(Date.now(), new Map([[routineId, accountId]]));
+    expect(counted.get(accountId)).toMatchObject({ productive: 20, unproductive: 0 });
+
+    const orchestrationId = await packet();
+    await researchBin(orchestrationId);
+    await itemAvailableAt(orchestrationId, aMinuteAgo());
+    const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(result.fired).toBe(1);
+    expect(result.unrouted['ACCOUNT_SESSIONS_UNPRODUCTIVE'] ?? 0).toBe(0);
+  });
+
+  it('does not count a fire during an outage, when nothing arrived from anywhere', async () => {
+    for (let index = 0; index < UNPRODUCTIVE_STARTS_THRESHOLD + 2; index += 1) {
+      await pastFire({ sentAt: minutesAgo(40 - index), session: `cse_outage_${index}` });
+    }
+    const counted = await productivityByAccount(Date.now(), new Map([[routineId, accountId]]));
+    expect(counted.get(accountId)?.unproductive ?? 0).toBe(0);
+    const orchestrationId = await packet();
+    await researchBin(orchestrationId);
+    await itemAvailableAt(orchestrationId, aMinuteAgo());
+    expect((await dispatchTick({ burst: 4, projectIds: [projectId] })).fired).toBe(1);
+  });
+
+  it('still honours a person-set account target for productive work', async () => {
+    await setPolicy({ scope: 'ACCOUNT', scopeId: accountId, target: 1, actor: 'test', reason: 'cap' });
+    // One live activation in flight on this account.
+    const orchestrationId = await packet();
+    await researchBin(orchestrationId);
+    await itemAvailableAt(orchestrationId, aMinuteAgo());
+    expect((await dispatchTick({ burst: 4, projectIds: [projectId] })).fired).toBe(1);
+    const second = await packet();
+    await researchBin(second);
+    await itemAvailableAt(second, aMinuteAgo());
+    const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(result.fired).toBe(0);
+    expect(result.unrouted['ACCOUNT_TARGETS_REACHED']).toBe(1);
   });
 });
 

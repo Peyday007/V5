@@ -13245,6 +13245,70 @@ the wrong connector (Airyn 2-B/C/D), or whose sessions never reach Brain (Airyn
 2-B, Caleb 3-B/C/D, Factory surface 3), is the account owner's to change in
 Claude. Brain cannot read another account's Routine configuration.
 
+## 65. A dead end is a watch, not a verdict, and research spends where an answer can change a decision.
+
+The Opportunity Intelligence release (`docs/OPPORTUNITY-INTELLIGENCE-PLAN.md`,
+`docs/RESEARCH-METHODS-NOTE.md`, baseline in
+`docs/OPPORTUNITY-INTELLIGENCE-BASELINE-2026-10-18.md`) found refinement
+stopped in production. No opening was eligible for a deep dive. 61 had spent a
+two-dive lifetime and 21 were disqualified, and nothing recorded could bring
+any of them back. 709 accepted claims sat unused inside blocked fragments.
+The rules it introduced:
+
+- **Blocker keys are shared, never per opportunity.** `BlockerKey`
+  (`domain/types.ts`) names a fact, such as `CAPABILITY:SEND_A_MESSAGE` or
+  `FIELD:payer`. `cash_needs.blocker_key` and `cash_reopen_conditions` both
+  index it, so one changed fact reaches every opportunity waiting on it with
+  one indexed lookup. `BLOCKER_DETECTION` is a `Record` over the kinds.
+  SUPPLIER, COST, CUSTOMER and REGULATION read `NOT_DETECTED` until a row
+  records a market-wide change. They are covered per opportunity as `FIELD:`
+  keys. Nothing pretends to detect them.
+- **There is no lifetime limit on reconsideration.** A change ref can trigger
+  a given opportunity once (`cash_reconsideration_triggers`). A second,
+  distinct change triggers it again. Real changes bound it; no count does.
+- **Reconsideration is not readiness.** A trigger sets
+  `reconsider_requested_at` and moves no state. Tier, the card gate, the
+  commercial authority, `sendGate` and the capability reading all still apply.
+- **A person's ARCHIVE or DECLINE is never reversed by Brain.** A triggered
+  condition raises one Needs-You item. The person's `reconsider` (ARCHIVED or
+  DECLINED → DISCOVERED or EVIDENCE_CARD only) is the only way back. It keeps
+  the row and the reason.
+- **Dives are per change epoch.** An epoch begins at creation and at each
+  reconsideration. Each epoch allows two full dives and one screen. There is no
+  epoch cap.
+- **The kill question comes first.** An opening with no established payer gets
+  a stage-1 `COMMERCIAL_VALIDATION_SCREEN` dive under the same envelope, gate
+  and lane floors. If the screen finds no payer, the opening goes dormant with
+  `EVIDENCE:payer` and no full dive is compiled. QUALIFIED still needs every
+  field.
+- **Capacity is derived, never a constant.** `diveRoom()` is
+  `min(free grant slots − 1, routable research surfaces, 0 while SHEDDING)`. It
+  is never above the grant a person set, and one dive may run while any slot is
+  free. It replaced `MAX_VALIDATIONS_IN_FLIGHT` and `MAX_OPEN_COMMISSIONS`.
+- **An account is refused for unproductive starts, never for productive
+  ones.** `ACCOUNT_SESSIONS_UNPRODUCTIVE` fires at three unproductive starts in
+  an hour: sessions that never arrived while others did, or that ended with no
+  claim, unit, pass or completion. It replaced the containment budget of six
+  starts per slot per hour. The work-ready gate, the bin refire guard and
+  unarrived-fire counting stay.
+- **Own gated evidence is reusable inside its project.** An accepted claim in a
+  BLOCKED fragment counts as existing evidence for coverage. The gate's bars
+  and §31's cross-project boundary are unchanged. An incomplete fragment is
+  still incomplete.
+- **A block cause is stored, not inferred later.** `block_cause` and
+  `block_host` are written in the statement that sets BLOCKED. They choose the
+  repair ladder: UNREADABLE runs through canonical link, then archived copy,
+  then official filings, then another repository, then unresolved, each rung
+  only inside the envelope. They also let automatic surface recovery fire once
+  per new RETRIEVED reading.
+- **A lesson is context, never a control.** Retrospective and usefulness
+  lessons reach prompts (`guidance.ts`, cached 10 minutes). No gate, depth,
+  repair, ordering or routing module imports them.
+- **A test sweep must not delete a live database.** `tests/setup.ts` sweeps
+  `brain-test-*` temp roots older than an hour, and it once matched the
+  Postgres test cluster `brain-test-pg-<port>`. That killed every Postgres run
+  longer than an hour. `isSweepableRoot` excludes it.
+
 ## Repository map
 
 ```

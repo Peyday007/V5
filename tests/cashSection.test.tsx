@@ -2609,3 +2609,328 @@ describe('the offer a person could send', () => {
     expect(screen.queryByRole('button', { name: /copy offer/i })).toBeNull();
   });
 });
+
+/**
+ * Standing on the page (OPPORTUNITY-INTELLIGENCE §3.6, workstream E).
+ *
+ * The actionable list is every piece, paged and never capped; the stopped
+ * pieces carry the sentence that explains them and what would reopen them; the
+ * reconsider control is offered where the server's capability and the piece's
+ * own state both allow it and is disabled with the server's reason elsewhere;
+ * and none of it adds or moves a section, for either role.
+ */
+describe('standing: actionable, waiting, stopped and reconsidered', () => {
+  const ADVANCING = (index: number): Record<string, unknown> => {
+    const id = `cop_w${String(index).padStart(2, '0')}`;
+    return {
+      opportunity: opportunity({ id, title: `Workable piece ${index}`, state: 'EVIDENCE_CARD' }),
+      disposition: 'EXECUTE_NOW',
+      because: 'Nothing is in its way.',
+      missing: [],
+      tier: tier({ tier: 'QUALIFIED' }),
+      standing: {
+        kind: 'ADVANCING',
+        stage: 'EVIDENCE_CARD',
+        doing: 'It can be started now.',
+        next: 'Begin execution.',
+        because: `Piece ${index} can be started now.`,
+      },
+    };
+  };
+  const WORKABLE = Array.from({ length: 60 }, (_, index) => ADVANCING(index + 1));
+  const DORMANT = {
+    opportunity: opportunity({ id: 'cop_d', title: 'An archived opening', state: 'ARCHIVED' }),
+    disposition: 'ARCHIVED',
+    because: 'Nobody could reach them.',
+    missing: [],
+    tier: tier({ tier: 'SIGNAL' }),
+    standing: {
+      kind: 'DORMANT',
+      cause: 'ARCHIVED',
+      reopenWhen: ['CAPABILITY:SEND_A_MESSAGE'],
+      reconsiderationRequested: false,
+      because:
+        'Nobody could reach them. It reopens for consideration when CAPABILITY:SEND_A_MESSAGE changes.',
+    },
+  };
+  const DERIVED = {
+    opportunity: opportunity({ id: 'cop_r', title: 'A twice-dived opening', state: 'DISCOVERED' }),
+    disposition: 'EVIDENCE_ONLY',
+    because: 'Evidence.',
+    missing: [],
+    tier: tier({ tier: 'SIGNAL' }),
+    standing: {
+      kind: 'DORMANT',
+      cause: 'ROUNDS_SPENT',
+      reopenWhen: ['EVIDENCE:payer'],
+      reconsiderationRequested: false,
+      because: 'Both bounded deep dives this epoch are spent (2/2) and it is still signal.',
+    },
+  };
+  const GROUP = {
+    key: 'CAPABILITY:SEND_A_MESSAGE',
+    kind: 'CAPABILITY',
+    count: 17,
+    opportunityIds: [],
+    sentence: '17 openings wait on CAPABILITY:SEND_A_MESSAGE.',
+    noticed: 'Brain reads the row that would change, on every pass.',
+    satisfiedWhen: 'the capability reads PRESENT',
+    automatic: true,
+  };
+  const sharedStanding = {
+    byKind: { ADVANCING: 60, WAITING: 17, DORMANT: 2, NOT_WORTH_PURSUING: 0, DONE: 0 },
+    withheld: 0,
+    waitingOn: [GROUP],
+    reopenOn: [{ ...GROUP, count: 1, sentence: '1 stopped opening reopens for consideration when CAPABILITY:SEND_A_MESSAGE changes.' }],
+    reconsidered: [
+      {
+        opportunityId: 'cop_x',
+        title: 'A piece looked at again',
+        at: '2026-10-17T00:00:00.000Z',
+        via: 'REOPEN_CONDITION',
+        blockerKey: 'CAPABILITY:SEND_A_MESSAGE',
+        outcome: 'ADVANCED',
+      },
+    ],
+    history: {
+      entries: {
+        cop_d: [
+          { at: '2026-10-16T00:00:00.000Z', kind: 'DORMANT', keys: ['CAPABILITY:SEND_A_MESSAGE'], because: null },
+          { at: '2026-10-10T00:00:00.000Z', kind: 'WAITING', keys: ['PERSON'], because: null },
+        ],
+      },
+      totals: { cop_d: 2 },
+    },
+    refinement: {
+      sprint: { kind: 'SLOTS_TAKEN', inFlight: 2, cap: 2, free: null, sentence: 'All 2 deep-dive slots are taken (2 in flight).' },
+      byRefusal: [{ kind: 'ROUNDS_SPENT', label: 'both bounded dives are spent', count: 61 }],
+      evaluating: 120,
+    },
+  };
+  const SHARED_OPPORTUNITIES = [
+    ...WORKABLE.map((one) => {
+      const piece = one['opportunity'] as Record<string, unknown>;
+      return sharedOpportunity({
+        id: piece['id'],
+        title: piece['title'],
+        state: 'EVIDENCE_CARD',
+        availability: 'BEING_QUALIFIED',
+        standing: {
+          kind: 'ADVANCING',
+          cause: null,
+          keys: [],
+          sentence: 'Moving: something is being done about it now.',
+          withheld: false,
+        },
+      });
+    }),
+    sharedOpportunity({
+      id: 'cop_d',
+      title: 'An archived opening',
+      state: 'ARCHIVED',
+      availability: 'CLOSED',
+      standing: {
+        kind: 'DORMANT',
+        cause: 'ARCHIVED',
+        keys: ['CAPABILITY:SEND_A_MESSAGE'],
+        sentence:
+          'Stopped, with conditions that would reopen it. It stopped because somebody stopped it. ' +
+          'It reopens for consideration when CAPABILITY:SEND_A_MESSAGE changes.',
+        withheld: false,
+      },
+    }),
+  ];
+  const standingFrontier = (): Record<string, unknown> =>
+    frontier({ opportunities: SHARED_OPPORTUNITIES, standing: sharedStanding });
+  const ownerView = (capabilities: Record<string, unknown> = {}): Record<string, unknown> => {
+    const base = view();
+    const work = base['myCurrentWork'] as Record<string, unknown>;
+    return {
+      ...base,
+      capabilities: { ...ALL_CAPABILITIES, mayReconsider: true, reconsiderRefusal: null, ...capabilities },
+      frontier: standingFrontier(),
+      myCurrentWork: {
+        ...work,
+        placements: [...WORKABLE, DORMANT, DERIVED],
+        actionable: WORKABLE,
+        dormant: [DORMANT, DERIVED],
+        byStanding: { ADVANCING: 60, WAITING: 0, DORMANT: 2, NOT_WORTH_PURSUING: 0, DONE: 0 },
+        standingSurface: {
+          waitingOn: [GROUP],
+          reopenOn: sharedStanding.reopenOn,
+          reconsidered: [{ ...sharedStanding.reconsidered[0], summary: 'Reconsidered: back from archived.' }],
+          history: {
+            entries: {
+              cop_d: [
+                {
+                  at: '2026-10-16T00:00:00.000Z',
+                  kind: 'DORMANT',
+                  keys: ['CAPABILITY:SEND_A_MESSAGE'],
+                  because: 'Nobody could reach them.',
+                },
+              ],
+            },
+            totals: { cop_d: 1 },
+          },
+          reopenConditions: {
+            cop_d: [
+              {
+                id: 'crc_1',
+                projectId: PROJECT,
+                opportunityId: 'cop_d',
+                blockerKey: 'CAPABILITY:SEND_A_MESSAGE',
+                recordedFrom: 'ARCHIVE',
+                observedAtRecord: 'MISSING',
+                actorRef: 'usr_1',
+                createdAt: '2026-10-16T00:00:00.000Z',
+                triggeredAt: null,
+                triggerChangeRef: null,
+              },
+            ],
+          },
+          reconsider: {
+            cop_d: {
+              allowed: true,
+              reason: 'Reconsidering returns it to evaluation; every gate still applies before it can be ready.',
+              conditionId: null,
+            },
+            cop_r: {
+              allowed: false,
+              reason:
+                'This is stopped by Brain’s own reading rather than by a person, so it is not reconsidered by hand.',
+              conditionId: null,
+            },
+          },
+          actionablePageSize: 25,
+        },
+      },
+    };
+  };
+  const member = (): Record<string, unknown> => ({
+    scope: 'SHARED',
+    capabilities: {
+      mayAdminister: false,
+      mayGrantAuthority: false,
+      mayViewPrivateJob: false,
+      mayActOnJob: false,
+      mayReconsider: false,
+      reconsiderRefusal: 'Reconsidering a stopped opening is a decision for whoever runs this operation.',
+    },
+    ...standingFrontier(),
+  });
+
+  it('keeps one skeleton for both roles with standing on the page', async () => {
+    base({ [VIEW]: { body: ownerView() } });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    const owner = sectionTree();
+    expect(document.querySelector('.rs-cash-portfolio .rs-cash-actionable')).toBeTruthy();
+    expect(document.querySelector('.rs-cash-needs .rs-cash-blockers')).toBeTruthy();
+
+    cleanup();
+    base({ [VIEW]: { body: member() } });
+    await mount(PROJECT, false);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    expect(owner.map((one) => one.id)).toEqual(SECTIONS);
+    expect(sectionTree()).toEqual(owner);
+    expect(document.querySelector('.rs-cash-portfolio .rs-cash-actionable')).toBeTruthy();
+    expect(document.querySelector('.rs-cash-portfolio .rs-cash-dormant')).toBeTruthy();
+    expect(document.querySelector('.rs-cash-portfolio .rs-cash-reconsidered')).toBeTruthy();
+  });
+
+  it('lists every actionable piece, paged by 25 and never capped', async () => {
+    base({ [VIEW]: { body: ownerView() } });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    const block = document.querySelector('.rs-cash-actionable') as HTMLElement;
+    const items = (): string[] =>
+      [...block.querySelectorAll(':scope > .rs-standing-list > li .rs-item-title')].map(
+        (node) => node.textContent ?? '',
+      );
+    expect(block.textContent).toMatch(/60 pieces are moving or waiting/);
+    const seen = new Set(items());
+    expect(seen.size).toBe(25);
+    expect(within(block).getByText(/Page 1 of 3/)).toBeTruthy();
+    fireEvent.click(within(block).getByRole('button', { name: 'Next' }));
+    for (const one of items()) seen.add(one);
+    expect(within(block).getByText(/Page 2 of 3/)).toBeTruthy();
+    fireEvent.click(within(block).getByRole('button', { name: 'Next' }));
+    expect(items()).toHaveLength(10);
+    for (const one of items()) seen.add(one);
+    // Every one of the sixty is reachable; the five above are only a highlight.
+    expect(seen.size).toBe(60);
+    expect((within(block).getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('shows each stopped piece with its reason and what would reopen it', async () => {
+    base({ [VIEW]: { body: ownerView() } });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    const dormant = within(document.querySelector('.rs-cash-dormant') as HTMLElement);
+    expect(dormant.getAllByText(/Nobody could reach them\. It reopens for consideration/).length).toBeGreaterThan(0);
+    expect(dormant.getAllByText(/Reopens when: CAPABILITY:SEND_A_MESSAGE/).length).toBeGreaterThan(0);
+    expect(dormant.getByText(/recorded from archive; not met yet/)).toBeTruthy();
+    expect(dormant.getByText(/Both bounded deep dives this epoch are spent/)).toBeTruthy();
+    expect(dormant.getByText(/1 stopped opening reopens for consideration/)).toBeTruthy();
+    // Grouped blockers live inside Brain's needs, by key and count.
+    expect(
+      within(document.querySelector('.rs-cash-needs') as HTMLElement).getByText(
+        '17 openings wait on CAPABILITY:SEND_A_MESSAGE.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('offers reconsider only where the server allows it, and says why everywhere else', async () => {
+    base({
+      [VIEW]: { body: ownerView() },
+      'POST /api/cash/opportunities/cop_d/reconsider': {
+        body: { opportunity: opportunity({ id: 'cop_d', state: 'DISCOVERED' }), message: 'Back in evaluation.' },
+      },
+    });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    const pieces = [...document.querySelectorAll('.rs-dormant-piece')] as HTMLElement[];
+    const archived = pieces.find((one) => one.textContent?.includes('An archived opening'))!;
+    const derived = pieces.find((one) => one.textContent?.includes('A twice-dived opening'))!;
+    const derivedButton = within(derived).getByRole('button', { name: 'Reconsider' }) as HTMLButtonElement;
+    expect(derivedButton.disabled).toBe(true);
+    expect(within(derived).getByText(/stopped by Brain’s own reading/)).toBeTruthy();
+
+    const button = within(archived).getByRole('button', { name: 'Reconsider' }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+    fireEvent.change(within(archived).getByLabelText(/worth looking at again/i), {
+      target: { value: 'A messaging integration was connected.' },
+    });
+    await act(async () => {
+      fireEvent.click(within(archived).getByRole('button', { name: 'Reconsider' }));
+    });
+    expect(calls).toContain('POST /api/cash/opportunities/cop_d/reconsider');
+    expect(bodies['POST /api/cash/opportunities/cop_d/reconsider']).toEqual({
+      reason: 'A messaging integration was connected.',
+    });
+
+    // A member: the control is there, disabled, with the server's sentence.
+    cleanup();
+    base({ [VIEW]: { body: member() } });
+    await mount(PROJECT, false);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    const memberPiece = document.querySelector('.rs-dormant-piece') as HTMLElement;
+    expect((within(memberPiece).getByRole('button', { name: 'Reconsider' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(memberPiece).getByText(/decision for whoever runs this operation/)).toBeTruthy();
+    // And the standing history a member is shown carries kinds and keys, no sentence.
+    expect(within(memberPiece).getByText(/Standing history \(2 changes recorded\)/)).toBeTruthy();
+  });
+
+  it('shows the research progress and what was reconsidered recently, for both roles', async () => {
+    base({ [VIEW]: { body: member() } });
+    await mount(PROJECT, false);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    const research = within(document.querySelector('.rs-cash-research') as HTMLElement);
+    expect(research.getByText(/All 2 deep-dive slots are taken/)).toBeTruthy();
+    expect(research.getByText(/61 — both bounded dives are spent/)).toBeTruthy();
+    const recent = within(document.querySelector('.rs-cash-reconsidered') as HTMLElement);
+    expect(recent.getByText(/A piece looked at again/)).toBeTruthy();
+    expect(recent.getByText(/moving now/)).toBeTruthy();
+  });
+});

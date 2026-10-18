@@ -32,6 +32,8 @@ import {
   listRequirements,
 } from '../../repos/reconciliation.ts';
 import { reconcile } from '../reconcile/plan.ts';
+import { repeatOfUnchangedSearch } from '../reconcile/coverage.ts';
+import type { RepeatedSearch } from '../reconcile/coverage.ts';
 
 /**
  * The part of a proposed fragment the coverage decision can read.
@@ -64,6 +66,13 @@ export interface CoverageDecision {
   claimIds: string[];
   documentIds: string[];
   confidence: number;
+  /**
+   * The finished search this exact question would repeat against the archive
+   * as it stands, when there is one. `needsResearch` is left as the classifier
+   * said: this is about the search, not the answer, and it is never reported
+   * as "already answered".
+   */
+  repeats: RepeatedSearch | null;
 }
 
 export interface ProposalCoverage {
@@ -77,6 +86,8 @@ export interface ProposalCoverage {
   existingClaims: number;
   /** True when the scope checks abstained for want of a stated boundary. */
   boundaryFromProposal: boolean;
+  /** The archive content marker these decisions were taken against; stamped on the fragments. */
+  archiveMarker: string;
 }
 
 /**
@@ -199,6 +210,13 @@ export async function coverProposal(input: {
       claimIds: assessment.claimIds,
       documentIds: assessment.documentIds,
       confidence: assessment.confidence,
+      repeats: assessment.needsResearch
+        ? await repeatOfUnchangedSearch({
+            projectId: orchestration.projectId,
+            question: requirement.statement,
+            marker: result.archiveMarker,
+          })
+        : null,
     });
   }
 
@@ -210,7 +228,18 @@ export async function coverProposal(input: {
     documentsUnreadable: result.documentsUnreadable,
     existingClaims: result.claims.length,
     boundaryFromProposal,
+    archiveMarker: result.archiveMarker,
   };
+}
+
+/** The sentence a fragment not created because it would repeat a finished search is recorded with. */
+export function whyNotRepeated(decision: CoverageDecision): string {
+  const prior = decision.repeats!;
+  return (
+    `This exact question was already searched to the end of its repair ladder (${prior.fragmentKey}, ` +
+    `${prior.fragmentId}, blocked ${prior.blockCause}) against an archive that has not changed since. ` +
+    'Searching it again would buy the same answer; it is searched again when new evidence arrives.'
+  );
 }
 
 /** The sentence a suppressed fragment is recorded with. */

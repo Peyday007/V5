@@ -91,6 +91,8 @@ const REMEDY: Record<RoutingRefusal, string> = {
     'Brain will not fire it until it is a routing candidate.',
   ACCOUNT_TARGETS_REACHED:
     'It is at its configured target; it frees when an activation finishes, or raise the Routine or account target.',
+  ACCOUNT_SESSIONS_UNPRODUCTIVE:
+    'Its account started sessions in the last hour that did no work, so Brain is not starting more for now; it lifts by itself within the hour.',
 };
 
 /**

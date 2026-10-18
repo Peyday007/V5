@@ -158,3 +158,14 @@ describe('the test harness does not leak a Postgres schema', () => {
     await teardown();
   });
 });
+
+describe('the stale data-root sweep', () => {
+  it('never sweeps the Postgres test cluster, however old its directory is', async () => {
+    const { isSweepableRoot } = await import('./setup.ts');
+    expect(isSweepableRoot('brain-test-pg-54329')).toBe(false);
+    expect(isSweepableRoot('brain-test-pg-55413')).toBe(false);
+    expect(isSweepableRoot('brain-test-abc123')).toBe(true);
+    expect(isSweepableRoot('something-else')).toBe(false);
+  });
+});
+

@@ -108,6 +108,10 @@ import {
 } from '../research/packetRunner.ts';
 import { reconcileRetrospectives } from '../research/intelligence/retrospective.ts';
 import { recoverFilingFailures, type FilingRecovery } from '../research/synthesisRecovery.ts';
+import {
+  recoverReachableFragments,
+  type AutomaticSurfaceRecovery,
+} from '../research/surfaceRecovery.ts';
 import { recoverExecutionLineage } from '../dispatch/lineageRecovery.ts';
 import { recomputeProject } from '../stateEngine.ts';
 import {
@@ -171,6 +175,7 @@ import { advanceResearchGoals, type GoalContinuationReport } from '../research/g
 import { scanIfStale } from '../selfmodel/refresh.ts';
 import { watchIdleOnTick } from '../engineering/watchdog.ts';
 import { databasePressure } from '../../db/pressure.ts';
+import { withArchiveMemo } from '../reconcile/coverage.ts';
 
 export interface TickReport {
   /**
@@ -399,6 +404,8 @@ export interface TickReport {
   retiredPacketWork: { orchestrationId: string; retired: number }[];
   /** Syntheses reissued because Brain itself could not file them. See `recoverFilingFailures`. */
   filingRecoveries: FilingRecovery[];
+  /** Fragments recovered (or refused) because a probe later read their blocking host. See `recoverReachableFragments`. */
+  surfaceRecoveries: AutomaticSurfaceRecovery[];
   /** Campaigns whose lessons were written this tick. See `retrospective.ts`. */
   researchLessons: { orchestrationId: string; lessons: number }[];
   abandonedParks: { orchestrationId: string; missionId: string; missionState: string }[];
@@ -763,6 +770,7 @@ const EMPTY: TickReport = {
   lineageUnresolved: [],
   retiredPacketWork: [],
   filingRecoveries: [],
+  surfaceRecoveries: [],
   researchLessons: [],
   abandonedParks: [],
   restoredParks: [],
@@ -793,6 +801,16 @@ const EMPTY: TickReport = {
  * throws for an ordinary refusal: a paused cycle and a lost race are results.
  */
 export async function tick(owner: string): Promise<TickReport> {
+  /*
+   * The archive is read once per project for the whole pass. Every archive
+   * check in it — the judgment of new ideas, goal continuation, the packet
+   * reconciliations a launch runs — then reads the same claims under the same
+   * marker, and `archiveReadCount` is what a test asserts that with.
+   */
+  return withArchiveMemo(() => tickOnce(owner));
+}
+
+async function tickOnce(owner: string): Promise<TickReport> {
   const claim = await claimCycle({ owner });
   if (!claim.ok || claim.generation === null) {
     return { ...EMPTY, skipped: claim.reason };
@@ -827,6 +845,7 @@ export async function tick(owner: string): Promise<TickReport> {
     linksUnreconciled: [],
     retiredPacketWork: [],
     filingRecoveries: [],
+    surfaceRecoveries: [],
   researchLessons: [],
     abandonedParks: [],
     restoredParks: [],
@@ -1124,6 +1143,20 @@ export async function tick(owner: string): Promise<TickReport> {
      */
     await runPass(report, 'filing-recoveries', async () => {
       report.filingRecoveries = await recoverFilingFailures(cycle.maxEventsPerCycle);
+    });
+
+    /*
+     * 1a-iv-b''. And put back a fragment the surface stopped, once a probe a
+     * worker ran has read the host that stopped it.
+     *
+     * `block_host` names the one host a SOURCE_ACCESS or SOURCES_UNREADABLE
+     * fragment could not read; a completed SURFACE_PROBE_V1 reading that host
+     * RETRIEVED after the block is the evidence the operator control already
+     * demands. Every guard of that control applies unchanged, each (fragment,
+     * reading) is tried once, and the pass is throttled inside.
+     */
+    await runPass(report, 'surface-recoveries', async () => {
+      report.surfaceRecoveries = await recoverReachableFragments(cycle.maxEventsPerCycle);
     });
 
     /*

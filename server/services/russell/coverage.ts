@@ -20,8 +20,20 @@
  * look like text that matches, and none of them is an answer. `CLOSING_STATUSES`
  * below is that rule in one place, and inverting it is what the test does.
  */
-import { assessRequirement, projectClaims } from '../reconcile/coverage.ts';
-import { sharedClaimsForProject } from '../knowledge/shared.ts';
+import {
+  assessRequirement,
+  dedupeClaims,
+  readArchive,
+  repeatOfUnchangedSearch,
+} from '../reconcile/coverage.ts';
+import type { RepeatedSearch } from '../reconcile/coverage.ts';
+
+export {
+  archiveReadCount,
+  currentArchiveMarker,
+  resetArchiveReadCount,
+  withArchiveMemo,
+} from '../reconcile/coverage.ts';
 import type {
   BoundaryContract,
   CoverageStatus,
@@ -51,6 +63,12 @@ export interface CoverageVerdict {
   reasons: string[];
   claimIds: string[];
   documentIds: string[];
+  /**
+   * Set when this exact question was already searched to the end of its repair
+   * ladder against the archive as it stands now. A reading, not a verdict:
+   * `needsResearch` is unchanged, and the caller that launches work decides.
+   */
+  repeats: RepeatedSearch | null;
 }
 
 export interface PreMissionCoverage {
@@ -65,6 +83,14 @@ export interface PreMissionCoverage {
   claimsConsidered: number;
   /** True when nothing is left to research, so no mission should be created. */
   fullyAnswered: boolean;
+  /** The archive content marker the decision was taken against. */
+  archiveMarker: string;
+  /**
+   * True when every gap repeats a search already run to the end of its ladder
+   * against this same archive — launching it again would buy the same answer.
+   * False whenever there are no gaps.
+   */
+  nothingNewToSearch: boolean;
 }
 
 export interface ProposedRequirement {
@@ -101,11 +127,19 @@ export async function coverBeforeWork(input: {
    * seam that could bypass the boundary is a boundary with a way round it, and
    * a guard on one entrance is not a guard.
    */
-  const own = input.claims ?? (await projectClaims(input.projectId));
-  const claims = [...own, ...(await sharedClaimsForProject(input.projectId))];
+  /*
+   * Read once per tick per project (`withArchiveMemo`), under a content
+   * marker. The project's own gate-accepted claims and the shared pool are
+   * added on *either* path, so a caller supplying document claims cannot
+   * route around either; ids are de-duplicated so one claim never counts as
+   * two publishers.
+   */
+  const archive = await readArchive(input.projectId);
+  const own = input.claims ?? archive.documentClaims;
+  const claims = dedupeClaims([...own, ...archive.gatedClaims, ...archive.sharedClaims]);
   const contract = input.contract ?? null;
 
-  const verdicts = input.requirements.map((proposed, index) => {
+  const verdicts = await Promise.all(input.requirements.map(async (proposed, index) => {
     const requirement: Requirement = {
       id: `pending:${proposed.key}`,
       orchestrationId: 'pending',
@@ -138,8 +172,16 @@ export async function coverBeforeWork(input: {
       reasons: assessment.reasons,
       claimIds: assessment.claimIds,
       documentIds: assessment.documentIds,
+      repeats:
+        assessment.needsResearch && !closed
+          ? await repeatOfUnchangedSearch({
+              projectId: input.projectId,
+              question: proposed.statement,
+              marker: archive.marker,
+            })
+          : null,
     };
-  });
+  }));
 
   const answered = verdicts.filter((verdict) => verdict.closed);
   const notResearch = verdicts.filter(
@@ -154,6 +196,8 @@ export async function coverBeforeWork(input: {
     notResearch,
     claimsConsidered: claims.length,
     fullyAnswered: gaps.length === 0,
+    archiveMarker: archive.marker,
+    nothingNewToSearch: gaps.length > 0 && gaps.every((gap) => gap.repeats !== null),
   };
 }
 

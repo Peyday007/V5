@@ -76,18 +76,23 @@ import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
 import { researchMissionSlotsFull } from '../russell/launch.ts';
+import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
+import { cashPosition } from './money.ts';
+import { CAPTURE_INPUTS, type QualificationKey, type TierReading } from './tier.ts';
+import { DIVE_STARTED_EVENT, diveEpochStart, diveStarts, type DiveStage, type DiveStart } from './diveStage.ts';
+export { diveEpochStart } from './diveStage.ts';
+import { researchRoom, type ResearchRoom, type RoomLimit } from './researchRoom.ts';
+import { recordReopenCondition, reopenConditionsFor } from '../../repos/cashReconsideration.ts';
+import { formatBlockerKey } from '../../domain/types.ts';
 import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
 
-/** How many deep dives one project may have in flight. Provider capacity. */
-export const MAX_VALIDATIONS_IN_FLIGHT = 2;
-
 /**
- * The states that actually occupy one of those slots.
+ * The states that actually occupy capacity.
  *
  * `NEEDS_PERSON` is deliberately absent, and that absence is the whole repair.
- * A slot is provider capacity; a dive parked for a person is using none of it,
- * and counting it made a Brain with two parked missions unable to start a
- * thirty-ninth dive for ever. What holds a slot is what a worker is working on.
+ * Capacity is provider capacity; a dive parked for a person is using none of
+ * it, and counting it made a Brain with two parked missions unable to start a
+ * thirty-ninth dive for ever. What holds capacity is what a worker is working on.
  */
 const HOLDS_A_SLOT: ReadonlySet<string> = Object.freeze(new Set(['PENDING', 'RUNNING']));
 
@@ -107,31 +112,124 @@ const HOLDS_A_SLOT: ReadonlySet<string> = Object.freeze(new Set(['PENDING', 'RUN
  * Six hours is longer than the gap between any two completed passes this
  * Brain has recorded, and short enough that a slot is not lost for a day. A
  * stalled dive is `BLOCKED` rather than failed, with the gap in the reason, so
- * it can be asked again inside `MAX_VALIDATION_ROUNDS` rather than written
- * off — and nothing it produced is destroyed.
+ * it can be asked again inside its epoch's rounds rather than written off — and
+ * nothing it produced is destroyed.
  */
 export const VALIDATION_STALL_MS = 6 * 60 * 60 * 1000;
 
 /**
- * How many bounded deep dives one opening may have, in total.
+ * How many full deep dives one opening may have **per change epoch**.
  *
- * A second one exists because the qualification bar rose after some pieces had
- * already been dived: the eligibility, acquisition, exit-evidence and
- * contact-mode lanes did not exist when the first production dives were
- * compiled, so a piece that answered everything its dive asked could still sit
- * one answer short of qualified with `startValidations` skipping it for ever.
- * §24's sentence at a new altitude — every escalation needs an answering
- * transition, and a bar with no way over it is a park rather than a standard.
+ * It used to be per lifetime, and that made a second look at an opening
+ * impossible however much changed underneath it: production held openings whose
+ * payer appeared in the shared pool weeks after both of their dives were spent,
+ * and nothing could ask again. An epoch begins at creation and again at each
+ * distinct change — a reconsideration (`reconsider_requested_at` later than the
+ * last dive started), recorded by the ledger whose primary key refuses the
+ * same change twice (`cash_reconsideration_triggers`). There is deliberately no
+ * cap on epochs: what bounds re-asking is that a new epoch needs a distinct
+ * change, and inside an epoch this count and `repair.ts`'s rule that the same
+ * search never runs twice.
  *
- * Two, and not a ladder. A third dive against the same published sources asks
- * the same question a third time, which is `repair.ts`'s rule about never
- * running the same search twice. A piece still short after two has an honest
- * answer — the sources do not publish it — and the card says which fields.
+ * Two inside an epoch, and not a ladder. A third dive against the same
+ * published sources in the same epoch asks the same question a third time. A
+ * piece still short after two has an honest answer for this epoch — the
+ * sources do not publish it — and the card says which fields.
  */
 export const MAX_VALIDATION_ROUNDS = 2;
 
+/**
+ * The stage-one screen an epoch may have, on top of its full dives.
+ *
+ * A screen asks three lanes rather than sixteen, so it does not spend one of
+ * the epoch's full dives: an opening that passes it still gets the depth it
+ * had before stages existed. One, because a second screen in the same epoch
+ * would ask the same kill questions of the same sources.
+ */
+export const MAX_SCREENS_PER_EPOCH = 1;
+
 /** Extra rounds an opening may have only to classify an older dive's possible disqualifier. */
 export const CLASSIFICATION_ROUNDS = 1;
+
+/**
+ * The card fields a stage-one screen settles: who pays, and whether anything
+ * rules the opening out (whether it is still open is a disqualifier found).
+ * Each can end an opening by itself, which is why they are asked first.
+ */
+export const STAGE_ONE_FIELDS: readonly QualificationKey[] = Object.freeze(['payer', 'disqualifiers']);
+
+/* --------------------------------------------------------------------------
+ * The change epoch
+ * ------------------------------------------------------------------------ */
+
+export interface DiveEpoch {
+  startedAt: string | null;
+  /**
+   * True when a distinct change arrived after the last dive started, so no dive
+   * of this epoch has run yet.
+   */
+  fresh: boolean;
+  /** Dives started in this epoch, screens included. */
+  roundsUsed: number;
+}
+
+/**
+ * The epoch, as a pure reading of the opportunity's own columns.
+ *
+ * `validation_rounds` counts the dives of the epoch the latest dive belongs to:
+ * `startValidations` restarts it at one for the first dive after a change. So
+ * when the change is later than the last dive's start the epoch is fresh and
+ * nothing has been used in it, and otherwise the column is the count.
+ */
+export function diveEpoch(opportunity: CashOpportunity): DiveEpoch {
+  const startedAt = diveEpochStart(opportunity);
+  const lastDive = opportunity.validationStartedAt ?? null;
+  const fresh =
+    startedAt !== null && opportunity.validationState !== null && (lastDive === null || startedAt > lastDive);
+  return { startedAt, fresh, roundsUsed: fresh ? 0 : opportunity.validationRounds };
+}
+
+/** The dives started inside the current epoch, from their own started events. */
+function startsInEpoch(starts: readonly DiveStart[], epoch: DiveEpoch): DiveStart[] {
+  if (epoch.fresh) return [];
+  if (epoch.startedAt === null) return [...starts];
+  return starts.filter((one) => one.at >= epoch.startedAt!);
+}
+
+/* --------------------------------------------------------------------------
+ * The stage
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Whether the opening's payer is established, from its row or its card.
+ *
+ * A documented search that found nobody never lands here: `applyValidationAnswers`
+ * refuses to write a NEGATIVE_EXISTENCE payer and withdraws any that once did.
+ */
+export function payerEstablished(
+  opportunity: CashOpportunity,
+  fact: (field: string) => CashCardFact | null,
+): boolean {
+  if (opportunity.payer && opportunity.payer.trim().length > 0) return true;
+  const payer = fact('payer');
+  return Boolean(payer && payer.kind !== 'RECOMMENDATION' && payer.value.trim().length > 0);
+}
+
+/**
+ * Which stage the next dive of this opening asks.
+ *
+ * The kill question first: with no payer established, the next dive is a
+ * `SCREEN` that asks who pays, whether the opening is still open, and whether
+ * anything rules it out — and nothing else. With a payer established the
+ * screen has nothing left to settle, so the dive is `FULL`. No bar moves:
+ * QUALIFIED still needs every qualification field.
+ */
+export function nextDiveStage(
+  opportunity: CashOpportunity,
+  fact: (field: string) => CashCardFact | null,
+): DiveStage {
+  return payerEstablished(opportunity, fact) ? 'FULL' : 'SCREEN';
+}
 
 /**
  * Why a particular opening is not being qualified right now.
@@ -170,20 +268,29 @@ export const CLASSIFICATION_ROUNDS = 1;
  * missing was capacity.
  */
 export type DiveRefusal =
-  /** Nothing refuses it; it starts as soon as a slot is free. */
+  /** Nothing refuses it; it starts as soon as there is room. */
   | { kind: 'ELIGIBLE' }
-  /** A worker is on it now. This one is holding a slot. */
+  /** A worker is on it now. This one is holding capacity. */
   | { kind: 'IN_FLIGHT'; state: OpportunityValidationState }
   /**
    * Parked at a decision only a person can make.
    *
-   * It holds no slot, and a second dive is refused on purpose: answering the
-   * mission's own card resumes the mission that is already there, so starting
-   * another would buy the same answer twice.
+   * It holds no capacity, and a second dive is refused on purpose: answering
+   * the mission's own card resumes the mission that is already there, so
+   * starting another would buy the same answer twice.
    */
   | { kind: 'AWAITING_PERSON' }
-  /** Both bounded dives are spent. A stalled round counts too, so this says nothing about the sources. */
-  | { kind: 'ROUNDS_SPENT'; rounds: number; cap: number }
+  /**
+   * This epoch's dives are spent. A stalled round counts too, so this says
+   * nothing about the sources. A new epoch — a distinct change — opens it again.
+   */
+  | { kind: 'EPOCH_SPENT'; rounds: number; cap: number; epochStartedAt: string | null }
+  /**
+   * This epoch's stage-one screen settled without the kill questions passing:
+   * no payer is established. The full dive is not spent on it; it is dormant
+   * until the reopen conditions recorded for it change.
+   */
+  | { kind: 'STAGE_ONE_FAILED'; open: string[]; epochStartedAt: string | null }
   /** It got there. A qualified piece has nothing left for a dive to ask. */
   | { kind: 'ALREADY_QUALIFIED'; tier: string }
   /**
@@ -208,16 +315,24 @@ export type DiveRefusal =
 export function describeDiveRefusal(refusal: DiveRefusal): string {
   switch (refusal.kind) {
     case 'ELIGIBLE':
-      return 'eligible — starts as soon as a slot is free';
+      return 'eligible — starts as soon as there is room';
     case 'IN_FLIGHT':
-      return `a worker is on it (${refusal.state}), holding a slot`;
+      return `a worker is on it (${refusal.state}), holding capacity`;
     case 'AWAITING_PERSON':
       return 'waiting on a person: its mission stopped at a decision only they can make';
-    case 'ROUNDS_SPENT':
+    case 'EPOCH_SPENT':
       // Not "the sources do not publish the rest": a round closed by the stall
-      // backstop researched nothing, and production held 32 such rounds. What
-      // each dive established is in its own reason, not in this count.
-      return `both dives are spent (${refusal.rounds}/${refusal.cap}); each dive's own reason says what it established`;
+      // backstop researched nothing. What each dive established is in its own
+      // reason, not in this count.
+      return (
+        `this epoch's dives are spent (${refusal.rounds}/${refusal.cap}); a distinct change ` +
+        'opens a new epoch, and each dive’s own reason says what it established'
+      );
+    case 'STAGE_ONE_FAILED':
+      return (
+        `its stage-one screen settled with ${refusal.open.join(' and ') || 'the kill questions'} ` +
+        'unanswered, so no full dive was spent on it; it reopens when that evidence changes'
+      );
     case 'ALREADY_QUALIFIED':
       return `already ${refusal.tier} — a dive has nothing left to ask`;
     case 'DISQUALIFIED':
@@ -248,26 +363,48 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
     const fact = await cardFactMap(opportunity.id);
     const disqualified = fact(DISQUALIFIED_FIELD);
     if (disqualified?.value) return { kind: 'DISQUALIFIED', reason: disqualified.value };
-    /*
-     * One bounded round more, to classify what an older dive left unclassified.
-     *
-     * A dive compiled before `ruled_out` existed could record a possible
-     * disqualifier without saying whether it rules the opening out, and that
-     * blocks qualification. Refusing another dive would make the block
-     * permanent, since another dive — which offers `ruled_out` and asks the
-     * open-or-closed question first — is exactly what settles it. So it gets
-     * exactly one, and the bound is the round count rather than a flag.
-     */
-    const classifying =
-      opportunity.validationRounds < MAX_VALIDATION_ROUNDS + CLASSIFICATION_ROUNDS &&
-      Boolean(fact(UNCLASSIFIED_DISQUALIFIER_FIELD)?.value) &&
-      !fact(RULED_OUT_CLEARED_FIELD)?.value;
-    if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS && !classifying) {
-      return {
-        kind: 'ROUNDS_SPENT',
-        rounds: opportunity.validationRounds,
-        cap: MAX_VALIDATION_ROUNDS,
-      };
+
+    const epoch = diveEpoch(opportunity);
+    if (!epoch.fresh) {
+      const inEpoch = startsInEpoch(await diveStarts(opportunity.id), epoch);
+      const current = opportunity.candidateId
+        ? [...inEpoch].reverse().find((one) => one.candidateId === opportunity.candidateId)
+        : undefined;
+      /*
+       * The screen this epoch asked, and it did not pass.
+       *
+       * Only a settled screen: one still running is IN_FLIGHT above, and a
+       * screen that found the payer has passed — the next dive is the full
+       * one. What it found stays on the card, and the opening is dormant until
+       * the reopen conditions recorded for it (`concludeScreens`) change.
+       */
+      if (current?.stage === 'SCREEN' && !payerEstablished(opportunity, fact)) {
+        return { kind: 'STAGE_ONE_FAILED', open: ['payer'], epochStartedAt: epoch.startedAt };
+      }
+      const screens = inEpoch.filter((one) => one.stage === 'SCREEN').length;
+      const cap = MAX_VALIDATION_ROUNDS + Math.min(screens, MAX_SCREENS_PER_EPOCH);
+      /*
+       * One bounded round more, to classify what an older dive left unclassified.
+       *
+       * A dive compiled before `ruled_out` existed could record a possible
+       * disqualifier without saying whether it rules the opening out, and that
+       * blocks qualification. Refusing another dive would make the block
+       * permanent, since another dive — which offers `ruled_out` and asks the
+       * open-or-closed question first — is exactly what settles it. So it gets
+       * exactly one, and the bound is the round count rather than a flag.
+       */
+      const classifying =
+        epoch.roundsUsed < cap + CLASSIFICATION_ROUNDS &&
+        Boolean(fact(UNCLASSIFIED_DISQUALIFIER_FIELD)?.value) &&
+        !fact(RULED_OUT_CLEARED_FIELD)?.value;
+      if (epoch.roundsUsed >= cap && !classifying) {
+        return {
+          kind: 'EPOCH_SPENT',
+          rounds: epoch.roundsUsed,
+          cap,
+          epochStartedAt: epoch.startedAt,
+        };
+      }
     }
     const tier = await qualifiedTier(opportunity);
     if (tier === 'QUALIFIED' || tier === 'READY_TO_TEST') {
@@ -298,6 +435,27 @@ async function qualifiedTier(opportunity: CashOpportunity): Promise<string> {
   return cashTier({ opportunity, card, readiness: evidenceCard(opportunity).readiness }).tier;
 }
 
+/* --------------------------------------------------------------------------
+ * Room: how many dives may start, derived (§3.4)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * How many more deep dives this project may start right now.
+ *
+ * The minimum of the grant's free `AT_ONCE` slots (one held back for discovery,
+ * never the last), the research surfaces that could run one now, and zero while
+ * the database is shedding — with one always allowed in flight while the grant
+ * has a free slot. See `researchRoom.ts`. It replaces the fixed two, and it is
+ * never above the person-set grant.
+ */
+export async function diveRoom(projectId: string, opportunities?: readonly CashOpportunity[]): Promise<ResearchRoom> {
+  const all = opportunities ?? (await listOpportunities({ projectId }));
+  const inFlight = all.filter((one) => HOLDS_A_SLOT.has(one.validationState ?? '')).length;
+  // A PENDING dive has not launched, so it has not reserved its grant slot yet.
+  const unlaunched = all.filter((one) => one.validationState === 'PENDING').length;
+  return researchRoom({ projectId, inFlight, unlaunched });
+}
+
 /**
  * Why the **sprint** cannot start another dive, whatever any opening says.
  *
@@ -310,29 +468,31 @@ export type SprintRefinementState =
   | { kind: 'NO_SPRINT' }
   | { kind: 'WOUND_DOWN'; reason: string }
   | { kind: 'NO_RESEARCH_AUTHORITY' }
-  | { kind: 'SLOTS_TAKEN'; inFlight: number; cap: number }
-  | { kind: 'READY'; free: number; cap: number };
+  | { kind: 'SLOTS_TAKEN'; inFlight: number; cap: number; limitedBy: RoomLimit; reason: string }
+  | { kind: 'READY'; free: number; cap: number; limitedBy: RoomLimit; reason: string };
 
 export async function sprintCanRefine(projectId: string): Promise<SprintRefinementState> {
   if (!(await getCashMode(projectId))) return { kind: 'NO_SPRINT' };
   const gate = await discoveryAllowed(projectId);
   if (!gate.allowed) return { kind: 'WOUND_DOWN', reason: gate.reason ?? 'the sprint is not active' };
   if (!(await discoveryAuthority(projectId))) return { kind: 'NO_RESEARCH_AUTHORITY' };
-  const all = await listOpportunities({ projectId });
-  const inFlight = all.filter((one) => HOLDS_A_SLOT.has(one.validationState ?? '')).length;
-  if (inFlight >= MAX_VALIDATIONS_IN_FLIGHT) {
-    return { kind: 'SLOTS_TAKEN', inFlight, cap: MAX_VALIDATIONS_IN_FLIGHT };
+  const room = await diveRoom(projectId);
+  if (room.room <= 0) {
+    return {
+      kind: 'SLOTS_TAKEN',
+      inFlight: room.inFlight,
+      cap: room.cap,
+      limitedBy: room.limitedBy,
+      reason: room.reason,
+    };
   }
-  return {
-    kind: 'READY',
-    free: MAX_VALIDATIONS_IN_FLIGHT - inFlight,
-    cap: MAX_VALIDATIONS_IN_FLIGHT,
-  };
+  return { kind: 'READY', free: room.room, cap: room.cap, limitedBy: room.limitedBy, reason: room.reason };
 }
 
 export interface StartedValidation {
   opportunityId: string;
   candidateId: string;
+  stage: DiveStage;
 }
 
 export interface ValidationProgress {
@@ -347,13 +507,30 @@ export interface ValidationProgress {
  * qualifying *this* thing rather than the category it belongs to. Nothing here
  * is invented: the signal is the claim's own sentence, which reached the
  * opportunity only by clearing the evidence gate.
+ *
+ * A `SCREEN` asks only the kill questions, in the order that makes each one
+ * cheap: still open, who pays, what would rule it out. Everything else is the
+ * full dive's, which is asked only once the screen passes.
  */
-export function validationQuestion(opportunity: CashOpportunity): string {
+export function validationQuestion(opportunity: CashOpportunity, stage: DiveStage = 'FULL'): string {
   const signal = (opportunity.buyingSignal ?? opportunity.title).replace(/\s+/g, ' ').trim();
   const observed = opportunity.signalObservedAt
     ? ` It was published or observed on ${opportunity.signalObservedAt}.`
     : '';
   const source = opportunity.source ? ` The source is ${opportunity.source}.` : '';
+  if (stage === 'SCREEN') {
+    return (
+      `Before anything else is asked about this specific opening — "${signal}" — settle the ` +
+      `three questions that can each end it.${source}${observed} ` +
+      'First establish whether it is still open to a supplier like us: whether its closing ' +
+      'date, expiry or listing status has passed, or a published rule excludes us. If it has ' +
+      'closed or excludes us, submit that one fact in the ruled_out lane with its source and ' +
+      'stop. Otherwise establish who actually pays for it, named in a published source, and ' +
+      'how a supplier reaches them; and whether anything published would disqualify it ' +
+      'outright. Nothing else about it is asked at this stage. Where no published source ' +
+      'names a payer, say so plainly with where you looked rather than naming a kind of buyer.'
+    );
+  }
   return (
     `What would somebody need to know before acting on this specific opening: "${signal}".` +
     `${source}${observed} ` +
@@ -387,19 +564,155 @@ export function validationQuestion(opportunity: CashOpportunity): string {
   );
 }
 
+/* --------------------------------------------------------------------------
+ * Decision-value order (§3.3(c)) — lexicographic, never weighted
+ * ------------------------------------------------------------------------ */
+
 /**
- * Start the deep dive on openings that have not had one.
+ * The card fields research should pursue on this opening **now**, kill
+ * questions first.
  *
- * Bounded by `MAX_VALIDATIONS_IN_FLIGHT`, which is provider capacity rather
- * than an allowance — the same distinction §24 drew when it removed the
- * lifetime quotas and kept concurrency.
+ * The `feeds()` principle from `commission.ts`, applied to card fields: a blank
+ * that cannot move the tier until an earlier one clears is not worth a research
+ * need yet. Pure, and it reads no prose:
+ *
+ *   * with the payer open, only the stage-one kill fields — nothing past them
+ *     can move the opening while nobody is known to pay;
+ *   * a SIGNAL needs a capture thesis, which Brain composes from a payer, a way
+ *     to reach them and published buying evidence — so those inputs, where open;
+ *   * otherwise the open requirements on the current rung, kill fields first.
+ *
+ * `answered` reads the engine card when the caller has one; without it the
+ * tier's own open set is used, and for a SIGNAL the opportunity's columns.
+ * The caller filters by owner: this says what is worth asking, not who asks.
+ */
+export function fieldsWorthResearching(
+  opportunity: CashOpportunity,
+  tier: TierReading,
+  answered?: (key: QualificationKey) => boolean,
+): QualificationKey[] {
+  const open = new Set(tier.toAdvance.map((one) => one.key));
+  const column: Partial<Record<QualificationKey, unknown>> = {
+    payer: opportunity.payer,
+    access: opportunity.reachableChannel,
+    buyingEvidence: opportunity.buyingSignal,
+  };
+  const isAnswered =
+    answered ??
+    ((key: QualificationKey): boolean =>
+      tier.tier === 'SIGNAL'
+        ? Boolean(String(column[key] ?? '').trim())
+        : !open.has(key));
+  if (tier.tier === 'QUALIFIED' || tier.tier === 'READY_TO_TEST') {
+    return tier.toAdvance.map((one) => one.key);
+  }
+  const killOpen = STAGE_ONE_FIELDS.filter((key) => !isAnswered(key));
+  if (killOpen.includes('payer')) return killOpen;
+  if (tier.tier === 'SIGNAL') {
+    return [...killOpen, ...CAPTURE_INPUTS.filter((key) => !isAnswered(key) && !killOpen.includes(key))];
+  }
+  const rest = tier.toAdvance.map((one) => one.key).filter((key) => !killOpen.includes(key));
+  return [...killOpen.filter((key) => open.has(key) || !isAnswered(key)), ...rest];
+}
+
+/** What the order compares, read from rows. Every field is a recorded fact. */
+export interface DiveValueFacts {
+  id: string;
+  createdAt: string;
+  /** A distinct change arrived after its last dive started. */
+  reconsidered: boolean;
+  /** One answer could move it a tier, or only kill questions stand in its way. */
+  crossesTier: boolean;
+  /** The stage its next dive would ask. */
+  stage: DiveStage;
+  /** Its recorded peak funding against deployable cash; unknown is its own value. */
+  capital: 'FITS' | 'EXCEEDS' | 'UNKNOWN';
+  /** Days to first cash a source on its card states, or null. */
+  timeToCashDays: number | null;
+  /** How much of its card is already answered — the archive partly answers it. */
+  answered: number;
+}
+
+const CAPITAL_ORDER: Readonly<Record<DiveValueFacts['capital'], number>> = Object.freeze({
+  FITS: 0,
+  EXCEEDS: 1,
+  // Unknowns last (invariant 39): a blank is never the reason something rises.
+  UNKNOWN: 2,
+});
+
+/**
+ * Which of two openings to dive first. A comparator over recorded facts, in a
+ * fixed order — the first criterion two openings differ on decides, and nothing
+ * below it is consulted. No number is computed and nothing is weighted:
+ *
+ *   1. reconsidered since its last dive;
+ *   2. an answer could cross a tier boundary;
+ *   3. a kill question (a screen) before refinement;
+ *   4. capital known to fit deployable cash, then known time to cash, shortest
+ *      first — unknowns last;
+ *   5. the card already partly answered;
+ *   6. arrival order.
+ */
+export function compareDiveValue(a: DiveValueFacts, b: DiveValueFacts): number {
+  if (a.reconsidered !== b.reconsidered) return a.reconsidered ? -1 : 1;
+  if (a.crossesTier !== b.crossesTier) return a.crossesTier ? -1 : 1;
+  if (a.stage !== b.stage) return a.stage === 'SCREEN' ? -1 : 1;
+  if (a.capital !== b.capital) return CAPITAL_ORDER[a.capital] - CAPITAL_ORDER[b.capital];
+  if (a.timeToCashDays !== b.timeToCashDays) {
+    if (a.timeToCashDays === null) return 1;
+    if (b.timeToCashDays === null) return -1;
+    return a.timeToCashDays - b.timeToCashDays;
+  }
+  if (a.answered !== b.answered) return b.answered - a.answered;
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/** The facts the order compares, for one opening. Pure. */
+export function diveValueFacts(input: {
+  opportunity: CashOpportunity;
+  tier: TierReading;
+  fact: (field: string) => CashCardFact | null;
+  deployableCents: number | null;
+  readDays: (text: string) => number | null;
+}): DiveValueFacts {
+  const { opportunity, tier, fact } = input;
+  const epoch = diveEpoch(opportunity);
+  const worth = fieldsWorthResearching(opportunity, tier);
+  const funding = opportunity.peakFundingCents;
+  const capital: DiveValueFacts['capital'] =
+    funding === null || funding === undefined || input.deployableCents === null
+      ? 'UNKNOWN'
+      : funding <= input.deployableCents
+        ? 'FITS'
+        : 'EXCEEDS';
+  const time = fact('timeToFirstCash');
+  return {
+    id: opportunity.id,
+    createdAt: opportunity.createdAt,
+    reconsidered: epoch.fresh && opportunity.validationStartedAt !== null,
+    crossesTier:
+      worth.length === 1 || (worth.length > 0 && worth.every((key) => STAGE_ONE_FIELDS.includes(key))),
+    stage: nextDiveStage(opportunity, fact),
+    capital,
+    timeToCashDays: time?.value ? input.readDays(time.value) : null,
+    answered: answeredCount(opportunity),
+  };
+}
+
+/**
+ * Start the deep dive on openings that may have one.
+ *
+ * Bounded by `diveRoom`, which is the person-set grant, the surfaces that could
+ * run it and the database's pressure — never a fixed number, and never above
+ * the grant. An optional `limit` lowers it further and never raises it.
  *
  * Idempotent by the opportunity's own row: `validation_state` moves to PENDING
- * in the same pass that writes the candidate, and a piece that already has one
- * is skipped. A crash between the two leaves a candidate with no state, which
- * the next tick sees as "not started" and replaces — losing one captured idea,
- * which is recoverable, rather than double-spending a research mission, which
- * is not.
+ * in the same transaction that writes the dive's started event, and a piece
+ * that already has one is skipped. A crash between creating the candidate and
+ * that transaction leaves a candidate with no owner, which nothing compiles —
+ * losing one captured idea, which is recoverable, rather than double-spending a
+ * research mission, which is not.
  */
 export async function startValidations(input: {
   projectId: string;
@@ -430,102 +743,132 @@ export async function startValidations(input: {
   if (!(await discoveryAuthority(input.projectId))) return [];
 
   const all = await listOpportunities({ projectId: input.projectId });
-  const inFlight = all.filter((one) => HOLDS_A_SLOT.has(one.validationState ?? '')).length;
-  let room = Math.max(0, MAX_VALIDATIONS_IN_FLIGHT - inFlight);
-  const limit = Math.max(1, input.limit ?? 2);
+  const derived = await diveRoom(input.projectId, all);
+  let room = derived.room;
+  if (input.limit !== undefined) room = Math.min(room, Math.max(0, Math.trunc(input.limit)));
+  if (room <= 0) return [];
 
   /*
-   * A piece nobody has looked at yet, before a second look at one.
-   *
-   * `all` is arrival order, and a re-dive candidate sitting earlier in it
-   * would take the slot from an opening that has never been qualified at all.
-   * A second dive is worth having and is worth less than a first, so the
-   * ordering is explicit rather than an accident of `created_at`. Within each
-   * group arrival order is kept, so which of two never-dived pieces goes first
-   * is still a property of when they were found.
+   * The order is the decision-value order, and it is a preference rather than
+   * a ceiling: nothing is refused because of it, and a piece at the back still
+   * starts the moment there is room. Facts are read once per pass — the card
+   * facts for the whole project in one query.
    */
-  /*
-   * And inside each group, the ones closest to being a decision first.
-   *
-   * Inside, not across: a re-dive has more answers on it by definition, so one
-   * sort over the whole list would put every second dive ahead of every first
-   * and undo the rule above. `Array.prototype.sort` is stable, so arrival
-   * order still decides between two pieces that have answered the same amount.
-   *
-   * The ordering is a count of rows rather than a judgement: an opening whose
-   * payer and reach are already established needs one more question before a
-   * person can act on it, and a raw market observation needs every question it
-   * has. Spending both slots on the second while the first waits is exactly
-   * what "actionable work sitting behind background work" means here.
-   *
-   * It is a preference and never a ceiling. Nothing is refused because of it,
-   * and a piece at the back still takes a slot the moment one is free.
-   */
-  const ordered = [
-    ...all.filter((one) => one.validationState === null).sort(closestFirst),
-    ...all.filter((one) => one.validationState !== null).sort(closestFirst),
-  ];
+  const factsById = new Map<string, CashCardFact[]>();
+  for (const one of await cardFactsForProject(input.projectId)) {
+    factsById.set(one.opportunityId, [...(factsById.get(one.opportunityId) ?? []), one]);
+  }
+  const position = await cashPosition({ projectId: input.projectId, currency: mode.currency }).catch(
+    () => null,
+  );
+  const { readDays } = await import('./monetization/commissionPass.ts');
+  const lookup = (id: string) => {
+    const facts = factsById.get(id) ?? [];
+    return (field: string): CashCardFact | null => facts.find((one) => one.field === field) ?? null;
+  };
+  const valued = all.map((opportunity) => {
+    const facts = factsById.get(opportunity.id) ?? [];
+    const tier = cashTier({
+      opportunity,
+      card: cashEngineCard({ opportunity, facts }),
+      readiness: evidenceCard(opportunity).readiness,
+    });
+    return {
+      opportunity,
+      value: diveValueFacts({
+        opportunity,
+        tier,
+        fact: lookup(opportunity.id),
+        deployableCents: position?.deployableCents ?? null,
+        readDays,
+      }),
+    };
+  });
+  valued.sort((a, b) => compareDiveValue(a.value, b.value));
 
   const out: StartedValidation[] = [];
-  for (const opportunity of ordered) {
-    if (room <= 0 || out.length >= limit) break;
+  for (const { opportunity, value } of valued) {
+    if (out.length >= room) break;
     /*
      * One condition, and `refinement-report` reads the same one.
      *
-     * It used to be three `continue`s written out here: a dive already over,
-     * a state where the commercial questions are closed, and nothing published
-     * to ask about. They are all still applied, in the same order, by
-     * `whyNotDiving` — which exists because a report that re-derived them
-     * would be the *two readers of one fact* defect this repository records
-     * more than any other, and it would be the copy nobody exercises that
-     * drifts. What that report prints is therefore the refusal that actually
-     * happened rather than a second opinion about it.
+     * Every refusal — a dive already over, a state where the commercial
+     * questions are closed, nothing published to ask about, an epoch spent, a
+     * screen failed — is applied by `whyNotDiving`, which exists because a
+     * report that re-derived them would be the *two readers of one fact*
+     * defect this repository records more than any other.
      */
     if ((await whyNotDiving(opportunity)).kind !== 'ELIGIBLE') continue;
 
+    const stage = value.stage;
+    const epoch = diveEpoch(opportunity);
     const candidate = await createCandidate({
       projectId: input.projectId,
       visibility: 'SHARED',
-      title: `Qualify: ${opportunity.title}`,
-      statement: validationQuestion(opportunity),
+      title: `${stage === 'SCREEN' ? 'Screen' : 'Qualify'}: ${opportunity.title}`,
+      statement: validationQuestion(opportunity, stage),
     });
-    const round = opportunity.validationRounds + 1;
-    const moved = await updateOpportunity(opportunity.id, {
-      // `candidate_id` is "the idea this opportunity is", which is the column
-      // the compiler reads to know it is compiling a deep dive rather than a
-      // bucket. `discovered_by_candidate_id` stays as it was.
-      candidate_id: candidate.id,
-      validation_state: 'PENDING',
-      validation_started_at: new Date().toISOString(),
-      validation_rounds: round,
+    /*
+     * The first dive after a distinct change is round one of its epoch, so the
+     * column counts this epoch's dives and nothing older. A screen counts as a
+     * round too; the epoch's cap allows for the one screen it may have.
+     */
+    const round = epoch.fresh ? 1 : opportunity.validationRounds + 1;
+    const startedAt = new Date().toISOString();
+    let moved = false;
+    await getDb().transaction(async () => {
+      const written = await updateOpportunity(opportunity.id, {
+        // `candidate_id` is "the idea this opportunity is", which is the column
+        // the compiler reads to know it is compiling a deep dive rather than a
+        // bucket. `discovered_by_candidate_id` stays as it was.
+        candidate_id: candidate.id,
+        validation_state: 'PENDING',
+        validation_started_at: startedAt,
+        validation_rounds: round,
+        /*
+         * A later round clears the settled stamp and leaves everything else.
+         *
+         * An earlier round's orchestration id is deliberately *not* cleared: it
+         * is the provenance of every card fact that round produced, and
+         * `applyValidationAnswers` reads every round's packet. Nothing recorded
+         * is destroyed — `mayReplace` still decides authority, so a fact from an
+         * earlier dive is only ever replaced by one of at least equal standing.
+         */
+        validation_settled_at: null,
+      });
+      if (!written) return;
+      moved = true;
       /*
-       * A second round clears the settled stamp and leaves everything else.
-       *
-       * The first round's orchestration id is deliberately *not* cleared: it
-       * is the provenance of every card fact that round produced, and
-       * `applyValidationAnswers` reads the current one. Nothing recorded is
-       * destroyed — `mayReplace` still decides authority, so a fact from the
-       * first dive is only ever replaced by one of at least equal standing.
+       * In the same transaction as the candidate's name on the row: the stage
+       * is what the compiler reads to choose the screen profile, so there is no
+       * moment at which the opening names an idea whose stage nobody recorded.
        */
-      validation_settled_at: null,
+      await recordCashEvent({
+        projectId: input.projectId,
+        opportunityId: opportunity.id,
+        kind: DIVE_STARTED_EVENT,
+        actorRef: 'BRAIN',
+        summary:
+          stage === 'SCREEN'
+            ? 'Brain is screening this opening from published sources: whether it is still open, ' +
+              'who actually pays, and whether anything rules it out — the questions that can ' +
+              'each end it. Nothing is being contacted or spent.'
+            : round > 1
+              ? 'Brain is qualifying this opening again, for the questions the last pass did not ' +
+                'settle. Nothing is being contacted or spent.'
+              : 'Brain is qualifying this opening from published sources: who pays, what it pays, ' +
+                'what it costs and what would rule it out. Nothing is being contacted or spent.',
+        detail: {
+          candidateId: candidate.id,
+          signal: opportunity.buyingSignal,
+          round,
+          stage,
+          epochStartedAt: epoch.startedAt,
+        },
+      });
     });
     if (!moved) continue;
-
-    await recordCashEvent({
-      projectId: input.projectId,
-      opportunityId: opportunity.id,
-      kind: 'CASH_VALIDATION_STARTED',
-      actorRef: 'BRAIN',
-      summary:
-        round > 1
-          ? 'Brain is qualifying this opening a second time, for the questions the first ' +
-            'pass was never asked. Nothing is being contacted or spent.'
-          : 'Brain is qualifying this opening from published sources: who pays, what it pays, ' +
-            'what it costs and what would rule it out. Nothing is being contacted or spent.',
-      detail: { candidateId: candidate.id, signal: opportunity.buyingSignal, round },
-    });
-    out.push({ opportunityId: opportunity.id, candidateId: candidate.id });
-    room -= 1;
+    out.push({ opportunityId: opportunity.id, candidateId: candidate.id, stage });
   }
   return out;
 }
@@ -536,12 +879,8 @@ export async function startValidations(input: {
  * The columns `answers.ts` maps card fields onto, plus the two evidence
  * columns a signal is born with. Nothing here reads prose and nothing here
  * forms a view about how good any of it is; it is a count of rows, used only
- * to decide which of two pieces is asked about first.
+ * as one criterion of the decision-value order.
  */
-function closestFirst(a: CashOpportunity, b: CashOpportunity): number {
-  return answeredCount(b) - answeredCount(a);
-}
-
 function answeredCount(one: CashOpportunity): number {
   const values = [
     one.payer,
@@ -619,7 +958,7 @@ export async function settleValidations(projectId: string): Promise<
        * The stall backstop below cannot see this: it is guarded on
        * `mission.state === 'RUNNING'`, and here there is no mission at all. So
        * a dive whose candidate never got judged held a slot with **no bound on
-       * it whatever** — `PENDING` counts against `MAX_VALIDATIONS_IN_FLIGHT`,
+       * it whatever** — `PENDING` counts against the dive room,
        * and nothing in this function could ever take it back.
        *
        * Under ordinary operation the Russell tick judges a candidate within
@@ -691,7 +1030,7 @@ export async function settleValidations(projectId: string): Promise<
      * This branch did not exist, and its absence was a deadlock rather than an
      * untidy state. `NEEDS_HUMAN` is none of `DONE`, `FAILED` or `CANCELLED`,
      * so the opening stayed `RUNNING` for ever while nothing ran — and because
-     * `RUNNING` counts against `MAX_VALIDATIONS_IN_FLIGHT`, production had
+     * `RUNNING` counts against the dive room (then a fixed two), production had
      * **both** of its two slots held by parked missions. Thirty-eight openings
      * could never be qualified, and no deep dive could ever start again.
      *
@@ -877,8 +1216,7 @@ export async function resumeUnlaunchedDives(projectId: string): Promise<string[]
   if (!(await discoveryAuthority(projectId))) return [];
 
   const all = await listOpportunities({ projectId });
-  const inFlight = all.filter((one) => HOLDS_A_SLOT.has(one.validationState ?? '')).length;
-  let room = Math.max(0, MAX_VALIDATIONS_IN_FLIGHT - inFlight);
+  let room = (await diveRoom(projectId, all)).room;
   const out: string[] = [];
 
   for (const opportunity of all) {
@@ -919,12 +1257,29 @@ export async function resumeUnlaunchedDives(projectId: string): Promise<string[]
       ),
     ];
 
+    /*
+     * Rounds are counted per epoch, so only this epoch's launched dives count
+     * against what is given back. Every epoch's unlaunched ideas are still
+     * parked, because any of them would otherwise launch a mission no opening
+     * owns.
+     */
+    const epoch = diveEpoch(opportunity);
+    const inEpoch = new Set(
+      events
+        .filter(
+          (event) =>
+            event.kind === DIVE_STARTED_EVENT &&
+            (epoch.startedAt === null || event.createdAt >= epoch.startedAt),
+        )
+        .map((event) => candidateOf(event.detail))
+        .filter((id): id is string => id !== null),
+    );
     const parked: string[] = [];
     let launched = 0;
     for (const candidateId of started) {
       if (candidateId === current.id) continue;
       if (await latestMissionForCandidate(candidateId)) {
-        launched += 1;
+        if (inEpoch.has(candidateId)) launched += 1;
         continue;
       }
       const earlier = await getCandidate(candidateId);
@@ -935,8 +1290,10 @@ export async function resumeUnlaunchedDives(projectId: string): Promise<string[]
     }
     // No readable history: keep what is there. The resume still happens, so
     // the dive is not lost, but nothing is given back on a guess.
-    const toRounds =
-      started.length === 0
+    // A change since the dive started makes the resumed dive this epoch's first.
+    const toRounds = epoch.fresh
+      ? 1
+      : started.length === 0
         ? opportunity.validationRounds
         : Math.min(opportunity.validationRounds, launched + 1);
 
@@ -1008,8 +1365,80 @@ export async function runValidations(projectId: string): Promise<ValidationProgr
   await proposeEngineTerms(projectId);
   // A question already asked is resumed before a new one takes a slot.
   await resumeUnlaunchedDives(projectId);
+  // A screen that settled without a payer is dormant with its reopen
+  // conditions, rather than spending a full dive (§3.3(a)).
+  await concludeScreens(projectId);
   const started = await startValidations({ projectId });
   return { started, settled };
+}
+
+/**
+ * The reopen conditions a failed stage-one screen leaves behind.
+ *
+ * A screen that settled with no payer established means nobody is known to pay
+ * for the opening, so the full sixteen-lane dive is not spent on it
+ * (`whyNotDiving` answers `STAGE_ONE_FAILED`). That is a dormancy, never a
+ * verdict: what would change it is evidence about the payer — in the own or
+ * shared citable pool (`EVIDENCE:payer`), or on this opening's own card
+ * (`FIELD:payer`) — and both are recorded as typed reopen conditions through
+ * the reconsideration ledger, so the change that meets one opens a new epoch
+ * and the opening is screened again. No lifetime cap: a new epoch needs a
+ * distinct change, which the ledger's key enforces.
+ *
+ * Once per screen: a condition already recorded since this dive started, or
+ * still untriggered from an earlier one, is not recorded again. Derived from
+ * rows on the tick, so it reaches a screen that settled while the tick was down.
+ */
+export async function concludeScreens(
+  projectId: string,
+): Promise<{ opportunityId: string; reopenWhen: string[] }[]> {
+  if (!(await getCashMode(projectId))) return [];
+  const out: { opportunityId: string; reopenWhen: string[] }[] = [];
+  const keys = [formatBlockerKey('EVIDENCE', 'payer'), formatBlockerKey('FIELD', 'payer')];
+  for (const opportunity of await listOpportunities({ projectId })) {
+    if (opportunity.validationState !== 'COMPLETE' && opportunity.validationState !== 'BLOCKED') continue;
+    const refusal = await whyNotDiving(opportunity);
+    if (refusal.kind !== 'STAGE_ONE_FAILED') continue;
+    const since = opportunity.validationStartedAt ?? '';
+    const held = await reopenConditionsFor(opportunity.id);
+    const missing = keys.filter(
+      (key) =>
+        !held.some(
+          (condition) =>
+            condition.blockerKey === key && (condition.triggeredAt === null || condition.createdAt >= since),
+        ),
+    );
+    if (missing.length === 0) continue;
+    for (const key of missing) {
+      await recordReopenCondition({
+        projectId,
+        opportunityId: opportunity.id,
+        blockerKey: key,
+        // The epoch's dives are spent: a failed screen ends the epoch.
+        recordedFrom: 'ROUNDS_SPENT',
+        observedAtRecord: 'NO_PAYER_ESTABLISHED',
+        actorRef: 'BRAIN',
+      });
+    }
+    await recordCashEvent({
+      projectId,
+      opportunityId: opportunity.id,
+      kind: 'CASH_VALIDATION_BLOCKED',
+      actorRef: 'BRAIN',
+      summary:
+        'The first-stage screen found no published source naming who would pay for this ' +
+        'opening, so Brain has not spent a full deep dive on it. It is dormant, and it is ' +
+        'screened again when evidence about its payer changes.',
+      detail: {
+        stage: 'SCREEN',
+        outcome: 'STAGE_ONE_FAILED',
+        candidateId: opportunity.candidateId,
+        reopenWhen: keys,
+      },
+    });
+    out.push({ opportunityId: opportunity.id, reopenWhen: keys });
+  }
+  return out;
 }
 
 export { getOpportunity };
@@ -1329,14 +1758,21 @@ async function finishedDivePackets(opportunity: CashOpportunity): Promise<string
   const add = (id: string | null | undefined): void => {
     if (id && !packets.includes(id)) packets.push(id);
   };
-  // By the round each event recorded, then by time: two rounds started in one
-  // millisecond would otherwise sort by their generated ids, and which claim
-  // fills a field must not depend on that.
+  // By the epoch each event recorded, then its round within that epoch: two
+  // rounds started in one millisecond would otherwise sort by their generated
+  // ids, and which claim fills a field must not depend on that. Rounds restart
+  // at one in each epoch, so the epoch comes first; an event from before epochs
+  // were recorded belongs to the first one.
+  const epochOf = (detail: Record<string, unknown>): string =>
+    typeof detail['epochStartedAt'] === 'string' ? detail['epochStartedAt'] : '';
   const roundOf = (detail: Record<string, unknown>): number =>
     typeof detail['round'] === 'number' ? detail['round'] : Number.MAX_SAFE_INTEGER;
-  const started = (await cashEventsOfKind(opportunity.id, 'CASH_VALIDATION_STARTED')).sort(
-    (a, b) => roundOf(a.detail) - roundOf(b.detail),
-  );
+  const started = (await cashEventsOfKind(opportunity.id, DIVE_STARTED_EVENT)).sort((a, b) => {
+    const ea = epochOf(a.detail);
+    const eb = epochOf(b.detail);
+    if (ea !== eb) return ea < eb ? -1 : 1;
+    return roundOf(a.detail) - roundOf(b.detail);
+  });
   for (const event of started) {
     const candidateId = event.detail['candidateId'];
     if (typeof candidateId !== 'string') continue;

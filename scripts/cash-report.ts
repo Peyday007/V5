@@ -67,6 +67,12 @@ import { cashPosition } from '../server/services/cash/money.ts';
 import { totalsByKind } from '../server/repos/cashLedger.ts';
 import { CASH_MONEY_KINDS } from '../server/domain/types.ts';
 import { gateFailureDistribution } from '../server/repos/research.ts';
+import { cashFunnel, formatFunnel } from '../server/services/cash/funnel.ts';
+import { projectStandings } from '../server/services/cash/standing.ts';
+import {
+  formatUsefulness,
+  researchUsefulness,
+} from '../server/services/research/intelligence/retrospective.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -439,6 +445,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   await researchYield(projectId);
   await gateFailures(projectId);
   await researchAccounting(projectId);
+  await funnelAndUsefulness(projectId);
 
   // --- What became a piece of work ----------------------------------------
   const opportunities = await listOpportunities({ projectId });
@@ -959,6 +966,14 @@ async function gateFailures(projectId: string): Promise<void> {
         `    ${String(n).padStart(4)}  ${cause}${example ? `  e.g. ${example.fragmentId} (${example.orchestrationId})` : ''}`,
       );
     }
+    // The column is read first; a row from before it existed is classified as before.
+    console.log(
+      `  cause read from block_cause=${d.causeSource.stored} classified from a legacy row=${d.causeSource.legacy}`,
+    );
+    const hosts = Object.entries(d.blockedByHost).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    if (hosts.length > 0) {
+      console.log(`  blocked by one dominant host ${hosts.map(([h, n]) => `${h}=${n}`).join(' ')}`);
+    }
     console.log(
       `  claims in those fragments submitted=${d.claims.submitted} accepted=${d.claims.accepted}` +
         ` accepted-inside-blocked=${d.claims.acceptedInBlocked} unread=${d.claims.unread}`,
@@ -1172,6 +1187,37 @@ async function researchYield(projectId: string): Promise<void> {
     );
   } catch (error) {
     console.log(`  (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
+  }
+}
+
+/**
+ * The FUNNEL and RESEARCH USEFULNESS blocks (OPPORTUNITY-INTELLIGENCE §3.6, §5 H).
+ *
+ * Both are composed by services and only printed here — `cashFunnel` /
+ * `formatFunnel` and `researchUsefulness` / `formatUsefulness` — so the report,
+ * the tests and any later surface read one derivation. An unknown prints the
+ * word `unknown`, never 0. Separate from the GATE OUTCOMES block, which is
+ * Workstream D's. Each block fails on its own.
+ */
+async function funnelAndUsefulness(projectId: string): Promise<void> {
+  try {
+    const standings = new Map(
+      [...(await projectStandings(projectId)).entries()].map(([id, one]) => [id, one.standing]),
+    );
+    console.log('');
+    for (const line of formatFunnel(await cashFunnel({ projectId, standings }))) console.log(line);
+  } catch (error) {
+    console.log('');
+    console.log(`FUNNEL (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
+  }
+  try {
+    console.log('');
+    for (const line of formatUsefulness(await researchUsefulness({ projectId }))) console.log(line);
+  } catch (error) {
+    console.log('');
+    console.log(
+      `RESEARCH USEFULNESS (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`,
+    );
   }
 }
 

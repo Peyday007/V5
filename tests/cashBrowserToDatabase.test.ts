@@ -40,7 +40,7 @@ import { freshProject } from './helpers.ts';
 import { EXECUTION_THESIS } from './helpers/cashTier.ts';
 import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
-import { capture, fillCard } from '../server/services/cash/opportunities.ts';
+import { archiveOpportunity, capture, fillCard } from '../server/services/cash/opportunities.ts';
 import { raiseNeed } from '../server/services/cash/needs.ts';
 import { getNeed, getOpportunity, listNeeds } from '../server/repos/cashPortfolio.ts';
 import { cardFact } from '../server/repos/cashCardFacts.ts';
@@ -108,6 +108,8 @@ const { CashSection } = await import('../client/src/russell/Cash.tsx');
 
 let projectId = '';
 let userId = '';
+/** The role the request principal holds on the project. ADMIN unless a test lowers it. */
+let role: 'ADMIN' | 'VIEWER' = 'ADMIN';
 let server: Server | null = null;
 /** The real one, taken before the stub replaces it. */
 const realFetch = globalThis.fetch;
@@ -128,7 +130,7 @@ function principal(): Principal {
         projectId,
         principalType: 'HUMAN',
         principalId: userId,
-        role: 'ADMIN',
+        role,
         scopes: ['project:read'],
         grantedByType: 'SYSTEM',
         grantedById: 'test',
@@ -141,6 +143,7 @@ function principal(): Principal {
 }
 
 beforeEach(async () => {
+  role = 'ADMIN';
   const fixture = await freshProject();
   projectId = fixture.project.id;
   const user = await createUser({
@@ -534,5 +537,119 @@ describe('the check is reachable rather than registered', () => {
     walk(path.join(ROOT, 'server'));
     walk(path.join(ROOT, 'tests'));
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Standing, from a real route over a real database (workstream E).
+ *
+ * The sentence is `standingFor`'s, composed on the server; the reconsider
+ * control's state half is `reconsiderEligibility` and its permission half is
+ * `cashCapabilities.mayReconsider` — so this is the seam a scripted-fetch
+ * suite cannot see: a control gated on a field the server does not send would
+ * render in one and not the other.
+ */
+describe('standing, from the route to the screen and back', () => {
+  it('shows the server’s standing sentence and offers reconsider only on what may be reconsidered', async () => {
+    const live = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: 'A live opening still being looked at',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!live.ok) throw new Error(live.reason);
+    const stopped = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: 'An opening nobody could reach',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!stopped.ok) throw new Error(stopped.reason);
+    const archived = await archiveOpportunity({
+      opportunityId: stopped.value.id,
+      actorRef: userId,
+      reason: 'There was no way to message them.',
+      reopenWhen: ['CAPABILITY:SEND_A_MESSAGE'],
+    });
+    expect(archived.ok).toBe(true);
+
+    await mount();
+    const dormant = document.querySelector('.rs-cash-dormant') as HTMLElement;
+    expect(dormant).toBeTruthy();
+    const piece = [...dormant.querySelectorAll('.rs-dormant-piece')].find((one) =>
+      one.textContent?.includes('An opening nobody could reach'),
+    ) as HTMLElement;
+    expect(piece).toBeTruthy();
+    // The sentence the server composed, verbatim.
+    expect(piece.textContent).toContain('There was no way to message them.');
+    expect(piece.textContent).toContain(
+      'It reopens for consideration when CAPABILITY:SEND_A_MESSAGE changes.',
+    );
+    // The live piece is not in the stopped list, so it carries no reconsider control.
+    expect(dormant.textContent).not.toContain('A live opening still being looked at');
+    expect(
+      (document.querySelector('.rs-cash-actionable') as HTMLElement).textContent,
+    ).toContain('A live opening still being looked at');
+
+    const button = [...piece.querySelectorAll('button')].find(
+      (one) => one.textContent === 'Reconsider',
+    ) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    const field = piece.querySelector('textarea') as HTMLTextAreaElement;
+    await act(async () => {
+      fireEvent.change(field, { target: { value: 'A messaging integration was connected.' } });
+    });
+    const go = [...piece.querySelectorAll('button')].find(
+      (one) => one.textContent === 'Reconsider',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      fireEvent.click(go);
+    });
+    await waitFor(async () =>
+      expect((await getOpportunity(stopped.value.id))?.state).toBe('DISCOVERED'),
+    );
+    // Back in evaluation, and the page says what was reconsidered.
+    await waitFor(() =>
+      expect(
+        (document.querySelector('.rs-cash-reconsidered') as HTMLElement).textContent,
+      ).toContain('An opening nobody could reach'),
+    );
+  });
+
+  it('disables reconsider for a reader the server says may not write, with its reason', async () => {
+    const stopped = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: 'An opening a reader is looking at',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!stopped.ok) throw new Error(stopped.reason);
+    expect(
+      (
+        await archiveOpportunity({
+          opportunityId: stopped.value.id,
+          actorRef: userId,
+          reason: 'Stopped for now.',
+          reopenWhen: ['CAPABILITY:SEND_A_MESSAGE'],
+        })
+      ).ok,
+    ).toBe(true);
+    role = 'VIEWER';
+    await mount();
+    const piece = document.querySelector('.rs-dormant-piece') as HTMLElement;
+    const button = [...piece.querySelectorAll('button')].find(
+      (one) => one.textContent === 'Reconsider',
+    ) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(piece.textContent).toContain('Reconsidering a stopped opening is a write.');
   });
 });

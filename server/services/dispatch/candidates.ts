@@ -24,6 +24,7 @@ import { getWorker, getWorkerRouting, listMembershipsForPrincipal } from '../../
 import { derivedFamiliesFrom } from '../bins/routing.ts';
 import { latestAllowanceReports } from '../../repos/allowance.ts';
 import { connectorHealthByRoutine } from '../fleet/connectorHealth.ts';
+import { sameProviderSession } from '../../domain/sessionRef.ts';
 
 /**
  * How long a sent activation counts as in flight.
@@ -39,45 +40,301 @@ import { connectorHealthByRoutine } from '../fleet/connectorHealth.ts';
 export const IN_FLIGHT_WINDOW_MS = 30 * 60_000;
 
 /**
- * Sessions one concurrency slot may start in an hour.
+ * Unproductive session starts per account: the adaptive control that replaced
+ * the fixed hourly activation budget.
+ *
+ * ---------------------------------------------------------------------------
+ * Why a fixed budget was the wrong shape
+ * ---------------------------------------------------------------------------
  *
  * An account's target bounds how many of its sessions run *at once*; nothing
- * bounded how many were *started*. A session that is handed a bin and hands it
- * back frees its slot within a minute, so a target of four still let one
- * account be fired 48 times in an hour (Airyn 2-A, 2026-10-12 05h). Six starts
- * per slot per hour is one every ten minutes per slot — more than any useful
- * session needs, since a session that is doing work holds its slot for longer
- * than that — and an account with no target is held to `DEFAULT_ACCOUNT_
- * ACTIVATIONS_PER_HOUR`, because "no target" was never a decision to allow
- * unlimited starts. It is a ceiling on spending, so it binds through the same
- * `ACCOUNT_TARGETS_REACHED` wait a target does: the bin waits, nothing is lost.
+ * bounded how many were *started*, so a session handed a bin it could not
+ * advance ended in a minute and freed its slot for the next — Airyn 2-A was
+ * fired 48 times in one hour on 2026-10-12, 558 times in a day for one accepted
+ * completion. The first containment was a budget of six starts per slot per
+ * hour (twelve with no target), and it stopped the bleeding by refusing
+ * everything past a count: a productive account doing real work for six
+ * friends' sessions an hour was refused exactly as a broken one was.
+ *
+ * What was wrong was never the number of starts; it was starts that did
+ * nothing. So only those are counted. A start is **productive** when the
+ * session it started did any work — claimed an item, submitted a unit result,
+ * checkpointed, completed a bin, or finished a research pass in the bin's
+ * packet — and **unproductive** when its session never arrived (while other
+ * sessions were arriving, so it is not Brain's own outage), or arrived and its
+ * lease ended without any of those. A start whose session still holds a live
+ * lease, or that is too recent to judge, is **pending** and counts for neither.
+ *
+ * An account is refused only when its unproductive starts in the last hour
+ * reach `UNPRODUCTIVE_STARTS_THRESHOLD`. Productive starts are bounded by the
+ * person-set account, Routine and fleet targets and the grant, and by nothing
+ * here. The refusal lifts by itself as those starts leave the hour.
+ *
+ * ---------------------------------------------------------------------------
+ * The four things the dispatcher has to tell apart, and where each lives
+ * ---------------------------------------------------------------------------
+ *
+ *   * a productive worker — counted nowhere; more capacity is welcome;
+ *   * a worker temporarily unable to complete one assignment — that bin is
+ *     deferred (`bin_session_refusals`, the per-bin refire guard) and the worker
+ *     is still handed other work;
+ *   * a repeated assignment that cannot advance — `workReadySql` refuses to fire
+ *     a bin with nothing claimable (`NO_CLAIMABLE_WORK`) and `BIN_REFIRE_GUARD`
+ *     cools off a bin fired too often;
+ *   * a genuine shortage — `ACCOUNT_TARGETS_REACHED`,
+ *     `NO_HEALTHY_EXECUTION_SURFACE`, or the grant full.
+ *
+ * And the fifth this adds: an account whose sessions keep doing nothing —
+ * `ACCOUNT_SESSIONS_UNPRODUCTIVE`. Nothing here starts a session because an
+ * earlier one handed work back; it can only refuse.
  */
-export const ACTIVATIONS_PER_SLOT_PER_HOUR = 6;
-export const DEFAULT_ACCOUNT_ACTIVATIONS_PER_HOUR = 12;
 
-export function accountActivationBudget(accountTarget: number | null): number {
-  return accountTarget === null
-    ? DEFAULT_ACCOUNT_ACTIVATIONS_PER_HOUR
-    : Math.max(1, accountTarget) * ACTIVATIONS_PER_SLOT_PER_HOUR;
+/**
+ * How many unproductive starts in an hour refuse an account.
+ *
+ * Three, for the same reason the no-show quarantine trips at three: one is an
+ * accident, two a coincidence, three a pattern somebody's allowance is paying
+ * for. It is not a quarantine — nothing is disabled and no person has to act —
+ * so the cost of reading a pattern into three is one hour of not starting that
+ * account's sessions, against the cost of not reading it, which was hundreds
+ * of activations a day.
+ */
+export const UNPRODUCTIVE_STARTS_THRESHOLD = 3;
+
+/** The window starts are judged over. */
+export const PRODUCTIVITY_WINDOW_MS = 60 * 60_000;
+
+/**
+ * How long a fire may go without its session arriving before that silence is
+ * judged. Longer than any cold start measured (§20: 35.7s, 28.8s), short enough
+ * that a dead surface is read inside the hour.
+ */
+export const ARRIVAL_SETTLE_MS = 15 * 60_000;
+
+export type StartVerdict =
+  | 'PRODUCTIVE'
+  /** Its session never arrived while others were arriving. */
+  | 'UNPRODUCTIVE_NEVER_ARRIVED'
+  /** Its session arrived and ended without doing any work. */
+  | 'UNPRODUCTIVE_NO_WORK'
+  /** Still working, or too recent to judge. */
+  | 'PENDING'
+  /** Nothing arrived anywhere in its window: Brain's own outage, charged to nobody. */
+  | 'NOT_JUDGED';
+
+/** What one start's verdict is decided from. Every field is read from rows. */
+export interface StartFacts {
+  sentAtMs: number;
+  nowMs: number;
+  /** Its own session reached Brain (an arrival or an assignment matched to it). */
+  arrived: boolean;
+  /** The leases its session took, and what became of each. */
+  leases: { productive: boolean; live: boolean }[];
+  /** Some session — any session — arrived at Brain within its settle window. */
+  brainAnswering: boolean;
 }
 
-/** Sessions Brain started per account in the last hour, from its own dispatch rows. */
-async function firesLastHourByAccount(
+/** The verdict for one start. Pure and total. */
+export function classifyStart(facts: StartFacts): StartVerdict {
+  if (facts.leases.some((one) => one.productive)) return 'PRODUCTIVE';
+  if (facts.leases.some((one) => one.live)) return 'PENDING';
+  if (facts.leases.length > 0) return 'UNPRODUCTIVE_NO_WORK';
+  const settled = facts.nowMs - facts.sentAtMs >= ARRIVAL_SETTLE_MS;
+  if (facts.arrived) return settled ? 'UNPRODUCTIVE_NO_WORK' : 'PENDING';
+  if (!settled) return 'PENDING';
+  return facts.brainAnswering ? 'UNPRODUCTIVE_NEVER_ARRIVED' : 'NOT_JUDGED';
+}
+
+export interface AccountProductivity {
+  productive: number;
+  unproductive: number;
+  pending: number;
+}
+
+const PRODUCTIVE_EVENTS = ['BIN_ITEM_CLAIMED', 'BIN_CHECKPOINT'];
+
+/**
+ * How long one reading may be reused. The window it judges is an hour, so a
+ * reading a minute old changes no decision, and the dispatch tick runs every
+ * ten seconds on a database §61 measured as the shared bottleneck. Off in the
+ * test suite (`BRAIN_SHARED_SNAPSHOT_MS=0`), which writes and reads within a
+ * second.
+ */
+function productivityReuseMs(): number {
+  const own = process.env['BRAIN_PRODUCTIVITY_REUSE_MS'];
+  if (own !== undefined && /^\d+$/.test(own)) return Number(own);
+  if (process.env['BRAIN_SHARED_SNAPSHOT_MS'] === '0') return 0;
+  return 60_000;
+}
+let productivityMemo: { at: number; value: Map<string, AccountProductivity> } | null = null;
+
+/** Tests: forget the reading. */
+export function resetProductivityCache(): void {
+  productivityMemo = null;
+}
+
+/**
+ * Productive, unproductive and pending starts per account in the last hour.
+ *
+ * Six bounded reads, each on an index (`bin_dispatch (state, sent_at)`,
+ * `bin_events (event_type, at)`, the primary keys of `bins` and
+ * `bin_unit_results`, `research_passes (orchestration_id, …)`), then a join in
+ * memory. A session is matched to its fire by its provider session id in any
+ * of its spellings (`sameProviderSession`); an assignment that reported no
+ * session is credited to the fire for its own bin at the generation that fire
+ * named, exactly as `creditDispatchArrival` credits arrivals.
+ */
+export async function productivityByAccount(
   nowMs: number,
   accountOfRoutine: Map<string, string>,
-): Promise<Map<string, number>> {
-  const since = new Date(nowMs - 60 * 60_000).toISOString();
-  const rows = await getDb().all<{ routine_id: string | null; n: number }>(
-    `SELECT routine_id, COUNT(*) AS n FROM bin_dispatch
-      WHERE state = 'SENT' AND sent_at >= ? AND routine_id IS NOT NULL
-      GROUP BY routine_id`,
+): Promise<Map<string, AccountProductivity>> {
+  const reuse = productivityReuseMs();
+  if (productivityMemo && reuse > 0 && nowMs >= productivityMemo.at && nowMs - productivityMemo.at < reuse) {
+    return productivityMemo.value;
+  }
+  const value = await readProductivity(nowMs, accountOfRoutine);
+  productivityMemo = { at: nowMs, value };
+  return value;
+}
+
+async function readProductivity(
+  nowMs: number,
+  accountOfRoutine: Map<string, string>,
+): Promise<Map<string, AccountProductivity>> {
+  const since = new Date(nowMs - PRODUCTIVITY_WINDOW_MS).toISOString();
+  const nowIso = new Date(nowMs).toISOString();
+  const db = getDb();
+  const fires = await db.all<{
+    bin_id: string;
+    lease_generation: number;
+    routine_id: string;
+    session_ref: string | null;
+    sent_at: string;
+  }>(
+    `SELECT d.bin_id, d.lease_generation, d.routine_id, d.session_ref, d.sent_at
+       FROM bin_dispatch d
+      WHERE d.state = 'SENT' AND d.sent_at >= ? AND d.routine_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM connector_recovery_probes p WHERE p.bin_id = d.bin_id)`,
     [since],
   );
-  const out = new Map<string, number>();
-  for (const row of rows) {
-    const account = row.routine_id ? accountOfRoutine.get(row.routine_id) : undefined;
-    if (account) out.set(account, (out.get(account) ?? 0) + Number(row.n));
+  const out = new Map<string, AccountProductivity>();
+  if (fires.length === 0) return out;
+
+  const assignments = await db.all<{ bin_id: string; lease_generation: number; session_ref: string | null; at: string }>(
+    `SELECT bin_id, lease_generation, session_ref, at FROM bin_events
+      WHERE event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER') AND at >= ? AND bin_id IS NOT NULL`,
+    [since],
+  );
+  const arrivals = await db.all<{ session_ref: string | null; at: string }>(
+    `SELECT session_ref, at FROM bin_events
+      WHERE event_type IN ('DISPATCH_SESSION_ARRIVED', 'DISPATCH_WRONG_WORKER') AND at >= ?`,
+    [since],
+  );
+  const worked = await db.all<{ bin_id: string; lease_generation: number | null }>(
+    `SELECT bin_id, lease_generation FROM bin_events
+      WHERE at >= ? AND bin_id IS NOT NULL
+        AND (event_type IN (${PRODUCTIVE_EVENTS.map(() => '?').join(', ')})
+             OR (event_type = 'BIN_TERMINAL' AND outcome = 'COMPLETE'))`,
+    [since, ...PRODUCTIVE_EVENTS],
+  );
+  const productive = new Set(worked.map((row) => `${row.bin_id}#${row.lease_generation}`));
+
+  const binIds = [...new Set(assignments.map((row) => row.bin_id))];
+  const bins = new Map<string, { state: string; lease_generation: number; lease_expires_at: string | null; orchestration_id: string | null }>();
+  for (const chunk of chunks(binIds, 200)) {
+    const marks = chunk.map(() => '?').join(', ');
+    for (const row of await db.all<{
+      id: string;
+      state: string;
+      lease_generation: number;
+      lease_expires_at: string | null;
+      orchestration_id: string | null;
+    }>(
+      `SELECT id, state, lease_generation, lease_expires_at, orchestration_id FROM bins WHERE id IN (${marks})`,
+      chunk,
+    )) {
+      bins.set(row.id, row);
+    }
+    for (const row of await db.all<{ bin_id: string; lease_generation: number | null }>(
+      `SELECT bin_id, lease_generation FROM bin_unit_results WHERE bin_id IN (${marks}) AND created_at >= ?`,
+      [...chunk, since],
+    )) {
+      productive.add(`${row.bin_id}#${row.lease_generation}`);
+    }
   }
+  // A research pass finished in the packet a leased bin carries, during that lease.
+  const orchestrationIds = [...new Set([...bins.values()].map((row) => row.orchestration_id).filter((id): id is string => !!id))];
+  const passesByOrchestration = new Map<string, string[]>();
+  for (const chunk of chunks(orchestrationIds, 200)) {
+    const marks = chunk.map(() => '?').join(', ');
+    for (const row of await db.all<{ orchestration_id: string; completed_at: string }>(
+      `SELECT orchestration_id, completed_at FROM research_passes
+        WHERE orchestration_id IN (${marks}) AND completed_at IS NOT NULL AND completed_at >= ?`,
+      [...chunk, since],
+    )) {
+      passesByOrchestration.set(row.orchestration_id, [
+        ...(passesByOrchestration.get(row.orchestration_id) ?? []),
+        row.completed_at,
+      ]);
+    }
+  }
+
+  const arrivalTimes = arrivals.map((row) => Date.parse(row.at));
+  for (const fire of fires) {
+    const account = accountOfRoutine.get(fire.routine_id);
+    if (!account) continue;
+    const sentAtMs = Date.parse(fire.sent_at);
+    // Its own session's assignments: matched by session, or — when the
+    // session reported none — the one at the generation after the fire on the
+    // bin it was fired for.
+    let mine = fire.session_ref
+      ? assignments.filter((row) => row.at >= fire.sent_at && sameProviderSession(row.session_ref, fire.session_ref))
+      : [];
+    if (mine.length === 0) {
+      mine = assignments.filter(
+        (row) =>
+          row.bin_id === fire.bin_id &&
+          Number(row.lease_generation) === Number(fire.lease_generation) + 1 &&
+          !row.session_ref,
+      );
+    }
+    const leases = mine.map((row) => {
+      const bin = bins.get(row.bin_id);
+      const generation = Number(row.lease_generation);
+      const passes = bin?.orchestration_id ? (passesByOrchestration.get(bin.orchestration_id) ?? []) : [];
+      return {
+        productive:
+          productive.has(`${row.bin_id}#${generation}`) || passes.some((at) => at >= row.at),
+        live:
+          bin !== undefined &&
+          bin.state === 'LEASED' &&
+          Number(bin.lease_generation) === generation &&
+          (bin.lease_expires_at ?? '') > nowIso,
+      };
+    });
+    const arrived =
+      mine.length > 0 ||
+      (fire.session_ref !== null &&
+        arrivals.some((row) => sameProviderSession(row.session_ref, fire.session_ref)));
+    const verdict = classifyStart({
+      sentAtMs,
+      nowMs,
+      arrived,
+      leases,
+      brainAnswering: arrivalTimes.some((at) => at > sentAtMs && at <= sentAtMs + ARRIVAL_SETTLE_MS),
+    });
+    const tally = out.get(account) ?? { productive: 0, unproductive: 0, pending: 0 };
+    if (verdict === 'PRODUCTIVE') tally.productive += 1;
+    else if (verdict === 'UNPRODUCTIVE_NEVER_ARRIVED' || verdict === 'UNPRODUCTIVE_NO_WORK') tally.unproductive += 1;
+    else if (verdict === 'PENDING') tally.pending += 1;
+    out.set(account, tally);
+  }
+  return out;
+}
+
+function chunks<T>(values: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < values.length; i += size) out.push(values.slice(i, i + size));
   return out;
 }
 
@@ -349,10 +606,10 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
 
   const accountById = new Map<string, FleetAccount>(accounts.map((a) => [a.id, a]));
   // Both read defensively: an unreadable count routes as it always did.
-  const firesLastHour = await firesLastHourByAccount(
+  const productivity = await productivityByAccount(
     now.getTime(),
     new Map(routines.map((routine) => [routine.id, routine.accountId])),
-  ).catch(() => new Map<string, number>());
+  ).catch(() => new Map<string, AccountProductivity>());
   const networkBlocked = await networkBlockedRoutines(now.getTime()).catch(() => new Set<string>());
   const perAccount = new Map<string, number>();
   for (const routine of routines) {
@@ -427,10 +684,8 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
       accountInFlight: perAccount.get(account.id) ?? 0,
       routineTarget: routinePolicy ? effectiveTarget(routinePolicy, nowIso).target : null,
       accountTarget: accountPolicy ? effectiveTarget(accountPolicy, nowIso).target : null,
-      accountFiresLastHour: firesLastHour.get(account.id) ?? 0,
-      accountActivationBudget: accountActivationBudget(
-        accountPolicy ? effectiveTarget(accountPolicy, nowIso).target : null,
-      ),
+      accountUnproductiveStarts: productivity.get(account.id)?.unproductive ?? 0,
+      accountUnproductiveLimit: UNPRODUCTIVE_STARTS_THRESHOLD,
       allowanceReport: allowanceReports.get(account.id) ?? null,
     });
   }

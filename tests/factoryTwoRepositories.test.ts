@@ -430,6 +430,7 @@ describe('a temporary fleet condition is a wait, and a permanent refusal is not'
       'NO_SURFACE_SERVES_THIS_REPOSITORY',
       'NO_SURFACE_SERVES_THIS_PROJECT',
       'ACCOUNT_TARGETS_REACHED',
+      'ACCOUNT_SESSIONS_UNPRODUCTIVE',
       'PINNED_SURFACE_UNAVAILABLE',
     ];
     // Every member of the union, and nothing else.
