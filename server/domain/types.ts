@@ -7416,6 +7416,12 @@ export interface CashOpportunityRow {
   declined_reason: string | null;
   reoffered_from_id: string | null;
   archived_reason: string | null;
+  /** When a distinct change last asked for re-evaluation (migration 118). */
+  reconsider_requested_at: string | null;
+  /** When the current deep-dive epoch began; null is the epoch since creation. */
+  dive_epoch_started_at: string | null;
+  /** The change that most recently reconsidered this piece. */
+  last_reconsider_change_ref: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -7517,6 +7523,22 @@ export interface CashOpportunity {
   declinedReason: string | null;
   reofferedFromId: string | null;
   archivedReason: string | null;
+  /**
+   * When a distinct change last asked for this piece to be re-evaluated.
+   *
+   * A request, never a decision: on a piece a person archived or declined it
+   * moves nothing, and on a live one the existing passes re-derive it. Null
+   * when nothing has asked.
+   */
+  reconsiderRequestedAt: string | null;
+  /**
+   * When the current deep-dive epoch began. Null is the epoch that began at
+   * creation. Dive rounds are counted per epoch, so a new epoch exists only
+   * because something distinct changed.
+   */
+  diveEpochStartedAt: string | null;
+  /** The change ref that most recently reconsidered this piece. */
+  lastReconsiderChangeRef: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -7627,6 +7649,8 @@ export interface CashNeedRow {
   blocks_state: string | null;
   candidate_id: string | null;
   request_key: string | null;
+  /** The shared fact this need is blocked on (migration 118). */
+  blocker_key: string | null;
   continued_at: string | null;
   continuation_note: string | null;
   state: string;
@@ -7688,6 +7712,14 @@ export interface CashNeed {
   candidateId: string | null;
   /** What made it unique, so the same condition raises one need. */
   requestKey: string | null;
+  /**
+   * The shared fact it is blocked on, when it was raised from a typed cause.
+   *
+   * `requestKey` embeds the opportunity; this does not, so a hundred needs
+   * blocked on one missing capability share one key. Null for a need raised
+   * from an untyped cause, and for every need raised before the column existed.
+   */
+  blockerKey: BlockerKey | null;
   /** When its continuation ran. Set once, by a guarded write. */
   continuedAt: string | null;
   /** What the continuation actually did, which is not the same as that it ran. */
@@ -7861,6 +7893,366 @@ export interface CashEvent {
   detail: Record<string, unknown>;
   createdAt: string;
 }
+
+/* ==========================================================================
+ * Blocker keys, reopen conditions and standing (OPPORTUNITY-INTELLIGENCE §3.1, §3.2)
+ *
+ * One shared key per *fact*, never per opportunity. `CAPABILITY:SEND_A_MESSAGE`
+ * is the same key on every piece waiting on a messaging integration, which is
+ * what lets one change find every piece it affects with one indexed read.
+ * ======================================================================== */
+
+/**
+ * The closed set of things an opportunity can be waiting on.
+ *
+ * Adding a kind is a compile error until `BLOCKER_DETECTION` says how it is
+ * detected — the `REFUSAL_WAIT` precedent. Four kinds (`SUPPLIER`, `COST`,
+ * `CUSTOMER`, `REGULATION`) have no reliable row source yet; they are in the
+ * union so a reopen condition can name them, and their detector is declared
+ * `NOT_DETECTED` rather than faked, so wiring one later is an explicit edit.
+ */
+export const BLOCKER_KINDS = [
+  'CAPABILITY',
+  'AUTHORITY',
+  'MANUFACTURING',
+  'SOURCE_HOST',
+  'FIELD',
+  'EVIDENCE',
+  'DEPENDENCY',
+  'DATE',
+  'PERSON',
+  'SUPPLIER',
+  'COST',
+  'CUSTOMER',
+  'REGULATION',
+] as const;
+export type BlockerKind = (typeof BLOCKER_KINDS)[number];
+
+/**
+ * A blocker key: `PERSON`, or `<KIND>:<argument>` for every other kind.
+ *
+ * `PERSON` carries no argument because "only a person can say" is one fact
+ * about the piece, not a fact about the world another piece could share.
+ */
+export type BlockerKey = 'PERSON' | `${Exclude<BlockerKind, 'PERSON'>}:${string}`;
+
+/** How a kind's change is noticed. `NOT_DETECTED` is a declaration, never a stub that reads "no change". */
+export type BlockerDetection =
+  /** Brain reads a row (a capability, a grant, a holding, an opportunity's state). */
+  | 'READ'
+  /** Brain compares a marker over a pool (the evidence pool's hash, a host's readings). */
+  | 'MARKER'
+  /** Brain compares its own clock to a date a row states. */
+  | 'CLOCK'
+  /** Never automatic: only a person can say. */
+  | 'NEVER'
+  /** No reliable row source exists yet. Nothing may claim to have detected it. */
+  | 'NOT_DETECTED';
+
+export interface BlockerDefinition {
+  detection: BlockerDetection;
+  /** Whether the part after the colon is required, and what it names. */
+  argument: string | null;
+  /** What satisfies it, in words. */
+  satisfiedWhen: string;
+  /** The rows the detector reads, or what would have to exist for one to. */
+  source: string;
+  /** Whether satisfying it is ever automatic. A person's grant or holding is still a person's. */
+  automatic: boolean;
+}
+
+export const BLOCKER_DETECTION: Readonly<Record<BlockerKind, BlockerDefinition>> = Object.freeze({
+  CAPABILITY: {
+    detection: 'READ',
+    argument: 'a cash capability id (services/cash/capabilities.ts)',
+    satisfiedWhen: 'the capability reads PRESENT',
+    source: 'readCapability, once per change pass',
+    automatic: true,
+  },
+  AUTHORITY: {
+    detection: 'READ',
+    argument: 'a commercial action (services/cash/authority.ts)',
+    satisfiedWhen: 'a live commercial grant covers the action',
+    source: 'cash_authorities, by updated_at',
+    automatic: true,
+  },
+  MANUFACTURING: {
+    detection: 'READ',
+    argument: 'a manufacturing capability key',
+    satisfiedWhen: 'the capability is held (capabilities.held_at is set, by a person)',
+    source: 'capabilities, by updated_at',
+    automatic: true,
+  },
+  SOURCE_HOST: {
+    detection: 'MARKER',
+    argument: 'a host name',
+    satisfiedWhen: 'a RETRIEVED reading exists for the host after the block',
+    source: 'retrieved claims and surface-probe readings since the watermark',
+    automatic: true,
+  },
+  FIELD: {
+    detection: 'READ',
+    argument: 'a card field key',
+    satisfiedWhen: "this opportunity's own card fact for the field changed",
+    source: 'cash_card_facts, by updated_at',
+    automatic: true,
+  },
+  EVIDENCE: {
+    detection: 'MARKER',
+    argument: 'an evidence lane id',
+    satisfiedWhen: 'the own or shared citable pool changed in that lane',
+    source: 'a hash of the citable pools, then the lanes touched since the watermark',
+    automatic: true,
+  },
+  DEPENDENCY: {
+    detection: 'READ',
+    argument: 'an opportunity id in the same project',
+    satisfiedWhen: 'the parent opportunity reached a stated state',
+    source: 'cash_opportunities transitions since the watermark',
+    automatic: true,
+  },
+  DATE: {
+    detection: 'CLOCK',
+    argument: 'an ISO date or timestamp',
+    satisfiedWhen: "the date has passed on Brain's own clock",
+    source: 'the date in the key, compared to cashNow()',
+    automatic: true,
+  },
+  PERSON: {
+    detection: 'NEVER',
+    argument: null,
+    satisfiedWhen: 'a person says so',
+    source: 'nothing: only a person can say',
+    automatic: false,
+  },
+  SUPPLIER: {
+    detection: 'NOT_DETECTED',
+    argument: 'what kind of supplier is missing',
+    satisfiedWhen: 'a supplier able to fulfil is established',
+    source:
+      'none yet: dealflow parties are scoped to a deal, not to a cash opportunity, so no row ' +
+      'says a supplier now exists for this piece',
+    automatic: false,
+  },
+  COST: {
+    detection: 'NOT_DETECTED',
+    argument: 'which cost',
+    satisfiedWhen: 'the named cost falls to a level that makes the piece worth doing',
+    source:
+      "none yet: a cost on this piece's own card is FIELD:<field>; nothing records a market-wide " +
+      'cost movement a piece could be waiting on',
+    automatic: false,
+  },
+  CUSTOMER: {
+    detection: 'NOT_DETECTED',
+    argument: 'which kind of customer',
+    satisfiedWhen: 'a payer of the named kind is established',
+    source:
+      "none yet: a payer on this piece's own card is FIELD:payer; no row records a new customer " +
+      'appearing for a piece that has none',
+    automatic: false,
+  },
+  REGULATION: {
+    detection: 'NOT_DETECTED',
+    argument: 'which rule',
+    satisfiedWhen: 'the named rule changes or takes effect',
+    source:
+      'none yet: a known effective date is DATE:<iso>; nothing records a regulatory change as a row',
+    automatic: false,
+  },
+});
+
+/** The argument after the colon: printable, bounded, and with no whitespace. */
+const BLOCKER_ARGUMENT = /^[A-Za-z0-9_.:@/+\-]{1,200}$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T[0-9:.]+(Z|[+-]\d{2}:\d{2})?)?$/;
+
+export function isBlockerKind(value: unknown): value is BlockerKind {
+  return typeof value === 'string' && (BLOCKER_KINDS as readonly string[]).includes(value);
+}
+
+/** Compose a key. Throws on a malformed argument, because a caller built it. */
+export function formatBlockerKey(kind: BlockerKind, argument?: string): BlockerKey {
+  if (kind === 'PERSON') {
+    if (argument !== undefined && argument !== '') {
+      throw new Error('PERSON carries no argument.');
+    }
+    return 'PERSON';
+  }
+  const parsed = parseBlockerKey(`${kind}:${argument ?? ''}`);
+  if (!parsed) throw new Error(`"${kind}:${argument ?? ''}" is not a valid blocker key.`);
+  return parsed;
+}
+
+/**
+ * Read a key back into the closed set, or null.
+ *
+ * Exact: an unknown kind, an empty or malformed argument, or a `DATE` that is
+ * not a date is null rather than the nearest thing — a key that matched loosely
+ * would make one fact look like another.
+ */
+export function parseBlockerKey(value: unknown): BlockerKey | null {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (text === 'PERSON') return 'PERSON';
+  const colon = text.indexOf(':');
+  if (colon <= 0) return null;
+  const kind = text.slice(0, colon);
+  const argument = text.slice(colon + 1);
+  if (!isBlockerKind(kind) || kind === 'PERSON') return null;
+  if (!BLOCKER_ARGUMENT.test(argument)) return null;
+  if (kind === 'DATE' && (!ISO_DATE.test(argument) || !Number.isFinite(Date.parse(argument)))) {
+    return null;
+  }
+  return text as BlockerKey;
+}
+
+/** The kind of a parsed key. */
+export function blockerKindOf(key: BlockerKey): BlockerKind {
+  if (key === 'PERSON') return 'PERSON';
+  return key.slice(0, key.indexOf(':')) as BlockerKind;
+}
+
+/** The argument of a parsed key, or null for PERSON. */
+export function blockerArgumentOf(key: BlockerKey): string | null {
+  if (key === 'PERSON') return null;
+  return key.slice(key.indexOf(':') + 1);
+}
+
+/** Where a reopen condition was recorded from. */
+export const REOPEN_RECORDED_FROM = [
+  'ARCHIVE',
+  'DECLINE',
+  'DISQUALIFY',
+  'ROUNDS_SPENT',
+  'EXPIRY',
+  'WEAK_ECONOMICS',
+] as const;
+export type ReopenRecordedFrom = (typeof REOPEN_RECORDED_FROM)[number];
+
+export interface CashReopenConditionRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string;
+  blocker_key: string;
+  recorded_from: string;
+  observed_at_record: string | null;
+  actor_ref: string;
+  created_at: string;
+  triggered_at: string | null;
+  trigger_change_ref: string | null;
+}
+
+export interface CashReopenCondition {
+  id: string;
+  projectId: string;
+  opportunityId: string;
+  blockerKey: BlockerKey;
+  recordedFrom: ReopenRecordedFrom;
+  /** What the fact read when the condition was recorded, where Brain read one. */
+  observedAtRecord: string | null;
+  actorRef: string;
+  createdAt: string;
+  /** When a distinct change met it. Set once, by a guarded write. */
+  triggeredAt: string | null;
+  triggerChangeRef: string | null;
+}
+
+/** What consumed a change for an opportunity. */
+export const RECONSIDERATION_TRIGGER_KINDS = ['REOPEN_CONDITION', 'LIVE_REQUEST', 'PERSON'] as const;
+export type ReconsiderationTriggerKind = (typeof RECONSIDERATION_TRIGGER_KINDS)[number];
+
+export interface CashReconsiderationTriggerRow {
+  opportunity_id: string;
+  change_ref: string;
+  project_id: string;
+  blocker_key: string | null;
+  kind: string;
+  created_at: string;
+}
+
+export interface CashReconsiderationTrigger {
+  opportunityId: string;
+  changeRef: string;
+  projectId: string;
+  blockerKey: BlockerKey | null;
+  kind: ReconsiderationTriggerKind;
+  createdAt: string;
+}
+
+export interface CashChangeWatermarkRow {
+  project_id: string;
+  source: string;
+  through: string;
+  marker: string | null;
+  updated_at: string;
+}
+
+export interface CashChangeWatermark {
+  projectId: string;
+  source: string;
+  /** The position this source has been read through (a timestamp, usually). */
+  through: string;
+  /** A content marker where position alone cannot say whether anything moved. */
+  marker: string | null;
+  updatedAt: string;
+}
+
+/* --------------------------------------------------------------------------
+ * Standing: one explained answer per opportunity, derived and never stored
+ * ------------------------------------------------------------------------ */
+
+export const STANDING_KINDS = [
+  'ADVANCING',
+  'WAITING',
+  'DORMANT',
+  'NOT_WORTH_PURSUING',
+  'DONE',
+] as const;
+export type StandingKind = (typeof STANDING_KINDS)[number];
+
+/** Why a piece is dormant. `WEAK_ECONOMICS` is reachable only from a recorded condition. */
+export const DORMANT_CAUSES = [
+  'ARCHIVED',
+  'DECLINED',
+  'DISQUALIFIED',
+  'ROUNDS_SPENT',
+  'EXPIRED',
+  'WEAK_ECONOMICS',
+] as const;
+export type DormantCause = (typeof DORMANT_CAUSES)[number];
+
+/** Dormant with nothing that could reopen it, or a second record of another piece. */
+export type NotWorthPursuingCause = DormantCause | 'DUPLICATE';
+
+/**
+ * What a waiting piece is waiting on: a shared fact, or one of two conditions
+ * that are about the project rather than the world — a free dive or execution
+ * slot (`SLOT`), or deployable cash (`CASH`).
+ */
+export type StandingWait = BlockerKey | 'SLOT' | 'CASH';
+
+export type Standing =
+  | {
+      kind: 'ADVANCING';
+      /** The state, or the tier where the state alone does not say where it is. */
+      stage: string;
+      /** What Brain (or the person running it) is doing now. */
+      doing: string;
+      next: string;
+      because: string;
+    }
+  | { kind: 'WAITING'; on: StandingWait[]; because: string }
+  | {
+      kind: 'DORMANT';
+      cause: DormantCause;
+      /** The untriggered reopen conditions, by key. */
+      reopenWhen: BlockerKey[];
+      /** Whether a distinct change has met a condition and is waiting on reconsideration. */
+      reconsiderationRequested: boolean;
+      because: string;
+    }
+  | { kind: 'NOT_WORTH_PURSUING'; cause: NotWorthPursuingCause; because: string }
+  | { kind: 'DONE'; outcome: string | null; because: string };
 
 // ---------------------------------------------------------------------------
 // SHARED FINDINGS
