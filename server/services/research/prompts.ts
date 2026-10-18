@@ -26,6 +26,7 @@ import type {
 } from '../../domain/types.ts';
 import { getAuditProfile, getLayerCriteria } from '../../domain/auditProfile.ts';
 import { MIN_INDEPENDENT_SOURCES_FLOOR } from './schema.ts';
+import { routesFor } from './readableRoutes.ts';
 
 // ---------------------------------------------------------------------------
 // Guidance: context for the worker that changes no gate input
@@ -59,6 +60,8 @@ export interface ResearchGuidance {
   unreachableHosts: { host: string; outcome: string; at: string }[];
   /** Reusable lessons from earlier campaigns. Context only: no gate or allocation input reads them. */
   lessons: { abstraction: string; lesson: string }[];
+  /** Verified readable routes for channels this fragment names or this surface could not read. */
+  readableRoutes: { host: string; lines: string[] }[];
   /** The whole of it, as prompt text. */
   text: string;
 }
@@ -76,7 +79,7 @@ export const MAX_GUIDANCE_HOSTS = 15;
  * score is computed.
  */
 export function composeGuidance(input: {
-  fragment: { fragmentKey: string } | null;
+  fragment: { fragmentKey: string; question?: string } | null;
   siblings: { fragmentKey: string; question: string }[];
   reachability: { host: string; outcome: string; at: string }[];
   lessons: { abstraction: string; lesson: string }[];
@@ -96,6 +99,10 @@ export function composeGuidance(input: {
   ]
     .slice(0, MAX_GUIDANCE_LESSONS)
     .map((lesson) => ({ abstraction: lesson.abstraction, lesson: lesson.lesson }));
+  const readableRoutes = routesFor({
+    question: input.fragment?.question ?? null,
+    unreachableHosts: unreachableHosts.map((entry) => entry.host),
+  }).map((route) => ({ host: route.host, lines: [...route.lines] }));
 
   const lines: string[] = [];
   if (input.fragment) {
@@ -117,6 +124,16 @@ export function composeGuidance(input: {
       ...unreachableHosts.map((entry) => `  - ${entry.host} (${entry.outcome}, ${entry.at.slice(0, 10)})`),
     );
   }
+  if (readableRoutes.length > 0) {
+    lines.push(
+      'READABLE ROUTES (public, no key or account, the publisher\'s own addresses, each read ' +
+        'successfully by Brain; cite the address you actually read):',
+      ...readableRoutes.flatMap((route) => [
+        `  ${route.host}:`,
+        ...route.lines.map((line) => `    - ${line}`),
+      ]),
+    );
+  }
   if (lessons.length > 0) {
     lines.push(
       'LESSONS FROM EARLIER CAMPAIGNS (context only; they change no evidence bar, depth or scope):',
@@ -129,6 +146,7 @@ export function composeGuidance(input: {
     negativeExistence: NEGATIVE_EXISTENCE_NOTE,
     unreachableHosts,
     lessons,
+    readableRoutes,
     text: lines.join('\n'),
   };
 }

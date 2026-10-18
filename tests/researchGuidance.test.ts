@@ -31,6 +31,7 @@ import {
   composeGuidance,
 } from '../server/services/research/prompts.ts';
 import { guidanceFor } from '../server/services/research/guidance.ts';
+import { READABLE_ROUTES, routesFor } from '../server/services/research/readableRoutes.ts';
 import { applyGate, fragmentPasses } from '../server/services/research/gate.ts';
 import { buildRepairPlan } from '../server/services/research/repair.ts';
 import { allocateDepth } from '../server/services/research/intelligence/depth.ts';
@@ -318,6 +319,62 @@ describe('a lesson is context, never an input to a decision', () => {
       const text = fs.readFileSync(path.join(root, file), 'utf8');
       expect(text, file).not.toMatch(/from ['"][^'"]*guidance(\.ts)?['"]/);
       expect(text, file).not.toMatch(/reusableLessons/);
+      expect(text, file).not.toMatch(/readableRoutes/);
+    }
+  });
+});
+
+describe('a readable route is named where the first route failed', () => {
+  it('names the route for a channel the fragment asks about, and none for one it does not', () => {
+    const guidance = composeGuidance({
+      fragment: {
+        fragmentKey: 'opening-screen',
+        question: "Is Freelancer.com project 40774287 'Precise entry from PDFs' still open?",
+      },
+      siblings: [],
+      reachability: [],
+      lessons: [],
+    });
+    expect(guidance.readableRoutes.map((route) => route.host)).toEqual(['freelancer.com']);
+    expect(guidance.text).toContain('READABLE ROUTES');
+    expect(guidance.text).toContain('/api/projects/0.1/projects/<project id>/');
+    expect(guidance.text).toContain('time_submitted');
+    expect(guidance.text).toContain('data-color="success"');
+    expect(guidance.text).not.toContain('sam.gov/api');
+  });
+
+  it('names the route for a host this surface could not read, even when the question does not', () => {
+    const guidance = composeGuidance({
+      fragment: { fragmentKey: 'rfqs', question: 'Which small federal solicitations close this month?' },
+      siblings: [],
+      reachability: [{ host: 'sam.gov', outcome: 'NOT_REACHABLE', at: '2026-10-17T00:00:00Z' }],
+      lessons: [],
+    });
+    expect(guidance.readableRoutes.map((route) => route.host)).toEqual(['sam.gov']);
+    expect(guidance.text).toContain('sam.gov/api/prod/sgs/v1/search/');
+    expect(guidance.text).toContain('responseDate');
+  });
+
+  it('matches a channel by its own name and never by an ordinary word', () => {
+    expect(routesFor({ question: 'Find a freelancer for the same job', unreachableHosts: [] })).toEqual([]);
+    expect(routesFor({ question: 'see usam.gov', unreachableHosts: [] })).toEqual([]);
+    expect(
+      routesFor({ question: null, unreachableHosts: ['www.publicsurplus.com'] }).map((route) => route.host),
+    ).toEqual(['publicsurplus.com']);
+    expect(routesFor({ question: 'Read the SAM.gov notice', unreachableHosts: [] }).map((r) => r.host)).toEqual([
+      'sam.gov',
+    ]);
+  });
+
+  it('every route is a public https address that needs no key and no account', () => {
+    for (const route of READABLE_ROUTES) {
+      for (const line of route.lines) {
+        for (const url of line.match(/https?:\/\/\S+/g) ?? []) {
+          expect(url, route.host).toMatch(/^https:\/\//);
+          expect(url, route.host).not.toMatch(/api_key|apikey|token=|access_token/i);
+          expect(new URL(url.replace(/<[^>]+>/g, 'x')).hostname.endsWith(route.host), url).toBe(true);
+        }
+      }
     }
   });
 });

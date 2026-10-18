@@ -892,6 +892,8 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   console.log('');
   console.log(`HISTORY (${eventCounts.total}) — ${shown(eventCounts)}`);
 
+  await readableRouteUse(projectId);
+
   console.log('');
   console.log(
     `CASH-REPORT: ${projectId} state=${mode.state}` +
@@ -924,6 +926,59 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       ` abandoned=${commissions.filter((one) => one.state === 'ABANDONED').length}`,
   );
   return true;
+}
+
+/**
+ * Whether research is reading the channels through the routes the guidance
+ * names (`services/research/readableRoutes.ts`), and who read them.
+ *
+ * A claim citing one of those addresses, attributed through its pass to a fleet
+ * Routine, is a fired, unattended worker that used the route. A claim whose pass
+ * names no Routine was submitted by a session Brain did not fire, so it counts
+ * as supporting evidence and never as fleet evidence. Read-only, last 7 days.
+ */
+async function readableRouteUse(projectId: string): Promise<void> {
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const rows = await getDb()
+    .all<{
+      id: string;
+      created_at: string;
+      source_url: string;
+      accepted: number;
+      routine_name: string | null;
+      session_ref: string | null;
+    }>(
+      `SELECT c.id, c.created_at, c.source_url, c.accepted, r.name AS routine_name,
+              p.executor_session_ref AS session_ref
+         FROM research_claims c
+         JOIN research_orchestrations o ON o.id = c.orchestration_id
+         LEFT JOIN research_passes p ON p.id = c.pass_id
+         LEFT JOIN fleet_routines r ON r.id = p.executor_routine_id
+        WHERE o.project_id = ? AND c.created_at >= ?
+          AND (c.source_url LIKE '%freelancer.com/api/%'
+               OR c.source_url LIKE '%sam.gov/api/%'
+               OR c.source_url LIKE '%publicsurplus.com/sms/%')
+        ORDER BY c.created_at`,
+      [projectId, since],
+    )
+    .catch((error: Error) => {
+      console.log(`READABLE ROUTES — could not be read: ${error.message}`);
+      return null;
+    });
+  if (rows === null) return;
+  const fleet = rows.filter((row) => row.routine_name !== null);
+  console.log('');
+  console.log(
+    `READABLE ROUTES (7d) — ${rows.length} claim(s) cite a route; ${fleet.length} from a fired Routine, ` +
+      `${rows.length - fleet.length} from a session Brain did not fire; ` +
+      `${rows.filter((row) => row.accepted === 1).length} accepted`,
+  );
+  for (const row of rows.slice(-25)) {
+    console.log(
+      `  ${row.created_at} ${row.id} ${row.accepted === 1 ? 'ACCEPTED' : 'unaccepted'} ` +
+        `routine=${row.routine_name ?? '—'} session=${row.session_ref ?? '—'} ${row.source_url.slice(0, 110)}`,
+    );
+  }
 }
 
 /**

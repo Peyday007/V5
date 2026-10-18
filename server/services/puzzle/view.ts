@@ -239,9 +239,9 @@ function physicalReading(
     stage,
     reading:
       stage === 0
-        ? 'Nothing physical. Everything this kernel has made is text, which is enough to prove ' +
-          'a puzzle and not enough to print one — TYPESET_FOR_PRINT reads MISSING, and it is ' +
-          'the first capability between here and any printed route.'
+        ? 'Nothing physical. Sudoku can now be typeset as a print-ready interior ' +
+          '(TYPESET_FOR_PRINT, sudoku only), and no print-on-demand or production route is ' +
+          'established yet, so nothing has been compiled as a physical product.'
         : stage === 1
           ? `${production.length} production route(s) are established and nothing physical has ` +
             'been compiled. The next step is a print-on-demand or prototype run, which puts no ' +

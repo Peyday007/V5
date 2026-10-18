@@ -51,14 +51,17 @@
     "design": "tsx --env-file-if-exists=.env scripts/design.ts",
     "capability": "tsx --env-file-if-exists=.env scripts/capability.ts",
     "manufacturing": "tsx --env-file-if-exists=.env scripts/manufacturing.ts",
-    "scenario:bench": "tsx scripts/scenario-bench.ts"
+    "scenario:bench": "tsx scripts/scenario-bench.ts",
+    "puzzle-book": "tsx scripts/puzzle-book.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
+    "@pdf-lib/fontkit": "^1.1.1",
     "cross-env": "^7.0.3",
     "express": "^4.21.2",
     "mammoth": "^1.12.1",
     "multer": "^2.0.2",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.2.108",
     "pg": "^8.23.0",
     "react": "^18.3.1",
