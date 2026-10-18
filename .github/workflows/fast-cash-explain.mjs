@@ -23,8 +23,16 @@ if (!goal) {
   );
   for (const p of packets) {
     console.log(`  packet ${p.goal_packet_key} ${p.id} ${p.status} ${p.created_at}`);
-    const frags = await db.all('SELECT fragment_key AS key, status, attempt FROM research_fragments WHERE orchestration_id = ? ORDER BY fragment_index', [p.id]);
-    for (const f of frags) console.log(`    fragment ${f.key} ${f.status} attempt ${f.attempt}`);
+    const orc = await db.get('SELECT failure_reason FROM research_orchestrations WHERE id = ?', [p.id]).catch(() => null);
+    if (orc?.failure_reason) console.log(`    reason: ${String(orc.failure_reason).slice(0, 400)}`);
+    const frags = await db.all('SELECT id, fragment_key AS key, status, attempt, max_repairs, blocked_reason FROM research_fragments WHERE orchestration_id = ? ORDER BY fragment_index', [p.id]);
+    for (const f of frags) console.log(`    fragment ${f.key} ${f.id} ${f.status} attempt ${f.attempt}/${Number(f.max_repairs) + 1} :: ${String(f.blocked_reason ?? '').slice(0, 260)}`);
+    const asks = await db.all(
+      `SELECT id, state, authority_needed, choices, resume_key, created_at FROM russell_human_requests
+        WHERE project_id = ? AND (resume_key LIKE ? OR resume_key LIKE ? OR why_not_russell LIKE ?) ORDER BY created_at`,
+      [goal.project_id, `%${p.id}%`, `%${goal.id}%`, `%${p.id}%`],
+    ).catch(() => []);
+    for (const a of asks) console.log(`    ask ${a.id} ${a.state} ${a.created_at} key=${a.resume_key} :: ${String(a.authority_needed).slice(0, 200)} choices=${String(a.choices).slice(0, 300)}`);
     const bins = await db.all('SELECT id, state, attempt_count, max_attempts FROM bins WHERE orchestration_id = ? ORDER BY created_at', [p.id]);
     for (const b of bins) console.log(`    bin ${b.id} ${b.state} ${b.attempt_count}/${b.max_attempts}`);
     const items = await db.all('SELECT id, work_type, state, attempt_count, worker_id, updated_at FROM work_items WHERE payload LIKE ? ORDER BY created_at', [`%${p.id}%`]).catch(() => []);
