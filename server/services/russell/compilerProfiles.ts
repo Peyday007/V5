@@ -42,6 +42,7 @@ export type CompilerProfileId =
   | 'PUBLIC_RECORDS'
   | 'MARKET_DISCOVERY'
   | 'COMMERCIAL_VALIDATION'
+  | 'COMMERCIAL_VALIDATION_SCREEN'
   | 'MONETIZATION_ATTRIBUTE'
   | 'INDUSTRY_STRUCTURE'
   | 'CAPITAL_STRUCTURE'
@@ -572,6 +573,63 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
       'found about a different one is reported as out of scope rather than used.',
   ],
 };
+
+/**
+ * The first stage of a deep dive: the kill questions, and nothing else.
+ *
+ * `COMMERCIAL_VALIDATION` asks sixteen lanes of an opening at once, and
+ * production measured what that costs on an opening nobody would pay for: a
+ * whole packet of price, cost, timing and effort research about something a
+ * single payer question would have ended. So when an opening's payer is not yet
+ * established, the dive is asked in two stages, and this is the first. It asks
+ * whether the opening is still open to a supplier like us (`ruled_out`), who
+ * actually pays (`payer`), and whether anything published rules it out
+ * (`disqualifier`) — the three answers that can each end the opening by
+ * themselves.
+ *
+ * **No bar moves.** The lanes are `COMMERCIAL_VALIDATION`'s own lane objects,
+ * taken by reference rather than restated, so each carries exactly the same
+ * evidence kind, necessity and description, and therefore exactly the same
+ * per-lane floor at the gate. The envelope is the same
+ * (`RUSSELL_CASH_VALIDATION_V1`), the gate is the same, the verification pass
+ * and the three audit roles are the same. An opening still needs every
+ * qualification field before it is QUALIFIED; only the order of asking changed,
+ * and an opening that fails here stops costing a full dive.
+ *
+ * It is not reachable through `profileFor`: an envelope names one profile, and
+ * which stage a dive is in is a fact about the opening (the dive's own started
+ * event), resolved by the compiler through `validationScreenProfile`.
+ */
+const SCREEN_LANES = new Set(['payer', 'ruled_out', 'disqualifier']);
+const COMMERCIAL_VALIDATION_SCREEN: CompilerProfile = {
+  ...COMMERCIAL_VALIDATION,
+  id: 'COMMERCIAL_VALIDATION_SCREEN',
+  fragmentKey: 'opening-screen',
+  /*
+   * Ahead of a full dive, by ten: a kill question is cheaper than the
+   * refinement it may make unnecessary, so it launches first. Still behind
+   * nothing else that was ahead of a deep dive, and still an ordering rather
+   * than a permission.
+   */
+  launchOrdinal: COMMERCIAL_VALIDATION.launchOrdinal - 10,
+  lanes: COMMERCIAL_VALIDATION.lanes.filter((lane) => SCREEN_LANES.has(lane.id)),
+  failureConditions: [
+    'No published source names who would actually pay, so the opening cannot be qualified ' +
+      'and the rest of it is not worth asking.',
+    'A published fact rules the opening out: its closing date has passed, it is closed, ' +
+      'filled or awarded, or a published rule excludes a supplier like this one.',
+  ],
+};
+
+/**
+ * The screen profile, for the compiler to use in place of
+ * `COMMERCIAL_VALIDATION` when the dive it is compiling is a stage-one screen.
+ * Null for any envelope whose profile is not the commercial validation one, so
+ * no other kind of question can be narrowed by this.
+ */
+export function validationScreenProfile(envelopeId: string): CompilerProfile | null {
+  return profileFor(envelopeId)?.id === 'COMMERCIAL_VALIDATION' ? COMMERCIAL_VALIDATION_SCREEN : null;
+}
 
 /**
  * The question that builds the map rather than searching inside it.

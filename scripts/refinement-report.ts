@@ -70,10 +70,11 @@ import { getBin } from '../server/repos/bins.ts';
 import { checkAuthority, spendTotals } from '../server/repos/russellAuthority.ts';
 import { RESEARCH_WORK_CLASS } from '../server/services/russell/launch.ts';
 import {
-  MAX_VALIDATIONS_IN_FLIGHT,
+  MAX_SCREENS_PER_EPOCH,
   MAX_VALIDATION_ROUNDS,
   VALIDATION_STALL_MS,
   describeDiveRefusal,
+  diveRoom,
   sprintCanRefine,
   whyNotDiving,
 } from '../server/services/cash/validation.ts';
@@ -141,15 +142,21 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
     (one) => one.validationState === 'PENDING' || one.validationState === 'RUNNING',
   ).length;
   const parked = opportunities.filter((one) => one.validationState === 'NEEDS_PERSON').length;
+  /*
+   * The room is derived (OPPORTUNITY-INTELLIGENCE §3.4): the grant's free slots
+   * less one for discovery, the routable research surfaces, and zero while the
+   * database is shedding. Printed with what limited it, because "no room" has
+   * three causes with three different remedies.
+   */
+  const room = await diveRoom(projectId, opportunities);
   console.log(
-    `  in flight   ${holding} of ${MAX_VALIDATIONS_IN_FLIGHT} slots` +
+    `  in flight   ${holding} (room for ${room.room} more, limited by ${room.limitedBy}: ${room.reason})` +
       `  ·  ${parked} parked for a person, holding none` +
-      `  ·  rounds cap ${MAX_VALIDATION_ROUNDS}  ·  stall after ${human(VALIDATION_STALL_MS)}`,
+      `  ·  per epoch ${MAX_VALIDATION_ROUNDS} full dive(s) + ${MAX_SCREENS_PER_EPOCH} screen` +
+      `  ·  stall after ${human(VALIDATION_STALL_MS)}`,
   );
-  if (holding >= MAX_VALIDATIONS_IN_FLIGHT) {
-    console.log(
-      `  NOTE        every slot is taken, so no opening that has never been qualified can start.`,
-    );
+  if (room.room === 0) {
+    console.log(`  NOTE        no new dive can start now: ${room.limitedBy} — ${room.reason}.`);
   }
 
   /*
@@ -177,8 +184,8 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
         : sprint.kind === 'NO_RESEARCH_AUTHORITY'
           ? 'no live research grant covers this project, so nothing could be compiled'
           : sprint.kind === 'SLOTS_TAKEN'
-            ? `no free slot: ${sprint.inFlight} of ${sprint.cap} are held by live dives`
-            : `${sprint.free} of ${sprint.cap} slot(s) free`;
+            ? `no room (${sprint.limitedBy}): ${sprint.inFlight} in flight; ${sprint.reason}`
+            : `room for ${sprint.free} more (${sprint.limitedBy}); ${sprint.reason}`;
   console.log('');
   console.log('WHY REFINEMENT IS OR IS NOT MOVING');
   console.log(`  sprint      ${sprintLine}`);

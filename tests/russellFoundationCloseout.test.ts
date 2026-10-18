@@ -31,7 +31,7 @@ import { bindRoutineWorker, createAccount, createRoutine } from '../server/repos
 import { createConversation, getConversation } from '../server/repos/russellConversations.ts';
 import { adoptSurface } from '../server/services/capacity/adopt.ts';
 import {
-  MAX_VALIDATIONS_IN_FLIGHT,
+  diveRoom,
   MAX_VALIDATION_ROUNDS,
   VALIDATION_STALL_MS,
   settleValidations,
@@ -666,7 +666,7 @@ describe('the refinement lifecycle is bounded and says what it is doing', () => 
     // A number rather than a comment: the report prints it, and a stall
     // longer than this is what frees the slot.
     expect(VALIDATION_STALL_MS).toBeGreaterThan(60 * 60 * 1000);
-    expect(MAX_VALIDATIONS_IN_FLIGHT).toBeGreaterThan(0);
+    expect(MAX_VALIDATION_ROUNDS).toBeGreaterThan(0);
   });
 
   /**
@@ -900,7 +900,7 @@ describe('the refinement lifecycle is bounded and says what it is doing', () => 
 
     expect((await whyNotDiving(eligible)).kind).toBe('ELIGIBLE');
     expect((await whyNotDiving(silent)).kind).toBe('NOTHING_PUBLISHED_TO_ASK_ABOUT');
-    expect((await whyNotDiving(spent)).kind).toBe('ROUNDS_SPENT');
+    expect((await whyNotDiving(spent)).kind).toBe('EPOCH_SPENT');
     expect((await whyNotDiving(closed)).kind).toBe('NOT_A_QUALIFYING_STATE');
 
     /*
@@ -1013,12 +1013,15 @@ describe('the refinement lifecycle is bounded and says what it is doing', () => 
     });
     if (!started.ok) return;
 
-    // A sprint with nothing running has free slots, and says how many.
+    // A sprint with nothing running has room, and says how much. The room is
+    // derived (grant, surfaces, pressure); with no fleet it is the floor of one.
     const free = await sprintCanRefine(fixture.project.id);
-    expect(free).toEqual({ kind: 'READY', free: MAX_VALIDATIONS_IN_FLIGHT, cap: MAX_VALIDATIONS_IN_FLIGHT });
+    const room = await diveRoom(fixture.project.id);
+    expect(room.room).toBeGreaterThan(0);
+    expect(free).toMatchObject({ kind: 'READY', free: room.room, cap: room.cap });
 
-    // Fill every slot with a live dive.
-    for (let i = 0; i < MAX_VALIDATIONS_IN_FLIGHT; i += 1) {
+    // Fill the room with live dives.
+    for (let i = 0; i < room.room; i += 1) {
       const held = await createOpportunity({
         projectId: fixture.project.id,
         cashModeId: started.mode.id,

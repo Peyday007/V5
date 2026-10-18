@@ -51,7 +51,9 @@ import { readMoneyFigures } from '../figures.ts';
 import { discoveryAllowed } from '../lifecycle.ts';
 import { discoveryAuthority } from '../discoveryAuthority.ts';
 import { composeLedger, rankableOf } from './ledger.ts';
-import { allocateCommissions, MAX_OPEN_COMMISSIONS } from './commission.ts';
+import { allocateCommissions } from './commission.ts';
+import { researchRoom, type ResearchRoom } from '../researchRoom.ts';
+import { diveEpochStart } from '../diveStage.ts';
 import type { CommissionAsk } from './commission.ts';
 import type { Ledger } from './ledger.ts';
 import type {
@@ -236,7 +238,7 @@ export async function runCommissions(input: {
    * A question parked for a person is using no provider capacity, so it holds
    * no slot.
    *
-   * `MAX_VALIDATIONS_IN_FLIGHT` was corrected for exactly this and the reason
+   * The dive room (then a fixed two) was corrected for exactly this and the reason
    * is recorded beside it: counting a parked dive made a Brain with two of them
    * unable to start a thirty-ninth for ever. **What holds a slot is what a
    * worker is working on.** Three commissions parked at `NEEDS_HUMAN` would
@@ -249,11 +251,21 @@ export async function runCommissions(input: {
    * bounded by `MAX_COMMISSION_ROUNDS`.
    */
   let holding = 0;
+  let unlaunched = 0;
   for (const one of open) {
     const mission = await latestMissionForCandidate(one.candidateId);
     if (mission?.state === 'NEEDS_HUMAN') continue;
     holding += 1;
+    // Not launched yet, so it has not reserved its grant slot.
+    if (!mission) unlaunched += 1;
   }
+  /*
+   * How many more may open, derived (§3.4) rather than the fixed three it was:
+   * the grant's free slots less one for discovery, the surfaces that could run
+   * a question now, and zero while the database is shedding. Never above the
+   * person-set grant.
+   */
+  const room = await researchRoom({ projectId: input.projectId, inFlight: holding, unlaunched });
   /*
    * A question about an opening that can no longer be pursued is not worth an
    * activation. Production, 2026-10-17: duplicates, disqualified and expired
@@ -265,13 +277,28 @@ export async function runCommissions(input: {
   const live = input.ledger.entries.filter(
     (one) => !(one.subject?.kind === 'OPPORTUNITY' && closed.has(one.subject.id)),
   );
+  /*
+   * Each opening's change epoch, for the possibilities about it: only askings
+   * of the current epoch spend its rounds (`MAX_COMMISSION_ROUNDS`).
+   */
+  const epochStarts = new Map<string, string>();
+  const opportunities = new Map(
+    (await listOpportunities({ projectId: input.projectId })).map((one) => [one.id, one]),
+  );
+  for (const entry of live) {
+    if (entry.subject?.kind !== 'OPPORTUNITY') continue;
+    const opportunity = opportunities.get(entry.subject.id);
+    const start = opportunity ? diveEpochStart(opportunity) : null;
+    if (start) epochStarts.set(entry.path.id, start);
+  }
   const plan = allocateCommissions({
     entries: live,
     rankable: live.map(rankableOf),
     commissions,
     contradicted: await contradictedPathAnswers(input.projectId),
-    slots: Math.max(0, MAX_OPEN_COMMISSIONS - holding),
+    slots: room.room,
     now: Date.parse(input.now ?? input.ledger.readAt),
+    epochStarts,
   });
 
   const opened = await openAsks({
@@ -428,7 +455,7 @@ async function openAsks(input: {
  * path, and §5's rule is that a question ceasing to be worth answering is not
  * a reason to destroy the answer. What it *does* free is the slot: three
  * commissions against archived possibilities would otherwise hold all of
- * `MAX_OPEN_COMMISSIONS` for ever, which is §24's *waiting nobody can resolve*
+ * every open-question slot for ever, which is §24's *waiting nobody can resolve*
  * and the identical defect `MAX_VALIDATIONS_IN_FLIGHT` already records — here
  * with nobody even able to resolve it, because the person has already said
  * they do not want this.
@@ -783,6 +810,26 @@ export function readDays(text: string): number | null {
 function clamp(text: string, max: number): string {
   const tidy = text.trim().replace(/\s+/g, ' ');
   return tidy.length <= max ? tidy : `${tidy.slice(0, max - 1)}…`;
+}
+
+/**
+ * How many questions may be open at once in this project right now: those
+ * holding capacity plus the room to open more. The figure the operator surface
+ * prints beside the open count, so the two are read from the same rule the
+ * pass applies rather than from a constant.
+ */
+export async function commissionCapacity(projectId: string): Promise<number> {
+  const open = await listCommissions({ projectId, state: 'OPEN' });
+  let holding = 0;
+  let unlaunched = 0;
+  for (const one of open) {
+    const mission = await latestMissionForCandidate(one.candidateId);
+    if (mission?.state === 'NEEDS_HUMAN') continue;
+    holding += 1;
+    if (!mission) unlaunched += 1;
+  }
+  const room: ResearchRoom = await researchRoom({ projectId, inFlight: holding, unlaunched });
+  return room.cap;
 }
 
 /** Every asking about one possibility, for the operator surface. */

@@ -75,7 +75,7 @@ import { cashRoadmap, type CashRoadmap } from './roadmap.ts';
 import { authorityFor } from './opportunities.ts';
 import { composeLedger, type Ledger } from './monetization/ledger.ts';
 import { commissionView, type CommissionWorkState } from './monetization/inFlight.ts';
-import { MAX_OPEN_COMMISSIONS } from './monetization/commission.ts';
+import { commissionCapacity } from './monetization/commissionPass.ts';
 import { composeSurface, movementSentence, TOP_SHOWN } from './monetization/surface.ts';
 import { explainRanking } from './monetization/rank.ts';
 import { rankableOf } from './monetization/ledger.ts';
@@ -349,7 +349,7 @@ async function sharedMonetization(
   composed?: Ledger,
 ): Promise<SharedMonetization> {
   const ledger = composed ?? (await composeLedger({ projectId }));
-  const work = await commissionView({ projectId, ledger, capacity: MAX_OPEN_COMMISSIONS });
+  const work = await commissionView({ projectId, ledger, capacity: await commissionCapacity(projectId) });
   const surface = composeSurface({ ledger });
   const live = ledger.entries.filter(
     (one) => one.status !== 'INVALIDATED' && one.status !== 'ARCHIVED',
