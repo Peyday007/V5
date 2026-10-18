@@ -35,8 +35,9 @@ if (!goal) {
     for (const a of asks) console.log(`    ask ${a.id} ${a.state} ${a.created_at} key=${a.resume_key} :: ${String(a.authority_needed).slice(0, 200)} choices=${String(a.choices).slice(0, 300)}`);
     const bins = await db.all('SELECT id, state, attempt_count, max_attempts FROM bins WHERE orchestration_id = ? ORDER BY created_at', [p.id]);
     for (const b of bins) console.log(`    bin ${b.id} ${b.state} ${b.attempt_count}/${b.max_attempts}`);
-    const items = await db.all('SELECT id, work_type, state, attempt_count, worker_id, updated_at FROM work_items WHERE payload LIKE ? ORDER BY created_at', [`%${p.id}%`]).catch(() => []);
-    for (const i of items) console.log(`    item ${i.id} ${i.work_type} ${i.state} att=${i.attempt_count} worker=${i.worker_id ?? '-'} ${i.updated_at}`);
+    const items = await db.all('SELECT id, work_type, state, attempt_count, max_attempts, worker_id, lease_expires_at, created_at FROM work_items WHERE payload LIKE ? ORDER BY created_at', [`%${p.id}%`]).catch((error) => { console.log(`    item read failed: ${error.message}`); return []; });
+    for (const i of items.slice(-12)) console.log(`    item ${i.id} ${i.work_type} ${i.state} att=${i.attempt_count}/${i.max_attempts} worker=${i.worker_id ?? '-'} lease=${i.lease_expires_at ?? '-'} created=${i.created_at}`);
+    for (const e of await db.all(`SELECT at, event_type, worker_id, routine_id, outcome, reason FROM bin_events WHERE orchestration_id = ? ORDER BY at DESC LIMIT 12`, [p.id]).catch(() => [])) console.log(`    event ${e.at} ${e.event_type} ${e.outcome ?? ''} worker=${e.worker_id ?? '-'} routine=${e.routine_id ?? '-'} ${String(e.reason ?? '').slice(0, 140)}`);
   }
   const inventory = await inventoryProject(goal.project_id);
   console.log(`  archive: documentsPending=${inventory.documentsPending} claims=${inventory.claims.length}`);
