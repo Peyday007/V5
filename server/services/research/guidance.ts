@@ -12,11 +12,35 @@
  */
 import type { ResearchFragment } from '../../domain/types.ts';
 import { hostReachability, type ReachabilitySurface } from '../../repos/research.ts';
-import { reusableLessons } from '../../repos/researchIntelligence.ts';
+import { lessonsForPrompt } from './intelligence/retrospective.ts';
 import { composeGuidance, type ResearchGuidance } from './prompts.ts';
 
 /** How far back "recently could not read" looks. */
 export const REACHABILITY_WINDOW_MS = 7 * 86_400_000;
+
+/**
+ * Stored lessons plus the usefulness lessons derived from the last 30 days of
+ * research rows (`retrospective.ts` `lessonsForPrompt`). The derivation is an
+ * aggregate over a month of passes, so it is read at most every ten minutes
+ * per project rather than once per assignment (§61).
+ */
+const LESSON_CACHE_MS = 10 * 60_000;
+const lessonCache = new Map<string, { at: number; value: { abstraction: string; lesson: string }[] }>();
+
+export function resetLessonCache(): void {
+  lessonCache.clear();
+}
+
+async function lessonsFor(projectId: string, now: number): Promise<{ abstraction: string; lesson: string }[]> {
+  const hit = lessonCache.get(projectId);
+  if (hit && now - hit.at >= 0 && now - hit.at < LESSON_CACHE_MS) return hit.value;
+  const value = (await lessonsForPrompt(projectId)).map((one) => ({
+    abstraction: one.abstraction,
+    lesson: one.lesson,
+  }));
+  lessonCache.set(projectId, { at: now, value });
+  return value;
+}
 
 export async function guidanceFor(input: {
   projectId: string;
@@ -35,7 +59,7 @@ export async function guidanceFor(input: {
    */
   const [reachability, lessons] = await Promise.all([
     hostReachability(input.surface, since).catch(() => []),
-    reusableLessons(input.projectId).catch(() => []),
+    lessonsFor(input.projectId, input.now ?? Date.now()).catch(() => []),
   ]);
   return composeGuidance({
     fragment: input.fragment,
