@@ -926,6 +926,8 @@ describe.skipIf(Boolean((process.env.BRAIN_TEST_DATABASE_URL ?? '').trim()))(
           maxBuffer: 64 * 1024 * 1024,
         },
       );
+      // The readable-route section reads, and reports zero rather than failing.
+      expect(output).toContain('READABLE ROUTES (7d) — 0 claim(s) cite a route');
       const missions = Number((await getDb().get<{ n: number }>(
         'SELECT COUNT(*) AS n FROM russell_missions WHERE project_id = ?',
         [projectId],
