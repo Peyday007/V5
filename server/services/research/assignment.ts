@@ -455,8 +455,15 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
     dependencyOutcomes,
     bundleKey: fragment ? bundleKeyFor(fragment, current) : null,
     method: { version: RESEARCH_METHOD_VERSION, summary: RESEARCH_METHOD_SUMMARY },
+    /*
+     * A verification re-reads the fragment's sources, so it is told the
+     * readable routes and unreadable hosts too, without the fragment-scoped
+     * lines (search strategy, siblings), which are about researching.
+     */
     guidance:
-      (item.workType === 'RESEARCH_FRAGMENT' && fragment) || item.workType === 'RESEARCH_PLAN'
+      (item.workType === 'RESEARCH_FRAGMENT' && fragment) ||
+      (item.workType === 'RESEARCH_VERIFY' && fragment) ||
+      item.workType === 'RESEARCH_PLAN'
         ? await guidanceFor({
             projectId: orchestration.projectId,
             fragment: item.workType === 'RESEARCH_FRAGMENT' ? fragment : null,
@@ -465,6 +472,9 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
               question: candidate.question,
             })),
             surface: item.workerId ? { workerId: item.workerId } : null,
+            contextText: [orchestration.title, item.workType === 'RESEARCH_VERIFY' ? fragment?.question : null]
+              .filter(Boolean)
+              .join(' '),
           })
         : null,
     checkpoints: checkpoints.map((checkpoint: WorkItemCheckpoint) => ({

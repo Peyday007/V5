@@ -83,6 +83,8 @@ export function composeGuidance(input: {
   siblings: { fragmentKey: string; question: string }[];
   reachability: { host: string; outcome: string; at: string }[];
   lessons: { abstraction: string; lesson: string }[];
+  /** Other text naming what is being researched, such as the packet's title. */
+  contextText?: string | null;
 }): ResearchGuidance {
   const notYours = input.fragment
     ? input.siblings
@@ -100,7 +102,7 @@ export function composeGuidance(input: {
     .slice(0, MAX_GUIDANCE_LESSONS)
     .map((lesson) => ({ abstraction: lesson.abstraction, lesson: lesson.lesson }));
   const readableRoutes = routesFor({
-    question: input.fragment?.question ?? null,
+    question: [input.fragment?.question, input.contextText].filter(Boolean).join(' ') || null,
     unreachableHosts: unreachableHosts.map((entry) => entry.host),
   }).map((route) => ({ host: route.host, lines: [...route.lines] }));
 
