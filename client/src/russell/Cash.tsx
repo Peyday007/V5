@@ -30,6 +30,14 @@ import { listState, humanWhen } from './present.ts';
 import { cashPage, modeState, type CashPage } from './cashPage.ts';
 import { Api } from '../lib/api.ts';
 import { JourneyLessons, DealJourney, JourneyTotals } from './CashJourney.tsx';
+import {
+  ActionableNow,
+  DormantPieces,
+  ReconsideredRecently,
+  ResearchProgressBlock,
+  SharedBlockers,
+  StandingLine,
+} from './CashStanding.tsx';
 import type { Project } from '../../../server/domain/types.ts';
 import {
   CashApi,
@@ -2884,6 +2892,7 @@ function Details({ page, onChanged }: { page: CashPage; onChanged(): void }): JS
             {frontier.roadmap.research.planned} planned items
           </span>
         </summary>
+        <ResearchProgressBlock page={page} />
         <Roadmap roadmap={frontier.roadmap} discoveryReason={frontier.discovery.reason} />
       </details>
       <details className="rs-card rs-cash-money-detail">
@@ -2997,6 +3006,17 @@ function Portfolio({
               earn belongs to whoever takes it on.
             </p>
           )}
+          {/*
+            * Standing, inside this section rather than beside it (§36): the
+            * whole actionable list (the five above are a highlight), the
+            * stopped pieces with what would reopen them and the reconsider
+            * control, and what was reconsidered recently. Both roles render
+            * all three; what is inside each is the role's payload.
+            */}
+          <ActionableNow page={page} />
+          <DormantPieces page={page} onChanged={onChanged} />
+          <ReconsideredRecently page={page} />
+          <h4>Every record</h4>
           <ul className="rs-list">
             {frontier.opportunities.map((one) => {
               const placement = view?.myCurrentWork.placements.find(
@@ -3012,6 +3032,7 @@ function Portfolio({
                   </p>
                   <p className="rs-decision-why">{placement ? placement.because : one.because}</p>
                   <FirstBlocker tier={placement?.tier ?? one.tier} />
+                  <StandingLine page={page} id={one.id} />
                   {placement?.opportunity.exhaustedAt ? (
                     <p className="rs-item-meta">
                       This opening is finished: {placement.opportunity.exhaustedReason}. Whatever it
@@ -3690,6 +3711,7 @@ function Needs({ page }: { page: CashPage }): JSX.Element {
   return (
     <section className="rs-card rs-cash-needs">
       <h3>What Brain needs</h3>
+      <SharedBlockers page={page} />
       {needs.length === 0 ? (
         <p className="rs-hint">Nothing is missing that Brain knows about.</p>
       ) : (

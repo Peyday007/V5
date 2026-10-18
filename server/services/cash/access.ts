@@ -178,6 +178,14 @@ export interface CashCapabilities {
   mayViewPrivateJob: boolean;
   /** Record an action, mark a piece ready, answer a decision. */
   mayActOnJob: boolean;
+  /**
+   * Return a piece somebody archived or declined to evaluation. A project
+   * write (the route's default level for a POST), and a person's decision —
+   * the route refuses a worker by type.
+   */
+  mayReconsider: boolean;
+  /** Why `mayReconsider` is false, in the server's words; null when it is true. */
+  reconsiderRefusal: string | null;
 }
 
 export function cashCapabilities(input: {
@@ -196,13 +204,22 @@ export function cashCapabilities(input: {
       mayGrantAuthority: false,
       mayViewPrivateJob: false,
       mayActOnJob: false,
+      mayReconsider: false,
+      reconsiderRefusal:
+        'Reconsidering a stopped opening is a decision for whoever runs this operation; this ' +
+        'page is a shared reading of it.',
     };
   }
   const administers = decideProjectAccess(currentPrincipal(), input.projectId, 'ADMIN').allowed;
+  const writes = decideProjectAccess(currentPrincipal(), input.projectId, 'WRITE').allowed;
   return {
     mayAdminister: administers,
     mayGrantAuthority: administers,
     mayViewPrivateJob: true,
     mayActOnJob: true,
+    mayReconsider: writes,
+    reconsiderRefusal: writes
+      ? null
+      : 'Your access to this project reads it. Reconsidering a stopped opening is a write.',
   };
 }

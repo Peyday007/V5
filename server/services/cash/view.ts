@@ -34,6 +34,8 @@ import { executionRecord, type ExecutionRecord } from './record.ts';
 import { compressedReview } from './review.ts';
 import { authorityFor } from './opportunities.ts';
 import { sharedFrontier, type SharedFrontier } from './shared.ts';
+import { readStandingRows } from './standing.ts';
+import { ownerStandingSurface, type OwnerStandingSurface } from './standingSurface.ts';
 import type {
   CashCardFact,
   CashCommitment,
@@ -168,6 +170,14 @@ export interface CashView {
     engineCards: Record<string, EngineCard>;
     /** The arithmetic behind each piece, with every input named. */
     economics: Record<string, DerivedFigure[]>;
+    /**
+     * Standing across the whole portfolio, in the owner's words: the shared
+     * blockers grouped by key, the dormant pieces' reopen keys, what was
+     * reconsidered recently and why, each piece's recorded standing history,
+     * its reopen conditions, and whether the reconsider transition accepts it.
+     * `actionable` and `dormant` above are the lists; this is what explains them.
+     */
+    standingSurface: OwnerStandingSurface;
   };
   whatBrainHasDone: CashEvent[];
   /**
@@ -300,6 +310,7 @@ export async function cashView(input: {
   }
 
   const lessons = await cashOutcomeLessons(input.projectId);
+  const standingRows = await readStandingRows(input.projectId, opportunities);
   const plan = assemble({
     opportunities,
     tiers,
@@ -310,7 +321,16 @@ export async function cashView(input: {
     // ready piece reads as waiting on the one decision nobody has made.
     maxConcurrent: authority?.maxConcurrent ?? 0,
     discoveryOpen: mode?.state === 'ACTIVE',
+    /*
+     * The rows standing reads beyond the placement — open needs, reopen
+     * conditions, the deep dive's own refusal and the dive room — read once and
+     * shared with the frontier below, so the owner's standing and the one a
+     * member is told are the same derivation over the same rows.
+     */
+    standingInputs: standingRows.standingInputs,
+    diveRoom: standingRows.diveRoom,
   });
+  const standings = new Map(plan.placements.map((p) => [p.opportunity.id, p.standing]));
 
   /*
    * The possibility ledger, composed once for both blocks below.
@@ -435,6 +455,13 @@ export async function cashView(input: {
     },
     myCurrentWork: {
       ...plan,
+      standingSurface: await ownerStandingSurface({
+        projectId: input.projectId,
+        opportunities,
+        standings,
+        rows: standingRows,
+        now,
+      }),
       cards,
       provenance,
       engineCards,
@@ -474,7 +501,12 @@ export async function cashView(input: {
      * two blocks are provably the same rows read once rather than two readings
      * that agree today.
      */
-    frontier: await sharedFrontier({ projectId: input.projectId, ledger }),
+    frontier: await sharedFrontier({
+      projectId: input.projectId,
+      ledger,
+      standings,
+      standingRows,
+    }),
     /*
      * The owner's reading of that same ledger. It is a *different projection*
      * over one composition: the shared one is names and counts by construction
