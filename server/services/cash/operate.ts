@@ -57,9 +57,27 @@ import {
   deferNeedContinuation,
   finishNeedContinuation,
   setNeedCandidate,
+  opportunitiesRequiring,
+  opportunitiesTouchedSince,
+  setNeedBlockerKeyIfUnset,
 } from '../../repos/cashPortfolio.ts';
+import { advanceWatermark, getWatermark } from '../../repos/cashReconsideration.ts';
+import { parseBlockerKey } from '../../domain/types.ts';
+import {
+  recordDerivedReopenConditions,
+  reconsiderAffected,
+  type DerivedCondition,
+  type ReconsiderPass,
+} from './reconsider.ts';
+import { projectStandings, recordStandingChanges, type StandingChange } from './standing.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
-import { readCapability, needForCapability } from './capabilities.ts';
+import {
+  readAllCapabilities,
+  readCapability,
+  readingFrom,
+  needForCapability,
+  type CapabilityReading,
+} from './capabilities.ts';
 import { cardFactsFor } from '../../repos/cashCardFacts.ts';
 import { evidenceCard } from './card.ts';
 import { cashEngineCard } from './engineCard.ts';
@@ -128,82 +146,197 @@ function capabilityKey(opportunityId: string, capabilityId: string): string {
 export interface CapabilityReconciliation {
   raised: string[];
   settled: string[];
+  /** How many pieces this pass looked at. A pass over an unchanged portfolio looks at few. */
+  examined?: number;
 }
 
+/** The watermark the capability-need pass reads its own position from. */
+export const CAPABILITY_NEEDS_SOURCE = 'capability-needs';
+
+/**
+ * How far back the touched-pieces read reaches past the last position.
+ *
+ * A row committed a moment after the pass read the clock carries a timestamp
+ * just before it; reading a little behind the watermark re-reads those rather
+ * than missing them. Re-reading is free: raising is idempotent by request key
+ * and settling only moves an open need.
+ */
+const TOUCHED_OVERLAP_MS = 5 * 60_000;
+
+function capabilityMarker(
+  readings: ReadonlyMap<string, CapabilityReading>,
+  previous: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = { ...previous };
+  for (const reading of readings.values()) {
+    // A reader that could not answer has not answered; its last value stands.
+    if (reading.state === 'UNKNOWN') continue;
+    out[reading.id] = reading.state;
+  }
+  return out;
+}
+
+function markerOf(value: Record<string, string>): string {
+  return JSON.stringify(Object.fromEntries(Object.keys(value).sort().map((key) => [key, value[key]])));
+}
+
+function readMarker(marker: string | null | undefined): Record<string, string> {
+  if (!marker) return {};
+  try {
+    const parsed = JSON.parse(marker) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+    );
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Raise one need per capability a piece requires and this Brain does not
+ * verifiably have; settle one whose capability arrived or is no longer
+ * required.
+ *
+ * **It no longer rescans the portfolio.** The vocabulary is read once — by the
+ * reconsideration pass, which hands its readings in, or here when called on its
+ * own — and compared with the readings this pass last acted on. The pieces it
+ * looks at are the ones that could have changed: those written since its last
+ * position (created, edited, moved, or flagged for reconsideration), and those
+ * requiring a capability whose reading changed. On its first pass, with no
+ * position, it looks at everything once. Every need it raises carries the
+ * shared `CAPABILITY:<id>` blocker key, so one indexed read finds every piece a
+ * capability arriving unblocks.
+ */
 export async function reconcileCapabilityNeeds(
   projectId: string,
+  context: { readings?: ReadonlyMap<string, CapabilityReading> } = {},
 ): Promise<CapabilityReconciliation> {
   const out: CapabilityReconciliation = { raised: [], settled: [] };
-  const open = await listNeeds({ projectId, states: ['OPEN'] });
-  const byKey = new Map(open.filter((one) => one.requestKey).map((one) => [one.requestKey!, one]));
+  // The real clock, never a caller's `now`: this is a position in the rows'
+  // own timestamps, which are written by the real clock.
+  const startedAt = new Date().toISOString();
+  const readings = context.readings ?? (await readAllCapabilities());
+  const watermark = await getWatermark(projectId, CAPABILITY_NEEDS_SOURCE);
+  const previous = readMarker(watermark?.marker);
+  const current = capabilityMarker(readings, previous);
+  const changed = Object.keys(current).filter((id) => previous[id] !== current[id]);
 
-  const live = await listOpportunities({ projectId, states: [...LIVE_STATES] });
-  const wanted = new Set<string>();
+  let pieces: CashOpportunity[];
+  if (!watermark) {
+    pieces = await listOpportunities({ projectId });
+  } else {
+    const since = new Date(Date.parse(watermark.through) - TOUCHED_OVERLAP_MS).toISOString();
+    const byId = new Map<string, CashOpportunity>();
+    for (const one of await opportunitiesTouchedSince(projectId, since)) byId.set(one.id, one);
+    for (const one of await opportunitiesRequiring({
+      projectId,
+      capabilityIds: changed,
+      states: [...LIVE_STATES],
+    })) {
+      byId.set(one.id, one);
+    }
+    pieces = [...byId.values()];
+  }
+  out.examined = pieces.length;
 
-  for (const opportunity of live) {
-    // A second record of an opening asks nothing: its needs were withdrawn when
-    // it was linked, and the survivor asks them.
-    if (opportunity.duplicateOfId) continue;
-    for (const capabilityId of opportunity.requiredCapabilities) {
-      const key = capabilityKey(opportunity.id, capabilityId);
-      wanted.add(key);
-      const reading = await readCapability(capabilityId);
-      const existing = byKey.get(key);
+  if (pieces.length > 0) {
+    const examined = new Set(pieces.map((one) => one.id));
+    const open = await listNeeds({ projectId, states: ['OPEN'] });
+    const byKey = new Map(
+      open
+        .filter((one) => one.requestKey?.startsWith('capability:') && examined.has(one.opportunityId ?? ''))
+        .map((one) => [one.requestKey!, one]),
+    );
+    const wanted = new Set<string>();
 
-      if (reading.state === 'PRESENT') {
-        if (!existing) continue;
-        const closed = await closeNeed({
-          needId: existing.id,
-          to: 'RESOLVED',
-          resolution:
-            `${reading.id} now reads PRESENT, so this is no longer blocked. Brain checked rather ` +
-            'than assumed: the reading comes from the rows the capability is made of.',
-          actorUserId: BRAIN,
+    for (const opportunity of pieces) {
+      if (!(LIVE_STATES as readonly string[]).includes(opportunity.state)) continue;
+      // A second record of an opening asks nothing: its needs were withdrawn when
+      // it was linked, and the survivor asks them.
+      if (opportunity.duplicateOfId) continue;
+      for (const capabilityId of opportunity.requiredCapabilities) {
+        const key = capabilityKey(opportunity.id, capabilityId);
+        wanted.add(key);
+        const reading = readingFrom(readings, capabilityId);
+        const existing = byKey.get(key);
+        const blockerKey = parseBlockerKey(`CAPABILITY:${capabilityId}`);
+
+        if (reading.state === 'PRESENT') {
+          if (!existing) continue;
+          const closed = await closeNeed({
+            needId: existing.id,
+            to: 'RESOLVED',
+            resolution:
+              `${reading.id} now reads PRESENT, so this is no longer blocked. Brain checked rather ` +
+              'than assumed: the reading comes from the rows the capability is made of.',
+            actorUserId: BRAIN,
+            // Read this pass, once, for every piece: closing does not read it again.
+            verifiedBy: 'BRAIN_READ_THE_ROW',
+          });
+          if (closed.ok) out.settled.push(existing.id);
+          continue;
+        }
+
+        if (existing) {
+          // A need raised before blocker keys existed is given its key, so the
+          // fan-out finds it when the capability arrives.
+          if (!existing.blockerKey && blockerKey) await setNeedBlockerKeyIfUnset(existing.id, blockerKey);
+          continue;
+        }
+        const composed = needForCapability(reading, `Progress "${opportunity.title}"`);
+        if (!composed) continue;
+        const raised = await raiseNeed({
+          projectId,
+          opportunityId: opportunity.id,
+          actorRef: BRAIN,
+          ...composed,
+          // What is waiting on it. A *state* rather than a free reference,
+          // because a state is what a continuation can actually retry.
+          blocksState: 'EXECUTING',
+          requestKey: key,
+          blockerKey,
         });
-        if (closed.ok) out.settled.push(existing.id);
-        continue;
+        if (raised.ok && raised.value.createdAt === raised.value.updatedAt) {
+          out.raised.push(raised.value.id);
+        }
       }
+    }
 
-      if (existing) continue;
-      const composed = needForCapability(reading, `Progress "${opportunity.title}"`);
-      if (!composed) continue;
-      const raised = await raiseNeed({
-        projectId,
-        opportunityId: opportunity.id,
-        actorRef: BRAIN,
-        ...composed,
-        // What is waiting on it. A *state* rather than a free reference,
-        // because a state is what a continuation can actually retry.
-        blocksState: 'EXECUTING',
-        requestKey: key,
+    /*
+     * A need for something no longer required is withdrawn, not left open.
+     *
+     * An opportunity whose card was corrected — the capability was never needed,
+     * or the piece was declined — would otherwise keep a remedy in the review for
+     * ever, and a review that accumulates answered questions is one people stop
+     * reading. Withdrawn rather than resolved: nothing was set up. Only for the
+     * pieces examined: a piece nobody touched still requires what it required.
+     */
+    for (const [key, need] of byKey) {
+      if (wanted.has(key)) continue;
+      const closed = await closeNeed({
+        needId: need.id,
+        to: 'WITHDRAWN',
+        resolution:
+          'Nothing requires this capability any more — the piece stopped needing it, or stopped ' +
+          'being pursued. Nothing was set up, so this is withdrawn rather than resolved.',
+        actorUserId: BRAIN,
       });
-      if (raised.ok && raised.value.createdAt === raised.value.updatedAt) {
-        out.raised.push(raised.value.id);
-      }
+      if (closed.ok) out.settled.push(need.id);
     }
   }
 
   /*
-   * A need for something no longer required is withdrawn, not left open.
-   *
-   * An opportunity whose card was corrected — the capability was never needed,
-   * or the piece was declined — would otherwise keep a remedy in the review for
-   * ever, and a review that accumulates answered questions is one people stop
-   * reading. Withdrawn rather than resolved: nothing was set up.
+   * The position moves last, guarded on the one read, so a pass that died
+   * above is replayed in full by the next — every step here is idempotent.
    */
-  for (const [key, need] of byKey) {
-    if (!key.startsWith('capability:') || wanted.has(key)) continue;
-    const closed = await closeNeed({
-      needId: need.id,
-      to: 'WITHDRAWN',
-      resolution:
-        'Nothing requires this capability any more — the piece stopped needing it, or stopped ' +
-        'being pursued. Nothing was set up, so this is withdrawn rather than resolved.',
-      actorUserId: BRAIN,
-    });
-    if (closed.ok) out.settled.push(need.id);
-  }
-
+  await advanceWatermark({
+    projectId,
+    source: CAPABILITY_NEEDS_SOURCE,
+    from: watermark?.through ?? null,
+    through: startedAt,
+    marker: markerOf(current),
+    ...(watermark ? { fromMarker: watermark.marker } : {}),
+  });
   return out;
 }
 
@@ -322,6 +455,15 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
         completionCondition: `The ${field.label.toLowerCase()} is recorded on this card.`,
         blocksState: 'EXECUTING',
         requestKey: key,
+        /*
+         * `FIELD:<card field>`: what settles this is this piece's own card
+         * answering, so the key is per field and the fact it watches is per
+         * piece. Supplier, cost and customer facts are card fields too
+         * (`fulfillment`, `price`/`directCosts`, `payer`), so a missing one is
+         * `FIELD:<that field>` here — the market-wide SUPPLIER/COST/CUSTOMER
+         * kinds stay NOT_DETECTED (domain/types.ts) until a row records one.
+         */
+        blockerKey: parseBlockerKey(`FIELD:${field.key}`),
       });
       if (!raised.ok) continue;
       keys.add(key);
@@ -978,6 +1120,13 @@ export async function operate(
   journey?: JourneyTickReport;
   /** READY_TO_TEST openings handed to the Software Factory (`factoryHandoff.ts`). */
   factory?: FactoryHandoffPass;
+  /** What changed and who it reconsidered (`reconsider.ts`); absent when Cash Mode is not active. */
+  reconsideration?:
+    | Omit<ReconsiderPass, 'readings'>
+    | { error: string }
+    | null;
+  /** Reopen watches recorded on derived dead ends, and standing changes written. */
+  standing?: { derived: DerivedCondition[]; changes: StandingChange[] } | { error: string };
 }> {
   if (!(await getCashMode(projectId))) {
     return {
@@ -1019,7 +1168,23 @@ export async function operate(
    * `reclassify.ts`.
    */
   const reclassified = await recordWorkModelReclassification(projectId);
-  const capabilities = await reconcileCapabilityNeeds(projectId);
+  /*
+   * Then what changed in the world since the last pass, and everyone waiting
+   * on it (`reconsider.ts`). Before the capability path, because it reads the
+   * capability vocabulary once and hands the readings on — the capability path
+   * then reads nothing itself. A failure here is its own failure domain: the
+   * capability path reads the vocabulary for itself and the rest still runs.
+   */
+  let reconsidered: ReconsiderPass | { error: string } | null = null;
+  try {
+    reconsidered = await reconsiderAffected(projectId, { now });
+  } catch (error) {
+    reconsidered = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+  }
+  const capabilities = await reconcileCapabilityNeeds(
+    projectId,
+    reconsidered && 'readings' in reconsidered ? { readings: reconsidered.readings } : {},
+  );
   const research = await applyResearchAnswers(projectId);
   const proposed = await proposeCommercialTerms(projectId);
   const gaps = await reconcileDiscoverableGaps(projectId);
@@ -1100,7 +1265,30 @@ export async function operate(
    * attempt, starts work or spends anything.
    */
   const monetization = await runMonetizationLedger(projectId, now);
+  /*
+   * Last of all, the standing of every piece as the passes above left it: each
+   * derived dead end is given the watch that could reopen it, and a standing
+   * event is written for each piece whose standing changed — and only those.
+   * Composed once and read by both. Its own failure domain, for the same reason
+   * as the reconsideration pass.
+   */
+  let standing: { derived: DerivedCondition[]; changes: StandingChange[] } | { error: string };
+  try {
+    const standings = await projectStandings(projectId);
+    const derived = await recordDerivedReopenConditions(projectId, standings);
+    standing = { derived, changes: await recordStandingChanges(projectId, standings) };
+  } catch (error) {
+    standing = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+  }
   return {
+    reconsideration: reconsidered && 'readings' in reconsidered
+      ? {
+          changes: reconsidered.changes,
+          triggered: reconsidered.triggered,
+          watermarksMoved: reconsidered.watermarksMoved,
+        }
+      : reconsidered,
+    standing,
     reclassified,
     capabilities,
     gaps,

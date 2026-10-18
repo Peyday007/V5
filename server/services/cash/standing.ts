@@ -483,10 +483,18 @@ export interface StandingChange {
  * lock, so two passes racing produce one event per change rather than two.
  * Nothing else is written — no state moves, no flag is set.
  */
-export async function recordStandingChanges(projectId: string): Promise<StandingChange[]> {
+export async function recordStandingChanges(
+  projectId: string,
+  /**
+   * The standings already composed this pass, so a caller that also reads them
+   * (the operating loop records derived reopen conditions from the same map)
+   * composes them once rather than twice.
+   */
+  precomputed?: Map<string, { opportunity: CashOpportunity; standing: Standing }>,
+): Promise<StandingChange[]> {
   const mode = await getCashMode(projectId);
   if (!mode) return [];
-  const standings = await projectStandings(projectId);
+  const standings = precomputed ?? (await projectStandings(projectId));
   if (standings.size === 0) return [];
   return serializeCash(projectId, mode.currency, async () => {
     const latest = await latestStandingEvents(projectId);

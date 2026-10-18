@@ -281,3 +281,37 @@ export function needForCapability(reading: CapabilityReading, blockedAction: str
     completionCondition: `${reading.definition.id} reads PRESENT, or this piece stops requiring it.`,
   };
 }
+
+/**
+ * Every capability in the vocabulary, read once each, as a map by id.
+ *
+ * The one place a pass reads the whole vocabulary. The reconsideration pass
+ * reads it once per tick and hands the map to the capability-need pass, so the
+ * capability path costs at most `CAPABILITIES.length` readings however many
+ * opportunities require one — rather than one reading per opportunity per
+ * capability (OPPORTUNITY-INTELLIGENCE §3.2(f)). Each reading is still
+ * `readCapability`'s, uncached across calls: no behaviour changes, only how
+ * often it is asked.
+ */
+export async function readAllCapabilities(): Promise<Map<string, CapabilityReading>> {
+  const out = new Map<string, CapabilityReading>();
+  for (const definition of CAPABILITIES) {
+    out.set(definition.id, await readCapability(definition.id));
+  }
+  return out;
+}
+
+/**
+ * One capability's reading out of a map `readAllCapabilities` produced.
+ *
+ * An id outside the vocabulary was never in the map, and reads `UNKNOWN`
+ * exactly as `readCapability` would answer it — without a read, because there
+ * is nothing to read.
+ */
+export function readingFrom(
+  readings: ReadonlyMap<string, CapabilityReading>,
+  id: string,
+): CapabilityReading {
+  const key = id.trim();
+  return readings.get(key) ?? { id: key, state: 'UNKNOWN', definition: BY_ID.get(key) ?? null };
+}
