@@ -32,7 +32,8 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
 import { readNeedCondition } from './conditions.ts';
-import type { CashNeed, CashOpportunityState } from '../../domain/types.ts';
+import { parseBlockerKey } from '../../domain/types.ts';
+import type { BlockerKey, CashNeed, CashOpportunityState } from '../../domain/types.ts';
 import type { Outcome } from './opportunities.ts';
 
 function refuse(reason: string): { ok: false; reason: string } {
@@ -71,7 +72,26 @@ export async function raiseNeed(input: {
    * anything a loop derives.
    */
   requestKey?: string | null;
+  /**
+   * The shared fact this need is blocked on, when it has a typed cause.
+   *
+   * One key per fact, never per opportunity (`CAPABILITY:SEND_A_MESSAGE`), so
+   * every need blocked on one fact is found with one indexed read. A malformed
+   * key is refused rather than stored: a key that matched loosely would make
+   * one fact look like another.
+   */
+  blockerKey?: BlockerKey | string | null;
 }): Promise<Outcome<CashNeed>> {
+  let blockerKey: BlockerKey | null = null;
+  if (input.blockerKey !== undefined && input.blockerKey !== null) {
+    blockerKey = parseBlockerKey(input.blockerKey);
+    if (!blockerKey) {
+      return refuse(
+        `"${String(input.blockerKey)}" is not a blocker key. A key is PERSON or <KIND>:<argument>, ` +
+          'with the kind from the closed set in domain/types.ts.',
+      );
+    }
+  }
   const fields = {
     blockedAction: input.blockedAction.trim(),
     whyItMatters: input.whyItMatters.trim(),
@@ -142,6 +162,7 @@ export async function raiseNeed(input: {
     candidateId: input.candidateId ?? null,
     requestKey: key,
     occurrence,
+    blockerKey,
   });
   if (!created) {
     // Another pass raised the same condition at the same moment. One entry in
@@ -160,6 +181,7 @@ export async function raiseNeed(input: {
       completionCondition: fields.completionCondition,
       blocksState: input.blocksState ?? null,
       expectedCostCents: input.expectedCostCents ?? null,
+      blockerKey,
     },
   });
 

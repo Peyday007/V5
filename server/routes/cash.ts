@@ -97,11 +97,16 @@ import {
   exhaust,
   fillCard,
   markReady,
+  proposeReopenKeys,
+  reconsider,
   recordMoneyEvent,
   attributePayment,
   reoffer,
   settleSpend,
+  type ReopenRequest,
 } from '../services/cash/opportunities.ts';
+import { reopenConditionsFor } from '../repos/cashReconsideration.ts';
+import { BLOCKER_DETECTION } from '../domain/types.ts';
 import { recordFurtherAction } from '../services/cash/actions.ts';
 import {
   agreementsFor,
@@ -238,6 +243,17 @@ function proposedTerms(body: Record<string, unknown>): {
     );
   }
   return { maxCommittedCents, maxPerActionCents, maxConcurrent };
+}
+
+/**
+ * What a person said would reopen a piece they are stopping.
+ *
+ * Absent means Brain's proposal from the rows (the form arrives pre-filled
+ * with it); a list, including an empty one, is exactly what the person chose.
+ */
+function reopenRequestOf(body: Record<string, unknown>): ReopenRequest {
+  const listed = optionalStringArray(body['reopenWhen'], 'reopenWhen');
+  return listed === undefined ? 'PROPOSED' : listed;
 }
 
 /** A service refusal becomes a 422: the request was understood and refused. */
@@ -1103,6 +1119,7 @@ cashRouter.post(
             opportunityId: opportunity.id,
             actorUserId: principal.id,
             reason: requiredString(body['reason'], 'reason'),
+            reopenWhen: reopenRequestOf(body),
           }),
         );
         return { opportunity: value, message };
@@ -1143,6 +1160,31 @@ cashRouter.post(
             opportunityId: opportunity.id,
             actorRef: principal.id,
             reason: requiredString(body['reason'], 'reason'),
+            reopenWhen: reopenRequestOf(body),
+          }),
+        );
+        return { opportunity: value, message };
+      }
+      case 'reconsider': {
+        /*
+         * A person's answer to "the condition you named changed — reconsider?",
+         * or their own decision to look again. Behind the same guards as
+         * archive and decline: the project resolves through `requireProject`
+         * with one 404 body, and `requirePerson` above refuses a worker by type.
+         * The service fixes where it may land — DISCOVERED or EVIDENCE_CARD,
+         * never READY.
+         */
+        const to = optionalString(body['to'], 'to');
+        if (to !== undefined && to !== 'DISCOVERED' && to !== 'EVIDENCE_CARD') {
+          throw badRequest('"to" is DISCOVERED or EVIDENCE_CARD: reconsidering is not readiness.');
+        }
+        const { value, message } = taken(
+          await reconsider({
+            opportunityId: opportunity.id,
+            actorUserId: principal.id,
+            reason: requiredString(body['reason'], 'reason'),
+            ...(to ? { to } : {}),
+            conditionId: optionalString(body['conditionId'], 'conditionId') ?? null,
           }),
         );
         return { opportunity: value, message };
@@ -1150,6 +1192,28 @@ cashRouter.post(
       default:
         throw notFound('No such route.');
     }
+  }),
+);
+
+/**
+ * What Brain proposes as reopen conditions for a piece, and what it already holds.
+ *
+ * The pre-fill for the archive and decline forms: the shared facts its open
+ * needs are blocked on and the capabilities it requires that do not read
+ * PRESENT, with how each kind is detected — including the ones declared
+ * `NOT_DETECTED`, so a person choosing one is told nothing will notice it yet.
+ * Reading it writes nothing.
+ */
+cashRouter.get(
+  '/cash/opportunities/:opportunityId/reopen-conditions',
+  handler(async (req) => {
+    requirePerson();
+    const opportunity = await requireOpportunity(pathId(req, 'opportunityId'));
+    return {
+      proposed: await proposeReopenKeys(opportunity),
+      conditions: await reopenConditionsFor(opportunity.id),
+      kinds: BLOCKER_DETECTION,
+    };
   }),
 );
 

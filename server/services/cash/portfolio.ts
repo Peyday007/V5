@@ -32,7 +32,17 @@
  */
 import { evidenceCard } from './card.ts';
 import { tierRank, type CashTier, type TierReading } from './tier.ts';
-import type { CashDisposition, CashOpportunity } from '../../domain/types.ts';
+import { standingFor, type DiveRoom } from './standing.ts';
+import type { DiveRefusal } from './validation.ts';
+import type {
+  CashDisposition,
+  CashNeed,
+  CashOpportunity,
+  CashReopenCondition,
+  Standing,
+  StandingKind,
+} from '../../domain/types.ts';
+import { STANDING_KINDS } from '../../domain/types.ts';
 
 /** The states in which an opportunity is occupying real fulfilment capacity. */
 const IN_FLIGHT = new Set(['EXECUTING', 'DELIVERING']);
@@ -121,6 +131,25 @@ export interface Placement {
    * whether something is an opportunity at all.
    */
   tier: TierReading;
+  /**
+   * What a WAIT_FOR_DEPENDENCY placement waits on, named by the branch that
+   * decided it rather than re-read from the sentence. Null for every other
+   * disposition.
+   */
+  waitsOn: 'DEPENDENCY' | 'CASH' | 'CAPACITY' | null;
+  /**
+   * The one explained answer to "is this moving, and if not, on what"
+   * (`services/cash/standing.ts`), composed from this placement and the rows
+   * the caller supplied. Derived, never stored.
+   */
+  standing: Standing;
+}
+
+/** The rows standing reads beyond the placement, per opportunity. */
+export interface StandingRows {
+  dive: DiveRefusal | null;
+  needs: readonly CashNeed[];
+  reopenConditions: readonly CashReopenCondition[];
 }
 
 export interface PortfolioInput {
@@ -135,6 +164,16 @@ export interface PortfolioInput {
   discoveryOpen: boolean;
   /** Measured contribution per contact by mechanism; see `rank`. */
   measured?: Record<string, number>;
+  /**
+   * The dive refusal, open needs and reopen conditions per opportunity id.
+   *
+   * Optional, so a caller that has not read them still assembles; a piece
+   * with none supplied reads its standing from the placement and tier alone,
+   * which is honest about less and never about more.
+   */
+  standingInputs?: Record<string, StandingRows>;
+  /** Whether the sprint can start a deep dive now. Unread is read as free. */
+  diveRoom?: DiveRoom;
 }
 
 /**
@@ -162,6 +201,23 @@ export function placements(input: PortfolioInput): Placement[] {
   }
 
   return ranked.map((opportunity) => {
+    const bare = place(opportunity);
+    const rows = input.standingInputs?.[opportunity.id];
+    return {
+      ...bare,
+      standing: standingFor({
+        opportunity,
+        tier: bare.tier,
+        placement: bare,
+        dive: rows?.dive ?? null,
+        needs: rows?.needs ?? [],
+        reopenConditions: rows?.reopenConditions ?? [],
+        ...(input.diveRoom ? { diveRoom: input.diveRoom } : {}),
+      }),
+    };
+  });
+
+  function place(opportunity: CashOpportunity): Omit<Placement, 'standing'> {
     const card = evidenceCard(opportunity);
     const missing = card.readiness.missing.map(String);
     const tier = input.tiers[opportunity.id] ?? UNREAD_TIER;
@@ -173,6 +229,7 @@ export function placements(input: PortfolioInput): Placement[] {
         because: opportunity.archivedReason ?? 'This was stopped.',
         missing,
         tier,
+        waitsOn: null,
       };
     }
     if (opportunity.state === 'DECLINED') {
@@ -184,6 +241,7 @@ export function placements(input: PortfolioInput): Placement[] {
           'This owner passed on it. It can be offered privately to somebody else.',
         missing,
         tier,
+        waitsOn: null,
       };
     }
 
@@ -197,6 +255,7 @@ export function placements(input: PortfolioInput): Placement[] {
             : 'This is already under way.',
         missing,
         tier,
+        waitsOn: null,
       };
     }
 
@@ -218,6 +277,7 @@ export function placements(input: PortfolioInput): Placement[] {
         because: tier.summary,
         missing,
         tier,
+        waitsOn: null,
       };
     }
 
@@ -229,6 +289,7 @@ export function placements(input: PortfolioInput): Placement[] {
         because: blocker,
         missing,
         tier,
+        waitsOn: 'DEPENDENCY' as const,
       };
     }
 
@@ -249,6 +310,7 @@ export function placements(input: PortfolioInput): Placement[] {
         because: card.readiness.summary,
         missing,
         tier,
+        waitsOn: null,
       };
     }
 
@@ -264,6 +326,7 @@ export function placements(input: PortfolioInput): Placement[] {
           'is deployable, so it waits on cash rather than on evidence.',
         missing,
         tier,
+        waitsOn: 'CASH' as const,
       };
     }
     if (!startable.has(opportunity.id)) {
@@ -275,6 +338,7 @@ export function placements(input: PortfolioInput): Placement[] {
           'on fulfilment capacity. Nothing about the opportunity itself is unresolved.',
         missing,
         tier,
+        waitsOn: 'CAPACITY' as const,
       };
     }
     return {
@@ -290,8 +354,9 @@ export function placements(input: PortfolioInput): Placement[] {
               'this piece is already in the portfolio and keeps running.',
       missing,
       tier,
+      waitsOn: null,
     };
-  });
+  }
 }
 
 function dependencyBlocker(
@@ -494,6 +559,23 @@ export interface AssembledPlan {
   combinedContributionCents: number | null;
   /** Peak funding of everything that would be running at once, in cents. */
   peakFundingCents: number;
+  /**
+   * Every live piece that is moving or waiting on something named, in rank
+   * order, and **unbounded**.
+   *
+   * `best` is a highlight of at most `BEST_SHOWN`; this is the list. A cap here
+   * would be a portfolio-size limit wearing a display constant, and nothing in
+   * the brief or the plan sets one.
+   */
+  actionable: Placement[];
+  /**
+   * The stopped pieces — archived, declined, or a derived dead end — kept and
+   * listed rather than dropped, each with what would reopen it or the honest
+   * answer that nothing was named.
+   */
+  dormant: Placement[];
+  /** How many pieces are at each standing, counted from the same placements. */
+  byStanding: Record<StandingKind, number>;
 }
 
 /**
@@ -585,5 +667,21 @@ export function assemble(input: PortfolioInput): AssembledPlan {
       (total, p) => total + (p.opportunity.peakFundingCents ?? 0),
       0,
     ),
+    actionable: all.filter(
+      (p) => p.standing.kind === 'ADVANCING' || p.standing.kind === 'WAITING',
+    ),
+    dormant: all.filter(
+      (p) => p.standing.kind === 'DORMANT' || p.standing.kind === 'NOT_WORTH_PURSUING',
+    ),
+    byStanding: countStanding(all),
   };
+}
+
+function countStanding(all: readonly Placement[]): Record<StandingKind, number> {
+  const counts = Object.fromEntries(STANDING_KINDS.map((kind) => [kind, 0])) as Record<
+    StandingKind,
+    number
+  >;
+  for (const placement of all) counts[placement.standing.kind] += 1;
+  return counts;
 }

@@ -26,11 +26,23 @@
 import {
   createOpportunity,
   getOpportunity,
+  listNeeds,
   listOpportunities,
   markExhausted,
+  RECONSIDERABLE_FROM,
+  RECONSIDERED_TO,
+  reconsiderOpportunity,
   transitionOpportunity,
   updateOpportunity,
 } from '../../repos/cashPortfolio.ts';
+import {
+  changeConsumed,
+  consumeChange,
+  getReopenCondition,
+  recordReopenCondition,
+  reopenConditionsFor,
+} from '../../repos/cashReconsideration.ts';
+import { readCapabilities } from './capabilities.ts';
 import {
   commit as commitCents,
   getCommitment,
@@ -62,7 +74,17 @@ import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition, checkMoneyEntry } from './money.ts';
 import { toJson } from '../../repos/util.ts';
 import { createHash } from 'node:crypto';
+import {
+  blockerArgumentOf,
+  blockerKindOf,
+  formatBlockerKey,
+  parseBlockerKey,
+} from '../../domain/types.ts';
 import type {
+  BlockerKey,
+  CashOpportunityState,
+  CashReopenCondition,
+  ReopenRecordedFrom,
   CashActionPerformer,
   CashCommitment,
   CashMechanism,
@@ -810,11 +832,15 @@ export async function decline(input: {
   opportunityId: string;
   actorUserId: string;
   reason: string;
+  /** What would justify reconsidering it; see `ReopenRequest`. */
+  reopenWhen?: ReopenRequest;
 }): Promise<Outcome<CashOpportunity>> {
   const opportunity = await getOpportunity(input.opportunityId);
   if (!opportunity) return refuse('No opportunity with that id.');
   const reason = input.reason.trim();
   if (!reason) return refuse('Say why you are passing, so it can be offered to somebody else honestly.');
+  const reopen = await resolveReopenKeys(opportunity, input.reopenWhen);
+  if (!reopen.ok) return reopen;
 
   const moved = await transitionOpportunity({
     id: opportunity.id,
@@ -829,13 +855,14 @@ export async function decline(input: {
         'than declined, and the obligation stands either way.',
     );
   }
+  await recordReopenConditions(opportunity, reopen.keys, 'DECLINE', input.actorUserId);
   await recordCashEvent({
     projectId: opportunity.projectId,
     opportunityId: opportunity.id,
     kind: 'CASH_OPPORTUNITY_DECLINED',
     actorRef: input.actorUserId,
     summary: 'This owner passed on the opportunity.',
-    detail: { reason },
+    detail: { reason, reopenWhen: reopen.keys, reopenProposedByBrain: reopen.proposed },
   });
   const after = await getOpportunity(opportunity.id);
   return { ok: true, value: after!, message: 'Passed. It can be offered privately to somebody else.' };
@@ -941,11 +968,15 @@ export async function archiveOpportunity(input: {
   opportunityId: string;
   actorRef: string;
   reason: string;
+  /** What would justify reconsidering it; see `ReopenRequest`. */
+  reopenWhen?: ReopenRequest;
 }): Promise<Outcome<CashOpportunity>> {
   const opportunity = await getOpportunity(input.opportunityId);
   if (!opportunity) return refuse('No opportunity with that id.');
   const reason = input.reason.trim();
   if (!reason) return refuse('Record the reason and the condition that would justify reopening it.');
+  const reopen = await resolveReopenKeys(opportunity, input.reopenWhen);
+  if (!reopen.ok) return reopen;
   const moved = await transitionOpportunity({
     id: opportunity.id,
     from: ['DISCOVERED', 'EVIDENCE_CARD', 'READY', 'EXECUTING', 'DELIVERING', 'COLLECTED', 'DECLINED'],
@@ -953,16 +984,272 @@ export async function archiveOpportunity(input: {
     archivedReason: reason,
   });
   if (!moved) return refuse('This is already archived.');
+  await recordReopenConditions(opportunity, reopen.keys, 'ARCHIVE', input.actorRef);
   await recordCashEvent({
     projectId: opportunity.projectId,
     opportunityId: opportunity.id,
     kind: 'CASH_OPPORTUNITY_ARCHIVED',
     actorRef: input.actorRef,
     summary: 'Stopped, with the reason kept.',
-    detail: { reason },
+    detail: { reason, reopenWhen: reopen.keys, reopenProposedByBrain: reopen.proposed },
   });
   const after = await getOpportunity(opportunity.id);
   return { ok: true, value: after!, message: 'Archived. Agreed delivery obligations are unaffected.' };
+}
+
+/* --------------------------------------------------------------------------
+ * Reopen conditions and reconsideration (OPPORTUNITY-INTELLIGENCE §3.2)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * What a person said would justify reconsidering a piece they stopped.
+ *
+ *   * `undefined` — nothing was said, and nothing is recorded. This is what
+ *     Brain's own archives pass (a race loser retired before anybody worked on
+ *     it has nothing to reopen on).
+ *   * `'PROPOSED'` — Brain's proposal from the rows, accepted as it stands.
+ *     The route passes this when a person archives without naming keys, so
+ *     the pre-filled proposal is what is recorded.
+ *   * a list — exactly these keys. An empty list is a person saying "never",
+ *     and it is honoured: the piece reads NOT_WORTH_PURSUING.
+ *
+ * A condition is a watch, never a decision. A triggered one raises a request
+ * a person answers; nothing here or downstream reverses a person's archive
+ * or decline by itself.
+ */
+export type ReopenRequest = readonly string[] | 'PROPOSED' | undefined;
+
+/**
+ * The reopen keys Brain proposes for a piece, read from its rows.
+ *
+ * The shared facts its open needs are blocked on, and every capability it
+ * requires that does not read PRESENT now. Nothing is inferred from prose: a
+ * piece with no typed blocker and no missing capability gets no proposal,
+ * which is honest rather than a gap.
+ */
+export async function proposeReopenKeys(opportunity: CashOpportunity): Promise<BlockerKey[]> {
+  const keys = new Set<BlockerKey>();
+  for (const need of await listNeeds({ projectId: opportunity.projectId, states: ['OPEN'] })) {
+    if (need.opportunityId === opportunity.id && need.blockerKey) keys.add(need.blockerKey);
+  }
+  for (const reading of await readCapabilities(opportunity.requiredCapabilities)) {
+    if (reading.state === 'PRESENT') continue;
+    const key = parseBlockerKey(`CAPABILITY:${reading.id}`);
+    if (key) keys.add(key);
+  }
+  return [...keys].sort();
+}
+
+async function resolveReopenKeys(
+  opportunity: CashOpportunity,
+  request: ReopenRequest,
+): Promise<{ ok: true; keys: BlockerKey[]; proposed: boolean } | Refusal> {
+  if (request === undefined) return { ok: true, keys: [], proposed: false };
+  if (request === 'PROPOSED') {
+    return { ok: true, keys: await proposeReopenKeys(opportunity), proposed: true };
+  }
+  const keys = new Set<BlockerKey>();
+  for (const raw of request) {
+    const key = parseBlockerKey(raw);
+    if (!key) {
+      return refuse(
+        `"${String(raw)}" is not a reopen condition. A condition is PERSON or <KIND>:<argument>, ` +
+          'with the kind one of CAPABILITY, AUTHORITY, MANUFACTURING, SOURCE_HOST, FIELD, ' +
+          'EVIDENCE, DEPENDENCY, DATE, SUPPLIER, COST, CUSTOMER or REGULATION.',
+      );
+    }
+    const argument = blockerArgumentOf(key);
+    const kind = blockerKindOf(key);
+    if (kind === 'AUTHORITY' && !isCommercialAction(argument)) {
+      return refuse(`"${argument}" is not a commercial action, so no grant could ever cover it.`);
+    }
+    if (kind === 'DEPENDENCY') {
+      const parent = argument ? await getOpportunity(argument) : null;
+      if (!parent || parent.projectId !== opportunity.projectId || parent.id === opportunity.id) {
+        return refuse('A dependency names another opportunity in this same operation.');
+      }
+    }
+    keys.add(key);
+  }
+  return { ok: true, keys: [...keys].sort(), proposed: false };
+}
+
+async function recordReopenConditions(
+  opportunity: CashOpportunity,
+  keys: readonly BlockerKey[],
+  recordedFrom: ReopenRecordedFrom,
+  actorRef: string,
+): Promise<CashReopenCondition[]> {
+  if (keys.length === 0) return [];
+  const capabilityIds = keys
+    .filter((key) => blockerKindOf(key) === 'CAPABILITY')
+    .map((key) => blockerArgumentOf(key)!);
+  const readings = new Map(
+    (await readCapabilities(capabilityIds)).map((reading) => [reading.id, reading.state]),
+  );
+  const out: CashReopenCondition[] = [];
+  for (const key of keys) {
+    const observed =
+      blockerKindOf(key) === 'CAPABILITY' ? (readings.get(blockerArgumentOf(key)!) ?? null) : null;
+    const { condition } = await recordReopenCondition({
+      projectId: opportunity.projectId,
+      opportunityId: opportunity.id,
+      blockerKey: key,
+      recordedFrom,
+      observedAtRecord: observed,
+      actorRef,
+    });
+    out.push(condition);
+  }
+  return out;
+}
+
+/**
+ * A person puts a piece somebody archived or declined back into evaluation.
+ *
+ * Three rules make this safe rather than a loophole:
+ *
+ *   * **It is a person's transition.** The route refuses a worker principal by
+ *     type, and nothing in Brain calls this: a triggered reopen condition on a
+ *     person's decision raises a request, and this is the answer to it.
+ *   * **Reconsideration is not readiness.** It lands in DISCOVERED or
+ *     EVIDENCE_CARD only, fixed in the guarded statement; every gate — the
+ *     tier, the card, the grant, the send gate — still applies afterwards.
+ *   * **It destroys nothing.** The archive or decline reason stays on the row,
+ *     every condition and event stays, and the reconsideration is one more
+ *     append-only event.
+ *
+ * It begins a new deep-dive epoch, because a person deciding to look again is
+ * a distinct change. When it answers a triggered condition the change that met
+ * it is named, and a change that already reconsidered this piece is refused;
+ * otherwise the person's own decision is the change, under a fresh ref,
+ * consumed in the ledger so it cannot be counted twice.
+ */
+export async function reconsider(input: {
+  opportunityId: string;
+  actorUserId: string;
+  reason: string;
+  to?: CashOpportunityState;
+  /** The triggered reopen condition this answers, when it answers one. */
+  conditionId?: string | null;
+}): Promise<Outcome<CashOpportunity>> {
+  const opportunity = await getOpportunity(input.opportunityId);
+  if (!opportunity) return refuse('No opportunity with that id.');
+  const reason = input.reason.trim();
+  if (!reason) return refuse('Say why this is worth looking at again, so the history can say so.');
+  if (!RECONSIDERABLE_FROM.includes(opportunity.state)) {
+    return refuse(
+      `This is ${opportunity.state.toLowerCase()}. Only a piece somebody archived or declined is ` +
+        'reconsidered; a live piece is re-evaluated by Brain as it is.',
+    );
+  }
+  const to = input.to ?? 'DISCOVERED';
+  if (!RECONSIDERED_TO.includes(to)) {
+    return refuse(
+      'A reconsidered piece goes back to evaluation — DISCOVERED or EVIDENCE_CARD — and never ' +
+        'straight to ready or executing: every gate after that still applies.',
+    );
+  }
+
+  let condition: CashReopenCondition | null = null;
+  if (input.conditionId) {
+    condition = await getReopenCondition(input.conditionId);
+    if (!condition || condition.opportunityId !== opportunity.id) {
+      return refuse('No reopen condition with that id on this piece.');
+    }
+    if (!condition.triggeredAt || !condition.triggerChangeRef) {
+      return refuse(
+        'That condition has not been met yet. A person may still reconsider the piece without ' +
+          'naming it.',
+      );
+    }
+  }
+
+  /*
+   * The change this reconsideration consumes, in the same ledger every trigger
+   * uses. Answering a condition consumes `RECONSIDERED:<the change that met it>`,
+   * so naming one met condition twice — even after the piece was archived
+   * again in between — is refused by the primary key rather than by a caller
+   * remembering. A person reconsidering on their own initiative is a distinct
+   * change by construction, under a fresh ref.
+   */
+  const changeRef = condition?.triggerChangeRef ?? `PERSON:${newChangeId()}`;
+  const ledgerRef = condition ? `RECONSIDERED:${changeRef}` : changeRef;
+  if (await changeConsumed(opportunity.id, ledgerRef)) {
+    return refuse('That change has already reconsidered this piece once.');
+  }
+  const from = opportunity.state;
+  const moved = await getDb()
+    .transaction(async () => {
+      const consumed = await consumeChange({
+        projectId: opportunity.projectId,
+        opportunityId: opportunity.id,
+        changeRef: ledgerRef,
+        blockerKey: condition?.blockerKey ?? formatBlockerKey('PERSON'),
+        kind: 'PERSON',
+      });
+      if (!consumed) throw new ReconsiderLost('CONSUMED');
+      const swapped = await reconsiderOpportunity({ id: opportunity.id, from, to, changeRef });
+      if (!swapped) throw new ReconsiderLost('MOVED');
+      return 'MOVED_OK' as const;
+    })
+    .catch((error: unknown) => {
+      if (error instanceof ReconsiderLost) return error.why;
+      throw error;
+    });
+  if (moved === 'CONSUMED') return refuse('That change has already reconsidered this piece once.');
+  if (moved === 'MOVED') {
+    return refuse(
+      'This piece moved while you were deciding. Read it again and decide on what it is now.',
+    );
+  }
+  const conditions = await reopenConditionsFor(opportunity.id);
+  await recordCashEvent({
+    projectId: opportunity.projectId,
+    opportunityId: opportunity.id,
+    kind: 'CASH_OPPORTUNITY_RECONSIDERED',
+    actorRef: input.actorUserId,
+    summary: `Reconsidered: back from ${from.toLowerCase()} to ${to.toLowerCase()} for evaluation.`,
+    detail: {
+      reason,
+      from,
+      to,
+      changeRef,
+      conditionId: condition?.id ?? null,
+      blockerKey: condition?.blockerKey ?? null,
+      // What was decided before is history, and stays readable beside this.
+      archivedReason: opportunity.archivedReason,
+      declinedReason: opportunity.declinedReason,
+      conditions: conditions.map((one) => ({
+        id: one.id,
+        blockerKey: one.blockerKey,
+        triggeredAt: one.triggeredAt,
+      })),
+    },
+  });
+  const after = await getOpportunity(opportunity.id);
+  return {
+    ok: true,
+    value: after!,
+    message:
+      'Back in evaluation. Its earlier decision and reason are kept, and every gate still applies ' +
+      'before it can be ready.',
+  };
+}
+
+/** Rolls the ledger entry back with the transition it was for. Never escapes. */
+class ReconsiderLost extends Error {
+  constructor(readonly why: 'CONSUMED' | 'MOVED') {
+    super(why);
+  }
+}
+
+/** A fresh, unguessable id for a person's own reconsideration change. */
+function newChangeId(): string {
+  return createHash('sha256')
+    .update(`${Date.now()}:${Math.random()}:${process.hrtime.bigint()}`)
+    .digest('hex')
+    .slice(0, 20);
 }
 
 /**
