@@ -809,6 +809,126 @@ describe('harvesting what discovery found', () => {
     expect(await harvest({ projectId })).toEqual([]);
   });
 
+  /*
+   * Nor is a claim that answers any other question about an opening already in
+   * the portfolio. Production, 2026-10-18: a need's research ("Payer for …")
+   * and an earlier round's deep dive each filed the opening they were about as
+   * a new one, read through a different URL so the twin check missed it, and
+   * every new "opening" raised needs of its own.
+   */
+  it("does not harvest a need's research, or an earlier round's dive", async () => {
+    await activated();
+    const opened = await openDiscovery({ projectId });
+    await finishedMission({
+      candidateId: opened[0]!.candidateId,
+      claims: [
+        {
+          claim: 'A client posted a fixed-price request for a WordPress site, open for bids.',
+          lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
+          sourceUrl: 'https://example.test/projects/site',
+        },
+      ],
+    });
+    const [first] = await harvest({ projectId });
+    expect(first).toBeDefined();
+
+    const { createCandidate } = await import('../server/repos/russellCandidates.ts');
+    const { createNeed, updateOpportunity } = await import('../server/repos/cashPortfolio.ts');
+
+    // A need about that opening, researched by its own mission.
+    const payerQuestion = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'Payer for the WordPress site request',
+      statement: 'Who pays for this request, and how much?',
+    });
+    await createNeed({
+      projectId,
+      opportunityId: first!.opportunity.id,
+      blockedAction: 'Qualify the opening',
+      whyItMatters: 'Nobody is known to pay.',
+      recommendedPath: 'Research the payer.',
+      setupEffort: 'None',
+      nextStep: 'Research the payer.',
+      completionCondition: 'payer is answered',
+      candidateId: payerQuestion.id,
+    });
+    await finishedMission({
+      candidateId: payerQuestion.id,
+      claims: [
+        {
+          claim: 'The same project, read through the public API, is open with a $250-$750 budget.',
+          lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
+          sourceUrl: 'https://example.test/api/projects/site',
+        },
+      ],
+    });
+
+    // An earlier round's deep dive: the opening's own idea, while its current
+    // validation orchestration names a later packet.
+    const firstDive = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'Qualify: the WordPress site request',
+      statement: 'Who pays, what it pays and when it closes.',
+    });
+    await updateOpportunity(first!.opportunity.id, { candidate_id: firstDive.id });
+    await finishedMission({
+      candidateId: firstDive.id,
+      claims: [
+        {
+          claim: 'The request is listed on a regional mirror of the same marketplace, still open.',
+          lane: SIGNAL_LANE,
+          signal: 'PAID_TASK_OR_CONTRACT',
+          sourceUrl: 'https://mirror.example.test/projects/site',
+        },
+      ],
+    });
+
+    expect(await harvest({ projectId })).toEqual([]);
+  });
+
+  /*
+   * A resale lot carries a seller's description and a current bid, and both
+   * invite a margin nobody has established. The shared view names what is
+   * unresolved rather than leaving a reader to infer it from a bid and an
+   * estimate.
+   */
+  it('names the unresolved checks on a fresh resale opening, and no figure', async () => {
+    await activated();
+    const opened = await openDiscovery({ projectId });
+    const closes = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
+    await finishedMission({
+      candidateId: opened[0]!.candidateId,
+      claims: [
+        {
+          claim: 'A state surplus auction lists a bracelet described as 14k, 11.5 g; current bid $201.',
+          lane: SIGNAL_LANE,
+          signal: 'RESALABLE_ASSET_OPENING',
+          sourceUrl: 'https://example.test/auction/lot-24',
+          closesOn: closes,
+        },
+      ],
+    });
+    const [filed] = await harvest({ projectId });
+    expect(filed).toBeDefined();
+
+    const { sharedFrontier } = await import('../server/services/cash/shared.ts');
+    const frontier = await sharedFrontier({ projectId });
+    const fresh = frontier.fresh.find((one) => one.opportunityId === filed!.opportunity.id);
+    expect(fresh).toBeDefined();
+    expect(fresh!.doesNotEstablish).toMatch(/what is left after fees/);
+    const checks = fresh!.unresolvedChecks.join(' ');
+    expect(checks).toMatch(/Authenticity and condition are unverified/);
+    expect(checks).toMatch(/Acquisition cost is not established/);
+    expect(checks).toMatch(/selling route is unverified/);
+    expect(checks).toMatch(/not a validated margin/);
+    // Static sentences: none of them carries a figure.
+    expect(checks).not.toMatch(/\$\s?\d/);
+  });
+
   it('does nothing at all for a project with no sprint', async () => {
     expect(await runDiscovery(projectId)).toEqual({
       opened: [],

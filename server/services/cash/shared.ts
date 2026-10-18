@@ -69,7 +69,8 @@ import { getClaim, listClaimsForFragment } from '../../repos/research.ts';
 import { evidenceCard } from './card.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
-import { CASH_TIERS, cashTier, type CashTier, type TierReading } from './tier.ts';
+import { CASH_TIERS, cashTier, SIGNAL_MEANING, type CashTier, type TierReading } from './tier.ts';
+import { isOpportunitySignal, type OpportunitySignal } from '../../domain/opportunitySignals.ts';
 import { chooseBest, rank } from './portfolio.ts';
 import { cashRoadmap, type CashRoadmap } from './roadmap.ts';
 import { authorityFor } from './opportunities.ts';
@@ -504,7 +505,36 @@ export interface SharedFreshOpening {
   excerpt: string | null;
   /** The other accepted claims about it, as published facts with their lane. */
   evidence: { lane: string | null; claim: string; sourceUrl: string | null }[];
+  /** What this kind of evidence does not establish, from `SIGNAL_MEANING`. */
+  doesNotEstablish: string | null;
+  /**
+   * The checks a person would otherwise skip, named for this kind of opening.
+   * Static sentences: no branch interpolates a value, so none can read as a
+   * figure somebody established.
+   */
+  unresolvedChecks: string[];
 }
+
+/**
+ * What must be checked before anybody acts on an opening of this kind.
+ *
+ * Only where the evidence is easy to over-read. A resale lot carries the
+ * seller's own description and a current bid, and both invite a margin nobody
+ * has established: the hallmark is untested, the price is whatever wins, the
+ * premium, tax and collection come on top, and nobody has confirmed what it
+ * sells for after fees.
+ */
+export const UNRESOLVED_CHECKS: Partial<Record<OpportunitySignal, readonly string[]>> = Object.freeze({
+  RESALABLE_ASSET_OPENING: Object.freeze([
+    "Authenticity and condition are unverified: they are the seller's own description, and a mark in a listing is not a test. Nothing has been inspected.",
+    'Acquisition cost is not established: the winning bid is unknown, and the buyer\'s premium, sales tax, payment fees and collection (pickup, travel or courier) come on top of it.',
+    'The selling route is unverified: no buyer, payout or sold price has been confirmed for this item, and what it pays after fees is unknown.',
+    'No margin is established. A value estimate, such as metal melt value, and a suggested bid ceiling are estimates, not a validated margin.',
+  ]),
+  PRICING_OR_INFORMATION_ASYMMETRY: Object.freeze([
+    'Two published prices are not a trade: nobody has confirmed we can buy at the lower one or sell at the higher one, or what is left after fees.',
+  ]),
+});
 
 /** How far back an opening counts as new. */
 export const FRESH_WINDOW_DAYS = 7;
@@ -554,6 +584,12 @@ async function freshOpenings(
         .filter((other) => other.accepted && other.opportunitySignal === null)
         .slice(0, 8)
         .map((other) => ({ lane: other.evidenceLane, claim: other.claim, sourceUrl: other.sourceUrl })),
+      doesNotEstablish: isOpportunitySignal(claim.opportunitySignal)
+        ? SIGNAL_MEANING[claim.opportunitySignal].doesNotEstablish
+        : null,
+      unresolvedChecks: isOpportunitySignal(claim.opportunitySignal)
+        ? [...(UNRESOLVED_CHECKS[claim.opportunitySignal] ?? [])]
+        : [],
     });
   }
   return out;
