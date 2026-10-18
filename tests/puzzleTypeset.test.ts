@@ -73,6 +73,15 @@ describe('a sudoku book interior', () => {
     await expect(book(puzzles(4))).rejects.toThrow(/KDP's paperback minimum/);
   }, 60_000);
 
+  it('prints one puzzle a page in large print, inside the same gutter rule', async () => {
+    const list = puzzles(40, 'lp');
+    const standard = await book(list);
+    const large = await typesetSudokuBook({ title: 'T', subtitle: 'S', rightsNotice: 'R', puzzles: list, layout: 'LARGE_PRINT' });
+    // 3 front pages + 40 puzzle pages + 7 solution pages.
+    expect(large.pages).toBe(50);
+    expect(large.pages).toBeGreaterThan(standard.pages);
+  }, 60_000);
+
   it('reports typesetting as present, for sudoku only', () => {
     const typeset = puzzleCapabilities().find((one) => one.id === 'TYPESET_FOR_PRINT')!;
     expect(typeset.state).toBe('PRESENT');

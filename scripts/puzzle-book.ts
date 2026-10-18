@@ -1,5 +1,5 @@
 /**
- * `npm run puzzle-book -- --volume v1 --count 100 --out <dir>`
+ * `npm run puzzle-book -- --volume v1 --count 100 --out <dir> [--layout large-print]`
  *
  * Makes one sudoku volume from Brain's own generator. Every puzzle is proved by
  * the format's independent validator, duplicates are refused by canonical form,
@@ -34,6 +34,7 @@ async function main(): Promise<void> {
   const volume = flag('volume') ?? 'v1';
   const count = Number(flag('count') ?? '100');
   const out = flag('out');
+  const layout = flag('layout') === 'large-print' ? 'LARGE_PRINT' : 'STANDARD';
   if (!out) throw new Error('--out <directory> is required.');
   if (!Number.isInteger(count) || count < 1 || count > 400) throw new Error('--count must be 1..400.');
 
@@ -69,9 +70,8 @@ async function main(): Promise<void> {
       ORDER.indexOf(a.verdict.measuredDifficulty ?? '') - ORDER.indexOf(b.verdict.measuredDifficulty ?? ''),
   );
 
-  const title = 'Sudoku: 100 Puzzles With Exactly One Solution';
   const book = await typesetSudokuBook({
-    title: count === 100 ? title : `Sudoku: ${count} Puzzles With Exactly One Solution`,
+    title: `${layout === 'LARGE_PRINT' ? 'Large Print ' : ''}Sudoku: ${count} Puzzles With Exactly One Solution`,
     subtitle: `Easy to Expert, solutions included. Volume ${volume.replace(/^v/, '')}.`,
     rightsNotice:
       'Puzzles generated and independently verified by the Brain puzzle kernel. The buyer of this ' +
@@ -80,10 +80,12 @@ async function main(): Promise<void> {
       'title. The buyer may not resell or give away this PDF file, or the puzzle set as a set, ' +
       'as a template or interior product. Set in DejaVu Sans (Bitstream Vera licence).',
     puzzles: kept,
+    layout,
   });
 
   fs.mkdirSync(out, { recursive: true });
-  const pdfPath = path.join(out, `sudoku-${volume}.pdf`);
+  const name = `sudoku-${volume}${layout === 'LARGE_PRINT' ? '-large-print' : ''}`;
+  const pdfPath = path.join(out, `${name}.pdf`);
   fs.writeFileSync(pdfPath, book.bytes);
   const sha256 = createHash('sha256').update(book.bytes).digest('hex');
   const byDifficulty: Record<string, number> = {};
@@ -97,6 +99,7 @@ async function main(): Promise<void> {
     sha256,
     pages: book.pages,
     trim: '8.5x11in, no bleed',
+    layout,
     puzzles: kept.length,
     attempts,
     refusedInvalid: invalid,
@@ -111,7 +114,7 @@ async function main(): Promise<void> {
       checks: one.verdict.checks.map((check) => `${check.ok ? 'PASS' : 'FAIL'} ${check.name}`),
     })),
   };
-  fs.writeFileSync(path.join(out, `sudoku-${volume}.manifest.json`), `${JSON.stringify(manifest, null, 2)}\n`);
+  fs.writeFileSync(path.join(out, `${name}.manifest.json`), `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(
     `PUZZLE-BOOK: OK volume=${volume} puzzles=${kept.length} pages=${book.pages} ` +
       `refused_invalid=${invalid} refused_duplicate=${duplicates} by=${JSON.stringify(byDifficulty)} sha256=${sha256}`,

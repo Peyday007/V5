@@ -62,6 +62,8 @@ export interface BookInput {
   /** Printed on the copyright page, verbatim. */
   rightsNotice: string;
   puzzles: readonly BookPuzzle[];
+  /** STANDARD prints two puzzles a page; LARGE_PRINT prints one, with larger digits. */
+  layout?: 'STANDARD' | 'LARGE_PRINT';
 }
 
 export interface TypesetBook {
@@ -221,16 +223,18 @@ export async function typesetSudokuBook(input: BookInput): Promise<TypesetBook> 
     }
   }
 
-  // Puzzles, two per page.
-  const gridSize = 4.1 * INCH;
-  for (let i = 0; i < input.puzzles.length; i += 2) {
+  // Puzzles: two per page, or one per page in large print.
+  const perPage = input.layout === 'LARGE_PRINT' ? 1 : 2;
+  const gridSize = perPage === 1 ? 6.8 * INCH : 4.1 * INCH;
+  for (let i = 0; i < input.puzzles.length; i += perPage) {
     const { page, box } = addPage(true);
-    for (let j = 0; j < 2 && i + j < input.puzzles.length; j += 1) {
+    for (let j = 0; j < perPage && i + j < input.puzzles.length; j += 1) {
       const one = input.puzzles[i + j]!;
       const label = `Puzzle ${i + j + 1}  ·  ${DIFFICULTY_LABEL[one.verdict.measuredDifficulty ?? ''] ?? 'Unrated'}`;
       const slotTop = j === 0 ? box.top : box.top - (box.top - box.bottom) / 2;
-      page.drawText(label, { x: box.left + (box.width - gridSize) / 2, y: slotTop - 18, size: 12, font: bold });
-      drawSudoku(page, regular, one.artifact.grid, box.left + (box.width - gridSize) / 2, slotTop - 30 - gridSize, gridSize, null);
+      const labelSize = perPage === 1 ? 18 : 12;
+      page.drawText(label, { x: box.left + (box.width - gridSize) / 2, y: slotTop - labelSize - 6, size: labelSize, font: bold });
+      drawSudoku(page, regular, one.artifact.grid, box.left + (box.width - gridSize) / 2, slotTop - labelSize - 18 - gridSize, gridSize, null);
     }
   }
 
