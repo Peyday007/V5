@@ -43,6 +43,7 @@ import { activate, setLifecycle } from '../server/services/cash/lifecycle.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
 import {
   BARREN_ROUNDS,
+  nextRoundFor,
   SEARCH_BUCKETS,
   SIGNAL_LANE,
   harvest,
@@ -943,6 +944,19 @@ describe('harvesting what discovery found', () => {
 });
 
 describe('a discovery round whose research stopped', () => {
+  it('is not barren evidence: a bucket whose rounds all stopped unfinished is asked again', () => {
+    const at = (hours: number) => new Date(Date.UTC(2026, 9, 18) + hours * 3_600_000).toISOString();
+    const round = (n: number, state: 'HARVESTED' | 'ABANDONED', found: number) =>
+      ({ id: `cdr_${n}`, round: n, state, found, openedAt: at(n * 30), harvestedAt: at(n * 30 + 1) }) as never;
+    const abandoned = [round(1, 'ABANDONED', 0), round(2, 'ABANDONED', 0), round(3, 'ABANDONED', 0)];
+    expect(nextRoundFor(abandoned, at(3 * 30 + 1 + 25))).toBe(4);
+    // Still bounded by the cool-off.
+    expect(nextRoundFor(abandoned, at(3 * 30 + 1 + 2))).toBeNull();
+    // Three finished rounds that found nothing still stop it.
+    const harvested = [round(1, 'HARVESTED', 0), round(2, 'HARVESTED', 0), round(3, 'HARVESTED', 0)];
+    expect(nextRoundFor(harvested, at(3 * 30 + 1 + 25))).toBeNull();
+  });
+
   it('closes, keeps what it filed, and lets the bucket be asked again', async () => {
     /*
      * Production, Cash Mode 1: all ten buckets OPEN at round 1, every one
