@@ -74,6 +74,41 @@ if (!goal) {
   for (const o of recent) {
     console.log(`    ${o.created_at} ${o.id} ${o.opportunity_signal}${o.duplicate_of_id ? ' dup' : ''} orc=${o.orchestration_id} worker=${o.worker_id ?? '-'} :: ${String(o.title).slice(0, 110)} <- ${o.source_url ?? '-'}`);
   }
+  // Where each recent non-duplicate opening came from: which question asked
+  // it, who asked that question, and which surface ran the pass. Read-only.
+  console.log('  lineage of non-duplicate openings filed in the last 48h:');
+  const lineageRows = await db.all(
+    `SELECT o.id, o.created_at, o.orchestration_id, o.title, c.id AS claim_id, p.executor_routine_id, p.executor_session_ref, r.name AS routine_name
+       FROM cash_opportunities o
+       LEFT JOIN research_claims c ON c.id = o.source_claim_id
+       LEFT JOIN research_passes p ON p.id = c.pass_id
+       LEFT JOIN fleet_routines r ON r.id = p.executor_routine_id
+      WHERE o.project_id = ? AND o.created_at >= ? AND o.duplicate_of_id IS NULL ORDER BY o.created_at`,
+    [goal.project_id, new Date(Date.now() - 48 * 3600_000).toISOString()],
+  ).catch((error) => { console.log(`  lineage read failed: ${error.message}`); return []; });
+  const origins = [
+    ['cash_discovery_rounds', 'candidate_id'], ['monetization_commissions', 'candidate_id'], ['industry_rounds', 'candidate_id'],
+    ['labor_rounds', 'candidate_id'], ['manufacturing_rounds', 'candidate_id'], ['deal_rounds', 'candidate_id'], ['puzzle_rounds', 'candidate_id'],
+  ];
+  for (const o of lineageRows) {
+    const orc = await db.get('SELECT id, goal_id, goal_packet_key, status, created_at FROM research_orchestrations WHERE id = ?', [o.orchestration_id]).catch(() => null);
+    const mission = await db.get('SELECT id, state, candidate_id, created_at FROM russell_missions WHERE orchestration_id = ?', [o.orchestration_id]).catch(() => null);
+    const cand = mission?.candidate_id
+      ? await db.get('SELECT id, title, state, conversation_id, follow_on_of_mission_id, created_at FROM russell_candidates WHERE id = ?', [mission.candidate_id]).catch(() => null)
+      : null;
+    const found = [];
+    if (cand) {
+      for (const [table, column] of origins) {
+        const row = await db.get(`SELECT * FROM ${table} WHERE ${column} = ?`, [cand.id]).catch(() => null);
+        if (row) found.push(`${table}:${row.id} created=${row.created_at ?? '-'} purpose=${row.purpose ?? row.attribute ?? row.bucket_key ?? row.bucket ?? '-'} round=${row.round ?? '-'}`);
+      }
+    }
+    const validation = await db.get('SELECT id FROM cash_opportunities WHERE validation_orchestration_id = ?', [o.orchestration_id]).catch(() => null);
+    console.log(`    ${o.created_at} ${o.id} claim=${o.claim_id ?? '-'} routine=${o.routine_name ?? o.executor_routine_id ?? '-'} session=${String(o.executor_session_ref ?? '-').slice(0, 18)}`);
+    console.log(`      orc ${orc?.id ?? o.orchestration_id} created=${orc?.created_at ?? '?'} goal=${orc?.goal_id ?? '-'} status=${orc?.status ?? '?'} mission=${mission?.id ?? '-'} candidate=${cand?.id ?? '-'} cand-created=${cand?.created_at ?? '-'} conversation=${cand?.conversation_id ?? '-'} follow-on-of=${cand?.follow_on_of_mission_id ?? '-'} validation-of=${validation?.id ?? '-'}`);
+    console.log(`      asked: ${String(cand?.title ?? '-').slice(0, 160)} | origin: ${found.join('; ') || 'none of the round tables'}`);
+    console.log(`      title: ${String(o.title).slice(0, 200)}`);
+  }
   // Who abandons work: identity, binding and how each lease ended, read-only.
   const since48 = new Date(Date.now() - 48 * 3600_000).toISOString();
   const who = (sql, params) => db.all(sql, params).catch((error) => { console.log(`  read failed: ${error.message}`); return []; });
