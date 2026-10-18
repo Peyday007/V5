@@ -217,11 +217,12 @@ if (!goal) {
     const last = ordered[ordered.length - 1];
     const settled = last.harvestedAt ?? last.openedAt;
     const next = nextRoundFor(history, nowIso);
-    const barren = ordered.slice(-3).length >= 3 && ordered.slice(-3).every((one) => one.found === 0);
+    const barren = ordered.slice(-3).length >= 3 && ordered.slice(-3).every((one) => one.state === 'HARVESTED' && one.found === 0);
     const eligibleAt = new Date(Date.parse(settled) + ROUND_COOL_OFF_MS).toISOString();
     const why = history.some((one) => one.state === 'OPEN') ? 'a round is live'
-      : barren ? 'stopped: last 3 rounds found nothing'
-      : next !== null ? `eligible now (round ${next})` : `cool-off until ${eligibleAt}`;
+      : next !== null ? `eligible now (round ${next})`
+      : barren ? 'stopped: last 3 finished rounds found nothing'
+      : `cool-off until ${eligibleAt}`;
     console.log(`  ${bucket.padEnd(28)} last r${last.round} ${last.state} found=${ordered.map((o) => o.found).join(',')} settled=${settled} :: ${why}`);
   }
   console.log('prepared decisions (Brain drafts, not sent):');
