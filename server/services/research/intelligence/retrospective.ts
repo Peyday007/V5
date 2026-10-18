@@ -446,6 +446,8 @@ export interface ApproachUsefulness {
   fragmentsBlocked: number;
   /** Fragments cancelled before they finished. */
   abandoned: number;
+  /** Blocked fragments by their stored `block_cause` (workstream D); unclassified ones are absent. */
+  blockCauses: Record<string, number>;
   claimsAccepted: number;
   /** Claims whose source could not be read (any retrieval state but RETRIEVED). */
   failedRetrievals: number;
@@ -522,9 +524,11 @@ export async function researchUsefulness(input: {
     question: string;
     created_at: string;
     envelope: string | null;
+    block_cause: string | null;
+    block_host: string | null;
   }>(
     `SELECT f.id, f.status, f.evidence_lane, f.repair_strategy, f.attempt, f.question, f.created_at,
-            o.approval_envelope_id AS envelope
+            f.block_cause, f.block_host, o.approval_envelope_id AS envelope
        FROM research_fragments f
        JOIN research_orchestrations o ON o.id = f.orchestration_id
       WHERE f.project_id = ? AND f.created_at >= ? AND f.created_at <= ?`,
@@ -639,6 +643,7 @@ export async function researchUsefulness(input: {
     fragmentsAccepted: number;
     fragmentsBlocked: number;
     abandoned: number;
+    blockCauses: Record<string, number>;
     claimsAccepted: number;
     failedRetrievals: number;
     passes: number;
@@ -663,6 +668,7 @@ export async function researchUsefulness(input: {
         fragmentsAccepted: 0,
         fragmentsBlocked: 0,
         abandoned: 0,
+        blockCauses: {},
         claimsAccepted: 0,
         failedRetrievals: 0,
         passes: 0,
@@ -693,6 +699,9 @@ export async function researchUsefulness(input: {
       if (fragment.status === 'ACCEPTED') entry.fragmentsAccepted += 1;
       if (fragment.status === 'BLOCKED') entry.fragmentsBlocked += 1;
       if (fragment.status === 'CANCELLED') entry.abandoned += 1;
+      if (fragment.status === 'BLOCKED' && fragment.block_cause) {
+        entry.blockCauses[fragment.block_cause] = (entry.blockCauses[fragment.block_cause] ?? 0) + 1;
+      }
       if (repeated) entry.repeatedWork += 1;
     });
   }
@@ -722,6 +731,17 @@ export async function researchUsefulness(input: {
       } else cell.retrieved += 1;
       unreadByHostSurface.set(key, cell);
     }
+  }
+  // A blocked fragment whose stored cause named a host counts as a failed read of that host.
+  for (const fragment of fragments) {
+    const surface = surfaceOf.get(fragment.id);
+    const host = fragment.block_host?.toLowerCase().replace(/^www\./, '') ?? null;
+    if (fragment.status !== 'BLOCKED' || !host || !surface) continue;
+    const key = `${surface}|${host}`;
+    const cell = unreadByHostSurface.get(key) ?? { failed: 0, retrieved: 0, claimIds: [] };
+    cell.failed += 1;
+    cell.claimIds.push(fragment.id);
+    unreadByHostSurface.set(key, cell);
   }
   const qualifiedRank = tierRank('QUALIFIED');
   for (const fact of facts) {
@@ -767,6 +787,7 @@ export async function researchUsefulness(input: {
         fragmentsAccepted: entry.fragmentsAccepted,
         fragmentsBlocked: entry.fragmentsBlocked,
         abandoned: entry.abandoned,
+        blockCauses: entry.blockCauses,
         claimsAccepted: entry.claimsAccepted,
         failedRetrievals: entry.failedRetrievals,
         passes: entry.passes,
@@ -941,7 +962,11 @@ export function formatUsefulness(reading: ResearchUsefulness): string[] {
     }
     lines.push(
       `    ${one.label.slice(0, 40).padEnd(40)} frag=${one.fragments} acc=${one.fragmentsAccepted}` +
-        ` blk=${one.fragmentsBlocked} abandoned=${one.abandoned} claims-acc=${one.claimsAccepted}` +
+        ` blk=${one.fragmentsBlocked}` +
+        (Object.keys(one.blockCauses).length > 0
+          ? `(${Object.entries(one.blockCauses).map(([k, n]) => `${k}:${n}`).join(',')})`
+          : '') +
+        ` abandoned=${one.abandoned} claims-acc=${one.claimsAccepted}` +
         ` unread=${one.failedRetrievals} passes=${one.passes} sessions=${unknown(one.sessions)}` +
         ` repeated=${one.repeatedWork} fields=${one.fieldsAnswered} decisive=${one.decisiveAnswered}` +
         ` qualified=${one.opportunitiesQualified} discoveries=${one.usefulDiscoveries}` +

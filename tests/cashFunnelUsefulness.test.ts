@@ -249,6 +249,9 @@ describe('research usefulness', () => {
       })) as unknown as Parameters<typeof insertClaims>[0],
     );
 
+    // Workstream D's stored block cause is read, not re-derived.
+    await getDb().run(`UPDATE research_fragments SET block_cause = 'SOURCE_ACCESS' WHERE id = ?`, [blocked[1]]);
+
     const before = await rowCounts();
     const reading = await researchUsefulness({ projectId });
     expect(await rowCounts()).toEqual(before);
@@ -261,6 +264,7 @@ describe('research usefulness', () => {
     expect(payer.fragmentsAccepted).toBe(5);
     expect(competition.fragmentsAccepted).toBe(1);
     expect(competition.abandoned).toBe(1);
+    expect(competition.blockCauses).toEqual({ SOURCE_ACCESS: 1 });
     expect(competition.repeatedWork).toBe(6);
     expect(competition.failedRetrievals).toBe(6);
     expect(competition.sessions).toBe(6);
