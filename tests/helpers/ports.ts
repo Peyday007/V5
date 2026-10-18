@@ -60,6 +60,20 @@ export const FETCH_BLOCKED_PORTS: ReadonlySet<number> = new Set([
 ]);
 
 /**
+ * Ports a server started by a suite may not take because the test environment
+ * already holds them.
+ *
+ * `api.test.ts` picks from 5400–5499, and the Postgres CI runner's own server
+ * listens on 5432. On 2026-10-18 the pick landed there: the Brain refused to
+ * boot ("Port 5432 is already in use"), the suite waited 45s for a server that
+ * would never come up, and the Postgres gate failed a release whose change had
+ * nothing to do with it — one run in a hundred, and only on that backend. The
+ * local throwaway cluster (`scripts/test-postgres.sh`) defaults to 54329, which
+ * no range here reaches, and is listed anyway for the same reason as above.
+ */
+export const ENVIRONMENT_RESERVED_PORTS: ReadonlySet<number> = new Set([5432, 54329]);
+
+/**
  * One port from `[base, base + span)` that `fetch` will actually dial.
  *
  * Deterministic in its refusal rather than its choice: the port is still
@@ -75,7 +89,7 @@ export const FETCH_BLOCKED_PORTS: ReadonlySet<number> = new Set([
 export function pickPort(base: number, span: number): number {
   const usable: number[] = [];
   for (let port = base; port < base + span; port += 1) {
-    if (!FETCH_BLOCKED_PORTS.has(port)) usable.push(port);
+    if (!FETCH_BLOCKED_PORTS.has(port) && !ENVIRONMENT_RESERVED_PORTS.has(port)) usable.push(port);
   }
   if (usable.length === 0) {
     throw new Error(
