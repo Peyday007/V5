@@ -366,6 +366,21 @@ describe('a readable route is named where the first route failed', () => {
     ]);
   });
 
+  it('reads the packet title and Freelancer\'s country domains, not only the fragment question', () => {
+    const byTitle = composeGuidance({
+      fragment: { fragmentKey: 'market-signal', question: 'State the maximum cash out before the money is usable' },
+      siblings: [],
+      reachability: [],
+      lessons: [],
+      contextText: "Exposure for \"Freelancer.com project 40771439 'WordPress Portfolio Site Build'\"",
+    });
+    expect(byTitle.readableRoutes.map((route) => route.host)).toEqual(['freelancer.com']);
+    for (const host of ['freelancer.co.uk', 'www.freelancer.ca', 'freelancer.cn']) {
+      expect(routesFor({ question: null, unreachableHosts: [host] }).map((r) => r.host), host).toEqual(['freelancer.com']);
+    }
+    expect(routesFor({ question: null, unreachableHosts: ['notfreelancer.com', 'freelancer.example.org'] })).toEqual([]);
+  });
+
   it('every route is a public https address that needs no key and no account', () => {
     for (const route of READABLE_ROUTES) {
       for (const line of route.lines) {

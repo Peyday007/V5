@@ -26,6 +26,8 @@ export interface ReadableRoute {
   /** The host as a worker would meet it, and the names a question may use for it. */
   host: string;
   names: readonly string[];
+  /** Other hosts that are the same publisher, such as a country domain. */
+  aliases?: RegExp;
   /** One line per address: what to open, and what in it answers which lane. */
   lines: readonly string[];
 }
@@ -34,6 +36,9 @@ export const READABLE_ROUTES: readonly ReadableRoute[] = Object.freeze([
   {
     host: 'freelancer.com',
     names: ['freelancer.com'],
+    // Its country sites (freelancer.co.uk, .ca, .cn, .in …) serve the same
+    // projects, and are where surfaces have failed with JS_ONLY.
+    aliases: /^(www\.)?freelancer\.(co\.[a-z]{2}|com\.[a-z]{2}|[a-z]{2})$/,
     lines: [
       'search open projects: https://www.freelancer.com/api/projects/0.1/projects/active/?query=<words>&limit=20&full_description=true',
       'one project: https://www.freelancer.com/api/projects/0.1/projects/<project id>/?full_description=true — ' +
@@ -74,9 +79,11 @@ function mentions(text: string, name: string): boolean {
 }
 
 /**
- * The routes this fragment should be told about. A route is included when the
- * fragment's own question names the channel, or when this surface recently
- * failed to read the channel's host. Pure.
+ * The routes this assignment should be told about. A route is included when
+ * the question names the channel, or when this surface recently failed to read
+ * the channel's host. `question` carries the fragment's question and the
+ * packet's title, because a fragment often asks about "this opening" and only
+ * the title names where it is. Pure.
  */
 export function routesFor(input: {
   question: string | null;
@@ -86,6 +93,8 @@ export function routesFor(input: {
   return READABLE_ROUTES.filter(
     (route) =>
       route.names.some((name) => mentions(question, name)) ||
-      input.unreachableHosts.some((host) => host === route.host || host.endsWith(`.${route.host}`)),
+      input.unreachableHosts.some(
+        (host) => host === route.host || host.endsWith(`.${route.host}`) || (route.aliases?.test(host) ?? false),
+      ),
   );
 }

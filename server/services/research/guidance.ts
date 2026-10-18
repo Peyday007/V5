@@ -50,6 +50,8 @@ export async function guidanceFor(input: {
   siblings: { fragmentKey: string; question: string }[];
   /** The surface the work runs on, when known. Null reads every surface. */
   surface: ReachabilitySurface | null;
+  /** Other text naming what is being researched, such as the packet's title. */
+  contextText?: string | null;
   now?: number;
 }): Promise<ResearchGuidance> {
   const since = new Date((input.now ?? Date.now()) - REACHABILITY_WINDOW_MS).toISOString();
@@ -66,5 +68,6 @@ export async function guidanceFor(input: {
     siblings: input.siblings,
     reachability,
     lessons,
+    contextText: input.contextText ?? null,
   });
 }

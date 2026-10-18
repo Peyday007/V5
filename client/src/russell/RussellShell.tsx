@@ -38,6 +38,7 @@ import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
 import { MachinesView } from './Machines.tsx';
 import { LaborView } from './Labor.tsx';
+import { PuzzlesView } from './Puzzles.tsx';
 import { ScenariosView } from './Scenarios.tsx';
 import { ResearchView } from './Research.tsx';
 import { ConnectionsPanel } from './Connections.tsx';
@@ -91,6 +92,7 @@ const SECTIONS = [
   { name: 'SITES' as const, label: 'Connected sites', primary: false },
   { name: 'MACHINES' as const, label: 'Machines', primary: false },
   { name: 'LABOR' as const, label: 'Labor', primary: false },
+  { name: 'PUZZLES' as const, label: 'Puzzles', primary: false },
   { name: 'SCENARIOS' as const, label: 'Scenarios', primary: false },
 ];
 
@@ -549,6 +551,7 @@ export function RussellShell({
         ) : null}
         {route.name === 'MACHINES' ? <MachinesView projectId={projectId} /> : null}
         {route.name === 'LABOR' ? <LaborView projectId={projectId} /> : null}
+        {route.name === 'PUZZLES' ? <PuzzlesView projectId={projectId} /> : null}
         {route.name === 'SCENARIOS' ? <ScenariosView projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
