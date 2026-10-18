@@ -268,6 +268,16 @@ export interface RoutingCandidate {
   workerActive: boolean;
   /** In-flight activations attributed to this Routine and its account. */
   routineInFlight: number;
+  /**
+   * Sessions Brain started on this Routine's account in the last hour, and how
+   * many it may start (`accountActivationBudget`). Production, 2026-10-17: an
+   * account with no target was fired 558 times in a day for one accepted
+   * completion, because a concurrency target bounds sessions *at once* and a
+   * session that ends in a minute frees its slot for the next. Optional so a
+   * hand-built candidate is unaffected; absent or null is no budget.
+   */
+  accountFiresLastHour?: number;
+  accountActivationBudget?: number | null;
   accountInFlight: number;
   routineTarget: number | null;
   accountTarget: number | null;
@@ -692,6 +702,17 @@ export function routeBin(input: RoutingInput): RoutingResult {
       sawTargetReached = true;
       continue;
     }
+    if (
+      candidate.accountActivationBudget != null &&
+      (candidate.accountFiresLastHour ?? 0) >= candidate.accountActivationBudget
+    ) {
+      considered.push({
+        routineId: routine.id,
+        verdict: `account activation budget reached ${candidate.accountFiresLastHour}/${candidate.accountActivationBudget} in the last hour`,
+      });
+      sawTargetReached = true;
+      continue;
+    }
 
     eligible.push(candidate);
   }
@@ -804,8 +825,9 @@ export function routeBin(input: RoutingInput): RoutingResult {
         ok: false,
         refusal: 'ACCOUNT_TARGETS_REACHED',
         reason:
-          'Every capable surface is at its configured target. Raise an account or Routine ' +
-          'target, or wait for an activation to finish.',
+          'Every capable surface is at its configured target, or has started its hourly ' +
+          'budget of sessions. Raise an account or Routine target, or wait for an activation ' +
+          'to finish.',
         considered,
         retryAt: null,
       };

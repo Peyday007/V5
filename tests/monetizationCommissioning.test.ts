@@ -88,6 +88,8 @@ import { recordMovements } from '../server/services/cash/monetization/movement.t
 import { operate } from '../server/services/cash/operate.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
+import { recordCardFact } from '../server/repos/cashCardFacts.ts';
+import { DISQUALIFIED_FIELD } from '../server/services/cash/engineCard.ts';
 import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
 import { ATTRIBUTE } from '../server/domain/monetization.ts';
 import {
@@ -1574,5 +1576,36 @@ describe('adversarial: research that finished before the possibility was put awa
     // And the evidence the activation was spent on reached the ledger.
     const facts = await pathFactsFor(asked.pathId);
     expect(facts.some((one) => one.kind === 'EVIDENCE' && one.claimId !== null)).toBe(true);
+  });
+});
+
+describe('a question about an opening that can no longer be pursued', () => {
+  /*
+   * Production, 2026-10-17: disqualified and duplicate openings kept earning
+   * research questions that friends' Claude sessions were fired at.
+   * `closedOpportunities` is read before allocation so none is asked. (An
+   * expired opening never reaches the ledger at all.)
+   */
+  it('is never opened for a disqualified opening, and still is for a live one', async () => {
+    const live = await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    const ruledOut = await discovery('PAID_TASK_OR_CONTRACT', 'A county tender for winter road salt delivery.');
+    await recordCardFact({
+      projectId,
+      opportunityId: ruledOut.id,
+      field: DISQUALIFIED_FIELD,
+      kind: 'PERSON',
+      value: 'The buyer only accepts licensed vendors.',
+      decidedBy: userId,
+    });
+    await enumeratePossibilities(projectId);
+    const ledger = await composeLedger({ projectId });
+    const subjectOfPath = new Map(ledger.entries.map((one) => [one.path.id, one.subject?.id ?? null]));
+    expect([...subjectOfPath.values()]).toContain(ruledOut.id);
+
+    const pass = await runCommissions({ projectId, ledger });
+    const asked = pass.opened.map((one) => subjectOfPath.get(one.pathId));
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked).not.toContain(ruledOut.id);
+    expect(asked).toContain(live.id);
   });
 });
