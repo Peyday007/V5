@@ -19,7 +19,7 @@ import type {
   ResearchClaim,
   ResearchFragment,
 } from '../../domain/types.ts';
-import type { GateResult } from './gate.ts';
+import type { BlockCause, GateResult } from './gate.ts';
 import { untaggedAccepted } from './lanes.ts';
 
 /**
@@ -63,6 +63,51 @@ const LADDER: Record<string, RepairStrategy[]> = {
     'REPLACE_ESTIMATE_WITH_RANGE',
   ],
 };
+
+/**
+ * The ladder for a fragment stopped because its sources could not be read.
+ *
+ * An unretrieved claim produces no failed gate condition — the gate has no
+ * verdict on evidence nobody could open — so the condition-keyed ladders never
+ * reached this failure, and the default ladder answered it with a different
+ * search of the same unreadable pages. This one is keyed by the stored cause
+ * instead, and every rung is an *alternative route to a source*: the canonical
+ * address, an archived copy, the official filing behind it, a different
+ * repository, and then an honest "unresolved". No rung repeats a rung an
+ * earlier attempt used, by the same rule as every other ladder.
+ */
+export const UNREADABLE_LADDER: readonly RepairStrategy[] = [
+  'RESOLVE_CANONICAL_LINK',
+  'INSPECT_ARCHIVED_SOURCES',
+  'USE_OFFICIAL_FILINGS',
+  'TRY_DIFFERENT_REPOSITORIES',
+  'MARK_UNRESOLVED',
+];
+
+/**
+ * The class of source each unreadable-ladder rung would send a worker to,
+ * written in the words an envelope's `allowedSourceTypes` is tested against.
+ *
+ * A rung is offered only when the fragment's envelope already admits its
+ * class. This is a filter on what is *offered*; the envelope check itself is
+ * unchanged and still applied to whatever the worker cites.
+ */
+export const RUNG_SOURCE_CLASS: Partial<Record<RepairStrategy, string>> = {
+  RESOLVE_CANONICAL_LINK: "the publisher's own official page",
+  INSPECT_ARCHIVED_SOURCES: 'a web archive copy of a published page',
+  USE_OFFICIAL_FILINGS: 'an official filing or public record',
+  TRY_DIFFERENT_REPOSITORIES: 'an open data portal or registry',
+};
+
+/** Whether an envelope admits the source class a rung relies on. No envelope, no narrowing. */
+export function rungAuthorized(
+  strategy: RepairStrategy,
+  envelope: { allowedSourceTypes: RegExp } | null | undefined,
+): boolean {
+  const cls = RUNG_SOURCE_CLASS[strategy];
+  if (!cls || !envelope) return true;
+  return envelope.allowedSourceTypes.test(cls);
+}
 
 const DEFAULT_LADDER: RepairStrategy[] = [
   'FIND_PRIMARY_DATA',
@@ -198,6 +243,14 @@ export interface BuildRepairPlanInput {
   splitRequired: boolean;
   /** Attempts left after this one, including it. */
   remainingBudget: number;
+  /**
+   * Why the failed attempt was blocked, from the stored `block_cause` (or
+   * `classifyBlock` on a legacy row). SOURCES_UNREADABLE and SOURCE_ACCESS
+   * choose the unreadable ladder.
+   */
+  blockCause?: BlockCause | null;
+  /** The approval envelope the packet runs under, when it has one. Narrows the unreadable rungs. */
+  envelope?: { allowedSourceTypes: RegExp } | null;
 }
 
 /**
@@ -214,15 +267,31 @@ export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
     input.history.flatMap((attempt) => attempt.repairPlan?.strategies ?? []),
   );
 
-  const candidates = input.gate.failedConditions.flatMap(
-    (condition) => LADDER[condition] ?? [],
-  );
-  const ordered = [...new Set([...candidates, ...DEFAULT_LADDER])];
-  const fresh = ordered.filter((strategy) => !used.has(strategy));
-  const strategies: RepairStrategy[] =
-    input.remainingBudget <= 1 || fresh.length === 0
-      ? ['MARK_UNRESOLVED']
-      : fresh.slice(0, 2);
+  const unreadable = input.blockCause === 'SOURCES_UNREADABLE' || input.blockCause === 'SOURCE_ACCESS';
+  let strategies: RepairStrategy[];
+  if (unreadable) {
+    /*
+     * Cause-keyed: an alternative route to a source, or a truthful terminal
+     * blocker — never the same unreadable pages searched again. Rungs whose
+     * source class the envelope does not admit are skipped rather than
+     * offered and then refused.
+     */
+    const fresh = UNREADABLE_LADDER.filter(
+      (strategy) =>
+        strategy !== 'MARK_UNRESOLVED' && !used.has(strategy) && rungAuthorized(strategy, input.envelope),
+    );
+    strategies = input.remainingBudget <= 1 || fresh.length === 0 ? ['MARK_UNRESOLVED'] : fresh.slice(0, 2);
+  } else {
+    const candidates = input.gate.failedConditions.flatMap(
+      (condition) => LADDER[condition] ?? [],
+    );
+    const ordered = [...new Set([...candidates, ...DEFAULT_LADDER])];
+    const fresh = ordered.filter((strategy) => !used.has(strategy));
+    strategies =
+      input.remainingBudget <= 1 || fresh.length === 0
+        ? ['MARK_UNRESOLVED']
+        : fresh.slice(0, 2);
+  }
 
   const tried = ecosystemsTried(input.claims);
   const rejected = input.claims
@@ -262,11 +331,29 @@ export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
     (claim) => claim.contradictionState === 'CONTESTED' || claim.contradictionState === 'REFUTED',
   );
 
+  const unreadHosts = [
+    ...new Set(
+      (gate.unresolvedRetrieval ?? [])
+        .map((entry) => {
+          try {
+            return entry.sourceUrl ? new URL(entry.sourceUrl).hostname.replace(/^www\./, '') : null;
+          } catch {
+            return null;
+          }
+        })
+        .filter((host): host is string => host !== null),
+    ),
+  ];
+
   return {
     failedRequirement: fragment.missingEvidence ?? fragment.question,
     affectedClaims: rejected.slice(0, 20),
-    missingEvidence:
-      missingLanes.length > 0 && untagged > 0
+    missingEvidence: unreadable
+      ? `The last attempt could not read its sources${
+          unreadHosts.length > 0 ? ` (${unreadHosts.join(', ')})` : ''
+        }, so nothing was judged. Reach the same evidence by a different route — do not retry the ` +
+        'same addresses, and if no authorized route reaches it, say so and list where you looked.'
+      : missingLanes.length > 0 && untagged > 0
         ? `${untagged} accepted claim(s) carry no evidence lane, so ${missingLanes.length} ` +
           `declared lane(s) read as empty: ${missingLanes.join(', ')}. The evidence is not ` +
           'missing — it is unlabelled. Resubmit the same claims with "evidence_lane" set to one ' +

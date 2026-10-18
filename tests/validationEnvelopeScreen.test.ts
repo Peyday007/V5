@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { ownActionMatches } from '../server/services/research/actorScope.ts';
-import { APPROVAL_ENVELOPES } from '../server/services/research/approvalEnvelope.ts';
+import {
+  APPROVAL_ENVELOPES,
+  fillAssignmentTemplate,
+  planFitsEnvelope,
+} from '../server/services/research/approvalEnvelope.ts';
+import { profileFor, validationScreenProfile } from '../server/services/russell/compilerProfiles.ts';
 import { validationQuestion } from '../server/services/cash/validation.ts';
-import type { CashOpportunity } from '../server/domain/types.ts';
+import type { CashOpportunity, ResearchFragment, ResearchOrchestration } from '../server/domain/types.ts';
 
 /*
  * Brain's own compiled deep-dive question must pass Brain's own envelope.
@@ -46,5 +51,69 @@ describe('a Cash deep dive is not refused by its own envelope', () => {
     ]) {
       expect(ownActionMatches(text, pattern), text).toEqual([]);
     }
+  });
+});
+
+/*
+ * The stage-one screen (OPPORTUNITY-INTELLIGENCE §3.3(a)) runs under the same
+ * envelope, the same gate and the same per-lane floors as the full dive. Only
+ * the order of asking changed.
+ */
+describe('the stage-one screen passes the same envelope', () => {
+  const envelope = APPROVAL_ENVELOPES['RUSSELL_CASH_VALIDATION_V1']!;
+  const opening = {
+    title: 'RFP',
+    buyingSignal: 'The county published request 2026-441 for ownership research, closing 30 October 2026.',
+    source: 'https://example.gov/rfp',
+    signalObservedAt: '2026-09-20',
+  } as unknown as CashOpportunity;
+
+  it('admits the screen question the compiler writes', () => {
+    expect(ownActionMatches(validationQuestion(opening, 'SCREEN'), envelope.forbiddenActions)).toEqual([]);
+  });
+
+  it('asks only the kill lanes, each the full profile’s own lane object', () => {
+    const full = profileFor('RUSSELL_CASH_VALIDATION_V1')!;
+    const screen = validationScreenProfile('RUSSELL_CASH_VALIDATION_V1')!;
+    expect(screen.id).toBe('COMMERCIAL_VALIDATION_SCREEN');
+    expect(screen.lanes.map((lane) => lane.id).sort()).toEqual(['disqualifier', 'payer', 'ruled_out']);
+    for (const lane of screen.lanes) {
+      // Identical, so the evidence kind, necessity and per-lane floor cannot differ.
+      expect(full.lanes.find((one) => one.id === lane.id)).toBe(lane);
+    }
+    expect(screen.proposedSources).toBe(full.proposedSources);
+    expect(screen.excludedSources).toBe(full.excludedSources);
+    // Nothing else can be narrowed by it.
+    expect(validationScreenProfile('RUSSELL_CASH_DISCOVERY_V1')).toBeNull();
+  });
+
+  it('a compiled screen plan fits the envelope', () => {
+    const screen = validationScreenProfile('RUSSELL_CASH_VALIDATION_V1')!;
+    const question = validationQuestion(opening, 'SCREEN');
+    const geography = 'Westfield County, Ohio';
+    const assignment = fillAssignmentTemplate(envelope.assignmentTemplate!, {
+      QUESTION: question,
+      JURISDICTION: geography,
+    });
+    const verdict = planFitsEnvelope({
+      envelope,
+      orchestration: { assignment, fixture: false, unresolvedGapPolicy: null } as unknown as ResearchOrchestration,
+      fragments: [
+        {
+          fragmentKey: screen.fragmentKey,
+          question,
+          definitions: null,
+          population: null,
+          geography,
+          completionCriteria: screen.completionCriteria(geography),
+          acceptableSourceTypes: screen.proposedSources.filter((one) => envelope.allowedSourceTypes.test(one)),
+          excludedSourceTypes: screen.excludedSources,
+          requiredEvidence: screen.lanes,
+          minIndependentSources: Math.max(1, envelope.minIndependentSourcesFloor),
+        } as unknown as ResearchFragment,
+      ],
+    });
+    expect(verdict.reasons).toEqual([]);
+    expect(verdict.fits).toBe(true);
   });
 });

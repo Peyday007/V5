@@ -50,7 +50,9 @@ import type {
   ResearchPassRow,
   ResearchPassStatus,
   RepairPlan,
+  ExistingClaim,
 } from '../domain/types.ts';
+import { CLAIM_TYPES } from '../domain/types.ts';
 import { buildUpdate, fromBool, newId, nowIso, parseJson, toBool, toJson } from './util.ts';
 
 function mapOrchestration(row: ResearchOrchestrationRow): ResearchOrchestration {
@@ -117,6 +119,9 @@ function mapFragment(row: ResearchFragmentRow): ResearchFragment {
     completionCriteria: parseJson<string[]>(row.completion_criteria, []),
     dependsOn: parseDependencies(row.depends_on),
     nextRetryAt: row.next_retry_at ?? null,
+    blockCause: row.block_cause ?? null,
+    blockHost: row.block_host ?? null,
+    archiveMarker: row.archive_marker ?? null,
     minIndependentSources: Number(row.min_independent_sources),
     status: row.status as FragmentStatus,
     attempt: Number(row.attempt),
@@ -566,6 +571,8 @@ export interface CreateFragmentInput {
   maxRepairs?: number;
   splitFromId?: string | null;
   repairPlan?: RepairPlan | null;
+  /** The archive content marker this search was judged against, when known. */
+  archiveMarker?: string | null;
 }
 
 /**
@@ -619,10 +626,10 @@ export async function createFragments(inputs: CreateFragmentInput[]): Promise<Re
            missing_evidence, why_existing_insufficient, existing_claim_ids, excluded_scope,
            expected_claim_types, preferred_source_types, prohibited_evidence, required_comparisons,
            required_calculations, contradiction_targets, failure_conditions, uncertainty_tolerance,
-           priority, estimated_effort, max_repairs, split_from_id, repair_plan,
+           priority, estimated_effort, max_repairs, split_from_id, repair_plan, archive_marker,
            created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.projectId, input.layerId, input.fragmentIndex,
           input.fragmentKey, input.question, input.geography ?? null, input.timeframe ?? null,
           input.population ?? null, input.definitions ?? null, toJson(serializeLanes(input.requiredEvidence)),
@@ -639,7 +646,7 @@ export async function createFragments(inputs: CreateFragmentInput[]): Promise<Re
           toJson(input.contradictionTargets ?? []), toJson(input.failureConditions ?? []),
           input.uncertaintyTolerance ?? null, input.priority ?? 5, input.estimatedEffort ?? null,
           input.maxRepairs ?? 2, input.splitFromId ?? null,
-          input.repairPlan ? toJson(input.repairPlan) : null, ts, ts],
+          input.repairPlan ? toJson(input.repairPlan) : null, input.archiveMarker ?? null, ts, ts],
       );
     }
   });
@@ -712,10 +719,56 @@ export interface UpdateFragmentInput {
    * new one is numbered after them.
    */
   maxRepairs?: number;
+  /**
+   * Overrides for the stored block cause. Almost never supplied: a BLOCKED
+   * write derives both from the reason and verdict it carries (or the row's
+   * own, when the patch does not carry them), so no write site can forget them.
+   */
+  blockCause?: string | null;
+  blockHost?: string | null;
+}
+
+/**
+ * The block cause a BLOCKED write stores, in the same UPDATE that blocks.
+ *
+ * Every BLOCKED write goes through `updateFragment`, so this is the one place
+ * the column is written. Nine call sites guarded one at a time is the
+ * arrangement this codebase has recorded as one forgotten filter away from
+ * being skipped. Leaving BLOCKED clears both columns, so a non-null cause
+ * always means the fragment is blocked now. `classifyBlock` stays the single
+ * classifier; nothing here judges anything it did not already judge.
+ */
+async function blockColumnsFor(
+  id: string,
+  patch: UpdateFragmentInput,
+): Promise<{ block_cause?: string | null; block_host?: string | null }> {
+  if (patch.status === undefined) return {};
+  if (patch.status !== 'BLOCKED') return { block_cause: null, block_host: null };
+  const { classifyBlock, blockHostFor, BLOCK_CAUSES } = await import('../services/research/gate.ts');
+  let blockedReason = patch.blockedReason;
+  let verdictDetail = patch.verdictDetail;
+  if (blockedReason === undefined || verdictDetail === undefined) {
+    const row = await getDb().get<{ blocked_reason: string | null; verdict_detail: string | null }>(
+      'SELECT blocked_reason, verdict_detail FROM research_fragments WHERE id = ?',
+      [id],
+    );
+    if (blockedReason === undefined) blockedReason = row?.blocked_reason ?? null;
+    if (verdictDetail === undefined) verdictDetail = parseJson<unknown>(row?.verdict_detail ?? null, null);
+  }
+  const input = { blockedReason: blockedReason ?? null, verdictDetail: verdictDetail ?? null };
+  const supplied =
+    patch.blockCause && (BLOCK_CAUSES as readonly string[]).includes(patch.blockCause)
+      ? (patch.blockCause as (typeof BLOCK_CAUSES)[number])
+      : null;
+  const cause = supplied ?? classifyBlock(input);
+  const host = patch.blockHost !== undefined ? patch.blockHost : blockHostFor({ ...input, cause });
+  return { block_cause: cause, block_host: host };
 }
 
 export async function updateFragment(id: string, patch: UpdateFragmentInput): Promise<ResearchFragment | null> {
+  const blockColumns = await blockColumnsFor(id, patch);
   const { clause, values } = buildUpdate({
+    ...blockColumns,
     status: patch.status,
     integrity_verdict: patch.integrityVerdict,
     sufficiency_verdict: patch.sufficiencyVerdict,
@@ -1107,6 +1160,208 @@ export async function citableClaims(orchestrationId: string): Promise<ResearchCl
       [orchestrationId],
     ))
     .map(mapClaim);
+}
+
+/**
+ * The project's own gated evidence, in the shape the coverage classifier reads.
+ *
+ * `citableClaims`' predicate, project-wide, narrowed to what the shared pool
+ * would accept of a claim (§31's `ELIGIBLE_SQL`, minus the fragment status):
+ * accepted, sourced, structurally valid, uncontested, not a calculation
+ * resting on inputs that did not travel with it — in an ACCEPTED **or
+ * BLOCKED** fragment. That second half is the point. Production held 944
+ * accepted claims inside BLOCKED fragments that the archive check could not
+ * see, so Brain paid to research again what its own gate had already accepted.
+ *
+ * A BLOCKED fragment is not thereby complete, and nothing here says it is: the
+ * fragment keeps its status and its reason, and each claim is reused only if
+ * `assessRequirement` — unchanged, two publishers, strength 0.55, relevance 0.5
+ * — finds it satisfies the new requirement. No bar moves.
+ *
+ * The cross-project boundary does not move either: §31's pool still requires
+ * an ACCEPTED fragment, and this read is scoped to one project by the
+ * fragment's own `project_id`, never by anything the claim says.
+ *
+ * `documentId` is the claim id — the thing that backs the reading and that a
+ * reader may resolve — for `asExistingClaim`'s reason: there is no document
+ * row for a claim that was never filed.
+ */
+export async function ownCitableAsExisting(projectId: string): Promise<ExistingClaim[]> {
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+      WHERE f.project_id = ? AND f.status IN ('ACCEPTED', 'BLOCKED')
+        AND c.accepted = 1 AND c.sourced = 1 AND c.validation_state = 'SOURCED'
+        AND c.source_url IS NOT NULL
+        AND c.contradiction_state IN ('UNCHALLENGED', 'SUPPORTED')
+        AND c.derived = 0
+      ORDER BY c.created_at, c.id`,
+    [projectId],
+  );
+  const out: ExistingClaim[] = [];
+  for (const row of rows) {
+    // An unrecognised type is refused, never defaulted to SOURCED_FACT: the
+    // difference is the difference between SATISFIED and PARTIALLY_SATISFIED.
+    if (!(CLAIM_TYPES as readonly string[]).includes(row.claim_type)) continue;
+    out.push({
+      id: row.id,
+      projectId,
+      documentId: row.id,
+      extractionRunId: null,
+      layerId: null,
+      claim: row.claim,
+      claimType: row.claim_type as ExistingClaim['claimType'],
+      page: null,
+      blockIndex: null,
+      charStart: null,
+      charEnd: null,
+      locator: row.evidence_locator,
+      sourceUrl: row.source_url,
+      sourceTitle: row.source_title,
+      sourcePublisher: row.source_publisher,
+      sourceDate: row.source_date,
+      retrievedAt: row.retrieved_at,
+      supportingPassage: row.evidence_excerpt,
+      geography: row.geography,
+      timeframe: row.timeframe,
+      population: row.population,
+      definition: row.definition,
+      // Submitted as structure and gated; never read out of a page.
+      extractionConfidence: 1,
+      evidenceConfidence: Number(row.confidence),
+      contradictionState: row.contradiction_state as ExistingClaim['contradictionState'],
+      // The gate's seven conditions include the verification pass's two
+      // judgements, and an accepted claim has both answered.
+      verificationState: 'VERIFIED',
+      verificationDetail: null,
+      priorAuditId: null,
+      documentVersion: null,
+      superseded: false,
+      contentHash: row.content_hash,
+      createdAt: row.created_at,
+    });
+  }
+  return out;
+}
+
+/** One host's latest reading for one surface. */
+export interface HostReading {
+  host: string;
+  /** RETRIEVED, or the failing retrieval state / probe outcome as recorded. */
+  outcome: string;
+  at: string;
+  /** Where the reading came from: a research claim, or a SURFACE_PROBE_V1 unit. */
+  source: 'CLAIM' | 'PROBE';
+  /** The claim or probe bin that recorded it. */
+  ref: string;
+}
+
+/** Which execution surface a reading is asked about. Null fields mean "any". */
+export interface ReachabilitySurface {
+  routineId?: string | null;
+  workerId?: string | null;
+}
+
+const REACHABILITY_TTL_MS = 60_000;
+const reachabilityCache = new Map<string, { at: number; readings: HostReading[] }>();
+
+/** Forget cached reachability readings; for tests. */
+export function resetHostReachabilityCache(): void {
+  reachabilityCache.clear();
+}
+
+/**
+ * Per host, the latest thing a surface found when it tried to read it.
+ *
+ * A derived reading rather than a table: the claims already record each
+ * source's `retrieval_state`, the pass that produced them records which worker
+ * and Routine executed it, and a `SURFACE_PROBE_V1` bin records a host by
+ * host reading a worker actually took. Joining them is the whole of it.
+ *
+ * `surface` narrows the claims to passes that surface executed; probe readings
+ * are narrowed to bins leased by that worker. With no surface, every surface.
+ * The newest reading per host wins, so a host that failed on Monday and was
+ * read on Tuesday reads RETRIEVED.
+ *
+ * Bounded: claims by `created_at` through `idx_research_claims_created`, probes
+ * by the bins' own state, and the answer cached for a minute — it is context
+ * for a prompt and a trigger for a guarded recovery, and neither needs it
+ * fresher than that. It decides nothing by itself.
+ */
+export async function hostReachability(
+  surface: ReachabilitySurface | null,
+  since: string,
+): Promise<HostReading[]> {
+  const key = `${surface?.routineId ?? '*'}|${surface?.workerId ?? '*'}|${since.slice(0, 13)}`;
+  const cached = reachabilityCache.get(key);
+  if (cached && Date.now() - cached.at < REACHABILITY_TTL_MS) return cached.readings;
+
+  const { hostOf } = await import('../services/research/gate.ts');
+  const params: unknown[] = [since];
+  let narrow = '';
+  if (surface?.routineId) {
+    narrow += ' AND p.executor_routine_id = ?';
+    params.push(surface.routineId);
+  }
+  if (surface?.workerId) {
+    narrow += ' AND p.executor_worker_id = ?';
+    params.push(surface.workerId);
+  }
+  const claims = await getDb().all<{
+    id: string;
+    source_url: string | null;
+    retrieval_state: string | null;
+    created_at: string;
+  }>(
+    `SELECT c.id, c.source_url, c.retrieval_state, c.created_at
+       FROM research_claims c
+       ${narrow ? 'JOIN research_passes p ON p.id = c.pass_id' : ''}
+      WHERE c.created_at >= ? AND c.source_url IS NOT NULL${narrow}
+      ORDER BY c.created_at, c.id`,
+    params as never[],
+  );
+  const latest = new Map<string, HostReading>();
+  const note = (reading: HostReading): void => {
+    const existing = latest.get(reading.host);
+    if (!existing || reading.at >= existing.at) latest.set(reading.host, reading);
+  };
+  for (const row of claims) {
+    const host = hostOf(row.source_url);
+    if (!host) continue;
+    note({ host, outcome: row.retrieval_state ?? 'RETRIEVED', at: row.created_at, source: 'CLAIM', ref: row.id });
+  }
+
+  /*
+   * Probe readings only when no surface is named: a finished bin no longer
+   * records which worker held it (`finishBin` clears the lease), so a probe
+   * cannot honestly be attributed to one surface. Unattributed, it is still the
+   * evidence `recoverFragmentAfterSurfaceChange` requires.
+   */
+  const probes = surface?.routineId || surface?.workerId
+    ? []
+    : await getDb().all<{ id: string }>(
+        `SELECT id FROM bins
+          WHERE state = 'COMPLETE' AND completion_contract = 'SURFACE_PROBE_V1' AND updated_at >= ?
+          ORDER BY updated_at, id`,
+        [since],
+      );
+  if (probes.length > 0) {
+    const { getBin } = await import('./bins.ts');
+    const { readSurfaceProbe } = await import('../services/bins/contracts.ts');
+    for (const { id } of probes) {
+      const bin = await getBin(id);
+      if (!bin) continue;
+      for (const reading of await readSurfaceProbe(bin)) {
+        const host = hostOf(/^https?:/i.test(reading.host) ? reading.host : `https://${reading.host}`);
+        if (!host) continue;
+        note({ host, outcome: reading.outcome, at: reading.recordedAt, source: 'PROBE', ref: id });
+      }
+    }
+  }
+
+  const readings = [...latest.values()].sort((a, b) => a.host.localeCompare(b.host));
+  reachabilityCache.set(key, { at: Date.now(), readings });
+  return readings;
 }
 
 /**
@@ -1591,6 +1846,10 @@ export interface GateFailureDistribution {
   until: string;
   fragments: { judged: number; accepted: number; blocked: number };
   blockedByCause: Record<string, number>;
+  /** How many blocked causes came from the stored column, and how many were classified from a legacy row. */
+  causeSource: { stored: number; legacy: number };
+  /** Blocked fragments by the one host that dominated them, where one did. */
+  blockedByHost: Record<string, number>;
   failedConditions: Record<string, number>;
   claims: { submitted: number; accepted: number; acceptedInBlocked: number; unread: number };
   packets: { total: number; byStatus: Record<string, number> };
@@ -1603,7 +1862,7 @@ export async function gateFailureDistribution(input: {
   since: string;
   until?: string;
 }): Promise<GateFailureDistribution> {
-  const { classifyBlock } = await import('../services/research/gate.ts');
+  const { blockCauseOf } = await import('../services/research/gate.ts');
   const until = input.until ?? new Date().toISOString();
   const rows = await getDb().all<{
     id: string;
@@ -1612,8 +1871,10 @@ export async function gateFailureDistribution(input: {
     status: string;
     blocked_reason: string | null;
     verdict_detail: string | null;
+    block_cause: string | null;
+    block_host: string | null;
   }>(
-    `SELECT id, orchestration_id, fragment_key, status, blocked_reason, verdict_detail
+    `SELECT id, orchestration_id, fragment_key, status, blocked_reason, verdict_detail, block_cause, block_host
        FROM research_fragments
       WHERE project_id = ? AND status IN ('ACCEPTED','BLOCKED')
         AND completed_at >= ? AND completed_at < ?`,
@@ -1625,6 +1886,8 @@ export async function gateFailureDistribution(input: {
     until,
     fragments: { judged: rows.length, accepted: 0, blocked: 0 },
     blockedByCause: {},
+    causeSource: { stored: 0, legacy: 0 },
+    blockedByHost: {},
     failedConditions: {},
     claims: { submitted: 0, accepted: 0, acceptedInBlocked: 0, unread: 0 },
     packets: { total: 0, byStatus: {} },
@@ -1653,7 +1916,15 @@ export async function gateFailureDistribution(input: {
     }
     out.fragments.blocked += 1;
     out.claims.acceptedInBlocked += acceptedHere;
-    const cause = classifyBlock({ blockedReason: row.blocked_reason, verdictDetail: detail });
+    // The stored cause first; the classifier only for a row from before it existed.
+    const cause = blockCauseOf({
+      blockCause: row.block_cause,
+      blockedReason: row.blocked_reason,
+      verdictDetail: detail,
+    });
+    if (row.block_cause) out.causeSource.stored += 1;
+    else out.causeSource.legacy += 1;
+    if (row.block_host) out.blockedByHost[row.block_host] = (out.blockedByHost[row.block_host] ?? 0) + 1;
     out.blockedByCause[cause] = (out.blockedByCause[cause] ?? 0) + 1;
     const list = (out.examples[cause] ??= []);
     if (list.length < 3) {

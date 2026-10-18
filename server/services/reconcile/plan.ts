@@ -43,8 +43,7 @@ import {
 } from '../../repos/reconciliation.ts';
 import { getCurrentExtractionRun } from '../../repos/extraction.ts';
 import { claimsForDocument } from './claims.ts';
-import { sharedClaimsForProject } from '../knowledge/shared.ts';
-import { buildCoverageMatrix, type CoverageAssessment } from './coverage.ts';
+import { buildCoverageMatrix, dedupeClaims, readArchive, type CoverageAssessment } from './coverage.ts';
 
 /**
  * At most this many fragments for one requirement, and this many in total.
@@ -169,6 +168,10 @@ export interface ReconciliationResult {
    * came from somewhere else.
    */
   sharedClaims: ExistingClaim[];
+  /** The project's own gate-accepted research claims, from ACCEPTED or BLOCKED fragments. */
+  gatedClaims: ExistingClaim[];
+  /** The archive content marker this reconciliation was judged against. */
+  archiveMarker: string;
   assessments: CoverageAssessment[];
   coverage: RequirementCoverage[];
   documentsRead: number;
@@ -198,11 +201,19 @@ export async function reconcile(input: {
    * proposed fragments are judged against exactly the same shared evidence a
    * conversation's idea is.
    */
-  const shared = await sharedClaimsForProject(input.projectId);
+  /*
+   * The project's own gate-accepted research claims — ACCEPTED and BLOCKED
+   * fragments alike — on this entrance too, read through the same memoized
+   * archive `coverBeforeWork` reads, so the two entrances judge against the
+   * same evidence and the same marker.
+   */
+  const archive = await readArchive(input.projectId);
+  const shared = archive.sharedClaims;
+  const gated = archive.gatedClaims;
   const { assessments, coverage } = await buildCoverageMatrix({
     orchestrationId: input.orchestrationId,
     requirements: input.requirements,
-    claims: [...inventory.claims, ...shared],
+    claims: dedupeClaims([...inventory.claims, ...gated, ...shared]),
     contract: input.contract,
   });
 
@@ -211,6 +222,8 @@ export async function reconcile(input: {
     requirements: input.requirements,
     claims: inventory.claims,
     sharedClaims: shared,
+    gatedClaims: gated,
+    archiveMarker: archive.marker,
     assessments,
     coverage,
     documentsRead: inventory.documentsRead,

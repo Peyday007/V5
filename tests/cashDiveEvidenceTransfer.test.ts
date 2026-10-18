@@ -635,7 +635,7 @@ describe('what the deep dive establishes about reaching the buyer, and about rul
     const after = cashEngineCard({ opportunity: (await getOpportunity(id))!, facts: await cardFactsFor(id) });
     expect(after.disqualifiedBy).toBeNull();
     // And it is not offered a fourth.
-    expect((await whyNotDiving((await getOpportunity(id))!)).kind).toBe('ROUNDS_SPENT');
+    expect((await whyNotDiving((await getOpportunity(id))!)).kind).toBe('EPOCH_SPENT');
   });
 
   it('a disqualified opening never reads as qualified, whatever else is answered', () => {

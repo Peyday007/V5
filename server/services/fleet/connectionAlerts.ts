@@ -211,15 +211,22 @@ export async function connectionAlerts(now = Date.now()): Promise<ConnectionAler
          * The probe that would have counted proved only that Brain was down
          * (CON-6). Nothing about the connector is established, so the account
          * owner is not sent to reconnect anything.
+         *
+         * The fast budget is spent; Brain's own daily check (§64) is not, until
+         * SLOW_PROBE_LIMIT. Production Caleb 3-D, 2026-10-16, read "probes are
+         * spent" with the next daily probe due the following morning, which sent
+         * a reader to probe by hand something Brain was about to probe itself.
          */
+        const slow = await slowCheckSentence(routine.id);
         alerts.push({
           ...base,
           problem: 'RECOVERY_EXHAUSTED',
           detail:
-            `Quarantined (${firstSentences(reason, 1)}). Brain's own automatic probes are spent, and the last one ` +
-            `(${ran.lastProbeAt ?? 'unknown'}) was inconclusive because Brain itself was unavailable.`,
+            `Quarantined (${firstSentences(reason, 1)}). Brain's fast recovery probes are spent, and the last one ` +
+            `(${ran.lastProbeAt ?? 'unknown'}) was inconclusive because Brain itself was unavailable.` +
+            (slow || " Brain's daily checks are spent too."),
           action:
-            `Nothing about the connector is indicated. Once Brain is healthy, an operator runs \`connectors probe ${routine.routineRef}\`; ` +
+            `Nothing about the connector is indicated. ${slow ? 'To ask sooner than that, once' : 'Once'} Brain is healthy, an operator runs \`connectors probe ${routine.routineRef}\`; ` +
             'its result says who, if anybody, has to act.',
           who: 'OPERATOR',
           since: ran.lastProbeAt,

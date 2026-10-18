@@ -652,6 +652,9 @@ describe('CON-6: an outage-ambiguous probe is not counted against the surface', 
     const alert = (await connectionAlerts()).alerts.find((a) => a.routineId === s.routineId)!;
     expect(alert.who).toBe('OPERATOR');
     expect(alert.action.toLowerCase()).not.toContain('reconnect');
+    // ...and it says Brain still checks it daily, rather than "spent" (Caleb 3-D, 2026-10-16).
+    expect(alert.detail).toContain('Brain checks it again by itself at');
+    expect(alert.detail).not.toContain("Brain's own automatic probes are spent");
   });
 
   it('a probe that ends inconclusive by outage is followed by the next eligible healthy-time probe', async () => {

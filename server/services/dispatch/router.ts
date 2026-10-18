@@ -44,7 +44,15 @@ export type RoutingRefusal =
   | 'NO_SURFACE_SERVES_THIS_REPOSITORY'
   | 'NO_SURFACE_SERVES_THIS_PROJECT'
   | 'PINNED_SURFACE_UNAVAILABLE'
-  | 'ACCOUNT_TARGETS_REACHED';
+  | 'ACCOUNT_TARGETS_REACHED'
+  /**
+   * Every capable surface's account has started too many sessions in the last
+   * hour that did no work — never arrived, or arrived and ended without a
+   * claim, a unit, a research pass or a completion. Not a shortage: the
+   * workers exist, they are just not getting anywhere with what they are
+   * fired for, and firing more spends somebody's allowance to repeat that.
+   */
+  | 'ACCOUNT_SESSIONS_UNPRODUCTIVE';
 
 /**
  * What kind of wait each refusal is — and there is no third kind.
@@ -75,6 +83,9 @@ export type RefusalWait = 'CAPACITY' | 'OPERATOR';
 export const REFUSAL_WAIT: Record<RoutingRefusal, RefusalWait> = {
   FLEET_TARGET_REACHED: 'CAPACITY',
   ACCOUNT_TARGETS_REACHED: 'CAPACITY',
+  // Resolves by itself: an unproductive start leaves the hour, or a productive
+  // one is not counted at all. Nothing an operator writes is needed.
+  ACCOUNT_SESSIONS_UNPRODUCTIVE: 'CAPACITY',
   ALL_SURFACES_RATE_LIMITED: 'CAPACITY',
   FLEET_PAUSED: 'CAPACITY',
   NO_SURFACE_SERVES_THIS_FAMILY: 'OPERATOR',
@@ -130,6 +141,7 @@ export const REFUSAL_SCOPE: Record<RoutingRefusal, 'FLEET' | 'BIN'> = {
   // these is reached, so another bin may still find a surface.
   ALL_SURFACES_RATE_LIMITED: 'BIN',
   ACCOUNT_TARGETS_REACHED: 'BIN',
+  ACCOUNT_SESSIONS_UNPRODUCTIVE: 'BIN',
   NO_CAPABLE_SURFACE: 'BIN',
   NO_SURFACE_SERVES_THIS_FAMILY: 'BIN',
   NO_SURFACE_SERVES_THIS_REPOSITORY: 'BIN',
@@ -268,6 +280,18 @@ export interface RoutingCandidate {
   workerActive: boolean;
   /** In-flight activations attributed to this Routine and its account. */
   routineInFlight: number;
+  /**
+   * Sessions Brain started on this Routine's account in the last hour that did
+   * no work, and how many of those the account may have before it is refused
+   * (`UNPRODUCTIVE_STARTS_THRESHOLD`). Production, 2026-10-17: an account was
+   * fired 558 times in a day for one accepted completion, because a session
+   * handed work it could not advance ends in a minute and frees its slot for the
+   * next. Only the unproductive starts are counted: a productive start is bounded
+   * by the targets and the grant and by nothing here. Optional so a hand-built
+   * candidate is unaffected; absent or null is no limit.
+   */
+  accountUnproductiveStarts?: number;
+  accountUnproductiveLimit?: number | null;
   accountInFlight: number;
   routineTarget: number | null;
   accountTarget: number | null;
@@ -559,6 +583,7 @@ export function routeBin(input: RoutingInput): RoutingResult {
   let sawServesRepository = false;
   let sawRateLimited: string | null = null;
   let sawTargetReached = false;
+  let sawUnproductive = false;
 
   const eligible: RoutingCandidate[] = [];
   for (const candidate of candidates) {
@@ -692,6 +717,19 @@ export function routeBin(input: RoutingInput): RoutingResult {
       sawTargetReached = true;
       continue;
     }
+    if (
+      candidate.accountUnproductiveLimit != null &&
+      (candidate.accountUnproductiveStarts ?? 0) >= candidate.accountUnproductiveLimit
+    ) {
+      considered.push({
+        routineId: routine.id,
+        verdict:
+          `account started ${candidate.accountUnproductiveStarts} session(s) in the last hour that ` +
+          `did no work (limit ${candidate.accountUnproductiveLimit})`,
+      });
+      sawUnproductive = true;
+      continue;
+    }
 
     eligible.push(candidate);
   }
@@ -797,6 +835,25 @@ export function routeBin(input: RoutingInput): RoutingResult {
         reason: `Every eligible surface is rate limited. The earliest returns at ${sawRateLimited}.`,
         considered,
         retryAt: sawRateLimited,
+      };
+    }
+    /*
+     * A genuine shortage is named before unproductive starts: if any surface is
+     * merely at its target, more capacity is the remedy, and that is the more
+     * useful thing to say. Unproductive alone is its own refusal, because its
+     * remedy is the opposite — not more sessions, but work they can advance.
+     */
+    if (sawUnproductive && !sawTargetReached) {
+      return {
+        ok: false,
+        refusal: 'ACCOUNT_SESSIONS_UNPRODUCTIVE',
+        reason:
+          'Every capable surface belongs to an account whose recent sessions did no work: they ' +
+          'never arrived, or arrived and ended without claiming anything. Brain is not starting ' +
+          'more of them for now; this lifts by itself as those starts leave the last hour, and a ' +
+          'productive session is never counted against an account.',
+        considered,
+        retryAt: null,
       };
     }
     if (sawTargetReached) {

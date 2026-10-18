@@ -76,10 +76,18 @@ import { cashRoadmap, type CashRoadmap } from './roadmap.ts';
 import { authorityFor } from './opportunities.ts';
 import { composeLedger, type Ledger } from './monetization/ledger.ts';
 import { commissionView, type CommissionWorkState } from './monetization/inFlight.ts';
-import { MAX_OPEN_COMMISSIONS } from './monetization/commission.ts';
+import { commissionCapacity } from './monetization/commissionPass.ts';
 import { composeSurface, movementSentence, TOP_SHOWN } from './monetization/surface.ts';
 import { explainRanking } from './monetization/rank.ts';
 import { rankableOf } from './monetization/ledger.ts';
+import { readStandingRows, type StandingRowsReading } from './standing.ts';
+import {
+  sharedStandingOf,
+  sharedStandingSurface,
+  standingsForProject,
+  type SharedStanding,
+  type SharedStandingSurface,
+} from './standingSurface.ts';
 import type {
   CashMechanism,
   CashMode,
@@ -91,6 +99,7 @@ import type {
   MonetizationStatus,
   OpportunityValidationState,
   PathOrigin,
+  Standing,
 } from '../../domain/types.ts';
 
 /**
@@ -341,7 +350,7 @@ async function sharedMonetization(
   composed?: Ledger,
 ): Promise<SharedMonetization> {
   const ledger = composed ?? (await composeLedger({ projectId }));
-  const work = await commissionView({ projectId, ledger, capacity: MAX_OPEN_COMMISSIONS });
+  const work = await commissionView({ projectId, ledger, capacity: await commissionCapacity(projectId) });
   const surface = composeSurface({ ledger });
   const live = ledger.entries.filter(
     (one) => one.status !== 'INVALIDATED' && one.status !== 'ARCHIVED',
@@ -474,6 +483,12 @@ export interface SharedOpportunity {
    * would leave the shared page with the defect that module exists to fix.
    */
   tier: TierReading;
+  /**
+   * The piece's standing, as a member may read it: the kind, the cause, the
+   * blocker keys by name and a sentence composed from those alone. Withheld
+   * for a piece somebody has claimed. See `standingSurface.ts`.
+   */
+  standing: SharedStanding;
 }
 
 /**
@@ -699,6 +714,16 @@ export interface SharedFrontier {
    * taken and another has one.
    */
   monetization: SharedMonetization;
+  /**
+   * Standing across the frontier, in names and counts: how many pieces are at
+   * each standing, the shared blockers grouped by key, the dormant pieces'
+   * reopen keys, what was reconsidered recently, each piece's recorded standing
+   * history (kind and keys only), and where the deep dives are.
+   *
+   * Built from the redacted per-piece standings only, so nothing the redaction
+   * removed — a claimed piece, a cash wait, a recorded reason — reaches it.
+   */
+  standing: SharedStandingSurface;
 }
 
 export type SharedCashView = { scope: 'SHARED' } & SharedFrontier;
@@ -723,10 +748,21 @@ export async function sharedFrontier(input: {
    * same function over the same rows.
    */
   ledger?: Ledger;
+  /**
+   * Every piece's true standing and the rows it was read from, where the
+   * caller already derived them. `cashView` has; a member's read derives them
+   * with `standingsForProject`, the same composition over the same rows.
+   */
+  standings?: ReadonlyMap<string, Standing>;
+  standingRows?: StandingRowsReading;
 }): Promise<SharedFrontier> {
   const { mode, authority } = await authorityFor(input.projectId);
   const opportunities = await listOpportunities({ projectId: input.projectId });
   const byId = new Map(opportunities.map((one) => [one.id, one]));
+  const standingRows = input.standingRows ?? (await readStandingRows(input.projectId, opportunities));
+  const standings =
+    input.standings ??
+    (await standingsForProject({ projectId: input.projectId, opportunities, rows: standingRows }));
 
   /*
    * The recorded facts, read once, exactly as `cashView` reads them.
@@ -780,6 +816,7 @@ export async function sharedFrontier(input: {
         summary: card.readiness.summary,
       },
       tier,
+      standing: sharedStandingOf(opportunity, standings.get(opportunity.id)),
     };
   });
 
@@ -872,5 +909,12 @@ export async function sharedFrontier(input: {
       .map(([kind, one]) => ({ kind, count: one.count, mostRecentAt: one.mostRecentAt }))
       .sort((a, b) => (a.mostRecentAt < b.mostRecentAt ? 1 : -1)),
     monetization: await sharedMonetization(input.projectId, input.ledger),
+    standing: await sharedStandingSurface({
+      projectId: input.projectId,
+      opportunities,
+      standings,
+      shared: new Map(shared.map((one) => [one.id, one.standing])),
+      rows: standingRows,
+    }),
   };
 }

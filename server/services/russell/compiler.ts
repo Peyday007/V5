@@ -75,7 +75,8 @@ import { cardFact } from '../../repos/cashCardFacts.ts';
 import { getClaim } from '../../repos/research.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
-import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
+import { profileFor, validationScreenProfile, type CompilerProfile } from './compilerProfiles.ts';
+import { diveStageForCandidate } from '../cash/diveStage.ts';
 import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
 import { dealRoundForCandidate } from '../../repos/dealflow.ts';
 import { puzzleRoundForCandidate } from '../../repos/puzzle.ts';
@@ -638,7 +639,19 @@ export async function compileMission(input: {
    * nothing, because falling back to *some* profile is how the wrong kind of
    * question gets written for an authorization nobody matched it to.
    */
-  const profile = profileFor(envelopeId);
+  let profile = profileFor(envelopeId);
+  /*
+   * A deep dive's first stage asks only the kill questions (§3.3(a)). Which
+   * stage this idea is was recorded when it was started, on the dive's own
+   * started event — read, never re-derived, so one idea always compiles to one
+   * specification. Same envelope, same gate, same per-lane floors.
+   */
+  if (profile?.id === 'COMMERCIAL_VALIDATION') {
+    const opening = await opportunityForOwnCandidate(project.id, candidate.id);
+    if (opening && (await diveStageForCandidate(opening.id, candidate.id)) === 'SCREEN') {
+      profile = validationScreenProfile(envelopeId) ?? profile;
+    }
+  }
   if (!profile) {
     return refuse(
       `the envelope "${envelopeId}" has no compiler profile in this build, so Brain does not ` +

@@ -18,7 +18,9 @@ import type { SqlParam } from '../db/types.ts';
 import { buildUpdate, newId, nowIso, parseJson, toJson } from './util.ts';
 import { OPPORTUNITY_VALIDATION_STATES } from '../domain/types.ts';
 import { isOpportunitySignal } from '../domain/opportunitySignals.ts';
+import { parseBlockerKey } from '../domain/types.ts';
 import type {
+  BlockerKey,
   CashMechanism,
   CashNeed,
   CashNeedRow,
@@ -100,6 +102,9 @@ function mapOpportunity(row: CashOpportunityRow): CashOpportunity {
     declinedReason: row.declined_reason,
     reofferedFromId: row.reoffered_from_id,
     archivedReason: row.archived_reason,
+    reconsiderRequestedAt: row.reconsider_requested_at ?? null,
+    diveEpochStartedAt: row.dive_epoch_started_at ?? null,
+    lastReconsiderChangeRef: row.last_reconsider_change_ref ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -276,6 +281,56 @@ export async function listOpportunities(input: {
     params,
   );
   return rows.map(mapOpportunity);
+}
+
+/**
+ * Every piece written at or after `since`, in any state.
+ *
+ * What the capability-need pass reads instead of the whole portfolio: a piece
+ * created, edited, moved or flagged for reconsideration since the last pass
+ * bumped `updated_at`, and nothing else can have changed what it requires.
+ */
+export async function opportunitiesTouchedSince(
+  projectId: string,
+  since: string,
+): Promise<CashOpportunity[]> {
+  const rows = await getDb().all<CashOpportunityRow>(
+    `SELECT * FROM cash_opportunities
+      WHERE project_id = ? AND updated_at >= ?
+      ORDER BY created_at DESC, id DESC`,
+    [projectId, since],
+  );
+  return rows.map(mapOpportunity);
+}
+
+/**
+ * Pieces in these states that require any of these capabilities.
+ *
+ * Read only when a capability's reading changed, so it costs nothing on an
+ * ordinary tick. The LIKE narrows (its `_` may over-match); the exact test is
+ * on the parsed column.
+ */
+export async function opportunitiesRequiring(input: {
+  projectId: string;
+  capabilityIds: readonly string[];
+  states: readonly CashOpportunityState[];
+}): Promise<CashOpportunity[]> {
+  if (input.capabilityIds.length === 0 || input.states.length === 0) return [];
+  const rows = await getDb().all<CashOpportunityRow>(
+    `SELECT * FROM cash_opportunities
+      WHERE project_id = ? AND state IN (${input.states.map(() => '?').join(', ')})
+        AND (${input.capabilityIds.map(() => 'required_capabilities LIKE ?').join(' OR ')})
+      ORDER BY created_at DESC, id DESC`,
+    [
+      input.projectId,
+      ...input.states,
+      ...input.capabilityIds.map((id) => `%"${id}"%`),
+    ],
+  );
+  const wanted = new Set(input.capabilityIds);
+  return rows
+    .map(mapOpportunity)
+    .filter((one) => one.requiredCapabilities.some((id) => wanted.has(id)));
 }
 
 /** The opportunity harvested from one claim, if that claim produced one. */
@@ -489,6 +544,47 @@ export async function transitionOpportunity(input: {
 }
 
 /**
+ * Put a piece a person archived or declined back into evaluation, guarded.
+ *
+ * The from and to sets are fixed here rather than taken from a caller, so no
+ * path can reconsider a piece into READY or EXECUTING: reconsideration returns
+ * a piece to evaluation, and every gate after that still applies. The archive
+ * and decline columns are deliberately not cleared — the reason a person gave
+ * is history, and the row keeps it.
+ *
+ * Written in one statement with the epoch start and the change that caused it,
+ * so there is no state in which the piece is back and nothing says why.
+ */
+export const RECONSIDERABLE_FROM: readonly CashOpportunityState[] = Object.freeze([
+  'ARCHIVED',
+  'DECLINED',
+]);
+export const RECONSIDERED_TO: readonly CashOpportunityState[] = Object.freeze([
+  'DISCOVERED',
+  'EVIDENCE_CARD',
+]);
+
+export async function reconsiderOpportunity(input: {
+  id: string;
+  from: CashOpportunityState;
+  to: CashOpportunityState;
+  changeRef: string;
+  at?: string;
+}): Promise<boolean> {
+  if (!RECONSIDERABLE_FROM.includes(input.from)) return false;
+  if (!RECONSIDERED_TO.includes(input.to)) return false;
+  const at = input.at ?? portfolioNow();
+  const result = await getDb().run(
+    `UPDATE cash_opportunities
+        SET state = ?, reconsider_requested_at = ?, dive_epoch_started_at = ?,
+            last_reconsider_change_ref = ?, updated_at = ?
+      WHERE id = ? AND state = ?`,
+    [input.to, at, at, input.changeRef, at, input.id, input.from],
+  );
+  return result.changes === 1;
+}
+
+/**
  * The opening is finished, whatever the transaction did.
  *
  * Separate from the state on purpose: a completed profitable one-off is a
@@ -534,6 +630,7 @@ function mapNeed(row: CashNeedRow): CashNeed {
     blocksState: row.blocks_state === null ? null : (row.blocks_state as CashOpportunityState),
     candidateId: row.candidate_id,
     requestKey: row.request_key,
+    blockerKey: parseBlockerKey(row.blocker_key),
     continuedAt: row.continued_at,
     continuationNote: row.continuation_note,
     state: row.state as CashNeedState,
@@ -543,6 +640,21 @@ function mapNeed(row: CashNeedRow): CashNeed {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/**
+ * Give a need raised before blocker keys existed the key its cause names.
+ *
+ * Guarded on the column still being empty, so a key once written is never
+ * replaced — the need's identity stays `request_key`, and this only lets the
+ * fan-out's indexed read find a need that was there all along.
+ */
+export async function setNeedBlockerKeyIfUnset(needId: string, key: BlockerKey): Promise<boolean> {
+  const result = await getDb().run(
+    'UPDATE cash_needs SET blocker_key = ? WHERE id = ? AND blocker_key IS NULL',
+    [key, needId],
+  );
+  return result.changes === 1;
 }
 
 export async function createNeed(input: {
@@ -559,6 +671,8 @@ export async function createNeed(input: {
   candidateId?: string | null;
   requestKey?: string | null;
   occurrence?: number;
+  /** The shared fact this need is blocked on, when it has a typed cause. */
+  blockerKey?: BlockerKey | null;
 }): Promise<CashNeed> {
   return (await createNeedOnce(input)).need;
 }
@@ -583,9 +697,9 @@ export async function createNeedOnce(input: Parameters<typeof createNeed>[0]): P
     `INSERT INTO cash_needs
        (id, project_id, opportunity_id, blocked_action, why_it_matters, recommended_path,
         expected_cost_cents, setup_effort, next_step, completion_condition, occurrence,
-        blocks_state, candidate_id, request_key, continued_at, continuation_note, state,
-        resolution, resolved_by_user_id, resolved_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'OPEN', NULL, NULL, NULL, ?, ?)
+        blocks_state, candidate_id, request_key, blocker_key, continued_at, continuation_note,
+        state, resolution, resolved_by_user_id, resolved_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'OPEN', NULL, NULL, NULL, ?, ?)
      ON CONFLICT (project_id, request_key, occurrence) DO NOTHING`,
     [
       id,
@@ -602,6 +716,7 @@ export async function createNeedOnce(input: Parameters<typeof createNeed>[0]): P
       input.blocksState ?? null,
       input.candidateId ?? null,
       input.requestKey ?? null,
+      input.blockerKey ?? null,
       at,
       at,
     ],

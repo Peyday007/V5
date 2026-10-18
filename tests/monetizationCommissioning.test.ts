@@ -73,10 +73,14 @@ import {
   allocateCommissions,
   decisiveCriteria,
   MAX_COMMISSION_ROUNDS,
-  MAX_OPEN_COMMISSIONS,
   COMMISSION_COOL_OFF_MS,
   NEAR_THE_TOP,
 } from '../server/services/cash/monetization/commission.ts';
+import { commissionCapacity } from '../server/services/cash/monetization/commissionPass.ts';
+import { registerResearchSurfaces } from './helpers/researchSurfaces.ts';
+
+/** Slots handed to the pure allocator in the tests that exercise it directly. */
+const MAX_OPEN_COMMISSIONS = 3;
 import {
   commissionQuestion,
   matchChoice,
@@ -88,6 +92,8 @@ import { recordMovements } from '../server/services/cash/monetization/movement.t
 import { operate } from '../server/services/cash/operate.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
+import { recordCardFact } from '../server/repos/cashCardFacts.ts';
+import { DISQUALIFIED_FIELD } from '../server/services/cash/engineCard.ts';
 import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
 import { ATTRIBUTE } from '../server/domain/monetization.ts';
 import {
@@ -701,11 +707,13 @@ describe('adversarial: nothing is ever commissioned twice', () => {
     await enumeratePossibilities(projectId);
     expect((await listPaths({ projectId })).length).toBeGreaterThan(MAX_OPEN_COMMISSIONS);
 
+    // The bound is derived from the project's research capacity, never fixed.
+    const capacity = await commissionCapacity(projectId);
     await tick();
     await tick();
     await tick();
     expect((await listCommissions({ projectId, state: 'OPEN' })).length).toBeLessThanOrEqual(
-      MAX_OPEN_COMMISSIONS,
+      capacity,
     );
   });
 
@@ -715,8 +723,9 @@ describe('adversarial: nothing is ever commissioned twice', () => {
     }
     await enumeratePossibilities(projectId);
 
+    const capacity = await commissionCapacity(projectId);
     const first = await tick();
-    expect(first.opened.length).toBe(MAX_OPEN_COMMISSIONS);
+    expect(first.opened.length).toBe(capacity);
     // Nothing more, because every slot is taken.
     expect((await tick()).opened).toEqual([]);
 
@@ -879,6 +888,29 @@ describe('adversarial: retries, exhaustion and the cool-off', () => {
     expect(
       (await composeLedger({ projectId })).entries.find((one) => one.path.id === pathId)!.unknowns,
     ).toContain(attribute);
+
+    /*
+     * Per change epoch, not per lifetime: a distinct change after both askings
+     * opens a new epoch, and those askings no longer spend its budget. The
+     * round keeps climbing, because it is a position in the unique key.
+     */
+    const epochStart = new Date().toISOString();
+    const afterChange = allocateCommissions({
+      entries: ledger.entries,
+      rankable: ledger.entries.map(rankableOf),
+      commissions: await listCommissions({ projectId }),
+      contradicted: new Set(),
+      slots: MAX_OPEN_COMMISSIONS,
+      now: Date.now(),
+      epochStarts: new Map([[pathId, epochStart]]),
+    });
+    expect(
+      afterChange.declined.some(
+        (one) => one.subject.includes(ATTRIBUTE[attribute].label) && one.why.includes('researched'),
+      ),
+    ).toBe(false);
+    const reasked = afterChange.asks.find((one) => one.pathId === pathId && one.attribute === attribute);
+    if (reasked) expect(reasked.round).toBe(3);
   });
 
   it('waits out the cool-off before asking again', async () => {
@@ -1258,7 +1290,8 @@ describe('the surface says what is happening, in one place', () => {
     const asked = (await tick()).opened[0]!;
 
     const ledger = await composeLedger({ projectId });
-    const view = await commissionView({ projectId, ledger, capacity: MAX_OPEN_COMMISSIONS });
+    const capacityNow = await commissionCapacity(projectId);
+    const view = await commissionView({ projectId, ledger, capacity: capacityNow });
     const live = view.open.find((one) => sameQuestion(one, asked))!;
     expect(live.pathTitle.length).toBeGreaterThan(0);
     expect(live.attribute).toBe(asked.attribute);
@@ -1268,7 +1301,7 @@ describe('the surface says what is happening, in one place', () => {
     // A question with no mission must never read as being researched.
     expect(live.state).toBe('WAITING_TO_START');
     expect(live.stateBecause.length).toBeGreaterThan(20);
-    expect(view.capacity).toBe(MAX_OPEN_COMMISSIONS);
+    expect(view.capacity).toBe(capacityNow);
   });
 
   it('reads as researching once a mission exists, and settled once it is filed', async () => {
@@ -1404,6 +1437,8 @@ describe('adversarial: a possibility put away while its question is still being 
   it('frees the slot, so three put-away questions cannot stop the loop for ever', async () => {
     await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
     await enumeratePossibilities(projectId);
+    // Three routable surfaces, so the derived room opens three at once.
+    await registerResearchSurfaces(projectId, MAX_OPEN_COMMISSIONS);
 
     const opened = await tick();
     expect(opened.opened.length).toBe(MAX_OPEN_COMMISSIONS);
@@ -1574,5 +1609,36 @@ describe('adversarial: research that finished before the possibility was put awa
     // And the evidence the activation was spent on reached the ledger.
     const facts = await pathFactsFor(asked.pathId);
     expect(facts.some((one) => one.kind === 'EVIDENCE' && one.claimId !== null)).toBe(true);
+  });
+});
+
+describe('a question about an opening that can no longer be pursued', () => {
+  /*
+   * Production, 2026-10-17: disqualified and duplicate openings kept earning
+   * research questions that friends' Claude sessions were fired at.
+   * `closedOpportunities` is read before allocation so none is asked. (An
+   * expired opening never reaches the ledger at all.)
+   */
+  it('is never opened for a disqualified opening, and still is for a live one', async () => {
+    const live = await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    const ruledOut = await discovery('PAID_TASK_OR_CONTRACT', 'A county tender for winter road salt delivery.');
+    await recordCardFact({
+      projectId,
+      opportunityId: ruledOut.id,
+      field: DISQUALIFIED_FIELD,
+      kind: 'PERSON',
+      value: 'The buyer only accepts licensed vendors.',
+      decidedBy: userId,
+    });
+    await enumeratePossibilities(projectId);
+    const ledger = await composeLedger({ projectId });
+    const subjectOfPath = new Map(ledger.entries.map((one) => [one.path.id, one.subject?.id ?? null]));
+    expect([...subjectOfPath.values()]).toContain(ruledOut.id);
+
+    const pass = await runCommissions({ projectId, ledger });
+    const asked = pass.opened.map((one) => subjectOfPath.get(one.pathId));
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked).not.toContain(ruledOut.id);
+    expect(asked).toContain(live.id);
   });
 });
