@@ -225,6 +225,27 @@ if (!goal) {
       : `cool-off until ${eligibleAt}`;
     console.log(`  ${bucket.padEnd(28)} last r${last.round} ${last.state} found=${ordered.map((o) => o.found).join(',')} settled=${settled} :: ${why}`);
   }
+  // Mission slots: what a queued discovery idea is waiting on, from the grant
+  // `launch()` resolves and the reservations it counts (spendTotals' own SQL).
+  console.log('research mission slots:');
+  const { checkAuthority } = await import('/app/server/services/russell/authority.ts');
+  const auth = await checkAuthority({ projectId: goal.project_id, workClass: 'RESEARCH' }).catch((error) => ({ ok: false, reason: error.message }));
+  if (!auth.ok || !auth.goal) {
+    console.log(`  no research grant governs: ${auth.reason ?? JSON.stringify(auth).slice(0, 200)}`);
+  } else {
+    const nowR = new Date().toISOString();
+    const held = await db.all(
+      `SELECT r.idempotency_key, r.created_at, r.expires_at, m.id AS mission_id, m.state AS mission_state, m.orchestration_id
+         FROM russell_budget_reservations r
+         LEFT JOIN russell_missions m ON r.idempotency_key LIKE '%' || m.candidate_id || '%'
+        WHERE r.goal_id = ? AND r.kind = 'MISSION' AND r.state = 'HELD' AND r.expires_at > ?
+        ORDER BY r.created_at`, [auth.goal.id, nowR]);
+    console.log(`  grant ${auth.goal.id} maxConcurrent=${auth.goal.maxConcurrent} held=${held.length}`);
+    for (const h of held) {
+      const o = h.orchestration_id ? await db.get('SELECT status FROM research_orchestrations WHERE id = ?', [h.orchestration_id]) : null;
+      console.log(`    ${h.created_at} key=${String(h.idempotency_key).slice(0, 60)} mission=${h.mission_id ?? '-'} ${h.mission_state ?? ''} packet=${h.orchestration_id ?? '-'} ${o?.status ?? ''} expires=${h.expires_at}`);
+    }
+  }
   console.log('prepared decisions (Brain drafts, not sent):');
   const prepared = await db.all(
     `SELECT opportunity_id, version, id, observed_at, observed_status, created_at FROM cash_prepared_decisions
