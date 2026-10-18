@@ -148,17 +148,18 @@ export function puzzleCapabilities(): PuzzleCapability[] {
     },
     {
       id: 'TYPESET_FOR_PRINT',
-      state: 'MISSING',
+      state: 'PRESENT',
       does:
         'Lay a validated puzzle out as a printable page: trim size, margins, typography, page ' +
         'numbers, and the answer section at the back.',
       reading:
-        'Nothing here produces a PDF. A puzzle renders as text, which is enough to prove it ' +
-        'and not enough to print it — and a printed page is what every physical route in the ' +
-        'ledger sells.',
+        'Sudoku only. `services/puzzle/typeset.ts` lays proved puzzles out as an 8.5" x 11" ' +
+        'interior with no bleed, KDP margins, embedded fonts and solutions at the back, and ' +
+        'refuses a puzzle without a VALID verdict. `npm run puzzle-book` makes a volume and its ' +
+        'manifest. Word search, maze and cryptogram still render as text only.',
       nextStep:
-        'The first thing that turns a validated catalog into a downloadable product, and the ' +
-        'cheapest capability on this list to build.',
+        'Typesetting the other generated formats is the next step, using the same layout ' +
+        'rules; a cover is still made outside Brain.',
     },
   ];
 }

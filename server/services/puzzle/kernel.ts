@@ -346,10 +346,10 @@ async function compileWhatIsReady(projectId: string): Promise<PuzzleProduct[]> {
       title: `${view?.name ?? master.formatKey} pack ${ordinal}`,
       /*
        * A downloadable pack, because that is what the rendered artifact
-       * actually is. Compiling a PRINT_BOOK would claim a capability this
-       * repository does not have — `TYPESET_FOR_PRINT` reads MISSING — and a
-       * product class Brain cannot produce is a promise the catalog cannot
-       * keep.
+       * actually is. Typesetting exists for sudoku only (`typeset.ts`), so
+       * compiling every format as a PRINT_BOOK would claim a capability the
+       * other formats do not have, and a product class Brain cannot produce is
+       * a promise the catalog cannot keep.
        */
       productClass: 'DIGITAL_DOWNLOAD',
       count: PRODUCT_SIZE,
