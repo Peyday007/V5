@@ -307,7 +307,7 @@ export interface StandingHistoryEntry {
 
 export interface StandingHistory {
   /** Newest first, at most `HISTORY_SHOWN` per piece. */
-  entries: Record<string, StandingHistoryEntry[]>;
+  byPiece: Record<string, StandingHistoryEntry[]>;
   /** How many events each piece has in total, so a cut list says it was cut. */
   totals: Record<string, number>;
 }
@@ -337,7 +337,7 @@ export async function standingHistory(input: {
       LIMIT 20000`,
     [input.projectId, STANDING_EVENT],
   );
-  const entries: Record<string, StandingHistoryEntry[]> = {};
+  const byPiece: Record<string, StandingHistoryEntry[]> = {};
   const totals: Record<string, number> = {};
   for (const row of rows) {
     if (input.withhold?.has(row.opportunity_id)) continue;
@@ -345,7 +345,7 @@ export async function standingHistory(input: {
     const signature = parseSignature(detail['signature']);
     if (!signature) continue;
     totals[row.opportunity_id] = (totals[row.opportunity_id] ?? 0) + 1;
-    const list = (entries[row.opportunity_id] ??= []);
+    const list = (byPiece[row.opportunity_id] ??= []);
     if (list.length >= HISTORY_SHOWN) continue;
     const standing = detail['standing'] as { because?: unknown } | undefined;
     list.push({
@@ -358,7 +358,7 @@ export async function standingHistory(input: {
           : null,
     });
   }
-  return { entries, totals };
+  return { byPiece, totals };
 }
 
 /* --------------------------------------------------------------------------
