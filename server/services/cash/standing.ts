@@ -152,12 +152,25 @@ export function standingFor(input: StandingInput): Standing {
         personsDecision: false,
       });
     }
-    if (dive.kind === 'ROUNDS_SPENT') {
+    if (dive.kind === 'EPOCH_SPENT') {
       return dormancy({
         cause: 'ROUNDS_SPENT',
         reason:
-          `Both bounded deep dives this epoch are spent (${dive.rounds}/${dive.cap}) and it is ` +
+          `The bounded deep dives this epoch are spent (${dive.rounds}/${dive.cap}) and it is ` +
           `still ${tier.tier.toLowerCase()}.`,
+        live,
+        triggered,
+        personsDecision: false,
+      });
+    }
+    if (dive.kind === 'STAGE_ONE_FAILED') {
+      // A failed screen ends its epoch: the epoch's dives are spent on it, and
+      // no full dive was. The reopen conditions say what would change that.
+      return dormancy({
+        cause: 'ROUNDS_SPENT',
+        reason:
+          'Its first-stage screen found no published source naming who would pay, so no full ' +
+          'deep dive was spent on it.',
         live,
         triggered,
         personsDecision: false,

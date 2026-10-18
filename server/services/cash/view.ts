@@ -49,7 +49,7 @@ import { cashForecast, type CashForecast } from './forecast.ts';
 import { composeLedger } from './monetization/ledger.ts';
 import { composeSurface, type MonetizationSurface } from './monetization/surface.ts';
 import { commissionView, type CommissionView } from './monetization/inFlight.ts';
-import { MAX_OPEN_COMMISSIONS } from './monetization/commission.ts';
+import { commissionCapacity } from './monetization/commissionPass.ts';
 import { journeyView, type JourneyView } from './journey/view.ts';
 import { cashOutcomeLessons, measuredByMechanism } from './journey/learning.ts';
 
@@ -486,7 +486,7 @@ export async function cashView(input: {
     monetizationWork: await commissionView({
       projectId: input.projectId,
       ledger,
-      capacity: MAX_OPEN_COMMISSIONS,
+      capacity: await commissionCapacity(input.projectId),
     }),
     decisionsForMe: compressedReview({
       mode,

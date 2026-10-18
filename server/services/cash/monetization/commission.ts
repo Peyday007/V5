@@ -78,29 +78,26 @@ import type {
   MonetizationStatus,
 } from '../../../domain/types.ts';
 
-/**
- * How many questions one project may have in flight at once.
- *
- * **A concurrency bound, and deliberately not an allowance.** §24 removed three
- * lifetime quotas from the standing authority and recorded why: the
- * subscription behind a research mission is already paid for, so a count of
- * missions measured a starting point and then became a permanent wall. Nothing
- * here is scarce in that sense either.
- *
- * What *is* real is capacity. The fleet has a measured fire ceiling, the
- * discovery grant has its own concurrency, and the industry kernel already
- * takes four. A ledger that queued a question for every open attribute on every
- * possibility would push every deep dive on an opening already found behind
- * several hundred of them, which is precisely the "actionable work sitting
- * behind background work" the validation ordering exists to prevent.
- *
- * Three, under the kernel's four, because a possibility's attribute is the
- * narrowest and least urgent of the three kinds of question this sprint asks.
+/*
+ * How many questions one project may have in flight at once is no longer a
+ * constant here. It was a fixed three, and it is now derived from the same
+ * capacity a deep dive's room is (`researchRoom.ts`): the person-set grant's
+ * free slots less one held back for discovery, the research surfaces that could
+ * run a question now, and zero while the database is shedding — still a
+ * concurrency bound rather than an allowance, and never above the grant. The
+ * pass computes it and hands it to `allocateCommissions` as `slots`.
  */
-export const MAX_OPEN_COMMISSIONS = 3;
 
 /**
- * How many times one question may be asked about one possibility.
+ * How many times one question may be asked about one possibility **per change
+ * epoch**.
+ *
+ * For a possibility about an opening, the epoch is the opening's: it begins at
+ * creation and again at each distinct change that reconsiders it
+ * (`reconsider_requested_at`, recorded once per change by the reconsideration
+ * ledger), and only askings opened in the current epoch count. There is no cap
+ * on epochs — a new one needs a distinct change. A possibility about anything
+ * else has the one epoch it began with, exactly as before.
  *
  * Two, and not a ladder — `MAX_VALIDATION_ROUNDS`' reasoning verbatim, and
  * §15's rule underneath it. A third pass against the same published sources is
@@ -354,6 +351,12 @@ export interface CommissionInput {
   /** How many more may be opened now. Never negative. */
   slots: number;
   now: number;
+  /**
+   * When each possibility's current epoch began, by path id. Absent is the
+   * epoch that began at creation, so every asking counts — the behaviour before
+   * epochs. Composed by the pass from the opening a possibility is about.
+   */
+  epochStarts?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -447,9 +450,18 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
         });
         continue;
       }
-      const history = byPathAttribute.get(`${entry.path.id}::${attribute}`) ?? [];
+      /*
+       * The askings of this epoch only. An asking opened before the latest
+       * distinct change searched sources that change may have overtaken, so it
+       * neither spends this epoch's budget nor starts its cool-off. `round`
+       * below still counts every asking ever opened, because it is a position
+       * in the unique key and must keep climbing.
+       */
+      const epochStart = input.epochStarts?.get(entry.path.id);
+      const everything = byPathAttribute.get(`${entry.path.id}::${attribute}`) ?? [];
+      const history = epochStart ? everything.filter((one) => one.openedAt >= epochStart) : everything;
 
-      if (history.some((one) => one.state === 'OPEN')) {
+      if (everything.some((one) => one.state === 'OPEN')) {
         declined.push({
           subject: `${entry.path.title} — ${ATTRIBUTE[attribute].label}`,
           why: 'Brain is already asking this and has not had the answer back yet',
@@ -459,7 +471,7 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
       /*
        * The budget counts askings that were actually researched.
        *
-       * `round` stays `history.length + 1` — it is a *position*, and it has to
+       * `round` stays `everything.length + 1` — it is a *position*, and it has to
        * keep climbing or a second asking would collide with the first on
        * `UNIQUE (project_id, path_id, attribute, round)` and never be inserted.
        * What must not count is an `ABANDONED` one, because nothing was
@@ -543,7 +555,7 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
         entry,
         attribute,
         moves,
-        round: history.length + 1,
+        round: everything.length + 1,
         contradicted,
       });
       if (!admitted) {
@@ -578,7 +590,7 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
     if (asks.length >= slots) {
       declined.push({
         subject: `${one.subject} — ${ATTRIBUTE[one.attribute].label}`,
-        why: `there is no free slot: ${MAX_OPEN_COMMISSIONS} questions may be open at once`,
+        why: `there is no free slot: ${slots} more question(s) may be opened now, from the research capacity this project has`,
       });
       continue;
     }

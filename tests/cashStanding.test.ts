@@ -224,13 +224,18 @@ describe('every standing kind, from rows', () => {
 
   it('derived dead ends are DORMANT with their conditions, or NOT_WORTH_PURSUING with none', async () => {
     const id = await piece('Both dives spent');
-    const spent = { kind: 'ROUNDS_SPENT' as const, rounds: 2, cap: 2 };
+    const spent = { kind: 'EPOCH_SPENT' as const, rounds: 2, cap: 2, epochStartedAt: null };
     const withWatch = standingFor(
       await inputFor(id, { dive: spent, reopenConditions: [condition({ opportunityId: id })] }),
     );
     expect(withWatch).toMatchObject({ kind: 'DORMANT', cause: 'ROUNDS_SPENT' });
     const without = standingFor(await inputFor(id, { dive: spent }));
     expect(without).toMatchObject({ kind: 'NOT_WORTH_PURSUING', cause: 'ROUNDS_SPENT' });
+    // A failed stage-one screen is dormant on its reopen conditions, the same way.
+    const screened = { kind: 'STAGE_ONE_FAILED' as const, open: ['payer'], epochStartedAt: null };
+    expect(
+      standingFor(await inputFor(id, { dive: screened, reopenConditions: [condition({ opportunityId: id })] })),
+    ).toMatchObject({ kind: 'DORMANT', cause: 'ROUNDS_SPENT' });
     const disqualified = standingFor(
       await inputFor(id, { dive: { kind: 'DISQUALIFIED', reason: 'The RFP closed.' } }),
     );
