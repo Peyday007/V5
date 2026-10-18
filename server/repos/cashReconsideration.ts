@@ -16,8 +16,10 @@
  * fill "What Brain needs" with dormant work, which §33 already corrected once.
  *
  * Append-only. The only columns ever written after an insert are
- * `triggered_at` and `trigger_change_ref`, once, by a guarded UPDATE; and a
- * watermark's position, by a compare-and-swap on the position the caller read.
+ * `triggered_at` and `trigger_change_ref`, once, by a guarded UPDATE — either
+ * because a change met the watch, or because a sibling watch already reopened
+ * the same dormancy (`retireSiblingConditions`); and a watermark's position, by
+ * a compare-and-swap on the position the caller read.
  */
 import { getDb } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
@@ -290,6 +292,44 @@ export async function triggerReopenCondition(input: {
 
 /** Rolls back the consumption when the stamp lost a race. Never escapes. */
 class LostTrigger extends Error {}
+
+/** The `trigger_change_ref` prefix a watch carries when its dormancy was reopened by a sibling. */
+export const SUPERSEDED_BY_PREFIX = 'superseded-by:';
+
+/**
+ * A dormancy reopens once: when one of a piece's watches fired and the piece
+ * was flagged for re-evaluation, the other watches it was holding stop
+ * guarding anything.
+ *
+ * A failed screen records `EVIDENCE:payer` and `FIELD:payer` together, as
+ * alternatives. Left live after the first one reopened the piece, the second
+ * then fired on the payer the re-dive *itself* wrote onto the card — the
+ * consequence of the reconsideration counted as a second, distinct change —
+ * and opened another epoch with a fresh round budget (found by the
+ * Opportunity Intelligence walk: two extra full dives, nothing new learned).
+ *
+ * Stamped, never deleted, with `superseded-by:<changeRef>` so a reader can
+ * tell a watch that was met from one that was retired. Guarded on
+ * `triggered_at IS NULL` like every stamp. Consumes no change: nothing was
+ * reconsidered by it. If the reopened piece goes dormant again, the pass that
+ * says so records fresh watches, because these no longer hold the key.
+ */
+export async function retireSiblingConditions(input: {
+  opportunityId: string;
+  exceptConditionId: string;
+  changeRef: string;
+  at?: string;
+}): Promise<number> {
+  const ref = input.changeRef.trim();
+  if (!ref) return 0;
+  const result = await getDb().run(
+    `UPDATE cash_reopen_conditions
+        SET triggered_at = ?, trigger_change_ref = ?
+      WHERE opportunity_id = ? AND id <> ? AND triggered_at IS NULL`,
+    [input.at ?? nowIso(), `${SUPERSEDED_BY_PREFIX}${ref}`, input.opportunityId, input.exceptConditionId],
+  );
+  return result.changes;
+}
 
 /**
  * A distinct change asked for a *live* piece (or a derived dead end) to be
