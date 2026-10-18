@@ -81,7 +81,7 @@ function rowsFor(page: CashPage, which: 'ACTIONABLE' | 'DORMANT'): StandingRow[]
 
 function historyFor(page: CashPage, id: string): { entries: StandingHistoryEntry[]; total: number } {
   const history = page.full?.myCurrentWork.standingSurface?.history ?? page.frontier.standing?.history;
-  return { entries: history?.entries[id] ?? [], total: history?.totals[id] ?? 0 };
+  return { entries: history?.byPiece[id] ?? [], total: history?.totals[id] ?? 0 };
 }
 
 /** The recorded standing changes for one piece, newest first. */

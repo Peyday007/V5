@@ -36,6 +36,7 @@
  * `body.myCash === undefined` would pass a payload that had moved the ledger
  * one key along.
  */
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pickPort } from './helpers/ports.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
@@ -1145,18 +1146,18 @@ describe('standing crosses by name, and nothing private rides with it', () => {
   it('withholds a claimed piece’s standing entirely', async () => {
     const member = await call<{
       opportunities: { id: string; standing: { kind: string | null; keys: string[]; withheld: boolean } }[];
-      standing: { withheld: number; history: { entries: Record<string, unknown[]> } };
+      standing: { withheld: number; history: { byPiece: Record<string, unknown[]> } };
     }>('GET', CASH(), { cookie: memberCookie });
     const claimed = member.body.opportunities.find((each) => each.id === opportunityId)!;
     expect(claimed.standing.withheld).toBe(true);
     expect(claimed.standing.kind).toBeNull();
     expect(claimed.standing.keys).toEqual([]);
     expect(member.body.standing.withheld).toBeGreaterThanOrEqual(1);
-    expect(member.body.standing.history.entries[opportunityId]).toBeUndefined();
+    expect(member.body.standing.history.byPiece[opportunityId]).toBeUndefined();
   });
 
   it('sends a member no owner standing surface, no conditions, no recorded sentence and no cash wait', async () => {
-    const member = await call<{ standing: { history: { entries: Record<string, { because: string | null }[]> } } }>(
+    const member = await call<{ standing: { history: { byPiece: Record<string, { because: string | null }[]> } } }>(
       'GET',
       CASH(),
       { cookie: memberCookie },
@@ -1165,9 +1166,28 @@ describe('standing crosses by name, and nothing private rides with it', () => {
       expect(member.text, forbidden).not.toContain(`"${forbidden}":`);
     }
     expect(member.text).not.toContain('"CASH"');
-    for (const list of Object.values(member.body.standing.history.entries)) {
+    for (const list of Object.values(member.body.standing.history.byPiece)) {
       for (const entry of list) expect(entry.because).toBeNull();
     }
+  });
+
+  /*
+   * The release gate's own forbidden-key list, applied to the body this suite
+   * builds. Deploy 480 (2026-10-18) released a shared payload carrying the key
+   * `entries` (the standing history's per-piece map, which holds no money) and
+   * `sharedCashBoundary` failed in production: the local suite only checked
+   * that the script *names* the keys, never that a local body is free of them.
+   * Reading the list out of the script keeps the two from drifting.
+   */
+  it('passes the release gate\'s own forbidden-key check, read from the script', async () => {
+    const script = readFileSync('scripts/verify-hosted.ts', 'utf8');
+    const start = script.indexOf('const raw = JSON.stringify(body ?? {});');
+    expect(start).toBeGreaterThan(0);
+    const block = script.slice(start, script.indexOf(']) {', start));
+    const keys = [...block.matchAll(/'([A-Za-z]+)'/g)].map((match) => match[1]!);
+    expect(keys).toContain('entries');
+    const member = await call('GET', CASH(), { cookie: memberCookie });
+    for (const key of keys) expect(member.text, key).not.toContain(`"${key}":`);
   });
 
   it('lists a reconsideration for both, with the reason only for the owner', async () => {

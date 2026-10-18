@@ -2693,7 +2693,7 @@ describe('standing: actionable, waiting, stopped and reconsidered', () => {
       },
     ],
     history: {
-      entries: {
+      byPiece: {
         cop_d: [
           { at: '2026-10-16T00:00:00.000Z', kind: 'DORMANT', keys: ['CAPABILITY:SEND_A_MESSAGE'], because: null },
           { at: '2026-10-10T00:00:00.000Z', kind: 'WAITING', keys: ['PERSON'], because: null },
@@ -2760,7 +2760,7 @@ describe('standing: actionable, waiting, stopped and reconsidered', () => {
           reopenOn: sharedStanding.reopenOn,
           reconsidered: [{ ...sharedStanding.reconsidered[0], summary: 'Reconsidered: back from archived.' }],
           history: {
-            entries: {
+            byPiece: {
               cop_d: [
                 {
                   at: '2026-10-16T00:00:00.000Z',
