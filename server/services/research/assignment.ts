@@ -69,6 +69,8 @@ import {
 import { getLayer } from '../../repos/layers.ts';
 import { getProject } from '../../repos/projects.ts';
 import { listCheckpoints } from '../../repos/workQueue.ts';
+import { guidanceFor } from './guidance.ts';
+import type { ResearchGuidance } from './prompts.ts';
 
 /** How much of a dependency's ledger travels with the assignment. */
 export const MAX_DEPENDENCY_CLAIMS = 40;
@@ -133,6 +135,13 @@ export interface AssignmentView {
   bundleKey: string | null;
   /** The standing research method, and the revision of it this run was given. */
   method: { version: string; summary: string } | null;
+  /**
+   * Search strategy, the sibling questions that are not this item's, how a
+   * documented absence answers a lane, hosts this worker's surface recently
+   * could not read, and reusable lessons — on a fragment or planning item;
+   * null otherwise. Context only: nothing that judges the submission reads it.
+   */
+  guidance: ResearchGuidance | null;
 }
 
 export interface DependencyOutcomeView {
@@ -446,6 +455,18 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
     dependencyOutcomes,
     bundleKey: fragment ? bundleKeyFor(fragment, current) : null,
     method: { version: RESEARCH_METHOD_VERSION, summary: RESEARCH_METHOD_SUMMARY },
+    guidance:
+      (item.workType === 'RESEARCH_FRAGMENT' && fragment) || item.workType === 'RESEARCH_PLAN'
+        ? await guidanceFor({
+            projectId: orchestration.projectId,
+            fragment: item.workType === 'RESEARCH_FRAGMENT' ? fragment : null,
+            siblings: current.map((candidate) => ({
+              fragmentKey: candidate.fragmentKey,
+              question: candidate.question,
+            })),
+            surface: item.workerId ? { workerId: item.workerId } : null,
+          })
+        : null,
     checkpoints: checkpoints.map((checkpoint: WorkItemCheckpoint) => ({
       attemptNumber: checkpoint.attemptNumber,
       leaseGeneration: checkpoint.leaseGeneration,

@@ -603,6 +603,7 @@ export async function placePlan(
           layerId: orchestration.layerId,
           fragmentIndex: index,
           requirementIds: requirementId ? [requirementId] : [],
+          archiveMarker: coverage.archiveMarker,
         };
       }),
     );

@@ -27,6 +27,112 @@ import type {
 import { getAuditProfile, getLayerCriteria } from '../../domain/auditProfile.ts';
 import { MIN_INDEPENDENT_SOURCES_FLOOR } from './schema.ts';
 
+// ---------------------------------------------------------------------------
+// Guidance: context for the worker that changes no gate input
+// ---------------------------------------------------------------------------
+
+/**
+ * How to search, before what to search for. Prompt text only: no bar, depth or
+ * ladder reads it.
+ */
+export const SEARCH_STRATEGY_NOTE =
+  'SEARCH STRATEGY: start with short, broad queries to survey what exists and who publishes it; ' +
+  'then narrow to the specific question, and open and read the full primary sources rather ' +
+  'than quoting search snippets or summaries of them.';
+
+/**
+ * A documented absence is an answer. This states the gate's existing rule for
+ * NEGATIVE_EXISTENCE (§14) to the worker; it does not change the rule.
+ */
+export const NEGATIVE_EXISTENCE_NOTE =
+  'A DOCUMENTED ABSENCE IS AN ANSWER: if what a lane asks for does not exist, a NEGATIVE_EXISTENCE ' +
+  'claim that lists, in searchedRepositories, the places it would be published is a complete ' +
+  'answer for that lane. Say only "not found" when you did not search where it would be.';
+
+/** What a worker is told beside its fragment, as data and as the text a prompt carries. */
+export interface ResearchGuidance {
+  searchStrategy: string;
+  /** Sibling fragments' bounded questions: somebody else's, not to be researched here. */
+  notYours: { key: string; question: string }[];
+  negativeExistence: string;
+  /** Hosts this surface recently failed to read, newest reading per host. */
+  unreachableHosts: { host: string; outcome: string; at: string }[];
+  /** Reusable lessons from earlier campaigns. Context only: no gate or allocation input reads them. */
+  lessons: { abstraction: string; lesson: string }[];
+  /** The whole of it, as prompt text. */
+  text: string;
+}
+
+/** How many lessons and hosts travel with an assignment; context, not a ledger. */
+export const MAX_GUIDANCE_LESSONS = 5;
+export const MAX_GUIDANCE_HOSTS = 15;
+
+/**
+ * Compose the guidance block. Pure: every input is handed in, nothing is read.
+ *
+ * `fragment` null is a planning pass — it gets the lessons and the
+ * reachability reading, and none of the fragment-scoped lines. Lessons are
+ * ordered GENERAL before DOMAIN and otherwise as handed in (newest first); no
+ * score is computed.
+ */
+export function composeGuidance(input: {
+  fragment: { fragmentKey: string } | null;
+  siblings: { fragmentKey: string; question: string }[];
+  reachability: { host: string; outcome: string; at: string }[];
+  lessons: { abstraction: string; lesson: string }[];
+}): ResearchGuidance {
+  const notYours = input.fragment
+    ? input.siblings
+        .filter((sibling) => sibling.fragmentKey !== input.fragment!.fragmentKey)
+        .map((sibling) => ({ key: sibling.fragmentKey, question: sibling.question }))
+    : [];
+  const unreachableHosts = input.reachability
+    .filter((reading) => reading.outcome !== 'RETRIEVED')
+    .slice(0, MAX_GUIDANCE_HOSTS)
+    .map((reading) => ({ host: reading.host, outcome: reading.outcome, at: reading.at }));
+  const lessons = [
+    ...input.lessons.filter((lesson) => lesson.abstraction === 'GENERAL'),
+    ...input.lessons.filter((lesson) => lesson.abstraction === 'DOMAIN'),
+  ]
+    .slice(0, MAX_GUIDANCE_LESSONS)
+    .map((lesson) => ({ abstraction: lesson.abstraction, lesson: lesson.lesson }));
+
+  const lines: string[] = [];
+  if (input.fragment) {
+    lines.push(SEARCH_STRATEGY_NOTE);
+    if (notYours.length > 0) {
+      lines.push(
+        'NOT YOURS — other fragments in this packet research these questions; do not research ' +
+          'them here, and do not file claims under them:',
+        ...notYours.map((entry) => `  - [${entry.key}] ${entry.question}`),
+      );
+    }
+    lines.push(NEGATIVE_EXISTENCE_NOTE);
+  }
+  if (unreachableHosts.length > 0) {
+    lines.push(
+      'HOSTS THIS SURFACE RECENTLY COULD NOT READ (do not make them your first route; reach the ' +
+        'same evidence through a source class this assignment already authorizes — the ' +
+        'publisher\'s canonical page, an archived copy, an official filing, another repository):',
+      ...unreachableHosts.map((entry) => `  - ${entry.host} (${entry.outcome}, ${entry.at.slice(0, 10)})`),
+    );
+  }
+  if (lessons.length > 0) {
+    lines.push(
+      'LESSONS FROM EARLIER CAMPAIGNS (context only; they change no evidence bar, depth or scope):',
+      ...lessons.map((entry) => `  - (${entry.abstraction}) ${entry.lesson}`),
+    );
+  }
+  return {
+    searchStrategy: SEARCH_STRATEGY_NOTE,
+    notYours,
+    negativeExistence: NEGATIVE_EXISTENCE_NOTE,
+    unreachableHosts,
+    lessons,
+    text: lines.join('\n'),
+  };
+}
+
 /** Ends every prompt: the reply is JSON, and only the last block is read. */
 function jsonInstruction(shape: string): string {
   return [
@@ -87,6 +193,8 @@ export function buildGoalPlanPrompt(input: {
   passages: { title: string; text: string }[];
   /** Titles of documents the project already holds, so the plan knows what exists. */
   existingDocuments: string[];
+  /** Lessons and reachability, as context only. */
+  guidance?: ResearchGuidance | null;
 }): string {
   return [
     'You are working out what a research assignment actually requires, before any research happens.',
@@ -106,6 +214,7 @@ export function buildGoalPlanPrompt(input: {
         ].join('\n')
       : '',
     sourceMaterial(input.passages),
+    input.guidance?.text ? `\n${input.guidance.text}` : '',
     '',
     'First, the boundary. Almost every wasted research run is a scope failure — the right answer to',
     'a slightly different question — so be specific about geography, timeframe, population and the',
@@ -293,6 +402,8 @@ export function buildBundledResearchPrompt(input: {
   rationale: string;
   /** Per fragment key, for the fragments in this job that are being repaired. */
   repairs?: Map<string, RepairContext>;
+  /** Search strategy, sibling boundaries, absences, reachability and lessons; context only. */
+  guidance?: ResearchGuidance | null;
 }): string {
   const first = input.fragments[0]!;
   return [
@@ -328,6 +439,7 @@ export function buildBundledResearchPrompt(input: {
           ),
         ].join('\n')
       : '',
+    input.guidance?.text ? `\n${input.guidance.text}` : '',
     '',
     'Return every claim under the fragment it answers. A claim filed under the wrong fragment, or',
     'a single undifferentiated list, cannot be attributed and the whole job is discarded.',
@@ -376,6 +488,8 @@ export function buildFragmentResearchPrompt(input: {
   dependencyClaims: { fragmentKey: string; claim: ResearchClaim }[];
   /** Set on a repair: what went wrong, and what to do differently. */
   repair?: RepairContext | null;
+  /** Search strategy, sibling boundaries, absences, reachability and lessons; context only. */
+  guidance?: ResearchGuidance | null;
 }): string {
   const repair = input.repair;
   return [
@@ -396,6 +510,7 @@ export function buildFragmentResearchPrompt(input: {
         ].join('\n')
       : '',
     repair ? `\n${repairBlock(repair)}` : '',
+    input.guidance?.text ? `\n${input.guidance.text}` : '',
     '',
     'Search, read the sources, and return the claims you can defend. For each claim quote the',
     'passage or name the table it came from, and say which evidence lane it fills.',

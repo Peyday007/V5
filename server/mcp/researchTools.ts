@@ -135,7 +135,7 @@ import {
 } from '../domain/manufacturing.ts';
 import type { CapabilityFinding } from '../domain/types.ts';
 import type { EvidenceLane, LaneNecessity } from '../domain/types.ts';
-import { coverProposal, whyNotResearched } from '../services/research/coverageGate.ts';
+import { coverProposal, whyNotRepeated, whyNotResearched } from '../services/research/coverageGate.ts';
 import { planDependencies } from '../services/research/splitting.ts';
 import {
   gateFragment,
@@ -918,9 +918,23 @@ const proposeFragmentsTool: McpTool = {
         const decisionFor = new Map(
           coverage.decisions.map((decision) => [decision.fragmentKey, decision]),
         );
-        const toResearch = proposed.filter(
-          (fragment) => decisionFor.get(fragment.key)?.needsResearch !== false,
-        );
+        /*
+         * A proposal that repeats a finished search against an unchanged
+         * archive is not created: the same question, the same evidence and an
+         * exhausted repair ladder buy the same answer. It is reported by name
+         * and searched again once the archive's marker moves.
+         */
+        const toResearch = proposed.filter((fragment) => {
+          const decision = decisionFor.get(fragment.key);
+          return decision?.needsResearch !== false && !decision?.repeats;
+        });
+        const notRepeated = coverage.decisions
+          .filter((decision) => decision.needsResearch && decision.repeats)
+          .map((decision) => ({
+            fragmentKey: decision.fragmentKey,
+            repeats: decision.repeats!.fragmentId,
+            why: whyNotRepeated(decision),
+          }));
 
         /*
          * A plan the grant will not pay for is a refusal the worker can see,
@@ -957,6 +971,7 @@ const proposeFragmentsTool: McpTool = {
               dependsOn: fragment.dependsOn,
               minIndependentSources: fragment.minIndependentSources,
               whyItMatters: fragment.whyItMatters,
+              archiveMarker: coverage.archiveMarker,
               // What the archive already has that bears on this fragment, and
               // why it was not enough. A fragment that survives coverage
               // should say what it is adding to rather than start from
@@ -1001,9 +1016,13 @@ const proposeFragmentsTool: McpTool = {
           await updateOrchestration(orchestration.id, {
             status: 'CANCELLED',
             cancelReason:
-              answered.length > 0
-                ? `The project already answers all ${answered.length} proposed fragment(s).`
-                : 'No fragment was proposed.',
+              notRepeated.length > 0
+                ? `${notRepeated.length} proposed fragment(s) repeat a search already run to the end ` +
+                  'of its repair ladder against an unchanged archive' +
+                  (answered.length > 0 ? `, and the project already answers ${answered.length}.` : '.')
+                : answered.length > 0
+                  ? `The project already answers all ${answered.length} proposed fragment(s).`
+                  : 'No fragment was proposed.',
             cancelledAt: new Date().toISOString(),
           });
           return {
@@ -1013,6 +1032,7 @@ const proposeFragmentsTool: McpTool = {
               proposed: 0,
               fragmentKeys: [] as string[],
               alreadyAnswered: answered,
+              notRepeated,
               archive: {
                 documentsRead: coverage.documentsRead,
                 documentsUnreadable: coverage.documentsUnreadable,
@@ -1053,6 +1073,7 @@ const proposeFragmentsTool: McpTool = {
             proposed: created.length,
             fragmentKeys: created.map((fragment) => fragment.fragmentKey),
             alreadyAnswered: answered,
+            notRepeated,
             archive: {
               documentsRead: coverage.documentsRead,
               documentsUnreadable: coverage.documentsUnreadable,
