@@ -29,15 +29,19 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 
 <!-- The check-in replaces everything below. -->
 
-- **Last check:** 2026-10-19 18:46Z. Production is serving fd50716. A Deploy of df3cf8f was still running at 18:46Z.
-- **Scope widened.** Another session (PR #238) widened what Brain can deliver beyond research reports. It now also takes data entry, document conversion and client CSV/Excel processing. It also accepts other currencies, converted at Freelancer's own rate. See `docs/FREELANCER-OPERATION.md`.
+- **Last check:** 2026-10-19 21:20Z. Production is serving 5916707. That release (#239) went out, though its Deploy run reported a failure after release; that run was not this campaign's.
+- **Scope:** PR #237/#238 widened what Brain delivers. It now also takes data entry, document conversion, client CSV/Excel processing and simple graphics such as logos. It also accepts other currencies, converted at Freelancer's own rate. See `docs/FREELANCER-OPERATION.md`.
 - **Operation:** runs unattended on Brain's tick.
-  - 24 scans so far, the last at 18:33Z.
-  - 1196 jobs screened: 1191 rejected with reasons, 1 withdrawn and 4 PREPARED.
-  - The 4 PREPARED bids are not sent; Brain cannot bid yet. They are Freelancer 40773783, 40772671, 40772623 and 40775802.
-  - The large figures shown for three of them are INR, not USD. For example, INR 17043 is about USD 205.
-  - 40772623 requires the work to be done by hand. The fix in 36d3c4a, deploying in df3cf8f, withdraws it on the next scan.
-  - Top rejection reasons: budget below the minimum (549), too many bids already (390), calls or meetings (308), hourly work (305), posted too long ago (264), ongoing work (203).
+  - 28 scans so far, the last at 20:52Z.
+  - 1499 jobs screened: 1493 rejected with reasons, 3 withdrawn and 3 PREPARED.
+  - The 3 PREPARED bids are not sent; Brain cannot bid yet:
+    - Freelancer 40772671, "Social Media Text Data Entry": INR 17043, about USD 180;
+    - 40775802, "PDF Text to Word": INR 15256, about USD 161;
+    - 40774101, "Logo Concepts for Creative Brand Names": INR 16125, about USD 170.
+  - Withdrawn automatically on re-screen:
+    - 40772623, which requires the work done by hand;
+    - 40773783, which already has 61 bids.
+  - Top rejection reasons: budget below the minimum (714), too many bids already (548), hourly work (382), calls or meetings (371), posted too long ago (344), video, audio or animation (282).
 - **Acting is blocked** on two owner steps:
   - Freelancer account plus token: `FREELANCER_OAUTH_TOKEN` NOT_CONNECTED;
   - commercial grant: ABSENT.
