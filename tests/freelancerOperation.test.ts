@@ -212,6 +212,25 @@ describe('the screen', () => {
     expect(academic.reasons.join(' ')).toMatch(/academic/);
     expect(screenProject(project(4) as never, Date.now()).deliverable).toBe(true);
   });
+
+  it('turns down the farm business plan production prepared on its first scan', () => {
+    // Freelancer 40775349, as published on 2026-10-19: an investor-ready plan with
+    // editable financial models and 3D work. Brain's first production scan
+    // prepared a bid on it; a research report cannot deliver it.
+    const farm = screenProject(
+      project(5, {
+        title: 'Export-Oriented Multi-Farm Plan (245 hectares North Africa)',
+        jobs: [{ name: '3D Rendering' }, { name: 'Business Plans' }, { name: 'Business Analysis' }, { name: 'Market Research' }],
+        description:
+          'I need a complete, investor-ready business plan. Market analysis that quantifies overseas demand. ' +
+          'Detailed financial projections (start-up costs, P&L, cash-flow, break-even). Executive summary, full ' +
+          'references and editable financial models (Excel or Google Sheets) are essential for board review.',
+      }) as never,
+      Date.now(),
+    );
+    expect(farm.deliverable).toBe(false);
+    expect(farm.reasons.join(' ')).toMatch(/financial model|business plan/);
+  });
 });
 
 describe('the operation', () => {
@@ -223,6 +242,17 @@ describe('the operation', () => {
     const jobs = await allJobs(projectId);
     expect(jobs.map((j) => j.state).sort()).toEqual(['PREPARED', 'REJECTED']);
     expect(world.bidPosts).toBe(0);
+  });
+
+  it('withdraws a prepared job the screen no longer passes, without an account', async () => {
+    world.projects = [project(15)];
+    await tick();
+    expect((await allJobs(projectId))[0]!.state).toBe('PREPARED');
+    world.projects[0] = project(15, { description: 'Market research, plus editable financial models in Excel.' });
+    await tick(31 * 60 * 1000);
+    const job = (await allJobs(projectId))[0]!;
+    expect(job.state).toBe('WITHDRAWN');
+    expect(job.stateReason).toMatch(/financial model/);
   });
 
   it('does not bid without the commercial grant, even when connected', async () => {
