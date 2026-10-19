@@ -171,6 +171,9 @@ describe('the screen decides by verified capability, not by category name', () =
       [{ title: 'Playwright TypeScript tests', jobs: [{ name: 'Test Automation' }, { name: 'Typescript' }], description: 'You pull the existing repo, review the conventions, and add Playwright specs in TypeScript to our framework, passing npx playwright test. '.repeat(2) }, /existing codebase|TypeScript|own application/],
       [{ title: 'Update my WordPress site', jobs: [{ name: 'WordPress' }, { name: 'HTML' }], description: 'Fix the landing page on my existing WordPress website, I will give you admin access to the dashboard to change the hero section. '.repeat(2) }, /client’s site|systems or hosting/],
       [{ title: 'Build a lead list', jobs: [{ name: 'Data Entry' }, { name: 'Lead Generation' }], description: 'Compile a CSV of 500 dentists in Texas with emails and phone numbers of the decision makers for my outreach campaign next month. '.repeat(2) }, /contacting or listing people/],
+      // Freelancer project 40772623, qualified in production on 2026-10-19: the
+      // client forbids tools, and Brain's bid says the work is AI-assisted.
+      [{ title: 'Manual Product Data Entry', jobs: [{ name: 'Data Entry' }, { name: 'Excel' }], description: 'I need help transferring product details from a series of public-facing websites into my Excel template. Everything is done by hand—no scraping tools or API connections—so close attention to detail is essential. I will provide the list of URLs and an Excel file already set up with the columns.' }, /by hand, without tools/],
     ];
     for (const [over, reason] of cases) {
       const verdict = screenProject(listing(2, over) as never, Date.now(), ALL_PROVED);

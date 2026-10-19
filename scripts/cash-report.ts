@@ -946,8 +946,8 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
  */
 async function marketplaceOperation(projectId: string): Promise<void> {
   const db = getDb();
-  const jobs = await db.all<{ id: string; external_id: string; title: string; state: string; state_reason: string | null; bid_amount_cents: number | null; screen_reasons: string; created_at: string }>(
-    'SELECT id, external_id, title, state, state_reason, bid_amount_cents, screen_reasons, created_at FROM marketplace_jobs WHERE project_id = ? ORDER BY created_at, id',
+  const jobs = await db.all<{ id: string; external_id: string; title: string; state: string; state_reason: string | null; bid_amount_cents: number | null; currency: string; economics: string | null; screen_reasons: string; created_at: string }>(
+    'SELECT id, external_id, title, state, state_reason, bid_amount_cents, currency, economics, screen_reasons, created_at FROM marketplace_jobs WHERE project_id = ? ORDER BY created_at, id',
     [projectId],
   ).catch(() => null);
   if (jobs === null) {
@@ -1019,7 +1019,11 @@ async function marketplaceOperation(projectId: string): Promise<void> {
   const top = [...reasons].sort((a, b) => b[1] - a[1]).slice(0, 6);
   if (top.length) console.log(`  rejected because ${top.map(([k, v]) => `${v}× ${k}`).join('; ')}`);
   for (const one of jobs.filter((j) => j.state !== 'REJECTED').slice(-20)) {
-    const usd = one.bid_amount_cents != null ? ` bid=USD ${one.bid_amount_cents / 100}` : '';
+    // A bid is in the job's own currency; the USD figures are Freelancer's own rate, read at screening.
+    const e = one.economics ? (JSON.parse(one.economics) as { bidUsd?: number; netUsd?: number }) : null;
+    const usd = one.bid_amount_cents != null
+      ? ` bid=${one.currency} ${one.bid_amount_cents / 100}${e?.bidUsd != null ? ` (USD ${e.bidUsd}, net USD ${e.netUsd})` : ''}`
+      : '';
     console.log(`  ${one.id} ${one.state} freelancer=${one.external_id}${usd} "${one.title.slice(0, 70)}"${one.state_reason ? ` — ${one.state_reason.slice(0, 120)}` : ''}`);
   }
   const events = await db.all<{ kind: string; summary: string; created_at: string }>(
