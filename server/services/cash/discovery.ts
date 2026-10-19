@@ -93,6 +93,10 @@ import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
 import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
 import { discoveryAllowed } from './lifecycle.ts';
+import { cashPosition } from './money.ts';
+import { proveCapabilities } from './freelancer/deliverables/capabilities.ts';
+import { CATEGORY_LABEL } from './freelancer/classify.ts';
+import { DELIVERABLE_KINDS } from './freelancer/deliverables/spec.ts';
 import { existingOpeningFor, markDuplicateOpenings, openingSourceKey } from './duplicates.ts';
 import {
   ensureDiscoveryAuthority,
@@ -300,12 +304,14 @@ export async function openDiscovery(input: {
 
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
+  let frame: ExecutionFrame | null | undefined;
   for (const bucket of SEARCH_BUCKETS) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
     if (next === null) continue;
     const held = await heldExclusions({ projectId: input.projectId, bucket, history });
+    if (frame === undefined) frame = await executionFrame(input.projectId, mode.currency);
 
     /*
      * The candidate and its round commit together, in one transaction.
@@ -328,7 +334,7 @@ export async function openDiscovery(input: {
           conversationId: null,
           sourceMessageId: null,
           title: next === 1 ? bucket.title : `${bucket.title} (round ${next})`,
-          statement: questionFor(bucket, mode.objective, next, history, held),
+          statement: questionFor(bucket, mode.objective, next, history, held, frame),
         });
 
         const result = await openRound({
@@ -448,8 +454,10 @@ export function questionFor(
   round: number,
   history: readonly CashDiscoveryRound[],
   held: HeldExclusions = { lines: [], omitted: 0 },
+  frame: ExecutionFrame | null = null,
 ): string {
   const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`];
+  if (frame) parts.push(executionFrameSentence(frame));
   if (round > 1) {
     const found = history.reduce((total, one) => total + one.found, 0);
     parts.push(
@@ -470,6 +478,62 @@ export function questionFor(
     );
   }
   return parts.join(' ');
+}
+
+/**
+ * What this operation can actually act on, read from rows when the round opens.
+ *
+ * Production, 2026-10-19: 312 openings, 248 of them evidence nobody could say
+ * how we would be paid from, and the rest mostly closed solicitations, grants,
+ * employment postings and resale needing capital the ledger does not hold.
+ * Every bucket asked *where money is published* and none said what this
+ * operation can do, so workers answered the question as asked. Telling them
+ * the frame — what it delivers (the deliverable kinds Brain proved in this
+ * process), how much of its own money it can commit (the ledger's deployable
+ * figure), and that it is paid online — aims the search at openings that can
+ * become collected cash, and asking for the payer and the route on each one is
+ * asking for exactly the field (`captureMechanism`) that stalled 248 of them.
+ *
+ * It narrows what is worth reporting and widens nothing: the envelope, the
+ * gate and the source classes are the compiler's. Its words are kept clear of
+ * `CASH_FORBIDDEN_ACTIONS`, and a test holds them to it.
+ */
+export interface ExecutionFrame {
+  /** Deliverable kinds proved in this process, as a person reads them. */
+  delivers: string[];
+  deployableCents: number;
+  currency: string;
+}
+
+export function executionFrameSentence(frame: ExecutionFrame): string {
+  const delivers = frame.delivers.length
+    ? `research reports and these kinds of work: ${frame.delivers.join(', ')}`
+    : 'research reports';
+  const capital =
+    frame.deployableCents > 0
+      ? `it can commit about ${frame.currency} ${(frame.deployableCents / 100).toFixed(0)} of its own capital, so prefer openings needing less than that up front`
+      : 'it holds no capital of its own to commit, so report only openings that need no money up front or are paid before any cost falls due';
+  return (
+    'Report only openings this operation could act on. It runs online with AI workers and ' +
+    `delivers ${delivers}; it holds no professional licence, certification, bonding, ` +
+    'government vendor registration or local physical presence, and takes no employment or ' +
+    `hourly positions; ${capital}; and it is paid online, through a checkout or invoice route a buyer ` +
+    'already uses. For each opening name who would pay this operation, roughly how much, how ' +
+    'the money would reach it, and the earliest it could arrive; openings that could become ' +
+    'collected cash within seven days come first. Leave out grants, job postings, solicitations ' +
+    'that require vendor registration or bonding, and anything already closed.'
+  );
+}
+
+async function executionFrame(projectId: string, currency: string): Promise<ExecutionFrame | null> {
+  try {
+    const [caps, position] = await Promise.all([proveCapabilities(), cashPosition({ projectId, currency })]);
+    const delivers = DELIVERABLE_KINDS.filter((kind) => caps[kind]?.available).map((kind) => CATEGORY_LABEL[kind]);
+    return { delivers, deployableCents: Math.max(0, position.deployableCents), currency };
+  } catch {
+    // A frame that cannot be read is left out, never guessed: the question still stands without it.
+    return null;
+  }
 }
 
 /** The held openings a bucket question names, bounded, and how many it left out. */

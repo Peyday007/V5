@@ -306,7 +306,7 @@ async function answer(candidateId: string, question: string, found: Found[]): Pr
       primary_source: true,
       ...(one.signal ? { opportunity_signal: one.signal } : {}),
     })),
-    search_queries: [question],
+    search_queries: [question.slice(0, 400)],
   });
   const stored = submitted['claims'] as { claimId: string }[];
   expect(stored).toHaveLength(found.length);
