@@ -379,7 +379,19 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
        * one. What it found stays on the card, and the opening is dormant until
        * the reopen conditions recorded for it (`concludeScreens`) change.
        */
-      if (current?.stage === 'SCREEN' && !payerEstablished(opportunity, fact)) {
+      /*
+       * And only a screen that ran. A screen whose idea never became a mission
+       * — closed by the stall backstop — searched nothing, so "no payer was
+       * found" is not something it established. Production, 2026-10-19:
+       * `cop_f895296d38f542c18b9e` went dormant as "no published source names a
+       * payer" from a screen with no mission at all. It falls through, and
+       * `resumeUnlaunchedDives` gives that round back.
+       */
+      if (
+        current?.stage === 'SCREEN' &&
+        !payerEstablished(opportunity, fact) &&
+        (await latestMissionForCandidate(current.candidateId)) !== null
+      ) {
         return { kind: 'STAGE_ONE_FAILED', open: ['payer'], epochStartedAt: epoch.startedAt };
       }
       const screens = inEpoch.filter((one) => one.stage === 'SCREEN').length;

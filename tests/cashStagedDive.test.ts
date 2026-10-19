@@ -15,6 +15,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
+import { launchMission } from '../server/repos/russellMissions.ts';
 import { registerResearchSurfaces } from './helpers/researchSurfaces.ts';
 import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -122,8 +123,20 @@ describe('a staged deep dive asks the kill questions first', () => {
     expect(lanes.map((lane) => lane.id).sort()).toEqual(['disqualifier', 'payer', 'ruled_out']);
     expect(lanes.find((lane) => lane.id === 'payer')!.necessity).toBe('REQUIRED');
 
-    // It settles with no payer found.
+    // Closed without ever becoming a mission, it searched nothing: that is
+    // not a finding that nobody pays.
     await settle(id, 'BLOCKED');
+    expect((await whyNotDiving((await getOpportunity(id))!)).kind).not.toBe('STAGE_ONE_FAILED');
+
+    // It ran, and settled with no payer found.
+    await launchMission({
+      projectId,
+      visibility: 'SHARED',
+      objective: 'screen',
+      whyNow: 'test',
+      idempotencyKey: `screen:${first.candidateId}`,
+      candidateId: first.candidateId,
+    });
     expect((await whyNotDiving((await getOpportunity(id))!)).kind).toBe('STAGE_ONE_FAILED');
     const concluded = await concludeScreens(projectId);
     expect(concluded.map((one) => one.opportunityId)).toEqual([id]);
