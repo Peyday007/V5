@@ -13304,6 +13304,21 @@ The rules it introduced:
 - **A lesson is context, never a control.** Retrospective and usefulness
   lessons reach prompts (`guidance.ts`, cached 10 minutes). No gate, depth,
   repair, ordering or routing module imports them.
+- **Discovery asks for what this operation can act on.** Production,
+  2026-10-19: 312 openings, 248 of them evidence nobody could say how we would
+  be paid from, the rest mostly closed solicitations, grants, job postings and
+  resale needing capital the ledger does not hold — because no bucket question
+  said what the operation can do. `executionFrameSentence` is appended to every
+  discovery question from rows: the deliverable kinds proved in this process,
+  the ledger's deployable capital, paid online, no licence or local presence,
+  and a demand to name who would pay, how much, how, and how soon, seven-day
+  cash first. It narrows what is reported and widens nothing; a test holds it
+  clear of every cash envelope's forbidden actions.
+- **A judge asking for more research does not park the opening on a person.**
+  A dive whose packet drew PATCH or MORE_RESEARCH settles BLOCKED: its accepted
+  claims already reach the card, and the next round of the epoch is the more
+  research. The packet's own Needs You card is untouched; any other park still
+  waits on its person.
 - **A test sweep must not delete a live database.** `tests/setup.ts` sweeps
   `brain-test-*` temp roots older than an hour, and it once matched the
   Postgres test cluster `brain-test-pg-<port>`. That killed every Postgres run

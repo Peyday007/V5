@@ -280,7 +280,7 @@ async function researchPacket(question: string, found: Found[]): Promise<string>
       primary_source: true,
       ...(one.signal ? { opportunity_signal: one.signal } : {}),
     })),
-    search_queries: [question],
+    search_queries: [question.slice(0, 400)],
   });
   const stored = submitted['claims'] as { claimId: string }[];
   expect(stored).toHaveLength(found.length);

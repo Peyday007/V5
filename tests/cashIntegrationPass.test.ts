@@ -407,7 +407,7 @@ async function workerResearches(input: {
       primary_source: true,
       ...(one.signal ? { opportunity_signal: one.signal } : {}),
     })),
-    search_queries: [input.question],
+    search_queries: [input.question.slice(0, 400)],
   });
   // Stored, and none of them accepted: the worker never decides that.
   expect(submitted['accepted']).toBe(0);

@@ -1060,10 +1060,35 @@ export async function settleValidations(projectId: string): Promise<
      * answers `AWAITING_PERSON` meanwhile so the answer is not bought twice.
      */
     if (mission.state === 'NEEDS_HUMAN') {
+      const packet = mission.orchestrationId ? await getOrchestration(mission.orchestrationId) : null;
+      /*
+       * A judge asking for more research is not a person's decision for the opening.
+       *
+       * Production, 2026-10-19: 30 openings sat at AWAITING_PERSON, nearly all
+       * because their dive's report drew a PATCH or MORE_RESEARCH verdict. The
+       * accepted claims of that packet already reach the card (a BLOCKED dive's
+       * citable claims are read like a COMPLETE one's), and the remedy the
+       * verdict names — more research — is exactly the next dive this epoch
+       * still allows. So the dive settles BLOCKED with the verdict as its
+       * reason, `whyNotDiving` offers the next round against what is still
+       * open, and the packet's own Needs You card is left exactly as it is for
+       * whoever wants to answer it. A park for anything else — an envelope, an
+       * authorization — still waits on its person.
+       */
+      const parkedFor = packet?.failureReason ?? mission.waitingOn ?? mission.terminalReason ?? null;
+      if (judgeAskedForResearch(parkedFor)) {
+        await settle(
+          projectId,
+          opportunity,
+          'BLOCKED',
+          `The deep dive's report was sent back for more research; what it established is on the card, ` +
+            `and the next round asks what is still open. ${parkedFor}`,
+          mission.orchestrationId,
+        );
+        out.push({ opportunityId: opportunity.id, to: 'BLOCKED' });
+        continue;
+      }
       if (opportunity.validationState !== 'NEEDS_PERSON') {
-        const packet = mission.orchestrationId
-          ? await getOrchestration(mission.orchestrationId)
-          : null;
         await settle(
           projectId,
           opportunity,
@@ -1768,6 +1793,11 @@ async function declaresRuledOut(fragmentId: string | null): Promise<boolean> {
 }
 
 const FINISHED_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);
+
+/** The judge's own words when a report needs more research, as `packetRunner` records them. */
+export function judgeAskedForResearch(reason: string | null): boolean {
+  return reason !== null && /^The judge's verdict was (?:PATCH|MORE_RESEARCH)\b/.test(reason);
+}
 
 /**
  * Every packet a deep dive of this opening produced, whose mission has finished.
