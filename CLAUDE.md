@@ -13309,6 +13309,34 @@ The rules it introduced:
   Postgres test cluster `brain-test-pg-<port>`. That killed every Postgres run
   longer than an hour. `isSweepableRoot` excludes it.
 
+## 66. Brain runs the marketplace work itself, or it does not take the job.
+
+The Freelancer operation (`server/services/cash/freelancer/`,
+`docs/FREELANCER-OPERATION.md`) is Brain's first cash activity whose whole
+loop is Brain's own: it finds the job, bids, does the work, delivers it and
+collects. The owner's part is the account, identity verification, one API
+token and the standing commercial grant.
+
+- **A job whose only delivery plan is a person's labour is rejected, never
+  bid on.** The screen is deterministic and fails toward rejection, and every
+  rejection keeps its reason on its row. Only a written desk-research
+  deliverable passes, because that is what the research fleet produces and
+  audits. Calls, client files, client systems, credentials, software, media
+  and student work all disqualify a job.
+- **A bid is CONTACT_BUYER through a channel the owner supplied. It is not
+  PUBLISH_EXTERNALLY**, which stays prohibited: it answers a buyer's own
+  posted request. Milestones are QUOTE_AND_INVOICE, and the ledger entry is
+  ACCEPT_PAYMENT. All three are read from the grant on every pass.
+- **Every action goes through Step 6.** A bid is reconcilable: after an
+  unknown outcome Brain asks Freelancer and never bids twice. Messages,
+  acceptance and milestones are opaque, so one attempt each, and an unknown is
+  never resent.
+- **Fulfilment is a research goal**, so the evidence gate and all three audit
+  roles stand between a client and the report. Research that cannot deliver
+  tells the client no payment will be asked for.
+- **Discovery needs no credential and runs without one.** Acting stops at the
+  first missing connection or grant, and the pass names which one.
+
 ## Repository map
 
 ```

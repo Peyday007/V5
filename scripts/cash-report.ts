@@ -893,6 +893,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   console.log(`HISTORY (${eventCounts.total}) — ${shown(eventCounts)}`);
 
   await readableRouteUse(projectId);
+  await marketplaceOperation(projectId);
 
   console.log('');
   console.log(
@@ -937,6 +938,54 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
  * names no Routine was submitted by a session Brain did not fire, so it counts
  * as supporting evidence and never as fleet evidence. Read-only, last 7 days.
  */
+/**
+ * The Freelancer operation: what Brain found, bid on, delivered and was paid
+ * for, read from its own rows. Read-only. Rejections are counted by reason,
+ * and every job past REJECTED is listed with its state and reason.
+ */
+async function marketplaceOperation(projectId: string): Promise<void> {
+  const db = getDb();
+  const jobs = await db.all<{ id: string; external_id: string; title: string; state: string; state_reason: string | null; bid_amount_cents: number | null; screen_reasons: string; created_at: string }>(
+    'SELECT id, external_id, title, state, state_reason, bid_amount_cents, screen_reasons, created_at FROM marketplace_jobs WHERE project_id = ? ORDER BY created_at, id',
+    [projectId],
+  ).catch(() => null);
+  if (jobs === null) {
+    console.log('MARKETPLACE — the marketplace_jobs table could not be read');
+    return;
+  }
+  const byState = new Map<string, number>();
+  for (const one of jobs) byState.set(one.state, (byState.get(one.state) ?? 0) + 1);
+  const scans = await db.get<{ n: number; last: string | null }>(
+    `SELECT COUNT(*) AS n, MAX(created_at) AS last FROM cash_events WHERE project_id = ? AND kind = 'MARKETPLACE_SCAN'`,
+    [projectId],
+  );
+  const connected = Boolean(process.env.FREELANCER_OAUTH_TOKEN?.trim());
+  console.log('');
+  console.log(
+    `MARKETPLACE (Freelancer) — jobs=${jobs.length} ${[...byState].map(([k, v]) => `${k}=${v}`).join(' ')} ` +
+      `scans=${scans?.n ?? 0} last-scan=${scans?.last ?? 'never'} account=${connected ? 'CONNECTED' : 'NOT_CONNECTED'}`,
+  );
+  const reasons = new Map<string, number>();
+  for (const one of jobs.filter((j) => j.state === 'REJECTED')) {
+    for (const r of JSON.parse(one.screen_reasons) as string[]) {
+      const key = r.replace(/\d+/g, 'N');
+      reasons.set(key, (reasons.get(key) ?? 0) + 1);
+    }
+  }
+  const top = [...reasons].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (top.length) console.log(`  rejected because ${top.map(([k, v]) => `${v}× ${k}`).join('; ')}`);
+  for (const one of jobs.filter((j) => j.state !== 'REJECTED').slice(-20)) {
+    const usd = one.bid_amount_cents != null ? ` bid=USD ${one.bid_amount_cents / 100}` : '';
+    console.log(`  ${one.id} ${one.state} freelancer=${one.external_id}${usd} "${one.title.slice(0, 70)}"${one.state_reason ? ` — ${one.state_reason.slice(0, 120)}` : ''}`);
+  }
+  const events = await db.all<{ kind: string; summary: string; created_at: string }>(
+    `SELECT kind, summary, created_at FROM cash_events WHERE project_id = ? AND kind LIKE 'MARKETPLACE_%' AND kind <> 'MARKETPLACE_SCAN'
+      ORDER BY created_at DESC, id DESC LIMIT 12`,
+    [projectId],
+  );
+  for (const e of events) console.log(`  ${e.created_at} ${e.kind} ${e.summary.slice(0, 160)}`);
+}
+
 async function readableRouteUse(projectId: string): Promise<void> {
   const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const rows = await getDb()

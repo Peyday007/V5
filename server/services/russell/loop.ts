@@ -152,6 +152,7 @@ import { runManufacturingKernel } from '../manufacturing/kernel.ts';
 import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
+import { runFreelancerOperation, type MarketplaceReport } from '../cash/freelancer/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
@@ -591,6 +592,8 @@ export interface TickReport {
     promoted: string[];
     settled: string[];
   }[];
+  /** The Freelancer operation's pass, per project, when it did anything. */
+  marketplace: ({ projectId: string } & MarketplaceReport)[];
   cashOperations: {
     projectId: string;
     needsRaised: string[];
@@ -787,6 +790,7 @@ const EMPTY: TickReport = {
   manufacturingKernel: [],
   dealflowKernel: [],
   puzzleKernel: [],
+  marketplace: [],
   cashOperations: [],
   sharedPromoted: [],
   ranked: [],
@@ -889,6 +893,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
     manufacturingKernel: [],
     dealflowKernel: [],
   puzzleKernel: [],
+    marketplace: [],
     cashOperations: [],
     sharedPromoted: [],
   };
@@ -1999,6 +2004,23 @@ async function tickOnce(owner: string): Promise<TickReport> {
           }
         } catch {
           /* a sprint whose operating pass could not run is left as it was */
+        }
+
+        try {
+          /*
+           * The Freelancer operation (`cash/freelancer/operate.ts`): find work
+           * Brain can deliver itself, bid, deliver and collect, under the
+           * standing commercial grant. Its own `try`, because a marketplace
+           * that did not answer must not stop the sprint's other work, and
+           * every step is derived from rows so the next tick resumes it.
+           */
+          const market = await runFreelancerOperation(project.id);
+          if (market && (market.recorded > 0 || market.bid.length > 0 || market.awarded.length > 0 ||
+              market.started.length > 0 || market.delivered.length > 0 || market.paid.length > 0 || market.messages > 0)) {
+            report.marketplace.push({ projectId: project.id, ...market });
+          }
+        } catch {
+          /* a marketplace pass that could not run is retried next tick */
         }
       }
     });
