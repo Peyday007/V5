@@ -123,7 +123,8 @@ export type DeliverableSpec =
   | { kind: 'MODEL_3D'; filename: string; units: 'mm' | 'cm' | 'm'; parts: Part3D[]; formats: ('obj' | 'stl' | 'gltf')[] };
 
 export interface Submission {
-  spec: DeliverableSpec;
+  /** One spec per deliverable kind the job asks for, in that order. */
+  specs: DeliverableSpec[];
   /** What to tell the client with the files. Optional; Brain has a default. */
   message: string | null;
 }
@@ -482,9 +483,21 @@ export function validateSubmission(raw: string): SpecResult {
     return { ok: false, problems: ['The submission was not valid JSON.'] };
   }
   const c = new Checker();
-  const body = c.object(parsed, 'submission', ['spec', 'message'], ['spec']);
+  const body = c.object(parsed, 'submission', ['spec', 'specs', 'message'], []);
   if (!body) return { ok: false, problems: c.problems };
-  checkSpec(c, body.spec);
+  let specs: unknown[] = [];
+  if (body.spec !== undefined && body.specs !== undefined) c.problems.push('submission carries both "spec" and "specs"; send one.');
+  else if (body.spec !== undefined) specs = [body.spec];
+  else specs = c.array(body.specs, 'submission.specs', 1, 3);
+  if (specs.length === 0 && body.spec === undefined && body.specs === undefined) c.problems.push('submission.spec (or "specs") is required.');
+  const before = c.problems.length;
+  specs.forEach((one, i) => {
+    const mark = c.problems.length;
+    checkSpec(c, one);
+    if (specs.length > 1) for (let j = mark; j < c.problems.length; j += 1) c.problems[j] = `specs[${i}]: ${c.problems[j]}`;
+  });
+  const names = specs.map((one) => (one as { filename?: unknown })?.filename);
+  if (c.problems.length === before && new Set(names).size !== names.length) c.problems.push('Two specs share a filename; give each deliverable its own.');
   let message: string | null = null;
   if (body.message !== undefined && body.message !== null) {
     const text = c.string(body.message, 'submission.message', 3000);
@@ -494,5 +507,5 @@ export function validateSubmission(raw: string): SpecResult {
     }
   }
   if (c.problems.length) return { ok: false, problems: c.problems.slice(0, 60) };
-  return { ok: true, submission: { spec: body.spec as DeliverableSpec, message } };
+  return { ok: true, submission: { specs: specs as DeliverableSpec[], message } };
 }

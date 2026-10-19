@@ -11,7 +11,7 @@
  * rather than a job category.
  */
 import { DELIVERABLE_KINDS, validateSubmission, type DeliverableKind, type Submission } from './spec.ts';
-import { renderDeliverable, type Rendered } from './render.ts';
+import { renderDeliverable, type DeliverableFile, type Rendered } from './render.ts';
 import { verifyDeliverable, type Verification } from './verify.ts';
 import { pythonParserAvailable } from './assets.ts';
 import { SAMPLES } from './samples.ts';
@@ -27,24 +27,47 @@ export interface CapabilityReading {
 export interface Produced {
   ok: boolean;
   submission: Submission | null;
-  rendered: Rendered | null;
+  /** Every file, across every spec, in spec order. */
+  files: DeliverableFile[];
+  rendered: Rendered[];
   verification: Verification | null;
   problems: string[];
 }
 
-/** Validate, render and verify one worker submission. Nothing is stored here. */
-export async function produce(raw: string): Promise<Produced> {
+/**
+ * Validate, render and verify one worker submission. Nothing is stored here.
+ * `kinds`, when given, is what the job asked for: a submission of anything
+ * else is refused, because a correct spreadsheet is the wrong answer to a
+ * request for a deck.
+ */
+export async function produce(raw: string, kinds?: readonly DeliverableKind[]): Promise<Produced> {
   const validated = validateSubmission(raw);
-  if (!validated.ok) return { ok: false, submission: null, rendered: null, verification: null, problems: validated.problems };
-  let rendered: Rendered;
-  try {
-    rendered = await renderDeliverable(validated.submission.spec);
-  } catch (error) {
-    return { ok: false, submission: validated.submission, rendered: null, verification: null, problems: [`Rendering failed: ${(error as Error).message.slice(0, 300)}`] };
+  const fail = (problems: string[], submission: Submission | null = null): Produced => ({ ok: false, submission, files: [], rendered: [], verification: null, problems });
+  if (!validated.ok) return fail(validated.problems);
+  const submitted = validated.submission.specs.map((s) => s.kind);
+  if (kinds && (submitted.length !== kinds.length || submitted.some((k, i) => k !== kinds[i]))) {
+    return fail([`The job asks for ${kinds.join(' then ')}; the submission carries ${submitted.join(' then ')}.`], validated.submission);
   }
-  const verification = await verifyDeliverable(validated.submission.spec, rendered);
-  const problems = verification.checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.detail}`);
-  return { ok: verification.passed, submission: validated.submission, rendered, verification, problems };
+  const rendered: Rendered[] = [];
+  const checks: Verification['checks'] = [];
+  for (const [i, spec] of validated.submission.specs.entries()) {
+    let one: Rendered;
+    try {
+      one = await renderDeliverable(spec);
+    } catch (error) {
+      return fail([`Rendering ${spec.kind} failed: ${(error as Error).message.slice(0, 300)}`], validated.submission);
+    }
+    rendered.push(one);
+    const verified = await verifyDeliverable(spec, one);
+    const prefix = validated.submission.specs.length > 1 ? `${i + 1}/${spec.kind} ` : '';
+    checks.push(...verified.checks.map((c) => ({ ...c, name: prefix + c.name })));
+  }
+  const files = rendered.flatMap((r) => r.files);
+  const names = files.map((f) => f.name.toLowerCase());
+  if (new Set(names).size !== names.length) checks.push({ name: 'file names', ok: false, detail: 'two deliverables produced files with the same name' });
+  const verification: Verification = { passed: checks.length > 0 && checks.every((c) => c.ok), checks };
+  const problems = checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.detail}`);
+  return { ok: verification.passed, submission: validated.submission, files, rendered, verification, problems };
 }
 
 let cached: Promise<Record<DeliverableKind, CapabilityReading>> | null = null;
@@ -55,7 +78,7 @@ async function proveOne(kind: DeliverableKind): Promise<CapabilityReading> {
   if (!produced.ok) {
     return { kind, available: false, checkedAt, detail: `its sample failed: ${produced.problems.slice(0, 3).join(' ')}`, files: [] };
   }
-  const files = produced.rendered!.files.map((f) => f.name);
+  const files = produced.files.map((f) => f.name);
   const passed = produced.verification!.checks.length;
   return { kind, available: true, checkedAt, detail: `sample rendered to ${files.join(', ')} and passed ${passed} check(s)`, files };
 }

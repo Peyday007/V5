@@ -1,120 +1,80 @@
 /**
  * Whether Brain can deliver a Freelancer job by itself, decided before any bid.
  *
- * Pure over the project as Freelancer published it. The rule is the owner's:
- * a job whose only delivery plan is a person's labour is rejected, not bid on.
- * What Brain can deliver unattended is a written research deliverable built
- * from public sources — a report, an analysis, a comparison, a summary — which
- * is exactly what the research pipeline produces and audits (§12). So a job is
- * DELIVERABLE only when it asks for that, and every other job is REJECTED with
- * the reasons, so the same job is not screened twice and anybody can read why.
+ * Pure over the project as Freelancer published it and the capabilities Brain
+ * has proved in this process. The rule is the owner's: a job whose only
+ * delivery plan is a person's labour is rejected, not bid on. What Brain can
+ * deliver is a research report (the research pipeline, §12) or one of the
+ * deliverable kinds whose sample rendered and passed verification
+ * (`deliverables/capabilities.ts`). A category name is never a rejection by
+ * itself; a capability Brain has not proved, or a blocker in this particular
+ * job, is.
  *
  * It fails toward rejection. A missed job costs one bid; a won job nobody can
  * deliver costs a refund, a review and the account's standing.
  */
 import type { FreelancerProject } from './client.ts';
+import { absorbs, blockersOf, deliverablesOf, namedDeliverables, scoreCategories, CATEGORY_LABEL, codeLanguageOf, needsClientFiles, type JobCategory } from './classify.ts';
+import { MAX_BID_USD, MIN_BUDGET_USD, MIN_NET_USD, priceJob, quoteOf, type JobEconomics } from './economics.ts';
+import type { DeliverableKind } from './deliverables/spec.ts';
 
-/** The ledger's currency. Another currency is rejected rather than converted. */
-export const SCREEN_CURRENCY = 'USD';
-export const MIN_BUDGET_USD = 30;
-export const MAX_BID_USD = 250;
+export { MAX_BID_USD, MIN_BUDGET_USD };
 export const MAX_AGE_HOURS = 72;
 export const MAX_BIDS_ALREADY = 60;
+/** One job delivers at most this many kinds of file, e.g. a business plan and its financial model. */
+export const MAX_CATEGORIES = 2;
 
-/** Freelancer job categories whose deliverable is a written research product. */
-const RESEARCH_JOBS = new Set([
-  'research',
-  'market research',
-  'research writing',
-  'web search',
-  'report writing',
-  'business analysis',
-  'competitive analysis',
-  'business plans',
-  'technical writing',
-  'white papers',
-]);
+export interface ScreenContext {
+  /** Which deliverable kinds passed their proof in this process. */
+  available: ReadonlySet<DeliverableKind>;
+  /** Whether Brain can parse Python here, so it can check Python before delivering it. */
+  python: boolean;
+  /**
+   * Whether Brain has read a real client attachment through Freelancer's live
+   * API. Until it has, jobs needing client files are admitted only while no
+   * other such job is active (`clientFileJobsActive`), so the first one is the proof.
+   */
+  clientFilesProven: boolean;
+  clientFileJobsActive: number;
+}
 
-/** Categories that mean delivery needs something Brain does not have. */
-const BLOCKING_JOBS = new Set([
-  'local job',
-  'video services',
-  'video editing',
-  'animation',
-  'graphic design',
-  'logo design',
-  'photoshop',
-  'illustrator',
-  'website design',
-  'wordpress',
-  'php',
-  'html',
-  'javascript',
-  'mobile app development',
-  'telemarketing',
-  'phone support',
-  'sales',
-  'data entry',
-  'web scraping',
-  'virtual assistant',
-  'voice talent',
-  'photography',
-  'field technical support',
-  'data collection',
-  'translation',
-  'transcription',
-  'recruitment',
-  'lead generation',
-  '3d rendering',
-  '3d modelling',
-  'business plan writing',
-  'excel',
-  'financial modeling',
-]);
-
-/**
- * Phrases in the request that mean the work needs a person, a file Brain cannot
- * receive yet, access to the client's systems, or academic work done for a
- * student. Word-bounded and lower-cased.
- */
-const BLOCKING_PHRASES: { pattern: RegExp; reason: string }[] = [
-  { pattern: /\b(call|calls|phone|zoom|meeting|meetings|interview|interviews|on-?site|in person|visit)\b/, reason: 'delivery needs calls, meetings or presence' },
-  { pattern: /\b(attached|attachment|i will send|will provide (?:the )?files?|upload(?:ed)? files?|my files|pdfs? (?:i|we) (?:have|will))\b/, reason: 'delivery needs files the client sends, which Brain cannot receive yet' },
-  { pattern: /\b(login|log in|access to (?:my|our)|admin access|credentials|my account|our account)\b/, reason: 'delivery needs access to the client’s systems' },
-  { pattern: /\b(essay|assignment|homework|thesis|dissertation|coursework|exam|university paper|my paper|plagiarism)\b/, reason: 'academic work done for a student is refused' },
-  { pattern: /\b(video|youtube|tiktok|reel|voice ?over|podcast|logo|design|figma|canva)\b/, reason: 'delivery is media or design, not a written report' },
-  { pattern: /\b(cold call|outreach to|contact (?:businesses|companies|leads)|send emails|email list|leads with emails|book appointments)\b/, reason: 'delivery means contacting people on the client’s behalf' },
-  { pattern: /\bwikipedia\b/, reason: 'paid Wikipedia editing breaks Wikipedia\u2019s own rules' },
-  { pattern: /\b(medical|clinical|legal advice|lawyer|attorney|tax|transfer pricing|accounting|accountant|certified|licensed|cpa|specialist)\b/, reason: 'the work needs a professional credential' },
-  { pattern: /\b(simulation|matlab|omnet|python|code|coding|software|script)\b/, reason: 'delivery needs software built or run' },
-  { pattern: /\b(excel|google sheets|spreadsheets?|financial (?:models?|projections?)|p&l|cash-?flow|break-?even|valuation|dcf)\b/, reason: 'delivery needs a financial model or spreadsheet, not a report' },
-  { pattern: /\b(business plan|pitch deck|investor-ready|presentation|slides|powerpoint)\b/, reason: 'delivery is a business plan or deck, not a research report' },
-  { pattern: /\b(3d|render(?:ing)?s?|cad)\b/, reason: 'delivery is media or design, not a written report' },
-  { pattern: /\b(ghostwrit|blog posts?|articles? writer|seo content|product descriptions?)\w*\b/, reason: 'content writing is not a research report' },
-  { pattern: /\b(native speaker|must be from|only from|us only|uk only|resident of)\b/, reason: 'the client restricts who may do the work' },
-];
-
-/**
- * The request must say, in its own words, that it wants research from public
- * sources. A category alone is not enough: freelancers tag almost anything
- * "Research".
- */
-const RESEARCH_INTENT =
-  /\b(market research|market analysis|competitor|competitive (?:analysis|landscape|research)|industry (?:analysis|report|research|overview)|research report|feasibility|market landscape|landscape (?:analysis|report)|benchmark(?:ing)?|desk research|business research|web research|online research|market sizing|market size|comparison report|compare (?:the )?(?:top|best|leading))\b/;
+/** What the screen assumed before deliverables existed: research reports only. */
+export const RESEARCH_ONLY: ScreenContext = { available: new Set(), python: false, clientFilesProven: false, clientFileJobsActive: 1 };
 
 export interface ScreenVerdict {
   deliverable: boolean;
   reasons: string[];
+  /** What Brain would deliver, in order. Empty when rejected. */
+  categories: JobCategory[];
+  needsClientFiles: boolean;
+  economics: JobEconomics | null;
 }
 
-export function screenProject(project: FreelancerProject, nowMs: number): ScreenVerdict {
+/**
+ * Research is chosen only when the job asks for desk research in its own
+ * words; a category tag alone is not enough, because freelancers tag almost
+ * anything "Research".
+ */
+function chooseCategories(found: ReturnType<typeof scoreCategories>, text: string): JobCategory[] {
+  const research = /\b(market research|market analysis|competitor|competitive (?:analysis|landscape|research)|industry (?:analysis|report|research|overview)|research report|feasibility|desk research|business research|web research|online research|market sizing|market size|comparison report)\b/.test(text);
+  const kinds = deliverablesOf(found);
+  // A research report and a business document are one deliverable: the research path writes it.
+  if (research && kinds.every((k) => k === 'DOCUMENT')) return ['RESEARCH_REPORT'];
+  // Research alongside another kind is written up as a document beside it: the
+  // research pipeline files Markdown, and cannot produce a workbook or a deck.
+  if (research && !kinds.includes('DOCUMENT')) return (['DOCUMENT', ...kinds] as JobCategory[]).slice(0, 3);
+  return kinds.slice(0, 3);
+}
+
+export function screenProject(project: FreelancerProject, nowMs: number, context: ScreenContext = RESEARCH_ONLY): ScreenVerdict {
   const reasons: string[] = [];
   const open = project.status === 'active' && (project.frontend_project_status ?? 'open') === 'open';
   if (!open) reasons.push(`not open (${project.status}/${project.frontend_project_status ?? '-'})`);
   if (project.type !== 'fixed') reasons.push('hourly work needs a person on the clock');
-  if (project.currency?.code !== SCREEN_CURRENCY) reasons.push(`priced in ${project.currency?.code}, not ${SCREEN_CURRENCY}`);
+  const quote = quoteOf(project.currency);
+  if (!quote) reasons.push(`priced in ${project.currency?.code ?? 'an unknown currency'} with no published exchange rate`);
   const min = project.budget?.minimum ?? 0;
-  if (min < MIN_BUDGET_USD) reasons.push(`budget starts below ${MIN_BUDGET_USD}`);
+  if (quote && min * quote.usdPerUnit < MIN_BUDGET_USD) reasons.push(`budget starts below USD ${MIN_BUDGET_USD}`);
   const ageHours = (nowMs / 1000 - project.time_submitted) / 3600;
   if (ageHours > MAX_AGE_HOURS) reasons.push(`posted ${Math.round(ageHours)}h ago`);
   if ((project.bid_stats?.bid_count ?? 0) > MAX_BIDS_ALREADY) reasons.push(`${project.bid_stats.bid_count} bids already`);
@@ -126,31 +86,73 @@ export function screenProject(project: FreelancerProject, nowMs: number): Screen
   }
   if (project.language && project.language !== 'en') reasons.push(`written in ${project.language}`);
 
-  const jobs = (project.jobs ?? []).map((one) => one.name.toLowerCase());
-  const blocking = jobs.filter((one) => BLOCKING_JOBS.has(one));
-  if (blocking.length > 0) reasons.push(`needs ${blocking.join(', ')}`);
-  if (!jobs.some((one) => RESEARCH_JOBS.has(one))) reasons.push('no research or report category');
-
-  const text0 = `${project.title}\n${project.description ?? project.preview_description ?? ''}`.toLowerCase();
-  if (!RESEARCH_INTENT.test(text0)) reasons.push('the request does not ask for desk research Brain can produce');
+  const tags = (project.jobs ?? []).map((one) => one.name.toLowerCase());
   const text = `${project.title}\n${project.description ?? project.preview_description ?? ''}`.toLowerCase();
-  for (const one of BLOCKING_PHRASES) if (one.pattern.test(text)) reasons.push(one.reason);
+  const found = scoreCategories(tags, text);
+  const categories = chooseCategories(found, text);
+  if (categories.length === 0) reasons.push('the request asks for nothing Brain delivers: no research report or deliverable kind in it');
+  if (categories.length > MAX_CATEGORIES) reasons.push(`it asks for ${categories.map((c) => CATEGORY_LABEL[c]).join(', ')}: more kinds of deliverable than Brain takes in one job`);
+  for (const category of categories) {
+    if (category === 'RESEARCH_REPORT') continue;
+    if (!context.available.has(category)) reasons.push(`delivery needs ${CATEGORY_LABEL[category]}, which Brain has not proved it can deliver`);
+  }
+  if (categories.includes('CODE')) {
+    const language = codeLanguageOf(text);
+    if (!language) reasons.push('the program’s language is not one Brain checks before delivering (Python or JavaScript)');
+    else if (language === 'python' && !context.python) reasons.push('Python cannot be checked on this machine, so Python work is not delivered');
+  }
+  // A kind the client tagged that Brain would not deliver means the job asks for
+  // more than Brain would hand over; and its blockers apply whether or not it is delivered.
+  const tagged = [
+    ...new Set([
+      ...found.filter((s) => s.tagHits > 0 && s.category !== 'RESEARCH_REPORT').map((s) => s.category),
+      ...namedDeliverables(text),
+    ]),
+  ];
+  for (const kind of tagged) {
+    if (categories.length && !categories.includes(kind) && !categories.some((c) => absorbs(c, kind)) && !(kind === 'DOCUMENT' && categories.includes('RESEARCH_REPORT'))) {
+      reasons.push(`it also asks for ${CATEGORY_LABEL[kind]}, which this job's deliverable would not cover`);
+    }
+  }
+  reasons.push(...blockersOf(tags, text, [...new Set([...categories, ...tagged])]));
+  const files = needsClientFiles(text);
+  if (files && !context.clientFilesProven && context.clientFileJobsActive > 0) {
+    reasons.push('delivery needs files the client sends, and Brain is already proving it can read those on another job');
+  }
 
-  return { deliverable: reasons.length === 0, reasons: reasons.length ? reasons : ['a written research deliverable Brain can produce from public sources'] };
+  let economics: JobEconomics | null = null;
+  if (quote && reasons.length === 0) {
+    economics = priceJob({
+      quote,
+      budgetMin: min,
+      budgetMax: project.budget?.maximum ?? null,
+      bidAvg: project.bid_stats?.bid_avg ?? null,
+      categories,
+    });
+    if (economics.netUsd < MIN_NET_USD) reasons.push(`after Freelancer’s fee the bid nets USD ${economics.netUsd}, below USD ${MIN_NET_USD}`);
+  }
+  const deliverable = reasons.length === 0;
+  return {
+    deliverable,
+    reasons: deliverable ? [`a ${categories.map((c) => CATEGORY_LABEL[c]).join(' and ')} Brain can produce and verify`] : reasons,
+    categories: deliverable ? categories : [],
+    needsClientFiles: files,
+    economics: deliverable ? economics : null,
+  };
 }
 
-/**
- * The bid: inside the published budget, under the ceiling, and a little under
- * the average already bid where there is one. Whole dollars.
- */
+/** The research-era bid helper, kept for callers that price a USD research job. */
 export function bidAmount(project: FreelancerProject): number {
-  const min = Math.max(project.budget?.minimum ?? MIN_BUDGET_USD, MIN_BUDGET_USD);
-  const max = Math.min(project.budget?.maximum ?? min, MAX_BID_USD);
-  const avg = project.bid_stats?.bid_avg;
-  const target = avg && avg > 0 ? avg * 0.9 : min + (max - min) * 0.3;
-  return Math.round(Math.min(Math.max(target, min), Math.max(min, max)));
+  const quote = quoteOf(project.currency) ?? { code: 'USD', usdPerUnit: 1, source: 'FREELANCER_PROJECT' as const };
+  return priceJob({
+    quote,
+    budgetMin: project.budget?.minimum ?? MIN_BUDGET_USD,
+    budgetMax: project.budget?.maximum ?? null,
+    bidAvg: project.bid_stats?.bid_avg ?? null,
+    categories: ['RESEARCH_REPORT'],
+  }).bid;
 }
 
 export function bidPeriodDays(project: FreelancerProject): number {
-  return Math.min(Math.max(project.bidperiod ?? 4, 3), 5);
+  return Math.min(Math.max(project.bidperiod ?? 4, 3), 7);
 }

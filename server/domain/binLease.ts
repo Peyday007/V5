@@ -94,6 +94,8 @@ export const CONTRACT_MIN_LEASE_MS: Record<CompletionContract, number | null> = 
   DESIGN_RENDER_V1: null,
   // Clones the repository and pushes one file. No suite runs.
   FACTORY_DELIVERY_PROBE_V1: null,
+  // Authors a specification and submits it; no command blocks the heartbeat.
+  FREELANCE_DELIVERABLE_V1: null,
 };
 
 /**
