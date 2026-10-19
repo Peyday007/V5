@@ -159,7 +159,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  delete process.env.FREELANCER_API_BASE;
+  process.env.FREELANCER_API_BASE = 'http://127.0.0.1:9'; // the setup default: never the live market
   delete process.env.FREELANCER_OAUTH_TOKEN;
 });
 
