@@ -205,3 +205,40 @@ The report's own run (`39167432587`) covers 26 h of history.
 Compared with the 24-hour reading: 3-C showed it *can* work and then stopped
 again, 3-A moved from automatic recovery to an operator hold, and 3-B, 3-D and
 Factory 3 are unchanged.
+
+## 10. 72-hour reading and verdict (2026-10-19 21:00Z, revision `5916707`)
+
+The report's run (`39324074159`) covers 26 h of history.
+
+| Routine | fires | right-worker arrivals | wrong-worker | real no-shows | probes | state |
+|---|---|---|---|---|---|---|
+| 3-A | 0 | 0 | 0 | 0 | none (operator hold) | QUARANTINED: operator hold since 10-18 15:56Z |
+| 3-B | 50 | **38**, in bursts: 10-18 22–23Z, 10-19 06–07Z, 13–14Z | 0 | 7 (+1 infra) | HEALTHY ×3 (22:17Z, 06:00Z, 13:17Z), NO_MCP ×5, PROVIDER_REFUSED ×1 | QUARANTINED 15:59Z, after its third lift |
+| 3-C | 4 | 2 (10-18 23:14Z) | 0 | 0 | HEALTHY ×1, NO_MCP ×4, AMBIGUOUS ×1 | QUARANTINED 05:41Z |
+| 3-D | 0 | 0 | 0 | 0 | AMBIGUOUS ×1 (Brain unavailable) | QUARANTINED since 10-14 |
+| Factory 3 | 0 | 0 | **1, as worker-04** | 0 | AMBIGUOUS ×1 | QUARANTINED WRONG_WORKER |
+
+- Every session that reached Brain arrived as worker-04. The connector
+  refreshed hourly and no refusal named Caleb's connector. The 20 EXPIRED and
+  3 INVALID_CREDENTIALS refusals on `/mcp` name no worker and sit around
+  restarts.
+- Brain's automatic recovery did exactly its job: it lifted 3-B three times
+  and 3-C once, within minutes of a session arriving, with nobody acting.
+- What does not hold is Caleb's side. Each Routine works for one to two hours
+  and then stops calling Brain for hours. One probe was refused by the
+  provider itself (`PROVIDER_REFUSED`, 3-B, 09:17Z).
+
+### Final verdict (three days of elapsed time)
+
+| Routine | verdict |
+|---|---|
+| 3-A | **Broken.** Silent since 10-17 22:17Z; operator hold. |
+| 3-B | **At risk.** Connects correctly in bursts, then stops; quarantined about every six hours. |
+| 3-C | **Broken.** Two arrivals in 26 h. |
+| 3-D | **Broken.** No arrival since 10-14. |
+| Factory 3 | **Broken.** No connector authorizes as worker-10; still arrives as worker-04. Factory execution untested. |
+
+**Overall: Caleb's setup is not functioning.** Brain's side (authentication,
+refresh, attribution and automatic recovery) held for three days and lifted
+every quarantine it could. The Claude side does not keep his Routines'
+sessions calling Brain.
