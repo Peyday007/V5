@@ -29,11 +29,11 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 
 <!-- The check-in replaces everything below. -->
 
-- **Last check:** 2026-10-19 09:22Z. Production is serving 62104d6.
+- **Last check:** 2026-10-19 12:25Z. Production is serving 62104d6.
 - **Operation:** the Freelancer operation runs unattended on Brain's tick.
-  - 6 scans so far, the last at 08:55Z.
-  - 482 jobs screened: 481 rejected with reasons and 1 withdrawn, Freelancer 40775349.
-  - Top rejection reasons: not a desk-research request (416), no research category (331), priced in INR (191), media or design (168), calls or meetings (133), software (133). That farm business plan needed financial models and 3D work. It was prepared by the first scan and withdrawn automatically once the fixed screen shipped.
+  - 12 scans so far, the last at 12:07Z.
+  - 533 jobs screened: 532 rejected with reasons and 1 withdrawn, Freelancer 40775349.
+  - Top rejection reasons: not a desk-research request (459), no research category (362), priced in INR (213), media or design (185), calls or meetings (149), software (147). That farm business plan needed financial models and 3D work. It was prepared by the first scan and withdrawn automatically once the fixed screen shipped.
   - No job currently passes. That is honest: research-report work priced in USD that needs nobody's labour is scarce on Freelancer. Brain keeps scanning every 30 minutes.
 - **Acting is blocked** on two owner steps:
   - Freelancer account plus token: `FREELANCER_OAUTH_TOKEN` NOT_CONNECTED;
