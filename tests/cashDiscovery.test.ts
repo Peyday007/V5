@@ -744,6 +744,19 @@ describe('harvesting what discovery found', () => {
   });
 
   /*
+   * Database pressure used to stop discovery outright, and production Cash
+   * Mode 1 ended up with no open round at all. Under pressure only the sweeps
+   * over every opportunity wait; the next round still opens.
+   */
+  it('opens a round under database pressure, with only the sweeps skipped', async () => {
+    await activated();
+    const run = await runDiscovery(projectId, { sweep: false });
+    expect(run.opened).toHaveLength(1);
+    expect(run.signalled).toEqual([]);
+    expect(run.failures).toEqual([]);
+  });
+
+  /*
    * A packet a bucket did not open is still authorized research in this sprint.
    *
    * This test used to assert the opposite, and that assertion was the defect.
@@ -968,6 +981,7 @@ describe('harvesting what discovery found', () => {
       // Nothing to read a signal back for either: one read of `cash_modes`
       // answers the whole pass for a project holding no sprint at all.
       signalled: [],
+      failures: [],
     });
   });
 });

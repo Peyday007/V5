@@ -968,7 +968,16 @@ function clamp(text: string, max: number): string {
  * not started, file what has finished — and because a caller that could do one
  * without the other is a caller that eventually does.
  */
-export async function runDiscovery(projectId: string): Promise<{
+export async function runDiscovery(
+  projectId: string,
+  options: {
+    /**
+     * Whether the reconciliations over every opportunity run this tick. They
+     * wait under database pressure; opening and harvesting never do.
+     */
+    sweep?: boolean;
+  } = {},
+): Promise<{
   opened: OpenedDiscovery[];
   harvested: Harvested[];
   /** True only on the tick that first wrote the discovery authorization. */
@@ -977,12 +986,14 @@ export async function runDiscovery(projectId: string): Promise<{
   resumed: string[];
   /** Pieces whose kind of opening was read back from their own source claim. */
   signalled: string[];
+  /** Reconciliations that threw this tick; opening and harvesting still ran. */
+  failures: string[];
 }> {
   // One read answers both halves for the many projects that hold no sprint at
   // all, which is what makes this cheap enough to run for every project on
   // every tick.
   if (!(await getCashMode(projectId))) {
-    return { opened: [], harvested: [], authorized: false, resumed: [], signalled: [] };
+    return { opened: [], harvested: [], authorized: false, resumed: [], signalled: [], failures: [] };
   }
 
   /*
@@ -1015,10 +1026,29 @@ export async function runDiscovery(projectId: string): Promise<{
    * blanks and never overwrites, and a piece whose claim carries no signal is
    * left exactly as it is.
    */
-  const signalled = await reconcileOpportunitySignals(projectId);
+  /*
+   * The two reconciliations below repair rows written before a column
+   * existed. A failure in either is reported and does not stop the sprint
+   * from asking new questions or filing what came back: they used to sit in
+   * front of `openDiscovery`, so one of them throwing on every tick would
+   * leave a sprint with no open round and nothing saying why.
+   */
+  const failures: string[] = [];
+  const reconcile = async <T>(name: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await fn();
+    } catch (error) {
+      failures.push(`${name}: ${(error instanceof Error ? error.message : String(error)).slice(0, 200)}`);
+      return fallback;
+    }
+  };
+  const sweep = options.sweep ?? true;
+  const signalled = sweep
+    ? await reconcile('signals', () => reconcileOpportunitySignals(projectId), [] as string[])
+    : [];
 
   // And the second records of one opening written before this existed.
-  await markDuplicateOpenings(projectId);
+  if (sweep) await reconcile('duplicates', () => markDuplicateOpenings(projectId), undefined);
 
   return {
     opened: await openDiscovery({ projectId, limit: 1 }),
@@ -1026,6 +1056,7 @@ export async function runDiscovery(projectId: string): Promise<{
     authorized: authorized?.created ?? false,
     resumed: resumed.map((one) => one.candidateId),
     signalled,
+    failures,
   };
 }
 
