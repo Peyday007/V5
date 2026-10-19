@@ -100,6 +100,14 @@ export const LIMITS = Object.freeze({
   maxBidUsd: 250,
   newPerScan: 300,
   repliesPerJob: 3,
+  /**
+   * How long one scan may spend asking Freelancer. The scan runs inside the
+   * Russell tick, and every request may take the client's 30 s timeout, so
+   * 33 searches plus a recheck per prepared job could otherwise hold the tick
+   * for many minutes when Freelancer is slow. What is not asked in time is
+   * asked by the next scan; nothing is withdrawn for being unread.
+   */
+  discoveryBudgetMs: 120_000,
 });
 
 export const SEARCH_QUERIES = [
@@ -211,7 +219,9 @@ function verdictFields(project: FreelancerProject, verdict: ScreenVerdict) {
 export async function discover(projectId: string, now = Date.now()): Promise<{ scanned: number; recorded: number; prepared: number; requalified: number }> {
   const context = await screenContext(projectId);
   const seen = new Map<number, FreelancerProject>();
+  const deadline = Date.now() + LIMITS.discoveryBudgetMs;
   for (const query of SEARCH_QUERIES) {
+    if (Date.now() >= deadline) break;
     try {
       for (const project of await searchProjects(query, 100)) seen.set(project.id, project);
     } catch {
@@ -287,7 +297,9 @@ export async function discover(projectId: string, now = Date.now()): Promise<{ s
   // withdrawn with its reason whether or not an account is connected.
   for (const job of await jobsInStates(projectId, ['PREPARED'])) {
     try {
-      const current = seen.get(Number(job.externalId)) ?? (await getProject(job.externalId));
+      const listed = seen.get(Number(job.externalId));
+      if (!listed && Date.now() >= deadline) continue;
+      const current = listed ?? (await getProject(job.externalId));
       const recheck = screenProject(current, now, context);
       if (!recheck.deliverable) {
         await move(job.id, 'PREPARED', 'WITHDRAWN', { stateReason: recheck.reasons.join('; ') });
