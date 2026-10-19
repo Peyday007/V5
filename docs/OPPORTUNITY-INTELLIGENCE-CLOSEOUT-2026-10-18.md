@@ -86,3 +86,64 @@ Each waits on events that have not occurred in the hours since release. The
 - Whether the stage-1 screen should count against an epoch's two full dives. It
   does not today.
 - Releasing Caleb 3-A from operator hold.
+
+## 24-hour reading, 2026-10-19 01:00Z
+
+Read inside the released container (`SERVING_REVISION c299324`, which carries
+this release plus later unrelated merges): Connection report #113 (`hours=24`,
+attempt 2 — attempt 1 failed on a Fly API timeout before reading anything),
+Cash report #101, Closeout report #129 (`what=refinement`), Dispatch diagnose
+#27.
+
+### Opportunity intelligence
+
+| measure | baseline | +3h | +24h |
+|---|---|---|---|
+| opportunities | 255 | 273 | 309 |
+| SIGNAL / CANDIDATE / QUALIFIED / READY_TO_TEST | 204 / 50 / 0 / 1 | 220 / 52 / 0 / 1 | 253 / 55 / 0 / 1 |
+| eligible for a deep dive | 0 | 10 | 22 |
+| dives in flight / room | 0 of fixed 2 | 1, grant full | 3, grant full (all 6 slots held or spoken for) |
+| dives started (all time) | — | — | 243 |
+| stage-1 screens run | 0 | 0 | 10 |
+| openings stopped by a screen (no full dive spent) | — | — | 7 (`STAGE_ONE_FAILED`) |
+| EPOCH_SPENT (was ROUNDS_SPENT) | 61 | 61 | 61 |
+| reconsiderations triggered | impossible | 0 | 0 |
+| standing events | 0 | 356 | 432 |
+| fragments accepted, 7d | 13.8% (163/1,177) | 14.4% | 15.8% (196/1,244) |
+| accepted claims inside blocked fragments | 709 | 768 | 864 |
+| block cause read from the column / legacy | 0 / all | 6 / 1,058 | 122 / 926 |
+| requirements closed by the archive | not measured | 78/1,024 (7.6%) | 81/1,094 (7.4%) |
+| accepted completions per session, 7d | — | 0.326 | 0.385 (1,760 / 4,569) |
+
+Proved live in 24h: the stage-1 screen (10 run, 7 openings stopped before a
+full dive), eligibility (22 vs 0), the cause column (122 rows written at
+block time).
+
+Not proved: a reconsideration (0 triggered; no qualifying change was
+recorded), an automatic host recovery, and any QUALIFIED throughput (still 0).
+The accept-share rise is a week-on-week reading over overlapping windows and
+is not claimed as an effect.
+
+### Capacity, per account, 24h
+
+| account | baseline (24h before 36a2b70) | 24h ending 01:00Z |
+|---|---|---|
+| Airyn | 558 fires, 389 arrived, 1 accepted completion, 845 releases | 80 arrived, 61 completions, 202 releases |
+| Caleb | 106 fires, 32 arrived | 27 arrived, 32 completions |
+| Brain Research A | 182 fires, 212 passes | 243 arrived, 341 completions |
+
+- All four Airyn Routines have been on an **operator hold since about
+  15:00Z 2026-10-18**, so Airyn's figures cover roughly 11 hours. The hold
+  reason says the Routine environment has no outbound web access, with proxy
+  `CONNECT 403` and DNS failures. This session neither placed nor lifted that
+  hold. Airyn has to allow web access for that Routine environment before it
+  is re-enabled.
+- **Caleb.** 3-A is still on operator hold. 3-B and 3-C were quarantined at
+  about 23:30Z for 3 sessions that never checked in, and auto-recovery reads
+  RECOVERING. 3-D reads RECOVERY_EXHAUSTED, so the account owner must act.
+- `ACCOUNT_SESSIONS_UNPRODUCTIVE` refusals: **0**. Research capacity is being
+  limited by `ACCOUNT_TARGETS_REACHED` (112,651 deferrals) and by the grant,
+  not by the new rule.
+- Fleet settings were not changed. The halt of useful work is caused by the
+  Routines' environments, which only their owners can fix; it is not a Brain
+  regression.
