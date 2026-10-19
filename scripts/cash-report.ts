@@ -446,6 +446,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   await gateFailures(projectId);
   await researchAccounting(projectId);
   await funnelAndUsefulness(projectId);
+  await listingRetrievalsSection(projectId);
 
   // --- What became a piece of work ----------------------------------------
   const opportunities = await listOpportunities({ projectId });
@@ -1322,6 +1323,51 @@ async function funnelAndUsefulness(projectId: string): Promise<void> {
     console.log(
       `RESEARCH USEFULNESS (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`,
     );
+  }
+}
+
+/**
+ * What Brain retrieved of known listings: the newest attempt per opening, and
+ * which follow-up packet the listing was handed to. Fails on its own.
+ */
+async function listingRetrievalsSection(projectId: string): Promise<void> {
+  try {
+    const rows = await getDb().all<{
+      opportunity_id: string;
+      platform_id: string | null;
+      outcome: string;
+      http_status: number | null;
+      retrieved_at: string;
+      original_url: string;
+      attempts: number;
+      validation_orchestration_id: string | null;
+      validation_state: string | null;
+    }>(
+      `SELECT r.opportunity_id, r.platform_id, r.outcome, r.http_status, r.retrieved_at, r.original_url,
+              (SELECT COUNT(*) FROM listing_retrievals x WHERE x.opportunity_id = r.opportunity_id) AS attempts,
+              o.validation_orchestration_id, o.validation_state
+         FROM listing_retrievals r
+         JOIN cash_opportunities o ON o.id = r.opportunity_id
+        WHERE r.project_id = ?
+          AND r.id = (SELECT y.id FROM listing_retrievals y WHERE y.opportunity_id = r.opportunity_id
+                       ORDER BY y.retrieved_at DESC, y.id DESC LIMIT 1)
+        ORDER BY r.retrieved_at DESC
+        LIMIT 40`,
+      [projectId],
+    );
+    console.log('');
+    console.log(`LISTING RETRIEVALS (${rows.length} opening(s) with a known listing, newest first)`);
+    for (const row of rows) {
+      console.log(
+        `  ${row.opportunity_id} freelancer=${row.platform_id ?? '—'} ${row.outcome}` +
+          `${row.http_status !== null ? ` http=${row.http_status}` : ''} at=${row.retrieved_at} attempts=${row.attempts}` +
+          ` dive=${row.validation_orchestration_id ?? '—'} ${row.validation_state ?? ''}`,
+      );
+      console.log(`      ${row.original_url}`);
+    }
+  } catch (error) {
+    console.log('');
+    console.log(`LISTING RETRIEVALS (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
   }
 }
 

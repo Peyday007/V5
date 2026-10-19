@@ -36,6 +36,7 @@
  * refused, because that is a `COMMERCIAL_ACTION` under a grant a person makes
  * separately.
  */
+import { listingSentenceFor, retrieveDueListings } from './listings.ts';
 import { closedBy } from './closing.ts';
 import { getDb } from '../../db/database.ts';
 import {
@@ -512,12 +513,17 @@ export interface ValidationProgress {
  * cheap: still open, who pays, what would rule it out. Everything else is the
  * full dive's, which is asked only once the screen passes.
  */
-export function validationQuestion(opportunity: CashOpportunity, stage: DiveStage = 'FULL'): string {
+export function validationQuestion(
+  opportunity: CashOpportunity,
+  stage: DiveStage = 'FULL',
+  /** `listingIdentitySentence`: the listing's id and original link, from its source claim. */
+  listing = '',
+): string {
   const signal = (opportunity.buyingSignal ?? opportunity.title).replace(/\s+/g, ' ').trim();
   const observed = opportunity.signalObservedAt
     ? ` It was published or observed on ${opportunity.signalObservedAt}.`
     : '';
-  const source = opportunity.source ? ` The source is ${opportunity.source}.` : '';
+  const source = (opportunity.source ? ` The source is ${opportunity.source}.` : '') + listing;
   if (stage === 'SCREEN') {
     return (
       `Before anything else is asked about this specific opening — "${signal}" — settle the ` +
@@ -806,7 +812,9 @@ export async function startValidations(input: {
       projectId: input.projectId,
       visibility: 'SHARED',
       title: `${stage === 'SCREEN' ? 'Screen' : 'Qualify'}: ${opportunity.title}`,
-      statement: validationQuestion(opportunity, stage),
+      // The listing's id and original link travel with the question, so the
+      // worker reads this listing rather than rebuilding an address for it.
+      statement: validationQuestion(opportunity, stage, await listingSentenceFor(opportunity)),
     });
     /*
      * The first dive after a distinct change is round one of its epoch, so the
@@ -1368,6 +1376,10 @@ export async function runValidations(projectId: string): Promise<ValidationProgr
   // A screen that settled without a payer is dormant with its reopen
   // conditions, rather than spending a full dive (§3.3(a)).
   await concludeScreens(projectId);
+  // Known listings are retrieved before a dive starts, so its worker is handed
+  // the listing rather than told to go and find it. Bounded and best effort: a
+  // listing that cannot be read never holds up a dive or any other work.
+  await retrieveDueListings({ projectId }).catch(() => []);
   const started = await startValidations({ projectId });
   return { started, settled };
 }
