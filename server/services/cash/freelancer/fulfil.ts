@@ -27,6 +27,7 @@ import { getStorage } from '../../storage/index.ts';
 import { safeSegment } from '../../storage/keys.ts';
 import { readObject } from '../../storage.ts';
 import { produce, type Produced } from './deliverables/capabilities.ts';
+import { STEP_OPS, type FileContext } from './deliverables/pipeline.ts';
 import { messageProblems, type DeliverableKind } from './deliverables/spec.ts';
 import { SAMPLES } from './deliverables/samples.ts';
 import { readXlsx, sheetAsText } from './deliverables/xlsx.ts';
@@ -95,6 +96,44 @@ export async function readClientFile(name: string, bytes: Buffer): Promise<ReadF
   }
 }
 
+/**
+ * Write bytes under a key exactly once. The store never overwrites, so a
+ * second write of the same bytes (a re-read, a replayed tick) reuses what is
+ * there, and different bytes under the same key are a version beside it.
+ */
+async function putOnce(key: string, bytes: Buffer, contentType: string, name: string): Promise<string> {
+  const sha = createHash('sha256').update(bytes).digest('hex');
+  try {
+    const existing = await readObject(key);
+    if (createHash('sha256').update(existing).digest('hex') === sha) return key;
+    return putOnce(`${key.replace(/(\.[^./]+)?$/, `-${sha.slice(0, 12)}$1`)}`, bytes, contentType, name);
+  } catch {
+    /* nothing there yet */
+  }
+  return (await getStorage().put({ key, body: bytes, contentType, originalFilename: name })).key;
+}
+
+/** Keep a client's file, under a key built from Brain's ids, so the work can be re-run over the same bytes. */
+export async function storeClientFile(job: MarketplaceJob, name: string, bytes: Buffer): Promise<{ storageKey: string; sha256: string }> {
+  const key = `marketplace/${safeSegment(job.projectId, 'project')}/${safeSegment(job.id, 'job')}/client/${safeSegment(name, 'file')}`;
+  return { storageKey: await putOnce(key, bytes, 'application/octet-stream', name), sha256: createHash('sha256').update(bytes).digest('hex') };
+}
+
+/** The client's stored files, read back and checked against the hash taken when they arrived. */
+export async function clientContext(job: Pick<MarketplaceJob, 'clientFiles'>): Promise<FileContext> {
+  const files = new Map<string, Buffer>();
+  for (const f of job.clientFiles ?? []) {
+    if (!f.storageKey) continue;
+    try {
+      const bytes = await readObject(f.storageKey);
+      if (!f.sha256 || createHash('sha256').update(bytes).digest('hex') === f.sha256) files.set(f.name, bytes);
+    } catch {
+      /* a file that cannot be read back is simply absent; a step naming it says so */
+    }
+  }
+  return { files };
+}
+
 /* =========================================================================
  * The brief and the bin
  * ====================================================================== */
@@ -154,6 +193,9 @@ export async function openDeliverableBin(input: FulfilmentInput): Promise<Bin> {
     'must not error, slide text must fit, the SVG may not contain scripts or external references, websites must link only',
     'to files in the bundle, code must parse. If Brain refuses, it tells you why: correct the unit and complete again.',
     'Use real, specific content for this client; never placeholders like "Lorem ipsum" or "[Company name]".',
+    input.kinds.includes('DATASET') && input.files.some((f) => f.readable && /\.(csv|tsv|txt|xlsx|xlsm)$/i.test(f.name))
+      ? `For data that is in the client's CSV or Excel files, do not copy rows into the spec: give "source": {"file": "<name>", "sheet"?: "<sheet>", "headerRow"?: 0} and "steps": [...], and Brain runs the steps over the whole file and writes a change log. Step ops: ${STEP_OPS.join(', ')}. Shapes: {"op":"rename","from","to"}, {"op":"trim","columns":["*" or names]}, {"op":"toNumber","columns":[...]}, {"op":"toDate","column","order":"YMD|DMY|MDY"}, {"op":"dedupe","columns":[...] or "*"}, {"op":"dropEmpty","columns":[...]}, {"op":"filter","column","test":"eq|ne|gt|lt|ge|le|contains|empty|notEmpty","value"}, {"op":"fill","column","value"}, {"op":"derive","column","a","operator":"add|subtract|multiply|divide|concat","b"}, {"op":"group","by":[...],"aggregates":[{"column","fn":"sum|avg|count|min|max","as"}]}, {"op":"sort","column","order":"asc|desc"}, {"op":"select","columns":[...]}, {"op":"case","column","to":"lower|upper|title"}, {"op":"replace","column","find","with"}, {"op":"append","file","sheet"?}, {"op":"datePart","column","from","part":"year|month|yearMonth|quarter"}.`
+      : '',
     'Do not put contact details, links or payment arrangements in "message": Freelancer forbids them.',
     '',
     examples,
@@ -240,7 +282,10 @@ export async function evaluateFreelanceDeliverable(bin: Bin): Promise<{ satisfie
   const submitted = results.find((row) => row.unitKey === DELIVERABLE_UNIT);
   if (!submitted) return { satisfied: false, disposition: 'RETRY', reasons: ['No deliverable was submitted.'], observed: { units: results.length } };
   const kinds = await kindsForBin(bin);
-  const produced = await produce(submitted.value, kinds ?? undefined);
+  const jobId = jobIdOf(bin);
+  const job = jobId ? await getDb().get<{ client_files: string | null }>('SELECT client_files FROM marketplace_jobs WHERE id = ?', [jobId]) : null;
+  const context = await clientContext({ clientFiles: job?.client_files ? (JSON.parse(job.client_files) as MarketplaceJob['clientFiles']) : null });
+  const produced = await produce(submitted.value, kinds ?? undefined, context);
   const observed = { kinds, files: produced.files.map((f) => f.name), checks: produced.verification?.checks.length ?? 0 };
   return produced.ok
     ? { satisfied: true, disposition: 'SATISFIED', reasons: [], observed }
@@ -264,15 +309,14 @@ export async function ingestBin(job: MarketplaceJob, binId: string): Promise<Ing
   const submitted = (await listBinUnitResults(binId)).find((row) => row.unitKey === DELIVERABLE_UNIT);
   if (!submitted) return { refused: ['the completed bin holds no deliverable'] };
   const kinds = job.categories.filter((c) => c !== 'RESEARCH_REPORT') as DeliverableKind[];
-  const produced = await produce(submitted.value, kinds);
+  const produced = await produce(submitted.value, kinds, await clientContext(job));
   if (!produced.ok) return { refused: produced.problems };
-  const store = getStorage();
   const files: DeliveredFile[] = [];
   const bytes = new Map<string, Buffer>();
   for (const file of produced.files) {
     const key = `marketplace/${safeSegment(job.projectId, 'project')}/${safeSegment(job.id, 'job')}/${safeSegment(binId, 'bin')}/${safeSegment(file.name, 'file')}`;
-    const meta = await store.put({ key, body: file.bytes, contentType: file.mime, originalFilename: file.name });
-    files.push({ name: file.name, mime: file.mime, size: file.bytes.length, sha256: createHash('sha256').update(file.bytes).digest('hex'), storageKey: meta.key });
+    const storageKey = await putOnce(key, file.bytes, file.mime, file.name);
+    files.push({ name: file.name, mime: file.mime, size: file.bytes.length, sha256: createHash('sha256').update(file.bytes).digest('hex'), storageKey });
     bytes.set(file.name, file.bytes);
   }
   return { produced, files, bytes };

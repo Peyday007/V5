@@ -14,6 +14,7 @@ import { renderPptx } from './pptx.ts';
 import { pngToPdf, renderGraphic, svgProblems, toCsv } from './assets.ts';
 import { meshOf, previewPng, toGltf, toObj, toStl } from './model3d.ts';
 import { zip } from './zip.ts';
+import { PipelineError, resolveDataset, type FileContext } from './pipeline.ts';
 
 export interface DeliverableFile {
   name: string;
@@ -49,7 +50,7 @@ export const MIME = {
 /** The largest single file Brain will attach: Freelancer's message attachments are bounded too. */
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
-export async function renderDeliverable(spec: DeliverableSpec): Promise<Rendered> {
+export async function renderDeliverable(spec: DeliverableSpec, context?: FileContext): Promise<Rendered> {
   const name = spec.filename.trim();
   const files: DeliverableFile[] = [];
   const previews: Rendered['previews'] = [];
@@ -76,10 +77,18 @@ export async function renderDeliverable(spec: DeliverableSpec): Promise<Rendered
       break;
     }
     case 'DATASET': {
-      const header = spec.columns.map((c) => c.name);
-      if (spec.formats.includes('csv')) files.push({ name: `${name}.csv`, mime: MIME.csv, bytes: Buffer.from(`﻿${toCsv(header, spec.rows)}`) });
+      let data;
+      try {
+        data = resolveDataset(spec, context);
+      } catch (error) {
+        if (!(error instanceof PipelineError)) throw error;
+        problems.push(error.message);
+        break;
+      }
+      const header = data.columns.map((c) => c.name);
+      if (spec.formats.includes('csv')) files.push({ name: `${name}.csv`, mime: MIME.csv, bytes: Buffer.from(`\uFEFF${toCsv(header, data.rows)}`) });
       if (spec.formats.includes('json')) {
-        const records = spec.rows.map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] ?? null])));
+        const records = data.rows.map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] ?? null])));
         files.push({ name: `${name}.json`, mime: MIME.json, bytes: Buffer.from(`${JSON.stringify(records, null, 2)}\n`) });
       }
       if (spec.formats.includes('xlsx')) {
@@ -89,13 +98,15 @@ export async function renderDeliverable(spec: DeliverableSpec): Promise<Rendered
             freezeRows: 1,
             rows: [
               header.map((h) => ({ v: h, bold: true, fill: '#DCE4F2' })),
-              ...spec.rows.map((r) => r.map((v, i) => (spec.columns[i]!.type === 'date' && typeof v === 'string' ? { v, fmt: 'date' as const } : v))),
+              ...data.rows.map((r) => r.map((v, i) => (data.columns[i]!.type === 'date' && typeof v === 'string' ? { v, fmt: 'date' as const } : v))),
             ],
           },
         ]);
         problems.push(...book.problems);
         files.push({ name: `${name}.xlsx`, mime: MIME.xlsx, bytes: book.bytes });
       }
+      if (data.log) files.push({ name: `${name} - change log.md`, mime: MIME.md, bytes: Buffer.from(`# Change log: ${name}\n\n${data.log.map((l) => `- ${l}`).join('\n')}\n`) });
+      if (data.rows.length === 0) problems.push('The data has no rows after the steps ran; nothing would be delivered.');
       break;
     }
     case 'WEBSITE':

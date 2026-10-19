@@ -13,6 +13,8 @@
  * problem named, so the next attempt can be a correction rather than a guess.
  */
 
+import { MAX_STEPS, STEP_OPS, type DataSource, type Step } from './pipeline.ts';
+
 export const DELIVERABLE_KINDS = [
   'SPREADSHEET',
   'DOCUMENT',
@@ -107,8 +109,12 @@ export type DeliverableSpec =
   | {
       kind: 'DATASET';
       filename: string;
-      columns: { name: string; type: 'string' | 'number' | 'integer' | 'boolean' | 'date' }[];
-      rows: (string | number | boolean | null)[][];
+      /** Literal data, for a dataset the worker compiled itself... */
+      columns?: { name: string; type: 'string' | 'number' | 'integer' | 'boolean' | 'date' }[];
+      rows?: (string | number | boolean | null)[][];
+      /** ...or a client file and the steps Brain runs over it (`pipeline.ts`). */
+      source?: DataSource;
+      steps?: Step[];
       formats: ('csv' | 'xlsx' | 'json')[];
     }
   | { kind: 'WEBSITE'; filename: string; files: ProjectFile[] }
@@ -283,8 +289,80 @@ function checkFiles(c: Checker, value: unknown, at: string, pattern: RegExp, max
   return files;
 }
 
+const STEP_FIELDS: Record<(typeof STEP_OPS)[number], { allowed: string[]; required: string[] }> = {
+  select: { allowed: ['columns'], required: ['columns'] },
+  rename: { allowed: ['from', 'to'], required: ['from', 'to'] },
+  trim: { allowed: ['columns'], required: ['columns'] },
+  case: { allowed: ['column', 'to'], required: ['column', 'to'] },
+  replace: { allowed: ['column', 'find', 'with'], required: ['column', 'find', 'with'] },
+  toNumber: { allowed: ['columns'], required: ['columns'] },
+  toDate: { allowed: ['column', 'order'], required: ['column', 'order'] },
+  dropEmpty: { allowed: ['columns'], required: ['columns'] },
+  dedupe: { allowed: ['columns'], required: ['columns'] },
+  filter: { allowed: ['column', 'test', 'value'], required: ['column', 'test'] },
+  fill: { allowed: ['column', 'value'], required: ['column', 'value'] },
+  derive: { allowed: ['column', 'a', 'operator', 'b'], required: ['column', 'a', 'operator', 'b'] },
+  group: { allowed: ['by', 'aggregates'], required: ['by', 'aggregates'] },
+  sort: { allowed: ['column', 'order'], required: ['column', 'order'] },
+  append: { allowed: ['file', 'sheet'], required: ['file'] },
+  datePart: { allowed: ['column', 'from', 'part'], required: ['column', 'from', 'part'] },
+};
+
+function checkPipeline(c: Checker, source: unknown, steps: unknown): void {
+  const src = c.object(source, 'spec.source', ['file', 'sheet', 'headerRow'], ['file']);
+  if (src) {
+    c.string(src.file, 'spec.source.file', 200);
+    c.string(src.sheet, 'spec.source.sheet', 100, true);
+    if (src.headerRow !== undefined) c.number(src.headerRow, 'spec.source.headerRow', 0, 50);
+  }
+  for (const [i, raw] of c.array(steps, 'spec.steps', 0, MAX_STEPS).entries()) {
+    const at = `spec.steps[${i}]`;
+    const op = (raw as { op?: unknown } | null)?.op;
+    if (typeof op !== 'string' || !(STEP_OPS as readonly string[]).includes(op)) {
+      c.problems.push(`${at}.op must be one of ${STEP_OPS.join(', ')}.`);
+      continue;
+    }
+    const fields = STEP_FIELDS[op as (typeof STEP_OPS)[number]];
+    const step = c.object(raw, at, ['op', ...fields.allowed], ['op', ...fields.required]);
+    if (!step) continue;
+    if (step.columns !== undefined && step.columns !== '*') c.strings(step.columns, `${at}.columns`, 1, 100, 200);
+    for (const key of ['column', 'from', 'to', 'file', 'sheet']) if (step[key] !== undefined && key !== 'to') c.string(step[key], `${at}.${key}`, 200);
+    if (op === 'case') c.oneOf(step.to, `${at}.to`, ['lower', 'upper', 'title'] as const);
+    else if (op === 'rename') c.string(step.to, `${at}.to`, 200);
+    if (op === 'datePart') {
+      c.string(step.from, `${at}.from`, 200);
+      c.oneOf(step.part, `${at}.part`, ['year', 'month', 'yearMonth', 'quarter'] as const);
+    }
+    if (op === 'toDate') c.oneOf(step.order, `${at}.order`, ['YMD', 'DMY', 'MDY'] as const);
+    if (op === 'sort') c.oneOf(step.order, `${at}.order`, ['asc', 'desc'] as const);
+    if (op === 'filter') {
+      c.oneOf(step.test, `${at}.test`, ['eq', 'ne', 'gt', 'lt', 'ge', 'le', 'contains', 'empty', 'notEmpty'] as const);
+      if (!['empty', 'notEmpty'].includes(String(step.test)) && step.value === undefined) c.problems.push(`${at}.value is required for ${String(step.test)}.`);
+    }
+    if (op === 'derive') {
+      c.oneOf(step.operator, `${at}.operator`, ['add', 'subtract', 'multiply', 'divide', 'concat'] as const);
+      for (const key of ['a', 'b']) if (typeof step[key] !== 'string' && typeof step[key] !== 'number') c.problems.push(`${at}.${key} must be a column name or a number.`);
+    }
+    if ((op === 'fill' || op === 'replace') && typeof step.value !== 'string' && typeof step.value !== 'number' && op === 'fill') c.problems.push(`${at}.value must be a string or number.`);
+    if (op === 'replace') {
+      c.string(step.find, `${at}.find`, 500);
+      if (typeof step.with !== 'string') c.problems.push(`${at}.with must be a string ("" to delete).`);
+    }
+    if (op === 'group') {
+      c.strings(step.by, `${at}.by`, 1, 10, 200);
+      for (const [j, a] of c.array(step.aggregates, `${at}.aggregates`, 1, 20).entries()) {
+        const agg = c.object(a, `${at}.aggregates[${j}]`, ['column', 'fn', 'as'], ['column', 'fn', 'as']);
+        if (!agg) continue;
+        c.string(agg.column, `${at}.aggregates[${j}].column`, 200);
+        c.oneOf(agg.fn, `${at}.aggregates[${j}].fn`, ['sum', 'avg', 'count', 'min', 'max'] as const);
+        c.string(agg.as, `${at}.aggregates[${j}].as`, 200);
+      }
+    }
+  }
+}
+
 function checkSpec(c: Checker, raw: unknown): void {
-  const base = c.object(raw, 'spec', ['kind', 'filename', 'sheets', 'title', 'subtitle', 'blocks', 'formats', 'accent', 'slides', 'columns', 'rows', 'files', 'language', 'entry', 'width', 'height', 'svg', 'units', 'parts'], ['kind', 'filename']);
+  const base = c.object(raw, 'spec', ['kind', 'filename', 'sheets', 'title', 'subtitle', 'blocks', 'formats', 'accent', 'slides', 'columns', 'rows', 'source', 'steps', 'files', 'language', 'entry', 'width', 'height', 'svg', 'units', 'parts'], ['kind', 'filename']);
   if (!base) return;
   const kind = c.oneOf(base.kind, 'spec.kind', DELIVERABLE_KINDS);
   if (typeof base.filename !== 'string' || !FILENAME.test(base.filename) || /\.[a-z0-9]{2,5}$/i.test(base.filename)) {
@@ -294,7 +372,7 @@ function checkSpec(c: Checker, raw: unknown): void {
     SPREADSHEET: ['sheets'],
     DOCUMENT: ['title', 'subtitle', 'blocks', 'formats'],
     PRESENTATION: ['title', 'accent', 'slides'],
-    DATASET: ['columns', 'rows', 'formats'],
+    DATASET: ['columns', 'rows', 'source', 'steps', 'formats'],
     WEBSITE: ['files'],
     CODE: ['language', 'entry', 'files'],
     GRAPHIC: ['width', 'height', 'svg', 'formats'],
@@ -394,6 +472,11 @@ function checkSpec(c: Checker, raw: unknown): void {
     }
     case 'DATASET': {
       c.formats(base.formats, 'spec.formats', ['csv', 'xlsx', 'json'] as const);
+      if (base.source !== undefined || base.steps !== undefined) {
+        if (base.columns !== undefined || base.rows !== undefined) c.problems.push('spec carries both literal rows and a source; send one.');
+        checkPipeline(c, base.source, base.steps);
+        break;
+      }
       const columns = c.array(base.columns, 'spec.columns', 1, 60);
       const types: string[] = [];
       for (const [i, one] of columns.entries()) {

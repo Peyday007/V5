@@ -243,3 +243,44 @@ export const SAMPLES: Record<DeliverableKind, Sample> = {
     },
   },
 };
+
+/**
+ * A client's messy export, generated deterministically: mixed date formats,
+ * currency strings, stray whitespace, inconsistent case and exact duplicates.
+ * The dataset capability is proved over it as well as over literal rows,
+ * because data work on a client's own file is most of what data jobs are.
+ */
+export function messyOrdersCsv(rows = 5000): Buffer {
+  const regions = ['north', ' North', 'SOUTH', 'south ', 'East', 'west'];
+  const lines = ['Order ID,Order Date,Region,Customer,Amount'];
+  for (let i = 1; i <= rows; i += 1) {
+    const day = (i % 28) + 1;
+    const month = (i % 12) + 1;
+    const date = i % 3 === 0 ? `${day}/${month}/2025` : i % 3 === 1 ? `2025-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` : `${day}.${month}.2025`;
+    const amount = i % 5 === 0 ? `"$${(1000 + i).toLocaleString('en-US')}.50"` : String(((i * 37) % 900) + 10);
+    lines.push(`${1000 + i},${date},${regions[i % regions.length]},  Customer ${i % 97} ,${amount}`);
+    if (i % 250 === 0) lines.push(lines[lines.length - 1]!);
+  }
+  return Buffer.from(`${lines.join('\n')}\n`);
+}
+
+export const PIPELINE_SAMPLE: { brief: string; file: string; spec: DeliverableSpec } = {
+  brief: 'Clean my orders export (attached), fix the dates and amounts, remove duplicates, and give me totals by region and month.',
+  file: 'orders-export.csv',
+  spec: {
+    kind: 'DATASET',
+    filename: 'Orders by region and month',
+    formats: ['csv', 'xlsx'],
+    source: { file: 'orders-export.csv' },
+    steps: [
+      { op: 'trim', columns: '*' },
+      { op: 'dedupe', columns: '*' },
+      { op: 'case', column: 'Region', to: 'title' },
+      { op: 'toDate', column: 'Order Date', order: 'DMY' },
+      { op: 'toNumber', columns: ['Amount'] },
+      { op: 'datePart', column: 'Month', from: 'Order Date', part: 'yearMonth' },
+      { op: 'group', by: ['Region', 'Month'], aggregates: [{ column: 'Amount', fn: 'sum', as: 'Revenue' }, { column: '*', fn: 'count', as: 'Orders' }, { column: 'Amount', fn: 'avg', as: 'Average order' }] },
+      { op: 'sort', column: 'Month', order: 'asc' },
+    ],
+  },
+};

@@ -45,7 +45,7 @@ export interface MarketplaceJob {
   deliverableBinId: string | null;
   revisions: number;
   /** What Brain read from the client's files, as a summary list. */
-  clientFiles: { name: string; chars: number; readable: boolean; note: string }[] | null;
+  clientFiles: { name: string; chars: number; readable: boolean; note: string; storageKey?: string; sha256?: string }[] | null;
 }
 
 function json<T>(text: string | null, fallback: T): T {

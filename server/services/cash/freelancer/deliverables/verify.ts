@@ -21,6 +21,7 @@ import { pngSize, svgToPng } from './raster.ts';
 import { plain } from './docx.ts';
 import { extractPdf } from '../../../documents/pdf.ts';
 import { extractDocx } from '../../../documents/docx.ts';
+import { resolveDataset, type FileContext } from './pipeline.ts';
 
 export interface Check {
   name: string;
@@ -39,7 +40,7 @@ function file(rendered: Rendered, ext: string): DeliverableFile | undefined {
   return rendered.files.find((f) => f.name.toLowerCase().endsWith(`.${ext}`));
 }
 
-export async function verifyDeliverable(spec: DeliverableSpec, rendered: Rendered): Promise<Verification> {
+export async function verifyDeliverable(spec: DeliverableSpec, rendered: Rendered, context?: FileContext): Promise<Verification> {
   const checks: Check[] = [];
   const check = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
   if (rendered.problems.length) check('render', false, rendered.problems.slice(0, 10).join(' '));
@@ -55,6 +56,9 @@ export async function verifyDeliverable(spec: DeliverableSpec, rendered: Rendere
     switch (spec.kind) {
       case 'SPREADSHEET':
       case 'DATASET': {
+        // The dataset's expected shape is computed again from the spec and the
+        // client's file, independently of the bytes the renderer wrote.
+        const dataset = spec.kind === 'DATASET' ? resolveDataset(spec, context) : null;
         const wantsXlsx = spec.kind === 'SPREADSHEET' || spec.formats.includes('xlsx');
         if (wantsXlsx) {
           const f = expectExt('xlsx');
@@ -77,7 +81,7 @@ export async function verifyDeliverable(spec: DeliverableSpec, rendered: Rendere
               const got = sheets.reduce((n, s) => n + s.cells.size, 0);
               check('cells', got >= wanted, `${got} cell(s) read back of ${wanted} specified`);
             } else {
-              check('rows', sheets[0]?.maxRow === spec.rows.length, `${(sheets[0]?.maxRow ?? -1)} data row(s) of ${spec.rows.length}`);
+              check('rows', sheets[0]?.maxRow === dataset!.rows.length, `${(sheets[0]?.maxRow ?? -1)} data row(s) of ${dataset!.rows.length}`);
             }
           }
         }
@@ -86,16 +90,20 @@ export async function verifyDeliverable(spec: DeliverableSpec, rendered: Rendere
             const f = expectExt('csv');
             if (f) {
               const rows = parseCsv(f.bytes.toString('utf8').replace(/^﻿/, ''));
-              const width = spec.columns.length;
-              check('csv shape', rows.length === spec.rows.length + 1 && rows.every((r) => r.length === width), `${rows.length - 1} row(s) of ${spec.rows.length}, ${width} column(s) each`);
-              check('csv header', rows[0]?.join('|') === spec.columns.map((c) => c.name).join('|'), rows[0]?.join(', ') ?? '');
+              const width = dataset!.columns.length;
+              check('csv shape', rows.length === dataset!.rows.length + 1 && rows.every((r) => r.length === width), `${rows.length - 1} row(s) of ${dataset!.rows.length}, ${width} column(s) each`);
+              check('csv header', rows[0]?.join('|') === dataset!.columns.map((c) => c.name).join('|'), rows[0]?.join(', ') ?? '');
             }
+          }
+          if (dataset!.log) {
+            const log = file(rendered, 'md');
+            check('change log', Boolean(log && log.bytes.toString('utf8').includes('Result:')), log ? log.name : 'no change log');
           }
           if (spec.formats.includes('json')) {
             const f = expectExt('json');
             if (f) {
               const parsed = JSON.parse(f.bytes.toString('utf8')) as unknown[];
-              check('json records', Array.isArray(parsed) && parsed.length === spec.rows.length, `${Array.isArray(parsed) ? parsed.length : 0} record(s)`);
+              check('json records', Array.isArray(parsed) && parsed.length === dataset!.rows.length, `${Array.isArray(parsed) ? parsed.length : 0} record(s)`);
             }
           }
         }

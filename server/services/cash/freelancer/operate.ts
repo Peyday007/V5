@@ -88,6 +88,7 @@ import {
   openReplyBin,
   readClientFile,
   replyOf,
+  storeClientFile,
   type ReadFile,
 } from './fulfil.ts';
 
@@ -413,10 +414,13 @@ async function gatherClientFiles(projectId: string, job: MarketplaceJob): Promis
   ];
   const known = new Map((job.clientFiles ?? []).map((f) => [f.name, f]));
   const out: ReadFile[] = [];
+  const stored = new Map<string, { storageKey: string; sha256: string }>();
   for (const ref of refs.slice(0, 10)) {
     let read: ReadFile;
     try {
-      read = await readClientFile(ref.name, await downloadClientFile(ref));
+      const bytes = await downloadClientFile(ref);
+      read = await readClientFile(ref.name, bytes);
+      if (read.readable) stored.set(ref.name, await storeClientFile(job, ref.name, bytes));
     } catch (error) {
       read = { name: ref.name, text: '', readable: false, note: `could not be downloaded: ${(error as Error).message.slice(0, 120)}` };
     }
@@ -430,7 +434,7 @@ async function gatherClientFiles(projectId: string, job: MarketplaceJob): Promis
       });
     }
   }
-  const summary = out.map((f) => ({ name: f.name, chars: f.text.length, readable: f.readable, note: f.note }));
+  const summary = out.map((f) => ({ name: f.name, chars: f.text.length, readable: f.readable, note: f.note, ...(stored.get(f.name) ?? {}) }));
   if (JSON.stringify(summary) !== JSON.stringify(job.clientFiles ?? [])) {
     await move(job.id, job.state, job.state, { clientFiles: JSON.stringify(summary) });
   }
@@ -458,12 +462,15 @@ async function binsSpent(jobId: string): Promise<number> {
 async function startDeliverableWork(
   projectId: string,
   job: MarketplaceJob,
-  extra: { previous?: { spec: unknown; version: number }; problems?: string[] } = {},
+  extra: { previous?: { spec: unknown; version: number }; problems?: string[]; askedForFiles?: boolean } = {},
 ): Promise<'OPENED' | 'WAITING_FOR_FILES' | 'EXHAUSTED'> {
   const spent = await binsSpent(job.id);
   if (spent >= MAX_DELIVERABLE_BINS) return 'EXHAUSTED';
   const files = await gatherClientFiles(projectId, job);
   if (job.needsClientFiles && !files.some((f) => f.readable)) {
+    const unreadable = files.filter((f) => !f.readable);
+    // The award message already asked for the files; ask again only about one that could not be read.
+    if (extra.askedForFiles && unreadable.length === 0) return 'WAITING_FOR_FILES';
     const t = await thread(job);
     await sendMessage({
       projectId,
@@ -549,7 +556,7 @@ async function startAwarded(projectId: string, report: MarketplaceReport): Promi
       report.started.push(job.id);
       if (!research) {
         const fresh = (await jobByExternalId(projectId, job.externalId))!;
-        await startDeliverableWork(projectId, fresh);
+        await startDeliverableWork(projectId, fresh, { askedForFiles: true });
       }
     }
   }
@@ -621,7 +628,7 @@ async function deliverResearch(projectId: string, job: MarketplaceJob, report: M
 
 async function deliverWork(projectId: string, job: MarketplaceJob, report: MarketplaceReport, deadline: number): Promise<void> {
   if (!job.deliverableBinId) {
-    const started = await startDeliverableWork(projectId, job);
+    const started = await startDeliverableWork(projectId, job, { askedForFiles: true });
     if (started === 'EXHAUSTED') await failJob(projectId, job, 'no deliverable bin could be opened');
     else if (Date.now() > deadline) await failJob(projectId, job, 'the client’s files did not arrive in time');
     return;

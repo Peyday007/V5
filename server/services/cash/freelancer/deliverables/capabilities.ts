@@ -14,7 +14,8 @@ import { DELIVERABLE_KINDS, validateSubmission, type DeliverableKind, type Submi
 import { renderDeliverable, type DeliverableFile, type Rendered } from './render.ts';
 import { verifyDeliverable, type Verification } from './verify.ts';
 import { pythonParserAvailable } from './assets.ts';
-import { SAMPLES } from './samples.ts';
+import { messyOrdersCsv, PIPELINE_SAMPLE, SAMPLES } from './samples.ts';
+import type { FileContext } from './pipeline.ts';
 
 export interface CapabilityReading {
   kind: DeliverableKind;
@@ -40,7 +41,7 @@ export interface Produced {
  * else is refused, because a correct spreadsheet is the wrong answer to a
  * request for a deck.
  */
-export async function produce(raw: string, kinds?: readonly DeliverableKind[]): Promise<Produced> {
+export async function produce(raw: string, kinds?: readonly DeliverableKind[], context?: FileContext): Promise<Produced> {
   const validated = validateSubmission(raw);
   const fail = (problems: string[], submission: Submission | null = null): Produced => ({ ok: false, submission, files: [], rendered: [], verification: null, problems });
   if (!validated.ok) return fail(validated.problems);
@@ -53,12 +54,12 @@ export async function produce(raw: string, kinds?: readonly DeliverableKind[]): 
   for (const [i, spec] of validated.submission.specs.entries()) {
     let one: Rendered;
     try {
-      one = await renderDeliverable(spec);
+      one = await renderDeliverable(spec, context);
     } catch (error) {
       return fail([`Rendering ${spec.kind} failed: ${(error as Error).message.slice(0, 300)}`], validated.submission);
     }
     rendered.push(one);
-    const verified = await verifyDeliverable(spec, one);
+    const verified = await verifyDeliverable(spec, one, context);
     const prefix = validated.submission.specs.length > 1 ? `${i + 1}/${spec.kind} ` : '';
     checks.push(...verified.checks.map((c) => ({ ...c, name: prefix + c.name })));
   }
@@ -78,8 +79,14 @@ async function proveOne(kind: DeliverableKind): Promise<CapabilityReading> {
   if (!produced.ok) {
     return { kind, available: false, checkedAt, detail: `its sample failed: ${produced.problems.slice(0, 3).join(' ')}`, files: [] };
   }
+  let passed = produced.verification!.checks.length;
   const files = produced.files.map((f) => f.name);
-  const passed = produced.verification!.checks.length;
+  if (kind === 'DATASET') {
+    const pipeline = await produce(JSON.stringify({ spec: PIPELINE_SAMPLE.spec }), undefined, { files: new Map([[PIPELINE_SAMPLE.file, messyOrdersCsv()]]) });
+    if (!pipeline.ok) return { kind, available: false, checkedAt, detail: `its pipeline sample failed: ${pipeline.problems.slice(0, 3).join(' ')}`, files: [] };
+    passed += pipeline.verification!.checks.length;
+    files.push(...pipeline.files.map((f) => f.name));
+  }
   return { kind, available: true, checkedAt, detail: `sample rendered to ${files.join(', ')} and passed ${passed} check(s)`, files };
 }
 

@@ -31,10 +31,47 @@ import { unzip, zip } from '../server/services/cash/freelancer/deliverables/zip.
 import { renderXlsx } from '../server/services/cash/freelancer/deliverables/xlsx.ts';
 import { feeUsd, priceJob } from '../server/services/cash/freelancer/economics.ts';
 import { readClientFile } from '../server/services/cash/freelancer/fulfil.ts';
+import { messyOrdersCsv, PIPELINE_SAMPLE } from '../server/services/cash/freelancer/deliverables/samples.ts';
+import { loadTable, runPipeline, toIsoDate, toNumber } from '../server/services/cash/freelancer/deliverables/pipeline.ts';
 
 const NOW = Math.floor(Date.now() / 1000);
 const ALL_PROVED = { available: new Set(DELIVERABLE_KINDS), python: true, clientFilesProven: false, clientFileJobsActive: 0 };
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+describe('data work on the client’s own file, run by Brain from declared steps', () => {
+  it('cleans and aggregates five thousand messy rows, and writes a change log', async () => {
+    const produced = await produce(JSON.stringify({ spec: PIPELINE_SAMPLE.spec }), ['DATASET'], { files: new Map([[PIPELINE_SAMPLE.file, messyOrdersCsv()]]) });
+    expect(produced.ok, produced.problems.join(' ')).toBe(true);
+    const log = produced.files.find((f) => f.name.endsWith('change log.md'))!.bytes.toString();
+    expect(log).toMatch(/Read 5020 row/);
+    expect(log).toMatch(/Removed 20 duplicate row/);
+    expect(log).toMatch(/Result: 12 row/);
+    const book = readXlsx(produced.files.find((f) => f.name.endsWith('.xlsx'))!.bytes)[0]!;
+    // Twelve region-months, every order counted once: 5000 distinct orders.
+    let orders = 0;
+    for (let r = 1; r <= book.maxRow; r += 1) orders += Number(book.cells.get(`${r},3`)?.value);
+    expect(orders).toBe(5000);
+  });
+
+  it('normalises the values clients actually send', () => {
+    expect(toNumber('$1,234.50')).toBe(1234.5);
+    expect(toNumber('(120)')).toBe(-120);
+    expect(toNumber('12%')).toBe(0.12);
+    expect(toNumber('n/a')).toBe('n/a');
+    expect(toIsoDate('03/04/2025', 'DMY')).toBe('2025-04-03');
+    expect(toIsoDate('03/04/2025', 'MDY')).toBe('2025-03-04');
+    expect(toIsoDate('31/02/2025', 'DMY')).toBe('31/02/2025');
+    expect(toIsoDate(45667, 'YMD')).toBe('2025-01-10');
+  });
+
+  it('refuses a step naming a column or file that is not there, rather than guessing', async () => {
+    const t = loadTable('a.csv', Buffer.from('Name,Amount\nA,1\nB,2\n'));
+    expect(() => runPipeline(t, [{ op: 'sort', column: 'Price', order: 'asc' }], () => t)).toThrow(/No column "Price"/);
+    const missing = await produce(JSON.stringify({ spec: { ...PIPELINE_SAMPLE.spec, source: { file: 'other.csv' } } }), undefined, { files: new Map() });
+    expect(missing.problems.join(' ')).toMatch(/no file named "other.csv"/);
+    expect(validateSubmission(JSON.stringify({ spec: { ...PIPELINE_SAMPLE.spec, steps: [{ op: 'exec', code: 'rm -rf /' }] } })).ok).toBe(false);
+  });
+});
 
 describe('every category is proved by producing its sample', () => {
   it('renders and verifies all eight samples', async () => {
@@ -376,7 +413,7 @@ describe('a won spreadsheet job, from bid to payment', () => {
     job = (await allJobs(projectId))[0]!;
     expect(job.state).toBe('FULFILLING');
     expect(job.deliverableBinId).toBeNull();
-    expect(world.messages.some((m) => /please send the files/i.test(m.message))).toBe(true);
+    expect(world.messages.filter((m) => /please send the files/i.test(m.message))).toHaveLength(1);
 
     // The client sends the CSV in the thread.
     world.messages.push({ id: 950, thread_id: 900, from_user: 9070, message: 'Here is last year', time_created: NOW, attachments: [{ filename: 'sales-2025.csv' }] });

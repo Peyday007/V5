@@ -114,8 +114,10 @@ export function screenProject(project: FreelancerProject, nowMs: number, context
       reasons.push(`it also asks for ${CATEGORY_LABEL[kind]}, which this job's deliverable would not cover`);
     }
   }
-  reasons.push(...blockersOf(tags, text, [...new Set([...categories, ...tagged])]));
   const files = needsClientFiles(text);
+  // Large data is processed by Brain's pipeline over the client's own file; it
+  // only blocks when the rows would have to be gathered by hand.
+  reasons.push(...blockersOf(tags, text, [...new Set([...categories, ...tagged])]).filter((r) => !(files && /larger than Brain can pass/.test(r))));
   if (files && !context.clientFilesProven && context.clientFileJobsActive > 0) {
     reasons.push('delivery needs files the client sends, and Brain is already proving it can read those on another job');
   }
