@@ -44,4 +44,4 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 - **Offers in front of buyers:** none. Brain sends bids once both are in place.
 - **Money:** USD 0.
 - **Discovery:** the research fleet is running, alongside the operation's own scans every 30 minutes.
-- **Last alert digest:** freelancer-not-connected, commercial-grant-absent.
+- **Last alert digest:** freelancer-not-connected, commercial-grant-absent (pushed once, 06:25Z; not repeated while unchanged).
