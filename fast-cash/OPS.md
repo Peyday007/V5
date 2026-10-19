@@ -29,12 +29,15 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 
 <!-- The check-in replaces everything below. -->
 
-- **Last check:** 2026-10-19 15:46Z. Production is serving 62104d6.
-- **Operation:** the Freelancer operation runs unattended on Brain's tick.
-  - 18 scans so far, the last at 15:16Z.
-  - 567 jobs screened: 566 rejected with reasons and 1 withdrawn, Freelancer 40775349.
-  - Top rejection reasons: not a desk-research request (488), no research category (388), priced in INR (225), media or design (204), calls or meetings (161), software (159). That farm business plan needed financial models and 3D work. It was prepared by the first scan and withdrawn automatically once the fixed screen shipped.
-  - No job currently passes. That is honest: research-report work priced in USD that needs nobody's labour is scarce on Freelancer. Brain keeps scanning every 30 minutes.
+- **Last check:** 2026-10-19 18:46Z. Production is serving fd50716. A Deploy of df3cf8f was still running at 18:46Z.
+- **Scope widened.** Another session (PR #238) widened what Brain can deliver beyond research reports. It now also takes data entry, document conversion and client CSV/Excel processing. It also accepts other currencies, converted at Freelancer's own rate. See `docs/FREELANCER-OPERATION.md`.
+- **Operation:** runs unattended on Brain's tick.
+  - 24 scans so far, the last at 18:33Z.
+  - 1196 jobs screened: 1191 rejected with reasons, 1 withdrawn and 4 PREPARED.
+  - The 4 PREPARED bids are not sent; Brain cannot bid yet. They are Freelancer 40773783, 40772671, 40772623 and 40775802.
+  - The large figures shown for three of them are INR, not USD. For example, INR 17043 is about USD 205.
+  - 40772623 requires the work to be done by hand. The fix in 36d3c4a, deploying in df3cf8f, withdraws it on the next scan.
+  - Top rejection reasons: budget below the minimum (549), too many bids already (390), calls or meetings (308), hourly work (305), posted too long ago (264), ongoing work (203).
 - **Acting is blocked** on two owner steps:
   - Freelancer account plus token: `FREELANCER_OAUTH_TOKEN` NOT_CONNECTED;
   - commercial grant: ABSENT.
