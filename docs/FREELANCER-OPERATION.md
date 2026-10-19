@@ -2,7 +2,7 @@
 
 Brain runs a research-report service on Freelancer.com end to end: it finds the jobs, bids, does the work, delivers it and collects the payment. The owner connects the account, completes Freelancer's identity checks and approves the limits. Nothing in the loop is the owner's labour.
 
-Code: `server/services/cash/freelancer/`. Table: `marketplace_jobs` (migration `121_marketplace_jobs.sql`, pg `112_marketplace_jobs.sql`). It runs as a pass on the durable Russell tick for every project with an ACTIVE USD cash sprint.
+Code: `server/services/cash/freelancer/`. Table: `marketplace_jobs` (migration `122_marketplace_jobs.sql`, pg `113_marketplace_jobs.sql`). It runs as a pass on the durable Russell tick for every project with an ACTIVE USD cash sprint.
 
 ## The loop
 
