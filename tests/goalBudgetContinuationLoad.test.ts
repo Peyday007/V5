@@ -339,7 +339,7 @@ describe('a packet the goal starts is one a worker can be sent for', () => {
     getDb().all<{ id: string; state: string; completion_contract: string; workload_class: string | null }>(
       `SELECT b.id, b.state, b.completion_contract, b.workload_class
          FROM bins b JOIN research_orchestrations o ON o.id = b.orchestration_id
-        WHERE o.goal_id = ? ORDER BY b.created_at, b.id`,
+        WHERE o.goal_id = ? ORDER BY b.created_at, b.rowid`,
       [goalId],
     );
 
