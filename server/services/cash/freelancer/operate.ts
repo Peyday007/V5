@@ -150,6 +150,20 @@ export async function discover(projectId: string, now = Date.now()): Promise<{ s
       if (verdict.deliverable) prepared += 1;
     }
   }
+  // Every prepared job is asked again each scan, against the current screen and
+  // Freelancer's current reading, so one that closed or no longer passes is
+  // withdrawn with its reason whether or not an account is connected.
+  for (const job of await jobsInStates(projectId, ['PREPARED'])) {
+    try {
+      const current = seen.get(Number(job.externalId)) ?? (await getProject(job.externalId));
+      const recheck = screenProject(current, now);
+      if (!recheck.deliverable) {
+        await move(job.id, 'PREPARED', 'WITHDRAWN', { stateReason: recheck.reasons.join('; ') });
+      }
+    } catch {
+      /* unreadable now is not a reason to withdraw */
+    }
+  }
   await event(projectId, 'MARKETPLACE_SCAN', `Read ${seen.size} open Freelancer jobs; ${prepared} new deliverable, ${recorded - prepared} rejected.`, {
     scanned: seen.size,
     recorded,

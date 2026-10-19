@@ -65,6 +65,11 @@ const BLOCKING_JOBS = new Set([
   'transcription',
   'recruitment',
   'lead generation',
+  '3d rendering',
+  '3d modelling',
+  'business plan writing',
+  'excel',
+  'financial modeling',
 ]);
 
 /**
@@ -81,7 +86,10 @@ const BLOCKING_PHRASES: { pattern: RegExp; reason: string }[] = [
   { pattern: /\b(cold call|outreach to|contact (?:businesses|companies|leads)|send emails|email list|leads with emails|book appointments)\b/, reason: 'delivery means contacting people on the client’s behalf' },
   { pattern: /\bwikipedia\b/, reason: 'paid Wikipedia editing breaks Wikipedia\u2019s own rules' },
   { pattern: /\b(medical|clinical|legal advice|lawyer|attorney|tax|transfer pricing|accounting|accountant|certified|licensed|cpa|specialist)\b/, reason: 'the work needs a professional credential' },
-  { pattern: /\b(simulation|matlab|omnet|python|code|coding|software|script|excel model|financial model|spreadsheet model)\b/, reason: 'delivery needs software built or run' },
+  { pattern: /\b(simulation|matlab|omnet|python|code|coding|software|script)\b/, reason: 'delivery needs software built or run' },
+  { pattern: /\b(excel|google sheets|spreadsheets?|financial (?:models?|projections?)|p&l|cash-?flow|break-?even|valuation|dcf)\b/, reason: 'delivery needs a financial model or spreadsheet, not a report' },
+  { pattern: /\b(business plan|pitch deck|investor-ready|presentation|slides|powerpoint)\b/, reason: 'delivery is a business plan or deck, not a research report' },
+  { pattern: /\b(3d|render(?:ing)?s?|cad)\b/, reason: 'delivery is media or design, not a written report' },
   { pattern: /\b(ghostwrit|blog posts?|articles? writer|seo content|product descriptions?)\w*\b/, reason: 'content writing is not a research report' },
   { pattern: /\b(native speaker|must be from|only from|us only|uk only|resident of)\b/, reason: 'the client restricts who may do the work' },
 ];
