@@ -29,19 +29,13 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 
 <!-- The check-in replaces everything below. -->
 
-- **Last check:** 2026-10-19 06:20Z, session-assisted. The scheduled check-in runs at :17 every 3 hours.
-- **Operation:** the Freelancer operation has been live on production since revision 37aec59, unattended on Brain's tick.
-  - First scan, 06:01Z: read 300 open jobs, rejected 299 with reasons, prepared 1.
-  - That one was a farm business plan the screen should have refused. The fix (PR #234) withdraws it.
-- **Top rejection reasons:**
-  - 254 do not ask for desk research;
-  - 119 are priced in INR;
-  - 84 are media or design;
-  - 80 need software.
+- **Last check:** 2026-10-19 07:58Z. Production is serving 62104d6.
+- **Operation:** the Freelancer operation runs unattended on Brain's tick.
+  - 4 scans so far, the last at 07:51Z.
+  - 468 jobs screened: 467 rejected with reasons and 1 withdrawn, Freelancer 40775349. That farm business plan needed financial models and 3D work. It was prepared by the first scan and withdrawn automatically once the fixed screen shipped.
+  - No job currently passes. That is honest: research-report work priced in USD that needs nobody's labour is scarce on Freelancer. Brain keeps scanning every 30 minutes.
 - **Acting is blocked** on two owner steps:
   - Freelancer account plus token: `FREELANCER_OAUTH_TOKEN` NOT_CONNECTED;
   - commercial grant: ABSENT.
-- **Offers in front of buyers:** none. Brain sends bids once both are in place.
-- **Money:** USD 0.
-- **Discovery:** the research fleet is running, alongside the operation's own scans every 30 minutes.
+- **Offers in front of buyers:** none. **Money:** USD 0.
 - **Last alert digest:** freelancer-not-connected, commercial-grant-absent (pushed once, 06:25Z; not repeated while unchanged).
