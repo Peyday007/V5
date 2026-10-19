@@ -13337,6 +13337,46 @@ token and the standing commercial grant.
 - **Discovery needs no credential and runs without one.** Acting stops at the
   first missing connection or grant, and the pass names which one.
 
+## 67. A category is offered because its proof passed, and the files are Brain's own.
+
+The operation now delivers eight kinds of work beside research reports:
+spreadsheets, business documents, presentations, data operations, static
+websites, small programs, vector graphics and primitive 3D models
+(`server/services/cash/freelancer/deliverables/`). **This corrects §66's "only a
+written desk-research deliverable passes"**, which was true when it was
+written. The rule underneath it stands: a job passes only for work Brain can
+produce and check itself.
+
+- **A category is unlocked by a proof, never by a list.** Each process renders
+  a realistic sample of every kind and verifies the bytes (`proveCapabilities`);
+  the screen reads the result. A kind whose proof fails is refused at the screen
+  with the reason. An installed tool is not a capability — Python code is
+  offered only where `python3` can parse it.
+- **The worker submits a specification; Brain writes and checks the files.** A
+  `FREELANCE_DELIVERABLE_V1` bin takes a JSON spec validated field by field.
+  Rendering is deterministic, and nothing a worker wrote is executed on the
+  server: formulas run on Brain's own evaluator, scripts are parsed, never run,
+  and an SVG with script or an external reference is refused. Verification
+  re-reads the rendered bytes, and a failing check refuses the submission with
+  its reasons, so the worker corrects it inside the same lease.
+- **A client's data is transformed by declared steps, not by code.** A data job
+  names a stored client file and a closed list of operations; Brain runs them,
+  writes a change log, and re-derives the result independently before sending.
+- **Every requested part must be deliverable.** A job that also asks for video,
+  calls, a CMS, ongoing work or anything outside the proved kinds is rejected
+  whole, with each reason, because winning half a job is a refund.
+- **Money stays in the job's currency until it is Freelancer's figure.** A bid
+  is priced in the job's own currency from Freelancer's published rate. A
+  payment is converted to USD at the rate Freelancer published, with the
+  original amount and the rate kept on the entry. The fee is Freelancer's own
+  published 10% or USD 5, and a job is bid only if the net clears USD 20.
+- **A delivery, reply and revision each have their own key.** An attachment
+  message is `delivered-v<n>`, a reply is keyed by the client message it
+  answers, and a plain thank-you is never read as a revision.
+- **Client files are downloaded only from Freelancer's own hosts**, bounded in
+  size, stored with their hash and never overwritten; an unreadable file is
+  named to the client rather than guessed at.
+
 ## Repository map
 
 ```
@@ -13560,6 +13600,19 @@ server/
         view.ts         every next step, and who takes it
       outreach.ts       the message a buyer is sent, composed from the card
       factoryHandoff.ts READY_TO_TEST to the Software Factory, under the standing grant
+      freelancer/
+        classify.ts     which kinds of work a listing asks for, and what blocks it
+        economics.ts    the job's currency, Freelancer's fee, the net, the estimate
+        screen.ts       accepted only for work a proof says Brain can deliver
+        fulfil.ts       the deliverable and reply bins, client files, the evaluator
+        operate.ts      discover, bid, answer, start, deliver, revise, collect
+        deliverables/
+          spec.ts       the closed specification a worker may submit
+          render.ts     a spec becomes the client's files, deterministically
+          verify.ts     the bytes re-read and checked before anything is sent
+          pipeline.ts   a client's own CSV/Excel through declared steps
+          capabilities.ts  the per-process proof the screen reads
+          samples.ts    the realistic sample each kind is proved on
       access.ts         where the shared frontier ends and a private job begins
       shared.ts         what every member may read, built from the columns it names
       lifecycle.ts      activating a sprint, giving it somewhere to file, winding it down

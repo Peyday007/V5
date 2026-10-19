@@ -43,11 +43,17 @@ ENV NODE_ENV=production
 # missing. They are installed here so a scanned PDF is evidence rather than a
 # gap — the extra image size buys a capability the platform otherwise reports as
 # absent.
+#
+# python3 is read by one check and nothing else: a freelance CODE deliverable in
+# Python is parsed (`python3 -I -c` over `ast.parse`, never executed) before it
+# is sent. Without it those jobs are refused at the screen rather than delivered
+# unchecked — see services/cash/freelancer/deliverables/assets.ts.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       poppler-utils \
       tesseract-ocr \
       tesseract-ocr-eng \
+      python3 \
       ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 

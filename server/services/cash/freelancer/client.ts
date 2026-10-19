@@ -146,7 +146,7 @@ export interface FreelancerProject {
   type: string;
   description?: string;
   preview_description?: string;
-  currency: { code: string };
+  currency: { code: string; exchange_rate?: number };
   budget: { minimum?: number; maximum?: number };
   bid_stats: { bid_count: number; bid_avg?: number };
   time_submitted: number;
@@ -270,14 +270,91 @@ export async function postMessage(threadId: number, message: string): Promise<Fr
 
 export async function postAttachment(
   threadId: number,
-  file: { name: string; bytes: Uint8Array; type: string },
+  file: { name: string; bytes: Uint8Array; type: string } | { name: string; bytes: Uint8Array; type: string }[],
 ): Promise<FreelancerMessage> {
+  const files = Array.isArray(file) ? file : [file];
   return call<FreelancerMessage>(`/api/messages/0.1/threads/${threadId}/messages/`, {
     method: 'POST',
     auth: true,
-    form: { 'attachments[]': [file.name] },
-    files: [{ field: 'files[]', ...file }],
+    form: { 'attachments[]': files.map((f) => f.name) },
+    files: files.map((f) => ({ field: 'files[]', ...f })),
   });
+}
+
+/* -------------------------------------------------------------------------
+ * The client's files
+ *
+ * Freelancer does not publish attachments on the open listing; after an award
+ * they are on the project (read with the owner's token) or arrive in the
+ * project's message thread. Field names below are read defensively, and a
+ * download is only ever made from Freelancer's own hosts, with the token sent
+ * only to freelancer.com itself.
+ * ---------------------------------------------------------------------- */
+
+export interface ClientFileRef {
+  name: string;
+  url: string | null;
+  source: 'PROJECT' | 'MESSAGE';
+  threadId?: number;
+}
+
+const FILE_HOSTS = /^https:\/\/([a-z0-9-]+\.)*(freelancer\.com|f-cdn\.com|freelancer-cdn\.com)(\/|$)/i;
+export const MAX_CLIENT_FILE_BYTES = 15 * 1024 * 1024;
+
+function refOf(raw: unknown, source: ClientFileRef['source'], threadId?: number): ClientFileRef | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const name = [r.filename, r.name, r.file_name].find((v) => typeof v === 'string' && v.trim()) as string | undefined;
+  if (!name) return null;
+  const url = [r.url, r.download_url, r.file_url, r.access_url].find((v) => typeof v === 'string' && FILE_HOSTS.test(v)) as string | undefined;
+  return { name: name.split(/[\\/]/).pop()!.slice(0, 200), url: url ?? null, source, ...(threadId ? { threadId } : {}) };
+}
+
+export async function projectFiles(projectId: number): Promise<ClientFileRef[]> {
+  const project = await call<{ attachments?: unknown[]; files?: unknown[] }>(`/api/projects/0.1/projects/${projectId}/`, {
+    auth: true,
+    query: { attachment_details: true, file_details: true },
+  });
+  return [...(project.attachments ?? []), ...(project.files ?? [])].map((one) => refOf(one, 'PROJECT')).filter((r): r is ClientFileRef => r !== null);
+}
+
+export async function threadFiles(threadId: number, fromUser: string | null): Promise<ClientFileRef[]> {
+  const result = await call<{ messages: (FreelancerMessage & { attachments?: unknown[] })[] }>('/api/messages/0.1/messages/', {
+    auth: true,
+    query: { threads: [threadId], limit: 100, attachment_details: true },
+  });
+  return (result.messages ?? [])
+    .filter((m) => fromUser === null || String(m.from_user) === fromUser)
+    .flatMap((m) => (m.attachments ?? []).map((a) => refOf(a, 'MESSAGE', threadId)))
+    .filter((r): r is ClientFileRef => r !== null);
+}
+
+/** Download one client file, bounded in time and size. */
+export async function downloadClientFile(ref: ClientFileRef): Promise<Buffer> {
+  const url =
+    ref.url ??
+    (ref.threadId !== undefined
+      ? `${freelancerBase()}/api/messages/0.1/threads/${ref.threadId}/attachments/${encodeURIComponent(ref.name)}`
+      : null);
+  if (!url) throw new FreelancerRefused(0, 'NO_URL', `No download address for ${ref.name}.`);
+  const own = url.startsWith(freelancerBase()) || /^https:\/\/([a-z0-9-]+\.)*freelancer\.com(\/|$)/i.test(url);
+  const token = freelancerToken();
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: own && token ? { 'freelancer-oauth-v1': token } : {},
+      redirect: 'follow',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new FreelancerUnknown(`Freelancer did not answer for ${ref.name}: ${(error as Error).name}`);
+  }
+  if (!response.ok) throw new FreelancerRefused(response.status, 'DOWNLOAD', `Download of ${ref.name} answered ${response.status}.`);
+  const declared = Number(response.headers.get('content-length') ?? 0);
+  if (declared > MAX_CLIENT_FILE_BYTES) throw new FreelancerRefused(413, 'TOO_LARGE', `${ref.name} is ${declared} bytes.`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length > MAX_CLIENT_FILE_BYTES) throw new FreelancerRefused(413, 'TOO_LARGE', `${ref.name} is ${bytes.length} bytes.`);
+  return bytes;
 }
 
 export interface FreelancerMilestone {
