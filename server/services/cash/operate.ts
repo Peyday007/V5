@@ -46,6 +46,7 @@
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { listingSentenceFor } from './listings.ts';
 import { handOffReadyTests, type FactoryHandoffPass } from './factoryHandoff.ts';
 import { advanceJourney, type JourneyTickReport } from './journey/tick.ts';
 import {
@@ -717,7 +718,7 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
       projectId,
       visibility: 'SHARED',
       title: need.blockedAction,
-      statement: `${need.whyItMatters} ${need.nextStep}`.trim(),
+      statement: `${need.whyItMatters} ${need.nextStep}${await listingSentenceFor(opportunity)}`.trim(),
     });
     await setNeedCandidate(need.id, candidate.id);
     out.push({ needId: need.id, candidateId: candidate.id });
