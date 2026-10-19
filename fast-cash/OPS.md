@@ -41,9 +41,19 @@ No prepared offer goes out by email, so none of those would put an offer in fron
 
 <!-- The check-in replaces everything below. -->
 
-- Last check: 2026-10-19 (session-assisted, this session).
-- Leads: Freelancer 40774287 OPEN (37 bids); Freelancer 40771439 OPEN (218 bids).
-- Offers in front of buyers: **none yet**. Every one waits on your actions 1–4.
-- Discovery: running unattended on the research fleet. Fired Routines filed 169 readable-route claims in the last 7 days.
-- Money: USD 0 received.
-- Last alert digest: none sent.
+- **Last check:** 2026-10-19 04:20Z, session-assisted. The scheduled check-in runs at :17 every 3 hours, bound to session session_01KZfTUmskWgvuNKdQDMKrPb.
+- **Leads:**
+  - Freelancer 40774287: OPEN, 37 bids, average INR 18,165.
+  - Freelancer 40771439: OPEN, 218 bids, average USD 386.
+- **Prepared in Brain, not sent:**
+  - cpd_a4835774b81f46aab4e6 (cop_9b9c7aacd6ba42a7ba2a);
+  - cpd_e713a020eca445b2af0b (cop_bce75bb8197849ddaa0b).
+- **Offers in front of buyers:** none yet. Every one waits on your actions 1–4.
+- **Discovery, unattended:**
+  - Brain's tick and the research fleet are running: 4,705 sessions started in 7 days, 1,748 accepted completions.
+  - Fired Routines filed 169 claims from readable routes. 449 fragments in the last week were blocked by the surfaces' own network access.
+- **Portfolio:**
+  - 307 openings: 252 signals, 54 candidates, 1 READY.
+  - The READY piece is a Copart broker listing at USD -795 and is not worth pursuing.
+- **Money:** USD 0. The commercial grant is ABSENT, and no messaging or billing provider is set. Neither is needed for the current offers.
+- **Last alert digest:** 8674746cac4dccf3, with open blockers: owner-freelancer-account, owner-gumroad-listing, owner-puzzle-read.
