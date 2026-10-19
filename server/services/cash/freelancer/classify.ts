@@ -224,6 +224,9 @@ const BLOCKERS: Blocker[] = [
   { pattern: /\b(native speaker|must be from|only from|us only|uk only|resident of|based in|located in|local to|timezone overlap)\b/, reason: 'the client restricts who may do the work' },
   { pattern: /\b(long[- ]term|ongoing|full[- ]time|part[- ]time|daily tasks?|every day|weekly basis|monthly retainer|per hour|hourly)\b/, reason: 'the client wants ongoing work, not one deliverable' },
   { pattern: /\b(no ai|not ai|ai[- ]generated (?:is )?not|without ai|human[- ]written|by a human|human (?:editor|writer)|ai detect(?:ion|or)|chatgpt (?:is )?not allowed|(?:not |without )sounding robotic|machine-generated)\b/, reason: 'the client refuses AI-produced work' },
+  // Brain's bid says the work is AI-assisted. A client who requires it be done
+  // by hand, without tools, would be told one thing and given another.
+  { pattern: /\b(no (?:scraping|automation|automated|bots?|scripts?)\b|without (?:any )?(?:scraping|automation|automated|bots?|scripts?)\b|(?:everything|all of it|all (?:the )?work|it) (?:is |must be |has to be |will be )?(?:done|entered|typed|copied) (?:by hand|manually)|(?:must|should) not be automated|automation (?:is )?not (?:allowed|permitted))/, reason: 'the client requires the work done by hand, without tools' },
   { pattern: /\b(journal|manuscript|ieee|peer[- ]review|publication-ready|conference paper)\b/, reason: 'academic writing is refused' },
   { pattern: /\b(apply (?:for|to) (?:jobs|roles|positions)|submit (?:the )?applications?|complete the (?:online )?application|on my behalf|on our behalf|in my name)\b/, reason: 'the work means acting on the client’s behalf' },
   { pattern: /\b(continuously|regularly|recurring|repeatedly|as needed|as and when)\b/, reason: 'the client wants ongoing work, not one deliverable' },
