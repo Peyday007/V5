@@ -13319,6 +13319,12 @@ The rules it introduced:
   claims already reach the card, and the next round of the epoch is the more
   research. The packet's own Needs You card is untouched; any other park still
   waits on its person.
+- **Database pressure does not stop discovery.** On 2026-10-19 Cash Mode 1 had
+  no open round (52 in a month, 50 abandoned), production was shedding, and the
+  tick skipped discovery whenever it shed. The error path was also a bare
+  `catch {}`. Under pressure only the sweeps over every opportunity wait now;
+  opening one round (at most one per bucket per day) and harvesting still run,
+  and a discovery failure is a recorded pass failure.
 - **A test sweep must not delete a live database.** `tests/setup.ts` sweeps
   `brain-test-*` temp roots older than an hour, and it once matched the
   Postgres test cluster `brain-test-pg-<port>`. That killed every Postgres run
