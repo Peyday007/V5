@@ -11109,3 +11109,51 @@ export interface CashPreparedDecisionRow {
   state: 'PREPARED_NOT_SENT';
   created_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// Marketplace jobs (migration 122 / pg 113)
+// ---------------------------------------------------------------------------
+
+export const MARKETPLACE_JOB_STATES = [
+  'REJECTED',
+  'PREPARED',
+  'BID_SENT',
+  'BID_UNCERTAIN',
+  'BID_REFUSED',
+  'LOST',
+  'AWARDED',
+  'FULFILLING',
+  'DELIVERED',
+  'PAID',
+  'FULFILMENT_FAILED',
+  'WITHDRAWN',
+] as const;
+export type MarketplaceJobState = (typeof MARKETPLACE_JOB_STATES)[number];
+
+export interface MarketplaceJobRow {
+  id: string;
+  project_id: string;
+  platform: string;
+  external_id: string;
+  title: string;
+  url: string;
+  employer_external_id: string | null;
+  currency: string;
+  budget_min_cents: number | null;
+  budget_max_cents: number | null;
+  posted_at: string | null;
+  description: string;
+  screen_reasons: string;
+  proposal_text: string | null;
+  bid_amount_cents: number | null;
+  bid_period_days: number | null;
+  state: string;
+  state_reason: string | null;
+  bid_external_id: string | null;
+  thread_external_id: string | null;
+  goal_id: string | null;
+  document_id: string | null;
+  milestone_external_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
