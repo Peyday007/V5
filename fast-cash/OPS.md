@@ -29,19 +29,17 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 
 <!-- The check-in replaces everything below. -->
 
-- **Last check:** 2026-10-19 21:20Z. Production is serving 5916707. That release (#239) went out, though its Deploy run reported a failure after release; that run was not this campaign's.
-- **Scope:** PR #237/#238 widened what Brain delivers. It now also takes data entry, document conversion, client CSV/Excel processing and simple graphics such as logos. It also accepts other currencies, converted at Freelancer's own rate. See `docs/FREELANCER-OPERATION.md`.
+- **Last check:** 2026-10-20 00:22Z. Production is serving fb5675f.
+- **Scope:** PR #237/#238 widened what Brain delivers. It now also takes data entry, document conversion, client CSV/Excel processing and simple graphics such as logos and brand identity. It also accepts other currencies, converted at Freelancer's own rate. See `docs/FREELANCER-OPERATION.md`.
 - **Operation:** runs unattended on Brain's tick.
-  - 28 scans so far, the last at 20:52Z.
-  - 1499 jobs screened: 1493 rejected with reasons, 3 withdrawn and 3 PREPARED.
-  - The 3 PREPARED bids are not sent; Brain cannot bid yet:
-    - Freelancer 40772671, "Social Media Text Data Entry": INR 17043, about USD 180;
-    - 40775802, "PDF Text to Word": INR 15256, about USD 161;
-    - 40774101, "Logo Concepts for Creative Brand Names": INR 16125, about USD 170.
-  - Withdrawn automatically on re-screen:
-    - 40772623, which requires the work done by hand;
-    - 40773783, which already has 61 bids.
-  - Top rejection reasons: budget below the minimum (714), too many bids already (548), hourly work (382), calls or meetings (371), posted too long ago (344), video, audio or animation (282).
+  - 33 scans so far, the last at 23:58Z.
+  - 1565 jobs screened: 1558 rejected with reasons, 3 withdrawn and 4 PREPARED.
+  - The 4 PREPARED bids are not sent; Brain cannot bid yet:
+    - Freelancer 40772671, "Social Media Text Data Entry": about USD 180;
+    - 40775802, "PDF Text to Word": about USD 161;
+    - 40774101, "Logo Concepts for Creative Brand Names": about USD 170;
+    - 40776694, "Complete Brand Identity Design for a Modern Skincare Brand": USD 193.
+  - Top rejection reasons: budget below the minimum (742), too many bids already (579), hourly work (397), calls or meetings (381), posted too long ago (358), video, audio or animation (294).
 - **Acting is blocked** on two owner steps:
   - Freelancer account plus token: `FREELANCER_OAUTH_TOKEN` NOT_CONNECTED;
   - commercial grant: ABSENT.
