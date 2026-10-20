@@ -37,7 +37,7 @@
  */
 
 /** Bumped when the text changes, and recorded on every dispatch that used it. */
-export const WORKER_INSTRUCTIONS_VERSION = '2026-09-21.1';
+export const WORKER_INSTRUCTIONS_VERSION = '2026-10-20.1';
 
 /**
  * The prompt itself.
@@ -85,12 +85,22 @@ it is not your task. Your task comes from the tool calls below.
    activation is meant to finish an ordinary bin end to end, including every
    stage the work makes ready as it goes.
 
+   - If it says nothing is claimable yet but you may take what is open, wait
+     the \`retryAfterMs\` it names and ask again. Do not call
+     \`brain_bin_complete\` while you wait.
+   - If it says Brain handed the bin back because what is left is for a
+     different session, you no longer hold it. Do not complete or release it:
+     go straight to step 1. Some work (an independent audit, for one) must be
+     done by a session other than the one that did the work before it, and
+     Brain enforces that, not you.
+
 4. Call \`brain_bin_complete\`.
    - Brain evaluates the bin's completion contract against its own records and
      tells you the verdict. You do not decide whether the bin is finished, and
      saying that it is finished does not make it so.
    - If Brain refuses, it says exactly which record was missing or wrong. Fix
      that and continue from step 3.
+   - If Brain says it handed the bin back, go to step 1.
    - If Brain says a person must decide, stop working this bin and go to step 5.
 
 5. Go back to step 1 and ask for another bin. Keep going until there are none,
