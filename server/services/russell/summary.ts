@@ -38,7 +38,19 @@ export interface WorkSummary {
   cash: SummaryLine;
   research: SummaryLine;
   build: SummaryLine;
+  /**
+   * The same readings as numbers, for Home's figure row. Each is null where
+   * its line could not be read or the reader may not see it: a member sees the
+   * opportunity counts and never a money figure (§34).
+   */
+  figures: {
+    money: { receivedCents: number; earnedCents: number; unpaidCostsCents: number; currency: string } | null;
+    opportunities: { readyToTest: number; qualified: number; candidates: number; signals: number } | null;
+    builds: { live: number; waitingRelease: number; blocked: number; complete: number } | null;
+  };
 }
+
+type Figures = WorkSummary['figures'];
 
 function unreadable(noun: string, error: unknown): SummaryLine {
   const temporary = classifyInfraFailure(error) !== null;
@@ -51,7 +63,7 @@ function unreadable(noun: string, error: unknown): SummaryLine {
   };
 }
 
-async function cashLine(): Promise<SummaryLine> {
+async function cashLine(figures: Figures): Promise<SummaryLine> {
   const root = await findCashRoot();
   const mode = root ? await getCashMode(root.id) : null;
   if (!root || !mode) {
@@ -63,6 +75,12 @@ async function cashLine(): Promise<SummaryLine> {
   }
   const frontier = await sharedFrontier({ projectId: root.id });
   const tiers = frontier.byTier;
+  figures.opportunities = {
+    readyToTest: tiers.READY_TO_TEST,
+    qualified: tiers.QUALIFIED,
+    candidates: tiers.CANDIDATE,
+    signals: tiers.SIGNAL,
+  };
   const discovery =
     `${tiers.READY_TO_TEST} ready to test, ${tiers.QUALIFIED} qualified, ` +
     `${tiers.CANDIDATE} candidates and ${tiers.SIGNAL} signals being researched.`;
@@ -78,6 +96,12 @@ async function cashLine(): Promise<SummaryLine> {
   }
   const position = await cashPosition({ projectId: root.id, currency: mode.currency });
   const money = (cents: number): string => formatMoney(cents, position.currency);
+  figures.money = {
+    receivedCents: position.customerPaymentsCents,
+    earnedCents: position.completedContributionCents,
+    unpaidCostsCents: position.unpaidCommitmentsCents,
+    currency: position.currency,
+  };
   return {
     sentence:
       `${money(position.customerPaymentsCents)} received, ` +
@@ -104,12 +128,13 @@ async function researchLine(projectId: string): Promise<SummaryLine> {
 
 const LIVE_BUILD = new Set(['PLANNING', 'EXECUTING', 'INTEGRATING', 'REVIEWING', 'REPAIRING', 'VERIFYING', 'ASSEMBLING']);
 
-async function buildLine(projectId: string): Promise<SummaryLine> {
+async function buildLine(projectId: string, figures: Figures): Promise<SummaryLine> {
   const campaigns = await listCampaigns(projectId);
   const live = campaigns.filter((one) => LIVE_BUILD.has(one.state)).length;
   const waiting = campaigns.filter((one) => one.state === 'AWAITING_RELEASE').length;
   const blocked = campaigns.filter((one) => one.state === 'BLOCKED').length;
   const done = campaigns.filter((one) => one.state === 'COMPLETE').length;
+  figures.builds = { live, waitingRelease: waiting, blocked, complete: done };
   if (campaigns.length === 0) {
     return { sentence: 'Nothing is being built in this project.', detail: null, retrying: false };
   }
@@ -126,10 +151,11 @@ async function buildLine(projectId: string): Promise<SummaryLine> {
 
 export async function workSummary(projectId: string | null): Promise<WorkSummary> {
   const none: SummaryLine = { sentence: 'There is no project here yet.', detail: null, retrying: false };
+  const figures: Figures = { money: null, opportunities: null, builds: null };
   const [cash, research, build] = await Promise.all([
-    cashLine().catch((error: unknown) => unreadable('Cash', error)),
+    cashLine(figures).catch((error: unknown) => unreadable('Cash', error)),
     projectId ? researchLine(projectId).catch((error: unknown) => unreadable('research', error)) : none,
-    projectId ? buildLine(projectId).catch((error: unknown) => unreadable('builds', error)) : none,
+    projectId ? buildLine(projectId, figures).catch((error: unknown) => unreadable('builds', error)) : none,
   ]);
-  return { cash, research, build };
+  return { cash, research, build, figures };
 }

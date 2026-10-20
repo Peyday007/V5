@@ -197,6 +197,20 @@ export interface RoutingCandidate {
    */
   servesFamilies: string[] | null;
   /**
+   * Whether this Routine's sessions recently could not reach the web
+   * (`networkBlockedRoutines`). Such a surface is not fired for research whose
+   * open work needs sources — a fragment or a verification — and is still
+   * fired for research that does not: planning, synthesis and the three audit
+   * roles read only what Brain hands them. Absent is false.
+   *
+   * It used to remove RESEARCH from `servesFamilies` outright, and an account
+   * whose Claude environment has no egress then received nothing at all
+   * (production, 2026-10-18: all four of one account's Routines put on an
+   * operator hold for it) while audits waited for the one account that could
+   * take them.
+   */
+  webBlocked?: boolean;
+  /**
    * The repository ids the worker this Routine is bound to may be handed, or
    * `null` when it has no explicit routing row and the question cannot be asked.
    *
@@ -306,6 +320,13 @@ export interface RoutingInput {
   fleetInFlight: number;
   /** ISO-8601. Passed in rather than read, so a decision is replayable. */
   now: string;
+  /**
+   * Whether this bin's open work needs the open web (`binNeedsWeb`). Absent is
+   * `true`: a caller that did not ask gets the conservative answer, so a
+   * surface whose sessions cannot reach the web is never fired for work that
+   * might need it.
+   */
+  needsWeb?: boolean;
 }
 
 export interface RoutingDecision {
@@ -652,6 +673,13 @@ export function routeBin(input: RoutingInput): RoutingResult {
      */
     if (!servesFamily(candidate, family)) {
       considered.push({ routineId: routine.id, verdict: `does not serve ${family} work` });
+      continue;
+    }
+    if (family === 'RESEARCH' && candidate.webBlocked && input.needsWeb !== false) {
+      considered.push({
+        routineId: routine.id,
+        verdict: 'its sessions cannot reach the web, and this research needs sources',
+      });
       continue;
     }
     sawServesFamily = true;

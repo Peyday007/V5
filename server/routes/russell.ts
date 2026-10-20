@@ -77,6 +77,8 @@ import {
 } from '../services/russell/inquiry.ts';
 import { SAVED_VIEWS, SEARCH_KINDS, search, type SearchKind } from '../services/russell/search.ts';
 import { explainSlowness, fleetView } from '../services/fleet/view.ts';
+import { workforceView } from '../services/fleet/workforce.ts';
+import { decideProjectAccess } from '../services/identity/policy.ts';
 import {
   LAB_MODES,
   applyFinding,
@@ -550,6 +552,29 @@ russellRouter.get(
         projectId: project.id,
       }),
     };
+  }),
+);
+
+/**
+ * The workforce: one card per Claude account, what it holds, what it finished
+ * in the last day, and whether it is idle while work it may take waits.
+ *
+ * A project member may read it, as the fleet reading above; a bin's title is
+ * shown only where the reader may read that bin's project, decided per project
+ * by the policy module, so a card about another operation says *work in
+ * another project* and names nothing.
+ */
+russellRouter.get(
+  '/projects/:projectId/workforce',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const cache = new Map<string, boolean>();
+    const mayRead = (id: string): boolean => {
+      if (!cache.has(id)) cache.set(id, decideProjectAccess(principal, id, 'READ').allowed);
+      return cache.get(id)!;
+    };
+    return { workforce: await workforceView({ mayRead }), projectId: project.id };
   }),
 );
 

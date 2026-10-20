@@ -122,7 +122,7 @@ async function mount(): Promise<void> {
   });
 }
 
-const PRIMARY = ['Home', 'Cash', 'Research', 'Build', 'Needs you', 'Who'];
+const PRIMARY = ['Home', 'Cash', 'Research', 'Build', 'Needs you', 'Workforce'];
 
 describe('navigation is six destinations, and nothing useful was lost', () => {
   it('shows the six primary destinations in order on a desktop', async () => {
