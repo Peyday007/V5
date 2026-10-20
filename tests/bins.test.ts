@@ -1609,6 +1609,124 @@ describe('a bin holder handed nothing says why, in Brain\'s own ledger', () => {
   });
 });
 
+describe('a bin whose remaining work is another session\'s is handed back, not spun on', () => {
+  /*
+   * Production, 2026-10-20, 24 hours on the two working accounts: 507 bins
+   * assigned, 43 completions accepted, 261 refused, 402 handed back, and 1 380
+   * calls to brain_bin_next_item. The session that finished the stage it could
+   * do was told to wait for work it may never take (a second audit role, a
+   * judge after its own argument), then told by the completion to fix
+   * something it could not fix. These pin the corrected answers.
+   */
+  async function packetWithJudgeOnly(): Promise<{ binId: string }> {
+    const layerId = (await listLayers(projectA))[0]!.id;
+    const run = await createRun({
+      projectId: projectA,
+      layerId,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'a bounded question',
+    });
+    const orchestration = await createOrchestration({
+      projectId: projectA,
+      layerId,
+      runId: run.id,
+      title: 'a bounded question',
+      assignment: 'the sources that answer it',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    const bin = await createBin({
+      projectId: projectA,
+      kind: 'RESEARCH_PACKET',
+      title: 'a packet waiting on another session',
+      objective: 'drain it',
+      manifest: { ...unitsManifest(projectA, 0), units: [] },
+      completionContract: 'RESEARCH_PACKET_V1',
+      orchestrationId: orchestration.id,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+    });
+    await enqueueWork({
+      projectId: projectA,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration.id,
+    });
+    return { binId: bin.id };
+  }
+
+  it('next item gives the bin back, with the reason, when nothing open is this session\'s', async () => {
+    const { binId } = await packetWithJudgeOnly();
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const next = await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    expect(next).toMatchObject({ held: true, item: null, binHasOpenWork: true });
+    if (!next.held || next.item !== null) throw new Error('expected no item');
+    expect(next.released?.reason).toMatch(/different session/);
+
+    const bin = (await getBin(binId))!;
+    expect(bin.state).toBe('READY');
+    expect(bin.workerId).toBeNull();
+    const events = await listBinEvents(binId, 100);
+    const released = events.find((event) => event.eventType === 'BIN_RELEASED');
+    expect(released?.reason).toMatch(/RESEARCH_AUDIT/);
+    // A handback is not a refused completion.
+    expect(events.some((event) => event.eventType === 'BIN_COMPLETION_REFUSED')).toBe(false);
+  });
+
+  it('keeps the bin, and names a bounded wait, when the open work is only waiting', async () => {
+    const binId = await makeBin(projectA, { units: 0 });
+    await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'later' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      binId,
+      availableAt: '2999-01-01T00:00:00.000Z',
+    });
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const next = await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    if (!next.held || next.item !== null) throw new Error('expected no item');
+    expect(next.released).toBeUndefined();
+    expect(next.retryAfterMs).toBe(120_000);
+    expect((await getBin(binId))!.state).toBe('LEASED');
+  });
+
+  it('a completion the session cannot fix becomes a handback, not a refusal', async () => {
+    const { binId } = await packetWithJudgeOnly();
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const outcome = await requestCompletion({
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+      principal: principalFor(workerOne, [projectA]),
+    });
+    expect(outcome.terminal).toBe(false);
+    expect(outcome.released?.reason).toMatch(/different session/);
+    expect((await getBin(binId))!.state).toBe('READY');
+    const events = await listBinEvents(binId, 100);
+    expect(events.some((event) => event.eventType === 'BIN_COMPLETION_REFUSED')).toBe(false);
+
+    // Without the principal (any caller that cannot say who it is) the old answer stands.
+    const again = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const refused = await requestCompletion({ workerId: workerOne, proof: proofFrom(again, workerOne) });
+    expect(refused.released).toBeUndefined();
+    expect(refused.verdict?.satisfied).toBe(false);
+  });
+});
+
 describe('an assignment budget the work itself spent', () => {
   /*
    * The stall production actually reached, and the reason no earlier test

@@ -13436,6 +13436,29 @@ hands a worker, were kept from him too.
   says how many it could not attribute. A title crosses only into a project the
   reader may read. It adds no mechanism and decides nothing.
 
+## 69. Work another session must do is handed back by Brain, never waited on.
+
+Production, 2026-10-20, 24 hours on Brain Research A's and Caleb's workers:
+507 bins assigned, 43 completions accepted, 261 refused, 402 handed back, and
+1 380 calls to `brain_bin_next_item`. A research packet's bin carries every
+stage, and §23 forbids one session two audit roles or reviewing what it wrote,
+so a session that finished the stage it could do was told *wait briefly and
+ask again* about work it could never take, then *fix it and ask again* by a
+completion it could not fix, and only then released.
+
+- **`openWorkForSession` is the one reading of what is left.** `WAIT` (a
+  backoff, a live lease, its own item in progress) names a bounded
+  `retryAfterMs`; `NOT_THIS_SESSION` (every open item refused by the same
+  admission rule the claim uses) hands the bin back; past-ceiling items count
+  as neither.
+- **Brain releases the bin itself**, from `brain_bin_next_item` or from a
+  RETRY completion, with the refusals on the `BIN_RELEASED` row. Such a
+  completion is not recorded as a refusal: it was never the worker's to fix.
+  The admission rule, the contract and the independence floor are unchanged.
+- **The live instructions say so** (`WORKER_INSTRUCTIONS` `2026-10-20.1`), and
+  the connection report's *WORK OUTCOMES* groups refusals, withheld items and
+  handbacks by reason, so the next reading names causes rather than counts.
+
 ## Repository map
 
 ```
