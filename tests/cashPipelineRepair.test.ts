@@ -51,6 +51,9 @@ import { OPPORTUNITY_SIGNALS } from '../server/domain/opportunitySignals.ts';
 import { MONETIZATION_METHODS } from '../server/domain/monetization.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { tick } from '../server/services/russell/loop.ts';
+import { registerResearchSurfaces } from './helpers/researchSurfaces.ts';
+import { setRoutineState } from '../server/repos/fleet.ts';
+import { forgetSharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import {
   APPROVAL_ENVELOPES,
   planFitsEnvelope,
@@ -967,6 +970,34 @@ describe('the concurrency a running sprint is held to', () => {
     expect(moved.workPolicy).toBe(goal.workPolicy);
     // And a commercial grant is still a separate decision nobody has made.
     expect(await liveAuthority(projectId)).toBeNull();
+  });
+
+  it('grows with the research surfaces the project has on record, and never below six', async () => {
+    /*
+     * Production, 2026-10-20: research Routines on three accounts, six live
+     * missions holding every slot, and a recovered account with nothing it
+     * could be handed. The ceiling follows the fleet now; six is the floor.
+     */
+    await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    expect((await discoveryAuthority(projectId))!.maxConcurrent).toBe(DISCOVERY_CONCURRENCY);
+
+    const routines = await registerResearchSurfaces(projectId, DISCOVERY_CONCURRENCY + 3);
+    // A quarantined surface is one recovery probe from work, and still counts.
+    await setRoutineState({ routineId: routines[0]!, from: 'ENABLED', to: 'QUARANTINED', reason: 'test' });
+    forgetSharedFleetSnapshot();
+    await ensureDiscoveryAuthority(projectId);
+    expect((await discoveryAuthority(projectId))!.maxConcurrent).toBe(DISCOVERY_CONCURRENCY + 3);
+
+    // A retired one is not capacity anybody means to use.
+    await setRoutineState({ routineId: routines[1]!, from: 'ENABLED', to: 'RETIRED', reason: 'test' });
+    forgetSharedFleetSnapshot();
+    await ensureDiscoveryAuthority(projectId);
+    expect((await discoveryAuthority(projectId))!.maxConcurrent).toBe(DISCOVERY_CONCURRENCY + 2);
   });
 
   it('writes nothing once the grant already agrees', async () => {

@@ -195,6 +195,45 @@ async function readRoutableResearchSurfaces(projectId: string): Promise<number |
   }
 }
 
+/**
+ * Research surfaces this project has on record, whether or not each one can be
+ * fired this minute.
+ *
+ * `routableResearchSurfaces` answers *now*, and moves every time a Routine is
+ * quarantined or recovers. This answers what the fleet is sized at: a Routine
+ * that is ENABLED, or QUARANTINED and therefore one recovery probe away from
+ * work, whose account is not disabled and whose live worker serves this
+ * project's research. RETIRED and DISABLED surfaces are not capacity anybody
+ * intends to use, so they are not counted.
+ *
+ * It sizes the discovery grant's concurrency (`discoveryConcurrencyFor`), and
+ * the reason it is not the routable count is churn: a grant that followed every
+ * quarantine would rewrite itself, and write an event, on every tick a surface
+ * flapped. A slot whose surface is briefly down costs nothing — the mission's
+ * bin waits READY until a surface can take it.
+ *
+ * Null when the snapshot cannot be read; the caller then leaves the grant as it
+ * is, because an unknown is never a reason to move a number.
+ */
+export async function researchSurfacesOnRecord(projectId: string): Promise<number | null> {
+  try {
+    const snapshot = await sharedFleetSnapshot();
+    let count = 0;
+    for (const candidate of snapshot.candidates) {
+      const { routine, account } = candidate;
+      if (routine.state !== 'ENABLED' && routine.state !== 'QUARANTINED') continue;
+      if (account.state !== 'ENABLED' && account.state !== 'QUARANTINED') continue;
+      if (routine.workerId === null || !candidate.workerActive) continue;
+      if (!candidate.servesProjects.includes(projectId)) continue;
+      if (Array.isArray(candidate.servesFamilies) && !candidate.servesFamilies.includes('RESEARCH')) continue;
+      count += 1;
+    }
+    return count;
+  } catch {
+    return null;
+  }
+}
+
 /** The room for one kind of research in one project. */
 export async function researchRoom(input: {
   projectId: string;

@@ -52,6 +52,7 @@ import {
 } from '../../repos/russellAuthority.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { resumeParkedForProject } from '../russell/resumeParked.ts';
+import { researchSurfacesOnRecord } from './researchRoom.ts';
 import type { RussellGoal } from '../../domain/types.ts';
 
 /**
@@ -96,6 +97,34 @@ const RESEARCH_WORK = 'RESEARCH';
  * roles it did at two.
  */
 export const DISCOVERY_CONCURRENCY = 6;
+
+/**
+ * The concurrency this sprint's grant should carry: the fleet it actually has,
+ * never less than `DISCOVERY_CONCURRENCY`.
+ *
+ * **Six was a constant, and the fleet grew past it.** It was written when the
+ * fleet had four research Routines on one account. Production on 2026-10-20 had
+ * research Routines on three Claude accounts — and six live missions held every
+ * slot, so a recovered account had nothing it could be handed: a Routine back
+ * from quarantine checked in and was told there was no work, while the
+ * discovery and qualification it could have run waited for a slot. That is the
+ * idleness beside executable work this file's own rule calls a defect, made by a
+ * number rather than by a fault.
+ *
+ * So the ceiling is the count of research surfaces the project has on record
+ * (`researchSurfacesOnRecord`), with six as the floor so a fleet that cannot be
+ * read, or a small one, keeps the bound it always had. Still provider capacity
+ * rather than an allowance: it authorizes nothing, every mission it admits meets
+ * the same envelope, gate and audit roles, and the dispatcher's own fleet,
+ * account and Routine targets still bound how many sessions are fired.
+ *
+ * Null when the fleet cannot be read: the caller leaves the grant alone.
+ */
+export async function discoveryConcurrencyFor(projectId: string): Promise<number | null> {
+  const onRecord = await researchSurfacesOnRecord(projectId);
+  if (onRecord === null) return null;
+  return Math.max(DISCOVERY_CONCURRENCY, onRecord);
+}
 
 export interface EnsuredAuthority {
   goal: RussellGoal;
@@ -170,18 +199,19 @@ export async function ensureDiscoveryAuthority(
    * and no other term of the grant moves. Ordering the check by inequality
    * keeps it idempotent: once they agree, no tick writes anything.
    */
-  if (goal.maxConcurrent !== DISCOVERY_CONCURRENCY) {
+  const target = (await discoveryConcurrencyFor(projectId)) ?? goal.maxConcurrent;
+  if (goal.maxConcurrent !== target) {
     const from = goal.maxConcurrent;
-    if (await setGoalConcurrency(goal.id, DISCOVERY_CONCURRENCY)) {
+    if (await setGoalConcurrency(goal.id, target)) {
       await recordCashEvent({
         projectId,
         kind: 'CASH_DISCOVERY_AUTHORIZED',
         actorRef: 'BRAIN',
         summary:
           `How much of this sprint may run at once moved from ${from} to ` +
-          `${DISCOVERY_CONCURRENCY}. It is provider capacity rather than an allowance, and ` +
+          `${target}, the research surfaces it has on record. It is provider capacity rather than an allowance, and ` +
           'nothing about what may be researched, spent or acted on changed.',
-        detail: { goalId: goal.id, from, to: DISCOVERY_CONCURRENCY },
+        detail: { goalId: goal.id, from, to: target },
       });
     }
   }
