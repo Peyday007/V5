@@ -230,6 +230,9 @@ const BLOCKERS: Blocker[] = [
   // A supplier advertising itself ("our factory network can support designers…")
   // posts as a project. There is nothing to deliver and nobody buying.
   { pattern: /\b(looking to connect with|(?:our|my) (?:factory|factories|factory network|company|agency|team) (?:can|could|will) (?:support|help|work with|offer)|(?:manufacturing|production|sourcing|business) (?:partner(?:ship)?|collaboration)|what we can (?:work with you on|offer)|tell us about your (?:designs?|products?|business|brand|requirements))\b/, reason: 'the post advertises the client’s own services rather than asking for a deliverable' },
+  // ISO/SOC certification is granted by an accredited body after an audit of the
+  // client's own organisation; nothing Brain writes certifies anybody.
+  { pattern: /\b(iso[ -]?\d{4,5}(?:-\d)?|soc ?2|certification (?:partner|body|audit|consultant|process|support)|accredited|lead auditor|internal audit)\b/, reason: 'certification needs an accredited body auditing the client’s organisation' },
   { pattern: /\b(medical|clinical|legal (?:advice|document|contract)|lawyer|attorney|tax (?:return|filing|advice)|transfer pricing|audit(?:ed)? (?:financial|accounts)|accountant|certified|licensed|cpa|chartered|stamped|pe stamp)\b/, reason: 'the work needs a professional credential' },
   { pattern: /\b(native speaker|must be from|only from|us only|uk only|resident of|based in|located in|local to|timezone overlap)\b/, reason: 'the client restricts who may do the work' },
   { pattern: /\b(long[- ]term|ongoing|full[- ]time|part[- ]time|daily tasks?|every day|weekly basis|monthly retainer|per hour|hourly)\b/, reason: 'the client wants ongoing work, not one deliverable' },

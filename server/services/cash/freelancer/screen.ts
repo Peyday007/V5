@@ -75,6 +75,9 @@ export function screenProject(project: FreelancerProject, nowMs: number, context
   if (!quote) reasons.push(`priced in ${project.currency?.code ?? 'an unknown currency'} with no published exchange rate`);
   const min = project.budget?.minimum ?? 0;
   if (quote && min * quote.usdPerUnit < MIN_BUDGET_USD) reasons.push(`budget starts below USD ${MIN_BUDGET_USD}`);
+  // A bid may not go below the client's own minimum, so a budget that starts above
+  // the ceiling cannot be bid inside it. priceJob would otherwise bid the minimum.
+  if (quote && min * quote.usdPerUnit > MAX_BID_USD) reasons.push(`budget starts above the USD ${MAX_BID_USD} bid ceiling`);
   const ageHours = (nowMs / 1000 - project.time_submitted) / 3600;
   if (ageHours > MAX_AGE_HOURS) reasons.push(`posted ${Math.round(ageHours)}h ago`);
   if ((project.bid_stats?.bid_count ?? 0) > MAX_BIDS_ALREADY) reasons.push(`${project.bid_stats.bid_count} bids already`);
