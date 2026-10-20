@@ -45,7 +45,7 @@ import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { nowIso } from '../../repos/util.ts';
 import { authorizeUnresolvedGaps } from '../research/gapPolicy.ts';
-import { advancePacket, approvePlan } from '../research/packetRunner.ts';
+import { advancePacket, approvePlan, assignmentApprovedUnder } from '../research/packetRunner.ts';
 import { getApprovalEnvelope, planFitsEnvelope } from '../research/approvalEnvelope.ts';
 import {
   getReservation,
@@ -634,7 +634,8 @@ export async function reaskRefusedPlans(limit: number): Promise<string[]> {
       (fragment) => fragment.status === 'PLANNED',
     );
     if (planned.length === 0) continue;
-    if (!planFitsEnvelope({ envelope, orchestration, fragments: planned }).fits) continue;
+    const assignmentAlreadyApproved = await assignmentApprovedUnder(orchestration, envelope.id);
+    if (!planFitsEnvelope({ envelope, orchestration, fragments: planned, assignmentAlreadyApproved }).fits) continue;
     /*
      * Resuming it is an admission: only within the grant's free research
      * slots. With none free, everything after this one waits, in order, for a
