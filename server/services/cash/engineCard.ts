@@ -98,6 +98,27 @@ export const ENGINE_FIELDS = [
 ] as const;
 export type EngineFieldKey = (typeof ENGINE_FIELDS)[number];
 
+/**
+ * The engine fields a single narrow research question may answer.
+ *
+ * Every one is a fact about the world (`fieldOwner` reads `BRAIN_RESEARCH`).
+ * `disqualifiers` is deliberately absent: a deep dive classifies what it finds
+ * as ruling the opening out or not, and a need's first citable sentence put on
+ * that field would read a disqualifier as a cleared question.
+ */
+export const NEED_RESEARCHABLE_ENGINE_FIELDS: readonly EngineFieldKey[] = Object.freeze([
+  'revenueRange',
+  'directCosts',
+  'requiredCapital',
+  'timeToFirstCash',
+  'hours',
+  'laborNeeds',
+  'phoneDependency',
+  'eligibility',
+  'acquisitionAccess',
+  'exitEvidence',
+]);
+
 export type CardEntryKind = 'FACT' | 'ESTIMATE' | 'DECISION' | 'UNKNOWN';
 
 export interface EngineCardEntry {

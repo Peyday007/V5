@@ -23,6 +23,7 @@
  * `services/cash/`; these resolve the project, hand over the principal, and
  * turn a refusal into a status.
  */
+import { pipelineReading } from '../services/cash/jobPipeline.ts';
 import { Router } from 'express';
 import {
   badRequest,
@@ -515,6 +516,31 @@ cashRouter.get(
         currencies: SPRINT_CURRENCIES,
       },
     };
+  }),
+);
+
+/**
+ * The road from discovery to usable cash, and the execution jobs on it.
+ *
+ * Separate from the section's own read so the jobs can be refreshed without
+ * recomposing the whole portfolio. Both scopes reach it through the same seam
+ * as the section: FULL sees every job's tasks, value and next action; SHARED
+ * sees the stage counts and which openings are jobs, and nothing of somebody
+ * else's private working state. It writes nothing.
+ */
+cashRouter.get(
+  '/projects/:projectId/cash/pipeline',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const projectId = pathId(req, 'projectId');
+    const decision = await decideCashRead(projectId);
+    if (decision.scope === 'NONE') await requireProject(projectId);
+    if (decision.scope === 'FULL') await requireProject(projectId);
+    const reading = await pipelineReading(projectId, {
+      userId: principal.id,
+      owner: decision.scope === 'FULL',
+    });
+    return { scope: decision.scope, pipeline: reading };
   }),
 );
 

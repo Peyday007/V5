@@ -26,7 +26,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Api } from '../lib/api.ts';
-import type { SessionUser } from '../lib/api.ts';
+import type { ProjectHomes, SessionUser } from '../lib/api.ts';
 import type { Project } from '../../../server/domain/types.ts';
 import { RussellApi } from '../lib/russellApi.ts';
 import { DEPTHS, DEPTH_LABELS, isDepth, navigationMode, type Depth } from './present.ts';
@@ -91,11 +91,50 @@ const SECTIONS = [
   { name: 'PROJECTS' as const, label: 'Ideas', primary: false },
   { name: 'KNOWLEDGE' as const, label: 'What Brain knows', primary: false },
   { name: 'SITES' as const, label: 'Connected sites', primary: false },
-  { name: 'MACHINES' as const, label: 'Machines', primary: false },
-  { name: 'LABOR' as const, label: 'Labor', primary: false },
-  { name: 'PUZZLES' as const, label: 'Puzzles', primary: false },
-  { name: 'SCENARIOS' as const, label: 'Scenarios', primary: false },
+  /*
+   * Machines, Labor, Puzzles and Scenarios are specialized business systems,
+   * and they are reached together through one destination rather than each
+   * standing in the navigation beside Cash and Research. Puzzles in particular
+   * read as a primary product area while being one kernel among several.
+   * Their addresses are unchanged, so a deep link still works.
+   */
+  { name: 'SYSTEMS' as const, label: 'Business systems', primary: false },
 ];
+
+/** The systems the Business systems destination opens, and what each is for. */
+export const BUSINESS_SYSTEMS = [
+  { name: 'MACHINES' as const, label: 'Machines', does: 'Which machines to build next, from demand back to capability.' },
+  { name: 'LABOR' as const, label: 'Labor', does: 'Who produces each task, and which human roles are still necessary.' },
+  { name: 'PUZZLES' as const, label: 'Puzzles', does: 'Original validated puzzles, the products made from them, and their trade.' },
+  { name: 'SCENARIOS' as const, label: 'Scenarios', does: 'Model a decision and compare strategies on the same simulated worlds.' },
+];
+
+/** Routes whose page reads one project chosen for it rather than resolving its own. */
+const PROJECT_SCOPED = new Set<Route['name']>([
+  'HOME',
+  'WORK',
+  'RESEARCH',
+  'BUILD',
+  'PROJECTS',
+  'KNOWLEDGE',
+  'FLEET',
+  'SITES',
+  'NEEDS_YOU',
+  'MACHINES',
+  'LABOR',
+  'PUZZLES',
+  'SCENARIOS',
+]);
+
+const PROJECT_KEY = 'brain.project';
+
+function rememberedProject(): string | null {
+  try {
+    return window.localStorage.getItem(PROJECT_KEY);
+  } catch {
+    return null;
+  }
+}
 
 const DEPTH_KEY = 'brain.depth';
 
@@ -198,9 +237,41 @@ export function RussellShell({
   const [operatorOpen, setOperatorOpen] = useState(false);
   const [depth, setDepth] = useDepth();
 
+  /*
+   * Which project a page reads, decided rather than defaulted.
+   *
+   * This was `projects[0]` — the first project the API happened to return —
+   * so a page whose rows live in another project rendered that project's
+   * empty state, and nothing on the screen said a choice had been made. Now:
+   * the person's own choice, remembered; otherwise the server's reading of
+   * where the work lives (`/api/projects/homes`); and each specialized kernel
+   * opens on the project that holds its rows. The chooser is always on screen
+   * for a project-scoped page, so the choice is visible and changeable.
+   */
   const projects = useAsync(() => Api.projects(), []);
-  const project: Project | null = projects.data?.projects[0] ?? null;
-  const projectId = project?.id ?? null;
+  const homes = useAsync(() => Api.projectHomes(), []);
+  const [chosen, setChosen] = useState<string | null>(() => rememberedProject());
+  const visible = projects.data?.projects ?? [];
+  const chosenVisible = chosen && visible.some((one) => one.id === chosen) ? chosen : null;
+  /*
+   * The server's reading is a refinement, not a dependency: a person with one
+   * project reads that project whether or not `/homes` answered, and a failed
+   * `/homes` never blanks a page the project list alone can resolve.
+   */
+  const onlyProject = visible.length === 1 ? visible[0]!.id : null;
+  const projectId: string | null = chosenVisible ?? homes.data?.fallback ?? onlyProject;
+  const project: Project | null = visible.find((one) => one.id === projectId) ?? null;
+  const choose = useCallback((id: string) => {
+    setChosen(id);
+    try {
+      window.localStorage.setItem(PROJECT_KEY, id);
+    } catch {
+      /* the choice still holds for this visit */
+    }
+  }, []);
+  /** Each kernel opens where its rows are, unless the person chose otherwise. */
+  const kernelProject = (home: string | null | undefined): string | null =>
+    chosenVisible ?? home ?? projectId;
 
   const conversations = useAsync(() => RussellApi.conversations(), []);
   const [openedId, setOpenedId] = useState<string | null>(null);
@@ -492,6 +563,22 @@ export function RussellShell({
       </nav>
 
       <main className="rs-main">
+        {PROJECT_SCOPED.has(route.name) ? (
+          <ProjectChooser
+            projects={projects}
+            homes={homes}
+            projectId={
+              route.name === 'MACHINES'
+                ? kernelProject(homes.data?.manufacturing)
+                : route.name === 'LABOR'
+                  ? kernelProject(homes.data?.labor)
+                  : route.name === 'PUZZLES'
+                    ? kernelProject(homes.data?.puzzles)
+                    : projectId
+            }
+            onChoose={choose}
+          />
+        ) : null}
         {route.name === 'HOME' ? (
           <RussellHome
             projectId={projectId}
@@ -551,9 +638,10 @@ export function RussellShell({
             <FleetView />
           </>
         ) : null}
-        {route.name === 'MACHINES' ? <MachinesView projectId={projectId} /> : null}
-        {route.name === 'LABOR' ? <LaborView projectId={projectId} /> : null}
-        {route.name === 'PUZZLES' ? <PuzzlesView projectId={projectId} /> : null}
+        {route.name === 'SYSTEMS' ? <BusinessSystems go={go} /> : null}
+        {route.name === 'MACHINES' ? <MachinesView projectId={kernelProject(homes.data?.manufacturing)} /> : null}
+        {route.name === 'LABOR' ? <LaborView projectId={kernelProject(homes.data?.labor)} /> : null}
+        {route.name === 'PUZZLES' ? <PuzzlesView projectId={kernelProject(homes.data?.puzzles)} /> : null}
         {route.name === 'SCENARIOS' ? <ScenariosView projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
@@ -596,6 +684,99 @@ export function RussellShell({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * The project a page is reading, always on screen and changeable.
+ *
+ * Three states are kept apart, because they have different remedies: the list
+ * could not be read (retryable, says so), the person may read no project at
+ * all (an answer, not a failure), and a project is shown (named, with the
+ * choice beside it).
+ */
+function ProjectChooser({
+  projects,
+  homes,
+  projectId,
+  onChoose,
+}: {
+  projects: ReturnType<typeof useAsync<{ projects: Project[] }>>;
+  homes: ReturnType<typeof useAsync<ProjectHomes>>;
+  projectId: string | null;
+  onChoose(id: string): void;
+}): JSX.Element {
+  if (projects.error) {
+    const error = projects.error;
+    return (
+      <p className={`rs-state ${error.retryable ? 'rs-state-retrying' : 'rs-state-error'} rs-project-chooser`} role="alert">
+        {error.retryable
+          ? 'Brain could not read which projects you have just now — this is temporary.'
+          : `Brain could not read which projects you have: ${error.message}`}{' '}
+        <button
+          type="button"
+          onClick={() => {
+            projects.reload();
+            homes.reload();
+          }}
+        >
+          Try again
+        </button>
+      </p>
+    );
+  }
+  if (!projects.data) {
+    return <p className="rs-state rs-state-loading rs-project-chooser">Reading your projects&hellip;</p>;
+  }
+  const list = projects.data.projects;
+  if (list.length === 0) {
+    return (
+      <p className="rs-state rs-state-empty rs-project-chooser">
+        You are not a member of any project yet, so there is nothing project-specific to show.
+      </p>
+    );
+  }
+  return (
+    <div className="rs-project-chooser">
+      <label>
+        Project{' '}
+        <select value={projectId ?? ''} onChange={(event) => event.target.value && onChoose(event.target.value)}>
+          {projectId ? null : <option value="">Choose a project</option>}
+          {list.map((one) => (
+            <option key={one.id} value={one.id}>
+              {one.name}
+              {one.id === homes.data?.cash ? ' (Cash)' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+      {projectId ? null : (
+        <span className="rs-hint"> Nothing was chosen for you: pick the project to read.</span>
+      )}
+    </div>
+  );
+}
+
+/** Machines, Labor, Puzzles and Scenarios, reached together. */
+function BusinessSystems({ go }: { go(route: Route): void }): JSX.Element {
+  return (
+    <section className="rs-view rs-view-systems">
+      <h2>Business systems</h2>
+      <p className="rs-lede">
+        Specialized kernels Brain runs beside Cash, Research and Build. Each keeps its own records
+        and opens on the project that holds them.
+      </p>
+      <ul className="rs-list">
+        {BUSINESS_SYSTEMS.map((system) => (
+          <li key={system.name} className="rs-card">
+            <button type="button" className="rs-link" onClick={() => go({ name: system.name })}>
+              {system.label}
+            </button>
+            <p className="rs-item-meta">{system.does}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

@@ -503,6 +503,66 @@ export interface IssuedEnrollment {
   expiresAt: string;
 }
 
+
+/* -------------------------------------------------------------------------
+ * The road from discovery to usable cash (`services/cash/jobPipeline.ts`)
+ * ----------------------------------------------------------------------- */
+
+export type PipelineStage =
+  | 'DISCOVERED'
+  | 'UNDER_QUALIFICATION'
+  | 'QUALIFIED'
+  | 'JOB_PREPARED'
+  | 'READY_BLOCKED'
+  | 'EXECUTING'
+  | 'AGREED'
+  | 'DELIVERED'
+  | 'PAID'
+  | 'SETTLED';
+
+export interface PipelineJobTask {
+  key: string;
+  action: string;
+  executor: string;
+  status: string;
+  because: string;
+  requiresAuthority: string | null;
+  requiresCapability: string | null;
+  dependsOn: string[];
+  artifact: string;
+}
+
+export interface PipelineJob {
+  jobId: string;
+  opportunityId: string;
+  title: string;
+  jobState: string;
+  stage: PipelineStage;
+  stageLabel: string;
+  ownerUserId: string | null;
+  createdAt: string;
+  priceCents: number | null;
+  exposureCents: number | null;
+  contributionPerSaleCents: number | null;
+  currency: string;
+  tasks: PipelineJobTask[];
+  blockers: string[];
+  next: { task: string; executor: string; because: string } | null;
+}
+
+export interface PipelineReading {
+  counts: Record<PipelineStage, number>;
+  labels: Record<PipelineStage, string>;
+  jobs: PipelineJob[];
+  qualifiedWithoutJob: { opportunityId: string; title: string; because: string }[];
+  settledCents: number;
+  paidUnsettledCents: number;
+  currency: string;
+  researchInFlight: number;
+  authority: { live: boolean; allowedActions: string[] };
+  providers: { id: string; state: string; nextStep: string | null }[];
+}
+
 const p = (value: string): string => encodeURIComponent(value);
 
 export const CashApi = {
@@ -523,6 +583,10 @@ export const CashApi = {
    * nothing.
    */
   mode: (): Promise<CashModeReading> => api('/api/cash/mode'),
+
+  /** Execution jobs and the stage of every opening. Reading it writes nothing. */
+  pipeline: (projectId: string): Promise<{ scope: string; pipeline: PipelineReading | null }> =>
+    api(`/api/projects/${p(projectId)}/cash/pipeline`),
 
   /*
    * Member slots and their links.

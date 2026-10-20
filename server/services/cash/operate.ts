@@ -46,6 +46,7 @@
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { reconcileCashJobs, type JobReconciliation } from './jobPipeline.ts';
 import { listingSentenceFor } from './listings.ts';
 import { handOffReadyTests, type FactoryHandoffPass } from './factoryHandoff.ts';
 import { advanceJourney, type JourneyTickReport } from './journey/tick.ts';
@@ -81,14 +82,14 @@ import {
   needForCapability,
   type CapabilityReading,
 } from './capabilities.ts';
-import { cardFactsFor } from '../../repos/cashCardFacts.ts';
+import { cardFact, cardFactsFor } from '../../repos/cashCardFacts.ts';
 import { evidenceCard } from './card.ts';
-import { cashEngineCard } from './engineCard.ts';
+import { cashEngineCard, NEED_RESEARCHABLE_ENGINE_FIELDS } from './engineCard.ts';
 import { CAPTURE_INPUTS, cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
-import { runValidations, type ValidationProgress } from './validation.ts';
+import { runValidations, whyNotDiving, type ValidationProgress } from './validation.ts';
 import { enumeratePossibilities } from './monetization/enumerate.ts';
 import { recordMovements } from './monetization/movement.ts';
 import { composeLedger } from './monetization/ledger.ts';
@@ -506,6 +507,132 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
     });
   }
 
+  return out;
+}
+
+/**
+ * How many engine-field questions may be open at once across a project.
+ *
+ * Each becomes a research mission holding one of the grant's slots, so this is
+ * concurrency rather than a quota: the next pass raises more as these settle.
+ */
+export const MAX_OPEN_ENGINE_QUESTIONS = 12;
+
+/**
+ * The qualification questions only a deep dive used to ask, asked one at a
+ * time once an opening's dives for this epoch are spent.
+ *
+ * Production, Cash Mode 1, 2026-10-20: 79 openings at CANDIDATE and none
+ * QUALIFIED. The needs path above asks only the short card's column fields,
+ * and the rest of the qualification set — eligibility, costs, capital, labour,
+ * time to first cash, whether calling is required — has no column and was
+ * answerable only by the bounded deep dive, two per change epoch. Twenty-six
+ * openings had spent both and still had those blanks, so nothing could ever
+ * ask again until the world changed: a bar with no way over it, which is a park
+ * rather than a standard.
+ *
+ * The evidence bar does not move. Each question is one narrow need answered by
+ * its own research mission through the same gate, and only a citable, sourced
+ * claim lands on the card (`answers.ts`). `disqualifiers` is never asked here
+ * (`NEED_RESEARCHABLE_ENGINE_FIELDS`).
+ *
+ * Ordered by what a person would want answered first: openings nearest to
+ * qualifying, then the largest published contribution per sale, then the
+ * smallest capital at risk. Unknown figures sort last, never first.
+ */
+export async function reconcileEngineGaps(projectId: string): Promise<DiscoverableGap[]> {
+  const out: DiscoverableGap[] = [];
+  const mode = await getCashMode(projectId);
+  if (!mode || mode.state !== 'ACTIVE') return out;
+  const open = await listNeeds({ projectId, states: ['OPEN'] });
+  const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
+  const engineKeys = new Set<string>(NEED_RESEARCHABLE_ENGINE_FIELDS);
+  /*
+   * A question answered some other way — a later dive, a person — is settled
+   * from the card, so an open need never sits beside a filled field.
+   */
+  for (const need of open) {
+    if (!need.opportunityId || !need.requestKey?.startsWith('question:')) continue;
+    const field = need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1);
+    if (!engineKeys.has(field) || need.requestKey !== questionKey(need.opportunityId, field)) continue;
+    const fact = await cardFact(need.opportunityId, field);
+    if (!fact) continue;
+    await closeNeed({
+      needId: need.id,
+      to: 'RESOLVED',
+      resolution: `The ${field} is now on the card, so this is answered.`,
+      actorUserId: BRAIN,
+    });
+    keys.delete(need.requestKey);
+    need.state = 'RESOLVED';
+  }
+  let openEngine = open.filter(
+    (one) =>
+      one.state === 'OPEN' &&
+      one.opportunityId &&
+      one.requestKey?.startsWith('question:') &&
+      engineKeys.has(one.requestKey.slice(one.requestKey.lastIndexOf(':') + 1)),
+  ).length;
+  if (openEngine >= MAX_OPEN_ENGINE_QUESTIONS) return out;
+
+  const ranked: { opportunity: CashOpportunity; fields: string[]; contribution: number | null }[] = [];
+  for (const opportunity of await listOpportunities({ projectId, states: ['DISCOVERED', 'EVIDENCE_CARD'] })) {
+    if (opportunity.duplicateOfId) continue;
+    if (diveOwnsItsQuestions(opportunity)) continue;
+    const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
+    if (engine.disqualifiedBy) continue;
+    const reading = cashTier({ opportunity, card: engine, readiness: evidenceCard(opportunity).readiness });
+    if (reading.tier !== 'CANDIDATE') continue;
+    const fields = reading.toAdvance
+      .map((one) => one.key as string)
+      .filter((key) => engineKeys.has(key) && !keys.has(questionKey(opportunity.id, key)));
+    if (fields.length === 0) continue;
+    // Only once the deep dive cannot ask: a dive asks every one of these at once.
+    if ((await whyNotDiving(opportunity)).kind !== 'EPOCH_SPENT') continue;
+    const contribution =
+      opportunity.priceCents !== null && opportunity.peakFundingCents !== null
+        ? opportunity.priceCents - opportunity.peakFundingCents
+        : null;
+    // A published loss is not worth qualifying further.
+    if (contribution !== null && contribution < 0) continue;
+    ranked.push({ opportunity, fields, contribution });
+  }
+  ranked.sort(
+    (a, b) =>
+      a.fields.length - b.fields.length ||
+      (b.contribution ?? -Infinity) - (a.contribution ?? -Infinity) ||
+      (a.opportunity.peakFundingCents ?? Infinity) - (b.opportunity.peakFundingCents ?? Infinity) ||
+      (a.opportunity.createdAt < b.opportunity.createdAt ? -1 : 1),
+  );
+
+  for (const { opportunity, fields } of ranked) {
+    const card = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
+    for (const field of fields) {
+      if (openEngine >= MAX_OPEN_ENGINE_QUESTIONS) return out;
+      const entry = card.entries.find((one) => one.key === field);
+      const key = questionKey(opportunity.id, field);
+      const raised = await raiseNeed({
+        projectId,
+        opportunityId: opportunity.id,
+        actorRef: BRAIN,
+        blockedAction: `${entry?.label ?? field} for "${opportunity.title}"`,
+        whyItMatters:
+          'This opening cannot be qualified without it, its deep dives for this epoch are spent, ' +
+          'and it is a fact about the world — so Brain looks it up as one narrow question.',
+        recommendedPath: entry?.task ?? `Establish the ${field} from published sources.`,
+        setupEffort: 'One bounded look.',
+        nextStep: entry?.task ?? `Establish the ${field} from published sources.`,
+        completionCondition: `The ${field} is recorded on this card.`,
+        blocksState: 'EXECUTING',
+        requestKey: key,
+        blockerKey: parseBlockerKey(`FIELD:${field}`),
+      });
+      if (!raised.ok) continue;
+      keys.add(key);
+      openEngine += 1;
+      out.push({ needId: raised.value.id, opportunityId: opportunity.id, field });
+    }
+  }
   return out;
 }
 
@@ -1179,6 +1306,8 @@ export async function operate(
   journey?: JourneyTickReport;
   /** READY_TO_TEST openings handed to the Software Factory (`factoryHandoff.ts`). */
   factory?: FactoryHandoffPass;
+  /** Qualified openings made execution jobs, and live jobs kept in step (`jobPipeline.ts`). */
+  jobs?: JobReconciliation | { error: string };
   /** What changed and who it reconsidered (`reconsider.ts`); absent when Cash Mode is not active. */
   reconsideration?:
     | Omit<ReconsiderPass, 'readings'>
@@ -1246,7 +1375,7 @@ export async function operate(
   );
   const research = await applyResearchAnswers(projectId);
   const proposed = await proposeCommercialTerms(projectId);
-  const gaps = await reconcileDiscoverableGaps(projectId);
+  const gaps = [...(await reconcileDiscoverableGaps(projectId)), ...(await reconcileEngineGaps(projectId))];
   const continuations = await runNeedContinuations(projectId, now);
   const dependentWork = await startDependentWork(projectId);
   /*
@@ -1307,6 +1436,19 @@ export async function operate(
    */
   const invoicing = await runInvoicing(projectId, now ? new Date(now) : new Date());
   const journey = await advanceJourney(projectId, now ? new Date(now) : new Date());
+  /*
+   * Then the jobs: every opening the passes above qualified, readied or took
+   * into execution gets its one canonical execution job, and each live job
+   * follows its opportunity's state. After the journey because the journey is
+   * what moves an opportunity to DELIVERING or COLLECTED. Its own failure
+   * domain: a job pass that cannot read must not stop the ledger below.
+   */
+  let jobs: JobReconciliation | { error: string };
+  try {
+    jobs = await reconcileCashJobs(projectId);
+  } catch (error) {
+    jobs = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+  }
   /*
    * And the possibility ledger, last, reading everything the passes above
    * wrote.
@@ -1369,6 +1511,7 @@ export async function operate(
     monetization,
     journey,
     factory,
+    jobs,
   };
 }
 
