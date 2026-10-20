@@ -755,8 +755,64 @@ describe('a need that is a question becomes work', () => {
     // decides whether anything may be spent. Neither is this function's call.
     expect(candidate.state).toBe('CAPTURED');
     expect((await getNeed(raised.value.id))!.candidateId).toBe(candidate.id);
+    // The question names the opening and the one thing to find, and carries
+    // none of the sentence written for a person about "this card".
+    const opening = (await getOpportunity(id))!;
+    expect(candidate.statement).toContain((opening.buyingSignal ?? opening.title).trim());
+    expect(candidate.statement).toContain('Name the role that signs.');
+    expect(candidate.statement).not.toContain('The card has no payer');
 
     // And once, however many ticks read it.
+    expect(await startDependentWork(projectId)).toEqual([]);
+  });
+
+  it('asks once more a question whose first asking named no opening and failed', async () => {
+    await granted();
+    const id = await readyPiece();
+    const raised = await raiseNeed({
+      projectId,
+      opportunityId: id,
+      actorRef: 'BRAIN',
+      blockedAction: 'Payer for this',
+      whyItMatters: 'This card cannot be tested without it.',
+      recommendedPath: 'Read the source.',
+      setupEffort: 'One bounded look.',
+      nextStep: 'Name the person or role who can approve payment.',
+      completionCondition: 'A payer is recorded on the card.',
+      blocksState: 'EXECUTING',
+      requestKey: `question:${id}:payer`,
+    });
+    if (!raised.ok) throw new Error(raised.reason);
+    const {
+      createCandidate,
+      getCandidate,
+      transitionCandidate,
+    } = await import('../server/repos/russellCandidates.ts');
+    const { setNeedCandidate } = await import('../server/repos/cashPortfolio.ts');
+    // What production asked: the person's sentence, with no opening in it.
+    const old = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'Payer for this',
+      statement: 'This card cannot be tested without it. Name the person or role who can approve payment.',
+    });
+    await setNeedCandidate(raised.value.id, old.id);
+
+    // Still being judged: not asked again.
+    expect(await startDependentWork(projectId)).toEqual([]);
+
+    // Its research ended without an answer: asked once, naming the opening.
+    expect(await transitionCandidate({ candidateId: old.id, from: 'CAPTURED', to: 'PARKED' })).toBe(true);
+    const again = await startDependentWork(projectId);
+    expect(again).toHaveLength(1);
+    const fresh = (await getCandidate(again[0]!.candidateId))!;
+    expect(fresh.statement.startsWith('For this specific opening')).toBe(true);
+    expect((await getNeed(raised.value.id))!.candidateId).toBe(fresh.id);
+    // The first asking keeps its row.
+    expect((await getCandidate(old.id))!.statement).toContain('This card cannot');
+
+    // And never a third time, however that one ends.
+    await transitionCandidate({ candidateId: fresh.id, from: 'CAPTURED', to: 'PARKED' });
     expect(await startDependentWork(projectId)).toEqual([]);
   });
 

@@ -892,6 +892,21 @@ export async function setNeedCandidate(id: string, candidateId: string): Promise
   return result.changes === 1;
 }
 
+/**
+ * Point a need at a replacement idea, only if it still points at `from`.
+ *
+ * Used once, for a need whose first question named no opening (see
+ * `dependentQuestion`). The old idea keeps its row, its statement and its
+ * missions, so which question was asked first is still readable.
+ */
+export async function replaceNeedCandidate(id: string, from: string, to: string): Promise<boolean> {
+  const result = await getDb().run(
+    'UPDATE cash_needs SET candidate_id = ?, updated_at = ? WHERE id = ? AND candidate_id = ?',
+    [to, portfolioNow(), id, from],
+  );
+  return result.changes === 1;
+}
+
 /** What the continuation did. Written once, by whoever claimed it. */
 export async function recordNeedContinuation(id: string, note: string): Promise<void> {
   await getDb().run(

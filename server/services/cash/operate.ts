@@ -58,6 +58,7 @@ import {
   deferNeedContinuation,
   finishNeedContinuation,
   setNeedCandidate,
+  replaceNeedCandidate,
   opportunitiesRequiring,
   opportunitiesTouchedSince,
   setNeedBlockerKeyIfUnset,
@@ -71,7 +72,8 @@ import {
   type ReconsiderPass,
 } from './reconsider.ts';
 import { projectStandings, recordStandingChanges, type StandingChange } from './standing.ts';
-import { createCandidate } from '../../repos/russellCandidates.ts';
+import { createCandidate, getCandidate } from '../../repos/russellCandidates.ts';
+import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import {
   readAllCapabilities,
   readCapability,
@@ -684,6 +686,35 @@ export interface DependentWork {
 }
 
 /**
+ * The question a need's research actually asks: the opening named, then the
+ * one thing to establish.
+ *
+ * It used to be the need's `whyItMatters` and `nextStep` — *"This card cannot
+ * be tested without it … Name the person or role who can approve payment."* —
+ * and the compiler takes a candidate's statement as the question, so a worker
+ * was asked who approves payment with no "it", no market and no opening.
+ * Production, Cash Mode 1: workers refused these as unanswerable ("refers to
+ * an unseen 'card', names no market") and the missions failed, each holding a
+ * slot first. The opening is described in the same quoted shape the deep dive
+ * uses, so nothing here is invented and the envelope reads it the same way.
+ */
+export function dependentQuestion(
+  opportunity: CashOpportunity,
+  need: Pick<CashNeed, 'nextStep'>,
+  listing = '',
+): string {
+  const signal = (opportunity.buyingSignal ?? opportunity.title).replace(/\s+/g, ' ').trim();
+  const source = opportunity.source ? ` The source is ${opportunity.source}.` : '';
+  const observed = opportunity.signalObservedAt
+    ? ` It was published or observed on ${opportunity.signalObservedAt}.`
+    : '';
+  return (
+    `${OPENING_NAMED} — "${signal}" — establish one thing from published ` +
+    `sources: ${need.nextStep.trim()}${source}${observed}${listing}`
+  ).trim();
+}
+
+/**
  * Turn the questions among the open needs into real work.
  *
  * Only where the missing thing is a *question* — an unrecognised capability is
@@ -696,8 +727,15 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
   if (!(await getCashMode(projectId))) return [];
   const out: DependentWork[] = [];
   for (const need of await listNeeds({ projectId, states: ['OPEN'] })) {
-    if (need.candidateId || !need.opportunityId) continue;
+    if (!need.opportunityId) continue;
     if (!need.requestKey?.startsWith('question:')) continue;
+    /*
+     * A need already asked is asked again only when its first question named
+     * no opening and its research then failed — once, because the replacement
+     * carries the new shape and never matches this again.
+     */
+    const previous = need.candidateId ? await askedWithoutTheOpening(need.candidateId) : null;
+    if (need.candidateId && !previous) continue;
     const opportunity = await getOpportunity(need.opportunityId);
     if (!opportunity) continue;
     /*
@@ -718,12 +756,32 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
       projectId,
       visibility: 'SHARED',
       title: need.blockedAction,
-      statement: `${need.whyItMatters} ${need.nextStep}${await listingSentenceFor(opportunity)}`.trim(),
+      statement: dependentQuestion(opportunity, need, await listingSentenceFor(opportunity)),
     });
-    await setNeedCandidate(need.id, candidate.id);
+    const pointed = previous
+      ? await replaceNeedCandidate(need.id, previous, candidate.id)
+      : await setNeedCandidate(need.id, candidate.id);
+    if (!pointed) continue;
     out.push({ needId: need.id, candidateId: candidate.id });
   }
   return out;
+}
+
+/** The shape every `dependentQuestion` begins with. */
+const OPENING_NAMED = 'For this specific opening';
+
+/**
+ * The idea id, when that idea asked a need's question without naming the
+ * opening and its research ended without an answer; otherwise null.
+ */
+async function askedWithoutTheOpening(candidateId: string): Promise<string | null> {
+  const candidate = await getCandidate(candidateId);
+  if (!candidate || candidate.statement.startsWith(OPENING_NAMED)) return null;
+  const mission = await latestMissionForCandidate(candidateId);
+  const failed = mission
+    ? mission.state === 'FAILED' || mission.state === 'CANCELLED'
+    : candidate.state === 'PARKED';
+  return failed ? candidateId : null;
 }
 
 export interface AutonomousStep {
