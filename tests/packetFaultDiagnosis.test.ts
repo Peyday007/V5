@@ -25,11 +25,12 @@ import {
   createOrchestration,
   currentFragments,
   getOrchestration,
+  insertClaims,
   updateFragment,
   updateOrchestration,
 } from '../server/repos/research.ts';
-import { cancelWork, enqueueWork } from '../server/repos/workQueue.ts';
-import { advancePacket, faultedOutReason } from '../server/services/research/packetRunner.ts';
+import { cancelWork, enqueueWork, listWorkItemsForOrchestration } from '../server/repos/workQueue.ts';
+import { advancePacket, faultedOutReason, MAX_ITEMS_PER_TARGET } from '../server/services/research/packetRunner.ts';
 
 let projectId = '';
 let layerId = '';
@@ -152,5 +153,102 @@ describe('a faulted packet keeps the diagnosis it recorded', () => {
     expect(faultedOutReason('planning')).toContain('planning');
     // Kept, because three suites match on it and a mission carries it verbatim.
     expect(faultedOutReason('synthesis')).toMatch(/finished without recording anything/i);
+  });
+});
+
+describe('an item the queue exhausted is replaced, bounded, rather than parked', () => {
+  /** Mark every synthesis item of the packet as cancelled with its attempts spent. */
+  /** The packet holds evidence, so the synthesis it is owed is a real one. */
+  async function withAcceptedClaim(orchestrationId: string): Promise<string> {
+    const [fragment] = await currentFragments(orchestrationId);
+    await insertClaims([
+      {
+        orchestrationId,
+        fragmentId: fragment!.id,
+        passId: null,
+        passKey: 'TARGETED',
+        claim: 'A dated posting asks to be paid for this.',
+        sourceUrl: 'https://example.test/posting',
+        sourceTitle: 'A posting',
+        sourcePublisher: 'A marketplace',
+        sourceDate: '2026-10-19',
+        evidenceExcerpt: 'We will pay for this.',
+        evidenceLocator: 'the page',
+        evidenceLane: 'demand_signal',
+        retrievedAt: '2026-10-19T00:00:00.000Z',
+        confidence: 0.9,
+        validationState: 'SOURCED',
+        validationDetail: null,
+        sourced: true,
+        accepted: true,
+        claimType: 'SOURCED_FACT',
+        contentHash: 'd'.repeat(64),
+      } as never,
+    ]);
+    return orchestrationId;
+  }
+
+  async function exhaustSynthesisItems(orchestrationId: string): Promise<void> {
+    const { getDb } = await import('../server/db/database.ts');
+    for (const item of await listWorkItemsForOrchestration(orchestrationId)) {
+      if (item.workType !== 'RESEARCH_SYNTHESIZE') continue;
+      if (item.state === 'QUEUED' || item.state === 'LEASED') {
+        await cancelWork(item.id, 'This item has spent all 2 of its attempts');
+      }
+      await getDb().run('UPDATE work_items SET attempt_count = max_attempts WHERE id = ?', [item.id]);
+    }
+  }
+
+  it('gives a synthesis that ran out of attempts one more item, and resumes the packet', async () => {
+    const orchestrationId = await withAcceptedClaim(await synthesisFaultedPacket(faultedOutReason('synthesis')));
+    await exhaustSynthesisItems(orchestrationId);
+
+    const result = await advancePacket(orchestrationId);
+    expect(result.status).toBe('SYNTHESIZING');
+    expect(result.enqueued.map((entry) => entry.workType)).toEqual(['RESEARCH_SYNTHESIZE']);
+    const after = (await getOrchestration(orchestrationId))!;
+    // Running again, so it must no longer be showing why it stopped.
+    expect(after.failureReason).toBeNull();
+    expect(after.completedAt).toBeNull();
+  });
+
+  it('parks the packet once the bound is spent, as before', async () => {
+    const orchestrationId = await withAcceptedClaim(await synthesisFaultedPacket(null));
+    for (let round = 1; round < MAX_ITEMS_PER_TARGET; round += 1) {
+      await exhaustSynthesisItems(orchestrationId);
+      expect((await advancePacket(orchestrationId)).status).toBe('SYNTHESIZING');
+    }
+    await exhaustSynthesisItems(orchestrationId);
+    const result = await advancePacket(orchestrationId);
+    expect(result.status).toBe('NEEDS_HUMAN');
+    const synth = (await listWorkItemsForOrchestration(orchestrationId)).filter(
+      (item) => item.workType === 'RESEARCH_SYNTHESIZE',
+    );
+    expect(synth).toHaveLength(MAX_ITEMS_PER_TARGET);
+  });
+
+  it('does not replace an item cancelled for another reason', async () => {
+    // The fixture's item is cancelled with its attempts unspent.
+    const orchestrationId = await withAcceptedClaim(await synthesisFaultedPacket(null));
+    expect((await advancePacket(orchestrationId)).status).toBe('NEEDS_HUMAN');
+  });
+
+  it('does not replace a synthesis whose earlier item reached the effect', async () => {
+    const orchestrationId = await withAcceptedClaim(await synthesisFaultedPacket(null));
+    await exhaustSynthesisItems(orchestrationId);
+    const { getDb } = await import('../server/db/database.ts');
+    const [item] = (await listWorkItemsForOrchestration(orchestrationId)).filter(
+      (one) => one.workType === 'RESEARCH_SYNTHESIZE',
+    );
+    // A filing that reached the store may have uploaded bytes: synthesisRecovery's.
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO idempotency_operations
+         (id, scope_hash, key_fingerprint, namespace, project_id, created_by_type,
+          work_item_id, request_fingerprint, reserved_at, created_at, updated_at)
+       VALUES ('idop_test', 'scope', 'fp', 'research:synthesis', ?, 'WORKER', ?, 'req', ?, ?, ?)`,
+      [projectId, item!.id, now, now, now],
+    );
+    expect((await advancePacket(orchestrationId)).status).toBe('NEEDS_HUMAN');
   });
 });

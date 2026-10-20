@@ -150,9 +150,79 @@ export interface AdvanceResult {
  * `max_attempts`, under one key. If an item reached a terminal state and the
  * state it should have moved did not move, that is a fault for a person to see
  * — not something to try again with a fresh key.
+ *
+ * One exception, and `mayReplace` below is the whole of it: an item whose
+ * attempts the queue spent, on a target where a second item cannot duplicate
+ * anything, gets a bounded replacement instead of a park.
  */
 function alreadyCreated(items: WorkItem[], predicate: (item: WorkItem) => boolean): boolean {
   return items.some(predicate);
+}
+
+/**
+ * How many items one (type, target) may ever have: the first and two
+ * replacements. A bound on a loop, not a budget.
+ */
+export const MAX_ITEMS_PER_TARGET = 3;
+
+/**
+ * Whether a target whose earlier items all ended without recording anything
+ * may be given one more item, instead of parking the packet for a person.
+ *
+ * The rule above exists because a second item is a second idempotency scope,
+ * and for fragment research that could file a second claim ledger. It does not
+ * apply where the earlier items provably recorded nothing: a verification
+ * records a verdict on the fragment, an audit role a pass, and this is asked
+ * only once those rows are absent. So there is nothing to duplicate.
+ *
+ * What it answers is an item that ran out of attempts on lease expiries: an
+ * outage, a session that ended mid-step. Production Cash Mode 1, 2026-10-20:
+ * thirteen packets parked "finished without recording anything" across
+ * Brain's own 13:25–14:20Z outage, every one waiting for a person to
+ * investigate a fault nobody had to fix.
+ *
+ * Planning stays out, for the reason the docstring on `researchItemRecorded`
+ * gives: a plan that yields no fragments would be re-issued for nothing.
+ * Fragment research stays out because its retries are the repair ladder's.
+ * A synthesis is replaced only when no earlier item reached the effect at all,
+ * because a failed filing may have uploaded bytes before rolling back, and
+ * that case belongs to `synthesisRecovery`, which asks the store first.
+ */
+async function mayReplace(
+  items: WorkItem[],
+  predicate: (item: WorkItem) => boolean,
+  type: 'RESEARCH_VERIFY' | 'RESEARCH_AUDIT' | 'RESEARCH_SYNTHESIZE',
+): Promise<boolean> {
+  const earlier = items.filter(predicate);
+  if (earlier.length === 0 || earlier.length >= MAX_ITEMS_PER_TARGET) return false;
+  /*
+   * Every earlier item ran out of attempts: FAILED, or cancelled by
+   * `concludeUnworkablePackets` with its attempts spent. A SUCCEEDED item that
+   * recorded nothing is a different fact — a worker said it was done, which
+   * `brain_complete_work` now refuses — and stays a fault for a person, as do
+   * items cancelled for any other reason (a round reopened, a packet ended).
+   */
+  /*
+   * FAILED counts only when the queue spent the attempts — a retryable failure
+   * or a lapsed lease on the last one. A worker that failed the item as not
+   * retryable said not to try again, and the repair ladder answers that.
+   */
+  const exhausted = (item: WorkItem): boolean =>
+    (item.state === 'FAILED' &&
+      (item.failureCategory === 'ATTEMPTS_EXHAUSTED' ||
+        item.failureCategory === 'LEASE_EXPIRED' ||
+        item.failureCategory === 'TIMEOUT')) ||
+    (item.state === 'CANCELLED' && item.attemptCount >= item.maxAttempts);
+  if (!earlier.every(exhausted)) return false;
+  if (type === 'RESEARCH_SYNTHESIZE') {
+    const reached = await getDb().get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM idempotency_operations
+        WHERE work_item_id IN (${earlier.map(() => '?').join(', ')})`,
+      earlier.map((item) => item.id),
+    );
+    if (Number(reached?.n ?? 0) > 0) return false;
+  }
+  return true;
 }
 
 /**
@@ -1795,7 +1865,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     const verifyItem = (item: WorkItem): boolean =>
       item.workType === 'RESEARCH_VERIFY' && item.fragmentId === fragment.id;
     if (stillRunning(items, verifyItem)) continue;
-    if (alreadyCreated(items, verifyItem)) {
+    if (alreadyCreated(items, verifyItem) && !(await mayReplace(items, verifyItem, 'RESEARCH_VERIFY'))) {
       // This fragment is stuck. The others are not, and the loop goes on.
       await faultedFragment({ orchestration, fragment, what: 'verification' });
       faulted += 1;
@@ -1972,7 +2042,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
         waitingOn: 'the synthesis',
       };
     }
-    if (alreadyCreated(items, synthItem)) {
+    if (alreadyCreated(items, synthItem) && !(await mayReplace(items, synthItem, 'RESEARCH_SYNTHESIZE'))) {
       return await faultedOut({ orchestration, what: 'synthesis' });
     }
     const claims = await acceptedClaims(orchestration.id);
@@ -2118,7 +2188,12 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     enqueued.push(
       await enqueueResearchItem({ orchestration, type: 'RESEARCH_SYNTHESIZE', priority: 8 }),
     );
-    await updateOrchestration(orchestration.id, { status: 'SYNTHESIZING', currentPass: 'SYNTHESIS' });
+    // A packet resumed from NEEDS_HUMAN must not still be showing why it stopped.
+    await updateOrchestration(orchestration.id, {
+      status: 'SYNTHESIZING',
+      currentPass: 'SYNTHESIS',
+      ...(orchestration.status === 'NEEDS_HUMAN' ? { failureReason: null, completedAt: null } : {}),
+    });
     return { orchestrationId, status: 'SYNTHESIZING', enqueued, waitingOn: null };
   }
 
@@ -2159,7 +2234,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
         waitingOn: `the ${role} audit pass`,
       };
     }
-    if (alreadyCreated(items, auditItem)) {
+    if (alreadyCreated(items, auditItem) && !(await mayReplace(items, auditItem, 'RESEARCH_AUDIT'))) {
       return await faultedOut({ orchestration, what: `${role.toLowerCase()} audit` });
     }
     enqueued.push(
@@ -2171,7 +2246,11 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
       }),
     );
     if (orchestration.status !== 'AUDITING') {
-      await updateOrchestration(orchestration.id, { status: 'AUDITING', currentPass: 'AUDIT' });
+      await updateOrchestration(orchestration.id, {
+        status: 'AUDITING',
+        currentPass: 'AUDIT',
+        ...(orchestration.status === 'NEEDS_HUMAN' ? { failureReason: null, completedAt: null } : {}),
+      });
     }
     return { orchestrationId, status: 'AUDITING', enqueued, waitingOn: null };
   }

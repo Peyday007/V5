@@ -1,0 +1,73 @@
+# Reading what the research fleet finished, by account, before and after a
+# moment — productive completions, refused completions, handbacks, expiries and
+# parked packets — from the authoritative rows, inside the released container.
+#
+# It prints the running artifact's own `BRAIN_REVISION` first, and it is
+# read-only: `scripts/productivity-report.ts` performs no INSERT, UPDATE or
+# DELETE, enqueues nothing and fires nothing.
+name: Productivity report
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Optional project id (prj_...). Omit to report every project.'
+        required: false
+        default: ''
+      hours:
+        description: 'Length of each window, in hours'
+        required: false
+        default: '6'
+      split:
+        description: 'Optional ISO time: report the window before and the window after it'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one,
+# and a report that raced a restart would be reporting whichever half answered.
+concurrency:
+  group: brain-console-productivity-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Read what the fleet finished
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Wait for a release, rather than racing one.
+      #
+      # This workflow used to share `deploy-brain` with the deploy and with
+      # every other operator command, which kept it off a machine mid-release
+      # and *also* let it silently cancel a queued deploy — GitHub keeps one
+      # pending run per group and the newest evicts the one that was waiting.
+      # The group is this workflow's own now, so nothing here can evict
+      # anything; this step is the half of the old group that was worth
+      # keeping. See `.github/actions/await-release/action.yml`.
+      - uses: ./.github/actions/await-release
+
+      - name: Report
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          args="--hours ${{ inputs.hours }}"
+          if [ -n "${{ inputs.project }}" ]; then
+            args="$args --project ${{ inputs.project }}"
+          fi
+          if [ -n "${{ inputs.split }}" ]; then
+            args="$args --split ${{ inputs.split }}"
+          fi
+          set +e
+          # The pool size is set here as well as in the script, because the
+          # workflow runs from the checked-out repository and the script runs
+          # from the image — so this one takes effect without a deploy, which
+          # is what matters when the pooler is already tight.
+          flyctl ssh console --app "$app" \
+            -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/productivity-report.sh $args" \
+            2>&1 | tee productivity-report.txt
+          set -e
+          grep -q '^PRODUCTIVITY-REPORT: OK' productivity-report.txt
