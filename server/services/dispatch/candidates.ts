@@ -349,13 +349,24 @@ function chunks<T>(values: readonly T[], size: number): T[][] {
  *
  * A Routine with at least `NETWORK_BLOCK_THRESHOLD` such blocks attributed to
  * its sessions inside `NETWORK_BLOCK_WINDOW_MS`, and no accepted fragment in the
- * same window, is not fired for research. It is not quarantined and is still
- * fired for other work; the window is the recovery — once it passes with no new
- * block the Routine is eligible again and its next session tests it, so a
- * repaired environment comes back without anybody remembering to clear it.
+ * same window, is not fired for research that needs sources (`binNeedsWeb`). It
+ * is not quarantined and is still fired for planning, synthesis and audits. It
+ * stays that way until a fragment it researched is accepted, or a day passes
+ * after its newest block, when one session tests it again — so a repaired
+ * environment comes back without anybody remembering to clear it.
  */
 export const NETWORK_BLOCK_THRESHOLD = 3;
 export const NETWORK_BLOCK_WINDOW_MS = 6 * 60 * 60_000;
+/**
+ * How long a Routine that has failed to reach the web stays treated that way
+ * after its newest block, while nothing it researched has been accepted since.
+ * Past this, one session is allowed to test it again; a further block starts
+ * the day again. Without it the six-hour window was the recovery, and each
+ * window cost three fragments per Routine on an environment nobody had fixed.
+ */
+export const NETWORK_BLOCK_RETEST_MS = 24 * 60 * 60_000;
+/** How far back blocks are read at all. */
+const NETWORK_BLOCK_MEMORY_MS = 7 * 24 * 60 * 60_000;
 const NETWORK_BLOCK_PATTERNS = ['%ENOTFOUND%', '%EAI_AGAIN%', '%getaddrinfo%', '%egress%', '%network polic%'];
 
 /**
@@ -380,31 +391,48 @@ export async function networkBlockedRoutines(nowMs: number): Promise<Set<string>
 }
 
 async function readNetworkBlockedRoutines(nowMs: number): Promise<Set<string>> {
-  const since = new Date(nowMs - NETWORK_BLOCK_WINDOW_MS).toISOString();
+  const since = new Date(nowMs - NETWORK_BLOCK_MEMORY_MS).toISOString();
   const like = NETWORK_BLOCK_PATTERNS.map(() => 'f.blocked_reason LIKE ?').join(' OR ');
   const routineOf =
     `(SELECT p.executor_routine_id FROM research_passes p WHERE p.fragment_id = f.id` +
     ` AND p.executor_routine_id IS NOT NULL ORDER BY p.started_at DESC LIMIT 1)`;
-  const blocked = await getDb().all<{ routine_id: string | null; n: number }>(
-    `SELECT routine_id, COUNT(*) AS n FROM (
-       SELECT ${routineOf} AS routine_id FROM research_fragments f
+  const blocked = await getDb().all<{ routine_id: string | null; at: string }>(
+    `SELECT routine_id, at FROM (
+       SELECT ${routineOf} AS routine_id, f.updated_at AS at FROM research_fragments f
         WHERE f.status = 'BLOCKED' AND f.updated_at >= ? AND f.blocked_reason IS NOT NULL AND (${like})
-     ) x WHERE routine_id IS NOT NULL GROUP BY routine_id`,
+     ) x WHERE routine_id IS NOT NULL`,
     [since, ...NETWORK_BLOCK_PATTERNS],
   );
-  const accepted = await getDb().all<{ routine_id: string | null }>(
-    `SELECT DISTINCT routine_id FROM (
-       SELECT ${routineOf} AS routine_id FROM research_fragments f
+  const accepted = await getDb().all<{ routine_id: string | null; at: string | null }>(
+    `SELECT routine_id, MAX(at) AS at FROM (
+       SELECT ${routineOf} AS routine_id, f.accepted_at AS at FROM research_fragments f
         WHERE f.status = 'ACCEPTED' AND f.accepted_at >= ?
-     ) x WHERE routine_id IS NOT NULL`,
+     ) x WHERE routine_id IS NOT NULL GROUP BY routine_id`,
     [since],
   );
-  const working = new Set(accepted.map((row) => row.routine_id).filter((id): id is string => !!id));
-  const out = new Set<string>();
+  const lastAccepted = new Map<string, string>();
+  for (const row of accepted) if (row.routine_id && row.at) lastAccepted.set(row.routine_id, row.at);
+  const recentStart = new Date(nowMs - NETWORK_BLOCK_WINDOW_MS).toISOString();
+  const retestAfter = new Date(nowMs - NETWORK_BLOCK_RETEST_MS).toISOString();
+  const tally = new Map<string, { recent: number; sinceAccepted: number; newest: string }>();
   for (const row of blocked) {
-    if (row.routine_id && Number(row.n) >= NETWORK_BLOCK_THRESHOLD && !working.has(row.routine_id)) {
-      out.add(row.routine_id);
-    }
+    if (!row.routine_id) continue;
+    const one = tally.get(row.routine_id) ?? { recent: 0, sinceAccepted: 0, newest: '' };
+    if (row.at >= recentStart) one.recent += 1;
+    if (!lastAccepted.has(row.routine_id) || row.at > lastAccepted.get(row.routine_id)!) one.sinceAccepted += 1;
+    if (row.at > one.newest) one.newest = row.at;
+    tally.set(row.routine_id, one);
+  }
+  const out = new Set<string>();
+  for (const [routine, one] of tally) {
+    const accepted = lastAccepted.get(routine);
+    // Nothing accepted since the newest block: the environment has not been shown to work again.
+    if (accepted && accepted >= one.newest) continue;
+    const burst = one.recent >= NETWORK_BLOCK_THRESHOLD;
+    // Remembered beyond the burst window, so a surface that cannot reach the web is
+    // retested by one fragment a day rather than three every six hours.
+    const remembered = one.sinceAccepted >= NETWORK_BLOCK_THRESHOLD && one.newest >= retestAfter;
+    if (burst || remembered) out.add(routine);
   }
   return out;
 }
@@ -648,10 +676,8 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
       routine,
       account,
       connectorHealth: healthByRoutine.get(routine.id) ?? null,
-      servesFamilies: withoutResearchIf(
-        networkBlocked.has(routine.id),
-        routine.workerId ? scopeByWorker.get(routine.workerId)?.families ?? null : null,
-      ),
+      servesFamilies: routine.workerId ? scopeByWorker.get(routine.workerId)?.families ?? null : null,
+      webBlocked: networkBlocked.has(routine.id),
       servesRepositories: routine.workerId
         ? scopeByWorker.get(routine.workerId)?.repositories ?? null
         : null,
@@ -701,11 +727,6 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
  * (`null`) becomes the non-research families explicitly, because "fire it for
  * anything" is exactly what a known block must not mean.
  */
-function withoutResearchIf(blocked: boolean, families: string[] | null): string[] | null {
-  if (!blocked) return families;
-  return (families ?? ['RESEARCH', 'GENERAL']).filter((family) => family !== 'RESEARCH');
-}
-
 /** What one worker may be handed, in the dimensions the fire decides on. */
 interface WorkerRoutingScope {
   families: string[];

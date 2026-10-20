@@ -375,7 +375,7 @@ const MUST_REACH = [
   'Research',
   'Build',
   'Needs you',
-  'Who',
+  'Workforce',
   'All work',
   'Ideas',
   'What Brain knows',
@@ -923,8 +923,8 @@ const JOURNEY_AFTER: JourneyStep[] = [
   },
   {
     name: '23-who-and-fleet',
-    what: 'Who, from the thumb bar: the people on the project and the fleet behind it — three capacity numbers that are not each other.',
-    act: railPress('Who'),
+    what: 'Workforce, from the thumb bar: one card per Claude account, then the people on the project and the fleet behind it.',
+    act: railPress('Workforce'),
     // `/fleet`, not `/who`. The rail's label and the address are different
     // things, and a predicate written from the label reported a screen that had
     // plainly arrived as never arriving.

@@ -2893,6 +2893,16 @@ function MoneyRow({ page }: { page: CashPage }): JSX.Element {
       <h3>Money</h3>
       {view ? (
         <ul className="rs-cash-tiers">
+          {/* Actual money first, and labelled as actual: these two come from
+              settled ledger entries, never from a forecast or an estimate. */}
+          <li className="rs-cash-actual">
+            <strong>{money(view.myCash.position.customerPaymentsCents, view.myCash.position.currency)}</strong>
+            <span>Received (actual)</span>
+          </li>
+          <li className="rs-cash-actual">
+            <strong>{money(view.myCash.position.completedContributionCents, view.myCash.position.currency)}</strong>
+            <span>Earned after costs (actual)</span>
+          </li>
           <li>
             <strong>{money(view.authority.maxCommittedCents, view.myCash.position.currency)}</strong>
             <span>Authorized</span>

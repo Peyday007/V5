@@ -44,6 +44,7 @@ import type { CollectionView, RankedThread, Starter } from '../../../server/serv
 import type { FrontierView, FrontierRegionView } from '../../../server/services/russell/frontier.ts';
 import type { SearchHit, SearchKind, SearchResult } from '../../../server/services/russell/search.ts';
 import type { FleetView as FleetReading, SlownessExplanation } from '../../../server/services/fleet/view.ts';
+import type { WorkforceView } from '../../../server/services/fleet/workforce.ts';
 import type { LabExperiment, LabMode, TestEnvelope } from '../../../server/services/fleet/lab.ts';
 import type { MapType, MapView } from '../../../server/services/russell/maps.ts';
 import type { WhyThisMatters } from '../../../server/services/russell/whyThisMatters.ts';
@@ -70,6 +71,7 @@ export type {
   FrontierView,
   HomeView,
   FleetReading,
+  WorkforceView,
   LabExperiment,
   LabMode,
   MapType,
@@ -316,6 +318,10 @@ export const RussellApi = {
    */
   fleetReading: (projectId: string): Promise<{ fleet: FleetReading }> =>
     api(`/api/russell/projects/${encodeURIComponent(projectId)}/fleet`),
+
+  /** One card per Claude account: what it holds, what it finished, whether it is idle. */
+  workforce: (projectId: string): Promise<{ workforce: WorkforceView }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/workforce`),
 
   /** Why one piece of work took as long as it did, from recorded events. */
   whySlow: (projectId: string, binId: string): Promise<{ explanation: SlownessExplanation }> =>

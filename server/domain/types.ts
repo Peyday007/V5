@@ -5437,6 +5437,11 @@ export const COMPLETION_CONTRACTS = [
   // bin that pushes is fired only at a Routine whose newest probe for that
   // repository is PROVEN. See `services/dispatch/deliveryProof.ts`.
   'FACTORY_DELIVERY_PROBE_V1',
+  // A finished freelance deliverable, as a specification. The worker never
+  // uploads a file: it submits the cells, slides, paragraphs, SVG or shapes, and
+  // Brain renders the files itself and verifies the bytes it produced before the
+  // bin may complete. See `services/cash/freelancer/deliverables/`.
+  'FREELANCE_DELIVERABLE_V1',
 ] as const;
 export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
 
@@ -11156,4 +11161,26 @@ export interface MarketplaceJobRow {
   milestone_external_id: string | null;
   created_at: string;
   updated_at: string;
+  categories: string;
+  economics: string | null;
+  needs_client_files: number;
+  deliverable_bin_id: string | null;
+  revisions: number;
+  client_files: string | null;
+}
+
+export interface MarketplaceDeliverableRow {
+  id: string;
+  project_id: string;
+  job_id: string;
+  version: number;
+  bin_id: string;
+  kinds: string;
+  spec: string;
+  message: string | null;
+  files: string;
+  verification: string;
+  state: string;
+  created_at: string;
+  delivered_at: string | null;
 }

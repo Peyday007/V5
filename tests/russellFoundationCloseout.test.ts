@@ -683,6 +683,7 @@ describe('the refinement lifecycle is bounded and says what it is doing', () => 
     cashModeId: string;
     missionState: 'RUNNING' | 'DONE' | 'NEEDS_HUMAN';
     startedAt: string;
+    waitingOn?: string;
   }): Promise<string> {
     const candidate = await createCandidate({
       projectId: input.projectId,
@@ -714,7 +715,7 @@ describe('the refinement lifecycle is bounded and says what it is doing', () => 
         from: 'RUNNING',
         to: input.missionState,
         ...(input.missionState === 'NEEDS_HUMAN'
-          ? { waitingOn: 'A decision only a person can make.' }
+          ? { waitingOn: input.waitingOn ?? 'A decision only a person can make.' }
           : {}),
       });
     }
@@ -773,6 +774,40 @@ describe('the refinement lifecycle is bounded and says what it is doing', () => 
       (one) => one.validationState === 'PENDING' || one.validationState === 'RUNNING',
     );
     expect(live).toHaveLength(0);
+  });
+
+  it('sends a dive the judge returned for more research on to its next round', async () => {
+    // Production, 2026-10-19: 30 openings waited on a person because their
+    // dive's report drew PATCH or MORE_RESEARCH. More research is the next dive.
+    const fixture = await freshProject();
+    const owner = await createUser({
+      email: 'judge@example.com',
+      displayName: 'Peyton',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    const started = await activate({
+      projectId: fixture.project.id,
+      ownerUserId: owner.id,
+      actorUserId: owner.id,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    if (!started.ok) throw new Error('not activated');
+    const returned = await dive({
+      projectId: fixture.project.id,
+      ownerUserId: owner.id,
+      cashModeId: started.mode.id,
+      missionState: 'NEEDS_HUMAN',
+      startedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      waitingOn:
+        "The judge's verdict was PATCH: the report needs more research before it can stand, and none of its gaps can be repaired automatically.",
+    });
+    const settled = await settleValidations(fixture.project.id);
+    expect(settled).toContainEqual({ opportunityId: returned, to: 'BLOCKED' });
+    const after = (await getOpportunity(returned))!;
+    expect(after.validationState).toBe('BLOCKED');
+    // The epoch still has its second round, so it is offered rather than waiting on anybody.
+    expect((await whyNotDiving(after)).kind).not.toBe('AWAITING_PERSON');
   });
 
   it('never blocks a dive whose mission has finished, however long the tick was down', async () => {

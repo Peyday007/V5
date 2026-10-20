@@ -8,6 +8,23 @@
  * before money moves, not after.
  */
 import type { FreelancerProject } from './client.ts';
+import type { JobCategory } from './classify.ts';
+
+/** What the client receives, per kind, in plain words. Each line is something Brain renders and checks. */
+const RECEIVES: Record<Exclude<JobCategory, 'RESEARCH_REPORT'>, string> = {
+  SPREADSHEET: 'an Excel workbook (.xlsx) with live formulas, every one of which is computed and checked for errors before delivery',
+  DOCUMENT: 'a Word document (.docx) and a PDF, with real headings, tables and charts, checked by opening both before delivery',
+  PRESENTATION: 'a PowerPoint deck (.pptx) with charts and tables, where every slide is rendered and checked so no text overflows',
+  DATASET: 'clean data as CSV, Excel and/or JSON, with the row and column counts checked against the source before delivery',
+  WEBSITE: 'the site as HTML, CSS and JavaScript files in a zip, with every link and asset checked to resolve and every script checked to parse',
+  CODE: 'the source code with a README on how to run it, checked to parse before delivery',
+  GRAPHIC: 'editable SVG plus PNG and PDF exports, rendered and checked before delivery',
+  MODEL_3D: 'OBJ, STL and glTF files plus a rendered image, each checked to open with sound geometry',
+};
+
+function money(currency: string, amount: number): string {
+  return `${currency} ${amount}`;
+}
 
 function firstSentence(text: string): string {
   const clean = text.replace(/\s+/g, ' ').trim();
@@ -15,10 +32,28 @@ function firstSentence(text: string): string {
   return (match?.[1] ?? clean.slice(0, 200)).trim();
 }
 
-export function composeBid(project: FreelancerProject, amount: number, days: number): string {
+export function composeBid(
+  project: FreelancerProject,
+  amount: number,
+  days: number,
+  categories: JobCategory[] = ['RESEARCH_REPORT'],
+): string {
   const ask = firstSentence(project.description ?? project.preview_description ?? project.title);
+  const currency = project.currency?.code ?? 'USD';
+  if (!categories.includes('RESEARCH_REPORT')) {
+    const kinds = categories as Exclude<JobCategory, 'RESEARCH_REPORT'>[];
+    return [
+      `Hello. I can deliver this within ${days} days, for ${money(currency, amount)}.`,
+      `What you asked for: "${ask}"`,
+      `You receive ${kinds.map((k) => RECEIVES[k]).join('; and ')}.`,
+      'How it is done: the work is produced with AI assistance and then checked automatically before it reaches you, ' +
+        'so formulas, links, layout and file formats are verified rather than assumed. Two rounds of revisions are included.',
+      'If anything in the brief depends on files or access you have not mentioned, tell me before awarding and I will ' +
+        'say whether it can be covered.',
+    ].join('\n\n');
+  }
   return [
-    `Hello. I can deliver this as a written research report within ${days} days, for USD ${amount}.`,
+    `Hello. I can deliver this as a written research report within ${days} days, for ${money(currency, amount)}.`,
     `What you asked for: "${ask}"`,
     'How it is done: AI-assisted desk research from public sources. Every statement in the report cites the ' +
       'source and passage it came from, contradictions are shown rather than averaged, and anything the ' +
@@ -56,4 +91,24 @@ export function unableMessage(): string {
     'I am sorry: the public sources do not let me deliver this brief to the standard I committed to, so I will ' +
     'not ask for payment. Please do not release any milestone for this project.'
   );
+}
+
+export function startedDeliverableMessage(days: number, needsFiles: boolean): string {
+  return needsFiles
+    ? `Thank you for the award. Please send the files the work is based on here in the chat (PDF, Word, Excel, CSV or text), and I will deliver within ${days} days of receiving them.`
+    : `Thank you for the award. The work has started, and I will deliver it here within ${days} days.`;
+}
+
+export function filesRequestMessage(unreadable: string[]): string {
+  return unreadable.length
+    ? `Thank you. I could not read ${unreadable.join(', ')}. Could you send ${unreadable.length > 1 ? 'them' : 'it'} as PDF, Word, Excel, CSV or plain text?`
+    : 'Thank you for the award. To start, please send the files the work is based on here in the chat (PDF, Word, Excel, CSV or text).';
+}
+
+export function deliveredFilesMessage(names: string[], note: string | null): string {
+  return [
+    note ?? 'Here is the finished work.',
+    `Attached: ${names.join(', ')}.`,
+    'I have requested the milestone release. If anything needs changing, reply here: two rounds of revisions are included.',
+  ].join('\n\n');
 }

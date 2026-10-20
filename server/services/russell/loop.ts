@@ -1632,12 +1632,19 @@ async function tickOnce(owner: string): Promise<TickReport> {
        * roles before a single claim can be harvested from it.
        */
       for (const project of await listProjects()) {
-        // Discovery and the five kernels start new questions; under database
-        // pressure they wait (`db/pressure.ts`). `operate` below still runs,
-        // because it advances work already in flight.
+        // The five kernels start new questions; under database pressure they
+        // wait (`db/pressure.ts`). Discovery does not stop under pressure: its
+        // opening is one insert per bucket per day and its harvest files work
+        // already paid for, and production Cash Mode 1 spent most of a month
+        // shedding with no open round at all. Under pressure only its sweeps
+        // over every opportunity wait. `operate` below still runs, because it
+        // advances work already in flight.
         const shedKernels = shedding(report, `discovery-and-kernels ${project.id}`);
-        if (!shedKernels) try {
-          const run = await runDiscovery(project.id);
+        try {
+          const run = await runDiscovery(project.id, { sweep: !shedKernels });
+          for (const failure of run.failures) {
+            report.passFailures.push({ pass: `cash-discovery ${project.id}`, error: failure });
+          }
           /*
            * Reported when anything happened at all, which now includes the two
            * things reconciliation does.
@@ -1665,8 +1672,17 @@ async function tickOnce(owner: string): Promise<TickReport> {
               signalled: run.signalled,
             });
           }
-        } catch {
-          /* a sprint whose discovery could not run is left as it was */
+        } catch (error) {
+          /*
+           * A sprint whose discovery could not run is left as it was — and
+           * said so. This was a bare `catch {}`, so production Cash Mode 1
+           * held no open discovery round with nothing anywhere saying why.
+           */
+          const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+          report.passFailures.push({
+            pass: `cash-discovery ${project.id}`,
+            error: classifyInfraFailure(error) ? `${INFRA_MARK}${message}` : message,
+          });
         }
 
         if (!shedKernels) try {

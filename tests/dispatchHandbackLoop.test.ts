@@ -497,6 +497,63 @@ describe('a Routine whose sessions cannot reach the web', () => {
     expect(fires).toBe(0);
   });
 
+  it('is still fired for research that needs no sources: an audit, a synthesis', async () => {
+    const orchestrationId = await packet();
+    for (let index = 0; index < 3; index += 1) {
+      await blockedFragment(orchestrationId, index, 'No network egress to source hosts (ENOTFOUND)');
+    }
+    resetNetworkBlockCache();
+
+    const other = await packet();
+    await researchBin(other);
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      orchestrationId: other,
+      availableAt: aMinuteAgo(),
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(result.fired).toBe(1);
+    expect(fires).toBe(1);
+  });
+
+  it('is not fired for a bin whose open work mixes an audit with a fragment', async () => {
+    const orchestrationId = await packet();
+    for (let index = 0; index < 3; index += 1) {
+      await blockedFragment(orchestrationId, index, 'No network egress to source hosts (ENOTFOUND)');
+    }
+    resetNetworkBlockCache();
+
+    const other = await packet();
+    await researchBin(other);
+    await itemAvailableAt(other, aMinuteAgo());
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      orchestrationId: other,
+      availableAt: aMinuteAgo(),
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const result = await dispatchTick({ burst: 4, projectIds: [projectId] });
+    expect(result.fired).toBe(0);
+    expect(fires).toBe(0);
+  });
+
+  it('stays blocked past the six-hour burst while nothing it researched was accepted, and is retested after a day', async () => {
+    const orchestrationId = await packet();
+    for (let index = 0; index < 3; index += 1) {
+      await blockedFragment(orchestrationId, index, 'No network egress to source hosts (ENOTFOUND)');
+    }
+    const hours = (n: number) => Date.now() + n * 60 * 60_000;
+    resetNetworkBlockCache();
+    expect((await networkBlockedRoutines(hours(12))).has(routineId)).toBe(true);
+    resetNetworkBlockCache();
+    expect((await networkBlockedRoutines(hours(25))).has(routineId)).toBe(false);
+  });
+
   it('is eligible again once one of its fragments is accepted', async () => {
     const orchestrationId = await packet();
     for (let index = 0; index < 3; index += 1) {

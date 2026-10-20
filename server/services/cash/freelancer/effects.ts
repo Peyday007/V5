@@ -107,13 +107,12 @@ const bidAdapter = adapter(
 );
 
 const messageAdapter = adapter('freelancer-message', MESSAGE, async (p) => {
-  if (p.attachment) {
-    const file = p.attachment as { name: string; base64: string; type: string };
-    const sent = await postAttachment(num(p.threadId), {
-      name: file.name,
-      bytes: Buffer.from(file.base64, 'base64'),
-      type: file.type,
-    });
+  if (p.attachment || p.attachments) {
+    const list = (p.attachments ?? [p.attachment]) as { name: string; base64: string; type: string }[];
+    const sent = await postAttachment(
+      num(p.threadId),
+      list.map((file) => ({ name: file.name, bytes: Buffer.from(file.base64, 'base64'), type: file.type })),
+    );
     if (p.message) await postMessage(num(p.threadId), String(p.message));
     return String(sent.id);
   }
@@ -204,6 +203,8 @@ export function sendMessage(input: {
   externalProjectId: number;
   message: string;
   attachment?: { name: string; base64: string; type: string };
+  /** Several files in one message: all of a deliverable arrives together. */
+  attachments?: { name: string; base64: string; type: string }[];
 }): Promise<RunResult> {
   return run(messageAdapter, MESSAGE, {
     projectId: input.projectId,
@@ -215,6 +216,7 @@ export function sendMessage(input: {
       projectId: input.externalProjectId,
       message: input.message,
       ...(input.attachment ? { attachment: input.attachment } : {}),
+      ...(input.attachments ? { attachments: input.attachments } : {}),
     },
   });
 }

@@ -19,6 +19,10 @@ import { activate } from '../server/services/cash/lifecycle.ts';
 import { createAuthority } from '../server/repos/cashAuthority.ts';
 import { forgetAccount, runFreelancerOperation } from '../server/services/cash/freelancer/operate.ts';
 import { screenProject } from '../server/services/cash/freelancer/screen.ts';
+import { DELIVERABLE_KINDS } from '../server/services/cash/freelancer/deliverables/spec.ts';
+
+/** Every deliverable kind proved, as a production process with a passing self-proof sees it. */
+const ALL_PROVED = { available: new Set(DELIVERABLE_KINDS), python: true, clientFilesProven: false, clientFileJobsActive: 0 };
 import { allJobs } from '../server/repos/marketplaceJobs.ts';
 import { advanceResearchGoals } from '../server/services/research/goalContinuation.ts';
 import { getDb } from '../server/db/database.ts';
@@ -155,7 +159,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  delete process.env.FREELANCER_API_BASE;
+  process.env.FREELANCER_API_BASE = 'http://127.0.0.1:9'; // the setup default: never the live market
   delete process.env.FREELANCER_OAUTH_TOKEN;
 });
 
@@ -216,7 +220,9 @@ describe('the screen', () => {
   it('turns down the farm business plan production prepared on its first scan', () => {
     // Freelancer 40775349, as published on 2026-10-19: an investor-ready plan with
     // editable financial models and 3D work. Brain's first production scan
-    // prepared a bid on it; a research report cannot deliver it.
+    // prepared a bid on it; a research report cannot deliver it. With spreadsheets
+    // and documents now proved, it is still refused: the 3D site renders are not
+    // something placed primitives can deliver, and it asks for three kinds at once.
     const farm = screenProject(
       project(5, {
         title: 'Export-Oriented Multi-Farm Plan (245 hectares North Africa)',
@@ -227,9 +233,11 @@ describe('the screen', () => {
           'references and editable financial models (Excel or Google Sheets) are essential for board review.',
       }) as never,
       Date.now(),
+      ALL_PROVED,
     );
     expect(farm.deliverable).toBe(false);
-    expect(farm.reasons.join(' ')).toMatch(/financial model|business plan/);
+    expect(farm.reasons.join(' ')).toMatch(/3D work needs more than placed primitive shapes/);
+    expect(farm.reasons.join(' ')).toMatch(/also asks for 3D model/);
   });
 });
 
@@ -248,11 +256,15 @@ describe('the operation', () => {
     world.projects = [project(15)];
     await tick();
     expect((await allJobs(projectId))[0]!.state).toBe('PREPARED');
-    world.projects[0] = project(15, { description: 'Market research, plus editable financial models in Excel.' });
+    world.projects[0] = project(15, {
+      description:
+        'I need a competitor analysis report comparing the top five US meal-kit delivery services from public sources, ' +
+        'and we will hold weekly calls to go through the findings together.',
+    });
     await tick(31 * 60 * 1000);
     const job = (await allJobs(projectId))[0]!;
     expect(job.state).toBe('WITHDRAWN');
-    expect(job.stateReason).toMatch(/financial model/);
+    expect(job.stateReason).toMatch(/calls, meetings or presence/);
   });
 
   it('does not bid without the commercial grant, even when connected', async () => {

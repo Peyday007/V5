@@ -47,6 +47,7 @@ import {
   SEARCH_BUCKETS,
   SIGNAL_LANE,
   harvest,
+  executionFrameSentence,
   openDiscovery,
   runDiscovery,
 } from '../server/services/cash/discovery.ts';
@@ -352,6 +353,34 @@ describe('discovery keeps going while the sprint is active', () => {
     const [opened] = await openDiscovery({ projectId });
     const candidate = (await getCandidate(opened!.candidateId))!;
     expect(candidate.statement).toContain('Maximize additional usable cash');
+  });
+
+  it('tells the worker what this operation can act on, from its own rows', async () => {
+    // Production, 2026-10-19: 248 of 312 openings were evidence nobody could say
+    // how we would be paid from, because no question said what this operation
+    // can do. The frame is read from the ledger and the capability proof.
+    await activated();
+    const [opened] = await openDiscovery({ projectId });
+    const statement = (await getCandidate(opened!.candidateId))!.statement;
+    expect(statement).toContain('Report only openings this operation could act on');
+    expect(statement).toContain('holds no capital of its own to commit');
+    expect(statement).toMatch(/who would pay this operation/);
+    expect(statement).toMatch(/spreadsheet/);
+    // And no envelope reads it as an instruction to act on the world.
+    const { APPROVAL_ENVELOPES } = await import('../server/services/research/approvalEnvelope.ts');
+    const { describesOwnAction } = await import('../server/services/research/actorScope.ts');
+    // The envelopes cash research compiles under; the licensing ones refuse any money word at all.
+    const cash = Object.values(APPROVAL_ENVELOPES).filter((one) => one.id.startsWith('RUSSELL_CASH_'));
+    expect(cash.length).toBeGreaterThan(0);
+    for (const envelope of cash) {
+      expect(describesOwnAction(statement, envelope.forbiddenActions), envelope.id).toBe(false);
+    }
+  });
+
+  it('states the capital the ledger says may be committed, and no more', () => {
+    expect(executionFrameSentence({ delivers: [], deployableCents: 50_000, currency: 'USD' })).toContain(
+      'about USD 500 of its own capital',
+    );
   });
 
   it('stops asking a bucket that has documented three times that there is nothing', async () => {
@@ -715,6 +744,19 @@ describe('harvesting what discovery found', () => {
   });
 
   /*
+   * Database pressure used to stop discovery outright, and production Cash
+   * Mode 1 ended up with no open round at all. Under pressure only the sweeps
+   * over every opportunity wait; the next round still opens.
+   */
+  it('opens a round under database pressure, with only the sweeps skipped', async () => {
+    await activated();
+    const run = await runDiscovery(projectId, { sweep: false });
+    expect(run.opened).toHaveLength(1);
+    expect(run.signalled).toEqual([]);
+    expect(run.failures).toEqual([]);
+  });
+
+  /*
    * A packet a bucket did not open is still authorized research in this sprint.
    *
    * This test used to assert the opposite, and that assertion was the defect.
@@ -939,6 +981,7 @@ describe('harvesting what discovery found', () => {
       // Nothing to read a signal back for either: one read of `cash_modes`
       // answers the whole pass for a project holding no sprint at all.
       signalled: [],
+      failures: [],
     });
   });
 });
