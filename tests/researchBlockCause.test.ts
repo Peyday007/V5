@@ -180,9 +180,13 @@ describe('a legacy row still classifies, and a report reads the column first', (
     // A stored answer that differs from what the words alone would say wins.
     await getDb().run("UPDATE research_fragments SET block_cause = 'NO_CLAIMS' WHERE id = ?", [stored]);
 
+    // The window is pinned past `at`. Left to default, `until` is the moment the
+    // read runs, and on a fast runner that is the same millisecond as `at`, so
+    // `completed_at < until` excluded both rows: Deploy 39463649319 failed here.
     const d = await gateFailureDistribution({
       projectId,
       since: new Date(Date.now() - 86_400_000).toISOString(),
+      until: new Date(Date.parse(at) + 60_000).toISOString(),
     });
     expect(d.blockedByCause.SOURCE_ACCESS).toBe(1);
     expect(d.blockedByCause.NO_CLAIMS).toBe(1);

@@ -4795,9 +4795,12 @@ describe('the gate-failure distribution', () => {
     expect((await getFragment(failing.id))?.status).toBe('BLOCKED');
 
     const { gateFailureDistribution } = await import('../server/repos/research.ts');
+    // Pinned past now: a default `until` read in the gate's own millisecond
+    // excludes what the gate just wrote (`completed_at < until`).
     const reading = await gateFailureDistribution({
       projectId: project.id,
       since: new Date(Date.now() - 3_600_000).toISOString(),
+      until: new Date(Date.now() + 60_000).toISOString(),
     });
     expect(reading.fragments).toEqual({ judged: 2, accepted: 1, blocked: 1 });
     expect(reading.blockedByCause).toEqual({ REQUIRED_LANE_EMPTY: 1 });
