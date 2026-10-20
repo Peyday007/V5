@@ -25,6 +25,7 @@ import type { Milestone } from '../../../server/services/russell/progress.ts';
 import { useAsync } from './useAsync.ts';
 import { foundationTone, humanWhen, listState } from './present.ts';
 import { ClaudeConnectionCard } from './ClaudeConnection.tsx';
+import { Kpi, useWorkforce } from './Workforce.tsx';
 
 export function RussellHome({
   projectId,
@@ -514,6 +515,10 @@ function Summary({
 }): JSX.Element {
   const summary = useAsync(() => RussellApi.summary(projectId), [projectId]);
   const data = summary.data?.summary ?? null;
+  const workforce = useWorkforce(projectId);
+  const crew = workforce.data?.workforce ?? null;
+  const figures = data?.figures ?? null;
+  const pending = summary.loading ? 'Reading…' : '—';
   const tile = (
     key: string,
     title: string,
@@ -547,6 +552,50 @@ function Summary({
           'Nothing needs your decision. Brain carries on by itself.'
         )}
       </p>
+      {/* The command row: real figures only. A figure Brain could not read, or
+          that the reader may not see, is a dash rather than a zero. */}
+      <div className="rs-kpis rs-home-kpis" role="list" aria-label="Brain right now">
+        <Kpi
+          label="Earned (settled)"
+          value={figures?.money ? money(figures.money.earnedCents, figures.money.currency) : pending}
+          detail={
+            figures?.money
+              ? `${money(figures.money.receivedCents, figures.money.currency)} received from customers`
+              : 'Actual money only; no estimate is counted here'
+          }
+          tone={figures?.money && figures.money.earnedCents > 0 ? 'good' : undefined}
+        />
+        <Kpi
+          label="Opportunities"
+          value={
+            figures?.opportunities
+              ? String(figures.opportunities.readyToTest + figures.opportunities.qualified + figures.opportunities.candidates)
+              : pending
+          }
+          detail={
+            figures?.opportunities
+              ? `${figures.opportunities.readyToTest} ready · ${figures.opportunities.qualified} qualified · ${figures.opportunities.signals} signals`
+              : null
+          }
+        />
+        <Kpi
+          label="Accounts working"
+          value={crew ? `${crew.totals.working} / ${crew.accounts.length}` : workforce.loading ? 'Reading…' : '—'}
+          detail={crew ? `${crew.queue.leased} jobs in progress · ${crew.queue.ready} waiting` : null}
+          tone={crew ? (crew.totals.working > 0 ? 'good' : 'bad') : undefined}
+        />
+        <Kpi
+          label="Completed (24h)"
+          value={crew ? String(crew.totals.completed24h) : workforce.loading ? 'Reading…' : '—'}
+          detail={crew ? `${crew.totals.researchPasses24h} research passes` : null}
+        />
+        <Kpi
+          label="Needs you"
+          value={String(needsYouCount)}
+          detail={needsYouCount > 0 ? 'Decisions only you can make' : 'Nothing waiting on you'}
+          tone={needsYouCount > 0 ? 'watch' : undefined}
+        />
+      </div>
       <div className="rs-home-summary-grid">
         {tile('cash', 'Money', data?.cash ?? null, { name: 'CASH' })}
         {tile('research', 'Research', data?.research ?? null, { name: 'RESEARCH' })}
@@ -554,4 +603,12 @@ function Summary({
       </div>
     </section>
   );
+}
+
+function money(cents: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 0 }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(0)} ${currency}`;
+  }
 }

@@ -1584,6 +1584,41 @@ export async function binWorkReady(bin: { id: string }, now: string = binNow()):
   return row !== undefined && row !== null;
 }
 
+/** The queue work types whose answer has to be read from a source on the web. */
+export const WEB_WORK_TYPES = ['RESEARCH_FRAGMENT', 'RESEARCH_VERIFY'] as const;
+
+/**
+ * Whether the open work in this bin needs the open web.
+ *
+ * A research packet's bin holds its fragments, verification, synthesis and the
+ * three audit roles; only the first two read sources. The rest read what Brain
+ * hands them (the assignment, the claims, the filed document), so a session
+ * whose environment cannot reach a source can still do them.
+ *
+ * Conservative everywhere it cannot tell: any bin that is not a research
+ * packet with a known orchestration needs the web, and so does a packet whose
+ * claimable work includes a fragment or a verification. Only a packet whose
+ * claimable work is entirely planning, synthesis or audit answers false. A
+ * wrong `false` would waste one session; a wrong `true` only keeps today's
+ * behaviour.
+ */
+export async function binNeedsWeb(
+  bin: { id: string; completionContract?: string | null; orchestrationId?: string | null },
+  now: string = binNow(),
+): Promise<boolean> {
+  if (bin.completionContract !== 'RESEARCH_PACKET_V1' || !bin.orchestrationId) return true;
+  const scope = '(w.bin_id = ? OR (w.bin_id IS NULL AND w.orchestration_id = ?))';
+  const claimable =
+    "((w.state = 'QUEUED' AND w.available_at <= ?) OR (w.state = 'LEASED' AND w.lease_expires_at <= ?))" +
+    ' AND w.attempt_count < w.max_attempts';
+  const rows = await getDb().all<{ work_type: string }>(
+    `SELECT DISTINCT w.work_type AS work_type FROM work_items w WHERE ${scope} AND ${claimable}`,
+    [bin.id, bin.orchestrationId, now, now],
+  );
+  if (rows.length === 0) return true;
+  return rows.some((row) => (WEB_WORK_TYPES as readonly string[]).includes(row.work_type));
+}
+
 /**
  * How many fires one bin may earn inside `BIN_REFIRE_WINDOW_MS` before the
  * dispatcher stops starting sessions for it.

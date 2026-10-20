@@ -85,6 +85,7 @@ import {
   classesForFamilies,
   decideBinRouting,
   derivedFamilies,
+  familyOf,
   workloadAdmission,
   WORKLOAD_FAMILIES,
   type WorkerRouting,
@@ -369,6 +370,36 @@ export async function binAdmission(input: {
               `declare ${needed.join(' and ')}` +
               (readings ? ` without a recorded push refusal for ${writeRepository}` : '') +
               '; the bin is left for a surface that does.',
+          };
+        }
+      }
+    }
+
+    /*
+     * And source research is not handed to a session whose Routine cannot reach
+     * the web — the router's `webBlocked` rule, asked of the session that
+     * finished one bin and asks for the next. Quiet, like the capability skip:
+     * the bin is left for a surface that can read sources, and this session is
+     * offered the audits and syntheses it can do. Open wherever it cannot tell.
+     */
+    if (input.sessionRef && familyOf(bin) === 'RESEARCH') {
+      const { routineRefsForSession, binNeedsWeb } = await import('../../repos/bins.ts');
+      const refs = await routineRefsForSession(input.sessionRef).catch(() => [] as string[]);
+      if (refs.length > 0) {
+        const { getRoutineByRef } = await import('../../repos/fleet.ts');
+        const { networkBlockedRoutines } = await import('../dispatch/candidates.ts');
+        const routines = await Promise.all(refs.map((ref) => getRoutineByRef(ref)));
+        const blocked = await networkBlockedRoutines(Date.now()).catch(() => new Set<string>());
+        const allBlocked =
+          routines.every((routine) => routine !== null) &&
+          routines.every((routine) => routine !== null && blocked.has(routine.id));
+        if (allBlocked && (await binNeedsWeb(bin).catch(() => false))) {
+          return {
+            ok: false,
+            quiet: true,
+            reason:
+              'This session was started by a Routine whose sessions recently could not reach the web, ' +
+              'and this bin\'s open work reads sources; it is left for a surface that can.',
           };
         }
       }

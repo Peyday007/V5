@@ -87,7 +87,7 @@ import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from './candidates.ts';
 import { shouldQuarantine } from './scaler.ts';
 import { routeBin } from './router.ts';
 import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator } from './router.ts';
-import { markDispatchRoutine } from '../../repos/bins.ts';
+import { binNeedsWeb, markDispatchRoutine } from '../../repos/bins.ts';
 import {
   claimRoutineFireSlot,
   countRoutines,
@@ -589,6 +589,14 @@ export async function dispatchTick(
      * learned the hard way that a dispatcher which silently does nothing is
      * indistinguishable from one that is broken.
      */
+    /*
+     * Whether the open work needs the web is asked only when a surface that
+     * cannot reach it is a candidate — it is the one routing input that costs a
+     * query, and nothing else reads it.
+     */
+    const needsWeb = snapshot.candidates.some((candidate) => candidate.webBlocked)
+      ? await binNeedsWeb(bin).catch(() => true)
+      : true;
     const decision = registryEmpty
       ? null
       : routeBin({
@@ -597,6 +605,7 @@ export async function dispatchTick(
           fleetPolicy: snapshot.fleetPolicy,
           fleetInFlight: snapshot.fleetInFlight + result.fired,
           now: new Date().toISOString(),
+          needsWeb,
         });
 
     if (decision && !decision.ok) {

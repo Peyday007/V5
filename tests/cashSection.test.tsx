@@ -1559,7 +1559,12 @@ describe('the money, and the work', () => {
     // which is a *forecast* of the same money and is in its own table under its
     // own heading, because a figure Brain worked out from a card is not the
     // same kind of number as one an append-only entry produced.
-    expect(screen.getAllByText('USD 750.00').length).toBe(3);
+    // Five since the 2026-10-20 refresh: the compact money row at the top now
+    // leads with the same two actual figures, labelled "(actual)", so the real
+    // earnings are the first thing on the page and never an estimate.
+    expect(screen.getAllByText('USD 750.00').length).toBe(5);
+    expect(screen.getByText('Received (actual)')).toBeTruthy();
+    expect(screen.getByText('Earned after costs (actual)')).toBeTruthy();
     expect(screen.getAllByText('USD 0.00').length).toBeGreaterThan(0);
     // Deployable is negative and is printed as such rather than clamped to nil.
     // Scoped, because the compact money row above reports the same figure as

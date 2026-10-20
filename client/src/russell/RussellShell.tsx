@@ -35,6 +35,7 @@ import { Conversation } from './Conversation.tsx';
 import { RussellHome } from './Home.tsx';
 import { Search } from './Search.tsx';
 import { FleetCentre } from './Fleet.tsx';
+import { WorkforcePanel } from './Workforce.tsx';
 import { BuildView } from './Build.tsx';
 import { MachinesView } from './Machines.tsx';
 import { LaborView } from './Labor.tsx';
@@ -85,7 +86,7 @@ const SECTIONS = [
   { name: 'RESEARCH' as const, label: 'Research', primary: true },
   { name: 'BUILD' as const, label: 'Build', primary: true },
   { name: 'NEEDS_YOU' as const, label: 'Needs you', primary: true },
-  { name: 'FLEET' as const, label: 'Who', primary: true },
+  { name: 'FLEET' as const, label: 'Workforce', primary: true },
   { name: 'WORK' as const, label: 'All work', primary: false },
   { name: 'PROJECTS' as const, label: 'Ideas', primary: false },
   { name: 'KNOWLEDGE' as const, label: 'What Brain knows', primary: false },
@@ -533,6 +534,7 @@ export function RussellShell({
               * "Who is doing the work" was about a connected site's work, and
               * lives on Connected sites now.
               */}
+            <WorkforcePanel projectId={projectId} />
             <ConnectionsPanel onOpenPeople={() => go({ name: 'PEOPLE' })} />
             <ClaudeConnectionCard />
             <WhoView projectId={projectId} />

@@ -29,24 +29,24 @@
 
 .rs-shell,
 .rs-boot {
-  --paper: #f2f4f6;
+  --paper: #f4f6f9;
   --surface: #ffffff;
-  --surface-sunk: #e9edf1;
-  --ink: #141c26;
-  --ink-soft: #44535f;
+  --surface-sunk: #ebeff4;
+  --ink: #0f1722;
+  --ink-soft: #3b4856;
   /* 5.48:1 on --surface, 4.97:1 on --paper, 4.66:1 on --surface-sunk.
      Raised from #74838f, which measured 3.90 / 3.54 / 3.31 — under the 4.5:1
      floor on all three, at every size this token is used at. Found by the
      design kernel's first real run and verified against the computed
      luminances rather than by eye; see docs/DESIGN-KERNEL.md. */
-  --ink-faint: #5c6b78;
-  --rule: #d3dae1;
-  --rule-soft: #e3e8ed;
+  --ink-faint: #56636f;
+  --rule: #d7dde5;
+  --rule-soft: #e6eaf0;
 
   /* One accent, spent in one place at a time. */
-  --verdigris: #2e7d6b;
-  --verdigris-soft: #dceae6;
-  --verdigris-ink: #1f5a4d;
+  --verdigris: #2f55d4;
+  --verdigris-soft: #e5ebfc;
+  --verdigris-ink: #2441a8;
 
   /* Semantic status, deliberately separate from the accent so "this is
      selected" and "this is healthy" never look like the same fact. */
@@ -72,10 +72,10 @@
   --iron-wash: #f4e4e1;
   --slate-wash: #e6eaee;
 
-  --shadow: 0 1px 2px rgba(20, 28, 38, 0.06), 0 8px 24px -16px rgba(20, 28, 38, 0.28);
+  --shadow: 0 1px 2px rgba(15, 23, 34, 0.05), 0 6px 20px -12px rgba(15, 23, 34, 0.22);
 
-  --display: "Fraunces", Georgia, "Times New Roman", serif;
-  --body: "Public Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --display: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --body: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --code: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --step--1: 0.8125rem;
@@ -114,23 +114,35 @@
      own literal below, and `tests/step12bResponsive.test.tsx` fails if the two
      numbers ever differ. */
   --bar-cell: 56px;
+
+  /* The navigation rail is a dark command strip in both themes (2026-10-20
+     refresh). Its own tokens, so a rail colour is never a page colour reused
+     on the wrong ground. Measured on #0f1722: ink 15.2:1, soft 8.4:1, faint
+     6.3:1; white on the active fill 10.7:1. */
+  --rail-bg: #0f1722;
+  --rail-ink: #e7ecf2;
+  --rail-ink-soft: #a6b3c1;
+  --rail-ink-faint: #8d9aa8;
+  --rail-hover: #1a2432;
+  --rail-active: #263a7a;
+  --rail-rule: #243041;
 }
 
 @media (prefers-color-scheme: dark) {
   .rs-shell:not([data-theme='light']),
   .rs-boot:not([data-theme='light']) {
-    --paper: #0e141b;
-    --surface: #161f29;
-    --surface-sunk: #111923;
-    --ink: #e6ebf0;
-    --ink-soft: #a3b1be;
-    --ink-faint: #8b99a5;
-    --rule: #2a3744;
-    --rule-soft: #1f2a35;
+    --paper: #0b1017;
+    --surface: #131a23;
+    --surface-sunk: #0f151d;
+    --ink: #e7ecf2;
+    --ink-soft: #a6b3c1;
+    --ink-faint: #8d9aa8;
+    --rule: #253242;
+    --rule-soft: #1b2531;
 
-    --verdigris: #55b49c;
-    --verdigris-soft: #17332d;
-    --verdigris-ink: #7fcdb8;
+    --verdigris: #7d9bff;
+    --verdigris-soft: #1a2442;
+    --verdigris-ink: #a9bcff;
 
     --moss: #7fb08b;
     --ochre: #d9a845;
@@ -148,22 +160,29 @@
     --slate-wash: #1c242d;
 
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.7);
+    --rail-bg: #070b10;
+    --rail-ink: #e7ecf2;
+    --rail-ink-soft: #a6b3c1;
+    --rail-ink-faint: #8d9aa8;
+    --rail-hover: #141c27;
+    --rail-active: #263a7a;
+    --rail-rule: #1b2531;
   }
 }
 
 .rs-shell[data-theme='dark'],
 .rs-boot[data-theme='dark'] {
-  --paper: #0e141b;
-  --surface: #161f29;
-  --surface-sunk: #111923;
-  --ink: #e6ebf0;
-  --ink-soft: #a3b1be;
-  --ink-faint: #8b99a5;
-  --rule: #2a3744;
-  --rule-soft: #1f2a35;
-  --verdigris: #55b49c;
-  --verdigris-soft: #17332d;
-  --verdigris-ink: #7fcdb8;
+  --paper: #0b1017;
+  --surface: #131a23;
+  --surface-sunk: #0f151d;
+  --ink: #e7ecf2;
+  --ink-soft: #a6b3c1;
+  --ink-faint: #8d9aa8;
+  --rule: #253242;
+  --rule-soft: #1b2531;
+  --verdigris: #7d9bff;
+  --verdigris-soft: #1a2442;
+  --verdigris-ink: #a9bcff;
   --moss: #7fb08b;
   --ochre: #d9a845;
   --moss-ink: #7fb08b;
@@ -175,6 +194,13 @@
   --iron-wash: #2c1a17;
   --slate-wash: #1c242d;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -16px rgba(0, 0, 0, 0.7);
+  --rail-bg: #070b10;
+  --rail-ink: #e7ecf2;
+  --rail-ink-soft: #a6b3c1;
+  --rail-ink-faint: #8d9aa8;
+  --rail-hover: #141c27;
+  --rail-active: #263a7a;
+  --rail-rule: #1b2531;
 }
 
 /* ------------------------------------------------------------------ boot -- */
@@ -813,7 +839,9 @@
 .rs-command button[type='submit'] {
   border-color: transparent;
   background: var(--verdigris);
-  color: #ffffff;
+  /* --surface rather than white: 6.2:1 on the light accent, 6.7:1 on the dark
+     one, where white on the lighter dark-mode accent measured under 3:1. */
+  color: var(--surface);
   font-weight: 600;
 }
 
@@ -4418,4 +4446,423 @@ details.rs-card > section.rs-card {
 
 .rs-scenarios-bar-loss {
   fill: var(--iron);
+}
+
+
+/* ======================================================= 2026-10-20 refresh --
+ *
+ * A visible redesign over the same structure: Inter for every face, a cobalt
+ * accent, a dark command rail, and the new workforce, KPI and status-chip
+ * components. Colour still comes only from tokens; every pair below was
+ * measured against the 4.5:1 floor before it was written.
+ */
+
+.rs-rail {
+  background: var(--rail-bg);
+  border-right-color: var(--rail-rule);
+  color: var(--rail-ink);
+}
+
+.rs-shell-bar .rs-rail {
+  border-top-color: var(--rail-rule);
+}
+
+.rs-brand {
+  color: var(--rail-ink);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.rs-brand small {
+  color: var(--rail-ink-faint);
+}
+
+.rs-rail-secondary {
+  border-top-color: var(--rail-rule);
+}
+
+.rs-rail-item {
+  color: var(--rail-ink-soft);
+  font-weight: 500;
+}
+
+.rs-rail-item:hover {
+  background: var(--rail-hover);
+  color: var(--rail-ink);
+}
+
+.rs-rail-item[aria-current='page'] {
+  background: var(--rail-active);
+  color: var(--rail-ink);
+}
+
+.rs-shell-bar .rs-rail-item[aria-current='page'] {
+  background: var(--rail-hover);
+  color: var(--rail-ink);
+  box-shadow: inset 0 2px 0 var(--verdigris);
+}
+
+.rs-rail .rs-more > button {
+  border-color: var(--rail-rule);
+  background: var(--rail-hover);
+  color: var(--rail-ink-soft);
+}
+
+.rs-rail .rs-more > button:hover {
+  color: var(--rail-ink);
+}
+
+.rs-rail-foot > .rs-depth,
+.rs-rail-foot > div > .rs-depth {
+  border-color: var(--rail-rule);
+  background: var(--rail-hover);
+}
+
+.rs-rail-foot > .rs-depth button,
+.rs-rail-foot > div > .rs-depth button {
+  color: var(--rail-ink-soft);
+}
+
+.rs-rail-foot > .rs-depth button[aria-pressed='true'],
+.rs-rail-foot > div > .rs-depth button[aria-pressed='true'] {
+  background: var(--rail-active);
+  color: var(--rail-ink);
+}
+
+.rs-view > h2,
+.rs-view-title {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.rs-eyebrow {
+  color: var(--verdigris-ink);
+}
+
+.rs-panel {
+  border-color: var(--rule-soft);
+  box-shadow: var(--shadow);
+}
+
+/* -------------------------------------------------- page head and tiles -- */
+
+.rs-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--gap-3);
+  margin-bottom: var(--gap-4);
+}
+
+.rs-page-head .rs-view-title {
+  margin-bottom: 0;
+}
+
+.rs-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 132px), 1fr));
+  gap: var(--gap-3);
+  margin: 0 0 var(--gap-5);
+}
+
+.rs-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--gap-3) var(--gap-4);
+  border: 1px solid var(--rule-soft);
+  border-left: 3px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.rs-kpi-good {
+  border-left-color: var(--moss);
+}
+
+.rs-kpi-watch {
+  border-left-color: var(--ochre);
+}
+
+.rs-kpi-bad {
+  border-left-color: var(--iron);
+}
+
+.rs-kpi-label {
+  color: var(--ink-faint);
+  font: 600 var(--step--1) / 1.3 var(--body);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rs-kpi-value {
+  color: var(--ink);
+  font: 700 var(--step-2) / 1.2 var(--display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.rs-kpi-detail {
+  color: var(--ink-soft);
+  font-size: var(--step--1);
+}
+
+/* ---------------------------------------------------------- status chip -- */
+
+.rs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-1);
+  padding: 2px var(--gap-2);
+  border-radius: 999px;
+  font: 600 var(--step--1) / 1.4 var(--body);
+  white-space: nowrap;
+}
+
+.rs-chip::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.rs-chip-good {
+  background: var(--moss-wash);
+  color: var(--moss-ink);
+}
+
+.rs-chip-watch {
+  background: var(--ochre-wash);
+  color: var(--ochre-ink);
+}
+
+.rs-chip-bad {
+  background: var(--iron-wash);
+  color: var(--iron);
+}
+
+.rs-chip-neutral {
+  background: var(--slate-wash);
+  color: var(--ink-soft);
+}
+
+/* ------------------------------------------------------------ workforce -- */
+
+.rs-wf {
+  margin-bottom: var(--gap-6);
+}
+
+.rs-wf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--gap-4);
+  margin-bottom: var(--gap-5);
+}
+
+.rs-wf-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+  min-width: 0;
+  padding: var(--gap-4);
+  border: 1px solid var(--rule-soft);
+  border-top: 3px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.rs-wf-good {
+  border-top-color: var(--moss);
+}
+
+.rs-wf-watch {
+  border-top-color: var(--ochre);
+}
+
+.rs-wf-bad {
+  border-top-color: var(--iron);
+}
+
+.rs-wf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-2);
+  min-width: 0;
+}
+
+.rs-wf-name {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: 700 var(--step-1) / 1.25 var(--display);
+  letter-spacing: -0.01em;
+}
+
+.rs-wf-sentence {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--step--1);
+}
+
+.rs-wf-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap-2);
+  margin: 0;
+}
+
+.rs-wf-facts div {
+  min-width: 0;
+}
+
+.rs-wf-facts dt,
+.rs-wf-label {
+  margin: 0;
+  color: var(--ink-faint);
+  font: 600 var(--step--1) / 1.3 var(--body);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rs-wf-facts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font: 600 var(--step-0) / 1.35 var(--body);
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-wf-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  padding: var(--gap-3);
+  border-radius: var(--r-2);
+  background: var(--surface-sunk);
+}
+
+.rs-wf-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  margin: 0 0 var(--gap-2);
+  padding: 0;
+  list-style: none;
+}
+
+.rs-wf-jobs li {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rs-wf-job {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.rs-wf-next {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.rs-wf-empty {
+  margin: 0 0 var(--gap-2);
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+}
+
+.rs-wf-meta {
+  color: var(--ink-faint);
+  font-size: var(--step--1);
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-wf-tally {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--step--1);
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-wf-tally caption {
+  margin-bottom: var(--gap-1);
+  color: var(--ink-faint);
+  font: 600 var(--step--1) / 1.3 var(--body);
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.rs-wf-tally th {
+  padding: 3px var(--gap-2) 3px 0;
+  color: var(--ink-soft);
+  font-weight: 400;
+  text-align: left;
+}
+
+.rs-wf-tally td {
+  padding: 3px var(--gap-3) 3px 0;
+  color: var(--ink);
+  font-weight: 600;
+  text-align: right;
+}
+
+.rs-wf-strong {
+  color: var(--verdigris-ink);
+}
+
+.rs-wf-tally td.rs-wf-strong {
+  color: var(--verdigris-ink);
+}
+
+.rs-wf-tally td.rs-wf-warn {
+  color: var(--iron);
+}
+
+.rs-wf-held ul {
+  margin: var(--gap-1) 0 0;
+  padding-left: var(--gap-4);
+  color: var(--ink-soft);
+  font-size: var(--step--1);
+}
+
+.rs-wf-moves {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rs-wf-moves li {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: var(--gap-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@container (max-width: 520px) {
+  .rs-wf-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rs-wf-moves li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+/* Actual money on Cash is set apart from authorizations and estimates. */
+.rs-cash-tiers .rs-cash-actual strong {
+  color: var(--moss-ink);
 }
