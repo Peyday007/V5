@@ -33,7 +33,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'independence | scope | reaudit'
+        description: 'independence | scope | reaudit | judge-parks'
         required: true
         default: independence
       target:
@@ -83,9 +83,9 @@ jobs:
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
 
           case "$PACKETS_COMMAND" in
-            independence|scope|reaudit) ;;
+            independence|scope|reaudit|judge-parks) ;;
             *)
-              echo "::error::Refusing '$PACKETS_COMMAND': one of independence, scope, reaudit."
+              echo "::error::Refusing '$PACKETS_COMMAND': one of independence, scope, reaudit, judge-parks."
               exit 1
               ;;
           esac

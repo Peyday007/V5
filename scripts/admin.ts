@@ -2059,6 +2059,48 @@ async function main(): Promise<void> {
      * becomes a general one. Both verdicts come from the same assessment, so
      * what this prints about a packet is what the action would do to it.
      */
+    case 'packets judge-parks': {
+      // Read-only: every packet parked on a judge's PATCH or MORE_RESEARCH, and
+      // what the tick's corrected-round pass does about it (`judgeRound.ts`),
+      // then what became of every packet it has already resumed.
+      const { judgeParkReadings } = await import('../server/services/research/judgeRound.ts');
+      const db = (await import('../server/db/database.ts')).getDb();
+      const readings = await judgeParkReadings();
+      const counts = new Map<string, number>();
+      for (const { orchestration, assessed } of readings) {
+        const key = `${assessed.kind}:${orchestration.verdict ?? '-'}`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+        const why =
+          assessed.kind === 'PERSON' || assessed.kind === 'CONTINUED_ELSEWHERE' ? ` — ${assessed.reason}` : '';
+        const extra =
+          assessed.kind === 'RESUME'
+            ? ` round ${assessed.round} corrections=${assessed.corrections.length} followUps=${assessed.followUps.length}`
+            : '';
+        console.log(
+          `  ${orchestration.id}  ${orchestration.verdict ?? '-'}  ${orchestration.approvalEnvelopeId ?? '-'}  ${assessed.kind}${extra}${why}`.slice(0, 400),
+        );
+      }
+      const resumed = await db.all<{ payload: string }>(
+        `SELECT payload FROM project_events WHERE event_type = 'RESEARCH_ROUND_RESUMED' ORDER BY created_at DESC LIMIT 1000`,
+      );
+      const ids = [
+        ...new Set(
+          resumed.map((row) => String((JSON.parse(row.payload) as Record<string, unknown>)['orchestrationId'] ?? '')),
+        ),
+      ].filter(Boolean);
+      const outcome = new Map<string, number>();
+      for (const id of ids) {
+        const row = await db.get<{ status: string }>(`SELECT status FROM research_orchestrations WHERE id = ?`, [id]);
+        const status = row?.status ?? 'GONE';
+        outcome.set(status, (outcome.get(status) ?? 0) + 1);
+      }
+      console.log(`JUDGE PARKS ${readings.length}: ${[...counts].map(([k, n]) => `${k}=${n}`).join(' ')}`);
+      console.log(
+        `RESUMED PACKETS ${ids.length}: ${[...outcome].map(([k, n]) => `${k}=${n}`).join(' ')}  (rounds begun ${resumed.length})`,
+      );
+      break;
+    }
+
     case 'packets syntheses': {
       const project = await projectFrom(rest[0] ?? fail(`Name a project.`));
       const rows = await assessProjectSyntheses(project.id);

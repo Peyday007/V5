@@ -66,6 +66,7 @@ import {
 } from '../server/services/research/gapPolicy.ts';
 import { createRequirements, listCoverage, upsertCoverage } from '../server/repos/reconciliation.ts';
 import { recoverInterruptedResearch } from '../server/services/research/queue.ts';
+import { assessJudgeRound, MAX_JUDGE_ROUNDS, resumeJudgeRound } from '../server/services/research/judgeRound.ts';
 import { updateFragment, updateOrchestration } from '../server/repos/research.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import type {
@@ -3586,6 +3587,167 @@ describe('the audit passes', () => {
       (item) => item.workType === 'RESEARCH_FRAGMENT' && item.fragmentId === attempts[0]!.id,
     );
     expect(research).toHaveLength(1);
+  });
+
+
+  /*
+   * Production, 2026-10-20: 120 packets parked at NEEDS_HUMAN after a PATCH or
+   * MORE_RESEARCH verdict, each asking a person to file short or stop. PATCH
+   * means "evidence suffices; correct it in synthesis", and a MORE_RESEARCH
+   * judge that wrote a bounded question named research the packet's approval
+   * may already cover. These walk the corrected round through the real tools.
+   */
+  async function judgedPacket(verdictBody: Record<string, unknown>): Promise<ResearchOrchestration> {
+    const orchestration = await filedPacket();
+    const fleet = await auditFleet();
+    await as(fleet.primary, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+      await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+    });
+    await as(fleet.adversarial, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), adversarial: ADVERSARIAL });
+      await call('brain_complete_work', { ...proof(item), summary: 'adversarial in' });
+    });
+    await as(fleet.judge, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), judge: judge(verdictBody) });
+      await call('brain_complete_work', { ...proof(item), summary: 'judged' });
+    });
+    await advancePacket(orchestration.id);
+    return (await getOrchestration(orchestration.id))!;
+  }
+
+  const PATCH_JUDGE = {
+    verdict: 'PATCH',
+    summary: 'The evidence is right; the report overstates it.',
+    next_action: 'Rewrite the summary so it claims only California.',
+    gap_classifications: [
+      {
+        classification: 'PATCH',
+        title: 'Overstated scope',
+        detail: 'The summary says five states; the evidence settles one.',
+      },
+    ],
+    targeted_research_runs_required: 0,
+  };
+
+  it('resumes a PATCH park as a corrected round, with a fresh audit, through to COMPLETE', async () => {
+    const parked = await judgedPacket(PATCH_JUDGE);
+    expect(parked.status).toBe('NEEDS_HUMAN');
+    expect(parked.failureReason).toMatch(/^The judge's verdict was PATCH/);
+    const firstDocument = parked.documentId;
+    const firstAudit = parked.auditId;
+
+    expect((await assessJudgeRound(parked)).kind).toBe('RESUME');
+    const resumed = await resumeJudgeRound(parked.id);
+    expect(resumed.outcome).toBe('RESUMED');
+    // A replay of the same pass is a no-op: the packet is no longer parked.
+    expect((await resumeJudgeRound(parked.id)).outcome).toBe('SKIPPED');
+
+    const synth = await claimNext('RESEARCH_SYNTHESIZE');
+    const assignment = await call('brain_get_assignment', { work_item_id: synth.workItemId });
+    const corrections = (assignment['assignment'] ?? assignment) as Record<string, unknown>;
+    expect(JSON.stringify(corrections)).toContain('Overstated scope');
+    const [stored] = await acceptedClaims(parked.id);
+    await call('brain_submit_synthesis', {
+      ...proof(synth),
+      report: `California, and only California, defines a broker at section 10131 [${stored!.id}].`,
+      cited_claim_ids: [stored!.id],
+    });
+    await call('brain_complete_work', { ...proof(synth), summary: 'refiled' });
+    const refiled = (await getOrchestration(parked.id))!;
+    expect(refiled.documentId).not.toBeNull();
+    expect(refiled.documentId).not.toBe(firstDocument);
+
+    // A fresh round: three new sessions, none of them the author.
+    const fleet = await auditFleet();
+    const second = {
+      primary: { workerId: fleet.primary.workerId, credentialId: 'cred_a3' },
+      adversarial: { workerId: fleet.adversarial.workerId, credentialId: 'cred_b2' },
+      judge: { workerId: fleet.primary.workerId, credentialId: 'cred_a4' },
+    };
+    await as(second.primary, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      expect(item.payload['role']).toBe('PRIMARY');
+      await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+      await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+    });
+    await as(second.adversarial, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', { ...proof(item), adversarial: ADVERSARIAL });
+      await call('brain_complete_work', { ...proof(item), summary: 'adversarial in' });
+    });
+    await as(second.judge, async () => {
+      const item = await claimNext('RESEARCH_AUDIT');
+      await call('brain_submit_audit', {
+        ...proof(item),
+        judge: judge({
+          verdict: 'PASS',
+          summary: 'Corrected; the report now claims what the evidence settles.',
+          next_action: 'Freeze it.',
+          gap_classifications: [],
+          targeted_research_runs_required: 0,
+          synthesis_ready: true,
+          confidence: 0.8,
+        }),
+      });
+      await call('brain_complete_work', { ...proof(item), summary: 'judged' });
+    });
+    await advancePacket(parked.id);
+    const done = (await getOrchestration(parked.id))!;
+    expect(done.status).toBe('COMPLETE');
+    expect(done.auditId).not.toBe(firstAudit);
+    // §5: the first round's audit stands exactly as written.
+    const audits = await listAuditsByProject(parked.projectId);
+    expect(audits.map((audit) => audit.id)).toContain(firstAudit);
+  });
+
+  it('turns a MORE_RESEARCH question into a PLANNED follow-up the packet\'s own approval decides', async () => {
+    const parked = await judgedPacket({});
+    expect(parked.status).toBe('NEEDS_HUMAN');
+    expect((await resumeJudgeRound(parked.id)).outcome).toBe('RESUMED');
+    const followUp = (await currentFragments(parked.id)).find((fragment) => fragment.fragmentKey.startsWith('judge-r1-'));
+    expect(followUp?.question).toMatch(/TX, FL, NY and IL/);
+    // No envelope and no goal on this packet, so a person still approves the spend.
+    expect(followUp?.status).toBe('PLANNED');
+    const after = (await getOrchestration(parked.id))!;
+    expect(after.status).not.toBe('COMPLETE');
+    expect(after.unresolvedGapPolicy).toBeNull();
+  });
+
+  it('leaves a MORE_RESEARCH park with no bounded question to a person, untouched', async () => {
+    const parked = await judgedPacket({
+      gap_classifications: [
+        { classification: 'FOUNDATIONAL_GAP', title: 'The frame is wrong', detail: 'The question itself needs restating.' },
+      ],
+      foundational_gap_count: 1,
+      targeted_research_runs_required: 0,
+    });
+    const assessed = await assessJudgeRound(parked);
+    expect(assessed.kind).toBe('PERSON');
+    expect((await resumeJudgeRound(parked.id)).outcome).toBe('PERSON');
+    const after = (await getOrchestration(parked.id))!;
+    expect(after.status).toBe('NEEDS_HUMAN');
+    expect(after.auditId).toBe(parked.auditId);
+  });
+
+  it('stops after the bounded number of corrected rounds', async () => {
+    const parked = await judgedPacket(PATCH_JUDGE);
+    for (let i = 0; i < MAX_JUDGE_ROUNDS; i += 1) {
+      await recordEvent({
+        projectId: parked.projectId,
+        entityType: 'RUN',
+        entityId: parked.runId,
+        eventType: 'RESEARCH_ROUND_RESUMED',
+        payload: { orchestrationId: parked.id, round: i + 1, corrections: [] },
+      });
+    }
+    // The events above began rounds after the verdict, so put the park back as it was.
+    await updateOrchestration(parked.id, { status: 'NEEDS_HUMAN', failureReason: parked.failureReason });
+    const assessed = await assessJudgeRound((await getOrchestration(parked.id))!);
+    expect(assessed.kind).toBe('PERSON');
   });
 
 });

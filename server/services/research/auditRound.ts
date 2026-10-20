@@ -42,7 +42,7 @@ import { parseJson } from '../../repos/util.ts';
  * rounds before it are history in exactly the same way.
  */
 /** Every event type that begins a new audit round. Both are append-only. */
-const ROUND_EVENTS = ['DOCUMENT_HANDED_OFF', 'AUDIT_ROUND_REOPENED'] as const;
+const ROUND_EVENTS = ['DOCUMENT_HANDED_OFF', 'AUDIT_ROUND_REOPENED', 'RESEARCH_ROUND_RESUMED'] as const;
 
 /**
  * The current round, as the one rule its readers share.
