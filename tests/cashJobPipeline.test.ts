@@ -162,6 +162,10 @@ describe('qualification becomes one job', () => {
 describe('what never becomes a job', () => {
   it('refuses an opening whose published figures say one sale loses money', async () => {
     const id = await qualifiedPiece({ priceCents: 500, peakFundingCents: 80_000 });
+    // The whole tick first: Brain marks a complete card READY by itself, and
+    // READY must not read as somebody having committed to the work.
+    await operate(projectId);
+    expect((await listJobs(projectId)).filter((one) => one.opportunityId === id)).toEqual([]);
     const result = await reconcileCashJobs(projectId);
     expect(result.created).toEqual([]);
     expect(result.declined.find((one) => one.opportunityId === id)!.because).toContain('loses money');
@@ -295,5 +299,19 @@ describe('a candidate whose dives are spent can still be qualified', () => {
     await getDb().run(`UPDATE cash_opportunities SET validation_rounds = 1 WHERE id = ?`, [id]);
     const { reconcileEngineGaps } = await import('../server/services/cash/operate.ts');
     expect((await reconcileEngineGaps(projectId)).filter((one) => one.opportunityId === id)).toEqual([]);
+  });
+});
+
+describe('a job stops when its grounds do', () => {
+  it('releases an uncommitted job once its figures show a loss, keeping the row', async () => {
+    const id = await qualifiedPiece();
+    await reconcileCashJobs(projectId);
+    await getDb().run('UPDATE cash_opportunities SET peak_funding_cents = 900000 WHERE id = ?', [id]);
+    const result = await reconcileCashJobs(projectId);
+    expect(result.released[0]!.because).toContain('no longer actionable');
+    expect((await listJobs(projectId)).map((one) => one.state)).toEqual(['RELEASED']);
+    // Nothing new is prepared while the loss stands.
+    await reconcileCashJobs(projectId);
+    expect(await listJobs(projectId)).toHaveLength(1);
   });
 });

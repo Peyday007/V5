@@ -1872,7 +1872,7 @@ const PIPELINE_ORDER: PipelineStage[] = [
 const EXECUTOR_WORDS: Record<string, string> = {
   BRAIN_DETERMINISTIC: 'Brain (composed from the card)',
   BRAIN_RESEARCH: 'Brain research fleet',
-  PROVIDER: 'Connected provider',
+  PROVIDER: 'A provider integration (messaging or billing)',
   VENDOR: 'Supplier or contractor',
   BUYER: 'The buyer',
   PERSON: 'A person',

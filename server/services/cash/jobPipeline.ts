@@ -172,9 +172,16 @@ const LIVE_STATES: ReadonlySet<CashOpportunityState> = new Set([
   'COLLECTED',
 ]);
 
-/** States a person or Brain already took the opportunity into as work. */
+/**
+ * States in which the opportunity is already committed work: something
+ * happened on it (`beginExecution` needs a recorded action).
+ *
+ * READY is deliberately absent. Brain marks a complete card READY by itself
+ * (`advanceWithinAuthority`), so READY is a reading of the card rather than a
+ * commitment — and treating it as one made a job for an opening whose own
+ * published figures lose money, found by driving the page in a browser.
+ */
 const TAKEN_STATES: ReadonlySet<CashOpportunityState> = new Set([
-  'READY',
   'EXECUTING',
   'DELIVERING',
   'COLLECTED',
@@ -203,7 +210,7 @@ export function jobEligibility(opportunity: CashOpportunity, tier: TierReading, 
   if (!taken && closed) {
     return { eligible: false, because: 'its published deadline has passed' };
   }
-  if (!taken && tier.tier !== 'QUALIFIED' && tier.tier !== 'READY_TO_TEST') {
+  if (!taken && opportunity.state !== 'READY' && tier.tier !== 'QUALIFIED' && tier.tier !== 'READY_TO_TEST') {
     return { eligible: false, because: `it is ${tier.tier.toLowerCase().replace(/_/g, ' ')}, not qualified` };
   }
   if (
@@ -353,10 +360,20 @@ export async function reconcileCashJobs(projectId: string): Promise<JobReconcili
     }
 
     const target = jobStateFor(opportunity.state);
-    if (target === 'RELEASE' || opportunity.duplicateOfId) {
+    /*
+     * A job nothing was committed to yet stops when its grounds do: a passed
+     * deadline, figures that now show a loss, a tier that fell back. Released
+     * rather than deleted, with the reason, and prepared again by itself if
+     * the opening becomes actionable again.
+     */
+    const stillEligible =
+      TAKEN_STATES.has(opportunity.state) || target === 'RELEASE' || jobEligibility(opportunity, tier, closed).eligible;
+    if (target === 'RELEASE' || opportunity.duplicateOfId || !stillEligible) {
       const because = opportunity.duplicateOfId
         ? `it was found to be a second record of ${opportunity.duplicateOfId}`
-        : `the opportunity was ${opportunity.state.toLowerCase()}`;
+        : target === 'RELEASE'
+          ? `the opportunity was ${opportunity.state.toLowerCase()}`
+          : `it is no longer actionable: ${(jobEligibility(opportunity, tier, closed) as { because: string }).because}`;
       if (await releaseJob({ jobId: job.id, reason: because })) {
         out.released.push({ jobId: job.id, because });
         await recordCashEvent({
@@ -412,7 +429,7 @@ function capabilityOk(ctx: TaskContext, id: string): { ok: boolean; because: str
   if (reading.state === 'PRESENT') return { ok: true, because: `${id} is connected` };
   return {
     ok: false,
-    because: `${id} reads ${reading.state} — it needs ${reading.definition?.requires ?? 'an integration Brain has no word for'}`,
+    because: `${id} reads ${reading.state}. Needed: ${(reading.definition?.requires ?? 'an integration Brain has no word for').replace(/\.+$/, '')}.`,
   };
 }
 
@@ -529,8 +546,8 @@ export function jobTasks(ctx: TaskContext): JobTask[] {
   } else if (!send.ok) {
     contactStatus = 'BLOCKED_PROVIDER';
     contactBecause =
-      `Authorized, and ${send.because}. Alternatively a person sends the message and records it ` +
-      'as a confirmed CONTACT_BUYER action on the opportunity.';
+      `Authorized, and ${send.because} Until it is connected a person may send the message and ` +
+      'record it as a confirmed CONTACT_BUYER action; Brain resumes by itself once it is.';
   } else if (!ctx.sprintActive) {
     contactStatus = 'WAITING_PERSON';
     contactBecause = 'The sprint is winding down, so Brain starts no new contact.';
