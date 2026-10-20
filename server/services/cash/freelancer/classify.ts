@@ -47,7 +47,9 @@ const SIGNALS: Record<JobCategory, Signal> = {
   },
   DOCUMENT: {
     tags: ['business plans', 'business plan writing', 'proposal writing', 'technical writing', 'white papers', 'business writing', 'grant writing', 'report writing', 'research writing'],
-    words: /\b(business plan|proposal|white ?paper|report|standard operating procedures?|sops?|policy document|company profile|executive summary|user manual|handbook|case study|grant application|rfp response|tender document)\b/,
+    // "proposal" only as a document someone wants written: "submit your
+    // proposal" is Freelancer's own boilerplate for a bid, on every kind of job.
+    words: /\b(business plan|(?<!(?:your|submit|send|bid|bidding) )proposal(?! through)|white ?paper|report|standard operating procedures?|sops?|policy document|company profile|executive summary|user manual|handbook|case study|grant application|rfp response|tender document)\b/,
   },
   PRESENTATION: {
     tags: ['powerpoint', 'presentations', 'pitch deck', 'google slides', 'presentation design'],
@@ -204,6 +206,11 @@ export const BLOCKING_TAGS: Record<string, string> = {
   'altium designer': 'electronics design needs a qualified engineer and EDA tools',
   'building inspection': 'an inspection needs somebody present',
   typescript: 'TypeScript is not a language Brain checks before delivering',
+  manufacturing: 'manufacturing is physical production Brain does not do',
+  'product sourcing': 'product sourcing means dealing with suppliers on the client’s behalf',
+  'fashion design': 'fashion design is not a capability Brain has',
+  'textile engineering': 'the work needs a qualified engineer',
+  'fashion consulting': 'fashion consulting is not a capability Brain has',
   'test automation': 'test automation runs against the client’s own application',
 };
 
@@ -220,6 +227,9 @@ const BLOCKERS: Blocker[] = [
   { pattern: /\[(?:number|date|x|amount|insert[^\]]*)\]/, reason: 'the brief still carries an unfilled placeholder, so its terms are not settled' },
   { pattern: /\b(thousands of (?:rows|records|entries|products|listings|files|pages)|\d{2,3},?\d{3}\+? (?:rows|records|entries|products|listings|lines)|millions? of (?:rows|records)|large dataset|big data|several (?:excel )?workbooks|multiple (?:excel )?workbooks|every sheet|all (?:the )?sheets|\d{3,} (?:pdfs|files|pages|invoices|documents))\b/, reason: 'the data is larger than Brain can pass through one deliverable without the client’s own file', only: ['DATASET', 'SPREADSHEET'] },
   { pattern: /\bwikipedia\b/, reason: 'paid Wikipedia editing breaks Wikipedia’s own rules' },
+  // A supplier advertising itself ("our factory network can support designers…")
+  // posts as a project. There is nothing to deliver and nobody buying.
+  { pattern: /\b(looking to connect with|(?:our|my) (?:factory|factories|factory network|company|agency|team) (?:can|could|will) (?:support|help|work with|offer)|(?:manufacturing|production|sourcing|business) (?:partner(?:ship)?|collaboration)|what we can (?:work with you on|offer)|tell us about your (?:designs?|products?|business|brand|requirements))\b/, reason: 'the post advertises the client’s own services rather than asking for a deliverable' },
   { pattern: /\b(medical|clinical|legal (?:advice|document|contract)|lawyer|attorney|tax (?:return|filing|advice)|transfer pricing|audit(?:ed)? (?:financial|accounts)|accountant|certified|licensed|cpa|chartered|stamped|pe stamp)\b/, reason: 'the work needs a professional credential' },
   { pattern: /\b(native speaker|must be from|only from|us only|uk only|resident of|based in|located in|local to|timezone overlap)\b/, reason: 'the client restricts who may do the work' },
   { pattern: /\b(long[- ]term|ongoing|full[- ]time|part[- ]time|daily tasks?|every day|weekly basis|monthly retainer|per hour|hourly)\b/, reason: 'the client wants ongoing work, not one deliverable' },

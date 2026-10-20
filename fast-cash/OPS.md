@@ -29,19 +29,27 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 
 <!-- The check-in replaces everything below. -->
 
-- **Last check:** 2026-10-19 06:20Z, session-assisted. The scheduled check-in runs at :17 every 3 hours.
-- **Operation:** the Freelancer operation has been live on production since revision 37aec59, unattended on Brain's tick.
-  - First scan, 06:01Z: read 300 open jobs, rejected 299 with reasons, prepared 1.
-  - That one was a farm business plan the screen should have refused. The fix (PR #234) withdraws it.
-- **Top rejection reasons:**
-  - 254 do not ask for desk research;
-  - 119 are priced in INR;
-  - 84 are media or design;
-  - 80 need software.
+- **Last check:** 2026-10-20 04:12Z. Production is serving fb5675f.
+- **Scope:** PR #237/#238 widened what Brain delivers. It now also takes data entry, document conversion, client CSV/Excel processing and simple graphics such as logos and brand identity. It also accepts other currencies, converted at Freelancer's own rate. See `docs/FREELANCER-OPERATION.md`.
+- **Operation:** runs unattended on Brain's tick.
+  - 40 scans so far, the last at 03:40Z.
+  - 1673 jobs screened: 1665 rejected with reasons, 4 withdrawn and 4 PREPARED.
+  - The 4 PREPARED bids are not sent; Brain cannot bid yet:
+    - Freelancer 40772671, "Social Media Text Data Entry": about USD 180;
+    - 40775802, "PDF Text to Word": about USD 161;
+    - 40774101, "Logo Concepts for Creative Brand Names": about USD 170;
+    - 40776882, "FASHION DESIGNERS WANTED – Bangladesh…": USD 250. This one is wrongly prepared; see below.
+  - 40776694 (brand identity) was withdrawn on re-screen: 66 bids already.
+  - Top rejection reasons: budget below the minimum (803), too many bids already (627), hourly work (424), calls or meetings (403), posted too long ago (376), video, audio or animation (320).
+- **Screen defect found, fix waiting to deploy:**
+  - 40776882 is a factory advertising its own manufacturing services. It is not a job with anything to deliver.
+  - It passed because Freelancer's boilerplate "submit your proposal" read as a request to write a document.
+  - The fix is PR #243, https://github.com/Peyday007/V5/pull/243. It is tested and mergeable.
+  - It was not merged because another session's Deploy (run 39362368948, a16bdd3) has been in flight since 03:04Z.
+  - Next check-in: merge #243 and dispatch Deploy once no Deploy is in flight. The re-screen then withdraws the job.
+  - Harmless until then: no bid can be sent while the account is not connected.
 - **Acting is blocked** on two owner steps:
   - Freelancer account plus token: `FREELANCER_OAUTH_TOKEN` NOT_CONNECTED;
   - commercial grant: ABSENT.
-- **Offers in front of buyers:** none. Brain sends bids once both are in place.
-- **Money:** USD 0.
-- **Discovery:** the research fleet is running, alongside the operation's own scans every 30 minutes.
+- **Offers in front of buyers:** none. **Money:** USD 0.
 - **Last alert digest:** freelancer-not-connected, commercial-grant-absent (pushed once, 06:25Z; not repeated while unchanged).
