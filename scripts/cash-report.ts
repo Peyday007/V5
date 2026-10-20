@@ -33,6 +33,8 @@
  * where it is kept.
  */
 import { listJobs } from '../server/repos/cashJobs.ts';
+import { NEED_RESEARCHABLE_ENGINE_FIELDS } from '../server/services/cash/engineCard.ts';
+import { listNeeds as listCashNeeds } from '../server/repos/cashPortfolio.ts';
 import { pipelineReading } from '../server/services/cash/jobPipeline.ts';
 import { describeDiveRefusal, whyNotDiving } from '../server/services/cash/validation.ts';
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
@@ -294,6 +296,25 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       }
       for (const one of pipeline.qualifiedWithoutJob) {
         console.log(`  no job ${one.opportunityId}  ${one.because.slice(0, 200)}`);
+      }
+      /*
+       * The qualification questions asked one at a time once a candidate's
+       * dives are spent (`reconcileEngineGaps`), with where each one's research
+       * stands. The proof the dead end is open, read from the need rows.
+       */
+      const engine = new Set<string>(NEED_RESEARCHABLE_ENGINE_FIELDS);
+      const questions = (await listCashNeeds({ projectId })).filter((need) => {
+        const field = need.requestKey?.startsWith('question:') ? need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1) : '';
+        return engine.has(field);
+      });
+      const byState: Record<string, number> = {};
+      for (const one of questions) byState[one.state] = (byState[one.state] ?? 0) + 1;
+      console.log(
+        `  engine questions ${questions.length} ` +
+          Object.entries(byState).map(([state, n]) => `${state}=${n}`).join(' '),
+      );
+      for (const one of questions.slice(0, 20)) {
+        console.log(`      ${one.id} ${one.state} idea=${one.candidateId ?? '—'} ${one.blockedAction.slice(0, 110)}`);
       }
     }
   } catch (error) {
