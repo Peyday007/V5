@@ -13325,6 +13325,12 @@ The rules it introduced:
   `catch {}`. Under pressure only the sweeps over every opportunity wait now;
   opening one round (at most one per bucket per day) and harvesting still run,
   and a discovery failure is a recorded pass failure.
+- **A follow-up research question names its opening.** A need's research
+  asked the person-facing sentence "This card cannot be tested without it…"
+  plus a task such as "Name the person who can approve payment", so workers
+  were asked about nothing and refused it. `dependentQuestion` quotes the
+  opening, as the deep dive does. A need whose first asking named no opening
+  and then failed is asked once more; the replacement never matches again.
 - **A test sweep must not delete a live database.** `tests/setup.ts` sweeps
   `brain-test-*` temp roots older than an hour, and it once matched the
   Postgres test cluster `brain-test-pg-<port>`. That killed every Postgres run
