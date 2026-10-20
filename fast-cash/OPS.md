@@ -29,15 +29,16 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 
 <!-- The check-in replaces everything below. -->
 
-- **Last check:** 2026-10-20 18:40Z. Production serves fa3ed69, which carries PR #249 (exhausted research items are replaced, not parked) and PR #250 (correction rounds for judge-parked packets).
+- **Last check:** 2026-10-20 22:20Z. Production serves d1b4a7a, which carries PRs #249, #250, #252 and #255.
 - **Operation:** runs unattended.
-  - 64 scans so far, the last at 18:08Z.
-  - 2260 jobs screened: 2247 rejected with reasons, 9 withdrawn and 4 PREPARED.
-  - The 4 PREPARED bids are not sent; Brain cannot bid yet:
+  - 69 scans so far, the last at 22:19Z.
+  - 2360 jobs screened: 2346 rejected with reasons, 9 withdrawn and 5 PREPARED.
+  - The 5 PREPARED bids are not sent; Brain cannot bid yet:
     - Freelancer 40775802, "PDF Text to Word": about USD 161;
     - 40777786, "PDF-to-Word Conversion -- 2": about USD 193;
     - 40778112, "15k Data Entries with Photos": about USD 219;
-    - 40778265, "Premium Service Google Ad Campaign": about USD 165.
+    - 40778265, "Premium Service Google Ad Campaign": about USD 165;
+    - 40778343, "Intermediate Origami Flower Designs": USD 103.
 - **Acting is blocked** on two owner steps:
   - Freelancer account plus token: `FREELANCER_OAUTH_TOKEN` NOT_CONNECTED;
   - commercial grant: ABSENT.
