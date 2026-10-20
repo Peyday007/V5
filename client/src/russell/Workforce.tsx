@@ -51,7 +51,7 @@ export function WorkforceTotals({ view }: { view: WorkforceView }): JSX.Element 
   const total = view.accounts.length;
   return (
     <div className="rs-kpis" role="list" aria-label="Workforce in the last day">
-      <Kpi label="Accounts working" value={`${view.totals.working} of ${total}`} tone={view.totals.working > 0 ? 'good' : 'bad'} />
+      <Kpi label="Accounts working" value={`${view.totals.working} / ${total}`} tone={view.totals.working > 0 ? 'good' : 'bad'} />
       <Kpi label="Bins completed (24h)" value={String(view.totals.completed24h)} />
       <Kpi label="Research passes (24h)" value={String(view.totals.researchPasses24h)} />
       <Kpi label="Work waiting" value={String(view.queue.ready)} />

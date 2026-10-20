@@ -579,8 +579,8 @@ function Summary({
           }
         />
         <Kpi
-          label="Workforce"
-          value={crew ? `${crew.totals.working} of ${crew.accounts.length} working` : workforce.loading ? 'Reading…' : '—'}
+          label="Accounts working"
+          value={crew ? `${crew.totals.working} / ${crew.accounts.length}` : workforce.loading ? 'Reading…' : '—'}
           detail={crew ? `${crew.queue.leased} jobs in progress · ${crew.queue.ready} waiting` : null}
           tone={crew ? (crew.totals.working > 0 ? 'good' : 'bad') : undefined}
         />
