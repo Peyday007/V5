@@ -161,6 +161,30 @@ async function parked(projectId: string | null): Promise<void> {
   for (const row of rows) {
     console.log(`    ${String(row.n).padStart(4)}  ${row.reason ?? '(no reason recorded)'}  newest ${row.newest}`);
   }
+
+  /*
+   * A judge that asked for more parks the packet with the reason no repair
+   * could be attempted, in the repair planner's own words between the
+   * parentheses. Counted per refusal, because which refusals dominate says
+   * whether the park is a person's decision or a condition Brain could clear.
+   */
+  const verdicts = await getDb().all<{ failure_reason: string }>(
+    `SELECT failure_reason FROM research_orchestrations
+      WHERE status = 'NEEDS_HUMAN' AND failure_reason LIKE 'The judge''s verdict was %'
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)`,
+    [projectId, projectId],
+  );
+  const refusals = new Map<string, number>();
+  for (const { failure_reason: reason } of verdicts) {
+    const inner = /on this packet \((.*)\)\. A person decides/s.exec(reason)?.[1] ?? '(unparsed)';
+    for (const part of new Set(inner.split('; ').map((one) => one.replace(/frg_[0-9a-f]+/g, 'frg_…').slice(0, 110)))) {
+      refusals.set(part, (refusals.get(part) ?? 0) + 1);
+    }
+  }
+  console.log(`  WHY A JUDGE-PARKED PACKET COULD NOT BE REPAIRED (${verdicts.length} packets; one packet may name several)`);
+  for (const [part, n] of [...refusals].sort((a, b) => b[1] - a[1]).slice(0, 15)) {
+    console.log(`    ${String(n).padStart(4)}  ${part}`);
+  }
 }
 
 async function main(): Promise<void> {
