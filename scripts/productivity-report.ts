@@ -114,6 +114,41 @@ async function endings(window: Window, projectId: string | null): Promise<void> 
   for (const row of rows.slice(0, 12)) {
     console.log(`    ${String(row.n).padStart(4)}  ${row.outcome.padEnd(9)} ${row.detail ?? '(no detail)'}`);
   }
+
+  // How long a released lease was held, and whether anything was recorded under it.
+  const released = await getDb().all<{ claimed_at: string; ended_at: string | null; work_item_id: string; worker_id: string }>(
+    `SELECT claimed_at, ended_at, work_item_id, worker_id FROM work_leases
+      WHERE claimed_at >= ? AND claimed_at < ? AND outcome = 'RELEASED'
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)`,
+    [window.from, window.to, projectId, projectId],
+  );
+  const held = released
+    .filter((row) => row.ended_at)
+    .map((row) => (Date.parse(row.ended_at!) - Date.parse(row.claimed_at)) / 1000)
+    .sort((a, b) => a - b);
+  const at = (q: number) => (held.length ? held[Math.min(held.length - 1, Math.floor(q * held.length))]!.toFixed(0) : '—');
+  let withEffect = 0;
+  for (const row of released) {
+    const effect = await getDb().get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM idempotency_operations WHERE work_item_id = ?`,
+      [row.work_item_id],
+    );
+    if (Number(effect?.n ?? 0) > 0) withEffect += 1;
+  }
+  console.log(
+    `  RELEASED LEASES ${window.label}: ${released.length}, held p10=${at(0.1)}s p50=${at(0.5)}s p90=${at(0.9)}s, ` +
+      `item carries a recorded effect: ${withEffect}`,
+  );
+
+  const bins = await getDb().all<{ reason: string | null; n: number }>(
+    `SELECT substr(reason, 1, 140) AS reason, COUNT(*) AS n FROM bin_events
+      WHERE event_type = 'BIN_RELEASED' AND at >= ? AND at < ?
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ? OR project_id IS NULL)
+      GROUP BY substr(reason, 1, 140) ORDER BY COUNT(*) DESC`,
+    [window.from, window.to, projectId, projectId],
+  );
+  console.log(`  WHY BINS WERE HANDED BACK ${window.label}`);
+  for (const row of bins.slice(0, 10)) console.log(`    ${String(row.n).padStart(4)}  ${row.reason ?? '(no reason)'}`);
 }
 
 async function tools(window: Window, projectId: string | null): Promise<void> {
