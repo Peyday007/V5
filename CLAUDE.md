@@ -13285,6 +13285,11 @@ The rules it introduced:
   `min(free grant slots − 1, routable research surfaces, 0 while SHEDDING)`. It
   is never above the grant a person set, and one dive may run while any slot is
   free. It replaced `MAX_VALIDATIONS_IN_FLIGHT` and `MAX_OPEN_COMMISSIONS`.
+  The sprint's own discovery grant follows the same rule one level up: its
+  concurrency is the research surfaces the project has on record (ENABLED or
+  QUARANTINED, live worker), never below six (`discoveryConcurrencyFor`).
+  Six was a constant written for four Routines, and on 2026-10-20 it held every
+  slot while research Routines on three accounts waited for work.
 - **An account is refused for unproductive starts, never for productive
   ones.** `ACCOUNT_SESSIONS_UNPRODUCTIVE` fires at three unproductive starts in
   an hour: sessions that never arrived while others did, or that ended with no

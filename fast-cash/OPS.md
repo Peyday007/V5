@@ -29,22 +29,24 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 
 <!-- The check-in replaces everything below. -->
 
-- **Last check:** 2026-10-20 07:10Z. Production is serving 849ce3e, which includes the screen fix from PR #243.
+- **Last check:** 2026-10-20 10:05Z. Production is serving feb5351, which includes PR #243 and PR #245.
 - **Scope:** PR #237/#238 widened what Brain delivers. It now also takes data entry, document conversion, client CSV/Excel processing and simple graphics such as logos and brand identity. It also accepts other currencies, converted at Freelancer's own rate. See `docs/FREELANCER-OPERATION.md`.
 - **Operation:** runs unattended on Brain's tick.
-  - 45 scans so far, the last at 06:27Z.
-  - 1775 jobs screened: 1767 rejected with reasons, 5 withdrawn and 3 PREPARED.
+  - 49 scans so far, the last at 08:58Z.
+  - 1887 jobs screened: 1878 rejected with reasons, 6 withdrawn and 3 PREPARED.
   - The 3 PREPARED bids are not sent; Brain cannot bid yet:
     - Freelancer 40772671, "Social Media Text Data Entry": about USD 180;
     - 40775802, "PDF Text to Word": about USD 161;
-    - 40776882, the factory post: wrongly prepared; see below.
-  - 40774101 (logo concepts) was withdrawn on re-screen: 61 bids already.
-  - Top rejection reasons: budget below the minimum (865), too many bids already (656), hourly work (450), calls or meetings (425), posted too long ago (391), video, audio or animation (343).
+    - 40777245, "ISO 27001 Certification Partner Needed": wrongly prepared; see below.
+  - 40776882 (the factory post) was withdrawn after PR #243 deployed, as expected.
+  - Top rejection reasons: budget below the minimum (930), too many bids already (693), hourly work (478), calls or meetings (453), posted too long ago (401).
 - **Screen defect, fixed:**
-  - 40776882 is a factory advertising its own manufacturing services, not a job with anything to deliver. It passed because Freelancer's boilerplate "submit your proposal" read as a request to write a document.
-  - PR #243 merged as 849ce3e. Deploy 39379770551 succeeded at about 06:55Z.
-  - The last scan ran before that deploy. The next scan re-screens and withdraws this job; the next check-in confirms it.
+  - 40777245 was prepared at INR 75000, about USD 792, three times the USD 250 bid ceiling. When a client's minimum budget is above the ceiling, the price was set to that minimum, and the screen never checked.
+  - The job is also certification work, which needs an accredited body to audit the client.
+  - PR #245, https://github.com/Peyday007/V5/pull/245, merged as feb5351. The screen now refuses both. Deploy 39400539889 released it.
+  - The next scan re-screens and withdraws the job; the next check-in confirms it.
   - Harmless meanwhile: no bid can be sent while the account is not connected.
+- **Release-gate note (not Freelancer):** Deploy 39400539889 passed every check before the restart (261/261). After the restart, one of 280 checks failed: the scenario engine's "reproduce" check answered 422. The same check had passed on the same image before the restart. That belongs to the scenario engine, and the image is serving.
 - **Acting is blocked** on two owner steps:
   - Freelancer account plus token: `FREELANCER_OAUTH_TOKEN` NOT_CONNECTED;
   - commercial grant: ABSENT.
