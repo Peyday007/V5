@@ -264,6 +264,27 @@ describe('the screen', () => {
     expect(factory.reasons.join(' ')).toMatch(/manufacturing is physical production/);
   });
 
+  it('turns down a budget that starts above the bid ceiling, and certification work', () => {
+    // Freelancer 40777245, as prepared on 2026-10-20: INR 75000 minimum, about
+    // USD 792, so the bid would have been the minimum, three times the ceiling.
+    const iso = screenProject(
+      project(8, {
+        title: 'ISO 27001 Certification Partner Needed',
+        jobs: [{ name: 'Documentation' }, { name: 'Technical Writing' }],
+        description: 'We need a partner to take our company through ISO 27001 certification: policies, documentation and the audit.',
+        currency: { code: 'INR', exchange_rate: 0.010558 },
+        budget: { minimum: 75000, maximum: 150000 },
+      }) as never,
+      Date.now(),
+      ALL_PROVED,
+    );
+    expect(iso.deliverable).toBe(false);
+    expect(iso.reasons.join(' ')).toMatch(/budget starts above the USD 250 bid ceiling/);
+    expect(iso.reasons.join(' ')).toMatch(/accredited body/);
+    const priced = screenProject(project(9, { budget: { minimum: 300, maximum: 600 } }) as never, Date.now(), ALL_PROVED);
+    expect(priced.reasons.join(' ')).toMatch(/budget starts above the USD 250 bid ceiling/);
+  });
+
   it('still reads a proposal somebody wants written as a document', () => {
     const grant = screenProject(
       project(7, {
