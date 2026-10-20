@@ -29,17 +29,25 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 
 <!-- The check-in replaces everything below. -->
 
-- **Last check:** 2026-10-20 00:22Z. Production is serving fb5675f.
+- **Last check:** 2026-10-20 04:12Z. Production is serving fb5675f.
 - **Scope:** PR #237/#238 widened what Brain delivers. It now also takes data entry, document conversion, client CSV/Excel processing and simple graphics such as logos and brand identity. It also accepts other currencies, converted at Freelancer's own rate. See `docs/FREELANCER-OPERATION.md`.
 - **Operation:** runs unattended on Brain's tick.
-  - 33 scans so far, the last at 23:58Z.
-  - 1565 jobs screened: 1558 rejected with reasons, 3 withdrawn and 4 PREPARED.
+  - 40 scans so far, the last at 03:40Z.
+  - 1673 jobs screened: 1665 rejected with reasons, 4 withdrawn and 4 PREPARED.
   - The 4 PREPARED bids are not sent; Brain cannot bid yet:
     - Freelancer 40772671, "Social Media Text Data Entry": about USD 180;
     - 40775802, "PDF Text to Word": about USD 161;
     - 40774101, "Logo Concepts for Creative Brand Names": about USD 170;
-    - 40776694, "Complete Brand Identity Design for a Modern Skincare Brand": USD 193.
-  - Top rejection reasons: budget below the minimum (742), too many bids already (579), hourly work (397), calls or meetings (381), posted too long ago (358), video, audio or animation (294).
+    - 40776882, "FASHION DESIGNERS WANTED – Bangladesh…": USD 250. This one is wrongly prepared; see below.
+  - 40776694 (brand identity) was withdrawn on re-screen: 66 bids already.
+  - Top rejection reasons: budget below the minimum (803), too many bids already (627), hourly work (424), calls or meetings (403), posted too long ago (376), video, audio or animation (320).
+- **Screen defect found, fix waiting to deploy:**
+  - 40776882 is a factory advertising its own manufacturing services. It is not a job with anything to deliver.
+  - It passed because Freelancer's boilerplate "submit your proposal" read as a request to write a document.
+  - The fix is PR #243, https://github.com/Peyday007/V5/pull/243. It is tested and mergeable.
+  - It was not merged because another session's Deploy (run 39362368948, a16bdd3) has been in flight since 03:04Z.
+  - Next check-in: merge #243 and dispatch Deploy once no Deploy is in flight. The re-screen then withdraws the job.
+  - Harmless until then: no bid can be sent while the account is not connected.
 - **Acting is blocked** on two owner steps:
   - Freelancer account plus token: `FREELANCER_OAUTH_TOKEN` NOT_CONNECTED;
   - commercial grant: ABSENT.
