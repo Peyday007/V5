@@ -46,6 +46,7 @@
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { reconcileCashJobs, type JobReconciliation } from './jobPipeline.ts';
 import { listingSentenceFor } from './listings.ts';
 import { handOffReadyTests, type FactoryHandoffPass } from './factoryHandoff.ts';
 import { advanceJourney, type JourneyTickReport } from './journey/tick.ts';
@@ -1179,6 +1180,8 @@ export async function operate(
   journey?: JourneyTickReport;
   /** READY_TO_TEST openings handed to the Software Factory (`factoryHandoff.ts`). */
   factory?: FactoryHandoffPass;
+  /** Qualified openings made execution jobs, and live jobs kept in step (`jobPipeline.ts`). */
+  jobs?: JobReconciliation | { error: string };
   /** What changed and who it reconsidered (`reconsider.ts`); absent when Cash Mode is not active. */
   reconsideration?:
     | Omit<ReconsiderPass, 'readings'>
@@ -1308,6 +1311,19 @@ export async function operate(
   const invoicing = await runInvoicing(projectId, now ? new Date(now) : new Date());
   const journey = await advanceJourney(projectId, now ? new Date(now) : new Date());
   /*
+   * Then the jobs: every opening the passes above qualified, readied or took
+   * into execution gets its one canonical execution job, and each live job
+   * follows its opportunity's state. After the journey because the journey is
+   * what moves an opportunity to DELIVERING or COLLECTED. Its own failure
+   * domain: a job pass that cannot read must not stop the ledger below.
+   */
+  let jobs: JobReconciliation | { error: string };
+  try {
+    jobs = await reconcileCashJobs(projectId);
+  } catch (error) {
+    jobs = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+  }
+  /*
    * And the possibility ledger, last, reading everything the passes above
    * wrote.
    *
@@ -1369,6 +1385,7 @@ export async function operate(
     monetization,
     journey,
     factory,
+    jobs,
   };
 }
 

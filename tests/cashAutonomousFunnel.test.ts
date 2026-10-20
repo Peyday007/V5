@@ -43,6 +43,8 @@ import type { InvoiceReading } from '../server/services/cash/providers/stripe.ts
 import { COMMERCIAL_EFFECTS } from '../server/services/cash/effects.ts';
 import { clearAdapters, registerAdapter, type EffectAdapter } from '../server/services/effects/adapter.ts';
 import { agree, fulfil } from './helpers/cashDeal.ts';
+import { pipelineReading, reconcileCashJobs } from '../server/services/cash/jobPipeline.ts';
+import { listJobs } from '../server/repos/cashJobs.ts';
 import { recordMoneyEvent } from '../server/services/cash/opportunities.ts';
 import { createUser, createWorker, grantMembership } from '../server/repos/identity.ts';
 import { createRun } from '../server/repos/runs.ts';
@@ -906,6 +908,33 @@ describe('one opportunity from discovery to learning, across the seam', () => {
     expect(final.state).toBe('READY');
     const id = final.id;
 
+    // THE JOB: qualifying it was enough. The tick prepared exactly one job,
+    // and with no grant and no provider it is prepared and visibly blocked —
+    // never contacted, never paid.
+    const jobOf = async () => {
+      const reading = await pipelineReading(projectId, { userId, owner: true });
+      return { reading: reading!, job: reading!.jobs.find((one) => one.opportunityId === id)! };
+    };
+    {
+      const jobs = (await listJobs(projectId)).filter((one) => one.opportunityId === id);
+      expect(jobs).toHaveLength(1);
+      expect(jobs[0]).toMatchObject({ state: 'ASSIGNED', ownerUserId: userId, createdBy: 'BRAIN' });
+      const { reading, job } = await jobOf();
+      expect(job.stage).toBe('READY_BLOCKED');
+      const byKey = Object.fromEntries(job.tasks.map((t) => [t.key, t]));
+      expect(byKey.offer!.status).toBe('DONE');
+      expect(byKey.buyer!.status).toBe('DONE');
+      expect(byKey.contact!).toMatchObject({ status: 'BLOCKED_AUTHORITY', requiresAuthority: 'CONTACT_BUYER' });
+      expect(byKey.agree!.status).toBe('BLOCKED_DEPENDENCY');
+      expect(reading.counts.READY_BLOCKED).toBe(1);
+      expect([reading.counts.AGREED, reading.counts.PAID, reading.counts.SETTLED]).toEqual([0, 0, 0]);
+      expect(reading.settledCents).toBe(0);
+      // Repeated passes and a concurrent pair make no second job.
+      await Promise.all([reconcileCashJobs(projectId), reconcileCashJobs(projectId)]);
+      await tick('autonomous');
+      expect((await listJobs(projectId)).filter((one) => one.opportunityId === id)).toHaveLength(1);
+    }
+
     // A person's standing commercial grant, and the providers connected.
     await createAuthority({
       projectId,
@@ -931,13 +960,31 @@ describe('one opportunity from discovery to learning, across the seam', () => {
       actorRef: userId,
     });
     expect(capital.ok).toBe(true);
+
+    // The grant alone moves the blocker to the provider, which names its config.
+    {
+      const { job } = await jobOf();
+      const contact = job.tasks.find((t) => t.key === 'contact')!;
+      expect(contact.status).toBe('BLOCKED_PROVIDER');
+      expect(contact.because).toContain('SEND_A_MESSAGE');
+      expect(job.stage).toBe('READY_BLOCKED');
+    }
     connect();
+    {
+      // Removing the blocker: the contact is now Brain's to perform next pass.
+      const { job } = await jobOf();
+      expect(job.tasks.find((t) => t.key === 'contact')!.status).toBe('IN_PROGRESS');
+      expect(job.stage).toBe('EXECUTING');
+    }
 
     // CONTACT: Brain reaches the one published address, by itself.
     await advanceWithinAuthority(projectId);
     expect((await getOpportunity(id))!.state).toBe('EXECUTING');
     expect(sends.CONTACT_BUYER).toHaveLength(1);
     expect(sends.CONTACT_BUYER![0]).toMatchObject({ to: 'procurement@westfield-drainage.example' });
+    await reconcileCashJobs(projectId);
+    expect((await listJobs(projectId)).find((one) => one.opportunityId === id)!.state).toBe('EXECUTING');
+    expect((await jobOf()).job.tasks.find((t) => t.key === 'agree')!.status).toBe('WAITING_BUYER');
 
     // BUYER RESPONSE is evidence; AGREEMENT is its own owner.
     const reply = await recordObservation({
@@ -949,6 +996,7 @@ describe('one opportunity from discovery to learning, across the seam', () => {
     });
     expect(reply.ok).toBe(true);
     const agreement = await agree(id, 200_000, userId);
+    expect((await jobOf()).job.stage).toBe('AGREED');
 
     // A restart between the agreement and the invoice: nothing is resent.
     clearAdapters();
@@ -986,6 +1034,13 @@ describe('one opportunity from discovery to learning, across the seam', () => {
       'PAID_UNSETTLED',
     );
     expect((await cashPosition({ projectId, currency: 'USD' })).availableFundsCents).toBe(50_000);
+    {
+      // Paid is not usable cash, and the reading says which it is.
+      const { reading, job } = await jobOf();
+      expect(job.stage).toBe('PAID');
+      expect(reading.settledCents).toBe(0);
+      expect(reading.paidUnsettledCents).toBe(200_000);
+    }
 
     // FULFILMENT → DELIVERY → ACCEPTANCE, each its own fact. Paid is not done.
     await fulfil(agreement, userId);
@@ -1001,6 +1056,13 @@ describe('one opportunity from discovery to learning, across the seam', () => {
     await pass();
     expect((await getOpportunity(id))!.state).toBe('COLLECTED');
     await pass();
+    {
+      const { reading, job } = await jobOf();
+      expect(job.stage).toBe('SETTLED');
+      expect(reading.settledCents).toBe(200_000);
+      const jobs = (await listJobs(projectId)).filter((one) => one.opportunityId === id);
+      expect(jobs.map((one) => one.state)).toEqual(['COLLECTED']);
+    }
 
     // CONTRIBUTION from rows: settled less the fee, nothing counted twice.
     const deal = await dealPosition({ opportunity: (await getOpportunity(id))!, currency: 'USD' });
@@ -1031,6 +1093,8 @@ describe('one opportunity from discovery to learning, across the seam', () => {
     expect((await outcomesFor({ projectId, opportunityId: id })).length).toBe(before.learned);
     expect([sends.CONTACT_BUYER!.length, sends.QUOTE_AND_INVOICE!.length]).toEqual([1, 1]);
     expect(await agreementsFor(id)).toHaveLength(1);
+    // And still exactly one job, settled, after the restarts and replays.
+    expect((await listJobs(projectId)).filter((one) => one.opportunityId === id)).toHaveLength(1);
   }, 180_000);
 });
 

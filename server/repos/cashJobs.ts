@@ -46,37 +46,38 @@ export async function createJob(input: {
   const id = newId('cjb');
   const ts = nowIso();
   const owner = input.ownerUserId ?? null;
-  try {
-    await getDb().run(
-      `INSERT INTO cash_jobs (id, opportunity_id, project_id, state, owner_user_id, visibility,
-         budget_cents, currency, note, assigned_at, released_at, release_reason,
-         created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)`,
-      [
-        id,
-        input.opportunityId,
-        input.projectId,
-        owner ? 'ASSIGNED' : 'UNASSIGNED',
-        owner,
-        input.visibility ?? 'PRIVATE',
-        input.budgetCents ?? null,
-        input.currency,
-        input.note ?? null,
-        owner ? ts : null,
-        input.createdBy,
-        ts,
-        ts,
-      ],
-    );
-  } catch {
-    /*
-     * The unique index refused it: a live job already exists for this
-     * opportunity. That is an ordinary outcome rather than an error — two
-     * people simultaneously believing the work is theirs is the thing it
-     * prevents — so the caller is told by getting null back.
-     */
-    return null;
-  }
+  /*
+   * `ON CONFLICT DO NOTHING` rather than a try/catch around a failed insert.
+   *
+   * The partial unique index on live jobs is the arbiter: two ticks, a restart
+   * mid-pass or two instances all produce one live job, and the loser is an
+   * ordinary outcome told by getting null back. Catching every error here used
+   * to hide a real failure as "already exists", and on Postgres a failed
+   * statement inside a caller's transaction would have aborted it.
+   */
+  const result = await getDb().run(
+    `INSERT INTO cash_jobs (id, opportunity_id, project_id, state, owner_user_id, visibility,
+       budget_cents, currency, note, assigned_at, released_at, release_reason,
+       created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
+     ON CONFLICT DO NOTHING`,
+    [
+      id,
+      input.opportunityId,
+      input.projectId,
+      owner ? 'ASSIGNED' : 'UNASSIGNED',
+      owner,
+      input.visibility ?? 'PRIVATE',
+      input.budgetCents ?? null,
+      input.currency,
+      input.note ?? null,
+      owner ? ts : null,
+      input.createdBy,
+      ts,
+      ts,
+    ],
+  );
+  if (result.changes !== 1) return null;
   return getJob(id);
 }
 
