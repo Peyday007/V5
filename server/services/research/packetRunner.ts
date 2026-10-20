@@ -160,6 +160,33 @@ function alreadyCreated(items: WorkItem[], predicate: (item: WorkItem) => boolea
 }
 
 /**
+ * Whether this envelope has already approved this packet's plan once.
+ *
+ * Read from the run's own `RESEARCH_PLAN_SYSTEM_APPROVED` events, written in
+ * the same branch that approves. A refusal event (`fits: false`) does not
+ * count. The assignment column is never updated after creation, so an approval
+ * of it then is an approval of the same words now.
+ */
+export async function assignmentApprovedUnder(
+  orchestration: ResearchOrchestration,
+  envelopeId: string,
+): Promise<boolean> {
+  const rows = await getDb().all<{ payload: string }>(
+    `SELECT payload FROM project_events
+      WHERE entity_type = 'RUN' AND entity_id = ? AND event_type = 'RESEARCH_PLAN_SYSTEM_APPROVED'`,
+    [orchestration.runId],
+  );
+  return rows.some((row) => {
+    try {
+      const payload = JSON.parse(row.payload) as { orchestrationId?: string; envelopeId?: string; fits?: boolean };
+      return payload.orchestrationId === orchestration.id && payload.envelopeId === envelopeId && payload.fits !== false;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
  * How many items one (type, target) may ever have: the first and two
  * replacements. A bound on a loop, not a budget.
  */
@@ -1726,7 +1753,12 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
         };
       }
 
-      const verdict = planFitsEnvelope({ envelope, orchestration, fragments: awaitingApproval });
+      const verdict = planFitsEnvelope({
+        envelope,
+        orchestration,
+        fragments: awaitingApproval,
+        assignmentAlreadyApproved: await assignmentApprovedUnder(orchestration, envelope.id),
+      });
       await recordEvent({
         projectId: orchestration.projectId,
         layerId: orchestration.layerId,

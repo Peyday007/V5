@@ -252,3 +252,30 @@ describe('an item the queue exhausted is replaced, bounded, rather than parked',
     expect((await advancePacket(orchestrationId)).status).toBe('NEEDS_HUMAN');
   });
 });
+
+describe('whether an envelope already approved this packet, read from its own events', () => {
+  it('counts only a system approval of this packet under this envelope', async () => {
+    const { recordEvent } = await import('../server/repos/events.ts');
+    const { assignmentApprovedUnder } = await import('../server/services/research/packetRunner.ts');
+    const orchestration = (await getOrchestration(await synthesisFaultedPacket(null)))!;
+    const record = async (eventType: string, payload: Record<string, unknown>) =>
+      recordEvent({
+        projectId,
+        layerId,
+        entityType: 'RUN',
+        entityId: orchestration.runId,
+        eventType,
+        payload: { orchestrationId: orchestration.id, ...payload },
+      } as never);
+
+    expect(await assignmentApprovedUnder(orchestration, 'ENV_A')).toBe(false);
+    await record('RESEARCH_PLAN_OUTSIDE_ENVELOPE', { envelopeId: 'ENV_A', fits: false });
+    await record('RESEARCH_PLAN_SYSTEM_APPROVED', { envelopeId: 'ENV_B', fits: true });
+    await record('RESEARCH_PLAN_SYSTEM_APPROVED', { envelopeId: 'ENV_A', fits: false });
+    expect(await assignmentApprovedUnder(orchestration, 'ENV_A')).toBe(false);
+    await record('RESEARCH_PLAN_SYSTEM_APPROVED', { envelopeId: 'ENV_A', fits: true });
+    expect(await assignmentApprovedUnder(orchestration, 'ENV_A')).toBe(true);
+    // An approval recorded before the event carried `fits` is still an approval.
+    expect(await assignmentApprovedUnder(orchestration, 'ENV_B')).toBe(true);
+  });
+});

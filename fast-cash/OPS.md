@@ -29,16 +29,15 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 
 <!-- The check-in replaces everything below. -->
 
-- **Last check:** 2026-10-20 15:00Z. Production serves a296bf8, released by Deploy 39433491987 at about 14:20Z.
-- **Outage, restored:** Brain stopped answering at 13:25Z. The database was overloaded, the machine stayed up but failed every health check, and Fly does not restart a machine for that. The a296bf8 release restarted it. /healthz has answered 200 since.
-- **Research capacity fix, live:** PR #246 (a43b033). The discovery grant's concurrency grows with the research surfaces on record and never drops below 6. It now reads 13; it was 6.
+- **Last check:** 2026-10-20 18:40Z. Production serves fa3ed69, which carries PR #249 (exhausted research items are replaced, not parked) and PR #250 (correction rounds for judge-parked packets).
 - **Operation:** runs unattended.
-  - 57 scans so far, the last at 14:10Z.
-  - 2091 jobs screened: 2081 rejected with reasons, 8 withdrawn and 2 PREPARED.
-  - The 2 PREPARED bids are not sent:
+  - 64 scans so far, the last at 18:08Z.
+  - 2260 jobs screened: 2247 rejected with reasons, 9 withdrawn and 4 PREPARED.
+  - The 4 PREPARED bids are not sent; Brain cannot bid yet:
     - Freelancer 40775802, "PDF Text to Word": about USD 161;
-    - 40777786, "PDF-to-Word Conversion -- 2": about USD 193.
-  - 40777245 (ISO 27001) was withdrawn by the PR #245 screen, as expected.
+    - 40777786, "PDF-to-Word Conversion -- 2": about USD 193;
+    - 40778112, "15k Data Entries with Photos": about USD 219;
+    - 40778265, "Premium Service Google Ad Campaign": about USD 165.
 - **Acting is blocked** on two owner steps:
   - Freelancer account plus token: `FREELANCER_OAUTH_TOKEN` NOT_CONNECTED;
   - commercial grant: ABSENT.

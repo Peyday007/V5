@@ -13341,6 +13341,12 @@ The rules it introduced:
   stay faults (`mayReplace` in `packetRunner.ts`). `npm run report:productivity`
   (`Productivity report` workflow) counts leases by outcome per worker, refused
   completions and handbacks, before and after `--split`.
+- **An assignment an envelope already approved is not judged again.** The
+  assignment is written once and never updated, so a `RESEARCH_PLAN_SYSTEM_APPROVED`
+  for this packet under the same envelope already judged these words; a judge's
+  follow-up fragment re-checks only the new fragments (`assignmentApprovedUnder`).
+  Production, 2026-10-20: correction rounds on packets older than the 10-13
+  template edit parked on "the assignment is not this envelope's".
 - **A follow-up research question names its opening.** A need's research
   asked the person-facing sentence "This card cannot be tested without it…"
   plus a task such as "Name the person who can approve payment", so workers
