@@ -13404,6 +13404,33 @@ produce and check itself.
   size, stored with their hash and never overwritten; an unreadable file is
   named to the client rather than guessed at.
 
+## 68. A surface that cannot reach the web still does the work that needs none, and each account is one card.
+
+Production, 2026-10-20: the fleet held six capacity accounts and one did any
+work. Airyn's four research Routines were on an operator hold because their
+Claude environment refused every source host, and the network-block guard
+removed the whole RESEARCH family from a blocked Routine — so the audits,
+syntheses and planning waiting in the same queue, which read only what Brain
+hands a worker, were kept from him too.
+
+- **Web need is a property of the open work, not of the family.**
+  `binNeedsWeb` answers false only for a research packet whose claimable items
+  are all planning, synthesis or audit; anything else, or anything it cannot
+  tell, needs the web. The router refuses a `webBlocked` candidate only when
+  the bin needs the web, and `binAdmission` quietly skips source research for a
+  session whose Routines are all web-blocked.
+- **A broken environment is remembered, and retested once a day.** A Routine
+  stays web-blocked while nothing it researched has been accepted since its
+  newest block and that block is under `NETWORK_BLOCK_RETEST_MS` old. The old
+  six-hour window was the recovery and cost three fragments per Routine per
+  window on an environment nobody had fixed.
+- **The workforce is one card per account, read from rows.**
+  `services/fleet/workforce.ts` attributes a lease to the account whose Routine
+  Brain fired for it (the `bin_dispatch` row at the lease's previous
+  generation), else the one account its worker is bound in, else nobody — and
+  says how many it could not attribute. A title crosses only into a project the
+  reader may read. It adds no mechanism and decides nothing.
+
 ## Repository map
 
 ```
@@ -13605,6 +13632,7 @@ server/
     fleet/
       view.ts           three capacity numbers that are not each other, and why it is slow
       capacity.ts       what the dispatcher would fire, counted once and labelled honestly
+      workforce.ts      one card per Claude account: what it holds, finished and is waiting on
       connectorHealth.ts  the one answer to whether a connector can authenticate, and whose fault a no-show is
       arrivalIdentity.ts  who arrived for a fire; a wrong worker is stopped at once, restored once registered
       autoRecovery.ts   Brain probes the quarantines it derived again, bounded, one at a time
@@ -13924,6 +13952,7 @@ client/                 React UI
   src/components/Recovery.tsx  the break-glass door, unlinked, ending in a device
   src/russell/Home.tsx  the command center: state, focus, maturity strip, collections
   src/russell/Fleet.tsx capacity, surfaces, policy as rows, and the lab beside it
+  src/russell/Workforce.tsx one card per Claude account, and the workforce totals
   src/russell/Frontier.tsx  the five regions, each item naming what it came from
   src/russell/Maps.tsx  six maps, with the outline always in the document
   src/russell/Search.tsx one search over everything this person may see
