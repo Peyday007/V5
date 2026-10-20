@@ -38,6 +38,8 @@ import { fulfillmentEvents, fulfillmentForAgreement, getFulfillment } from '../.
 import { getAgreement } from '../../repos/cashJourney.ts';
 import { readCapability } from './capabilities.ts';
 import { evidenceCard } from './card.ts';
+import { NEED_RESEARCHABLE_ENGINE_FIELDS } from './engineCard.ts';
+import { cardFact } from '../../repos/cashCardFacts.ts';
 import { getOperation } from '../../repos/idempotency.ts';
 import { actionsFor } from '../../repos/cashActions.ts';
 import type { CashNeed } from '../../domain/types.ts';
@@ -100,6 +102,14 @@ export async function readNeedCondition(need: CashNeed): Promise<NeedVerificatio
           field.value !== null
             ? `The ${field.label.toLowerCase()} is on the card.`
             : `The ${field.label.toLowerCase()} is still blank.`,
+      };
+    }
+    for (const key of NEED_RESEARCHABLE_ENGINE_FIELDS) {
+      if (questionKey(need.opportunityId, key) !== need.requestKey) continue;
+      const fact = await cardFact(need.opportunityId, key);
+      return {
+        holds: Boolean(fact && fact.value !== null),
+        reading: fact ? `The ${key} is on the card.` : `The ${key} is still blank.`,
       };
     }
     return null;

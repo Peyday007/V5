@@ -649,6 +649,11 @@ export interface DiveValueFacts {
   timeToCashDays: number | null;
   /** How much of its card is already answered — the archive partly answers it. */
   answered: number;
+  /**
+   * Published price less published exposure, per sale, or null. Optional so a
+   * caller built before it existed still compares; null and absent sort last.
+   */
+  contributionCents?: number | null;
 }
 
 const CAPITAL_ORDER: Readonly<Record<DiveValueFacts['capital'], number>> = Object.freeze({
@@ -680,6 +685,17 @@ export function compareDiveValue(a: DiveValueFacts, b: DiveValueFacts): number {
     if (a.timeToCashDays === null) return 1;
     if (b.timeToCashDays === null) return -1;
     return a.timeToCashDays - b.timeToCashDays;
+  }
+  /*
+   * Expected usable profit, from published figures only. Larger first; an
+   * unknown contribution never outranks a known one (invariant 39).
+   */
+  const ca = a.contributionCents ?? null;
+  const cb = b.contributionCents ?? null;
+  if (ca !== cb) {
+    if (ca === null) return 1;
+    if (cb === null) return -1;
+    return cb - ca;
   }
   if (a.answered !== b.answered) return b.answered - a.answered;
   if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
@@ -715,6 +731,10 @@ export function diveValueFacts(input: {
     capital,
     timeToCashDays: time?.value ? input.readDays(time.value) : null,
     answered: answeredCount(opportunity),
+    contributionCents:
+      opportunity.priceCents !== null && funding !== null && funding !== undefined
+        ? opportunity.priceCents - funding
+        : null,
   };
 }
 

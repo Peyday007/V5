@@ -3039,7 +3039,8 @@ button.rs-card:hover {
   container-type: inline-size;
 }
 
-.rs-cash-tiers {
+.rs-cash-tiers,
+.rs-cash-stages {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
   gap: var(--gap-2);
@@ -3048,7 +3049,8 @@ button.rs-card:hover {
   list-style: none;
 }
 
-.rs-cash-tiers > li {
+.rs-cash-tiers > li,
+.rs-cash-stages > li {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -3058,13 +3060,15 @@ button.rs-card:hover {
   min-width: 0;
 }
 
-.rs-cash-tiers > li > strong {
+.rs-cash-tiers > li > strong,
+.rs-cash-stages > li > strong {
   font-size: var(--step-1);
   line-height: 1.1;
   overflow-wrap: anywhere;
 }
 
-.rs-cash-tiers > li > span {
+.rs-cash-tiers > li > span,
+.rs-cash-stages > li > span {
   font-size: var(--step--1);
   color: var(--ink-soft);
 }
@@ -4865,4 +4869,35 @@ details.rs-card > section.rs-card {
 /* Actual money on Cash is set apart from authorizations and estimates. */
 .rs-cash-tiers .rs-cash-actual strong {
   color: var(--moss-ink);
+}
+
+/* Execution jobs (`Pipeline` in Cash.tsx). The stage strip reuses the tier
+   strip's reflow; a job reads as a list item with its next action. */
+.rs-cash-stages {
+  padding-left: 0;
+}
+.rs-cash-job-stage {
+  color: var(--verdigris-ink);
+}
+.rs-cash-job-next {
+  margin: 0.25rem 0;
+}
+.rs-cash-job-tasks > li[data-status^='BLOCKED'] > strong {
+  color: var(--ochre-ink, var(--ink));
+}
+
+/* The project a page reads, named above it (`ProjectChooser`). */
+.rs-project-chooser {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-2);
+  margin: 0 0 var(--gap-3);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+.rs-project-chooser select {
+  max-width: 100%;
+  min-height: 2.5rem;
+  font-size: 1rem;
 }

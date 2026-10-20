@@ -7,6 +7,8 @@
  * needs to re-render and nobody has to remember to refresh anything.
  */
 import { Router } from 'express';
+import { getDb } from '../db/database.ts';
+import { findCashRoot } from '../services/cash/root.ts';
 import type {
   DocumentScope,
   DocumentType,
@@ -175,6 +177,49 @@ projectsRouter.get(
     const all = await listProjects();
     const visible = new Set(visibleProjectIds(currentPrincipal(), all.map((p) => p.id)));
     return { projects: all.filter((project) => visible.has(project.id)) };
+  }),
+);
+
+/**
+ * Which project each surface actually lives in, among the projects this caller
+ * may read.
+ *
+ * The shell used to hand every page `projects[0]` — the first project the API
+ * happened to return — so a kernel whose rows live in one project was shown
+ * another's empty state, and nothing on the screen said a choice had been made.
+ * This answers from rows instead: the Cash root by `findCashRoot`'s own order,
+ * and each kernel by the project holding its rows. A project the caller may not
+ * read is never named, so the answer for it is null — the same as absent.
+ * It creates nothing.
+ */
+projectsRouter.get(
+  '/homes',
+  handler(async () => {
+    const all = await listProjects();
+    const visible = new Set(visibleProjectIds(currentPrincipal(), all.map((p) => p.id)));
+    const readable = (id: string | null | undefined): string | null => (id && visible.has(id) ? id : null);
+    const db = getDb();
+    const holding = async (table: string): Promise<string | null> => {
+      const rows = await db.all<{ project_id: string; n: number }>(
+        `SELECT project_id, COUNT(*) AS n FROM ${table} GROUP BY project_id ORDER BY COUNT(*) DESC, project_id`,
+      );
+      return rows.map((row) => readable(row.project_id)).find((id) => id !== null) ?? null;
+    };
+    const cashRoot = await findCashRoot();
+    const cash = readable(cashRoot?.id);
+    return {
+      cash,
+      manufacturing: await holding('manufacturing_programs'),
+      labor: (await holding('labor_workflows')) ?? cash,
+      puzzles: (await holding('puzzle_formats')) ?? cash,
+      /*
+       * What a project-scoped page opens on when nobody has chosen: the Cash
+       * root when this person may read it, otherwise their only project, and
+       * otherwise nothing — a page with no project says so and offers the
+       * choice rather than picking one silently.
+       */
+      fallback: cash ?? (visible.size === 1 ? [...visible][0]! : null),
+    };
   }),
 );
 

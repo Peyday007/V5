@@ -51,6 +51,8 @@ import {
   type OfferDraft,
   type Placement,
   type ReviewItem,
+  type PipelineReading,
+  type PipelineStage,
 } from '../lib/cashApi.ts';
 
 /**
@@ -305,6 +307,15 @@ export function CashView_({
         */}
       <Status page={page} />
       <Decisions page={page} projectId={rootId} onChanged={view.reload} />
+      {/*
+        * Jobs, directly under the decisions — a decision nothing can proceed
+        * without is still named first. A job is the first thing on this page
+        * that is somebody's work rather than evidence, and the stages it shows
+        * are the ones nobody may collapse: prepared is not contacted, agreed is
+        * not delivered, paid is not usable cash. Research is counted beside it
+        * and never as a job.
+        */}
+      <Pipeline projectId={rootId} reloadToken={view.data} />
       <YourWork page={page} onChanged={view.reload} />
       <BestOpportunities page={page} onChanged={view.reload} />
       <FreshOpenings page={page} />
@@ -1844,6 +1855,174 @@ function SettleCommitment({
  * against — and calling all four an opening is the defect this whole change
  * is about.
  */
+/** The stages, in the order money travels. Labels come from the server. */
+const PIPELINE_ORDER: PipelineStage[] = [
+  'DISCOVERED',
+  'UNDER_QUALIFICATION',
+  'QUALIFIED',
+  'JOB_PREPARED',
+  'READY_BLOCKED',
+  'EXECUTING',
+  'AGREED',
+  'DELIVERED',
+  'PAID',
+  'SETTLED',
+];
+
+const EXECUTOR_WORDS: Record<string, string> = {
+  BRAIN_DETERMINISTIC: 'Brain (composed from the card)',
+  BRAIN_RESEARCH: 'Brain research fleet',
+  PROVIDER: 'Connected provider',
+  VENDOR: 'Supplier or contractor',
+  BUYER: 'The buyer',
+  PERSON: 'A person',
+};
+
+const TASK_STATUS_WORDS: Record<string, string> = {
+  DONE: 'Done',
+  IN_PROGRESS: 'Running',
+  WAITING_RESEARCH: 'Brain is researching',
+  BLOCKED_DEPENDENCY: 'Waiting on an earlier step',
+  BLOCKED_AUTHORITY: 'Needs authorization',
+  BLOCKED_PROVIDER: 'Needs a provider connected',
+  WAITING_BUYER: 'Waiting on the buyer',
+  WAITING_PERSON: 'Waiting on a person',
+};
+
+/**
+ * From discovery to usable cash: every stage counted, and every execution job.
+ *
+ * Its own read (`/cash/pipeline`), so a failure here says so in its own card
+ * rather than blanking the section, and a loading state is never mistaken for
+ * an empty one.
+ */
+function Pipeline({ projectId, reloadToken }: { projectId: string; reloadToken: unknown }): JSX.Element {
+  const reading = useAsync(() => CashApi.pipeline(projectId), [projectId, reloadToken]);
+  const data: PipelineReading | null = reading.data?.pipeline ?? null;
+
+  if (!data) {
+    const failed = reading.error
+      ? listState({ loading: false, error: reading.error, items: null, noun: 'jobs' })
+      : null;
+    return (
+      <section className="rs-card rs-cash-pipeline">
+        <h3>Jobs: from discovery to usable cash</h3>
+        {failed ? (
+          <p className={`rs-state rs-state-${failed.phase.toLowerCase()}`} role={failed.phase === 'ERROR' ? 'alert' : undefined}>
+            {failed.message}
+            {failed.retryable ? (
+              <button type="button" onClick={reading.reload}>
+                Try again
+              </button>
+            ) : null}
+          </p>
+        ) : reading.loading ? (
+          <p className="rs-state rs-state-loading">Reading the jobs&hellip;</p>
+        ) : (
+          <p className="rs-state rs-state-empty">Cash Mode is not running, so there are no jobs.</p>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <section className="rs-card rs-cash-pipeline">
+      <h3>Jobs: from discovery to usable cash</h3>
+      <ol className="rs-cash-stages" aria-label="Where every opening stands">
+        {PIPELINE_ORDER.map((stage) => (
+          <li key={stage} data-stage={stage}>
+            <strong>{data.counts[stage] ?? 0}</strong>
+            <span>{data.labels[stage] ?? stage}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="rs-hint">
+        Collected and usable: <strong>{money(data.settledCents, data.currency)}</strong>
+        {data.paidUnsettledCents > 0
+          ? ` · paid and not yet settled: ${money(data.paidUnsettledCents, data.currency)}`
+          : ''}
+        . Research in flight: {data.researchInFlight} packet(s) — research, not jobs.
+      </p>
+      <p className="rs-hint rs-cash-authority-line">
+        {data.authority.live
+          ? `Commercial authority covers: ${data.authority.allowedActions.join(', ') || 'nothing that reaches a buyer'}.`
+          : 'No commercial authority is granted, so Brain prepares jobs and contacts nobody. Grant it under "What Brain is allowed to do".'}{' '}
+        Providers:{' '}
+        {data.providers.map((one, index) => (
+          <span key={one.id} title={one.nextStep ?? undefined}>
+            {index > 0 ? ', ' : ''}
+            {one.id} {one.state === 'PRESENT' ? 'connected' : one.state.toLowerCase()}
+          </span>
+        ))}
+        .
+      </p>
+
+      {data.jobs.length === 0 ? (
+        <p className="rs-state rs-state-empty">
+          No execution jobs yet. A job is prepared by itself the moment an opening is qualified
+          {data.qualifiedWithoutJob.length > 0 ? '; the qualified openings below were not, and say why.' : '; none is qualified yet.'}
+        </p>
+      ) : (
+        <ul className="rs-list rs-cash-jobs">
+          {data.jobs.map((job) => (
+            <li key={job.jobId} className="rs-cash-job" data-stage={job.stage}>
+              <p>
+                <strong>{job.title}</strong> — <span className="rs-cash-job-stage">{job.stageLabel}</span>
+              </p>
+              {job.priceCents !== null ? (
+                <p className="rs-item-meta">
+                  Price per sale {money(job.priceCents, job.currency)}
+                  {job.exposureCents !== null ? ` · capital at risk ${money(job.exposureCents, job.currency)}` : ''}
+                  {job.contributionPerSaleCents !== null
+                    ? ` · contribution per sale ${money(job.contributionPerSaleCents, job.currency)}`
+                    : ''}
+                  . Figures are published prices, not revenue.
+                </p>
+              ) : null}
+              {job.next ? (
+                <p className="rs-cash-job-next">
+                  Next: {job.next.task} — {EXECUTOR_WORDS[job.next.executor] ?? job.next.executor}.{' '}
+                  {job.next.because}
+                </p>
+              ) : null}
+              {job.tasks.length > 0 ? (
+                <details className="rs-details">
+                  <summary>{job.tasks.length} tasks</summary>
+                  <ol className="rs-cash-job-tasks">
+                    {job.tasks.map((task) => (
+                      <li key={task.key} data-status={task.status}>
+                        <strong>{TASK_STATUS_WORDS[task.status] ?? task.status}</strong> · {task.action}{' '}
+                        <span className="rs-item-meta">
+                          ({EXECUTOR_WORDS[task.executor] ?? task.executor}) {task.because}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              ) : (
+                <p className="rs-item-meta">This job is somebody else&rsquo;s; its working state is theirs.</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {data.qualifiedWithoutJob.length > 0 ? (
+        <details className="rs-details">
+          <summary>{data.qualifiedWithoutJob.length} qualified opening(s) with no job, and why</summary>
+          <ul className="rs-list">
+            {data.qualifiedWithoutJob.map((one) => (
+              <li key={one.opportunityId}>
+                <strong>{one.title}</strong> — {one.because}.
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
 function Status({ page }: { page: CashPage }): JSX.Element {
   const frontier = page.frontier;
   const tiers = frontier.byTier;

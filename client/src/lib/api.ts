@@ -278,6 +278,14 @@ export interface SessionResponse {
   user: SessionUser | null;
 }
 
+export interface ProjectHomes {
+  cash: string | null;
+  manufacturing: string | null;
+  labor: string | null;
+  puzzles: string | null;
+  fallback: string | null;
+}
+
 export const Api = {
   // -------------------------------------------------------------------------
   // Who is using this Brain
@@ -356,6 +364,10 @@ export const Api = {
     return api<HealthResponse>('/api/health');
   },
 
+  /** Which project each surface lives in, among those this person may read. */
+  projectHomes(): Promise<ProjectHomes> {
+    return api<ProjectHomes>('/api/projects/homes');
+  },
   projects(): Promise<{ projects: Project[] }> {
     return api<{ projects: Project[] }>('/api/projects');
   },

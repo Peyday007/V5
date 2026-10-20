@@ -45,6 +45,12 @@ export type Route =
   | { name: 'PUZZLES' }
   /** Scenario modelling: simulate a decision and compare strategies (§60). */
   | { name: 'SCENARIOS' }
+  /**
+   * The specialized business systems, together: Machines, Labor, Puzzles and
+   * Scenarios. Each keeps its own address; this is where they are reached
+   * from, so no one of them is a standalone destination in the navigation.
+   */
+  | { name: 'SYSTEMS' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -115,6 +121,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'PUZZLES' };
     case 'scenarios':
       return { name: 'SCENARIOS' };
+    case 'systems':
+      return { name: 'SYSTEMS' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
@@ -166,6 +174,8 @@ export function pathFor(route: Route): string {
       return '/puzzles';
     case 'SCENARIOS':
       return '/scenarios';
+    case 'SYSTEMS':
+      return '/systems';
     case 'SEARCH':
       return '/search';
     case 'INVITE':

@@ -987,6 +987,7 @@ describe('an ordinary member reading the shared frontier', () => {
     expect(ids).toEqual([
       'rs-cash-status',
       'rs-cash-decisions',
+      'rs-cash-pipeline',
       // Work is a section of its own now, for both roles: §36's rule is that a
       // permission decides what is inside a section and never which sections
       // exist. A member's copy says that work belongs to whoever owns a job.

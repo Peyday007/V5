@@ -75,6 +75,7 @@ import {
 } from '../../repos/cashCardFacts.ts';
 import { listAllocations, listTasks, listWorkflows } from '../../repos/labor.ts';
 import { evidenceCard } from './card.ts';
+import { NEED_RESEARCHABLE_ENGINE_FIELDS } from './engineCard.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed } from './needs.ts';
 import { readCapabilities } from './capabilities.ts';
@@ -398,6 +399,9 @@ function fieldOf(need: CashNeed, opportunity: CashOpportunity): string | null {
   for (const one of evidenceCard(opportunity).fields) {
     if (questionKey(opportunity.id, one.key) === need.requestKey) return one.key;
   }
+  for (const key of NEED_RESEARCHABLE_ENGINE_FIELDS) {
+    if (questionKey(opportunity.id, key) === need.requestKey) return key;
+  }
   return null;
 }
 
@@ -408,14 +412,19 @@ async function applyOne(input: {
   claim: ResearchClaim;
 }): Promise<boolean> {
   const column = COLUMN[input.field];
-  if (!column) return false;
+  const engineOnly = !column && (NEED_RESEARCHABLE_ENGINE_FIELDS as readonly string[]).includes(input.field);
+  if (!column && !engineOnly) return false;
 
   const existing = await cardFact(input.opportunity.id, input.field);
   if (!mayReplace(existing, 'EVIDENCE')) return false;
 
   const value = clamp(input.claim.claim, 600);
-  const patch: Record<string, string | number | null> = { [column]: value };
-  if (MONEY_FIELD[input.field]) {
+  /*
+   * An engine field has no column: the qualification set reads it from the
+   * card fact alone, so the fact below is the whole of the write.
+   */
+  const patch: Record<string, string | number | null> = column ? { [column]: value } : {};
+  if (column && MONEY_FIELD[input.field]) {
     const cents = figureFor(input.field, input.claim.claim, input.opportunity.currency);
     if (cents === null) return false;
     patch[column] = cents;
@@ -427,13 +436,13 @@ async function applyOne(input: {
    * from something somebody remembers from March — so the date travels with the
    * claim rather than being left for somebody to fill in afterwards.
    */
-  if (input.field === 'buyingEvidence') {
+  if (column && input.field === 'buyingEvidence') {
     patch['buying_signal'] = value;
     delete patch[column];
     patch['signal_observed_at'] = input.claim.sourceDate ?? input.claim.retrievedAt ?? null;
     if (!patch['signal_observed_at']) return false;
   }
-  await updateOpportunity(input.opportunity.id, patch as never);
+  if (Object.keys(patch).length > 0) await updateOpportunity(input.opportunity.id, patch as never);
 
   await recordCardFact({
     projectId: input.opportunity.projectId,

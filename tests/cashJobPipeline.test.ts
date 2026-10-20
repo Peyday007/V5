@@ -220,3 +220,80 @@ describe('the derivation is honest about stage', () => {
     expect(jobStage(jobTasks(paid), paid)).toBe('PAID');
   });
 });
+
+describe('a candidate whose dives are spent can still be qualified', () => {
+  /*
+   * Production, 2026-10-20: 79 CANDIDATE openings, none QUALIFIED, 26 with both
+   * dives of their epoch spent and qualification fields no column holds — so
+   * nothing could ever ask again. Each blank engine field is now one narrow
+   * research question, through the same gate, and the answer lands on the card.
+   */
+  async function spentCandidate(): Promise<string> {
+    const captured = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: 'A published request for parcel research',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!captured.ok) throw new Error(captured.reason);
+    const id = captured.value.id;
+    await fillCard({
+      opportunityId: id,
+      actorRef: userId,
+      patch: {
+        payer: 'The drainage authority',
+        reachableChannel: 'procurement@authority.example',
+        buyingSignal: 'Request 2026-441, published',
+        signalObservedAt: '2026-10-15T09:00:00.000Z',
+        offerScope: 'Ownership research on twenty parcels',
+        acceptanceCondition: 'Twenty parcels delivered',
+        priceCents: 200_000,
+        deliveryMethod: 'A report by email',
+        fulfillmentOwner: 'Brain',
+        peakFundingCents: 0,
+      },
+    });
+    // Everything a person or a dive answered, except the engine facts.
+    const engine = new Set(['revenueRange', 'directCosts', 'requiredCapital', 'timeToFirstCash', 'laborNeeds']);
+    for (const field of [CAPTURE_KEY, ...qualificationKeys(null)]) {
+      if (engine.has(field)) continue;
+      await recordCardFact({ projectId, opportunityId: id, field, kind: 'PERSON', value: `Answered: ${field}.`, decidedBy: userId });
+    }
+    await getDb().run(
+      `UPDATE cash_opportunities SET validation_state = 'BLOCKED', validation_rounds = 2,
+         source_claim_id = NULL WHERE id = ?`,
+      [id],
+    );
+    return id;
+  }
+
+  it('asks each blank engine field once, capped, and never the disqualifier question', async () => {
+    const id = await spentCandidate();
+    const { reconcileEngineGaps, MAX_OPEN_ENGINE_QUESTIONS } = await import('../server/services/cash/operate.ts');
+    const first = await reconcileEngineGaps(projectId);
+    const fields = first.filter((one) => one.opportunityId === id).map((one) => one.field).sort();
+    expect(fields).toEqual(['directCosts', 'laborNeeds', 'requiredCapital', 'revenueRange', 'timeToFirstCash']);
+    expect(fields).not.toContain('disqualifiers');
+    // Idempotent: the next pass raises nothing new.
+    expect(await reconcileEngineGaps(projectId)).toEqual([]);
+    expect(first.length).toBeLessThanOrEqual(MAX_OPEN_ENGINE_QUESTIONS);
+
+    // An answer arriving by any route settles the question from the card.
+    await recordCardFact({ projectId, opportunityId: id, field: 'laborNeeds', kind: 'PERSON', value: 'Brain alone.', decidedBy: userId });
+    await reconcileEngineGaps(projectId);
+    const open = await getDb().all<{ request_key: string }>(
+      `SELECT request_key FROM cash_needs WHERE opportunity_id = ? AND state = 'OPEN'`,
+      [id],
+    );
+    expect(open.map((one) => one.request_key)).not.toContain(`question:${id}:laborNeeds`);
+  });
+
+  it('does not ask while a dive could still ask everything at once', async () => {
+    const id = await spentCandidate();
+    await getDb().run(`UPDATE cash_opportunities SET validation_rounds = 1 WHERE id = ?`, [id]);
+    const { reconcileEngineGaps } = await import('../server/services/cash/operate.ts');
+    expect((await reconcileEngineGaps(projectId)).filter((one) => one.opportunityId === id)).toEqual([]);
+  });
+});

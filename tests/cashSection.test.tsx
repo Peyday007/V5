@@ -1943,6 +1943,8 @@ describe('winding down', () => {
 const SECTIONS = [
   'rs-cash-status',
   'rs-cash-decisions',
+  // Execution jobs and the stage of every opening, both roles (`jobPipeline.ts`).
+  'rs-cash-pipeline',
   /*
    * Work, and the section that did not exist.
    *

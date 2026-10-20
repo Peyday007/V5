@@ -151,8 +151,8 @@ describe('navigation is six destinations, and nothing useful was lost', () => {
       'Ideas',
       'What Brain knows',
       'Connected sites',
-      'Machines',
-      'Labor',
+      // Machines, Labor, Puzzles and Scenarios are reached together.
+      'Business systems',
       'People & capacity',
       'Your devices',
       'Full console',
@@ -161,6 +161,18 @@ describe('navigation is six destinations, and nothing useful was lost', () => {
     ]) {
       expect(screen.getByRole('menuitem', { name }), name).toBeTruthy();
     }
+    // No specialized kernel stands on its own in the navigation.
+    for (const name of ['Puzzles', 'Machines', 'Labor', 'Scenarios']) {
+      expect(screen.queryByRole('menuitem', { name }), name).toBeNull();
+    }
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Business systems' }));
+    });
+    const hub = await screen.findByRole('heading', { name: 'Business systems' });
+    const systems = within(hub.closest('section') as HTMLElement)
+      .getAllByRole('button')
+      .map((one) => one.textContent);
+    expect(systems).toEqual(['Machines', 'Labor', 'Puzzles', 'Scenarios']);
   });
 
   it('opens Research at its own address', async () => {
