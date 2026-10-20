@@ -88,6 +88,7 @@ import {
   listWorkItemsForOrchestration,
   queueNow,
 } from '../../repos/workQueue.ts';
+import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { workType, AUDIT_ROLES, type AuditRole } from '../queue/workTypes.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -167,6 +168,10 @@ function alreadyCreated(items: WorkItem[], predicate: (item: WorkItem) => boolea
  * count. The assignment column is never updated after creation, so an approval
  * of it then is an approval of the same words now.
  */
+function assignmentDigest(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
 export async function assignmentApprovedUnder(
   orchestration: ResearchOrchestration,
   envelopeId: string,
@@ -176,10 +181,24 @@ export async function assignmentApprovedUnder(
       WHERE entity_type = 'RUN' AND entity_id = ? AND event_type = 'RESEARCH_PLAN_SYSTEM_APPROVED'`,
     [orchestration.runId],
   );
+  const digest = assignmentDigest(orchestration.assignment);
   return rows.some((row) => {
     try {
-      const payload = JSON.parse(row.payload) as { orchestrationId?: string; envelopeId?: string; fits?: boolean };
-      return payload.orchestrationId === orchestration.id && payload.envelopeId === envelopeId && payload.fits !== false;
+      const payload = JSON.parse(row.payload) as {
+        orchestrationId?: string;
+        envelopeId?: string;
+        fits?: boolean;
+        assignmentSha256?: string;
+      };
+      return (
+        payload.orchestrationId === orchestration.id &&
+        payload.envelopeId === envelopeId &&
+        payload.fits !== false &&
+        // An approval that recorded the words must have judged these words. One
+        // recorded before the digest was written relies on the column never
+        // being updated, which nothing in this codebase does.
+        (payload.assignmentSha256 === undefined || payload.assignmentSha256 === digest)
+      );
     } catch {
       return false;
     }
@@ -1776,6 +1795,9 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
           authorizedBy: orchestration.approvalEnvelopeAuthorizedBy,
           authorizedAt: orchestration.approvalEnvelopeAuthorizedAt,
           authorization: envelope.authorization,
+          // The words this approval judged, so a later reader can tell that the
+          // assignment it is relying on is the one that was approved.
+          assignmentSha256: assignmentDigest(orchestration.assignment),
           fits: verdict.fits,
           reasons: verdict.reasons,
           checked: verdict.checked,

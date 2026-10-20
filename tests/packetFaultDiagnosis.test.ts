@@ -277,5 +277,12 @@ describe('whether an envelope already approved this packet, read from its own ev
     expect(await assignmentApprovedUnder(orchestration, 'ENV_A')).toBe(true);
     // An approval recorded before the event carried `fits` is still an approval.
     expect(await assignmentApprovedUnder(orchestration, 'ENV_B')).toBe(true);
+    // One that recorded other words did not approve these.
+    const { createHash } = await import('node:crypto');
+    const digest = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
+    await record('RESEARCH_PLAN_SYSTEM_APPROVED', { envelopeId: 'ENV_C', fits: true, assignmentSha256: digest('other words') });
+    expect(await assignmentApprovedUnder(orchestration, 'ENV_C')).toBe(false);
+    await record('RESEARCH_PLAN_SYSTEM_APPROVED', { envelopeId: 'ENV_C', fits: true, assignmentSha256: digest(orchestration.assignment) });
+    expect(await assignmentApprovedUnder(orchestration, 'ENV_C')).toBe(true);
   });
 });
