@@ -239,6 +239,46 @@ describe('the screen', () => {
     expect(farm.reasons.join(' ')).toMatch(/3D work needs more than placed primitive shapes/);
     expect(farm.reasons.join(' ')).toMatch(/also asks for 3D model/);
   });
+
+  it('turns down a supplier advertising itself as a project', () => {
+    // Freelancer 40776882, as published on 2026-10-20: a Bangladesh factory
+    // network inviting designers to "submit your proposal". Production prepared
+    // a bid on it because Freelancer's own boilerplate read as a business
+    // document. There is nothing to deliver and nobody buying.
+    const factory = screenProject(
+      project(6, {
+        title: 'FASHION DESIGNERS WANTED – BANGLADESH KNIT & WOVEN MANUFACTURING COLLABORATION',
+        jobs: [{ name: 'Product Sourcing' }, { name: 'Manufacturing' }, { name: 'Fashion Design' }],
+        description:
+          'We are looking to connect with fashion designers, independent clothing brands, and apparel professionals ' +
+          'who are developing their own collections and are looking for reliable manufacturing support in Bangladesh. ' +
+          'Our Bangladesh-based factory network can support designers with both knit and woven apparel production. ' +
+          'What we can work with you on: sample and product development, fabric sourcing, quality control. ' +
+          'Please submit your proposal through Freelancer.com and tell us about your designs, products and quantities.',
+      }) as never,
+      Date.now(),
+      ALL_PROVED,
+    );
+    expect(factory.deliverable).toBe(false);
+    expect(factory.reasons.join(' ')).toMatch(/advertises the client’s own services/);
+    expect(factory.reasons.join(' ')).toMatch(/manufacturing is physical production/);
+  });
+
+  it('still reads a proposal somebody wants written as a document', () => {
+    const grant = screenProject(
+      project(7, {
+        title: 'Grant proposal for a community garden',
+        jobs: [{ name: 'Proposal Writing' }],
+        description:
+          'I need a written proposal for a community garden grant from our city council, about six pages, covering ' +
+          'the need, the budget summary from the figures I list here, the timeline and the expected outcomes. ' +
+          'A single Word document is the deliverable. Fixed price.',
+      }) as never,
+      Date.now(),
+      ALL_PROVED,
+    );
+    expect(grant.categories).toContain('DOCUMENT');
+  });
 });
 
 describe('the operation', () => {
