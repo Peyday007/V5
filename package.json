@@ -36,6 +36,7 @@
     "report:refinement": "tsx scripts/refinement-report.ts",
     "verify:closeout": "tsx scripts/closeout-verify.ts",
     "report:labor": "tsx scripts/labor-report.ts",
+    "report:productivity": "tsx scripts/productivity-report.ts",
     "report:connections": "tsx scripts/connection-report.ts",
     "report:puzzle": "tsx scripts/puzzle-report.ts",
     "verify:capability": "tsx scripts/verify-research-capability.ts",

@@ -13330,6 +13330,17 @@ The rules it introduced:
   `catch {}`. Under pressure only the sweeps over every opportunity wait now;
   opening one round (at most one per bucket per day) and harvesting still run,
   and a discovery failure is a recorded pass failure.
+- **An item the queue exhausted is replaced, not parked.** A verification,
+  synthesis or audit item whose attempts ran out (FAILED as exhausted or on a
+  lapsed lease, or cancelled with its attempts spent) and recorded nothing gets
+  another item, up to `MAX_ITEMS_PER_TARGET` per target, instead of parking the
+  packet for a person. Production, 2026-10-20: thirteen Cash Mode 1 packets
+  parked "finished without recording anything" across Brain's own outage.
+  Planning, fragment research, a worker's non-retryable failure, a legacy
+  SUCCEEDED-without-record item, and a synthesis whose item reached the effect
+  stay faults (`mayReplace` in `packetRunner.ts`). `npm run report:productivity`
+  (`Productivity report` workflow) counts leases by outcome per worker, refused
+  completions and handbacks, before and after `--split`.
 - **A follow-up research question names its opening.** A need's research
   asked the person-facing sentence "This card cannot be tested without it…"
   plus a task such as "Name the person who can approve payment", so workers
