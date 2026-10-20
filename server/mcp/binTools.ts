@@ -277,14 +277,32 @@ const nextItemTool: McpTool = {
     });
     if (!result.held) return { value: LOST_THE_BIN, projectId: null };
     if (result.item === null) {
+      if (result.released) {
+        return {
+          value: {
+            held: false,
+            released: true,
+            item: null,
+            binHasOpenWork: true,
+            reason: result.released.reason,
+            message:
+              'The work left in this bin is for a different session, so Brain has handed it back for ' +
+              'you — you no longer hold it and need not call brain_bin_complete or brain_bin_release. ' +
+              'Call brain_check_in now for other work.',
+          },
+          projectId: null,
+        };
+      }
       return {
         value: {
           held: true,
           item: null,
           binHasOpenWork: result.binHasOpenWork,
+          ...(result.retryAfterMs ? { retryAfterMs: result.retryAfterMs } : {}),
           message: result.binHasOpenWork
-            ? 'Nothing is claimable yet, but this bin still has open work — something is waiting ' +
-              'on a dependency or a backoff. Wait briefly and ask again.'
+            ? 'Nothing is claimable yet, but this bin still has open work you may take — it is waiting ' +
+              `on a dependency, a backoff or a lease. Wait about ${Math.round((result.retryAfterMs ?? 30_000) / 1000)}s ` +
+              'and ask again; do not call brain_bin_complete meanwhile.'
             : 'This bin is drained. Call brain_bin_complete and Brain will judge it.',
         },
         projectId: null,
@@ -468,8 +486,24 @@ const completeTool: McpTool = {
   run: async (args, { principal }) => {
     const workerId = workerOnly(principal);
     const proof = binProof(args, workerId);
-    const outcome = await requestCompletion({ workerId, proof });
+    const outcome = await requestCompletion({ workerId, proof, principal });
     if (!outcome.held) return { value: LOST_THE_BIN, projectId: null };
+    if (outcome.released) {
+      return {
+        value: {
+          held: false,
+          released: true,
+          terminal: false,
+          satisfied: false,
+          reasons: outcome.verdict?.reasons ?? [],
+          reason: outcome.released.reason,
+          message:
+            'Not finished, and what is left is work for a different session, so Brain has handed this bin ' +
+            'back for you. Do not release it again. Call brain_check_in now for other work.',
+        },
+        projectId: null,
+      };
+    }
     return {
       value: {
         held: true,

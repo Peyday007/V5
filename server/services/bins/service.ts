@@ -30,6 +30,7 @@ import type {
   Principal,
   WorkerScope,
   WorkItem,
+  WorkItemRow,
 } from '../../domain/types.ts';
 import {
   assignNextBin,
@@ -984,7 +985,102 @@ async function deriveReadyWork(projectIds: string[]): Promise<boolean> {
 export type NextItemResult =
   | { held: false }
   | { held: true; item: ClaimedWork }
-  | { held: true; item: null; binHasOpenWork: boolean };
+  | {
+      held: true;
+      item: null;
+      binHasOpenWork: boolean;
+      /** Set when Brain handed the bin back because nothing left in it is this session's to do. */
+      released?: { reason: string };
+      /** When the open work is only waiting, the earliest instant worth asking again. */
+      retryAfterMs?: number | null;
+    };
+
+/**
+ * What the open work left in a bin means for the session holding it.
+ *
+ * `WAIT` — something here this session may yet take: an item on a backoff, an
+ * item another lease still holds, or one this session is itself working.
+ * `NOT_THIS_SESSION` — every open item is one the admission rule refuses this
+ * session (audit independence, routing scope), so no amount of waiting or
+ * retrying inside this activation advances it; another session can.
+ * `NONE` — nothing is open, or what is open is past its own attempt ceiling.
+ *
+ * Production, 2026-10-20: in 24 hours the two working accounts were assigned
+ * 507 bins, had 43 completions accepted and 261 refused, and handed back 402,
+ * while calling `brain_bin_next_item` 1 380 times. A research packet's bin
+ * carries every stage of the packet, and §23 forbids one session from holding
+ * two audit roles or reviewing what it wrote — so a session that finished the
+ * stage it could do was told "wait briefly and ask again" about work it may
+ * never take, then "fix it and ask again" by a completion it could not fix,
+ * and only then gave the bin back. Saying which case it is ends that loop.
+ */
+export type SessionOpenWork =
+  | { kind: 'NONE' }
+  | { kind: 'WAIT'; retryAfterMs: number }
+  | { kind: 'NOT_THIS_SESSION'; reason: string };
+
+const MIN_WAIT_MS = 15_000;
+const MAX_WAIT_MS = 120_000;
+
+async function openWorkForSession(
+  bin: Bin,
+  input: { workerId: string; proof: BinProof },
+  admit: (row: WorkItemRow) => Promise<{ ok: boolean; reason?: string }>,
+): Promise<SessionOpenWork> {
+  const items = await listWorkItemsForBin(confinementFor(bin));
+  const now = Date.now();
+  let soonest: number | null = null;
+  const refused: string[] = [];
+  for (const item of items) {
+    if (item.state !== 'QUEUED' && item.state !== 'LEASED') continue;
+    if (item.attemptCount >= item.maxAttempts) continue;
+    const leaseLive =
+      item.state === 'LEASED' && item.leaseExpiresAt !== null && new Date(item.leaseExpiresAt).getTime() > now;
+    if (leaseLive) {
+      // Its own item in progress, or another lease that will end: either way, waiting is right.
+      const at = item.workerId === input.workerId ? now : new Date(item.leaseExpiresAt!).getTime();
+      soonest = soonest === null ? at : Math.min(soonest, at);
+      continue;
+    }
+    const row = await getWorkItemRow(item.id);
+    if (!row) {
+      soonest = soonest === null ? now : Math.min(soonest, now); // unreadable is not ineligible
+      continue;
+    }
+    const verdict = await admit(row);
+    if (!verdict.ok) {
+      refused.push(`${item.workType}: ${verdict.reason ?? 'not admissible for this session'}`);
+      continue;
+    }
+    const at = Math.max(now, new Date(item.availableAt).getTime());
+    soonest = soonest === null ? at : Math.min(soonest, at);
+  }
+  if (soonest !== null) {
+    return { kind: 'WAIT', retryAfterMs: Math.min(MAX_WAIT_MS, Math.max(MIN_WAIT_MS, soonest - now)) };
+  }
+  if (refused.length > 0) {
+    return {
+      kind: 'NOT_THIS_SESSION',
+      reason:
+        'Handed back by Brain: the work left in this bin is for a different session. ' +
+        [...new Set(refused)].slice(0, 5).join(' | '),
+    };
+  }
+  return { kind: 'NONE' };
+}
+
+/** The admission rule a bin holder's claims are judged by, built once per call. */
+async function holderAdmission(input: { workerId: string; principal: Principal }) {
+  return allAdmissions([
+    workloadAdmission(await workerRoutingFor(input.workerId, input.principal)),
+    auditAdmission(
+      await lineageForWorker({
+        workerId: input.workerId,
+        credentialId: input.principal.credentialId,
+      }),
+    ),
+  ]);
+}
 
 /**
  * The next unit of work inside the bin this worker holds.
@@ -1017,19 +1113,12 @@ export async function nextItemInBin(input: {
   // Same admission rule as the MCP claim path. A worker draining a bin is
   // still a worker, and an audit item inside that bin is still an audit item —
   // a guard on one entrance only is not a guard.
+  // Both rules, as at every other entrance: the workload scope this worker is
+  // registered for, then audit independence. A worker draining a bin is still
+  // a worker, and an audit item inside that bin is still an audit item.
+  const admit = await holderAdmission(input);
   const claimed = await claimWork({
-    // Both rules, as at every other entrance: the workload scope this worker is
-    // registered for, then audit independence. A worker draining a bin is still
-    // a worker, and an audit item inside that bin is still an audit item.
-    admit: allAdmissions([
-      workloadAdmission(await workerRoutingFor(input.workerId, input.principal)),
-      auditAdmission(
-        await lineageForWorker({
-          workerId: input.workerId,
-          credentialId: input.principal.credentialId,
-        }),
-      ),
-    ]),
+    admit,
     workerId: input.workerId,
     credentialId: input.principal.credentialId,
     scopes,
@@ -1059,7 +1148,25 @@ export async function nextItemInBin(input: {
   const items = await listWorkItemsForBin(confinementFor(bin));
   const open = items.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
   if (open.length > 0) await recordWithheld(bin, input, open);
-  return { held: true, item: null, binHasOpenWork: open.length > 0 };
+  if (open.length === 0) return { held: true, item: null, binHasOpenWork: false };
+
+  const view = await openWorkForSession(bin, input, admit);
+  if (view.kind === 'NOT_THIS_SESSION') {
+    // Nothing this activation can do will advance the bin, and another session
+    // can: give it back now, so it is fired for one, and this session asks for
+    // other work instead of spinning on it.
+    const outcome = await releaseBin(input.proof, view.reason);
+    if (outcome === 'OK') {
+      return { held: true, item: null, binHasOpenWork: true, released: { reason: view.reason } };
+    }
+    return { held: false };
+  }
+  return {
+    held: true,
+    item: null,
+    binHasOpenWork: true,
+    retryAfterMs: view.kind === 'WAIT' ? view.retryAfterMs : null,
+  };
 }
 
 /**
@@ -1227,6 +1334,8 @@ export interface CompletionOutcome {
   verdict: ContractVerdict | null;
   /** Signals worth recording even when the verdict was satisfied. */
   signals: string[];
+  /** Set when the bin was handed back because its remaining work is another session's. */
+  released?: { reason: string };
 }
 
 /**
@@ -1243,6 +1352,8 @@ export interface CompletionOutcome {
 export async function requestCompletion(input: {
   workerId: string;
   proof: BinProof;
+  /** Present on the MCP path; lets a refusal this session cannot fix become a handback. */
+  principal?: Principal;
 }): Promise<CompletionOutcome> {
   const bin = await proveBinOwnership(input.proof);
   if (!bin) return { held: false, terminal: false, state: null, verdict: null, signals: [] };
@@ -1252,6 +1363,26 @@ export async function requestCompletion(input: {
 
   if (!verdict.satisfied) {
     const reason = verdict.reasons.join(' ');
+    /*
+     * A RETRY whose only remedy is work another session must do is not a
+     * refusal this worker can act on. Recording it as one, and answering "fix
+     * it and ask again", is what made a finished activation spin before giving
+     * the bin back — so Brain gives it back here, with the contract's own
+     * reasons on the release, and the worker checks in for other work.
+     */
+    if (verdict.disposition === 'RETRY' && input.principal) {
+      const view = await openWorkForSession(
+        bin,
+        input,
+        await holderAdmission({ workerId: input.workerId, principal: input.principal }),
+      );
+      if (view.kind === 'NOT_THIS_SESSION') {
+        const released = `${view.reason} Contract: ${reason}`;
+        const outcome = await releaseBin(input.proof, released);
+        if (outcome !== 'OK') return { held: false, terminal: false, state: null, verdict, signals };
+        return { held: true, terminal: false, state: null, verdict, signals, released: { reason: released } };
+      }
+    }
     await recordBinRefusal(input.proof, reason);
 
     // A refusal a worker cannot act on is a stall, and the governing invariant

@@ -859,6 +859,37 @@ async function main(): Promise<void> {
   for (const [key, counts] of grouped) console.log(`  ${key}  ${counts.join(' ')}  last=${lastAt.get(key)}`);
   });
 
+  /*
+   * Why, for the three outcomes that cost an activation without producing
+   * work: a completion Brain refused, an item a holder was not handed, and a
+   * bin handed back. Counts alone said 234 refusals beside 29 acceptances and
+   * named nothing; the reason column is Brain's own sentence, grouped with
+   * identifiers and numbers folded so one cause is one line.
+   */
+  await section('\nWORK OUTCOMES (why: refusals, withheld items, handbacks)', async () => {
+    const rows = await db.all<{ worker_id: string | null; event_type: string; outcome: string | null; reason: string | null }>(
+      `SELECT worker_id, event_type, outcome, reason FROM bin_events
+        WHERE at >= ? AND event_type IN ('BIN_COMPLETION_REFUSED', 'BIN_ITEM_WITHHELD', 'BIN_RELEASED')`,
+      [since],
+    );
+    if (rows.length === 0) console.log('  none in the window');
+    const fold = (text: string | null): string =>
+      (text ?? '(no reason given)')
+        .replace(/\b[a-z]{2,5}_[0-9a-f]{6,}\b/gi, '<id>')
+        .replace(/\d+/g, 'N')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 160);
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const key = `${row.event_type.replace(/^BIN_/, '')}  ${row.worker_id ?? '-'}  ${row.outcome ?? '-'}  ${fold(row.reason)}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    for (const [key, n] of [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40)) {
+      console.log(`  n=${n}  ${key}`);
+    }
+  });
+
   console.log('\nALERTS (who has to act, and what)');
   const { connectionAlerts } = await import('../server/services/fleet/connectionAlerts.ts');
   const alerts = await connectionAlerts();
