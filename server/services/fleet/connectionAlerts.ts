@@ -245,6 +245,33 @@ export async function connectionAlerts(now = Date.now()): Promise<ConnectionAler
         });
       } else {
         const next = await nextAutoProbeAt(routine.id);
+        /*
+         * A probe since this quarantine whose session never reached Brain is
+         * evidence nothing on Brain's side repairs: the Claude Routine starts
+         * sessions that do not call Brain. Brain keeps probing, but the fast
+         * budget can take a day to spend (a person's probe restarts it), and
+         * reading NOBODY all that time left the one person who can fix it
+         * untold. Production Airyn 2-A, 2026-10-20: NO_MCP at 14:58Z with Brain
+         * healthy, and the alert still said nothing to do. An outage reads
+         * AMBIGUOUS, never NO_MCP, so this cannot blame a surface for Brain.
+         */
+        const probe = await latestRecoveryProbeFor(routine.id);
+        const quarantinedAt = routine.stateChangedAt ?? routine.updatedAt;
+        if (probe && probe.state === 'NO_MCP' && probe.createdAt >= quarantinedAt) {
+          alerts.push({
+            ...base,
+            problem: 'RECOVERING',
+            detail:
+              `Quarantined (${firstSentences(reason, 1)}). Brain's probe at ${probe.firedAt ?? probe.createdAt} started a ` +
+              'session that never reached Brain, while Brain was answering.',
+            action:
+              `${await exhaustedAction(routine, probe.state)}` +
+              (next ? ` Brain also probes again by itself at ${next}.` : ''),
+            who: 'ACCOUNT_OWNER',
+            since: probe.createdAt,
+          });
+          continue;
+        }
         alerts.push({
           ...base,
           problem: 'RECOVERING',

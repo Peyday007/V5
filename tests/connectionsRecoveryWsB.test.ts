@@ -625,6 +625,27 @@ describe('CON-6: an outage-ambiguous probe is not counted against the surface', 
     expect((await autoRecoveryExhausted()).map((e) => e.routineId)).toEqual([s.routineId]);
   });
 
+  it('a clean NO_MCP probe since the quarantine names the account owner while Brain keeps probing', async () => {
+    const s = await surface('airyn-2a', research);
+    await setRoutineState({ routineId: s.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: NO_SHOW_REASON });
+    let clock = Date.now() + 60_000;
+    await settledProbe(s.routineId, s.accountId, clock, { to: 'NO_MCP', outcome: 'nothing arrived' });
+    expect(await autoRecoveryExhausted()).toEqual([]);
+    const alert = (await connectionAlerts()).alerts.find((a) => a.routineId === s.routineId)!;
+    expect(alert.problem).toBe('RECOVERING');
+    expect(alert.who).toBe('ACCOUNT_OWNER');
+    expect(alert.action).toContain('connector is attached and enabled');
+    // Brain's own outage afterwards proves nothing new, so nobody is sent anywhere.
+    clock += 60_000;
+    await settledProbe(s.routineId, s.accountId, clock, {
+      to: 'AMBIGUOUS',
+      health: BRAIN_OUTAGE_HEALTH,
+      outcome: 'The provider started x, and Brain itself was failing while that session would have arrived.',
+    });
+    const after = (await connectionAlerts()).alerts.find((a) => a.routineId === s.routineId)!;
+    expect(after.who).toBe('NOBODY');
+  });
+
   it('a legacy outage probe, settled before the mark existed, is recognised from the sentence Brain wrote', async () => {
     expect(
       probeAmbiguousByOutage({
