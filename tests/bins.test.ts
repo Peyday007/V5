@@ -54,7 +54,7 @@ import {
   manifestProblems,
   UNIT_TRANSFORMS,
 } from '../server/services/bins/contracts.ts';
-import { nextItemInBin, reconcileBins, requestCompletion, submitUnit } from '../server/services/bins/service.ts';
+import { nextItemInBin, reconcileBins, release, requestCompletion, submitUnit } from '../server/services/bins/service.ts';
 import { dispatchTick, recoverDispatchAtBoot } from '../server/services/dispatch/loop.ts';
 import {
   instructionProblems,
@@ -1703,6 +1703,37 @@ describe('a bin whose remaining work is another session\'s is handed back, not s
     expect(next.released).toBeUndefined();
     expect(next.retryAfterMs).toBe(120_000);
     expect((await getBin(binId))!.state).toBe('LEASED');
+  });
+
+  it('a bin handed back takes the holder\'s item leases with it, so the next holder is not made to wait', async () => {
+    const binId = await makeBin(projectA, { units: 0 });
+    await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'in progress' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      binId,
+    });
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const proof = proofFrom(assigned, workerOne);
+    const next = await nextItemInBin({ principal: principalFor(workerOne, [projectA]), workerId: workerOne, proof });
+    if (!next.held || !next.item) throw new Error('expected an item');
+    expect((await getWorkItem(next.item.workItemId))?.state).toBe('LEASED');
+
+    expect(await release(proof, 'out of allowance')).toBe('OK');
+    const item = await getWorkItem(next.item.workItemId);
+    expect(item?.state).toBe('QUEUED');
+
+    // The next holder takes it at once.
+    const again = (await assignNextBin({ workerId: workerTwo, projectIds: [projectA] }))!;
+    const taken = await nextItemInBin({
+      principal: principalFor(workerTwo, [projectA]),
+      workerId: workerTwo,
+      proof: proofFrom(again, workerTwo),
+    });
+    if (!taken.held) throw new Error('held');
+    expect(taken.item?.workItemId).toBe(next.item.workItemId);
   });
 
   it('a completion the session cannot fix becomes a handback, not a refusal', async () => {

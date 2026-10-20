@@ -74,6 +74,7 @@ import { databasePoolReadings } from '../../db/database.ts';
 import { recordUnservedArrival } from '../infra/incidents.ts';
 import {
   claimWork,
+  releaseWork,
   getWorkItemRow,
   listWorkItemsForBin,
   type ClaimScope,
@@ -1117,7 +1118,7 @@ export async function nextItemInBin(input: {
   // registered for, then audit independence. A worker draining a bin is still
   // a worker, and an audit item inside that bin is still an audit item.
   const admit = await holderAdmission(input);
-  const claimed = await claimWork({
+  const claimOnce = () => claimWork({
     admit,
     workerId: input.workerId,
     credentialId: input.principal.credentialId,
@@ -1127,6 +1128,26 @@ export async function nextItemInBin(input: {
     limit: 1,
     leaseMs: input.leaseMs,
   });
+  let claimed = await claimOnce();
+  /*
+   * Nothing claimable: let the packet move first, then ask once more.
+   *
+   * The runner is what retires an audit role already argued in this round and
+   * what enqueues the next stage once the last one finished — and it ran only
+   * when something else advanced the packet. A holder that finished a stage and
+   * asked for the next was told to wait for a tick, or handed the bin back over
+   * an item that was in fact settled. Best-effort and idempotent: the same
+   * advance the tick runs.
+   */
+  if (claimed.length === 0 && bin.orchestrationId) {
+    try {
+      const { advancePacket } = await import('../research/packetRunner.ts');
+      await advancePacket(bin.orchestrationId);
+      claimed = await claimOnce();
+    } catch {
+      // The tick is the fallback; a drain must never fail because an optimisation did.
+    }
+  }
 
   if (claimed.length > 0) {
     const first = claimed[0]!;
@@ -1155,7 +1176,7 @@ export async function nextItemInBin(input: {
     // Nothing this activation can do will advance the bin, and another session
     // can: give it back now, so it is fired for one, and this session asks for
     // other work instead of spinning on it.
-    const outcome = await releaseBin(input.proof, view.reason);
+    const outcome = await handBack(bin, input.proof, view.reason);
     if (outcome === 'OK') {
       return { held: true, item: null, binHasOpenWork: true, released: { reason: view.reason } };
     }
@@ -1378,7 +1399,7 @@ export async function requestCompletion(input: {
       );
       if (view.kind === 'NOT_THIS_SESSION') {
         const released = `${view.reason} Contract: ${reason}`;
-        const outcome = await releaseBin(input.proof, released);
+        const outcome = await handBack(bin, input.proof, released);
         if (outcome !== 'OK') return { held: false, terminal: false, state: null, verdict, signals };
         return { held: true, terminal: false, state: null, verdict, signals, released: { reason: released } };
       }
@@ -1530,6 +1551,45 @@ export async function checkpoint(proof: BinProof, note: Record<string, unknown>)
 }
 
 export async function release(proof: BinProof, reason?: string | null) {
+  const bin = await proveBinOwnership(proof);
+  if (!bin) return await releaseBin(proof, reason);
+  return await handBack(bin, proof, reason ?? null);
+}
+
+/**
+ * Give a bin back, and the item leases its holder took inside it.
+ *
+ * A bin release left those item leases live — a research item's for up to an
+ * hour — so the next session handed the bin found its next item "not
+ * claimable", waited, and handed the bin back too (production, 2026-10-20:
+ * "Fragment item still not claimable after ~N minutes … a live lease from an
+ * earlier worker"). The holder is giving the work up, so its items go back
+ * with it, each by `releaseWork`'s own ownership proof and attempt refund. A
+ * late submission from that holder still lands idempotently by work item, and a
+ * late completion matches nothing.
+ */
+async function handBack(bin: Bin, proof: BinProof, reason: string | null) {
+  try {
+    const items = await listWorkItemsForBin(confinementFor(bin));
+    const nowMs = Date.now();
+    for (const item of items) {
+      if (
+        item.state !== 'LEASED' ||
+        item.workerId !== proof.workerId ||
+        !item.leaseId ||
+        !item.leaseExpiresAt ||
+        new Date(item.leaseExpiresAt).getTime() <= nowMs
+      ) {
+        continue;
+      }
+      await releaseWork(
+        { workItemId: item.id, workerId: proof.workerId, leaseId: item.leaseId, leaseGeneration: item.leaseGeneration },
+        'Released with its bin, so the next holder can take it at once.',
+      );
+    }
+  } catch {
+    // The bin release below is what matters; an item lease left behind still expires.
+  }
   return await releaseBin(proof, reason);
 }
 

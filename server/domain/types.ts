@@ -283,6 +283,11 @@ export const EVENT_TYPES = [
   // with no row saying why is indistinguishable from one edited by hand.
   'DOCUMENT_HANDED_OFF',
 
+  // A packet whose judge asked for a correction or a bounded question, given
+  // one more round by Brain (`services/research/judgeRound.ts`). It begins an
+  // audit round, so the previous verdict and report stay as written.
+  'RESEARCH_ROUND_RESUMED',
+
   // A finished mission repointed at what its packet actually produced.
   //
   // A mission's document, audit and layer are a projection of its packet, and a

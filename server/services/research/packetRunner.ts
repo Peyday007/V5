@@ -2033,7 +2033,11 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
 
   // ---- Synthesis, once there is something to synthesize from. ------------
   if (!orchestration.documentId) {
-    const synthItem = (item: WorkItem): boolean => item.workType === 'RESEARCH_SYNTHESIZE';
+    // Scoped to the current round: a packet resumed after its judge asked for a
+    // correction has the previous round's synthesis item, which is history.
+    const synthRoundFrom = await auditRoundStartedAt(orchestration.id);
+    const synthItem = (item: WorkItem): boolean =>
+      item.workType === 'RESEARCH_SYNTHESIZE' && (!synthRoundFrom || item.createdAt > synthRoundFrom);
     if (stillRunning(items, synthItem)) {
       return {
         orchestrationId,

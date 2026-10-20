@@ -13469,6 +13469,25 @@ completion it could not fix, and only then released.
 - **The live instructions say so** (`WORKER_INSTRUCTIONS` `2026-10-20.1`), and
   the connection report's *WORK OUTCOMES* groups refusals, withheld items and
   handbacks by reason, so the next reading names causes rather than counts.
+- **A handback takes its item leases with it** (`handBack`), so the next holder
+  does not wait out an hour-long research lease; and an empty
+  `brain_bin_next_item` advances the packet once before answering, so an
+  already-argued audit role is retired and the next stage queued in the call.
+
+**A PATCH is a correction, not a decision.** 120 packets sat at NEEDS_HUMAN
+after a PATCH (87) or MORE_RESEARCH (33) verdict, each asking a person to file
+short or stop. `GAP_CLASSIFICATIONS` defines PATCH as *evidence suffices,
+correct it in synthesis*. `services/research/judgeRound.ts` runs one corrected
+round: a compare-and-swap clears the packet's report, audit and verdict
+pointers (the rows stay), a `RESEARCH_ROUND_RESUMED` event begins a new round
+for `auditRound.ts` and the synthesis, the synthesis assignment carries the
+judge's corrections (`correctionsRequested`), and a MORE_RESEARCH judge's
+bounded `research_question` becomes a follow-up fragment created `PLANNED`, so
+the packet's own envelope, goal or person approves it. It never authorizes
+gaps, approves a plan, lowers a bar, or touches a packet a person answered; a
+cash deep dive is left to the opening's next dive; a question-less verdict,
+an exhausted budget and a third round (`MAX_JUDGE_ROUNDS` = 2) stay a person's.
+At most `MAX_LIVE_JUDGE_ROUNDS` (6) run at once. `packets judge-parks` reads it.
 
 ## Repository map
 

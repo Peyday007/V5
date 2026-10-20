@@ -108,6 +108,7 @@ import {
 } from '../research/packetRunner.ts';
 import { reconcileRetrospectives } from '../research/intelligence/retrospective.ts';
 import { recoverFilingFailures, type FilingRecovery } from '../research/synthesisRecovery.ts';
+import { resumeJudgeParkedPackets, type JudgeRoundResult } from '../research/judgeRound.ts';
 import {
   recoverReachableFragments,
   type AutomaticSurfaceRecovery,
@@ -405,6 +406,8 @@ export interface TickReport {
   retiredPacketWork: { orchestrationId: string; retired: number }[];
   /** Syntheses reissued because Brain itself could not file them. See `recoverFilingFailures`. */
   filingRecoveries: FilingRecovery[];
+  /** Packets parked on a judge's PATCH or MORE_RESEARCH, resumed or named as a person's. See `judgeRound.ts`. */
+  judgeRounds: JudgeRoundResult[];
   /** Fragments recovered (or refused) because a probe later read their blocking host. See `recoverReachableFragments`. */
   surfaceRecoveries: AutomaticSurfaceRecovery[];
   /** Campaigns whose lessons were written this tick. See `retrospective.ts`. */
@@ -773,6 +776,7 @@ const EMPTY: TickReport = {
   lineageUnresolved: [],
   retiredPacketWork: [],
   filingRecoveries: [],
+  judgeRounds: [],
   surfaceRecoveries: [],
   researchLessons: [],
   abandonedParks: [],
@@ -849,6 +853,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
     linksUnreconciled: [],
     retiredPacketWork: [],
     filingRecoveries: [],
+    judgeRounds: [],
     surfaceRecoveries: [],
   researchLessons: [],
     abandonedParks: [],
@@ -1148,6 +1153,18 @@ async function tickOnce(owner: string): Promise<TickReport> {
      */
     await runPass(report, 'filing-recoveries', async () => {
       report.filingRecoveries = await recoverFilingFailures(cycle.maxEventsPerCycle);
+    });
+
+    /*
+     * 1a-iv-b'''. And resume a packet whose judge said what to correct.
+     *
+     * A PATCH or MORE_RESEARCH verdict with nothing repairable parked the packet
+     * on a person — file short, or stop — even when the judge had written the
+     * correction or the bounded question. Brain runs one corrected round where
+     * the packet's own approval allows it, bounded per packet and in flight.
+     */
+    await runPass(report, 'judge-rounds', async () => {
+      report.judgeRounds = await resumeJudgeParkedPackets();
     });
 
     /*

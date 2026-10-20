@@ -46,6 +46,7 @@
  * worker what to say. It says what is being asked and what would count as an
  * answer, which is the difference between an assignment and a script.
  */
+import { correctionsForRound } from './judgeRound.ts';
 import { bundleKeyFor } from './bundling.ts';
 import { RESEARCH_METHOD_SUMMARY, RESEARCH_METHOD_VERSION } from './method.ts';
 import { laneIds } from '../../domain/evidenceLanes.ts';
@@ -114,6 +115,12 @@ export interface AssignmentView {
    * out of its own conclusion.
    */
   claimsToCite: ClaimToCiteView[] | null;
+  /**
+   * What the previous round's judge asked this synthesis to correct, when the
+   * packet is in a corrected round (`judgeRound.ts`). Null otherwise, so a first
+   * synthesis is told exactly what it always was.
+   */
+  correctionsRequested: Awaited<ReturnType<typeof correctionsForRound>>;
   /**
    * What each dependency actually established, for a fragment allowed to start
    * before its dependency succeeded.
@@ -441,6 +448,8 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
      * packet a stop, and the shape of the test that catches it is the one that
      * reads *only* what the assignment carries.
      */
+    correctionsRequested:
+      item.workType === 'RESEARCH_SYNTHESIZE' ? await correctionsForRound(orchestration) : null,
     claimsToCite:
       item.workType === 'RESEARCH_SYNTHESIZE'
         ? toCite(
