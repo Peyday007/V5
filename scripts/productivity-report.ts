@@ -100,6 +100,22 @@ async function leases(window: Window, projectId: string | null): Promise<void> {
   }
 }
 
+/** Why leases ended without a completion, in the queue's own words. */
+async function endings(window: Window, projectId: string | null): Promise<void> {
+  const rows = await getDb().all<{ outcome: string; detail: string | null; n: number }>(
+    `SELECT outcome, substr(detail, 1, 120) AS detail, COUNT(*) AS n FROM work_leases
+      WHERE claimed_at >= ? AND claimed_at < ? AND outcome IN ('RELEASED', 'EXPIRED', 'CANCELLED', 'FAILED')
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)
+      GROUP BY outcome, substr(detail, 1, 120)
+      ORDER BY COUNT(*) DESC`,
+    [window.from, window.to, projectId, projectId],
+  );
+  console.log(`  WHY LEASES ENDED WITHOUT A COMPLETION ${window.label}`);
+  for (const row of rows.slice(0, 12)) {
+    console.log(`    ${String(row.n).padStart(4)}  ${row.outcome.padEnd(9)} ${row.detail ?? '(no detail)'}`);
+  }
+}
+
 async function tools(window: Window, projectId: string | null): Promise<void> {
   const rows = await getDb().all<{ target_id: string; result: string; n: number }>(
     `SELECT target_id, result, COUNT(*) AS n FROM identity_events
@@ -160,6 +176,18 @@ async function parked(projectId: string | null): Promise<void> {
   console.log(`  PARKED PACKETS (NEEDS_HUMAN) ${total}`);
   for (const row of rows) {
     console.log(`    ${String(row.n).padStart(4)}  ${row.reason ?? '(no reason recorded)'}  newest ${row.newest}`);
+    const samples = await getDb().all<{ id: string; created_at: string; approval_envelope_id: string | null; goal_id: string | null }>(
+      `SELECT id, created_at, approval_envelope_id, goal_id FROM research_orchestrations
+        WHERE status = 'NEEDS_HUMAN' AND substr(failure_reason, 1, 96) = ?
+          AND (CAST(? AS TEXT) IS NULL OR project_id = ?)
+        ORDER BY updated_at DESC LIMIT 3`,
+      [row.reason ?? '', projectId, projectId],
+    );
+    for (const one of samples) {
+      console.log(
+        `          e.g. ${one.id} created ${one.created_at} envelope=${one.approval_envelope_id ?? '—'} goal=${one.goal_id ?? '—'}`,
+      );
+    }
   }
 
   /*
@@ -211,6 +239,7 @@ async function main(): Promise<void> {
   for (const window of windows) {
     await leases(window, projectId);
     await tools(window, projectId);
+    await endings(window, projectId);
   }
   await hourly(windows[0]!.from, windows[windows.length - 1]!.to, projectId);
   await parked(projectId);
