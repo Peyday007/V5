@@ -13489,6 +13489,54 @@ cash deep dive is left to the opening's next dive; a question-less verdict,
 an exhausted budget and a third round (`MAX_JUDGE_ROUNDS` = 2) stay a person's.
 At most `MAX_LIVE_JUDGE_ROUNDS` (6) run at once. `packets judge-parks` reads it.
 
+## 70. A qualified opening becomes one job, and a job says exactly what stops it.
+
+Production, 2026-10-20: 340 openings, 79 candidates, **0 qualified**, one
+READY piece, and **no execution job anywhere** — `cash_jobs` (migration 061)
+had its unique live index, its compare-and-swap assignment and its redaction,
+and nothing in the server ever wrote a row. A mechanism nothing calls is not a
+mechanism. `services/cash/jobPipeline.ts` is the caller and
+`docs/CASH-JOBS.md` the record.
+
+- **The job is stored; its tasks are derived.** `reconcileCashJobs` runs in
+  the cash `operate` pass (its own failure domain) and prepares exactly one job
+  per actionable opening, owned by the opportunity's owner, idempotent by the
+  partial unique index (`createJob` is `ON CONFLICT DO NOTHING` now, not a
+  catch-all that hid real failures). Each task's status is read from rows that
+  already state it — the card, open needs, the live grant, capability readings,
+  recorded actions, agreements, the ledger — so there is no second master.
+- **Actionable means qualified, and not losing money on its own figures.**
+  `QUALIFIED`/`READY_TO_TEST`, or READY; refused with the reason when a
+  duplicate, past its published deadline, or priced below its published
+  exposure. **READY is not a commitment**: Brain marks a complete card READY by
+  itself, and reading READY as "somebody took this" prepared a job for a
+  loss-making opening — found by driving the page in a browser, not by a test.
+  Only EXECUTING and later are committed; an uncommitted job whose grounds stop
+  holding is released with the reason and prepared again if they return.
+- **A COLLECTED job is still the canonical job.** It leaves the live index, so
+  the first version prepared a second job for every finished deal — found by
+  the discovery-to-settlement walk.
+- **Ten stages, never collapsed.** Discovered, under qualification, qualified,
+  job prepared, ready-but-blocked, executing, agreed, delivered, paid,
+  settled. Paid is not usable cash and preparation is not a commitment.
+  Research is counted beside the jobs and never as one.
+- **Every blocker names its remedy.** No grant: the exact `COMMERCIAL_ACTION`.
+  Grant but no provider: the exact deployment variables. Preparation proceeds
+  without either, and nothing here contacts, spends or records an action —
+  that stays `advanceWithinAuthority`, the invoicing pass and the journey.
+- **Qualification had a dead end.** The short card's column fields are asked
+  by needs; the rest of the qualification set (costs, capital, labour,
+  eligibility, time to first cash, calling) had no column and was answerable
+  only by the deep dive, two per epoch — 26 candidates had spent both.
+  `reconcileEngineGaps` asks each blank engine field as one narrow need once
+  the epoch is spent, capped at 12 open, nearest-to-qualifying first, then
+  published contribution, then exposure. `disqualifiers` is never asked that
+  way: a dive classifies it. Dive order also weighs contribution now.
+- **No page is handed `projects[0]`.** `GET /api/projects/homes` says which
+  readable project holds each kernel's rows, the chooser is always on screen
+  for a project-scoped page, and Machines, Labor, Puzzles and Scenarios are
+  one *Business systems* destination.
+
 ## Repository map
 
 ```
@@ -13713,6 +13761,7 @@ server/
         view.ts         every next step, and who takes it
       outreach.ts       the message a buyer is sent, composed from the card
       factoryHandoff.ts READY_TO_TEST to the Software Factory, under the standing grant
+      jobPipeline.ts    a qualified opening becomes one job; its tasks, stage and blockers (§70)
       freelancer/
         classify.ts     which kinds of work a listing asks for, and what blocks it
         economics.ts    the job's currency, Freelancer's fee, the net, the estimate
