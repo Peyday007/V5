@@ -32,6 +32,8 @@
  * string, a bucket key or a token: it reports what a project contains, never
  * where it is kept.
  */
+import { listJobs } from '../server/repos/cashJobs.ts';
+import { pipelineReading } from '../server/services/cash/jobPipeline.ts';
 import { describeDiveRefusal, whyNotDiving } from '../server/services/cash/validation.ts';
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { industryView } from '../server/services/industry/view.ts';
@@ -265,6 +267,39 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
    * capability or a provider's configuration. A read that fails says so, and
    * is never printed as zero.
    */
+  /*
+   * The execution jobs and the stage of every opening (`jobPipeline.ts`), read
+   * exactly as the Cash page reads them. Read-only: the reading writes nothing.
+   */
+  console.log('');
+  console.log('JOBS');
+  try {
+    const pipeline = await pipelineReading(projectId, { userId: null, owner: true });
+    if (!pipeline) {
+      console.log('  no pipeline: Cash Mode is not running here');
+    } else {
+      console.log(
+        '  stages      ' +
+          Object.entries(pipeline.counts)
+            .map(([stage, n]) => `${stage}=${n}`)
+            .join(' '),
+      );
+      console.log(`  research in flight ${pipeline.researchInFlight} (research, not jobs)`);
+      console.log(`  settled ${pipeline.settledCents} paid_unsettled ${pipeline.paidUnsettledCents} ${pipeline.currency}`);
+      for (const job of pipeline.jobs) {
+        console.log(`  ${job.jobId}  ${job.opportunityId}  ${job.stage}  job=${job.jobState}  ${job.title.slice(0, 80)}`);
+        for (const task of job.tasks) {
+          console.log(`      ${task.key.padEnd(10)} ${task.status.padEnd(18)} ${task.executor.padEnd(19)} ${task.because.slice(0, 180)}`);
+        }
+      }
+      for (const one of pipeline.qualifiedWithoutJob) {
+        console.log(`  no job ${one.opportunityId}  ${one.because.slice(0, 200)}`);
+      }
+    }
+  } catch (error) {
+    console.log(`  could not be read: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
   console.log('');
   console.log(`MONEY LEDGER (${mode.currency})`);
   try {
@@ -899,6 +934,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   console.log('');
   console.log(
     `CASH-REPORT: ${projectId} state=${mode.state}` +
+    ` jobs=${(await listJobs(projectId)).filter((one) => one.state !== 'RELEASED').length}` +
       ` research_grant=${discovery ? 'ACTIVE' : 'ABSENT'}` +
       ` commercial_grant=${commercial ? 'PRESENT' : 'ABSENT'}` +
       ` ideas=${ideaCounts.total} missions=${missionCounts.total} work_items=${shape.total}` +
