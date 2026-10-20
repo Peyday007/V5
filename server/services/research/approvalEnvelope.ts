@@ -1992,6 +1992,15 @@ export function planFitsEnvelope(input: {
   envelope: ApprovalEnvelope;
   orchestration: ResearchOrchestration;
   fragments: ResearchFragment[];
+  /**
+   * This envelope already approved this packet's plan once. The assignment is
+   * written when the packet is created and never updated, so the words it
+   * judged then are the words here now; asking again would judge them against
+   * a template that may have been edited since (10-13), which parks a judge's
+   * follow-up on a packet whose question nobody changed. Every new fragment is
+   * still checked against today's rules below.
+   */
+  assignmentAlreadyApproved?: boolean;
 }): EnvelopeVerdict {
   const { envelope, orchestration, fragments } = input;
   const reasons: string[] = [];
@@ -2001,9 +2010,10 @@ export function planFitsEnvelope(input: {
   // pinned words drifted is not the packet that was authorized, whatever its
   // title says.
   const assignmentMatches =
-    envelope.assignmentTemplate !== undefined
+    input.assignmentAlreadyApproved === true ||
+    (envelope.assignmentTemplate !== undefined
       ? assignmentFitsTemplate(orchestration.assignment, envelope.assignmentTemplate)
-      : sha256(orchestration.assignment) === envelope.assignmentSha256;
+      : sha256(orchestration.assignment) === envelope.assignmentSha256);
   if (!assignmentMatches) {
     reasons.push(
       envelope.assignmentTemplate !== undefined

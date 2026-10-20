@@ -406,3 +406,28 @@ describe('the Russell envelope bounds scope rather than counting questions', () 
     expect(verdict.reasons.join(' ')).toMatch(/spendy/);
   });
 });
+
+describe('an assignment this envelope already approved is not judged again', () => {
+  /*
+   * A judge's follow-up on an old packet: the assignment was approved under
+   * this envelope when the packet began, and the template has been edited
+   * since. Production, 2026-10-20: ten correction rounds parked at 18:24Z on
+   * "the assignment is not this envelope's" about questions nobody changed.
+   */
+  it('passes the unchanged words, and still refuses a fragment the rules refuse', () => {
+    const old = packet({ assignment: MICHIGAN_LICENSING_ASSIGNMENT + ' (as worded before an edit)' });
+    expect(planFitsEnvelope({ envelope: ENVELOPE, orchestration: old, fragments: [fragment()] }).fits).toBe(false);
+    expect(
+      planFitsEnvelope({ envelope: ENVELOPE, orchestration: old, fragments: [fragment()], assignmentAlreadyApproved: true })
+        .fits,
+    ).toBe(true);
+    const outside = planFitsEnvelope({
+      envelope: ENVELOPE,
+      orchestration: old,
+      fragments: [fragment({ geography: 'Ohio' })],
+      assignmentAlreadyApproved: true,
+    });
+    expect(outside.fits).toBe(false);
+    expect(outside.reasons.join(' ')).toMatch(/not Michigan/);
+  });
+});
