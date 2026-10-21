@@ -46,6 +46,7 @@
  * job this module must not produce, and the reason is reported instead.
  */
 import { getDb } from '../../db/database.ts';
+import { describeExcludedMarket, excludedMarket } from './excludedMarkets.ts';
 import { cashEventsOfKindInProject, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { listOpportunities, listNeeds } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
@@ -210,6 +211,11 @@ export function jobEligibility(opportunity: CashOpportunity, tier: TierReading, 
     return { eligible: false, because: `it is a second record of ${opportunity.duplicateOfId}` };
   }
   const taken = TAKEN_STATES.has(opportunity.state);
+  if (!taken) {
+    // A ruled-out market never becomes a job, however well researched (excludedMarkets.ts).
+    const market = excludedMarket(opportunity);
+    if (market) return { eligible: false, because: describeExcludedMarket(market) };
+  }
   if (!taken && closed) {
     return { eligible: false, because: 'its published deadline has passed' };
   }

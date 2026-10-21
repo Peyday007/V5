@@ -31,6 +31,7 @@
 import { cashPosition } from './money.ts';
 import { getClaim } from '../../repos/research.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
+import { describeExcludedMarket, excludedMarket, type ExcludedMarket } from './excludedMarkets.ts';
 
 /**
  * Hosts whose pages are individual freelance-marketplace listings.
@@ -87,6 +88,7 @@ export function closesWithin(expiresAt: string | null, now: string, runwayMs = D
 
 export type NotWorthResearching =
   | { kind: 'MARKETPLACE_LISTING'; marketplace: string }
+  | { kind: 'EXCLUDED_MARKET'; market: ExcludedMarket }
   | { kind: 'CLOSES_TOO_SOON'; at: string }
   | { kind: 'CAPITAL_NOT_HELD'; needsCents: number | null; deployableCents: number; currency: string };
 
@@ -96,6 +98,8 @@ export function describeNotWorthResearching(reason: NotWorthResearching): string
       return reason.marketplace === 'freelancer'
         ? 'a Freelancer listing — Brain’s marketplace operation reads and screens these through the platform’s API, so a dive would learn nothing'
         : `a ${reason.marketplace} listing — Brain holds no account there, so nothing a dive found could be acted on`;
+    case 'EXCLUDED_MARKET':
+      return describeExcludedMarket(reason.market);
     case 'CLOSES_TOO_SOON':
       return `it closes ${reason.at}, sooner than a dive could finish and the first step be taken`;
     case 'CAPITAL_NOT_HELD':
@@ -123,11 +127,17 @@ export async function notWorthResearching(
   opportunity: CashOpportunity,
   context: { now: string; deployableCents?: number },
 ): Promise<NotWorthResearching | null> {
+  let sourceUrl: string | null = null;
   if (opportunity.sourceClaimId) {
     const claim = await getClaim(opportunity.sourceClaimId);
-    const marketplace = marketplaceOf(claim?.sourceUrl);
+    sourceUrl = claim?.sourceUrl ?? null;
+    const marketplace = marketplaceOf(sourceUrl);
     if (marketplace) return { kind: 'MARKETPLACE_LISTING', marketplace };
   }
+  // The owner's ruled-out markets: a federal bid without a SAM registration,
+  // or his home metros. Code, so no worker can read past it (excludedMarkets.ts).
+  const market = excludedMarket(opportunity, sourceUrl);
+  if (market) return { kind: 'EXCLUDED_MARKET', market };
   if (closesWithin(opportunity.expiresAt, context.now)) {
     return { kind: 'CLOSES_TOO_SOON', at: opportunity.expiresAt! };
   }

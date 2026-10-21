@@ -179,8 +179,15 @@ export const PLAY_BUCKETS: readonly SearchBucket[] = Object.freeze(
   ),
 );
 
-export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
-  ...PLAY_BUCKETS,
+/**
+ * Buckets Brain no longer asks, kept so the rounds they already opened can
+ * still be read and harvested.
+ *
+ * `explicit-paid-request` hunted posted gigs, briefs and listings — freelance
+ * work by another name, which the owner rejected as a Cash Mode strategy. Its
+ * open rounds still file what they found; no new round is opened.
+ */
+export const RETIRED_BUCKETS: readonly SearchBucket[] = Object.freeze([
   {
     id: 'explicit-paid-request',
     mechanism: 'EXPLICIT_PAID_REQUEST',
@@ -190,6 +197,10 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
       'could be delivered within weeks — naming who asked, what they asked for, what it pays ' +
       'and when it closes?',
   },
+]);
+
+export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
+  ...PLAY_BUCKETS,
   {
     id: 'supply-demand-mismatch',
     mechanism: 'SUPPLY_DEMAND_MISMATCH',
@@ -257,7 +268,8 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
     title: 'Which repeated job is still being bought as a bespoke project',
     question:
       'Which narrowly-defined task is being repeatedly commissioned as custom work — the same ' +
-      'brief appearing again and again on boards, listings or agency pages — where the ' +
+      'brief appearing again and again on agency pages, service directories and price lists, ' +
+      'not freelance marketplace listings — where the ' +
       'published prices, turnaround times and deliverables are close enough to be sold as one ' +
       'fixed-scope, fixed-price offer?',
   },
@@ -292,6 +304,9 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
       'sources, what each side published, and what specifically one supplies to the other?',
   },
 ]);
+
+/** Every bucket a round may name, retired ones included. */
+export const ALL_BUCKETS: readonly SearchBucket[] = Object.freeze([...SEARCH_BUCKETS, ...RETIRED_BUCKETS]);
 
 const OPENED = 'CASH_DISCOVERY_OPENED';
 const HARVESTED = 'CASH_OPPORTUNITY_HARVESTED';
@@ -694,7 +709,7 @@ function safeExclusion(text: string): boolean {
 async function liveRounds(
   projectId: string,
 ): Promise<Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>> {
-  const byId = new Map(SEARCH_BUCKETS.map((bucket) => [bucket.id, bucket]));
+  const byId = new Map(ALL_BUCKETS.map((bucket) => [bucket.id, bucket]));
   const out = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>();
   for (const [candidateId, round] of await openRoundsByCandidate(projectId)) {
     const bucket = byId.get(round.bucketId);
