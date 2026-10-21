@@ -46,6 +46,7 @@
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { runMailer, type MailerPass } from './mailer/index.ts';
 import { reconcileCashJobs, type JobReconciliation } from './jobPipeline.ts';
 import { listingSentenceFor } from './listings.ts';
 import { handOffReadyTests, type FactoryHandoffPass } from './factoryHandoff.ts';
@@ -1394,6 +1395,8 @@ export async function operate(
     | Omit<ReconsiderPass, 'readings'>
     | { error: string }
     | null;
+  /** The rolling city mailer: cities opened and filled, outreach drafted and held (`mailer/`). */
+  mailer?: MailerPass | { error: string };
   /** Reopen watches recorded on derived dead ends, and standing changes written. */
   standing?: { derived: DerivedCondition[]; changes: StandingChange[] } | { error: string } | { skipped: string };
 }> {
@@ -1550,6 +1553,18 @@ export async function operate(
    */
   const monetization = await runMonetizationLedger(projectId, now);
   /*
+   * The rolling city mailer: open the next city when none is selling, mark a
+   * sold-out city FULL, and compose held outreach. It sends nothing and spends
+   * nothing. Its own failure domain, so a mailer that cannot read stops nothing
+   * above or below it.
+   */
+  let mailer: MailerPass | { error: string };
+  try {
+    mailer = await runMailer(projectId);
+  } catch (error) {
+    mailer = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+  }
+  /*
    * Last of all, the standing of every piece as the passes above left it: each
    * derived dead end is given the watch that could reopen it, and a standing
    * event is written for each piece whose standing changed — and only those.
@@ -1596,6 +1611,7 @@ export async function operate(
     journey,
     factory,
     jobs,
+    mailer,
   };
 }
 
