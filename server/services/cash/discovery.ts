@@ -96,12 +96,13 @@ import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition } from './money.ts';
 import { proveCapabilities } from './freelancer/deliverables/capabilities.ts';
 import { CATEGORY_LABEL } from './freelancer/classify.ts';
-import { DELIVERABLE_KINDS } from './freelancer/deliverables/spec.ts';
 import { existingOpeningFor, markDuplicateOpenings, openingSourceKey } from './duplicates.ts';
 import {
   ensureDiscoveryAuthority,
   resumeAuthorityParkedCandidates,
 } from './discoveryAuthority.ts';
+import { DELIVERABLE_KINDS, type DeliverableKind } from './freelancer/deliverables/spec.ts';
+import { deliverableCapabilityId } from './capabilities.ts';
 import type {
   CashDiscoveryRound,
   CashMechanism,
@@ -126,9 +127,60 @@ export interface SearchBucket {
   mechanism: CashMechanism;
   title: string;
   question: string;
+  /**
+   * For a play bucket, the deliverable its question is about. An opening
+   * harvested from a round of it requires producing that kind, so Brain can
+   * say from its own proof whether it delivers — see `PLAY_BUCKETS`.
+   */
+  deliverable?: DeliverableKind;
 }
 
+/**
+ * Plays: a kind of business that pays for something Brain can make.
+ *
+ * The owner's correction (2026-10-21): fast cash comes from several plays at
+ * once — a reachable group of buyers who already pay for a deliverable, sold
+ * to them directly — not from one-off listings. Every bucket below asked
+ * *who has published a request*, which is why discovery returned single
+ * postings, solicitations and auctions. These ask the play question, one per
+ * deliverable Brain proved it can produce, so the opening a round finds is
+ * about that deliverable by construction and carries `PRODUCE_<KIND>` as its
+ * required capability — which is how `deliveryReading` can say Brain does the
+ * work, from the proof rather than from anybody's word.
+ *
+ * Still a *place to look*: every answer is a published, dated artefact through
+ * the same gate. The question asks for the buyers, what they pay, how often,
+ * and where they can be reached; it asks for no estimate.
+ */
+const PLAY_SUBJECT: Record<DeliverableKind, string> = {
+  SPREADSHEET: 'custom spreadsheets, trackers, calculators or financial models',
+  DOCUMENT: 'business documents such as proposals, policies, SOPs, reports or templates',
+  PRESENTATION: 'presentations and pitch decks',
+  DATASET: 'data cleaning, de-duplication, enrichment or list building',
+  WEBSITE: 'simple websites and landing pages',
+  CODE: 'small scripts, automations or integrations',
+  GRAPHIC: 'logos, icons and other vector graphics',
+  MODEL_3D: 'simple 3D models',
+};
+
+export const PLAY_BUCKETS: readonly SearchBucket[] = Object.freeze(
+  DELIVERABLE_KINDS.map(
+    (kind): SearchBucket => ({
+      id: `play-${kind.toLowerCase().replace(/_/g, '-')}`,
+      mechanism: 'PRODUCTIZED_SERVICE',
+      deliverable: kind,
+      title: `Who keeps paying for ${PLAY_SUBJECT[kind].split(',')[0]}`,
+      question:
+        `Which kinds of businesses or organisations pay, again and again, for ${PLAY_SUBJECT[kind]} — ` +
+        'naming the kind of buyer, the published prices they pay (with the source), how often ' +
+        'they buy, how fast they expect it delivered, and a published directory, association ' +
+        'list or index where such buyers and their business email addresses can be found?',
+    }),
+  ),
+);
+
 export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
+  ...PLAY_BUCKETS,
   {
     id: 'explicit-paid-request',
     mechanism: 'EXPLICIT_PAID_REQUEST',
@@ -517,7 +569,8 @@ export function executionFrameSentence(frame: ExecutionFrame): string {
     'Report first the openings this operation could act on now. It runs online with AI workers and ' +
     `delivers ${delivers}; it holds no professional licence, certification, bonding, ` +
     'government vendor registration or local physical presence, and takes no employment or ' +
-    `hourly positions; ${capital}; and it is paid online, through a checkout or invoice route a buyer ` +
+    `hourly positions; ${capital}; it reaches buyers by email at the business addresses they ` +
+    'publish; and it is paid online, through a checkout or invoice route a buyer ' +
     'already uses. For each opening name who would pay this operation, roughly how much, how ' +
     'the money would reach it, the earliest it could arrive, and whether it could act on it now; ' +
     'openings that could become collected cash within seven days come first. An opening it could ' +
@@ -527,7 +580,10 @@ export function executionFrameSentence(frame: ExecutionFrame): string {
     'project listings on freelance marketplaces (Freelancer, PeoplePerHour, Upwork, Fiverr): this ' +
     'operation does not take freelance work. A company publishing its ' +
     'own prices or fees is evidence of what that company charges, not of anybody paying this ' +
-    'operation, so it is not an opening unless a named buyer would pay this operation for something.'
+    'operation, so on its own it is not an opening. A kind of business that publicly and ' +
+    'repeatedly pays for something this operation delivers, with a published place to find those ' +
+    'businesses and their email addresses, is an opening, and the prices others charge them are ' +
+    'its price evidence.'
   );
 }
 
@@ -816,6 +872,11 @@ export async function harvest(input: {
       // lossy on purpose and the tier turns on the signal — see `tier.ts`.
       opportunitySignal: signal,
       currency: mode.currency,
+      // A play round asked about one deliverable, so what it found needs that
+      // deliverable produced — named here, never guessed from the claim's words.
+      requiredCapabilities: context?.bucket.deliverable
+        ? [deliverableCapabilityId(context.bucket.deliverable)]
+        : [],
       // The deadline the source publishes, as the worker declared it. Null
       // when it states none, which `closedBy` reads as never closed, not open.
       expiresAt: claim.closesOn ?? null,
