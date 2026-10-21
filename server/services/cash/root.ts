@@ -106,10 +106,30 @@ export const CANONICAL_CASH_SUMMARY =
  * therefore always tell the standing mandate from this week's steer, which a
  * single blended paragraph makes impossible.
  */
-export function objectiveWith(constraints?: string | null): string {
+export function objectiveWith(constraints?: string | null, base: string = CANONICAL_CASH_OBJECTIVE): string {
   const extra = (constraints ?? '').trim();
-  if (extra.length === 0) return CANONICAL_CASH_OBJECTIVE;
-  return `${CANONICAL_CASH_OBJECTIVE}\n\nAdditional priorities and constraints from the operator (these narrow or reprioritise; they do not replace the mandate above):\n${extra}`;
+  if (extra.length === 0) return base;
+  return `${base}${OPERATOR_CONSTRAINTS_HEADER}${extra}`;
+}
+
+/** The heading `objectiveWith` puts between the mandate and a person's additions. */
+export const OPERATOR_CONSTRAINTS_HEADER =
+  '\n\nAdditional priorities and constraints from the operator (these narrow or reprioritise; they do not replace the mandate above):\n';
+
+/**
+ * A stored objective, split back into the mandate and the operator's additions.
+ *
+ * The inverse of `objectiveWith`, so changing the additions on a running sprint
+ * keeps the mandate it was activated with byte for byte rather than replacing
+ * it with today's canonical text.
+ */
+export function splitObjective(objective: string): { base: string; constraints: string } {
+  const at = objective.indexOf(OPERATOR_CONSTRAINTS_HEADER);
+  if (at < 0) return { base: objective, constraints: '' };
+  return {
+    base: objective.slice(0, at),
+    constraints: objective.slice(at + OPERATOR_CONSTRAINTS_HEADER.length).trim(),
+  };
 }
 
 /**

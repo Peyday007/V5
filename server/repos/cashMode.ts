@@ -274,3 +274,33 @@ export async function listCashEventsFor(
   );
   return rows.map(mapEvent);
 }
+
+/** Every event of one kind in a project, oldest first and unbounded. */
+export async function cashEventsOfKindInProject(projectId: string, kind: string): Promise<CashEvent[]> {
+  const rows = await getDb().all<CashEventRow>(
+    `SELECT * FROM cash_events
+      WHERE project_id = ? AND kind = ?
+      ORDER BY created_at, id`,
+    [projectId, kind],
+  );
+  return rows.map(mapEvent);
+}
+
+/**
+ * Replace the sprint's objective text, guarded on the text the caller read.
+ *
+ * The objective is only ever changed by a person editing the operator's
+ * additions (`setConstraints`), so two people saving at once produce one change
+ * and the loser is told rather than silently overwriting.
+ */
+export async function setCashModeObjective(input: {
+  projectId: string;
+  expectObjective: string;
+  objective: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE cash_modes SET objective = ?, updated_at = ? WHERE project_id = ? AND objective = ?`,
+    [input.objective, cashNow(), input.projectId, input.expectObjective],
+  );
+  return result.changes === 1;
+}

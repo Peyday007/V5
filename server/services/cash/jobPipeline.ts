@@ -46,10 +46,12 @@
  * job this module must not produce, and the reason is reported instead.
  */
 import { getDb } from '../../db/database.ts';
-import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
+import { cashEventsOfKindInProject, getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { listOpportunities, listNeeds } from '../../repos/cashPortfolio.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
-import { createJob, listJobs, liveJobFor, releaseJob, setJobState } from '../../repos/cashJobs.ts';
+import { createJob, dealJob, listJobs, liveJobFor, releaseJob, setJobState } from '../../repos/cashJobs.ts';
+import { chooseHolder, type DealtJob } from './deal.ts';
+import { peopleReading } from '../identity/people.ts';
 import { actionsFor } from '../../repos/cashActions.ts';
 import { agreementsFor } from '../../repos/cashJourney.ts';
 import { cashEngineCard } from './engineCard.ts';
@@ -263,6 +265,8 @@ export interface JobReconciliation {
   released: { jobId: string; because: string }[];
   /** Qualified openings that were not made jobs, each with its reason. */
   declined: { opportunityId: string; because: string }[];
+  /** Jobs whose holder the dealer chose this pass, and why (`deal.ts`). */
+  dealt: { jobId: string; from: string | null; to: string; because: string }[];
 }
 
 interface TierContext {
@@ -291,6 +295,30 @@ async function tiersFor(projectId: string): Promise<TierContext[]> {
 export const JOB_PREPARED_EVENT = 'CASH_JOB_PREPARED';
 export const JOB_STATE_EVENT = 'CASH_JOB_STATE';
 export const JOB_RELEASED_EVENT = 'CASH_JOB_RELEASED';
+export const JOB_DEALT_EVENT = 'CASH_JOB_DEALT';
+
+/**
+ * A prepared job is moved to rebalance only when its holder has this many more
+ * jobs of its kind than the person the dealer would choose. Moving at one would
+ * swap a job back and forth on every pass; two or more is a real imbalance a
+ * move makes strictly smaller, so dealing converges and never churns.
+ */
+export const REDEAL_IMBALANCE = 2;
+
+/**
+ * The people a job may be dealt to: everybody who has joined and can sign in.
+ *
+ * Unreadable is not "nobody joined": it returns null and the pass deals
+ * nothing, leaving every job with the holder it already has.
+ */
+async function dealSeats(): Promise<string[] | null> {
+  try {
+    const reading = await peopleReading(null);
+    return reading.people.filter((one) => one.state === 'READY').map((one) => one.userId);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Create or reuse the canonical job for every actionable opening, and keep each
@@ -298,11 +326,33 @@ export const JOB_RELEASED_EVENT = 'CASH_JOB_RELEASED';
  * on live jobs makes a repeated tick, a restart and two instances one job.
  */
 export async function reconcileCashJobs(projectId: string): Promise<JobReconciliation> {
-  const out: JobReconciliation = { created: [], advanced: [], released: [], declined: [] };
+  const out: JobReconciliation = { created: [], advanced: [], released: [], declined: [], dealt: [] };
   const mode = await getCashMode(projectId);
   if (!mode) return out;
 
   const contexts = await tiersFor(projectId);
+  const mechanismOf = new Map(contexts.map((c) => [c.opportunity.id, c.opportunity]));
+  const seats = await dealSeats();
+  const existing = await listJobs(projectId);
+  /*
+   * What each person holds, as the dealer counts it: every job that is not
+   * RELEASED, oldest first so a rebalance moves the job prepared longest ago.
+   */
+  const holdings = new Map<string, DealtJob>();
+  for (const job of [...existing].reverse()) {
+    if (job.state === 'RELEASED') continue;
+    const opp = mechanismOf.get(job.opportunityId);
+    holdings.set(job.id, { ownerUserId: job.ownerUserId, mechanism: opp?.mechanism ?? 'UNKNOWN' });
+  }
+  const dealtTo = new Map<string, string>();
+  for (const event of await cashEventsOfKindInProject(projectId, JOB_DEALT_EVENT)) {
+    const jobId = typeof event.detail['jobId'] === 'string' ? (event.detail['jobId'] as string) : null;
+    const to = typeof event.detail['to'] === 'string' ? (event.detail['to'] as string) : null;
+    if (jobId && to) dealtTo.set(jobId, to);
+  }
+  if (seats && seats.length > 0) {
+    await rebalancePreparedJobs(projectId, existing, mechanismOf, seats, holdings, dealtTo, out);
+  }
   const jobsByOpportunity = new Map<string, CashJob>();
   /*
    * A COLLECTED job is the canonical job of a finished deal even though the
@@ -334,11 +384,13 @@ export async function reconcileCashJobs(projectId: string): Promise<JobReconcili
        * new work after somebody said stop.
        */
       if (mode.state !== 'ACTIVE' && !TAKEN_STATES.has(opportunity.state)) continue;
+      const choice = seats && seats.length > 0 ? chooseHolder(opportunity.mechanism, seats, [...holdings.values()]) : null;
+      const holder = choice?.userId ?? opportunity.ownerUserId;
       const created = await createJob({
         opportunityId: opportunity.id,
         projectId,
         currency: opportunity.currency,
-        ownerUserId: opportunity.ownerUserId,
+        ownerUserId: holder,
         createdBy: 'BRAIN',
         note: `Prepared because ${eligibility.because}.`,
       });
@@ -349,6 +401,19 @@ export async function reconcileCashJobs(projectId: string): Promise<JobReconcili
       } else {
         job = created;
         out.created.push({ jobId: job.id, opportunityId: opportunity.id, because: eligibility.because });
+        holdings.set(job.id, { ownerUserId: holder, mechanism: opportunity.mechanism });
+        if (choice) {
+          dealtTo.set(job.id, holder);
+          out.dealt.push({ jobId: job.id, from: null, to: holder, because: choice.because });
+          await recordCashEvent({
+            projectId,
+            opportunityId: opportunity.id,
+            kind: JOB_DEALT_EVENT,
+            actorRef: 'BRAIN',
+            summary: `Execution job for "${opportunity.title}" dealt because ${choice.because}.`,
+            detail: { jobId: job.id, from: null, to: holder, sameKind: choice.sameKind, total: choice.total },
+          });
+        }
         await recordCashEvent({
           projectId,
           opportunityId: opportunity.id,
@@ -404,6 +469,59 @@ export async function reconcileCashJobs(projectId: string): Promise<JobReconcili
     }
   }
   return out;
+}
+
+/**
+ * Move prepared jobs from whoever holds too many of a kind, so the plates even out.
+ *
+ * Only a job nothing has been committed to: Brain prepared it, the opening has
+ * not been taken into execution, and its holder is the one Brain last put there
+ * (or the opening's owner, for a job prepared before dealing existed). A move
+ * happens only when the holder has `REDEAL_IMBALANCE` more jobs of its kind than
+ * the person the dealer would choose, which makes every move reduce the spread
+ * and stops the pass swapping a job back and forth. Each move is a
+ * compare-and-swap on the owner the pass read, so a concurrent change wins.
+ */
+async function rebalancePreparedJobs(
+  projectId: string,
+  jobs: readonly CashJob[],
+  opportunities: ReadonlyMap<string, CashOpportunity>,
+  seats: readonly string[],
+  holdings: Map<string, DealtJob>,
+  dealtTo: Map<string, string>,
+  out: JobReconciliation,
+): Promise<void> {
+  for (const job of [...jobs].reverse()) {
+    if (job.state !== 'ASSIGNED' && job.state !== 'UNASSIGNED') continue;
+    if (job.createdBy !== 'BRAIN') continue;
+    const opportunity = opportunities.get(job.opportunityId);
+    if (!opportunity || TAKEN_STATES.has(opportunity.state)) continue;
+    const brainPlaced = dealtTo.get(job.id) ?? opportunity.ownerUserId;
+    if (job.ownerUserId !== null && job.ownerUserId !== brainPlaced) continue;
+
+    const others = [...holdings.entries()].filter(([id]) => id !== job.id).map(([, held]) => held);
+    const choice = chooseHolder(opportunity.mechanism, seats, others);
+    if (!choice || choice.userId === job.ownerUserId) continue;
+    if (job.ownerUserId !== null) {
+      const current = others.filter(
+        (held) => held.ownerUserId === job.ownerUserId && held.mechanism === opportunity.mechanism,
+      ).length + 1;
+      const holderSeated = seats.includes(job.ownerUserId);
+      if (holderSeated && current - choice.sameKind < REDEAL_IMBALANCE) continue;
+    }
+    if (!(await dealJob({ jobId: job.id, expectOwnerUserId: job.ownerUserId, ownerUserId: choice.userId }))) continue;
+    holdings.set(job.id, { ownerUserId: choice.userId, mechanism: opportunity.mechanism });
+    dealtTo.set(job.id, choice.userId);
+    out.dealt.push({ jobId: job.id, from: job.ownerUserId, to: choice.userId, because: choice.because });
+    await recordCashEvent({
+      projectId,
+      opportunityId: opportunity.id,
+      kind: JOB_DEALT_EVENT,
+      actorRef: 'BRAIN',
+      summary: `Execution job for "${opportunity.title}" re-dealt to even out the plates: ${choice.because}.`,
+      detail: { jobId: job.id, from: job.ownerUserId, to: choice.userId, sameKind: choice.sameKind, total: choice.total },
+    });
+  }
 }
 
 /* --------------------------------------------------------------------------
