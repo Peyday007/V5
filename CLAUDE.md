@@ -13502,8 +13502,9 @@ completion it could not fix, and only then released.
 **A corrected round needs a decision waiting on it.** `assessJudgeRound`
 asked whether a parked packet *could* be resumed, never whether anything still
 read its answer. Production, 2026-10-21: of 986 fragments that re-asked an
-already-accepted question in 30 days, 959 were cash-need packets from
-September whose question was the pre-§65 shape ("This card cannot be tested
+already-accepted question in 30 days, 264 were the hosted verification's own
+fixture (one per deploy, intended) and 710 were cash-need packets whose
+question was the pre-§65 shape ("This card cannot be tested
 without it…", no opening named), and PATCH parks among them were being
 re-synthesized and re-audited and parked again. A packet launched for a cash
 need is now resumed only while that need is OPEN, still points at this idea,
