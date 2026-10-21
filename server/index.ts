@@ -765,6 +765,11 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
     //
     // Nothing is spent by this. It queues work; a worker still has to claim it,
     // and a plan a person has not approved stays exactly where it is.
+    // Start the deliverable proof now, so capability readings have it settled
+    // before any page asks (they never wait on it). Not awaited.
+    void import('./services/cash/freelancer/deliverables/capabilities.ts')
+      .then((module) => module.proveCapabilities())
+      .catch((error) => console.error('[brain] the deliverable proof failed:', error));
     const resumed = (await afterListenStep('resume worker-driven packets', resumePulledPackets)) ?? 0;
     if (resumed > 0) {
       console.log(`  ${resumed} worker-driven research packet(s) picked back up from their rows`);

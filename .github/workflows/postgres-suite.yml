@@ -232,7 +232,7 @@ jobs:
           BRAIN_TEST_DATABASE_URL: postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable
         run: >-
           npx vitest run --shard=${{ matrix.shard }}/4
-          --reporter=default --reporter=json
+          --reporter=default --reporter=json --reporter=github-actions
           --outputFile.json=postgres-shard-report.json
 
       # What this shard actually ran, read from its own report, for `verdict`

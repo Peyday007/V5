@@ -61,7 +61,7 @@ import {
 import { usablePaymentReader } from './providers/payments.ts';
 import { listRoutines } from '../../repos/fleet.ts';
 import { DELIVERABLE_KINDS, type DeliverableKind } from './freelancer/deliverables/spec.ts';
-import { proveCapabilities } from './freelancer/deliverables/capabilities.ts';
+import { settledCapabilities } from './freelancer/deliverables/capabilities.ts';
 
 export type CapabilityState = 'PRESENT' | 'MISSING' | 'UNKNOWN';
 
@@ -230,7 +230,16 @@ export const DELIVERABLE_CAPABILITIES: readonly CapabilityDefinition[] = Object.
     does: `Produce and verify ${DELIVERABLE_LABEL[kind]} with no person doing the work.`,
     requires: `This process's sample of ${DELIVERABLE_LABEL[kind]} rendering and passing every check.`,
     nextStep: `Read why the ${kind.toLowerCase()} sample failed in the capability proof, and fix the renderer.`,
-    read: async () => (await proveCapabilities())[kind]?.available === true,
+    // Never runs or waits on the proof: it renders a sample of every kind on
+    // the event loop (seconds), and a reading on a page path must not pay
+    // that. Boot starts it (`server/index.ts`), and so does discovery's frame;
+    // until it has finished this reads UNKNOWN — the reader could not answer
+    // yet — rather than a guess either way.
+    read: async () => {
+      const proof = settledCapabilities();
+      if (!proof) throw new Error('the deliverable proof has not finished in this process yet');
+      return proof[kind]?.available === true;
+    },
   })),
 );
 
@@ -297,6 +306,18 @@ export function needForCapability(reading: CapabilityReading, blockedAction: str
   completionCondition: string;
 } | null {
   if (reading.state === 'PRESENT') return null;
+  if (reading.state === 'UNKNOWN' && reading.definition) {
+    // Brain has a word for it and could not read it just now — a reader that
+    // threw, or a proof still running. Not "no word for that".
+    return {
+      blockedAction,
+      whyItMatters: `Whether Brain can ${reading.definition.does.charAt(0).toLowerCase()}${reading.definition.does.slice(1)} could not be read just now.`,
+      recommendedPath: 'Nothing to do: Brain reads it again on its next pass.',
+      setupEffort: 'None.',
+      nextStep: `Wait for the next reading of ${reading.definition.id}.`,
+      completionCondition: `${reading.definition.id} reads PRESENT, or this piece stops requiring it.`,
+    };
+  }
   if (reading.state === 'UNKNOWN' || !reading.definition) {
     return {
       blockedAction,
