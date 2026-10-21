@@ -70,9 +70,14 @@ primary_region = "iad"        # pick the region nearest your Supabase project
     path = "/healthz"
 
 [[vm]]
-  size = "shared-cpu-1x"
-  # 1 GB rather than the 256 MB default. Reading a PDF decodes it in memory and
+  # Two shared CPUs, not one. Twelve workers call the MCP endpoint at once while
+  # four background loops, extraction and puzzle solving run in this same
+  # process; on one shared CPU a busy stretch starved request handling until
+  # workers timed out and the proxy answered 502/503 (2026-10-21). This is the
+  # cheap half of that fix; moving OCR off the event loop is the other half.
+  size = "shared-cpu-2x"
+  # 2 GB, not the 256 MB default. Reading a PDF decodes it in memory and
   # OCR spawns tesseract per page; 256 MB gets an out-of-memory kill partway
   # through a large import, which looks like a mysterious restart rather than
   # like a memory limit.
-  memory = "1gb"
+  memory = "2gb"

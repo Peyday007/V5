@@ -18,7 +18,7 @@
  * Recognition is entirely local. There is no cloud fallback, and no document
  * ever leaves the machine to be read.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -192,21 +192,75 @@ interface RunOutcome {
   message: string;
 }
 
-function run(command: string, args: string[], timeoutMs: number): RunOutcome {
-  const result = spawnSync(command, args, { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 });
-  const timedOut = result.error !== undefined && /ETIMEDOUT|timed? ?out/i.test(String(result.error));
-  const killedBySignal = result.signal !== null && result.signal !== undefined;
-  return {
-    ok: !result.error && result.status === 0,
-    stdout: result.stdout ?? '',
-    stderr: (result.stderr ?? '').trim(),
-    timedOut: timedOut || (killedBySignal && result.status === null),
-    message: result.error
-      ? String((result.error as Error).message ?? result.error)
-      : result.status === 0
-        ? ''
-        : `exited with status ${result.status}${result.stderr ? `: ${String(result.stderr).trim()}` : ''}`,
-  };
+/**
+ * One child process, awaited without holding the event loop.
+ *
+ * This used to be `spawnSync`, which froze the whole server for as long as
+ * tesseract or the renderer ran — up to the runtime timeout per page. Brain is
+ * one process on one machine, so every MCP call from every worker waited behind
+ * that page: workers saw timeouts, Fly's health check missed, and the proxy
+ * answered 502/503. The child still runs to the same timeout and the same
+ * output cap; only the waiting moved off the event loop.
+ */
+const RUN_MAX_BUFFER = 64 * 1024 * 1024;
+
+function run(command: string, args: string[], timeoutMs: number): Promise<RunOutcome> {
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let size = 0;
+    let timedOut = false;
+    let overflow = false;
+    let settled = false;
+    const finish = (outcome: RunOutcome): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(outcome);
+    };
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      resolve({ ok: false, stdout: '', stderr: '', timedOut: false, message: String((error as Error).message ?? error) });
+      return;
+    }
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGKILL');
+    }, timeoutMs);
+    const take = (chunk: Buffer, into: 'out' | 'err'): void => {
+      size += chunk.byteLength;
+      if (size > RUN_MAX_BUFFER) {
+        overflow = true;
+        child.kill('SIGKILL');
+        return;
+      }
+      if (into === 'out') stdout += chunk.toString('utf8');
+      else stderr += chunk.toString('utf8');
+    };
+    child.stdout?.on('data', (chunk: Buffer) => take(chunk, 'out'));
+    child.stderr?.on('data', (chunk: Buffer) => take(chunk, 'err'));
+    child.on('error', (error) => {
+      finish({ ok: false, stdout, stderr: stderr.trim(), timedOut, message: String(error.message ?? error) });
+    });
+    child.on('close', (status, signal) => {
+      const killed = signal !== null && status === null;
+      finish({
+        ok: !timedOut && !overflow && status === 0,
+        stdout,
+        stderr: stderr.trim(),
+        timedOut: timedOut || (killed && !overflow),
+        message: overflow
+          ? 'output exceeded the buffer limit'
+          : timedOut
+            ? `timed out after ${timeoutMs}ms`
+            : status === 0
+              ? ''
+              : `exited with status ${status}${stderr.trim() ? `: ${stderr.trim()}` : ''}`,
+      });
+    });
+  });
 }
 
 /**
@@ -240,14 +294,14 @@ export class LocalOcrEngine implements OcrEngine {
   }
 
   /** Rasterise one page. Returns null with a reason when the renderer fails. */
-  #render(
+  async #render(
     pdfPath: string,
     pageNumber: number,
     workDir: string,
-  ): { png: Buffer; path: string } | { error: string; timedOut: boolean } {
+  ): Promise<{ png: Buffer; path: string } | { error: string; timedOut: boolean }> {
     const renderer = this.#runtime.renderer.command!;
     const prefix = path.join(workDir, `p${pageNumber}`);
-    const outcome = run(
+    const outcome = await run(
       renderer,
       [
         '-f', String(pageNumber),
@@ -298,7 +352,7 @@ export class LocalOcrEngine implements OcrEngine {
     try {
       for (const pageNumber of pageNumbers) {
         const startedAt = Date.now();
-        const rendered = this.#render(pdfPath, pageNumber, workDir);
+        const rendered = await this.#render(pdfPath, pageNumber, workDir);
         if ('error' in rendered) {
           results.push({
             pageNumber,
@@ -316,7 +370,7 @@ export class LocalOcrEngine implements OcrEngine {
         const size = pngSize(rendered.png);
 
         const out = path.join(workDir, `p${pageNumber}-out`);
-        const outcome = run(
+        const outcome = await run(
           this.#runtime.recognizer.command!,
           [rendered.path, out, '-l', this.#runtime.language, '--psm', '1', 'tsv'],
           this.#runtime.timeoutMs,
