@@ -662,7 +662,12 @@ describe('RES-5: the exclusions reach the compiled question and pass the envelop
       null,
       'MBE WBE certification consulting RFQ, purchase of services',
     );
-    const opened = await openDiscovery({ projectId, limit: 1 });
+    // Play buckets come first (§73) and ask about a different mechanism, so the
+    // round under test is the paid-request bucket's.
+    const { SEARCH_BUCKETS } = await import('../server/services/cash/discovery.ts');
+    const opened = (await openDiscovery({ projectId, limit: SEARCH_BUCKETS.length })).filter(
+      (one) => one.bucketId === 'explicit-paid-request',
+    );
     expect(opened).toHaveLength(1);
     const candidate = (await getCandidate(opened[0]!.candidateId))!;
     expect(candidate.statement).toContain('stlouis-mo.gov/sldc/procurement/rfq-mbe.cfm');

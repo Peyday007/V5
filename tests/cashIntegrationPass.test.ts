@@ -752,11 +752,18 @@ describe('one sprint, from activation to money in and winding down', () => {
     expect(offer.assumptions).toBeTruthy();
     expect(offer.uncertainty).toBeTruthy();
     expect((await cardFact(piece.id, 'acceptance'))!.kind).toBe('RECOMMENDATION');
-    // Who delivers it is not proposed from Brain being able to research a
-    // question (RES-6): nothing records what delivering this needs, so both
-    // stay unknown rather than reading "Brain, with a person reviewing".
+    // Who delivers it is never proposed from Brain being able to research a
+    // question (RES-6). This piece came from a play round, so it requires
+    // producing that round's deliverable (§73), and the proposal rests on that
+    // proof — never on RESEARCH_A_QUESTION.
+    const required = (await getOpportunity(piece.id))!.requiredCapabilities;
+    expect(required).toHaveLength(1);
+    expect(required[0]).toMatch(/^PRODUCE_/);
     for (const field of ['delivery', 'fulfillment']) {
-      expect((await cardFact(piece.id, field))?.kind).not.toBe('RECOMMENDATION');
+      const fact = (await cardFact(piece.id, field))!;
+      expect(fact.kind).toBe('RECOMMENDATION');
+      expect(fact.basis).toContain(`${required[0]} PRESENT`);
+      expect(fact.basis).not.toContain('RESEARCH_A_QUESTION');
     }
     // And it withholds what it has no basis for: no source states a figure, so
     // no price is invented and then explained.

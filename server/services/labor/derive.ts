@@ -41,7 +41,7 @@
  */
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { createTask, createWorkflow } from '../../repos/labor.ts';
-import { CAPABILITIES } from '../cash/capabilities.ts';
+import { CAPABILITIES, DELIVERABLE_CAPABILITIES } from '../cash/capabilities.ts';
 import type { CashOpportunity, CashOpportunityState, LaborTask, LaborWorkflow } from '../../domain/types.ts';
 
 /**
@@ -62,7 +62,7 @@ export const DELIVERABLE: readonly CashOpportunityState[] = Object.freeze([
   'COLLECTED',
 ]);
 
-const BY_CAPABILITY = new Map(CAPABILITIES.map((one) => [one.id, one]));
+const BY_CAPABILITY = new Map([...CAPABILITIES, ...DELIVERABLE_CAPABILITIES].map((one) => [one.id, one]));
 
 export interface Derived {
   workflows: LaborWorkflow[];

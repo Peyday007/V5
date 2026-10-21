@@ -60,6 +60,8 @@ import {
 } from './effects.ts';
 import { usablePaymentReader } from './providers/payments.ts';
 import { listRoutines } from '../../repos/fleet.ts';
+import { DELIVERABLE_KINDS, type DeliverableKind } from './freelancer/deliverables/spec.ts';
+import { proveCapabilities } from './freelancer/deliverables/capabilities.ts';
 
 export type CapabilityState = 'PRESENT' | 'MISSING' | 'UNKNOWN';
 
@@ -194,7 +196,45 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
   },
 ]);
 
-const BY_ID = new Map(CAPABILITIES.map((one) => [one.id, one]));
+/**
+ * Producing a kind of deliverable, read from the proof this process ran.
+ *
+ * Brain renders a realistic sample of each kind and re-reads the bytes before
+ * it may say it can make one (`freelancer/deliverables/capabilities.ts`). That
+ * proof was only ever read by the marketplace screen, so a play built on
+ * "we make spreadsheets for this kind of business" had no capability to name,
+ * and `deliveryReading` withheld delivery on every one of them. These read the
+ * same proof. The module sits under `freelancer/` for history; the proof is
+ * about the files, not about any marketplace.
+ */
+export const DELIVERABLE_CAPABILITY_PREFIX = 'PRODUCE_';
+
+export function deliverableCapabilityId(kind: DeliverableKind): string {
+  return `${DELIVERABLE_CAPABILITY_PREFIX}${kind}`;
+}
+
+const DELIVERABLE_LABEL: Record<DeliverableKind, string> = {
+  SPREADSHEET: 'a working spreadsheet',
+  DOCUMENT: 'a business document',
+  PRESENTATION: 'a presentation',
+  DATASET: 'a cleaned and transformed dataset',
+  WEBSITE: 'a static website',
+  CODE: 'a small program',
+  GRAPHIC: 'a vector graphic',
+  MODEL_3D: 'a primitive 3D model',
+};
+
+export const DELIVERABLE_CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze(
+  DELIVERABLE_KINDS.map((kind): CapabilityDefinition => ({
+    id: deliverableCapabilityId(kind),
+    does: `Produce and verify ${DELIVERABLE_LABEL[kind]} with no person doing the work.`,
+    requires: `This process's sample of ${DELIVERABLE_LABEL[kind]} rendering and passing every check.`,
+    nextStep: `Read why the ${kind.toLowerCase()} sample failed in the capability proof, and fix the renderer.`,
+    read: async () => (await proveCapabilities())[kind]?.available === true,
+  })),
+);
+
+const BY_ID = new Map([...CAPABILITIES, ...DELIVERABLE_CAPABILITIES].map((one) => [one.id, one]));
 
 export interface CapabilityReading {
   id: string;
@@ -295,7 +335,7 @@ export function needForCapability(reading: CapabilityReading, blockedAction: str
  */
 export async function readAllCapabilities(): Promise<Map<string, CapabilityReading>> {
   const out = new Map<string, CapabilityReading>();
-  for (const definition of CAPABILITIES) {
+  for (const definition of [...CAPABILITIES, ...DELIVERABLE_CAPABILITIES]) {
     out.set(definition.id, await readCapability(definition.id));
   }
   return out;

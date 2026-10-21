@@ -13691,6 +13691,29 @@ deliverable sat PREPARED, and Cash counted none of them.
   account and spend), origami designs (a fold cannot be verified from a file),
   and "15k entries" of data with no client file.
 
+## 73. A play is a kind of buyer for something Brain can make, and it names what it needs produced.
+
+The owner's correction (2026-10-21): fast cash comes from several plays at
+once, not from one-off listings or one repeatable offer. A play is a kind of
+business that keeps paying for something Brain can deliver, reached by email.
+Every discovery bucket asked *who has published a request*, which is why the
+portfolio filled with single postings, solicitations and auctions.
+
+- **One play bucket per deliverable Brain proves** (`PLAY_BUCKETS`, ahead of the
+  rest). Each asks which kinds of buyer pay for that deliverable again and
+  again, what they pay, how fast they expect it, and where they and their
+  business email addresses are published. Still published, dated evidence
+  through the same gate; no estimate is asked for.
+- **An opening from a play round requires producing that deliverable**
+  (`PRODUCE_<KIND>`), named from the bucket that asked, never from the claim's
+  words. Those capabilities read the per-process deliverable proof, which only
+  the marketplace screen used to read — so `deliveryReading` can now say Brain
+  does the work, and the labor kernel recognises the task.
+- **The frame says how buyers are reached**: by email at the business addresses
+  they publish. A vendor's price list on its own is still not an opening; a
+  kind of business that repeatedly pays for what Brain delivers is, and other
+  vendors' prices are its price evidence.
+
 ## Repository map
 
 ```

@@ -45,6 +45,7 @@ import {
   BARREN_ROUNDS,
   nextRoundFor,
   SEARCH_BUCKETS,
+  PLAY_BUCKETS,
   SIGNAL_LANE,
   harvest,
   executionFrameSentence,
@@ -517,7 +518,8 @@ describe('harvesting what discovery found', () => {
     // Never `candidateId`: that column means the idea this opportunity *is*,
     // and the wind-down guard reads it to tell discovery from support work.
     expect(opportunity.candidateId).toBeNull();
-    expect(opportunity.mechanism).toBe(SEARCH_BUCKETS[0]!.mechanism);
+    // From the claim's own signal, never from the bucket that asked (`harvest`).
+    expect(opportunity.mechanism).toBe('EXPLICIT_PAID_REQUEST');
     expect(opportunity.buyingSignal).toContain('drain commission');
     expect(opportunity.signalObservedAt).toBe('2026-09-10');
   });
@@ -1069,5 +1071,54 @@ describe('harvest reads past what it already filed', () => {
     // The tick's own bound: runDiscovery harvests ten, so it reads forty.
     for (let pass = 0; pass < 6; pass += 1) await harvest({ projectId, limit: 10 });
     expect(await listOpportunities({ projectId })).toHaveLength(45);
+  });
+});
+
+describe('plays: a kind of business that pays for something Brain can make', () => {
+  it('asks one play question per deliverable Brain proves, before every other bucket', async () => {
+    const { DELIVERABLE_KINDS } = await import('../server/services/cash/freelancer/deliverables/spec.ts');
+    expect(PLAY_BUCKETS.map((one) => one.deliverable)).toEqual([...DELIVERABLE_KINDS]);
+    expect(SEARCH_BUCKETS.slice(0, PLAY_BUCKETS.length).map((one) => one.id)).toEqual(
+      PLAY_BUCKETS.map((one) => one.id),
+    );
+    for (const bucket of PLAY_BUCKETS) {
+      expect(bucket.question).toMatch(/pay, again and again/);
+      expect(bucket.question).toMatch(/published prices/);
+      expect(bucket.question).toMatch(/business email addresses can be found/);
+    }
+    expect(new Set(SEARCH_BUCKETS.map((one) => one.id)).size).toBe(SEARCH_BUCKETS.length);
+  });
+
+  it('an opening from a play round requires producing that deliverable, which Brain proves it can', async () => {
+    await activated();
+    const [first] = await openDiscovery({ projectId });
+    const bucket = PLAY_BUCKETS.find((one) => one.id === first!.bucketId)!;
+    expect(bucket).toBeDefined();
+    await finishedMission({
+      candidateId: first!.candidateId,
+      claims: [
+        {
+          claim: 'Independent property managers repeatedly buy owner-statement spreadsheets at $150 each.',
+          lane: SIGNAL_LANE,
+          signal: 'RECURRING_OUTSOURCED_WORK',
+          sourceUrl: 'https://example.test/plays/spreadsheets',
+        },
+      ],
+    });
+    const [made] = await harvest({ projectId });
+    const opportunity = (await getOpportunity(made!.opportunity.id))!;
+    expect(opportunity.requiredCapabilities).toEqual([`PRODUCE_${bucket.deliverable}`]);
+    const { readCapability } = await import('../server/services/cash/capabilities.ts');
+    const reading = await readCapability(`PRODUCE_${bucket.deliverable}`);
+    expect(reading.definition).not.toBeNull();
+    expect(reading.state).toBe('PRESENT');
+  });
+
+  it('tells the worker this operation reaches buyers by email, and what a play is', async () => {
+    await activated();
+    const [opened] = await openDiscovery({ projectId });
+    const statement = (await getCandidate(opened!.candidateId))!.statement;
+    expect(statement).toMatch(/reaches buyers by email at the business addresses they publish/);
+    expect(statement).toMatch(/repeatedly pays for something this operation delivers/);
   });
 });
