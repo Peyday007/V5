@@ -865,3 +865,105 @@ describe('what this change was not allowed to touch', () => {
     expect(JSON.stringify(assemble(input))).toBe(JSON.stringify(assemble(input)));
   });
 });
+
+// ---------------------------------------------------------------------------
+// The test-first bar for a low-cost email play (owner's decision, 2026-10-21)
+// ---------------------------------------------------------------------------
+
+describe('a low-cost email play qualifies on who pays and that Brain can deliver', () => {
+  async function play(requiredCapabilities: string[]): Promise<CashOpportunity> {
+    const created = await createOpportunity({
+      projectId,
+      cashModeId,
+      ownerUserId: userId,
+      title: 'Property managers keep paying for monthly owner-report spreadsheets.',
+      mechanism: 'PRODUCTIZED_SERVICE',
+      currency: 'USD',
+      sourceClaimId: `clm_${Math.random().toString(36).slice(2, 12)}`,
+      opportunitySignal: 'RECURRING_OUTSOURCED_WORK',
+      source: 'A publisher',
+      requiredCapabilities,
+    });
+    return created;
+  }
+
+  it('holds the prefix equal to the capability readers’ own', async () => {
+    const { PLAY_CAPABILITY_PREFIX } = await import('../server/services/cash/tier.ts');
+    const { DELIVERABLE_CAPABILITY_PREFIX } = await import('../server/services/cash/capabilities.ts');
+    expect(PLAY_CAPABILITY_PREFIX).toBe(DELIVERABLE_CAPABILITY_PREFIX);
+  });
+
+  it('is a candidate until both are answered, then qualified with the rest still blank', async () => {
+    const piece = await play(['PRODUCE_SPREADSHEET']);
+    await answer(piece, CAPTURE_KEY);
+    await answer(piece, 'payer');
+    const half = await tierOf(piece.id);
+    expect(half.tier).toBe('CANDIDATE');
+    expect(half.toAdvance.map((one) => one.key)).toEqual(['delivery']);
+    expect(half.required).toBe(2);
+
+    await answer(piece, 'delivery');
+    const reading = await tierOf(piece.id);
+    expect(reading.tier).toBe('QUALIFIED');
+    expect(reading.summary).toMatch(/bounded test/);
+  });
+
+  it('never qualifies on a signal alone: the capture thesis still comes first', async () => {
+    const piece = await play(['PRODUCE_DOCUMENT']);
+    await answer(piece, 'payer');
+    await answer(piece, 'delivery');
+    expect((await tierOf(piece.id)).tier).toBe('SIGNAL');
+  });
+
+  it('keeps the full bar for anything that also needs a capability Brain must buy or connect', async () => {
+    const piece = await play(['PRODUCE_SPREADSHEET', 'SEND_A_MESSAGE']);
+    await answer(piece, CAPTURE_KEY);
+    await answer(piece, 'payer');
+    await answer(piece, 'delivery');
+    const reading = await tierOf(piece.id);
+    expect(reading.tier).toBe('CANDIDATE');
+    expect(reading.required).toBe(qualificationKeys('RECURRING_OUTSOURCED_WORK').length);
+  });
+
+  it('keeps the full bar for a piece that records no requirement at all', async () => {
+    const piece = await play([]);
+    await answer(piece, CAPTURE_KEY);
+    await answer(piece, 'payer');
+    await answer(piece, 'delivery');
+    expect((await tierOf(piece.id)).tier).toBe('CANDIDATE');
+  });
+
+  it('still refuses a play whose own figures lose money', async () => {
+    const piece = await play(['PRODUCE_SPREADSHEET']);
+    await answer(piece, CAPTURE_KEY);
+    await answer(piece, 'payer');
+    await answer(piece, 'delivery');
+    await updateOpportunity(piece.id, { price_cents: 500, peak_funding_cents: 80_000 });
+    const reading = await tierOf(piece.id);
+    expect(reading.tier).toBe('CANDIDATE');
+    expect(reading.summary).toMatch(/Loses money/);
+  });
+});
+
+describe('a single named request found in a play round is not a play', () => {
+  it('keeps the full bar for one buyer’s published request, even with only PRODUCE_ needs', async () => {
+    const created = await createOpportunity({
+      projectId,
+      cashModeId,
+      ownerUserId: userId,
+      title: 'A county authority published one request for a parcel spreadsheet.',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+      sourceClaimId: 'clm_named_request',
+      opportunitySignal: 'ACTIVE_BUYER_DEMAND',
+      source: 'A publisher',
+      requiredCapabilities: ['PRODUCE_SPREADSHEET'],
+    });
+    await answer(created, CAPTURE_KEY);
+    await answer(created, 'payer');
+    await answer(created, 'delivery');
+    const reading = await tierOf(created.id);
+    expect(reading.tier).toBe('CANDIDATE');
+    expect(reading.required).toBe(qualificationKeys('ACTIVE_BUYER_DEMAND').length);
+  });
+});
