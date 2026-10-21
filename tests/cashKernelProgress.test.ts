@@ -634,10 +634,10 @@ describe('RES-5: one opening, however it was reached', () => {
   });
 
   it('the next bucket question names the openings already held, and asks for new revisions', async () => {
-    const { questionFor, heldExclusions, SEARCH_BUCKETS } = await import(
+    const { questionFor, heldExclusions, ALL_BUCKETS } = await import(
       '../server/services/cash/discovery.ts'
     );
-    const bucket = SEARCH_BUCKETS.find((one) => one.mechanism === 'EXPLICIT_PAID_REQUEST')!;
+    const bucket = ALL_BUCKETS.find((one) => one.mechanism === 'EXPLICIT_PAID_REQUEST')!;
     await claimedOpening('https://www.stlouis-mo.gov/sldc/procurement/rfq-mbe.cfm', null, 'MBE WBE certification RFQ');
     await claimedOpening('https://example.org/jobs/42', null, 'Transcription for Ohio clinics, contact the office');
     const held = await heldExclusions({ projectId, bucket, history: [] });
