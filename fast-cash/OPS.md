@@ -29,10 +29,12 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 
 <!-- The check-in replaces everything below. -->
 
-- **Last check:** 2026-10-21 00:20Z. Production serves 11b25ac, which carries PRs #249, #250, #252, #255 and #257.
+- **Last check:** 2026-10-21 03:45Z. Production serves d829e35. Another Deploy (fad6f73) was in flight during the check.
 - **Operation:** runs unattended.
-  - 72 scans so far, the last at 00:04Z.
-  - 2396 jobs screened: 2382 rejected with reasons, 9 withdrawn and 5 PREPARED.
+  - 74 scans so far, the last at 01:09Z.
+    - That is 2.5h before this check, while four Deploys restarted the machine (01:00Z, 02:15Z, 02:48Z, 03:37Z).
+    - Re-checked after the restarts settled.
+  - 2413 jobs screened: 2398 rejected with reasons, 10 withdrawn and 5 PREPARED.
   - The 5 PREPARED bids are not sent; Brain cannot bid yet:
     - Freelancer 40775802, "PDF Text to Word": about USD 161;
     - 40777786, "PDF-to-Word Conversion -- 2": about USD 193;
