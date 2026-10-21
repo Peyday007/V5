@@ -34,6 +34,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pickPort } from './helpers/ports.ts';
+import { cooldownAfter } from '../server/services/identity/pin.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import fs from 'node:fs';
@@ -357,7 +358,15 @@ describe('the throttle, which is the whole strength of six digits', () => {
     await call('POST', '/api/auth/pin/set', { cookie: theirs.cookie, body: { pin } });
 
     /*
-     * Climbed to the top of the ladder. Every rung answers identically, so
+     * Into the cooldown — and **not** to the top of the ladder, which an
+     * earlier version of this comment claimed. The third failure earns five
+     * seconds, and every attempt after it lands inside that window, where the
+     * door refuses without counting: an attempt nobody's PIN was actually
+     * checked against is not a guess, and counting it would let anybody who
+     * knows a name push that person to the hour-long rung with eight quick
+     * requests. So this ends at three failures and a five-second lock, which is
+     * all the assertions below need and is exactly why the restart test does
+     * not inherit it. Every rung answers identically, so
      * there is nothing in the responses to tell them apart by — which is the
      * property, and is why the lockout is proved by what it *does* below
      * rather than by a status code that announces it.
@@ -406,12 +415,65 @@ describe('the throttle, which is the whole strength of six digits', () => {
      * is the only form of it a caller can observe now that every refusal reads
      * the same.
      */
+    /*
+     * The lockout has to outlast the restart, and the one the test above earned
+     * does not: three failures is a five-second cooldown, and stopping and
+     * booting this Brain takes about as long — measured at 4.7s against 3.7s
+     * left on the lock, which is why this failed every run on a busy machine
+     * and passed on an idle one. A test that hopes a restart beats a timer is a
+     * flake.
+     *
+     * So the counter is aged in the row to one below the top rung — climbing
+     * there honestly means waiting out 5s, 15s, a minute, five and fifteen — and
+     * the top rung itself is **earned through the door**: one more wrong PIN,
+     * and the server's own `recordPinFailure` and `cooldownAfter` write the
+     * hour. What is arranged is the count; the lockout is the server's.
+     */
+    const throttleRow = (): { pin_failed_count: number; pin_locked_until: string | null } => {
+      // `process.getBuiltinModule` for workerInvitation's reason: Vite cannot
+      // resolve `node:sqlite` at transform time.
+      const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
+      const db = new DatabaseSync(path.join(dataDir, 'brain.db'));
+      try {
+        db.exec('PRAGMA busy_timeout = 5000');
+        return db
+          .prepare('SELECT pin_failed_count, pin_locked_until FROM users WHERE email = ?')
+          .get(email) as { pin_failed_count: number; pin_locked_until: string | null };
+      } finally {
+        db.close();
+      }
+    };
+    {
+      const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
+      const db = new DatabaseSync(path.join(dataDir, 'brain.db'));
+      try {
+        db.exec('PRAGMA busy_timeout = 5000');
+        db.prepare(
+          'UPDATE users SET pin_failed_count = 7, pin_locked_until = NULL WHERE email = ?',
+        ).run(email);
+      } finally {
+        db.close();
+      }
+    }
+
+    const eighth = await call('POST', '/api/auth/pin', { body: { identity: email, pin: '000003' } });
+    expect(eighth.status).toBe(401);
+    const earned = throttleRow();
+    expect(earned.pin_failed_count, 'the wrong PIN was not counted').toBe(8);
+    expect(earned.pin_locked_until).not.toBeNull();
+    // The top rung, with a margin no restart comes near.
+    expect(Date.parse(earned.pin_locked_until as string) - Date.now()).toBeGreaterThan(
+      cooldownAfter(8) - 60_000,
+    );
+
     const before = await call('POST', '/api/auth/pin', { body: { identity: email, pin } });
     expect(before.status).toBe(401);
 
     await stopServer();
     await startServer();
 
+    // Rows, not memory: the same count and the same instant after the boot.
+    expect(throttleRow()).toEqual(earned);
     const after = await call('POST', '/api/auth/pin', { body: { identity: email, pin } });
     expect(after.status, 'the lockout did not survive the restart').toBe(401);
   }, 120_000);
