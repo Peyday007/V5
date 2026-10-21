@@ -37,6 +37,8 @@ import {
   MAX_VALIDATION_ROUNDS,
   startValidations,
   whyNotDiving,
+  mechanismYields,
+  MECHANISM_MIN_SAMPLE,
   type DiveValueFacts,
 } from '../server/services/cash/validation.ts';
 import { diveStageForCandidate } from '../server/services/cash/diveStage.ts';
@@ -298,6 +300,44 @@ describe('decision-value order and the fields worth researching', () => {
     timeToCashDays: null,
     answered: 0,
     ...over,
+  });
+
+  it('ranks a mechanism whose dives never changed a decision behind the rest, and never an unmeasured one', () => {
+    const order = (list: DiveValueFacts[]) => [...list].sort(compareDiveValue).map((one) => one.id);
+    // Unproductive goes behind an otherwise equal one, even one that is older.
+    expect(
+      order([
+        facts({ id: 'tried-and-useless', mechanismYield: 'UNPRODUCTIVE', createdAt: '2026-09-01T00:00:00.000Z' }),
+        facts({ id: 'unmeasured' }),
+      ]),
+    ).toEqual(['unmeasured', 'tried-and-useless']);
+    // Unmeasured is never pushed back for lacking history: exploration is preserved.
+    expect(
+      order([facts({ id: 'new', mechanismYield: 'UNMEASURED' }), facts({ id: 'proven', mechanismYield: 'PRODUCTIVE', createdAt: '2026-12-01T00:00:00.000Z' })]),
+    ).toEqual(['new', 'proven']);
+    // A stronger decision-value fact still wins over the measured yield.
+    expect(
+      order([facts({ id: 'plain' }), facts({ id: 'crosses', crossesTier: true, mechanismYield: 'UNPRODUCTIVE' })]),
+    ).toEqual(['crosses', 'plain']);
+  });
+
+  it('measures a mechanism unproductive only past its sample, and one decision restores it', () => {
+    const piece = (mechanism: string, over: Partial<{ validationState: string | null; tier: 'SIGNAL' | 'CANDIDATE' | 'QUALIFIED' | 'READY_TO_TEST'; state: string }> = {}) => ({
+      mechanism,
+      validationState: 'COMPLETE',
+      tier: 'CANDIDATE' as const,
+      state: 'EVIDENCE_CARD',
+      ...over,
+    });
+    const small = Array.from({ length: MECHANISM_MIN_SAMPLE - 1 }, () => piece('A'));
+    expect(mechanismYields(small).get('A')?.yield).toBe('UNMEASURED');
+    const enough = Array.from({ length: MECHANISM_MIN_SAMPLE }, () => piece('A'));
+    expect(mechanismYields(enough).get('A')?.yield).toBe('UNPRODUCTIVE');
+    // An opening still in its first dive is not evidence about the mechanism.
+    expect(mechanismYields([...small, piece('A', { validationState: 'RUNNING' })]).get('A')?.yield).toBe('UNMEASURED');
+    // A disqualifying answer is a decision too.
+    expect(mechanismYields([...enough, piece('A', { state: 'DECLINED' })]).get('A')?.yield).toBe('PRODUCTIVE');
+    expect(mechanismYields([...enough, piece('A', { tier: 'QUALIFIED' })]).get('A')?.yield).toBe('PRODUCTIVE');
   });
 
   it('is lexicographic over recorded facts, first difference decides', () => {

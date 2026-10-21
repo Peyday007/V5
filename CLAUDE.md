@@ -13309,6 +13309,25 @@ The rules it introduced:
 - **A lesson is context, never a control.** Retrospective and usefulness
   lessons reach prompts (`guidance.ts`, cached 10 minutes). No gate, depth,
   repair, ordering or routing module imports them.
+- **One measured outcome now orders deep dives, and it is not a lesson.**
+  "A lesson is context, never a control" stays true: prompt lessons still reach
+  no gate, depth, repair or routing module. What changed is narrower. Usefulness
+  was measured (1 qualified from 489 validation fragments) and nothing about it
+  moved which opening was dived next. `mechanismYields` reads current rows: for
+  each mechanism, how many settled dives (COMPLETE or BLOCKED) ended in a
+  decision — qualified, or declined/archived. At `MECHANISM_MIN_SAMPLE` (8)
+  settled dives with none, the mechanism is `UNPRODUCTIVE` and its openings sort
+  after equal ones (rule 2a, below "could cross a tier"). Fewer than eight is
+  `UNMEASURED` and sorts exactly like `PRODUCTIVE`, so an unfamiliar mechanism
+  is never pushed back for lacking history, and one decision restores it. It
+  orders and never refuses.
+- **Not being able to act today is a named gap, not a reason to drop an
+  opening.** The frame below once said "report only openings this operation
+  could act on" and "leave out … solicitations that require vendor registration
+  or bonding", which made "worth investigating" and "executable now" one test.
+  It now asks for executable openings first and for the others with the missing
+  licence, registration, capability or capital named. Payer, amount, route and
+  timing are still required of every one.
 - **Discovery asks for what this operation can act on.** Production,
   2026-10-19: 312 openings, 248 of them evidence nobody could say how we would
   be paid from, the rest mostly closed solicitations, grants, job postings and
