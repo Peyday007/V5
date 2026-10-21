@@ -239,6 +239,13 @@ const BLOCKERS: Blocker[] = [
   { pattern: /\[(?:number|date|x|amount|insert[^\]]*)\]/, reason: 'the brief still carries an unfilled placeholder, so its terms are not settled' },
   { pattern: /\b(thousands of (?:rows|records|entries|products|listings|files|pages)|\d{2,3},?\d{3}\+? (?:rows|records|entries|products|listings|lines)|millions? of (?:rows|records)|large dataset|big data|several (?:excel )?workbooks|multiple (?:excel )?workbooks|every sheet|all (?:the )?sheets|\d{3,} (?:pdfs|files|pages|invoices|documents))\b/, reason: 'the data is larger than Brain can pass through one deliverable without the client’s own file', only: ['DATASET', 'SPREADSHEET'] },
   { pattern: /\bwikipedia\b/, reason: 'paid Wikipedia editing breaks Wikipedia’s own rules' },
+  // Production, 2026-10-21: "Startup Live Chat Support Agent Needed" reached
+  // PREPARED as a website — the brief is a person staffing a chat widget during
+  // business hours. A role somebody staffs is not a deliverable.
+  { pattern: /\b(live[- ]chat (?:specialist|agent|support|operator)|chat (?:support|agent|operator)|customer (?:support|service|care) (?:agent|representative|specialist|role)|support agent|first point of contact|business hours|monday[- ](?:to[- ])?friday|(?:day|night|weekend) shifts?)\b/, reason: 'the work is a person staffing a role, not a deliverable' },
+  // And "15,000 rows that must be keyed into an Excel workbook … exactly as
+  // shown on the source sheet": keying is typing by hand.
+  { pattern: /\b(must be keyed|keyed (?:in|into)|key (?:them |it |the data )?into|hand[- ]keyed|typed (?:in|into) by hand|manual(?:ly)? (?:typed|typing|keyed|keying))\b/, reason: 'the client requires the work done by hand, without tools' },
   { pattern: /\b(ad campaigns?|google ads|adwords|ppc|pay[- ]per[- ]click|meta ads|facebook ads|ads manager|ad spend|run (?:the |my |our )?ads)\b/, reason: 'running ads needs the client’s ad account and their ad spend' },
   // A design whose correctness is physical — it folds, sews or knits — cannot
   // be verified from the file Brain renders.
