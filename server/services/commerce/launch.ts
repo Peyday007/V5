@@ -312,6 +312,16 @@ async function advanceLaunch(input: {
     return { did: listed.did, blocker: null };
   }
 
+  // The variant id is what matches a store order to this product; a listing
+  // whose variant was not read back is read again rather than never matched.
+  if (!launch.storeVariantId && launch.storeHandle) {
+    const found = await findListing(launch.storeHandle);
+    if (found && found !== 'UNKNOWN' && found.variantId) {
+      await patchLaunch(launch.id, { storeVariantId: found.variantId }, { storeVariantId: null });
+      launch.storeVariantId = found.variantId;
+    }
+  }
+
   // 4. Visible on the Online Store.
   if (!launch.publishedAt) {
     const published = await ensurePublished(launch.storeProductId);
