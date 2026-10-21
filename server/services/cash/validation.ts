@@ -79,7 +79,7 @@ import { discoveryAuthority } from './discoveryAuthority.ts';
 import { researchMissionSlotsFull } from '../russell/launch.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { cashPosition } from './money.ts';
-import { CAPTURE_INPUTS, type QualificationKey, type TierReading } from './tier.ts';
+import { CAPTURE_INPUTS, type QualificationKey, type TierReading, type CashTier } from './tier.ts';
 import { DIVE_STARTED_EVENT, diveEpochStart, diveStarts, type DiveStage, type DiveStart } from './diveStage.ts';
 export { diveEpochStart } from './diveStage.ts';
 import { researchRoom, type ResearchRoom, type RoomLimit } from './researchRoom.ts';
@@ -654,6 +654,50 @@ export interface DiveValueFacts {
    * caller built before it existed still compares; null and absent sort last.
    */
   contributionCents?: number | null;
+  /**
+   * What earlier deep dives on openings of the same mechanism achieved, read
+   * from rows (`mechanismYield`). Optional so a caller built before it existed
+   * still compares; absent reads as UNMEASURED.
+   */
+  mechanismYield?: MechanismYield;
+}
+
+/**
+ * Whether deep dives on openings of one mechanism have changed decisions.
+ *
+ * `UNPRODUCTIVE` needs `MECHANISM_MIN_SAMPLE` settled dives and not one of them
+ * ending in a decision — qualified, or declined/archived. Anything less is
+ * `UNMEASURED`, which ranks exactly as `PRODUCTIVE` does: a mechanism with no
+ * history is never pushed back for lacking one (exploration is preserved), and
+ * one success is enough to restore a mechanism to the front. It orders; it
+ * never refuses — an opening of an unproductive mechanism still starts the
+ * moment there is room ahead of nothing better.
+ */
+export type MechanismYield = 'PRODUCTIVE' | 'UNMEASURED' | 'UNPRODUCTIVE';
+export const MECHANISM_MIN_SAMPLE = 8;
+
+export function mechanismYields(
+  pieces: readonly { mechanism: string | null | undefined; validationState: string | null; tier: CashTier; state: string }[],
+): Map<string, { settled: number; decided: number; yield: MechanismYield }> {
+  const out = new Map<string, { settled: number; decided: number; yield: MechanismYield }>();
+  for (const piece of pieces) {
+    if (!piece.mechanism) continue;
+    if (piece.validationState !== 'COMPLETE' && piece.validationState !== 'BLOCKED') continue;
+    const row = out.get(piece.mechanism) ?? { settled: 0, decided: 0, yield: 'UNMEASURED' as MechanismYield };
+    row.settled += 1;
+    const decided =
+      piece.tier === 'QUALIFIED' ||
+      piece.tier === 'READY_TO_TEST' ||
+      piece.state === 'DECLINED' ||
+      piece.state === 'ARCHIVED';
+    if (decided) row.decided += 1;
+    out.set(piece.mechanism, row);
+  }
+  for (const row of out.values()) {
+    row.yield =
+      row.decided > 0 ? 'PRODUCTIVE' : row.settled >= MECHANISM_MIN_SAMPLE ? 'UNPRODUCTIVE' : 'UNMEASURED';
+  }
+  return out;
 }
 
 const CAPITAL_ORDER: Readonly<Record<DiveValueFacts['capital'], number>> = Object.freeze({
@@ -670,6 +714,7 @@ const CAPITAL_ORDER: Readonly<Record<DiveValueFacts['capital'], number>> = Objec
  *
  *   1. reconsidered since its last dive;
  *   2. an answer could cross a tier boundary;
+ *   2a. its mechanism's earlier dives have not been measured unproductive;
  *   3. a kill question (a screen) before refinement;
  *   4. capital known to fit deployable cash, then known time to cash, shortest
  *      first — unknowns last;
@@ -679,6 +724,9 @@ const CAPITAL_ORDER: Readonly<Record<DiveValueFacts['capital'], number>> = Objec
 export function compareDiveValue(a: DiveValueFacts, b: DiveValueFacts): number {
   if (a.reconsidered !== b.reconsidered) return a.reconsidered ? -1 : 1;
   if (a.crossesTier !== b.crossesTier) return a.crossesTier ? -1 : 1;
+  const ua = a.mechanismYield === 'UNPRODUCTIVE';
+  const ub = b.mechanismYield === 'UNPRODUCTIVE';
+  if (ua !== ub) return ua ? 1 : -1;
   if (a.stage !== b.stage) return a.stage === 'SCREEN' ? -1 : 1;
   if (a.capital !== b.capital) return CAPITAL_ORDER[a.capital] - CAPITAL_ORDER[b.capital];
   if (a.timeToCashDays !== b.timeToCashDays) {
@@ -804,24 +852,36 @@ export async function startValidations(input: {
     const facts = factsById.get(id) ?? [];
     return (field: string): CashCardFact | null => facts.find((one) => one.field === field) ?? null;
   };
-  const valued = all.map((opportunity) => {
+  const tiered = all.map((opportunity) => {
     const facts = factsById.get(opportunity.id) ?? [];
     const tier = cashTier({
       opportunity,
       card: cashEngineCard({ opportunity, facts }),
       readiness: evidenceCard(opportunity).readiness,
     });
-    return {
-      opportunity,
-      value: diveValueFacts({
+    return { opportunity, tier };
+  });
+  const yields = mechanismYields(
+    tiered.map(({ opportunity, tier }) => ({
+      mechanism: opportunity.mechanism,
+      validationState: opportunity.validationState,
+      tier: tier.tier,
+      state: opportunity.state,
+    })),
+  );
+  const valued = tiered.map(({ opportunity, tier }) => ({
+    opportunity,
+    value: {
+      ...diveValueFacts({
         opportunity,
         tier,
         fact: lookup(opportunity.id),
         deployableCents: position?.deployableCents ?? null,
         readDays,
       }),
-    };
-  });
+      mechanismYield: (opportunity.mechanism && yields.get(opportunity.mechanism)?.yield) || 'UNMEASURED',
+    } as DiveValueFacts,
+  }));
   valued.sort((a, b) => compareDiveValue(a.value, b.value));
 
   const out: StartedValidation[] = [];

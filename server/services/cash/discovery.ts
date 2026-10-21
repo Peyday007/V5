@@ -514,14 +514,16 @@ export function executionFrameSentence(frame: ExecutionFrame): string {
       ? `it can commit about ${frame.currency} ${(frame.deployableCents / 100).toFixed(0)} of its own capital, so prefer openings needing less than that up front`
       : 'it holds no capital of its own to commit, so report only openings that need no money up front or are paid before any cost falls due';
   return (
-    'Report only openings this operation could act on. It runs online with AI workers and ' +
+    'Report first the openings this operation could act on now. It runs online with AI workers and ' +
     `delivers ${delivers}; it holds no professional licence, certification, bonding, ` +
     'government vendor registration or local physical presence, and takes no employment or ' +
     `hourly positions; ${capital}; and it is paid online, through a checkout or invoice route a buyer ` +
     'already uses. For each opening name who would pay this operation, roughly how much, how ' +
-    'the money would reach it, and the earliest it could arrive; openings that could become ' +
-    'collected cash within seven days come first. Leave out grants, job postings, solicitations ' +
-    'that require vendor registration or bonding, and anything already closed.'
+    'the money would reach it, the earliest it could arrive, and whether it could act on it now; ' +
+    'openings that could become collected cash within seven days come first. An opening it could ' +
+    'not act on today is still worth reporting when the money is real: name the one licence, ' +
+    'registration, capability or amount of capital it would need rather than leaving it out. ' +
+    'Leave out job postings, hourly positions and anything already closed.'
   );
 }
 

@@ -251,6 +251,65 @@ async function parked(projectId: string | null): Promise<void> {
 }
 
 /**
+ * Which questions are asked again after an earlier fragment already answered
+ * them — the `repeated` count in the cash report's usefulness block — grouped
+ * by the normalized question, with how each repeat was made (its packet's
+ * envelope, its fragment key, its attempt and status). Read-only.
+ */
+async function repeated(projectId: string | null): Promise<void> {
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const rows = await getDb().all<{
+    id: string;
+    question: string;
+    status: string;
+    created_at: string;
+    accepted_at: string | null;
+    fragment_key: string;
+    attempt: number;
+    envelope: string | null;
+    orchestration_id: string;
+  }>(
+    `SELECT f.id, f.question, f.status, f.created_at, f.accepted_at, f.fragment_key, f.attempt,
+            o.approval_envelope_id AS envelope, f.orchestration_id
+       FROM research_fragments f JOIN research_orchestrations o ON o.id = f.orchestration_id
+      WHERE f.created_at >= ? AND (CAST(? AS TEXT) IS NULL OR f.project_id = ?)
+      ORDER BY f.created_at`,
+    [since, projectId, projectId],
+  );
+  const norm = (text: string) => text.toLowerCase().replace(/\s+/g, ' ').trim();
+  const firstAccepted = new Map<string, string>();
+  for (const row of rows) {
+    if (row.status !== 'ACCEPTED') continue;
+    const key = norm(row.question);
+    const at = row.accepted_at ?? row.created_at;
+    if (!firstAccepted.has(key) || at < firstAccepted.get(key)!) firstAccepted.set(key, at);
+  }
+  const groups = new Map<string, { n: number; statuses: Map<string, number>; keys: Set<string>; packets: Set<string>; envelopes: Set<string> }>();
+  let total = 0;
+  for (const row of rows) {
+    const key = norm(row.question);
+    const earlier = firstAccepted.get(key);
+    if (!earlier || earlier >= row.created_at) continue;
+    total += 1;
+    const g = groups.get(key) ?? { n: 0, statuses: new Map(), keys: new Set(), packets: new Set(), envelopes: new Set() };
+    g.n += 1;
+    g.statuses.set(row.status, (g.statuses.get(row.status) ?? 0) + 1);
+    g.keys.add(row.fragment_key);
+    g.packets.add(row.orchestration_id);
+    g.envelopes.add(row.envelope ?? '—');
+    groups.set(key, g);
+  }
+  console.log(`  REPEATED QUESTIONS (30 days): ${total} fragment(s) re-asked a question already accepted, ${groups.size} distinct`);
+  for (const [question, g] of [...groups].sort((a, b) => b[1].n - a[1].n).slice(0, 15)) {
+    const statuses = [...g.statuses].map(([k, v]) => `${k}=${v}`).join(' ');
+    console.log(
+      `    ${String(g.n).padStart(4)}  packets=${g.packets.size} keys=${[...g.keys].slice(0, 3).join(',')} ` +
+        `env=${[...g.envelopes].join(',')} ${statuses}  "${question.slice(0, 140)}"`,
+    );
+  }
+}
+
+/**
  * Packets, not items: what actually finished, and how long the audit stage took.
  *
  * A work item completing is a step; a packet reaching COMPLETE is the result.
@@ -448,6 +507,7 @@ async function main(): Promise<void> {
   await hourly(windows[0]!.from, windows[windows.length - 1]!.to, projectId);
   await parked(projectId);
   await backlog(projectId);
+  await repeated(projectId);
   console.log('PRODUCTIVITY-REPORT: OK');
 }
 

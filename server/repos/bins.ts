@@ -357,6 +357,28 @@ export async function listBinEvents(binId: string, limit = 500): Promise<BinEven
   return rows.map(mapBinEvent);
 }
 
+/**
+ * The item leases a bin lease took, read from its own claim events.
+ *
+ * A handback gives back exactly these and nothing else: a packet's untagged
+ * items are reachable from every bin built for it, and one worker id serves
+ * several accounts, so "leased by this worker, reachable from this bin" names
+ * other sessions' work too.
+ */
+export async function itemLeasesClaimedUnder(binId: string, binLeaseId: string): Promise<Set<string>> {
+  const rows = await getDb().all<{ measures: string | null }>(
+    `SELECT measures FROM bin_events
+      WHERE bin_id = ? AND event_type = 'BIN_ITEM_CLAIMED' AND lease_id = ?`,
+    [binId, binLeaseId],
+  );
+  const out = new Set<string>();
+  for (const row of rows) {
+    const id = parseJson<Record<string, unknown>>(row.measures, {}).itemLeaseId;
+    if (typeof id === 'string' && id) out.add(id);
+  }
+  return out;
+}
+
 export async function countBinEvents(binId: string, eventType: string): Promise<number> {
   const row = await getDb().get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM bin_events WHERE bin_id = ? AND event_type = ?`,

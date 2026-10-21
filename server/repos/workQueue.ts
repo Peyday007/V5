@@ -799,6 +799,39 @@ async function endLease(
   );
 }
 
+/**
+ * The submission namespace whose committed operation *is* a research item's
+ * whole output. Other namespaces on the same item (a blocker, a contradiction)
+ * do not finish it.
+ */
+const ITEM_OUTPUT_NAMESPACE: Record<string, string> = {
+  RESEARCH_PLAN: 'research.plan',
+  RESEARCH_FRAGMENT: 'research.claims',
+  RESEARCH_VERIFY: 'research.verify',
+  RESEARCH_SYNTHESIZE: 'research.synthesis',
+  RESEARCH_AUDIT: 'research.audit',
+};
+
+/**
+ * Whether this exact work item's output has already committed.
+ *
+ * Read from Step 6's own record rather than from the packet: the operation key
+ * is derived from the work item, so a SUCCEEDED row in the item's output
+ * namespace is an exact statement that *this item* recorded its effect — never
+ * "not applicable", which is what `researchItemRecorded` answers for several
+ * cases and why it is unsafe for a retirement.
+ */
+export async function itemOutputRecorded(item: { id: string; workType: string }): Promise<boolean> {
+  const ns = ITEM_OUTPUT_NAMESPACE[item.workType];
+  if (!ns) return false;
+  const row = await getDb().get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM idempotency_operations
+      WHERE work_item_id = ? AND namespace = ? AND state = 'SUCCEEDED'`,
+    [item.id, ns],
+  );
+  return Number(row?.n ?? 0) > 0;
+}
+
 export async function completeWork(
   proof: OwnershipProof,
   result: { resultRef?: string | null; summary?: string | null } = {},

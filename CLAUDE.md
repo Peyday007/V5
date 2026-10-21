@@ -13309,6 +13309,25 @@ The rules it introduced:
 - **A lesson is context, never a control.** Retrospective and usefulness
   lessons reach prompts (`guidance.ts`, cached 10 minutes). No gate, depth,
   repair, ordering or routing module imports them.
+- **One measured outcome now orders deep dives, and it is not a lesson.**
+  "A lesson is context, never a control" stays true: prompt lessons still reach
+  no gate, depth, repair or routing module. What changed is narrower. Usefulness
+  was measured (1 qualified from 489 validation fragments) and nothing about it
+  moved which opening was dived next. `mechanismYields` reads current rows: for
+  each mechanism, how many settled dives (COMPLETE or BLOCKED) ended in a
+  decision — qualified, or declined/archived. At `MECHANISM_MIN_SAMPLE` (8)
+  settled dives with none, the mechanism is `UNPRODUCTIVE` and its openings sort
+  after equal ones (rule 2a, below "could cross a tier"). Fewer than eight is
+  `UNMEASURED` and sorts exactly like `PRODUCTIVE`, so an unfamiliar mechanism
+  is never pushed back for lacking history, and one decision restores it. It
+  orders and never refuses.
+- **Not being able to act today is a named gap, not a reason to drop an
+  opening.** The frame below once said "report only openings this operation
+  could act on" and "leave out … solicitations that require vendor registration
+  or bonding", which made "worth investigating" and "executable now" one test.
+  It now asks for executable openings first and for the others with the missing
+  licence, registration, capability or capital named. Payer, amount, route and
+  timing are still required of every one.
 - **Discovery asks for what this operation can act on.** Production,
   2026-10-19: 312 openings, 248 of them evidence nobody could say how we would
   be paid from, the rest mostly closed solicitations, grants, job postings and
@@ -13479,6 +13498,26 @@ completion it could not fix, and only then released.
   does not wait out an hour-long research lease; and an empty
   `brain_bin_next_item` advances the packet once before answering, so an
   already-argued audit role is retired and the next stage queued in the call.
+
+**A handback took more than its own work, and finished work back with it.**
+`handBack` released every live item lease in the bin's reach held by the same
+worker id. A worker id serves several accounts and a packet's untagged items
+are reachable from every bin built for it, so one session's handback released
+another session's research. And the holder's own items were usually already
+done: production, 2026-10-20 16:40–23:56Z, 113 leases "Released with its bin",
+**132 of 133 released leases had already recorded their output**, median held
+65 s — a worker submits, then hands the bin back before `brain_complete_work`,
+and the release put the finished item back in the queue with its attempt
+refunded for the next session to collide with. Completions fell from about 25
+to 7 an hour on the two working accounts. Now a handback touches only the item
+leases its own bin lease claimed (`BIN_ITEM_CLAIMED` names each), **completes**
+one whose output already committed (`itemOutputRecorded`: a SUCCEEDED Step 6
+operation in that work type's own submission namespace, never
+`researchItemRecorded`, which answers true for "not applicable"), and releases
+the rest. An item found already recorded when it is claimed is completed by
+Brain and the next one claimed. And a live lease reads as in progress whatever
+its attempt count: the ceiling check used to come first, so an item worked on
+its last attempt was invisible and its bin read as another session's.
 
 **A PATCH is a correction, not a decision.** 120 packets sat at NEEDS_HUMAN
 after a PATCH (87) or MORE_RESEARCH (33) verdict, each asking a person to file
