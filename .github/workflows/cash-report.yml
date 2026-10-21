@@ -79,10 +79,30 @@ jobs:
         run: |
           [ -f cash-report.txt ] || exit 0
           python3 - <<'PY'
-          data = open('cash-report.txt', encoding='utf-8', errors='replace').read()
-          size = 60000
-          chunks = [data[i:i + size] for i in range(0, len(data), size)][:9]
-          for n, chunk in enumerate(chunks, 1):
-              body = chunk.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-              print(f'::notice title=cash-report {n}/{len(chunks)}::{body}')
+          # GitHub keeps about 4 KB of an annotation and 10 notices a step, so
+          # the report goes out as its top-level sections (a line with no
+          # leading space starts one), the ones that answer "is it working"
+          # first, each cut to what one annotation holds.
+          import re
+          text = open('cash-report.txt', encoding='utf-8', errors='replace').read()
+          sections, current = [], []
+          for line in text.splitlines():
+              if line and not line[0].isspace() and current:
+                  sections.append(current); current = []
+              current.append(line)
+          if current:
+              sections.append(current)
+          first = ('SERVING_REVISION', 'CASH-REPORT', 'MARKETPLACE', 'JOBS', 'AUTHORIZ', 'FUNNEL', 'PORTFOLIO', 'MONEY')
+          def rank(section):
+              head = section[0]
+              for n, word in enumerate(first):
+                  if head.startswith(word):
+                      return n
+              return len(first)
+          chosen = sorted(sections, key=rank)[:10]
+          for section in chosen:
+              body = '\n'.join(section)[:3900]
+              body = body.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              title = re.sub(r'[^A-Za-z0-9 _.-]', '', section[0])[:60] or 'section'
+              print(f'::notice title={title}::{body}')
           PY
