@@ -110,7 +110,7 @@ export function sortVersions(versions: string[]): string[] {
 }
 
 export function maxVersion(versions: string[]): string | null {
-  return sortVersions(versions.filter(Boolean)).at(-1) ?? null;
+  return sortVersions(versions.filter((v) => parseVersion(v).valid)).at(-1) ?? null;
 }
 
 /**
