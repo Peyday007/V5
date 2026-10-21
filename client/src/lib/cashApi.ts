@@ -77,6 +77,8 @@ export interface CashCapabilities {
    */
   mayReconsider?: boolean;
   reconsiderRefusal?: string | null;
+  /** Whether "Add a play" may be offered. Optional, fail-closed, like the two above. */
+  mayAddPlay?: boolean;
 }
 
 export type CashViewReading = (({ scope: 'FULL' } & CashView) | SharedCashView) & {
@@ -852,7 +854,15 @@ export const CashApi = {
 
   capture: (
     projectId: string,
-    body: { title: string; mechanism: string; source?: string; nextAction?: string },
+    body: {
+      title: string;
+      mechanism: string;
+      currency?: string;
+      industry?: string;
+      source?: string;
+      nextAction?: string;
+      stopRule?: string;
+    },
   ): Promise<{ opportunity: CashOpportunity; message: string }> =>
     api(`/api/projects/${p(projectId)}/cash/opportunities`, {
       method: 'POST',
