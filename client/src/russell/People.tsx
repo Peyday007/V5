@@ -846,6 +846,7 @@ export function PeopleAndCapacityView(): JSX.Element {
         separate things: a person can join without contributing a Routine, a Routine serves every
         project here rather than owning any of it, and neither count starts or stops any work.
       </p>
+      <p className="rs-hint">Joining this Brain and contributing capacity are separate steps.</p>
 
       <People page={page} onChanged={reading.reload} />
       {/*
