@@ -128,17 +128,25 @@ async function endings(window: Window, projectId: string | null): Promise<void> 
     .sort((a, b) => a - b);
   const at = (q: number) => (held.length ? held[Math.min(held.length - 1, Math.floor(q * held.length))]!.toFixed(0) : '—');
   let withEffect = 0;
+  const byOp = new Map<string, number>();
   for (const row of released) {
-    const effect = await getDb().get<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM idempotency_operations WHERE work_item_id = ?`,
+    const ops = await getDb().all<{ namespace: string; state: string }>(
+      `SELECT namespace, state FROM idempotency_operations WHERE work_item_id = ?`,
       [row.work_item_id],
     );
-    if (Number(effect?.n ?? 0) > 0) withEffect += 1;
+    if (ops.length > 0) withEffect += 1;
+    // Which operations those were: an output that committed (the handback should
+    // have completed it) reads differently from a blocker or a refused submit.
+    const label = [...new Set(ops.map((op) => `${op.namespace}:${op.state}`))].sort().join('+') || 'none';
+    byOp.set(label, (byOp.get(label) ?? 0) + 1);
   }
   console.log(
     `  RELEASED LEASES ${window.label}: ${released.length}, held p10=${at(0.1)}s p50=${at(0.5)}s p90=${at(0.9)}s, ` +
       `item carries a recorded effect: ${withEffect}`,
   );
+  for (const [label, n] of [...byOp].sort((a, b) => b[1] - a[1]).slice(0, 8)) {
+    console.log(`      ${String(n).padStart(4)}  ${label}`);
+  }
 
   const bins = await getDb().all<{ reason: string | null; n: number }>(
     `SELECT substr(reason, 1, 140) AS reason, COUNT(*) AS n FROM bin_events
