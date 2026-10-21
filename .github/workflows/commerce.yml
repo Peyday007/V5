@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'start | state | show | tick | seed | retire'
+        description: 'start | state | show | tick | seed | retire | probe'
         required: true
         default: show
       args:

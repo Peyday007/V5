@@ -12,6 +12,7 @@
  * with the reason it could not start.
  */
 import { registerCommercialProviders } from './services/cash/providers/register.ts';
+import { registerCommerceProviders } from './services/commerce/connect/register.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Server } from 'node:http';
@@ -707,6 +708,12 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
   console.log(
     `  boot: commercial providers — messaging ${providers.messaging ?? 'none selected'}, ` +
       `billing ${providers.billing ?? 'none selected'}`,
+  );
+  // The store, supplier and ad account the commerce launch uses (§74).
+  const commerce = registerCommerceProviders();
+  console.log(
+    `  boot: commerce connections — store ${commerce.store ?? 'none selected'}, ` +
+      `supplier ${commerce.supplier ?? 'none selected'}, ads ${commerce.ads ?? 'none selected'}`,
   );
 
   console.log(`  boot: opening the port ${((Date.now() - bootStarted) / 1000).toFixed(1)}s after the cloud answered`);

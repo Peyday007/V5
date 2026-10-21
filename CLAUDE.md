@@ -13712,6 +13712,26 @@ wants them. It is an entrance to the research machinery, like §45 and §48.
 - **It sells nothing.** No store, listing, supplier order, payment or ad. The
   view names each as not connected, with what the owner must supply.
 
+## 74. Selling is three connections and three grants, and nothing else.
+
+`server/services/commerce/launch.ts` and `connect/` sell what §73 qualifies:
+match the CJ item, list it on Shopify, run a Meta ad test, and buy and ship
+each paid order.
+
+- **Each external step needs its connection, its action in the standing
+  grant (`LIST_PRODUCT`, `RUN_ADS`, `FULFIL_ORDER`), and — when it spends — a
+  commitment against the grant's ceilings first.** Missing any of them, the step
+  does nothing and the launch says what to set or grant.
+- **Listing, the ad test and the supplier order go through `runExternalEffect`,
+  keyed on Brain rows, and are reconcilable.** An ad test is built paused and
+  switched on last, with an end date.
+- **An ad test is paused at two acquisition budgets with no order.**
+- **A paid order is fulfilled even when the programme is paused** (invariant 40).
+- **No customer address is stored**; it is read from the store when the supplier
+  order is placed.
+- `PUBLISH_EXTERNALLY` stays prohibited; `LIST_PRODUCT` is one product page in
+  the owner's own store.
+
 ## Repository map
 
 ```
@@ -13782,6 +13802,7 @@ server/
     dealflow.ts       both sides of a transaction, and everything hard between them
     puzzle.ts         the universe, the systems, the puzzles, the products, the trade
     commerce.ts       products, their published facts, and the rounds that asked
+    commerceLaunch.ts launches, ad tests and store orders
     faculties.ts      sources, candidates, faculties and their typed edges
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
@@ -14039,7 +14060,9 @@ server/
       expand.ts         opening the questions, and filing what a gated claim declared
       programme.ts      the decisions only a person makes
       kernel.ts         the tick: file, then ask
-      view.ts           the products, the next questions, and what is not connected
+      view.ts           the products, the next questions, connections, sales and orders
+      launch.ts         match, list, advertise, buy and ship — each gated on a grant
+      connect/          Shopify, CJ and Meta adapters, read from deployment secrets
     puzzle/
       formats/
         engine.ts       what a generator is, what a validator is, the wall between

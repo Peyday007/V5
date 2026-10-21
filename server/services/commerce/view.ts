@@ -20,6 +20,10 @@ import {
   MIN_DEMAND_SOURCES,
 } from './standing.ts';
 import type { CommerceProgramme } from '../../domain/types.ts';
+import { checkCommercialAuthority } from '../cash/authority.ts';
+import { listAdTests, listLaunches, listOrders } from '../../repos/commerceLaunch.ts';
+import { adsConfig, storeConfig, supplierConfig, type ConnectionReading } from './connect/config.ts';
+import { CONNECT_ADS, CONNECT_STORE, CONNECT_SUPPLIER } from './launch.ts';
 import type { CommerceStage } from './standing.ts';
 
 export interface CommerceProductView {
@@ -46,6 +50,17 @@ export interface CommerceView {
   next: { purpose: string; product: string | null; why: string }[];
   policy: string[];
   notConnected: { capability: string; needs: string }[];
+  connections: ConnectionLine[];
+  launches: {
+    product: string;
+    price: string | null;
+    supplier: string | null;
+    listed: boolean;
+    problem: string | null;
+    stopped: string | null;
+    adTests: { round: number; state: string; spend: string; outcome: string | null }[];
+  }[];
+  orders: { name: string; amount: string; state: string; tracking: string | null; problem: string | null }[];
 }
 
 const ORDER: Record<CommerceStage, number> = {
@@ -61,29 +76,48 @@ const ORDER: Record<CommerceStage, number> = {
   RETIRED: 9,
 };
 
-/** The half of the operation that does not exist yet, named rather than implied. */
-export const NOT_CONNECTED: readonly { capability: string; needs: string }[] = Object.freeze([
-  {
-    capability: 'A storefront',
-    needs: 'A store a person owns (Shopify or similar) and an admin API token set on the deployment.',
-  },
-  {
+/**
+ * Each connection selling needs, read now: the deployment's configuration and
+ * the owner's grant, never a flag. A line that is not ready says exactly what
+ * to set or grant (§74).
+ */
+export interface ConnectionLine {
+  capability: string;
+  state: 'READY' | 'NOT_CONNECTED' | 'NOT_GRANTED';
+  needs: string;
+}
+
+export async function commerceConnections(projectId: string): Promise<ConnectionLine[]> {
+  const lines: ConnectionLine[] = [];
+  const pairs: [string, ConnectionReading, string, string][] = [
+    ['A storefront', storeConfig(), 'LIST_PRODUCT', CONNECT_STORE],
+    ['Ordering from a supplier', supplierConfig(), 'FULFIL_ORDER', CONNECT_SUPPLIER],
+    ['Advertising', adsConfig(), 'RUN_ADS', CONNECT_ADS],
+  ];
+  for (const [capability, reading, action, connect] of pairs) {
+    if (!reading.configured) {
+      lines.push({ capability, state: 'NOT_CONNECTED', needs: `${connect} Missing: ${reading.problems.join(', ')}.` });
+      continue;
+    }
+    const decision = await checkCommercialAuthority({ projectId, action });
+    lines.push(
+      decision.ok
+        ? { capability, state: 'READY', needs: 'Nothing.' }
+        : { capability, state: 'NOT_GRANTED', needs: `Add ${action} to the standing commercial authority (${decision.reason}).` },
+    );
+  }
+  lines.push({
     capability: 'Taking a payment',
-    needs: 'Payments enabled on that store, in the owner’s name.',
-  },
-  {
-    capability: 'Ordering from a supplier',
-    needs: 'A supplier account (CJ Dropshipping or similar) with its API key on the deployment, and a grant to place supplier orders.',
-  },
-  {
-    capability: 'Advertising',
-    needs: 'An ad account in the owner’s name, its token on the deployment, and a spending ceiling the owner sets.',
-  },
-  {
-    capability: 'Orders, fulfilment and customer service',
-    needs: 'Built after the three above exist; nothing here can be tested against a real order until then.',
-  },
-]);
+    state: storeConfig().configured ? 'READY' : 'NOT_CONNECTED',
+    needs: storeConfig().configured
+      ? 'Payments are set up in the store itself (Shopify Payments), in the owner’s name.'
+      : 'Connect the store, then turn on Shopify Payments in its settings.',
+  });
+  return lines;
+}
+
+/** The connections, as the earlier sentence-list shape the view and CLI read. */
+export const NOT_CONNECTED_CAPABILITIES = ['A storefront', 'Ordering from a supplier', 'Advertising', 'Taking a payment'] as const;
 
 export async function commerceView(projectId: string): Promise<CommerceView> {
   const programme = await getCommerceProgramme(projectId);
@@ -136,6 +170,13 @@ export async function commerceView(projectId: string): Promise<CommerceView> {
     });
 
   const plan = programme ? planFrom(snapshot) : { asks: [], declined: [] };
+  const connections = await commerceConnections(projectId);
+  const [launches, tests, orders] = await Promise.all([
+    listLaunches(projectId),
+    listAdTests(projectId),
+    listOrders(projectId),
+  ]);
+  const productById = new Map(snapshot.products.map((one) => [one.id, one]));
   return {
     programme,
     counts,
@@ -157,6 +198,34 @@ export async function commerceView(projectId: string): Promise<CommerceView> {
       `The chosen supplier must publish delivery in ${MAX_QUALIFIED_DELIVERY_DAYS} days or fewer.`,
       'Every figure is the conservative published end, and a missing line withholds the total rather than being guessed.',
     ],
-    notConnected: [...NOT_CONNECTED],
+    notConnected: connections
+      .filter((one) => one.state !== 'READY')
+      .map((one) => ({ capability: one.capability, needs: one.needs })),
+    connections,
+    launches: launches.map((launch) => ({
+      product: productById.get(launch.productId)?.name ?? launch.productId,
+      price: launch.priceCents === null ? null : formatMoney(launch.priceCents, launch.currency),
+      supplier: launch.supplierName
+        ? `${launch.supplierName}: ${formatMoney(launch.supplierUnitCents, 'USD')} + ${formatMoney(launch.supplierShippingCents, 'USD')} shipping, ${launch.supplierMaxDays ?? '?'} days`
+        : null,
+      listed: launch.storeProductId !== null,
+      problem: launch.problem,
+      stopped: launch.stopReason,
+      adTests: tests
+        .filter((test) => test.launchId === launch.id)
+        .map((test) => ({
+          round: test.round,
+          state: test.state,
+          spend: formatMoney(test.spendCents ?? 0, launch.currency ?? 'USD'),
+          outcome: test.outcome,
+        })),
+    })),
+    orders: orders.map((order) => ({
+      name: order.storeOrderName,
+      amount: formatMoney(order.amountCents, order.currency),
+      state: order.state,
+      tracking: order.trackingNumber,
+      problem: order.problem,
+    })),
   };
 }

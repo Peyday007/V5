@@ -61,7 +61,7 @@ import {
   seedCommerceProduct,
   startCommerceProgramme,
 } from '../server/services/commerce/programme.ts';
-import { commerceView, NOT_CONNECTED } from '../server/services/commerce/view.ts';
+import { commerceView, NOT_CONNECTED_CAPABILITIES } from '../server/services/commerce/view.ts';
 import {
   costsQuestion,
   discoverQuestion,
@@ -413,17 +413,21 @@ describe('the operation stays read-only', () => {
   it('names what is not connected rather than implying a store exists', async () => {
     await started();
     const view = await commerceView(projectId);
-    expect(view.notConnected.map((one) => one.capability)).toEqual(NOT_CONNECTED.map((one) => one.capability));
-    expect(view.notConnected.some((one) => /advertis/i.test(one.capability))).toBe(true);
+    // Nothing is connected in a test deployment, so every connection names what to set.
+    expect(view.notConnected.map((one) => one.capability)).toEqual([...NOT_CONNECTED_CAPABILITIES]);
+    for (const one of view.notConnected) expect(one.needs).toMatch(/BRAIN_|Connect/);
   });
 
-  it('imports no provider and records no commercial action anywhere in the kernel', () => {
+  it('keeps the research half away from every provider and commercial action', () => {
     const dir = new URL('../server/services/commerce/', import.meta.url);
     const files = readdirSync(dir).filter((one) => one.endsWith('.ts'));
     expect(files.length).toBeGreaterThan(5);
     for (const file of files) {
       const text = readFileSync(new URL(file, dir), 'utf8');
-      for (const forbidden of ['cash/providers', 'recordAction', 'beginExecution', 'perform.ts', 'cashLedger']) {
+      // Selling reaches the outside only through the effects engine (launch.ts)
+      // and the connect/ adapters; the research half touches none of it.
+      if (file === 'launch.ts' || file === 'view.ts') continue;
+      for (const forbidden of ['cash/providers', 'recordAction', 'beginExecution', 'perform.ts', 'cashLedger', 'runExternalEffect']) {
         expect(`${file}:${text.includes(forbidden)}`).toBe(`${file}:false`);
       }
     }

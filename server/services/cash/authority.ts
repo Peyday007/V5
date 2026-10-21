@@ -74,6 +74,23 @@ export const COMMERCIAL_ACTIONS = [
    * nobody — the pull request stays a person's to merge.
    */
   'BUILD_A_TEST',
+  /**
+   * Put a qualified product on sale in the owner's own connected store (§74).
+   * Narrower than PUBLISH_EXTERNALLY, which stays prohibited: one product page
+   * in a store the owner created and connected, priced at a published price.
+   */
+  'LIST_PRODUCT',
+  /**
+   * Run a bounded advertising test for a listed product (§74). Every test is a
+   * commitment against this grant's ceilings first, has an end date, and is
+   * paused by Brain when it has spent its stop amount with no order.
+   */
+  'RUN_ADS',
+  /**
+   * Buy the unit a customer has already paid for from the connected supplier,
+   * and ship it to that customer (§74). Only ever for a paid store order.
+   */
+  'FULFIL_ORDER',
 ] as const;
 
 export type CommercialAction = (typeof COMMERCIAL_ACTIONS)[number];

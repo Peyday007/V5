@@ -121,3 +121,100 @@ ALTER TABLE research_claims
 ALTER TABLE research_claims
   ADD CONSTRAINT research_claims_commerce_days_check
   CHECK (commerce_days IS NULL OR commerce_days >= 0);
+
+-- The launch (§74). SQLite's 124_commerce_kernel.sql has the reasoning.
+
+CREATE TABLE IF NOT EXISTS commerce_launches (
+  id                       TEXT PRIMARY KEY,
+  project_id               TEXT NOT NULL REFERENCES projects(id),
+  product_id               TEXT NOT NULL REFERENCES commerce_products(id),
+  supplier_product_id      TEXT,
+  supplier_variant_id      TEXT,
+  supplier_name            TEXT,
+  supplier_unit_cents      INTEGER,
+  supplier_shipping_cents  INTEGER,
+  supplier_logistic        TEXT,
+  supplier_max_days        INTEGER,
+  supplier_image_url       TEXT,
+  matched_at               TEXT,
+  price_cents              INTEGER,
+  currency                 TEXT,
+  store_product_id         TEXT,
+  store_variant_id         TEXT,
+  store_handle             TEXT,
+  listed_at                TEXT,
+  published_at             TEXT,
+  problem                  TEXT,
+  stopped_at               TEXT,
+  stop_reason              TEXT,
+  created_at               TEXT NOT NULL,
+  updated_at               TEXT NOT NULL,
+  seq                      BIGSERIAL,
+  CHECK (supplier_unit_cents IS NULL OR supplier_unit_cents > 0),
+  CHECK (supplier_shipping_cents IS NULL OR supplier_shipping_cents >= 0),
+  CHECK (price_cents IS NULL OR price_cents > 0)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS commerce_launches_by_product
+  ON commerce_launches (product_id);
+
+CREATE TABLE IF NOT EXISTS commerce_ad_tests (
+  id                  TEXT PRIMARY KEY,
+  project_id          TEXT NOT NULL REFERENCES projects(id),
+  launch_id           TEXT NOT NULL REFERENCES commerce_launches(id),
+  round               INTEGER NOT NULL,
+  commitment_id       TEXT,
+  daily_budget_cents  INTEGER NOT NULL,
+  days                INTEGER NOT NULL,
+  campaign_id         TEXT,
+  started_at          TEXT,
+  ends_at             TEXT,
+  spend_cents         INTEGER,
+  state               TEXT NOT NULL,
+  outcome             TEXT,
+  stop_reason         TEXT,
+  settled_at          TEXT,
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  seq                 BIGSERIAL,
+  CHECK (round >= 1),
+  CHECK (daily_budget_cents > 0),
+  CHECK (days > 0),
+  CHECK (state IN ('PENDING', 'RUNNING', 'STOPPED', 'ENDED', 'UNCERTAIN')),
+  CHECK (outcome IS NULL OR outcome IN ('WON', 'LOST'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS commerce_ad_tests_round
+  ON commerce_ad_tests (launch_id, round);
+
+CREATE TABLE IF NOT EXISTS commerce_orders (
+  id                     TEXT PRIMARY KEY,
+  project_id             TEXT NOT NULL REFERENCES projects(id),
+  launch_id              TEXT NOT NULL REFERENCES commerce_launches(id),
+  store_order_id         TEXT NOT NULL,
+  store_order_name       TEXT NOT NULL,
+  quantity               INTEGER NOT NULL,
+  amount_cents           INTEGER NOT NULL,
+  currency               TEXT NOT NULL,
+  paid_at                TEXT NOT NULL,
+  supplier_order_number  TEXT NOT NULL,
+  supplier_order_id      TEXT,
+  supplier_cost_cents    INTEGER,
+  commitment_id          TEXT,
+  tracking_number        TEXT,
+  tracking_url           TEXT,
+  carrier                TEXT,
+  state                  TEXT NOT NULL,
+  problem                TEXT,
+  created_at             TEXT NOT NULL,
+  updated_at             TEXT NOT NULL,
+  seq                    BIGSERIAL,
+  CHECK (quantity >= 1),
+  CHECK (amount_cents > 0),
+  CHECK (state IN ('PAID', 'ORDERED', 'SHIPPED', 'FULFILLED', 'NEEDS_PERSON'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS commerce_orders_by_store_order
+  ON commerce_orders (project_id, store_order_id);
+CREATE UNIQUE INDEX IF NOT EXISTS commerce_orders_by_supplier_number
+  ON commerce_orders (supplier_order_number);

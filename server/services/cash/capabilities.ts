@@ -60,6 +60,12 @@ import {
 } from './effects.ts';
 import { usablePaymentReader } from './providers/payments.ts';
 import { listRoutines } from '../../repos/fleet.ts';
+import {
+  AD_TEST_NAMESPACE,
+  LISTING_NAMESPACE,
+  SUPPLIER_ORDER_NAMESPACE,
+  usableCommerceAdapter,
+} from '../commerce/connect/register.ts';
 
 export type CapabilityState = 'PRESENT' | 'MISSING' | 'UNKNOWN';
 
@@ -184,6 +190,35 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
       'Until one exists, the listing is published by a person. Note that publishing is an ' +
       'ALWAYS_PROHIBITED_COMMERCIAL action for Brain itself whatever integration exists.',
     read: null,
+  },
+  {
+    id: 'LIST_IN_STORE',
+    does: "Put a qualified product on sale in the owner's own connected store (§74).",
+    requires:
+      'BRAIN_STORE_PROVIDER=shopify, SHOPIFY_STORE_DOMAIN and SHOPIFY_ADMIN_TOKEN set on the ' +
+      'deployment, and LIST_PRODUCT in the standing commercial authority.',
+    nextStep: 'Create the store, make a custom app with Admin API access, and set the three secrets.',
+    read: async () => usableCommerceAdapter(LISTING_NAMESPACE) !== null,
+  },
+  {
+    id: 'ORDER_FROM_SUPPLIER',
+    does: 'Buy the unit a customer already paid for from the connected supplier and ship it to them (§74).',
+    requires:
+      'BRAIN_SUPPLIER_PROVIDER=cj and CJ_API_KEY set on the deployment, money in the CJ wallet, ' +
+      'and FULFIL_ORDER in the standing commercial authority.',
+    nextStep: 'Create the CJ account, add funds to its wallet, generate an API key, and set the two secrets.',
+    read: async () => usableCommerceAdapter(SUPPLIER_ORDER_NAMESPACE) !== null,
+  },
+  {
+    id: 'RUN_AN_AD',
+    does: 'Run a bounded advertising test for a listed product, paused when it spends with no sale (§74).',
+    requires:
+      'BRAIN_ADS_PROVIDER=meta, META_ACCESS_TOKEN, META_AD_ACCOUNT_ID, META_PAGE_ID and ' +
+      'BRAIN_ADS_DAILY_BUDGET_CENTS set on the deployment, and RUN_ADS in the standing commercial authority.',
+    nextStep:
+      'Create a Business Manager system user with ads_management on the ad account and Page, and set ' +
+      'the five secrets.',
+    read: async () => usableCommerceAdapter(AD_TEST_NAMESPACE) !== null,
   },
   {
     id: 'SIGN_AN_AGREEMENT',

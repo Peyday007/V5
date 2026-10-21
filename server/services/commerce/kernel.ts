@@ -20,6 +20,7 @@ import { discoveryAllowed } from '../cash/lifecycle.ts';
 import { allocate, MAX_OPEN_COMMERCE_ROUNDS, type Ask, type Declined } from './allocate.ts';
 import { fileCommerceFindings, openCommerceAsks, type Filed, type OpenedCommerceRound } from './expand.ts';
 import { commerceSnapshot, type CommerceSnapshot } from './graph.ts';
+import { runCommerceLaunch, type LaunchPass } from './launch.ts';
 
 export interface CommercePass {
   filed: Filed;
@@ -28,6 +29,8 @@ export interface CommercePass {
   products: number;
   qualified: number;
   openRounds: number;
+  /** What selling did this pass (§74): listings, ad tests and orders. */
+  launch: LaunchPass | null;
 }
 
 function emptyPass(): CommercePass {
@@ -38,6 +41,7 @@ function emptyPass(): CommercePass {
     products: 0,
     qualified: 0,
     openRounds: 0,
+    launch: null,
   };
 }
 
@@ -49,10 +53,27 @@ export async function runCommerceKernel(projectId: string): Promise<CommercePass
 
   const filed = await fileCommerceFindings({ projectId });
   const snapshot = await commerceSnapshot(projectId);
+  /*
+   * Selling runs every pass the programme exists, before the research gates:
+   * a paused programme starts nothing new, and a paid order is still bought
+   * and shipped (§74). Its own failure never stops the research half.
+   */
+  let launch: LaunchPass | null = null;
+  try {
+    launch = await runCommerceLaunch(projectId);
+  } catch (error) {
+    launch = {
+      lines: [{ productId: '', name: 'the launch pass', did: null, blocker: error instanceof Error ? error.message : String(error) }],
+      ordersSeen: 0,
+      ordersPlaced: 0,
+      ordersShipped: 0,
+    };
+  }
   const summary = {
     products: snapshot.products.length,
     qualified: snapshot.standing.filter((one) => one.stage === 'QUALIFIED').length,
     openRounds: snapshot.openRounds,
+    launch,
   };
 
   if (programme.state !== 'ACTIVE') {

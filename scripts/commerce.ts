@@ -22,6 +22,10 @@ import {
 } from '../server/services/commerce/programme.ts';
 import { commerceView } from '../server/services/commerce/view.ts';
 import { runCommerceKernel } from '../server/services/commerce/kernel.ts';
+import { registerCommerceProviders } from '../server/services/commerce/connect/register.ts';
+import { probeShopify } from '../server/services/commerce/connect/shopify.ts';
+import { probeCj } from '../server/services/commerce/connect/cj.ts';
+import { probeMeta } from '../server/services/commerce/connect/meta.ts';
 
 function out(line = ''): void {
   console.log(line);
@@ -50,12 +54,13 @@ const USAGE = `
   tick <project>                                    run one kernel pass by hand
   seed <project> --name "…" --admin <email> [--note "…"]
   retire <project> --product <id> --reason "…" --admin <email>
+  probe                                             check the store, supplier and ad keys; sends nothing
 
   A project is named by slug or id.
 
-  What none of these do: order from a supplier, open a store, list a product,
-  advertise or spend. This kernel reads published sources and records what a
-  person decides.
+  Selling (§74) happens on the tick, only once the store, supplier and ad
+  account are connected and the standing commercial authority grants
+  LIST_PRODUCT, RUN_ADS and FULFIL_ORDER. 'show' names whatever is missing.
 `;
 
 async function resolveProject(ref: string | undefined): Promise<{ id: string; name: string }> {
@@ -88,6 +93,7 @@ async function main(): Promise<void> {
     return;
   }
   await initDatabase();
+  registerCommerceProviders();
 
   switch (command) {
     case 'start': {
@@ -130,6 +136,10 @@ async function main(): Promise<void> {
       for (const one of pass.opened) out(`    ${one.purpose.padEnd(9)} ${one.roundId}  why: ${one.why}`);
       for (const one of pass.declined.slice(0, 10)) out(`  Declined   ${one.subject} — ${one.why}`);
       out(`  Products   ${pass.products} on the map, ${pass.qualified} qualified`);
+      if (pass.launch) {
+        for (const one of pass.launch.lines) out(`  Selling    ${one.name}: ${one.did ?? one.blocker ?? 'nothing to do'}`);
+        out(`  Orders     ${pass.launch.ordersSeen} new, ${pass.launch.ordersPlaced} bought from the supplier, ${pass.launch.ordersShipped} shipped`);
+      }
       out('');
       break;
     }
@@ -153,6 +163,10 @@ async function main(): Promise<void> {
       const outcome = await retireCommerceProductDecision({ projectId: project.id, actorUserId: admin, productId: productId as string, reason: reason as string });
       if (!outcome.ok) fail(outcome.reason);
       out('\n  Retired.\n');
+      break;
+    }
+    case 'probe': {
+      await probe();
       break;
     }
     default:
@@ -192,8 +206,31 @@ async function show(projectId: string): Promise<void> {
   out('  NEXT');
   if (view.next.length === 0) out('    nothing — every slot is taken or the programme is not active');
   for (const one of view.next) out(`    ${one.purpose.padEnd(9)} ${one.product ?? '—'} — ${one.why}`);
-  out('  NOT CONNECTED');
-  for (const one of view.notConnected) out(`    ${one.capability}: ${one.needs}`);
+  out('  CONNECTIONS');
+  for (const one of view.connections) out(`    ${one.state.padEnd(13)} ${one.capability}: ${one.needs}`);
+  out('  SELLING');
+  if (view.launches.length === 0) out('    nothing yet — a product must be QUALIFIED first');
+  for (const one of view.launches) {
+    out(`    ${one.product}  price ${one.price ?? '—'}  ${one.listed ? 'listed' : 'not listed'}`);
+    if (one.supplier) out(`      supplier ${one.supplier}`);
+    for (const test of one.adTests) out(`      ad test ${test.round}: ${test.state} spent ${test.spend}${test.outcome ? ` (${test.outcome})` : ''}`);
+    if (one.problem) out(`      next: ${one.problem}`);
+    if (one.stopped) out(`      stopped: ${one.stopped}`);
+  }
+  out('  ORDERS');
+  if (view.orders.length === 0) out('    none');
+  for (const one of view.orders) {
+    out(`    ${one.name} ${one.amount} ${one.state}${one.tracking ? ` tracking ${one.tracking}` : ''}${one.problem ? ` — ${one.problem}` : ''}`);
+  }
+  out('');
+}
+
+async function probe(): Promise<void> {
+  const [store, supplier, ads] = await Promise.all([probeShopify(), probeCj(), probeMeta()]);
+  out('');
+  out(`  Store     ${store.verdict}  ${store.detail}${store.currency ? ` (prices in ${store.currency})` : ''}`);
+  out(`  Supplier  ${supplier.verdict}  ${supplier.detail}`);
+  out(`  Ads       ${ads.verdict}  ${ads.detail}${ads.currency ? ` (bills in ${ads.currency})` : ''}`);
   out('');
 }
 
