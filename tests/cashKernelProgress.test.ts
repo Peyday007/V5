@@ -661,12 +661,15 @@ describe('RES-5: the exclusions reach the compiled question and pass the envelop
       'https://www.stlouis-mo.gov/sldc/procurement/rfq-mbe.cfm',
       null,
       'MBE WBE certification consulting RFQ, purchase of services',
+      'SUPPLY_DEMAND_MISMATCH',
     );
     // Play buckets come first (§73) and ask about a different mechanism, so the
-    // round under test is the paid-request bucket's.
+    // round under test is a live mechanism bucket's. The paid-request bucket is
+    // retired (no-freelancing), so it is the supply-demand bucket that carries
+    // an opening of its own mechanism into its question.
     const { SEARCH_BUCKETS } = await import('../server/services/cash/discovery.ts');
     const opened = (await openDiscovery({ projectId, limit: SEARCH_BUCKETS.length })).filter(
-      (one) => one.bucketId === 'explicit-paid-request',
+      (one) => one.bucketId === 'supply-demand-mismatch',
     );
     expect(opened).toHaveLength(1);
     const candidate = (await getCandidate(opened[0]!.candidateId))!;
@@ -687,6 +690,7 @@ async function claimedOpening(
   sourceUrl: string,
   excerpt: string | null,
   title = 'An open RFQ',
+  mechanism: CashOpportunity['mechanism'] = 'EXPLICIT_PAID_REQUEST',
 ): Promise<CashOpportunity> {
   const { listLayers } = await import('../server/repos/layers.ts');
   const { createRun } = await import('../server/repos/runs.ts');
@@ -758,7 +762,7 @@ async function claimedOpening(
     cashModeId,
     ownerUserId: userId,
     title: `${title} ${seq}`,
-    mechanism: 'EXPLICIT_PAID_REQUEST',
+    mechanism,
     currency: 'USD',
     opportunitySignal: 'ACTIVE_BUYER_DEMAND',
     source: 'A publisher',
