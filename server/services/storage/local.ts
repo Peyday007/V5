@@ -25,6 +25,13 @@ import {
   type StoredObjectMeta,
 } from './types.ts';
 
+function alreadyExists(key: string): Error {
+  return new Error(
+    `An object already exists at ${key}. Storage never overwrites silently — ` +
+      'a superseded document keeps its bytes.',
+  );
+}
+
 /** Where the original filename and content type are remembered. */
 interface SidecarMeta {
   originalFilename?: string;
@@ -74,14 +81,19 @@ export class LocalStorageProvider implements StorageProvider {
 
   async put(input: PutObjectInput): Promise<StoredObjectMeta> {
     const target = this.#pathFor(input.key);
-    if (!input.overwrite && fs.existsSync(target)) {
-      throw new Error(
-        `An object already exists at ${input.key}. Storage never overwrites silently — ` +
-          'a superseded document keeps its bytes.',
-      );
-    }
     await fsp.mkdir(path.dirname(target), { recursive: true });
-    await fsp.writeFile(target, input.body);
+    if (input.overwrite) {
+      await fsp.writeFile(target, input.body);
+    } else {
+      // Exclusive create: the check and the write are one operation, so two
+      // concurrent puts to one key cannot both succeed.
+      try {
+        await fsp.writeFile(target, input.body, { flag: 'wx' });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw alreadyExists(input.key);
+        throw error;
+      }
+    }
 
     const meta: SidecarMeta = {
       contentType: input.contentType ?? contentTypeFor(input.key),
@@ -157,7 +169,25 @@ export class LocalStorageProvider implements StorageProvider {
       return existing;
     }
     await fsp.mkdir(path.dirname(to), { recursive: true });
-    await fsp.rename(from, to);
+    // rename() replaces an existing destination on POSIX, which would destroy
+    // another document. A hard link fails with EEXIST instead, so the
+    // destination is claimed exclusively and neither object is touched on refusal.
+    try {
+      try {
+        await fsp.link(from, to);
+        await fsp.unlink(from);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+        await fsp.copyFile(from, to, fs.constants.COPYFILE_EXCL);
+        await fsp.unlink(from);
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') throw new ObjectNotFoundError(fromKey);
+      if (code === 'EEXIST') throw alreadyExists(toKey);
+      throw error;
+    }
+    // The destination is ours now, so any sidecar there is not another document's.
     try {
       await fsp.rename(this.#metaPathFor(fromKey), this.#metaPathFor(toKey));
     } catch {
