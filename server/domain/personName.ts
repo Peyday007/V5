@@ -57,17 +57,42 @@ export function looksLikeAddress(value: string): boolean {
   return local.length > 0 && domain.includes('.') && !domain.startsWith('.') && !domain.endsWith('.');
 }
 
+/** A token as an address would be written in running text: no brackets, no mailto:, no trailing punctuation. */
+function bareToken(token: string): string {
+  return token
+    .replace(/^[<("'[]+/, '')
+    .replace(/[>)"'\].,;:!?]+$/, '')
+    .replace(/^mailto:/i, '');
+}
+
+/**
+ * Whether any whitespace-separated word of this string is an address, so
+ * `Rosser Peyton <rosserpeyton@gmail.com>` and `mailto:a@b.com` count and
+ * `DJ @ Night` does not. `looksLikeAddress` still decides each word.
+ */
+export function containsAddress(value: string): boolean {
+  return (value ?? '')
+    .split(/\s+/)
+    .some((token) => token.length > 0 && looksLikeAddress(bareToken(token)));
+}
+
 /**
  * The name to show a person, from whatever the row holds.
  *
  * Total and pure: the same row always produces the same name, which is what
- * lets every surface call this instead of each deciding for itself.
+ * lets every surface call this instead of each deciding for itself. Address
+ * words are dropped and the rest is returned; when nothing is left the
+ * fallback is the first address's own local part.
  */
 export function personName(user: { displayName: string }): string {
   const value = (user.displayName ?? '').trim();
   if (value.length === 0) return 'Someone';
-  if (!looksLikeAddress(value)) return value;
-  return value.slice(0, value.indexOf('@'));
+  if (!containsAddress(value)) return value;
+  const tokens = value.split(/\s+/).filter((token) => token.length > 0);
+  const rest = tokens.filter((token) => !looksLikeAddress(bareToken(token)));
+  if (rest.length > 0) return rest.join(' ');
+  const address = bareToken(tokens[0] ?? '');
+  return address.slice(0, address.indexOf('@'));
 }
 
 /**
@@ -79,7 +104,7 @@ export function personName(user: { displayName: string }): string {
  * rather than a permanent workaround.
  */
 export function refuseAddressAsName(value: string): void {
-  if (looksLikeAddress(value)) {
+  if (containsAddress(value)) {
     throw new Error(
       'A display name is what a person is called, not their address. An address is how they ' +
         'sign in and how they are contacted, and it is kept separately.',
