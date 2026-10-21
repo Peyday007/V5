@@ -33,7 +33,10 @@ Not needed: Resend, Stripe, Gumroad, or any work from you.
 - **Operation:** runs unattended.
   - 74 scans so far, the last at 01:09Z.
     - That is 2.5h before this check, while four Deploys restarted the machine (01:00Z, 02:15Z, 02:48Z, 03:37Z).
-    - Re-checked after the restarts settled.
+    - Not yet confirmed. The re-check report (run 39545125882) sat in its read step for 80 minutes and was cancelled at 06:25Z.
+    - Production is up but slow: `/healthz` takes 3–9 s.
+    - Deploys keep failing or hanging: fad6f73 failed, ed15be7 failed, and 9530577 has been in its Fly step for over an hour.
+    - This looks like database pressure, not a discovery code fault. The scan is bounded to 2 minutes and runs late in the Russell tick.
   - 2413 jobs screened: 2398 rejected with reasons, 10 withdrawn and 5 PREPARED.
   - The 5 PREPARED bids are not sent; Brain cannot bid yet:
     - Freelancer 40775802, "PDF Text to Word": about USD 161;
