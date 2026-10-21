@@ -53,8 +53,20 @@ import type { AuditGap, ResearchOrchestration } from '../../domain/types.ts';
 
 /** How many corrected rounds Brain runs on one packet before the question is a person's. */
 export const MAX_JUDGE_ROUNDS = 2;
-/** How many resumed packets may be in their new round at once, so a backlog never starves fresh work. */
+/**
+ * The floor on how many resumed packets may be in their new round at once.
+ *
+ * It was the whole limit, and production measured what that cost: six resumed
+ * packets were live, four of them waiting in AUDITING for independent sessions,
+ * so no further packet could be resumed and the backlog drained at about the
+ * rate new ones parked. The live count is now sized to the research surfaces
+ * that can run it (`liveJudgeRoundCap`), with this as the floor and
+ * `MAX_LIVE_JUDGE_ROUNDS_CEILING` above it, and none at all while the database
+ * is shedding optional work.
+ */
 export const MAX_LIVE_JUDGE_ROUNDS = 6;
+/** The most resumed rounds that may be live however many surfaces there are. */
+export const MAX_LIVE_JUDGE_ROUNDS_CEILING = 12;
 /** Follow-up questions one round may add. */
 export const MAX_FOLLOW_UPS_PER_ROUND = 3;
 export const JUDGE_ROUND_EVENT = 'RESEARCH_ROUND_RESUMED';
@@ -337,14 +349,51 @@ async function liveJudgeRounds(): Promise<number> {
 }
 
 /**
+ * How many resumed rounds may be live at once, from the fleet that runs them.
+ *
+ * A resumed round is a corrected synthesis and three audit roles, each from its
+ * own session; what bounds how many can progress together is how many sessions
+ * the fleet can start, which is one per routable research surface. So the cap is
+ * that count, never below the old fixed six and never above the ceiling, and
+ * zero while the database is shedding — a resumed round is optional work, and
+ * starting more of it is what shedding exists to stop. An unreadable fleet is
+ * the floor, never "plenty".
+ */
+export async function liveJudgeRoundCap(): Promise<number> {
+  try {
+    const { databasePressure } = await import('../../db/pressure.ts');
+    if (databasePressure().state === 'SHEDDING') return 0;
+  } catch {
+    // An unreadable pressure reading changes nothing; the floor below still applies.
+  }
+  let surfaces = 0;
+  try {
+    const { sharedFleetSnapshot } = await import('../dispatch/candidates.ts');
+    const { surfaceIneligibility } = await import('../dispatch/router.ts');
+    const snapshot = await sharedFleetSnapshot();
+    for (const candidate of snapshot.candidates) {
+      if (surfaceIneligibility(candidate) !== null) continue;
+      if (Array.isArray(candidate.servesFamilies) && !candidate.servesFamilies.includes('RESEARCH')) continue;
+      surfaces += 1;
+    }
+  } catch {
+    surfaces = 0;
+  }
+  return Math.min(MAX_LIVE_JUDGE_ROUNDS_CEILING, Math.max(MAX_LIVE_JUDGE_ROUNDS, surfaces));
+}
+
+/**
  * The tick's pass: resume what may be resumed, oldest park first, a few at a time.
  *
  * Derived from rows, so it reaches the packets already parked and every new
  * one, and bounded by `MAX_LIVE_JUDGE_ROUNDS` so a backlog drains beside fresh
  * work rather than instead of it.
  */
-export async function resumeJudgeParkedPackets(input: { limit?: number } = {}): Promise<JudgeRoundResult[]> {
-  const room = Math.min(input.limit ?? MAX_LIVE_JUDGE_ROUNDS, MAX_LIVE_JUDGE_ROUNDS - (await liveJudgeRounds()));
+export async function resumeJudgeParkedPackets(
+  input: { limit?: number; cap?: number } = {},
+): Promise<JudgeRoundResult[]> {
+  const cap = input.cap ?? (await liveJudgeRoundCap());
+  const room = Math.min(input.limit ?? cap, cap - (await liveJudgeRounds()));
   if (room <= 0) return [];
   const rows = await getDb().all<{ id: string }>(
     `SELECT id FROM research_orchestrations

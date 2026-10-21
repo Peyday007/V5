@@ -51,6 +51,7 @@
  * attempt. That is Step 10's job — a correct basic dispatcher — and
  * capacity-aware routing is explicitly Step 11's.
  */
+import type { Bin } from '../../domain/types.ts';
 import { getDb } from '../../db/database.ts';
 import { reconcileConnectorBindings, recoverReauthorizedSurfaces } from '../fleet/connectorBinding.ts';
 import {
@@ -561,6 +562,43 @@ export async function dispatchTick(
     }
 
     /*
+     * Audit work is fired at a surface whose next session the claim will admit.
+     *
+     * A research bin whose only claimable work is audit roles can be taken only
+     * by a session distinct from the packet's author and earlier reviewers, and
+     * the session the claim compares is the connector's access token — the same
+     * one for every activation on that Claude account for its whole hour. So a
+     * fire at whichever surface had headroom often started a session the claim
+     * then refused, and spent the bin's refire budget learning it. Asked first,
+     * the fire goes to a surface that can take the role, or waits for the moment
+     * the blocking credential ages out. Nothing is decided here: the arriving
+     * session is still judged at the claim on the credential it presents.
+     */
+    let routable = snapshot.candidates;
+    if (bin.orchestrationId) {
+      const fit = await auditFitFor(bin, snapshot.candidates).catch(() => null);
+      if (fit?.applies) {
+        if (fit.eligible.size === 0) {
+          const retryAfterMs = fit.sessionClearsAt
+            ? Math.max(30_000, Date.parse(fit.sessionClearsAt) - Date.now())
+            : NO_CLAIMABLE_WORK_DEFER_MS;
+          await markDispatchDeferred(intent.id, {
+            refusal: 'NO_ELIGIBLE_AUDIT_SESSION',
+            message:
+              'The only open work in this bin is an audit role, and no surface’s next session would be ' +
+              'independent of the sessions that already wrote or reviewed this report. No session is ' +
+              'started until one would be' +
+              (fit.sessionClearsAt ? ` (the earliest blocking credential ages out at ${fit.sessionClearsAt}).` : '.'),
+            retryAfterMs,
+          });
+          result.deferred += 1;
+          continue;
+        }
+        routable = snapshot.candidates.filter((candidate) => fit.eligible.has(candidate.routine.id));
+      }
+    }
+
+    /*
      * And a bin that keeps being handed back stops earning sessions for a while.
      *
      * The backstop under the work gate: whatever the reason sessions keep
@@ -594,14 +632,14 @@ export async function dispatchTick(
      * cannot reach it is a candidate — it is the one routing input that costs a
      * query, and nothing else reads it.
      */
-    const needsWeb = snapshot.candidates.some((candidate) => candidate.webBlocked)
+    const needsWeb = routable.some((candidate) => candidate.webBlocked)
       ? await binNeedsWeb(bin).catch(() => true)
       : true;
     const decision = registryEmpty
       ? null
       : routeBin({
           bin,
-          candidates: snapshot.candidates,
+          candidates: routable,
           fleetPolicy: snapshot.fleetPolicy,
           fleetInFlight: snapshot.fleetInFlight + result.fired,
           now: new Date().toISOString(),
@@ -1050,4 +1088,34 @@ export async function recoverDispatchAtBoot(): Promise<number> {
     measures: { dispatchableBins: dispatchable.length, intentsCreated: created },
   });
   return created;
+}
+
+/**
+ * The audit fit for one bin against this tick's candidates (`auditFireFit`).
+ *
+ * Reads the bin's own open items once, and only for a research packet's bin —
+ * the one kind whose next role depends on who did the last one.
+ */
+async function auditFitFor(
+  bin: Bin,
+  candidates: Awaited<ReturnType<typeof fleetSnapshot>>['candidates'],
+) {
+  const { listWorkItemsForBin, getWorkItemRow } = await import('../../repos/workQueue.ts');
+  const { confinementFor } = await import('../../repos/bins.ts');
+  const { auditFireFit } = await import('../research/auditAdmission.ts');
+  const items = await listWorkItemsForBin(confinementFor(bin));
+  const open = items.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
+  if (open.length === 0) return null;
+  const rows = (await Promise.all(open.map((item) => getWorkItemRow(item.id)))).filter(
+    (row): row is NonNullable<typeof row> => row !== null,
+  );
+  return await auditFireFit({
+    items: rows,
+    candidates: candidates.map((candidate) => ({
+      routineId: candidate.routine.id,
+      workerId: candidate.routine.workerId,
+      accountId: candidate.account.id,
+      connectorId: candidate.routine.connectorId,
+    })),
+  });
 }

@@ -1656,9 +1656,26 @@ export const BIN_REFIRE_WINDOW_MS = 30 * 60_000;
 /** How long a bin that hit the limit waits before it may earn another fire. */
 export const BIN_REFIRE_COOLDOWN_MS = 30 * 60_000;
 
-/** Sessions Brain started for this bin within the window, any generation. */
+/**
+ * Sessions Brain started for this bin within the window that have not been
+ * followed by progress.
+ *
+ * "Without finishing" is what the guard is about, and a session that completed
+ * an item in this bin finished something. Counting every fire made a packet that
+ * was moving correctly — a synthesis, then three independent audit roles, each
+ * from its own session and each needing its own fire — hit the limit at its
+ * third role and wait half an hour before its judge could be fired for. So a
+ * completed item resets the count: only fires since the bin last made progress
+ * are evidence that sessions keep returning it unfinished.
+ */
 export async function recentFiresForBin(binId: string, nowMs: number = Date.now()): Promise<number> {
-  const since = new Date(nowMs - BIN_REFIRE_WINDOW_MS).toISOString();
+  const windowStart = new Date(nowMs - BIN_REFIRE_WINDOW_MS).toISOString();
+  const progress = await getDb().get<{ at: string | null }>(
+    `SELECT MAX(l.ended_at) AS at FROM work_leases l JOIN work_items w ON w.id = l.work_item_id
+      WHERE w.bin_id = ? AND l.outcome = 'SUCCEEDED' AND l.ended_at >= ?`,
+    [binId, windowStart],
+  );
+  const since = progress?.at && progress.at > windowStart ? progress.at : windowStart;
   const row = await getDb().get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM bin_dispatch WHERE bin_id = ? AND state = 'SENT' AND sent_at >= ?`,
     [binId, since],
@@ -1749,6 +1766,23 @@ export async function listDispatchableBins(limit = 200): Promise<Bin[]> {
  * invented yet still belongs to the family whose name it starts with. A fixed
  * list of classes would silently admit a new stage to every worker.
  */
+/** How many pages of 25 one assignment may look through before answering "nothing". */
+const ASSIGN_ROUNDS = 4;
+
+/**
+ * Within one priority, a packet close to finished is offered first.
+ *
+ * A bin whose packet is being audited or synthesized holds a report that is
+ * one or a few independent sessions from accepted, and every research packet
+ * already spent its research to get there. Offering it before fresh research —
+ * to a session the claim admits for it — is what turns work already paid for
+ * into a finished packet. It is an ordering and nothing else: a session that
+ * cannot take the audit is refused exactly as before and is handed the next
+ * bin, so fresh research is not starved, only made to come after.
+ */
+const STAGE_RANK_SQL = `COALESCE((SELECT CASE o.status WHEN 'AUDITING' THEN 0 WHEN 'SYNTHESIZING' THEN 1 ELSE 2 END
+    FROM research_orchestrations o WHERE o.id = bins.orchestration_id), 2)`;
+
 function familyWhereClause(
   families: { prefixes: string[]; allowsNull: boolean } | undefined,
 ): { sql: string; params: SqlParam[] } | null {
@@ -1816,7 +1850,18 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
     ? await recoveryBinForSession(input.sessionRef)
     : await sessionlessDuringRecovery(input.workerId, input.credentialId ?? null);
 
-  for (let round = 0; round < 3; round += 1) {
+  /*
+   * Bins this call has already looked at and passed over.
+   *
+   * Each round used to re-read the same 25 oldest bins, so a session the first
+   * 25 all refused — the author of every packet waiting at the head of the queue,
+   * or a reviewer who already argued each of them — was told there was nothing,
+   * while an eligible bin sat at position 26. Excluding what was already judged
+   * lets the later rounds reach it. Bounded by the rounds and by the caller's
+   * own deadline on admission.
+   */
+  const passedOver: string[] = [];
+  for (let round = 0; round < ASSIGN_ROUNDS; round += 1) {
     const now = binNow();
     const params: SqlParam[] = [now, ...input.projectIds, ...familyClause.params];
 
@@ -1832,12 +1877,14 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
           AND project_id IN (${input.projectIds.map(() => '?').join(', ')})
           ${familyClause.sql}
           ${recoveryOnly ? 'AND id = ?' : ''}
-        ORDER BY priority DESC, created_at, rowid
+          ${passedOver.length > 0 ? `AND id NOT IN (${passedOver.map(() => '?').join(', ')})` : ''}
+        ORDER BY priority DESC, ${STAGE_RANK_SQL}, created_at, rowid
         LIMIT 25`,
-      recoveryOnly ? [...params, recoveryOnly] : params,
+      [...(recoveryOnly ? [...params, recoveryOnly] : params), ...passedOver],
     );
 
     if (candidates.length === 0) return null;
+    passedOver.push(...candidates.map((row) => row.id));
 
     for (const row of candidates) {
       /*

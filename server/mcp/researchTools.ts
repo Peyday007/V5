@@ -174,9 +174,11 @@ import {
 } from '../services/research/filing.ts';
 import { conflictError, invalidInput, limitExceeded, notFoundError } from './errors.ts';
 import {
+  COMPLETE_NAMESPACE,
   MUTATING,
   READ_ONLY,
   idempotentEffect,
+  idempotentQueueMutation,
   optionalIdempotencyKey,
   optionalString,
   proofFrom,
@@ -2728,6 +2730,11 @@ const submitSynthesisTool: McpTool = {
       },
     );
 
+    // A filed report is the whole of what this item asks for.
+    if ((outcome.value as { filed?: unknown }).filed === true) {
+      await finishOwnItem({ principal, item, proof, requestId, summary: 'synthesis filed' });
+    }
+
     return {
       projectId: item.projectId,
       value: outcome.value,
@@ -3134,6 +3141,8 @@ const submitAuditTool: McpTool = {
      * ownership proof, which is where that decision belongs: see
      * `finishRecordedAuditRoles`.
      */
+    // The pass is this item's whole output, so the item is finished with it.
+    await finishOwnItem({ principal, item, proof, requestId, summary: `${role} pass recorded` });
     await advancePacketAfterAudit(item.orchestrationId);
 
     return {
@@ -3144,6 +3153,55 @@ const submitAuditTool: McpTool = {
     };
   },
 };
+
+/**
+ * Complete the submitter's own item once its whole output is recorded.
+ *
+ * An audit role's pass and a filed synthesis are each the entire output of the
+ * item that asked for them, and the worker's separate `brain_complete_work` is
+ * what used to finish the item. Production, 2026-10-20: 57 audit passes and 23
+ * syntheses were submitted in four hours while 28 and 8 of those items were
+ * completed; the rest stayed LEASED under a submitter that had moved on, the
+ * next session of the same worker was told the bin's open item was "its own,
+ * in progress", polled, and handed the bin back. The release log says it in the
+ * workers' own words: "Remaining open work … was not claimable after repeated
+ * polling; handing back".
+ *
+ * So the submission finishes the item itself, under the submitter's own lease
+ * proof and through the *same* idempotent operation `brain_complete_work`
+ * performs — same namespace, same server-derived key — so the worker's own
+ * completion afterwards is a replay of this one rather than a refusal. Nothing
+ * about what counts as recorded changes, and a lease that is no longer current
+ * is refused exactly as it always was: this is then a no-op, and the tick's
+ * `finishRecordedAuditRoles` settles the item once the lease lapses.
+ */
+async function finishOwnItem(input: {
+  principal: Principal;
+  item: { id: string; projectId: string };
+  proof: ReturnType<typeof proofFrom>;
+  requestId: string;
+  summary: string;
+}): Promise<void> {
+  try {
+    const { completeWork } = await import('../repos/workQueue.ts');
+    await idempotentQueueMutation(
+      {
+        namespace: COMPLETE_NAMESPACE,
+        principal: input.principal,
+        projectId: input.item.projectId,
+        proof: input.proof,
+        // Derived from the work item, as `brain_complete_work` derives it when the
+        // worker sends none, so the two are one operation.
+        suppliedKey: null,
+        requestId: input.requestId,
+        payload: { workItemId: input.item.id, operation: 'complete' },
+      },
+      async () => await completeWork(input.proof, { summary: input.summary }),
+    );
+  } catch {
+    // Not current, or already finished: the record stands either way.
+  }
+}
 
 /**
  * Let the packet see the role that just finished.

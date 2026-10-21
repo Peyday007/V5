@@ -13582,6 +13582,59 @@ mechanism. `services/cash/jobPipeline.ts` is the caller and
   for a project-scoped page, and Machines, Labor, Puzzles and Scenarios are
   one *Business systems* destination.
 
+## 71. A finished packet is the measure, and an audit role is fired where it can be taken.
+
+Production, 2026-10-20, after #246–#250: about four parked packets resumed an
+hour and about as many parked; six resumed rounds were live, four of them
+waiting in AUDITING; item successes fell from ~25/h to 3–8/h while 87 item
+leases ended "Released with its bin". Four defects, each found in the rows.
+
+- **An audit role's session is the connector's access token, so a fire must
+  be aimed.** Every activation on one Claude account presents one token for its
+  hour (§23, `sessionWindow.ts`), and `rankSurfacesFor`'s `future:` prediction
+  — "a fire is a fresh session" — is false inside that hour. The dispatcher
+  fired audit-only bins at whichever surface had headroom, the claim refused the
+  author's own session, and the bin spent its refire budget learning it.
+  `auditFireFit` (`auditAdmission.ts`) judges each candidate with the claim's
+  own `auditAdmission` against the credential its next session would present
+  (`predictedArrivalCredential`: the connector's newest live access token, or a
+  fresh session when it ages out within `ARRIVAL_MARGIN_MS`). No candidate fits
+  → `NO_ELIGIBLE_AUDIT_SESSION`, deferred to the moment the blocking token ages
+  out. It is a preference: the arriving session is still judged at the claim,
+  and the floor is unchanged.
+- **A submitted pass is a finished item.** 57 audit passes and 23 syntheses
+  were submitted while 28 and 8 of those items completed; the rest stayed
+  LEASED, and the next session of the same worker read the open item as "its
+  own, in progress", polled and handed the bin back. `brain_submit_audit` and a
+  filed `brain_submit_synthesis` now complete their own item under the
+  submitter's lease, through `brain_complete_work`'s own idempotent operation,
+  so the worker's completion afterwards is a replay.
+- **The refire guard counts fires since progress.** A packet moving correctly —
+  synthesis, then three roles, each a fire — hit `BIN_REFIRE_LIMIT` at its third
+  role. A SUCCEEDED item lease in the bin resets the count.
+- **Assignment pages past refusals and prefers finishing.** It re-read the same
+  25 oldest bins for three rounds, so a session they all refused got nothing
+  while bin 26 was its to take; it now excludes what it judged (4 pages). Within
+  a priority, a bin whose packet is AUDITING, then SYNTHESIZING, is offered
+  first. A refused session still gets the next bin, so fresh research waits but
+  is not starved.
+- **Resumed rounds are sized to the fleet** (`liveJudgeRoundCap`): one per
+  routable research surface, never below six, never above twelve, none while
+  shedding.
+
+**The three re-parks after a corrected round were the judge doing its job.**
+Each round was independent and compliant at every pair, and round 2 of
+`MAX_JUDGE_ROUNDS` remains for each: `orc_2b42ad12…` drew a new PATCH to
+re-date openings that had expired while it waited; `orc_4bc09a30…`'s follow-up
+fragment could not read its sources; `orc_30a895b1…`'s follow-up had all nine
+claims refused by the gate for giving a URL and no passage. Nothing about them
+was relabelled, and no bar moved.
+
+`npm run report:productivity` prints PACKETS per window — completions/h by
+status and verdict, resumed rounds/h, parks, bin assignments and fires per
+completed packet, the audit stage's waits from the passes, distinct sessions,
+refusals and withheld fires — and LIVE PACKETS NOW with the judge-park backlog.
+
 ## Repository map
 
 ```

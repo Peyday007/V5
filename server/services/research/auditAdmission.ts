@@ -455,3 +455,135 @@ export function separationShortfall(
     `${counts[want]}. It resumes by itself when another is registered.`
   );
 }
+
+/* ------------------------------------------------------------------------- */
+/* Which surface a waiting audit role should be fired at                      */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * How long a fired session takes to start and present its credential.
+ *
+ * Generous on purpose. A token that expires inside this margin is treated as
+ * already gone — the arriving session will refresh and present a new one — and
+ * guessing "gone" too early only ever costs one fire, while guessing "still
+ * there" too late withholds a fire for a few minutes.
+ */
+export const ARRIVAL_MARGIN_MS = 3 * 60_000;
+
+/**
+ * The credential a session fired through this connector will most likely
+ * present, or null when that cannot be read.
+ *
+ * `sessionWindow.ts` records the fact this rests on: the session dimension the
+ * matrix compares is the access token a request authenticated with, and the
+ * Cowork connector keeps presenting one access token for its whole hour. So
+ * *every* activation of every Routine on one Claude account, inside one token
+ * hour, is the same session — and `rankSurfacesFor`'s `future:` prediction,
+ * which assumes a fire always produces a session distinct from every recorded
+ * one, is wrong for exactly that hour.
+ *
+ * Production, 2026-10-20: research audits were fired at whichever account had
+ * headroom, the arriving session was the author or an earlier reviewer, the
+ * assignment refused it, and the bin spent one of its three fires per thirty
+ * minutes (`BIN_REFIRE_LIMIT`) learning that. A packet one audit role from
+ * finished then waited out the refire cool-off.
+ *
+ * Reading this is a prediction and decides nothing: the arriving session is
+ * still judged by `auditAdmission` on the credential it actually presents. Null
+ * means "a fresh session", which is the fail-open direction — wrong, it costs
+ * one fire, which is what happened before this existed.
+ */
+export async function predictedArrivalCredential(
+  connectorId: string | null,
+  nowMs: number = Date.now(),
+): Promise<{ credentialId: string; expiresAt: string } | null> {
+  if (!connectorId) return null;
+  try {
+    const row = await getDb().get<{ id: string; expires_at: string }>(
+      `SELECT t.id AS id, t.expires_at AS expires_at
+         FROM oauth_tokens t JOIN connector_clients c ON c.client_id = t.client_id
+        WHERE c.connector_id = ? AND t.kind = 'ACCESS' AND t.revoked_at IS NULL AND t.expires_at > ?
+        ORDER BY t.created_at DESC, t.id DESC
+        LIMIT 1`,
+      [connectorId, new Date(nowMs + ARRIVAL_MARGIN_MS).toISOString()],
+    );
+    return row ? { credentialId: row.id, expiresAt: row.expires_at } : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface AuditFireCandidate {
+  routineId: string;
+  workerId: string | null;
+  accountId: string;
+  connectorId: string | null;
+}
+
+export type AuditFireFit =
+  /** The bin's claimable work is not audit-only; routing is untouched. */
+  | { applies: false }
+  | {
+      applies: true;
+      /** Routines whose next session would be admitted to at least one open audit role. */
+      eligible: Set<string>;
+      /** When the earliest blocking credential stops being presented, if any candidate is blocked only by its session. */
+      sessionClearsAt: string | null;
+    };
+
+/**
+ * Which of these surfaces could be given this bin's open audit work right now.
+ *
+ * Asked by the dispatcher of a research bin whose only claimable work is audit
+ * roles. Each candidate is judged by the same `auditAdmission` rule the queue
+ * applies at the claim, with the credential its next session would present —
+ * so the fire goes where the claim will succeed. Every refusal it predicts is
+ * still made, for real, at the claim; this only stops spending a fire to learn
+ * it. A candidate whose session cannot be predicted is judged as a fresh one.
+ */
+export async function auditFireFit(input: {
+  items: WorkItemRow[];
+  candidates: AuditFireCandidate[];
+  nowMs?: number;
+}): Promise<AuditFireFit> {
+  const nowMs = input.nowMs ?? Date.now();
+  const now = new Date(nowMs).toISOString();
+  const claimable = input.items.filter(
+    (row) =>
+      row.attempt_count < row.max_attempts &&
+      row.available_at <= now &&
+      (row.state === 'QUEUED' || (row.state === 'LEASED' && row.lease_expires_at !== null && row.lease_expires_at <= now)),
+  );
+  if (claimable.length === 0) return { applies: false };
+  if (claimable.some((row) => row.work_type !== 'RESEARCH_AUDIT')) return { applies: false };
+
+  const eligible = new Set<string>();
+  let sessionClearsAt: string | null = null;
+  for (const candidate of input.candidates) {
+    if (!candidate.workerId) {
+      eligible.add(candidate.routineId); // unknown worker: the claim decides, as before
+      continue;
+    }
+    const predicted = await predictedArrivalCredential(candidate.connectorId, nowMs);
+    const admit = auditAdmission({
+      workerId: candidate.workerId,
+      routineId: candidate.routineId,
+      accountId: candidate.accountId,
+      sessionRef: predicted?.credentialId ?? `future:${candidate.routineId}`,
+    });
+    let blockedBySession = false;
+    for (const row of claimable) {
+      const verdict = await admit(row);
+      if (verdict.ok) {
+        eligible.add(candidate.routineId);
+        break;
+      }
+      if (verdict.sessionBlocked) blockedBySession = true;
+    }
+    if (!eligible.has(candidate.routineId) && blockedBySession && predicted) {
+      const clears = new Date(Date.parse(predicted.expiresAt) - ARRIVAL_MARGIN_MS).toISOString();
+      if (sessionClearsAt === null || clears < sessionClearsAt) sessionClearsAt = clears;
+    }
+  }
+  return { applies: true, eligible, sessionClearsAt };
+}
