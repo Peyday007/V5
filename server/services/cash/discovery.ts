@@ -102,6 +102,7 @@ import {
   resumeAuthorityParkedCandidates,
 } from './discoveryAuthority.ts';
 import { DELIVERABLE_KINDS, type DeliverableKind } from './freelancer/deliverables/spec.ts';
+import { owedByCategory } from './dealer.ts';
 import { deliverableCapabilityId } from './capabilities.ts';
 import type {
   CashDiscoveryRound,
@@ -179,8 +180,16 @@ export const PLAY_BUCKETS: readonly SearchBucket[] = Object.freeze(
   ),
 );
 
-export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
-  ...PLAY_BUCKETS,
+/**
+ * Buckets Brain no longer asks, kept so the rounds they already opened can
+ * still be read and harvested.
+ *
+ * `explicit-paid-request` hunted posted gigs, briefs and listings — freelance
+ * work by another name, which the owner rejected as a Cash Mode strategy
+ * (2026-10-20, and again 2026-10-21: "kill that freelance shit"). Its open
+ * rounds still file what they found; no new round is opened.
+ */
+export const RETIRED_BUCKETS: readonly SearchBucket[] = Object.freeze([
   {
     id: 'explicit-paid-request',
     mechanism: 'EXPLICIT_PAID_REQUEST',
@@ -190,6 +199,10 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
       'could be delivered within weeks — naming who asked, what they asked for, what it pays ' +
       'and when it closes?',
   },
+]);
+
+export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
+  ...PLAY_BUCKETS,
   {
     id: 'supply-demand-mismatch',
     mechanism: 'SUPPLY_DEMAND_MISMATCH',
@@ -257,7 +270,8 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
     title: 'Which repeated job is still being bought as a bespoke project',
     question:
       'Which narrowly-defined task is being repeatedly commissioned as custom work — the same ' +
-      'brief appearing again and again on boards, listings or agency pages — where the ' +
+      'brief appearing again and again on agency pages, service directories and price lists, ' +
+      'not freelance marketplace listings — where the ' +
       'published prices, turnaround times and deliverables are close enough to be sold as one ' +
       'fixed-scope, fixed-price offer?',
   },
@@ -292,6 +306,9 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
       'sources, what each side published, and what specifically one supplies to the other?',
   },
 ]);
+
+/** Every bucket a round may name, retired ones included. */
+export const ALL_BUCKETS: readonly SearchBucket[] = Object.freeze([...SEARCH_BUCKETS, ...RETIRED_BUCKETS]);
 
 const OPENED = 'CASH_DISCOVERY_OPENED';
 const HARVESTED = 'CASH_OPPORTUNITY_HARVESTED';
@@ -354,13 +371,27 @@ export async function openDiscovery(input: {
     byBucket.set(round.bucketId, [...(byBucket.get(round.bucketId) ?? []), round]);
   }
 
+  /*
+   * A kind of work somebody is owed comes first, and is looked for sooner.
+   *
+   * The dealer (`dealer.ts`) gives every person the same menu: when one of a
+   * kind is found and there are not enough to go round, the others are owed
+   * one. What closes that gap is finding more of that kind, so its buckets are
+   * asked before the rest and wait out a shorter cool-off. The barren rule
+   * still applies — a bucket that has documented three times that nothing is
+   * there stops — so "owed" can never become "ask for ever".
+   */
+  const owedNow = await owedByCategory(input.projectId).catch(() => new Map<CashMechanism, number>());
+  const buckets = SEARCH_BUCKETS.map((bucket, order) => ({ bucket, order, owed: owedNow.get(bucket.mechanism) ?? 0 }))
+    .sort((a, b) => b.owed - a.owed || a.order - b.order);
+
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
-  for (const bucket of SEARCH_BUCKETS) {
+  for (const { bucket, owed } of buckets) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
-    const next = nextRoundFor(history, now);
+    const next = nextRoundFor(history, now, owed > 0 ? OWED_COOL_OFF_MS : ROUND_COOL_OFF_MS);
     if (next === null) continue;
     const held = await heldExclusions({ projectId: input.projectId, bucket, history });
     if (frame === undefined) frame = await executionFrame(input.projectId, mode.currency);
@@ -417,6 +448,7 @@ export async function openDiscovery(input: {
         cashModeId: mode.id,
         round: next,
         objective: mode.objective,
+        owed,
       },
     });
     out.push({ bucketId: bucket.id, candidateId: round.candidateId, round: next });
@@ -444,6 +476,15 @@ class RoundNotOpened extends Error {}
  */
 export const ROUND_COOL_OFF_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * The cool-off for a kind of work somebody is owed.
+ *
+ * Shorter, because a person is waiting on exactly this kind of opening to have
+ * the same plate as everybody else; still a bound, so a bucket is never asked
+ * more than four times a day.
+ */
+export const OWED_COOL_OFF_MS = 6 * 60 * 60 * 1000;
+
 /** How many times Brain will re-ask a bucket that keeps finding nothing. */
 export const BARREN_ROUNDS = 3;
 
@@ -458,14 +499,18 @@ export const BARREN_ROUNDS = 3;
  * there is nothing there, and re-asking is the allowance spent to learn it
  * again. That is §13's rule about the archive, applied to Brain's own history.
  */
-export function nextRoundFor(history: CashDiscoveryRound[], now: string): number | null {
+export function nextRoundFor(
+  history: CashDiscoveryRound[],
+  now: string,
+  coolOffMs: number = ROUND_COOL_OFF_MS,
+): number | null {
   if (history.some((one) => one.state === 'OPEN')) return null;
   if (history.length === 0) return 1;
 
   const ordered = [...history].sort((a, b) => a.round - b.round);
   const last = ordered[ordered.length - 1]!;
   const settledAt = last.harvestedAt ?? last.openedAt;
-  if (Date.parse(now) - Date.parse(settledAt) < ROUND_COOL_OFF_MS) return null;
+  if (Date.parse(now) - Date.parse(settledAt) < coolOffMs) return null;
 
   /*
    * Barren is "finished and found nothing", never "did not finish". An
@@ -694,7 +739,7 @@ function safeExclusion(text: string): boolean {
 async function liveRounds(
   projectId: string,
 ): Promise<Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>> {
-  const byId = new Map(SEARCH_BUCKETS.map((bucket) => [bucket.id, bucket]));
+  const byId = new Map(ALL_BUCKETS.map((bucket) => [bucket.id, bucket]));
   const out = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>();
   for (const [candidateId, round] of await openRoundsByCandidate(projectId)) {
     const bucket = byId.get(round.bucketId);

@@ -540,6 +540,8 @@ export interface PipelineJob {
   stage: PipelineStage;
   stageLabel: string;
   ownerUserId: string | null;
+  /** On the reader's own plate. */
+  yours?: boolean;
   createdAt: string;
   priceCents: number | null;
   exposureCents: number | null;
@@ -563,6 +565,27 @@ export interface PipelineReading {
   providers: { id: string; state: string; nextStep: string | null }[];
   /** Freelancer jobs Brain screened as deliverable, read from their own table. */
   marketplaceJobs?: PipelineMarketplaceJob[];
+  /** The dealer's table: what is on the reader's plate, and what they are owed. */
+  plate?: PlateReading;
+}
+
+export interface PlateCategoryCount {
+  category: string;
+  label: string;
+  count: number;
+}
+
+export interface PlateReading {
+  seats: number;
+  mine: PlateCategoryCount[];
+  owedToMe: PlateCategoryCount[];
+  everyone?: {
+    userId: string;
+    displayName: string;
+    total: number;
+    byCategory: PlateCategoryCount[];
+    owed: PlateCategoryCount[];
+  }[];
 }
 
 export interface PipelineMarketplaceJob {

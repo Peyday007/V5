@@ -161,11 +161,48 @@ async function noDecisionConsumes(projectId: string, candidateId: string): Promi
   return null;
 }
 
+/** The layer a cash frontier files under (`cash/lifecycle.ts` CASH_LAYER_NAME). */
+export const LEGACY_CASH_LAYER = 'Opportunity Research';
+
+/**
+ * Why a packet in one of the four old person-derived cash projects is no
+ * longer worth another round, or null when it is not one.
+ *
+ * Discovery is one shared frontier (`cash/root.ts`): the project holding the
+ * sprint asks every market question once, for everybody. Cash Mode 2, 3 and 4
+ * were each researching the same questions separately before that — the owner
+ * saw four accounts on one plate (2026-10-21) — and the corrected-round
+ * machinery kept re-running their parked packets. Their rows stay exactly as
+ * they are; Brain simply stops buying more rounds of a question the shared
+ * frontier already asks.
+ */
+export async function askedBySharedFrontier(projectId: string): Promise<string | null> {
+  const db = getDb();
+  const own = await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM cash_modes WHERE project_id = ?', [projectId]);
+  if (Number(own?.n ?? 0) > 0) return null;
+  const layer = await db.get<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM layers WHERE project_id = ? AND name = ?',
+    [projectId, LEGACY_CASH_LAYER],
+  );
+  if (Number(layer?.n ?? 0) === 0) return null;
+  const root = await db.get<{ project_id: string }>(
+    'SELECT project_id FROM cash_modes WHERE project_id <> ? ORDER BY activated_at, id LIMIT 1',
+    [projectId],
+  );
+  if (!root) return null;
+  return (
+    `This packet belongs to an old per-person cash project; the shared frontier (${root.project_id}) ` +
+    'asks every market question once for everybody, so another round here would research it twice.'
+  );
+}
+
 /** What may be done about one parked packet, from its rows alone. Writes nothing. */
 export async function assessJudgeRound(orchestration: ResearchOrchestration): Promise<JudgeRoundAssessment> {
   if (!isJudgePark(orchestration) || !orchestration.auditId) return { kind: 'NOT_PARKED' };
   // A person already authorized filing short: the runner files it, nothing to resume.
   if (orchestration.unresolvedGapPolicy === 'RECORD_GAPS') return { kind: 'NOT_PARKED' };
+  const shared = await askedBySharedFrontier(orchestration.projectId);
+  if (shared) return { kind: 'CONTINUED_ELSEWHERE', reason: shared };
   if (orchestration.approvalEnvelopeId === DIVE_ENVELOPE) {
     return {
       kind: 'CONTINUED_ELSEWHERE',

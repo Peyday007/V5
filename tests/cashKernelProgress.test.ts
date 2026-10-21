@@ -637,9 +637,9 @@ describe('RES-5: one opening, however it was reached', () => {
     const { questionFor, heldExclusions, SEARCH_BUCKETS } = await import(
       '../server/services/cash/discovery.ts'
     );
-    const bucket = SEARCH_BUCKETS.find((one) => one.mechanism === 'EXPLICIT_PAID_REQUEST')!;
-    await claimedOpening('https://www.stlouis-mo.gov/sldc/procurement/rfq-mbe.cfm', null, 'MBE WBE certification RFQ');
-    await claimedOpening('https://example.org/jobs/42', null, 'Transcription for Ohio clinics, contact the office');
+    const bucket = SEARCH_BUCKETS.find((one) => one.mechanism === 'TEMPORARY_EXPLOIT')!;
+    await claimedOpening('https://www.stlouis-mo.gov/sldc/procurement/rfq-mbe.cfm', null, 'MBE WBE certification RFQ', 'TEMPORARY_EXPLOIT');
+    await claimedOpening('https://example.org/jobs/42', null, 'Transcription for Ohio clinics, contact the office', 'TEMPORARY_EXPLOIT');
     const held = await heldExclusions({ projectId, bucket, history: [] });
     const question = questionFor(bucket, 'cash', 2, [], held);
     expect(question).toContain('stlouis-mo.gov/sldc/procurement/rfq-mbe.cfm');
@@ -661,12 +661,14 @@ describe('RES-5: the exclusions reach the compiled question and pass the envelop
       'https://www.stlouis-mo.gov/sldc/procurement/rfq-mbe.cfm',
       null,
       'MBE WBE certification consulting RFQ, purchase of services',
+      'TEMPORARY_EXPLOIT',
     );
     // Play buckets come first (§73) and ask about a different mechanism, so the
-    // round under test is the paid-request bucket's.
+    // round under test is the closing-openings bucket's (the paid-request bucket
+    // is retired: it hunted freelance postings).
     const { SEARCH_BUCKETS } = await import('../server/services/cash/discovery.ts');
     const opened = (await openDiscovery({ projectId, limit: SEARCH_BUCKETS.length })).filter(
-      (one) => one.bucketId === 'explicit-paid-request',
+      (one) => one.bucketId === 'temporary-exploit',
     );
     expect(opened).toHaveLength(1);
     const candidate = (await getCandidate(opened[0]!.candidateId))!;
@@ -687,6 +689,7 @@ async function claimedOpening(
   sourceUrl: string,
   excerpt: string | null,
   title = 'An open RFQ',
+  mechanism: CashOpportunity['mechanism'] = 'EXPLICIT_PAID_REQUEST',
 ): Promise<CashOpportunity> {
   const { listLayers } = await import('../server/repos/layers.ts');
   const { createRun } = await import('../server/repos/runs.ts');
@@ -758,7 +761,7 @@ async function claimedOpening(
     cashModeId,
     ownerUserId: userId,
     title: `${title} ${seq}`,
-    mechanism: 'EXPLICIT_PAID_REQUEST',
+    mechanism,
     currency: 'USD',
     opportunitySignal: 'ACTIVE_BUYER_DEMAND',
     source: 'A publisher',

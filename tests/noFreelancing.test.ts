@@ -55,6 +55,14 @@ describe('no freelancing', () => {
     expect(frame).not.toMatch(/reads Freelancer itself/);
   });
 
+  it('discovery no longer hunts posted gigs, briefs or listings', async () => {
+    const { SEARCH_BUCKETS } = await import('../server/services/cash/discovery.ts');
+    expect(SEARCH_BUCKETS.map((one) => one.id)).not.toContain('explicit-paid-request');
+    for (const bucket of SEARCH_BUCKETS) {
+      expect(bucket.question).not.toMatch(/\bon boards\b|posting or listing for work/i);
+    }
+  });
+
   it('the operations file asks nobody to connect a freelance account', () => {
     const ops = read('fast-cash/OPS.md');
     expect(ops).toMatch(/No freelancing/);

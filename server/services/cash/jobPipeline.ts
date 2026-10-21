@@ -60,6 +60,7 @@ import { readAllCapabilities, type CapabilityReading } from './capabilities.ts';
 import { totalsByKind } from '../../repos/cashLedger.ts';
 import { dealPosition } from './journey/position.ts';
 import { marketplaceJobViews, type MarketplaceJobView } from './marketplacePipeline.ts';
+import { dealJobs, plateReading, type DealReport, type PlateReading } from './dealer.ts';
 import type {
   CashCardFact,
   CashJob,
@@ -263,6 +264,9 @@ export interface JobReconciliation {
   released: { jobId: string; because: string }[];
   /** Qualified openings that were not made jobs, each with its reason. */
   declined: { opportunityId: string; because: string }[];
+  /** Who each waiting job was dealt to, and why (`dealer.ts`). */
+  dealt: DealReport['dealt'];
+  undealt: DealReport['undealt'];
 }
 
 interface TierContext {
@@ -298,7 +302,7 @@ export const JOB_RELEASED_EVENT = 'CASH_JOB_RELEASED';
  * on live jobs makes a repeated tick, a restart and two instances one job.
  */
 export async function reconcileCashJobs(projectId: string): Promise<JobReconciliation> {
-  const out: JobReconciliation = { created: [], advanced: [], released: [], declined: [] };
+  const out: JobReconciliation = { created: [], advanced: [], released: [], declined: [], dealt: [], undealt: [] };
   const mode = await getCashMode(projectId);
   if (!mode) return out;
 
@@ -334,11 +338,17 @@ export async function reconcileCashJobs(projectId: string): Promise<JobReconcili
        * new work after somebody said stop.
        */
       if (mode.state !== 'ACTIVE' && !TAKEN_STATES.has(opportunity.state)) continue;
+      /*
+       * Unassigned unless somebody already took the opening into execution:
+       * who holds a fresh job is the dealer's decision (`dealer.ts`), made at
+       * the end of this pass, so every person gets the same menu and nobody
+       * the same job. A taken opening keeps the person who took it.
+       */
       const created = await createJob({
         opportunityId: opportunity.id,
         projectId,
         currency: opportunity.currency,
-        ownerUserId: opportunity.ownerUserId,
+        ownerUserId: TAKEN_STATES.has(opportunity.state) ? opportunity.ownerUserId : null,
         createdBy: 'BRAIN',
         note: `Prepared because ${eligibility.because}.`,
       });
@@ -403,6 +413,14 @@ export async function reconcileCashJobs(projectId: string): Promise<JobReconcili
       }
     }
   }
+  /*
+   * Then deal: every job waiting for a person goes to whoever is owed one in
+   * its category. After the loop, so a job prepared this pass is dealt this
+   * pass, and the next pass moves it with its opportunity.
+   */
+  const deal = await dealJobs(projectId);
+  out.dealt = deal.dealt;
+  out.undealt = deal.undealt;
   return out;
 }
 
@@ -690,6 +708,8 @@ export interface JobView {
   stage: PipelineStage;
   stageLabel: string;
   ownerUserId: string | null;
+  /** Whether this job is on the reader's own plate. */
+  yours: boolean;
   createdAt: string;
   /** Per-sale price and the published exposure, never a forecast. */
   priceCents: number | null;
@@ -722,6 +742,12 @@ export interface PipelineReading {
    * deliverable, owned by `marketplace_jobs` and read here, never copied.
    */
   marketplaceJobs: MarketplaceJobView[];
+  /**
+   * The dealer's table for this reader: what is on their plate per category,
+   * and what they are owed — the next job of that kind is theirs. A reader who
+   * may see the whole sprint also gets every plate.
+   */
+  plate: PlateReading;
 }
 
 const AUTHORITY_ACTIONS = ['CONTACT_BUYER', 'QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT', 'ENGAGE_CONTRACTOR'];
@@ -826,6 +852,7 @@ export async function pipelineReading(
       stage,
       stageLabel: PIPELINE_STAGE_LABELS[stage],
       ownerUserId: mine ? job.ownerUserId : null,
+      yours: viewer.userId !== null && job.ownerUserId === viewer.userId,
       createdAt: job.createdAt,
       priceCents: mine ? opportunity.priceCents : null,
       exposureCents: mine ? opportunity.peakFundingCents : null,
@@ -864,6 +891,7 @@ export async function pipelineReading(
     currency: mode.currency,
     researchInFlight: Number(research?.n ?? 0),
     marketplaceJobs,
+    plate: await plateReading(projectId, { userId: viewer.userId, full: viewer.owner }),
     authority: {
       live: [...authority.values()].some((one) => one.ok),
       allowedActions: AUTHORITY_ACTIONS.filter((a) => authority.get(a)?.ok),

@@ -33,7 +33,7 @@
  * the kernel exists to ask, and would be wrong about every economy the
  * classification systems have revised since somebody typed it.
  */
-import { SEARCH_BUCKETS, type SearchBucket } from '../cash/discovery.ts';
+import { ALL_BUCKETS, type SearchBucket } from '../cash/discovery.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 
 export const BOOTSTRAP_TITLE = 'Which industries the economy is actually divided into';
@@ -172,7 +172,7 @@ export function capitalQuestion(input: {
 /** The bucket a scan round names, or null where the round names none. */
 export function bucketById(bucketId: string | null): SearchBucket | null {
   if (!bucketId) return null;
-  return SEARCH_BUCKETS.find((one) => one.id === bucketId) ?? null;
+  return ALL_BUCKETS.find((one) => one.id === bucketId) ?? null;
 }
 
 function clip(text: string, max: number): string {

@@ -152,6 +152,37 @@ export async function assignJob(input: {
   return result.changes === 1;
 }
 
+/**
+ * Deal a job to a seat, guarded on the state *and* the owner the dealer read.
+ *
+ * `assignJob` guards only the state, which is right for a person pressing
+ * assign and wrong for the dealer: re-dealing an inherited job must not
+ * overwrite an owner somebody set between the read and the write. Two
+ * statements rather than `owner_user_id IS ?`, because a parameter tested only
+ * for nullity has no type on Postgres (§47).
+ */
+export async function dealJob(input: {
+  jobId: string;
+  expectState: CashJobState;
+  expectOwnerUserId: string | null;
+  ownerUserId: string;
+}): Promise<boolean> {
+  const ts = nowIso();
+  const result =
+    input.expectOwnerUserId === null
+      ? await getDb().run(
+          `UPDATE cash_jobs SET owner_user_id = ?, state = 'ASSIGNED', assigned_at = ?, updated_at = ?
+            WHERE id = ? AND state = ? AND owner_user_id IS NULL`,
+          [input.ownerUserId, ts, ts, input.jobId, input.expectState],
+        )
+      : await getDb().run(
+          `UPDATE cash_jobs SET owner_user_id = ?, assigned_at = ?, updated_at = ?
+            WHERE id = ? AND state = ? AND owner_user_id = ?`,
+          [input.ownerUserId, ts, ts, input.jobId, input.expectState, input.expectOwnerUserId],
+        );
+  return result.changes === 1;
+}
+
 /** Hand it back without destroying anything: the row and its history stay. */
 export async function releaseJob(input: {
   jobId: string;
