@@ -1280,6 +1280,7 @@ describe('the operating pass as the tick calls it', () => {
       reclassified: null,
       capabilities: { raised: [], settled: [] },
       gaps: [],
+      withdrawnResearch: [],
       research: { applied: [], unanswered: [] },
       proposed: [],
       continuations: [],

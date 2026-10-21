@@ -13647,6 +13647,39 @@ status and verdict, resumed rounds/h, parks, bin assignments and fires per
 completed packet, the audit stage's waits from the passes, distinct sessions,
 refusals and withheld fires — and LIVE PACKETS NOW with the judge-park backlog.
 
+## 72. Research goes where an answer can make work executable, and a marketplace job is a job.
+
+Production, Cash Mode 1, 2026-10-21: 340 openings (177 of them duplicates),
+269 deep dives, **one** qualified piece and **no** execution job. The one piece
+was a broker's own fee schedule — a $5 membership read as the price against an
+$800 deposit read as the exposure — at READY_TO_TEST beside a card reading
+"USD -795.00 expected". Meanwhile five Freelancer jobs Brain had screened as
+deliverable sat PREPARED, and Cash counted none of them.
+
+- **No research where no answer could make the opening executable.**
+  `services/cash/worthResearching.ts` refuses a deep dive, field research, an
+  engine question and a monetization commission on a freelance-marketplace
+  listing (the marketplace operation owns Freelancer through its API; Brain
+  holds no account elsewhere — "Payer for Freelancer project 40771439" was
+  asked six times), on an opening closing inside `DIVE_RUNWAY_MS` (72 h), and
+  on an asset to buy that deployable cash cannot pay for. Derived on every
+  read, so each lifts by itself; nothing is archived. A *service* with an
+  exposure is still researched — capital can arrive and execution waits on its
+  own. Open field research on such openings is withdrawn before it launches.
+- **A piece that loses money on its own figures is not qualified.** Price below
+  exposure caps the tier at CANDIDATE, and it is never marked ready or
+  contacted for — the reading `jobEligibility` already applied, so the tier,
+  the page and the job pipeline now agree.
+- **Discovery is told what not to report**: individual marketplace listings,
+  and a company's own price list as though it were a buyer.
+- **A prepared marketplace job is an execution job.** `marketplacePipeline.ts`
+  reads `marketplace_jobs` (never copies it) into the Cash pipeline's stages
+  with tasks — screen, bid, award, deliver, collect — and the exact blocker:
+  `FREELANCER_OAUTH_TOKEN` not set, or the grant lacking `CONTACT_BUYER`.
+- **The screen refused three it had prepared**: an ad campaign (the client's ad
+  account and spend), origami designs (a fold cannot be verified from a file),
+  and "15k entries" of data with no client file.
+
 ## Repository map
 
 ```

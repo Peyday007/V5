@@ -1957,12 +1957,35 @@ function Pipeline({ projectId, reloadToken }: { projectId: string; reloadToken: 
         .
       </p>
 
-      {data.jobs.length === 0 ? (
+      {(data.marketplaceJobs ?? []).length > 0 ? (
+        <ul className="rs-list rs-cash-jobs rs-cash-marketplace-jobs">
+          {(data.marketplaceJobs ?? []).map((job) => (
+            <li key={job.jobId} className="rs-cash-job" data-stage={job.stage}>
+              <p>
+                <strong>{job.title}</strong> — Freelancer job {job.externalId} ·{' '}
+                <span className="rs-cash-job-stage">{data.labels[job.stage] ?? job.stage}</span>
+              </p>
+              <p className="rs-item-meta">
+                Delivers {job.categories.join(', ') || 'nothing yet'}
+                {job.bid ? ` · bid ${job.bid}` : ''}
+                {job.netUsd !== null ? ` · about USD ${job.netUsd.toFixed(2)} to us after Freelancer’s fee` : ''}.
+              </p>
+              {job.next ? (
+                <p className="rs-cash-job-next">
+                  Next: {job.next.task}. {job.next.because}.
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {data.jobs.length === 0 && (data.marketplaceJobs ?? []).length === 0 ? (
         <p className="rs-state rs-state-empty">
           No execution jobs yet. A job is prepared by itself the moment an opening is qualified
           {data.qualifiedWithoutJob.length > 0 ? '; the qualified openings below were not, and say why.' : '; none is qualified yet.'}
         </p>
-      ) : (
+      ) : data.jobs.length === 0 ? null : (
         <ul className="rs-list rs-cash-jobs">
           {data.jobs.map((job) => (
             <li key={job.jobId} className="rs-cash-job" data-stage={job.stage}>
