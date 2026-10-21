@@ -362,7 +362,10 @@ describe('discovery keeps going while the sprint is active', () => {
     await activated();
     const [opened] = await openDiscovery({ projectId });
     const statement = (await getCandidate(opened!.candidateId))!.statement;
-    expect(statement).toContain('Report only openings this operation could act on');
+    expect(statement).toContain('Report first the openings this operation could act on now');
+    // Not being able to act today is a named gap, never a reason to drop the opening.
+    expect(statement).toMatch(/still worth reporting when the money is real/);
+    expect(statement).not.toMatch(/Report only openings/);
     expect(statement).toContain('holds no capital of its own to commit');
     expect(statement).toMatch(/who would pay this operation/);
     expect(statement).toMatch(/spreadsheet/);

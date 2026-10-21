@@ -13480,6 +13480,26 @@ completion it could not fix, and only then released.
   `brain_bin_next_item` advances the packet once before answering, so an
   already-argued audit role is retired and the next stage queued in the call.
 
+**A handback took more than its own work, and finished work back with it.**
+`handBack` released every live item lease in the bin's reach held by the same
+worker id. A worker id serves several accounts and a packet's untagged items
+are reachable from every bin built for it, so one session's handback released
+another session's research. And the holder's own items were usually already
+done: production, 2026-10-20 16:40–23:56Z, 113 leases "Released with its bin",
+**132 of 133 released leases had already recorded their output**, median held
+65 s — a worker submits, then hands the bin back before `brain_complete_work`,
+and the release put the finished item back in the queue with its attempt
+refunded for the next session to collide with. Completions fell from about 25
+to 7 an hour on the two working accounts. Now a handback touches only the item
+leases its own bin lease claimed (`BIN_ITEM_CLAIMED` names each), **completes**
+one whose output already committed (`itemOutputRecorded`: a SUCCEEDED Step 6
+operation in that work type's own submission namespace, never
+`researchItemRecorded`, which answers true for "not applicable"), and releases
+the rest. An item found already recorded when it is claimed is completed by
+Brain and the next one claimed. And a live lease reads as in progress whatever
+its attempt count: the ceiling check used to come first, so an item worked on
+its last attempt was invisible and its bin read as another session's.
+
 **A PATCH is a correction, not a decision.** 120 packets sat at NEEDS_HUMAN
 after a PATCH (87) or MORE_RESEARCH (33) verdict, each asking a person to file
 short or stop. `GAP_CLASSIFICATIONS` defines PATCH as *evidence suffices,

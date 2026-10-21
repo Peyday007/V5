@@ -44,6 +44,7 @@ import {
   getBin,
   getBinHead,
   heartbeatBin,
+  itemLeasesClaimedUnder,
   listBins,
   listBinHeads,
   listBinUnitResults,
@@ -74,6 +75,8 @@ import { databasePoolReadings } from '../../db/database.ts';
 import { recordUnservedArrival } from '../infra/incidents.ts';
 import {
   claimWork,
+  completeWork,
+  itemOutputRecorded,
   releaseWork,
   getWorkItemRow,
   listWorkItemsForBin,
@@ -1034,9 +1037,13 @@ async function openWorkForSession(
   const refused: string[] = [];
   for (const item of items) {
     if (item.state !== 'QUEUED' && item.state !== 'LEASED') continue;
-    if (item.attemptCount >= item.maxAttempts) continue;
     const leaseLive =
       item.state === 'LEASED' && item.leaseExpiresAt !== null && new Date(item.leaseExpiresAt).getTime() > now;
+    // A live lease is work in progress whatever its attempt count. The ceiling
+    // check used to come first, so an item claimed on its last attempt was
+    // invisible here: the bin read as "another session's", was handed back,
+    // and the handback released the very item that was being worked.
+    if (!leaseLive && item.attemptCount >= item.maxAttempts) continue;
     if (leaseLive) {
       // Its own item in progress, or another lease that will end: either way, waiting is right.
       const at = item.workerId === input.workerId ? now : new Date(item.leaseExpiresAt!).getTime();
@@ -1128,7 +1135,7 @@ export async function nextItemInBin(input: {
     limit: 1,
     leaseMs: input.leaseMs,
   });
-  let claimed = await claimOnce();
+  let claimed = await settleRecorded(await claimOnce(), input, claimOnce);
   /*
    * Nothing claimable: let the packet move first, then ask once more.
    *
@@ -1143,7 +1150,7 @@ export async function nextItemInBin(input: {
     try {
       const { advancePacket } = await import('../research/packetRunner.ts');
       await advancePacket(bin.orchestrationId);
-      claimed = await claimOnce();
+      claimed = await settleRecorded(await claimOnce(), input, claimOnce);
     } catch {
       // The tick is the fallback; a drain must never fail because an optimisation did.
     }
@@ -1160,7 +1167,8 @@ export async function nextItemInBin(input: {
       workerId: input.workerId,
       leaseId: input.proof.leaseId,
       leaseGeneration: input.proof.leaseGeneration,
-      measures: { workType: first.workType },
+      // The item lease this bin lease took: what a handback may give back.
+      measures: { workType: first.workType, itemLeaseId: first.leaseId },
       outcome: 'CLAIMED',
     });
     return { held: true, item: first };
@@ -1188,6 +1196,44 @@ export async function nextItemInBin(input: {
     binHasOpenWork: true,
     retryAfterMs: view.kind === 'WAIT' ? view.retryAfterMs : null,
   };
+}
+
+/**
+ * An item whose output already committed is finished, not work.
+ *
+ * Items released before handbacks completed recorded work are still QUEUED in
+ * production with their output on record; handing one out costs a session a
+ * claim and a release (median 65s) and finishes nothing. Brain holds the lease
+ * it just took, so it completes the item itself and claims again — bounded, so
+ * a drain can never loop on this.
+ */
+async function settleRecorded(
+  claimed: ClaimedWork[],
+  input: { workerId: string },
+  claimAgain: () => Promise<ClaimedWork[]>,
+): Promise<ClaimedWork[]> {
+  let current = claimed;
+  for (let round = 0; round < 5 && current.length > 0; round += 1) {
+    const first = current[0]!;
+    let recorded = false;
+    try {
+      recorded = await itemOutputRecorded({ id: first.workItemId, workType: first.workType });
+    } catch {
+      return current;
+    }
+    if (!recorded) return current;
+    await completeWork(
+      {
+        workItemId: first.workItemId,
+        workerId: input.workerId,
+        leaseId: first.leaseId,
+        leaseGeneration: first.leaseGeneration,
+      },
+      { summary: 'Completed by Brain on claim: its output was already recorded.' },
+    );
+    current = await claimAgain();
+  }
+  return current;
 }
 
 /**
@@ -1570,11 +1616,27 @@ export async function release(proof: BinProof, reason?: string | null) {
  */
 async function handBack(bin: Bin, proof: BinProof, reason: string | null) {
   try {
+    /*
+     * Only the item leases *this bin lease* took. The first version released
+     * every live lease in the bin's reach held by the same worker id — and a
+     * worker id is shared by several Claude accounts, while a packet's untagged
+     * items are reachable from every bin built for it. So one session handing
+     * back released another session's research mid-flight (production,
+     * 2026-10-20 18:20–22:08Z: 87 leases "Released with its bin", successes
+     * from ~25/h to ~7/h). The claim event names the item lease it took, so the
+     * set is exact; a claim recorded before that field existed is left to
+     * expire, which is what happened before handbacks released anything.
+     */
+    const ours = await itemLeasesClaimedUnder(bin.id, proof.leaseId);
+    if (ours.size === 0) return await releaseBin(proof, reason);
+    let completed = false;
     const items = await listWorkItemsForBin(confinementFor(bin));
     const nowMs = Date.now();
     for (const item of items) {
       if (
         item.state !== 'LEASED' ||
+        !item.leaseId ||
+        !ours.has(item.leaseId) ||
         item.workerId !== proof.workerId ||
         !item.leaseId ||
         !item.leaseExpiresAt ||
@@ -1582,10 +1644,32 @@ async function handBack(bin: Bin, proof: BinProof, reason: string | null) {
       ) {
         continue;
       }
-      await releaseWork(
-        { workItemId: item.id, workerId: proof.workerId, leaseId: item.leaseId, leaseGeneration: item.leaseGeneration },
-        'Released with its bin, so the next holder can take it at once.',
-      );
+      const itemProof = {
+        workItemId: item.id,
+        workerId: proof.workerId,
+        leaseId: item.leaseId,
+        leaseGeneration: item.leaseGeneration,
+      };
+      /*
+       * Finished work is completed, not put back. Production, 2026-10-20
+       * 16:40–23:56Z: 132 of 133 released leases belonged to items whose
+       * output had already committed — the holder submitted, then handed the
+       * bin back before `brain_complete_work`. Released, the item went back to
+       * QUEUED with its attempt refunded, the next session claimed settled
+       * work, found it recorded, and released it again.
+       */
+      if (await itemOutputRecorded(item)) {
+        await completeWork(itemProof, {
+          summary: 'Completed with its bin: its output was already recorded.',
+        });
+        completed = true;
+        continue;
+      }
+      await releaseWork(itemProof, 'Released with its bin, so the next holder can take it at once.');
+    }
+    if (completed && bin.orchestrationId) {
+      const { advancePacket } = await import('../research/packetRunner.ts');
+      await advancePacket(bin.orchestrationId);
     }
   } catch {
     // The bin release below is what matters; an item lease left behind still expires.

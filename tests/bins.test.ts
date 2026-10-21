@@ -1736,6 +1736,134 @@ describe('a bin whose remaining work is another session\'s is handed back, not s
     expect(taken.item?.workItemId).toBe(next.item.workItemId);
   });
 
+  it('a handback releases only the item leases its own bin lease took, never another session\'s on the same worker', async () => {
+    // Production, 2026-10-20: one worker id serves several accounts, and a
+    // packet's items are reachable from more than one bin. A handback released
+    // every same-worker live lease in reach — another session's research too.
+    const binId = await makeBin(projectA, { units: 0 });
+    const elsewhere = await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'another session is working this' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      binId,
+    });
+    // Claimed by a different session of the same worker, not through this bin lease.
+    const [other] = await claimWork({
+      workerId: workerOne,
+      scopes: [{ projectId: projectA, scopes: ['queue:claim'] }],
+      limit: 1,
+    });
+    expect(other?.workItemId).toBe(elsewhere.id);
+
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    expect(await release(proofFrom(assigned, workerOne), 'giving up')).toBe('OK');
+
+    const item = await getWorkItem(elsewhere.id);
+    expect(item?.state).toBe('LEASED');
+    expect(item?.leaseId).toBe(other!.leaseId);
+  });
+
+  it('an item worked on its last attempt reads as in progress, not as the bin being drained', async () => {
+    const binId = await makeBin(projectA, { units: 0 });
+    await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'last attempt' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      maxAttempts: 1,
+      binId,
+    });
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const proof = proofFrom(assigned, workerOne);
+    const principal = principalFor(workerOne, [projectA]);
+    const first = await nextItemInBin({ principal, workerId: workerOne, proof });
+    if (!first.held || !first.item) throw new Error('expected an item');
+    const again = await nextItemInBin({ principal, workerId: workerOne, proof });
+    if (!again.held || again.item !== null) throw new Error('expected no second item');
+    expect(again.released).toBeUndefined();
+    expect(again.retryAfterMs).not.toBeNull();
+    expect((await getWorkItem(first.item.workItemId))?.state).toBe('LEASED');
+  });
+
+  async function recordOutput(workItemId: string, namespace: string): Promise<void> {
+    const now = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO idempotency_operations (id, scope_hash, key_fingerprint, namespace, project_id,
+         created_by_type, request_fingerprint, state, work_item_id, reserved_at, completed_at,
+         created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'WORKER', 'f', 'SUCCEEDED', ?, ?, ?, ?, ?)`,
+      [`idop_${workItemId}_${namespace}`, `s_${workItemId}_${namespace}`, `k_${workItemId}`, namespace, projectA, workItemId, now, now, now, now],
+    );
+  }
+
+  async function researchItemInBin(binId: string): Promise<string> {
+    const item = await enqueueWork({
+      projectId: projectA,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { which: 'a verification' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      binId,
+    });
+    // Brain's item-output rule is keyed by work type; the queue does not care.
+    await getDb().run(`UPDATE work_items SET work_type = 'RESEARCH_VERIFY' WHERE id = ?`, [item.id]);
+    const { setWorkerRouting } = await import('../server/repos/identity.ts');
+    await setWorkerRouting({
+      workerId: workerOne,
+      families: ['GENERAL', 'RESEARCH'],
+      repositories: [],
+      capabilities: [],
+      reason: 'test',
+      setBy: 'test',
+    });
+    return item.id;
+  }
+
+  it('a handback completes an item whose output already committed, rather than putting finished work back', async () => {
+    const binId = await makeBin(projectA, { units: 0 });
+    const itemId = await researchItemInBin(binId);
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const proof = proofFrom(assigned, workerOne);
+    const next = await nextItemInBin({ principal: principalFor(workerOne, [projectA]), workerId: workerOne, proof });
+    if (!next.held || !next.item) throw new Error('expected an item');
+    await recordOutput(itemId, 'research.verify');
+
+    expect(await release(proof, 'verification submitted')).toBe('OK');
+    expect((await getWorkItem(itemId))?.state).toBe('SUCCEEDED');
+  });
+
+  it('an item found already recorded on claim is completed by Brain, not handed out', async () => {
+    const binId = await makeBin(projectA, { units: 0 });
+    const itemId = await researchItemInBin(binId);
+    await recordOutput(itemId, 'research.verify');
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const next = await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    if (!next.held) throw new Error('held');
+    expect(next.item).toBeNull();
+    expect((await getWorkItem(itemId))?.state).toBe('SUCCEEDED');
+  });
+
+  it('a blocker or other side effect on an item does not count as its output', async () => {
+    const binId = await makeBin(projectA, { units: 0 });
+    const itemId = await researchItemInBin(binId);
+    await recordOutput(itemId, 'research.blocker');
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+    const next = await nextItemInBin({
+      principal: principalFor(workerOne, [projectA]),
+      workerId: workerOne,
+      proof: proofFrom(assigned, workerOne),
+    });
+    if (!next.held || !next.item) throw new Error('expected the item to be handed out');
+    expect(next.item.workItemId).toBe(itemId);
+  });
+
   it('a completion the session cannot fix becomes a handback, not a refusal', async () => {
     const { binId } = await packetWithJudgeOnly();
     const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
