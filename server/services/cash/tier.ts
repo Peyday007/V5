@@ -136,6 +136,53 @@ export const UNIVERSAL_QUALIFICATION: readonly QualificationKey[] = Object.freez
 ]);
 
 /**
+ * The bar for a low-cost email play: who pays, and that Brain can deliver.
+ *
+ * The owner's decision (2026-10-21): 0 of 340 openings had qualified, because
+ * most of the sixteen facts above — conversion, real costs, time to first
+ * cash, how a buyer actually answers — are learned by running a test, not by
+ * reading what somebody published. For a play where Brain makes the whole
+ * deliverable itself there is nothing to buy and nothing to risk beyond the
+ * test, so it qualifies on the two facts a test cannot answer for us: a payer
+ * published as paying, and delivery proved by Brain's own capability reading.
+ * The rest is learned from the bounded test.
+ *
+ * `delivery` is answered only by `deliveryReading`, and only when every
+ * required capability reads PRESENT and no task needs physical work — so "we
+ * can deliver" is a reading, never anybody's word. The short card a test runs
+ * against (`evidenceCard`) is unchanged, and so is every refusal below: a
+ * published disqualifier, and a price below the exposure, still cap it.
+ */
+export const TEST_FIRST_QUALIFICATION: readonly QualificationKey[] = Object.freeze([
+  'payer',
+  'delivery',
+]);
+
+/**
+ * The capability ids a play round writes: `PRODUCE_<KIND>`. Kept as a string
+ * here so this pure module does not load the capability readers; a test holds
+ * it equal to `DELIVERABLE_CAPABILITY_PREFIX`.
+ */
+export const PLAY_CAPABILITY_PREFIX = 'PRODUCE_';
+
+/**
+ * A low-cost email play: a kind of buyer that keeps paying for one deliverable
+ * (`RECURRING_OUTSOURCED_WORK`, declared by the worker that read the source),
+ * where every requirement is that deliverable and Brain produces it itself.
+ * The capabilities are read from `requiredCapabilities`, which a play round
+ * writes from the bucket that asked, never from the claim's words.
+ *
+ * A single named request found in a play round — a procurement notice, one
+ * buyer's brief — is not a play and keeps the full bar, and so does anything
+ * that also needs a capability Brain must buy or connect, or records none.
+ */
+export function isTestFirstPlay(opportunity: CashOpportunity): boolean {
+  if (opportunity.opportunitySignal !== 'RECURRING_OUTSOURCED_WORK') return false;
+  const caps = opportunity.requiredCapabilities ?? [];
+  return caps.length > 0 && caps.every((one) => one.startsWith(PLAY_CAPABILITY_PREFIX));
+}
+
+/**
  * What one kind of evidence establishes, what it does not, and what closes the
  * gap.
  *
@@ -242,8 +289,15 @@ export interface TierReading {
   summary: string;
 }
 
-/** The whole requirement set for one piece, universal plus its own kind's. */
-export function qualificationKeys(signal: OpportunitySignal | null): QualificationKey[] {
+/**
+ * The whole requirement set for one piece: universal plus its own kind's, or
+ * the test-first bar for a low-cost email play.
+ */
+export function qualificationKeys(
+  signal: OpportunitySignal | null,
+  testFirst = false,
+): QualificationKey[] {
+  if (testFirst) return [...TEST_FIRST_QUALIFICATION];
   const meaning = signal ? SIGNAL_MEANING[signal] : UNSIGNALLED;
   const out = [...UNIVERSAL_QUALIFICATION];
   for (const key of meaning.alsoRequires) if (!out.includes(key)) out.push(key);
@@ -295,7 +349,8 @@ export function cashTier(input: {
   };
 
   const captured = answered(CAPTURE_KEY);
-  const keys = qualificationKeys(signal);
+  const testFirst = isTestFirstPlay(input.opportunity);
+  const keys = qualificationKeys(signal, testFirst);
   const open = keys.filter((key) => !answered(key));
   const answeredCount = keys.length - open.length;
 
@@ -396,7 +451,11 @@ export function cashTier(input: {
       toAdvance: open.map(requirement),
       answered: answeredCount,
       required: keys.length,
-      summary:
+      summary: testFirst
+        ? `A low-cost email play: it qualifies once ${open
+            .map((key) => (key === 'delivery' ? 'Brain can deliver it' : 'who pays is established'))
+            .join(' and ')}. The rest is learned from a bounded test.`
+        :
         `Brain can say how this would make money, and ${open.length} thing` +
         `${open.length === 1 ? '' : 's'} still ${open.length === 1 ? 'needs' : 'need'} ` +
         'establishing before it could be acted on.',
@@ -428,9 +487,11 @@ export function cashTier(input: {
       toAdvance: (input.readiness.missing as QualificationKey[]).map(requirement),
       answered: answeredCount,
       required: keys.length,
-      summary:
-        'The execution thesis is supported. What is left is the short card a bounded test ' +
-        'runs against.',
+      summary: testFirst
+        ? 'A low-cost email play: who pays is established and Brain can deliver it. What is ' +
+          'left is the short card a bounded test runs against; the test answers the rest.'
+        : 'The execution thesis is supported. What is left is the short card a bounded test ' +
+          'runs against.',
     };
   }
 

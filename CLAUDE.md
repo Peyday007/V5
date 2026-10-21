@@ -13738,6 +13738,29 @@ differ only by effort. `services/cash/deal.ts` is the dealer.
   discovery question carries. They narrow; they widen nothing. Used first to
   leave the owner's home markets (Detroit, Cleveland) out of discovery.
 
+## 75. A low-cost email play qualifies on who pays and that Brain can deliver.
+
+Production, 2026-10-21: 340 openings, 282 dives, **0 qualified**. Most of the
+sixteen qualification facts (conversion, real costs, time to first cash, how a
+buyer answers) are learned by running a test, not by reading what somebody
+published, so the bar could not be met by research at all. The owner's
+decision: for a play Brain delivers itself, prove who pays and that we can
+deliver, then let a bounded test answer the rest.
+
+- **Which pieces.** `isTestFirstPlay` in `tier.ts`: the signal is
+  `RECURRING_OUTSOURCED_WORK` (a kind of buyer that keeps paying) and every
+  required capability is `PRODUCE_<KIND>`, which a play round writes from its
+  bucket, never from a claim's words. A single named request found in a play
+  round, or anything that also needs a capability Brain must buy or connect,
+  keeps the full bar.
+- **What it needs.** The capture thesis, then `payer` and `delivery`
+  (`TEST_FIRST_QUALIFICATION`). `delivery` is answered only by
+  `deliveryReading`, which needs every required capability PRESENT and no
+  physical task, so "we can deliver" is a reading, never a word.
+- **What did not move.** A published disqualifier and a price below the
+  exposure still cap it at CANDIDATE. READY_TO_TEST still needs the short card
+  (`evidenceCard`), and acting still needs the commercial grant.
+
 ## Repository map
 
 ```
