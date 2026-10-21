@@ -1109,6 +1109,8 @@ describe('plays: a kind of business that pays for something Brain can make', () 
     const opportunity = (await getOpportunity(made!.opportunity.id))!;
     expect(opportunity.requiredCapabilities).toEqual([`PRODUCE_${bucket.deliverable}`]);
     const { readCapability } = await import('../server/services/cash/capabilities.ts');
+    const { proveCapabilities } = await import('../server/services/cash/freelancer/deliverables/capabilities.ts');
+    await proveCapabilities();
     const reading = await readCapability(`PRODUCE_${bucket.deliverable}`);
     expect(reading.definition).not.toBeNull();
     expect(reading.state).toBe('PRESENT');

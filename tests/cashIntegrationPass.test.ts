@@ -61,7 +61,8 @@
  * `cashCurrencyHttp`, driven against a booted server, and the deterministic
  * two-connection concurrency test is `cashConcurrency`.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { proveCapabilities } from '../server/services/cash/freelancer/deliverables/capabilities.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
@@ -147,6 +148,12 @@ const WORKER_SCOPES: WorkerScope[] = [
   'queue:heartbeat',
   'queue:complete',
 ];
+
+// The deliverable proof is started at boot in production; here, once, up front,
+// so a play's PRODUCE_ capability reads PRESENT rather than not-yet-read.
+beforeAll(async () => {
+  await proveCapabilities();
+});
 
 beforeEach(async () => {
   fixture = await freshProject();

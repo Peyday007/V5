@@ -72,6 +72,7 @@ export async function produce(raw: string, kinds?: readonly DeliverableKind[], c
 }
 
 let cached: Promise<Record<DeliverableKind, CapabilityReading>> | null = null;
+let settled: Record<DeliverableKind, CapabilityReading> | null = null;
 
 async function proveOne(kind: DeliverableKind): Promise<CapabilityReading> {
   const checkedAt = new Date().toISOString();
@@ -90,6 +91,18 @@ async function proveOne(kind: DeliverableKind): Promise<CapabilityReading> {
   return { kind, available: true, checkedAt, detail: `sample rendered to ${files.join(', ')} and passed ${passed} check(s)`, files };
 }
 
+/**
+ * The proof if it has finished in this process, without waiting for it.
+ *
+ * The proof renders a sample of every kind (about 3 s here, longer on a busy
+ * runner), so a request-path reader that awaited it would hold a page for that
+ * long on a cold process. A reader that needs an answer now asks this, and
+ * `proveCapabilities` is started at boot so it is almost always settled.
+ */
+export function settledCapabilities(): Record<DeliverableKind, CapabilityReading> | null {
+  return settled;
+}
+
 export function proveCapabilities(): Promise<Record<DeliverableKind, CapabilityReading>> {
   cached ??= (async () => {
     const out = {} as Record<DeliverableKind, CapabilityReading>;
@@ -100,6 +113,7 @@ export function proveCapabilities(): Promise<Record<DeliverableKind, CapabilityR
         out[kind] = { kind, available: false, checkedAt: new Date().toISOString(), detail: `its sample threw: ${(error as Error).message.slice(0, 200)}`, files: [] };
       }
     }
+    settled = out;
     return out;
   })();
   return cached;
@@ -108,6 +122,7 @@ export function proveCapabilities(): Promise<Record<DeliverableKind, CapabilityR
 /** Tests prove again after changing the environment. */
 export function forgetCapabilities(): void {
   cached = null;
+  settled = null;
 }
 
 /** Languages whose code Brain can check before delivering. */
