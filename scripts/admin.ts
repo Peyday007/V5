@@ -58,6 +58,7 @@
  *   npm run admin -- packets scope [project]
  *   npm run admin -- packets reaudit <orchestration> --admin someone@example.com
  *   npm run admin -- cash seed-industry <project> "<subject name>" --admin someone@example.com
+ *   npm run admin -- cash constraints <project> ["<additions, empty clears>"] --admin someone@example.com
  */
 import { startPacket } from '../server/services/research/startPacket.ts';
 import type { GoalBudgetStatus } from '../server/repos/russellAuthority.ts';
@@ -68,7 +69,9 @@ import {
 } from '../server/repos/russellAuthority.ts';
 import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
 import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
-import { CASH_LAYER_NAME } from '../server/services/cash/lifecycle.ts';
+import { CASH_LAYER_NAME, setConstraints } from '../server/services/cash/lifecycle.ts';
+import { splitObjective } from '../server/services/cash/root.ts';
+import { getCashMode } from '../server/repos/cashMode.ts';
 import { seedSubject } from '../server/services/industry/seed.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
 import { binForOrchestration, createBin } from '../server/repos/bins.ts';
@@ -1916,6 +1919,37 @@ async function main(): Promise<void> {
      * decides when the subject is asked about, the discovery grant decides
      * whether that may run, and the evidence gate decides what may be claimed.
      */
+    case 'cash constraints': {
+      const project = await projectFrom(rest[0] ?? fail('Name the project.'));
+      if (rest.length < 2) {
+        const mode = await getCashMode(project.id);
+        if (!mode) fail('Cash Mode has never been activated for this project.');
+        const { constraints } = splitObjective(mode.objective);
+        console.log(`  operator additions: ${constraints || '(none)'}`);
+        break;
+      }
+      const actor = await administrator();
+      const outcome = await setConstraints({
+        projectId: project.id,
+        actorUserId: actor.id,
+        constraints: rest.slice(1).join(' '),
+      });
+      if (!outcome.ok) fail(outcome.reason);
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'UPDATE_PROJECT',
+        targetType: 'PROJECT',
+        targetId: project.id,
+        projectId: project.id,
+        result: 'SUCCESS',
+      });
+      if (outcome.ok) {
+        console.log(`  ${outcome.message}`);
+        console.log(`  operator additions: ${splitObjective(outcome.mode.objective).constraints || '(none)'}`);
+      }
+      break;
+    }
     case 'cash seed-industry': {
       const actor = await administrator();
       const project = await projectFrom(rest[0] ?? fail('Name the project.'));

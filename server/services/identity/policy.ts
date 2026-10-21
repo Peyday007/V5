@@ -353,6 +353,7 @@ const OVERRIDES: Override[] = [
   // is still refused there by `requirePerson`; leaving them out is one fewer
   // entry that could drift.
   { pattern: /^\/api\/projects\/[^/]+\/cash\/mode$/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/cash\/constraints$/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/cash\/authority/, level: 'ADMIN' },
   // A refund pays money out of the account, so authorizing one and answering
   // its outcome are decisions *about* the operation's money, at the level the

@@ -38,9 +38,11 @@ import {
   activateCashMode,
   getCashMode,
   recordCashEvent,
+  setCashModeObjective,
   transitionCashMode,
 } from '../../repos/cashMode.ts';
 import { getApprovalEnvelope } from '../research/approvalEnvelope.ts';
+import { objectiveWith, splitObjective } from './root.ts';
 import { ensureDiscoveryAuthority, withdrawDiscoveryAuthority } from './discoveryAuthority.ts';
 import { opportunitiesForCandidate } from '../../repos/cashPortfolio.ts';
 import { roundForCandidate } from '../../repos/cashDiscovery.ts';
@@ -523,4 +525,75 @@ export async function discoveryAllowed(projectId: string): Promise<DiscoveryDeci
     };
   }
   return { allowed: true, mode, reason: 'Cash Mode is active.' };
+}
+
+/** The event a change to the operator's additions is recorded under. */
+export const CONSTRAINTS_SET_EVENT = 'CASH_MODE_CONSTRAINTS_SET';
+
+/** At most this many characters of operator additions; a mandate is not an essay. */
+export const MAX_CONSTRAINTS_CHARS = 2000;
+
+/**
+ * Change what a person has added to a running sprint's objective.
+ *
+ * The mandate the sprint was activated with is kept; only the additions under
+ * the operator heading change, and they narrow or reprioritise discovery — the
+ * next question every bucket asks carries them (`questionFor`). They widen
+ * nothing: the envelope, the evidence gate and the source classes are the
+ * compiler's, and nothing here spends, contacts or approves. An empty value
+ * clears the additions.
+ *
+ * Recorded with both the old and the new text, because an instruction that
+ * changed what Brain searches for must be legible afterwards.
+ */
+export async function setConstraints(input: {
+  projectId: string;
+  actorUserId: string;
+  constraints: string;
+}): Promise<LifecycleOutcome> {
+  const mode = await getCashMode(input.projectId);
+  if (!mode) {
+    return { ok: false, reason: 'Cash Mode has never been activated for this project.' };
+  }
+  const next = input.constraints.trim();
+  if (next.length > MAX_CONSTRAINTS_CHARS) {
+    return {
+      ok: false,
+      reason: `Keep the additions under ${MAX_CONSTRAINTS_CHARS} characters; they are read into every discovery question.`,
+    };
+  }
+  const { base, constraints: before } = splitObjective(mode.objective);
+  if (before === next) {
+    return { ok: true, mode, changed: false, message: 'Those are already the operator\'s additions.' };
+  }
+  const objective = objectiveWith(next, base);
+  const moved = await setCashModeObjective({
+    projectId: input.projectId,
+    expectObjective: mode.objective,
+    objective,
+  });
+  if (!moved) {
+    return {
+      ok: false,
+      reason: 'Somebody changed the additions while this was being saved. Read them again and retry.',
+    };
+  }
+  await recordCashEvent({
+    projectId: input.projectId,
+    kind: CONSTRAINTS_SET_EVENT,
+    actorRef: input.actorUserId,
+    summary: next
+      ? `Operator additions to the sprint objective set: ${next}`
+      : 'Operator additions to the sprint objective cleared.',
+    detail: { before, after: next },
+  });
+  const now = (await getCashMode(input.projectId)) ?? mode;
+  return {
+    ok: true,
+    mode: now,
+    changed: true,
+    message: next
+      ? 'Saved. The next discovery question every bucket asks carries these additions.'
+      : 'Cleared. Discovery asks with the mandate alone again.',
+  };
 }

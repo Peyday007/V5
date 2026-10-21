@@ -13714,6 +13714,30 @@ portfolio filled with single postings, solicitations and auctions.
   kind of business that repeatedly pays for what Brain delivers is, and other
   vendors' prices are its price evidence.
 
+## 74. A job is dealt to one person, and every person gets an even mix.
+
+Four people run Cash Mode, and `reconcileCashJobs` prepared every job owned by
+the sprint's owner, so one person held every job and three had an empty plate.
+The owner's rule (2026-10-21): an even mix of every kind of job for each
+account, dealt like cards, no two accounts holding the same job, so earnings
+differ only by effort. `services/cash/deal.ts` is the dealer.
+
+- **Lexicographic, never a score**: fewest jobs of this mechanism, then fewest
+  jobs in all, then user id. The first criterion that decided is the sentence
+  on the `CASH_JOB_DEALT` event.
+- **Seats are `peopleReading`'s READY people**, the one reading the People page
+  uses. Unreadable deals nothing; nobody READY leaves the opening's owner.
+- **A prepared job is re-dealt only to shrink a real imbalance**: Brain made it,
+  nothing is committed, its holder is the one Brain placed, and the holder has
+  `REDEAL_IMBALANCE` (2) more of that kind than the chosen person. Each move
+  shrinks the spread, so passes converge; the swap is a compare-and-swap on the
+  owner the pass read. A job somebody placed is never moved.
+- **A person's additions to a running sprint** (`setConstraints`,
+  `POST /cash/constraints`, ADMIN; `admin cash constraints`) keep the mandate
+  byte for byte and change only the text under the operator heading, which every
+  discovery question carries. They narrow; they widen nothing. Used first to
+  leave the owner's home markets (Detroit, Cleveland) out of discovery.
+
 ## Repository map
 
 ```
@@ -13939,6 +13963,7 @@ server/
       outreach.ts       the message a buyer is sent, composed from the card
       factoryHandoff.ts READY_TO_TEST to the Software Factory, under the standing grant
       jobPipeline.ts    a qualified opening becomes one job; its tasks, stage and blockers (§70)
+      deal.ts           who holds each job: an even mix of every kind per person (§74)
       freelancer/
         classify.ts     which kinds of work a listing asks for, and what blocks it
         economics.ts    the job's currency, Freelancer's fee, the net, the estimate

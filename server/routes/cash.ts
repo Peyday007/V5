@@ -84,6 +84,7 @@ import {
   SELECTABLE_CASH_ENVELOPES,
   SPRINT_CURRENCIES,
   activate,
+  setConstraints,
   setLifecycle,
 } from '../services/cash/lifecycle.ts';
 import {
@@ -137,6 +138,7 @@ import {
   CANONICAL_CASH_SUMMARY,
   findCashRoot,
   objectiveWith,
+  splitObjective,
   resolveOrCreateCashRoot,
 } from '../services/cash/root.ts';
 import { recordCashEvent } from '../repos/cashMode.ts';
@@ -586,6 +588,33 @@ cashRouter.post(
     });
     if (!outcome.ok) throw unprocessable(outcome.reason);
     return { mode: outcome.mode, changed: outcome.changed, message: outcome.message };
+  }),
+);
+
+/**
+ * What a person adds to the running sprint's objective — a market to leave out,
+ * a priority, a preference.
+ *
+ * ADMIN, for `/cash/mode`'s reason: it changes what discovery looks for, which
+ * is a decision about the operation rather than work inside it. The mandate the
+ * sprint was activated with is kept; only the additions change, and they widen
+ * nothing (`setConstraints`). An empty string clears them.
+ */
+cashRouter.post(
+  '/projects/:projectId/cash/constraints',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const raw = body['constraints'];
+    if (typeof raw !== 'string') throw badRequest('"constraints" must be a string (empty clears them).');
+    const outcome = await setConstraints({
+      projectId: project.id,
+      actorUserId: principal.id,
+      constraints: raw,
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return { changed: outcome.changed, message: outcome.message, constraints: splitObjective(outcome.mode.objective).constraints };
   }),
 );
 

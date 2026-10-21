@@ -177,3 +177,30 @@ export async function setJobState(input: {
   );
   return result.changes === 1;
 }
+
+/**
+ * Hand a prepared job to the person the dealer chose, guarded on the owner the
+ * dealer saw as well as the state.
+ *
+ * `assignJob` guards on state alone, which is right for a person reassigning
+ * and wrong here: a person who moved the job between the dealer's read and this
+ * write must win, so the owner is part of the compare-and-swap.
+ */
+export async function dealJob(input: {
+  jobId: string;
+  expectOwnerUserId: string | null;
+  ownerUserId: string;
+}): Promise<boolean> {
+  const ts = nowIso();
+  // Two spellings rather than `? IS NULL`: a parameter tested only for nullity
+  // has no type on Postgres (§47).
+  const ownerGuard = input.expectOwnerUserId === null ? 'owner_user_id IS NULL' : 'owner_user_id = ?';
+  const params = [input.ownerUserId, ts, ts, input.jobId];
+  if (input.expectOwnerUserId !== null) params.push(input.expectOwnerUserId);
+  const result = await getDb().run(
+    `UPDATE cash_jobs SET owner_user_id = ?, state = 'ASSIGNED', assigned_at = ?, updated_at = ?
+      WHERE id = ? AND state IN ('UNASSIGNED', 'ASSIGNED') AND ${ownerGuard}`,
+    params,
+  );
+  return result.changes === 1;
+}
