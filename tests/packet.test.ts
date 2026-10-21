@@ -3631,6 +3631,51 @@ describe('the audit passes', () => {
     targeted_research_runs_required: 0,
   };
 
+  async function asANeedsPacket(parked: ResearchOrchestration, needState: 'OPEN' | 'RESOLVED'): Promise<void> {
+    const { createCandidate } = await import('../server/repos/russellCandidates.ts');
+    const { launchMission, linkMission } = await import('../server/repos/russellMissions.ts');
+    const title = 'Payer for "a published price list"';
+    const candidate = await createCandidate({
+      projectId: parked.projectId,
+      visibility: 'SHARED',
+      title,
+      statement: 'This card cannot be tested without it.',
+    });
+    const { mission } = await launchMission({
+      projectId: parked.projectId,
+      visibility: 'SHARED',
+      objective: title,
+      whyNow: 'test',
+      idempotencyKey: `need-${parked.id}`,
+      candidateId: candidate.id,
+    });
+    await linkMission({ missionId: mission.id, orchestrationId: parked.id });
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO cash_needs (id, project_id, blocked_action, why_it_matters, recommended_path, setup_effort,
+         next_step, state, candidate_id, created_at, updated_at)
+       VALUES (?, ?, ?, 'w', 'p', 'e', 'n', ?, ?, ?, ?)`,
+      [`cnd_${parked.id}`, parked.projectId, title, needState, candidate.id, at, at],
+    );
+  }
+
+  it('does not resume a judge park whose cash need no longer waits on its answer (invariant 43)', async () => {
+    // Production, 2026-10-21: September "Payer for" packets were re-synthesized
+    // and re-audited after their need was settled or asked again elsewhere.
+    const parked = await judgedPacket(PATCH_JUDGE);
+    await asANeedsPacket(parked, 'RESOLVED');
+    const assessed = await assessJudgeRound(parked);
+    expect(assessed.kind).toBe('CONTINUED_ELSEWHERE');
+    expect((await resumeJudgeRound(parked.id)).outcome).toBe('CONTINUED_ELSEWHERE');
+    expect((await getOrchestration(parked.id))!.status).toBe('NEEDS_HUMAN');
+  });
+
+  it('still resumes a judge park whose cash need is open', async () => {
+    const parked = await judgedPacket(PATCH_JUDGE);
+    await asANeedsPacket(parked, 'OPEN');
+    expect((await assessJudgeRound(parked)).kind).toBe('RESUME');
+  });
+
   it('resumes a PATCH park as a corrected round, with a fresh audit, through to COMPLETE', async () => {
     const parked = await judgedPacket(PATCH_JUDGE);
     expect(parked.status).toBe('NEEDS_HUMAN');
