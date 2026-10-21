@@ -126,8 +126,25 @@ export function stateFromPlace(value: unknown): UsState | null {
  */
 export function statesNamedIn(text: string): UsState[] {
   const found = new Set<UsState>();
-  for (const state of US_STATES) {
-    if (new RegExp(`\\b${state}\\b`, 'i').test(text)) found.add(state);
+  /*
+   * Names overlap: `west virginia` contains `virginia`, and `Washington, DC`
+   * contains `washington`. Testing each independently reports two jurisdictions
+   * for one, and the compiler refuses on two. So the district's written forms go
+   * first, then names longest-first, and each matched span is blanked in a
+   * working copy before a shorter name is tested against it.
+   */
+  let working = text;
+  const districtForms = /\bWashington,?\s+D\.?C\.?(?![A-Za-z])/gi;
+  if (districtForms.test(working)) {
+    found.add('district of columbia');
+    working = working.replace(districtForms, ' ');
+  }
+  for (const state of [...US_STATES].sort((a, b) => b.length - a.length)) {
+    const pattern = new RegExp(`\\b${state}\\b`, 'gi');
+    if (pattern.test(working)) {
+      found.add(state);
+      working = working.replace(pattern, ' ');
+    }
   }
   /*
    * `, OH` — a comma, optional space, two **capital** letters, a word boundary.
