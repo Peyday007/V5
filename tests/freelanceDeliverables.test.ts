@@ -173,6 +173,10 @@ describe('the screen decides by verified capability, not by category name', () =
       [{ title: 'Build a lead list', jobs: [{ name: 'Data Entry' }, { name: 'Lead Generation' }], description: 'Compile a CSV of 500 dentists in Texas with emails and phone numbers of the decision makers for my outreach campaign next month. '.repeat(2) }, /contacting or listing people/],
       // Freelancer project 40772623, qualified in production on 2026-10-19: the
       // client forbids tools, and Brain's bid says the work is AI-assisted.
+      // Three prepared in production on 2026-10-21 that Brain could not deliver.
+      [{ title: 'Premium Service Google Ad Campaign', jobs: [{ name: 'Google Adwords' }, { name: 'Excel' }], description: 'Set up and manage a Google Ads campaign for my service business: keyword research spreadsheet, ad copy and a weekly report on spend and conversions over the first month. '.repeat(2) }, /ad account/],
+      [{ title: 'Intermediate Origami Flower Designs', jobs: [{ name: 'Graphic Design' }, { name: 'Illustrator' }], description: 'I need five original intermediate origami flower designs with clear step-by-step folding diagrams as vector files, each tested so that it folds from a single square sheet. '.repeat(2) }, /folding or craft design|folding design/],
+      [{ title: '15k Data Entries with Photos', jobs: [{ name: 'Data Entry' }, { name: 'Excel' }], description: 'Enter 15k entries with photos into a spreadsheet: for each product find the name, price and a photo link and type them into the columns of the sheet in order. '.repeat(2) }, /larger than Brain can pass/],
       [{ title: 'Manual Product Data Entry', jobs: [{ name: 'Data Entry' }, { name: 'Excel' }], description: 'I need help transferring product details from a series of public-facing websites into my Excel template. Everything is done by hand—no scraping tools or API connections—so close attention to detail is essential. I will provide the list of URLs and an Excel file already set up with the columns.' }, /by hand, without tools/],
     ];
     for (const [over, reason] of cases) {

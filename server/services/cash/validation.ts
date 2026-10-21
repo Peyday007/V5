@@ -38,6 +38,7 @@
  */
 import { listingSentenceFor, retrieveDueListings } from './listings.ts';
 import { closedBy } from './closing.ts';
+import { describeNotWorthResearching, notWorthResearching, type NotWorthResearching } from './worthResearching.ts';
 import { getDb } from '../../db/database.ts';
 import {
   cashEventsOfKind,
@@ -310,7 +311,13 @@ export type DiveRefusal =
   /** A second record of an opening already in the portfolio; the survivor is dived instead. */
   | { kind: 'DUPLICATE'; of: string }
   /** Its recorded closing date has passed, so there is nothing left to win. */
-  | { kind: 'EXPIRED'; at: string };
+  | { kind: 'EXPIRED'; at: string }
+  /**
+   * No answer a dive could find would make it executable now: a marketplace
+   * listing, a close inside the runway, or capital the ledger does not hold.
+   * Derived on every read, so it lifts by itself (`worthResearching.ts`).
+   */
+  | { kind: 'NOT_WORTH_RESEARCHING'; reason: NotWorthResearching };
 
 /** One line, for a report or an operator. */
 export function describeDiveRefusal(refusal: DiveRefusal): string {
@@ -346,6 +353,8 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
       return `a second record of ${refusal.of} (same source, same kind of opening) — that one is dived instead`;
     case 'EXPIRED':
       return `closed on ${refusal.at} — a dive cannot win an opening that has already closed`;
+    case 'NOT_WORTH_RESEARCHING':
+      return `not worth a dive now: ${describeNotWorthResearching(refusal.reason)}`;
   }
 }
 
@@ -437,6 +446,8 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
   if (!opportunity.buyingSignal && !opportunity.sourceClaimId) {
     return { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
   }
+  const waste = await notWorthResearching(opportunity, { now: cashNow() });
+  if (waste) return { kind: 'NOT_WORTH_RESEARCHING', reason: waste };
   return { kind: 'ELIGIBLE' };
 }
 

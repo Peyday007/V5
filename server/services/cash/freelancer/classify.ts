@@ -212,6 +212,18 @@ export const BLOCKING_TAGS: Record<string, string> = {
   'textile engineering': 'the work needs a qualified engineer',
   'fashion consulting': 'fashion consulting is not a capability Brain has',
   'test automation': 'test automation runs against the client’s own application',
+  // Production, 2026-10-21: "Premium Service Google Ad Campaign" reached
+  // PREPARED. A campaign runs inside the client's ad account and spends the
+  // client's budget; nothing Brain renders is the campaign.
+  'google adwords': 'running ads needs the client’s ad account and their ad spend',
+  'google ads': 'running ads needs the client’s ad account and their ad spend',
+  ppc: 'running ads needs the client’s ad account and their ad spend',
+  'facebook ads': 'running ads needs the client’s ad account and their ad spend',
+  'facebook marketing': 'running ads needs the client’s ad account and their ad spend',
+  'digital marketing': 'marketing means acting from the client’s accounts',
+  'internet marketing': 'marketing means acting from the client’s accounts',
+  origami: 'a folding design has to be folded to be checked, which Brain cannot do',
+  'arts & crafts': 'a craft design has to be made to be checked, which Brain cannot do',
 };
 
 /** Engineering disciplines whose work needs a qualified engineer, whatever the deliverable looks like. */
@@ -227,6 +239,11 @@ const BLOCKERS: Blocker[] = [
   { pattern: /\[(?:number|date|x|amount|insert[^\]]*)\]/, reason: 'the brief still carries an unfilled placeholder, so its terms are not settled' },
   { pattern: /\b(thousands of (?:rows|records|entries|products|listings|files|pages)|\d{2,3},?\d{3}\+? (?:rows|records|entries|products|listings|lines)|millions? of (?:rows|records)|large dataset|big data|several (?:excel )?workbooks|multiple (?:excel )?workbooks|every sheet|all (?:the )?sheets|\d{3,} (?:pdfs|files|pages|invoices|documents))\b/, reason: 'the data is larger than Brain can pass through one deliverable without the client’s own file', only: ['DATASET', 'SPREADSHEET'] },
   { pattern: /\bwikipedia\b/, reason: 'paid Wikipedia editing breaks Wikipedia’s own rules' },
+  { pattern: /\b(ad campaigns?|google ads|adwords|ppc|pay[- ]per[- ]click|meta ads|facebook ads|ads manager|ad spend|run (?:the |my |our )?ads)\b/, reason: 'running ads needs the client’s ad account and their ad spend' },
+  // A design whose correctness is physical — it folds, sews or knits — cannot
+  // be verified from the file Brain renders.
+  { pattern: /\b(origami|kirigami|paper ?craft|sewing patterns?|knitting|crochet|embroidery|quilt(?:ing)? patterns?|woodworking plans?)\b/, reason: 'a folding or craft design has to be made to be checked, which Brain cannot do' },
+  { pattern: /\b\d{1,3}(?:\.\d)?k\+? (?:rows|records|entries|data entries|products|listings|lines|items|photos|images)\b/, reason: 'the data is larger than Brain can pass through one deliverable without the client’s own file', only: ['DATASET', 'SPREADSHEET'] },
   // A supplier advertising itself ("our factory network can support designers…")
   // posts as a project. There is nothing to deliver and nobody buying.
   { pattern: /\b(looking to connect with|(?:our|my) (?:factory|factories|factory network|company|agency|team) (?:can|could|will) (?:support|help|work with|offer)|(?:manufacturing|production|sourcing|business) (?:partner(?:ship)?|collaboration)|what we can (?:work with you on|offer)|tell us about your (?:designs?|products?|business|brand|requirements))\b/, reason: 'the post advertises the client’s own services rather than asking for a deliverable' },
