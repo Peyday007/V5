@@ -524,8 +524,8 @@ export function executionFrameSentence(frame: ExecutionFrame): string {
     'not act on today is still worth reporting when the money is real: name the one licence, ' +
     'registration, capability or amount of capital it would need rather than leaving it out. ' +
     'Leave out job postings, hourly positions and anything already closed. Leave out individual ' +
-    'project listings on freelance marketplaces (Freelancer, PeoplePerHour, Upwork, Fiverr): Brain ' +
-    'reads Freelancer itself and holds no seller account on the others. A company publishing its ' +
+    'project listings on freelance marketplaces (Freelancer, PeoplePerHour, Upwork, Fiverr): this ' +
+    'operation does not take freelance work. A company publishing its ' +
     'own prices or fees is evidence of what that company charges, not of anybody paying this ' +
     'operation, so it is not an opening unless a named buyer would pay this operation for something.'
   );

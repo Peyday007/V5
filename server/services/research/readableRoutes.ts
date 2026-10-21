@@ -17,6 +17,10 @@
  * publisher's own pages and the same source class the assignment already
  * authorizes, reached by a form a fetcher can read.
  *
+ * Freelancer.com was the first entry and is removed: the owner rejected
+ * freelance work for Cash Mode (2026-10-20), so a worker is no longer pointed
+ * at a marketplace's API to research its listings.
+ *
  * This is context and never a control. Nothing reads it except the guidance
  * text. Adding a channel is a reviewed code change, verified against the live
  * endpoint first; a route that stops answering is removed, never guessed at.
@@ -33,23 +37,6 @@ export interface ReadableRoute {
 }
 
 export const READABLE_ROUTES: readonly ReadableRoute[] = Object.freeze([
-  {
-    host: 'freelancer.com',
-    names: ['freelancer.com'],
-    // Its country sites (freelancer.co.uk, .ca, .cn, .in …) serve the same
-    // projects, and are where surfaces have failed with JS_ONLY.
-    aliases: /^(www\.)?freelancer\.(co\.[a-z]{2}|com\.[a-z]{2}|[a-z]{2})$/,
-    lines: [
-      'search open projects: https://www.freelancer.com/api/projects/0.1/projects/active/?query=<words>&limit=20&full_description=true',
-      'one project: https://www.freelancer.com/api/projects/0.1/projects/<project id>/?full_description=true — ' +
-        'status and frontend_project_status say whether it is open (closed or awarded is demand_closed); ' +
-        'time_submitted is the posting time in epoch seconds; budget.minimum/maximum with currency.code ' +
-        'and type (fixed or hourly) are the economics; bid_stats.bid_count and bid_avg are the competition',
-      'the listing page https://www.freelancer.com/projects/<seo_url> is server-rendered: "About the client" ' +
-        'gives location, rating and member-since; in "Client Verification" an icon whose span carries ' +
-        'data-color="success" is achieved (Payment verified, Deposit made, Email, Phone, Profile)',
-    ],
-  },
   {
     host: 'sam.gov',
     names: ['sam.gov'],

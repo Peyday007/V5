@@ -329,17 +329,15 @@ describe('a readable route is named where the first route failed', () => {
     const guidance = composeGuidance({
       fragment: {
         fragmentKey: 'opening-screen',
-        question: "Is Freelancer.com project 40774287 'Precise entry from PDFs' still open?",
+        question: 'Is PublicSurplus auction 4109620 still open, and at what price?',
       },
       siblings: [],
       reachability: [],
       lessons: [],
     });
-    expect(guidance.readableRoutes.map((route) => route.host)).toEqual(['freelancer.com']);
+    expect(guidance.readableRoutes.map((route) => route.host)).toEqual(['publicsurplus.com']);
     expect(guidance.text).toContain('READABLE ROUTES');
-    expect(guidance.text).toContain('/api/projects/0.1/projects/<project id>/');
-    expect(guidance.text).toContain('time_submitted');
-    expect(guidance.text).toContain('data-color="success"');
+    expect(guidance.text).toContain('Current Price');
     expect(guidance.text).not.toContain('sam.gov/api');
   });
 
@@ -366,7 +364,7 @@ describe('a readable route is named where the first route failed', () => {
     ]);
   });
 
-  it('reads the packet title and Freelancer\'s country domains, not only the fragment question', () => {
+  it('points no worker at a freelance marketplace: the owner rejected freelance work', () => {
     const byTitle = composeGuidance({
       fragment: { fragmentKey: 'market-signal', question: 'State the maximum cash out before the money is usable' },
       siblings: [],
@@ -374,11 +372,12 @@ describe('a readable route is named where the first route failed', () => {
       lessons: [],
       contextText: "Exposure for \"Freelancer.com project 40771439 'WordPress Portfolio Site Build'\"",
     });
-    expect(byTitle.readableRoutes.map((route) => route.host)).toEqual(['freelancer.com']);
-    for (const host of ['freelancer.co.uk', 'www.freelancer.ca', 'freelancer.cn']) {
-      expect(routesFor({ question: null, unreachableHosts: [host] }).map((r) => r.host), host).toEqual(['freelancer.com']);
+    expect(byTitle.readableRoutes).toEqual([]);
+    expect(byTitle.text).not.toContain('freelancer.com/api');
+    for (const host of ['freelancer.com', 'freelancer.co.uk', 'www.freelancer.ca']) {
+      expect(routesFor({ question: null, unreachableHosts: [host] }), host).toEqual([]);
     }
-    expect(routesFor({ question: null, unreachableHosts: ['notfreelancer.com', 'freelancer.example.org'] })).toEqual([]);
+    expect(READABLE_ROUTES.map((route) => route.host)).not.toContain('freelancer.com');
   });
 
   it('every route is a public https address that needs no key and no account', () => {

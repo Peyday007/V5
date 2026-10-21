@@ -1,5 +1,7 @@
 # The Freelancer operation
 
+> **Off (2026-10-20).** The owner rejected freelance work as a Cash Mode strategy. This operation does not run (`server/services/cash/freelancer/enabled.ts`); this document describes it as history. Do not follow its setup steps.
+
 Brain runs a freelance service on Freelancer.com end to end. It finds jobs, bids, does the work, delivers it, answers the client, revises, and collects the payment. The owner connects the account, completes Freelancer's identity checks and approves the limits. Nothing in the loop is the owner's labour.
 
 Code: `server/services/cash/freelancer/`, with the deliverable renderers and verifiers under `deliverables/`. Tables: `marketplace_jobs` (migration `122_marketplace_jobs.sql`, pg `113_marketplace_jobs.sql`) and `marketplace_deliverables` (`123_marketplace_deliverables.sql`, pg `114_marketplace_deliverables.sql`). The operation runs as a pass on the durable Russell tick for every project with an ACTIVE cash sprint.

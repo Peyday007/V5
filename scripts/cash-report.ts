@@ -32,6 +32,7 @@
  * string, a bucket key or a token: it reports what a project contains, never
  * where it is kept.
  */
+import { freelancerOperationEnabled, FREELANCER_OPERATION_OFF } from '../server/services/cash/freelancer/enabled.ts';
 import { listJobs } from '../server/repos/cashJobs.ts';
 import { NEED_RESEARCHABLE_ENGINE_FIELDS } from '../server/services/cash/engineCard.ts';
 import { listNeeds as listCashNeeds } from '../server/repos/cashPortfolio.ts';
@@ -1011,6 +1012,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
  * and every job past REJECTED is listed with its state and reason.
  */
 async function marketplaceOperation(projectId: string): Promise<void> {
+  if (!freelancerOperationEnabled()) console.log(`MARKETPLACE — ${FREELANCER_OPERATION_OFF} Rows below are history.`);
   const db = getDb();
   const jobs = await db.all<{ id: string; external_id: string; title: string; state: string; state_reason: string | null; bid_amount_cents: number | null; currency: string; economics: string | null; screen_reasons: string; created_at: string }>(
     'SELECT id, external_id, title, state, state_reason, bid_amount_cents, currency, economics, screen_reasons, created_at FROM marketplace_jobs WHERE project_id = ? ORDER BY created_at, id',
