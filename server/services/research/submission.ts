@@ -218,6 +218,19 @@ export async function recordFragmentClaims(input: {
         puzzleValue: claim.puzzleValue ?? null,
         puzzleAmountCents: claim.puzzleAmountCents ?? null,
         puzzleCurrency: claim.puzzleCurrency ?? null,
+        /*
+         * And the commerce declaration (§73), for the same reason: a field
+         * the tool validated and this mapper forgot lands NULL, and the
+         * failure reads exactly like a worker honestly finding nothing.
+         */
+        commerceFinding: claim.commerceFinding ?? null,
+        commerceProduct: claim.commerceProduct ?? null,
+        commerceSubject: claim.commerceSubject ?? null,
+        commerceValue: claim.commerceValue ?? null,
+        commerceAmountCents: claim.commerceAmountCents ?? null,
+        commerceRateBps: claim.commerceRateBps ?? null,
+        commerceCurrency: claim.commerceCurrency ?? null,
+        commerceDays: claim.commerceDays ?? null,
         // Carried through rather than defaulted here. This mapper dropped it,
         // so every claim landed RETRIEVED however the worker had marked it —
         // and a claim whose source nobody could open was then judged as though

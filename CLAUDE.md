@@ -13691,6 +13691,27 @@ deliverable sat PREPARED, and Cash counted none of them.
   account and spend), origami designs (a fold cannot be verified from a file),
   and "15k entries" of data with no client file.
 
+## 73. What sells is a dated fact, and a margin is withheld past any unknown.
+
+The commerce kernel (`server/services/commerce/`, `server/repos/commerce.ts`,
+`server/domain/commerce.ts`, `docs/COMMERCE.md`) finds generic products selling
+now, who ships them, what they sell for, what one order costs to sell and who
+wants them. It is an entrance to the research machinery, like §45 and §48.
+
+- **A finding is declared from a closed set**, validated by one function at
+  both submission doors, and declared in the tool schema. A demand signal with
+  no date is refused at filing.
+- **The output is an acquisition budget, never a guessed ad cost.** Retail less
+  supplier, shipping, card fee and other published lines, at the worst
+  published end. A missing load-bearing line or two currencies withholds it.
+- **Nothing derivable is stored.** Stage, economics and the next question are
+  derived on every read.
+- **Finishing outranks starting**, and at most three questions are live.
+- **A commerce round is judged by its own envelope, decided before the project
+  slug map**, for the labor kernel's reason — found by compiling one.
+- **It sells nothing.** No store, listing, supplier order, payment or ad. The
+  view names each as not connected, with what the owner must supply.
+
 ## Repository map
 
 ```
@@ -13721,6 +13742,7 @@ server/
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
     puzzle.ts           what a puzzle finding means, and where a retail price may not go
+    commerce.ts         what a commerce finding means, and the one validator both doors call
     puzzleCorpora.ts    the source material, and the rights in it — never researched
     signInName.ts       the name a person types, and what makes it theirs alone
     design.ts           ten design concerns, and the kinds a reading may establish
@@ -13759,6 +13781,7 @@ server/
     bridge.ts         a person's bearer, a transcript exactly as it arrived, and its receipts
     dealflow.ts       both sides of a transaction, and everything hard between them
     puzzle.ts         the universe, the systems, the puzzles, the products, the trade
+    commerce.ts       products, their published facts, and the rounds that asked
     faculties.ts      sources, candidates, faculties and their typed edges
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
@@ -14008,6 +14031,15 @@ server/
       declare.ts        the three things only a person can say
       kernel.ts         one project's pass, derived on the tick
       view.ts           the ladder, the gaps, and what would close the nearest one
+    commerce/
+      economics.ts      the acquisition budget, and every reason it is withheld
+      standing.ts       where a product stands, derived from its rows
+      allocate.ts       finishing before finding, pure over a snapshot
+      questions.ts      what each round asks, with the product named verbatim
+      expand.ts         opening the questions, and filing what a gated claim declared
+      programme.ts      the decisions only a person makes
+      kernel.ts         the tick: file, then ask
+      view.ts           the products, the next questions, and what is not connected
     puzzle/
       formats/
         engine.ts       what a generator is, what a validator is, the wall between

@@ -52,6 +52,7 @@
     "design": "tsx --env-file-if-exists=.env scripts/design.ts",
     "capability": "tsx --env-file-if-exists=.env scripts/capability.ts",
     "manufacturing": "tsx --env-file-if-exists=.env scripts/manufacturing.ts",
+    "commerce": "tsx --env-file-if-exists=.env scripts/commerce.ts",
     "scenario:bench": "tsx scripts/scenario-bench.ts",
     "puzzle-book": "tsx scripts/puzzle-book.ts"
   },

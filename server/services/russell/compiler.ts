@@ -80,6 +80,7 @@ import { diveStageForCandidate } from '../cash/diveStage.ts';
 import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
 import { dealRoundForCandidate } from '../../repos/dealflow.ts';
 import { puzzleRoundForCandidate } from '../../repos/puzzle.ts';
+import { commerceRoundForCandidate } from '../../repos/commerce.ts';
 import type { DealRoundPurpose, PuzzleRoundPurpose } from '../../domain/types.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
 import { commissionForCandidate } from '../../repos/monetization.ts';
@@ -308,6 +309,24 @@ async function envelopeIdFor(
     return 'RUSSELL_MONETIZATION_ATTRIBUTE_V1';
   }
 
+  /*
+   * A commerce question (§73), decided by the round that asked it and split for
+   * the puzzle kernel's reason: finding which products sell is a question whose
+   * deliverable is a name, and establishing what one order costs is one whose
+   * deliverable is a figure. Neither widens anything beyond reading.
+   *
+   * Above the slug map for the labor kernel's reason: a caller cannot reach it,
+   * since `commerce_rounds` is written by the kernel, and on a project that
+   * declares a public-records envelope a question about what sells would
+   * otherwise be compiled and judged as a public-records question — found by
+   * compiling one in a test rather than by reading this function.
+   */
+  const commerce = await commerceRoundForCandidate(candidate.id);
+  if (commerce) {
+    return commerce.purpose === 'DISCOVER' || commerce.purpose === 'NICHE'
+      ? 'RUSSELL_COMMERCE_DISCOVERY_V1'
+      : 'RUSSELL_COMMERCE_TERMS_V1';
+  }
   const declared = ENVELOPE_BY_PROJECT[project.slug];
   if (declared) return declared;
 

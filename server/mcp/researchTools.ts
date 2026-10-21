@@ -70,6 +70,16 @@ import {
 } from '../domain/puzzle.ts';
 import type { PuzzleFinding, PuzzleProductClass } from '../domain/types.ts';
 import {
+  COMMERCE_COST_COMPONENTS,
+  COMMERCE_DEMAND_KINDS,
+  COMMERCE_FINDINGS,
+  COMMERCE_FINDING_GUIDE,
+  COMMERCE_RESTRICTIONS,
+  MAX_DELIVERY_DAYS,
+  validateCommerceFinding,
+} from '../domain/commerce.ts';
+import type { CommerceFinding } from '../domain/types.ts';
+import {
   TerminalEffectFailure,
   type OperationNamespace,
 } from '../services/effects/engine.ts';
@@ -1390,6 +1400,48 @@ function puzzleOf(
   };
 }
 
+/**
+ * The wire door's commerce declaration (§73), delegated to the one validator.
+ * A rename and nothing else, for `puzzleOf`'s reason: every rule lives in
+ * `domain/commerce.ts` and is applied identically on both doors.
+ */
+function commerceOf(
+  row: Record<string, unknown>,
+  where: string,
+): {
+  commerceFinding: CommerceFinding | null;
+  commerceProduct: string | null;
+  commerceSubject: string | null;
+  commerceValue: string | null;
+  commerceAmountCents: number | null;
+  commerceRateBps: number | null;
+  commerceCurrency: string | null;
+  commerceDays: number | null;
+} {
+  const parsed = validateCommerceFinding({
+    where,
+    finding: row['commerce_finding'],
+    product: row['commerce_product'],
+    subject: row['commerce_subject'],
+    value: row['commerce_value'],
+    amountCents: row['commerce_amount_cents'],
+    rateBps: row['commerce_rate_bps'],
+    currency: row['commerce_currency'],
+    days: row['commerce_days'],
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return {
+    commerceFinding: parsed.value.finding,
+    commerceProduct: parsed.value.product,
+    commerceSubject: parsed.value.subject,
+    commerceValue: parsed.value.value,
+    commerceAmountCents: parsed.value.amountCents,
+    commerceRateBps: parsed.value.rateBps,
+    commerceCurrency: parsed.value.currency,
+    commerceDays: parsed.value.days,
+  };
+}
+
 const submitClaimsTool: McpTool = {
   name: 'brain_submit_claims',
   title: 'Submit a fragment\'s claims',
@@ -1446,6 +1498,13 @@ const submitClaimsTool: McpTool = {
     'The axes are independent: a claim can carry an opportunity_signal, a ' +
     'structural_finding, a deal_finding and a puzzle_finding at once, and most claims carry ' +
     'none of them. ' +
+    'And separately again, where a claim establishes something about a consumer product ' +
+    'people are buying now — that it is selling, what it retails for, who supplies it at what ' +
+    'unit cost, a line of what one order costs, who else sells it, what buyers complain about, ' +
+    'which sub-audience wants it, or a rule on selling or advertising it — set ' +
+    'commerce_finding to the kind it is: ' +
+    COMMERCE_FINDINGS.map((one) => `${one} — ${COMMERCE_FINDING_GUIDE[one]}`).join('; ') +
+    '. Every commerce_finding requires commerce_product and commerce_subject. ' +
     'monetization_method is not a fifth axis, because it is the one field here that says ' +
     'nothing on its own: where a source says how money would actually be made from an opening ' +
     'it establishes, set it alongside that claim\'s opportunity_signal — only alongside one, ' +
@@ -1841,6 +1900,71 @@ const submitClaimsTool: McpTool = {
                 'published. Brain never converts, so a product class whose figures are in two ' +
                 'currencies has its contribution withheld and says why.',
             },
+            /*
+             * The commerce declaration (§73), declared in the schema for the
+             * reason the puzzle one is: a field named in prose and left out of
+             * an `additionalProperties: false` schema is dropped by a client
+             * that honours the schema.
+             */
+            commerce_finding: {
+              type: 'string',
+              enum: [...COMMERCE_FINDINGS],
+              description:
+                'Optional, and absent for most claims. Set it when this claim establishes ' +
+                'something about a consumer product people are buying now: ' +
+                COMMERCE_FINDINGS.map((one) => `${one} — ${COMMERCE_FINDING_GUIDE[one]}`).join('; ') +
+                '. Independent of the other axes.',
+            },
+            commerce_product: {
+              type: 'string',
+              description:
+                'Required whenever commerce_finding is set: which product, named specifically ' +
+                '(not a category). Where the assignment names a product, copy that string ' +
+                'verbatim — a different wording is a different product to Brain.',
+            },
+            commerce_subject: {
+              type: 'string',
+              description:
+                'Required whenever commerce_finding is set: the seller, supplier, platform, ' +
+                'community or rule the finding names, as the source writes it.',
+            },
+            commerce_value: {
+              type: 'string',
+              enum: [...COMMERCE_DEMAND_KINDS, ...COMMERCE_COST_COMPONENTS, ...COMMERCE_RESTRICTIONS],
+              description:
+                'Required for PRODUCT_DEMAND (which signal: ' +
+                COMMERCE_DEMAND_KINDS.join(', ') +
+                '), COST_LINE (which line: ' +
+                COMMERCE_COST_COMPONENTS.join(', ') +
+                ') and RESTRICTION (which rule: ' +
+                COMMERCE_RESTRICTIONS.join(', ') +
+                '); refused otherwise.',
+            },
+            commerce_amount_cents: {
+              type: 'integer',
+              description:
+                'The published figure in minor units. Required for RETAIL_PRICE, SUPPLIER_OFFER ' +
+                'and COMPETITOR; a COST_LINE carries either this or commerce_rate_bps. A ' +
+                'published zero (free shipping) is declared as 0.',
+            },
+            commerce_rate_bps: {
+              type: 'integer',
+              description:
+                'A COST_LINE published as a percentage, in basis points (2.9% is 290). Only a ' +
+                'COST_LINE carries one, and never together with commerce_amount_cents.',
+            },
+            commerce_currency: {
+              type: 'string',
+              description:
+                'Required with commerce_amount_cents: the three-letter ISO 4217 code as ' +
+                'published. Brain never converts currencies.',
+            },
+            commerce_days: {
+              type: 'integer',
+              description:
+                `Optional, SUPPLIER_OFFER only: the delivery days to the customer the supplier ` +
+                `publishes, 0 to ${MAX_DELIVERY_DAYS}.`,
+            },
             retrieval_state: {
               type: 'string',
               enum: [...RETRIEVAL_STATES],
@@ -1968,6 +2092,7 @@ const submitClaimsTool: McpTool = {
          */
         ...dealOf(row, where),
         ...puzzleOf(row, where),
+        ...commerceOf(row, where),
         retrievalState: retrievalStateOf(row, where),
         derived: bool(row, 'derived', where, false),
         derivedFrom: strList(row, 'derived_from', where),

@@ -55,7 +55,9 @@ export type CompilerProfileId =
   | 'DEALFLOW_PARTIES'
   | 'DEALFLOW_TERMS'
   | 'PUZZLE_MARKET'
-  | 'PUZZLE_TERMS';
+  | 'PUZZLE_TERMS'
+  | 'COMMERCE_DISCOVERY'
+  | 'COMMERCE_TERMS';
 
 export interface CompilerProfile {
   id: CompilerProfileId;
@@ -2089,6 +2091,172 @@ const PUZZLE_TERMS: CompilerProfile = {
   ],
 };
 
+/**
+ * Which consumer products are selling now (§73).
+ *
+ * The half of the commerce kernel whose deliverable is a **named product with
+ * a dated signal**. The excluded sources are the failure this subject has: the
+ * web is full of undated "winning products" articles, and a product somebody
+ * called a winner establishes nothing about this month.
+ */
+const COMMERCE_DISCOVERY: CompilerProfile = {
+  id: 'COMMERCE_DISCOVERY',
+  fragmentKey: 'commerce-discovery',
+  multipleJurisdictions: 'DESCRIBE',
+  // Beside the industry map, dealflow parties and the puzzle market: it gives
+  // later questions something to point at, and yields to finishing work.
+  launchOrdinal: 330,
+  proposedSources: [
+    'a marketplace or online store’s own best-seller, top-rated or fastest-rising list',
+    'a marketplace product page stating how many have sold or how many reviews it has',
+    'a product analytics or trend report naming specific products with dated figures',
+    'a public ad library entry showing an advert and the date it started running',
+    'a search-trend page for the product',
+    'a community, forum or review thread where buyers discuss the product',
+  ],
+  excludedSources: [
+    'an undated article listing "winning products" with no evidence behind each one',
+    'a product described as trending with no date and no figure',
+    'a brand-name or trademarked product presented as a generic opening',
+    'a forecast of a category’s growth presented as a product selling now',
+  ],
+  lanes: [
+    {
+      id: 'product_demand',
+      // One dated best-seller listing establishes that one listing; a second,
+      // independent source is the kernel's own bar for qualifying, not the
+      // gate's for accepting the claim.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A specific product visibly selling now, declared with commerce_finding PRODUCT_DEMAND, ' +
+        'commerce_product naming it as a shopper would search for it, commerce_subject naming ' +
+        'the platform or store that shows it, commerce_value naming the kind of signal, and the ' +
+        'source’s date. A product described in prose and not declared reaches nothing.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'niche_signal',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A published sub-audience, use case or complaint theme for a product, declared as ' +
+        'NICHE_SIGNAL or CUSTOMER_COMPLAINT with commerce_product set to the product.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'Lists of "winning products" exist and none carries a date or a figure, which is recorded ' +
+      'as no current signal rather than as a product selling.',
+    'Every product found is a brand-name product, which is reported as such and not as an ' +
+      'opening.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Name each product ` +
+        'specifically and date every signal.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: () => [
+    'Every product is declared on its own claim with commerce_finding, commerce_product and ' +
+      'commerce_subject. One described in prose and not declared changes nothing.',
+    'Where the question names a product, that exact string is copied into commerce_product.',
+    'Every demand signal carries the date the source published or last observed it; an undated ' +
+      'signal is not filed.',
+    'Every source carries its URL, who publishes it, and its date, and every claim carries the ' +
+      'URL of the source it came from.',
+  ],
+};
+
+/**
+ * Who supplies a product, what it sells for, and what one order costs (§73).
+ *
+ * The half whose deliverable is a **figure or a rule**, and whose most
+ * dangerous answer is a plausible one: a percentage fee reported as an amount,
+ * or a retail price reported as a supplier's cost.
+ */
+const COMMERCE_TERMS: CompilerProfile = {
+  id: 'COMMERCE_TERMS',
+  fragmentKey: 'commerce-terms',
+  multipleJurisdictions: 'DESCRIBE',
+  // Beside the deep dive and the other kernels' terms: finishing work on
+  // something already on the map.
+  launchOrdinal: 150,
+  proposedSources: [
+    'a supplier’s own listing or catalogue page with its unit price and shipping',
+    'a dropship or wholesale catalogue’s product page',
+    'a marketplace or online store’s own product page and price',
+    'a payment processor or store platform’s own published fee page',
+    'a carrier’s published shipping rates',
+    'a published advertising benchmark report naming cost per order or per acquisition',
+    'an ad platform’s own published advertising policy',
+    'a regulator, standards body or customs authority’s published rule',
+    'an intellectual-property register',
+  ],
+  excludedSources: [
+    'a retail price presented as a supplier’s cost',
+    'a percentage fee converted into an amount, or an amount into a percentage',
+    'a figure estimated, interpolated or converted between currencies',
+    'a single number produced from a published range',
+    'a legal or policy position asserted with no published rule behind it',
+  ],
+  lanes: [
+    {
+      id: 'product_supplier',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A named supplier that would ship the product, declared as SUPPLIER_OFFER with its unit ' +
+        'cost in commerce_amount_cents and commerce_currency, and its delivery days in ' +
+        'commerce_days where published.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'product_price',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What a named seller charges a shopper, declared as RETAIL_PRICE or COMPETITOR with the ' +
+        'figure and currency as published.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'product_costs',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'One published line of what an order costs, declared as COST_LINE with commerce_value ' +
+        'naming the line and either an amount with its currency or a percentage in ' +
+        'commerce_rate_bps.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'product_rules',
+      description:
+        'A published rule on selling or advertising the product, declared as RESTRICTION with ' +
+        'commerce_value naming its kind.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'Suppliers list the product and none publishes a unit price without signing in, which is ' +
+      'recorded as no published unit cost rather than estimated.',
+    'No advertising cost per order is published for products of this kind, which is reported as ' +
+      'such — Brain then reports what one order can afford to spend instead of guessing.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Report every figure as the ` +
+        'source published it, in the currency it published it in.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: () => [
+    'Every figure is declared with commerce_finding, commerce_product set to exactly the product ' +
+      'the question names, commerce_subject, and an amount with its currency or a percentage in ' +
+      'commerce_rate_bps. A figure described in prose and not declared reaches no arithmetic.',
+    'A supplier’s cost, a retail price and a fee are never conflated, and a percentage is never ' +
+      'converted into an amount.',
+    'Figures are reported as published: no currency conversion and no range turned into one number.',
+    'Every source carries its URL, who publishes it, and its date, and every claim carries the ' +
+      'URL of the source it came from.',
+  ],
+};
+
 const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_PUBLIC_RECORDS_V1: PUBLIC_RECORDS,
   RUSSELL_STATE_LICENSING_V1: PUBLIC_RECORDS,
@@ -2109,6 +2277,8 @@ const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_DEALFLOW_TERMS_V1: DEALFLOW_TERMS,
   RUSSELL_PUZZLE_MARKET_V1: PUZZLE_MARKET,
   RUSSELL_PUZZLE_TERMS_V1: PUZZLE_TERMS,
+  RUSSELL_COMMERCE_DISCOVERY_V1: COMMERCE_DISCOVERY,
+  RUSSELL_COMMERCE_TERMS_V1: COMMERCE_TERMS,
 });
 
 export function profileFor(envelopeId: string): CompilerProfile | null {

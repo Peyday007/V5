@@ -449,6 +449,15 @@ const OVERRIDES: Override[] = [
   // Brain is looking.
   { pattern: /^\/api\/projects\/[^/]+\/manufacturing/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/manufacturing/, method: 'PATCH', level: 'ADMIN' },
+  // The commerce kernel (§73)
+  // ---------------------------------------------------------------------
+  //
+  // Every write is ADMIN, for manufacturing's reason: starting the programme
+  // is the authorization for its research, and naming or retiring a product
+  // decides where the fleet looks. No entry names a worker scope, and every
+  // handler also calls `requirePerson`. Reading takes the default READ.
+  { pattern: /^\/api\/projects\/[^/]+\/commerce/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/commerce/, method: 'PATCH', level: 'ADMIN' },
   // The cross-border dealflow kernel
   // ---------------------------------------------------------------------
   //

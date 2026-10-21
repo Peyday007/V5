@@ -666,6 +666,84 @@ anywhere; placing an advertisement; making any commitment on anybody's behalf; q
 or negotiating. This is read-only research into what is already published, and every action
 beyond reading needs a separate commercial authorization from a person.`;
 
+/**
+ * Which consumer products are selling now, and who wants them (§73).
+ *
+ * The deliverable is a named product with a dated signal. The failure this
+ * subject has is specific and the template names it: the web is full of
+ * articles listing "winning products" with no date and no evidence, and a
+ * product somebody called a winner establishes nothing about whether anyone is
+ * buying it this month.
+ */
+export const COMMERCE_DISCOVERY_ASSIGNMENT_TEMPLATE = `Establish, from published sources, the answer to this question:
+
+{QUESTION}
+
+Scope: {JURISDICTION}. Say which market each signal is about where the source says so.
+
+Evidence standard: a published page identified by its URL and by who publishes it — a
+best-seller or fastest-rising list, a marketplace product page stating how many have sold, a
+product analytics report, an advert in a public ad library with its start date, a search-trend
+page, or a community thread — carrying the date it was published or last observed. A product is
+established as selling by a dated signal about that specific product, not by an article calling
+it a winner.
+
+Completion standard: every product is declared on its own claim with commerce_finding set to
+PRODUCT_DEMAND, commerce_product naming the product specifically as a shopper would search for it,
+commerce_subject naming the platform, list or store that shows the signal, commerce_value naming
+the kind of signal, and the source's date. A product described in prose and not declared reaches
+nothing. Where the assignment names a product, copy that string verbatim into commerce_product. A
+brand-name or trademarked product is reported as such rather than as an opening. Saying that no
+current signal was found is a better answer than naming an undated one.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription or a paid
+API; opening, registering or signing in to any account; ordering a sample or any product; listing,
+uploading or publishing anything anywhere; placing an advertisement; making any commitment on
+anybody's behalf; quoting, offering or negotiating. This is read-only research into what is
+already published, and every action beyond reading needs a separate commercial authorization from
+a person.`;
+
+/**
+ * What one order of a product costs, who supplies it, and what rules bear on
+ * selling it (§73).
+ *
+ * The deliverable is a figure or a rule. The template names the one confusion
+ * that wrecks the arithmetic — a percentage fee reported as an amount, or a
+ * shelf price reported as a supplier's cost — because it is the mistake a
+ * careful worker makes when the easy number is the wrong one.
+ */
+export const COMMERCE_TERMS_ASSIGNMENT_TEMPLATE = `Establish, from published sources, the answer to this question:
+
+{QUESTION}
+
+Scope: {JURISDICTION}. A price, a fee and a rule are each about one market. Say which.
+
+Evidence standard: a supplier's own listing or catalogue page, a marketplace or store's own
+product page, a payment processor's or platform's own published fee page, a carrier's published
+rates, a published advertising benchmark report, an ad platform's own policy page, a regulator's
+or standards body's published rule, or an intellectual-property register — identified by its URL
+and by who publishes it, carrying the date it was published or last observed. A figure is read
+from a source and never produced: report it as published, in the currency it was published in.
+
+THE DISTINCTION THIS QUESTION TURNS ON: a supplier's unit cost, a shopper's retail price and a
+per-order fee are three different numbers. Declare a supplier's cost as SUPPLIER_OFFER, a seller's
+price as RETAIL_PRICE or COMPETITOR, and a fee as COST_LINE — a percentage fee in commerce_rate_bps
+(2.9% is 290) and an amount in commerce_amount_cents, never one as the other.
+
+Completion standard: every figure is declared on its own claim with commerce_finding, commerce_product
+set to exactly the product the assignment names, commerce_subject naming who publishes it, and the
+figure in commerce_amount_cents with commerce_currency, or in commerce_rate_bps. A published zero is
+a figure and is declared as 0. Do not convert currencies, do not reconcile figures on different
+bases, and do not turn a range into one number. Every rule on selling or advertising the product is
+declared as RESTRICTION with commerce_value naming its kind.
+
+Out of scope: contacting any person or organisation; requesting a quote; ordering a sample or any
+product; opening, registering or signing in to any account; buying access, data, a subscription or
+a paid API; listing, uploading or publishing anything anywhere; placing an advertisement;
+making any commitment on anybody's behalf; quoting, offering or negotiating. This is read-only research into
+what is already published, and every action beyond reading needs a separate commercial
+authorization from a person.`;
+
 export const INDUSTRY_MAP_ASSIGNMENT_TEMPLATE = `Establish, from published sources, how this part of the economy is actually put together:
 
 {QUESTION}
@@ -1571,6 +1649,62 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'registering an account, obtaining a certification and listing anything anywhere are ' +
       'commercial actions a person grants separately, and never this envelope.',
     assignmentTemplate: PUZZLE_TERMS_ASSIGNMENT_TEMPLATE,
+    jurisdiction: ANY_NAMED_MARKET,
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * The commerce kernel's two questions (§73).
+   *
+   * Two rather than one for `RUSSELL_CASH_VALIDATION_V1`'s reason:
+   * `planFitsEnvelope` pins one assignment template per envelope, and finding
+   * which products are selling is a question whose deliverable is a name,
+   * while establishing what one order costs is one whose deliverable is a
+   * figure. Both take their source classes and prohibitions verbatim from the
+   * cash discovery envelope, so nothing here authorizes ordering from a
+   * supplier, opening a store, listing a product or advertising it — each of
+   * those is a `COMMERCIAL_ACTION` a person grants separately.
+   */
+  RUSSELL_COMMERCE_DISCOVERY_V1: Object.freeze({
+    id: 'RUSSELL_COMMERCE_DISCOVERY_V1',
+    authorization:
+      'The operator authorized standing read-only discovery research inside a Cash Mode ' +
+      'project when they started it, and started the commerce programme on it: published ' +
+      'sources only, with no spending, no paid API or purchased data, no contact with any ' +
+      'person or organisation, no advertising, no publishing and no external effect of any ' +
+      'kind. This envelope is that authorization applied to establishing which consumer ' +
+      'products are visibly selling now and which audiences want them. Ordering from a ' +
+      'supplier, opening a store, listing a product and advertising it are commercial actions ' +
+      'a person grants separately, and never this envelope.',
+    assignmentTemplate: COMMERCE_DISCOVERY_ASSIGNMENT_TEMPLATE,
+    jurisdiction: ANY_NAMED_MARKET,
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  RUSSELL_COMMERCE_TERMS_V1: Object.freeze({
+    id: 'RUSSELL_COMMERCE_TERMS_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a Cash Mode project when ' +
+      'they started it, and started the commerce programme on it: published sources only, with ' +
+      'no spending, no paid API or purchased data, no contact with any person or organisation, ' +
+      'no advertising, no publishing and no external effect of any kind. This envelope is that ' +
+      'authorization applied to establishing who supplies a product and at what unit cost, what ' +
+      'it retails for, what one order costs to sell, and what rules bear on selling or ' +
+      'advertising it. Requesting a quote, ordering a sample, opening an account and listing ' +
+      'anything are commercial actions a person grants separately, and never this envelope.',
+    assignmentTemplate: COMMERCE_TERMS_ASSIGNMENT_TEMPLATE,
     jurisdiction: ANY_NAMED_MARKET,
     maxFragments: null,
     geography: /\S/,

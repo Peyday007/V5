@@ -36,6 +36,7 @@ import {
   type CapabilityFinding,
   type DealFinding,
   type PuzzleFinding,
+  type CommerceFinding,
   type PuzzleProductClass,
   type MonetizationMethod,
 } from '../../domain/types.ts';
@@ -46,6 +47,7 @@ import { validateLabor } from '../../domain/labor.ts';
 import { validateCapabilityFinding } from '../../domain/manufacturing.ts';
 import { validateDealFinding } from '../../domain/dealflow.ts';
 import { validatePuzzleFinding } from '../../domain/puzzle.ts';
+import { validateCommerceFinding } from '../../domain/commerce.ts';
 import {
   booleanField,
   confidenceField,
@@ -601,6 +603,15 @@ export interface ParsedClaim {
   puzzleAmountCents: number | null;
   /** Which currency it was published in. Brain never converts one. */
   puzzleCurrency: string | null;
+  /** What the claim establishes about a consumer product, or null (§73). */
+  commerceFinding: CommerceFinding | null;
+  commerceProduct: string | null;
+  commerceSubject: string | null;
+  commerceValue: string | null;
+  commerceAmountCents: number | null;
+  commerceRateBps: number | null;
+  commerceCurrency: string | null;
+  commerceDays: number | null;
   /**
    * Whether the worker could actually read the source.
    *
@@ -878,6 +889,23 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   });
   if (!puzzle.ok) return puzzle;
 
+  /*
+   * And what it establishes about a consumer product (§73), delegated to the
+   * one validator the MCP tool calls too, for the reason directly above.
+   */
+  const commerce = validateCommerceFinding({
+    where,
+    finding: row['commerceFinding'],
+    product: row['commerceProduct'],
+    subject: row['commerceSubject'],
+    value: row['commerceValue'],
+    amountCents: row['commerceAmountCents'],
+    rateBps: row['commerceRateBps'],
+    currency: row['commerceCurrency'],
+    days: row['commerceDays'],
+  });
+  if (!commerce.ok) return commerce;
+
   const confidence = confidenceField(row['confidence']);
   if (!confidence.ok) return confidence;
 
@@ -941,6 +969,14 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       puzzleValue: puzzle.value.value,
       puzzleAmountCents: puzzle.value.amountCents,
       puzzleCurrency: puzzle.value.currency,
+      commerceFinding: commerce.value.finding,
+      commerceProduct: commerce.value.product,
+      commerceSubject: commerce.value.subject,
+      commerceValue: commerce.value.value,
+      commerceAmountCents: commerce.value.amountCents,
+      commerceRateBps: commerce.value.rateBps,
+      commerceCurrency: commerce.value.currency,
+      commerceDays: commerce.value.days,
       derived: derived.value,
       derivedFrom: derivedFrom.value,
       claimType: claimType.value,

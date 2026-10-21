@@ -2199,6 +2199,14 @@ export interface ResearchClaimRow {
   puzzle_value: string | null;
   puzzle_amount_cents: number | null;
   puzzle_currency: string | null;
+  commerce_finding: string | null;
+  commerce_product: string | null;
+  commerce_subject: string | null;
+  commerce_value: string | null;
+  commerce_amount_cents: number | null;
+  commerce_rate_bps: number | null;
+  commerce_currency: string | null;
+  commerce_days: number | null;
   retrieved_at: string | null;
   confidence: number;
   contradiction_state: string;
@@ -3563,6 +3571,30 @@ export interface ResearchClaim {
   puzzleAmountCents: number | null;
   /** The currency that figure is published in. Brain never converts one. */
   puzzleCurrency: string | null;
+  /**
+   * What this claim establishes about a product people are buying now, if
+   * anything.
+   *
+   * The fifth declaration axis (§73), and its own column for the reason every
+   * other one has one: *what does this say about a consumer product, its
+   * demand, its suppliers and its unit economics* is a different question from
+   * the four beside it, and a column with two masters is invariant 31.
+   */
+  commerceFinding: CommerceFinding | null;
+  /** Which product, as the source names it — the key two rows join on. */
+  commerceProduct: string | null;
+  /** What the finding names: the seller, the supplier, the platform, the rule. */
+  commerceSubject: string | null;
+  /** The closed-set value: a demand kind, a cost line, or a kind of restriction. */
+  commerceValue: string | null;
+  /** A published figure in minor units. A published zero is a figure. */
+  commerceAmountCents: number | null;
+  /** A published percentage fee, in basis points. Only a cost line carries one. */
+  commerceRateBps: number | null;
+  /** The currency the figure was published in. Brain never converts one. */
+  commerceCurrency: string | null;
+  /** Days to deliver, where a supplier publishes them. */
+  commerceDays: number | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
@@ -11188,4 +11220,192 @@ export interface MarketplaceDeliverableRow {
   state: string;
   created_at: string;
   delivered_at: string | null;
+}
+
+
+/* ==========================================================================
+ * THE COMMERCE KERNEL (§73)
+ *
+ * Products consumers are buying now, the suppliers that would ship them, and
+ * what one order is worth after every cost a source published. The finding
+ * vocabulary is closed, the products are not: a product exists because a
+ * gated claim named it or a person seeded it, and there is no list of them
+ * anywhere in this repository.
+ * ======================================================================== */
+
+/** What a claim establishes about a consumer product and its trade. */
+export const COMMERCE_FINDINGS = [
+  /** The product is visibly selling now, by a named, dated signal. */
+  'PRODUCT_DEMAND',
+  /** A named seller's published retail price for it. */
+  'RETAIL_PRICE',
+  /** A named supplier that will ship it, with its published unit cost. */
+  'SUPPLIER_OFFER',
+  /** One published line of what selling one unit costs. */
+  'COST_LINE',
+  /** A named competing seller and its published price. */
+  'COMPETITOR',
+  /** A published complaint theme about products like it. */
+  'CUSTOMER_COMPLAINT',
+  /** A published sub-audience or use case asking for it. */
+  'NICHE_SIGNAL',
+  /** A published rule bearing on whether it may be sold or advertised. */
+  'RESTRICTION',
+] as const;
+export type CommerceFinding = (typeof COMMERCE_FINDINGS)[number];
+
+/** Which kind of demand signal a PRODUCT_DEMAND finding is. */
+export const COMMERCE_DEMAND_KINDS = [
+  'BESTSELLER_RANK',
+  'ORDER_COUNT',
+  'LONG_RUNNING_AD',
+  'SEARCH_TREND',
+  'SOCIAL_TRACTION',
+  'REVIEW_VELOCITY',
+] as const;
+export type CommerceDemandKind = (typeof COMMERCE_DEMAND_KINDS)[number];
+
+/** Which line of per-order cost a COST_LINE finding is. */
+export const COMMERCE_COST_COMPONENTS = [
+  'SHIPPING_TO_CUSTOMER',
+  'PAYMENT_PROCESSING',
+  'PLATFORM_FEE',
+  'AD_COST_PER_ORDER',
+  'RETURNS_ALLOWANCE',
+  'IMPORT_DUTY',
+] as const;
+export type CommerceCostComponent = (typeof COMMERCE_COST_COMPONENTS)[number];
+
+/** Which kind of rule a RESTRICTION finding is. */
+export const COMMERCE_RESTRICTIONS = [
+  'AD_POLICY',
+  'PROHIBITED_ITEM',
+  'SAFETY_CERTIFICATION',
+  'INTELLECTUAL_PROPERTY',
+  'IMPORT_RULE',
+  'PLATFORM_RULE',
+] as const;
+export type CommerceRestriction = (typeof COMMERCE_RESTRICTIONS)[number];
+
+export const COMMERCE_ROUND_PURPOSES = ['DISCOVER', 'SOURCE', 'PRICE', 'COSTS', 'NICHE'] as const;
+export type CommerceRoundPurpose = (typeof COMMERCE_ROUND_PURPOSES)[number];
+
+export const COMMERCE_ROUND_STATES = ['OPEN', 'SETTLED', 'ABANDONED'] as const;
+export type CommerceRoundState = (typeof COMMERCE_ROUND_STATES)[number];
+
+export const COMMERCE_PROGRAMME_STATES = ['ACTIVE', 'PAUSED'] as const;
+export type CommerceProgrammeState = (typeof COMMERCE_PROGRAMME_STATES)[number];
+
+export type CommerceOrigin = 'SEED' | 'DISCOVERED';
+
+export interface CommerceProgrammeRow {
+  id: string;
+  project_id: string;
+  objective: string;
+  state: string;
+  started_by: string;
+  started_at: string;
+  updated_at: string;
+}
+
+export interface CommerceProgramme {
+  id: string;
+  projectId: string;
+  objective: string;
+  state: CommerceProgrammeState;
+  startedBy: string;
+  startedAt: string;
+  updatedAt: string;
+}
+
+export interface CommerceProductRow {
+  id: string;
+  project_id: string;
+  name: string;
+  product_key: string;
+  note: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommerceProduct {
+  id: string;
+  projectId: string;
+  name: string;
+  productKey: string;
+  note: string | null;
+  origin: CommerceOrigin;
+  sourceClaimId: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommerceFactRow {
+  id: string;
+  project_id: string;
+  product_id: string;
+  finding: string;
+  subject: string;
+  value: string | null;
+  amount_cents: number | null;
+  rate_bps: number | null;
+  currency: string | null;
+  days: number | null;
+  statement: string;
+  publisher: string | null;
+  observed_on: string | null;
+  source_claim_id: string;
+  created_at: string;
+}
+
+export interface CommerceFact {
+  id: string;
+  projectId: string;
+  productId: string;
+  finding: CommerceFinding;
+  subject: string;
+  value: string | null;
+  amountCents: number | null;
+  rateBps: number | null;
+  currency: string | null;
+  days: number | null;
+  statement: string;
+  publisher: string | null;
+  observedOn: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+}
+
+export interface CommerceRoundRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  purpose: string;
+  product_key: string | null;
+  candidate_id: string;
+  round: number;
+  state: string;
+  found: number | null;
+  created_at: string;
+  settled_at: string | null;
+}
+
+export interface CommerceRound {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  purpose: CommerceRoundPurpose;
+  productKey: string | null;
+  candidateId: string;
+  round: number;
+  state: CommerceRoundState;
+  found: number | null;
+  createdAt: string;
+  settledAt: string | null;
 }

@@ -16,7 +16,8 @@ import { isLaborFinding } from '../domain/labor.ts';
 import type { LaborFinding, StructuralFinding } from '../domain/types.ts';
 import { isDealFinding } from '../domain/dealflow.ts';
 import { isPuzzleFinding, isPuzzleProductClass } from '../domain/puzzle.ts';
-import type { DealFinding, PuzzleFinding, PuzzleProductClass } from '../domain/types.ts';
+import { isCommerceFinding } from '../domain/commerce.ts';
+import type { CommerceFinding, DealFinding, PuzzleFinding, PuzzleProductClass } from '../domain/types.ts';
 import type { OpportunitySignal } from '../domain/types.ts';
 import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
@@ -250,6 +251,14 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     puzzleValue: row.puzzle_value,
     puzzleAmountCents: row.puzzle_amount_cents,
     puzzleCurrency: row.puzzle_currency,
+    commerceFinding: isCommerceFinding(row.commerce_finding) ? row.commerce_finding : null,
+    commerceProduct: row.commerce_product ?? null,
+    commerceSubject: row.commerce_subject ?? null,
+    commerceValue: row.commerce_value ?? null,
+    commerceAmountCents: row.commerce_amount_cents ?? null,
+    commerceRateBps: row.commerce_rate_bps ?? null,
+    commerceCurrency: row.commerce_currency ?? null,
+    commerceDays: row.commerce_days ?? null,
     retrievedAt: row.retrieved_at,
     confidence: Number(row.confidence),
     contradictionState: row.contradiction_state as ContradictionState,
@@ -999,6 +1008,15 @@ export interface InsertClaimInput {
   puzzleAmountCents?: number | null;
   /** Which currency that figure is in, as the source published it. */
   puzzleCurrency?: string | null;
+  /** What this claim establishes about a consumer product (§73), or null. */
+  commerceFinding?: CommerceFinding | null;
+  commerceProduct?: string | null;
+  commerceSubject?: string | null;
+  commerceValue?: string | null;
+  commerceAmountCents?: number | null;
+  commerceRateBps?: number | null;
+  commerceCurrency?: string | null;
+  commerceDays?: number | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState?: ContradictionState;
@@ -1046,6 +1064,8 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            deal_amount_cents, deal_currency,
            puzzle_finding, puzzle_subject, puzzle_format, puzzle_product_class,
            puzzle_value, puzzle_amount_cents, puzzle_currency,
+           commerce_finding, commerce_product, commerce_subject, commerce_value,
+           commerce_amount_cents, commerce_rate_bps, commerce_currency, commerce_days,
            retrieved_at, confidence,
            contradiction_state,
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
@@ -1054,7 +1074,8 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
@@ -1077,6 +1098,10 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
           input.puzzleFormat ?? null, input.puzzleProductClass ?? null,
           input.puzzleValue ?? null, input.puzzleAmountCents ?? null,
           input.puzzleCurrency ?? null,
+          input.commerceFinding ?? null, input.commerceProduct ?? null,
+          input.commerceSubject ?? null, input.commerceValue ?? null,
+          input.commerceAmountCents ?? null, input.commerceRateBps ?? null,
+          input.commerceCurrency ?? null, input.commerceDays ?? null,
           input.retrievedAt,
           input.confidence,
           input.contradictionState ?? 'UNCHALLENGED', input.contradictionNote ?? null,
@@ -1575,6 +1600,38 @@ export async function puzzleClaims(input: {
        JOIN research_orchestrations o ON o.id = c.orchestration_id
       WHERE o.project_id = ? AND c.accepted = 1
         AND c.puzzle_finding IS NOT NULL
+        AND c.orchestration_id IN (${holes})
+        AND f.status IN ('ACCEPTED', 'BLOCKED')
+      ORDER BY c.created_at, c.rowid
+      LIMIT ? OFFSET ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 200), Math.max(0, input.offset ?? 0)],
+  );
+  return rows.map((row) => {
+    const claim = mapClaim(row);
+    return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
+  });
+}
+
+/**
+ * The accepted claims carrying a commerce declaration (§73), for the rounds
+ * still open. `puzzleClaims`' shape exactly, one axis along, and its own
+ * function for that function's stated reason: the column each selects on
+ * decides which table its caller writes into.
+ */
+export async function commerceClaims(input: {
+  projectId: string;
+  orchestrationIds: readonly string[];
+  limit?: number;
+  offset?: number;
+}): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
+  if (input.orchestrationIds.length === 0) return [];
+  const holes = input.orchestrationIds.map(() => '?').join(', ');
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.commerce_finding IS NOT NULL
         AND c.orchestration_id IN (${holes})
         AND f.status IN ('ACCEPTED', 'BLOCKED')
       ORDER BY c.created_at, c.rowid

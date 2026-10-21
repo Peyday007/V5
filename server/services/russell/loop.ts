@@ -152,6 +152,7 @@ import { runLaborKernel } from '../labor/kernel.ts';
 import { runManufacturingKernel } from '../manufacturing/kernel.ts';
 import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { runPuzzleKernel } from '../puzzle/kernel.ts';
+import { runCommerceKernel } from '../commerce/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { runFreelancerOperation, type MarketplaceReport } from '../cash/freelancer/operate.ts';
 import { freelancerOperationEnabled } from '../cash/freelancer/enabled.ts';
@@ -596,6 +597,19 @@ export interface TickReport {
     promoted: string[];
     settled: string[];
   }[];
+  /**
+   * What the commerce kernel did (§73): products and facts it filed, rounds it
+   * settled, and the questions it opened with the allocator's reason.
+   */
+  commerceKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    products: string[];
+    facts: string[];
+    refused: number;
+    settled: string[];
+    qualified: number;
+  }[];
   /** The Freelancer operation's pass, per project, when it did anything. */
   marketplace: ({ projectId: string } & MarketplaceReport)[];
   cashOperations: {
@@ -795,6 +809,7 @@ const EMPTY: TickReport = {
   manufacturingKernel: [],
   dealflowKernel: [],
   puzzleKernel: [],
+  commerceKernel: [],
   marketplace: [],
   cashOperations: [],
   sharedPromoted: [],
@@ -899,6 +914,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
     manufacturingKernel: [],
     dealflowKernel: [],
   puzzleKernel: [],
+  commerceKernel: [],
     marketplace: [],
     cashOperations: [],
     sharedPromoted: [],
@@ -1930,6 +1946,45 @@ async function tickOnce(owner: string): Promise<TickReport> {
           }
         } catch {
           /* a puzzle pass that could not run leaves every row exactly as it was */
+        }
+
+        if (!shedKernels) try {
+          /*
+           * 1a-iv-h. The commerce kernel (§73): which consumer products are
+           * selling now, who would ship them, and what one order is worth.
+           *
+           * It runs only where a person started a commerce programme, and one
+           * read of `commerce_programmes` answers it for every other project.
+           * Its own `try`, for the reason every block around it has one. A
+           * round is a Russell candidate and goes through the archive check,
+           * the compiler, the approval envelope, the evidence gate and all
+           * three audit roles exactly as a bucket does; nothing here orders,
+           * lists, advertises or spends.
+           */
+          const commerce = await runCommerceKernel(project.id);
+          if (
+            commerce.opened.length > 0 ||
+            commerce.filed.products.length > 0 ||
+            commerce.filed.facts.length > 0 ||
+            commerce.filed.settled.length > 0 ||
+            commerce.filed.refused.length > 0
+          ) {
+            report.commerceKernel.push({
+              projectId: project.id,
+              opened: commerce.opened.map((one) => ({
+                purpose: one.purpose,
+                roundId: one.roundId,
+                why: one.why,
+              })),
+              products: commerce.filed.products.map((one) => one.id),
+              facts: commerce.filed.facts.map((one) => one.id),
+              refused: commerce.filed.refused.length,
+              settled: commerce.filed.settled.map((one) => one.roundId),
+              qualified: commerce.qualified,
+            });
+          }
+        } catch {
+          /* a commerce pass that could not run leaves every row exactly as it was */
         }
 
         if (!shedKernels) try {

@@ -1,0 +1,95 @@
+# Driving the commerce kernel (§73) on the deployed Brain, without a terminal.
+#
+# The sibling of `manufacturing.yml`, for its reason: asking the kernel what it
+# would research next through the deploy pipeline would mean an image build and
+# a restart per question.
+#
+# **This adds convenience and not privilege.** Anyone who can dispatch this can
+# already dispatch `deploy.yml`. The command is passed through to
+# `scripts/commerce.ts`, the same closed surface a terminal reaches: it can
+# start, pause, read and seed the research programme, and it cannot order from a
+# supplier, open a store, list a product, advertise or spend anything.
+#
+# Reaching this is the authentication, as §26 says of the shell, and `--admin`
+# is the attribution — resolved against the database rather than trusted.
+name: Commerce kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'start | state | show | tick | seed | retire'
+        required: true
+        default: show
+      args:
+        description: 'The rest of the command line, passed through verbatim'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one,
+# and a reading that raced a restart would be reporting whichever half answered.
+concurrency:
+  group: brain-console-commerce
+  cancel-in-progress: false
+
+jobs:
+  commerce:
+    name: Commerce kernel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Wait for a release, rather than racing one.
+      #
+      # This workflow used to share `deploy-brain` with the deploy and with
+      # every other operator command, which kept it off a machine mid-release
+      # and *also* let it silently cancel a queued deploy — GitHub keeps one
+      # pending run per group and the newest evicts the one that was waiting.
+      # The group is this workflow's own now, so nothing here can evict
+      # anything; this step is the half of the old group that was worth
+      # keeping. See `.github/actions/await-release/action.yml`.
+      - uses: ./.github/actions/await-release
+
+      # The inputs reach the shell as *environment variables*, never as `${{ }}`
+      # interpolated into the script, and they are parsed rather than evaluated.
+      # `-C` takes one command string, so an input pasted into it is executed by
+      # the shell inside the production container: a quote in an argument ends
+      # the string and everything after it is a command. `shlex.split` applies
+      # the same quoting rules and executes nothing; `shlex.quote` puts the words
+      # back together so the container receives exactly what was typed. It is
+      # deliberately not `eval`, which is the identical hole one line along
+      # because `$(…)` inside the string runs.
+      #
+      # It matters here: an objective and a product name are prose a person
+      # writes.
+      - name: Run
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          COMMAND: ${{ inputs.command }}
+          ARGS: ${{ inputs.args }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          remote=$(python3 - <<'PY'
+          import os, shlex
+          words = shlex.split(os.environ.get('COMMAND', '')) + shlex.split(os.environ.get('ARGS', ''))
+          print(' '.join(['sh', '/app/scripts/commerce.sh'] + [shlex.quote(w) for w in words]))
+          PY
+          )
+          echo "Running: $remote"
+          # `tee` would otherwise hide a non-zero exit behind its own success.
+          set -o pipefail
+          # One pooler client, asked for here as well as inside the script.
+          #
+          # `BRAIN_DATABASE_POOL_SIZE` is read from the process environment, so
+          # setting it at the call site reaches an image whose copy of
+          # `commerce.sh` predates the line that sets it — which is exactly
+          # the case an operator command is for: the app that needs reading or
+          # driving is the one already running. `closeout-report.yml` gives the
+          # same reason for the same line.
+          #
+          # `manufacturing.yml` records what leaving it out cost: the same
+          # read died on `EMAXCONNSESSION ... limited to pool_size: 15`.
+          flyctl ssh console --app "$app" \
+            -C "env BRAIN_DATABASE_POOL_SIZE=1 $remote" 2>&1 | tee commerce.txt
