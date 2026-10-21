@@ -1,5 +1,7 @@
 # Fast Cash: prepared actions
 
+> **Superseded for Freelancer (2026-10-20).** The owner rejected freelance work. The two Freelancer leads ranked #1 and #2 below are history, not actions: Brain does not bid on them and nobody is asked to connect a Freelancer account. See `fast-cash/OPS.md`.
+
 This file and `fast-cash/prepared/*.json` replace the scratch notes that lived in `/tmp`.
 
 Every lead here is **preliminary**. None is QUALIFIED or READY. Nothing has been bid on, registered for, submitted, sent or paid for. Every decision is a person's.

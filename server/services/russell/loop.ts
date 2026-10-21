@@ -154,6 +154,7 @@ import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { runFreelancerOperation, type MarketplaceReport } from '../cash/freelancer/operate.ts';
+import { freelancerOperationEnabled } from '../cash/freelancer/enabled.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
@@ -2047,7 +2048,9 @@ async function tickOnce(owner: string): Promise<TickReport> {
            * that did not answer must not stop the sprint's other work, and
            * every step is derived from rows so the next tick resumes it.
            */
-          const market = await runFreelancerOperation(project.id);
+          // Off unless a deployment turns it on: the owner rejected freelance
+          // work for Cash Mode (`freelancer/enabled.ts`).
+          const market = freelancerOperationEnabled() ? await runFreelancerOperation(project.id) : null;
           if (market && (market.recorded > 0 || market.bid.length > 0 || market.awarded.length > 0 ||
               market.started.length > 0 || market.delivered.length > 0 || market.paid.length > 0 || market.messages > 0)) {
             report.marketplace.push({ projectId: project.id, ...market });

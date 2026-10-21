@@ -241,6 +241,16 @@ describe('a prepared marketplace job is an execution job', () => {
       bidPeriodDays: null,
       state: 'REJECTED',
     });
+    // Off by default: the owner rejected freelance work, so a PREPARED bid is
+    // history and never an execution job asking for a Freelancer account.
+    const off = (await pipelineReading(projectId, { userId: ownerId, owner: true }))!;
+    expect(off.marketplaceJobs).toEqual([]);
+    expect(off.counts.READY_BLOCKED).toBe(0);
+    expect(JSON.stringify(off)).not.toMatch(/FREELANCER_OAUTH_TOKEN/);
+
+    // Only a deployment that turns the operation back on reads them as jobs.
+    process.env.BRAIN_FREELANCER_OPERATION = 'on';
+    try {
     const reading = (await pipelineReading(projectId, { userId: ownerId, owner: true }))!;
     expect(reading.marketplaceJobs).toHaveLength(1);
     const job = reading.marketplaceJobs[0]!;
@@ -253,5 +263,8 @@ describe('a prepared marketplace job is an execution job', () => {
     expect(job.blockers.join(' ')).toMatch(/not connected/);
     // A member who is not the owner is not shown another operation's jobs.
     expect((await pipelineReading(projectId, { userId: 'usr_other', owner: false }))!.marketplaceJobs).toEqual([]);
+    } finally {
+      delete process.env.BRAIN_FREELANCER_OPERATION;
+    }
   });
 });

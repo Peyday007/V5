@@ -18,6 +18,7 @@
  */
 import { jobsInStates, type MarketplaceJob } from '../../repos/marketplaceJobs.ts';
 import { freelancerConnected, FREELANCER_TOKEN_ENV } from './freelancer/client.ts';
+import { freelancerOperationEnabled } from './freelancer/enabled.ts';
 import type { JobTask, PipelineStage } from './jobPipeline.ts';
 
 /** States a marketplace job is live work in; the rest are rejections and endings. */
@@ -212,6 +213,10 @@ export async function marketplaceJobViews(
   projectId: string,
   authority: ReadonlyMap<string, { ok: boolean; reason: string }>,
 ): Promise<MarketplaceJobView[]> {
+  // A switched-off operation has no jobs to pursue: its rows are history, and
+  // counting a PREPARED bid as an execution job would ask for the very
+  // connection the owner refused.
+  if (!freelancerOperationEnabled()) return [];
   const ctx: MarketplaceContext = { connected: freelancerConnected(), authority };
   const out: MarketplaceJobView[] = [];
   const live = Object.keys(STAGE_BY_STATE) as MarketplaceJob['state'][];

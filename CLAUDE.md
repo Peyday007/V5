@@ -13405,6 +13405,17 @@ token and the standing commercial grant.
 - **Discovery needs no credential and runs without one.** Acting stops at the
   first missing connection or grant, and the pass names which one.
 
+**The operation is off, by the owner's decision (2026-10-20).** Freelance work
+was rejected as a Cash Mode strategy, and the decision reached the
+operations file and not the code: the operation went on running every tick,
+and its prepared bids were counted as execution jobs blocked on
+`FREELANCER_OAUTH_TOKEN`, so every report asked for the connection the owner
+had refused. `freelancer/enabled.ts` is the switch — off unless
+`BRAIN_FREELANCER_OPERATION=on` — read by the tick and by the Cash pipeline;
+no worker is routed to Freelancer's API; discovery says this operation takes
+no freelance work. Every `marketplace_jobs` row stays as history.
+`tests/noFreelancing.test.ts` holds each of those.
+
 ## 67. A category is offered because its proof passed, and the files are Brain's own.
 
 The operation now delivers eight kinds of work beside research reports:
