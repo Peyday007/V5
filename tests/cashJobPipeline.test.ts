@@ -168,10 +168,13 @@ describe('what never becomes a job', () => {
     expect((await listJobs(projectId)).filter((one) => one.opportunityId === id)).toEqual([]);
     const result = await reconcileCashJobs(projectId);
     expect(result.created).toEqual([]);
-    expect(result.declined.find((one) => one.opportunityId === id)!.because).toContain('loses money');
+    // Since 2026-10-21 the tier refuses it too, so it is not even counted as
+    // qualified: the page, the ranking and the job pipeline read one answer.
     const reading = (await pipelineReading(projectId, { userId, owner: true }))!;
-    expect(reading.counts.QUALIFIED).toBe(1);
-    expect(reading.qualifiedWithoutJob[0]!.because).toContain('loses money');
+    expect(reading.counts.QUALIFIED).toBe(0);
+    expect(reading.counts.UNDER_QUALIFICATION).toBe(1);
+    // Nor did the tick mark it ready on the way.
+    expect((await getOpportunity(id))!.state).not.toBe('READY');
   });
 
   it('refuses a duplicate record of an opening', async () => {

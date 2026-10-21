@@ -27,6 +27,8 @@
  * already paid for. §30 draws this line for discovery and for the deep dive;
  * this is the same line, at a third question.
  */
+import { notWorthResearching } from '../worthResearching.ts';
+import { cashPosition } from '../money.ts';
 import { cashNow, getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
 import { createCandidate } from '../../../repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../../../repos/russellMissions.ts';
@@ -846,6 +848,8 @@ export { ANSWERED as MONETIZATION_ANSWER_EVENT };
 export async function closedOpportunities(projectId: string): Promise<Set<string>> {
   const now = cashNow();
   const closed = new Set<string>();
+  const mode = await getCashMode(projectId);
+  let deployable: number | null = null;
   for (const one of await listOpportunities({ projectId })) {
     if (
       one.duplicateOfId ||
@@ -854,7 +858,16 @@ export async function closedOpportunities(projectId: string): Promise<Set<string
       closedBy(one.expiresAt, now)
     ) {
       closed.add(one.id);
+      continue;
     }
+    /*
+     * And one no answer could make executable now — a marketplace listing, a
+     * close inside the runway, or capital the ledger does not hold. The same
+     * reading the deep dive refuses on (`worthResearching.ts`), so a
+     * monetization question is not spent where a dive would not be.
+     */
+    deployable ??= Math.max(0, (await cashPosition({ projectId, currency: mode?.currency })).deployableCents);
+    if (await notWorthResearching(one, { now, deployableCents: deployable })) closed.add(one.id);
   }
   for (const fact of await cardFactsForProject(projectId)) {
     if (fact.field === DISQUALIFIED_FIELD && fact.value.trim().length > 0) closed.add(fact.opportunityId);

@@ -355,6 +355,39 @@ export function cashTier(input: {
     };
   }
 
+  /*
+   * Its own published figures say one sale loses money.
+   *
+   * Production, 2026-10-21: the only READY_TO_TEST piece in 340 was a broker's
+   * fee schedule — a $5 membership read as the price against an $800 deposit
+   * read as the exposure — every field answered, and the card's own economics
+   * line reading "USD -795.00 expected". `jobEligibility` already refused it a
+   * job on exactly these two columns; the tier went on calling it ready, so the
+   * page and the ranking told a person the opposite of the job pipeline. Capped
+   * at CANDIDATE, because what moves it is a different price or exposure, and
+   * read from the same two columns so the two readers cannot disagree.
+   */
+  const price = input.opportunity.priceCents;
+  const exposure = input.opportunity.peakFundingCents;
+  if (price !== null && exposure !== null && price < exposure) {
+    return {
+      tier: 'CANDIDATE',
+      establishes: meaning.establishes,
+      doesNotEstablish: meaning.doesNotEstablish,
+      toAdvance: [
+        {
+          ...requirement('revenueRange'),
+          task:
+            'Its published price does not cover its published capital exposure, so the figures say ' +
+            'one sale loses money. It qualifies only if a higher price or a lower exposure is established.',
+        },
+      ],
+      answered: answeredCount,
+      required: keys.length,
+      summary: 'Loses money on its own figures: the published price is below the published exposure.',
+    };
+  }
+
   if (open.length > 0) {
     return {
       tier: 'CANDIDATE',

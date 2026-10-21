@@ -471,6 +471,7 @@ const REFUSAL_LABEL: Record<DiveRefusal['kind'], string> = {
   NOTHING_PUBLISHED_TO_ASK_ABOUT: 'nothing published to ask a dive about',
   DUPLICATE: 'a second record of another opening',
   EXPIRED: 'its closing date has passed',
+  NOT_WORTH_RESEARCHING: 'no answer could make it executable now: a marketplace listing, a close too soon, or capital the ledger does not hold',
 };
 
 export interface ResearchProgress {

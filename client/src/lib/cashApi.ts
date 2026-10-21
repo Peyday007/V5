@@ -561,6 +561,24 @@ export interface PipelineReading {
   researchInFlight: number;
   authority: { live: boolean; allowedActions: string[] };
   providers: { id: string; state: string; nextStep: string | null }[];
+  /** Freelancer jobs Brain screened as deliverable, read from their own table. */
+  marketplaceJobs?: PipelineMarketplaceJob[];
+}
+
+export interface PipelineMarketplaceJob {
+  jobId: string;
+  platform: 'FREELANCER';
+  externalId: string;
+  url: string;
+  title: string;
+  state: string;
+  stage: PipelineStage;
+  categories: string[];
+  bid: string | null;
+  netUsd: number | null;
+  tasks: PipelineJobTask[];
+  blockers: string[];
+  next: { task: string; because: string } | null;
 }
 
 const p = (value: string): string => encodeURIComponent(value);

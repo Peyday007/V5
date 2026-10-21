@@ -111,7 +111,9 @@ import {
   prepare,
 } from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
-import { getCashMode } from '../../repos/cashMode.ts';
+import { cashNow, getCashMode } from '../../repos/cashMode.ts';
+import { describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
+import { cashPosition } from './money.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
 
 /** Brain acting on its own account, never a person and never a worker. */
@@ -369,8 +371,73 @@ export interface DiscoverableGap {
  * still never become needs, because a researched answer to "what should we
  * charge for this" is invented judgment wearing a citation.
  */
+/** Price below exposure on the piece's own columns: the reading `jobEligibility` and the tier refuse on too. */
+function losesMoneyOnItsFigures(opportunity: CashOpportunity): boolean {
+  return (
+    opportunity.priceCents !== null &&
+    opportunity.peakFundingCents !== null &&
+    opportunity.priceCents < opportunity.peakFundingCents
+  );
+}
+const LOSES_MONEY =
+  'Its published price does not cover its published capital exposure, so one sale loses money; ' +
+  'nothing is readied or contacted for it.';
+
+/** The project's deployable cash, read once on first use within one pass. */
+function deployableReader(projectId: string): () => Promise<number> {
+  let value: Promise<number> | null = null;
+  return () => {
+    value ??= (async () => {
+      const mode = await getCashMode(projectId);
+      const position = await cashPosition({ projectId, currency: mode?.currency });
+      return Math.max(0, position.deployableCents);
+    })();
+    return value;
+  };
+}
+
+/**
+ * Field research nobody could act on, withdrawn before it is launched.
+ *
+ * A `question:` need asks one card field about one opening. On an opening that
+ * is not worth researching now (`worthResearching.ts`) — a marketplace listing,
+ * a close inside the runway, capital the ledger does not hold — the answer
+ * could not make it executable, and each launched need holds a research slot
+ * that a workable opening is waiting for. Withdrawn rather than resolved:
+ * nothing was established. It is raised again by itself if the opening becomes
+ * worth researching, because the gap passes derive it from the card.
+ */
+export async function withdrawResearchNotWorthIt(projectId: string): Promise<string[]> {
+  const out: string[] = [];
+  const deployableOnce = deployableReader(projectId);
+  const open = await listNeeds({ projectId, states: ['OPEN'] });
+  const byOpportunity = new Map<string, CashNeed[]>();
+  for (const need of open) {
+    if (!need.opportunityId || !need.requestKey?.startsWith('question:')) continue;
+    byOpportunity.set(need.opportunityId, [...(byOpportunity.get(need.opportunityId) ?? []), need]);
+  }
+  if (byOpportunity.size === 0) return out;
+  for (const opportunity of await listOpportunities({ projectId, states: ['DISCOVERED', 'EVIDENCE_CARD'] })) {
+    const needs = byOpportunity.get(opportunity.id);
+    if (!needs) continue;
+    const reason = await notWorthResearching(opportunity, { now: cashNow(), deployableCents: await deployableOnce() });
+    if (!reason) continue;
+    for (const need of needs) {
+      const closed = await closeNeed({
+        needId: need.id,
+        to: 'WITHDRAWN',
+        resolution: `Not researched: ${describeNotWorthResearching(reason)}. Nothing was established, so this is withdrawn rather than resolved.`,
+        actorUserId: BRAIN,
+      });
+      if (closed.ok) out.push(need.id);
+    }
+  }
+  return out;
+}
+
 export async function reconcileDiscoverableGaps(projectId: string): Promise<DiscoverableGap[]> {
   const out: DiscoverableGap[] = [];
+  const deployableOnce = deployableReader(projectId);
   const open = await listNeeds({ projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
 
@@ -408,6 +475,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * blank is asked once it has settled, which is what this pass is for.
      */
     if (diveOwnsItsQuestions(opportunity)) continue;
+    if (await notWorthResearching(opportunity, { now: cashNow(), deployableCents: await deployableOnce() })) continue;
     const card = evidenceCard(opportunity);
     const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
     /*
@@ -542,6 +610,7 @@ export const MAX_OPEN_ENGINE_QUESTIONS = 12;
  */
 export async function reconcileEngineGaps(projectId: string): Promise<DiscoverableGap[]> {
   const out: DiscoverableGap[] = [];
+  const deployableOnce = deployableReader(projectId);
   const mode = await getCashMode(projectId);
   if (!mode || mode.state !== 'ACTIVE') return out;
   const open = await listNeeds({ projectId, states: ['OPEN'] });
@@ -579,6 +648,7 @@ export async function reconcileEngineGaps(projectId: string): Promise<Discoverab
   for (const opportunity of await listOpportunities({ projectId, states: ['DISCOVERED', 'EVIDENCE_CARD'] })) {
     if (opportunity.duplicateOfId) continue;
     if (diveOwnsItsQuestions(opportunity)) continue;
+    if (await notWorthResearching(opportunity, { now: cashNow(), deployableCents: await deployableOnce() })) continue;
     const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
     if (engine.disqualifiedBy) continue;
     const reading = cashTier({ opportunity, card: engine, readiness: evidenceCard(opportunity).readiness });
@@ -995,6 +1065,10 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
     // a piece being worked on, and reporting every one of them as withheld
     // every tick would bury the ones that are actually stuck.
     if (!evidenceCard(opportunity).readiness.ready) continue;
+    if (losesMoneyOnItsFigures(opportunity)) {
+      out.withheld.push({ opportunityId: opportunity.id, because: LOSES_MONEY });
+      continue;
+    }
     const ready = await markReady({ opportunityId: opportunity.id, actorRef: BRAIN });
     if (ready.ok) {
       out.took.push({
@@ -1009,6 +1083,11 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
 
   for (const opportunity of await listOpportunities({ projectId, states: ['READY'] })) {
     if (opportunity.duplicateOfId) continue;
+    // A piece whose own figures lose money is never contacted for, whoever marked it ready.
+    if (losesMoneyOnItsFigures(opportunity)) {
+      out.withheld.push({ opportunityId: opportunity.id, because: LOSES_MONEY });
+      continue;
+    }
     /*
      * Not after its published deadline. A piece marked ready before the date
      * passed would otherwise still get a buyer message after it — contacting
@@ -1291,6 +1370,8 @@ export async function operate(
   reclassified: Reclassification | null;
   capabilities: CapabilityReconciliation;
   gaps: DiscoverableGap[];
+  /** Field research withdrawn because no answer could make its opening executable now. */
+  withdrawnResearch: string[];
   research: ResearchApplication;
   proposed: Proposed[];
   continuations: Continuation[];
@@ -1321,6 +1402,7 @@ export async function operate(
       reclassified: null,
       capabilities: { raised: [], settled: [] },
       gaps: [],
+      withdrawnResearch: [],
       research: { applied: [], unanswered: [] },
       proposed: [],
       continuations: [],
@@ -1375,6 +1457,7 @@ export async function operate(
   );
   const research = await applyResearchAnswers(projectId);
   const proposed = await proposeCommercialTerms(projectId);
+  const withdrawnResearch = await withdrawResearchNotWorthIt(projectId);
   const gaps = [...(await reconcileDiscoverableGaps(projectId)), ...(await reconcileEngineGaps(projectId))];
   const continuations = await runNeedContinuations(projectId, now);
   const dependentWork = await startDependentWork(projectId);
@@ -1500,6 +1583,7 @@ export async function operate(
     reclassified,
     capabilities,
     gaps,
+    withdrawnResearch,
     research,
     proposed,
     continuations,

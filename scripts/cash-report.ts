@@ -294,6 +294,15 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
           console.log(`      ${task.key.padEnd(10)} ${task.status.padEnd(18)} ${task.executor.padEnd(19)} ${task.because.slice(0, 180)}`);
         }
       }
+      for (const job of pipeline.marketplaceJobs) {
+        console.log(
+          `  ${job.jobId}  freelancer=${job.externalId}  ${job.stage}  state=${job.state}` +
+            `  ${job.categories.join('+')}  bid=${job.bid ?? '—'} net_usd=${job.netUsd ?? '—'}  ${job.title.slice(0, 70)}`,
+        );
+        for (const task of job.tasks) {
+          console.log(`      ${task.key.padEnd(10)} ${task.status.padEnd(18)} ${task.executor.padEnd(19)} ${task.because.slice(0, 180)}`);
+        }
+      }
       for (const one of pipeline.qualifiedWithoutJob) {
         console.log(`  no job ${one.opportunityId}  ${one.because.slice(0, 200)}`);
       }
@@ -1083,6 +1092,15 @@ async function marketplaceOperation(projectId: string): Promise<void> {
       : '';
     console.log(`  ${one.id} ${one.state} freelancer=${one.external_id}${usd} "${one.title.slice(0, 70)}"${one.state_reason ? ` — ${one.state_reason.slice(0, 120)}` : ''}`);
   }
+  // What a prepared job actually asks for, so whether Brain could deliver it is
+  // a reading of the client's words rather than of a title.
+  const prepared = await db
+    .all<{ id: string; description: string }>(
+      `SELECT id, description FROM marketplace_jobs WHERE project_id = ? AND state = 'PREPARED' ORDER BY created_at, id`,
+      [projectId],
+    )
+    .catch(() => []);
+  for (const one of prepared) console.log(`      brief ${one.id}: ${trim(one.description, 400)}`);
   const events = await db.all<{ kind: string; summary: string; created_at: string }>(
     `SELECT kind, summary, created_at FROM cash_events WHERE project_id = ? AND kind LIKE 'MARKETPLACE_%' AND kind <> 'MARKETPLACE_SCAN'
       ORDER BY created_at DESC, id DESC LIMIT 12`,
