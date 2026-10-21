@@ -250,6 +250,174 @@ async function parked(projectId: string | null): Promise<void> {
   }
 }
 
+/**
+ * Packets, not items: what actually finished, and how long the audit stage took.
+ *
+ * A work item completing is a step; a packet reaching COMPLETE is the result.
+ * Every figure here is a count of rows or a difference between two recorded
+ * timestamps, and "accepted" is the packet's own status — a judge's verdict
+ * that let it file — never a worker's account.
+ */
+async function packets(window: Window, projectId: string | null): Promise<void> {
+  const db = getDb();
+  const hours = (Date.parse(window.to) - Date.parse(window.from)) / 3_600_000;
+  const rate = (n: number) => (hours > 0 ? (n / hours).toFixed(2) : '—');
+  const done = await db.all<{ status: string; verdict: string | null; n: number }>(
+    `SELECT status, verdict, COUNT(*) AS n FROM research_orchestrations
+      WHERE completed_at >= ? AND completed_at < ? AND status IN ('COMPLETE', 'COMPLETE_WITH_GAPS')
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)
+      GROUP BY status, verdict`,
+    [window.from, window.to, projectId, projectId],
+  );
+  const completed = done.reduce((sum, row) => sum + Number(row.n), 0);
+  const resumed = await db.all<{ payload: string; created_at: string }>(
+    `SELECT payload, created_at FROM project_events
+      WHERE event_type = 'RESEARCH_ROUND_RESUMED' AND created_at >= ? AND created_at < ?
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)`,
+    [window.from, window.to, projectId, projectId],
+  );
+  // Parks are not evented consistently, so the packet's own last write is the reading:
+  // a NEEDS_HUMAN packet last updated inside the window parked (or re-parked) in it.
+  const parkedNow = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM research_orchestrations
+      WHERE status = 'NEEDS_HUMAN' AND updated_at >= ? AND updated_at < ?
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)`,
+    [window.from, window.to, projectId, projectId],
+  );
+  const leases = await db.get<{ n: number; workers: number }>(
+    `SELECT COUNT(*) AS n, COUNT(DISTINCT worker_id) AS workers FROM work_leases
+      WHERE claimed_at >= ? AND claimed_at < ? AND (CAST(? AS TEXT) IS NULL OR project_id = ?)`,
+    [window.from, window.to, projectId, projectId],
+  );
+  const binAssignments = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM bin_events
+      WHERE event_type IN ('BIN_ASSIGNED', 'BIN_TAKEOVER') AND at >= ? AND at < ?
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)`,
+    [window.from, window.to, projectId, projectId],
+  );
+  const fires = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM bin_events
+      WHERE event_type = 'DISPATCH_SENT' AND at >= ? AND at < ?
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)`,
+    [window.from, window.to, projectId, projectId],
+  );
+  console.log(`  PACKETS ${window.label}  (${hours.toFixed(1)}h)`);
+  console.log(
+    `    completed=${completed} (${rate(completed)}/h)  ` +
+      done.map((row) => `${row.status}/${row.verdict ?? '-'}=${row.n}`).join(' '),
+  );
+  console.log(
+    `    resumed rounds=${resumed.length} (${rate(resumed.length)}/h)  parked-or-reparked (last write in window)=${Number(parkedNow?.n ?? 0)}`,
+  );
+  const assignments = Number(binAssignments?.n ?? 0);
+  console.log(
+    `    bin assignments=${assignments} fires=${Number(fires?.n ?? 0)} item leases=${Number(leases?.n ?? 0)}  ` +
+      `completed packets per bin assignment=${assignments > 0 ? (completed / assignments).toFixed(3) : '—'}`,
+  );
+
+  // The audit stage, measured from the passes: synthesis → primary → adversarial → judge.
+  const passes = await db.all<{
+    orchestration_id: string;
+    pass_key: string;
+    ordinal: number;
+    completed_at: string | null;
+    executor_session_ref: string | null;
+  }>(
+    `SELECT p.orchestration_id, p.pass_key, p.ordinal, p.completed_at, p.executor_session_ref
+       FROM research_passes p JOIN research_orchestrations o ON o.id = p.orchestration_id
+      WHERE p.status = 'COMPLETE' AND p.completed_at >= ? AND p.completed_at < ?
+        AND p.pass_key IN ('SYNTHESIS', 'AUDIT')
+        AND (CAST(? AS TEXT) IS NULL OR o.project_id = ?)
+      ORDER BY p.completed_at`,
+    [new Date(Date.parse(window.from) - 24 * 3_600_000).toISOString(), window.to, projectId, projectId],
+  );
+  const gaps: Record<string, number[]> = { 'synthesis→primary': [], 'primary→adversarial': [], 'adversarial→judge': [], 'synthesis→judge': [] };
+  const byPacket = new Map<string, typeof passes>();
+  for (const pass of passes) {
+    const list = byPacket.get(pass.orchestration_id) ?? [];
+    list.push(pass);
+    byPacket.set(pass.orchestration_id, list);
+  }
+  for (const list of byPacket.values()) {
+    for (const judge of list.filter((p) => p.ordinal === 7 && p.completed_at && p.completed_at >= window.from)) {
+      const before = (ordinal: number, key: string, until: string) =>
+        list.filter((p) => p.ordinal === ordinal && p.pass_key === key && p.completed_at! <= until).pop();
+      const adversarial = before(6, 'AUDIT', judge.completed_at!);
+      const primary = adversarial ? before(5, 'AUDIT', adversarial.completed_at!) : undefined;
+      const synthesis = primary ? before(4, 'SYNTHESIS', primary.completed_at!) : undefined;
+      const minutes = (a?: { completed_at: string | null }, b?: { completed_at: string | null }) =>
+        a?.completed_at && b?.completed_at ? (Date.parse(b.completed_at) - Date.parse(a.completed_at)) / 60_000 : null;
+      const push = (key: string, value: number | null) => {
+        if (value !== null) gaps[key]!.push(value);
+      };
+      push('synthesis→primary', minutes(synthesis, primary));
+      push('primary→adversarial', minutes(primary, adversarial));
+      push('adversarial→judge', minutes(adversarial, judge));
+      push('synthesis→judge', minutes(synthesis, judge));
+    }
+  }
+  const median = (values: number[]) => {
+    if (values.length === 0) return '—';
+    const sorted = [...values].sort((a, b) => a - b);
+    return `${sorted[Math.floor(sorted.length / 2)]!.toFixed(0)}min`;
+  };
+  console.log(
+    `    audit stage (judged in window, n=${gaps['synthesis→judge']!.length}): ` +
+      Object.entries(gaps).map(([key, values]) => `${key} p50=${median(values)}`).join('  '),
+  );
+  const sessions = new Set(
+    passes
+      .filter((p) => p.completed_at && p.completed_at >= window.from && p.executor_session_ref)
+      .map((p) => p.executor_session_ref!),
+  );
+  console.log(`    distinct sessions that recorded a synthesis or audit pass: ${sessions.size}`);
+
+  const refusals = await db.all<{ reason: string | null; n: number; sessions: number }>(
+    `SELECT substr(reason, 1, 110) AS reason, SUM(refusals) AS n, COUNT(*) AS sessions FROM bin_session_refusals
+      WHERE last_at >= ? AND last_at < ?
+      GROUP BY substr(reason, 1, 110) ORDER BY SUM(refusals) DESC`,
+    [window.from, window.to],
+  );
+  console.log(`    session refusals at assignment (by reason)`);
+  for (const row of refusals.slice(0, 6)) {
+    console.log(`      ${String(row.n).padStart(4)} across ${row.sessions} session(s)  ${row.reason ?? '(no reason)'}`);
+  }
+  const deferred = await db.all<{ outcome: string | null; n: number }>(
+    `SELECT outcome, COUNT(*) AS n FROM bin_events
+      WHERE event_type IN ('DISPATCH_DEFERRED', 'DISPATCH_UNROUTED') AND at >= ? AND at < ?
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)
+      GROUP BY outcome ORDER BY COUNT(*) DESC`,
+    [window.from, window.to, projectId, projectId],
+  );
+  console.log(
+    `    fires withheld: ${deferred.map((row) => `${row.outcome ?? '-'}=${row.n}`).join(' ') || 'none'}`,
+  );
+}
+
+/** What is waiting, now: the recoverable backlog and where its packets are. */
+async function backlog(projectId: string | null): Promise<void> {
+  const rows = await getDb().all<{ status: string; n: number }>(
+    `SELECT status, COUNT(*) AS n FROM research_orchestrations
+      WHERE status NOT IN ('COMPLETE', 'COMPLETE_WITH_GAPS', 'FAILED', 'CANCELLED')
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)
+      GROUP BY status ORDER BY status`,
+    [projectId, projectId],
+  );
+  console.log(`  LIVE PACKETS NOW  ${rows.map((row) => `${row.status}=${row.n}`).join(' ')}`);
+  try {
+    const { judgeParkReadings } = await import('../server/services/research/judgeRound.ts');
+    const readings = await judgeParkReadings();
+    const counts = new Map<string, number>();
+    for (const { orchestration, assessed } of readings) {
+      if (projectId && orchestration.projectId !== projectId) continue;
+      counts.set(assessed.kind, (counts.get(assessed.kind) ?? 0) + 1);
+    }
+    console.log(`  JUDGE-PARKED NOW  ${[...counts].map(([k, n]) => `${k}=${n}`).join(' ') || 'none'}`);
+  } catch (error) {
+    console.log(`  JUDGE-PARKED NOW  unreadable: ${(error as Error).message}`);
+  }
+}
+
 async function main(): Promise<void> {
   await initDatabase();
   const hours = Math.max(1, Number(flag('hours') ?? '6'));
@@ -272,12 +440,14 @@ async function main(): Promise<void> {
 
   console.log(`PRODUCTIVITY project=${projectId ?? 'all'} hours=${hours} split=${split?.toISOString() ?? '—'}`);
   for (const window of windows) {
+    await packets(window, projectId);
     await leases(window, projectId);
     await tools(window, projectId);
     await endings(window, projectId);
   }
   await hourly(windows[0]!.from, windows[windows.length - 1]!.to, projectId);
   await parked(projectId);
+  await backlog(projectId);
   console.log('PRODUCTIVITY-REPORT: OK');
 }
 

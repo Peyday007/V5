@@ -3003,23 +3003,21 @@ describe('the audit passes', () => {
     });
 
     /*
-     * While the lease is live nothing is touched, because the contract asks
-     * that session to complete its own item and Brain retiring it underneath
-     * would make that call fail its ownership proof.
+     * The submission finishes the item itself, under the submitter's own lease,
+     * through the same idempotent operation `brain_complete_work` performs. It
+     * used to wait for the lease to lapse, and production measured what that
+     * cost: the next session of the same worker was told the open item was its
+     * own and in progress, polled, and handed the bin back (2026-10-20).
      */
-    expect((await getWorkItem(item.workItemId))?.state).toBe('LEASED');
-
-    // The session is gone: the lease lapses, and the item is claimable again —
-    // which is the exact moment the repeat became possible.
-    await getDb().run(`UPDATE work_items SET lease_expires_at = ? WHERE id = ?`, [
-      new Date(Date.now() - 60_000).toISOString(),
-      item.workItemId,
-    ]);
-    await advancePacket(orchestration.id);
-
     const finished = await getWorkItem(item.workItemId);
-    expect(finished?.state).toBe('CANCELLED');
-    expect(finished?.resultSummary ?? finished?.failureCategory ?? '').toBeDefined();
+    expect(finished?.state).toBe('SUCCEEDED');
+
+    // The worker's own completion still works, as a replay rather than a refusal.
+    const completed = await as(fleet.primary, () =>
+      call('brain_complete_work', { ...proof(item), summary: 'primary in' }),
+    );
+    expect(completed).toBeDefined();
+    expect((await getWorkItem(item.workItemId))?.state).toBe('SUCCEEDED');
 
     // The next role is now reachable, which is the thing that was not.
     const next = await as(fleet.adversarial, () => claimNext('RESEARCH_AUDIT'));

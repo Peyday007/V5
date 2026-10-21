@@ -122,6 +122,7 @@ async function readyBin(title: string): Promise<string> {
     projectId,
     workType: 'RESEARCH_AUDIT',
     orchestrationId: orchestration.id,
+    payload: { role: 'PRIMARY' },
     availableAt: new Date(Date.now() - 60_000).toISOString(),
     createdByType: 'SYSTEM',
     createdById: 'test',
