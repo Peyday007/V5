@@ -66,3 +66,23 @@ jobs:
             2>&1 | tee cash-report.txt
           set -e
           grep -q '^CASH-REPORT: OK' cash-report.txt
+
+      # The report as annotations, so it can be read through the API.
+      #
+      # A session reading production had only the API: the run's log is served
+      # from a storage host its network policy refuses, so `cash-report.txt`
+      # could not be read at all and "is the operation off?" had no answer.
+      # Annotations are part of the check run, which the API returns. Read-only,
+      # and `always()` so a failed report is readable too.
+      - name: Surface the report
+        if: always()
+        run: |
+          [ -f cash-report.txt ] || exit 0
+          python3 - <<'PY'
+          data = open('cash-report.txt', encoding='utf-8', errors='replace').read()
+          size = 60000
+          chunks = [data[i:i + size] for i in range(0, len(data), size)][:9]
+          for n, chunk in enumerate(chunks, 1):
+              body = chunk.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print(f'::notice title=cash-report {n}/{len(chunks)}::{body}')
+          PY
