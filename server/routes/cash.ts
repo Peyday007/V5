@@ -24,6 +24,16 @@
  * turn a refusal into a status.
  */
 import { pipelineReading } from '../services/cash/jobPipeline.ts';
+import {
+  addLeads,
+  approvePrint,
+  heldOutreach,
+  mailerView,
+  markMailed,
+  queueCity,
+  recordSlotSale,
+  setLeadResponse,
+} from '../services/cash/mailer/index.ts';
 import { Router } from 'express';
 import {
   badRequest,
@@ -2457,5 +2467,133 @@ cashRouter.post(
     }
 
     throw badRequest('"action" is MERGE, UNMERGE, SPLIT or LINK.');
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The rolling city mailer
+ *
+ * Reads are a project member's; every write is ADMIN plus `requirePerson`,
+ * because queueing a city, recording a payment and approving a print run are
+ * decisions about the operation. Nothing here sends outreach or spends money:
+ * the held drafts are read back for a person to send, and approving a print
+ * run records a person's decision rather than placing an order.
+ * ------------------------------------------------------------------------ */
+cashRouter.get(
+  '/projects/:projectId/cash/mailer',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return mailerView(project.id);
+  }),
+);
+
+cashRouter.get(
+  '/projects/:projectId/cash/mailer/cities/:cityId/outreach',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const held = await heldOutreach(project.id, pathId(req, 'cityId'));
+    if (!held) throw notFound('No such city in this project.');
+    return { held };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/mailer/cities',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const outcome = await queueCity({
+      projectId: project.id,
+      city: requiredString(body['city'], 'city'),
+      region: requiredString(body['region'], 'region'),
+      actorRef: principal.id,
+      slotCount: optionalInteger(body['slotCount'], 'slotCount', { min: 1, max: 200 }),
+      slotPriceCents: optionalInteger(body['slotPriceCents'], 'slotPriceCents', { min: 1 }),
+      printCostCents: optionalInteger(body['printCostCents'], 'printCostCents', { min: 0 }),
+      leadTarget: optionalInteger(body['leadTarget'], 'leadTarget', { min: 1, max: 100_000 }),
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return { city: outcome.city, created: outcome.created };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/mailer/cities/:cityId/leads',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const leads = bodyOf(req)['leads'];
+    if (!Array.isArray(leads) || leads.length === 0 || leads.length > 2000) {
+      throw badRequest('"leads" must be a list of 1 to 2000 { businessName, category, email, sourceUrl? }.');
+    }
+    const outcome = await addLeads({
+      projectId: project.id,
+      cityId: pathId(req, 'cityId'),
+      leads: leads.map((one) => {
+        const row = (one ?? {}) as Record<string, unknown>;
+        return {
+          businessName: typeof row['businessName'] === 'string' ? row['businessName'] : '',
+          category: typeof row['category'] === 'string' ? row['category'] : '',
+          email: typeof row['email'] === 'string' ? row['email'] : '',
+          sourceUrl: typeof row['sourceUrl'] === 'string' ? row['sourceUrl'] : null,
+        };
+      }),
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return outcome;
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/mailer/cities/:cityId/sales',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const outcome = await recordSlotSale({
+      projectId: project.id,
+      cityId: pathId(req, 'cityId'),
+      leadId: requiredString(body['leadId'], 'leadId'),
+      paymentRef: requiredString(body['paymentRef'], 'paymentRef'),
+      amountCents: optionalInteger(body['amountCents'], 'amountCents', { min: 1 }),
+      actorRef: principal.id,
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return outcome;
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/mailer/leads/:leadId/response',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const to = requiredString(bodyOf(req)['response'], 'response');
+    if (to !== 'DECLINED' && to !== 'OPTED_OUT') throw badRequest('"response" must be DECLINED or OPTED_OUT.');
+    const outcome = await setLeadResponse({ projectId: project.id, leadId: pathId(req, 'leadId'), to });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return outcome;
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/mailer/cities/:cityId/:step',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const cityId = pathId(req, 'cityId');
+    const step = pathId(req, 'step');
+    const outcome =
+      step === 'approve-print'
+        ? await approvePrint({ projectId: project.id, cityId, actorUserId: principal.id })
+        : step === 'mailed'
+          ? await markMailed({ projectId: project.id, cityId, actorRef: principal.id })
+          : null;
+    if (!outcome) throw notFound('No such step.');
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return outcome;
   }),
 );
