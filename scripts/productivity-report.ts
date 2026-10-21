@@ -284,15 +284,18 @@ async function repeated(projectId: string | null): Promise<void> {
     const at = row.accepted_at ?? row.created_at;
     if (!firstAccepted.has(key) || at < firstAccepted.get(key)!) firstAccepted.set(key, at);
   }
-  const groups = new Map<string, { n: number; statuses: Map<string, number>; keys: Set<string>; packets: Set<string>; envelopes: Set<string> }>();
+  const groups = new Map<string, { n: number; last: string; day: number; statuses: Map<string, number>; keys: Set<string>; packets: Set<string>; envelopes: Set<string> }>();
+  const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
   let total = 0;
   for (const row of rows) {
     const key = norm(row.question);
     const earlier = firstAccepted.get(key);
     if (!earlier || earlier >= row.created_at) continue;
     total += 1;
-    const g = groups.get(key) ?? { n: 0, statuses: new Map(), keys: new Set(), packets: new Set(), envelopes: new Set() };
+    const g = groups.get(key) ?? { n: 0, last: '', day: 0, statuses: new Map(), keys: new Set(), packets: new Set(), envelopes: new Set() };
     g.n += 1;
+    if (row.created_at > g.last) g.last = row.created_at;
+    if (row.created_at >= dayAgo) g.day += 1;
     g.statuses.set(row.status, (g.statuses.get(row.status) ?? 0) + 1);
     g.keys.add(row.fragment_key);
     g.packets.add(row.orchestration_id);
@@ -303,7 +306,7 @@ async function repeated(projectId: string | null): Promise<void> {
   for (const [question, g] of [...groups].sort((a, b) => b[1].n - a[1].n).slice(0, 15)) {
     const statuses = [...g.statuses].map(([k, v]) => `${k}=${v}`).join(' ');
     console.log(
-      `    ${String(g.n).padStart(4)}  packets=${g.packets.size} keys=${[...g.keys].slice(0, 3).join(',')} ` +
+      `    ${String(g.n).padStart(4)}  last24h=${g.day} newest=${g.last.slice(0, 16)} packets=${g.packets.size} keys=${[...g.keys].slice(0, 3).join(',')} ` +
         `env=${[...g.envelopes].join(',')} ${statuses}  "${question.slice(0, 140)}"`,
     );
   }

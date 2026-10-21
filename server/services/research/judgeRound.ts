@@ -112,6 +112,55 @@ export async function judgeRoundsSoFar(orchestration: ResearchOrchestration): Pr
   ).length;
 }
 
+/**
+ * Why a packet launched to answer a cash need no longer bears on any decision,
+ * or null when it still does (invariant 43).
+ *
+ * A corrected round re-runs synthesis and three audits. Production,
+ * 2026-10-21: September "Payer for …" packets about evidence-tier openings
+ * were being resumed and re-parked while their need had been asked again in a
+ * new shape, settled, or its opening declined — research capacity spent on
+ * answers nothing reads. Read from rows: the need this idea asked (matched by
+ * the need's own `blocked_action`, which is the idea's title), its state, and
+ * its opening's. Not a cash need at all is null — this says nothing about it.
+ */
+async function noDecisionConsumes(projectId: string, candidateId: string): Promise<string | null> {
+  const db = getDb();
+  const candidate = await db.get<{ title: string }>('SELECT title FROM russell_candidates WHERE id = ?', [candidateId]);
+  const need =
+    (await db.get<{ id: string; state: string; opportunity_id: string | null; candidate_id: string | null }>(
+      'SELECT id, state, opportunity_id, candidate_id FROM cash_needs WHERE candidate_id = ? LIMIT 1',
+      [candidateId],
+    )) ??
+    (candidate
+      ? await db.get<{ id: string; state: string; opportunity_id: string | null; candidate_id: string | null }>(
+          `SELECT id, state, opportunity_id, candidate_id FROM cash_needs
+            WHERE project_id = ? AND blocked_action = ? LIMIT 1`,
+          [projectId, candidate.title],
+        )
+      : undefined);
+  if (!need) return null;
+  if (need.candidate_id && need.candidate_id !== candidateId) {
+    return `Its cash need (${need.id}) has since been asked again by another idea, so this packet's answer is read by nothing.`;
+  }
+  if (need.state !== 'OPEN') {
+    return `Its cash need (${need.id}) is ${need.state}, so no decision is waiting on this packet's answer.`;
+  }
+  if (need.opportunity_id) {
+    const opportunity = await db.get<{ state: string; duplicate_of_id: string | null }>(
+      'SELECT state, duplicate_of_id FROM cash_opportunities WHERE id = ?',
+      [need.opportunity_id],
+    );
+    if (opportunity?.duplicate_of_id) {
+      return `Its opening is a duplicate of ${opportunity.duplicate_of_id}, so no decision is waiting on this packet's answer.`;
+    }
+    if (opportunity && (opportunity.state === 'DECLINED' || opportunity.state === 'ARCHIVED')) {
+      return `Its opening is ${opportunity.state}, so no decision is waiting on this packet's answer.`;
+    }
+  }
+  return null;
+}
+
 /** What may be done about one parked packet, from its rows alone. Writes nothing. */
 export async function assessJudgeRound(orchestration: ResearchOrchestration): Promise<JudgeRoundAssessment> {
   if (!isJudgePark(orchestration) || !orchestration.auditId) return { kind: 'NOT_PARKED' };
@@ -135,6 +184,10 @@ export async function assessJudgeRound(orchestration: ResearchOrchestration): Pr
     if (Number(answered?.n ?? 0) > 0) {
       return { kind: 'PERSON', reason: 'A person has answered this packet\'s question; their answer is carried out as given.' };
     }
+  }
+  if (mission?.candidateId) {
+    const unconsumed = await noDecisionConsumes(orchestration.projectId, mission.candidateId);
+    if (unconsumed) return { kind: 'CONTINUED_ELSEWHERE', reason: unconsumed };
   }
   const rounds = await judgeRoundsSoFar(orchestration);
   if (rounds >= MAX_JUDGE_ROUNDS) {
