@@ -13714,6 +13714,44 @@ portfolio filled with single postings, solicitations and auctions.
   kind of business that repeatedly pays for what Brain delivers is, and other
   vendors' prices are its price evidence.
 
+## 74. Every person gets the same menu, and nobody gets the same job.
+
+The owner's rule for the four people running Cash Mode (2026-10-21): research
+is one shared frontier, and its jobs are dealt so that if one person makes more
+than another it is because they worked harder, never because they were dealt
+better work. `server/services/cash/dealer.ts` is the dealer; `docs/CASH-JOBS.md`
+the operator's view.
+
+- **The kind of work is the opening's `mechanism`.** A closed vocabulary, so a
+  category is a fact, not free text.
+- **A seat is a real person who can sign in today** (`peopleReading` READY).
+  A job dealt to somebody who cannot open the page is a job nobody works. A
+  person who joins later is owed in every kind and catches up first; that is
+  the literal rule, written down rather than softened.
+- **Dealt per kind, lexicographically, never by a weight**: fewest of this
+  kind, then fewest overall, then dealt longest ago, then user id.
+- **"Owed" is derived, never stored.** In a kind, a person is owed the most
+  anybody holds minus what they hold, read from `cash_jobs.owner_user_id`. A
+  released job is off a plate, so its holder is owed again; a collected one
+  stays counted, so finishing fast is never punished with less work.
+- **Nothing is taken off somebody who started it.** Only an unassigned job, a
+  job handed to the sprint's owner by default before dealing existed (its
+  `assigned_at` equals its `created_at`, it was created by Brain, and nothing
+  dealt it), or one whose holder can no longer sign in is dealt — each by a
+  compare-and-swap on the state *and* the owner read, with a `CASH_JOB_DEALT`
+  event naming why.
+- **An owed kind is what discovery looks for first**, with a 6-hour cool-off
+  instead of 24. The barren rule still applies, so "owed" never becomes "ask
+  for ever".
+- **One frontier, not four.** A parked packet in one of the old per-person cash
+  projects (an `Opportunity Research` layer and no sprint of its own, beside a
+  project that has one) reads `CONTINUED_ELSEWHERE`: the shared frontier asks
+  the question, so another corrected round there researches it twice.
+- **No freelancing, in discovery too.** The `explicit-paid-request` bucket
+  hunted posted gigs, briefs and listings; it is retired (`RETIRED_BUCKETS`,
+  still readable for its open rounds), and the productized-service question
+  names agency pages and price lists, not freelance marketplace listings.
+
 ## Repository map
 
 ```
@@ -13939,6 +13977,7 @@ server/
       outreach.ts       the message a buyer is sent, composed from the card
       factoryHandoff.ts READY_TO_TEST to the Software Factory, under the standing grant
       jobPipeline.ts    a qualified opening becomes one job; its tasks, stage and blockers (§70)
+      dealer.ts         jobs dealt evenly per kind of work; who is owed, derived (§74)
       freelancer/
         classify.ts     which kinds of work a listing asks for, and what blocks it
         economics.ts    the job's currency, Freelancer's fee, the net, the estimate

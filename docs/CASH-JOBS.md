@@ -17,6 +17,28 @@ job. A job is released (never deleted) when the opportunity is declined or
 archived, is found to be a duplicate, or — while nothing was committed yet —
 stops being actionable.
 
+## Who gets each job
+
+Jobs are **dealt** (`server/services/cash/dealer.ts`, CLAUDE.md §74). Everybody
+running the sprint — every real person who can sign in — gets the same menu,
+and nobody gets the same job:
+
+- a fresh job is created unassigned and dealt at the end of the same pass;
+- the kind of work is the opening's `mechanism`;
+- the next job of a kind goes to whoever holds the **fewest of that kind**,
+  then the fewest overall, then whoever was dealt longest ago;
+- when a kind is short, the people who got none are **owed** one — derived
+  from the jobs table, never stored — and the next one found goes to them;
+- discovery asks for an owed kind first, with a 6-hour cool-off instead of 24
+  (the barren rule still stops a bucket that keeps finding nothing).
+
+A job somebody is executing is never taken off them. A job handed to the
+sprint's owner by default before dealing existed is dealt once. A job whose
+holder can no longer sign in is dealt again. Every deal writes
+`CASH_JOB_DEALT` with the reason. Each person sees **Your plate** on the Cash
+page: what they hold per kind and what they are owed; the owner also sees
+everybody's.
+
 ## Stages
 
 | stage | means |

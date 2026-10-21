@@ -1957,6 +1957,8 @@ function Pipeline({ projectId, reloadToken }: { projectId: string; reloadToken: 
         .
       </p>
 
+      {data.plate ? <Plate plate={data.plate} /> : null}
+
       {(data.marketplaceJobs ?? []).length > 0 ? (
         <ul className="rs-list rs-cash-jobs rs-cash-marketplace-jobs">
           {(data.marketplaceJobs ?? []).map((job) => (
@@ -1991,6 +1993,7 @@ function Pipeline({ projectId, reloadToken }: { projectId: string; reloadToken: 
             <li key={job.jobId} className="rs-cash-job" data-stage={job.stage}>
               <p>
                 <strong>{job.title}</strong> — <span className="rs-cash-job-stage">{job.stageLabel}</span>
+                {job.yours ? <span className="rs-chip rs-cash-job-yours"> on your plate</span> : null}
               </p>
               {job.priceCents !== null ? (
                 <p className="rs-item-meta">
@@ -2043,6 +2046,48 @@ function Pipeline({ projectId, reloadToken }: { projectId: string; reloadToken: 
         </details>
       ) : null}
     </section>
+  );
+}
+
+function counted(list: { label: string; count: number }[]): string {
+  return list.map((one) => `${one.count} ${one.label}`).join(', ');
+}
+
+/**
+ * The dealer's table (`dealer.ts`): every person gets the same menu, nobody the
+ * same job. What is on your plate per kind of work, and what you are owed —
+ * the next job of that kind found goes to you.
+ */
+function Plate({ plate }: { plate: NonNullable<PipelineReading['plate']> }): JSX.Element {
+  return (
+    <div className="rs-cash-plate">
+      <h4>Your plate</h4>
+      <p className="rs-hint">
+        Jobs are dealt evenly across the {plate.seats} people running this sprint, one kind of work at a time.
+        Nobody gets the same job twice.
+      </p>
+      <p>{plate.mine.length > 0 ? `You hold: ${counted(plate.mine)}.` : 'Nothing has been dealt to you yet.'}</p>
+      {plate.owedToMe.length > 0 ? (
+        <p className="rs-cash-plate-owed">
+          You are owed: {counted(plate.owedToMe)}. The next one of each found goes to you, and Brain is looking for
+          more of that kind first.
+        </p>
+      ) : null}
+      {plate.everyone && plate.everyone.length > 0 ? (
+        <details className="rs-details">
+          <summary>Everybody&rsquo;s plate</summary>
+          <ul className="rs-list">
+            {plate.everyone.map((one) => (
+              <li key={one.userId}>
+                <strong>{one.displayName}</strong> — {one.total} job(s)
+                {one.byCategory.length > 0 ? `: ${counted(one.byCategory)}` : ''}
+                {one.owed.length > 0 ? ` · owed ${counted(one.owed)}` : ''}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
   );
 }
 
