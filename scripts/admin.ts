@@ -1294,7 +1294,7 @@ async function main(): Promise<void> {
               name: 'Methods: how Brain researches and judges',
               maxPackets: 10,
               maxFragments: 60,
-              deadline: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+              deadline: new Date(Date.now() + 2 * 86_400_000).toISOString(),
               researchAssignment: METHODS_ASSIGNMENT,
               researchLayerId: layer.id,
             })
