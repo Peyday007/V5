@@ -56,12 +56,14 @@ import { composeLedger, rankableOf } from './ledger.ts';
 import { allocateCommissions } from './commission.ts';
 import { researchRoom, type ResearchRoom } from '../researchRoom.ts';
 import { diveEpochStart } from '../diveStage.ts';
+import { payerEstablished } from '../validation.ts';
 import type { CommissionAsk } from './commission.ts';
 import type { Ledger } from './ledger.ts';
 import type {
   MonetizationAttribute,
   MonetizationCommission,
   ResearchClaim,
+  CashCardFact,
 } from '../../../domain/types.ts';
 
 const OPENED = 'MONETIZATION_QUESTION_ASKED';
@@ -850,7 +852,8 @@ export async function closedOpportunities(projectId: string): Promise<Set<string
   const closed = new Set<string>();
   const mode = await getCashMode(projectId);
   let deployable: number | null = null;
-  for (const one of await listOpportunities({ projectId })) {
+  const opportunities = await listOpportunities({ projectId });
+  for (const one of opportunities) {
     if (
       one.duplicateOfId ||
       one.state === 'DECLINED' ||
@@ -869,8 +872,25 @@ export async function closedOpportunities(projectId: string): Promise<Set<string
     deployable ??= Math.max(0, (await cashPosition({ projectId, currency: mode?.currency })).deployableCents);
     if (await notWorthResearching(one, { now, deployableCents: deployable })) closed.add(one.id);
   }
-  for (const fact of await cardFactsForProject(projectId)) {
+  const facts = await cardFactsForProject(projectId);
+  for (const fact of facts) {
     if (fact.field === DISQUALIFIED_FIELD && fact.value.trim().length > 0) closed.add(fact.opportunityId);
+  }
+  /*
+   * And one nobody has shown would pay. Production, 2026-10-22: 254 questions
+   * asked, 6 answered — nearly all of them the capital, costs or timing of a
+   * market fact (a surplus auction, a domain appraisal, a bug-bounty page)
+   * with no payer behind it. Who pays is the deep dive's first question, and
+   * until it is answered nothing these questions could settle changes what
+   * Brain does next (§65). Answer the payer, and the opening is asked again.
+   */
+  const payerFacts = new Map<string, CashCardFact>();
+  for (const fact of facts) if (fact.field === 'payer') payerFacts.set(fact.opportunityId, fact);
+  for (const one of opportunities) {
+    if (closed.has(one.id)) continue;
+    if (!payerEstablished(one, (field) => (field === 'payer' ? payerFacts.get(one.id) ?? null : null))) {
+      closed.add(one.id);
+    }
   }
   return closed;
 }

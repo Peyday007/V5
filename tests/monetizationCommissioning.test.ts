@@ -147,6 +147,9 @@ async function discovery(
   const withSignal = await updateOpportunity(created.id, {
     buying_signal: title,
     signal_observed_at: '2026-09-15',
+    // A named payer, so the possibility is worth commissioning at all
+    // (an opening nobody is shown to pay for is closed to commissions).
+    ...('payer' in over ? {} : { payer: 'A named buyer' }),
   });
   return withSignal ?? created;
 }
@@ -621,6 +624,23 @@ describe('what cannot change a decision is not researched', () => {
 });
 
 // ---------------------------------------------------------------------------
+
+describe('no money question about an opening nobody is shown to pay for', () => {
+  it('opens nothing until a payer is established, and asks once one is', async () => {
+    const opening = await discovery('PAID_TASK_OR_CONTRACT', 'A request with no payer yet.', {
+      payer: null,
+    });
+    await enumeratePossibilities(projectId);
+
+    const without = await tick();
+    expect(without.opened).toEqual([]);
+    expect(await listCommissions({ projectId })).toHaveLength(0);
+
+    await updateOpportunity(opening.id, { payer: 'A named buyer' });
+    const withPayer = await tick();
+    expect(withPayer.opened.length).toBeGreaterThan(0);
+  });
+});
 
 describe('adversarial: nothing is ever commissioned twice', () => {
   it('a repeated durable tick creates no second question', async () => {

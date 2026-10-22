@@ -13677,6 +13677,11 @@ deliverable sat PREPARED, and Cash counted none of them.
   read, so each lifts by itself; nothing is archived. A *service* with an
   exposure is still researched — capital can arrive and execution waits on its
   own. Open field research on such openings is withdrawn before it launches.
+- **No money question about an opening nobody is shown to pay for.** A
+  monetization commission asks what a possibility earns, costs or needs; on an
+  opening with no established payer (`payerEstablished`, the same test the
+  screen dive uses) none of those answers can make it executable, so
+  `closedOpportunities` closes it to commissions until a payer lands.
 - **A piece that loses money on its own figures is not qualified.** Price below
   exposure caps the tier at CANDIDATE, and it is never marked ready or
   contacted for — the reading `jobEligibility` already applied, so the tier,
