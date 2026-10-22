@@ -65,6 +65,7 @@ import { startPacket } from '../server/services/research/startPacket.ts';
 import type { GoalBudgetStatus } from '../server/repos/russellAuthority.ts';
 import {
   createResearchGoal,
+  revokeGoal,
   getGoal,
   goalBudgetStatus,
 } from '../server/repos/russellAuthority.ts';
@@ -198,7 +199,12 @@ class Halt extends Error {}
 const METHODS_ASSIGNMENT = [
   'Research methods, not markets: how to think, so every later question Brain asks gets a better answer.',
   'For each question give concrete rules a computer could follow, each with a real public source.',
-  'Skip general startup advice. Say what is proven and what is only opinion. The aim is fast cash from services sold by email; no freelance marketplaces.',
+  'Skip general startup advice. Say what is proven and what is only opinion.',
+  'HOW TO PLAN THIS (version 2; version 1 lost almost every finding to these four mistakes):',
+  '- These are general methods. Declare NO population, NO geography and NO timeframe for a fragment unless its own question is about one place, period or kind of business. A study of startups, investors or any industry counts as evidence for a general method.',
+  '- One independent source is enough for a rule that a study, standard, textbook or official guide states itself: set the independent-source minimum to 1.',
+  '- Declare evidence lanes CONDITIONAL, not REQUIRED, so one missing kind of evidence does not throw away the rest.',
+  '- Submit each rule as the source states it, claim type SOURCED_FACT, with the exact passage quoted. Do not merge several sources into one rule of your own: that is an inference with no stated inputs and is rejected.',
   '1. Validating an idea before spending money: how professional analysts and investors check fast and cheap whether a business idea is real.',
   '2. Why small businesses fail, and the earliest warning sign of each way.',
   '3. Finding who actually pays: who inside a business makes the buying decision and controls the budget, from public information.',
@@ -1284,6 +1290,19 @@ async function main(): Promise<void> {
         }
         const layer = (await listLayers(project.id)).find((one) => one.name === ARCHITECTURE_LAYER)
           ?? fail(`No layer "${ARCHITECTURE_LAYER}" in this project.`);
+        // An earlier methods goal still running is replaced, not run beside this
+        // one: its accepted claims stay (they are rows), only its new work stops.
+        const live = await getDb().all<{ id: string }>(
+          `SELECT id FROM russell_goals
+            WHERE project_id = ? AND purpose = 'RESEARCH_GOAL' AND state IN ('ACTIVE','PAUSED')
+              AND name LIKE 'Methods:%'`,
+          [project.id],
+        );
+        for (const old of live) {
+          if (await revokeGoal({ goalId: old.id, actorUserId: actor.id, reason: 'Replaced by a newer methods goal.' })) {
+            console.log(`  replaced ${old.id}`);
+          }
+        }
         let goalId: string;
         try {
           goalId = (
@@ -1291,7 +1310,7 @@ async function main(): Promise<void> {
               projectId: project.id,
               ownerUserId: actor.id,
               createdByUserId: actor.id,
-              name: 'Methods: how Brain researches and judges',
+              name: 'Methods: how Brain researches and judges (v2)',
               maxPackets: 10,
               maxFragments: 60,
               deadline: new Date(Date.now() + 2 * 86_400_000).toISOString(),
