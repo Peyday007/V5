@@ -142,3 +142,16 @@ jobs:
           # The verdict comes from a line the command printed, not from an exit
           # code that had to survive an SSH session, a shell and a CLI.
           grep -q '^ADMIN: OK' admin.txt
+
+      # Readable through the checks API where the log is not; see closeout-report.yml.
+      - name: Publish the output as annotations
+        if: always()
+        run: |
+          [ -f admin.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('admin.txt', encoding='utf-8', errors='replace').read()
+          enc = lambda s: s.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][:10]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=output {n}/{len(chunks)}::{enc(chunk)}')
+          PY

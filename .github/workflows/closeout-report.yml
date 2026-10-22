@@ -44,7 +44,7 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: 'cash | people | fleet | refinement | product | candidate | packet | routing | projects | campaigns | campaign | bins'
+        description: 'cash | people | fleet | refinement | product | candidate | packet | routing | projects | campaigns | campaign | bins | methods'
         required: true
         default: cash
       project:
@@ -203,6 +203,10 @@ jobs:
               cmd="sh /app/scripts/factory.sh bins --campaign $campaign"
               marker='^FACTORY: OK'
               ;;
+            methods)
+              cmd="sh /app/scripts/methods-report.sh"
+              marker='^METHODS-REPORT: OK'
+              ;;
             refinement)
               cmd="sh /app/scripts/refinement-report.sh"
               [ -n "$project" ] && cmd="$cmd --project $project"
@@ -238,6 +242,21 @@ jobs:
             -C "sh -c 'BRAIN_DATABASE_POOL_SIZE=1 BRAIN_DATABASE_CONNECT_TIMEOUT_MS=60000 $cmd'" 2>&1 | tee closeout-report.txt
           set -e
           grep -q "$marker" closeout-report.txt
+
+      # Annotations are readable through the checks API where the log and the
+      # artifact are not (their blob host is outside some readers' allowlist),
+      # so the report is also published as notices, in chunks.
+      - name: Publish the report as annotations
+        if: always()
+        run: |
+          [ -f closeout-report.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('closeout-report.txt', encoding='utf-8', errors='replace').read()
+          enc = lambda s: s.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][:10]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=report {n}/{len(chunks)}::{enc(chunk)}')
+          PY
 
       - uses: actions/upload-artifact@v4
         if: always()
