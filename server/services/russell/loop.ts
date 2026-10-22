@@ -153,8 +153,8 @@ import { runManufacturingKernel } from '../manufacturing/kernel.ts';
 import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
-import { runFreelancerOperation, type MarketplaceReport } from '../cash/freelancer/operate.ts';
-import { freelancerOperationEnabled } from '../cash/freelancer/enabled.ts';
+import { retireMarketplaceListings, type ListingsRetired } from '../cash/retireListings.ts';
+import { retireUnjudgeableBins } from '../bins/retireUnjudgeable.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
@@ -596,8 +596,10 @@ export interface TickReport {
     promoted: string[];
     settled: string[];
   }[];
-  /** The Freelancer operation's pass, per project, when it did anything. */
-  marketplace: ({ projectId: string } & MarketplaceReport)[];
+  /** Freelance-marketplace listings put away with their research, per project, when any were. */
+  listingsRetired: ({ projectId: string } & ListingsRetired)[];
+  /** Live bins whose contract has no evaluator, retired. */
+  unjudgeableBinsRetired: string[];
   cashOperations: {
     projectId: string;
     needsRaised: string[];
@@ -795,7 +797,8 @@ const EMPTY: TickReport = {
   manufacturingKernel: [],
   dealflowKernel: [],
   puzzleKernel: [],
-  marketplace: [],
+  listingsRetired: [],
+  unjudgeableBinsRetired: [],
   cashOperations: [],
   sharedPromoted: [],
   ranked: [],
@@ -899,7 +902,8 @@ async function tickOnce(owner: string): Promise<TickReport> {
     manufacturingKernel: [],
     dealflowKernel: [],
   puzzleKernel: [],
-    marketplace: [],
+    listingsRetired: [],
+    unjudgeableBinsRetired: [],
     cashOperations: [],
     sharedPromoted: [],
   };
@@ -1117,6 +1121,10 @@ async function tickOnce(owner: string): Promise<TickReport> {
      * and then finds nothing, and no provider is called — every lesson is a
      * count of rows.
      */
+    await runPass(report, 'unjudgeable-bins', async () => {
+      report.unjudgeableBinsRetired.push(...(await retireUnjudgeableBins()));
+    });
+
     await runPass(report, 'retrospectives', async () => {
       for (const entry of await reconcileRetrospectives(cycle.maxEventsPerCycle)) {
         report.researchLessons.push(entry);
@@ -2042,21 +2050,19 @@ async function tickOnce(owner: string): Promise<TickReport> {
 
         try {
           /*
-           * The Freelancer operation (`cash/freelancer/operate.ts`): find work
-           * Brain can deliver itself, bid, deliver and collect, under the
-           * standing commercial grant. Its own `try`, because a marketplace
-           * that did not answer must not stop the sprint's other work, and
-           * every step is derived from rows so the next tick resumes it.
+           * Openings that are freelance-marketplace listings are put away with
+           * their research (`cash/retireListings.ts`). Derived from rows, so it
+           * reaches what was filed before the rule, and idempotent.
            */
-          // Off unless a deployment turns it on: the owner rejected freelance
-          // work for Cash Mode (`freelancer/enabled.ts`).
-          const market = freelancerOperationEnabled() ? await runFreelancerOperation(project.id) : null;
-          if (market && (market.recorded > 0 || market.bid.length > 0 || market.awarded.length > 0 ||
-              market.started.length > 0 || market.delivered.length > 0 || market.paid.length > 0 || market.messages > 0)) {
-            report.marketplace.push({ projectId: project.id, ...market });
+          const retired = await retireMarketplaceListings(project.id);
+          if (
+            retired.archived.length + retired.needsWithdrawn.length + retired.candidatesRejected.length +
+              retired.missionsCancelled.length + retired.packetsCancelled.length > 0
+          ) {
+            report.listingsRetired.push({ projectId: project.id, ...retired });
           }
         } catch {
-          /* a marketplace pass that could not run is retried next tick */
+          /* a retirement pass that could not run is retried next tick */
         }
       }
     });

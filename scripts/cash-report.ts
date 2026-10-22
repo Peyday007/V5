@@ -32,7 +32,6 @@
  * string, a bucket key or a token: it reports what a project contains, never
  * where it is kept.
  */
-import { freelancerOperationEnabled, FREELANCER_OPERATION_OFF } from '../server/services/cash/freelancer/enabled.ts';
 import { listJobs } from '../server/repos/cashJobs.ts';
 import { NEED_RESEARCHABLE_ENGINE_FIELDS } from '../server/services/cash/engineCard.ts';
 import { listNeeds as listCashNeeds } from '../server/repos/cashPortfolio.ts';
@@ -295,15 +294,6 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
           console.log(`      ${task.key.padEnd(10)} ${task.status.padEnd(18)} ${task.executor.padEnd(19)} ${task.because.slice(0, 180)}`);
         }
       }
-      for (const job of pipeline.marketplaceJobs) {
-        console.log(
-          `  ${job.jobId}  freelancer=${job.externalId}  ${job.stage}  state=${job.state}` +
-            `  ${job.categories.join('+')}  bid=${job.bid ?? '—'} net_usd=${job.netUsd ?? '—'}  ${job.title.slice(0, 70)}`,
-        );
-        for (const task of job.tasks) {
-          console.log(`      ${task.key.padEnd(10)} ${task.status.padEnd(18)} ${task.executor.padEnd(19)} ${task.because.slice(0, 180)}`);
-        }
-      }
       for (const one of pipeline.qualifiedWithoutJob) {
         console.log(`  no job ${one.opportunityId}  ${one.because.slice(0, 200)}`);
       }
@@ -512,7 +502,6 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   await gateFailures(projectId);
   await researchAccounting(projectId);
   await funnelAndUsefulness(projectId);
-  await listingRetrievalsSection(projectId);
 
   // --- What became a piece of work ----------------------------------------
   const opportunities = await listOpportunities({ projectId });
@@ -960,7 +949,6 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   console.log(`HISTORY (${eventCounts.total}) — ${shown(eventCounts)}`);
 
   await readableRouteUse(projectId);
-  await marketplaceOperation(projectId);
 
   console.log('');
   console.log(
@@ -1006,111 +994,6 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
  * names no Routine was submitted by a session Brain did not fire, so it counts
  * as supporting evidence and never as fleet evidence. Read-only, last 7 days.
  */
-/**
- * The Freelancer operation: what Brain found, bid on, delivered and was paid
- * for, read from its own rows. Read-only. Rejections are counted by reason,
- * and every job past REJECTED is listed with its state and reason.
- */
-async function marketplaceOperation(projectId: string): Promise<void> {
-  if (!freelancerOperationEnabled()) console.log(`MARKETPLACE — ${FREELANCER_OPERATION_OFF} Rows below are history.`);
-  const db = getDb();
-  const jobs = await db.all<{ id: string; external_id: string; title: string; state: string; state_reason: string | null; bid_amount_cents: number | null; currency: string; economics: string | null; screen_reasons: string; created_at: string }>(
-    'SELECT id, external_id, title, state, state_reason, bid_amount_cents, currency, economics, screen_reasons, created_at FROM marketplace_jobs WHERE project_id = ? ORDER BY created_at, id',
-    [projectId],
-  ).catch(() => null);
-  if (jobs === null) {
-    console.log('MARKETPLACE — the marketplace_jobs table could not be read');
-    return;
-  }
-  const byState = new Map<string, number>();
-  for (const one of jobs) byState.set(one.state, (byState.get(one.state) ?? 0) + 1);
-  const scans = await db.get<{ n: number; last: string | null }>(
-    `SELECT COUNT(*) AS n, MAX(created_at) AS last FROM cash_events WHERE project_id = ? AND kind = 'MARKETPLACE_SCAN'`,
-    [projectId],
-  );
-  const connected = Boolean(process.env.FREELANCER_OAUTH_TOKEN?.trim());
-  console.log('');
-  console.log(
-    `MARKETPLACE (Freelancer) — jobs=${jobs.length} ${[...byState].map(([k, v]) => `${k}=${v}`).join(' ')} ` +
-      `scans=${scans?.n ?? 0} last-scan=${scans?.last ?? 'never'} account=${connected ? 'CONNECTED' : 'NOT_CONNECTED'}`,
-  );
-  // The separate counts the operation is judged by. Each later stage is a
-  // subset of the one before it, read from the state a job reached rather than
-  // from its current state alone, so a PAID job still counts as awarded.
-  const reached = (states: string[]): number => jobs.filter((j) => states.includes(j.state)).length;
-  const afterBid = ['BID_SENT', 'BID_UNCERTAIN', 'LOST', 'AWARDED', 'FULFILLING', 'DELIVERED', 'PAID', 'FULFILMENT_FAILED'];
-  const afterAward = ['AWARDED', 'FULFILLING', 'DELIVERED', 'PAID', 'FULFILMENT_FAILED'];
-  console.log(
-    `  pipeline discovered=${jobs.length} qualified=${reached(['PREPARED', 'WITHDRAWN', 'BID_REFUSED', ...afterBid])} ` +
-      `bids-submitted=${reached(afterBid)} awarded=${reached(afterAward)} completed=${reached(['DELIVERED', 'PAID'])} ` +
-      `payments-collected=${reached(['PAID'])}`,
-  );
-  const categories = await db
-    .all<{ categories: string }>(`SELECT categories FROM marketplace_jobs WHERE project_id = ? AND state <> 'REJECTED'`, [projectId])
-    .catch(() => [] as { categories: string }[]);
-  const byCategory = new Map<string, number>();
-  for (const row of categories) for (const c of JSON.parse(row.categories || '[]') as string[]) byCategory.set(c, (byCategory.get(c) ?? 0) + 1);
-  if (byCategory.size) console.log(`  qualified by category ${[...byCategory].map(([k, v]) => `${k}=${v}`).join(' ')}`);
-  const counts = await db.all<{ kind: string; n: number }>(
-    `SELECT kind, COUNT(*) AS n FROM cash_events WHERE project_id = ? AND kind IN
-       ('MARKETPLACE_REQUALIFIED', 'MARKETPLACE_CAPABILITIES_PROVED', 'MARKETPLACE_CLIENT_FILE_READ', 'MARKETPLACE_MESSAGE_RECEIVED',
-        'MARKETPLACE_REPLIED', 'MARKETPLACE_REVISION_STARTED', 'MARKETPLACE_DELIVERABLE_VERIFIED')
-     GROUP BY kind ORDER BY kind`,
-    [projectId],
-  );
-  if (counts.length) console.log(`  events ${counts.map((c) => `${c.kind.replace('MARKETPLACE_', '').toLowerCase()}=${c.n}`).join(' ')}`);
-  const proved = await db.get<{ summary: string; created_at: string }>(
-    `SELECT summary, created_at FROM cash_events WHERE project_id = ? AND kind = 'MARKETPLACE_CAPABILITIES_PROVED' ORDER BY created_at DESC, id DESC LIMIT 1`,
-    [projectId],
-  );
-  console.log(`  capabilities ${proved ? `${proved.created_at} ${proved.summary.slice(0, 200)}` : 'no reading recorded yet'}`);
-  const deliverables = await db
-    .all<{ job_id: string; version: number; state: string; files: string; verification: string; created_at: string }>(
-      `SELECT d.job_id, d.version, d.state, d.files, d.verification, d.created_at FROM marketplace_deliverables d
-         JOIN marketplace_jobs j ON j.id = d.job_id WHERE j.project_id = ? ORDER BY d.created_at DESC LIMIT 12`,
-      [projectId],
-    )
-    .catch(() => null);
-  if (deliverables === null) console.log('  deliverables — the marketplace_deliverables table could not be read');
-  for (const d of deliverables ?? []) {
-    const files = (JSON.parse(d.files || '[]') as { name: string }[]).map((f) => f.name);
-    const checks = (JSON.parse(d.verification || '{}') as { checks?: { ok: boolean }[] }).checks ?? [];
-    console.log(`  deliverable ${d.job_id} v${d.version} ${d.state} checks=${checks.filter((c) => c.ok).length}/${checks.length} files=${files.join(', ').slice(0, 140)}`);
-  }
-  const reasons = new Map<string, number>();
-  for (const one of jobs.filter((j) => j.state === 'REJECTED')) {
-    for (const r of JSON.parse(one.screen_reasons) as string[]) {
-      const key = r.replace(/\d+/g, 'N');
-      reasons.set(key, (reasons.get(key) ?? 0) + 1);
-    }
-  }
-  const top = [...reasons].sort((a, b) => b[1] - a[1]).slice(0, 6);
-  if (top.length) console.log(`  rejected because ${top.map(([k, v]) => `${v}× ${k}`).join('; ')}`);
-  for (const one of jobs.filter((j) => j.state !== 'REJECTED').slice(-20)) {
-    // A bid is in the job's own currency; the USD figures are Freelancer's own rate, read at screening.
-    const e = one.economics ? (JSON.parse(one.economics) as { bidUsd?: number; netUsd?: number }) : null;
-    const usd = one.bid_amount_cents != null
-      ? ` bid=${one.currency} ${one.bid_amount_cents / 100}${e?.bidUsd != null ? ` (USD ${e.bidUsd}, net USD ${e.netUsd})` : ''}`
-      : '';
-    console.log(`  ${one.id} ${one.state} freelancer=${one.external_id}${usd} "${one.title.slice(0, 70)}"${one.state_reason ? ` — ${one.state_reason.slice(0, 120)}` : ''}`);
-  }
-  // What a prepared job actually asks for, so whether Brain could deliver it is
-  // a reading of the client's words rather than of a title.
-  const prepared = await db
-    .all<{ id: string; description: string }>(
-      `SELECT id, description FROM marketplace_jobs WHERE project_id = ? AND state = 'PREPARED' ORDER BY created_at, id`,
-      [projectId],
-    )
-    .catch(() => []);
-  for (const one of prepared) console.log(`      brief ${one.id}: ${trim(one.description, 400)}`);
-  const events = await db.all<{ kind: string; summary: string; created_at: string }>(
-    `SELECT kind, summary, created_at FROM cash_events WHERE project_id = ? AND kind LIKE 'MARKETPLACE_%' AND kind <> 'MARKETPLACE_SCAN'
-      ORDER BY created_at DESC, id DESC LIMIT 12`,
-    [projectId],
-  );
-  for (const e of events) console.log(`  ${e.created_at} ${e.kind} ${e.summary.slice(0, 160)}`);
-}
-
 async function readableRouteUse(projectId: string): Promise<void> {
   const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const rows = await getDb()
@@ -1129,8 +1012,7 @@ async function readableRouteUse(projectId: string): Promise<void> {
          LEFT JOIN research_passes p ON p.id = c.pass_id
          LEFT JOIN fleet_routines r ON r.id = p.executor_routine_id
         WHERE o.project_id = ? AND c.created_at >= ?
-          AND (c.source_url LIKE '%freelancer.com/api/%'
-               OR c.source_url LIKE '%sam.gov/api/%'
+          AND (c.source_url LIKE '%sam.gov/api/%'
                OR c.source_url LIKE '%publicsurplus.com/sms/%')
         ORDER BY c.created_at`,
       [projectId, since],
@@ -1447,51 +1329,6 @@ async function funnelAndUsefulness(projectId: string): Promise<void> {
     console.log(
       `RESEARCH USEFULNESS (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`,
     );
-  }
-}
-
-/**
- * What Brain retrieved of known listings: the newest attempt per opening, and
- * which follow-up packet the listing was handed to. Fails on its own.
- */
-async function listingRetrievalsSection(projectId: string): Promise<void> {
-  try {
-    const rows = await getDb().all<{
-      opportunity_id: string;
-      platform_id: string | null;
-      outcome: string;
-      http_status: number | null;
-      retrieved_at: string;
-      original_url: string;
-      attempts: number;
-      validation_orchestration_id: string | null;
-      validation_state: string | null;
-    }>(
-      `SELECT r.opportunity_id, r.platform_id, r.outcome, r.http_status, r.retrieved_at, r.original_url,
-              (SELECT COUNT(*) FROM listing_retrievals x WHERE x.opportunity_id = r.opportunity_id) AS attempts,
-              o.validation_orchestration_id, o.validation_state
-         FROM listing_retrievals r
-         JOIN cash_opportunities o ON o.id = r.opportunity_id
-        WHERE r.project_id = ?
-          AND r.id = (SELECT y.id FROM listing_retrievals y WHERE y.opportunity_id = r.opportunity_id
-                       ORDER BY y.retrieved_at DESC, y.id DESC LIMIT 1)
-        ORDER BY r.retrieved_at DESC
-        LIMIT 40`,
-      [projectId],
-    );
-    console.log('');
-    console.log(`LISTING RETRIEVALS (${rows.length} opening(s) with a known listing, newest first)`);
-    for (const row of rows) {
-      console.log(
-        `  ${row.opportunity_id} freelancer=${row.platform_id ?? '—'} ${row.outcome}` +
-          `${row.http_status !== null ? ` http=${row.http_status}` : ''} at=${row.retrieved_at} attempts=${row.attempts}` +
-          ` dive=${row.validation_orchestration_id ?? '—'} ${row.validation_state ?? ''}`,
-      );
-      console.log(`      ${row.original_url}`);
-    }
-  } catch (error) {
-    console.log('');
-    console.log(`LISTING RETRIEVALS (could not be read: ${error instanceof Error ? error.message.split('\n')[0] : String(error)})`);
   }
 }
 

@@ -62,7 +62,7 @@
  * two-connection concurrency test is `cashConcurrency`.
  */
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { proveCapabilities } from '../server/services/cash/freelancer/deliverables/capabilities.ts';
+import { proveCapabilities } from '../server/services/cash/deliverables/capabilities.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';

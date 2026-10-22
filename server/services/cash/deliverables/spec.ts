@@ -1,5 +1,5 @@
 /**
- * What a worker may hand Brain as a finished freelance deliverable.
+ * What a worker may hand Brain as a finished deliverable.
  *
  * A worker never uploads a file. It submits a *specification* — the cells, the
  * slides, the paragraphs, the SVG, the primitives — and Brain renders the file
@@ -26,6 +26,18 @@ export const DELIVERABLE_KINDS = [
   'MODEL_3D',
 ] as const;
 export type DeliverableKind = (typeof DELIVERABLE_KINDS)[number];
+
+/** What each kind is called where a person or a question reads it. */
+export const DELIVERABLE_LABEL: Record<DeliverableKind, string> = {
+  SPREADSHEET: 'spreadsheet',
+  DOCUMENT: 'business document',
+  PRESENTATION: 'presentation',
+  DATASET: 'data operations',
+  WEBSITE: 'website',
+  CODE: 'programming',
+  GRAPHIC: 'graphic design',
+  MODEL_3D: '3D model',
+};
 
 export type CellFormat = 'general' | 'integer' | 'decimal' | 'currency' | 'percent' | 'date' | 'text';
 export const CELL_FORMATS: readonly CellFormat[] = ['general', 'integer', 'decimal', 'currency', 'percent', 'date', 'text'];
@@ -542,16 +554,16 @@ function checkSpec(c: Checker, raw: unknown): void {
 }
 
 /**
- * Contact details and payment off the platform are against Freelancer's terms,
- * and a message Brain sends is sent under the owner's account. So a worker's
- * message is refused for carrying either, never rewritten.
+ * A message Brain sends with a deliverable is sent under the owner's name, so a
+ * worker's message is refused for carrying contact details, a payment channel
+ * or a link, never rewritten.
  */
 export function messageProblems(text: string): string[] {
   const problems: string[] = [];
   if (text.length > 3000) problems.push('The message is longer than 3000 characters.');
   if (/[\w.+-]+@[\w-]+\.[\w.]+/.test(text)) problems.push('The message carries an email address; contact details stay off the platform.');
   if (/(\+?\d[\d\s().-]{8,}\d)/.test(text)) problems.push('The message carries what looks like a phone number.');
-  if (/\b(whatsapp|telegram|skype|discord|paypal|venmo|wise\.com|bank transfer|outside (?:of )?freelancer|off[- ]platform)\b/i.test(text)) {
+  if (/\b(whatsapp|telegram|skype|discord|paypal|venmo|wise\.com|bank transfer|off[- ]platform)\b/i.test(text)) {
     problems.push('The message points the client off the platform.');
   }
   if (/https?:\/\//i.test(text)) problems.push('The message carries a link; deliverables travel as attachments.');

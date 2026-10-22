@@ -94,14 +94,13 @@ import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.
 import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition } from './money.ts';
-import { proveCapabilities } from './freelancer/deliverables/capabilities.ts';
-import { CATEGORY_LABEL } from './freelancer/classify.ts';
+import { proveCapabilities } from './deliverables/capabilities.ts';
 import { existingOpeningFor, markDuplicateOpenings, openingSourceKey } from './duplicates.ts';
 import {
   ensureDiscoveryAuthority,
   resumeAuthorityParkedCandidates,
 } from './discoveryAuthority.ts';
-import { DELIVERABLE_KINDS, type DeliverableKind } from './freelancer/deliverables/spec.ts';
+import { DELIVERABLE_KINDS, DELIVERABLE_LABEL, type DeliverableKind } from './deliverables/spec.ts';
 import { deliverableCapabilityId } from './capabilities.ts';
 import type {
   CashDiscoveryRound,
@@ -577,8 +576,8 @@ export function executionFrameSentence(frame: ExecutionFrame): string {
     'not act on today is still worth reporting when the money is real: name the one licence, ' +
     'registration, capability or amount of capital it would need rather than leaving it out. ' +
     'Leave out job postings, hourly positions and anything already closed. Leave out individual ' +
-    'project listings on freelance marketplaces (Freelancer, PeoplePerHour, Upwork, Fiverr): this ' +
-    'operation does not take freelance work. A company publishing its ' +
+    'project listings on freelance marketplaces: this operation does not take freelance work. ' +
+    'A company publishing its ' +
     'own prices or fees is evidence of what that company charges, not of anybody paying this ' +
     'operation, so on its own it is not an opening. A kind of business that publicly and ' +
     'repeatedly pays for something this operation delivers, with a published place to find those ' +
@@ -590,7 +589,7 @@ export function executionFrameSentence(frame: ExecutionFrame): string {
 async function executionFrame(projectId: string, currency: string): Promise<ExecutionFrame | null> {
   try {
     const [caps, position] = await Promise.all([proveCapabilities(), cashPosition({ projectId, currency })]);
-    const delivers = DELIVERABLE_KINDS.filter((kind) => caps[kind]?.available).map((kind) => CATEGORY_LABEL[kind]);
+    const delivers = DELIVERABLE_KINDS.filter((kind) => caps[kind]?.available).map((kind) => DELIVERABLE_LABEL[kind]);
     return { delivers, deployableCents: Math.max(0, position.deployableCents), currency };
   } catch {
     // A frame that cannot be read is left out, never guessed: the question still stands without it.

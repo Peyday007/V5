@@ -62,8 +62,6 @@ export interface ResearchGuidance {
   lessons: { abstraction: string; lesson: string }[];
   /** Verified readable routes for channels this fragment names or this surface could not read. */
   readableRoutes: { host: string; lines: string[] }[];
-  /** The known listing a follow-up task is about, as Brain retrieved it. Null for any other packet. */
-  listing: string[] | null;
   /** The whole of it, as prompt text. */
   text: string;
 }
@@ -87,8 +85,6 @@ export function composeGuidance(input: {
   lessons: { abstraction: string; lesson: string }[];
   /** Other text naming what is being researched, such as the packet's title. */
   contextText?: string | null;
-  /** `listingGuidanceLines`, when this packet is about one known listing. */
-  listing?: string[] | null;
 }): ResearchGuidance {
   const notYours = input.fragment
     ? input.siblings
@@ -111,10 +107,6 @@ export function composeGuidance(input: {
   }).map((route) => ({ host: route.host, lines: [...route.lines] }));
 
   const lines: string[] = [];
-  // First, because it is what the assignment is about: the one listing, by
-  // its own id and link, as Brain read it.
-  const listing = input.listing && input.listing.length > 0 ? [...input.listing] : null;
-  if (listing) lines.push(...listing);
   if (input.fragment) {
     lines.push(SEARCH_STRATEGY_NOTE);
     if (notYours.length > 0) {
@@ -157,7 +149,6 @@ export function composeGuidance(input: {
     unreachableHosts,
     lessons,
     readableRoutes,
-    listing,
     text: lines.join('\n'),
   };
 }

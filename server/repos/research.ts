@@ -1448,10 +1448,10 @@ export async function signalledClaims(input: {
          * second round replaces, and it named nothing else that asks about one
          * opening: a need ("Payer for …", "Access for …") and a monetization
          * commission research the same opening, and their claims restate it.
-         * Production, 2026-10-18: one discovery round filed three Freelancer
-         * openings, and the questions about them filed thirty-five more — the
-         * same two projects read through the API URL or a regional mirror, so
-         * the source-URL twin check missed most of them — and each new
+         * Production, 2026-10-18: one discovery round filed three openings,
+         * and the questions about them filed thirty-five more — the same two
+         * listings read through an API URL or a regional mirror, so the
+         * source-URL twin check missed most of them — and each new
          * "opening" raised needs of its own. The same tail-chasing loop, one
          * door along. A question is linked to the opening it is about through
          * its candidate, so these are read through the mission that ran it.

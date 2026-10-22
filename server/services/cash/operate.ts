@@ -47,7 +47,6 @@
  * and Brain carries on around it, which is exactly what the plan means.
  */
 import { reconcileCashJobs, type JobReconciliation } from './jobPipeline.ts';
-import { listingSentenceFor } from './listings.ts';
 import { handOffReadyTests, type FactoryHandoffPass } from './factoryHandoff.ts';
 import { advanceJourney, type JourneyTickReport } from './journey/tick.ts';
 import {
@@ -898,7 +897,6 @@ export interface DependentWork {
 export function dependentQuestion(
   opportunity: CashOpportunity,
   need: Pick<CashNeed, 'nextStep'>,
-  listing = '',
 ): string {
   const signal = (opportunity.buyingSignal ?? opportunity.title).replace(/\s+/g, ' ').trim();
   const source = opportunity.source ? ` The source is ${opportunity.source}.` : '';
@@ -907,7 +905,7 @@ export function dependentQuestion(
     : '';
   return (
     `${OPENING_NAMED} — "${signal}" — establish one thing from published ` +
-    `sources: ${need.nextStep.trim()}${source}${observed}${listing}`
+    `sources: ${need.nextStep.trim()}${source}${observed}`
   ).trim();
 }
 
@@ -953,7 +951,7 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
       projectId,
       visibility: 'SHARED',
       title: need.blockedAction,
-      statement: dependentQuestion(opportunity, need, await listingSentenceFor(opportunity)),
+      statement: dependentQuestion(opportunity, need),
     });
     const pointed = previous
       ? await replaceNeedCandidate(need.id, previous, candidate.id)

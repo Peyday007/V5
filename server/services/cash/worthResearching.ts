@@ -6,14 +6,9 @@
  * deposit) read as revenue. The dives had gone to three kinds of opening no
  * answer could make executable:
  *
- *   * **a marketplace listing** — a Freelancer or PeoplePerHour project. Its
- *     payer is the client and its route is the platform's escrow; there is
- *     nothing published left to find. Freelancer listings are read and screened
- *     by Brain's own marketplace operation through the platform's API, which is
- *     the owner of that question (`freelancer/screen.ts`); a cash dive asking
- *     "who is the payer" for one asked the same question six times and learned
- *     nothing. Other marketplaces Brain holds no account on, so a dive there
- *     buys an answer nobody could act on.
+ *   * **a freelance-marketplace listing.** Its payer is the client and its
+ *     route is the platform's escrow, and this operation takes no freelance
+ *     work, so a dive there buys an answer nobody could act on.
  *   * **an opening that closes before a dive could finish** and a person could
  *     act on what it found. A dive runs for hours to a day, and the first
  *     external step needs a grant and a send after that.
@@ -36,7 +31,7 @@ import type { CashOpportunity } from '../../domain/types.ts';
  * Hosts whose pages are individual freelance-marketplace listings.
  *
  * Matched on the host's registered name, any subdomain and any country domain
- * (`freelancer.ie`, `www.freelancer.com`). A reviewed constant: adding a
+ * (`upwork.com`, `www.peopleperhour.co.uk`). A reviewed constant: adding a
  * marketplace here is a code change somebody reads.
  */
 export const MARKETPLACE_HOSTS: readonly string[] = Object.freeze([
@@ -63,7 +58,7 @@ export function marketplaceOf(url: string | null | undefined): string | null {
   }
   const labels = host.split('.');
   for (const name of MARKETPLACE_HOSTS) {
-    // `freelancer.com`, `www.freelancer.ie`, `freelancer.co.uk` — the name is
+    // `upwork.com`, `www.fiverr.ie`, `guru.co.uk` — the name is
     // a whole label, followed only by a public suffix.
     const at = labels.indexOf(name);
     if (at >= 0 && at < labels.length - 1 && labels.slice(at + 1).length <= 2 && labels.slice(at + 1).every((one) => one.length <= 3)) {
@@ -93,9 +88,7 @@ export type NotWorthResearching =
 export function describeNotWorthResearching(reason: NotWorthResearching): string {
   switch (reason.kind) {
     case 'MARKETPLACE_LISTING':
-      return reason.marketplace === 'freelancer'
-        ? 'a Freelancer listing — Brain’s marketplace operation reads and screens these through the platform’s API, so a dive would learn nothing'
-        : `a ${reason.marketplace} listing — Brain holds no account there, so nothing a dive found could be acted on`;
+      return 'a freelance-marketplace listing — this operation takes no freelance work, so nothing a dive found could be acted on';
     case 'CLOSES_TOO_SOON':
       return `it closes ${reason.at}, sooner than a dive could finish and the first step be taken`;
     case 'CAPITAL_NOT_HELD':

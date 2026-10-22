@@ -61,7 +61,6 @@ import { checkCommercialAuthority } from './authority.ts';
 import { readAllCapabilities, type CapabilityReading } from './capabilities.ts';
 import { totalsByKind } from '../../repos/cashLedger.ts';
 import { dealPosition } from './journey/position.ts';
-import { marketplaceJobViews, type MarketplaceJobView } from './marketplacePipeline.ts';
 import type {
   CashCardFact,
   CashJob,
@@ -834,12 +833,6 @@ export interface PipelineReading {
   researchInFlight: number;
   authority: { live: boolean; allowedActions: string[] };
   providers: { id: string; state: string; nextStep: string | null }[];
-  /**
-   * Live marketplace jobs (`marketplacePipeline.ts`), counted in `counts` beside
-   * the opportunities' jobs: each is a specific paid listing Brain screened as
-   * deliverable, owned by `marketplace_jobs` and read here, never copied.
-   */
-  marketplaceJobs: MarketplaceJobView[];
 }
 
 const AUTHORITY_ACTIONS = ['CONTACT_BUYER', 'QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT', 'ENGAGE_CONTRACTOR'];
@@ -966,9 +959,6 @@ export async function pipelineReading(
       WHERE project_id = ? AND status NOT IN ('COMPLETE', 'COMPLETE_WITH_GAPS', 'FAILED', 'CANCELLED', 'NEEDS_HUMAN')`,
     [projectId],
   );
-  // Marketplace jobs are execution jobs too, from their own table (read, never copied).
-  const marketplaceJobs = viewer.owner ? await marketplaceJobViews(projectId, authority) : [];
-  for (const one of marketplaceJobs) counts[one.stage] += 1;
   const order = (stage: PipelineStage): number => -PIPELINE_STAGES.indexOf(stage);
   views.sort((a, b) => order(a.stage) - order(b.stage) || (a.createdAt < b.createdAt ? -1 : 1));
 
@@ -981,7 +971,6 @@ export async function pipelineReading(
     paidUnsettledCents: viewer.owner ? Math.max(0, paidCents - settledCents) : 0,
     currency: mode.currency,
     researchInFlight: Number(research?.n ?? 0),
-    marketplaceJobs,
     authority: {
       live: [...authority.values()].some((one) => one.ok),
       allowedActions: AUTHORITY_ACTIONS.filter((a) => authority.get(a)?.ok),

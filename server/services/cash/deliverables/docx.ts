@@ -18,7 +18,7 @@ import { esc, XML_HEAD } from './xml.ts';
 import { coreProps } from './xlsx.ts';
 import { zip } from './zip.ts';
 
-const FONT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../assets/fonts');
+const FONT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../assets/fonts');
 
 export interface Run {
   text: string;

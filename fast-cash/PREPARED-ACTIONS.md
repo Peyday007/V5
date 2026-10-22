@@ -1,6 +1,6 @@
 # Fast Cash: prepared actions
 
-> **Superseded for Freelancer (2026-10-20).** The owner rejected freelance work. The two Freelancer leads ranked #1 and #2 below are history, not actions: Brain does not bid on them and nobody is asked to connect a Freelancer account. See `fast-cash/OPS.md`.
+> The owner rejected freelance work (2026-10-20). Freelance-marketplace leads are removed from this file. See `fast-cash/OPS.md`.
 
 This file and `fast-cash/prepared/*.json` replace the scratch notes that lived in `/tmp`.
 
@@ -24,11 +24,7 @@ Figures are labelled. **Published** means quoted from the named source on the da
 
 Each card under "New openings this week" links to its prepared decision.
 
-Sources of those records:
-- `prepared/cop_9b9c7aacd6ba42a7ba2a.json`: Freelancer 40774287, "Precise Entry From PDFs"
-- `prepared/cop_bce75bb8197849ddaa0b.json`: Freelancer 40771439, "WordPress Portfolio Site Build"
-
-They are recorded with `fast-cash-goal.yml`, command `prepare`, which runs `admin cash prepare`. The command:
+Prepared records are recorded with `fast-cash-goal.yml`, command `prepare`, which runs `admin cash prepare`. The command:
 - records a new version only when a file changes;
 - records nothing as a person's decision;
 - moves no opportunity state.
@@ -39,17 +35,13 @@ Ranked on four things: commercial merit, deliverability for a solo owner with no
 
 | # | Lead | Actionable today? | Cash would arrive (estimate) | Blocks the next action |
 |---|---|---|---|---|
-| 1 | Freelancer 40774287, PDF data entry (`cop_9b9c7aacd6ba42a7ba2a`) | Yes: proposal finished | ~1–2 weeks after award | Freelancer account, plus a USD 20 minimum balance (published) |
-| 2 | Freelancer 40771439, WordPress portfolio (`cop_bce75bb8197849ddaa0b`) | Yes: proposal finished | ~2–3 weeks after award | Same account and balance. 219 bids, so winning depends on reviews and on a builder at a known cost |
 | 3 | Winston-Salem RFP2775, portable toilets | No | Net-30 monthly (estimate), from late 2026 | The RFP document. It is available only by email request to the buyer, which Brain will not send |
 | 4 | Texas surplus jewelry lots | No | ~2–4 weeks after 10-29 close | Someone in Austin for preview and pickup, plus a written refiner payout schedule |
-| 5 | PeoplePerHour "UGC videos for Learnora" ($1,000/month retainer, published) | No | Monthly, if accepted; schedule unpublished | PeoplePerHour account and application (person). Video count, rights and payment route are unpublished |
 | — | iMac #4109620, North Las Vegas | Decline unless it is a high-spec unit | — | Published base-model resale ($53–$95) is below the ~$244 it would cost to win today (estimate). Configuration is unstated |
 | 6 | BLM 140LL027Q0005, Garnet Hill signs | No | First 20% ~Feb–Mar 2027 | SAM.gov registration/UEI and past performance. The award value is not published |
 | — | Marin MCOE 2026-RFQ-005, translation | Drop | — | Disqualified: needs 5 years of California public-agency translation experience, and joint bids are refused |
 | — | GPO Jacket 452-109 | Drop | — | Proxy unit cost (estimate) exceeds the budget per set |
 
-The freelance listings are two entries, not a column. Lower-merit duplicates from the same discovery round (40771314 Sweden, 40771965 Netherlands) are left out of the ranking. Their records stay in Brain.
 
 ## Winston-Salem RFP2775: Portable Toilet Rental Services
 
@@ -149,22 +141,6 @@ Read 2026-10-18 19:30Z.
 **Published resale for a base model:** $53 from online buyback and $95.46 on eBay after fees (Flipsy, 2026-08-17).
 
 **Verdict:** a base unit loses money. Decline, unless the configuration turns out to be high-spec and someone can collect.
-
-## PeoplePerHour "UGC videos for Learnora AI study app"
-
-**Source:** https://www.peopleperhour.com/freelance-jobs/social-media/instagram-marketing/ugc-videos-for-learnora-ai-study-app-4527247
-
-**Published:** posted about 2026-10-18 10:00Z; "$1,000/month retainer, plus CPM and performance bonuses"; 13 proposals.
-
-**Business model:** a creator retainer, which is different from the freelance builds above.
-
-**Unresolved:**
-- the number of videos a month;
-- usage rights;
-- the payment schedule;
-- the application form is external (Jotform), so payment may run off-platform.
-
-**Your decision:** whether to apply on camera. Applying needs a PeoplePerHour account, which Brain will not create.
 
 ## Etsy printables
 

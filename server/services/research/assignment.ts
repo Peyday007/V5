@@ -481,7 +481,6 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
               question: candidate.question,
             })),
             surface: item.workerId ? { workerId: item.workerId } : null,
-            orchestrationId: orchestration.id,
             contextText: [orchestration.title, item.workType === 'RESEARCH_VERIFY' ? fragment?.question : null]
               .filter(Boolean)
               .join(' '),

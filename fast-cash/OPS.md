@@ -8,19 +8,14 @@ ask the owner to connect a freelance account or authorize bids.
 
 How that is enforced, not just written down:
 
-- The Freelancer operation is **off** (`server/services/cash/freelancer/enabled.ts`).
-  It no longer runs on Brain's tick. `BRAIN_FREELANCER_OPERATION=on` is the only
-  way to turn it back on, and that is the owner's call alone.
-- Prepared Freelancer bids are **not** execution jobs and are not counted on the
-  Cash page or in `cash-report`.
+- The freelance-marketplace operation was **removed from the code** (2026-10-22).
+  Nothing in Brain bids, delivers or collects on a marketplace.
 - Discovery tells workers to leave marketplace listings out, deep dives and field
-  research are refused on them, and no worker is pointed at Freelancer's API.
-- The scheduled "Fast Cash check-in" that watched and repaired the Freelancer
-  operation is **paused**.
+  research are refused on them, and openings filed from a listing before the rule
+  are archived by Brain with their research stopped.
 
-Earlier `marketplace_jobs` rows, `fast-cash/prepared/*.json` and
-`docs/FREELANCER-OPERATION.md` are kept as history. They are not current
-priorities and are not instructions to anyone.
+Earlier `marketplace_jobs` and `listing_retrievals` rows stay in the database as
+history; no code reads them.
 
 ## Current priority
 

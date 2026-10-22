@@ -60,8 +60,8 @@ import {
 } from './effects.ts';
 import { usablePaymentReader } from './providers/payments.ts';
 import { listRoutines } from '../../repos/fleet.ts';
-import { DELIVERABLE_KINDS, type DeliverableKind } from './freelancer/deliverables/spec.ts';
-import { settledCapabilities } from './freelancer/deliverables/capabilities.ts';
+import { DELIVERABLE_KINDS, type DeliverableKind } from './deliverables/spec.ts';
+import { settledCapabilities } from './deliverables/capabilities.ts';
 
 export type CapabilityState = 'PRESENT' | 'MISSING' | 'UNKNOWN';
 
@@ -200,12 +200,9 @@ export const CAPABILITIES: readonly CapabilityDefinition[] = Object.freeze([
  * Producing a kind of deliverable, read from the proof this process ran.
  *
  * Brain renders a realistic sample of each kind and re-reads the bytes before
- * it may say it can make one (`freelancer/deliverables/capabilities.ts`). That
- * proof was only ever read by the marketplace screen, so a play built on
- * "we make spreadsheets for this kind of business" had no capability to name,
- * and `deliveryReading` withheld delivery on every one of them. These read the
- * same proof. The module sits under `freelancer/` for history; the proof is
- * about the files, not about any marketplace.
+ * it may say it can make one (`deliverables/capabilities.ts`). These read that
+ * proof, so a play built on "we make spreadsheets for this kind of business"
+ * names a capability `deliveryReading` can answer.
  */
 export const DELIVERABLE_CAPABILITY_PREFIX = 'PRODUCE_';
 

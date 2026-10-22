@@ -80,6 +80,7 @@ jobs:
               # and moves no state; a replay of an unchanged file writes nothing.
               script=""
               for f in fast-cash/prepared/cop_*.json; do
+                [ -e "$f" ] || continue
                 b=$(base64 -w0 "$f")
                 script="$script$base cash prepare cash-mode-1 --json-b64 $b && "
               done

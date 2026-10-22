@@ -14,7 +14,7 @@
  * Verblio's published rates, Adobe Stock and Depositphotos subscription
  * tiers, FIFA and Coachella resale *asking* prices, historical sneaker and
  * trading-card spreads, domain appraisals above an asking price, a generic
- * bug-bounty programme, auction-access brokers, generic Freelancer listings,
+ * bug-bounty programme, auction-access brokers, generic freelance-marketplace listings,
  * and specialised long-cycle government solicitations.
  *
  * Every one of those is a real, gated, well-sourced finding. **None of them

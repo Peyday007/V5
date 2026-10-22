@@ -13379,7 +13379,8 @@ The rules it introduced:
 
 ## 66. Brain runs the marketplace work itself, or it does not take the job.
 
-The Freelancer operation (`server/services/cash/freelancer/`,
+**Removed from the code on 2026-10-22 (§76); what follows is history.** The
+Freelancer operation (`server/services/cash/freelancer/`,
 `docs/FREELANCER-OPERATION.md`) is Brain's first cash activity whose whole
 loop is Brain's own: it finds the job, bids, does the work, delivers it and
 collects. The owner's part is the account, identity verification, one API
@@ -13418,7 +13419,9 @@ no freelance work. Every `marketplace_jobs` row stays as history.
 
 ## 67. A category is offered because its proof passed, and the files are Brain's own.
 
-The operation now delivers eight kinds of work beside research reports:
+**The marketplace operation this describes was removed (§76).** The deliverable
+renderers, verifiers and their proof stay, at `server/services/cash/deliverables/`,
+because the play buckets (§73) read them. The operation delivered eight kinds of work beside research reports:
 spreadsheets, business documents, presentations, data operations, static
 websites, small programs, vector graphics and primitive 3D models
 (`server/services/cash/freelancer/deliverables/`). **This corrects §66's "only a
@@ -13688,7 +13691,7 @@ deliverable sat PREPARED, and Cash counted none of them.
   the page and the job pipeline now agree.
 - **Discovery is told what not to report**: individual marketplace listings,
   and a company's own price list as though it were a buyer.
-- **A prepared marketplace job is an execution job.** `marketplacePipeline.ts`
+- **A prepared marketplace job is an execution job** (removed in §76). `marketplacePipeline.ts`
   reads `marketplace_jobs` (never copies it) into the Cash pipeline's stages
   with tasks — screen, bid, award, deliver, collect — and the exact blocker:
   `FREELANCER_OAUTH_TOKEN` not set, or the grant lacking `CONTACT_BUYER`.
@@ -13765,6 +13768,21 @@ deliver, then let a bounded test answer the rest.
 - **What did not move.** A published disqualifier and a price below the
   exposure still cap it at CANDIDATE. READY_TO_TEST still needs the short card
   (`evidenceCard`), and acting still needs the commercial grant.
+
+## 76. The freelance-marketplace operation is gone, and its leftovers are put away.
+
+The owner rejected freelance work (2026-10-20), so on 2026-10-22 the
+Freelancer operation was deleted from the code: the job screen, bidding,
+fulfilment, listing retrieval, the marketplace pipeline and the
+`FREELANCE_DELIVERABLE_V1` bin contract. The deliverable renderers and their
+proof moved to `services/cash/deliverables/`, because the play buckets need
+them. Discovery still leaves marketplace listings out and `worthResearching.ts`
+still refuses research on one, generically. Two passes on the tick clean up,
+from rows and idempotently: `retireMarketplaceListings` archives an uncommitted
+opening whose source is a marketplace listing and stops its research (needs
+withdrawn, unlaunched ideas rejected, missions and packets cancelled), and
+`retireUnjudgeableBins` retires any live bin whose contract has no evaluator.
+No row and no migration was removed; the old tables are history nothing reads.
 
 ## Repository map
 
@@ -13992,19 +14010,14 @@ server/
       factoryHandoff.ts READY_TO_TEST to the Software Factory, under the standing grant
       jobPipeline.ts    a qualified opening becomes one job; its tasks, stage and blockers (§70)
       deal.ts           who holds each job: an even mix of every kind per person (§74)
-      freelancer/
-        classify.ts     which kinds of work a listing asks for, and what blocks it
-        economics.ts    the job's currency, Freelancer's fee, the net, the estimate
-        screen.ts       accepted only for work a proof says Brain can deliver
-        fulfil.ts       the deliverable and reply bins, client files, the evaluator
-        operate.ts      discover, bid, answer, start, deliver, revise, collect
-        deliverables/
-          spec.ts       the closed specification a worker may submit
-          render.ts     a spec becomes the client's files, deterministically
-          verify.ts     the bytes re-read and checked before anything is sent
-          pipeline.ts   a client's own CSV/Excel through declared steps
-          capabilities.ts  the per-process proof the screen reads
-          samples.ts    the realistic sample each kind is proved on
+      retireListings.ts openings from a freelance-marketplace listing, archived with their research (§76)
+      deliverables/
+        spec.ts         the closed specification a worker may submit
+        render.ts       a spec becomes the files, deterministically
+        verify.ts       the bytes re-read and checked before anything is sent
+        pipeline.ts     a supplied CSV/Excel through declared steps
+        capabilities.ts the per-process proof the PRODUCE_<KIND> capabilities read
+        samples.ts      the realistic sample each kind is proved on
       access.ts         where the shared frontier ends and a private job begins
       shared.ts         what every member may read, built from the columns it names
       lifecycle.ts      activating a sprint, giving it somewhere to file, winding it down

@@ -51,14 +51,6 @@ records the payment with its reference).
   `STRIPE_SECRET_KEY`, or issue the invoice outside Brain and record the
   payment with its reference.
 
-## Marketplace jobs
-
-A Freelancer job the marketplace screen prepared is shown as an execution job
-in the same stages (`marketplacePipeline.ts`): PREPARED is *ready, blocked*
-until `FREELANCER_OAUTH_TOKEN` is set and the grant allows `CONTACT_BUYER`;
-a sent bid is *executing*; an award is *agreed*; then delivered and paid. The
-rows stay in `marketplace_jobs`; nothing is copied into `cash_jobs`.
-
 ## What is not researched
 
 No deep dive, field question or monetization question is spent on a

@@ -13,7 +13,6 @@
 import type { ResearchFragment } from '../../domain/types.ts';
 import { hostReachability, type ReachabilitySurface } from '../../repos/research.ts';
 import { lessonsForPrompt } from './intelligence/retrospective.ts';
-import { listingGuidanceFor } from '../cash/listings.ts';
 import { composeGuidance, type ResearchGuidance } from './prompts.ts';
 
 /** How far back "recently could not read" looks. */
@@ -53,8 +52,6 @@ export async function guidanceFor(input: {
   surface: ReachabilitySurface | null;
   /** Other text naming what is being researched, such as the packet's title. */
   contextText?: string | null;
-  /** The packet, so a follow-up about one known listing is handed that listing. */
-  orchestrationId?: string | null;
   now?: number;
 }): Promise<ResearchGuidance> {
   const since = new Date((input.now ?? Date.now()) - REACHABILITY_WINDOW_MS).toISOString();
@@ -62,10 +59,9 @@ export async function guidanceFor(input: {
    * Each reading is best-effort: guidance that cannot be read is left out
    * rather than failing the assignment it would only have annotated.
    */
-  const [reachability, lessons, listing] = await Promise.all([
+  const [reachability, lessons] = await Promise.all([
     hostReachability(input.surface, since).catch(() => []),
     lessonsFor(input.projectId, input.now ?? Date.now()).catch(() => []),
-    input.orchestrationId ? listingGuidanceFor(input.orchestrationId).catch(() => null) : null,
   ]);
   return composeGuidance({
     fragment: input.fragment,
@@ -73,6 +69,5 @@ export async function guidanceFor(input: {
     reachability,
     lessons,
     contextText: input.contextText ?? null,
-    listing,
   });
 }

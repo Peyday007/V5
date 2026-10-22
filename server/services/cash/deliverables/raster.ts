@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Resvg } from '@resvg/resvg-js';
 
-const FONT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../assets/fonts');
+const FONT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../assets/fonts');
 export const FONT_FAMILY = 'DejaVu Sans';
 const FONT_FILES = [path.join(FONT_DIR, 'DejaVuSans.ttf'), path.join(FONT_DIR, 'DejaVuSans-Bold.ttf')];
 
