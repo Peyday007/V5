@@ -28,15 +28,6 @@ process.env['BRAIN_SHARED_SNAPSHOT_MS'] ??= '0';
 // The standing pass is throttled to every five minutes in production (§61);
 // tests call operate() back to back and read its standing each time.
 process.env['BRAIN_STANDING_INTERVAL_MS'] ??= '0';
-// The Russell tick runs the Freelancer operation for every ACTIVE cash sprint,
-// and its discovery reads freelancer.com's public API. A test must never reach
-// the live market: what it lists changes by the hour, so a tick's duration and
-// what it records would be a property of the internet rather than the code
-// (Deploy 493 failed twenty Cash journeys that passed an hour earlier). Port 9
-// on loopback refuses at once. The suites that exercise the client point it at
-// their own fake and put this back afterwards.
-process.env['FREELANCER_API_BASE'] ??= 'http://127.0.0.1:9';
-
 /**
  * Old enough that no live suite could own it.
  *

@@ -21,7 +21,7 @@ let opportunityId = '';
 const body = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   opportunityId,
   buyerRequest: 'Key PDFs into my template, exactly.',
-  buyerRequestUrl: 'https://www.freelancer.com/projects/data-entry/precise-entry-from-pdfs',
+  buyerRequestUrl: 'https://www.example-buyer.com/requests/precise-entry-from-pdfs',
   observedAt: '2026-10-18T19:30:00Z',
   observedStatus: 'active, open, 30 bids',
   scope: 'Key every PDF; second-pass reconciliation; anomalies note.',
@@ -31,8 +31,8 @@ const body = (overrides: Record<string, unknown> = {}): Record<string, unknown> 
   cashTiming: 'Days after delivery, on milestone release (estimate).',
   openQuestions: ['How many PDFs?'],
   proposalText: 'Accuracy over speed is exactly how I work.',
-  submissionBlockers: ['A Freelancer account in good standing is needed to bid.'],
-  decisionNeeded: 'Whether to submit this bid from your own account.',
+  submissionBlockers: ['A buyer account in good standing is needed to reply.'],
+  decisionNeeded: 'Whether to send this reply from your own account.',
   ...overrides,
 });
 

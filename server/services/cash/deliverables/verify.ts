@@ -19,8 +19,8 @@ import { textOf, wellFormedProblem } from './xml.ts';
 import { cssProblem, localReferences, parseCsv, parseJavaScript, parsePython, svgProblems } from './assets.ts';
 import { pngSize, svgToPng } from './raster.ts';
 import { plain } from './docx.ts';
-import { extractPdf } from '../../../documents/pdf.ts';
-import { extractDocx } from '../../../documents/docx.ts';
+import { extractPdf } from '../../documents/pdf.ts';
+import { extractDocx } from '../../documents/docx.ts';
 import { resolveDataset, type FileContext } from './pipeline.ts';
 
 export interface Check {

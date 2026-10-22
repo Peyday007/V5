@@ -1,14 +1,14 @@
 /**
- * Which kinds of freelance work Brain can deliver, established by doing it.
+ * Which kinds of deliverable Brain can produce, established by doing it.
  *
  * A category is AVAILABLE only when its realistic sample (`samples.ts`) has
  * been validated, rendered into real files and passed every verification
  * check, in this process. Having the code, or a tool installed, is not the
- * same fact, and the job screen reads this rather than a list.
+ * same fact, and the capability readings use this rather than a list.
  *
  * The proof runs once per process and is cached; a category that failed says
- * which check failed, so the screen's rejection names the missing capability
- * rather than a job category.
+ * which check failed, so a refusal names the missing capability rather than
+ * a category of work.
  */
 import { DELIVERABLE_KINDS, validateSubmission, type DeliverableKind, type Submission } from './spec.ts';
 import { renderDeliverable, type DeliverableFile, type Rendered } from './render.ts';

@@ -3,12 +3,10 @@
  * whose first route failed.
  *
  * Fast Cash's first round stopped on four channels, and each fragment named
- * why: Freelancer pages were "JS-only" or the posting date was "a cached
- * render"; SAM.gov needed "an api.sam.gov key or renderer"; PublicSurplus and
- * PeoplePerHour read as empty to a page fetcher. The guidance block already
- * named the hosts a surface could not read and told the worker to find another
- * route. It never said which route. Some workers found the Freelancer API on
- * their own and others did not.
+ * why: SAM.gov needed "an api.sam.gov key or renderer", and PublicSurplus read
+ * as empty to a page fetcher. The guidance block already named the hosts a
+ * surface could not read and told the worker to find another route. It never
+ * said which route.
  *
  * Each entry here is a public, unauthenticated address that the platform itself
  * serves. Each was read successfully on 2026-10-18, and each lists the fields
@@ -16,10 +14,6 @@
  * a payment, so none widens what an envelope allows: they are the same
  * publisher's own pages and the same source class the assignment already
  * authorizes, reached by a form a fetcher can read.
- *
- * Freelancer.com was the first entry and is removed: the owner rejected
- * freelance work for Cash Mode (2026-10-20), so a worker is no longer pointed
- * at a marketplace's API to research its listings.
  *
  * This is context and never a control. Nothing reads it except the guidance
  * text. Adding a channel is a reviewed code change, verified against the live
@@ -60,7 +54,7 @@ export const READABLE_ROUTES: readonly ReadableRoute[] = Object.freeze([
 
 function mentions(text: string, name: string): boolean {
   // Bounded, so "sam.gov" does not match inside "usam.gov" and a channel is
-  // named only by its own name, never by an ordinary word like "freelancer".
+  // named only by its own name, never by an ordinary word inside a longer one.
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`, 'i').test(text);
 }

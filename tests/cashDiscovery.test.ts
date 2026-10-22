@@ -1076,7 +1076,7 @@ describe('harvest reads past what it already filed', () => {
 
 describe('plays: a kind of business that pays for something Brain can make', () => {
   it('asks one play question per deliverable Brain proves, before every other bucket', async () => {
-    const { DELIVERABLE_KINDS } = await import('../server/services/cash/freelancer/deliverables/spec.ts');
+    const { DELIVERABLE_KINDS } = await import('../server/services/cash/deliverables/spec.ts');
     expect(PLAY_BUCKETS.map((one) => one.deliverable)).toEqual([...DELIVERABLE_KINDS]);
     expect(SEARCH_BUCKETS.slice(0, PLAY_BUCKETS.length).map((one) => one.id)).toEqual(
       PLAY_BUCKETS.map((one) => one.id),
@@ -1109,7 +1109,7 @@ describe('plays: a kind of business that pays for something Brain can make', () 
     const opportunity = (await getOpportunity(made!.opportunity.id))!;
     expect(opportunity.requiredCapabilities).toEqual([`PRODUCE_${bucket.deliverable}`]);
     const { readCapability } = await import('../server/services/cash/capabilities.ts');
-    const { proveCapabilities } = await import('../server/services/cash/freelancer/deliverables/capabilities.ts');
+    const { proveCapabilities } = await import('../server/services/cash/deliverables/capabilities.ts');
     await proveCapabilities();
     const reading = await readCapability(`PRODUCE_${bucket.deliverable}`);
     expect(reading.definition).not.toBeNull();

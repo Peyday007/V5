@@ -47,7 +47,7 @@ export const MIME = {
   gltf: 'model/gltf+json',
 } as const;
 
-/** The largest single file Brain will attach: Freelancer's message attachments are bounded too. */
+/** The largest single file Brain will produce for one deliverable. */
 export const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
 export async function renderDeliverable(spec: DeliverableSpec, context?: FileContext): Promise<Rendered> {
