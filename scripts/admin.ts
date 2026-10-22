@@ -60,6 +60,7 @@
  *   npm run admin -- cash seed-industry <project> "<subject name>" --admin someone@example.com
  *   npm run admin -- cash constraints <project> ["<additions, empty clears>"] --admin someone@example.com
  */
+import { ARCHITECTURE_LAYER, ARCHITECTURE_SLUG } from '../server/services/capability/ingest.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
 import type { GoalBudgetStatus } from '../server/repos/russellAuthority.ts';
 import {
@@ -193,6 +194,23 @@ function fail(message: string): never {
 class Halt extends Error {}
 
 /** A write needs somebody's name on it. A read does not. */
+/** The methods goal's assignment: the owner's ten building-block questions. */
+const METHODS_ASSIGNMENT = [
+  'Research methods, not markets: how to think, so every later question Brain asks gets a better answer.',
+  'For each question give concrete rules a computer could follow, each with a real public source.',
+  'Skip general startup advice. Say what is proven and what is only opinion. The aim is fast cash from services sold by email; no freelance marketplaces.',
+  '1. Validating an idea before spending money: how professional analysts and investors check fast and cheap whether a business idea is real.',
+  '2. Why small businesses fail, and the earliest warning sign of each way.',
+  '3. Finding who actually pays: who inside a business makes the buying decision and controls the budget, from public information.',
+  '4. One-time buyer vs repeat buyer: how to tell from public information whether a customer buys once or keeps paying.',
+  '5. Pricing from public information: what something sells for and what it costs to deliver, and how wrong each method tends to be.',
+  '6. Judging whether a source can be trusted, especially for prices, demand and market size.',
+  '7. Spotting non-obvious opportunities: price gaps between markets, hidden costs, ignored customers.',
+  '8. Killing bad ideas quickly: the fastest, cheapest tests that rule out a bad idea before real work is spent.',
+  '9. Connecting ideas: how a finding in one area opens a door in another (adjacent markets, reusing a skill or a customer).',
+  '10. Deciding with missing information: what to assume, what to test first, and when to stop researching.',
+].join('\n');
+
 async function administrator(): Promise<User> {
   const email = flag('admin');
   const enabled = (await listUsers()).filter((user) => user.isBrainAdmin && !user.disabledAt);
@@ -1250,6 +1268,54 @@ async function main(): Promise<void> {
      */
     case 'research goal': {
       const sub = rest[0] ?? fail('Say what to do with a research goal: create, show or list.');
+      /*
+       * The methods goal: the ten building-block questions the owner chose, so
+       * every later question Brain asks is asked better. A preset rather than
+       * flags because the dispatch door carries two arguments and no flags; the
+       * text is reviewed here like any other code. Its accepted findings reach
+       * every research worker's guidance as method rules (`methodRules.ts`),
+       * which is why it must be opened in the Brain architecture project.
+       */
+      if (sub === 'methods') {
+        const actor = await administrator();
+        const project = await projectFrom(rest[1] ?? fail('Name the Brain architecture project.'));
+        if (project.slug !== ARCHITECTURE_SLUG) {
+          fail(`The methods goal belongs in the Brain architecture project (${ARCHITECTURE_SLUG}), or its findings reach no worker.`);
+        }
+        const layer = (await listLayers(project.id)).find((one) => one.name === ARCHITECTURE_LAYER)
+          ?? fail(`No layer "${ARCHITECTURE_LAYER}" in this project.`);
+        let goalId: string;
+        try {
+          goalId = (
+            await createResearchGoal({
+              projectId: project.id,
+              ownerUserId: actor.id,
+              createdByUserId: actor.id,
+              name: 'Methods: how Brain researches and judges',
+              maxPackets: 10,
+              maxFragments: 60,
+              deadline: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+              researchAssignment: METHODS_ASSIGNMENT,
+              researchLayerId: layer.id,
+            })
+          ).id;
+        } catch (error) {
+          fail(error instanceof Error ? error.message : 'The methods goal could not be opened.');
+        }
+        await recordIdentityEvent({
+          actorType: 'HUMAN',
+          actorId: actor.id,
+          action: 'OPEN_RESEARCH_GOAL',
+          targetType: 'PROJECT',
+          targetId: project.id,
+          projectId: project.id,
+          result: 'SUCCESS',
+          metadata: { goalId, preset: 'methods' },
+        });
+        const status = await goalBudgetStatus(goalId);
+        if (status) await printGoalBudget(status);
+        break;
+      }
       if (sub === 'create') {
         const actor = await administrator();
         const project = await projectFrom(rest[1] ?? fail('Name a project.'));
