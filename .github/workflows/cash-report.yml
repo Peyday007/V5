@@ -76,6 +76,8 @@ jobs:
       # and `always()` so a failed report is readable too.
       - name: Surface the report
         if: always()
+        env:
+          SECTIONS: ${{ inputs.sections }}
         run: |
           [ -f cash-report.txt ] || exit 0
           python3 - <<'PY'
@@ -92,7 +94,9 @@ jobs:
               current.append(line)
           if current:
               sections.append(current)
-          first = ('SERVING_REVISION', 'CASH-REPORT', 'MARKETPLACE', 'JOBS', 'AUTHORIZ', 'FUNNEL', 'PORTFOLIO', 'MONEY')
+          import os
+          wanted = tuple(w.strip() for w in os.environ.get('SECTIONS', '').split(',') if w.strip())
+          first = wanted + ('SERVING_REVISION', 'CASH-REPORT', 'MARKETPLACE', 'JOBS', 'AUTHORIZ', 'FUNNEL', 'PORTFOLIO', 'MONEY')
           def rank(section):
               head = section[0]
               for n, word in enumerate(first):
