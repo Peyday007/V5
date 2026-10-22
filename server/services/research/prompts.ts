@@ -50,6 +50,30 @@ export const NEGATIVE_EXISTENCE_NOTE =
   'claim that lists, in searchedRepositories, the places it would be published is a complete ' +
   'answer for that lane. Say only "not found" when you did not search where it would be.';
 
+/**
+ * How strong a piece of demand evidence is, strongest first (the DR_1 method
+ * report's evidence hierarchy). Prompt text only: the gate's standards in
+ * `standards.ts` are unchanged, and nothing ranks a claim by this.
+ */
+export const DEMAND_EVIDENCE_NOTE =
+  'DEMAND EVIDENCE, STRONGEST FIRST: (1) completed and repeat purchases; (2) money committed — ' +
+  'paid pilots, deposits, signed contracts, awarded work; (3) a stated budget or an open ' +
+  'procurement; (4) a competitor\'s published sales or usage; (5) market or government ' +
+  'statistics; (6) observed behaviour such as sign-ups or waitlists; (7) search or traffic ' +
+  'data; (8) engagement such as likes; (9) what people say they would buy; (10) testimonials ' +
+  'and marketing copy. When a claim is about demand or payment, say which rung it is, prefer ' +
+  'the highest rung you can source, and never present rungs 7 to 10 as proof that anybody pays.';
+
+/**
+ * Which question to answer first, and when to stop (the DR_1 report's
+ * decisive-assumption and stop rules). Prompt text only.
+ */
+export const DECISIVE_ASSUMPTION_NOTE =
+  'DECISIVE ASSUMPTION FIRST: answer first whatever would kill the idea if it were false — ' +
+  'nobody pays, it cannot be delivered, it cannot be reached, or it loses money — before ' +
+  'anything that would only refine it. Look for evidence against it as hard as evidence for ' +
+  'it. Stop once more evidence of the same kind could not change the answer, and say so.';
+
 /** What a worker is told beside its fragment, as data and as the text a prompt carries. */
 export interface ResearchGuidance {
   searchStrategy: string;
@@ -60,6 +84,13 @@ export interface ResearchGuidance {
   unreachableHosts: { host: string; outcome: string; at: string }[];
   /** Reusable lessons from earlier campaigns. Context only: no gate or allocation input reads them. */
   lessons: { abstraction: string; lesson: string }[];
+  /**
+   * Method rules Brain researched about how to research: accepted, sourced
+   * claims from research goals in the Brain architecture project
+   * (`methodRules.ts`). Context only: no gate, depth, ladder or allocation
+   * reads them.
+   */
+  methodRules: { rule: string; source: string | null }[];
   /** Verified readable routes for channels this fragment names or this surface could not read. */
   readableRoutes: { host: string; lines: string[] }[];
   /** The whole of it, as prompt text. */
@@ -69,6 +100,7 @@ export interface ResearchGuidance {
 /** How many lessons and hosts travel with an assignment; context, not a ledger. */
 export const MAX_GUIDANCE_LESSONS = 5;
 export const MAX_GUIDANCE_HOSTS = 15;
+export const MAX_GUIDANCE_METHOD_RULES = 8;
 
 /**
  * Compose the guidance block. Pure: every input is handed in, nothing is read.
@@ -83,9 +115,14 @@ export function composeGuidance(input: {
   siblings: { fragmentKey: string; question: string }[];
   reachability: { host: string; outcome: string; at: string }[];
   lessons: { abstraction: string; lesson: string }[];
+  /** Method rules researched by Brain; absent reads as none. */
+  methodRules?: { rule: string; source: string | null }[];
   /** Other text naming what is being researched, such as the packet's title. */
   contextText?: string | null;
 }): ResearchGuidance {
+  const methodRules = (input.methodRules ?? [])
+    .slice(0, MAX_GUIDANCE_METHOD_RULES)
+    .map((entry) => ({ rule: entry.rule, source: entry.source }));
   const notYours = input.fragment
     ? input.siblings
         .filter((sibling) => sibling.fragmentKey !== input.fragment!.fragmentKey)
@@ -117,6 +154,8 @@ export function composeGuidance(input: {
       );
     }
     lines.push(NEGATIVE_EXISTENCE_NOTE);
+    lines.push(DEMAND_EVIDENCE_NOTE);
+    lines.push(DECISIVE_ASSUMPTION_NOTE);
   }
   if (unreachableHosts.length > 0) {
     lines.push(
@@ -142,12 +181,21 @@ export function composeGuidance(input: {
       ...lessons.map((entry) => `  - (${entry.abstraction}) ${entry.lesson}`),
     );
   }
+  if (methodRules.length > 0) {
+    lines.push(
+      'METHOD RULES BRAIN RESEARCHED (sourced and accepted; context only — they change no ' +
+        'evidence bar, depth or scope, and a source this assignment does not authorize is ' +
+        'still not one you may cite):',
+      ...methodRules.map((entry) => `  - ${entry.rule}${entry.source ? ` (${entry.source})` : ''}`),
+    );
+  }
   return {
     searchStrategy: SEARCH_STRATEGY_NOTE,
     notYours,
     negativeExistence: NEGATIVE_EXISTENCE_NOTE,
     unreachableHosts,
     lessons,
+    methodRules,
     readableRoutes,
     text: lines.join('\n'),
   };
