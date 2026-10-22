@@ -28,6 +28,7 @@
  *   - Money is not here at all. `startPacket` pins it at zero and refuses a
  *     claim otherwise.
  */
+import { ARCHITECTURE_SLUG } from '../capability/ingest.ts';
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { nowIso } from '../../repos/util.ts';
@@ -125,6 +126,15 @@ async function ensurePacketBin(goal: GoalRow, orchestrationId: string, title: st
     );
     if (Number(spent[0]?.n ?? 0) >= MAX_GOAL_PACKET_BINS) return null;
   }
+  /*
+   * A goal in the Brain architecture project researches how Brain researches,
+   * and what it learns reaches every other worker (`methodRules.ts`), so it is
+   * handed out ahead of ordinary research: 8, still below a conversation turn.
+   */
+  const project = await getDb().get<{ slug: string }>('SELECT slug FROM projects WHERE id = ?', [
+    goal.project_id,
+  ]);
+  const priority = project?.slug === ARCHITECTURE_SLUG ? 8 : 7;
   const objective =
     'Carry this research packet from its plan to a filed, audited report, inside the ' +
     'ceilings its goal was approved with, and stop. Read published sources only.';
@@ -174,7 +184,7 @@ async function ensurePacketBin(goal: GoalRow, orchestrationId: string, title: st
     createdByType: 'SYSTEM',
     createdById: `research-goal:${goal.id}`,
     ready: true,
-    priority: 7,
+    priority,
     maxAttempts: 5,
   }).catch(async (error: unknown) => {
     // `idx_bins_goal_packet_live` refused a second live bin: another pass made
