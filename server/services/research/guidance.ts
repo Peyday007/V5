@@ -14,6 +14,7 @@ import type { ResearchFragment } from '../../domain/types.ts';
 import { hostReachability, type ReachabilitySurface } from '../../repos/research.ts';
 import { lessonsForPrompt } from './intelligence/retrospective.ts';
 import { composeGuidance, type ResearchGuidance } from './prompts.ts';
+import { methodRulesFor } from './methodRules.ts';
 
 /** How far back "recently could not read" looks. */
 export const REACHABILITY_WINDOW_MS = 7 * 86_400_000;
@@ -59,15 +60,17 @@ export async function guidanceFor(input: {
    * Each reading is best-effort: guidance that cannot be read is left out
    * rather than failing the assignment it would only have annotated.
    */
-  const [reachability, lessons] = await Promise.all([
+  const [reachability, lessons, methodRules] = await Promise.all([
     hostReachability(input.surface, since).catch(() => []),
     lessonsFor(input.projectId, input.now ?? Date.now()).catch(() => []),
+    methodRulesFor(input.now ?? Date.now()).catch(() => []),
   ]);
   return composeGuidance({
     fragment: input.fragment,
     siblings: input.siblings,
     reachability,
     lessons,
+    methodRules,
     contextText: input.contextText ?? null,
   });
 }
