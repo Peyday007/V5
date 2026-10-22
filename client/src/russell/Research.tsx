@@ -12,7 +12,7 @@
  * Details, because a person follows research by its questions, not its rows.
  */
 import { useState } from 'react';
-import { ApiError } from '../lib/api.ts';
+import { Api, ApiError } from '../lib/api.ts';
 import { useAsync } from './useAsync.ts';
 import { listState } from './present.ts';
 import { humanWhen } from './present.ts';
@@ -85,6 +85,8 @@ export function ResearchView({
           </button>
         </p>
       ) : null}
+
+      {projectId ? <StartGoal projectId={projectId} onChanged={query.reload} /> : null}
 
       {overview?.goals.map((goal) => (
         <Goal key={goal.budget.goalId} goal={goal} projectId={projectId} onChanged={query.reload} />
@@ -215,6 +217,123 @@ function Packet({ packet }: { packet: PacketReading }): JSX.Element {
         </p>
       </details>
     </article>
+  );
+}
+
+/**
+ * Start a new research goal: a question, a layer to file under, and ceilings.
+ *
+ * It calls the same route the successor form does, so the server decides
+ * everything: project ADMIN, a person, money fixed at zero. Brain then plans
+ * and continues the goal by itself each tick (§52). Closed by default, because
+ * starting research is a deliberate act and not the page's main reading.
+ */
+function StartGoal({ projectId, onChanged }: { projectId: string; onChanged(): void }): JSX.Element {
+  const layersQuery = useAsync(() => Api.project(projectId), [projectId]);
+  const layers = layersQuery.data?.layers ?? [];
+  const later = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+  const [name, setName] = useState('');
+  const [assignment, setAssignment] = useState('');
+  const [layerId, setLayerId] = useState('');
+  const [packets, setPackets] = useState('10');
+  const [fragments, setFragments] = useState('60');
+  const [deadline, setDeadline] = useState(later);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const chosenLayer = layerId || layers[0]?.id || '';
+  const ready = name.trim().length > 0 && assignment.trim().length > 0 && chosenLayer !== '';
+
+  async function open(): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await ResearchGoalsApi.open(projectId, {
+        name: name.trim(),
+        maxPackets: Number(packets),
+        maxFragments: Number(fragments),
+        deadline: new Date(`${deadline}T23:59:59.000Z`).toISOString(),
+        assignment: assignment.trim(),
+        layerId: chosenLayer,
+      });
+      setDone(true);
+      onChanged();
+    } catch (error) {
+      setProblem(
+        error instanceof ApiError && error.status === 404
+          ? 'Only an administrator of this project can open a research goal.'
+          : error instanceof Error
+            ? error.message
+            : 'That did not work.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <details className="rs-card rs-details rs-research-start">
+      <summary>Start a research goal</summary>
+      {done ? (
+        <p className="rs-state rs-state-ready">
+          The goal is open. Brain plans the research and carries it on by itself.
+        </p>
+      ) : (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void open();
+          }}
+        >
+          <p className="rs-hint">
+            Say what Brain should learn. It checks what it already knows first, and stops at the
+            limits you set. Nothing here spends money.
+          </p>
+          <label>
+            Name
+            <input type="text" value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label>
+            What to research
+            <textarea rows={8} value={assignment} onChange={(event) => setAssignment(event.target.value)} />
+          </label>
+          <label>
+            File under
+            <select value={chosenLayer} onChange={(event) => setLayerId(event.target.value)}>
+              {layers.map((layer) => (
+                <option key={layer.id} value={layer.id}>
+                  {layer.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {layersQuery.data && layers.length === 0 ? (
+            <p className="rs-hint">This project has nowhere to file research yet.</p>
+          ) : null}
+          <label>
+            Research runs
+            <input type="number" min={1} value={packets} onChange={(event) => setPackets(event.target.value)} />
+          </label>
+          <label>
+            Questions
+            <input type="number" min={1} value={fragments} onChange={(event) => setFragments(event.target.value)} />
+          </label>
+          <label>
+            Until
+            <input type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} />
+          </label>
+          <button type="submit" className="rs-primary" disabled={busy || !ready}>
+            {busy ? 'Starting…' : 'Start the goal'}
+          </button>
+          {problem ? (
+            <p className="rs-state rs-state-error" role="alert">
+              {problem}
+            </p>
+          ) : null}
+        </form>
+      )}
+    </details>
   );
 }
 
