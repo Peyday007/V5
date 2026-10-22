@@ -152,3 +152,38 @@ describe('method rules', () => {
     expect(await readMethodRules()).toHaveLength(MAX_GUIDANCE_METHOD_RULES);
   });
 });
+
+describe('choosing which method rules a worker reads', () => {
+  const row = (claim: string, topic: string, question: string) => ({
+    claim,
+    source_url: null,
+    topic_key: topic,
+    topic_question: question,
+  });
+
+  it('puts the rules about this question first, newest first among equals', async () => {
+    const { selectMethodRules } = await import('../server/services/research/methodRules.ts');
+    const pool = [
+      row('Newest rule about pricing from rate cards', 'm05', 'Pricing from public information'),
+      row('A source that publishes its method is more reliable', 'm06', 'Judging whether a source can be trusted'),
+      row('Undated market figures are unreliable sources', 'm06', 'Judging whether a source can be trusted'),
+    ];
+    const chosen = selectMethodRules(pool, 'Which source can be trusted here?');
+    expect(chosen.map((entry) => entry.rule).slice(0, 2)).toEqual([
+      'A source that publishes its method is more reliable',
+      'Undated market figures are unreliable sources',
+    ]);
+  });
+
+  it('lets no one method question fill the block, and drops repeats', async () => {
+    const { selectMethodRules, MAX_RULES_PER_TOPIC } = await import('../server/services/research/methodRules.ts');
+    const pool = [
+      ...Array.from({ length: 10 }, (_, i) => row(`pricing rule ${i}`, 'm05', 'pricing')),
+      row('pricing rule 0', 'm07', 'opportunities'),
+      row('an opportunity rule', 'm07', 'opportunities'),
+    ];
+    const chosen = selectMethodRules(pool, 'pricing');
+    expect(chosen.filter((entry) => entry.rule.startsWith('pricing rule'))).toHaveLength(MAX_RULES_PER_TOPIC);
+    expect(chosen.map((entry) => entry.rule)).toContain('an opportunity rule');
+  });
+});
