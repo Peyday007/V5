@@ -472,7 +472,10 @@ export async function assignmentFor(item: WorkItem): Promise<AssignmentView | nu
     guidance:
       (item.workType === 'RESEARCH_FRAGMENT' && fragment) ||
       (item.workType === 'RESEARCH_VERIFY' && fragment) ||
-      item.workType === 'RESEARCH_PLAN'
+      item.workType === 'RESEARCH_PLAN' ||
+      // A synthesis draws the conclusion, which is where method rules about
+      // judging evidence matter most; it gets them without the fragment lines.
+      item.workType === 'RESEARCH_SYNTHESIZE'
         ? await guidanceFor({
             projectId: orchestration.projectId,
             fragment: item.workType === 'RESEARCH_FRAGMENT' ? fragment : null,

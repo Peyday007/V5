@@ -100,7 +100,7 @@ export interface ResearchGuidance {
 /** How many lessons and hosts travel with an assignment; context, not a ledger. */
 export const MAX_GUIDANCE_LESSONS = 5;
 export const MAX_GUIDANCE_HOSTS = 15;
-export const MAX_GUIDANCE_METHOD_RULES = 8;
+export const MAX_GUIDANCE_METHOD_RULES = 12;
 
 /**
  * Compose the guidance block. Pure: every input is handed in, nothing is read.

@@ -63,7 +63,10 @@ export async function guidanceFor(input: {
   const [reachability, lessons, methodRules] = await Promise.all([
     hostReachability(input.surface, since).catch(() => []),
     lessonsFor(input.projectId, input.now ?? Date.now()).catch(() => []),
-    methodRulesFor(input.now ?? Date.now()).catch(() => []),
+    methodRulesFor(
+      input.now ?? Date.now(),
+      [input.fragment?.question, input.contextText].filter(Boolean).join(' ') || null,
+    ).catch(() => []),
   ]);
   return composeGuidance({
     fragment: input.fragment,
