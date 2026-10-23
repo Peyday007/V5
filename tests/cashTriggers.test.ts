@@ -10,8 +10,10 @@ afterEach(() => {
 });
 
 describe('trigger buckets', () => {
-  it('are off unless BRAIN_TRIGGERS=on', () => {
+  it('start when the free-model lane is connected, and can be forced either way', () => {
     expect(triggersEnabled({})).toBe(false);
+    expect(triggersEnabled({ BRAIN_CHEAP_LLM_URL: 'https://cheap.example/v1' })).toBe(true);
+    expect(triggersEnabled({ BRAIN_CHEAP_LLM_URL: 'https://cheap.example/v1', BRAIN_TRIGGERS: 'off' })).toBe(false);
     expect(triggersEnabled({ BRAIN_TRIGGERS: 'ON' })).toBe(true);
     expect(triggersEnabled({ BRAIN_TRIGGERS: 'yes' })).toBe(false);
   });
