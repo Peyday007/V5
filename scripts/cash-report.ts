@@ -32,6 +32,7 @@
  * string, a bucket key or a token: it reports what a project contains, never
  * where it is kept.
  */
+import { formatScoreboard, scoreboard } from '../server/services/cash/scoreboard.ts';
 import { listJobs } from '../server/repos/cashJobs.ts';
 import { NEED_RESEARCHABLE_ENGINE_FIELDS } from '../server/services/cash/engineCard.ts';
 import { listNeeds as listCashNeeds } from '../server/repos/cashPortfolio.ts';
@@ -1340,7 +1341,10 @@ async function main(): Promise<void> {
   let found = 0;
   for (const project of projects) {
     if (only && project.id !== only) continue;
-    if (await reportProject(project.id, project.name)) found += 1;
+    if (await reportProject(project.id, project.name)) {
+      found += 1;
+      for (const line of formatScoreboard(await scoreboard(project.id))) console.log(line);
+    }
   }
 
   console.log('');

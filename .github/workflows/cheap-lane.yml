@@ -1,0 +1,72 @@
+# The cheap lane's switchboard (OmniRoute), and connecting the Brain to it.
+#
+#   deploy  — create or update the separate `northline-cheap` Fly app. Its
+#             dashboard password is the OMNIROUTE_PASSWORD repository secret;
+#             without it nothing is deployed, so the dashboard is never left on
+#             its default password.
+#   connect — point the Brain at it: sets BRAIN_CHEAP_LLM_URL, _KEY and
+#             _MODELS on the Brain from the OMNIROUTE_API_KEY and
+#             OMNIROUTE_MODEL secrets (the endpoint key and combo a person
+#             created in the dashboard). Setting secrets restarts the Brain.
+#   disconnect — remove them; the lane is off again, nothing else changes.
+#
+# No key is printed. Free provider keys never pass through here: they are
+# entered in OmniRoute's own dashboard.
+name: Cheap lane
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'deploy | connect | disconnect'
+        required: true
+        default: deploy
+
+concurrency:
+  group: cheap-lane
+  cancel-in-progress: false
+
+jobs:
+  cheap:
+    name: Cheap lane
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: ./.github/actions/await-release
+      - name: Run
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          OMNIROUTE_PASSWORD: ${{ secrets.OMNIROUTE_PASSWORD }}
+          OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
+          OMNIROUTE_MODEL: ${{ secrets.OMNIROUTE_MODEL }}
+          ACTION: ${{ inputs.action }}
+        run: |
+          set -eu
+          brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          cheap=northline-cheap
+          case "$ACTION" in
+            deploy)
+              [ -n "$OMNIROUTE_PASSWORD" ] || { echo "::error::Set the OMNIROUTE_PASSWORD repository secret first."; exit 1; }
+              flyctl apps list --json | grep -q "\"$cheap\"" || flyctl apps create "$cheap"
+              flyctl volumes list --app "$cheap" --json | grep -q omniroute_data \
+                || flyctl volumes create omniroute_data --app "$cheap" --region iad --size 1 --yes
+              flyctl secrets set --app "$cheap" --stage INITIAL_PASSWORD="$OMNIROUTE_PASSWORD" >/dev/null
+              flyctl deploy --config deploy/cheap-lane/fly.toml --app "$cheap" --ha=false
+              echo "::notice title=cheap lane::OmniRoute is at https://$cheap.fly.dev — sign in with OMNIROUTE_PASSWORD, add providers, make a combo and an endpoint key."
+              ;;
+            connect)
+              [ -n "$OMNIROUTE_API_KEY" ] || { echo "::error::Set the OMNIROUTE_API_KEY repository secret (an endpoint key from the OmniRoute dashboard)."; exit 1; }
+              model="${OMNIROUTE_MODEL:-auto}"
+              flyctl secrets set --app "$brain" \
+                BRAIN_CHEAP_LLM_URL="https://$cheap.fly.dev/v1" \
+                BRAIN_CHEAP_LLM_KEY="$OMNIROUTE_API_KEY" \
+                BRAIN_CHEAP_LLM_MODELS="$model" >/dev/null
+              echo "::notice title=cheap lane::The Brain now sends grunt work to the cheap lane (models: $model)."
+              ;;
+            disconnect)
+              flyctl secrets unset --app "$brain" BRAIN_CHEAP_LLM_URL BRAIN_CHEAP_LLM_KEY BRAIN_CHEAP_LLM_MODELS >/dev/null
+              echo "::notice title=cheap lane::The cheap lane is off."
+              ;;
+            *) echo "::error::Unknown action '$ACTION'."; exit 1 ;;
+          esac

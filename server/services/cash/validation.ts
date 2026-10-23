@@ -36,6 +36,7 @@
  * refused, because that is a `COMMERCIAL_ACTION` under a grant a person makes
  * separately.
  */
+import { latestScreens, laneConfig, screenOpening, type ScreenOutput } from '../cheap/lane.ts';
 import { closedBy } from './closing.ts';
 import { describeNotWorthResearching, notWorthResearching, type NotWorthResearching } from './worthResearching.ts';
 import { getDb } from '../../db/database.ts';
@@ -891,6 +892,26 @@ export async function startValidations(input: {
     } as DiveValueFacts,
   }));
   valued.sort((a, b) => compareDiveValue(a.value, b.value));
+  /*
+   * The cheap lane's screen, as a preference and never a refusal: an opening
+   * two free models agree is junk is dived after everything else, and starts
+   * the moment nothing better is waiting. No screen (lane off, budget spent,
+   * no valid answer) changes nothing. Stable, so the decision-value order
+   * stands among the rest.
+   */
+  const screens = await latestScreens(valued.map(({ opportunity }) => opportunity.id)).catch(
+    () => new Map<string, ScreenOutput>(),
+  );
+  const dropped = (id: string) => screens.get(id)?.verdict === 'DROP';
+  /*
+   * Quick plays first among the rest (the owner, 2026-10-22: fast cash, a
+   * window of weeks is fine): a time-bounded opening, or one a cheap screen
+   * read as a short window, is dived before ongoing ones. Junk still last.
+   */
+  const quick = (opportunity: CashOpportunity) =>
+    opportunity.mechanism === 'TEMPORARY_EXPLOIT' || screens.get(opportunity.id)?.window === 'SHORT';
+  const band = (opportunity: CashOpportunity) => (dropped(opportunity.id) ? 2 : quick(opportunity) ? 0 : 1);
+  valued.sort((a, b) => band(a.opportunity) - band(b.opportunity));
 
   const out: StartedValidation[] = [];
   for (const { opportunity, value } of valued) {
@@ -1483,6 +1504,38 @@ function hasCompiledSpecification(judgment: unknown): boolean {
   );
 }
 
+/** How many openings the cheap lane screens per pass. */
+export const CHEAP_SCREENS_PER_PASS = 40;
+
+/**
+ * Screen openings no free model has looked at yet, newest first, bounded per
+ * pass. Live openings only: an archived or finished one needs no sorting.
+ */
+export async function screenNewOpenings(projectId: string): Promise<number> {
+  if (!laneConfig()) return 0;
+  const live = (await listOpportunities({ projectId })).filter(
+    (one) => !['ARCHIVED', 'DECLINED', 'COLLECTED'].includes(one.state),
+  );
+  const done = await latestScreens(live.map((one) => one.id));
+  let screened = 0;
+  for (const one of live) {
+    if (screened >= CHEAP_SCREENS_PER_PASS) break;
+    if (done.has(one.id)) continue;
+    const result = await screenOpening(one.id, {
+      title: one.title,
+      mechanism: one.mechanism,
+      source: one.source,
+      payer: one.payer,
+      buyingSignal: one.buyingSignal,
+      deadline: one.deadline,
+      price: one.priceCents === null ? null : `${(one.priceCents / 100).toFixed(2)} ${one.currency}`,
+    });
+    screened += 1;
+    if (result === null && !laneConfig()) break;
+  }
+  return screened;
+}
+
 /** Both halves, for the tick. */
 export async function runValidations(projectId: string): Promise<ValidationProgress> {
   // Settling first, so a deep dive that finished this tick frees its slot for
@@ -1499,6 +1552,8 @@ export async function runValidations(projectId: string): Promise<ValidationProgr
   // A screen that settled without a payer is dormant with its reopen
   // conditions, rather than spending a full dive (§3.3(a)).
   await concludeScreens(projectId);
+  // Free models sort the openings first, so Claude's dives go to the best ones.
+  await screenNewOpenings(projectId).catch(() => 0);
   const started = await startValidations({ projectId });
   return { started, settled };
 }

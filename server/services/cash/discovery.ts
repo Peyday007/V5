@@ -178,7 +178,74 @@ export const PLAY_BUCKETS: readonly SearchBucket[] = Object.freeze(
   ),
 );
 
+/**
+ * Quick plays: money available now that will not last (the owner, 2026-10-22:
+ * "small exploits where we make money super fast; if it only lasts a month, so
+ * be it"). Each asks *why money is available this month*, and every answer is
+ * still a published, dated artefact through the same gate. First in the list,
+ * because the window is the point. A bucket names the deliverable its answer
+ * is mostly about, so an opening it finds requires producing that kind and
+ * `deliveryReading` can say from Brain's own proof whether Brain does the work.
+ */
+const QUICK_WINDOW_ASK =
+  'naming who must pay, the published price or budget, the date the window closes, and how ' +
+  'fast a first payment could arrive for work delivered by email — and say how long the window ' +
+  'lasts (a window of weeks is fine)?';
+
+export const QUICK_PLAY_BUCKETS: readonly SearchBucket[] = Object.freeze([
+  {
+    id: 'quick-new-rule',
+    mechanism: 'TEMPORARY_EXPLOIT',
+    deliverable: 'DOCUMENT',
+    title: 'Which new rule forces businesses to buy something soon',
+    question:
+      'Which newly published rule, regulation, standard or platform policy forces a group of ' +
+      'businesses to produce a document, filing, data set, notice or web change by a stated ' +
+      `date — ${QUICK_WINDOW_ASK}`,
+  },
+  {
+    id: 'quick-deadline-rush',
+    mechanism: 'TEMPORARY_EXPLOIT',
+    deliverable: 'SPREADSHEET',
+    title: 'Which deadline has businesses rushing to get work done',
+    question:
+      'Which published deadline (a filing date, a renewal, a grant or program closing, a ' +
+      'compliance date) has a group of businesses needing documents, data or spreadsheets ' +
+      `prepared before it — ${QUICK_WINDOW_ASK}`,
+  },
+  {
+    id: 'quick-event',
+    mechanism: 'TEMPORARY_EXPLOIT',
+    deliverable: 'DOCUMENT',
+    title: 'Which upcoming event creates a burst of paid work',
+    question:
+      'Which upcoming, published event — a trade show, a season, a launch, a change of tax year, ' +
+      'an election, a disaster recovery period — creates a burst of demand for digital work ' +
+      `from businesses or organisations — ${QUICK_WINDOW_ASK}`,
+  },
+  {
+    id: 'quick-platform-change',
+    mechanism: 'TEMPORARY_EXPLOIT',
+    deliverable: 'DATASET',
+    title: 'Which platform change leaves businesses needing help now',
+    question:
+      'Which published change by a widely used platform, marketplace or software vendor (a ' +
+      'shutdown, a migration, a new requirement, a price change) leaves its business users ' +
+      `needing data moved, documents redone or pages rebuilt soon — ${QUICK_WINDOW_ASK}`,
+  },
+  {
+    id: 'quick-price-gap',
+    mechanism: 'TEMPORARY_EXPLOIT',
+    title: 'Which price gap is open right now and closing',
+    question:
+      'Where is the same deliverable or digital product published at two clearly different ' +
+      'prices right now because of a temporary condition (a promotion, a shortage, a new entrant, ' +
+      `a currency move), with buyers on the expensive side — ${QUICK_WINDOW_ASK}`,
+  },
+]);
+
 export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
+  ...QUICK_PLAY_BUCKETS,
   ...PLAY_BUCKETS,
   {
     id: 'explicit-paid-request',
