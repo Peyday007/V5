@@ -10,5 +10,7 @@ describe('the scoreboard', () => {
     expect(board.foundLast7Days).toBe(0);
     expect(board.cheapLane.enabled).toBe(false);
     expect(formatScoreboard(board).join('\n')).toContain('free lane   off');
+    expect(board.triggersOn).toBe(false);
+    expect(board.triggers).toHaveLength(8);
   });
 });
