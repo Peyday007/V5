@@ -410,6 +410,27 @@ describe('the throttle, which is the whole strength of six digits', () => {
     expect(before.status).toBe(401);
 
     await stopServer();
+    /*
+     * Held for an hour while the server is down. The ladder's early rungs are
+     * seconds long and refusals during a cooldown do not climb it, so on a
+     * fast runner the lock above can be a five-second one that a slow restart
+     * outlives — which is not a lockout failing to survive, it is a lockout
+     * ending. Extending the stored row keeps this about what it says: the
+     * lock is a row the restarted process reads, not memory it lost.
+     */
+    // The SQLite run only: on the Postgres run the server keeps its rows there
+    // and this race has not shown there; the SQLite run is where it failed.
+    const file = path.join(dataDir, 'brain.db');
+    if (fs.existsSync(file)) {
+      const { createRequire } = await import('node:module');
+      const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
+      const db = new DatabaseSync(file);
+      db.prepare('UPDATE users SET pin_locked_until = ? WHERE email = ?').run(
+        new Date(Date.now() + 60 * 60_000).toISOString(),
+        email,
+      );
+      db.close();
+    }
     await startServer();
 
     const after = await call('POST', '/api/auth/pin', { body: { identity: email, pin } });

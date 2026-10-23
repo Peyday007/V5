@@ -47,12 +47,29 @@ jobs:
           cheap=northline-cheap
           case "$ACTION" in
             deploy)
+              # Not `flyctl deploy`: exactly one workflow ships the Brain
+              # (deploymentOwnership), and this is a different app. It runs one
+              # machine from OmniRoute's published image, created once and
+              # updated in place after.
               [ -n "$OMNIROUTE_PASSWORD" ] || { echo "::error::Set the OMNIROUTE_PASSWORD repository secret first."; exit 1; }
+              image=diegosouzapw/omniroute:latest
               flyctl apps list --json | grep -q "\"$cheap\"" || flyctl apps create "$cheap"
               flyctl volumes list --app "$cheap" --json | grep -q omniroute_data \
                 || flyctl volumes create omniroute_data --app "$cheap" --region iad --size 1 --yes
-              flyctl secrets set --app "$cheap" --stage INITIAL_PASSWORD="$OMNIROUTE_PASSWORD" >/dev/null
-              flyctl deploy --config deploy/cheap-lane/fly.toml --app "$cheap" --ha=false
+              flyctl ips list --app "$cheap" --json | grep -q '"v6"' || flyctl ips allocate-v6 --app "$cheap"
+              flyctl ips list --app "$cheap" --json | grep -q 'shared_v4\|"v4"' || flyctl ips allocate-v4 --shared --app "$cheap" --yes
+              machine=$(flyctl machine list --app "$cheap" --json | grep -o '"id": *"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{8,\}' || true)
+              if [ -n "$machine" ]; then
+                flyctl machine update "$machine" --app "$cheap" --image "$image" \
+                  --env INITIAL_PASSWORD="$OMNIROUTE_PASSWORD" --yes
+              else
+                flyctl machine run "$image" --app "$cheap" --region iad --name omniroute \
+                  --vm-size shared-cpu-1x --vm-memory 512 \
+                  --volume omniroute_data:/app/data \
+                  --env PORT=20128 --env HOSTNAME=0.0.0.0 --env INITIAL_PASSWORD="$OMNIROUTE_PASSWORD" \
+                  --port 443:20128/tcp:tls:http --port 80:20128/tcp:http \
+                  --restart always
+              fi
               echo "::notice title=cheap lane::OmniRoute is at https://$cheap.fly.dev — sign in with OMNIROUTE_PASSWORD, add providers, make a combo and an endpoint key."
               ;;
             connect)
