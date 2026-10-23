@@ -83,7 +83,7 @@ export function formatScoreboard(board: Scoreboard): string[] {
     lane.enabled
       ? `  free lane   ${lane.today} screens today of ${lane.budget} (keep ${lane.verdicts.KEEP}, drop ${lane.verdicts.DROP}, unsure ${lane.verdicts.UNSURE}, failed ${lane.failed})`
       : '  free lane   off (no BRAIN_CHEAP_LLM_URL set)',
-    `  triggers    ${board.triggersOn ? 'on' : 'off (BRAIN_TRIGGERS not on)'}`,
+    `  triggers    ${board.triggersOn ? 'on' : 'off (starts when the free lane is connected)'}`,
     ...board.triggers.map(
       (one) => `    ${one.id.padEnd(28)} rounds ${one.rounds} · found ${one.found} · past evidence ${one.beyondEvidence}`,
     ),

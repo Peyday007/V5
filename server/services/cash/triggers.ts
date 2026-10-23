@@ -9,14 +9,22 @@
  * contact. Every answer is still a published, dated artefact through the same
  * evidence gate: a trigger asks where to look, never what to conclude.
  *
- * Off unless `BRAIN_TRIGGERS=on` (the owner, 2026-10-23: "build it, don't start
- * firing it off"). Which triggers pay is read from rows on the scoreboard; a
+ * Off until the free-model lane is connected (`triggersEnabled`). Which
+ * triggers pay is read from rows on the scoreboard; a
  * trigger that never produces a candidate is visible as such.
  */
 import type { SearchBucket } from './discovery.ts';
 
+/**
+ * On once the free-model lane is connected, because the lane is what sorts
+ * the volume triggers produce (the owner, 2026-10-23: "make it start when I
+ * add the free APIs"). `BRAIN_TRIGGERS=on` forces it on, `off` holds it off.
+ */
 export function triggersEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env['BRAIN_TRIGGERS']?.trim().toLowerCase() === 'on';
+  const flag = env['BRAIN_TRIGGERS']?.trim().toLowerCase();
+  if (flag === 'on') return true;
+  if (flag === 'off') return false;
+  return Boolean(env['BRAIN_CHEAP_LLM_URL']?.trim());
 }
 
 const ASK =
