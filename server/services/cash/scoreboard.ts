@@ -9,6 +9,8 @@
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { sharedFrontier } from './shared.ts';
 import { laneReading } from '../cheap/lane.ts';
+import { listRounds } from '../../repos/cashDiscovery.ts';
+import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 
 export interface Scoreboard {
   /** Openings found in the window, and how many of them were quick plays. */
@@ -22,6 +24,9 @@ export interface Scoreboard {
   readyToTest: number;
   executing: number;
   collected: number;
+  /** Per trigger: rounds asked, openings found, and how many got past evidence. */
+  triggers: { id: string; title: string; rounds: number; found: number; beyondEvidence: number }[];
+  triggersOn: boolean;
   /** The free-model lane today. */
   cheapLane: Awaited<ReturnType<typeof laneReading>>;
 }
@@ -43,7 +48,29 @@ export async function scoreboard(projectId: string, now: Date = new Date()): Pro
     executing: (state.EXECUTING ?? 0) + (state.DELIVERING ?? 0),
     collected: state.COLLECTED ?? 0,
     cheapLane: await laneReading(now),
+    triggersOn: triggersEnabled(),
+    triggers: await triggerYields(projectId, all, frontier.opportunities),
   };
+}
+
+async function triggerYields(
+  projectId: string,
+  all: Awaited<ReturnType<typeof listOpportunities>>,
+  shared: { id: string; tier: { tier: string } }[],
+): Promise<Scoreboard['triggers']> {
+  const rounds = await listRounds(projectId);
+  const tierOf = new Map(shared.map((one) => [one.id, one.tier.tier]));
+  return TRIGGER_BUCKETS.map((bucket) => {
+    const ids = new Set(rounds.filter((one) => one.bucketId === bucket.id).map((one) => one.id));
+    const found = all.filter((one) => one.discoveryRoundId !== null && ids.has(one.discoveryRoundId));
+    return {
+      id: bucket.id,
+      title: bucket.title,
+      rounds: ids.size,
+      found: found.length,
+      beyondEvidence: found.filter((one) => (tierOf.get(one.id) ?? 'SIGNAL') !== 'SIGNAL').length,
+    };
+  });
 }
 
 export function formatScoreboard(board: Scoreboard): string[] {
@@ -56,5 +83,9 @@ export function formatScoreboard(board: Scoreboard): string[] {
     lane.enabled
       ? `  free lane   ${lane.today} screens today of ${lane.budget} (keep ${lane.verdicts.KEEP}, drop ${lane.verdicts.DROP}, unsure ${lane.verdicts.UNSURE}, failed ${lane.failed})`
       : '  free lane   off (no BRAIN_CHEAP_LLM_URL set)',
+    `  triggers    ${board.triggersOn ? 'on' : 'off (BRAIN_TRIGGERS not on)'}`,
+    ...board.triggers.map(
+      (one) => `    ${one.id.padEnd(28)} rounds ${one.rounds} · found ${one.found} · past evidence ${one.beyondEvidence}`,
+    ),
   ];
 }

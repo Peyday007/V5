@@ -67,6 +67,7 @@
  * never a favourable assumption, arriving at the moment an opportunity is born
  * rather than being asserted away by whoever created it.
  */
+import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
@@ -423,7 +424,7 @@ export async function openDiscovery(input: {
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
-  for (const bucket of SEARCH_BUCKETS) {
+  for (const bucket of [...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])]) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
@@ -760,7 +761,9 @@ function safeExclusion(text: string): boolean {
 async function liveRounds(
   projectId: string,
 ): Promise<Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>> {
-  const byId = new Map(SEARCH_BUCKETS.map((bucket) => [bucket.id, bucket]));
+  // Trigger buckets always resolve, so a round opened while triggers were on is
+  // still harvested after they are switched off.
+  const byId = new Map([...SEARCH_BUCKETS, ...TRIGGER_BUCKETS].map((bucket) => [bucket.id, bucket]));
   const out = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>();
   for (const [candidateId, round] of await openRoundsByCandidate(projectId)) {
     const bucket = byId.get(round.bucketId);
