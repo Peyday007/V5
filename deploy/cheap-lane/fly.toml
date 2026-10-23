@@ -1,0 +1,29 @@
+# OmniRoute: the switchboard in front of free model providers, for Brain's
+# cheap lane (server/services/cheap/lane.ts). A separate Fly app from the
+# Brain, so a fault in it can never touch the Brain's machine, rows or bytes.
+# Providers are added in its own dashboard by a person; Brain only ever calls
+# its OpenAI-compatible endpoint with an endpoint key.
+app = "northline-cheap"
+primary_region = "iad"
+
+[build]
+  image = "diegosouzapw/omniroute:latest"
+
+[env]
+  PORT = "20128"
+  HOSTNAME = "0.0.0.0"
+
+[[mounts]]
+  source = "omniroute_data"
+  destination = "/app/data"
+
+[http_service]
+  internal_port = 20128
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

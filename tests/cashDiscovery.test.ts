@@ -1075,12 +1075,19 @@ describe('harvest reads past what it already filed', () => {
 });
 
 describe('plays: a kind of business that pays for something Brain can make', () => {
-  it('asks one play question per deliverable Brain proves, before every other bucket', async () => {
+  it('asks one play question per deliverable Brain proves, right after the quick plays', async () => {
     const { DELIVERABLE_KINDS } = await import('../server/services/cash/deliverables/spec.ts');
+    const { QUICK_PLAY_BUCKETS } = await import('../server/services/cash/discovery.ts');
     expect(PLAY_BUCKETS.map((one) => one.deliverable)).toEqual([...DELIVERABLE_KINDS]);
-    expect(SEARCH_BUCKETS.slice(0, PLAY_BUCKETS.length).map((one) => one.id)).toEqual(
-      PLAY_BUCKETS.map((one) => one.id),
+    // The owner (2026-10-22): quick, short-window plays come first, then plays.
+    expect(SEARCH_BUCKETS.slice(0, QUICK_PLAY_BUCKETS.length).map((one) => one.id)).toEqual(
+      QUICK_PLAY_BUCKETS.map((one) => one.id),
     );
+    expect(
+      SEARCH_BUCKETS.slice(QUICK_PLAY_BUCKETS.length, QUICK_PLAY_BUCKETS.length + PLAY_BUCKETS.length).map(
+        (one) => one.id,
+      ),
+    ).toEqual(PLAY_BUCKETS.map((one) => one.id));
     for (const bucket of PLAY_BUCKETS) {
       expect(bucket.question).toMatch(/pay, again and again/);
       expect(bucket.question).toMatch(/published prices/);
@@ -1091,7 +1098,9 @@ describe('plays: a kind of business that pays for something Brain can make', () 
 
   it('an opening from a play round requires producing that deliverable, which Brain proves it can', async () => {
     await activated();
-    const [first] = await openDiscovery({ projectId });
+    const { QUICK_PLAY_BUCKETS } = await import('../server/services/cash/discovery.ts');
+    const opened = await openDiscovery({ projectId, limit: QUICK_PLAY_BUCKETS.length + 1 });
+    const first = opened.find((one) => PLAY_BUCKETS.some((play) => play.id === one.bucketId));
     const bucket = PLAY_BUCKETS.find((one) => one.id === first!.bucketId)!;
     expect(bucket).toBeDefined();
     await finishedMission({
