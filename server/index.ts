@@ -286,6 +286,24 @@ function serveMigrationFailure(error: Error, options: { retrying?: boolean } = {
   return server;
 }
 
+/**
+ * Keep idle connections open longer than Fly's proxy keeps them.
+ *
+ * Node closes an idle keep-alive connection after 5 seconds by default. Fly's
+ * proxy reuses its upstream connections for longer than that, so a request it
+ * sends down a connection Node has just closed fails and the proxy answers 502
+ * — a random 502 with nothing in Brain's own log. Holding the connection open
+ * past the proxy's idle window removes that race. `headersTimeout` must exceed
+ * `keepAliveTimeout`, or Node can drop a request whose headers arrive late on a
+ * reused connection.
+ */
+const KEEP_ALIVE_TIMEOUT_MS = 75_000;
+
+function holdProxyConnections(server: Server): void {
+  server.keepAliveTimeout = KEEP_ALIVE_TIMEOUT_MS;
+  server.headersTimeout = KEEP_ALIVE_TIMEOUT_MS + 1_000;
+}
+
 function onListenError(error: NodeJS.ErrnoException): void {
   if (error.code === 'EADDRINUSE') {
     console.error(
@@ -712,6 +730,7 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
   console.log(`  boot: opening the port ${((Date.now() - bootStarted) / 1000).toFixed(1)}s after the cloud answered`);
   const server = buildApp(gate).listen(PORT, () => logBanner(migrations, gate, identity));
   server.on('error', onListenError);
+  holdProxyConnections(server);
   installShutdown(server);
 
   /*
