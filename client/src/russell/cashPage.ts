@@ -80,6 +80,7 @@ const NOTHING: CashCapabilities = {
   mayActOnJob: false,
   mayReconsider: false,
   reconsiderRefusal: 'This page was not told whether reconsidering is allowed here.',
+  mayAddPlay: false,
 };
 
 export interface CashPage {
