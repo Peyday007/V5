@@ -253,7 +253,10 @@ jobs:
           python3 - <<'PY'
           text = open('closeout-report.txt', encoding='utf-8', errors='replace').read()
           enc = lambda s: s.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
-          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][:10]
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)]
+          # GitHub keeps ten notices a step: the first five and the last five,
+          # because a report's verdict and summary lines are at its end.
+          chunks = chunks if len(chunks) <= 10 else chunks[:5] + chunks[-5:]
           for n, chunk in enumerate(chunks, 1):
               print(f'::notice title=report {n}/{len(chunks)}::{enc(chunk)}')
           PY
