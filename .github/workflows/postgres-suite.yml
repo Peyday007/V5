@@ -82,12 +82,12 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Four shards, one verdict
+  # Eight shards, one verdict
   # ---------------------------------------------------------------------------
   #
   # Run 580 spent 71m09s in one `npm test` against one cluster, and every
   # release waited on it. The suite is split by vitest's own `--shard` across
-  # four jobs, each on its own runner with its own cluster, so no shard shares
+  # eight jobs, each on its own runner with its own cluster, so no shard shares
   # a database, a lock table or a schema with another.
   #
   # Nothing about what counts moved. Deploy's postgres-evidence.sh reads the
@@ -118,14 +118,14 @@ jobs:
           if-no-files-found: error
 
   suite:
-    name: The whole suite, against Postgres (shard ${{ matrix.shard }}/4)
+    name: The whole suite, against Postgres (shard ${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
     strategy:
       # Every shard runs to its end, so one red run names every failure in the
       # suite rather than the first shard's. The verdict is the same either way.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     # The whole suite once needed 120 (it outgrew sixty on 2026-10-06); a
     # quarter of it gets the same ceiling, as a bound on a hung shard.
     timeout-minutes: 120
@@ -231,7 +231,7 @@ jobs:
         env:
           BRAIN_TEST_DATABASE_URL: postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable
         run: >-
-          npx vitest run --shard=${{ matrix.shard }}/4
+          npx vitest run --shard=${{ matrix.shard }}/8
           --reporter=default --reporter=json --reporter=github-actions
           --outputFile.json=postgres-shard-report.json
 
@@ -300,5 +300,7 @@ jobs:
         run: |
           .github/workflows/postgres-shards.sh check lists/postgres-suite-files/postgres-suite-files.txt \
             lists/postgres-shard-1/postgres-shard-1.txt lists/postgres-shard-2/postgres-shard-2.txt \
-            lists/postgres-shard-3/postgres-shard-3.txt lists/postgres-shard-4/postgres-shard-4.txt
+            lists/postgres-shard-3/postgres-shard-3.txt lists/postgres-shard-4/postgres-shard-4.txt \
+            lists/postgres-shard-5/postgres-shard-5.txt lists/postgres-shard-6/postgres-shard-6.txt \
+            lists/postgres-shard-7/postgres-shard-7.txt lists/postgres-shard-8/postgres-shard-8.txt
           echo "POSTGRES-SUITE: PASS ${{ github.sha }}"

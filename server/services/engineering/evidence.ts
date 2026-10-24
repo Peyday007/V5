@@ -105,10 +105,15 @@ async function readGateFromCi(
     return null;
   }
   if (!reply.ok || !reply.body) return null;
-  const check = reply.body.checks.find((c) => c.name === FULL_GATE_CHECKS[backend]);
-  if (!check || check.status !== 'completed') return null;
-  const status = check.conclusion === 'success' ? 'PROVEN' : 'FAILED';
-  const ref = `github check "${check.name}" on ${sha}: ${check.conclusion}`;
+  // A sharded gate reports one check per shard, named "<gate> (<shard>)"; the
+  // gate holds only when every shard completed and passed.
+  const base = FULL_GATE_CHECKS[backend];
+  const shards = reply.body.checks.filter((c) => c.name === base || c.name.startsWith(`${base} (`));
+  if (shards.length === 0 || shards.some((c) => c.status !== 'completed')) return null;
+  const failed = shards.find((c) => c.conclusion !== 'success');
+  const check = failed ?? shards[0]!;
+  const status = failed ? 'FAILED' : 'PROVEN';
+  const ref = `github check "${check.name}" on ${sha}: ${check.conclusion}${shards.length > 1 ? ` (${shards.length} shards)` : ''}`;
   await recordEvidence({
     repository,
     propertyKey: `FULL_GATE:${sha}:${backend}`,
