@@ -217,6 +217,51 @@ const METHODS_ASSIGNMENT = [
   '10. Deciding with missing information: what to assume, what to test first, and when to stop researching.',
 ].join('\n');
 
+/** The planning rules every architecture goal shares (methods v2's lessons). */
+const GENERAL_PLAN_RULES = METHODS_ASSIGNMENT.split('\n').filter((line) => line.startsWith('- ')).join('\n');
+
+/** Where the signals are: which free public data shows somebody is about to pay. */
+const SIGNALS_ASSIGNMENT = [
+  'Research where buying signals live in free public data, so code can pull leads in bulk and rules can sort them.',
+  'For each question give concrete, checkable rules a program could apply, each with a real public source. Say what is proven and what is only opinion.',
+  'HOW TO PLAN THIS:',
+  GENERAL_PLAN_RULES,
+  '1. Which free public data sources (job boards, business filings, permits, licence registries, review sites, funding and news feeds, government notices) can be read by a program, and what each one is allowed to be used for.',
+  '2. Which observable events most often come before a business buys outside help: a job post left open long, a new location, new funding, a new rule, a leadership change, a platform being shut down, a run of complaints.',
+  '3. How strongly each of those signs predicts a purchase, and how long after the sign the buying usually happens.',
+  '4. How to tell a real buyer signal from noise: reposted ads, fake listings, recruiters, companies that never buy.',
+  '5. How to find the right contact and a business email from public information, and the rules on contacting them.',
+  '6. Which signals point to work that can be delivered as a document, spreadsheet, dataset, website or other file, with no calls and no on-site work.',
+].join('\n');
+
+/** How to split research so free models do the small steps and Claude the hard ones. */
+const SPLIT_ASSIGNMENT = [
+  'Research how to break research and lead-checking into small steps that cheap language models can do reliably, keeping only the hard steps for a strong model.',
+  'For each question give concrete rules a program could follow, each with a real public source (papers, benchmarks, vendor documentation). Say what is proven and what is only opinion.',
+  'HOW TO PLAN THIS:',
+  GENERAL_PLAN_RULES,
+  '1. Which kinds of task small or free models do reliably (classify, extract fields, yes/no checks, summarise) and which they fail at (multi-step reasoning, judgement, long documents).',
+  '2. How to decompose a large research or judgement task into many small checkable steps, and how much accuracy is lost or gained by doing so.',
+  '3. How to check a cheap model\'s answer automatically: quote-must-exist checks, two models agreeing, schemas, self-consistency, spot checks by a stronger model.',
+  '4. When to escalate a step from a cheap model to a strong one, and how to set that threshold.',
+  '5. How to measure and track the error rate of each step over time so the pipeline improves.',
+].join('\n');
+
+interface GoalPreset {
+  prefix: string;
+  name: string;
+  assignment: string;
+  maxPackets: number;
+  maxFragments: number;
+  days: number;
+}
+
+const GOAL_PRESETS: Record<string, GoalPreset> = {
+  methods: { prefix: 'Methods:', name: 'Methods: how Brain researches and judges (v2)', assignment: METHODS_ASSIGNMENT, maxPackets: 10, maxFragments: 60, days: 2 },
+  signals: { prefix: 'Signals:', name: 'Signals: where buyers show up in free public data', assignment: SIGNALS_ASSIGNMENT, maxPackets: 6, maxFragments: 36, days: 2 },
+  split: { prefix: 'Split:', name: 'Split: free models for small steps, Claude for hard ones', assignment: SPLIT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+};
+
 async function administrator(): Promise<User> {
   const email = flag('admin');
   const enabled = (await listUsers()).filter((user) => user.isBrainAdmin && !user.disabledAt);
@@ -1282,11 +1327,12 @@ async function main(): Promise<void> {
        * every research worker's guidance as method rules (`methodRules.ts`),
        * which is why it must be opened in the Brain architecture project.
        */
-      if (sub === 'methods') {
+      const preset = GOAL_PRESETS[sub];
+      if (preset) {
         const actor = await administrator();
         const project = await projectFrom(rest[1] ?? fail('Name the Brain architecture project.'));
         if (project.slug !== ARCHITECTURE_SLUG) {
-          fail(`The methods goal belongs in the Brain architecture project (${ARCHITECTURE_SLUG}), or its findings reach no worker.`);
+          fail(`The ${sub} goal belongs in the Brain architecture project (${ARCHITECTURE_SLUG}), or its findings reach no worker.`);
         }
         const layer = (await listLayers(project.id)).find((one) => one.name === ARCHITECTURE_LAYER)
           ?? fail(`No layer "${ARCHITECTURE_LAYER}" in this project.`);
@@ -1295,11 +1341,11 @@ async function main(): Promise<void> {
         const live = await getDb().all<{ id: string }>(
           `SELECT id FROM russell_goals
             WHERE project_id = ? AND purpose = 'RESEARCH_GOAL' AND state IN ('ACTIVE','PAUSED')
-              AND name LIKE 'Methods:%'`,
-          [project.id],
+              AND name LIKE ?`,
+          [project.id, `${preset.prefix}%`],
         );
         for (const old of live) {
-          if (await revokeGoal({ goalId: old.id, actorUserId: actor.id, reason: 'Replaced by a newer methods goal.' })) {
+          if (await revokeGoal({ goalId: old.id, actorUserId: actor.id, reason: `Replaced by a newer ${sub} goal.` })) {
             console.log(`  replaced ${old.id}`);
           }
         }
@@ -1310,16 +1356,16 @@ async function main(): Promise<void> {
               projectId: project.id,
               ownerUserId: actor.id,
               createdByUserId: actor.id,
-              name: 'Methods: how Brain researches and judges (v2)',
-              maxPackets: 10,
-              maxFragments: 60,
-              deadline: new Date(Date.now() + 2 * 86_400_000).toISOString(),
-              researchAssignment: METHODS_ASSIGNMENT,
+              name: preset.name,
+              maxPackets: preset.maxPackets,
+              maxFragments: preset.maxFragments,
+              deadline: new Date(Date.now() + preset.days * 86_400_000).toISOString(),
+              researchAssignment: preset.assignment,
               researchLayerId: layer.id,
             })
           ).id;
         } catch (error) {
-          fail(error instanceof Error ? error.message : 'The methods goal could not be opened.');
+          fail(error instanceof Error ? error.message : `The ${sub} goal could not be opened.`);
         }
         await recordIdentityEvent({
           actorType: 'HUMAN',
@@ -1329,7 +1375,7 @@ async function main(): Promise<void> {
           targetId: project.id,
           projectId: project.id,
           result: 'SUCCESS',
-          metadata: { goalId, preset: 'methods' },
+          metadata: { goalId, preset: sub },
         });
         const status = await goalBudgetStatus(goalId);
         if (status) await printGoalBudget(status);
