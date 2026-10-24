@@ -245,6 +245,18 @@ describe('opening the discovery of a sprint', () => {
     expect(events).toHaveLength(SEARCH_BUCKETS.length);
   });
 
+  it('opens no Claude round while BRAIN_CLAUDE_DISCOVERY is off, and resumes when it is not', async () => {
+    await activated();
+    process.env['BRAIN_CLAUDE_DISCOVERY'] = 'off';
+    try {
+      expect(await openDiscovery({ projectId, limit: SEARCH_BUCKETS.length })).toEqual([]);
+      expect(await listRounds(projectId)).toEqual([]);
+    } finally {
+      delete process.env['BRAIN_CLAUDE_DISCOVERY'];
+    }
+    expect(await openDiscovery({ projectId })).toHaveLength(1);
+  });
+
   it('opens nothing without a sprint, and nothing once it has wound down', async () => {
     expect(await openDiscovery({ projectId })).toEqual([]);
 

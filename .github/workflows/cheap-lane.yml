@@ -9,6 +9,9 @@
 #             OMNIROUTE_MODEL secrets (the endpoint key and combo a person
 #             created in the dashboard). Setting secrets restarts the Brain.
 #   disconnect — remove them; the lane is off again, nothing else changes.
+#   claude-discovery-off / claude-discovery-on — stop or resume Claude Routines
+#             opening broad discovery rounds (BRAIN_CLAUDE_DISCOVERY), so they
+#             spend their capacity on deep dives and research goals.
 #
 # No key is printed. Free provider keys never pass through here: they are
 # entered in OmniRoute's own dashboard.
@@ -18,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | connect | disconnect'
+        description: 'deploy | connect | disconnect | claude-discovery-off | claude-discovery-on'
         required: true
         default: deploy
 
@@ -84,6 +87,14 @@ jobs:
             disconnect)
               flyctl secrets unset --app "$brain" BRAIN_CHEAP_LLM_URL BRAIN_CHEAP_LLM_KEY BRAIN_CHEAP_LLM_MODELS >/dev/null
               echo "::notice title=cheap lane::The cheap lane is off."
+              ;;
+            claude-discovery-off)
+              flyctl secrets set --app "$brain" BRAIN_CLAUDE_DISCOVERY=off >/dev/null
+              echo "::notice title=discovery::Claude Routines no longer open broad discovery rounds."
+              ;;
+            claude-discovery-on)
+              flyctl secrets unset --app "$brain" BRAIN_CLAUDE_DISCOVERY >/dev/null
+              echo "::notice title=discovery::Claude Routines open broad discovery rounds again."
               ;;
             *) echo "::error::Unknown action '$ACTION'."; exit 1 ;;
           esac

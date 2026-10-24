@@ -397,11 +397,26 @@ export interface OpenedDiscovery {
  * a wound-down sprint opens nothing new, and reactivating it opens whatever it
  * had not reached yet rather than starting again.
  */
+/**
+ * Whether Brain's Claude workers open new broad discovery rounds.
+ *
+ * On by default. `BRAIN_CLAUDE_DISCOVERY=off` stops new rounds (search buckets
+ * and triggers alike) so the Routines spend their capacity on deep dives,
+ * qualification and research goals instead of bulk finding — bulk finding
+ * moves to code feeds and the cheap lane. Rounds already open still finish and
+ * are harvested; nothing already found is touched. Read per call, so turning it
+ * back on needs no deploy.
+ */
+export function claudeDiscoveryEnabled(env = process.env): boolean {
+  return env['BRAIN_CLAUDE_DISCOVERY']?.trim().toLowerCase() !== 'off';
+}
+
 export async function openDiscovery(input: {
   projectId: string;
   limit?: number;
   now?: string;
 }): Promise<OpenedDiscovery[]> {
+  if (!claudeDiscoveryEnabled()) return [];
   const gate = await discoveryAllowed(input.projectId);
   if (!gate.allowed || !gate.mode) return [];
   const mode = gate.mode;
