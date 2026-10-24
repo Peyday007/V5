@@ -46,7 +46,7 @@ export interface ResearchCapacity {
   sheddingReason: string | null;
 }
 
-export type RoomLimit = 'SHEDDING' | 'NO_GRANT' | 'GRANT' | 'SURFACES';
+export type RoomLimit = 'SHEDDING' | 'NO_GRANT' | 'GRANT' | 'SURFACES' | 'OPERATOR';
 
 export interface ResearchRoom {
   /** How many more may start now. Never negative, never above the grant's free slots. */
@@ -234,15 +234,44 @@ export async function researchSurfacesOnRecord(projectId: string): Promise<numbe
   }
 }
 
+/**
+ * An operator's ceiling on cash research, from `BRAIN_CASH_RESEARCH_MAX`.
+ *
+ * Deep dives and monetization questions on weak openings are low-yield Routine
+ * time; this bounds how many of each kind run at once so the Routines go to
+ * work that improves every job. Unset means no extra ceiling. It only ever
+ * lowers the room — never raises it past the grant.
+ */
+export function operatorResearchMax(env = process.env): number | null {
+  const raw = env['BRAIN_CASH_RESEARCH_MAX']?.trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
+}
+
+export function applyOperatorMax(room: ResearchRoom, max: number | null): ResearchRoom {
+  if (max === null) return room;
+  const allowed = Math.max(0, max - room.inFlight);
+  if (allowed >= room.room) return room;
+  return {
+    room: allowed,
+    cap: room.inFlight + allowed,
+    inFlight: room.inFlight,
+    limitedBy: 'OPERATOR',
+    reason: `an operator capped cash research at ${max} at once`,
+  };
+}
+
 /** The room for one kind of research in one project. */
 export async function researchRoom(input: {
   projectId: string;
   inFlight: number;
   unlaunched: number;
 }): Promise<ResearchRoom> {
-  return researchRoomFrom({
+  const room = researchRoomFrom({
     capacity: await researchCapacity(input.projectId),
     inFlight: input.inFlight,
     unlaunched: input.unlaunched,
   });
+  return room.room <= 0 ? room : applyOperatorMax(room, operatorResearchMax());
 }

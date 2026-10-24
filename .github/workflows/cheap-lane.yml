@@ -12,6 +12,9 @@
 #   claude-discovery-off / claude-discovery-on — stop or resume Claude Routines
 #             opening broad discovery rounds (BRAIN_CLAUDE_DISCOVERY), so they
 #             spend their capacity on deep dives and research goals.
+#   focus / unfocus — focus also caps cash deep dives and monetization
+#             questions at one at a time (BRAIN_CASH_RESEARCH_MAX=1) and stops
+#             broad discovery, so Routines work on what improves every job.
 #
 # No key is printed. Free provider keys never pass through here: they are
 # entered in OmniRoute's own dashboard.
@@ -21,7 +24,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | connect | disconnect | claude-discovery-off | claude-discovery-on'
+        description: 'deploy | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus'
         required: true
         default: deploy
 
@@ -95,6 +98,14 @@ jobs:
             claude-discovery-on)
               flyctl secrets unset --app "$brain" BRAIN_CLAUDE_DISCOVERY >/dev/null
               echo "::notice title=discovery::Claude Routines open broad discovery rounds again."
+              ;;
+            focus)
+              flyctl secrets set --app "$brain" BRAIN_CLAUDE_DISCOVERY=off BRAIN_CASH_RESEARCH_MAX=1 >/dev/null
+              echo "::notice title=focus::Routines: no broad discovery, one cash deep dive at a time."
+              ;;
+            unfocus)
+              flyctl secrets unset --app "$brain" BRAIN_CLAUDE_DISCOVERY BRAIN_CASH_RESEARCH_MAX >/dev/null
+              echo "::notice title=focus::Routines back to normal cash research."
               ;;
             *) echo "::error::Unknown action '$ACTION'."; exit 1 ;;
           esac
