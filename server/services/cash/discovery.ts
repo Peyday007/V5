@@ -68,6 +68,7 @@
  * rather than being asserted away by whoever created it.
  */
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
+import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
@@ -669,7 +670,7 @@ export function executionFrameSentence(frame: ExecutionFrame): string {
   );
 }
 
-async function executionFrame(projectId: string, currency: string): Promise<ExecutionFrame | null> {
+export async function executionFrame(projectId: string, currency: string): Promise<ExecutionFrame | null> {
   try {
     const [caps, position] = await Promise.all([proveCapabilities(), cashPosition({ projectId, currency })]);
     const delivers = DELIVERABLE_KINDS.filter((kind) => caps[kind]?.available).map((kind) => DELIVERABLE_LABEL[kind]);
@@ -756,7 +757,7 @@ export async function heldExclusions(input: {
 }
 
 /** Neither a jurisdiction the compiler would read nor an action an envelope would refuse. */
-function safeExclusion(text: string): boolean {
+export function safeExclusion(text: string): boolean {
   if (statesNamedIn(text).length > 0) return false;
   if (/\b(?:and also|as well as|in addition to)\b/i.test(text)) return false;
   const line = `already listed: ${text}`;
@@ -778,7 +779,9 @@ async function liveRounds(
 ): Promise<Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>> {
   // Trigger buckets always resolve, so a round opened while triggers were on is
   // still harvested after they are switched off.
-  const byId = new Map([...SEARCH_BUCKETS, ...TRIGGER_BUCKETS].map((bucket) => [bucket.id, bucket]));
+  const byId = new Map(
+    [...SEARCH_BUCKETS, ...TRIGGER_BUCKETS, FEED_SHORTLIST_BUCKET].map((bucket) => [bucket.id, bucket]),
+  );
   const out = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>();
   for (const [candidateId, round] of await openRoundsByCandidate(projectId)) {
     const bucket = byId.get(round.bucketId);

@@ -23,6 +23,7 @@
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { newId, nowIso } from '../../repos/util.ts';
+import { DELIVERABLE_KINDS, type DeliverableKind } from '../cash/deliverables/spec.ts';
 
 export interface LaneConfig {
   url: string;
@@ -75,7 +76,29 @@ export interface ScreenInput {
   price: string | null;
 }
 
-/** The closed set of tasks the lane runs. One today; each new one is reviewed code. */
+/** A raw lead a feed pulled: a post, a rule, a forum thread. */
+export interface LeadInput {
+  source: string;
+  title: string;
+  organization: string | null;
+  publishedAt: string | null;
+  body: string | null;
+  url: string;
+}
+
+export interface LeadOutput {
+  verdict: ScreenVerdict;
+  window: CashWindow;
+  /** The one deliverable Brain could sell here, or NONE. */
+  deliverable: DeliverableKind | 'NONE';
+  /** What the business needs, in a few words. */
+  need: string;
+  /** Who would pay, in a few words, or empty when the post does not say. */
+  payer: string;
+  reason: string;
+}
+
+/** The closed set of tasks the lane runs. Each new one is reviewed code. */
 export const TASKS = {
   SCREEN_OPENING: {
     system:
@@ -99,6 +122,31 @@ export const TASKS = {
         `Source: ${input.source ?? 'unknown'}`,
         '',
         'Reply exactly: {"verdict":"KEEP|DROP|UNSURE","window":"SHORT|ONGOING|UNKNOWN","tags":["up to 5 short tags"],"reason":"one sentence"}',
+      ].join('\n');
+    },
+  },
+  SCREEN_LEAD: {
+    system:
+      'You read raw public posts for a very small online operation that wants cash fast. It sells ' +
+      'finished digital work by email to businesses: documents, spreadsheets, data work, simple ' +
+      'websites, small scripts, presentations, graphics. It does no calls, no on-site work, no ' +
+      'employment and no licensed work. Answer ONLY with a JSON object.',
+    prompt(input: LeadInput): string {
+      return [
+        'Does this post show a business that would plausibly pay this operation, soon, for one finished piece of digital work?',
+        'KEEP: yes, there is a clear need it could deliver as a file or site.',
+        'DROP: no — personal post, no business need, needs a licence, physical work, a full-time hire only, or spam.',
+        'UNSURE: you cannot tell.',
+        'window: SHORT if there is a deadline, a new rule or an event within weeks; ONGOING if the need repeats; UNKNOWN otherwise.',
+        `deliverable: one of ${[...DELIVERABLE_KINDS, 'NONE'].join(', ')}.`,
+        '',
+        `Source: ${input.source}`,
+        `Title: ${input.title}`,
+        `Organization: ${input.organization ?? 'unknown'}`,
+        `Published: ${input.publishedAt ?? 'unknown'}`,
+        `Text: ${(input.body ?? '').slice(0, 1500)}`,
+        '',
+        'Reply exactly: {"verdict":"KEEP|DROP|UNSURE","window":"SHORT|ONGOING|UNKNOWN","deliverable":"KIND","need":"a few words","payer":"a few words or empty","reason":"one sentence"}',
       ].join('\n');
     },
   },
@@ -128,6 +176,53 @@ export function parseScreen(text: string): ScreenOutput | null {
     : [];
   const reason = typeof record['reason'] === 'string' ? record['reason'].slice(0, 300) : '';
   return { verdict: verdict as ScreenVerdict, window: window as CashWindow, tags, reason };
+}
+
+/** Validate one lead answer. Anything off-shape is refused, never repaired. */
+export function parseLead(text: string): LeadOutput | null {
+  const match = /\{[\s\S]*\}/.exec(text);
+  if (!match) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const allowed = new Set(['verdict', 'window', 'deliverable', 'need', 'payer', 'reason']);
+  if (Object.keys(record).some((key) => !allowed.has(key))) return null;
+  const verdict = record['verdict'];
+  const window = record['window'] ?? 'UNKNOWN';
+  const deliverable = record['deliverable'] ?? 'NONE';
+  if (typeof verdict !== 'string' || !(SCREEN_VERDICTS as readonly string[]).includes(verdict)) return null;
+  if (typeof window !== 'string' || !(CASH_WINDOWS as readonly string[]).includes(window)) return null;
+  if (typeof deliverable !== 'string' || ![...DELIVERABLE_KINDS, 'NONE'].includes(deliverable)) return null;
+  const words = (key: string, max: number) =>
+    typeof record[key] === 'string' ? (record[key] as string).trim().slice(0, max) : '';
+  return {
+    verdict: verdict as ScreenVerdict,
+    window: window as CashWindow,
+    deliverable: deliverable as DeliverableKind | 'NONE',
+    need: words('need', 160),
+    payer: words('payer', 120),
+    reason: words('reason', 300),
+  };
+}
+
+/**
+ * Two lead answers into one. A KEEP needs both models to keep it and to agree
+ * on the deliverable; anything else that is not a shared DROP is UNSURE.
+ */
+export function combineLeads(answers: (LeadOutput | null)[]): LeadOutput | null {
+  const good = answers.filter((one): one is LeadOutput => one !== null);
+  if (good.length === 0) return null;
+  if (good.length === 1) return good[0]!;
+  const [a, b] = good as [LeadOutput, LeadOutput];
+  if (a.verdict === b.verdict && (a.verdict !== 'KEEP' || a.deliverable === b.deliverable)) {
+    return { ...a, window: a.window === b.window ? a.window : 'UNKNOWN' };
+  }
+  return { ...a, verdict: 'UNSURE', window: 'UNKNOWN', reason: 'The two models disagreed.' };
 }
 
 /** Two answers into one: agreement keeps the verdict, disagreement is UNSURE. */
@@ -193,41 +288,44 @@ async function usedToday(kind: TaskKind, now: Date): Promise<number> {
 }
 
 /**
- * Screen one opening. Null when the lane is off, the budget is spent, or no
- * model gave a valid answer — and null means "no signal", never DROP.
+ * Run one closed task on one input, cached and budgeted per kind. Null when
+ * the lane is off, the budget is spent, or no model gave a valid answer — and
+ * null means "no signal", never a refusal.
  */
-export async function screenOpening(
+async function runTask<I, O>(
+  kind: TaskKind,
   subjectId: string,
-  input: ScreenInput,
-  options: { config?: LaneConfig | null; completer?: Completer; now?: Date } = {},
-): Promise<ScreenOutput | null> {
+  input: I,
+  prompt: (input: I) => string,
+  parse: (text: string) => O | null,
+  merge: (answers: (O | null)[]) => O | null,
+  options: { config?: LaneConfig | null; completer?: Completer; now?: Date },
+): Promise<O | null> {
   const config = options.config === undefined ? laneConfig() : options.config;
   if (!config) return null;
-  const kind: TaskKind = 'SCREEN_OPENING';
   const hash = inputHash(kind, input);
   const db = getDb();
   const cached = await db.all<ResultRow>(
     'SELECT model, ok, output FROM cheap_results WHERE kind = ? AND input_hash = ?',
     [kind, hash],
   );
-  const answers: (ScreenOutput | null)[] = [];
+  const answers: (O | null)[] = [];
   const now = options.now ?? new Date();
   for (const model of config.models) {
     const hit = cached.find((row) => row.model === model);
     if (hit) {
-      answers.push(hit.ok && hit.output ? parseScreen(hit.output) : null);
+      answers.push(hit.ok && hit.output ? parse(hit.output) : null);
       continue;
     }
-    if ((await usedToday(kind, now)) >= config.dailyBudget) return combine(answers);
-    const task = TASKS[kind];
+    if ((await usedToday(kind, now)) >= config.dailyBudget) return merge(answers);
     let text = '';
     let error: string | null = null;
     try {
-      text = await (options.completer ?? httpCompleter)(config, model, task.system, task.prompt(input));
+      text = await (options.completer ?? httpCompleter)(config, model, TASKS[kind].system, prompt(input));
     } catch (caught) {
       error = caught instanceof Error ? caught.message.slice(0, 300) : 'failed';
     }
-    const parsed = error ? null : parseScreen(text);
+    const parsed = error ? null : parse(text);
     await db.run(
       `INSERT INTO cheap_results (id, kind, input_hash, subject_id, model, ok, output, error, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -246,8 +344,27 @@ export async function screenOpening(
     );
     answers.push(parsed);
   }
-  return combine(answers);
+  return merge(answers);
 }
+
+/** Screen one opening. Null means "no signal", never DROP. */
+export async function screenOpening(
+  subjectId: string,
+  input: ScreenInput,
+  options: { config?: LaneConfig | null; completer?: Completer; now?: Date } = {},
+): Promise<ScreenOutput | null> {
+  return runTask('SCREEN_OPENING', subjectId, input, (one) => TASKS.SCREEN_OPENING.prompt(one), parseScreen, combine, options);
+}
+
+/** Screen one raw lead a feed pulled. Null means "no signal", never DROP. */
+export async function screenLead(
+  subjectId: string,
+  input: LeadInput,
+  options: { config?: LaneConfig | null; completer?: Completer; now?: Date } = {},
+): Promise<LeadOutput | null> {
+  return runTask('SCREEN_LEAD', subjectId, input, (one) => TASKS.SCREEN_LEAD.prompt(one), parseLead, combineLeads, options);
+}
+
 
 /** The latest screen of each subject, for a reader ordering work. */
 export async function latestScreens(subjectIds: string[]): Promise<Map<string, ScreenOutput>> {
