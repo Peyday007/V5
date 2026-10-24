@@ -71,6 +71,8 @@ import {
 import { currentFragments, getOrchestration, updateOrchestration } from '../../repos/research.ts';
 import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { getProject, listProjects } from '../../repos/projects.ts';
+import { laneConfig } from '../cheap/lane.ts';
+import { openFeedShortlist, pullDueFeeds, screenFeedLeads, shortlistProject } from '../feeds/run.ts';
 import { frontierIsDue, refreshFrontier } from './frontier.ts';
 import {
   dispatchInquiry,
@@ -724,6 +726,7 @@ export const DEFERRABLE_UNDER_PRESSURE: ReadonlySet<string> = new Set([
   'execution-lineage',
   'frontier',
   'lens-inquiries',
+  'feeds',
 ]);
 
 /** True, and recorded on the report, when optional work should wait. */
@@ -1657,6 +1660,19 @@ async function tickOnce(owner: string): Promise<TickReport> {
        * compiler, the approval envelope, the evidence gate and all three audit
        * roles before a single claim can be harvested from it.
        */
+      /*
+       * The feeds: code pulls free public sources, the cheap lane's free
+       * models sort them, and once a day the best few go to Claude as one
+       * shortlist round (`services/feeds/run.ts`). Off until the cheap lane is
+       * configured. Its own failure domain, and deferred under pressure.
+       */
+      await runPass(report, 'feeds', async () => {
+        if (!laneConfig()) return;
+        await pullDueFeeds();
+        await screenFeedLeads();
+        const target = await shortlistProject((await listProjects()).map((one) => one.id));
+        if (target) await openFeedShortlist({ projectId: target });
+      });
       for (const project of await listProjects()) {
         // The five kernels start new questions; under database pressure they
         // wait (`db/pressure.ts`). Discovery does not stop under pressure: its

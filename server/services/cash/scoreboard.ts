@@ -9,6 +9,7 @@
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { sharedFrontier } from './shared.ts';
 import { laneReading } from '../cheap/lane.ts';
+import { feedReading } from '../../repos/feeds.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 
@@ -29,6 +30,8 @@ export interface Scoreboard {
   triggersOn: boolean;
   /** The free-model lane today. */
   cheapLane: Awaited<ReturnType<typeof laneReading>>;
+  /** Raw leads code pulled, and how many reached a Claude shortlist. */
+  feeds: Awaited<ReturnType<typeof feedReading>>;
 }
 
 export async function scoreboard(projectId: string, now: Date = new Date()): Promise<Scoreboard> {
@@ -48,6 +51,7 @@ export async function scoreboard(projectId: string, now: Date = new Date()): Pro
     executing: (state.EXECUTING ?? 0) + (state.DELIVERING ?? 0),
     collected: state.COLLECTED ?? 0,
     cheapLane: await laneReading(now),
+    feeds: await feedReading(now),
     triggersOn: triggersEnabled(),
     triggers: await triggerYields(projectId, all, frontier.opportunities),
   };
@@ -83,6 +87,10 @@ export function formatScoreboard(board: Scoreboard): string[] {
     lane.enabled
       ? `  free lane   ${lane.today} screens today of ${lane.budget} (keep ${lane.verdicts.KEEP}, drop ${lane.verdicts.DROP}, unsure ${lane.verdicts.UNSURE}, failed ${lane.failed})`
       : '  free lane   off (no BRAIN_CHEAP_LLM_URL set)',
+    `  feeds       ${board.feeds.today} raw leads today · ${board.feeds.items} held · ${board.feeds.shortlisted} sent to Claude`,
+    ...board.feeds.bySource.map(
+      (one) => `    ${one.source.padEnd(28)} ${one.items} leads${one.lastError ? ` · last pull failed: ${one.lastError}` : ''}`,
+    ),
     `  triggers    ${board.triggersOn ? 'on' : 'off (starts when the free lane is connected)'}`,
     ...board.triggers.map(
       (one) => `    ${one.id.padEnd(28)} rounds ${one.rounds} · found ${one.found} · past evidence ${one.beyondEvidence}`,
