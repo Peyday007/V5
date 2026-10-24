@@ -286,6 +286,71 @@ const LADDER_ASSIGNMENT = [
   '5. How capital-heavy ventures such as manufacturing or games were funded from earlier profits rather than investors.',
 ].join('\n');
 
+/** Memory: storing and recalling what Brain learns */
+const MEMORY_ASSIGNMENT = [
+  "Research how AI agent systems store and recall what they learn so past work makes later answers better, rather than piling up unused.",
+  "For each question give concrete rules a program could follow, each with a real public source (papers, benchmarks, engineering write-ups from AI labs and agent builders). Say what is proven and what is only opinion.",
+  "HOW TO PLAN THIS:",
+  GENERAL_PLAN_RULES,
+  "1. How the strongest agent memory designs work (episodic, semantic, procedural memory; retrieval; summarising; forgetting) and what each is measured to improve.",
+  "2. How to decide what is worth remembering, at what level of generality, and when a memory should be updated or dropped.",
+  "3. How to retrieve the right memory for a new task, and how retrieval quality is measured.",
+  "4. How memory goes wrong (stale facts, false generalisations, memory that biases every answer) and how systems guard against it.",
+  "5. How to test whether a memory system actually improves results, rather than only adding context.",
+].join('\n');
+
+/** Judgment: AI that checks its own reasoning */
+const JUDGMENT_ASSIGNMENT = [
+  "Research how to make an AI system judge well: check its own reasoning, catch its own mistakes, and know how confident to be.",
+  "For each question give concrete rules a program could follow, each with a real public source (papers, benchmarks, engineering write-ups from AI labs and agent builders). Say what is proven and what is only opinion.",
+  "HOW TO PLAN THIS:",
+  GENERAL_PLAN_RULES,
+  "1. Which self-checking methods measurably improve answers (self-critique, verification steps, debate, independent reviewers) and which do not.",
+  "2. How to calibrate the stated confidence of an AI system so it matches how often the system is right.",
+  "3. How to structure a decision so the model weighs options fairly (rubrics, pairwise comparison, devil-advocate passes), and the known biases of model judges.",
+  "4. When independent reviewers catch errors a single model misses, and how many are worth the cost.",
+  "5. How to detect when a model is guessing or reasoning from too little evidence.",
+].join('\n');
+
+/** Research: how top research agents search and verify */
+const RESEARCH_METHOD_ASSIGNMENT = [
+  "Research how the best AI research agents find information, judge sources and verify facts quickly and reliably.",
+  "For each question give concrete rules a program could follow, each with a real public source (papers, benchmarks, engineering write-ups from AI labs and agent builders). Say what is proven and what is only opinion.",
+  "HOW TO PLAN THIS:",
+  GENERAL_PLAN_RULES,
+  "1. How leading deep-research agents plan a search, decide when to search again, and when to stop.",
+  "2. How to rank and filter sources automatically for reliability, recency and independence.",
+  "3. How agents verify a fact (quote matching, cross-checking, citation checking) and the measured error rates of each.",
+  "4. How to break a broad research question into sub-questions that together cover it, and how coverage is checked.",
+  "5. The common failure modes of research agents (invented citations, shallow search, outdated sources) and the fixes that measurably work.",
+].join('\n');
+
+/** Agents: running many AI workers well */
+const AGENTS_ASSIGNMENT = [
+  "Research how large AI systems run many agents or workers together efficiently, without wasted or duplicated work.",
+  "For each question give concrete rules a program could follow, each with a real public source (papers, benchmarks, engineering write-ups from AI labs and agent builders). Say what is proven and what is only opinion.",
+  "HOW TO PLAN THIS:",
+  GENERAL_PLAN_RULES,
+  "1. How multi-agent systems divide work (orchestrator and workers, pipelines, queues) and which designs measurably beat a single agent.",
+  "2. How to keep workers from duplicating effort or working on stale tasks, and how to hand work between them.",
+  "3. How to allocate a fixed budget of strong-model time across many tasks for the most value.",
+  "4. How to detect a stuck, looping or idle worker and recover automatically.",
+  "5. What breaks at scale in agent systems, and how production systems monitor and fix it.",
+].join('\n');
+
+/** Self-improvement: a system that upgrades its own rules */
+const SELFIMPROVE_ASSIGNMENT = [
+  "Research how an AI system can measure its own performance and improve its own rules and prompts over time without breaking what already works.",
+  "For each question give concrete rules a program could follow, each with a real public source (papers, benchmarks, engineering write-ups from AI labs and agent builders). Say what is proven and what is only opinion.",
+  "HOW TO PLAN THIS:",
+  GENERAL_PLAN_RULES,
+  "1. How self-improving AI systems measure themselves: evaluation sets, outcome tracking, regression tests.",
+  "2. Methods for automatically improving prompts, rules or workflows from results, and how much each has been shown to help.",
+  "3. How to roll out a change to such a system safely: testing on a sample, comparing against the old version, rolling back.",
+  "4. How to stop a self-improving system from drifting, gaming its own measures or forgetting earlier lessons.",
+  "5. Which parts of such a system should stay fixed and reviewed by a person, and which can change by themselves.",
+].join('\n');
+
 interface GoalPreset {
   prefix: string;
   name: string;
@@ -301,6 +366,11 @@ const GOAL_PRESETS: Record<string, GoalPreset> = {
   strategy: { prefix: 'Strategy:', name: 'Strategy: which kinds of business are worth building', assignment: STRATEGY_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
   learning: { prefix: 'Learning:', name: 'Learning: getting smarter from what actually paid', assignment: LEARNING_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
   ladder: { prefix: 'Ladder:', name: 'Ladder: stacking small cash into large ventures', assignment: LADDER_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+  memory: { prefix: 'Memory:', name: 'Memory: storing and recalling what Brain learns', assignment: MEMORY_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+  judgment: { prefix: 'Judgment:', name: 'Judgment: AI that checks its own reasoning', assignment: JUDGMENT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+  research: { prefix: 'Research:', name: 'Research: how top research agents search and verify', assignment: RESEARCH_METHOD_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+  agents: { prefix: 'Agents:', name: 'Agents: running many AI workers well', assignment: AGENTS_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+  selfimprove: { prefix: 'Self-improvement:', name: 'Self-improvement: a system that upgrades its own rules', assignment: SELFIMPROVE_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
   split: { prefix: 'Split:', name: 'Split: free models for small steps, Claude for hard ones', assignment: SPLIT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
 };
 
