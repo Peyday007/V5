@@ -247,6 +247,45 @@ const SPLIT_ASSIGNMENT = [
   '5. How to measure and track the error rate of each step over time so the pipeline improves.',
 ].join('\n');
 
+/** Which kinds of money machines are worth building, and how to compare them. */
+const STRATEGY_ASSIGNMENT = [
+  'Research how to decide which kinds of business to build at all, for a small operation run by AI workers that wants fast cash now and larger ventures later, with no outside money.',
+  'For each question give concrete rules a program could apply, each with a real public source (strategy research, investor and operator guides, economics). Say what is proven and what is only opinion.',
+  'HOW TO PLAN THIS:',
+  GENERAL_PLAN_RULES,
+  '1. What makes a business model compound rather than stay flat: repeat buyers, reusable assets, falling cost per unit, network or data effects.',
+  '2. How to compare very different business models on one footing: time to first cash, capital needed, margin, how much labour each sale needs, and how far it scales.',
+  '3. Which kinds of business suit an operation whose workers are AI: what AI does cheaply that people charge for, and where it still fails.',
+  '4. How to spot when a kind of business is a trap: low margins, buyers who never repeat, hidden labour, platform risk.',
+  '5. How to choose how many bets to run at once, and when to kill one.',
+].join('\n');
+
+/** How Brain gets smarter from what actually paid. */
+const LEARNING_ASSIGNMENT = [
+  'Research how a decision-making system should learn from its own results, so every opportunity it checks makes the next judgement better.',
+  'For each question give concrete rules a program could follow, each with a real public source (decision science, forecasting research, machine learning practice). Say what is proven and what is only opinion.',
+  'HOW TO PLAN THIS:',
+  GENERAL_PLAN_RULES,
+  '1. How to record predictions so they can be scored later: what to write down before acting, and how to judge it after.',
+  '2. How forecasters and investors measure and correct their own judgement: calibration, base rates, scoring rules.',
+  '3. How much evidence is enough before changing a rule, so one lucky or unlucky result does not move it.',
+  '4. How to learn from failures that are rare and from wins that are rarer still.',
+  '5. How to tell a rule that works from one that only worked by chance.',
+].join('\n');
+
+/** How to stack small, fast cash into large ventures with no outside money. */
+const LADDER_ASSIGNMENT = [
+  'Research how businesses have grown from small, fast cash into large ventures using only their own profits, with no outside investment.',
+  'For each question give concrete rules a program could follow, each with a real public source (case studies, business history, bootstrapping research). Say what is proven and what is only opinion.',
+  'HOW TO PLAN THIS:',
+  GENERAL_PLAN_RULES,
+  '1. Documented cases of companies that bootstrapped from a small cash business into a large one, and the steps between.',
+  '2. How to decide how much profit to put back into the next step versus keep as a reserve.',
+  '3. What a small operation should build or keep from each stage (customers, skills, assets, reputation) so the next stage is cheaper.',
+  '4. When a business is ready to move up a stage, and the warning signs it is not.',
+  '5. How capital-heavy ventures such as manufacturing or games were funded from earlier profits rather than investors.',
+].join('\n');
+
 interface GoalPreset {
   prefix: string;
   name: string;
@@ -259,6 +298,9 @@ interface GoalPreset {
 const GOAL_PRESETS: Record<string, GoalPreset> = {
   methods: { prefix: 'Methods:', name: 'Methods: how Brain researches and judges (v2)', assignment: METHODS_ASSIGNMENT, maxPackets: 10, maxFragments: 60, days: 2 },
   signals: { prefix: 'Signals:', name: 'Signals: where buyers show up in free public data', assignment: SIGNALS_ASSIGNMENT, maxPackets: 6, maxFragments: 36, days: 2 },
+  strategy: { prefix: 'Strategy:', name: 'Strategy: which kinds of business are worth building', assignment: STRATEGY_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+  learning: { prefix: 'Learning:', name: 'Learning: getting smarter from what actually paid', assignment: LEARNING_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+  ladder: { prefix: 'Ladder:', name: 'Ladder: stacking small cash into large ventures', assignment: LADDER_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
   split: { prefix: 'Split:', name: 'Split: free models for small steps, Claude for hard ones', assignment: SPLIT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
 };
 
