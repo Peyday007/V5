@@ -41,7 +41,9 @@ beforeEach(async () => {
   ).id;
 });
 
-const now = new Date('2026-10-24T12:00:00.000Z');
+// The real clock: rounds and rows are stamped with it, so a fixed date drifts.
+const now = new Date();
+const yesterday = new Date(now.getTime() - 86_400_000).toISOString();
 const config: LaneConfig = { url: 'http://cheap.test/v1', key: null, models: ['m1', 'm2'], dailyBudget: 1000, timeoutMs: 1000 };
 const keep = '{"verdict":"KEEP","window":"SHORT","deliverable":"SPREADSHEET","need":"a pricing tracker","payer":"the shop","reason":"asks for it"}';
 const drop = '{"verdict":"DROP","window":"UNKNOWN","deliverable":"NONE","need":"","payer":"","reason":"personal"}';
@@ -59,7 +61,7 @@ function source(id: string, items: number): FeedSource {
         title: one.n === 0 ? 'We want to hire a bookkeeper and buy software' : `Shop needs a pricing tracker ${one.n}`,
         body: 'We need a spreadsheet to track prices.',
         organization: 'A shop',
-        publishedAt: '2026-10-23T00:00:00.000Z',
+        publishedAt: yesterday,
       })),
   };
 }
@@ -126,13 +128,13 @@ describe('free-model answers about a lead', () => {
       title: 't',
       body: null,
       organization: null,
-      publishedAt: '2026-10-20T00:00:00.000Z',
-      fetchedAt: '2026-10-24T00:00:00.000Z',
+      publishedAt: new Date(now.getTime() - 4 * 86_400_000).toISOString(),
+      fetchedAt: yesterday,
       shortlistedRoundId: null,
     };
     expect(leadPassesRules(item, parseLead(keep), now)).toBe(true);
     expect(leadPassesRules(item, parseLead(drop), now)).toBe(false);
-    expect(leadPassesRules({ ...item, publishedAt: '2026-08-01T00:00:00.000Z' }, parseLead(keep), now)).toBe(false);
+    expect(leadPassesRules({ ...item, publishedAt: new Date(now.getTime() - 60 * 86_400_000).toISOString() }, parseLead(keep), now)).toBe(false);
     expect(leadPassesRules(item, null, now)).toBe(false);
   });
 });
