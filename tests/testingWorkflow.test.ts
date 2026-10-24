@@ -55,8 +55,8 @@ describe('the Postgres suite is sharded without shrinking', () => {
   it('runs every shard of one count, each against its own cluster', () => {
     const shards = job('suite');
     const matrix = /shard: \[([\d, ]+)\]/.exec(shards)?.[1]?.split(',').map((n) => Number(n.trim()));
-    expect(matrix).toEqual([1, 2, 3, 4]);
-    expect(shards).toContain('npx vitest run --shard=${{ matrix.shard }}/4');
+    expect(matrix).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(shards).toContain('npx vitest run --shard=${{ matrix.shard }}/8');
     // A cluster per job: the start step is inside the matrix job, not shared.
     expect(shards).toContain('ALTER SYSTEM SET max_locks_per_transaction');
     expect(shards).toContain('BRAIN_TEST_DATABASE_URL');
@@ -81,7 +81,7 @@ describe('the Postgres suite is sharded without shrinking', () => {
     expect(verdict).toContain('if: ${{ always() }}');
     expect(verdict).toMatch(/\[ "\$PARTITION" != success \] \|\| \[ "\$SUITE" != success \]/);
     expect(verdict).toMatch(/exit 1/);
-    for (const n of [1, 2, 3, 4]) expect(verdict).toContain(`postgres-shard-${n}/postgres-shard-${n}.txt`);
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) expect(verdict).toContain(`postgres-shard-${n}/postgres-shard-${n}.txt`);
     expect(verdict).toContain('postgres-shards.sh check');
     // Every other job feeds the verdict, so the run's conclusion — what
     // postgres-evidence.sh reads — is never success with a job left out.

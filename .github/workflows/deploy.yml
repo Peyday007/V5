@@ -150,6 +150,13 @@ jobs:
     needs: canonical
     if: needs.canonical.outputs.superseded != 'true'
     name: Typecheck and tests
+    # The whole suite split across four runners by vitest's own `--shard`, so
+    # the SQLite half of the gate takes a quarter of the time. Every shard must
+    # pass for `deploy` to run; nothing is skipped.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     outputs:
       superseded: ${{ steps.fresh.outputs.superseded || steps.tests.outputs.superseded }}
@@ -210,12 +217,14 @@ jobs:
       - name: The whole suite, stopped if this commit is superseded
         id: tests
         if: steps.fresh.outputs.superseded != 'true'
+        env:
+          SHARD: ${{ matrix.shard }}/4
         run: |
           # No -e: the watcher's own reads may fail, and the step's verdict is
           # the suite's exit status, returned by the final `wait`.
           set +e
           interval="${SUPERSEDED_POLL_SECONDS:-60}"
-          setsid npm test &
+          setsid npm test ${SHARD:+-- --shard=$SHARD} &
           pid=$!
           while kill -0 "$pid" 2>/dev/null; do
             sleep "$interval"

@@ -1439,7 +1439,31 @@ async function main(): Promise<void> {
        * every research worker's guidance as method rules (`methodRules.ts`),
        * which is why it must be opened in the Brain architecture project.
        */
-      const preset = GOAL_PRESETS[sub];
+      /*
+       * A study typed rather than shipped: `text` takes the whole assignment
+       * as base64 (`--text-b64`), its first line the goal's name, so a new
+       * study needs no code change and no deploy. The planning rules every
+       * architecture goal carries are appended, and a goal of the same name
+       * still running is replaced.
+       */
+      let preset: GoalPreset | undefined = GOAL_PRESETS[sub];
+      if (sub === 'text') {
+        const encoded = flag('text-b64') ?? fail('Pass --text-b64: the assignment, base64, its first line the name.');
+        const decoded = Buffer.from(encoded, 'base64').toString('utf8').trim();
+        const [first, ...restLines] = decoded.split('\n');
+        const name = (first ?? '').trim().slice(0, 120);
+        const body = restLines.join('\n').trim();
+        if (name.length < 4) fail('The first line of the text is the name, and it is missing.');
+        if (body.length < 200) fail('Give the assignment at least a paragraph after the name line.');
+        preset = {
+          prefix: name,
+          name,
+          assignment: [body, 'HOW TO PLAN THIS:', GENERAL_PLAN_RULES].join('\n'),
+          maxPackets: 5,
+          maxFragments: 30,
+          days: 2,
+        };
+      }
       if (preset) {
         const actor = await administrator();
         const project = await projectFrom(rest[1] ?? fail('Name the Brain architecture project.'));
