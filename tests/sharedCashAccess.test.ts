@@ -758,6 +758,7 @@ describe('both roles are shown the same shared frontier, byte for byte', () => {
       mayActOnJob: true,
       mayReconsider: true,
       reconsiderRefusal: null,
+      mayAddPlay: true,
     });
     /*
      * All four false, including the two reads. A shared payload has no private
@@ -771,6 +772,7 @@ describe('both roles are shown the same shared frontier, byte for byte', () => {
       mayActOnJob: false,
       mayReconsider: false,
       reconsiderRefusal: expect.stringMatching(/whoever runs this operation/),
+      mayAddPlay: false,
     });
   });
 });

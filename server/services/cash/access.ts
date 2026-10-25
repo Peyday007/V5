@@ -186,6 +186,12 @@ export interface CashCapabilities {
   mayReconsider: boolean;
   /** Why `mayReconsider` is false, in the server's words; null when it is true. */
   reconsiderRefusal: string | null;
+  /**
+   * Add a play — an opening a person names — to this sprint's portfolio. The
+   * capture route's own level: a project write, by a person. Adding one spends
+   * nothing and contacts nobody; it is a row the ordinary pipeline then works.
+   */
+  mayAddPlay: boolean;
 }
 
 export function cashCapabilities(input: {
@@ -208,6 +214,7 @@ export function cashCapabilities(input: {
       reconsiderRefusal:
         'Reconsidering a stopped opening is a decision for whoever runs this operation; this ' +
         'page is a shared reading of it.',
+      mayAddPlay: false,
     };
   }
   const administers = decideProjectAccess(currentPrincipal(), input.projectId, 'ADMIN').allowed;
@@ -221,5 +228,6 @@ export function cashCapabilities(input: {
     reconsiderRefusal: writes
       ? null
       : 'Your access to this project reads it. Reconsidering a stopped opening is a write.',
+    mayAddPlay: writes,
   };
 }
