@@ -49,6 +49,7 @@ jobs:
           ACTION: ${{ inputs.action }}
         run: |
           set -eu
+          exec > >(tee cheap.txt) 2>&1
           brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           cheap=northline-cheap
           case "$ACTION" in
@@ -109,3 +110,17 @@ jobs:
               ;;
             *) echo "::error::Unknown action '$ACTION'."; exit 1 ;;
           esac
+
+      # Readable through the checks API where the log is not; see closeout-report.yml.
+      - name: Publish the output as annotations
+        if: always()
+        run: |
+          [ -f cheap.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('cheap.txt', encoding='utf-8', errors='replace').read()
+          enc = lambda s: s.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)]
+          chunks = chunks if len(chunks) <= 10 else chunks[:5] + chunks[-5:]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=output {n}/{len(chunks)}::{enc(chunk)}')
+          PY
