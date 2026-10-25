@@ -200,6 +200,17 @@ export const PeopleApi = {
   issueConnectorInvitation: (userId: string): Promise<ConnectionView> =>
     api(`/api/people/${p(userId)}/claude/invitation`, { method: 'POST', body: '{}' }),
 
+  /** A Brain administrator's: take somebody else's connection back. */
+  revokeFor: (userId: string, reason: string): Promise<ConnectionView> =>
+    api(`/api/people/${p(userId)}/claude/revoke`, { method: 'POST', body: JSON.stringify({ reason }) }),
+
+  /** A Brain administrator's: record an existing Routine as somebody's. */
+  adopt: (
+    userId: string,
+    routineRef: string,
+  ): Promise<{ connection: ConnectionView['connection']; alreadyAdopted: boolean }> =>
+    api(`/api/people/${p(userId)}/claude/adopt`, { method: 'POST', body: JSON.stringify({ routineRef }) }),
+
   /** A Brain administrator's: every connection, for the one outstanding action. */
   connections: (): Promise<{ connections: ConnectionSummary[] }> =>
     api('/api/people/connections'),
