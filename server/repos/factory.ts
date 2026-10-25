@@ -1000,7 +1000,7 @@ export async function findDependencyCycle(campaignId: string): Promise<string[] 
 /**
  * Do these two mutation surfaces overlap?
  *
- * Globs are compared as prefixes after the first wildcard, which is coarse on
+ * Globs are compared as prefixes before the first wildcard character (`* ? [ {`, after normalising backslashes and a leading `./`), which is coarse on
  * purpose: the question is "could two workers touch the same file", and the
  * expensive mistake is answering no when the truthful answer is "possibly".
  * `server/services/factory/**` and `server/services/factory/loop.ts` overlap;
@@ -1008,9 +1008,11 @@ export async function findDependencyCycle(campaignId: string): Promise<string[] 
  */
 export function pathsOverlap(a: string[], b: string[]): boolean {
   const stems = (globs: string[]): string[] =>
-    globs.map((glob) => {
-      const star = glob.indexOf('*');
-      return star === -1 ? glob : glob.slice(0, star);
+    globs.map((raw) => {
+      let glob = raw.replace(/\\/g, '/');
+      while (glob.startsWith('./')) glob = glob.slice(2);
+      const wild = glob.search(/[*?[{]/);
+      return wild === -1 ? glob : glob.slice(0, wild);
     });
   const left = stems(a);
   const right = stems(b);
