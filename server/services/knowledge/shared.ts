@@ -199,7 +199,29 @@ export interface SharedFindingView {
     promotedAt: string;
   };
   validUntil: string | null;
+  /**
+   * Whether this reader may withdraw the finding or set its horizon.
+   *
+   * The identical check `requireOwnFinding` and the ADMIN override on the two
+   * POST routes already enforce, decided once here so the client never has to
+   * guess at a permission it cannot itself compute.
+   */
+  mayDecide: boolean;
+  /** Why not, when `mayDecide` is false. Never set when it is true. */
+  decideRefusal: string | null;
 }
+
+/**
+ * Why a reader may not withdraw a finding or set its horizon.
+ *
+ * One fixed sentence rather than one composed per project: `decideProjectAccess`
+ * refuses for `NO_CREDENTIALS`, `NOT_A_MEMBER` or `INSUFFICIENT_ROLE`, and none
+ * of those, nor the reason a reader is told, may name the originating project —
+ * invariant 23 at this boundary. A sentence built from an identifier could leak
+ * one by accident; a constant cannot.
+ */
+const CANNOT_DECIDE =
+  'You do not administer the project this finding came from, so you may not withdraw it or set its horizon.';
 
 function withheldReason(finding: SharedFindingEvidence, now: string): string | null {
   if (finding.state === 'REVOKED') {
@@ -230,6 +252,7 @@ export function describeForReader(
 ): SharedFindingView {
   const originVisible =
     decideProjectAccess(principal, finding.originProjectId, 'READ').allowed;
+  const mayDecide = decideProjectAccess(principal, finding.originProjectId, 'ADMIN').allowed;
   return {
     id: finding.findingId,
     statement: finding.claim,
@@ -264,6 +287,8 @@ export function describeForReader(
       promotedAt: finding.promotedAt,
     },
     validUntil: finding.validUntil,
+    mayDecide,
+    decideRefusal: mayDecide ? null : CANNOT_DECIDE,
   };
 }
 
