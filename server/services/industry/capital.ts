@@ -98,21 +98,41 @@ export function readCapital(
     byAnswered.set(one.answersId, [...(byAnswered.get(one.answersId) ?? []), one]);
   }
 
-  const readings: RequirementReading[] = requirements.map((entry) => {
-    const answers = byAnswered.get(entry.id) ?? [];
+  /*
+   * One reading per *requirement*, not per row. The unique index is
+   * (opportunity_id, source_claim_id), so two claims may both price EQUIPMENT;
+   * summing them would count one requirement once per source that priced it.
+   * §39 records the same correction in the manufacturing kernel: two figures for
+   * one requirement widen a range rather than sum, and a requirement is unpriced
+   * only where no row for it carries a figure.
+   */
+  const groups = new Map<CapitalRequirement, (CapitalStructure & { requirement: CapitalRequirement })[]>();
+  for (const one of requirements) {
+    groups.set(one.requirement, [...(groups.get(one.requirement) ?? []), one]);
+  }
+
+  const readings: RequirementReading[] = [...groups.values()].map((rows) => {
+    // Restructurings answering any row of the group answer the requirement.
+    const answers = rows.flatMap((row) => byAnswered.get(row.id) ?? []);
     /*
      * The best *published* residual, and nothing else.
      *
      * A mechanism whose residual is null is available and moves no number.
-     * Choosing the lowest published residual is the one place this function
-     * chooses at all, and it is chosen rather than averaged because the
-     * residuals are alternatives: you use one structure, not the mean of
-     * three. It can never exceed the gross, because a restructuring that made
-     * a requirement more expensive is not a restructuring of it.
+     * Choosing the lowest published residual is chosen rather than averaged
+     * because the residuals are alternatives: you use one structure, not the
+     * mean of three. It can never exceed the gross.
      */
     const residuals = answers
       .map((one) => one.residualCents)
       .filter((one): one is number => one !== null);
+    // The highest published figure: an understated minimum is the dangerous
+    // direction. Null only where no row in the group carries a figure.
+    let entry = rows[0]!;
+    for (const row of rows) {
+      if (row.amountCents !== null && (entry.amountCents === null || row.amountCents > entry.amountCents)) {
+        entry = row;
+      }
+    }
     const gross = entry.amountCents;
     const best = residuals.length > 0 ? Math.min(...residuals) : null;
     const net =
