@@ -24,14 +24,14 @@ import {
   requirePerson,
 } from './helpers.ts';
 import { GOAL_COMMITMENTS, type GoalCommitment } from '../domain/goals.ts';
-import { getWorkstream, linkWorkstream, listLinks, listWorkstreamEvents, recordWorkstreamEvent } from '../repos/register.ts';
+import { getWorkstream, listLinks, listWorkstreamEvents } from '../repos/register.ts';
 import { snapshotHistory } from '../repos/goals.ts';
 import { getMembership } from '../repos/identity.ts';
 import { listProjects } from '../repos/projects.ts';
 import { decideProjectAccess } from '../services/identity/policy.ts';
 import { goalBriefing } from '../services/goals/briefing.ts';
 import { assembleGoals } from '../services/goals/model.ts';
-import { cancel, changeObjective, pause, reinstate, resume, setTerms } from '../services/goals/decide.ts';
+import { cancel, changeObjective, pause, reinstate, resume, setDependency, setTerms } from '../services/goals/decide.ts';
 import type { Principal } from '../domain/types.ts';
 
 export const goalsRouter: Router = Router();
@@ -187,39 +187,14 @@ goalsRouter.post(
     if (otherId === goal.id) throw badRequest('A goal cannot depend on itself.');
     const other = await requireGoal(principal, otherId, 'READ');
 
-    // Walk what the other goal depends on; reaching this goal is a cycle.
-    const seen = new Set<string>();
-    const queue = [other.id];
-    while (queue.length) {
-      const next = queue.shift()!;
-      if (next === goal.id) throw badRequest('That would make the two goals wait on each other for ever.');
-      if (seen.has(next)) continue;
-      seen.add(next);
-      for (const link of await listLinks(next)) {
-        if (link.kind === 'WORKSTREAM' && link.relation === 'DEPENDS_ON') queue.push(link.ref);
-      }
-    }
-
-    const link = await linkWorkstream({
-      workstreamId: goal.id,
-      kind: 'WORKSTREAM',
-      ref: other.id,
-      relation: 'DEPENDS_ON',
-      label: other.title,
-      recordedBy: 'PERSON',
-      recordedByUserId: principal.id,
-    });
-    await recordWorkstreamEvent({
-      workstreamId: goal.id,
-      kind: 'GOAL_DEPENDENCY_SET',
-      summary: `Waits on "${other.title}" until it completes.`,
-      detail: { dependsOn: other.id, linkId: link.id },
-      actorRef: actor(principal),
-    });
+    const result = await setDependency(goal.id, other.id, { actorRef: actor(principal), userId: principal.id });
+    if (!result.ok) throw badRequest(result.reason ?? 'That dependency cannot be declared.');
+    const link = (await listLinks(goal.id)).find(
+      (one) => one.kind === 'WORKSTREAM' && one.relation === 'DEPENDS_ON' && one.ref === other.id,
+    );
     return {
       link,
-      consequence:
-        'Until that goal completes, Brain holds this goal’s live bins so capacity goes to work that can move; it releases them on the first tick after the other goal completes.',
+      consequence: result.consequence,
     };
   }),
 );
