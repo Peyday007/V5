@@ -168,9 +168,28 @@ export function effectiveStandard(claim: {
 
 /** Publishers that syndicate rather than report. Copies do not corroborate. */
 const SYNDICATORS = [
-  'prnewswire', 'businesswire', 'globenewswire', 'einpresswire', 'openpr',
-  'yahoo', 'msn', 'news.google', 'finance.yahoo',
+  'prnewswire.com', 'businesswire.com', 'globenewswire.com', 'einpresswire.com', 'openpr.com',
+  'yahoo.com', 'finance.yahoo.com', 'msn.com', 'news.google.com',
 ];
+
+/** Domain equality or dot-suffix, so openprocurement.org and msnbc.com are not wires. */
+function isSyndicator(host: string): boolean {
+  return SYNDICATORS.some((wire) => host === wire || host.endsWith(`.${wire}`));
+}
+
+/**
+ * The organisation an excerpt attributes its figure to. The keywords are matched
+ * without regard to case; the name itself must still be capitalised, which is
+ * what makes it a name rather than a common noun.
+ */
+function upstreamAttribution(excerpt: string): string | null {
+  const keywords = /\b(?:according to|cites?|data from|source:)(?=\s)/gi;
+  for (let m = keywords.exec(excerpt); m; m = keywords.exec(excerpt)) {
+    const name = /^\s+([A-Z][\w&.\- ]{2,40})/.exec(excerpt.slice(m.index + m[0].length));
+    if (name) return name[1]!;
+  }
+  return null;
+}
 
 /**
  * The identity a source counts as, for independence.
@@ -188,7 +207,7 @@ export function independenceGroup(claim: {
   const host = hostOf(claim.sourceUrl);
   if (!host) return null;
 
-  if (SYNDICATORS.some((wire) => host.includes(wire))) {
+  if (isSyndicator(host)) {
     // A wire is a delivery mechanism. What matters is whose release it carries.
     const origin = (claim.sourcePublisher ?? '').trim().toLowerCase();
     return origin.length > 0 ? `release:${origin}` : `wire:${host}`;
@@ -196,12 +215,10 @@ export function independenceGroup(claim: {
 
   // An excerpt that attributes the figure to somebody else makes that somebody
   // the source, not the page that quoted them.
-  const attribution = /\b(?:according to|per|cites?|data from|source:)\s+([A-Z][\w&.\- ]{2,40})/.exec(
-    claim.evidenceExcerpt ?? '',
-  );
+  const attribution = upstreamAttribution(claim.evidenceExcerpt ?? '');
   // Trailing punctuation belongs to the sentence, not to the publisher's name.
   if (attribution) {
-    return `upstream:${attribution[1]!.trim().replace(/[.,;:]+$/, '').toLowerCase()}`;
+    return `upstream:${attribution.trim().replace(/[.,;:]+$/, '').toLowerCase()}`;
   }
 
   return `host:${host}`;
