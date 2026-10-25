@@ -24,6 +24,8 @@
  * finding a worse one.
  */
 
+import { fileURLToPath } from 'node:url';
+
 /* ------------------------------------------------------------------------- */
 /* Vocabulary                                                                 */
 /* ------------------------------------------------------------------------- */
@@ -135,6 +137,26 @@ const TIER_3_PREFIXES = [
 const TIER_2_PREFIXES = ['server/services/', 'server/mcp/', 'server/routes/', 'server/index.ts'];
 const TIER_1_PREFIXES = ['client/', 'server/domain/', 'scripts/', 'tests/', '.claude/', 'package.json'];
 
+const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url)).replace(/\\/g, '/').replace(/\/+$/, '');
+
+/**
+ * The repo-relative spelling of a path, and whether it could not be placed in the
+ * repository at all (still absolute after stripping the root, or climbing with `..`).
+ */
+export function normaliseChangedPath(raw: string): { path: string; outside: boolean } {
+  let path = raw.trim().replace(/\\/g, '/');
+  for (const root of [REPO_ROOT, process.cwd().replace(/\\/g, '/').replace(/\/+$/, '')]) {
+    if (root && path.startsWith(`${root}/`)) {
+      path = path.slice(root.length + 1);
+      break;
+    }
+  }
+  path = path.replace(/\/{2,}/g, '/');
+  while (path.startsWith('./')) path = path.slice(2).replace(/^\/+/, '');
+  const outside = path.startsWith('/') || /^[A-Za-z]:\//.test(path) || path.split('/').includes('..');
+  return { path, outside };
+}
+
 function isDocs(path: string): boolean {
   return path.startsWith('docs/') || /\.(md|txt)$/i.test(path);
 }
@@ -150,8 +172,11 @@ export function riskForPaths(paths: readonly string[]): { tier: RiskTier; reason
     if (RISK_TIERS.indexOf(to) > RISK_TIERS.indexOf(tier)) tier = to;
     if (!reasons.includes(why)) reasons.push(why);
   };
-  for (const path of paths) {
-    if (TIER_3_PREFIXES.some((prefix) => path.startsWith(prefix))) {
+  for (const rawPath of paths) {
+    const { path, outside } = normaliseChangedPath(rawPath);
+    if (outside) {
+      raise('TIER_2', `${path} is outside the repository or climbs with "..", so its scope is unknown`);
+    } else if (TIER_3_PREFIXES.some((prefix) => path.startsWith(prefix))) {
       raise('TIER_3', `${path} is identity, routing, persistence, schema or deployment`);
     } else if (TIER_2_PREFIXES.some((prefix) => path.startsWith(prefix))) {
       raise('TIER_2', `${path} is subsystem or business logic`);
@@ -198,12 +223,13 @@ export function testPolicy(input: TestPolicyInput): TestPolicy {
   const risk = riskForPaths(input.changedPaths);
   const tier = risk.tier;
   const reasons = [...risk.reasons];
-  const allDocs = input.changedPaths.length > 0 && input.changedPaths.every(isDocs);
+  const changed = input.changedPaths.map((raw) => normaliseChangedPath(raw));
+  const allDocs = changed.length > 0 && changed.every((c) => !c.outside && isDocs(c.path));
 
   const typecheck = !allDocs;
   const impacted = tier !== 'TIER_0';
-  const persistence = input.changedPaths.some(
-    (path) => path.startsWith('server/db/') || path.startsWith('server/repos/'),
+  const persistence = changed.some(
+    ({ path }) => path.startsWith('server/db/') || path.startsWith('server/repos/'),
   );
   const focusedPostgres = tier === 'TIER_3' && persistence;
 
