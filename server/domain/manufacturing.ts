@@ -715,8 +715,11 @@ function validateAmount(args: {
 }
 
 function asMinor(value: unknown): number | null {
-  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
-  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return null;
+  // A string is accepted only as plain digits. Number() reads blank as 0, '0x10' as 16,
+  // '12500.00' as 12500 minor units and '1e6' as a million, each silently wrong.
+  const n =
+    typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+  if (!Number.isSafeInteger(n) || n < 0) return null;
   return n;
 }
 
