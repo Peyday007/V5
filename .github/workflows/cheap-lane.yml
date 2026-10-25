@@ -43,6 +43,9 @@ jobs:
       - name: Run
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # The Brain's deploy token can only touch the Brain's app; creating a
+          # second app needs an organization token (Fly dashboard → Tokens).
+          FLY_ORG_TOKEN: ${{ secrets.FLY_ORG_TOKEN }}
           OMNIROUTE_PASSWORD: ${{ secrets.OMNIROUTE_PASSWORD }}
           OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
           OMNIROUTE_MODEL: ${{ secrets.OMNIROUTE_MODEL }}
@@ -54,6 +57,8 @@ jobs:
           cheap=northline-cheap
           case "$ACTION" in
             deploy)
+              [ -n "$FLY_ORG_TOKEN" ] || { echo "::error::Set the FLY_ORG_TOKEN repository secret: an organization token from the Fly dashboard (Tokens). The Brain's own deploy token cannot create another app."; exit 1; }
+              export FLY_API_TOKEN="$FLY_ORG_TOKEN"
               # Not `flyctl deploy`: exactly one workflow ships the Brain
               # (deploymentOwnership), and this is a different app. It runs one
               # machine from OmniRoute's published image, created once and
