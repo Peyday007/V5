@@ -58,14 +58,19 @@ jobs:
           case "$ACTION" in
             deploy)
               [ -n "$FLY_ORG_TOKEN" ] || { echo "::error::Set the FLY_ORG_TOKEN repository secret: an organization token from the Fly dashboard (Tokens). The Brain's own deploy token cannot create another app."; exit 1; }
+              # The Brain's own organization, read with the Brain's token, so the
+              # new app lands beside it rather than in a personal organization.
+              org=$(flyctl status --app "$brain" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); o=d.get("Organization") or d.get("organization") or {}; print(o.get("Slug") or o.get("slug") or "")')
+              echo "organization: ${org:-unknown}"
               export FLY_API_TOKEN="$FLY_ORG_TOKEN"
+              orgflag=${org:+--org $org}
               # Not `flyctl deploy`: exactly one workflow ships the Brain
               # (deploymentOwnership), and this is a different app. It runs one
               # machine from OmniRoute's published image, created once and
               # updated in place after.
               [ -n "$OMNIROUTE_PASSWORD" ] || { echo "::error::Set the OMNIROUTE_PASSWORD repository secret first."; exit 1; }
               image=diegosouzapw/omniroute:latest
-              flyctl apps list --json | grep -q "\"$cheap\"" || flyctl apps create "$cheap"
+              flyctl apps list $orgflag --json | grep -q "\"$cheap\"" || flyctl apps create "$cheap" $orgflag
               flyctl volumes list --app "$cheap" --json | grep -q omniroute_data \
                 || flyctl volumes create omniroute_data --app "$cheap" --region iad --size 1 --yes
               flyctl ips list --app "$cheap" --json | grep -q '"v6"' || flyctl ips allocate-v6 --app "$cheap"
