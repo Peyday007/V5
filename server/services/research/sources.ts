@@ -105,7 +105,7 @@ export function normalizeUrl(url: URL): string {
   const copy = new URL(url.toString());
   copy.hash = '';
   for (const key of [...copy.searchParams.keys()]) {
-    if (/^(utm_|fbclid|gclid|mc_cid|mc_eid|ref)$/i.test(key)) copy.searchParams.delete(key);
+    if (/^(utm_.*|fbclid|gclid|mc_cid|mc_eid|ref)$/i.test(key)) copy.searchParams.delete(key);
   }
   copy.hostname = copy.hostname.toLowerCase();
   return copy.toString();
