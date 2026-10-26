@@ -24,7 +24,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus'
+        description: 'deploy | status | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus'
         required: true
         default: deploy
 
@@ -98,6 +98,19 @@ jobs:
               m=$(flyctl machine list --app "$cheap" --json | grep -o '"id": *"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{8,\}' || true)
               [ -n "$m" ] && flyctl ssh console --app "$cheap" -C "node -e eval(Buffer.from('Y29uc3QgaG9zdHM9WydodHRwczovL2FwaS5ncm9xLmNvbS9vcGVuYWkvdjEvbW9kZWxzJywnaHR0cHM6Ly9hcGkuY2VyZWJyYXMuYWkvdjEvbW9kZWxzJywnaHR0cHM6Ly9pbnRlZ3JhdGUuYXBpLm52aWRpYS5jb20vdjEvbW9kZWxzJywnaHR0cHM6Ly9vcGVucm91dGVyLmFpL2FwaS92MS9tb2RlbHMnLCdodHRwczovL2dlbmVyYXRpdmVsYW5ndWFnZS5nb29nbGVhcGlzLmNvbS92MWJldGEvbW9kZWxzJ107KGFzeW5jKCk9Pntmb3IoY29uc3QgaCBvZiBob3N0cyl7Y29uc3QgdD1EYXRlLm5vdygpO3RyeXtjb25zdCByPWF3YWl0IGZldGNoKGgse3NpZ25hbDpBYm9ydFNpZ25hbC50aW1lb3V0KDE1MDAwKX0pO2NvbnNvbGUubG9nKGgsci5zdGF0dXMsRGF0ZS5ub3coKS10LCdtcycpO31jYXRjaChlKXtjb25zb2xlLmxvZyhoLCdFUlInLFN0cmluZygoZS5jYXVzZSYmZS5jYXVzZS5jb2RlKXx8ZS5tZXNzYWdlKSxEYXRlLm5vdygpLXQsJ21zJyk7fX1jb25zb2xlLmxvZygnbWVtJyxKU09OLnN0cmluZ2lmeShwcm9jZXNzLm1lbW9yeVVzYWdlKCkpLCdub2RlJyxwcm9jZXNzLnZlcnNpb24pO30pKCk7','base64').toString())" || true
               flyctl machine status "$m" --app "$cheap" || true
+              ;;
+            test)
+              # One real question to each combo, timed, from outside the machine.
+              [ -n "$OMNIROUTE_API_KEY" ] || { echo "::error::Set OMNIROUTE_API_KEY."; exit 1; }
+              for model in $(echo "${OMNIROUTE_MODEL:-auto}" | tr ',' ' '); do
+                start=$(date +%s)
+                code=$(curl -sS -o reply.json -w '%{http_code}' --max-time 120 \
+                  -H "authorization: Bearer $OMNIROUTE_API_KEY" -H 'content-type: application/json' \
+                  -d "{\"model\":\"$model\",\"max_tokens\":40,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with the word ok.\"}]}" \
+                  "https://$cheap.fly.dev/v1/chat/completions" || echo 000)
+                echo "model $model: HTTP $code in $(( $(date +%s) - start ))s"
+                head -c 600 reply.json 2>/dev/null; echo
+              done
               ;;
             connect)
               [ -n "$OMNIROUTE_API_KEY" ] || { echo "::error::Set the OMNIROUTE_API_KEY repository secret (an endpoint key from the OmniRoute dashboard)."; exit 1; }
