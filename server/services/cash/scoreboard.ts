@@ -10,6 +10,7 @@ import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { sharedFrontier } from './shared.ts';
 import { laneReading } from '../cheap/lane.ts';
 import { feedReading } from '../../repos/feeds.ts';
+import { shortlistFunnel } from '../feeds/run.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 
@@ -32,6 +33,7 @@ export interface Scoreboard {
   cheapLane: Awaited<ReturnType<typeof laneReading>>;
   /** Raw leads code pulled, and how many reached a Claude shortlist. */
   feeds: Awaited<ReturnType<typeof feedReading>>;
+  funnel: { pool: number; screened: number; kept: number; passedRules: number; ready: number } | null;
 }
 
 export async function scoreboard(projectId: string, now: Date = new Date()): Promise<Scoreboard> {
@@ -52,6 +54,9 @@ export async function scoreboard(projectId: string, now: Date = new Date()): Pro
     collected: state.COLLECTED ?? 0,
     cheapLane: await laneReading(now),
     feeds: await feedReading(now),
+    funnel: await shortlistFunnel(projectId, now)
+      .then((f) => ({ pool: f.pool, screened: f.screened, kept: f.kept, passedRules: f.passedRules, ready: f.chosen.length }))
+      .catch(() => null),
     triggersOn: triggersEnabled(),
     triggers: await triggerYields(projectId, all, frontier.opportunities),
   };
@@ -88,6 +93,9 @@ export function formatScoreboard(board: Scoreboard): string[] {
       ? `  free lane   ${lane.today} screens today of ${lane.budget} (keep ${lane.verdicts.KEEP}, drop ${lane.verdicts.DROP}, unsure ${lane.verdicts.UNSURE}, failed ${lane.failed})`
       : '  free lane   off (no BRAIN_CHEAP_LLM_URL set)',
     `  feeds       ${board.feeds.today} raw leads today · ${board.feeds.items} held · ${board.feeds.shortlisted} sent to Claude`,
+    board.funnel
+      ? `  funnel      ${board.funnel.pool} recent → ${board.funnel.screened} screened → ${board.funnel.kept} kept → ${board.funnel.passedRules} pass rules → ${board.funnel.ready} ready for Claude`
+      : '  funnel      could not be read',
     ...board.feeds.bySource.map(
       (one) => `    ${one.source.padEnd(28)} ${one.items} leads${one.lastError ? ` · last pull failed: ${one.lastError}` : ''}`,
     ),

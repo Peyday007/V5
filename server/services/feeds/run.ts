@@ -238,36 +238,7 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date }
   const latest = history.reduce<string | null>((max, one) => (!max || one.openedAt > max ? one.openedAt : max), null);
   if (latest && now.getTime() - Date.parse(latest) < SHORTLIST_INTERVAL_MS) return null;
 
-  const since = new Date(now.getTime() - LEAD_MAX_AGE_MS).toISOString();
-  const pool = await unlistedFeedItems({ since, limit: 2_000 });
-  const screens = await leadScreens(pool);
-  const held = new Set(
-    (await openingsWithSourceUrl(input.projectId))
-      .map(({ sourceUrl }) => openingSourceKey(sourceUrl))
-      .filter((key): key is string => !!key),
-  );
-  const ranked = pool
-    .filter((item) => leadPassesRules(item, screens.get(item.id) ?? null, now))
-    // Fast cash: a lead with no near window waits until the short ones run out.
-    .filter((item, _i, all) =>
-      screens.get(item.id)?.window === 'SHORT' ||
-      all.filter((one) => screens.get(one.id)?.window === 'SHORT').length < SHORTLIST_SIZE)
-    .filter((item) => {
-      const key = openingSourceKey(item.url);
-      return !key || !held.has(key);
-    })
-    .sort((a, b) => {
-      const wa = screens.get(a.id)?.window === 'SHORT' ? 0 : 1;
-      const wb = screens.get(b.id)?.window === 'SHORT' ? 0 : 1;
-      if (wa !== wb) return wa - wb;
-      return (b.publishedAt ?? b.fetchedAt).localeCompare(a.publishedAt ?? a.fetchedAt);
-    });
-  const chosen: { item: StoredFeedItem; line: string }[] = [];
-  for (const item of ranked) {
-    if (chosen.length >= SHORTLIST_SIZE) break;
-    const line = shortlistLine(item, screens.get(item.id)!);
-    if (line) chosen.push({ item, line });
-  }
+  const { chosen } = await shortlistFunnel(input.projectId, now);
   if (chosen.length === 0) return null;
 
   const frame = await executionFrame(input.projectId, mode.currency);
@@ -326,6 +297,61 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date }
 }
 
 class ShortlistLost extends Error {}
+
+export interface ShortlistFunnel {
+  /** Recent leads no shortlist has taken. */
+  pool: number;
+  /** Of those, screened by the free models at all. */
+  screened: number;
+  /** Combined verdict KEEP. */
+  kept: number;
+  /** KEEP, deliverable, stated need, recent. */
+  passedRules: number;
+  /** Not already an opening, and its line can be said safely. */
+  chosen: { item: StoredFeedItem; line: string }[];
+}
+
+/** Which leads would go to Claude now, with the count at every step. Writes nothing. */
+export async function shortlistFunnel(projectId: string, now: Date = new Date()): Promise<ShortlistFunnel> {
+  const since = new Date(now.getTime() - LEAD_MAX_AGE_MS).toISOString();
+  const pool = await unlistedFeedItems({ since, limit: 2_000 });
+  const screens = await leadScreens(pool);
+  const held = new Set(
+    (await openingsWithSourceUrl(projectId))
+      .map(({ sourceUrl }) => openingSourceKey(sourceUrl))
+      .filter((key): key is string => !!key),
+  );
+  const ranked = pool
+    .filter((item) => leadPassesRules(item, screens.get(item.id) ?? null, now))
+    // Fast cash: a lead with no near window waits until the short ones run out.
+    .filter((item, _i, all) =>
+      screens.get(item.id)?.window === 'SHORT' ||
+      all.filter((one) => screens.get(one.id)?.window === 'SHORT').length < SHORTLIST_SIZE)
+    .filter((item) => {
+      const key = openingSourceKey(item.url);
+      return !key || !held.has(key);
+    })
+    .sort((a, b) => {
+      const wa = screens.get(a.id)?.window === 'SHORT' ? 0 : 1;
+      const wb = screens.get(b.id)?.window === 'SHORT' ? 0 : 1;
+      if (wa !== wb) return wa - wb;
+      return (b.publishedAt ?? b.fetchedAt).localeCompare(a.publishedAt ?? a.fetchedAt);
+    });
+  const chosen: { item: StoredFeedItem; line: string }[] = [];
+  for (const item of ranked) {
+    if (chosen.length >= SHORTLIST_SIZE) break;
+    const line = shortlistLine(item, screens.get(item.id)!);
+    if (line) chosen.push({ item, line });
+  }
+  return {
+    pool: pool.length,
+    screened: pool.filter((item) => screens.has(item.id)).length,
+    kept: pool.filter((item) => screens.get(item.id)?.verdict === 'KEEP').length,
+    passedRules: pool.filter((item) => leadPassesRules(item, screens.get(item.id) ?? null, now)).length,
+    chosen,
+  };
+}
+
 
 /** The project feeds shortlist into: the oldest active sprint. */
 export async function shortlistProject(projectIds: readonly string[]): Promise<string | null> {
