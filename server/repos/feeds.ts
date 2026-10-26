@@ -127,8 +127,11 @@ export async function feedReading(now: Date = new Date()): Promise<FeedReading> 
   const listed = await db.get<{ n: number | string }>(
     'SELECT COUNT(*) AS n FROM feed_items WHERE shortlisted_round_id IS NOT NULL',
   );
+  // Every source that was ever asked, so one that has never returned anything still shows.
   const per = await db.all<{ source: string; n: number | string }>(
-    'SELECT source, COUNT(*) AS n FROM feed_items GROUP BY source ORDER BY source',
+    `SELECT s.source, (SELECT COUNT(*) FROM feed_items i WHERE i.source = s.source) AS n
+       FROM (SELECT source FROM feed_items UNION SELECT source FROM feed_pulls) s
+      ORDER BY s.source`,
   );
   const bySource = [];
   for (const row of per) {
