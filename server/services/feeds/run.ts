@@ -210,6 +210,10 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date }
   );
   const ranked = pool
     .filter((item) => leadPassesRules(item, screens.get(item.id) ?? null, now))
+    // Fast cash: a lead with no near window waits until the short ones run out.
+    .filter((item, _i, all) =>
+      screens.get(item.id)?.window === 'SHORT' ||
+      all.filter((one) => screens.get(one.id)?.window === 'SHORT').length < SHORTLIST_SIZE)
     .filter((item) => {
       const key = openingSourceKey(item.url);
       return !key || !held.has(key);

@@ -260,9 +260,11 @@ export const FEED_SOURCES: readonly FeedSource[] = [
     headers: REDDIT_HEADERS,
     parse: parseReddit,
   },
-  gdelt('news-funding', 'News: a company just raised money', '("raises" OR "secures" OR "closes") ("seed round" OR "series a" OR "funding round")'),
-  gdelt('news-new-location', 'News: a business opening a new location', '("grand opening" OR "opens new" OR "now open") (location OR store OR office OR clinic OR restaurant)'),
-  gdelt('news-leadership', 'News: a new leader at a business', '("names new" OR "appoints" OR "promoted to") ("ceo" OR "president" OR "general manager" OR "marketing director" OR "operations director")'),
-  gdelt('news-shutdown', 'News: a platform or service shutting down', '("shutting down" OR "will be discontinued" OR "end of life" OR "sunsetting") (platform OR software OR app OR service)'),
+  // Fast cash only: events with a deadline inside weeks, where a business has
+  // to get something done now and pays for speed.
+  gdelt('news-new-rule-deadline', 'News: a rule or deadline businesses must meet soon', '("deadline" OR "must comply" OR "takes effect" OR "goes into effect") ("small businesses" OR "employers" OR "business owners")'),
+  gdelt('news-new-location', 'News: a business opening soon', '("grand opening" OR "opening soon" OR "now open") (location OR store OR office OR clinic OR restaurant)'),
+  gdelt('news-shutdown', 'News: a tool businesses use shutting down', '("shutting down" OR "will be discontinued" OR "end of support" OR "sunsetting") (platform OR software OR app OR service)'),
   gdelt('news-closures', 'News: a competitor closing, leaving customers behind', '("closing all" OR "closes its doors" OR "going out of business") (business OR company OR store)'),
+  gdelt('news-event-rush', 'News: an event businesses are rushing to prepare for', '("ahead of" OR "in time for") ("holiday season" OR "black friday" OR "tax season" OR "open enrollment" OR "festival")'),
 ];
