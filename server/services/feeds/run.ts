@@ -22,7 +22,7 @@ import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { openingsWithSourceUrl } from '../../repos/cashPortfolio.ts';
 import { listRounds, openRound } from '../../repos/cashDiscovery.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
-import { laneConfig, screenLead, type Completer, type LaneConfig, type LeadOutput } from '../cheap/lane.ts';
+import { isDown, laneConfig, modelHealth, screenLead, type Completer, type LaneConfig, type LeadOutput } from '../cheap/lane.ts';
 import { executionFrame, executionFrameSentence } from '../cash/discovery.ts';
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
@@ -45,6 +45,34 @@ export const httpFetcher: Fetcher = async (url, headers) => {
 export const LEAD_MAX_AGE_MS = 21 * 86_400_000;
 /** Leads screened per pass, so one tick never spends the day. */
 export const SCREENS_PER_PASS = 60;
+
+/**
+ * How hard to push the free models this pass, from how they have been
+ * answering. Pure, so the rule can be argued with.
+ *
+ * The healthy models' recent failure rate decides: clean answers push volume
+ * up, failures pull it down, and a lane failing most of the time pauses until
+ * the window clears. Calls run a few at a time, never all at once.
+ */
+export function lanePacing(health: Map<string, { total: number; failed: number }>, isDownModel: (h: { total: number; failed: number }) => boolean): {
+  perPass: number;
+  parallel: number;
+  failureRate: number | null;
+} {
+  let total = 0;
+  let failed = 0;
+  for (const h of health.values()) {
+    if (isDownModel(h)) continue;
+    total += h.total;
+    failed += h.failed;
+  }
+  if (total < 20) return { perPass: SCREENS_PER_PASS, parallel: 4, failureRate: null };
+  const rate = failed / total;
+  if (rate < 0.05) return { perPass: 300, parallel: 8, failureRate: rate };
+  if (rate < 0.15) return { perPass: 120, parallel: 6, failureRate: rate };
+  if (rate < 0.4) return { perPass: 30, parallel: 2, failureRate: rate };
+  return { perPass: 0, parallel: 1, failureRate: rate };
+}
 /** Leads handed to Claude per shortlist round. */
 export const SHORTLIST_SIZE = 10;
 /** One shortlist round a day at most. */
@@ -111,26 +139,36 @@ export async function screenFeedLeads(input: {
   const since = new Date(now.getTime() - LEAD_MAX_AGE_MS).toISOString();
   const recent = await unlistedFeedItems({ since, limit: 2_000 });
   const done = await screenedLeads(recent.map((one) => one.id));
+  const health = await modelHealth('SCREEN_LEAD', now);
+  const pace = lanePacing(health, isDown);
+  const todo = recent
+    .filter((item) => !done.has(item.id))
+    .filter((item) => {
+      const published = Date.parse(item.publishedAt ?? item.fetchedAt);
+      return !Number.isFinite(published) || now.getTime() - published <= LEAD_MAX_AGE_MS;
+    })
+    .slice(0, pace.perPass);
   let screened = 0;
-  for (const item of recent) {
-    if (screened >= SCREENS_PER_PASS) break;
-    if (done.has(item.id)) continue;
-    const published = Date.parse(item.publishedAt ?? item.fetchedAt);
-    if (Number.isFinite(published) && now.getTime() - published > LEAD_MAX_AGE_MS) continue;
-    await screenLead(
-      item.id,
-      {
-        source: item.source,
-        title: item.title,
-        organization: item.organization,
-        publishedAt: item.publishedAt,
-        body: item.body,
-        url: item.url,
-      },
-      { config, completer: input.completer, now },
-    );
-    screened += 1;
-  }
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < todo.length) {
+      const item = todo[next++]!;
+      await screenLead(
+        item.id,
+        {
+          source: item.source,
+          title: item.title,
+          organization: item.organization,
+          publishedAt: item.publishedAt,
+          body: item.body,
+          url: item.url,
+        },
+        { config, completer: input.completer, now, health },
+      );
+      screened += 1;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, pace.parallel) }, () => worker()));
   return screened;
 }
 

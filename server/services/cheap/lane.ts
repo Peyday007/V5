@@ -43,12 +43,12 @@ export function laneConfig(env: NodeJS.ProcessEnv = process.env): LaneConfig | n
     .map((one) => one.trim())
     .filter(Boolean)
     .slice(0, 2);
-  const budget = Number(env['BRAIN_CHEAP_LLM_DAILY_BUDGET'] ?? 3000);
+  const budget = Number(env['BRAIN_CHEAP_LLM_DAILY_BUDGET'] ?? 20000);
   return {
     url: url.replace(/\/+$/, ''),
     key: env['BRAIN_CHEAP_LLM_KEY']?.trim() || null,
     models: models.length > 0 ? models : ['auto'],
-    dailyBudget: Number.isFinite(budget) && budget > 0 ? Math.trunc(budget) : 3000,
+    dailyBudget: Number.isFinite(budget) && budget > 0 ? Math.trunc(budget) : 20000,
     timeoutMs: 30_000,
   };
 }
@@ -290,6 +290,31 @@ async function usedToday(kind: TaskKind, now: Date): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
+/** How each model has answered this task recently: the lane's own feedback. */
+export const HEALTH_WINDOW_MS = 15 * 60_000;
+/** A model failing this often, on enough answers, is skipped until it ages out of the window. */
+export const DOWN_FAILURE_RATE = 0.8;
+export const DOWN_MIN_SAMPLE = 10;
+
+export interface ModelHealth {
+  total: number;
+  failed: number;
+}
+
+export async function modelHealth(kind: TaskKind, now: Date = new Date()): Promise<Map<string, ModelHealth>> {
+  const since = new Date(now.getTime() - HEALTH_WINDOW_MS).toISOString();
+  const rows = await getDb().all<{ model: string; total: number | string; failed: number | string }>(
+    `SELECT model, COUNT(*) AS total, SUM(CASE WHEN ok = 1 THEN 0 ELSE 1 END) AS failed
+       FROM cheap_results WHERE kind = ? AND created_at >= ? GROUP BY model`,
+    [kind, since],
+  );
+  return new Map(rows.map((row) => [row.model, { total: Number(row.total), failed: Number(row.failed ?? 0) }]));
+}
+
+export function isDown(health: ModelHealth | undefined): boolean {
+  return !!health && health.total >= DOWN_MIN_SAMPLE && health.failed / health.total >= DOWN_FAILURE_RATE;
+}
+
 /**
  * Run one closed task on one input, cached and budgeted per kind. Null when
  * the lane is off, the budget is spent, or no model gave a valid answer — and
@@ -302,7 +327,7 @@ async function runTask<I, O>(
   prompt: (input: I) => string,
   parse: (text: string) => O | null,
   merge: (answers: (O | null)[]) => O | null,
-  options: { config?: LaneConfig | null; completer?: Completer; now?: Date },
+  options: LaneOptions,
 ): Promise<O | null> {
   const config = options.config === undefined ? laneConfig() : options.config;
   if (!config) return null;
@@ -314,12 +339,15 @@ async function runTask<I, O>(
   );
   const answers: (O | null)[] = [];
   const now = options.now ?? new Date();
+  const health = options.health ?? (await modelHealth(kind, now));
   for (const model of config.models) {
     const hit = cached.find((row) => row.model === model);
     if (hit) {
       answers.push(hit.ok && hit.output ? parse(hit.output) : null);
       continue;
     }
+    // A model that keeps failing is skipped, not asked: no answer, no spent call.
+    if (isDown(health.get(model))) continue;
     if ((await usedToday(kind, now)) >= config.dailyBudget) return merge(answers);
     let text = '';
     let error: string | null = null;
@@ -351,10 +379,17 @@ async function runTask<I, O>(
 }
 
 /** Screen one opening. Null means "no signal", never DROP. */
+export interface LaneOptions {
+  config?: LaneConfig | null;
+  completer?: Completer;
+  now?: Date;
+  health?: Map<string, ModelHealth>;
+}
+
 export async function screenOpening(
   subjectId: string,
   input: ScreenInput,
-  options: { config?: LaneConfig | null; completer?: Completer; now?: Date } = {},
+  options: LaneOptions = {},
 ): Promise<ScreenOutput | null> {
   return runTask('SCREEN_OPENING', subjectId, input, (one) => TASKS.SCREEN_OPENING.prompt(one), parseScreen, combine, options);
 }
@@ -363,7 +398,7 @@ export async function screenOpening(
 export async function screenLead(
   subjectId: string,
   input: LeadInput,
-  options: { config?: LaneConfig | null; completer?: Completer; now?: Date } = {},
+  options: LaneOptions = {},
 ): Promise<LeadOutput | null> {
   return runTask('SCREEN_LEAD', subjectId, input, (one) => TASKS.SCREEN_LEAD.prompt(one), parseLead, combineLeads, options);
 }

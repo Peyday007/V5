@@ -191,3 +191,36 @@ describe('the shortlist', () => {
     expect(await screenFeedLeads({ now, config: null })).toBe(0);
   });
 });
+
+describe('self-tuning the free models', () => {
+  it('pushes up when answers are clean, backs off when they fail, and pauses when most fail', async () => {
+    const { lanePacing } = await import('../server/services/feeds/run.ts');
+    const { isDown } = await import('../server/services/cheap/lane.ts');
+    const h = (total: number, failed: number) => new Map([['m1', { total, failed }]]);
+    expect(lanePacing(h(5, 0), isDown).failureRate).toBeNull();
+    expect(lanePacing(h(100, 1), isDown).perPass).toBe(300);
+    expect(lanePacing(h(100, 10), isDown).perPass).toBe(120);
+    expect(lanePacing(h(100, 30), isDown).perPass).toBe(30);
+    expect(lanePacing(h(100, 39), isDown).perPass).toBe(30);
+    // A model that is simply dead is skipped, not counted against the rest.
+    const mixed = new Map([['m1', { total: 100, failed: 1 }], ['m2', { total: 50, failed: 50 }]]);
+    expect(lanePacing(mixed, isDown).perPass).toBe(300);
+  });
+
+  it('stops asking a model that keeps failing', async () => {
+    await pullDueFeeds({ now, sources: [source('one', 30)], fetcher: async () => Array.from({ length: 30 }, (_, i) => ({ n: i })) });
+    const asked: string[] = [];
+    const completer: Completer = async (_c, model) => {
+      asked.push(model);
+      if (model === 'm2') throw new Error('down');
+      return keep;
+    };
+    await screenFeedLeads({ now, config, completer });
+    const m2First = asked.filter((m) => m === 'm2').length;
+    asked.length = 0;
+    await pullDueFeeds({ now: new Date(now.getTime() + 2 * 3_600_000), sources: [source('two', 10)], fetcher: async () => Array.from({ length: 10 }, (_, i) => ({ n: i })) });
+    await screenFeedLeads({ now, config, completer });
+    expect(m2First).toBeGreaterThanOrEqual(10);
+    expect(asked.filter((m) => m === 'm2')).toHaveLength(0);
+  });
+});
