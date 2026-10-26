@@ -134,7 +134,7 @@ export const TASKS = {
     prompt(input: LeadInput): string {
       return [
         'Does this post show a business that would plausibly pay this operation, soon, for one finished piece of digital work?',
-        'KEEP: yes, there is a clear need it could deliver as a file or site.',
+        'KEEP: yes, there is a clear need it could deliver as a file or site. A business event that creates such a need within weeks also counts: a rule or deadline it must meet soon, a location about to open, a tool it relies on shutting down, a competitor closing, or an event it is rushing to prepare for. The operation wants cash fast, so a need with no near deadline is UNSURE at best.',
         'DROP: no — personal post, no business need, needs a licence, physical work, a full-time hire only, or spam.',
         'UNSURE: you cannot tell.',
         'window: SHORT if there is a deadline, a new rule or an event within weeks; ONGOING if the need repeats; UNKNOWN otherwise.',

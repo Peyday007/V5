@@ -27,6 +27,8 @@ export interface FeedSource {
   /** How often Brain may ask, from the publisher's own guidance. */
   intervalMs: number;
   headers?: Record<string, string>;
+  /** Wait this long before asking, when another source was just asked (a publisher's rate rule). */
+  spacingMs?: number;
   parse(body: unknown): FeedItem[];
 }
 
@@ -165,6 +167,53 @@ export function parseReddit(body: unknown): FeedItem[] {
   return out;
 }
 
+/** GDELT's seen-date, `20261026T120000Z`, as ISO. */
+function gdeltDate(value: unknown): string | null {
+  const raw = text(value);
+  const m = raw ? /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(raw) : null;
+  return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}.000Z` : isoOrNull(value);
+}
+
+/** The GDELT DOC API's article list: `{ articles: [...] }`. */
+export function parseGdelt(body: unknown): FeedItem[] {
+  const articles = body && typeof body === 'object' ? (body as Record<string, unknown>)['articles'] : null;
+  const out: FeedItem[] = [];
+  for (const row of records(articles)) {
+    const url = text(row['url']);
+    const title = text(row['title']);
+    if (!title || !isHttpUrl(url)) continue;
+    out.push({
+      externalId: url.slice(0, 500),
+      url,
+      title,
+      body: null,
+      organization: text(row['domain']),
+      publishedAt: gdeltDate(row['seendate']),
+    });
+  }
+  return out;
+}
+
+/** A GDELT news search for one kind of trigger, over the last day, US English. */
+function gdelt(id: string, label: string, query: string): FeedSource {
+  const params = new URLSearchParams({
+    query: `${query} sourcecountry:US sourcelang:english`,
+    mode: 'artlist',
+    maxrecords: '75',
+    format: 'json',
+    timespan: '1d',
+  });
+  return {
+    id,
+    label,
+    url: `https://api.gdeltproject.org/api/v2/doc/doc?${params.toString()}`,
+    intervalMs: 6 * HOUR,
+    // GDELT asks for no more than one request every five seconds.
+    spacingMs: 6_000,
+    parse: parseGdelt,
+  };
+}
+
 const REDDIT_HEADERS = { 'user-agent': 'brain-feed/1.0 (reads public listings)' };
 
 export const FEED_SOURCES: readonly FeedSource[] = [
@@ -211,4 +260,11 @@ export const FEED_SOURCES: readonly FeedSource[] = [
     headers: REDDIT_HEADERS,
     parse: parseReddit,
   },
+  // Fast cash only: events with a deadline inside weeks, where a business has
+  // to get something done now and pays for speed.
+  gdelt('news-new-rule-deadline', 'News: a rule or deadline businesses must meet soon', '("deadline" OR "must comply" OR "takes effect" OR "goes into effect") ("small businesses" OR "employers" OR "business owners")'),
+  gdelt('news-new-location', 'News: a business opening soon', '("grand opening" OR "opening soon" OR "now open") (location OR store OR office OR clinic OR restaurant)'),
+  gdelt('news-shutdown', 'News: a tool businesses use shutting down', '("shutting down" OR "will be discontinued" OR "end of support" OR "sunsetting") (platform OR software OR app OR service)'),
+  gdelt('news-closures', 'News: a competitor closing, leaving customers behind', '("closing all" OR "closes its doors" OR "going out of business") (business OR company OR store)'),
+  gdelt('news-event-rush', 'News: an event businesses are rushing to prepare for', '("ahead of" OR "in time for") ("holiday season" OR "black friday" OR "tax season" OR "open enrollment" OR "festival")'),
 ];
