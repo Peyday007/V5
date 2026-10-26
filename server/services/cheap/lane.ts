@@ -259,7 +259,10 @@ export const httpCompleter: Completer = async (config, model, system, prompt) =>
     body: JSON.stringify({
       model,
       temperature: 0,
-      max_tokens: 300,
+      // Reasoning models (gpt-oss) spend tokens thinking before they answer;
+      // a small budget left them with no answer at all. Low effort, more room.
+      max_tokens: 2000,
+      reasoning_effort: 'low',
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: prompt },

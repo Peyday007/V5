@@ -106,7 +106,7 @@ jobs:
                 start=$(date +%s)
                 code=$(curl -sS -o reply.json -w '%{http_code}' --max-time 120 \
                   -H "authorization: Bearer $OMNIROUTE_API_KEY" -H 'content-type: application/json' \
-                  -d "{\"model\":\"$model\",\"max_tokens\":40,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with the word ok.\"}]}" \
+                  -d "{\"model\":\"$model\",\"max_tokens\":2000,\"reasoning_effort\":\"low\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with the word ok.\"}]}" \
                   "https://$cheap.fly.dev/v1/chat/completions" || echo 000)
                 echo "model $model: HTTP $code in $(( $(date +%s) - start ))s"
                 head -c 600 reply.json 2>/dev/null; echo
