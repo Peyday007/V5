@@ -11,6 +11,7 @@ import { getCandidate } from '../server/repos/russellCandidates.ts';
 import { feedReading } from '../server/repos/feeds.ts';
 import {
   parseFederalRegister,
+  parseGdelt,
   parseReddit,
   parseRemoteOk,
   parseRemotive,
@@ -88,6 +89,11 @@ describe('parsers', () => {
       parseReddit({ data: { children: [{ data: { id: 'a', title: 'Need help with books', permalink: '/r/smallbusiness/a', created_utc: 1761300000 } }, { data: { id: 'b', title: 'Rules', permalink: '/r/x/b', stickied: true } }] } }),
     ).toHaveLength(1);
     expect(parseRemoteOk('not json')).toEqual([]);
+    expect(
+      parseGdelt({ articles: [{ url: 'https://news.test/a', title: 'Acme opens new store', domain: 'news.test', seendate: '20261026T120000Z' }, { title: 'no url' }] }),
+    ).toEqual([
+      { externalId: 'https://news.test/a', url: 'https://news.test/a', title: 'Acme opens new store', body: null, organization: 'news.test', publishedAt: '2026-10-26T12:00:00.000Z' },
+    ]);
   });
 });
 

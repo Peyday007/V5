@@ -60,6 +60,9 @@ export async function pullDueFeeds(input: {
   for (const source of input.sources ?? FEED_SOURCES) {
     const last = await lastPullAt(source.id);
     if (last && now.getTime() - Date.parse(last) < source.intervalMs) continue;
+    if (source.spacingMs && out.length > 0 && !input.fetcher) {
+      await new Promise((resolve) => setTimeout(resolve, source.spacingMs));
+    }
     try {
       const body = await (input.fetcher ?? httpFetcher)(source.url, source.headers ?? {});
       const items = source.parse(body);
