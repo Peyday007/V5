@@ -8,7 +8,8 @@
  *
  * What an item is: a published, dated thing that may show a business needing
  * work done — a job opening, a new federal rule businesses must comply with, a
- * small-business owner describing a problem. It is a raw lead, never evidence.
+ * named business in the news. Every source names a real organisation; anonymous
+ * forums are left out because nothing proves a business or a budget behind them. It is a raw lead, never evidence.
  */
 
 export interface FeedItem {
@@ -141,32 +142,6 @@ export function parseFederalRegister(body: unknown): FeedItem[] {
   return out;
 }
 
-/** Reddit's listing JSON: `{ data: { children: [{ data }] } }`. */
-export function parseReddit(body: unknown): FeedItem[] {
-  const data = body && typeof body === 'object' ? (body as Record<string, unknown>)['data'] : null;
-  const children = data && typeof data === 'object' ? (data as Record<string, unknown>)['children'] : null;
-  const out: FeedItem[] = [];
-  for (const child of records(children)) {
-    const row = child['data'];
-    if (!row || typeof row !== 'object') continue;
-    const post = row as Record<string, unknown>;
-    const id = text(post['id']);
-    const title = text(post['title']);
-    const permalink = text(post['permalink']);
-    if (!id || !title || !permalink) continue;
-    if (post['stickied'] === true || post['over_18'] === true) continue;
-    out.push({
-      externalId: id,
-      url: `https://www.reddit.com${permalink}`,
-      title,
-      body: plain(post['selftext']),
-      organization: text(post['subreddit_name_prefixed']),
-      publishedAt: isoOrNull(post['created_utc']),
-    });
-  }
-  return out;
-}
-
 /** GDELT's seen-date, `20261026T120000Z`, as ISO. */
 function gdeltDate(value: unknown): string | null {
   const raw = text(value);
@@ -214,7 +189,6 @@ function gdelt(id: string, label: string, query: string): FeedSource {
   };
 }
 
-const REDDIT_HEADERS = { 'user-agent': 'brain-feed/1.0 (reads public listings)' };
 
 export const FEED_SOURCES: readonly FeedSource[] = [
   {
@@ -243,22 +217,6 @@ export const FEED_SOURCES: readonly FeedSource[] = [
       '&fields%5B%5D=publication_date&fields%5B%5D=effective_on&fields%5B%5D=agencies',
     intervalMs: 6 * HOUR,
     parse: parseFederalRegister,
-  },
-  {
-    id: 'reddit-smallbusiness',
-    label: 'r/smallbusiness: owners describing problems',
-    url: 'https://www.reddit.com/r/smallbusiness/new.json?limit=100',
-    intervalMs: 2 * HOUR,
-    headers: REDDIT_HEADERS,
-    parse: parseReddit,
-  },
-  {
-    id: 'reddit-entrepreneur',
-    label: 'r/Entrepreneur: owners describing problems',
-    url: 'https://www.reddit.com/r/Entrepreneur/new.json?limit=100',
-    intervalMs: 2 * HOUR,
-    headers: REDDIT_HEADERS,
-    parse: parseReddit,
   },
   // Fast cash only: events with a deadline inside weeks, where a business has
   // to get something done now and pays for speed.

@@ -12,7 +12,6 @@ import { feedReading } from '../server/repos/feeds.ts';
 import {
   parseFederalRegister,
   parseGdelt,
-  parseReddit,
   parseRemoteOk,
   parseRemotive,
   type FeedSource,
@@ -85,9 +84,6 @@ describe('parsers', () => {
     expect(
       parseFederalRegister({ results: [{ document_number: '2026-1', title: 'A rule', html_url: 'https://www.federalregister.gov/d/2026-1', publication_date: '2026-10-22', effective_on: '2026-11-22', agencies: [{ name: 'EPA' }] }] })[0],
     ).toMatchObject({ organization: 'EPA', body: 'Effective 2026-11-22.' });
-    expect(
-      parseReddit({ data: { children: [{ data: { id: 'a', title: 'Need help with books', permalink: '/r/smallbusiness/a', created_utc: 1761300000 } }, { data: { id: 'b', title: 'Rules', permalink: '/r/x/b', stickied: true } }] } }),
-    ).toHaveLength(1);
     expect(parseRemoteOk('not json')).toEqual([]);
     expect(
       parseGdelt({ articles: [{ url: 'https://news.test/a', title: 'Acme opens new store', domain: 'news.test', seendate: '20261026T120000Z' }, { title: 'no url' }] }),
