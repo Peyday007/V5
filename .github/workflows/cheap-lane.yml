@@ -96,7 +96,8 @@ jobs:
               flyctl machine list --app "$cheap" || true
               flyctl logs --app "$cheap" --no-tail 2>&1 | tail -120 || true
               m=$(flyctl machine list --app "$cheap" --json | grep -o '"id": *"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{8,\}' || true)
-              [ -n "$m" ] && flyctl ssh console --app "$cheap" -C "sh -c 'free -m; wget -q -O- --timeout=10 https://api.groq.com/openai/v1/models 2>&1 | head -c 300; echo; wget -S -q -O /dev/null --timeout=10 https://api.cerebras.ai 2>&1 | head -5'" || true
+              [ -n "$m" ] && flyctl ssh console --app "$cheap" -C "node -e eval(Buffer.from('Y29uc3QgaG9zdHM9WydodHRwczovL2FwaS5ncm9xLmNvbS9vcGVuYWkvdjEvbW9kZWxzJywnaHR0cHM6Ly9hcGkuY2VyZWJyYXMuYWkvdjEvbW9kZWxzJywnaHR0cHM6Ly9pbnRlZ3JhdGUuYXBpLm52aWRpYS5jb20vdjEvbW9kZWxzJywnaHR0cHM6Ly9vcGVucm91dGVyLmFpL2FwaS92MS9tb2RlbHMnLCdodHRwczovL2dlbmVyYXRpdmVsYW5ndWFnZS5nb29nbGVhcGlzLmNvbS92MWJldGEvbW9kZWxzJ107KGFzeW5jKCk9Pntmb3IoY29uc3QgaCBvZiBob3N0cyl7Y29uc3QgdD1EYXRlLm5vdygpO3RyeXtjb25zdCByPWF3YWl0IGZldGNoKGgse3NpZ25hbDpBYm9ydFNpZ25hbC50aW1lb3V0KDE1MDAwKX0pO2NvbnNvbGUubG9nKGgsci5zdGF0dXMsRGF0ZS5ub3coKS10LCdtcycpO31jYXRjaChlKXtjb25zb2xlLmxvZyhoLCdFUlInLFN0cmluZygoZS5jYXVzZSYmZS5jYXVzZS5jb2RlKXx8ZS5tZXNzYWdlKSxEYXRlLm5vdygpLXQsJ21zJyk7fX1jb25zb2xlLmxvZygnbWVtJyxKU09OLnN0cmluZ2lmeShwcm9jZXNzLm1lbW9yeVVzYWdlKCkpLCdub2RlJyxwcm9jZXNzLnZlcnNpb24pO30pKCk7','base64').toString())" || true
+              flyctl machine status "$m" --app "$cheap" || true
               ;;
             connect)
               [ -n "$OMNIROUTE_API_KEY" ] || { echo "::error::Set the OMNIROUTE_API_KEY repository secret (an endpoint key from the OmniRoute dashboard)."; exit 1; }
