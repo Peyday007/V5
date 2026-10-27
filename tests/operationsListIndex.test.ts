@@ -31,8 +31,14 @@ describe('listing a project\'s operations', () => {
   });
 
   it.skipIf(!POSTGRES)('has the same index on the backend production runs', async () => {
+    // Only this run's own schema. `pg_indexes` spans every schema, and other
+    // test files drop theirs concurrently, so reading the definition of an
+    // index another file just dropped fails with "could not open relation".
     const rows = await getDb().all<{ indexdef: string }>(
-      `SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_idempotency_operations_project_created'`,
+      `SELECT pg_get_indexdef(c.oid) AS indexdef
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = 'idx_idempotency_operations_project_created'
+          AND n.nspname = current_schema()`,
       [],
     );
     expect(rows[0]?.indexdef).toMatch(/\(project_id, created_at DESC, id\)/);
