@@ -371,10 +371,11 @@ describe('archiving', () => {
       const row = await getOpportunity(id);
       expect(row?.state).toBe('ARCHIVED');
       expect(row?.archivedReason).toBe('The margin evaporated once shipping was quoted.');
+      // The event is written beside the state, so wait for it too rather than
+      // reading it on the first poll that saw the state (a race on Postgres).
+      const events = await listCashEventsFor(id);
+      expect(events.some((event) => event.kind === 'CASH_OPPORTUNITY_ARCHIVED')).toBe(true);
     });
-
-    const events = await listCashEventsFor(id);
-    expect(events.some((event) => event.kind === 'CASH_OPPORTUNITY_ARCHIVED')).toBe(true);
 
     // The reason is still on the page, as the disposition's own sentence —
     // `placements()` reports an archived opportunity's `because` as its
