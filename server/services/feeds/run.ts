@@ -17,7 +17,7 @@
  * volume has nowhere to go but Claude.
  */
 import { getDb } from '../../db/database.ts';
-import { insertFeedItems, lastPullAt, markShortlisted, recordFeedPull, unlistedFeedItems, type StoredFeedItem } from '../../repos/feeds.ts';
+import { insertFeedItems, markShortlisted, pullState, recordFeedPull, unlistedFeedItems, type StoredFeedItem } from '../../repos/feeds.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { openingsWithSourceUrl } from '../../repos/cashPortfolio.ts';
 import { listRounds, openRound } from '../../repos/cashDiscovery.ts';
@@ -33,13 +33,41 @@ import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
 import { FEED_SOURCES, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 
-export type Fetcher = (url: string, headers: Record<string, string>) => Promise<unknown>;
+export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<unknown>;
 
-export const httpFetcher: Fetcher = async (url, headers) => {
-  const response = await fetch(url, { headers: { accept: 'application/json', ...headers }, signal: AbortSignal.timeout(20_000) });
+export const httpFetcher: Fetcher = async (url, headers, timeoutMs = 20_000) => {
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: { accept: 'application/json', ...headers }, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (error) {
+    // Name the cause: "fetch failed" alone cannot tell a timeout from a refusal.
+    const cause = error instanceof Error ? ((error as Error & { cause?: { code?: string; message?: string } }).cause ?? null) : null;
+    const name = error instanceof Error ? error.name : '';
+    if (name === 'TimeoutError') throw new Error(`timed out after ${timeoutMs}ms`);
+    throw new Error(`fetch failed${cause?.code ? ` (${cause.code})` : cause?.message ? ` (${cause.message})` : ''}`);
+  }
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 };
+
+/**
+ * When a source may be asked again. A success waits its interval; a failure
+ * waits a short, doubling backoff instead, so one refusal does not cost the
+ * source six hours. Pure.
+ */
+export function nextPullAt(
+  source: Pick<FeedSource, 'intervalMs'>,
+  state: { lastSuccessAt: string | null; failuresSince: number; lastFailureAt: string | null },
+): number {
+  if (state.failuresSince > 0 && state.lastFailureAt) {
+    const backoff = Math.min(source.intervalMs, PULL_RETRY_MS * 2 ** (state.failuresSince - 1));
+    return Date.parse(state.lastFailureAt) + backoff;
+  }
+  return state.lastSuccessAt ? Date.parse(state.lastSuccessAt) + source.intervalMs : 0;
+}
+
+/** The first wait after a failed pull. */
+export const PULL_RETRY_MS = 20 * 60_000;
 
 /** How far back a lead may have been published and still be worth asking about. */
 export const LEAD_MAX_AGE_MS = 21 * 86_400_000;
@@ -86,13 +114,12 @@ export async function pullDueFeeds(input: {
   const now = input.now ?? new Date();
   const out: { source: string; inserted: number; error: string | null }[] = [];
   for (const source of input.sources ?? FEED_SOURCES) {
-    const last = await lastPullAt(source.id);
-    if (last && now.getTime() - Date.parse(last) < source.intervalMs) continue;
+    if (now.getTime() < nextPullAt(source, await pullState(source.id))) continue;
     if (source.spacingMs && out.length > 0 && !input.fetcher) {
       await new Promise((resolve) => setTimeout(resolve, source.spacingMs));
     }
     try {
-      const body = await (input.fetcher ?? httpFetcher)(source.url, source.headers ?? {});
+      const body = await (input.fetcher ?? httpFetcher)(source.url, source.headers ?? {}, source.timeoutMs);
       const items = source.parse(body);
       const inserted = await insertFeedItems(source.id, items);
       await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at: now.toISOString() });
