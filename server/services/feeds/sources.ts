@@ -30,6 +30,8 @@ export interface FeedSource {
   headers?: Record<string, string>;
   /** Wait this long before asking, when another source was just asked (a publisher's rate rule). */
   spacingMs?: number;
+  /** How long one request may take; a slow public API gets longer. */
+  timeoutMs?: number;
   parse(body: unknown): FeedItem[];
 }
 
@@ -183,8 +185,10 @@ function gdelt(id: string, label: string, query: string): FeedSource {
     label,
     url: `https://api.gdeltproject.org/api/v2/doc/doc?${params.toString()}`,
     intervalMs: 6 * HOUR,
-    // GDELT asks for no more than one request every five seconds.
-    spacingMs: 6_000,
+    // GDELT asks for no more than one request every five seconds; leave room.
+    spacingMs: 12_000,
+    // And it is slow: a day's article list often takes longer than 20 seconds.
+    timeoutMs: 60_000,
     parse: parseGdelt,
   };
 }

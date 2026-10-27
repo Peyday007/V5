@@ -88,6 +88,19 @@ export async function lastPullAt(source: string): Promise<string | null> {
   return row?.at ?? null;
 }
 
+/** The last success, and the failures since it, for one source. */
+export async function pullState(source: string): Promise<{ lastSuccessAt: string | null; failuresSince: number; lastFailureAt: string | null }> {
+  const db = getDb();
+  const ok = await db.get<{ at: string | null }>('SELECT MAX(created_at) AS at FROM feed_pulls WHERE source = ? AND ok = 1', [source]);
+  const lastSuccessAt = ok?.at ?? null;
+  const failed = await db.get<{ n: number | string; at: string | null }>(
+    `SELECT COUNT(*) AS n, MAX(created_at) AS at FROM feed_pulls
+      WHERE source = ? AND ok = 0 AND created_at > ?`,
+    [source, lastSuccessAt ?? ''],
+  );
+  return { lastSuccessAt, failuresSince: Number(failed?.n ?? 0), lastFailureAt: failed?.at ?? null };
+}
+
 /** Items no shortlist has taken, newest first. */
 export async function unlistedFeedItems(input: { since: string; limit: number }): Promise<StoredFeedItem[]> {
   const rows = await getDb().all<Row>(

@@ -224,3 +224,26 @@ describe('self-tuning the free models', () => {
     expect(asked.filter((m) => m === 'm2')).toHaveLength(0);
   });
 });
+
+describe('a failed pull', () => {
+  it('is retried after a short doubling wait, not the whole interval', async () => {
+    const { nextPullAt, PULL_RETRY_MS } = await import('../server/services/feeds/run.ts');
+    const six = { intervalMs: 6 * 3_600_000 };
+    const at = '2026-10-27T00:00:00.000Z';
+    const t = Date.parse(at);
+    expect(nextPullAt(six, { lastSuccessAt: null, failuresSince: 0, lastFailureAt: null })).toBe(0);
+    expect(nextPullAt(six, { lastSuccessAt: at, failuresSince: 0, lastFailureAt: null })).toBe(t + six.intervalMs);
+    expect(nextPullAt(six, { lastSuccessAt: null, failuresSince: 1, lastFailureAt: at })).toBe(t + PULL_RETRY_MS);
+    expect(nextPullAt(six, { lastSuccessAt: null, failuresSince: 3, lastFailureAt: at })).toBe(t + 4 * PULL_RETRY_MS);
+    expect(nextPullAt(six, { lastSuccessAt: null, failuresSince: 20, lastFailureAt: at })).toBe(t + six.intervalMs);
+
+    const sources = [source('flaky', 1)];
+    const failing = async () => {
+      throw new Error('HTTP 429');
+    };
+    expect((await pullDueFeeds({ now, sources, fetcher: failing }))[0]?.error).toBe('HTTP 429');
+    expect(await pullDueFeeds({ now: new Date(now.getTime() + 5 * 60_000), sources, fetcher: failing })).toEqual([]);
+    const retried = await pullDueFeeds({ now: new Date(now.getTime() + PULL_RETRY_MS + 60_000), sources, fetcher: async () => [{ n: 1 }] });
+    expect(retried[0]).toMatchObject({ inserted: 1, error: null });
+  });
+});
