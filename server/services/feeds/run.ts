@@ -32,6 +32,7 @@ import { discoveryAllowed } from '../cash/lifecycle.ts';
 import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
 import { FEED_SOURCES, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
+import { SITE_SOURCE } from './sites.ts';
 
 export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<unknown>;
 
@@ -169,7 +170,7 @@ export async function screenFeedLeads(input: {
   const health = await modelHealth('SCREEN_LEAD', now);
   const pace = lanePacing(health, isDown);
   const todo = recent
-    .filter((item) => !done.has(item.id))
+    .filter((item) => item.source !== SITE_SOURCE && !done.has(item.id))
     .filter((item) => {
       const published = Date.parse(item.publishedAt ?? item.fetchedAt);
       return !Number.isFinite(published) || now.getTime() - published <= LEAD_MAX_AGE_MS;
@@ -221,6 +222,12 @@ async function leadScreens(items: readonly StoredFeedItem[]): Promise<Map<string
   for (const [id, answers] of by) {
     const merged = combineLeads(answers);
     if (merged) out.set(id, merged);
+  }
+  // A broken site is proved by code, so it needs no model to keep it.
+  for (const item of items) {
+    if (item.source !== SITE_SOURCE) continue;
+    const need = item.title.split(': ').slice(1).join(': ') || 'a broken website';
+    out.set(item.id, { verdict: 'KEEP', window: 'SHORT', deliverable: 'WEBSITE', need, payer: 'the business owner', reason: 'Shown twice by a code check.' });
   }
   return out;
 }

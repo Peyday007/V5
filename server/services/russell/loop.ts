@@ -73,6 +73,7 @@ import { listCoverage, listRequirements } from '../../repos/reconciliation.ts';
 import { getProject, listProjects } from '../../repos/projects.ts';
 import { laneConfig } from '../cheap/lane.ts';
 import { openFeedShortlist, pullDueFeeds, screenFeedLeads, shortlistProject } from '../feeds/run.ts';
+import { checkDueSites, mapNextMetro } from '../feeds/sites.ts';
 import { frontierIsDue, refreshFrontier } from './frontier.ts';
 import {
   dispatchInquiry,
@@ -1669,6 +1670,9 @@ async function tickOnce(owner: string): Promise<TickReport> {
       await runPass(report, 'feeds', async () => {
         if (!laneConfig()) return;
         await pullDueFeeds();
+        // Broken money paths: map named businesses, check their sites, file what repeats.
+        await mapNextMetro();
+        await checkDueSites();
         await screenFeedLeads();
         const target = await shortlistProject((await listProjects()).map((one) => one.id));
         if (target) await openFeedShortlist({ projectId: target });
