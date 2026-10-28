@@ -12,18 +12,22 @@
  *   * **an opening that closes before a dive could finish** and a person could
  *     act on what it found. A dive runs for hours to a day, and the first
  *     external step needs a grant and a send after that.
- *   * **an asset to buy that the ledger cannot pay for.** Resale needs the
- *     purchase price before anything comes back, and this project's deployable
- *     cash is a measured figure (`cashPosition`). While it cannot cover it,
- *     qualifying the opening produces a job that cannot begin.
  *
- * None of these deletes, archives or reclassifies anything, and none is
- * stored. Each is derived on every read, so it lifts by itself when the row it
- * reads changes — deployable cash arriving lifts the third, and an opening is
- * never refused for a host it does not name. §65's rule holds: not being able
- * to act today is a named gap, never a reason to drop an opening.
+ * A third used to be here — an asset to buy that the ledger cannot pay for —
+ * and it was removed on 2026-10-28. It refused research on every resale
+ * opening while deployable cash was zero, so a whole family of openings could
+ * never be qualified, and research is reading, not spending: what an asset
+ * costs, whether it can be sold before it is paid for, or bought by somebody
+ * else for a fee, is exactly what a dive establishes. Capital is still asked
+ * where it binds — `beginExecution` refuses to start what deployable cash
+ * cannot cover — exactly as it always was for a service with an exposure.
+ *
+ * Neither deletes, archives or reclassifies anything, and neither is stored.
+ * Each is derived on every read, so it lifts by itself when the row it reads
+ * changes, and an opening is never refused for a host it does not name. §65's
+ * rule holds: not being able to act today is a named gap, never a reason to
+ * drop an opening.
  */
-import { cashPosition } from './money.ts';
 import { getClaim } from '../../repos/research.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 
@@ -82,8 +86,7 @@ export function closesWithin(expiresAt: string | null, now: string, runwayMs = D
 
 export type NotWorthResearching =
   | { kind: 'MARKETPLACE_LISTING'; marketplace: string }
-  | { kind: 'CLOSES_TOO_SOON'; at: string }
-  | { kind: 'CAPITAL_NOT_HELD'; needsCents: number | null; deployableCents: number; currency: string };
+  | { kind: 'CLOSES_TOO_SOON'; at: string };
 
 export function describeNotWorthResearching(reason: NotWorthResearching): string {
   switch (reason.kind) {
@@ -91,30 +94,17 @@ export function describeNotWorthResearching(reason: NotWorthResearching): string
       return 'a freelance-marketplace listing — this operation takes no freelance work, so nothing a dive found could be acted on';
     case 'CLOSES_TOO_SOON':
       return `it closes ${reason.at}, sooner than a dive could finish and the first step be taken`;
-    case 'CAPITAL_NOT_HELD':
-      return (
-        (reason.needsCents !== null
-          ? `it needs ${reason.currency} ${(reason.needsCents / 100).toFixed(2)} up front`
-          : 'buying the asset needs capital up front') +
-        ` and the ledger can deploy ${reason.currency} ${(reason.deployableCents / 100).toFixed(2)}; ` +
-        'it is looked at again once deployable cash covers it'
-      );
   }
 }
 
-/** Signals whose capture starts by buying something. */
-const ACQUISITION_SIGNALS = new Set(['RESALABLE_ASSET_OPENING']);
-
 /**
  * The first reason this opening is not worth researching now, or null.
- *
- * `deployableCents` may be passed by a caller that reads many openings in one
- * project; otherwise it is read from the ledger, and only when the capital rule
- * could apply.
+ * Capital is not one of them: it decides whether work may begin, never
+ * whether it may be researched.
  */
 export async function notWorthResearching(
   opportunity: CashOpportunity,
-  context: { now: string; deployableCents?: number },
+  context: { now: string },
 ): Promise<NotWorthResearching | null> {
   if (opportunity.sourceClaimId) {
     const claim = await getClaim(opportunity.sourceClaimId);
@@ -123,25 +113,6 @@ export async function notWorthResearching(
   }
   if (closesWithin(opportunity.expiresAt, context.now)) {
     return { kind: 'CLOSES_TOO_SOON', at: opportunity.expiresAt! };
-  }
-  /*
-   * Only an acquisition, whose capture starts by paying the asking price. A
-   * service with a published exposure is still researched while the ledger is
-   * empty — capital can arrive, and execution waits for it on its own
-   * (`beginExecution`); spending nothing on research there would leave every
-   * service opening unqualified the day the money lands.
-   */
-  if (ACQUISITION_SIGNALS.has(opportunity.opportunitySignal ?? '')) {
-    const deployable =
-      context.deployableCents ??
-      Math.max(
-        0,
-        (await cashPosition({ projectId: opportunity.projectId, currency: opportunity.currency })).deployableCents,
-      );
-    const needs = opportunity.peakFundingCents !== null && opportunity.peakFundingCents > 0 ? opportunity.peakFundingCents : null;
-    if (needs !== null ? needs > deployable : deployable <= 0) {
-      return { kind: 'CAPITAL_NOT_HELD', needsCents: needs, deployableCents: deployable, currency: opportunity.currency };
-    }
   }
   return null;
 }

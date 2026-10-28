@@ -191,8 +191,8 @@ export const PLAY_BUCKETS: readonly SearchBucket[] = Object.freeze(
  */
 const QUICK_WINDOW_ASK =
   'naming who must pay, the published price or budget, the date the window closes, and how ' +
-  'fast a first payment could arrive for work delivered by email — and say how long the window ' +
-  'lasts (a window of weeks is fine)?';
+  'fast a first payment could arrive for the work, goods or service delivered — and say how long ' +
+  'the window lasts (a window of weeks is fine)?';
 
 export const QUICK_PLAY_BUCKETS: readonly SearchBucket[] = Object.freeze([
   {
@@ -222,8 +222,8 @@ export const QUICK_PLAY_BUCKETS: readonly SearchBucket[] = Object.freeze([
     title: 'Which upcoming event creates a burst of paid work',
     question:
       'Which upcoming, published event — a trade show, a season, a launch, a change of tax year, ' +
-      'an election, a disaster recovery period — creates a burst of demand for digital work ' +
-      `from businesses or organisations — ${QUICK_WINDOW_ASK}`,
+      'an election, a disaster recovery period — creates a burst of demand for paid work, goods or services ' +
+      `from businesses, organisations or households — ${QUICK_WINDOW_ASK}`,
   },
   {
     id: 'quick-platform-change',
@@ -240,9 +240,109 @@ export const QUICK_PLAY_BUCKETS: readonly SearchBucket[] = Object.freeze([
     mechanism: 'TEMPORARY_EXPLOIT',
     title: 'Which price gap is open right now and closing',
     question:
-      'Where is the same deliverable or digital product published at two clearly different ' +
+      'Where is the same product, service or deliverable published at two clearly different ' +
       'prices right now because of a temporary condition (a promotion, a shortage, a new entrant, ' +
       `a currency move), with buyers on the expensive side — ${QUICK_WINDOW_ASK}`,
+  },
+]);
+
+/**
+ * The third wave: the wider economy (the owner, 2026-10-28).
+ *
+ * Every bucket above but two was about work a business buys and Brain
+ * delivers itself, and thirteen of them came first in the list — so discovery
+ * concentrated on small B2B digital services. These ask about the other ways
+ * money moves: between consumers and businesses, through a broker or a
+ * matchmaker, through freight and storage, through somebody sourcing what a
+ * buyer cannot find, through physical resale, and through running a function a
+ * business hands off. They are starting examples rather than a closed list, and
+ * the last one asks which ways nobody here has named yet.
+ *
+ * Researching one of these authorizes nothing: an opening it finds goes
+ * through the same gate, the same tier and the same commercial grant as every
+ * other, and acting on it still needs whatever licence, capital or capability
+ * it names.
+ */
+export const BROAD_ECONOMY_BUCKETS: readonly SearchBucket[] = Object.freeze([
+  {
+    id: 'broad-brokerage',
+    mechanism: 'SUPPLY_DEMAND_MISMATCH',
+    title: 'Where buyers and sellers pay somebody to find each other',
+    question:
+      'In which markets — business or consumer, goods or services — do buyers and sellers pay a ' +
+      'broker, agent or matchmaker a fee or commission to find each other, naming the market, ' +
+      'which side pays, the published fee or commission, where the two sides currently look, and ' +
+      'any licence or rule that decides who may arrange the match?',
+  },
+  {
+    id: 'broad-logistics',
+    mechanism: 'SUPPLY_DEMAND_MISMATCH',
+    title: 'Where freight, delivery or storage demand is unmet or overpriced',
+    question:
+      'Where is published freight, delivery, moving or storage demand going unmet or paying well ' +
+      'above normal right now — loads posted without carriers, lanes with published rate spikes, ' +
+      'storage shortages, delivery backlogs — naming who needs it moved or stored, the published ' +
+      'rate, the dates, and what licence, insurance or equipment decides who may arrange it?',
+  },
+  {
+    id: 'broad-sourcing',
+    mechanism: 'CAPABILITY_ARBITRAGE',
+    title: 'Who cannot find a product, part or supply at the price they need',
+    question:
+      'Which businesses, institutions or households have published that they need a product ' +
+      'sourced — a part, a material, a supply, a bulk quantity — faster or cheaper than they can ' +
+      'find it, naming the buyer, the item, what they pay now, a published supplier price ' +
+      'elsewhere, and what the sources say about minimum quantities, importing or terms?',
+  },
+  {
+    id: 'broad-consumer-demand',
+    mechanism: 'EXISTING_BUYING_SIGNAL',
+    title: 'Which consumer needs are published as unmet right now',
+    question:
+      'Which consumer needs are published as unmet or badly served right now — products sold ' +
+      'out or back-ordered, services with long published waitlists, things many people are ' +
+      'publicly asking where to find — naming the need, how widely it is asked (with the ' +
+      'source), what people currently pay, and where those consumers gather or can be reached?',
+  },
+  {
+    id: 'broad-physical-resale',
+    mechanism: 'RESALE_OR_ASSET',
+    title: 'Which physical goods sell for more in one market than another',
+    question:
+      'Which physical goods are published at a clearly higher price in one market, channel, ' +
+      'region or season than they are offered at in another — liquidation and wholesale lots, ' +
+      'regional gaps, out-of-season stock — naming both published prices, the quantities, the ' +
+      'published costs of moving and reselling them, and any restriction on resale?',
+  },
+  {
+    id: 'broad-delegated-operations',
+    mechanism: 'SUBCONTRACTED_FULFILMENT',
+    title: 'Which ongoing functions businesses pay an outside firm to run',
+    question:
+      'Which ongoing business functions — bookkeeping, scheduling, customer support, dispatch, ' +
+      'collections, listings management, compliance tracking, procurement — do businesses ' +
+      'publicly pay an outside firm to run month after month, naming the kind of business, the ' +
+      'published monthly price, what the outside firm does, and what running it would require?',
+  },
+  {
+    id: 'broad-referrals',
+    mechanism: 'EXISTING_BUYING_SIGNAL',
+    title: 'Who publishes a price for a referral, a lead or a booked job',
+    question:
+      'Which trades, service businesses or sellers publish that they pay for referrals, ' +
+      'qualified leads or booked appointments — a referral fee, a price per lead, a commission ' +
+      'on a closed sale — naming the kind of business, the published price, how they say the ' +
+      'leads are delivered, and any rule on who may supply them?',
+  },
+  {
+    id: 'broad-other-mechanisms',
+    mechanism: 'SUPPLY_DEMAND_MISMATCH',
+    title: 'Which other ways of being paid between two parties exist right now',
+    question:
+      'Beyond direct sale, brokerage, matchmaking, subcontracting, logistics, sourcing, resale, ' +
+      'arbitrage and running delegated operations, which other lawful ways are people and ' +
+      'businesses currently being paid to move money, goods, information or work between two ' +
+      'parties — naming one live, dated, published example of each, who pays whom, and how much?',
   },
 ]);
 
@@ -359,6 +459,7 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
       'leads, data, fulfilment capacity, a licence, credibility or capital — naming both ' +
       'sources, what each side published, and what specifically one supplies to the other?',
   },
+  ...BROAD_ECONOMY_BUCKETS,
 ]);
 
 const OPENED = 'CASH_DISCOVERY_OPENED';
@@ -440,7 +541,7 @@ export async function openDiscovery(input: {
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
-  for (const bucket of [...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])]) {
+  for (const bucket of fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds)) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
@@ -503,6 +604,47 @@ export async function openDiscovery(input: {
       },
     });
     out.push({ bucketId: bucket.id, candidateId: round.candidateId, round: next });
+  }
+  return out;
+}
+
+/**
+ * The order buckets are offered in: the least-asked mechanism first.
+ *
+ * `openDiscovery` opens one round a tick and every bucket is re-asked after its
+ * cool-off, so whichever buckets come first in the list are the ones asked over
+ * and over. Thirteen of the first thirteen were small digital-service plays,
+ * which is how discovery concentrated on one kind of opening. A mechanism with
+ * nine buckets now gets the same share of asking as a mechanism with one, a
+ * bucket never asked comes before one asked again inside its mechanism, and
+ * list order only breaks a tie. It changes which question is asked next and
+ * nothing about whether any may be.
+ */
+export function fairOrder(buckets: readonly SearchBucket[], rounds: readonly CashDiscoveryRound[]): SearchBucket[] {
+  const byMechanism = new Map<string, number>();
+  const byBucket = new Map<string, number>();
+  for (const round of rounds) {
+    byMechanism.set(round.mechanism, (byMechanism.get(round.mechanism) ?? 0) + 1);
+    byBucket.set(round.bucketId, (byBucket.get(round.bucketId) ?? 0) + 1);
+  }
+  // Greedy, so one pass that opens several rounds interleaves mechanisms too:
+  // each pick counts as an asking of its mechanism before the next is chosen.
+  const left = buckets.map((bucket, index) => ({ bucket, index }));
+  const out: SearchBucket[] = [];
+  while (left.length > 0) {
+    let best = 0;
+    for (let i = 1; i < left.length; i += 1) {
+      const a = left[i]!;
+      const b = left[best]!;
+      const order =
+        (byMechanism.get(a.bucket.mechanism) ?? 0) - (byMechanism.get(b.bucket.mechanism) ?? 0) ||
+        (byBucket.get(a.bucket.id) ?? 0) - (byBucket.get(b.bucket.id) ?? 0) ||
+        a.index - b.index;
+      if (order < 0) best = i;
+    }
+    const [picked] = left.splice(best, 1);
+    out.push(picked!.bucket);
+    byMechanism.set(picked!.bucket.mechanism, (byMechanism.get(picked!.bucket.mechanism) ?? 0) + 1);
   }
   return out;
 }
@@ -647,19 +789,21 @@ export function executionFrameSentence(frame: ExecutionFrame): string {
   const capital =
     frame.deployableCents > 0
       ? `it can commit about ${frame.currency} ${(frame.deployableCents / 100).toFixed(0)} of its own capital, so prefer openings needing less than that up front`
-      : 'it holds no capital of its own to commit, so report only openings that need no money up front or are paid before any cost falls due';
+      : 'it holds no capital of its own to commit, so say for each opening how much money it needs up front and whether it is paid before any cost falls due';
   return (
-    'Report first the openings this operation could act on now. It runs online with AI workers and ' +
-    `delivers ${delivers}; it holds no professional licence, certification, bonding, ` +
+    'Look across the whole economy, not only at work this operation can already do: business and ' +
+    'consumer markets, goods and services, brokerage, matchmaking, subcontracting, logistics, ' +
+    'sourcing, resale, arbitrage and running operations for others are all in scope, and these ' +
+    'are examples rather than a limit. For context, today this operation runs online with AI ' +
+    `workers and delivers ${delivers}; it holds no professional licence, certification, bonding, ` +
     'government vendor registration or local physical presence, and takes no employment or ' +
-    `hourly positions; ${capital}; it reaches buyers by email at the business addresses they ` +
-    'publish; and it is paid online, through a checkout or invoice route a buyer ' +
-    'already uses. For each opening name who would pay this operation, roughly how much, how ' +
-    'the money would reach it, the earliest it could arrive, and whether it could act on it now; ' +
-    'openings that could become collected cash within seven days come first. An opening it could ' +
-    'not act on today is still worth reporting when the money is real: name the one licence, ' +
-    'registration, capability or amount of capital it would need rather than leaving it out. ' +
-    'Leave out job postings, hourly positions and anything already closed. Leave out individual ' +
+    `hourly positions; ${capital}; and it is paid online, through a checkout or invoice route a ` +
+    'buyer already uses. That describes where it starts, not what is worth reporting. For each ' +
+    'opening name who would pay this operation, roughly how much, how the money would reach it, ' +
+    'the earliest it could arrive, and whether it could act on it now. An opening it could not ' +
+    'act on today is still worth reporting when the money is real: name the one licence, ' +
+    'registration, capability, partner or amount of capital it would need rather than leaving it ' +
+    'out. Leave out job postings, hourly positions and anything already closed. Leave out individual ' +
     'project listings on freelance marketplaces: this operation does not take freelance work. ' +
     'A company publishing its ' +
     'own prices or fees is evidence of what that company charges, not of anybody paying this ' +
