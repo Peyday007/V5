@@ -34,12 +34,19 @@ import { isTestFirstPlay } from './tier.ts';
 import { sharedFrontier } from './shared.ts';
 import { cashPosition } from './money.ts';
 import type { CashOpportunity, CashCardFact } from '../../domain/types.ts';
-import type { ScenarioModelDefinition, ScenarioVariable, SourceRef, StrategySpec, VariableProvenance } from '../../domain/scenario.ts';
+import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, type SourceRef, type StrategySpec, type VariableProvenance } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
 
-/** At most this many opportunities in one model: seven variables each, under the engine's 40. */
-export const MAX_MODEL_OPPORTUNITIES = 5;
+/** Variables the model declares once, and per opportunity. */
+export const GOAL_MODEL_VARIABLES = 4;
+export const OPPORTUNITY_MODEL_VARIABLES = 8;
+/**
+ * At most this many opportunities in one model, derived from the engine's own
+ * variable limit rather than written beside it — a constant written beside it
+ * was 5, which is 44 variables, and production refused the first real model.
+ */
+export const MAX_MODEL_OPPORTUNITIES = Math.floor((SCENARIO_LIMITS.maxVariables - GOAL_MODEL_VARIABLES) / OPPORTUNITY_MODEL_VARIABLES);
 /** A repeatable play's strategy offers to this many times the buyers it needs. */
 export const OUTREACH_MULTIPLE = 4;
 /** And never more than this many buyers in one strategy. */
