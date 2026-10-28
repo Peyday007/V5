@@ -204,6 +204,15 @@ describe('the gate', () => {
     expect(rows.map((one) => one.kind)).toEqual(['MISSED']);
   });
 
+  it('stays inside the engine limits however many openings there are', async () => {
+    for (let i = 0; i < 9; i += 1) await play({ title: `Opening ${i}`, priceCents: 50_000 + i, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    const id = await goal(1_000_000);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
+    expect(reading.refusal).toBeNull();
+    expect(reading.strategies.length).toBeGreaterThan(1);
+    expect(reading.excluded.filter((one) => one.reason.includes('closest to a decision')).length).toBeGreaterThan(0);
+  });
+
   it('says why there is nothing to model rather than inventing a plan', async () => {
     const id = await goal(100_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
