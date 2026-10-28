@@ -74,6 +74,7 @@ import { getProject, listProjects } from '../../repos/projects.ts';
 import { laneConfig } from '../cheap/lane.ts';
 import { openFeedShortlist, pullDueFeeds, screenFeedLeads, shortlistProject } from '../feeds/run.ts';
 import { checkDueSites, mapNextMetro } from '../feeds/sites.ts';
+import { runDetectors } from '../feeds/detectors.ts';
 import { frontierIsDue, refreshFrontier } from './frontier.ts';
 import {
   dispatchInquiry,
@@ -1670,6 +1671,8 @@ async function tickOnce(owner: string): Promise<TickReport> {
       await runPass(report, 'feeds', async () => {
         if (!laneConfig()) return;
         await pullDueFeeds();
+        // Code-first: installed rules recognise patterns before any model is asked.
+        await runDetectors();
         // Broken money paths: map named businesses, check their sites, file what repeats.
         await mapNextMetro();
         await checkDueSites();

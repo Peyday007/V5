@@ -33,6 +33,7 @@ import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
 import { FEED_SOURCES, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
+import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
 
 export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<unknown>;
 
@@ -169,8 +170,10 @@ export async function screenFeedLeads(input: {
   const done = await screenedLeads(recent.map((one) => one.id));
   const health = await modelHealth('SCREEN_LEAD', now);
   const pace = lanePacing(health, isDown);
+  // A record a code rule already accounts for is not asked about one by one.
+  const covered = await coveredItems(recent.map((one) => one.id));
   const todo = recent
-    .filter((item) => item.source !== SITE_SOURCE && !done.has(item.id))
+    .filter((item) => item.source !== SITE_SOURCE && item.source !== CODE_SIGNAL_SOURCE && !covered.has(item.id) && !done.has(item.id))
     .filter((item) => {
       const published = Date.parse(item.publishedAt ?? item.fetchedAt);
       return !Number.isFinite(published) || now.getTime() - published <= LEAD_MAX_AGE_MS;
@@ -222,6 +225,21 @@ async function leadScreens(items: readonly StoredFeedItem[]): Promise<Map<string
   for (const [id, answers] of by) {
     const merged = combineLeads(answers);
     if (merged) out.set(id, merged);
+  }
+  // A code detection is recognised by a rule, so it needs no model to keep it —
+  // and it is still only a lead: Claude verifies it on the shortlist like any other.
+  const detections = await detectionsForLeads(items.filter((one) => one.source === CODE_SIGNAL_SOURCE).map((one) => one.id));
+  for (const item of items) {
+    const detection = detections.get(item.id);
+    if (!detection || !detection.deliverable) continue;
+    out.set(item.id, {
+      verdict: 'KEEP',
+      window: 'ONGOING',
+      deliverable: detection.deliverable,
+      need: detection.label,
+      payer: item.organization ?? '',
+      reason: 'Recognised by a code rule; a pattern, not a confirmed buyer.',
+    });
   }
   // A broken site is proved by code, so it needs no model to keep it.
   for (const item of items) {

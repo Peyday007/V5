@@ -12,6 +12,7 @@ import { laneReading } from '../cheap/lane.ts';
 import { feedReading } from '../../repos/feeds.ts';
 import { shortlistFunnel } from '../feeds/run.ts';
 import { siteReading, type SiteReading } from '../feeds/sites.ts';
+import { detectionReading, type DetectionReading } from '../feeds/detectors.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 
@@ -35,6 +36,7 @@ export interface Scoreboard {
   /** Raw leads code pulled, and how many reached a Claude shortlist. */
   feeds: Awaited<ReturnType<typeof feedReading>>;
   sites: SiteReading | null;
+  detections: DetectionReading | null;
   funnel: { pool: number; screened: number; kept: number; passedRules: number; ready: number } | null;
 }
 
@@ -57,6 +59,7 @@ export async function scoreboard(projectId: string, now: Date = new Date()): Pro
     cheapLane: await laneReading(now),
     feeds: await feedReading(now),
     sites: await siteReading().catch(() => null),
+    detections: await detectionReading().catch(() => null),
     funnel: await shortlistFunnel(projectId, now)
       .then((f) => ({ pool: f.pool, screened: f.screened, kept: f.kept, passedRules: f.passedRules, ready: f.chosen.length }))
       .catch(() => null),
@@ -99,6 +102,9 @@ export function formatScoreboard(board: Scoreboard): string[] {
     board.sites
       ? `  sites       ${board.sites.businesses} named businesses mapped · ${board.sites.checked} checked · ${board.sites.pending} problems waiting a second look · ${board.sites.confirmed} confirmed${Object.keys(board.sites.byProblem).length ? ` (${Object.entries(board.sites.byProblem).map(([k, v]) => `${k} ${v}`).join(', ')})` : ''}`
       : '  sites       could not be read',
+    board.detections
+      ? `  code rules  ${board.detections.byRule.map((one) => `${one.rule} ${one.mode} ${one.detections} found, ${one.leads} sent on`).join(' · ') || 'none fired yet'} · ${board.detections.covered} raw records covered, ${board.detections.coveredUnscreened} of them never sent to the free AI`
+      : '  code rules  could not be read',
     board.funnel
       ? `  funnel      ${board.funnel.pool} recent → ${board.funnel.screened} screened → ${board.funnel.kept} kept → ${board.funnel.passedRules} pass rules → ${board.funnel.ready} ready for Claude`
       : '  funnel      could not be read',
