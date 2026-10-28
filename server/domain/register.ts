@@ -146,6 +146,31 @@ export interface WorkstreamRow {
   paused_reason?: string | null;
   cancelled_at?: string | null;
   cancelled_reason?: string | null;
+  // Migration 128: a measurable target a person stated.
+  target_metric?: string | null;
+  target_amount_cents?: number | string | null;
+  target_currency?: string | null;
+  target_project_id?: string | null;
+  capital_ceiling_cents?: number | string | null;
+  hours_ceiling?: number | string | null;
+  target_set_at?: string | null;
+}
+
+/** The figure a targeted goal counts. */
+export const GOAL_METRICS = ['SETTLED_CASH', 'COLLECTED_CASH', 'CONTRIBUTION'] as const;
+export type GoalMetric = (typeof GOAL_METRICS)[number];
+
+/** A measurable target, in a person's words turned into numbers. */
+export interface GoalTarget {
+  metric: GoalMetric;
+  amountCents: number;
+  currency: string;
+  /** The project whose ledger the figure is read from. */
+  projectId: string;
+  capitalCeilingCents: number | null;
+  hoursCeiling: number | null;
+  /** Money is counted from this instant. */
+  setAt: string;
 }
 
 export interface Workstream {
@@ -168,6 +193,8 @@ export interface Workstream {
   pausedReason: string | null;
   cancelledAt: string | null;
   cancelledReason: string | null;
+  /** Null for a goal measured by its delivered work rather than a figure. */
+  target: GoalTarget | null;
 }
 
 export interface WorkstreamLinkRow {

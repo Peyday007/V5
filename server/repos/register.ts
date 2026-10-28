@@ -28,6 +28,7 @@ import type {
   WorkstreamPurpose,
   WorkstreamRow,
 } from '../domain/register.ts';
+import { GOAL_METRICS, type GoalMetric } from '../domain/register.ts';
 
 function mapWorkstream(row: WorkstreamRow): Workstream {
   return {
@@ -50,6 +51,20 @@ function mapWorkstream(row: WorkstreamRow): Workstream {
     pausedReason: row.paused_reason ?? null,
     cancelledAt: row.cancelled_at ?? null,
     cancelledReason: row.cancelled_reason ?? null,
+    target:
+      row.target_metric && (GOAL_METRICS as readonly string[]).includes(row.target_metric) &&
+      row.target_amount_cents !== null && row.target_amount_cents !== undefined &&
+      row.target_currency && row.target_project_id && row.target_set_at
+        ? {
+            metric: row.target_metric as GoalMetric,
+            amountCents: Number(row.target_amount_cents),
+            currency: row.target_currency,
+            projectId: row.target_project_id,
+            capitalCeilingCents: row.capital_ceiling_cents === null || row.capital_ceiling_cents === undefined ? null : Number(row.capital_ceiling_cents),
+            hoursCeiling: row.hours_ceiling === null || row.hours_ceiling === undefined ? null : Number(row.hours_ceiling),
+            setAt: row.target_set_at,
+          }
+        : null,
   };
 }
 

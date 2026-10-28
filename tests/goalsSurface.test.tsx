@@ -28,6 +28,7 @@ const goal: GoalView = {
   commitmentLabel: 'No outside commitment',
   lifecycle: 'ACTIVE',
   lifecycleReason: 'being pursued',
+  target: null,
   state: 'IN_PROGRESS',
   stateEvidence: 'MISSION: russell_missions.state = RUNNING',
   authority: { research: 'Russell may research here until 2026-10-06.', commercial: null },

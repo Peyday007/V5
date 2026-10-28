@@ -135,7 +135,7 @@ describe('in the feed path', () => {
     const funnel = await shortlistFunnel(projectId, now);
     const lead = funnel.chosen.find(({ item }) => item.source === CODE_SIGNAL_SOURCE);
     expect(lead).toBeDefined();
-    expect(lead!.item.title).toContain('Acme');
+    expect(lead!.item.title).toMatch(/^Acme: /);
   });
 
   it('extends a detection when a new title arrives, and never shrinks it', async () => {

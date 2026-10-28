@@ -167,6 +167,12 @@ export const CONCENTRATED_HIRING: Detector = {
       if (!title) continue;
       const key = `${entity}|${family.key}`;
       const group = groups.get(key) ?? { name: record.organization!.trim(), family, byTitle: new Map() };
+      // The display name is the spelling most members use, then the alphabetically
+      // first — never whichever row the database happened to return first.
+      const names = [...[...group.byTitle.values()].flat(), record].map((one) => one.organization!.trim());
+      const counts = new Map<string, number>();
+      for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
+      group.name = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]![0];
       const same = group.byTitle.get(title) ?? [];
       same.push(record);
       group.byTitle.set(title, same);

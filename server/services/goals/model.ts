@@ -63,6 +63,7 @@ import { REFUSAL_WAIT, surfaceIneligibility, type RoutingRefusal } from '../disp
 import { listRoutines } from '../../repos/fleet.ts';
 import { sharedFleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
+import { readTarget, type TargetReading } from './target.ts';
 
 // ---------------------------------------------------------------------------
 // The shape
@@ -158,6 +159,8 @@ export interface GoalView {
 
   lifecycle: GoalLifecycle;
   lifecycleReason: string;
+  /** A measurable target and the ledger's reading of it, or null. */
+  target: TargetReading | null;
 
   /** The register's derived state and the reading that decided it. */
   state: WorkstreamView['state'];
@@ -673,6 +676,7 @@ export async function assembleGoals(options: {
   // First pass: what every goal's rows say, over the whole Brain, because a
   // dependency's lifecycle and a priority rank are both facts about goals the
   // caller may not be able to read.
+  const targets = new Map<string, TargetReading | null>();
   const base = new Map<
     string,
     { goal: Workstream; view: WorkstreamView | null; lifecycle: GoalLifecycle; reason: string; resolved: Resolved }
@@ -699,11 +703,21 @@ export async function assembleGoals(options: {
       continue;
     }
     const view = await viewOf(goal, own);
-    const complete = completion(view, own);
+    // A goal with a measurable target is complete only when the real ledger
+    // reaches it — never because the work it pursues reported itself done.
+    const target = goal.target ? await readTarget(goal) : null;
+    const complete = target ? target.achieved : completion(view, own);
     const lifecycle: GoalLifecycle = decided?.lifecycle ?? (complete ? 'COMPLETE' : 'ACTIVE');
     const reason =
       decided?.reason ??
-      (complete ? `every piece of work it pursues has delivered (${view.stateEvidence})` : 'being pursued');
+      (target
+        ? target.achieved
+          ? `the ledger shows ${target.achievedCents / 100} ${target.currency} ${target.metricLabel}, at or above the ${target.targetCents / 100} target`
+          : `being pursued: ${target.achievedCents / 100} of ${target.targetCents / 100} ${target.currency} ${target.metricLabel} so far`
+        : complete
+          ? `every piece of work it pursues has delivered (${view.stateEvidence})`
+          : 'being pursued');
+    targets.set(goal.id, target);
     const resolved = await resolveWork(own, goal.projectId, attestedMerge(view.readings));
     base.set(goal.id, { goal, view, lifecycle, reason, resolved });
   }
@@ -905,6 +919,7 @@ export async function assembleGoals(options: {
       commitmentLabel: COMMITMENT_LABELS[goal.commitment],
       lifecycle,
       lifecycleReason: reason,
+      target: targets.get(goal.id) ?? null,
       state: view.state,
       stateEvidence: view.stateEvidence,
       authority,
