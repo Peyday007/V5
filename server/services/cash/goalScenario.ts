@@ -116,6 +116,12 @@ export interface GoalModel {
   definition: ScenarioModelDefinition;
   included: ModelledOpportunity[];
   excluded: { opportunityId: string; title: string; reason: string }[];
+  /**
+   * Every opening that could be read at all, modelled or not. The engine fits
+   * a few into one simulation; the gate still judges every one of these on
+   * its own evidence, so the engine's limit never limits what Brain considers.
+   */
+  considered: ModelledOpportunity[];
   /** Why nothing could be modelled, when nothing could. */
   refusal: string | null;
 }
@@ -173,10 +179,15 @@ async function modelOpportunity(
   const top = price.high ?? price.value ?? 0;
 
   const exposure = fact('exposure');
+  // Research answers "how much goes out before any comes back" as requiredCapital.
+  const capitalFact = fact('requiredCapital');
+  const capitalFigures = capitalFact ? readMoneyFigures(capitalFact.value, currency).filter((one) => !one.perUnit) : [];
   const capital =
     opportunity.peakFundingCents !== null
       ? known(opportunity.peakFundingCents / 100, kindToProvenance(exposure).provenance === 'UNKNOWN' ? 'ASSUMPTION' : kindToProvenance(exposure).provenance, kindToProvenance(exposure).source ?? ref, 'money tied up before it pays')
-      : unknown(0, top, 'nobody has established the money tied up; swept from nothing to the whole price');
+      : capitalFigures.length > 0
+        ? known(Math.max(...capitalFigures.map((one) => one.cents)) / 100, kindToProvenance(capitalFact).provenance, kindToProvenance(capitalFact).source, 'the most that goes out before any comes back')
+        : unknown(0, top, 'nobody has established the money tied up; swept from nothing to the whole price');
 
   const hoursFact = fact('hours');
   const hours =
@@ -248,6 +259,18 @@ async function modelOpportunity(
  * repeatable play could take, or one deal. Zero when it is known to settle too
  * late. A ranking key only — it is never shown as a forecast.
  */
+/** A price buyers are shown to pay — a source or this Brain's own record — rather than a guess. */
+export function priceSupported(one: Pick<ModelledOpportunity, 'price'>): boolean {
+  return one.price.provenance === 'EVIDENCE' || one.price.provenance === 'HISTORICAL';
+}
+
+/** How many of an opening's money facts rest on a source or a measurement rather than a guess. */
+export function evidenceCount(one: ModelledOpportunity): number {
+  return [one.price, one.close, one.daysToCash, one.directCost, one.capital, one.hours].filter(
+    (input) => input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL',
+  ).length;
+}
+
 export function bestCaseReach(one: ModelledOpportunity, remaining: number, daysLeft: number): number {
   const late = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && one.daysToCash.value > daysLeft;
   if (late) return 0;
@@ -280,10 +303,12 @@ function variable(key: string, label: string, unit: string, input: ModelInput): 
 export async function composeGoalModel(input: { goal: Workstream; target: TargetReading; now?: Date }): Promise<GoalModel> {
   const { goal, target } = input;
   const excluded: GoalModel['excluded'] = [];
+  const candidates: ModelledOpportunity[] = [];
   const refuse = (refusal: string): GoalModel => ({
     definition: { title: goal.title, currency: target.currency, horizon: 'until the goal is due', variables: [], lines: [], strategies: [] },
     included: [],
     excluded,
+    considered: candidates,
     refusal,
   });
   if (target.daysLeft === null) return refuse('The goal has no due date, so there is no window to count money inside. Set one with `goals terms --due`.');
@@ -310,7 +335,6 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
 
   const lessons = await cashOutcomeLessons(target.projectId);
   const included: ModelledOpportunity[] = [];
-  const candidates: ModelledOpportunity[] = [];
   for (const opportunity of ordered) {
     const tier = tierOf.get(opportunity.id) ?? 'SIGNAL';
     if (tier === 'SIGNAL' && !IN_FLIGHT.has(opportunity.state)) {
@@ -342,6 +366,10 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     (a, b) =>
       (IN_FLIGHT.has(a.opportunity.state) || a.agreed ? 0 : 1) - (IN_FLIGHT.has(b.opportunity.state) || b.agreed ? 0 : 1) ||
       Number(a.competitiveAward) - Number(b.competitiveAward) ||
+      // Reach at a price buyers are shown to pay comes before reach at a guess.
+      (priceSupported(b) ? bestCaseReach(b, remainingMajor, target.daysLeft!) : 0) -
+        (priceSupported(a) ? bestCaseReach(a, remainingMajor, target.daysLeft!) : 0) ||
+      evidenceCount(b) - evidenceCount(a) ||
       bestCaseReach(b, remainingMajor, target.daysLeft!) - bestCaseReach(a, remainingMajor, target.daysLeft!) ||
       (TIER_ORDER[a.tier] ?? 3) - (TIER_ORDER[b.tier] ?? 3),
   );
@@ -529,6 +557,16 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     },
     included,
     excluded,
+    considered: candidates,
     refusal: null,
   };
+}
+
+/** The buyers a single-opening plan asks, for a judgement made outside the engine. */
+export function dealsForGoal(one: ModelledOpportunity, remainingMajor: number): number {
+  const gap = Math.max(0, remainingMajor - one.agreedValue);
+  if (gap === 0) return 0;
+  if (!one.repeatable) return one.agreedValue > 0 ? 0 : 1;
+  const price = one.price.value ?? one.price.low ?? 1;
+  return Math.min(MAX_BUYERS_OFFERED, Math.ceil(gap / Math.max(1, price)) * OUTREACH_MULTIPLE);
 }

@@ -334,7 +334,10 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     const combined = reading.strategies.find((one) => one.key.startsWith('combine_'))!;
     expect(combined.opportunityIds).toHaveLength(2);
     expect(combined.constraintsFailed.join(' ')).not.toMatch(/cannot reach/);
-    expect(reading.needsMoreOpenings).toBe(false);
+    // The combination reaches the target on paper, but nothing is established
+    // yet, so it is not a realistic plan and Brain keeps looking.
+    expect(reading.verdict).not.toBe('RECOMMENDABLE');
+    expect(reading.needsMoreOpenings).toBe(true);
     // Delivered by somebody other than Brain, named by a person and by a source.
     expect(combined.links.find((one) => one.link === 'FULFILMENT')!.ok).toBe(true);
   });
@@ -369,20 +372,24 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     await setTerms(g.id, { dueAt: inDays(30), ownerUserId: userId }, `person:${userId}`);
     await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId, resources: 'a box truck and two weekend helpers' });
 
+    const mine = async () => (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${g.id}-`));
     const first = await advanceGoalPlans(now);
     expect(first.asked).toBe(1);
-    const rounds = (await listRounds(projectId)).filter((one) => one.bucketId === `goal-${g.id}`);
-    expect(rounds).toHaveLength(1);
+    const rounds = await mine();
+    expect(rounds.map((one) => one.bucketId)).toEqual([`goal-${g.id}-open`]);
     const statement = (await getCandidate(rounds[0]!.candidateId))!.statement;
-    expect(statement).toMatch(/any market, industry or mechanism/);
+    expect(statement).toMatch(/any way at all, in any market, industry or arrangement/);
     expect(statement).toMatch(/reach at most USD 300/);
+    expect(statement).toMatch(/look for different kinds: "Too small"/);
     expect(statement).toMatch(/box truck/);
     expect(statement).toMatch(/has not said how much of their own capital/);
 
-    // The next read, inside the round's life, asks nothing again.
-    const later = await advanceGoalPlans(new Date(now.getTime() + 31 * 60_000));
-    expect(later.asked).toBe(0);
-    expect((await listRounds(projectId)).filter((one) => one.bucketId === `goal-${g.id}`)).toHaveLength(1);
+    // Each later read asks from a different angle, never the same one twice at once…
+    for (let i = 1; i <= 4; i += 1) await advanceGoalPlans(new Date(now.getTime() + i * 31 * 60_000));
+    const lenses = (await mine()).map((one) => one.bucketId.slice(`goal-${g.id}-`.length));
+    expect(lenses.sort()).toEqual(['brokerage', 'consumer', 'open']);
+    // …and no more than three are open at once.
+    expect((await mine()).filter((one) => one.state === 'OPEN')).toHaveLength(3);
   });
 });
 
@@ -526,10 +533,60 @@ describe('how the money actually arrives (2026-10-28)', () => {
     await oneOff({ title: 'Federal RFP, too slow', priceCents: 13_502_000, days: null });
     const id = await pacedGoalFor();
     expect((await advanceGoalPlans(now)).asked).toBe(1);
-    const round = (await listRounds(projectId)).find((one) => one.bucketId === `goal-${id}`)!;
+    const round = (await listRounds(projectId)).find((one) => one.bucketId.startsWith(`goal-${id}-`))!;
     const statement = (await getCandidate(round.candidateId))!.statement;
     expect(statement).toMatch(/come in step by step/);
     expect(statement).toMatch(/no more than USD 300 tied up before the first payment/);
     expect(statement).toMatch(/only pays after a competitive award/);
+  });
+});
+
+
+describe('Brain keeps looking until a plan is realistic, and digs into what it holds', () => {
+  it("does not count a guessed or listed price as money, however big", async () => {
+    const o = await oneOff({ title: 'Flip a domain listed at 36,000', priceCents: 3_600_000 });
+    // The card's price came from Brain's proposal, not from anything buyers paid.
+    await recordCardFact({ projectId, opportunityId: o.id, field: 'price', kind: 'RECOMMENDATION', value: '$36000', claimId: null, decidedBy: 'BRAIN', basis: 'listing', assumptions: 'a', uncertainty: 'u' });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    const only = reading.strategies[0]!;
+    expect(only.links.find((one) => one.link === 'OFFER_AND_PRICE')!).toMatchObject({ ok: false });
+    expect(only.links.find((one) => one.link === 'OFFER_AND_PRICE')!.basis).toMatch(/is a guess/);
+    expect(only.constraintsFailed.join(' ')).toMatch(/at prices buyers are shown to pay/);
+    expect(reading.bestReach).toBe(0);
+    expect(reading.needsMoreOpenings).toBe(true);
+  });
+
+  it('judges every opening it holds, not only the few the simulation fits', async () => {
+    for (let i = 0; i < 7; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 200_000 + i });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    expect(reading.considered).toHaveLength(7);
+    expect(reading.considered.filter((one) => one.modelled)).toHaveLength(4);
+    expect(reading.considered.every((one) => Array.isArray(one.missing))).toBe(true);
+  });
+
+  it('raises research for the path to the money on the openings closest to a plan', async () => {
+    const o = await oneOff({ title: 'Freight loads with unknown payment timing', priceCents: 2_000_000, days: null });
+    const id = await goal(1_000_000);
+    const result = await advanceGoalPlans(now);
+    expect(result.researched).toBeGreaterThan(0);
+    const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
+    const needs = (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.opportunityId === o.id);
+    const timing = needs.find((one) => one.requestKey === `question:${o.id}:timeToFirstCash`)!;
+    expect(timing.nextStep).toMatch(/each step, who decides it, how long each takes, and the published payment or payout terms/);
+    // Asking again does not duplicate it.
+    await advanceGoalPlans(new Date(now.getTime() + 31 * 60_000));
+    expect((await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.requestKey === `question:${o.id}:timeToFirstCash`)).toHaveLength(1);
+    expect(id).toBeTruthy();
+  });
+
+  it("never asks a goal's question as an instruction to act", async () => {
+    const { GOAL_LENSES } = await import('../server/services/cash/discovery.ts');
+    const { APPROVAL_ENVELOPES } = await import('../server/services/research/approvalEnvelope.ts');
+    const { describesOwnAction } = await import('../server/services/research/actorScope.ts');
+    const cash = Object.values(APPROVAL_ENVELOPES).filter((one) => one.id.startsWith('RUSSELL_CASH_'));
+    for (const lens of GOAL_LENSES) {
+      const text = `Looking at ${lens.angle} — which lawful ways could bring this operation USD 10000 more?`;
+      for (const envelope of cash) expect(describesOwnAction(text, envelope.forbiddenActions), `${lens.id} ${envelope.id}`).toBe(false);
+    }
   });
 });

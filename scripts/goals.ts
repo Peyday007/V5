@@ -340,6 +340,10 @@ function printPlan(reading: PlanReading): void {
   console.log(`  resources   ${t.resources ?? 'not stated'}`);
   console.log(`  spending    ${spendingRuleSentence(t) ?? 'no pace set'}`);
   console.log(`  verdict     ${reading.summary}`);
+  console.log(`  considered  ${reading.considered.length} opening(s), ${reading.considered.filter((one) => one.modelled).length} in the simulation; ${reading.needsMoreOpenings ? 'not enough yet, so Brain keeps searching' : 'a realistic plan exists'}`);
+  for (const one of reading.considered.slice(0, 8)) {
+    console.log(`    ${one.modelled ? 'model' : '     '} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
+  }
   if (reading.scenarioRunId) console.log(`  scenario    model ${reading.scenarioModelId} run ${reading.scenarioRunId}`);
   if (reading.basisNote) console.log(`  basis       ${reading.basisNote}`);
   console.log(`  chance      ${reading.measuredChance ? `${Math.round(reading.measuredChance.estimate * 100)}% (${Math.round(reading.measuredChance.lowerBound * 100)}–${Math.round(reading.measuredChance.upperBound * 100)}%, n=${reading.measuredChance.sampleSize}, ${reading.measuredChance.cohort})` : 'not stated: this Brain has too few finished recommended plans to measure one'}`);
