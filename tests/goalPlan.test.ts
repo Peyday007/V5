@@ -23,6 +23,10 @@ import { readTarget, setTarget } from '../server/services/goals/target.ts';
 import { advanceGoalPlans, listReadings, readGoalPlan, recordGoalOutcome } from '../server/services/goals/plan.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
+import { linkWorkstream } from '../server/repos/register.ts';
+import { recordAction } from '../server/repos/cashActions.ts';
+import { createAuthority } from '../server/repos/cashAuthority.ts';
+import { goalSpendingRefusal, spendingRuleSentence } from '../server/services/goals/spending.ts';
 import { assembleGoals } from '../server/services/goals/model.ts';
 import { CAPTURE_KEY } from '../server/services/cash/tier.ts';
 import { proveCapabilities } from '../server/services/cash/deliverables/capabilities.ts';
@@ -379,5 +383,93 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     const later = await advanceGoalPlans(new Date(now.getTime() + 31 * 60_000));
     expect(later.asked).toBe(0);
     expect((await listRounds(projectId)).filter((one) => one.bucketId === `goal-${g.id}`)).toHaveLength(1);
+  });
+});
+
+
+describe("the owner's pace: a test stage before money arrives, then spread over the month (2026-10-28)", () => {
+  async function pacedGoal(): Promise<string> {
+    const g = await createWorkstream({ projectId, title: 'Ten thousand this month', intent: 'x', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: inDays(30), ownerUserId: userId }, `person:${userId}`);
+    const set = await setTarget({
+      goal: (await getWorkstream(g.id))!,
+      metric: 'SETTLED_CASH',
+      amountCents: 1_000_000,
+      currency: 'USD',
+      projectId,
+      capitalCeilingCents: 300_000,
+      capitalBeforeProofCents: 30_000,
+      capitalPerWeekCents: 75_000,
+      now: new Date(now.getTime() - 60_000),
+    });
+    expect(set.ok).toBe(true);
+    return g.id;
+  }
+  async function pursued(goalId: string, title: string, capitalCents: number, executing = false, priceCents = 400_000): Promise<CashOpportunity> {
+    const o = await oneOff({ title, priceCents, capitalCents });
+    await linkWorkstream({ workstreamId: goalId, kind: 'OPPORTUNITY', ref: o.id, relation: 'PURSUES', recordedBy: 'PERSON' });
+    if (executing) {
+      await getDb().run(`UPDATE cash_opportunities SET state = 'EXECUTING' WHERE id = ?`, [o.id]);
+      const grant = await createAuthority({ projectId, ownerUserId: userId, createdByUserId: userId, name: 'g', allowedActions: ['CONTACT_BUYER'], prohibitions: [], maxCommittedCents: 1_000_000, maxPerActionCents: 1_000_000, maxConcurrent: 5, currency: 'USD' });
+      await recordAction({ projectId, opportunityId: o.id, authorityId: grant.id, action: 'CONTACT_BUYER', performedBy: 'PERSON', detail: 'started', confirmedBy: userId, requestKey: `start-${o.id}` });
+    }
+    return o;
+  }
+
+  it('holds spending to the test stage until a customer payment arrives', async () => {
+    const id = await pacedGoal();
+    const small = await pursued(id, 'A small test campaign', 20_000);
+    const big = await pursued(id, 'The full campaign', 150_000);
+    expect(await goalSpendingRefusal({ opportunity: small, neededCents: 20_000 })).toBeNull();
+    expect(await goalSpendingRefusal({ opportunity: big, neededCents: 150_000 })).toMatch(/Until a customer payment arrives.*at most USD 300.*proof it works/);
+
+    // Proof: a verified customer payment since the target was set.
+    await recordMoney({ projectId, kind: 'CUSTOMER_PAYMENT', amountCents: 50_000, currency: 'USD', recordedBy: 'PERSON', idempotencyKey: 'proof-1', verifiedReference: 'pi_proof' });
+    // Past the test stage, the weekly pace still spreads it out: 1500 is more than 750 a week.
+    expect(await goalSpendingRefusal({ opportunity: big, neededCents: 150_000 })).toMatch(/at most USD 750 in any seven days/);
+    expect(await goalSpendingRefusal({ opportunity: big, neededCents: 60_000 })).toBeNull();
+  });
+
+  it('counts what this week already started, and never goes past the total', async () => {
+    const id = await pacedGoal();
+    await recordMoney({ projectId, kind: 'CUSTOMER_PAYMENT', amountCents: 50_000, currency: 'USD', recordedBy: 'PERSON', idempotencyKey: 'proof-2', verifiedReference: 'pi_proof2' });
+    await pursued(id, 'Started this week', 60_000, true);
+    const next = await pursued(id, 'Next one', 30_000);
+    expect(await goalSpendingRefusal({ opportunity: next, neededCents: 30_000 })).toMatch(/USD 600 was started this week/);
+    // A week later the room is back.
+    expect(await goalSpendingRefusal({ opportunity: next, neededCents: 30_000, now: inDaysDate(8) })).toBeNull();
+    // And the total holds whatever the week says.
+    expect(await goalSpendingRefusal({ opportunity: next, neededCents: 250_000, now: inDaysDate(8) })).toMatch(/at most USD 3000/);
+  });
+
+  it('says the rule in words, and holds the plan to it', async () => {
+    const id = await pacedGoal();
+    const target = (await readTarget((await getWorkstream(id))!))!;
+    expect(spendingRuleSentence(target)).toBe('at most USD 300 before any money comes in; at most USD 750 newly tied up a week; at most USD 3000 in all');
+    await pursued(id, 'A campaign', 20_000, false, 2_000_000);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
+    expect(reading.nextTest?.link).toBe('CONVERSION');
+    expect(reading.nextTest?.test).toMatch(/no more than 300 USD until money comes in/);
+  });
+
+  it('changes nothing for a goal whose owner set no pace', async () => {
+    const id = await goal(1_000_000);
+    const o = await pursued(id, 'Unpaced', 900_000);
+    expect(await goalSpendingRefusal({ opportunity: o, neededCents: 900_000 })).toBeNull();
+  });
+});
+
+function inDaysDate(n: number): Date {
+  return new Date(now.getTime() + n * 86_400_000);
+}
+
+describe('where the pace binds', () => {
+  it('is asked where execution begins, after the capital the ledger can cover', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(new URL('../server/services/cash/opportunities.ts', import.meta.url), 'utf8');
+    const capital = source.indexOf('cents are deployable. Settle something');
+    const paced = source.indexOf('await goalSpendingRefusal({ opportunity, neededCents: needed })');
+    expect(capital).toBeGreaterThan(0);
+    expect(paced).toBeGreaterThan(capital);
   });
 });

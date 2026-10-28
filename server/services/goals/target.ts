@@ -48,6 +48,10 @@ export interface TargetReading {
   hoursCeiling: number | null;
   /** What the owner said they have to work with, in their words; null when nobody has said. */
   resources: string | null;
+  capitalBeforeProofCents: number | null;
+  capitalPerWeekCents: number | null;
+  /** Whether a verified customer payment has arrived since the target was set. */
+  proven: boolean;
 }
 
 const DAY = 86_400_000;
@@ -87,6 +91,9 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
     capitalCeilingCents: target.capitalCeilingCents,
     hoursCeiling: target.hoursCeiling,
     resources: target.resources,
+    capitalBeforeProofCents: target.capitalBeforeProofCents,
+    capitalPerWeekCents: target.capitalPerWeekCents,
+    proven: payments - refunds > 0,
   };
 }
 
@@ -108,6 +115,10 @@ export async function setTarget(input: {
   hoursCeiling?: number | null;
   /** People, equipment, relationships, licences — what the owner has. Never permission to spend. */
   resources?: string | null;
+  /** At most this much tied up before any money comes in. */
+  capitalBeforeProofCents?: number | null;
+  /** At most this much newly tied up in any seven days. */
+  capitalPerWeekCents?: number | null;
   now?: Date;
 }): Promise<SetTargetResult> {
   if (!(GOAL_METRICS as readonly string[]).includes(input.metric)) {
@@ -116,15 +127,16 @@ export async function setTarget(input: {
   if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) return { ok: false, reason: 'The amount must be a positive whole number of cents.' };
   if (!/^[A-Z]{3}$/.test(input.currency)) return { ok: false, reason: 'The currency must be a three-letter code.' };
   if (!(await getProject(input.projectId))) return { ok: false, reason: 'No project with that id.' };
-  for (const [name, value] of [['capital', input.capitalCeilingCents], ['hours', input.hoursCeiling]] as const) {
+  for (const [name, value] of [['capital', input.capitalCeilingCents], ['hours', input.hoursCeiling], ['before-proof', input.capitalBeforeProofCents], ['per-week', input.capitalPerWeekCents]] as const) {
     if (value !== undefined && value !== null && (!Number.isInteger(value) || value < 0)) return { ok: false, reason: `The ${name} ceiling must be a whole number, zero or more.` };
   }
   const resources = input.resources?.trim() ? input.resources.trim().slice(0, 2000) : null;
   const at = (input.now ?? new Date()).toISOString();
   await getDb().run(
     `UPDATE workstreams SET target_metric = ?, target_amount_cents = ?, target_currency = ?, target_project_id = ?,
-            capital_ceiling_cents = ?, hours_ceiling = ?, target_resources = ?, target_set_at = ?, updated_at = ? WHERE id = ?`,
-    [input.metric, input.amountCents, input.currency, input.projectId, input.capitalCeilingCents ?? null, input.hoursCeiling ?? null, resources, at, at, input.goal.id],
+            capital_ceiling_cents = ?, hours_ceiling = ?, target_resources = ?,
+            target_capital_before_proof_cents = ?, target_capital_per_week_cents = ?, target_set_at = ?, updated_at = ? WHERE id = ?`,
+    [input.metric, input.amountCents, input.currency, input.projectId, input.capitalCeilingCents ?? null, input.hoursCeiling ?? null, resources, input.capitalBeforeProofCents ?? null, input.capitalPerWeekCents ?? null, at, at, input.goal.id],
   );
   return {
     ok: true,
@@ -136,6 +148,8 @@ export async function setTarget(input: {
       capitalCeilingCents: input.capitalCeilingCents ?? null,
       hoursCeiling: input.hoursCeiling ?? null,
       resources,
+      capitalBeforeProofCents: input.capitalBeforeProofCents ?? null,
+      capitalPerWeekCents: input.capitalPerWeekCents ?? null,
       setAt: at,
     },
   };

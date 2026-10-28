@@ -372,6 +372,11 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     bestReach = Math.max(bestReach, best);
     if (sweep.infeasibleShare === 1) constraintsFailed.push('breaks the money or hours limit in every tested case');
     const cons = conservative(members, target);
+    // Spread over the goal's life: the owner's weekly pace, over the weeks left.
+    if (target.capitalPerWeekCents !== null && cons.exposure !== null && target.daysLeft !== null) {
+      const room = (target.capitalPerWeekCents / 100) * Math.max(1, Math.ceil(target.daysLeft / 7));
+      if (cons.exposure > room) constraintsFailed.push(`ties up ${Math.round(cons.exposure)} ${target.currency}, more than ${Math.round(room)} at the owner's weekly pace before the deadline`);
+    }
     const missing = links.find((one) => !one.ok);
     let verdict: PlanVerdict;
     if (constraintsFailed.length > 0) verdict = 'NOT_VIABLE';
@@ -407,6 +412,11 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       } else {
         nextTest = { link: 'CONVERSION', test: 'Every link is established, but the cautious numbers fall short of the target: add a second opening or more buyers and test again.', by: 'BRAIN', blocker: null };
       }
+    }
+    // Proof first: before any money comes in, the test is held to the owner's
+    // test-stage limit, and the rest waits for it to pay.
+    if (nextTest?.link === 'CONVERSION' && target.capitalBeforeProofCents !== null && !target.proven) {
+      nextTest = { ...nextTest, test: `${nextTest.test} Tie up no more than ${target.capitalBeforeProofCents / 100} ${target.currency} until money comes in; the rest waits for that proof.` };
     }
     strategies.push({
       key: spec.key,
