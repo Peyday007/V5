@@ -46,6 +46,8 @@ export interface TargetReading {
   since: string;
   capitalCeilingCents: number | null;
   hoursCeiling: number | null;
+  /** What the owner said they have to work with, in their words; null when nobody has said. */
+  resources: string | null;
 }
 
 const DAY = 86_400_000;
@@ -84,6 +86,7 @@ export async function readTarget(goal: Workstream, now: Date = new Date()): Prom
     since: target.setAt,
     capitalCeilingCents: target.capitalCeilingCents,
     hoursCeiling: target.hoursCeiling,
+    resources: target.resources,
   };
 }
 
@@ -103,6 +106,8 @@ export async function setTarget(input: {
   projectId: string;
   capitalCeilingCents?: number | null;
   hoursCeiling?: number | null;
+  /** People, equipment, relationships, licences — what the owner has. Never permission to spend. */
+  resources?: string | null;
   now?: Date;
 }): Promise<SetTargetResult> {
   if (!(GOAL_METRICS as readonly string[]).includes(input.metric)) {
@@ -114,11 +119,12 @@ export async function setTarget(input: {
   for (const [name, value] of [['capital', input.capitalCeilingCents], ['hours', input.hoursCeiling]] as const) {
     if (value !== undefined && value !== null && (!Number.isInteger(value) || value < 0)) return { ok: false, reason: `The ${name} ceiling must be a whole number, zero or more.` };
   }
+  const resources = input.resources?.trim() ? input.resources.trim().slice(0, 2000) : null;
   const at = (input.now ?? new Date()).toISOString();
   await getDb().run(
     `UPDATE workstreams SET target_metric = ?, target_amount_cents = ?, target_currency = ?, target_project_id = ?,
-            capital_ceiling_cents = ?, hours_ceiling = ?, target_set_at = ?, updated_at = ? WHERE id = ?`,
-    [input.metric, input.amountCents, input.currency, input.projectId, input.capitalCeilingCents ?? null, input.hoursCeiling ?? null, at, at, input.goal.id],
+            capital_ceiling_cents = ?, hours_ceiling = ?, target_resources = ?, target_set_at = ?, updated_at = ? WHERE id = ?`,
+    [input.metric, input.amountCents, input.currency, input.projectId, input.capitalCeilingCents ?? null, input.hoursCeiling ?? null, resources, at, at, input.goal.id],
   );
   return {
     ok: true,
@@ -129,6 +135,7 @@ export async function setTarget(input: {
       projectId: input.projectId,
       capitalCeilingCents: input.capitalCeilingCents ?? null,
       hoursCeiling: input.hoursCeiling ?? null,
+      resources,
       setAt: at,
     },
   };

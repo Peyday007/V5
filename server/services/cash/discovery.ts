@@ -561,51 +561,158 @@ export async function openDiscovery(input: {
      * orphan or not. Rolling both writes back together makes a lost race
      * exactly as if this call had never happened.
      */
-    let round: CashDiscoveryRound;
-    try {
-      round = await getDb().transaction(async (): Promise<CashDiscoveryRound> => {
-        const candidate = await createCandidate({
-          projectId: input.projectId,
-          visibility: 'SHARED',
-          conversationId: null,
-          sourceMessageId: null,
-          title: next === 1 ? bucket.title : `${bucket.title} (round ${next})`,
-          statement: questionFor(bucket, mode.objective, next, history, held, frame),
-        });
-
-        const result = await openRound({
-          projectId: input.projectId,
-          cashModeId: mode.id,
-          bucketId: bucket.id,
-          mechanism: bucket.mechanism,
-          round: next,
-          candidateId: candidate.id,
-        });
-        if (!result.created) throw new RoundNotOpened();
-        return result.round;
-      });
-    } catch (error) {
-      if (error instanceof RoundNotOpened) continue;
-      throw error;
-    }
-
-    await recordCashEvent({
+    const round = await openBucketRound({
       projectId: input.projectId,
-      kind: OPENED,
-      actorRef: 'BRAIN',
-      summary: `Discovery opened: ${bucket.title} (round ${next}).`,
-      detail: {
-        bucketId: bucket.id,
-        mechanism: bucket.mechanism,
-        candidateId: round.candidateId,
-        cashModeId: mode.id,
-        round: next,
-        objective: mode.objective,
-      },
+      mode,
+      bucket,
+      next,
+      statement: questionFor(bucket, mode.objective, next, history, held, frame),
     });
+    if (!round) continue;
     out.push({ bucketId: bucket.id, candidateId: round.candidateId, round: next });
   }
   return out;
+}
+
+/**
+ * Open one round of one bucket: the candidate and its round in one
+ * transaction, then the event. Null when another pass already opened it.
+ */
+async function openBucketRound(input: {
+  projectId: string;
+  mode: { id: string; objective: string };
+  bucket: SearchBucket;
+  next: number;
+  statement: string;
+}): Promise<CashDiscoveryRound | null> {
+  const { bucket, next, mode } = input;
+  let round: CashDiscoveryRound;
+  try {
+    round = await getDb().transaction(async (): Promise<CashDiscoveryRound> => {
+      const candidate = await createCandidate({
+        projectId: input.projectId,
+        visibility: 'SHARED',
+        conversationId: null,
+        sourceMessageId: null,
+        title: next === 1 ? bucket.title : `${bucket.title} (round ${next})`,
+        statement: input.statement,
+      });
+
+      const result = await openRound({
+        projectId: input.projectId,
+        cashModeId: mode.id,
+        bucketId: bucket.id,
+        mechanism: bucket.mechanism,
+        round: next,
+        candidateId: candidate.id,
+      });
+      if (!result.created) throw new RoundNotOpened();
+      return result.round;
+    });
+  } catch (error) {
+    if (error instanceof RoundNotOpened) return null;
+    throw error;
+  }
+
+  await recordCashEvent({
+    projectId: input.projectId,
+    kind: OPENED,
+    actorRef: 'BRAIN',
+    summary: `Discovery opened: ${bucket.title} (round ${next}).`,
+    detail: {
+      bucketId: bucket.id,
+      mechanism: bucket.mechanism,
+      candidateId: round.candidateId,
+      cashModeId: mode.id,
+      round: next,
+      objective: mode.objective,
+    },
+  });
+  return round;
+}
+
+/** A goal's own discovery question has this bucket id. */
+export const GOAL_BUCKET_PREFIX = 'goal-';
+
+/** The bucket a goal's own discovery rounds are filed under. */
+export function goalBucket(goalId: string, title: string, question = ''): SearchBucket {
+  return {
+    id: `${GOAL_BUCKET_PREFIX}${goalId}`,
+    // Not one mechanism: the question is open across all of them.
+    mechanism: 'OTHER',
+    title: `What else could reach: ${title}`.slice(0, 160),
+    question,
+  };
+}
+
+/**
+ * Ask the world for what the goal is missing, when the openings Brain holds
+ * cannot reach it however they are combined.
+ *
+ * Evaluating the same openings again teaches nothing, so the goal's own gap
+ * becomes one discovery round through the machinery every bucket uses: the
+ * candidate is judged, launched only inside the standing research grant, and
+ * its findings go through the same gate and harvest. The question is open —
+ * any market, mechanism or combination — and carries what the owner said they
+ * have to work with. It is asked at most once a day, stops after three barren
+ * rounds like any bucket, and authorizes nothing but reading.
+ */
+export async function openGoalDiscovery(input: {
+  goal: { id: string; title: string };
+  target: {
+    projectId: string;
+    remainingCents: number;
+    currency: string;
+    metricLabel: string;
+    daysLeft: number | null;
+    capitalCeilingCents: number | null;
+    resources: string | null;
+  };
+  bestReach: number | null;
+  now?: string;
+}): Promise<OpenedDiscovery | null> {
+  if (!claudeDiscoveryEnabled()) return null;
+  const gate = await discoveryAllowed(input.target.projectId);
+  if (!gate.allowed || !gate.mode) return null;
+  const mode = gate.mode;
+  const now = input.now ?? new Date().toISOString();
+  const t = input.target;
+  if (t.daysLeft === null || t.daysLeft <= 0 || t.remainingCents <= 0) return null;
+
+  const id = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
+  const history = (await listRounds(t.projectId)).filter((one) => one.bucketId === id);
+  const next = nextRoundFor(history, now);
+  if (next === null) return null;
+
+  const amount = `${t.currency} ${(t.remainingCents / 100).toFixed(0)}`;
+  const held =
+    input.bestReach === null
+      ? 'Brain holds no opening far enough along to plan with.'
+      : `Combined in every way Brain could, the openings it holds reach at most ${t.currency} ${Math.round(input.bestReach)} of it.`;
+  const capital =
+    t.capitalCeilingCents === null
+      ? 'The owner has not said how much of their own capital this goal may use, so name what each opening needs up front.'
+      : `The owner has said this goal may use up to ${t.currency} ${(t.capitalCeilingCents / 100).toFixed(0)} of capital, so name what each opening needs up front.`;
+  const resources = t.resources ? `What the owner has to work with: ${t.resources}.` : 'The owner has not described other resources.';
+  const bucket = goalBucket(
+    input.goal.id,
+    input.goal.title,
+    `Which lawful ways — in any market, industry or mechanism, including ones not usually put together, ` +
+      `and as one opening or several running at once — could bring this operation ${amount} more of ` +
+      `${t.metricLabel} within ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}? ${held} ${capital} ${resources} ` +
+      'For each, name who pays, roughly how much, when the money would settle, what it needs up front, ' +
+      'and what it would need that the operation does not have yet?',
+  );
+  const frame = await executionFrame(t.projectId, mode.currency);
+  const heldLines = await heldExclusions({ projectId: t.projectId, bucket, history });
+  const round = await openBucketRound({
+    projectId: t.projectId,
+    mode,
+    bucket,
+    next,
+    statement: questionFor(bucket, mode.objective, next, history, heldLines, frame),
+  });
+  return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
 }
 
 /**
@@ -928,7 +1035,9 @@ async function liveRounds(
   );
   const out = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>();
   for (const [candidateId, round] of await openRoundsByCandidate(projectId)) {
-    const bucket = byId.get(round.bucketId);
+    const bucket =
+      byId.get(round.bucketId) ??
+      (round.bucketId.startsWith(GOAL_BUCKET_PREFIX) ? goalBucket(round.bucketId.slice(GOAL_BUCKET_PREFIX.length), 'a goal') : undefined);
     if (bucket) out.set(candidateId, { round, bucket });
   }
   return out;

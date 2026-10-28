@@ -313,7 +313,7 @@ async function targetCommand(command: 'create' | 'target'): Promise<void> {
   }
   const spec = parseSpec(specWord);
   const fresh = (await getWorkstream(goal.id))!;
-  const result = await setTarget({ goal: fresh, metric: spec.metric, amountCents: spec.amountCents, currency: spec.currency, projectId, capitalCeilingCents: spec.capital, hoursCeiling: spec.hours });
+  const result = await setTarget({ goal: fresh, metric: spec.metric, amountCents: spec.amountCents, currency: spec.currency, projectId, capitalCeilingCents: spec.capital, hoursCeiling: spec.hours, resources: flag('resources') ?? null });
   if (!result.ok) fail(`The target was not set: ${result.reason}`);
   await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'GOAL_TARGET_SET', summary: `Target: ${spec.metric} ${spec.amountCents / 100} ${spec.currency}${spec.capital !== null ? `, at most ${spec.capital / 100} tied up` : ''}${spec.hours !== null ? `, at most ${spec.hours} hours` : ''}. Counted from now.`, actorRef: `person:${adminId}` });
   console.log(`${command} ${goal.id}: target ${spec.metric} ${spec.amountCents / 100} ${spec.currency} counted from ${result.target.setAt}`);
@@ -325,7 +325,8 @@ function printPlan(reading: PlanReading): void {
   console.log(`PLAN ${reading.goalId}  ${reading.verdict}`);
   console.log(`  target      ${t.targetCents / 100} ${t.currency} ${t.metricLabel}; ledger shows ${t.achievedCents / 100} since ${t.since.slice(0, 10)}; ${t.remainingCents / 100} to go; ${t.daysLeft ?? '—'} day(s) left`);
   for (const one of t.notCounted) console.log(`  not counted ${one.label}: ${one.cents / 100} ${t.currency}`);
-  console.log(`  limits      capital ${t.capitalCeilingCents === null ? 'deployable cash' : t.capitalCeilingCents / 100} · hours ${t.hoursCeiling ?? 'unknown'}`);
+  console.log(`  limits      capital ${t.capitalCeilingCents === null ? 'not stated (the owner has not said how much may be committed)' : t.capitalCeilingCents / 100} · hours ${t.hoursCeiling ?? 'not stated'}`);
+  console.log(`  resources   ${t.resources ?? 'not stated'}`);
   console.log(`  verdict     ${reading.summary}`);
   if (reading.scenarioRunId) console.log(`  scenario    model ${reading.scenarioModelId} run ${reading.scenarioRunId}`);
   if (reading.basisNote) console.log(`  basis       ${reading.basisNote}`);

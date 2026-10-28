@@ -21,6 +21,8 @@ import { createWorkstream, getWorkstream, listLinks } from '../server/repos/regi
 import { setTerms } from '../server/services/goals/decide.ts';
 import { readTarget, setTarget } from '../server/services/goals/target.ts';
 import { advanceGoalPlans, listReadings, readGoalPlan, recordGoalOutcome } from '../server/services/goals/plan.ts';
+import { listRounds } from '../server/repos/cashDiscovery.ts';
+import { getCandidate } from '../server/repos/russellCandidates.ts';
 import { assembleGoals } from '../server/services/goals/model.ts';
 import { CAPTURE_KEY } from '../server/services/cash/tier.ts';
 import { proveCapabilities } from '../server/services/cash/deliverables/capabilities.ts';
@@ -160,7 +162,7 @@ describe('the gate', () => {
     const id = await goal(1_000_000, 50_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
     expect(reading.verdict).toBe('NOT_VIABLE');
-    expect(reading.strategies[0]!.constraintsFailed.join(' ')).toMatch(/more than the 500 ceiling/);
+    expect(reading.strategies[0]!.constraintsFailed.join(' ')).toMatch(/more than the 500 the owner said this goal may commit/);
   });
 
   it('recommends only when every link is established and the cautious numbers reach the target', async () => {
@@ -210,7 +212,7 @@ describe('the gate', () => {
     const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
     expect(reading.refusal).toBeNull();
     expect(reading.strategies.length).toBeGreaterThan(1);
-    expect(reading.excluded.filter((one) => one.reason.includes('closest to a decision')).length).toBeGreaterThan(0);
+    expect(reading.excluded.filter((one) => one.reason.includes('openings in one model')).length).toBeGreaterThan(0);
   });
 
   it('never gives a slot to an opening that has already closed', async () => {
@@ -240,5 +242,142 @@ describe('the gate', () => {
     expect((await advanceGoalPlans(now)).read).toBe(1);
     expect((await advanceGoalPlans(new Date(now.getTime() + 60_000))).read).toBe(0);
     expect(await listReadings(id)).toHaveLength(1);
+  });
+});
+
+
+/** A one-off opening: one buyer, one deal, no deliverable of Brain's required. */
+async function oneOff(input: { title: string; priceCents: number; days?: number; hours?: number; costCents?: number; capitalCents?: number; fulfilledBy?: { who: string; kind: 'PERSON' | 'EVIDENCE' | 'RECOMMENDATION' } }): Promise<CashOpportunity> {
+  const o = await createOpportunity({
+    projectId,
+    cashModeId,
+    ownerUserId: userId,
+    title: input.title,
+    mechanism: 'SUPPLY_DEMAND_MISMATCH',
+    currency: 'USD',
+    sourceClaimId: `clm_${Math.random().toString(36).slice(2, 12)}`,
+    opportunitySignal: 'PAID_TASK_OR_CONTRACT',
+    source: 'A publisher',
+    requiredCapabilities: [],
+  });
+  await fact(o, CAPTURE_KEY, 'Arrange it for the buyer for a fee.');
+  await fact(o, 'payer', 'The shipper');
+  await updateOpportunity(o.id, {
+    payer: 'The shipper',
+    price_cents: input.priceCents,
+    offer_scope: 'Arrange one load',
+    reachable_channel: 'The posted contact on the load board',
+    buying_signal: 'Posted this week',
+    signal_observed_at: inDays(-2),
+    peak_funding_cents: input.capitalCents ?? 0,
+    human_hours: input.hours ?? 2,
+    fulfillment_owner: input.fulfilledBy?.who ?? null,
+  });
+  await fact(o, 'price', `$${input.priceCents / 100}`);
+  await fact(o, 'timeToFirstCash', `${input.days ?? 5} days`);
+  await fact(o, 'directCosts', `$${(input.costCents ?? 1_000) / 100}`);
+  await fact(o, 'exposure', `$${(input.capitalCents ?? 0) / 100}`);
+  if (input.fulfilledBy) {
+    await recordCardFact({
+      projectId,
+      opportunityId: o.id,
+      field: 'fulfillment',
+      kind: input.fulfilledBy.kind,
+      value: input.fulfilledBy.who,
+      claimId: input.fulfilledBy.kind === 'EVIDENCE' ? `clm_ful_${o.id}` : null,
+      decidedBy: input.fulfilledBy.kind === 'PERSON' ? 'PERSON' : 'BRAIN',
+      ...(input.fulfilledBy.kind === 'RECOMMENDATION' ? { basis: 'b', assumptions: 'a', uncertainty: 'c' } : {}),
+    });
+  }
+  return o;
+}
+
+describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
+  it('does not treat unstated capital as zero, and asks the owner rather than refusing', async () => {
+    const o = await play({ title: 'Stock bought then resold', priceCents: 1_200_000, days: 7, capitalCents: 400_000, hours: 3, costCents: 2_000 });
+    await insertAgreement({ projectId, opportunityId: o.id, amountCents: 1_200_000, currency: 'USD', deliverable: 'stock', acceptanceCondition: 'delivered', evidenceKind: 'WRITTEN_ACCEPTANCE', evidenceRef: 'po-1', recordedBy: 'PERSON', requestKey: 'agree-stock' });
+    await proveCapabilities();
+
+    // Nobody said how much may be committed: no ceiling to break, and a question for the owner.
+    const unstated = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    expect(unstated.target.capitalCeilingCents).toBeNull();
+    expect(unstated.strategies[0]!.constraintsFailed.join(' ')).not.toMatch(/ties up/);
+    expect(unstated.verdict).toBe('NEEDS_EVIDENCE');
+    expect(unstated.nextTest).toMatchObject({ link: 'ECONOMICS', by: 'PERSON' });
+    expect(unstated.nextTest!.test).toMatch(/ties up about 4000 USD/);
+
+    // The owner says more may be used: the same plan is recommendable.
+    expect((await readGoalPlan({ goalId: await goal(1_000_000, 1_000_000), evaluations: 2_000 }))!.verdict).toBe('RECOMMENDABLE');
+    // The owner says less: not viable, and it says why.
+    const tight = (await readGoalPlan({ goalId: await goal(1_000_000, 100_000), evaluations: 2_000 }))!;
+    expect(tight.verdict).toBe('NOT_VIABLE');
+    expect(tight.strategies[0]!.constraintsFailed.join(' ')).toMatch(/ties up 4000 USD, more than the 1000/);
+  });
+
+  it('keeps what the owner has to work with on the goal, as context and never as permission', async () => {
+    const g = await createWorkstream({ projectId, title: 'g', intent: 'g', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    const set = await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 100_000, currency: 'USD', projectId, resources: 'A box truck, two helpers on weekends, a contact at a regional liquidator' });
+    expect(set.ok).toBe(true);
+    expect((await readTarget((await getWorkstream(g.id))!))!.resources).toMatch(/box truck/);
+  });
+
+  it('combines openings by what each actually offers, with no fixed count or split', async () => {
+    await oneOff({ title: 'Refrigerated load to Chicago', priceCents: 600_000, fulfilledBy: { who: 'A partner carrier', kind: 'PERSON' } });
+    await oneOff({ title: 'Machinery finder fee', priceCents: 500_000, fulfilledBy: { who: 'The dealer handles the sale', kind: 'EVIDENCE' } });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 4_000 }))!;
+    const singles = reading.strategies.filter((one) => one.key.startsWith('only_'));
+    expect(singles.every((one) => one.constraintsFailed.some((why) => /cannot reach/.test(why)))).toBe(true);
+    const combined = reading.strategies.find((one) => one.key.startsWith('combine_'))!;
+    expect(combined.opportunityIds).toHaveLength(2);
+    expect(combined.constraintsFailed.join(' ')).not.toMatch(/cannot reach/);
+    expect(reading.needsMoreOpenings).toBe(false);
+    // Delivered by somebody other than Brain, named by a person and by a source.
+    expect(combined.links.find((one) => one.link === 'FULFILMENT')!.ok).toBe(true);
+  });
+
+  it('one opening may carry the whole goal, and then nothing is combined for its own sake', async () => {
+    await oneOff({ title: 'One large brokered sale', priceCents: 2_000_000 });
+    await oneOff({ title: 'A small extra job', priceCents: 50_000 });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    const combined = reading.strategies.find((one) => one.key === 'combine_reach');
+    // Largest reach first covers the goal alone, so that combination is not built.
+    expect(combined).toBeUndefined();
+    expect(reading.strategies.find((one) => one.label.includes('One large'))!.constraintsFailed.join(' ')).not.toMatch(/cannot reach/);
+  });
+
+  it("does not count Brain's own guess at who fulfils it as a way to deliver", async () => {
+    await oneOff({ title: 'Guessed fulfiller', priceCents: 2_000_000, fulfilledBy: { who: 'Some carrier, probably', kind: 'RECOMMENDATION' } });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    expect(reading.strategies[0]!.links.find((one) => one.link === 'FULFILMENT')).toMatchObject({ ok: false, basis: 'nobody has established who would do the work' });
+  });
+
+  it('gives the slots to what could reach the goal, not to whatever is newest', async () => {
+    await oneOff({ title: 'The one that matters', priceCents: 900_000 });
+    for (let i = 0; i < 5; i += 1) await oneOff({ title: `Tiny job ${i}`, priceCents: 1_000 + i });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    expect(reading.strategies.some((one) => one.label.includes('The one that matters'))).toBe(true);
+    expect(reading.excluded.some((one) => one.title === 'The one that matters')).toBe(false);
+  });
+
+  it('looks for more when what it holds cannot reach the goal, through ordinary discovery, once a day', async () => {
+    await oneOff({ title: 'Too small', priceCents: 30_000 });
+    const g = await createWorkstream({ projectId, title: 'Ten thousand in a month', intent: 'x', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: inDays(30), ownerUserId: userId }, `person:${userId}`);
+    await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId, resources: 'a box truck and two weekend helpers' });
+
+    const first = await advanceGoalPlans(now);
+    expect(first.asked).toBe(1);
+    const rounds = (await listRounds(projectId)).filter((one) => one.bucketId === `goal-${g.id}`);
+    expect(rounds).toHaveLength(1);
+    const statement = (await getCandidate(rounds[0]!.candidateId))!.statement;
+    expect(statement).toMatch(/any market, industry or mechanism/);
+    expect(statement).toMatch(/reach at most USD 300/);
+    expect(statement).toMatch(/box truck/);
+    expect(statement).toMatch(/has not said how much of their own capital/);
+
+    // The next read, inside the round's life, asks nothing again.
+    const later = await advanceGoalPlans(new Date(now.getTime() + 31 * 60_000));
+    expect(later.asked).toBe(0);
+    expect((await listRounds(projectId)).filter((one) => one.bucketId === `goal-${g.id}`)).toHaveLength(1);
   });
 });
