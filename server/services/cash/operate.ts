@@ -112,7 +112,6 @@ import {
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
 import { describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
-import { cashPosition } from './money.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
 
 /** Brain acting on its own account, never a person and never a worker. */
@@ -382,19 +381,6 @@ const LOSES_MONEY =
   'Its published price does not cover its published capital exposure, so one sale loses money; ' +
   'nothing is readied or contacted for it.';
 
-/** The project's deployable cash, read once on first use within one pass. */
-function deployableReader(projectId: string): () => Promise<number> {
-  let value: Promise<number> | null = null;
-  return () => {
-    value ??= (async () => {
-      const mode = await getCashMode(projectId);
-      const position = await cashPosition({ projectId, currency: mode?.currency });
-      return Math.max(0, position.deployableCents);
-    })();
-    return value;
-  };
-}
-
 /**
  * Field research nobody could act on, withdrawn before it is launched.
  *
@@ -408,7 +394,6 @@ function deployableReader(projectId: string): () => Promise<number> {
  */
 export async function withdrawResearchNotWorthIt(projectId: string): Promise<string[]> {
   const out: string[] = [];
-  const deployableOnce = deployableReader(projectId);
   const open = await listNeeds({ projectId, states: ['OPEN'] });
   const byOpportunity = new Map<string, CashNeed[]>();
   for (const need of open) {
@@ -419,7 +404,7 @@ export async function withdrawResearchNotWorthIt(projectId: string): Promise<str
   for (const opportunity of await listOpportunities({ projectId, states: ['DISCOVERED', 'EVIDENCE_CARD'] })) {
     const needs = byOpportunity.get(opportunity.id);
     if (!needs) continue;
-    const reason = await notWorthResearching(opportunity, { now: cashNow(), deployableCents: await deployableOnce() });
+    const reason = await notWorthResearching(opportunity, { now: cashNow() });
     if (!reason) continue;
     for (const need of needs) {
       const closed = await closeNeed({
@@ -436,7 +421,6 @@ export async function withdrawResearchNotWorthIt(projectId: string): Promise<str
 
 export async function reconcileDiscoverableGaps(projectId: string): Promise<DiscoverableGap[]> {
   const out: DiscoverableGap[] = [];
-  const deployableOnce = deployableReader(projectId);
   const open = await listNeeds({ projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
 
@@ -474,7 +458,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * blank is asked once it has settled, which is what this pass is for.
      */
     if (diveOwnsItsQuestions(opportunity)) continue;
-    if (await notWorthResearching(opportunity, { now: cashNow(), deployableCents: await deployableOnce() })) continue;
+    if (await notWorthResearching(opportunity, { now: cashNow() })) continue;
     const card = evidenceCard(opportunity);
     const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
     /*
@@ -609,7 +593,6 @@ export const MAX_OPEN_ENGINE_QUESTIONS = 12;
  */
 export async function reconcileEngineGaps(projectId: string): Promise<DiscoverableGap[]> {
   const out: DiscoverableGap[] = [];
-  const deployableOnce = deployableReader(projectId);
   const mode = await getCashMode(projectId);
   if (!mode || mode.state !== 'ACTIVE') return out;
   const open = await listNeeds({ projectId, states: ['OPEN'] });
@@ -647,7 +630,7 @@ export async function reconcileEngineGaps(projectId: string): Promise<Discoverab
   for (const opportunity of await listOpportunities({ projectId, states: ['DISCOVERED', 'EVIDENCE_CARD'] })) {
     if (opportunity.duplicateOfId) continue;
     if (diveOwnsItsQuestions(opportunity)) continue;
-    if (await notWorthResearching(opportunity, { now: cashNow(), deployableCents: await deployableOnce() })) continue;
+    if (await notWorthResearching(opportunity, { now: cashNow() })) continue;
     const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
     if (engine.disqualifiedBy) continue;
     const reading = cashTier({ opportunity, card: engine, readiness: evidenceCard(opportunity).readiness });

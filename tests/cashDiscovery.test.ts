@@ -55,6 +55,9 @@ import {
 import { evidenceCard } from '../server/services/cash/card.ts';
 import type { Layer } from '../server/domain/types.ts';
 
+// Buckets are offered least-asked mechanism first, so a re-ask is checked in a
+// pass wide enough to reach every bucket.
+const ALL = 200;
 let projectId = '';
 let userId = '';
 let layer: Layer;
@@ -343,11 +346,11 @@ describe('discovery keeps going while the sprint is active', () => {
 
     // Answered, but not yet due: the cool-off is what keeps "ongoing" from
     // becoming "uncontrolled".
-    const soon = await openDiscovery({ projectId, limit: 9 });
+    const soon = await openDiscovery({ projectId, limit: ALL });
     expect(soon.some((one) => one.bucketId === first!.bucketId)).toBe(false);
 
     const tomorrow = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString();
-    const again = await openDiscovery({ projectId, limit: 9, now: tomorrow });
+    const again = await openDiscovery({ projectId, limit: ALL, now: tomorrow });
     const second = again.find((one) => one.bucketId === first!.bucketId);
     expect(second?.round).toBe(2);
 
@@ -375,7 +378,9 @@ describe('discovery keeps going while the sprint is active', () => {
     await activated();
     const [opened] = await openDiscovery({ projectId });
     const statement = (await getCandidate(opened!.candidateId))!.statement;
-    expect(statement).toContain('Report first the openings this operation could act on now');
+    expect(statement).toContain('Look across the whole economy, not only at work this operation can already do');
+    expect(statement).toMatch(/brokerage, matchmaking, subcontracting, logistics/);
+    expect(statement).toMatch(/examples rather than a limit/);
     // Not being able to act today is a named gap, never a reason to drop the opening.
     expect(statement).toMatch(/still worth reporting when the money is real/);
     expect(statement).not.toMatch(/Report only openings/);
@@ -406,7 +411,7 @@ describe('discovery keeps going while the sprint is active', () => {
     for (let round = 1; round <= BARREN_ROUNDS; round += 1) {
       const opened = await openDiscovery({
         projectId,
-        limit: 9,
+        limit: ALL,
         now: new Date(at).toISOString(),
       });
       const mine = bucketId
@@ -433,7 +438,7 @@ describe('discovery keeps going while the sprint is active', () => {
     // the archive applied to Brain's own history.
     const fourth = await openDiscovery({
       projectId,
-      limit: 9,
+      limit: ALL,
       now: new Date(at).toISOString(),
     });
     expect(fourth.some((one) => one.bucketId === bucketId)).toBe(false);
@@ -484,7 +489,7 @@ describe('discovery keeps going while the sprint is active', () => {
     expect(window.some((event) => event.kind === 'CASH_DISCOVERY_OPENED')).toBe(false);
 
     // No duplicate: the bucket is still known to have an open round.
-    const again = await openDiscovery({ projectId, limit: 9 });
+    const again = await openDiscovery({ projectId, limit: ALL });
     expect(again.some((one) => one.bucketId === opened!.bucketId)).toBe(false);
 
     // And the research still files, which is the half that would have failed
@@ -1049,7 +1054,7 @@ describe('a discovery round whose research stopped', () => {
 
     // And the bucket is asked again once the cool-off has passed.
     const tomorrow = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString();
-    const again = await openDiscovery({ projectId, limit: 9, now: tomorrow });
+    const again = await openDiscovery({ projectId, limit: ALL, now: tomorrow });
     expect(again.find((one) => one.bucketId === opened!.bucketId)?.round).toBe(2);
   });
 
@@ -1137,11 +1142,126 @@ describe('plays: a kind of business that pays for something Brain can make', () 
     expect(reading.state).toBe('PRESENT');
   });
 
-  it('tells the worker this operation reaches buyers by email, and what a play is', async () => {
+  it('does not limit discovery to buyers reached by email, and still says what a play is', async () => {
     await activated();
     const [opened] = await openDiscovery({ projectId });
     const statement = (await getCandidate(opened!.candidateId))!.statement;
-    expect(statement).toMatch(/reaches buyers by email at the business addresses they publish/);
+    expect(statement).not.toMatch(/reaches buyers by email/);
+    expect(statement).not.toMatch(/report only openings/i);
     expect(statement).toMatch(/repeatedly pays for something this operation delivers/);
+  });
+});
+
+describe('the wider economy (2026-10-28)', () => {
+  it('asks about brokerage, logistics, sourcing, consumers, resale, delegated operations and the rest', async () => {
+    const { BROAD_ECONOMY_BUCKETS } = await import('../server/services/cash/discovery.ts');
+    const ids = BROAD_ECONOMY_BUCKETS.map((one) => one.id);
+    for (const id of [
+      'broad-brokerage',
+      'broad-logistics',
+      'broad-sourcing',
+      'broad-consumer-demand',
+      'broad-physical-resale',
+      'broad-delegated-operations',
+      'broad-other-mechanisms',
+    ]) {
+      expect(ids).toContain(id);
+    }
+    // They are search questions, not deliverables Brain must produce.
+    for (const bucket of BROAD_ECONOMY_BUCKETS) {
+      expect(bucket.deliverable).toBeUndefined();
+      expect(SEARCH_BUCKETS).toContain(bucket);
+    }
+    // Asking is reading: no bucket reads as an instruction to act on the world.
+    const { APPROVAL_ENVELOPES } = await import('../server/services/research/approvalEnvelope.ts');
+    const { describesOwnAction } = await import('../server/services/research/actorScope.ts');
+    const cash = Object.values(APPROVAL_ENVELOPES).filter((one) => one.id.startsWith('RUSSELL_CASH_'));
+    for (const bucket of SEARCH_BUCKETS) {
+      for (const envelope of cash) {
+        expect(describesOwnAction(bucket.question, envelope.forbiddenActions), `${bucket.id} / ${envelope.id}`).toBe(false);
+      }
+    }
+  });
+
+  it('gives every mechanism its turn instead of re-asking whichever buckets come first', async () => {
+    const { fairOrder } = await import('../server/services/cash/discovery.ts');
+    // A fresh sprint: the first ten offered span ten different mechanisms.
+    const fresh = fairOrder(SEARCH_BUCKETS, []).slice(0, 10);
+    expect(new Set(fresh.map((one) => one.mechanism)).size).toBe(10);
+    // The digital-service plays share one mechanism, so together they get one turn.
+    const productized = fresh.filter((one) => one.mechanism === 'PRODUCTIZED_SERVICE');
+    expect(productized).toHaveLength(1);
+
+    // On a real sprint, one round a tick: a week of ticks reaches the wider buckets.
+    await activated();
+    const opened: string[] = [];
+    for (let pass = 0; pass < 14; pass += 1) {
+      for (const one of await openDiscovery({ projectId })) opened.push(one.bucketId);
+    }
+    expect(opened.filter((id) => id.startsWith('play-')).length).toBeLessThanOrEqual(2);
+    expect(opened, opened.join(' ')).toEqual(expect.arrayContaining(['broad-consumer-demand', 'broad-brokerage']));
+  });
+
+  it('turns genuinely different kinds of openings into work the same evaluation reads', async () => {
+    await activated();
+    const opened = await openDiscovery({ projectId, limit: ALL });
+    const round = (id: string) => opened.find((one) => one.bucketId === id)!;
+    const findings: { bucket: string; claim: string; signal: OpportunitySignal }[] = [
+      {
+        bucket: 'broad-consumer-demand',
+        claim: 'A regional retailer published that a children’s car seat model is back-ordered until January and lists 1,400 waitlist sign-ups.',
+        signal: 'ACTIVE_BUYER_DEMAND',
+      },
+      {
+        bucket: 'broad-brokerage',
+        claim: 'A machinery dealers’ association publishes a 5% finder’s fee, paid by the seller, for introducing a buyer of used excavators.',
+        signal: 'SUPPLY_DEMAND_MISMATCH',
+      },
+      {
+        bucket: 'broad-logistics',
+        claim: 'A produce distributor posted 12 refrigerated loads from Salinas to Chicago for next week at $6,800 each with no carrier assigned.',
+        signal: 'PAID_TASK_OR_CONTRACT',
+      },
+      {
+        bucket: 'broad-physical-resale',
+        claim: 'A liquidator lists 300 new cordless drills at $38 each; the same model sells new at $129 at national retailers.',
+        signal: 'RESALABLE_ASSET_OPENING',
+      },
+    ];
+    for (const one of findings) {
+      expect(round(one.bucket), one.bucket).toBeDefined();
+      await finishedMission({
+        candidateId: round(one.bucket).candidateId,
+        claims: [
+          {
+            claim: one.claim,
+            lane: SIGNAL_LANE,
+            signal: one.signal,
+            sourceUrl: `https://example.test/${one.bucket}`,
+            sourceDate: new Date().toISOString().slice(0, 10),
+          },
+        ],
+      });
+    }
+    const filed = await harvest({ projectId, limit: 50 });
+    expect(filed).toHaveLength(4);
+
+    const { sharedFrontier } = await import('../server/services/cash/shared.ts');
+    const { whyNotDiving } = await import('../server/services/cash/validation.ts');
+    const frontier = await sharedFrontier({ projectId });
+    const mechanisms = new Set<string>();
+    for (const made of filed) {
+      const opportunity = (await getOpportunity(made.opportunity.id))!;
+      mechanisms.add(opportunity.mechanism);
+      // Nothing about a physical or brokered opening asks Brain to produce a deliverable.
+      expect(opportunity.requiredCapabilities).toEqual([]);
+      // It is on the frontier with a tier, like any other opening.
+      expect(frontier.opportunities.find((one) => one.id === opportunity.id)?.tier.tier).toBeDefined();
+      // And the deep dive that qualifies it is open to it — none is refused for its kind.
+      expect(await whyNotDiving(opportunity), opportunity.title).toEqual({ kind: 'ELIGIBLE' });
+    }
+    expect([...mechanisms].sort()).toEqual(
+      ['EXPLICIT_PAID_REQUEST', 'RESALE_OR_ASSET', 'SUPPLY_DEMAND_MISMATCH'].sort(),
+    );
   });
 });

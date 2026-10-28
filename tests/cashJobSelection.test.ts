@@ -169,12 +169,12 @@ describe('no dive is spent where no answer could make the opening executable', (
     expect((await dive(id)).kind).toBe('ELIGIBLE');
   });
 
-  it('refuses an asset to buy that the deployable cash cannot pay for', async () => {
+  it('researches an asset to buy even when the ledger cannot pay for it yet', async () => {
+    // 2026-10-28: research is reading, not spending. Whether an asset can be
+    // sold before it is paid for is what the dive finds out; capital is asked
+    // where it binds, when work would begin.
     const asset = await opening({ url: 'https://www.publicsurplus.com/sms/auction/view?auc=1', signal: 'RESALABLE_ASSET_OPENING' });
-    expect(await dive(asset)).toMatchObject({
-      kind: 'NOT_WORTH_RESEARCHING',
-      reason: { kind: 'CAPITAL_NOT_HELD', needsCents: null, deployableCents: 0 },
-    });
+    expect((await dive(asset)).kind).toBe('ELIGIBLE');
     // A service with an exposure is still researched: capital can arrive, and execution waits for it.
     const exposed = await opening({ url: 'https://www.example-buyer.com/rfp/bond' });
     await updateOpportunity(exposed, { peak_funding_cents: 80000 });
