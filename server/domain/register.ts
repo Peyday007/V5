@@ -154,6 +154,8 @@ export interface WorkstreamRow {
   capital_ceiling_cents?: number | string | null;
   hours_ceiling?: number | string | null;
   target_resources?: string | null;
+  target_capital_before_proof_cents?: number | string | null;
+  target_capital_per_week_cents?: number | string | null;
   target_set_at?: string | null;
 }
 
@@ -172,6 +174,10 @@ export interface GoalTarget {
   hoursCeiling: number | null;
   /** What the owner said they have to work with — people, equipment, relationships. Not permission to use it. */
   resources: string | null;
+  /** At most this much tied up before any customer payment has arrived. */
+  capitalBeforeProofCents: number | null;
+  /** At most this much newly tied up in any seven days. */
+  capitalPerWeekCents: number | null;
   /** Money is counted from this instant. */
   setAt: string;
 }

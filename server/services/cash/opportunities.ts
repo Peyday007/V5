@@ -72,6 +72,7 @@ import { cashEngineCard, ENGINE_FIELDS } from './engineCard.ts';
 import { cashTier } from './tier.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition, checkMoneyEntry } from './money.ts';
+import { goalSpendingRefusal } from '../goals/spending.ts';
 import { toJson } from '../../repos/util.ts';
 import { createHash } from 'node:crypto';
 import {
@@ -581,6 +582,10 @@ export async function beginExecution(input: {
         'cents are deployable. Settle something, release a commitment or add capital.',
     );
   }
+  // The goal this opening serves may say more about how its money is spent:
+  // a test stage before money comes in, and a weekly pace. Those only narrow.
+  const paced = await goalSpendingRefusal({ opportunity, neededCents: needed });
+  if (paced) return refuse(paced);
 
   /*
    * Something has to have happened, and the record of it commits only when

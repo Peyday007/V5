@@ -63,6 +63,8 @@ function mapWorkstream(row: WorkstreamRow): Workstream {
             capitalCeilingCents: row.capital_ceiling_cents === null || row.capital_ceiling_cents === undefined ? null : Number(row.capital_ceiling_cents),
             hoursCeiling: row.hours_ceiling === null || row.hours_ceiling === undefined ? null : Number(row.hours_ceiling),
             resources: row.target_resources ?? null,
+            capitalBeforeProofCents: row.target_capital_before_proof_cents === null || row.target_capital_before_proof_cents === undefined ? null : Number(row.target_capital_before_proof_cents),
+            capitalPerWeekCents: row.target_capital_per_week_cents === null || row.target_capital_per_week_cents === undefined ? null : Number(row.target_capital_per_week_cents),
             setAt: row.target_set_at,
           }
         : null,

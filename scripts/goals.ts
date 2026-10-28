@@ -44,6 +44,7 @@ import { assembleGoals, type GoalView } from '../server/services/goals/model.ts'
 import { briefFrom } from '../server/services/goals/briefing.ts';
 import { unfiledWork } from '../server/services/register/unfiled.ts';
 import { cancel, pause, reinstate, resume, setTerms } from '../server/services/goals/decide.ts';
+import { spendingRuleSentence } from '../server/services/goals/spending.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 
@@ -275,19 +276,29 @@ async function decide(command: string): Promise<void> {
   console.log('GOALS: OK');
 }
 
-function parseSpec(spec: string | undefined): { metric: string; amountCents: number; currency: string; capital: number | null; hours: number | null } {
-  if (!spec) fail('Name the target as METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], e.g. SETTLED_CASH-1000000-USD-50000-120.');
+/** A whole number of cents from a flag, or null when it was not given. */
+function cents(value: string | undefined): number | null {
+  if (value === undefined) return null;
+  if (!/^\d+$/.test(value)) fail(`Expected a whole number of cents, got ${value}.`);
+  return Number(value);
+}
+
+function parseSpec(spec: string | undefined): { metric: string; amountCents: number; currency: string; capital: number | null; hours: number | null; beforeProof: number | null; perWeek: number | null } {
+  if (!spec) fail('Name the target as METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS[-BEFORE_PROOF_CENTS[-PER_WEEK_CENTS]]]], e.g. SETTLED_CASH-1000000-USD-300000-120-30000-75000. Use x to leave one unset.');
   const parts = spec.split('-');
   const metric = parts.slice(0, parts.findIndex((one) => /^\d+$/.test(one))).join('_') || parts[0]!;
   const rest = parts.slice(parts.findIndex((one) => /^\d+$/.test(one)));
-  const [amount, currency, capital, hours] = rest;
+  const [amount, currency, capital, hours, beforeProof, perWeek] = rest;
+  const optional = (value: string | undefined) => (value === undefined || value === 'x' ? null : Number(value));
   if (!amount || !/^\d+$/.test(amount) || !currency) fail('The target spec needs an amount in cents and a currency.');
   return {
     metric: metric.replace(/-/g, '_'),
     amountCents: Number(amount),
     currency: currency.toUpperCase(),
-    capital: capital !== undefined ? Number(capital) : null,
-    hours: hours !== undefined ? Number(hours) : null,
+    capital: optional(capital),
+    hours: optional(hours),
+    beforeProof: optional(beforeProof),
+    perWeek: optional(perWeek),
   };
 }
 
@@ -313,7 +324,7 @@ async function targetCommand(command: 'create' | 'target'): Promise<void> {
   }
   const spec = parseSpec(specWord);
   const fresh = (await getWorkstream(goal.id))!;
-  const result = await setTarget({ goal: fresh, metric: spec.metric, amountCents: spec.amountCents, currency: spec.currency, projectId, capitalCeilingCents: spec.capital, hoursCeiling: spec.hours, resources: flag('resources') ?? null });
+  const result = await setTarget({ goal: fresh, metric: spec.metric, amountCents: spec.amountCents, currency: spec.currency, projectId, capitalCeilingCents: spec.capital, hoursCeiling: spec.hours, resources: flag('resources') ?? null, capitalBeforeProofCents: cents(flag('before-proof')) ?? spec.beforeProof, capitalPerWeekCents: cents(flag('per-week')) ?? spec.perWeek });
   if (!result.ok) fail(`The target was not set: ${result.reason}`);
   await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'GOAL_TARGET_SET', summary: `Target: ${spec.metric} ${spec.amountCents / 100} ${spec.currency}${spec.capital !== null ? `, at most ${spec.capital / 100} tied up` : ''}${spec.hours !== null ? `, at most ${spec.hours} hours` : ''}. Counted from now.`, actorRef: `person:${adminId}` });
   console.log(`${command} ${goal.id}: target ${spec.metric} ${spec.amountCents / 100} ${spec.currency} counted from ${result.target.setAt}`);
@@ -327,6 +338,7 @@ function printPlan(reading: PlanReading): void {
   for (const one of t.notCounted) console.log(`  not counted ${one.label}: ${one.cents / 100} ${t.currency}`);
   console.log(`  limits      capital ${t.capitalCeilingCents === null ? 'not stated (the owner has not said how much may be committed)' : t.capitalCeilingCents / 100} · hours ${t.hoursCeiling ?? 'not stated'}`);
   console.log(`  resources   ${t.resources ?? 'not stated'}`);
+  console.log(`  spending    ${spendingRuleSentence(t) ?? 'no pace set'}`);
   console.log(`  verdict     ${reading.summary}`);
   if (reading.scenarioRunId) console.log(`  scenario    model ${reading.scenarioModelId} run ${reading.scenarioRunId}`);
   if (reading.basisNote) console.log(`  basis       ${reading.basisNote}`);
