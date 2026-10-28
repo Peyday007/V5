@@ -1025,7 +1025,8 @@ describe('one sprint, from activation to money in and winding down', () => {
      *     first is answered and the cool-off has passed.
      * ------------------------------------------------------------------ */
     const tomorrow = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString();
-    const second = await openDiscovery({ projectId, limit: 9, now: tomorrow });
+    // Buckets are offered least-asked mechanism first, so the re-ask is checked in a full pass.
+    const second = await openDiscovery({ projectId, limit: 200, now: tomorrow });
     const reasked = second.find((one) => one.bucketId === round.bucketId)!;
     expect(reasked.round).toBe(2);
     // It says what the first round already covered, so a worker looks for what
@@ -1072,7 +1073,7 @@ describe('one sprint, from activation to money in and winding down', () => {
       ),
     ).toBe(false);
 
-    const afterNoise = await openDiscovery({ projectId, limit: 9, now: tomorrow });
+    const afterNoise = await openDiscovery({ projectId, limit: 200, now: tomorrow });
     // No duplicate of a bucket whose round is still open.
     expect(afterNoise.some((one) => one.bucketId === reasked.bucketId)).toBe(false);
 
