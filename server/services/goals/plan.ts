@@ -38,9 +38,10 @@ import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
 import { checkCommercialAuthority } from '../cash/authority.ts';
-import { composeGoalModel, OUTREACH_MULTIPLE, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { bestCaseReach, composeGoalModel, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
 import { openGoalDiscovery } from '../cash/discovery.ts';
+import { researchGoalPaths } from './pathResearch.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
 import { getScenarioModel } from '../../repos/scenario.ts';
 import { runModel, saveModel } from '../scenario/service.ts';
@@ -133,10 +134,26 @@ export interface PlanReading {
    */
   bestReach: number | null;
   /**
+   * Every opening Brain could read, judged on its own evidence whether or not
+   * it fitted in the simulation: which links are missing and how much it could
+   * bring at a price buyers are shown to pay.
+   */
+  considered: ConsideredOpening[];
+  /**
    * The openings Brain holds cannot reach the goal however they are combined,
    * so evaluating them again teaches nothing: more must be found.
    */
   needsMoreOpenings: boolean;
+}
+
+export interface ConsideredOpening {
+  opportunityId: string;
+  title: string;
+  modelled: boolean;
+  missing: ChainLink[];
+  /** What it could bring toward the goal at a supported price, in major units. */
+  supportedReach: number;
+  competitiveAward: boolean;
 }
 
 const DAY = 86_400_000;
@@ -150,7 +167,20 @@ function linkChecks(one: ModelledOpportunity, deals: number, target: TargetReadi
   return [
     { link: 'REACHABLE_BUYER', ok: !!o.reachableChannel && !!o.payer, basis: o.reachableChannel ? `reach: ${o.reachableChannel.slice(0, 80)}` : 'nobody has established how to reach the buyer' },
     { link: 'CURRENT_DEMAND', ok: !!(o.buyingSignal && fresh), basis: o.buyingSignal ? (fresh ? `signal dated ${o.signalObservedAt!.slice(0, 10)}` : 'the buying signal is undated or older than the policy allows') : 'no buying signal recorded' },
-    { link: 'OFFER_AND_PRICE', ok: !!o.offerScope && one.price.value !== null, basis: one.price.value !== null ? `price ${one.price.value} ${target.currency} (${one.price.provenance})` : 'no single price on the card' },
+    {
+      link: 'OFFER_AND_PRICE',
+      // A price counts only when buyers are shown to pay it: a source, this
+      // Brain's own sales, or a buyer's agreement. Brain's proposal, a person's
+      // hope or somebody else's asking price is a guess about revenue.
+      ok: !!o.offerScope && (one.agreed || (one.price.value !== null && priceSupported(one))),
+      basis: one.agreed
+        ? `a buyer agreed to ${one.agreedValue} ${target.currency}`
+        : one.price.value === null
+          ? 'no single price on the card'
+          : priceSupported(one)
+            ? `price ${one.price.value} ${target.currency} (${one.price.provenance})`
+            : `price ${one.price.value} ${target.currency} is a guess (${one.price.provenance}), not something buyers are shown to pay`,
+    },
     {
       link: 'CONVERSION',
       ok: deals === 0 ? one.agreed : one.close.provenance === 'HISTORICAL',
@@ -313,6 +343,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       basisNote: null,
       refusal: model.refusal,
       bestReach: null,
+      considered: [],
       needsMoreOpenings: !target.achieved && target.daysLeft !== null && target.daysLeft > 0,
     };
     if (input.persist) await persistReading(goal, reading, null);
@@ -339,7 +370,19 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
   }
 
   let bestReach = 0;
-  const capabilities = new Map((await readCapabilities([...new Set(model.included.flatMap((one) => one.opportunity.requiredCapabilities)), 'SEND_A_MESSAGE'])).map((one) => [one.id, one.state]));
+  const capabilities = new Map((await readCapabilities([...new Set(model.considered.flatMap((one) => one.opportunity.requiredCapabilities)), 'SEND_A_MESSAGE'])).map((one) => [one.id, one.state]));
+  const modelledIds = new Set(model.included.map((one) => one.opportunity.id));
+  const considered: ConsideredOpening[] = model.considered.map((one) => ({
+    opportunityId: one.opportunity.id,
+    title: one.opportunity.title,
+    modelled: modelledIds.has(one.opportunity.id),
+    missing: linkChecks(one, dealsForGoal(one, target.remainingCents / 100), target, capabilities, now)
+      .filter((check) => !check.ok)
+      .map((check) => check.link),
+    supportedReach: one.agreed || priceSupported(one) ? bestCaseReach(one, target.remainingCents / 100, target.daysLeft ?? 0) : 0,
+    competitiveAward: one.competitiveAward,
+  }));
+  considered.sort((a, b) => a.missing.length - b.missing.length || b.supportedReach - a.supportedReach);
   const strategies: StrategyReading[] = [];
   for (const spec of model.definition.strategies) {
     const members = model.included
@@ -371,10 +414,13 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       const late = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && target.daysLeft !== null && one.daysToCash.value > target.daysLeft;
       // An award not yet shown to pay in time is not reach: it must be won first.
       const unproven = one.competitiveAward && one.daysToCash.provenance !== 'EVIDENCE' && one.daysToCash.provenance !== 'HISTORICAL';
-      return sum + (late || unproven ? 0 : one.agreedValue + deals * (one.price.high ?? one.price.value ?? 0));
+      if (late) return sum;
+      // Agreed money is reach. New deals are reach only at a price buyers are
+      // shown to pay — never at a guessed or listed one.
+      return sum + one.agreedValue + (unproven || !priceSupported(one) ? 0 : deals * (one.price.high ?? one.price.value ?? 0));
     }, 0);
     if (best < target.remainingCents / 100) {
-      constraintsFailed.push(`cannot reach the ${target.remainingCents / 100} ${target.currency} still needed even if every buyer it offers to agreed (at most ${Math.round(best)})`);
+      constraintsFailed.push(`cannot reach the ${target.remainingCents / 100} ${target.currency} still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most ${Math.round(best)})`);
     }
     bestReach = Math.max(bestReach, best);
     /*
@@ -486,7 +532,10 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     basisNote: result?.basisNote ?? null,
     refusal: null,
     bestReach,
-    needsMoreOpenings: bestReach < target.remainingCents / 100,
+    considered,
+    // Sufficient means a realistic, evidence-supported plan — a recommendation —
+    // never openings that merely look valuable. Until there is one, keep looking.
+    needsMoreOpenings: !target.achieved && verdict !== 'RECOMMENDABLE',
   };
   if (input.persist) await persistReading(goal, reading, chosen);
   return reading;
@@ -596,13 +645,14 @@ export async function recordGoalOutcome(goalId: string, now: Date = new Date()):
 /** The tick's pass: re-read every targeted goal's plan at most this often. */
 export const PLAN_REFRESH_MS = 30 * 60_000;
 
-export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; busy: boolean }> {
+export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; researched: number; busy: boolean }> {
   const goals = await getDb().all<{ id: string }>(
     `SELECT id FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
   );
   let read = 0;
   let outcomes = 0;
   let asked = 0;
+  let researched = 0;
   for (const { id } of goals) {
     if (await recordGoalOutcome(id, now)) outcomes += 1;
     const last = await getDb().get<{ at: string | null }>(
@@ -620,7 +670,7 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       reading = await readGoalPlan({ goalId: id, now, persist: true });
       read += 1;
     } catch (error) {
-      if (error instanceof ScenarioBusyError) return { read, outcomes, asked, busy: true };
+      if (error instanceof ScenarioBusyError) return { read, outcomes, asked, researched, busy: true };
       throw error;
     }
     // What Brain holds cannot reach the goal however it is combined: look for
@@ -628,8 +678,21 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     // the same openings again in thirty minutes.
     if (reading?.needsMoreOpenings) {
       const goal = await getWorkstream(id);
-      if (goal && (await openGoalDiscovery({ goal, target: reading.target, bestReach: reading.bestReach, now: now.toISOString() }))) asked += 1;
+      if (
+        goal &&
+        (await openGoalDiscovery({
+          goal,
+          target: reading.target,
+          bestReach: reading.bestReach,
+          heldTitles: reading.considered.map((one) => one.title),
+          now: now.toISOString(),
+        }))
+      ) {
+        asked += 1;
+      }
+      // And dig into the openings already held: the path to their money.
+      researched += (await researchGoalPaths({ reading, projectId: reading.target.projectId })).length;
     }
   }
-  return { read, outcomes, asked, busy: false };
+  return { read, outcomes, asked, researched, busy: false };
 }

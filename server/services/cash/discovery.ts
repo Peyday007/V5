@@ -635,9 +635,9 @@ async function openBucketRound(input: {
 export const GOAL_BUCKET_PREFIX = 'goal-';
 
 /** The bucket a goal's own discovery rounds are filed under. */
-export function goalBucket(goalId: string, title: string, question = ''): SearchBucket {
+export function goalBucket(goalId: string, title: string, question = '', lens = ''): SearchBucket {
   return {
-    id: `${GOAL_BUCKET_PREFIX}${goalId}`,
+    id: `${GOAL_BUCKET_PREFIX}${goalId}${lens ? `-${lens}` : ''}`,
     // Not one mechanism: the question is open across all of them.
     mechanism: 'OTHER',
     title: `What else could reach: ${title}`.slice(0, 160),
@@ -657,6 +657,33 @@ export function goalBucket(goalId: string, title: string, question = ''): Search
  * have to work with. It is asked at most once a day, stops after three barren
  * rounds like any bucket, and authorizes nothing but reading.
  */
+/**
+ * The angles a goal's own search is asked from, in turn.
+ *
+ * Starting points, never a limit: the first asks for any way at all, and each
+ * of the rest pushes the search into a different part of the economy so it
+ * does not keep returning to one kind of opening. Every lens still asks the
+ * same goal-shaped question — who pays, how much, when it settles, what it
+ * needs up front — so the answers are comparable whichever way they came.
+ */
+export const GOAL_LENSES: readonly { id: string; angle: string }[] = Object.freeze([
+  { id: 'open', angle: 'any way at all, in any market, industry or arrangement' },
+  { id: 'consumer', angle: 'selling to consumers or households, online or locally' },
+  { id: 'brokerage', angle: 'brokering or matchmaking: connecting buyers and sellers for a fee or commission' },
+  { id: 'subcontract', angle: 'owning the customer and paying someone else to do the work, keeping the difference' },
+  { id: 'logistics', angle: 'moving, delivering, storing or arranging the transport of goods' },
+  { id: 'sourcing', angle: 'finding and supplying products, parts or materials buyers cannot easily get' },
+  { id: 'resale', angle: 'buying, reselling or flipping goods across markets, channels or seasons' },
+  { id: 'operations', angle: 'running an ongoing task for businesses that they pay for every week or month' },
+  { id: 'rental', angle: 'renting, lending or sharing equipment, space or other assets' },
+  { id: 'seasonal', angle: 'a season, event, deadline or local surge that creates demand right now' },
+  { id: 'digital', angle: 'digital products, information, data or software people pay for' },
+  { id: 'combination', angle: 'two or more of these combined, where one feeds the other' },
+]);
+
+/** At most this many of a goal's own rounds are open at once. */
+export const MAX_LIVE_GOAL_ROUNDS = 3;
+
 export async function openGoalDiscovery(input: {
   goal: { id: string; title: string };
   target: {
@@ -671,6 +698,8 @@ export async function openGoalDiscovery(input: {
     capitalPerWeekCents?: number | null;
   };
   bestReach: number | null;
+  /** Openings Brain already holds for the goal, so a new round looks elsewhere. */
+  heldTitles?: string[];
   now?: string;
 }): Promise<OpenedDiscovery | null> {
   if (!claudeDiscoveryEnabled()) return null;
@@ -681,16 +710,30 @@ export async function openGoalDiscovery(input: {
   const t = input.target;
   if (t.daysLeft === null || t.daysLeft <= 0 || t.remainingCents <= 0) return null;
 
-  const id = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
-  const history = (await listRounds(t.projectId)).filter((one) => one.bucketId === id);
-  const next = nextRoundFor(history, now);
-  if (next === null) return null;
+  /*
+   * One lens a pass, chosen by rotation: whichever this goal has asked least,
+   * then in list order. Each lens is its own bucket, so it keeps its own
+   * cool-off and its own three-barren-rounds stop, and a few run at once.
+   */
+  const prefix = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
+  const mine = (await listRounds(t.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
+  if (mine.filter((one) => one.state === 'OPEN').length >= MAX_LIVE_GOAL_ROUNDS) return null;
+  const choices = GOAL_LENSES.map((lens, index) => {
+    const id = `${prefix}-${lens.id}`;
+    const history = mine.filter((one) => one.bucketId === id);
+    return { lens, index, id, history, next: nextRoundFor(history, now) };
+  })
+    .filter((one): one is typeof one & { next: number } => one.next !== null)
+    .sort((a, b) => a.history.length - b.history.length || a.index - b.index);
+  const choice = choices[0];
+  if (!choice) return null;
+  const { lens, id, history, next } = choice;
 
   const amount = `${t.currency} ${(t.remainingCents / 100).toFixed(0)}`;
   const held =
     input.bestReach === null
       ? 'Brain holds no opening far enough along to plan with.'
-      : `Combined in every way Brain could, the openings it holds reach at most ${t.currency} ${Math.round(input.bestReach)} of it.`;
+      : `Combined in every way Brain could, at prices buyers are shown to pay, the openings it holds reach at most ${t.currency} ${Math.round(input.bestReach)} of it.`;
   const capital =
     t.capitalCeilingCents === null
       ? 'The owner has not said how much of their own capital this goal may use, so name what each opening needs up front.'
@@ -703,14 +746,19 @@ export async function openGoalDiscovery(input: {
         (t.capitalPerWeekCents != null ? `no more than ${t.currency} ${(t.capitalPerWeekCents / 100).toFixed(0)} newly tied up a week, ` : '') +
         'so prefer ways that can be tried small and pay quickly and repeatedly, and say plainly when a way only pays after a competitive award or in one lump at the end.'
       : '';
+  const already = (input.heldTitles ?? []).slice(0, 8);
+  const elsewhere = already.length
+    ? ` Brain already holds openings like these, and none yet makes a realistic plan, so look for different kinds: ${already.map((one) => `"${one.slice(0, 80)}"`).join('; ')}.`
+    : '';
   const bucket = goalBucket(
     input.goal.id,
     input.goal.title,
-    `Which lawful ways — in any market, industry or mechanism, including ones not usually put together, ` +
-      `and as one opening or several running at once — could bring this operation ${amount} more of ` +
-      `${t.metricLabel} within ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}? ${held} ${capital} ${resources} ${pace} ` +
-      'For each, name who pays, roughly how much, when the money would settle, what it needs up front, ' +
-      'and what it would need that the operation does not have yet?',
+    `Looking at ${lens.angle} — in any market or industry, and as one opening or several running at once — ` +
+      `which lawful ways could bring this operation ${amount} more of ` +
+      `${t.metricLabel} within ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}? ${held}${elsewhere} ${capital} ${resources} ${pace} ` +
+      'For each, name who pays, what buyers are published as actually paying, when the money would settle, ' +
+      'what it needs up front, and what it would need that the operation does not have yet?',
+    lens.id,
   );
   const frame = await executionFrame(t.projectId, mode.currency);
   const heldLines = await heldExclusions({ projectId: t.projectId, bucket, history });
