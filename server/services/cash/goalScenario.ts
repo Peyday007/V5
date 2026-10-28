@@ -91,6 +91,25 @@ export interface ModelledOpportunity {
    * logistics or resale opening.
    */
   fulfilledBy: { value: string; provenance: VariableProvenance; source: SourceRef | null } | null;
+  /**
+   * Money only comes after somebody else picks us: a bid, a tender, a
+   * solicitation, a grant. That is a gate outside our control before any work,
+   * a second wait after it for payment, and usually money spent to compete —
+   * and it pays in one lump at the end, not little by little.
+   */
+  competitiveAward: boolean;
+}
+
+/**
+ * Whether the opening is won by competing for an award. Read from the words
+ * that name what it is — the title, the source and the published signal — and
+ * deliberately narrow: a missed one is treated like any other opening, and a
+ * wrong one only ranks lower and keeps Brain looking.
+ */
+export const COMPETITIVE_AWARD = /\b(rfp|rfq|rfi|rfx|tender|solicitation|bids?|bidding|grants?|cooperative agreements?|procurement|sam\.gov|notice of funding|funding opportunity|nofo)\b/i;
+
+export function isCompetitiveAward(o: { title: string; source: string | null; buyingSignal: string | null; offerScope?: string | null }): boolean {
+  return COMPETITIVE_AWARD.test([o.title, o.source, o.buyingSignal].filter(Boolean).join(' '));
 }
 
 export interface GoalModel {
@@ -219,6 +238,7 @@ async function modelOpportunity(
     agreedValue: agreements.reduce((sum, one) => sum + one.amountCents, 0) / 100,
     agreedDeals: agreements.length,
     fulfilledBy,
+    competitiveAward: agreements.length === 0 && isCompetitiveAward(opportunity),
   };
 }
 
@@ -228,9 +248,12 @@ async function modelOpportunity(
  * repeatable play could take, or one deal. Zero when it is known to settle too
  * late. A ranking key only — it is never shown as a forecast.
  */
-function bestCaseReach(one: ModelledOpportunity, remaining: number, daysLeft: number): number {
+export function bestCaseReach(one: ModelledOpportunity, remaining: number, daysLeft: number): number {
   const late = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && one.daysToCash.value > daysLeft;
   if (late) return 0;
+  // An award nobody has shown pays inside the window does not count as reach:
+  // first it must be won, then delivered, then paid on the buyer's terms.
+  if (one.competitiveAward && !(one.daysToCash.provenance === 'EVIDENCE' || one.daysToCash.provenance === 'HISTORICAL')) return 0;
   const price = one.price.high ?? one.price.value ?? 0;
   const deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(remaining / Math.max(1, price))) : one.agreedValue > 0 ? 0 : 1;
   return Math.min(remaining, one.agreedValue + deals * price);
@@ -318,6 +341,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   candidates.sort(
     (a, b) =>
       (IN_FLIGHT.has(a.opportunity.state) || a.agreed ? 0 : 1) - (IN_FLIGHT.has(b.opportunity.state) || b.agreed ? 0 : 1) ||
+      Number(a.competitiveAward) - Number(b.competitiveAward) ||
       bestCaseReach(b, remainingMajor, target.daysLeft!) - bestCaseReach(a, remainingMajor, target.daysLeft!) ||
       (TIER_ORDER[a.tier] ?? 3) - (TIER_ORDER[b.tier] ?? 3),
   );

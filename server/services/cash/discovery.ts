@@ -667,6 +667,8 @@ export async function openGoalDiscovery(input: {
     daysLeft: number | null;
     capitalCeilingCents: number | null;
     resources: string | null;
+    capitalBeforeProofCents?: number | null;
+    capitalPerWeekCents?: number | null;
   };
   bestReach: number | null;
   now?: string;
@@ -694,12 +696,19 @@ export async function openGoalDiscovery(input: {
       ? 'The owner has not said how much of their own capital this goal may use, so name what each opening needs up front.'
       : `The owner has said this goal may use up to ${t.currency} ${(t.capitalCeilingCents / 100).toFixed(0)} of capital, so name what each opening needs up front.`;
   const resources = t.resources ? `What the owner has to work with: ${t.resources}.` : 'The owner has not described other resources.';
+  const pace =
+    t.capitalBeforeProofCents != null || t.capitalPerWeekCents != null
+      ? 'The owner wants money to come in step by step: ' +
+        (t.capitalBeforeProofCents != null ? `no more than ${t.currency} ${(t.capitalBeforeProofCents / 100).toFixed(0)} tied up before the first payment arrives, ` : '') +
+        (t.capitalPerWeekCents != null ? `no more than ${t.currency} ${(t.capitalPerWeekCents / 100).toFixed(0)} newly tied up a week, ` : '') +
+        'so prefer ways that can be tried small and pay quickly and repeatedly, and say plainly when a way only pays after a competitive award or in one lump at the end.'
+      : '';
   const bucket = goalBucket(
     input.goal.id,
     input.goal.title,
     `Which lawful ways — in any market, industry or mechanism, including ones not usually put together, ` +
       `and as one opening or several running at once — could bring this operation ${amount} more of ` +
-      `${t.metricLabel} within ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}? ${held} ${capital} ${resources} ` +
+      `${t.metricLabel} within ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}? ${held} ${capital} ${resources} ${pace} ` +
       'For each, name who pays, roughly how much, when the money would settle, what it needs up front, ' +
       'and what it would need that the operation does not have yet?',
   );

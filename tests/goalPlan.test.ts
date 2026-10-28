@@ -251,7 +251,7 @@ describe('the gate', () => {
 
 
 /** A one-off opening: one buyer, one deal, no deliverable of Brain's required. */
-async function oneOff(input: { title: string; priceCents: number; days?: number; hours?: number; costCents?: number; capitalCents?: number; fulfilledBy?: { who: string; kind: 'PERSON' | 'EVIDENCE' | 'RECOMMENDATION' } }): Promise<CashOpportunity> {
+async function oneOff(input: { title: string; priceCents: number; days?: number | null; hours?: number; costCents?: number; capitalCents?: number; fulfilledBy?: { who: string; kind: 'PERSON' | 'EVIDENCE' | 'RECOMMENDATION' } }): Promise<CashOpportunity> {
   const o = await createOpportunity({
     projectId,
     cashModeId,
@@ -278,7 +278,7 @@ async function oneOff(input: { title: string; priceCents: number; days?: number;
     fulfillment_owner: input.fulfilledBy?.who ?? null,
   });
   await fact(o, 'price', `$${input.priceCents / 100}`);
-  await fact(o, 'timeToFirstCash', `${input.days ?? 5} days`);
+  if (input.days !== null) await fact(o, 'timeToFirstCash', `${input.days ?? 5} days`);
   await fact(o, 'directCosts', `$${(input.costCents ?? 1_000) / 100}`);
   await fact(o, 'exposure', `$${(input.capitalCents ?? 0) / 100}`);
   if (input.fulfilledBy) {
@@ -471,5 +471,65 @@ describe('where the pace binds', () => {
     const paced = source.indexOf('await goalSpendingRefusal({ opportunity, neededCents: needed })');
     expect(capital).toBeGreaterThan(0);
     expect(paced).toBeGreaterThan(capital);
+  });
+});
+
+describe('how the money actually arrives (2026-10-28)', () => {
+  async function pacedGoalFor(amountCents = 1_000_000): Promise<string> {
+    const g = await createWorkstream({ projectId, title: 'Ten thousand, little by little', intent: 'x', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+    await setTerms(g.id, { dueAt: inDays(30), ownerUserId: userId }, `person:${userId}`);
+    await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents, currency: 'USD', projectId, capitalCeilingCents: 300_000, capitalBeforeProofCents: 30_000, capitalPerWeekCents: 75_000, now: new Date(now.getTime() - 60_000) });
+    return g.id;
+  }
+
+  it('recognises an opening that is won by competing for an award', async () => {
+    const { isCompetitiveAward } = await import('../server/services/cash/goalScenario.ts');
+    for (const title of ['RFPMart lists RFP DE-5507, records scanning', 'Market: US federal grants (NEH cooperative agreements)', 'Market: US federal procurement (SAM.gov)', 'City tender for snow removal']) {
+      expect(isCompetitiveAward({ title, source: null, buyingSignal: null }), title).toBe(true);
+    }
+    for (const title of ['Refrigerated load to Chicago', 'Liquidation lot of cordless drills', 'Property managers buy owner reports']) {
+      expect(isCompetitiveAward({ title, source: null, buyingSignal: null }), title).toBe(false);
+    }
+  });
+
+  it('does not count a big award as reach, and keeps looking rather than resting on it', async () => {
+    await oneOff({ title: 'Federal RFP for records digitization', priceCents: 13_502_000, days: null });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    const award = reading.strategies[0]!;
+    expect(award.links.find((one) => one.link === 'SETTLES_IN_TIME')!.basis).toMatch(/only after winning an award/);
+    expect(award.constraintsFailed.join(' ')).toMatch(/cannot reach/);
+    expect(reading.needsMoreOpenings).toBe(true);
+  });
+
+  it("refuses a plan that only pays in one lump after somebody else decides, when the owner wants it step by step", async () => {
+    await oneOff({ title: 'NEH grant: cooperative agreement for archives', priceCents: 2_000_000, days: 10 });
+    const reading = (await readGoalPlan({ goalId: await pacedGoalFor(), evaluations: 2_000 }))!;
+    expect(reading.verdict).toBe('NOT_VIABLE');
+    expect(reading.strategies[0]!.constraintsFailed.join(' ')).toMatch(/not little by little/);
+  });
+
+  it('puts a way that pays in steps ahead of an award of the same footing', async () => {
+    await oneOff({ title: 'Federal bid for scanning services', priceCents: 1_200_000 });
+    await oneOff({ title: 'Recurring freight loads for a distributor', priceCents: 1_200_000 });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    const chosen = reading.strategies.find((one) => one.key === reading.chosen)!;
+    expect(chosen.label).toMatch(/freight/);
+  });
+
+  it('refuses a plan where no step can start inside the test budget', async () => {
+    await oneOff({ title: 'Buy and resell a pallet', priceCents: 1_200_000, capitalCents: 100_000 });
+    const reading = (await readGoalPlan({ goalId: await pacedGoalFor(), evaluations: 2_000 }))!;
+    expect(reading.strategies[0]!.constraintsFailed.join(' ')).toMatch(/no step can start with 300 USD or less tied up/);
+  });
+
+  it("asks the goal's own discovery for ways that pay step by step", async () => {
+    await oneOff({ title: 'Federal RFP, too slow', priceCents: 13_502_000, days: null });
+    const id = await pacedGoalFor();
+    expect((await advanceGoalPlans(now)).asked).toBe(1);
+    const round = (await listRounds(projectId)).find((one) => one.bucketId === `goal-${id}`)!;
+    const statement = (await getCandidate(round.candidateId))!.statement;
+    expect(statement).toMatch(/come in step by step/);
+    expect(statement).toMatch(/no more than USD 300 tied up before the first payment/);
+    expect(statement).toMatch(/only pays after a competitive award/);
   });
 });
