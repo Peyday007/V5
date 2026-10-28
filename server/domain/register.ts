@@ -153,6 +153,7 @@ export interface WorkstreamRow {
   target_project_id?: string | null;
   capital_ceiling_cents?: number | string | null;
   hours_ceiling?: number | string | null;
+  target_resources?: string | null;
   target_set_at?: string | null;
 }
 
@@ -169,6 +170,8 @@ export interface GoalTarget {
   projectId: string;
   capitalCeilingCents: number | null;
   hoursCeiling: number | null;
+  /** What the owner said they have to work with — people, equipment, relationships. Not permission to use it. */
+  resources: string | null;
   /** Money is counted from this instant. */
   setAt: string;
 }

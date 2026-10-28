@@ -55,6 +55,10 @@ on:
         description: '--admin <email>: required by every command but show and plan'
         required: false
         default: ''
+      resources:
+        description: 'For create/target: what the owner has to work with (people, equipment, relationships, licences), in plain words. Not permission to spend.'
+        required: false
+        default: ''
 
 concurrency:
   group: brain-console-goals
@@ -83,6 +87,7 @@ jobs:
           G_DUE: ${{ inputs.due }}
           G_PROJECT: ${{ inputs.project }}
           G_ADMIN: ${{ inputs.admin }}
+          G_RESOURCES: ${{ inputs.resources }}
         run: |
           set -eu
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
@@ -104,6 +109,9 @@ jobs:
           done
           case "$G_REASON" in
             *[!A-Za-z0-9\ .,_-]*) echo "::error::Refusing the reason: letters, digits, spaces and . , - _ only."; exit 1 ;;
+          esac
+          case "$G_RESOURCES" in
+            *[!A-Za-z0-9\ .,_-]*) echo "::error::Refusing the resources: letters, digits, spaces and . , - _ only."; exit 1 ;;
           esac
           case "$G_ADMIN" in
             '') ;;
@@ -127,6 +135,7 @@ jobs:
           [ -n "$G_DUE" ] && args="$args --due $G_DUE"
           [ -n "$G_PROJECT" ] && args="$args --project $G_PROJECT"
           [ -n "$G_ADMIN" ] && args="$args --admin $G_ADMIN"
+          [ -n "$G_RESOURCES" ] && args="$args --resources \"$G_RESOURCES\""
 
           echo "goals $args"
           set +e

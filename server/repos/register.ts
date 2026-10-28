@@ -62,6 +62,7 @@ function mapWorkstream(row: WorkstreamRow): Workstream {
             projectId: row.target_project_id,
             capitalCeilingCents: row.capital_ceiling_cents === null || row.capital_ceiling_cents === undefined ? null : Number(row.capital_ceiling_cents),
             hoursCeiling: row.hours_ceiling === null || row.hours_ceiling === undefined ? null : Number(row.hours_ceiling),
+            resources: row.target_resources ?? null,
             setAt: row.target_set_at,
           }
         : null,

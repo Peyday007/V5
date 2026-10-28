@@ -38,8 +38,9 @@ import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
 import { checkCommercialAuthority } from '../cash/authority.ts';
-import { composeGoalModel, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { composeGoalModel, OUTREACH_MULTIPLE, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
+import { openGoalDiscovery } from '../cash/discovery.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
 import { getScenarioModel } from '../../repos/scenario.ts';
 import { runModel, saveModel } from '../scenario/service.ts';
@@ -59,7 +60,7 @@ export const CHAIN_LABEL: Record<ChainLink, string> = {
   CURRENT_DEMAND: 'a dated sign they need it now',
   OFFER_AND_PRICE: 'an offer and a price',
   CONVERSION: 'buyers who have actually agreed to it',
-  FULFILMENT: 'proof Brain can deliver it',
+  FULFILMENT: 'proof it can be delivered — by Brain or by whoever is named to do it',
   ECONOMICS: 'known costs and money tied up, inside the limits',
   SETTLES_IN_TIME: 'cash that settles before the deadline',
 };
@@ -126,6 +127,16 @@ export interface PlanReading {
   measuredChance: { estimate: number; lowerBound: number; upperBound: number; sampleSize: number; cohort: string } | null;
   target: TargetReading;
   refusal: string | null;
+  /**
+   * The most any modelled strategy could put toward the goal if every buyer it
+   * asks agreed, in major units — or null when nothing could be modelled.
+   */
+  bestReach: number | null;
+  /**
+   * The openings Brain holds cannot reach the goal however they are combined,
+   * so evaluating them again teaches nothing: more must be found.
+   */
+  needsMoreOpenings: boolean;
 }
 
 const DAY = 86_400_000;
@@ -150,7 +161,7 @@ function linkChecks(one: ModelledOpportunity, deals: number, target: TargetReadi
             ? one.close.note
             : `${deals} new buyer(s) would be offered and nobody knows how many would agree${one.agreed ? ` (one agreement of ${one.agreedValue} is recorded)` : ''}`,
     },
-    { link: 'FULFILMENT', ok: allPresent && one.hours.value !== null, basis: allPresent ? (one.hours.value !== null ? `Brain has proved: ${caps.join(', ')}` : 'deliverable is proved but the hours are unknown') : caps.length ? `not proved: ${caps.filter((id) => capabilities.get(id) !== 'PRESENT').join(', ')}` : 'nobody has said what Brain would deliver' },
+    fulfilmentCheck(one, caps, allPresent, capabilities),
     {
       link: 'ECONOMICS',
       ok: one.directCost.value !== null && one.capital.value !== null && established(one.directCost) && one.capital.value !== null,
@@ -162,6 +173,37 @@ function linkChecks(one: ModelledOpportunity, deals: number, target: TargetReadi
       basis: one.daysToCash.value !== null ? `${one.daysToCash.value} days to usable cash against ${target.daysLeft} left` : 'nobody has established when the money would settle',
     },
   ];
+}
+
+/**
+ * Whether the work can be delivered, and by whom.
+ *
+ * Brain proving its own deliverable is one way; a source or a person naming
+ * who fulfils it — a partner, a subcontractor, a supplier, the owner's own
+ * people — is another, and it is the only way a brokered, freight or resale
+ * opening could ever pass. Brain's own proposal of a fulfiller does not count:
+ * a name nobody has confirmed is not a way to deliver.
+ */
+function fulfilmentCheck(one: ModelledOpportunity, caps: string[], allPresent: boolean, capabilities: Map<string, string>): LinkCheck {
+  const hours = one.hours.value !== null;
+  if (allPresent) {
+    return { link: 'FULFILMENT', ok: hours, basis: hours ? `Brain has proved: ${caps.join(', ')}` : 'the work is proved but the hours are unknown' };
+  }
+  const missing = caps.filter((id) => capabilities.get(id) !== 'PRESENT');
+  if (one.fulfilledBy && missing.length === 0) {
+    return {
+      link: 'FULFILMENT',
+      ok: hours,
+      basis: hours ? `fulfilled by ${one.fulfilledBy.value.slice(0, 80)} (${one.fulfilledBy.provenance === 'EVIDENCE' ? 'a source' : 'a person'} says so)` : `fulfilled by ${one.fulfilledBy.value.slice(0, 60)}, but the hours are unknown`,
+    };
+  }
+  if (missing.length > 0) return { link: 'FULFILMENT', ok: false, basis: `not proved: ${missing.join(', ')}` };
+  return { link: 'FULFILMENT', ok: false, basis: 'nobody has established who would do the work' };
+}
+
+/** The deals a strategy actually needs taken, as opposed to the buyers it asks. */
+function dealsTaken(one: ModelledOpportunity, deals: number): number {
+  return one.agreedDeals + (one.repeatable ? Math.ceil(deals / OUTREACH_MULTIPLE) : deals);
 }
 
 async function nextTestFor(link: ChainLink, one: ModelledOpportunity, projectId: string): Promise<NextTest> {
@@ -176,7 +218,9 @@ async function nextTestFor(link: ChainLink, one: ModelledOpportunity, projectId:
       return { link, test, by: 'BRAIN', blocker: null };
     }
     case 'FULFILMENT':
-      return { link, test: `Prove Brain can produce what "${title}" needs, on a real sample, and record the hours.`, by: 'BRAIN', blocker: null };
+      return one.opportunity.requiredCapabilities.length > 0
+        ? { link, test: `Prove Brain can produce what "${title}" needs, on a real sample, and record the hours.`, by: 'BRAIN', blocker: null }
+        : { link, test: `Establish who would do the work for "${title}" — Brain, a partner, a subcontractor or a supplier — from a published source or the owner, and the hours it takes.`, by: 'BRAIN', blocker: null };
     case 'REACHABLE_BUYER':
       return { link, test: `Find a published, permitted way to reach the buyer for "${title}".`, by: 'BRAIN', blocker: null };
     case 'CURRENT_DEMAND':
@@ -205,7 +249,7 @@ function conservative(members: { one: ModelledOpportunity; deals: number }[], ta
     if (close === null || price === null || days === null || cost === null || capital === null || hours === null) return { settled: null, exposure: null, labour: null };
     const won = deals * close;
     settled += days <= (target.daysLeft ?? 0) ? one.agreedValue + won * price : 0;
-    exposure += deals * capital;
+    exposure += (won + one.agreedDeals) * capital;
     labour += won * hours;
   }
   return { settled, exposure, labour };
@@ -263,6 +307,8 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       scenarioRunId: null,
       basisNote: null,
       refusal: model.refusal,
+      bestReach: null,
+      needsMoreOpenings: !target.achieved && target.daysLeft !== null && target.daysLeft > 0,
     };
     if (input.persist) await persistReading(goal, reading, null);
     return reading;
@@ -287,6 +333,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     result = await runIsolated(model.definition, options);
   }
 
+  let bestReach = 0;
   const capabilities = new Map((await readCapabilities([...new Set(model.included.flatMap((one) => one.opportunity.requiredCapabilities)), 'SEND_A_MESSAGE'])).map((one) => [one.id, one.state]));
   const strategies: StrategyReading[] = [];
   for (const spec of model.definition.strategies) {
@@ -301,7 +348,8 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     for (const { one, deals } of members) {
       if (one.capital.value !== null && one.capital.provenance !== 'UNKNOWN') {
         const ceiling = target.capitalCeilingCents;
-        if (ceiling !== null && deals * one.capital.value > ceiling / 100) constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" ties up ${deals * one.capital.value} ${target.currency}, more than the ${ceiling / 100} ceiling`);
+        const tied = dealsTaken(one, deals) * one.capital.value;
+        if (ceiling !== null && tied > ceiling / 100) constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" ties up ${tied} ${target.currency}, more than the ${ceiling / 100} the owner said this goal may commit`);
       }
       if (one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && target.daysLeft !== null && one.daysToCash.value > target.daysLeft) {
         constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" settles in ${one.daysToCash.value} days, after the ${target.daysLeft} left`);
@@ -321,6 +369,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     if (best < target.remainingCents / 100) {
       constraintsFailed.push(`cannot reach the ${target.remainingCents / 100} ${target.currency} still needed even if every buyer it offers to agreed (at most ${Math.round(best)})`);
     }
+    bestReach = Math.max(bestReach, best);
     if (sweep.infeasibleShare === 1) constraintsFailed.push('breaks the money or hours limit in every tested case');
     const cons = conservative(members, target);
     const missing = links.find((one) => !one.ok);
@@ -333,8 +382,25 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       (target.hoursCeiling === null || (cons.labour ?? Infinity) <= target.hoursCeiling)
     ) verdict = 'RECOMMENDABLE';
     else verdict = 'NEEDS_EVIDENCE';
+    /*
+     * A plan that needs money up front, for a goal whose owner has not said how
+     * much may be committed, is not recommended on the ledger's behalf. It is
+     * a question for the owner — which is not the same thing as a failure, and
+     * not permission to spend once answered: the commercial authority still
+     * decides that.
+     */
+    const askCapital =
+      verdict === 'RECOMMENDABLE' && target.capitalCeilingCents === null && (cons.exposure ?? 0) > 0;
+    if (askCapital) verdict = 'NEEDS_EVIDENCE';
     let nextTest: NextTest | null = null;
-    if (verdict === 'NEEDS_EVIDENCE') {
+    if (askCapital) {
+      nextTest = {
+        link: 'ECONOMICS',
+        test: `This plan ties up about ${Math.round(cons.exposure!)} ${target.currency} before it pays. Say how much this goal may commit, or that it may commit none.`,
+        by: 'PERSON',
+        blocker: 'The owner has not said how much money this goal may commit.',
+      };
+    } else if (verdict === 'NEEDS_EVIDENCE') {
       if (missing) {
         const member = members.find(({ one, deals }) => !linkChecks(one, deals, target, capabilities, now).find((check) => check.link === missing.link)!.ok)!;
         nextTest = await nextTestFor(missing.link, member.one, target.projectId);
@@ -382,6 +448,8 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     scenarioRunId,
     basisNote: result?.basisNote ?? null,
     refusal: null,
+    bestReach,
+    needsMoreOpenings: bestReach < target.remainingCents / 100,
   };
   if (input.persist) await persistReading(goal, reading, chosen);
   return reading;
@@ -491,12 +559,13 @@ export async function recordGoalOutcome(goalId: string, now: Date = new Date()):
 /** The tick's pass: re-read every targeted goal's plan at most this often. */
 export const PLAN_REFRESH_MS = 30 * 60_000;
 
-export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; busy: boolean }> {
+export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; busy: boolean }> {
   const goals = await getDb().all<{ id: string }>(
     `SELECT id FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
   );
   let read = 0;
   let outcomes = 0;
+  let asked = 0;
   for (const { id } of goals) {
     if (await recordGoalOutcome(id, now)) outcomes += 1;
     const last = await getDb().get<{ at: string | null }>(
@@ -509,13 +578,21 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     );
     const since = [last?.at, lastRun?.at].filter((one): one is string => !!one).reduce((max, at) => Math.max(max, Date.parse(at)), 0);
     if (since && now.getTime() - since < PLAN_REFRESH_MS) continue;
+    let reading: PlanReading | null;
     try {
-      await readGoalPlan({ goalId: id, now, persist: true });
+      reading = await readGoalPlan({ goalId: id, now, persist: true });
       read += 1;
     } catch (error) {
-      if (error instanceof ScenarioBusyError) return { read, outcomes, busy: true };
+      if (error instanceof ScenarioBusyError) return { read, outcomes, asked, busy: true };
       throw error;
     }
+    // What Brain holds cannot reach the goal however it is combined: look for
+    // more, through the same discovery every bucket uses, instead of reading
+    // the same openings again in thirty minutes.
+    if (reading?.needsMoreOpenings) {
+      const goal = await getWorkstream(id);
+      if (goal && (await openGoalDiscovery({ goal, target: reading.target, bestReach: reading.bestReach, now: now.toISOString() }))) asked += 1;
+    }
   }
-  return { read, outcomes, busy: false };
+  return { read, outcomes, asked, busy: false };
 }

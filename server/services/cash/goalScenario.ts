@@ -32,7 +32,6 @@ import { readDays } from './monetization/commissionPass.ts';
 import { cashOutcomeLessons, LESSON_MIN_SAMPLE } from './journey/learning.ts';
 import { isTestFirstPlay } from './tier.ts';
 import { sharedFrontier } from './shared.ts';
-import { cashPosition } from './money.ts';
 import type { CashOpportunity, CashCardFact } from '../../domain/types.ts';
 import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, type SourceRef, type StrategySpec, type VariableProvenance } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
@@ -82,6 +81,16 @@ export interface ModelledOpportunity {
   agreed: boolean;
   /** What those agreements are worth, in major units: money a buyer has already agreed to. */
   agreedValue: number;
+  /** How many live agreements that is: each one is a deal that may tie up money too. */
+  agreedDeals: number;
+  /**
+   * Who does the work, when a source or a person has said so. Brain is one
+   * possible fulfiller, never the only one: a partner, a subcontractor, a
+   * supplier or the owner's own people fulfil just as well, and a plan that
+   * only counted Brain's own deliverables could never contain a brokered,
+   * logistics or resale opening.
+   */
+  fulfilledBy: { value: string; provenance: VariableProvenance; source: SourceRef | null } | null;
 }
 
 export interface GoalModel {
@@ -189,6 +198,12 @@ async function modelOpportunity(
     close = unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing');
   }
 
+  const fulfilmentFact = fact('fulfillment');
+  const fulfilledBy =
+    fulfilmentFact && fulfilmentFact.kind !== 'RECOMMENDATION' && opportunity.fulfillmentOwner
+      ? { value: opportunity.fulfillmentOwner, ...kindToProvenance(fulfilmentFact) }
+      : null;
+
   return {
     opportunity,
     index,
@@ -202,7 +217,23 @@ async function modelOpportunity(
     directCost,
     agreed: agreements.length > 0,
     agreedValue: agreements.reduce((sum, one) => sum + one.amountCents, 0) / 100,
+    agreedDeals: agreements.length,
+    fulfilledBy,
   };
+}
+
+/**
+ * The most this opening could put toward the goal inside the window, from
+ * what is known: its agreed money, or its top price times the deals a
+ * repeatable play could take, or one deal. Zero when it is known to settle too
+ * late. A ranking key only — it is never shown as a forecast.
+ */
+function bestCaseReach(one: ModelledOpportunity, remaining: number, daysLeft: number): number {
+  const late = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && one.daysToCash.value > daysLeft;
+  if (late) return 0;
+  const price = one.price.high ?? one.price.value ?? 0;
+  const deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(remaining / Math.max(1, price))) : one.agreedValue > 0 ? 0 : 1;
+  return Math.min(remaining, one.agreedValue + deals * price);
 }
 
 function variable(key: string, label: string, unit: string, input: ModelInput): ScenarioVariable {
@@ -256,6 +287,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
 
   const lessons = await cashOutcomeLessons(target.projectId);
   const included: ModelledOpportunity[] = [];
+  const candidates: ModelledOpportunity[] = [];
   for (const opportunity of ordered) {
     const tier = tierOf.get(opportunity.id) ?? 'SIGNAL';
     if (tier === 'SIGNAL' && !IN_FLIGHT.has(opportunity.state)) {
@@ -270,13 +302,31 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `closed on ${opportunity.expiresAt.slice(0, 10)}` });
       continue;
     }
+    const modelled = await modelOpportunity(opportunity, 0, tier, target.currency, lessons);
+    if ('reason' in modelled) excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: modelled.reason });
+    else candidates.push(modelled);
+  }
+  /*
+   * Which openings take the engine's few slots is decided by what each could
+   * put toward *this* goal, not by how far along it is. Production,
+   * 2026-10-28: the slots went to the four "closest to a decision" — a $2.50
+   * auction among them — and the plan could reach $415 of $10,000 however it
+   * combined them. Money already agreed and work already under way come first,
+   * then the largest reach inside the window, then the evidence tier.
+   */
+  const remainingMajor = target.remainingCents / 100;
+  candidates.sort(
+    (a, b) =>
+      (IN_FLIGHT.has(a.opportunity.state) || a.agreed ? 0 : 1) - (IN_FLIGHT.has(b.opportunity.state) || b.agreed ? 0 : 1) ||
+      bestCaseReach(b, remainingMajor, target.daysLeft!) - bestCaseReach(a, remainingMajor, target.daysLeft!) ||
+      (TIER_ORDER[a.tier] ?? 3) - (TIER_ORDER[b.tier] ?? 3),
+  );
+  for (const one of candidates) {
     if (included.length >= MAX_MODEL_OPPORTUNITIES) {
-      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `beyond the ${MAX_MODEL_OPPORTUNITIES} closest to a decision` });
+      excluded.push({ opportunityId: one.opportunity.id, title: one.opportunity.title, reason: `the engine fits ${MAX_MODEL_OPPORTUNITIES} openings in one model and ${included.length} could reach more of this goal` });
       continue;
     }
-    const modelled = await modelOpportunity(opportunity, included.length + 1, tier, target.currency, lessons);
-    if ('reason' in modelled) excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: modelled.reason });
-    else included.push(modelled);
+    included.push({ ...one, index: included.length + 1 });
   }
   if (included.length === 0) {
     return refuse(
@@ -286,18 +336,9 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     );
   }
 
-  const position = await cashPosition({ projectId: target.projectId, currency: target.currency });
   const variables: ScenarioVariable[] = [
     variable('remaining', 'Still needed to reach the target', target.currency, known(target.remainingCents / 100, 'EVIDENCE', { kind: 'OTHER', ref: `workstream:${goal.id}`, note: 'target less what the ledger shows' }, 'target less the ledger')),
     variable('days_left', 'Days until the goal is due', 'days', known(target.daysLeft, 'EVIDENCE', { kind: 'OTHER', ref: `workstream:${goal.id}` }, 'the goal row')),
-    variable(
-      'capital_ceiling',
-      'Money the plan may tie up',
-      target.currency,
-      target.capitalCeilingCents !== null
-        ? known(target.capitalCeilingCents / 100, 'EVIDENCE', { kind: 'PERSON', ref: `workstream:${goal.id}`, note: 'the ceiling a person set' }, 'the ceiling a person set')
-        : known(Math.max(0, position.deployableCents) / 100, 'EVIDENCE', { kind: 'LEDGER_ENTRY', ref: `project:${target.projectId}`, note: 'deployable cash' }, 'deployable cash on the ledger'),
-    ),
     variable(
       'hours_available',
       'Working hours available before the deadline',
@@ -307,6 +348,19 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
         : unknown(20, 160, 'nobody has said how many hours are available; swept from 20 to 160'),
     ),
   ];
+  /*
+   * Capital is the goal's own, never a global default. When the owner has said
+   * how much may be committed, that is the ceiling. When nobody has said, there
+   * is no ceiling to break — the model reports how much each strategy ties up,
+   * and the gate asks the owner, rather than reading the ledger's deployable
+   * cash (often zero) as a decision nobody made. Permission to spend is still
+   * the commercial authority's either way.
+   */
+  if (target.capitalCeilingCents !== null) {
+    variables.push(
+      variable('capital_ceiling', 'Money the owner said this goal may commit', target.currency, known(target.capitalCeilingCents / 100, 'EVIDENCE', { kind: 'PERSON', ref: `workstream:${goal.id}`, note: 'the ceiling a person set' }, 'the ceiling a person set')),
+    );
+  }
   const derived: NonNullable<ScenarioModelDefinition['derived']> = [];
   const lines: ScenarioModelDefinition['lines'] = [];
   const exposure: string[] = [];
@@ -342,7 +396,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       { key: `${o}_cash`, label: `${name}: settled inside the window`, kind: 'REVENUE', expr: `(${o}_agreed + ${o}_won * ${o}_price) * ${o}_in` },
       { key: `${o}_spend`, label: `${name}: direct costs`, kind: 'COST', expr: `${o}_won * ${o}_cost` },
     );
-    exposure.push(`${o}_n * ${o}_capital`);
+    // Money is tied up per deal taken, not per buyer asked.
+    exposure.push(`(${o}_won + ${one.agreedDeals}) * ${o}_capital`);
     labour.push(`${o}_won * ${o}_hours`);
     cashIn.push(`(${o}_agreed + ${o}_won * ${o}_price) * ${o}_in`);
     slowest.push(`if(${o}_n + ${o}_agreed > 0, ${o}_days, 0)`);
@@ -356,11 +411,12 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     { key: 'days', label: 'Slowest money to settle', unit: 'days', expr: slowest.length > 1 ? `max(${slowest.join(', ')})` : slowest[0]!, better: 'LOWER', role: 'DAYS_TO_CASH' },
   ];
   const constraints: NonNullable<ScenarioModelDefinition['constraints']> = [
-    { key: 'capital', label: 'Within the money the plan may tie up', expr: exposure.join(' + '), op: '<=', value: 0 },
     { key: 'hours', label: 'Within the hours available', expr: `${labour.join(' + ')} - hours_available`, op: '<=', value: 0 },
   ];
-  // The capital constraint compares against a variable, so it is written as a difference.
-  constraints[0] = { key: 'capital', label: 'Within the money the plan may tie up', expr: `${exposure.join(' + ')} - capital_ceiling`, op: '<=', value: 0 };
+  // A ceiling is compared against a variable, so it is written as a difference.
+  if (target.capitalCeilingCents !== null) {
+    constraints.unshift({ key: 'capital', label: 'Within the money the owner said this goal may commit', expr: `${exposure.join(' + ')} - capital_ceiling`, op: '<=', value: 0 });
+  }
 
   const strategies: StrategySpec[] = [];
   // How many new buyers a strategy offers to. Agreed money needs none; a
@@ -375,26 +431,61 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     return Math.min(MAX_BUYERS_OFFERED, Math.ceil(gap / Math.max(1, price)) * OUTREACH_MULTIPLE);
   };
   const none = () => Object.fromEntries(included.map((one) => [`o${one.index}_n`, 0]));
+  const add = (spec: StrategySpec) => {
+    // Two strategies that ask the same thing of every opening are one strategy.
+    const same = strategies.some((one) => canonical(one.set) === canonical(spec.set));
+    if (!same && strategies.length < SCENARIO_LIMITS.maxStrategies) strategies.push(spec);
+  };
+  const canonical = (set: StrategySpec['set']) => JSON.stringify(Object.entries(set).sort(([a], [b]) => a.localeCompare(b)));
   for (const one of included) {
-    if (strategies.length >= 6) break;
-    strategies.push({
+    add({
       key: `only_o${one.index}`,
       label: `Only: ${one.opportunity.title.slice(0, 60)}`,
       set: { ...none(), [`o${one.index}_n`]: dealsFor(one) },
     });
   }
-  if (included.length > 1) {
-    const fast = included.filter((one) => one.daysToCash.value !== null && one.daysToCash.value <= target.daysLeft!);
-    if (fast.length > 1) {
-      strategies.push({
-        key: 'basket_fast',
-        label: 'Every opening known to settle before the deadline',
-        set: { ...none(), ...Object.fromEntries(fast.map((one) => [`o${one.index}_n`, dealsFor(one)])) },
-      });
+  /*
+   * Combinations are built from the openings themselves, never from a split.
+   * Each walks the openings in one order and asks each for only what is still
+   * needed after the ones before it: money already agreed first, then a
+   * one-off deal for its price, then a repeatable play for whatever remains.
+   * So one opening may carry the whole goal, or several may share it in
+   * whatever amounts they actually offer — and nothing is divided equally or
+   * by template. The engine then evaluates the combination as one plan, with
+   * the shared hours and money summed across it.
+   */
+  const combine = (key: string, label: string, order: ModelledOpportunity[]) => {
+    let gap = target.remainingCents / 100;
+    const set: StrategySpec['set'] = none();
+    const used: ModelledOpportunity[] = [];
+    for (const one of order) {
+      if (gap <= 0) break;
+      const price = one.price.value ?? one.price.low ?? 0;
+      if (one.agreedValue > 0) {
+        gap -= one.agreedValue;
+      } else if (!one.repeatable) {
+        if (price <= 0) continue;
+        set[`o${one.index}_n`] = 1;
+        gap -= price;
+      } else {
+        set[`o${one.index}_n`] = Math.min(MAX_BUYERS_OFFERED, Math.ceil(gap / Math.max(1, price)) * OUTREACH_MULTIPLE);
+        gap = 0;
+      }
+      used.push(one);
     }
-    strategies.push({
+    if (used.length > 1) add({ key, label: `${label}: ${used.map((one) => one.opportunity.title.slice(0, 30)).join(' + ')}`.slice(0, 160), set });
+  };
+  if (included.length > 1) {
+    const reach = (one: ModelledOpportunity) => bestCaseReach(one, target.remainingCents / 100, target.daysLeft!);
+    combine('combine_reach', 'Combined, largest reach first', [...included].sort((a, b) => Number(b.agreed) - Number(a.agreed) || reach(b) - reach(a)));
+    const days = (one: ModelledOpportunity) => (one.daysToCash.value !== null ? one.daysToCash.value : Number.POSITIVE_INFINITY);
+    combine('combine_fast', 'Combined, fastest money first', [...included].sort((a, b) => Number(b.agreed) - Number(a.agreed) || days(a) - days(b) || reach(b) - reach(a)));
+    const evidence = (one: ModelledOpportunity) =>
+      [one.close, one.price, one.daysToCash, one.directCost, one.capital].filter((input) => input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL').length;
+    combine('combine_evidence', 'Combined, best-evidenced first', [...included].sort((a, b) => Number(b.agreed) - Number(a.agreed) || evidence(b) - evidence(a) || reach(b) - reach(a)));
+    add({
       key: 'basket_all',
-      label: 'Every modelled opening at once',
+      label: 'Every modelled opening at full reach',
       set: { ...none(), ...Object.fromEntries(included.map((one) => [`o${one.index}_n`, dealsFor(one)])) },
     });
   }
@@ -410,7 +501,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       lines,
       metrics,
       constraints,
-      strategies: strategies.slice(0, 8),
+      strategies,
     },
     included,
     excluded,
