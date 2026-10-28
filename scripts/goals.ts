@@ -21,6 +21,13 @@
  *   npm run goals -- reinstate <wst_…> --admin a@b
  *   npm run goals -- depends <wst_…> <wst_…> --admin a@b
  *   npm run goals -- terms <wst_…> [--outcome "…"] [--due 2026-10-01] [--commitment CUSTOMER] --admin a@b
+ *   npm run goals -- create --reason "Collect 10000 dollars in 30 days" --project prj_… --due 2026-11-27 SETTLED_CASH-1000000-USD-50000-120 --admin a@b
+ *   npm run goals -- target <wst_…> SETTLED_CASH-1000000-USD-50000-120 --project prj_… --admin a@b
+ *   npm run goals -- plan <wst_…>            (reads and prints; writes nothing)
+ *
+ * A target spec is METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], dashes
+ * only, so it passes the workflow's id check: the figure, how much, in which
+ * currency, and optionally the money and hours a plan may use.
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
@@ -37,6 +44,8 @@ import { assembleGoals, type GoalView } from '../server/services/goals/model.ts'
 import { briefFrom } from '../server/services/goals/briefing.ts';
 import { unfiledWork } from '../server/services/register/unfiled.ts';
 import { cancel, pause, reinstate, resume, setTerms } from '../server/services/goals/decide.ts';
+import { setTarget } from '../server/services/goals/target.ts';
+import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 
 class Halt extends Error {}
 
@@ -86,6 +95,7 @@ function printGoal(goal: GoalView): void {
   console.log(`  owner       ${goal.owner?.name ?? '—'}   purpose ${goal.purposeLabel}   ${goal.commitmentLabel}${goal.dueAt ? `   due ${goal.dueAt.slice(0, 10)}${goal.overdue ? ' OVERDUE' : ''}` : ''}`);
   console.log(`  intent      ${goal.intent.slice(0, 240)}`);
   console.log(`  outcome     ${goal.outcome ?? 'nobody has said what counts as finished'}`);
+  if (goal.target) console.log(`  target      ${goal.target.targetCents / 100} ${goal.target.currency} ${goal.target.metricLabel}: ledger shows ${goal.target.achievedCents / 100}, ${goal.target.remainingCents / 100} to go${goal.target.daysLeft !== null ? `, ${goal.target.daysLeft} day(s) left` : ''}${goal.target.notCounted.length ? ` (not counted: ${goal.target.notCounted.map((one) => `${one.label} ${one.cents / 100}`).join('; ')})` : ''}`);
   console.log(`  authority   ${goal.authority.research}`);
   if (goal.authority.commercial) console.log(`              ${goal.authority.commercial}`);
   console.log(`  state       ${goal.state} — ${goal.stateEvidence}`);
@@ -265,6 +275,88 @@ async function decide(command: string): Promise<void> {
   console.log('GOALS: OK');
 }
 
+function parseSpec(spec: string | undefined): { metric: string; amountCents: number; currency: string; capital: number | null; hours: number | null } {
+  if (!spec) fail('Name the target as METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], e.g. SETTLED_CASH-1000000-USD-50000-120.');
+  const parts = spec.split('-');
+  const metric = parts.slice(0, parts.findIndex((one) => /^\d+$/.test(one))).join('_') || parts[0]!;
+  const rest = parts.slice(parts.findIndex((one) => /^\d+$/.test(one)));
+  const [amount, currency, capital, hours] = rest;
+  if (!amount || !/^\d+$/.test(amount) || !currency) fail('The target spec needs an amount in cents and a currency.');
+  return {
+    metric: metric.replace(/-/g, '_'),
+    amountCents: Number(amount),
+    currency: currency.toUpperCase(),
+    capital: capital !== undefined ? Number(capital) : null,
+    hours: hours !== undefined ? Number(hours) : null,
+  };
+}
+
+async function targetCommand(command: 'create' | 'target'): Promise<void> {
+  const adminId = await administrator();
+  const projectId = flag('project') ?? fail('A target needs --project: the project whose ledger counts.');
+  let goal;
+  let specWord: string | undefined;
+  if (command === 'create') {
+    const title = flag('reason') ?? fail('create needs --reason: the goal in plain words.');
+    const due = flag('due') ?? fail('create needs --due: a goal with no deadline has no window to count money in.');
+    if (!Number.isFinite(Date.parse(due))) fail('--due must be a date.');
+    [, specWord] = words();
+    const spec = parseSpec(specWord);
+    goal = await createWorkstream({ projectId, title: title.slice(0, 160), intent: title, purpose: 'REVENUE_DIRECT', createdByUserId: adminId });
+    await setTerms(goal.id, { outcome: `${spec.metric} of at least ${spec.amountCents / 100} ${spec.currency}, verified on the ledger`, dueAt: new Date(due).toISOString(), ownerUserId: adminId }, `person:${adminId}`);
+    await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'WORKSTREAM_OPENED', summary: `Created as a targeted goal: ${title.slice(0, 200)}`, actorRef: `person:${adminId}` });
+  } else {
+    const [, goalId, word] = words();
+    specWord = word;
+    goal = goalId ? await getWorkstream(goalId) : null;
+    if (!goal) fail(`No goal ${goalId ?? '(none named)'}.`);
+  }
+  const spec = parseSpec(specWord);
+  const fresh = (await getWorkstream(goal.id))!;
+  const result = await setTarget({ goal: fresh, metric: spec.metric, amountCents: spec.amountCents, currency: spec.currency, projectId, capitalCeilingCents: spec.capital, hoursCeiling: spec.hours });
+  if (!result.ok) fail(`The target was not set: ${result.reason}`);
+  await recordWorkstreamEvent({ workstreamId: goal.id, kind: 'GOAL_TARGET_SET', summary: `Target: ${spec.metric} ${spec.amountCents / 100} ${spec.currency}${spec.capital !== null ? `, at most ${spec.capital / 100} tied up` : ''}${spec.hours !== null ? `, at most ${spec.hours} hours` : ''}. Counted from now.`, actorRef: `person:${adminId}` });
+  console.log(`${command} ${goal.id}: target ${spec.metric} ${spec.amountCents / 100} ${spec.currency} counted from ${result.target.setAt}`);
+  console.log('GOALS: OK');
+}
+
+function printPlan(reading: PlanReading): void {
+  const t = reading.target;
+  console.log(`PLAN ${reading.goalId}  ${reading.verdict}`);
+  console.log(`  target      ${t.targetCents / 100} ${t.currency} ${t.metricLabel}; ledger shows ${t.achievedCents / 100} since ${t.since.slice(0, 10)}; ${t.remainingCents / 100} to go; ${t.daysLeft ?? '—'} day(s) left`);
+  for (const one of t.notCounted) console.log(`  not counted ${one.label}: ${one.cents / 100} ${t.currency}`);
+  console.log(`  limits      capital ${t.capitalCeilingCents === null ? 'deployable cash' : t.capitalCeilingCents / 100} · hours ${t.hoursCeiling ?? 'unknown'}`);
+  console.log(`  verdict     ${reading.summary}`);
+  if (reading.scenarioRunId) console.log(`  scenario    model ${reading.scenarioModelId} run ${reading.scenarioRunId}`);
+  if (reading.basisNote) console.log(`  basis       ${reading.basisNote}`);
+  console.log(`  chance      ${reading.measuredChance ? `${Math.round(reading.measuredChance.estimate * 100)}% (${Math.round(reading.measuredChance.lowerBound * 100)}–${Math.round(reading.measuredChance.upperBound * 100)}%, n=${reading.measuredChance.sampleSize}, ${reading.measuredChance.cohort})` : 'not stated: this Brain has too few finished recommended plans to measure one'}`);
+  for (const s of reading.strategies) {
+    console.log(`  strategy    ${s.key} ${s.verdict}  ${s.label}`);
+    const sw = s.sweep;
+    if (sw.goalMetShare !== null) console.log(`    sweep     reaches target in ${Math.round(sw.goalMetShare * 100)}% of tested conditions${sw.probabilistic ? ' (probability)' : ' (coverage, not a probability)'}; settled p50 ${Math.round(sw.settledP50 ?? 0)} p90 ${Math.round(sw.settledP90 ?? 0)}; infeasible ${Math.round((sw.infeasibleShare ?? 0) * 100)}%`);
+    console.log(`    cautious  ${s.conservativeSettled === null ? 'cannot be computed: an input it needs is unknown' : `${Math.round(s.conservativeSettled)} ${t.currency} settled in time`}`);
+    for (const link of s.links) console.log(`    ${link.ok ? 'OK ' : 'MISSING'} ${CHAIN_LABEL[link.link]}: ${link.basis.slice(0, 200)}`);
+    for (const failed of s.constraintsFailed) console.log(`    FAILS     ${failed}`);
+  }
+  if (reading.nextTest) {
+    console.log(`  next test   [${reading.nextTest.by}] ${reading.nextTest.test}`);
+    if (reading.nextTest.blocker) console.log(`  blocker     ${reading.nextTest.blocker}`);
+  }
+  for (const one of reading.excluded.slice(0, 15)) console.log(`  left out    ${one.opportunityId} ${one.title.slice(0, 70)}: ${one.reason}`);
+  if (reading.excluded.length > 15) console.log(`  left out    … and ${reading.excluded.length - 15} more`);
+}
+
+async function plan(): Promise<void> {
+  const [, goalId] = words();
+  if (!goalId) fail('plan needs a goal id.');
+  const reading = await readGoalPlan({ goalId, persist: false });
+  if (!reading) fail(`No targeted goal ${goalId}.`);
+  printPlan(reading);
+  const history = await listReadings(goalId);
+  for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);
+  console.log('GOALS: OK');
+}
+
 async function main(): Promise<void> {
   await initDatabase();
   const [command] = words();
@@ -281,8 +373,13 @@ async function main(): Promise<void> {
     case 'terms':
     case 'depends':
       return await decide(command);
+    case 'create':
+    case 'target':
+      return await targetCommand(command);
+    case 'plan':
+      return await plan();
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }

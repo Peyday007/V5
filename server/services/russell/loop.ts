@@ -178,6 +178,7 @@ import { advanceSources } from '../capability/extraction.ts';
 import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { advanceGoals, type GoalTickReport } from '../goals/tick.ts';
+import { advanceGoalPlans } from '../goals/plan.ts';
 import { advanceResearchGoals, type GoalContinuationReport } from '../research/goalContinuation.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 import { watchIdleOnTick } from '../engineering/watchdog.ts';
@@ -1301,6 +1302,19 @@ async function tickOnce(owner: string): Promise<TickReport> {
     await runPass(report, 'research-goals', async () => {
       report.researchGoals = await advanceResearchGoals();
     });
+
+    /*
+     * A targeted goal's plan: compose the scenario model from rows, run the
+     * existing engine, apply the evidence gate, and record what actually
+     * happened once the target is met or the due date passes. At most every
+     * half hour per goal, deferred under database pressure, and it writes only
+     * an append-only reading when the conclusion changed.
+     */
+    if (!shedding(report, 'goal-plans')) {
+      await runPass(report, 'goal-plans', async () => {
+        await advanceGoalPlans();
+      });
+    }
 
     /*
      * Rule 9 of the engineering policy: executable work beside idle capacity is

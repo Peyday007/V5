@@ -319,6 +319,8 @@ export async function totalsByKind(input: {
    * label makes the result look checked.
    */
   currency?: string;
+  /** Count only entries that occurred at or after this instant (a goal's start). */
+  since?: string;
 }): Promise<Record<CashMoneyKind, number>> {
   const where = ['project_id = ?'];
   const params: SqlParam[] = [input.projectId];
@@ -329,6 +331,10 @@ export async function totalsByKind(input: {
   if (input.currency) {
     where.push('currency = ?');
     params.push(input.currency);
+  }
+  if (input.since) {
+    where.push('occurred_at >= ?');
+    params.push(input.since);
   }
   const rows = await getDb().all<{ kind: string; total: number }>(
     `SELECT kind, COALESCE(SUM(amount_cents), 0) AS total

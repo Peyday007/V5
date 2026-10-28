@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'show | file | pause | resume | cancel | reinstate | depends | terms'
+        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan'
         required: true
         default: show
       goal:
@@ -28,7 +28,7 @@ on:
         required: false
         default: ''
       other:
-        description: 'For depends: the goal it waits on (wst_...). For file: the row to file from (fcp_/fcr_/rms_/rcn_/orc_...)'
+        description: 'For depends: the goal it waits on. For file: the row to file from. For create/target: METRIC-AMOUNT_CENTS-CURRENCY[-CAPITAL_CENTS[-HOURS]], e.g. SETTLED_CASH-1000000-USD-50000-120'
         required: false
         default: ''
       purpose:
@@ -36,7 +36,7 @@ on:
         required: false
         default: ''
       reason:
-        description: 'For pause and cancel: why, in plain words (letters, digits, spaces and . , - _)'
+        description: 'For pause and cancel: why. For create: the goal in plain words (letters, digits, spaces and . , - _)'
         required: false
         default: ''
       commitment:
@@ -44,15 +44,15 @@ on:
         required: false
         default: ''
       due:
-        description: 'For terms: a date, YYYY-MM-DD'
+        description: 'For terms and create: a date, YYYY-MM-DD'
         required: false
         default: ''
       project:
-        description: 'For show: optionally one project (prj_...)'
+        description: 'For show: optionally one project. For create/target: the project whose ledger counts (prj_...)'
         required: false
         default: ''
       admin:
-        description: '--admin <email>: required by every command but show'
+        description: '--admin <email>: required by every command but show and plan'
         required: false
         default: ''
 
@@ -89,7 +89,7 @@ jobs:
 
           # The allowlist is the control; the input's description is a label.
           case "$G_COMMAND" in
-            show|file|pause|resume|cancel|reinstate|depends|terms) ;;
+            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan) ;;
             *) echo "::error::Refusing '$G_COMMAND'."; exit 1 ;;
           esac
 
@@ -109,7 +109,7 @@ jobs:
             '') ;;
             *[!A-Za-z0-9_.@+-]*) echo "::error::Refusing the administrator address."; exit 1 ;;
           esac
-          if [ "$G_COMMAND" != show ] && [ -z "$G_ADMIN" ]; then
+          if [ "$G_COMMAND" != show ] && [ "$G_COMMAND" != plan ] && [ -z "$G_ADMIN" ]; then
             echo "::error::'$G_COMMAND' changes something, so it needs an administrator."
             exit 1
           fi
@@ -137,6 +137,19 @@ jobs:
           # The verdict is a line the script printed, never an exit code that
           # had to survive an SSH session, a shell and a CLI.
           grep -q '^GOALS: OK' goals.txt
+
+      # The output, published as notices, so it can be read without the log.
+      - name: Publish the output as annotations
+        if: always()
+        run: |
+          [ -f goals.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('goals.txt', encoding='utf-8', errors='replace').read()
+          enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][:10]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=goals {n}/{len(chunks)}::{enc(chunk)}')
+          PY
 
       - uses: actions/upload-artifact@v4
         if: always()
