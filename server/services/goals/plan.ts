@@ -170,7 +170,12 @@ function linkChecks(one: ModelledOpportunity, deals: number, target: TargetReadi
     {
       link: 'SETTLES_IN_TIME',
       ok: one.daysToCash.value !== null && target.daysLeft !== null && one.daysToCash.value <= target.daysLeft && established(one.daysToCash),
-      basis: one.daysToCash.value !== null ? `${one.daysToCash.value} days to usable cash against ${target.daysLeft} left` : 'nobody has established when the money would settle',
+      basis:
+        one.competitiveAward && !established(one.daysToCash)
+          ? 'money comes only after winning an award, then doing the work, then the buyer paying on its terms — nobody has established when that would be'
+          : one.daysToCash.value !== null
+            ? `${one.daysToCash.value} days to usable cash against ${target.daysLeft} left`
+            : 'nobody has established when the money would settle',
     },
   ];
 }
@@ -364,12 +369,31 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     // buyer agreeing — never from the bounds a sweep happened to test.
     const best = members.reduce((sum, { one, deals }) => {
       const late = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && target.daysLeft !== null && one.daysToCash.value > target.daysLeft;
-      return sum + (late ? 0 : one.agreedValue + deals * (one.price.high ?? one.price.value ?? 0));
+      // An award not yet shown to pay in time is not reach: it must be won first.
+      const unproven = one.competitiveAward && one.daysToCash.provenance !== 'EVIDENCE' && one.daysToCash.provenance !== 'HISTORICAL';
+      return sum + (late || unproven ? 0 : one.agreedValue + deals * (one.price.high ?? one.price.value ?? 0));
     }, 0);
     if (best < target.remainingCents / 100) {
       constraintsFailed.push(`cannot reach the ${target.remainingCents / 100} ${target.currency} still needed even if every buyer it offers to agreed (at most ${Math.round(best)})`);
     }
     bestReach = Math.max(bestReach, best);
+    /*
+     * The owner's way of spending: little first, the rest once money comes in,
+     * spread over time. A plan has to be able to start that way — some step
+     * that can pay with no more tied up than the test allows — and an award
+     * that pays one lump at the end, after somebody else decides, cannot.
+     */
+    const paced = target.capitalBeforeProofCents !== null || target.capitalPerWeekCents !== null;
+    if (paced && members.length > 0 && members.every(({ one }) => one.competitiveAward)) {
+      constraintsFailed.push('pays only after winning an award and then waiting on the buyer\'s payment, in one lump at the end — not little by little, as the owner wants');
+    }
+    if (target.capitalBeforeProofCents !== null && !target.proven) {
+      const test = target.capitalBeforeProofCents / 100;
+      const starters = members.filter(({ one }) => !one.competitiveAward && !(one.capital.value !== null && one.capital.provenance !== 'UNKNOWN' && one.capital.value > test));
+      if (members.length > 0 && starters.length === 0 && !members.some(({ one }) => one.competitiveAward)) {
+        constraintsFailed.push(`no step can start with ${test} ${target.currency} or less tied up, which is all the owner allows before money comes in`);
+      }
+    }
     if (sweep.infeasibleShare === 1) constraintsFailed.push('breaks the money or hours limit in every tested case');
     const cons = conservative(members, target);
     // Spread over the goal's life: the owner's weekly pace, over the weeks left.
@@ -431,11 +455,14 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     });
   }
 
+  const awardIds = new Set(model.included.filter((one) => one.competitiveAward).map((one) => one.opportunity.id));
+  const awards = (s: StrategyReading) => s.opportunityIds.filter((id) => awardIds.has(id)).length;
   const rank = (s: StrategyReading) => (s.verdict === 'RECOMMENDABLE' ? 0 : s.verdict === 'NEEDS_EVIDENCE' ? 1 : 2);
   const ordered = [...strategies].sort(
     (a, b) =>
       rank(a) - rank(b) ||
       (b.conservativeSettled ?? -1) - (a.conservativeSettled ?? -1) ||
+      awards(a) - awards(b) ||
       a.links.filter((one) => !one.ok).length - b.links.filter((one) => !one.ok).length ||
       (b.sweep.goalMetShare ?? 0) - (a.sweep.goalMetShare ?? 0),
   );
