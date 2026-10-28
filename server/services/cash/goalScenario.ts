@@ -262,6 +262,14 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: 'evidence only: nobody has shown who would pay us' });
       continue;
     }
+    // A closed opening can contribute nothing, so it must not take one of the
+    // few slots a better one needs. Production, 2026-10-28: all four slots
+    // went to auctions and a notice that had already closed, and the plan read
+    // NOT_VIABLE for that reason alone.
+    if (opportunity.expiresAt && Date.parse(opportunity.expiresAt) < (input.now ?? new Date()).getTime()) {
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `closed on ${opportunity.expiresAt.slice(0, 10)}` });
+      continue;
+    }
     if (included.length >= MAX_MODEL_OPPORTUNITIES) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `beyond the ${MAX_MODEL_OPPORTUNITIES} closest to a decision` });
       continue;

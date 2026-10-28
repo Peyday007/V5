@@ -213,6 +213,19 @@ describe('the gate', () => {
     expect(reading.excluded.filter((one) => one.reason.includes('closest to a decision')).length).toBeGreaterThan(0);
   });
 
+  it('never gives a slot to an opening that has already closed', async () => {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString();
+    for (let i = 0; i < 4; i += 1) {
+      const closed = await play({ title: `Closed ${i}`, priceCents: 90_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+      await getDb().run('UPDATE cash_opportunities SET expires_at = ? WHERE id = ?', [yesterday, closed.id]);
+    }
+    await play({ title: 'Still open', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    const id = await goal(1_000_000);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
+    expect(reading.excluded.filter((one) => one.reason.startsWith('closed on'))).toHaveLength(4);
+    expect(reading.excluded.some((one) => one.title === 'Still open')).toBe(false);
+  });
+
   it('says why there is nothing to model rather than inventing a plan', async () => {
     const id = await goal(100_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
