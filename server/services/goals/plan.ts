@@ -701,7 +701,7 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
         asked += 1;
       }
       // And dig into the openings already held: the path to their money.
-      researched += (await researchGoalPaths({ reading, projectId: reading.target.projectId })).length;
+      researched += (await researchGoalPaths({ reading, projectId: reading.target.projectId, now })).length;
     }
   }
   return { read, outcomes, asked, researched, busy: false };

@@ -593,6 +593,32 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(id).toBeTruthy();
   });
 
+  it('asks a path question again when its research ended without an answer, at most three times', async () => {
+    const o = await oneOff({ title: 'Freight loads with unknown payment timing', priceCents: 2_000_000, days: null });
+    await goal(1_000_000);
+    const { listNeeds, setNeedCandidate } = await import('../server/repos/cashPortfolio.ts');
+    const { createCandidate } = await import('../server/repos/russellCandidates.ts');
+    const key = `question:${o.id}:timeToFirstCash`;
+    const timing = async () => (await listNeeds({ projectId })).filter((one) => one.requestKey === key);
+    let at = now.getTime();
+    await advanceGoalPlans(new Date(at));
+    for (let round = 1; round <= 4; round += 1) {
+      const open = (await timing()).filter((one) => one.state === 'OPEN');
+      expect(open).toHaveLength(1);
+      expect(open[0]!.occurrence).toBe(Math.min(round, 3));
+      // Its research is turned away and nothing more happens to it.
+      const idea = await createCandidate({ projectId, title: 't', statement: 's' });
+      await setNeedCandidate(open[0]!.id, idea.id);
+      await getDb().run(`UPDATE russell_candidates SET state = 'PARKED', updated_at = ? WHERE id = ?`, [new Date(at).toISOString(), idea.id]);
+      // A day later the goal asks again, until it has asked three times.
+      at += 25 * 60 * 60 * 1000;
+      await advanceGoalPlans(new Date(at));
+    }
+    const all = await timing();
+    expect(all.filter((one) => one.state === 'WITHDRAWN')).toHaveLength(2);
+    expect(all).toHaveLength(3);
+  });
+
   it("never asks a goal's question as an instruction to act", async () => {
     const { GOAL_LENSES } = await import('../server/services/cash/discovery.ts');
     const { APPROVAL_ENVELOPES } = await import('../server/services/research/approvalEnvelope.ts');
