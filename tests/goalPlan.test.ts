@@ -612,6 +612,19 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(open.filter((one) => one.opportunityId === guessed.id).map((one) => one.requestKey)).toEqual([`question:${guessed.id}:revenueRange`]);
   });
 
+  it("does not count Brain's own estimate as an answer, so a question is researched rather than churned", async () => {
+    const o = await oneOff({ title: 'Freight loads with unknown payment timing', priceCents: 2_000_000, days: null });
+    await recordCardFact({ projectId, opportunityId: o.id, field: 'timeToFirstCash', kind: 'RECOMMENDATION', value: '30', claimId: null, decidedBy: 'BRAIN', basis: 'b', assumptions: 'a', uncertainty: 'u' });
+    await goal(1_000_000);
+    const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
+    const { readNeedCondition } = await import('../server/services/cash/conditions.ts');
+    for (let i = 0; i < 3; i += 1) await advanceGoalPlans(new Date(now.getTime() + i * 31 * 60_000));
+    const timing = (await listNeeds({ projectId })).filter((one) => one.requestKey === `question:${o.id}:timeToFirstCash`);
+    expect(timing).toHaveLength(1);
+    expect(timing[0]!.state).toBe('OPEN');
+    expect((await readNeedCondition(timing[0]!))!.holds).toBe(false);
+  });
+
   it('does not let dead questions fill the cap and stop new ones', async () => {
     const o = await oneOff({ title: 'Freight loads with unknown payment timing', priceCents: 2_000_000, days: null });
     await goal(1_000_000);

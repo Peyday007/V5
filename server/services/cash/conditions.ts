@@ -107,9 +107,22 @@ export async function readNeedCondition(need: CashNeed): Promise<NeedVerificatio
     for (const key of NEED_RESEARCHABLE_ENGINE_FIELDS) {
       if (questionKey(need.opportunityId, key) !== need.requestKey) continue;
       const fact = await cardFact(need.opportunityId, key);
+      /*
+       * A research question is answered by a source or a person, never by
+       * Brain's own proposal. Production, 2026-10-29: the goal's path questions
+       * on time to cash, capital and revenue were each settled the instant they
+       * were raised by a RECOMMENDATION already on the card, re-raised on the
+       * next reading because the plan still read the field as a guess, and
+       * settled again — 86 times for one field — while nothing was researched.
+       */
+      const answered = Boolean(fact && fact.value !== null && fact.kind !== 'RECOMMENDATION');
       return {
-        holds: Boolean(fact && fact.value !== null),
-        reading: fact ? `The ${key} is on the card.` : `The ${key} is still blank.`,
+        holds: answered,
+        reading: answered
+          ? `The ${key} is on the card.`
+          : fact
+            ? `The ${key} is only Brain's own estimate; nothing has established it yet.`
+            : `The ${key} is still blank.`,
       };
     }
     return null;
