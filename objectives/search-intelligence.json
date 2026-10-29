@@ -1,0 +1,103 @@
+{
+  "objective": "Give Brain general-purpose search intelligence: learn WHAT exists (subjects nobody hard-coded) and HOW to find real examples of it, keep search methods as reusable records that earn trust only from measured results, and compile repeatable methods into code detectors so routine search runs without Claude. Extend the existing owners; do not build a second discovery system, search engine or knowledge store. Owners found on inspection: server/services/cash/discoveryYield.ts (reads which buckets and source hosts filed openings and reached CANDIDATE, rows only, cash only); server/services/feeds/detectors.ts (versioned pure code detectors over stored feed_items, SHADOW before ACTIVE, covered items skip the free screen); server/services/feeds/sources.ts and run.ts (bulk pull by plain code, cheap-lane screen, rules, daily Claude shortlist); server/services/cheap/lane.ts (closed free-model tasks, two-model agreement, per-task daily budget); server/services/russell/frontier.ts (row-derived and judgment lenses for what a project does not yet understand); server/services/cash/discovery.ts and triggers.ts (SEARCH_BUCKETS, TRIGGER_BUCKETS, GOAL_LENSES). Gaps: (1) SEARCH_BUCKETS, TRIGGER_BUCKETS and GOAL_LENSES are Object.freeze constants, so a subject Brain discovers is not retained as a future search lens; (2) detectors are TypeScript constants with mode set in code, so a learned pattern cannot become a detector without a code change, and nothing promotes SHADOW to ACTIVE (or demotes) from measured precision; (3) there is no search-method record — what it finds, when it is useful, sources, required inputs, query/filter, how results are checked, observed limits, outcomes, trust state — and discoveryYield measures buckets and hosts only, for cash only; (4) nothing separates 'source unavailable' from 'searched and nothing suitable exists' from 'too many false positives', and nothing stops a method that keeps failing or asks why; (5) method development (Claude reasoning) and search execution (code and cheap lane) are not separated, so routine searching can still consume Claude; (6) no rule says which learning is private to a project or user and which general method may be shared. Split this into independently testable units with disjoint owned paths so they run in parallel, e.g.: learned-subject store feeding discovery lenses; search-method record and trust lifecycle; data-defined detectors with measured SHADOW to ACTIVE promotion; per-method metrics extending discoveryYield beyond cash; failure classification and pause/revise; method-development vs execution routing through the cheap lane; scope isolation and general-method sharing; live verification report.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Production Brain stores learned subjects and search-method records in the database. A method moves PROPOSED -> TESTING -> PROVEN, or to DEMOTED/RETIRED, only on recorded results; a proposed method is never reported as proven. A repeatable pattern is stored as a data-defined detector that runs through the existing feeds/detectors pipeline, starts in SHADOW, is checked against positive and negative real examples, and becomes ACTIVE only when measured precision clears a stored threshold; once ACTIVE it finds results with zero new Claude jobs, and items it cannot classify confidently still go to the cheap lane and then Claude. Each method has metrics: relevant, verified, duplicates, false positives, search time, compute cost, AI jobs consumed and avoided, validated opportunities and downstream outcomes when known; volume alone never raises trust. A failing method is classified (source unavailable, no suitable results, high false positives, stale) and paused with a retry time or revised, never rerun indefinitely, and one failed method never retires its whole subject. Project and user findings stay scoped; only methods marked general, whose definition holds no private data, are shared. The same path works for non-cash targets (suppliers, public datasets, technologies). After release, a live run on the owner's active $10K goal reports: methods Brain already knew, new methods researched, sources identified, methods that became code, results per method, how many were relevant and verified, AI usage avoided, methods improved or abandoned, and new useful opportunities — split into what Brain knows how to find, is still learning to find, can find automatically, has proven, and what remains unproven.",
+  "nonGoals": [
+    "A new search engine, knowledge database or learning framework separate from the existing research, feeds, cheap-lane, yield and frontier owners.",
+    "A speculative self-learning system that cannot be tested in this campaign.",
+    "Running routine search execution on Claude when code or the cheap lane can do it.",
+    "Treating a started search job, or a document describing an algorithm, as proof a method works.",
+    "Freelance-gig sources, SAM.gov federal bids, or Detroit/Cleveland targeting for Cash Mode.",
+    "Ignoring publisher terms, robots rules or stated rate limits.",
+    "Any change under server/services/identity/**, any policy entry weakening an existing guard, or any secret."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A subject not named in the original search request is discovered, stored with the source it came from, and offered as a search lens on a later discovery run alongside the existing buckets, surviving a process restart.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Search-method records persist with what-it-finds, when-useful, sources, required inputs, query/filter, check procedure, observed limits, outcomes and a trust state; a PROPOSED method cannot be read or reported as PROVEN, and only recorded verified results move it forward.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Two or more methods for the same subject are compared on the same data and the comparison is stored with per-method metrics.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A data-defined detector built from at least three positive and some negative stored examples starts in SHADOW, is measured on further stored feed_items, and is promoted to ACTIVE only when its measured precision clears the stored threshold; below it, promotion is refused.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "An ACTIVE learned detector produces results with no new research packet, Claude assignment or premium job created, and the run records the AI jobs it avoided.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "An item the detector cannot classify confidently is escalated to the cheap lane and, if unresolved, to Claude.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A method that repeatedly finds nothing is classified by cause (source unavailable vs no suitable results vs high false positives vs stale), is paused with a retry time or revised rather than rerun, and its subject stays open to other methods.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A high-volume, low-precision method ranks below a low-volume, high-precision method; candidate count alone never raises trust.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A finding learned in one project is not readable from another project, while a method marked general with no private data in its definition is reusable from both.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The same subject-discovery and method path runs end to end for a non-cash target (for example suppliers or public datasets).",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks and existing discovery, feeds, cheap-lane and frontier tests still pass.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    },
+    {
+      "statement": "After release, a live run against the owner's active $10K goal records per-method results, verified counts and AI usage avoided in production rows, and the report separates known, still-learning, automatic, proven and unproven.",
+      "verification": "Production rows read through the Factory status and campaign evidence after deploy.",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/cash/discovery.ts",
+    "server/services/cash/discoveryYield.ts",
+    "server/services/cash/triggers.ts",
+    "server/services/feeds/**",
+    "server/services/russell/frontier.ts",
+    "server/services/research/**",
+    "server/services/cheap/**",
+    "server/services/knowledge/**",
+    "server/repos/feeds.ts",
+    "server/repos/cashDiscovery.ts",
+    "server/repos/research.ts",
+    "server/repos/researchIntelligence.ts",
+    "server/repos/searchMethods.ts",
+    "server/domain/**",
+    "server/db/migrations/**",
+    "server/db/pg-migrations/**",
+    "tests/**"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Revert the merged pull requests. New tables are additive and new detectors start in SHADOW; with the new rows absent, discovery falls back to the existing frozen buckets and code detectors unchanged."
+}
