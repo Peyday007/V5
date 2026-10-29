@@ -1,0 +1,140 @@
+{
+  "objective": "Give Brain evidence-based work routing and resource management: every unit of research or processing work runs on the least expensive resource that can reliably complete it — plain code, then the free cheap lane, then Claude — chosen from measured records rather than keyword rules, with results reused before new work is started, failures classified before anything escalates, and repeated AI work flagged as a candidate to become code. Extend the existing owners; do not build a second router, queue, cache, learning system or quota system. Owners found on inspection: server/services/cheap/lane.ts (closed free-model TASKS, validated answers, two-model agreement, cheap_results rows, per-task daily budget, modelHealth/isDown over a 15-minute window, laneReading); server/services/conversation/lanes.ts (FAST/DEEP/WORK lane decision with a closed ESCALATIONS vocabulary, deciding nothing about spend or model); server/services/dispatch/router.ts (routeBin: eligibility, capability, project/family/repository scope, rate-limit refusals, relative headroom and fresh person-reported allowance; no notion of an owner account that must be used last); server/services/factory/allocation.ts (measured fires, arrivals, provider refusals and reported allowance per account) and server/services/factory/scheduler.ts (lane target, ownership overlap, modelClassFor, chooseWorker); server/services/bins/routing.ts (worker-keyed assignment boundary); server/services/research/quota.ts (dependency-ordered execution under a finite allowance, evidence bar never lowered); server/services/feeds/detectors.ts and run.ts (code detectors before the cheap screen); server/repos/sharedFindings.ts and research evidence rows; server/services/goals/** (goal targets, resources and spending pace). Gaps: (1) nothing classifies a unit of work as CODE, CHEAP or STRONG from what it requires (an existing algorithm or detector, structured data, tools, internet access, verification need) and from measured per-resource success and error rates — routing today is per-subsystem and partly hard-wired; (2) routeBin has no last-resort rule, so the owner's Claude account (rosserpeyton@gmail.com) can be fired while an eligible non-owner account has headroom — add a stored per-account routing preference (NORMAL | LAST_RESORT, data not code, not an access grant) that routeBin and the factory allocation honour, recording why when a LAST_RESORT account is selected; (3) a failure in one resource is not classified before the next attempt, so a source outage, an invalid free-model JSON answer, missing information and a genuine reasoning gap can all end up on Claude — add a failure classifier (TRANSIENT_PROVIDER, RATE_LIMITED, PROVIDER_DOWN, SOURCE_UNAVAILABLE, MALFORMED_OUTPUT, MISSING_INPUT, CAPABILITY_GAP, UNSOLVABLE) mapped to responses (backoff and retry same resource, other source, known repair, other capable worker, escalate, ask for input, stop) with bounded attempts so failed work never holds capacity; (4) no reuse check runs before a research packet, fragment or cheap-lane task is created — consult existing evidence, shared findings, completed jobs and cheap_results first, honour source dates and per-question freshness windows, reuse only what is current and still subject to the same verification rules, and investigate only the unanswered part; (5) research priority is volume-blind: open questions are not weighted by whether they can change a decision, value, cost, reuse, staleness of the opportunity and whether they block other work, and goal-specific budgets from server/services/goals/** are not read; (6) free-provider capacity is a single OmniRoute address with one daily budget — add per-provider/model rate-limit awareness, backoff and an unavailable cooldown so a known-down provider is not called repeatedly, and never invent allowance or usage numbers; (7) repeated AI jobs of the same shape are not counted, so nothing proposes turning them into code — emit candidate records into the search-intelligence campaign's method/detector path (objectives/search-intelligence.json) rather than building a second learning system, and never activate code without that path's SHADOW/precision checks and Factory engineering approval; (8) Factory software work and ordinary research share no explicit boundary at routing time — a unit of software change routes only to the Factory, a research question only to the research queue; (9) there is no single ledger of which resource ran each unit and why. Add a routing-decision ledger (resource chosen, reasons, alternatives considered, reused result id, failure class, escalation, outcome, validation result) and a savings report that counts code-only, cheap-lane, Claude, reused and prevented jobs, failures by cause, escalations, provider reliability and premium usage consumed, labelling any figure Brain cannot measure UNKNOWN and comparing only like-for-like workloads; output quality (verification pass rate, gate rejections) is reported beside every usage figure. Record a baseline of current routing on a representative stored workload before changing behaviour. Keep everything general-purpose (commercial, manufacturing, supplier, technical, scientific, planning work) and project-scoped: one project's or user's private rows are never read to route or answer another's, while general algorithms may be shared when marked general. Free-model output stays a sorting signal and never becomes verified evidence. Coordinate with the scenario-expansion, search-intelligence and opportunity-screening campaigns: read their rows and modules when present, do not duplicate them, and keep owned paths disjoint from theirs where possible. Split into independently testable units with disjoint owned paths, e.g.: work classification and routing decision ledger; owner-last-resort account preference in routeBin and allocation; failure classification and bounded retry/backoff; reuse-before-research check with freshness; value-weighted research priority reading goal budgets; per-provider capacity and cooldown in the cheap lane; repeated-work detection feeding the search-method path; research vs Factory boundary; savings and quality report with baseline; live verification report.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "Production Brain decides, for every unit of research and processing work, whether it runs as code, on the free cheap lane or on Claude, from stored capability and measured performance records, and writes that decision with its reasons to a ledger. Work an existing algorithm or detector can do runs without AI; closed classification and extraction go to an eligible free model only when that model's measured reliability for the task clears a stored threshold, with validated output; unfamiliar or high-judgment work still reaches Claude. Before new research starts, current reusable answers are reused and only the missing part is investigated; stale answers are not reused as current evidence. Failures are classified and handled by cause — backoff, other source, repair, other worker, escalation, request for input or stop — with bounded attempts, so a free-model failure never automatically consumes Claude and a source outage is never sent to a stronger model. A down or rate-limited free provider is cooled down, not hammered. The owner's Claude account is selected only when no eligible non-owner account can take the work, and when it is, the reason is recorded. Research questions are prioritised by decision value, cost, reuse and blocking, within goal-specific budgets. Repeated AI work of the same shape becomes a candidate in the search-intelligence method path. A report shows, against a recorded baseline on a comparable workload, code-only, free-AI, Claude, reused and prevented job counts, failures by cause, escalations, provider reliability and output quality, with unmeasurable figures marked UNKNOWN.",
+  "nonGoals": [
+    "A second router, work queue, cache, learning system, detector registry or quota system beside the existing owners.",
+    "Activating any learned algorithm or detector without the search-intelligence SHADOW/precision checks and an approved Factory change.",
+    "Treating free-model output as verified evidence, or letting cached or reused results bypass the evidence gate or freshness rules.",
+    "Escalating every cheap-lane failure to Claude, or retrying a known-down provider indefinitely.",
+    "Inventing token counts, subscription balances, remaining allowance or monetary savings.",
+    "Changing which repositories, projects or capabilities any account, Routine or worker may access; creating accounts; evading provider limits; touching secrets or credentials.",
+    "Routing Factory software changes through the research queue, or ordinary research through the Factory or standalone Claude Routines.",
+    "Any change under server/services/identity/**, server/services/research/approvalEnvelope.ts, or any policy entry weakening an existing guard.",
+    "Freelance-gig sources, SAM.gov federal bids, or Detroit/Cleveland targeting for Cash Mode."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "Baseline: before routing behaviour changes, a stored representative workload is replayed through the current paths and its resource use, completion and quality figures are recorded as a baseline row that later reports compare against.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A deterministic data-processing unit (parse, filter, dedupe, date check) is routed to CODE, completes with zero cheap-lane calls and zero Claude assignments, and the ledger records CODE with its reason.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A unit an existing ACTIVE detector or established algorithm covers is completed by that code instead of creating a research packet or Claude assignment.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A closed classification unit goes to an eligible free model whose measured reliability for that task clears the stored threshold; a model below the threshold, or one that has repeatedly failed the task, is not given it.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A complex unfamiliar problem with no existing method is routed to strong AI.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A down free provider is cooled down and not called again until its retry time; a transient failure gets bounded exponential backoff; attempts are capped and a failed unit releases its capacity.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A SOURCE_UNAVAILABLE or MISSING_INPUT failure is not escalated to a stronger model; a MALFORMED_OUTPUT failure from a free model is repaired or retried on the cheap lane before any escalation is considered; only a CAPABILITY_GAP escalates.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Work that requires internet access is never routed to a worker or Routine whose capabilities lack it.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A current stored answer within its freshness window is reused and no new job is created; a stale answer is not reused as current evidence and only the missing or stale part is re-researched; reused material still passes the evidence gate.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Per-provider rate limits are respected: a burst above a provider's stored limit is spread or deferred, never sent.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Outputs are validated before acceptance, and an unsupported free-model answer is never stored as a verified fact or read by a gate, card, tier or ledger.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Repeated AI jobs of the same shape are counted and emitted as a code-conversion candidate into the search-intelligence method path; on a repeat workload, code-first execution consumes measurably fewer Claude assignments than the baseline with no drop in verification pass rate.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "routeBin never selects an account marked LAST_RESORT while an eligible non-LAST_RESORT account can take the bin; when it does select one, the decision records which accounts were considered and why each could not.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Workers cannot exceed their project, capability or repository boundaries through the new routing, and one project's or user's private rows are never read to route or answer another project's work.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A software-change unit routes only to the Factory and an ordinary research question only to the research queue.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Research questions are ordered by decision value, cost, reuse and blocking within the goal's own stored budget; many low-value questions do not outrank a few critical ones.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The savings report counts code-only, free-AI, Claude, reused and prevented jobs, failures by cause, escalations, provider reliability and quality, and prints UNKNOWN for any figure Brain cannot measure.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The repository typechecks and existing cheap-lane, dispatch, factory, research and feeds tests still pass.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    },
+    {
+      "statement": "After release, a live run on the owner's active $10K goal records in production rows which units went to code, free AI and Claude and why, which results were reused, which jobs were avoided, which escalated, which providers failed and how, compared with the recorded baseline.",
+      "verification": "Production rows read through the Factory status and campaign evidence after deploy.",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/routing/**",
+    "server/repos/workRouting.ts",
+    "server/services/cheap/lane.ts",
+    "server/services/dispatch/router.ts",
+    "server/services/dispatch/candidates.ts",
+    "server/services/factory/allocation.ts",
+    "server/services/factory/scheduler.ts",
+    "server/services/research/quota.ts",
+    "server/services/research/startPacket.ts",
+    "server/services/research/queue.ts",
+    "server/repos/sharedFindings.ts",
+    "server/repos/fleet.ts",
+    "server/domain/types.ts",
+    "server/db/migrations/**",
+    "server/db/pg-migrations/**",
+    "scripts/factory.ts",
+    "tests/**"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Revert the merged pull requests. New tables and columns are additive; with the routing ledger absent and every account preference NORMAL, routeBin, the cheap lane and research start behave exactly as before, and no stored evidence changes meaning."
+}
