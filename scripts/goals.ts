@@ -49,6 +49,7 @@ import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { listNeeds } from '../server/repos/cashPortfolio.ts';
 import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
 import { getCycle } from '../server/repos/russellCycle.ts';
+import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
@@ -342,6 +343,13 @@ async function printSearching(reading: PlanReading): Promise<void> {
   const rounds = (await listRounds(reading.target.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
   const cycle = await getCycle();
   console.log(`  tick        ${cycle ? `${cycle.state}, last ran ${cycle.lastRanAt ?? 'never'}${cycle.lastError ? `; last problem: ${cycle.lastError.slice(0, 400)}` : ''}` : 'no tick has run'}`);
+  // Who can do this research: a search or a path question needs a worker that can open the web.
+  const snapshot = await sharedFleetSnapshot();
+  const research = snapshot.candidates.filter(
+    (c) => c.servesProjects.includes(reading.target.projectId) && (!Array.isArray(c.servesFamilies) || c.servesFamilies.includes('RESEARCH')),
+  );
+  const line = (c: (typeof research)[number]) => `${c.routine.name ?? c.routine.id} ${c.routine.state}${c.webBlocked ? ' NO-WEB' : ''}`;
+  console.log(`  workers     ${research.filter((c) => c.routine.state === 'ENABLED' && !c.webBlocked).length} can do web research now, of ${research.length}: ${research.map(line).join('; ')}`);
   console.log(`  searching   ${rounds.length} round(s) of this goal's own search`);
   for (const round of rounds) {
     const mission = await latestMissionForCandidate(round.candidateId);
