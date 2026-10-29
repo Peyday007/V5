@@ -684,8 +684,49 @@ export const GOAL_LENSES: readonly { id: string; angle: string }[] = Object.free
   { id: 'combination', angle: 'two or more of these combined, where one feeds the other' },
 ]);
 
-/** At most this many of a goal's own rounds are open at once. */
+/**
+ * At most this many of a goal's own rounds are open at once. A concurrency
+ * limit, never a limit on how much is searched: as each round settles the next
+ * angle is asked, and a lens that found nothing is asked again later from
+ * elsewhere rather than retired (`nextGoalRoundFor`).
+ */
 export const MAX_LIVE_GOAL_ROUNDS = 3;
+
+/** A barren goal lens waits longer each time, up to this, and is never retired. */
+export const GOAL_LENS_MAX_BACKOFF_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * When a goal lens may be asked again. Like `nextRoundFor`, except a lens that
+ * keeps finding nothing backs off — a day, two, four, up to a week — instead of
+ * stopping after three. A goal without a supported plan keeps searching until
+ * its due date; only the wait between askings grows.
+ */
+export function nextGoalRoundFor(history: CashDiscoveryRound[], now: string): number | null {
+  if (history.some((one) => one.state === 'OPEN')) return null;
+  if (history.length === 0) return 1;
+  const ordered = [...history].sort((a, b) => a.round - b.round);
+  const last = ordered[ordered.length - 1]!;
+  let barren = 0;
+  for (let i = ordered.length - 1; i >= 0; i -= 1) {
+    const one = ordered[i]!;
+    if (one.state === 'HARVESTED' && one.found === 0) barren += 1;
+    else break;
+  }
+  const wait = Math.min(ROUND_COOL_OFF_MS * 2 ** barren, GOAL_LENS_MAX_BACKOFF_MS);
+  const settledAt = last.harvestedAt ?? last.openedAt;
+  if (Date.parse(now) - Date.parse(settledAt) < wait) return null;
+  return last.round + 1;
+}
+
+/** Titles of the openings these rounds' ideas filed. */
+async function foundByRounds(candidateIds: string[]): Promise<string[]> {
+  if (candidateIds.length === 0) return [];
+  const rows = await getDb().all<{ title: string }>(
+    `SELECT title FROM cash_opportunities WHERE discovered_by_candidate_id IN (${candidateIds.map(() => '?').join(', ')}) ORDER BY created_at DESC LIMIT 20`,
+    candidateIds,
+  );
+  return rows.map((one) => one.title);
+}
 
 export async function openGoalDiscovery(input: {
   goal: { id: string; title: string };
@@ -731,7 +772,7 @@ export async function openGoalDiscovery(input: {
   const choices = GOAL_LENSES.map((lens, index) => {
     const id = `${prefix}-${lens.id}`;
     const history = mine.filter((one) => one.bucketId === id);
-    return { lens, index, id, history, next: nextRoundFor(history, now) };
+    return { lens, index, id, history, next: nextGoalRoundFor(history, now) };
   })
     .filter((one): one is typeof one & { next: number } => one.next !== null)
     .sort((a, b) => a.history.length - b.history.length || a.index - b.index);
@@ -772,6 +813,15 @@ export async function openGoalDiscovery(input: {
   );
   const frame = await executionFrame(t.projectId, mode.currency);
   const heldLines = await heldExclusions({ projectId: t.projectId, bucket, history });
+  // A lens asked again must look somewhere else, not repeat the same search.
+  const before = await foundByRounds(history.map((one) => one.candidateId));
+  if (history.length > 0) {
+    bucket.question +=
+      before.length > 0
+        ? ` Earlier searches from this angle already found: ${before.slice(0, 8).map((one) => `"${one.slice(0, 80)}"`).join('; ')}. ` +
+          'Look in different industries, markets, regions and kinds of buyer than those.'
+        : ' Earlier searches from this angle found nothing usable, so search differently: other industries, other regions, other kinds of buyer, and other kinds of source.';
+  }
   const round = await openBucketRound({
     projectId: t.projectId,
     mode,
