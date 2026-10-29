@@ -46,6 +46,7 @@ import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
 import { getScenarioModel } from '../../repos/scenario.ts';
 import { runModel, saveModel } from '../scenario/service.ts';
 import { runIsolated, ScenarioBusyError } from '../scenario/isolate.ts';
+import { ScenarioRunError } from '../scenario/engine.ts';
 import type { ScenarioResult } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 
@@ -366,7 +367,16 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     scenarioRunId = run.id;
     result = run.result ?? null;
   } else {
-    result = await runIsolated(model.definition, options);
+    try {
+      result = await runIsolated(model.definition, options);
+    } catch (error) {
+      // A simulation that does not finish in its budget is a missing sweep,
+      // not a missing plan: the gate below judges every opening on its own
+      // evidence without it, exactly as the persisted path already does when
+      // its run is recorded FAILED.
+      if (!(error instanceof ScenarioRunError)) throw error;
+      result = null;
+    }
   }
 
   let bestReach = 0;
