@@ -49,6 +49,7 @@ import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { listNeeds } from '../server/repos/cashPortfolio.ts';
 import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
 import { getCycle } from '../server/repos/russellCycle.ts';
+import { discoveryYield, type YieldRow } from '../server/services/cash/discoveryYield.ts';
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
@@ -350,6 +351,11 @@ async function printSearching(reading: PlanReading): Promise<void> {
   );
   const line = (c: (typeof research)[number]) => `${c.routine.name ?? c.routine.id} ${c.routine.state}${c.webBlocked ? ' NO-WEB' : ''}`;
   console.log(`  workers     ${research.filter((c) => c.routine.state === 'ENABLED' && !c.webBlocked).length} can do web research now, of ${research.length}: ${research.map(line).join('; ')}`);
+  // Which ways of looking have paid off: openings filed, how many have a known payer, research spent.
+  const found = await discoveryYield(reading.target.projectId);
+  const show = (r: YieldRow) => `${r.key} ${r.useful}/${r.openings} useful${r.qualified ? ` ${r.qualified} qualified` : ''}${r.rounds ? `, ${r.rounds} search(es) ${r.failedRounds} failed, ${r.fragments} research jobs` : ''}`;
+  console.log(`  methods     ${found.byMethod.slice(0, 12).map(show).join(' · ')}`);
+  console.log(`  sources     ${found.bySource.slice(0, 12).map(show).join(' · ')}`);
   console.log(`  searching   ${rounds.length} round(s) of this goal's own search`);
   for (const round of rounds) {
     const mission = await latestMissionForCandidate(round.candidateId);
