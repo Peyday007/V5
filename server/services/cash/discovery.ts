@@ -89,7 +89,8 @@ import {
   openRound,
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
-import { openIndustryRoundsByCandidate } from '../../repos/industry.ts';
+import { listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
+import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
 import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
@@ -684,6 +685,9 @@ export const GOAL_LENSES: readonly { id: string; angle: string }[] = Object.free
   { id: 'combination', angle: 'two or more of these combined, where one feeds the other' },
 ]);
 
+/** At most this many industries from the map are offered as search angles. */
+export const MAX_INDUSTRY_LENSES = 60;
+
 /**
  * At most this many of a goal's own rounds are open at once. A concurrency
  * limit, never a limit on how much is searched: as each round settles the next
@@ -769,7 +773,20 @@ export async function openGoalDiscovery(input: {
   const prefix = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
   const mine = (await listRounds(t.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
   if (mine.filter((one) => one.state === 'OPEN').length >= MAX_LIVE_GOAL_ROUNDS) return null;
-  const choices = GOAL_LENSES.map((lens, index) => {
+  /*
+   * The fixed angles are a starting point, not the whole map: Brain's own
+   * industry map (`industry_nodes`, filled from classification systems and
+   * research) adds an angle per industry it knows of, so the search reaches
+   * parts of the economy no list here names. A fixed angle not yet asked still
+   * comes first; after that, an industry nobody has looked at outranks an
+   * angle asked again.
+   */
+  const industries = (await listNodes(t.projectId))
+    .filter((node) => !node.retiredAt)
+    .slice(0, MAX_INDUSTRY_LENSES)
+    .map((node) => ({ id: `ind-${node.id}`, angle: `the ${node.name} industry, and the businesses that supply, serve or buy from it` }));
+  const lenses = [...GOAL_LENSES, ...industries];
+  const choices = lenses.map((lens, index) => {
     const id = `${prefix}-${lens.id}`;
     const history = mine.filter((one) => one.bucketId === id);
     return { lens, index, id, history, next: nextGoalRoundFor(history, now) };
@@ -801,15 +818,32 @@ export async function openGoalDiscovery(input: {
   const elsewhere = already.length
     ? ` Brain already holds openings like these, and none yet makes a realistic plan, so look for different kinds: ${already.map((one) => `"${one.slice(0, 80)}"`).join('; ')}.`
     : '';
+  /*
+   * Finding what exists and knowing how to find it are two questions. When
+   * this angle's last search came back empty or failed, the next one does not
+   * repeat it: it first works out how openings of this kind are actually found
+   * — the directories, registers, feeds, trade lists and search
+   * terms — and reports what it found through each, so the method is tested
+   * on real results and the sources that work are measured from then on.
+   */
+  const last = [...history].sort((a, b) => b.round - a.round)[0];
+  const methodFirst =
+    last && (last.state === 'ABANDONED' || (last.state === 'HARVESTED' && last.found === 0))
+      ? 'The last search from this angle found nothing usable, so start with how such openings are actually found: name the specific directories, public registers, feeds, trade associations and search terms where buyers of this kind publish what they need, open each, say which produced live openings and which did not, and report the openings found through the ones that worked. '
+      : '';
+  const learned = yieldGuidance(await discoveryYield(t.projectId));
   const bucket = goalBucket(
     input.goal.id,
     input.goal.title,
+    methodFirst +
     `Looking at ${lens.angle} — in any market or industry, and as one opening or several running at once — ` +
       `which lawful ways could bring this operation ${amount} more of ` +
       `${t.metricLabel} within ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}? ${held}${elsewhere} ${capital} ${resources} ${pace} ` +
       `Report only ways that could bring at least ${t.currency} ${Math.round((t.remainingCents / 100) * 0.1)} within that time — alone, or as a stream many buyers pay repeatedly — and leave out one-off small payments, contests, bounties and submissions that pay a few hundred at most. ` +
       'For each, name who pays, what buyers are published as actually paying, when the money would settle, ' +
-      'what it needs up front, and what it would need that the operation does not have yet?',
+      'what it needs up front, and what it would need that the operation does not have yet?' +
+      (learned ? ` ${learned}` : '') +
+      ' For each opening, say how it was found: the source and the search that led to it.',
     lens.id,
   );
   const frame = await executionFrame(t.projectId, mode.currency);

@@ -698,6 +698,54 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(nextGoalRoundFor(rounds, new Date(t0 + 7 * day + 1).toISOString())).toBe(4);
   });
 
+  it("reaches past its fixed angles into Brain's industry map, and asks how to find openings after an empty search", async () => {
+    const { createNode } = await import('../server/repos/industry.ts');
+    const { GOAL_LENSES } = await import('../server/services/cash/discovery.ts');
+    await createNode({ projectId, parentId: null, kind: 'SECTOR', name: 'Commercial laundry', origin: 'SEED' });
+    await oneOff({ title: 'Too small', priceCents: 30_000 });
+    const id = await goal(1_000_000);
+    const mine = async () => (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-`));
+    // Every fixed angle has been asked once and came back empty.
+    let at = now.getTime();
+    for (let i = 0; i < GOAL_LENSES.length; i += 1) {
+      await advanceGoalPlans(new Date(at));
+      for (const round of await mine()) {
+        if (round.state === 'OPEN') await getDb().run(`UPDATE cash_discovery_rounds SET state = 'HARVESTED', found = 0, harvested_at = ? WHERE id = ?`, [new Date(at).toISOString(), round.id]);
+      }
+      at += 31 * 60_000;
+    }
+    expect(new Set((await mine()).map((one) => one.bucketId)).size).toBe(GOAL_LENSES.length);
+    // The next angle is an industry nobody has looked at, not a fixed one again.
+    await advanceGoalPlans(new Date(at));
+    const industry = (await mine()).find((one) => one.bucketId.includes('-ind-'))!;
+    expect(industry).toBeTruthy();
+    expect((await getCandidate(industry.candidateId))!.statement).toMatch(/Commercial laundry industry/);
+    expect((await getCandidate(industry.candidateId))!.statement).toMatch(/say how it was found/);
+    // Two days later an empty fixed angle is asked again — by first working out how such openings are found.
+    await getDb().run(`UPDATE cash_discovery_rounds SET state = 'HARVESTED', found = 0, harvested_at = ? WHERE id = ?`, [new Date(at).toISOString(), industry.id]);
+    await advanceGoalPlans(new Date(at + 3 * 24 * 60 * 60 * 1000));
+    const again = (await mine()).filter((one) => one.round === 2);
+    expect(again.length).toBeGreaterThan(0);
+    expect((await getCandidate(again[0]!.candidateId))!.statement).toMatch(/start with how such openings are actually found/);
+  });
+
+  it('measures which ways of looking found openings worth having', async () => {
+    const { discoveryYield } = await import('../server/services/cash/discoveryYield.ts');
+    const o = await oneOff({ title: 'Recurring loads', priceCents: 500_000 });
+    const idea = (await import('../server/repos/russellCandidates.ts')).createCandidate;
+    const c = await idea({ projectId, title: 't', statement: 's' });
+    await getDb().run(`UPDATE cash_opportunities SET discovered_by_candidate_id = ? WHERE id = ?`, [c.id, o.id]);
+    await getDb().run(
+      `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, found, created_at, updated_at)
+       VALUES ('cdr_t1', ?, ?, 'goal-x-logistics', 'OTHER', 1, ?, 'HARVESTED', ?, 1, ?, ?)`,
+      [projectId, cashModeId, c.id, now.toISOString(), now.toISOString(), now.toISOString()],
+    );
+    const reading = await discoveryYield(projectId);
+    const row = reading.byMethod.find((one) => one.key === 'goal-x-logistics')!;
+    expect(row).toMatchObject({ rounds: 1, openings: 1 });
+    expect(row.useful).toBeGreaterThanOrEqual(0);
+  });
+
   it("never asks a goal's question as an instruction to act", async () => {
     const { GOAL_LENSES } = await import('../server/services/cash/discovery.ts');
     const { APPROVAL_ENVELOPES } = await import('../server/services/research/approvalEnvelope.ts');
