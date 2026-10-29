@@ -49,6 +49,7 @@ import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { listNeeds } from '../server/repos/cashPortfolio.ts';
 import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
 import { getCycle } from '../server/repos/russellCycle.ts';
+import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 
@@ -353,6 +354,9 @@ async function printSearching(reading: PlanReading): Promise<void> {
     (one) => one.opportunityId && ids.has(one.opportunityId) && one.requestKey?.startsWith('question:'),
   );
   console.log(`  digging     ${needs.length} research question(s) on openings it holds`);
+  const trace: string[] = [];
+  await researchGoalPaths({ reading, projectId: reading.target.projectId, dryRun: true, trace });
+  for (const line of trace) console.log(`    next: ${line}`);
   // Grouped by what became of each: whether its research is running, done, or
   // ended without an answer — and the reason it gave — so a stall is readable.
   const groups = new Map<string, number>();

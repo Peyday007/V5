@@ -56,7 +56,16 @@ const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> =
   ],
 };
 
-export async function researchGoalPaths(input: { reading: PlanReading; projectId: string; now?: Date }): Promise<string[]> {
+export async function researchGoalPaths(input: {
+  reading: PlanReading;
+  projectId: string;
+  now?: Date;
+  /** Each opening's outcome in words, for the operator readout. */
+  trace?: string[];
+  /** Decide only: raise and withdraw nothing. */
+  dryRun?: boolean;
+}): Promise<string[]> {
+  const note = (line: string) => input.trace?.push(line);
   const now = input.now ?? new Date();
   const raised: string[] = [];
   const considered = input.reading.considered;
@@ -94,8 +103,15 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
     const asks = one.missing.flatMap((link) => FIELDS_FOR[link] ?? []);
     if (asks.length === 0) continue;
     const opportunity = await getOpportunity(one.opportunityId);
-    if (!opportunity || diveOwnsItsQuestions(opportunity)) continue;
-    openings += 1;
+    if (!opportunity) continue;
+    if (diveOwnsItsQuestions(opportunity)) {
+      note(`${one.title.slice(0, 60)}: its deep dive owns these questions (${opportunity.validationState})`);
+      continue;
+    }
+    // An opening counts toward the budget only when it gets live research:
+    // spending the budget on openings where nothing could be asked left the
+    // next ones unresearched.
+    let actedHere = false;
     for (const { field, ask } of asks) {
       if (openHere >= MAX_OPEN_PATH_QUESTIONS) break;
       const key = questionKey(opportunity.id, field);
@@ -106,9 +122,22 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
         // such questions OPEN for ever, their missions FAILED, so the openings
         // a goal rests on were never researched again.
         const stale = open.find((one) => one.requestKey === key);
-        if (!stale || stale.occurrence >= MAX_ASKINGS) continue;
+        if (!stale) continue;
+        if (stale.occurrence >= MAX_ASKINGS) {
+          note(`${one.title.slice(0, 60)} ${field}: asked ${stale.occurrence} times already`);
+          continue;
+        }
         const ended = await endedWithoutAnswer(stale.candidateId, now);
-        if (!ended) continue;
+        if (!ended) {
+          if (await researchAlive(stale.candidateId)) actedHere = true;
+          note(`${one.title.slice(0, 60)} ${field}: ${(await researchAlive(stale.candidateId)) ? 'being researched' : 'ended less than a day ago'}`);
+          continue;
+        }
+        if (input.dryRun) {
+          note(`${one.title.slice(0, 60)} ${field}: would ask again (${ended.reason.slice(0, 80)})`);
+          actedHere = true;
+          continue;
+        }
         const closed = await closeNeed({
           needId: stale.id,
           to: 'WITHDRAWN',
@@ -118,6 +147,11 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
         if (!closed.ok) continue;
         keys.delete(key);
         nextStep = differentMethod(ask, stale.occurrence + 1, ended.reason);
+      }
+      if (input.dryRun) {
+        note(`${one.title.slice(0, 60)} ${field}: would ask`);
+        actedHere = true;
+        continue;
       }
       const need = await raiseNeed({
         projectId: input.projectId,
@@ -134,12 +168,19 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
         requestKey: key,
         blockerKey: parseBlockerKey(`FIELD:${field}`),
       });
-      if (!need.ok) continue;
+      if (!need.ok) {
+        note(`${one.title.slice(0, 60)} ${field}: refused — ${need.reason}`);
+        continue;
+      }
       keys.add(key);
       openHere += 1;
+      actedHere = true;
       raised.push(need.value.id);
+      note(`${one.title.slice(0, 60)} ${field}: asked`);
     }
+    if (actedHere) openings += 1;
   }
+  note(`live path questions ${openHere} of ${MAX_OPEN_PATH_QUESTIONS}; openings researched ${openings} of ${PATH_RESEARCH_OPENINGS}`);
   return raised;
 }
 
