@@ -497,6 +497,17 @@ describe('a Routine whose sessions cannot reach the web', () => {
     expect(fires).toBe(0);
   });
 
+  it("recognises a session's own words for having no web, not only the error codes", async () => {
+    const orchestrationId = await packet();
+    const words = [
+      "This session's environment refuses outbound web access, so no source could be opened.",
+      'This surface has no outbound web access: DNS resolution fails for every host.',
+      "This session's network environment refuses outbound connections to the source.",
+    ];
+    for (let index = 0; index < words.length; index += 1) await blockedFragment(orchestrationId, index, words[index]!);
+    expect((await networkBlockedRoutines(Date.now())).has(routineId)).toBe(true);
+  });
+
   it('is still fired for research that needs no sources: an audit, a synthesis', async () => {
     const orchestrationId = await packet();
     for (let index = 0; index < 3; index += 1) {
