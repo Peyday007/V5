@@ -365,6 +365,9 @@ export const NETWORK_BLOCK_WINDOW_MS = 6 * 60 * 60_000;
  * window cost three fragments per Routine on an environment nobody had fixed.
  */
 export const NETWORK_BLOCK_RETEST_MS = 24 * 60 * 60_000;
+/** A session's own words that its network refuses all outbound access. */
+const SESSION_HAS_NO_WEB =
+  /outbound (web|connect|network|access)|no outbound|DNS resolution fail|no network access|without network access|(egress|network) polic/i;
 /** How far back blocks are read at all. */
 const NETWORK_BLOCK_MEMORY_MS = 7 * 24 * 60 * 60_000;
 /*
@@ -418,9 +421,9 @@ async function readNetworkBlockedRoutines(nowMs: number): Promise<Set<string>> {
   const routineOf =
     `(SELECT p.executor_routine_id FROM research_passes p WHERE p.fragment_id = f.id` +
     ` AND p.executor_routine_id IS NOT NULL ORDER BY p.started_at DESC LIMIT 1)`;
-  const blocked = await getDb().all<{ routine_id: string | null; at: string }>(
-    `SELECT routine_id, at FROM (
-       SELECT ${routineOf} AS routine_id, f.updated_at AS at FROM research_fragments f
+  const blocked = await getDb().all<{ routine_id: string | null; at: string; reason: string | null }>(
+    `SELECT routine_id, at, reason FROM (
+       SELECT ${routineOf} AS routine_id, f.updated_at AS at, f.blocked_reason AS reason FROM research_fragments f
         WHERE f.status = 'BLOCKED' AND f.updated_at >= ? AND f.blocked_reason IS NOT NULL AND (${like})
      ) x WHERE routine_id IS NOT NULL`,
     [since, ...NETWORK_BLOCK_PATTERNS],
@@ -440,8 +443,13 @@ async function readNetworkBlockedRoutines(nowMs: number): Promise<Set<string>> {
   for (const row of blocked) {
     if (!row.routine_id) continue;
     const one = tally.get(row.routine_id) ?? { recent: 0, sinceAccepted: 0, newest: '' };
-    if (row.at >= recentStart) one.recent += 1;
-    if (!lastAccepted.has(row.routine_id) || row.at > lastAccepted.get(row.routine_id)!) one.sinceAccepted += 1;
+    // A session saying its own network refuses everything is the whole fact at
+    // once; one bad host (ENOTFOUND for a site that is gone) is not, so codes
+    // still need three. Without this a web-less Routine spent three fragments
+    // learning what its first one already said.
+    const weight = row.reason && SESSION_HAS_NO_WEB.test(row.reason) ? NETWORK_BLOCK_THRESHOLD : 1;
+    if (row.at >= recentStart) one.recent += weight;
+    if (!lastAccepted.has(row.routine_id) || row.at > lastAccepted.get(row.routine_id)!) one.sinceAccepted += weight;
     if (row.at > one.newest) one.newest = row.at;
     tally.set(row.routine_id, one);
   }

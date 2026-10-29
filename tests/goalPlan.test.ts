@@ -600,6 +600,18 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(id).toBeTruthy();
   });
 
+  it('spends no research on an opening too small to matter, and asks a guessed one only what buyers pay', async () => {
+    const small = await oneOff({ title: 'A one-off bounty worth little', priceCents: 25_000, days: null });
+    const guessed = await oneOff({ title: 'A big listing at a guessed price', priceCents: 3_600_000, days: null });
+    await recordCardFact({ projectId, opportunityId: guessed.id, field: 'price', kind: 'RECOMMENDATION', value: '$36000', claimId: null, decidedBy: 'BRAIN', basis: 'listing', assumptions: 'a', uncertainty: 'u' });
+    await goal(1_000_000);
+    await advanceGoalPlans(now);
+    const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
+    const open = await listNeeds({ projectId, states: ['OPEN'] });
+    expect(open.filter((one) => one.opportunityId === small.id && one.requestKey?.startsWith('question:'))).toHaveLength(0);
+    expect(open.filter((one) => one.opportunityId === guessed.id).map((one) => one.requestKey)).toEqual([`question:${guessed.id}:revenueRange`]);
+  });
+
   it('does not let dead questions fill the cap and stop new ones', async () => {
     const o = await oneOff({ title: 'Freight loads with unknown payment timing', priceCents: 2_000_000, days: null });
     await goal(1_000_000);
