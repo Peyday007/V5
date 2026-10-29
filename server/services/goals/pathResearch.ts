@@ -65,8 +65,19 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
   let openHere = open.filter((one) => one.opportunityId && ids.has(one.opportunityId) && one.requestKey?.startsWith('question:')).length;
 
-  // Ways that pay in steps first; an award only when nothing else is left.
-  const order = [...considered].sort((a, b) => Number(a.competitiveAward) - Number(b.competitiveAward));
+  /*
+   * The questions that could change the next decision first: ways that pay in
+   * steps before an award, then the openings the plan is actually built from,
+   * then the ones closest to complete, then the largest supported reach. The
+   * rest wait; they never stop discovery, which runs on its own counter.
+   */
+  const order = [...considered].sort(
+    (a, b) =>
+      Number(a.competitiveAward) - Number(b.competitiveAward) ||
+      Number(b.modelled) - Number(a.modelled) ||
+      a.missing.length - b.missing.length ||
+      b.supportedReach - a.supportedReach,
+  );
   let openings = 0;
   for (const one of order) {
     if (openings >= PATH_RESEARCH_OPENINGS || openHere >= MAX_OPEN_PATH_QUESTIONS) break;
@@ -78,22 +89,26 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
     for (const { field, ask } of asks) {
       if (openHere >= MAX_OPEN_PATH_QUESTIONS) break;
       const key = questionKey(opportunity.id, field);
+      let nextStep = ask;
       if (keys.has(key)) {
         // Already asked. Ask again only when that research ended without an
-        // answer a while ago: production held 161 such questions OPEN for
-        // ever, their missions FAILED, so the openings a goal rests on were
-        // never researched again and every reading said the same thing.
+        // answer a while ago — and never the same way: production held 161
+        // such questions OPEN for ever, their missions FAILED, so the openings
+        // a goal rests on were never researched again.
         const stale = open.find((one) => one.requestKey === key);
-        if (!stale || !(await endedWithoutAnswer(stale.candidateId, now)) || stale.occurrence >= MAX_ASKINGS) continue;
+        if (!stale || stale.occurrence >= MAX_ASKINGS) continue;
+        const ended = await endedWithoutAnswer(stale.candidateId, now);
+        if (!ended) continue;
         const closed = await closeNeed({
           needId: stale.id,
           to: 'WITHDRAWN',
-          resolution: 'Its research ended without an answer; a goal plan rests on this opening, so it is asked again.',
+          resolution: `Its research ended without an answer (${ended.reason}); asked again a different way.`,
           actorUserId: 'BRAIN',
         });
         if (!closed.ok) continue;
         keys.delete(key);
         openHere -= 1;
+        nextStep = differentMethod(ask, stale.occurrence + 1, ended.reason);
       }
       const need = await raiseNeed({
         projectId: input.projectId,
@@ -102,9 +117,9 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
         blockedAction: `The path to money for "${opportunity.title.slice(0, 120)}"`,
         whyItMatters:
           'A goal plan rests on this opening, and until this is established from sources its numbers are a sweep of guesses rather than a plan.',
-        recommendedPath: ask,
+        recommendedPath: nextStep,
         setupEffort: 'One bounded look.',
-        nextStep: ask,
+        nextStep,
         completionCondition: `The ${field} is recorded on this card.`,
         blocksState: 'EXECUTING',
         requestKey: key,
@@ -119,17 +134,33 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
   return raised;
 }
 
-/** True when the question's research finished, failed or was given up, long enough ago. */
-async function endedWithoutAnswer(candidateId: string | null, now: Date): Promise<boolean> {
-  if (!candidateId) return false;
+/**
+ * The same question, asked a different way. The second asking names what went
+ * wrong and turns to other kinds of source; the third answers from comparable
+ * published cases. Never the identical search twice.
+ */
+export function differentMethod(ask: string, asking: number, previous: string): string {
+  const why = previous.replace(/\s+/g, ' ').trim().slice(0, 240);
+  const method =
+    asking <= 2
+      ? 'Do not repeat that approach. Use other kinds of source — the buyer’s or platform’s own published terms and payout pages, official filings, trade or industry publications, archived copies of pages that are now unavailable — and say which you used.'
+      : 'Two attempts found no direct answer. Answer from the closest comparable published cases instead: name each comparable business or transaction, its published figure or terms with source and date, and how it compares to this opening. Say plainly if nothing comparable is published.';
+  return `${ask} An earlier attempt ended without an answer: ${why}. ${method}`;
+}
+
+/** Why the question's research ended without an answer, when it did so long enough ago. */
+async function endedWithoutAnswer(candidateId: string | null, now: Date): Promise<{ reason: string } | null> {
+  if (!candidateId) return null;
   const candidate = await getCandidate(candidateId);
-  if (!candidate) return false;
+  if (!candidate) return null;
   const mission = await latestMissionForCandidate(candidateId);
   if (mission) {
-    if (mission.state !== 'FAILED' && mission.state !== 'CANCELLED') return false;
-    return now.getTime() - Date.parse(mission.completedAt ?? mission.updatedAt) >= REASK_AFTER_MS;
+    if (mission.state !== 'FAILED' && mission.state !== 'CANCELLED') return null;
+    if (now.getTime() - Date.parse(mission.completedAt ?? mission.updatedAt) < REASK_AFTER_MS) return null;
+    return { reason: mission.terminalReason ?? `the research ${mission.state.toLowerCase()} without saying why` };
   }
   // No mission: the idea was parked or turned away before any research ran.
-  if (candidate.state !== 'PARKED' && candidate.state !== 'REJECTED') return false;
-  return now.getTime() - Date.parse(candidate.updatedAt) >= REASK_AFTER_MS;
+  if (candidate.state !== 'PARKED' && candidate.state !== 'REJECTED') return null;
+  if (now.getTime() - Date.parse(candidate.updatedAt) < REASK_AFTER_MS) return null;
+  return { reason: candidate.reason ?? `the question was ${candidate.state.toLowerCase()} before any research ran` };
 }

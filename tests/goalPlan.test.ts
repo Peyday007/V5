@@ -390,6 +390,13 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     expect(lenses.sort()).toEqual(['brokerage', 'consumer', 'open']);
     // …and no more than three are open at once.
     expect((await mine()).filter((one) => one.state === 'OPEN')).toHaveLength(3);
+    // Three is how many run at once, not how many are asked: when one settles,
+    // a new angle is asked in its place.
+    const settled = (await mine()).find((one) => one.bucketId.endsWith('-open'))!;
+    await getDb().run(`UPDATE cash_discovery_rounds SET state = 'HARVESTED', found = 0, harvested_at = ? WHERE candidate_id = ?`, [now.toISOString(), settled.candidateId]);
+    await advanceGoalPlans(new Date(now.getTime() + 6 * 31 * 60_000));
+    const after = (await mine()).map((one) => one.bucketId.slice(`goal-${g.id}-`.length));
+    expect(after.sort()).toEqual(['brokerage', 'consumer', 'open', 'subcontract']);
   });
 });
 
@@ -617,6 +624,26 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     const all = await timing();
     expect(all.filter((one) => one.state === 'WITHDRAWN')).toHaveLength(2);
     expect(all).toHaveLength(3);
+    // Never the same way twice: the second asking turns to other sources, the
+    // third to comparable cases, and each names what went wrong before.
+    const byAsking = [...all].sort((a, b) => a.occurrence - b.occurrence).map((one) => one.nextStep);
+    expect(new Set(byAsking).size).toBe(3);
+    expect(byAsking[1]).toMatch(/Do not repeat that approach/);
+    expect(byAsking[2]).toMatch(/comparable published cases/);
+    expect(byAsking[1]).toMatch(/earlier attempt ended without an answer/);
+  });
+
+  it('keeps a barren goal lens searching later, from elsewhere, instead of retiring it', async () => {
+    const { nextGoalRoundFor, nextRoundFor } = await import('../server/services/cash/discovery.ts');
+    const day = 24 * 60 * 60 * 1000;
+    const t0 = Date.parse('2026-11-01T00:00:00Z');
+    const rounds = [1, 2, 3].map((round) => ({
+      round, state: 'HARVESTED', found: 0, openedAt: new Date(t0 + (round - 3) * day).toISOString(), harvestedAt: new Date(t0 + (round - 3) * day).toISOString(),
+    })) as never[];
+    // A bucket stops after three barren rounds; a goal lens only waits longer.
+    expect(nextRoundFor(rounds, new Date(t0 + 30 * day).toISOString())).toBeNull();
+    expect(nextGoalRoundFor(rounds, new Date(t0 + 6 * day).toISOString())).toBeNull();
+    expect(nextGoalRoundFor(rounds, new Date(t0 + 7 * day + 1).toISOString())).toBe(4);
   });
 
   it("never asks a goal's question as an instruction to act", async () => {
