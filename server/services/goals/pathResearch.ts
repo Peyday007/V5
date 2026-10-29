@@ -63,7 +63,17 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
   const ids = new Set(considered.map((one) => one.opportunityId));
   const open = await listNeeds({ projectId: input.projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
-  let openHere = open.filter((one) => one.opportunityId && ids.has(one.opportunityId) && one.requestKey?.startsWith('question:')).length;
+  /*
+   * The cap counts questions whose research is still alive. Production,
+   * 2026-10-29: 161 questions sat OPEN on these openings with their research
+   * long dead, and counting them filled the cap of eight before the loop
+   * began, so nothing was ever asked or asked again.
+   */
+  let openHere = 0;
+  for (const one of open) {
+    if (!one.opportunityId || !ids.has(one.opportunityId) || !one.requestKey?.startsWith('question:')) continue;
+    if (await researchAlive(one.candidateId)) openHere += 1;
+  }
 
   /*
    * The questions that could change the next decision first: ways that pay in
@@ -107,7 +117,6 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
         });
         if (!closed.ok) continue;
         keys.delete(key);
-        openHere -= 1;
         nextStep = differentMethod(ask, stale.occurrence + 1, ended.reason);
       }
       const need = await raiseNeed({
@@ -146,6 +155,17 @@ export function differentMethod(ask: string, asking: number, previous: string): 
       ? 'Do not repeat that approach. Use other kinds of source — the buyer’s or platform’s own published terms and payout pages, official filings, trade or industry publications, archived copies of pages that are now unavailable — and say which you used.'
       : 'Two attempts found no direct answer. Answer from the closest comparable published cases instead: name each comparable business or transaction, its published figure or terms with source and date, and how it compares to this opening. Say plainly if nothing comparable is published.';
   return `${ask} An earlier attempt ended without an answer: ${why}. ${method}`;
+}
+
+/** True while a question is waiting to be asked or its research is still under way. */
+async function researchAlive(candidateId: string | null): Promise<boolean> {
+  if (!candidateId) return true;
+  const candidate = await getCandidate(candidateId);
+  if (!candidate) return false;
+  if (candidate.state === 'REJECTED' || candidate.state === 'PARKED' || candidate.state === 'MERGED' || candidate.state === 'DONE') return false;
+  const mission = await latestMissionForCandidate(candidateId);
+  if (!mission) return true;
+  return mission.state !== 'FAILED' && mission.state !== 'CANCELLED' && mission.state !== 'DONE';
 }
 
 /** Why the question's research ended without an answer, when it did so long enough ago. */

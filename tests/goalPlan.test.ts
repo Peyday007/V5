@@ -600,6 +600,23 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(id).toBeTruthy();
   });
 
+  it('does not let dead questions fill the cap and stop new ones', async () => {
+    const o = await oneOff({ title: 'Freight loads with unknown payment timing', priceCents: 2_000_000, days: null });
+    await goal(1_000_000);
+    const { listNeeds, setNeedCandidate } = await import('../server/repos/cashPortfolio.ts');
+    const { createCandidate } = await import('../server/repos/russellCandidates.ts');
+    const { raiseNeed } = await import('../server/services/cash/needs.ts');
+    for (let i = 0; i < 12; i += 1) {
+      const need = await raiseNeed({ projectId, opportunityId: o.id, actorRef: 'BRAIN', blockedAction: 'old', whyItMatters: 'w', recommendedPath: 'r', setupEffort: 's', nextStep: 'n', completionCondition: 'c', requestKey: `question:${o.id}:old${i}` });
+      const idea = await createCandidate({ projectId, title: 't', statement: 's' });
+      await setNeedCandidate(need.ok ? need.value.id : '', idea.id);
+      await getDb().run(`UPDATE russell_candidates SET state = 'PARKED' WHERE id = ?`, [idea.id]);
+    }
+    await advanceGoalPlans(now);
+    const open = await listNeeds({ projectId, states: ['OPEN'] });
+    expect(open.some((one) => one.requestKey === `question:${o.id}:timeToFirstCash`)).toBe(true);
+  });
+
   it('asks a path question again when its research ended without an answer, at most three times', async () => {
     const o = await oneOff({ title: 'Freight loads with unknown payment timing', priceCents: 2_000_000, days: null });
     await goal(1_000_000);
