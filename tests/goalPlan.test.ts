@@ -706,13 +706,16 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     const id = await goal(1_000_000);
     const mine = async () => (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-`));
     // Every fixed angle has been asked once and came back empty.
-    let at = now.getTime();
-    for (let i = 0; i < GOAL_LENSES.length; i += 1) {
-      await advanceGoalPlans(new Date(at));
-      for (const round of await mine()) {
-        if (round.state === 'OPEN') await getDb().run(`UPDATE cash_discovery_rounds SET state = 'HARVESTED', found = 0, harvested_at = ? WHERE id = ?`, [new Date(at).toISOString(), round.id]);
-      }
-      at += 31 * 60_000;
+    const at = now.getTime();
+    const { createCandidate } = await import('../server/repos/russellCandidates.ts');
+    for (const [i, lens] of GOAL_LENSES.entries()) {
+      const c = await createCandidate({ projectId, title: 't', statement: 's' });
+      const when = new Date(at - 60 * 60_000).toISOString();
+      await getDb().run(
+        `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, harvested_at, found, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'OTHER', 1, ?, 'HARVESTED', ?, ?, 0, ?, ?)`,
+        [`cdr_lens${i}`, projectId, cashModeId, `goal-${id}-${lens.id}`, c.id, when, when, when, when],
+      );
     }
     expect(new Set((await mine()).map((one) => one.bucketId)).size).toBe(GOAL_LENSES.length);
     // The next angle is an industry nobody has looked at, not a fixed one again.
