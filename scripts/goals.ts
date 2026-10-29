@@ -336,11 +336,6 @@ async function targetCommand(command: 'create' | 'target'): Promise<void> {
 }
 
 /** What the goal is doing about its own gap: its search rounds and its path research. */
-async function missionLine(candidateId: string): Promise<string> {
-  const mission = await latestMissionForCandidate(candidateId);
-  return mission ? ` · mission ${mission.id} ${mission.state}` : ' · no mission yet';
-}
-
 async function printSearching(reading: PlanReading): Promise<void> {
   const prefix = `goal-${reading.goalId}`;
   const rounds = (await listRounds(reading.target.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
@@ -358,10 +353,17 @@ async function printSearching(reading: PlanReading): Promise<void> {
     (one) => one.opportunityId && ids.has(one.opportunityId) && one.requestKey?.startsWith('question:'),
   );
   console.log(`  digging     ${needs.length} research question(s) on openings it holds`);
-  for (const need of needs.slice(0, 12)) {
+  // Grouped by what became of each: whether its research is running, done, or
+  // ended without an answer — and the reason it gave — so a stall is readable.
+  const groups = new Map<string, number>();
+  for (const need of needs) {
     const candidate = need.candidateId ? await getCandidate(need.candidateId) : null;
-    console.log(`    ${need.state} ${need.requestKey?.split(':').pop()} · ${need.blockedAction.slice(0, 90)} · ${candidate ? `idea ${candidate.id} ${candidate.state}${await missionLine(candidate.id)}` : 'not asked yet'}`);
+    const mission = candidate ? await latestMissionForCandidate(candidate.id) : null;
+    const why = mission?.terminalReason ?? mission?.waitingOn ?? candidate?.reason ?? '';
+    const key = `${need.state} ${need.requestKey?.split(':').pop()} · idea ${candidate?.state ?? 'none'} · mission ${mission?.state ?? 'none'}${why ? ` · ${why.replace(/\s+/g, ' ').slice(0, 160)}` : ''}`;
+    groups.set(key, (groups.get(key) ?? 0) + 1);
   }
+  for (const [key, count] of [...groups].sort((a, b) => b[1] - a[1]).slice(0, 40)) console.log(`    ${String(count).padStart(3)}x ${key}`);
 }
 
 function printPlan(reading: PlanReading): void {

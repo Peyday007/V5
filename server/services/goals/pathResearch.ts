@@ -21,7 +21,9 @@
  * is a test, and reaching them is a permission.
  */
 import { getOpportunity, listNeeds } from '../../repos/cashPortfolio.ts';
-import { raiseNeed } from '../cash/needs.ts';
+import { closeNeed, raiseNeed } from '../cash/needs.ts';
+import { getCandidate } from '../../repos/russellCandidates.ts';
+import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import { questionKey } from '../cash/conditions.ts';
 import { diveOwnsItsQuestions } from '../cash/operate.ts';
 import { parseBlockerKey } from '../../domain/types.ts';
@@ -31,6 +33,10 @@ import type { ChainLink, PlanReading } from './plan.ts';
 export const PATH_RESEARCH_OPENINGS = 4;
 /** And at most this many path questions open per goal at once. */
 export const MAX_OPEN_PATH_QUESTIONS = 8;
+/** A question whose research ended without an answer is asked again after this long… */
+export const REASK_AFTER_MS = 24 * 60 * 60 * 1000;
+/** …and at most this many times in all, so a question nobody can answer stops. */
+export const MAX_ASKINGS = 3;
 
 const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> = {
   SETTLES_IN_TIME: [
@@ -50,7 +56,8 @@ const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> =
   ],
 };
 
-export async function researchGoalPaths(input: { reading: PlanReading; projectId: string }): Promise<string[]> {
+export async function researchGoalPaths(input: { reading: PlanReading; projectId: string; now?: Date }): Promise<string[]> {
+  const now = input.now ?? new Date();
   const raised: string[] = [];
   const considered = input.reading.considered;
   const ids = new Set(considered.map((one) => one.opportunityId));
@@ -71,7 +78,23 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
     for (const { field, ask } of asks) {
       if (openHere >= MAX_OPEN_PATH_QUESTIONS) break;
       const key = questionKey(opportunity.id, field);
-      if (keys.has(key)) continue;
+      if (keys.has(key)) {
+        // Already asked. Ask again only when that research ended without an
+        // answer a while ago: production held 161 such questions OPEN for
+        // ever, their missions FAILED, so the openings a goal rests on were
+        // never researched again and every reading said the same thing.
+        const stale = open.find((one) => one.requestKey === key);
+        if (!stale || !(await endedWithoutAnswer(stale.candidateId, now)) || stale.occurrence >= MAX_ASKINGS) continue;
+        const closed = await closeNeed({
+          needId: stale.id,
+          to: 'WITHDRAWN',
+          resolution: 'Its research ended without an answer; a goal plan rests on this opening, so it is asked again.',
+          actorUserId: 'BRAIN',
+        });
+        if (!closed.ok) continue;
+        keys.delete(key);
+        openHere -= 1;
+      }
       const need = await raiseNeed({
         projectId: input.projectId,
         opportunityId: opportunity.id,
@@ -94,4 +117,19 @@ export async function researchGoalPaths(input: { reading: PlanReading; projectId
     }
   }
   return raised;
+}
+
+/** True when the question's research finished, failed or was given up, long enough ago. */
+async function endedWithoutAnswer(candidateId: string | null, now: Date): Promise<boolean> {
+  if (!candidateId) return false;
+  const candidate = await getCandidate(candidateId);
+  if (!candidate) return false;
+  const mission = await latestMissionForCandidate(candidateId);
+  if (mission) {
+    if (mission.state !== 'FAILED' && mission.state !== 'CANCELLED') return false;
+    return now.getTime() - Date.parse(mission.completedAt ?? mission.updatedAt) >= REASK_AFTER_MS;
+  }
+  // No mission: the idea was parked or turned away before any research ran.
+  if (candidate.state !== 'PARKED' && candidate.state !== 'REJECTED') return false;
+  return now.getTime() - Date.parse(candidate.updatedAt) >= REASK_AFTER_MS;
 }
