@@ -45,6 +45,9 @@ import { briefFrom } from '../server/services/goals/briefing.ts';
 import { unfiledWork } from '../server/services/register/unfiled.ts';
 import { cancel, pause, reinstate, resume, setTerms } from '../server/services/goals/decide.ts';
 import { spendingRuleSentence } from '../server/services/goals/spending.ts';
+import { listRounds } from '../server/repos/cashDiscovery.ts';
+import { listNeeds } from '../server/repos/cashPortfolio.ts';
+import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 
@@ -331,6 +334,24 @@ async function targetCommand(command: 'create' | 'target'): Promise<void> {
   console.log('GOALS: OK');
 }
 
+/** What the goal is doing about its own gap: its search rounds and its path research. */
+async function printSearching(reading: PlanReading): Promise<void> {
+  const prefix = `goal-${reading.goalId}`;
+  const rounds = (await listRounds(reading.target.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
+  console.log(`  searching   ${rounds.length} round(s) of this goal's own search`);
+  for (const round of rounds) {
+    const mission = await latestMissionForCandidate(round.candidateId);
+    console.log(`    ${round.bucketId.slice(prefix.length + 1) || 'open'} round ${round.round} ${round.state} found ${round.found ?? '—'} · idea ${round.candidateId} · mission ${mission ? `${mission.id} ${mission.state}` : 'not launched yet'}`);
+  }
+  const ids = new Set(reading.considered.map((one) => one.opportunityId));
+  const needs = (await listNeeds({ projectId: reading.target.projectId })).filter((one) => one.opportunityId && ids.has(one.opportunityId) && one.blockedAction.startsWith('The path to money'));
+  console.log(`  digging     ${needs.length} path-to-money question(s) on openings it holds`);
+  for (const need of needs.slice(0, 12)) {
+    const candidate = need.candidateId ? await getCandidate(need.candidateId) : null;
+    console.log(`    ${need.state} ${need.requestKey?.split(':').pop()} · ${need.blockedAction.slice(0, 90)} · ${candidate ? `idea ${candidate.id} ${candidate.state}` : 'not asked yet'}`);
+  }
+}
+
 function printPlan(reading: PlanReading): void {
   const t = reading.target;
   console.log(`PLAN ${reading.goalId}  ${reading.verdict}`);
@@ -369,6 +390,7 @@ async function plan(): Promise<void> {
   const reading = await readGoalPlan({ goalId, persist: false });
   if (!reading) fail(`No targeted goal ${goalId}.`);
   printPlan(reading);
+  await printSearching(reading);
   const history = await listReadings(goalId);
   for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);
   console.log('GOALS: OK');
