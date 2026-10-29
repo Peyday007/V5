@@ -625,6 +625,16 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect((await readNeedCondition(timing[0]!))!.holds).toBe(false);
   });
 
+  it('does not ask again for what a source already established', async () => {
+    const o = await oneOff({ title: 'A big listing at a guessed price', priceCents: 3_600_000, days: null });
+    await recordCardFact({ projectId, opportunityId: o.id, field: 'price', kind: 'RECOMMENDATION', value: '$36000', claimId: null, decidedBy: 'BRAIN', basis: 'listing', assumptions: 'a', uncertainty: 'u' });
+    await recordCardFact({ projectId, opportunityId: o.id, field: 'revenueRange', kind: 'EVIDENCE', value: '$200-$400', claimId: null, decidedBy: 'BRAIN', basis: 'b', assumptions: 'a', uncertainty: 'u' });
+    await goal(1_000_000);
+    for (let i = 0; i < 3; i += 1) await advanceGoalPlans(new Date(now.getTime() + i * 31 * 60_000));
+    const { listNeeds } = await import('../server/repos/cashPortfolio.ts');
+    expect((await listNeeds({ projectId })).filter((one) => one.requestKey === `question:${o.id}:revenueRange`)).toHaveLength(0);
+  });
+
   it('does not let dead questions fill the cap and stop new ones', async () => {
     const o = await oneOff({ title: 'Freight loads with unknown payment timing', priceCents: 2_000_000, days: null });
     await goal(1_000_000);

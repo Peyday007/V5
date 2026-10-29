@@ -22,6 +22,7 @@
  */
 import { getOpportunity, listNeeds } from '../../repos/cashPortfolio.ts';
 import { closeNeed, raiseNeed } from '../cash/needs.ts';
+import { cardFact } from '../../repos/cashCardFacts.ts';
 import { getCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import { questionKey } from '../cash/conditions.ts';
@@ -145,6 +146,13 @@ export async function researchGoalPaths(input: {
     for (const { field, ask } of asks) {
       if (openHere >= MAX_OPEN_PATH_QUESTIONS) break;
       const key = questionKey(opportunity.id, field);
+      // Already established from a source or by a person: asking again would
+      // be settled the instant it was raised and re-raised on the next read.
+      const known = await cardFact(opportunity.id, field);
+      if (known && known.value !== null && known.kind !== 'RECOMMENDATION') {
+        note(`${one.title.slice(0, 60)} ${field}: already established (${String(known.value).slice(0, 40)})`);
+        continue;
+      }
       let nextStep = ask;
       if (keys.has(key)) {
         // Already asked. Ask again only when that research ended without an
