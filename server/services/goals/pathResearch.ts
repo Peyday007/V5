@@ -29,6 +29,14 @@ import { diveOwnsItsQuestions } from '../cash/operate.ts';
 import { parseBlockerKey } from '../../domain/types.ts';
 import type { ChainLink, PlanReading } from './plan.ts';
 
+/**
+ * The smallest share of what is still needed an opening must be able to bring
+ * to be worth researching. Several smaller sources may still make the goal,
+ * but each has to matter: an opening that cannot bring a tenth of the gap even
+ * if every buyer agreed costs research it can never repay.
+ */
+export const MIN_SHARE_WORTH_RESEARCHING = 0.1;
+
 /** At most this many openings per goal get path research at once. */
 export const PATH_RESEARCH_OPENINGS = 4;
 /** And at most this many path questions open per goal at once. */
@@ -90,18 +98,40 @@ export async function researchGoalPaths(input: {
    * then the ones closest to complete, then the largest supported reach. The
    * rest wait; they never stop discovery, which runs on its own counter.
    */
+  const remaining = input.reading.target.remainingCents / 100;
+  const floor = remaining * MIN_SHARE_WORTH_RESEARCHING;
+  const potential = (one: (typeof considered)[number]) => Math.max(one.supportedReach, one.potentialReach ?? 0);
+  // Biggest possible contribution first, so research goes where an answer can
+  // change what Brain pursues; an award only after ways that pay in steps.
   const order = [...considered].sort(
     (a, b) =>
       Number(a.competitiveAward) - Number(b.competitiveAward) ||
-      Number(b.modelled) - Number(a.modelled) ||
-      a.missing.length - b.missing.length ||
-      b.supportedReach - a.supportedReach,
+      potential(b) - potential(a) ||
+      b.supportedReach - a.supportedReach ||
+      a.missing.length - b.missing.length,
   );
   let openings = 0;
   for (const one of order) {
     if (openings >= PATH_RESEARCH_OPENINGS || openHere >= MAX_OPEN_PATH_QUESTIONS) break;
-    const asks = one.missing.flatMap((link) => FIELDS_FOR[link] ?? []);
+    let asks = one.missing.flatMap((link) => FIELDS_FOR[link] ?? []);
     if (asks.length === 0) continue;
+    /*
+     * Worth asking about only if the answer could change what Brain pursues.
+     * An opening whose most, even with every buyer agreeing, is under a tenth
+     * of the gap is not researched further: its costs and timing cannot make
+     * it a plan. One with no price buyers are shown to pay — none at all, or
+     * only a guess — is asked one thing first, what buyers actually pay,
+     * because that answer decides whether anything else is worth asking.
+     */
+    if (potential(one) < floor && one.potentialReach !== null) {
+      note(`${one.title.slice(0, 60)}: too small to matter — at most ${Math.round(potential(one))} of the ${Math.round(remaining)} still needed, even if every buyer agreed`);
+      continue;
+    }
+    if (one.supportedReach < floor) {
+      // No supported price big enough yet: what buyers actually pay decides
+      // whether anything else about it is worth asking, so ask that alone.
+      asks = [FIELDS_FOR.OFFER_AND_PRICE![0]!];
+    }
     const opportunity = await getOpportunity(one.opportunityId);
     if (!opportunity) continue;
     if (diveOwnsItsQuestions(opportunity)) {

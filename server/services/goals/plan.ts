@@ -154,6 +154,12 @@ export interface ConsideredOpening {
   missing: ChainLink[];
   /** What it could bring toward the goal at a supported price, in major units. */
   supportedReach: number;
+  /**
+   * What it could bring at whatever price the card holds, supported or not —
+   * the most it could be worth if research confirms it. Null when the card has
+   * no price at all, so nothing yet says how big it could be.
+   */
+  potentialReach: number | null;
   competitiveAward: boolean;
 }
 
@@ -390,6 +396,10 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       .filter((check) => !check.ok)
       .map((check) => check.link),
     supportedReach: one.agreed || priceSupported(one) ? bestCaseReach(one, target.remainingCents / 100, target.daysLeft ?? 0) : 0,
+    potentialReach:
+      one.agreed || one.price.value !== null || one.price.high !== null
+        ? bestCaseReach(one, target.remainingCents / 100, target.daysLeft ?? 0)
+        : null,
     competitiveAward: one.competitiveAward,
   }));
   considered.sort((a, b) => a.missing.length - b.missing.length || b.supportedReach - a.supportedReach);

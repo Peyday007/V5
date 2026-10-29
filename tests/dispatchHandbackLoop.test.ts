@@ -508,6 +508,18 @@ describe('a Routine whose sessions cannot reach the web', () => {
     expect((await networkBlockedRoutines(Date.now())).has(routineId)).toBe(true);
   });
 
+  it('takes a session at its word after one block when it says its whole network is refused', async () => {
+    const orchestrationId = await packet();
+    await blockedFragment(orchestrationId, 0, "This session's environment refuses outbound web access, so no source could be opened.");
+    expect((await networkBlockedRoutines(Date.now())).has(routineId)).toBe(true);
+  });
+
+  it('does not take one missing host as a web-less surface', async () => {
+    const orchestrationId = await packet();
+    await blockedFragment(orchestrationId, 0, 'getaddrinfo ENOTFOUND gone-site.example');
+    expect((await networkBlockedRoutines(Date.now())).has(routineId)).toBe(false);
+  });
+
   it('is still fired for research that needs no sources: an audit, a synthesis', async () => {
     const orchestrationId = await packet();
     for (let index = 0; index < 3; index += 1) {

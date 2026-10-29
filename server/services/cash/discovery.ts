@@ -807,6 +807,7 @@ export async function openGoalDiscovery(input: {
     `Looking at ${lens.angle} — in any market or industry, and as one opening or several running at once — ` +
       `which lawful ways could bring this operation ${amount} more of ` +
       `${t.metricLabel} within ${t.daysLeft} day${t.daysLeft === 1 ? '' : 's'}? ${held}${elsewhere} ${capital} ${resources} ${pace} ` +
+      `Report only ways that could bring at least ${t.currency} ${Math.round((t.remainingCents / 100) * 0.1)} within that time — alone, or as a stream many buyers pay repeatedly — and leave out one-off small payments, contests, bounties and submissions that pay a few hundred at most. ` +
       'For each, name who pays, what buyers are published as actually paying, when the money would settle, ' +
       'what it needs up front, and what it would need that the operation does not have yet?',
     lens.id,
