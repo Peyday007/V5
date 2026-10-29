@@ -539,6 +539,20 @@ describe('how the money actually arrives (2026-10-28)', () => {
     expect(statement).toMatch(/no more than USD 300 tied up before the first payment/);
     expect(statement).toMatch(/only pays after a competitive award/);
   });
+
+  it("searches for the goal even while bulk Claude discovery is switched off", async () => {
+    await oneOff({ title: 'Federal RFP, too slow', priceCents: 13_502_000, days: null });
+    const id = await pacedGoalFor();
+    const before = process.env['BRAIN_CLAUDE_DISCOVERY'];
+    process.env['BRAIN_CLAUDE_DISCOVERY'] = 'off';
+    try {
+      expect((await advanceGoalPlans(now)).asked).toBe(1);
+      expect((await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-`))).toHaveLength(1);
+    } finally {
+      if (before === undefined) delete process.env['BRAIN_CLAUDE_DISCOVERY'];
+      else process.env['BRAIN_CLAUDE_DISCOVERY'] = before;
+    }
+  });
 });
 
 

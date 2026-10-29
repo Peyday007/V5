@@ -508,6 +508,9 @@ export interface OpenedDiscovery {
  * moves to code feeds and the cheap lane. Rounds already open still finish and
  * are harvested; nothing already found is touched. Read per call, so turning it
  * back on needs no deploy.
+ *
+ * Two Claude rounds ask anyway, because neither is bulk finding: the feed
+ * shortlist, and a goal's own search (`openGoalDiscovery`).
  */
 export function claudeDiscoveryEnabled(env = process.env): boolean {
   return env['BRAIN_CLAUDE_DISCOVERY']?.trim().toLowerCase() !== 'off';
@@ -702,7 +705,14 @@ export async function openGoalDiscovery(input: {
   heldTitles?: string[];
   now?: string;
 }): Promise<OpenedDiscovery | null> {
-  if (!claudeDiscoveryEnabled()) return null;
+  /*
+   * Not behind `BRAIN_CLAUDE_DISCOVERY`. That switch stops *bulk* finding so the
+   * Routines spend their capacity on research goals instead — and a goal's own
+   * search is exactly that: aimed at one goal a person approved, at most
+   * MAX_LIVE_GOAL_ROUNDS at once. Production, 2026-10-29: the switch was off,
+   * so every goal round was refused before it was asked and the goal read
+   * "keeps searching" over zero rounds. Like the feed shortlist, it asks anyway.
+   */
   const gate = await discoveryAllowed(input.target.projectId);
   if (!gate.allowed || !gate.mode) return null;
   const mode = gate.mode;
