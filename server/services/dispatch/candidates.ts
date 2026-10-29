@@ -367,7 +367,29 @@ export const NETWORK_BLOCK_WINDOW_MS = 6 * 60 * 60_000;
 export const NETWORK_BLOCK_RETEST_MS = 24 * 60 * 60_000;
 /** How far back blocks are read at all. */
 const NETWORK_BLOCK_MEMORY_MS = 7 * 24 * 60 * 60_000;
-const NETWORK_BLOCK_PATTERNS = ['%ENOTFOUND%', '%EAI_AGAIN%', '%getaddrinfo%', '%egress%', '%network polic%'];
+/*
+ * Workers describe the same fact in their own words. Production, 2026-10-29:
+ * goal research failed on "This session's environment refuses outbound web
+ * access", "no outbound web access: DNS resolution fails" and "network
+ * environment refuses outbound connections" — none of which matched, so those
+ * Routines kept being fired for source research and each fire was a failed
+ * fragment. These name the session's own network, never one site refusing.
+ */
+const NETWORK_BLOCK_PATTERNS = [
+  '%ENOTFOUND%',
+  '%EAI_AGAIN%',
+  '%getaddrinfo%',
+  '%egress%',
+  '%network polic%',
+  '%outbound web%',
+  '%outbound connect%',
+  '%outbound network%',
+  '%outbound access%',
+  '%no outbound%',
+  '%DNS resolution%',
+  '%no network access%',
+  '%without network access%',
+];
 
 /**
  * Read at most every five minutes. The window it judges is six hours, so a
