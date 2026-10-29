@@ -345,7 +345,7 @@ async function printSearching(reading: PlanReading): Promise<void> {
   console.log(`  searching   ${rounds.length} round(s) of this goal's own search`);
   for (const round of rounds) {
     const mission = await latestMissionForCandidate(round.candidateId);
-    console.log(`    ${round.bucketId.slice(prefix.length + 1) || 'open'} round ${round.round} ${round.state} found ${round.found ?? '—'} · idea ${round.candidateId} · mission ${mission ? `${mission.id} ${mission.state}` : 'not launched yet'}`);
+    console.log(`    ${round.bucketId.slice(prefix.length + 1) || 'open'} round ${round.round} ${round.state} found ${round.found ?? '—'} · idea ${round.candidateId} · mission ${mission ? `${mission.id} ${mission.state}${mission.terminalReason ? ` (${mission.terminalReason.replace(/\s+/g, ' ').slice(0, 200)})` : ''}` : 'not launched yet'}`);
   }
   const ids = new Set(reading.considered.map((one) => one.opportunityId));
   // Every research question on these openings, whichever pass raised it: the

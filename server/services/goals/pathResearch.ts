@@ -206,7 +206,8 @@ async function researchAlive(candidateId: string | null): Promise<boolean> {
   if (candidate.state === 'REJECTED' || candidate.state === 'PARKED' || candidate.state === 'MERGED' || candidate.state === 'DONE') return false;
   const mission = await latestMissionForCandidate(candidateId);
   if (!mission) return true;
-  return mission.state !== 'FAILED' && mission.state !== 'CANCELLED' && mission.state !== 'DONE';
+  // A mission parked on a person uses no capacity and is not research under way.
+  return mission.state !== 'FAILED' && mission.state !== 'CANCELLED' && mission.state !== 'DONE' && mission.state !== 'NEEDS_HUMAN';
 }
 
 /** Why the question's research ended without an answer, when it did so long enough ago. */
@@ -216,9 +217,11 @@ async function endedWithoutAnswer(candidateId: string | null, now: Date): Promis
   if (!candidate) return null;
   const mission = await latestMissionForCandidate(candidateId);
   if (mission) {
-    if (mission.state !== 'FAILED' && mission.state !== 'CANCELLED') return null;
+    // A mission parked on a person for a day — the judge asked for more and
+    // nothing could be attempted — is as stuck as a failed one.
+    if (mission.state !== 'FAILED' && mission.state !== 'CANCELLED' && mission.state !== 'NEEDS_HUMAN') return null;
     if (now.getTime() - Date.parse(mission.completedAt ?? mission.updatedAt) < REASK_AFTER_MS) return null;
-    return { reason: mission.terminalReason ?? `the research ${mission.state.toLowerCase()} without saying why` };
+    return { reason: mission.terminalReason ?? mission.waitingOn ?? `the research ${mission.state.toLowerCase()} without saying why` };
   }
   // No mission: the idea was parked or turned away before any research ran.
   if (candidate.state !== 'PARKED' && candidate.state !== 'REJECTED') return null;
