@@ -7,13 +7,13 @@ import { getDb } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
 import type { CollectFailureCause, FeedPullMetrics, SourceKind } from '../domain/collect.ts';
 
-export async function recordPullMetrics(source: string, ok: boolean, m: FeedPullMetrics, error: string | null = null): Promise<void> {
+export async function recordPullMetrics(source: string, ok: boolean, m: FeedPullMetrics, error: string | null = null, at?: string): Promise<void> {
   await getDb().run(
     `INSERT INTO feed_pulls
        (id, source, ok, fetched, inserted, error, created_at, method, duplicates, relevant, signals,
         failure_cause, wall_ms, bytes, memory_bytes, cheap_calls, claude_jobs)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [newId('fdp'), source, ok ? 1 : 0, m.fetched, m.inserted, error, nowIso(), m.method, m.duplicates, m.relevant,
+    [newId('fdp'), source, ok ? 1 : 0, m.fetched, m.inserted, error, at ?? nowIso(), m.method, m.duplicates, m.relevant,
       m.signals, m.failureCause, m.wallMs, m.bytes, m.memoryBytes, m.cheapCalls, m.claudeJobs],
   );
 }
