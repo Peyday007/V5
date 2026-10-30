@@ -15,7 +15,7 @@
  * already spent in part.
  */
 import { getDb } from '../../db/database.ts';
-import { cashEventsOfKindInProject } from '../../repos/cashMode.ts';
+import { cashEventsOfKindInProject, recordCashEvent } from '../../repos/cashMode.ts';
 import type { DecisionVerdict } from '../../domain/cashDecisions.ts';
 
 /** The cash event kind a caller writes when a question is skipped for want of any decision it could change. */
@@ -93,4 +93,39 @@ export async function screenMetrics(projectId: string, goalId?: string): Promise
     claudeJobsAvoided: { rejectedBeforeAnyDive, questionsSkipped: skipped, total: rejectedBeforeAnyDive + skipped },
     notes,
   };
+}
+
+
+/**
+ * Record that a question was not asked because no answer to it could change the
+ * decision, once per (opening, question). A question already recorded is left
+ * alone, so a tick that skips the same question again writes nothing - the
+ * counter above counts decisions not to ask, not ticks that made them.
+ */
+export async function recordQuestionsSkipped(input: {
+  projectId: string;
+  opportunityId: string;
+  fields: readonly string[];
+  why: string;
+}): Promise<number> {
+  if (input.fields.length === 0) return 0;
+  const held = new Set(
+    (await cashEventsOfKindInProject(input.projectId, QUESTION_SKIPPED_EVENT))
+      .filter((event) => event.opportunityId === input.opportunityId)
+      .map((event) => String((event.detail as { field?: unknown } | null)?.field ?? '')),
+  );
+  let recorded = 0;
+  for (const field of input.fields) {
+    if (held.has(field)) continue;
+    await recordCashEvent({
+      projectId: input.projectId,
+      opportunityId: input.opportunityId,
+      kind: QUESTION_SKIPPED_EVENT,
+      actorRef: 'BRAIN',
+      summary: `Not asked: ${field}. ${input.why}`,
+      detail: { field, why: input.why },
+    });
+    recorded += 1;
+  }
+  return recorded;
 }

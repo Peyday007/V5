@@ -210,11 +210,11 @@ export function goalComparator(inputs: Map<string, RankInput>, goal: RankGoal): 
  * time, repeatability and combinability facts nobody has established stay null,
  * which sorts last on their criteria rather than helping.
  */
-export async function goalCompareFor(
+export async function goalRankingFor(
   projectId: string,
   opportunities: readonly CashOpportunity[],
   now: Date = new Date(),
-): Promise<((a: CashOpportunity, b: CashOpportunity) => number) | undefined> {
+): Promise<{ goal: RankGoal; inputs: Map<string, RankInput> } | undefined> {
   const goals: RankGoal[] = [];
   for (const workstream of await listWorkstreams({ projectIds: [projectId] })) {
     if (workstream.projectId !== projectId || !workstream.target) continue;
@@ -233,5 +233,14 @@ export async function goalCompareFor(
       combinable: null,
     });
   }
-  return goalComparator(inputs, goals[0]!);
+  return { goal: goals[0]!, inputs };
+}
+
+export async function goalCompareFor(
+  projectId: string,
+  opportunities: readonly CashOpportunity[],
+  now: Date = new Date(),
+): Promise<((a: CashOpportunity, b: CashOpportunity) => number) | undefined> {
+  const ranking = await goalRankingFor(projectId, opportunities, now);
+  return ranking ? goalComparator(ranking.inputs, ranking.goal) : undefined;
 }
