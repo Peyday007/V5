@@ -1259,3 +1259,42 @@ export async function getWorkerSession(sessionRef: string): Promise<WorkerSessio
       }
     : null;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Routing preference                                                         */
+/* ------------------------------------------------------------------------- */
+
+export type AccountRoutingPreference = 'NORMAL' | 'LAST_RESORT';
+
+/**
+ * How the router orders an account that is already eligible. Data, not an
+ * access grant: it widens nothing and an unknown value reads as NORMAL.
+ */
+export async function accountRoutingPreference(accountId: string): Promise<AccountRoutingPreference> {
+  const row = await getDb().get<{ routing_preference: string | null }>(
+    'SELECT routing_preference FROM fleet_accounts WHERE id = ?',
+    [accountId],
+  );
+  return row?.routing_preference === 'LAST_RESORT' ? 'LAST_RESORT' : 'NORMAL';
+}
+
+/** Every account's preference, keyed by id, in one read. */
+export async function accountRoutingPreferences(): Promise<Map<string, AccountRoutingPreference>> {
+  const rows = await getDb().all<{ id: string; routing_preference: string | null }>(
+    'SELECT id, routing_preference FROM fleet_accounts',
+  );
+  return new Map(rows.map((r) => [r.id, r.routing_preference === 'LAST_RESORT' ? 'LAST_RESORT' : 'NORMAL']));
+}
+
+/** Guarded on the preference the caller read, so two operators produce one move. */
+export async function setAccountRoutingPreference(input: {
+  accountId: string;
+  from: AccountRoutingPreference;
+  to: AccountRoutingPreference;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    'UPDATE fleet_accounts SET routing_preference = ?, updated_at = ? WHERE id = ? AND routing_preference = ?',
+    [input.to, nowIso(), input.accountId, input.from],
+  );
+  return result.changes === 1;
+}
