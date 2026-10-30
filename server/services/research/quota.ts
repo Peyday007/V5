@@ -138,7 +138,12 @@ const EFFORT_ORDER: Record<string, number> = { LOW: 0, MEDIUM: 1, HIGH: 2 };
  * safe — what it decides is only which of several runnable things is worth the
  * next slice of the allowance.
  */
-export function executionOrder(ready: ResearchFragment[], all: ResearchFragment[]): ResearchFragment[] {
+export function executionOrder(
+  ready: ResearchFragment[],
+  all: ResearchFragment[],
+  /** Optional decision value of a fragment (higher first), consulted after the tier. Absent = unchanged order. */
+  valueOf?: (fragment: ResearchFragment) => number,
+): ResearchFragment[] {
   const ranked = ready.map((fragment) => ({
     fragment,
     rank: tierOf(fragment, all).rank,
@@ -147,6 +152,10 @@ export function executionOrder(ready: ResearchFragment[], all: ResearchFragment[
   }));
   ranked.sort((a, b) => {
     if (a.rank !== b.rank) return a.rank - b.rank;
+    if (valueOf) {
+      const diff = valueOf(b.fragment) - valueOf(a.fragment);
+      if (diff !== 0) return diff;
+    }
     // Whatever unblocks the most work next is worth the slot.
     if (a.unblocks !== b.unblocks) return b.unblocks - a.unblocks;
     // A repair is work already half paid for; finish it before opening new work.
