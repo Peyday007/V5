@@ -23,6 +23,7 @@
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { newId, nowIso } from '../../repos/util.ts';
+import { ProviderHttpError, parseRetryAfter, providerCapacity, providerKey, type ProviderCapacity } from '../routing/providers/capacity.ts';
 import { DELIVERABLE_KINDS, type DeliverableKind } from '../cash/deliverables/spec.ts';
 
 export interface LaneConfig {
@@ -270,7 +271,7 @@ export const httpCompleter: Completer = async (config, model, system, prompt) =>
     }),
     signal: AbortSignal.timeout(config.timeoutMs),
   });
-  if (!response.ok) throw new Error(`cheap lane HTTP ${response.status}`);
+  if (!response.ok) throw new ProviderHttpError(response.status, parseRetryAfter(response.headers.get('retry-after')));
   const body = (await response.json()) as { choices?: { message?: { content?: string } }[] };
   return body.choices?.[0]?.message?.content ?? '';
 };
@@ -348,6 +349,11 @@ async function runTask<I, O>(
     }
     // A model that keeps failing is skipped, not asked: no answer, no spent call.
     if (isDown(health.get(model))) continue;
+    // A provider in cooldown, or over its stored rate limit, is deferred: not called,
+    // and nothing is written, so a deferral never reads as a failed answer.
+    const capacity = options.capacity ?? providerCapacity;
+    const key = providerKey(config.url, model);
+    if (!capacity.reserve(key, now).allowed) continue;
     if ((await usedToday(kind, now)) >= config.dailyBudget) return merge(answers);
     let text = '';
     let error: string | null = null;
@@ -355,7 +361,9 @@ async function runTask<I, O>(
       text = await (options.completer ?? httpCompleter)(config, model, TASKS[kind].system, prompt(input));
     } catch (caught) {
       error = caught instanceof Error ? caught.message.slice(0, 300) : 'failed';
+      capacity.failure(key, caught, now);
     }
+    if (!error) capacity.success(key);
     const parsed = error ? null : parse(text);
     await db.run(
       `INSERT INTO cheap_results (id, kind, input_hash, subject_id, model, ok, output, error, created_at)
@@ -384,6 +392,7 @@ export interface LaneOptions {
   completer?: Completer;
   now?: Date;
   health?: Map<string, ModelHealth>;
+  capacity?: ProviderCapacity;
 }
 
 export async function screenOpening(
