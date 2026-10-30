@@ -136,6 +136,7 @@ export function surfaceEligibility(input: {
     candidates: snapshot.candidates,
     fleetPolicy: snapshot.fleetPolicy,
     fleetInFlight: snapshot.fleetInFlight,
+    factoryInFlight: snapshot.factoryInFlight,
     now: input.now,
   });
 

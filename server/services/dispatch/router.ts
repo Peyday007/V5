@@ -318,6 +318,12 @@ export interface RoutingInput {
   candidates: RoutingCandidate[];
   fleetPolicy: FleetPolicy | null;
   fleetInFlight: number;
+  /**
+   * Of `fleetInFlight`, the activations on repository (Factory) surfaces.
+   * Absent is 0, which is the old behaviour: every activation counted against
+   * the fleet target.
+   */
+  factoryInFlight?: number;
   /** ISO-8601. Passed in rather than read, so a decision is replayable. */
   now: string;
   /**
@@ -566,16 +572,34 @@ export function routeBin(input: RoutingInput): RoutingResult {
     };
   }
 
-  // The fleet target is a ceiling on concurrent activations, not on queued
-  // work. Reaching it is an ordinary state: the bins stay, and the next tick
-  // after something finishes will route them.
+  // From the bin's own columns. One derivation, shared with the assigner, so the
+  // fire and the hand-over cannot disagree about what kind of work this is.
+  const family = familyOf(bin);
+
+  /*
+   * The fleet target is a ceiling on concurrent activations, not on queued
+   * work. Reaching it is an ordinary state: the bins stay, and the next tick
+   * after something finishes will route them.
+   *
+   * It bounds research and general work, and it does not bound the Software
+   * Factory. The target was set to 1 on 2026-10-29 to "save Claude capacity
+   * for the factory build", and because Factory bins counted against the same
+   * single slot, a 9-unit campaign and an 11-unit campaign took turns on one
+   * activation behind research — the opposite of what the setting was for.
+   * A Factory bin is bounded instead by its own surfaces' Routine and account
+   * targets (checked per candidate below), the fire slot's compare-and-swap and
+   * the provider's refusals; and Factory activations do not use up the
+   * research budget, so neither family can starve the other.
+   */
   const fleetTarget = fleetPolicy ? effective(fleetPolicy, now) : null;
-  if (fleetTarget !== null && fleetInFlight >= fleetTarget) {
+  const factoryInFlight = input.factoryInFlight ?? 0;
+  const nonFactoryInFlight = Math.max(0, fleetInFlight - factoryInFlight);
+  if (family !== 'FACTORY' && fleetTarget !== null && nonFactoryInFlight >= fleetTarget) {
     return {
       ok: false,
       refusal: 'FLEET_TARGET_REACHED',
       reason:
-        `${fleetInFlight} activations are in flight and the fleet target is ${fleetTarget}. ` +
+        `${nonFactoryInFlight} research/general activations are in flight and the fleet target is ${fleetTarget}. ` +
         'Raise the target to push harder; nothing is lost by waiting.',
       considered,
       retryAt: null,
@@ -583,9 +607,6 @@ export function routeBin(input: RoutingInput): RoutingResult {
   }
 
   const required = requiredCapabilities(bin);
-  // From the bin's own columns. One derivation, shared with the assigner, so the
-  // fire and the hand-over cannot disagree about what kind of work this is.
-  const family = familyOf(bin);
   const repository = repositoryIdOf(bin);
   /*
    * The pin, read from the bin's own column and applied before anything else.

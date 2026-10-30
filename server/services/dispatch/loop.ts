@@ -226,6 +226,8 @@ export function forgetUnansweredRead(): void {
 export async function dispatchTick(
   options: { burst?: number; projectIds?: string[] } = {},
 ): Promise<TickResult> {
+  // Factory fires this tick, so the burst's research count is not charged for them.
+  let firedFactory = 0;
   const result: TickResult = {
     superseded: 0,
     rearmed: 0,
@@ -314,6 +316,7 @@ export async function dispatchTick(
         candidates: snapshot.candidates,
         fleetPolicy: snapshot.fleetPolicy,
         fleetInFlight: snapshot.fleetInFlight,
+        factoryInFlight: snapshot.factoryInFlight,
         now: new Date().toISOString(),
       });
       return decision.ok || !waitsForOperator(decision.refusal);
@@ -642,6 +645,7 @@ export async function dispatchTick(
           candidates: routable,
           fleetPolicy: snapshot.fleetPolicy,
           fleetInFlight: snapshot.fleetInFlight + result.fired,
+          factoryInFlight: snapshot.factoryInFlight + firedFactory,
           now: new Date().toISOString(),
           needsWeb,
         });
@@ -855,6 +859,7 @@ export async function dispatchTick(
       });
       if (decision?.ok) await recordRoutineFire({ routineId: decision.routine.id, ok: true });
       result.fired += 1;
+      if (decision?.ok && decision.routine.capabilities.includes('repository')) firedFactory += 1;
       continue;
     }
 
