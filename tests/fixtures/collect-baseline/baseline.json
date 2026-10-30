@@ -1,0 +1,25 @@
+{
+  "workload": "companies=20,filler=40",
+  "counts": {
+    "pulls": 6,
+    "failedPulls": 2,
+    "fetched": 240,
+    "inserted": 120,
+    "duplicates": 120,
+    "detectorSignals": 20,
+    "cheapCalls": 80,
+    "screened": 40,
+    "claudeJobs": 0
+  },
+  "rates": {
+    "duplicateRate": 0.5,
+    "failureRate": 0.3333333333333333
+  },
+  "timing": {
+    "collectMs": 25,
+    "interpretMs": 41,
+    "recordsPerMinute": 576000,
+    "heapDeltaBytes": 5324864
+  },
+  "measuredOn": "dev machine, SQLite, fake fetcher; timings are indicative only"
+}
