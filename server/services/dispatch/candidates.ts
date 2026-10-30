@@ -18,7 +18,7 @@ import {
   listRoutines,
 } from '../../repos/fleet.ts';
 import { resolveToken } from './fire.ts';
-import { surfaceIneligibility, type RoutingCandidate } from './router.ts';
+import { surfaceIneligibility, type RoutingCandidate, type RoutingPreference } from './router.ts';
 import type { FleetAccount, FleetPolicy } from '../../domain/types.ts';
 import { getWorker, getWorkerRouting, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { derivedFamiliesFrom } from '../bins/routing.ts';
@@ -743,6 +743,9 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
       accountUnproductiveStarts: productivity.get(account.id)?.unproductive ?? 0,
       accountUnproductiveLimit: UNPRODUCTIVE_STARTS_THRESHOLD,
       allowanceReport: allowanceReports.get(account.id) ?? null,
+      // Stored per-account preference; absent until the account row carries one.
+      routingPreference:
+        (account as { routingPreference?: RoutingPreference | null }).routingPreference ?? null,
     });
   }
 
