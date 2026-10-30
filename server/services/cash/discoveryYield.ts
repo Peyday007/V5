@@ -22,6 +22,11 @@ import { cashTier, tierRank } from './tier.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { hostOf } from '../research/gate.ts';
+import { openingsWithSourceUrl } from '../../repos/cashPortfolio.ts';
+import { openingSourceKey } from './duplicates.ts';
+import { sourceYield } from '../collect/metrics/read.ts';
+import type { OpeningOutcome } from '../collect/metrics/yield.ts';
+import type { SourceYieldRow } from '../collect/metrics/yield.ts';
 
 export interface YieldRow {
   /** The bucket id, or a source host. */
@@ -41,6 +46,8 @@ export interface YieldRow {
 export interface DiscoveryYield {
   byMethod: YieldRow[];
   bySource: YieldRow[];
+  /** Collected feeds, judged on what their leads became. */
+  byFeed: SourceYieldRow[];
 }
 
 const empty = (key: string): YieldRow => ({ key, rounds: 0, failedRounds: 0, fragments: 0, openings: 0, useful: 0, qualified: 0, duplicates: 0 });
@@ -71,6 +78,8 @@ export async function discoveryYield(projectId: string): Promise<DiscoveryYield>
     facts.set(fact.opportunityId, [...(facts.get(fact.opportunityId) ?? []), fact]);
   }
   const hosts = await sourceHosts(projectId);
+  const outcomes: OpeningOutcome[] = [];
+  const urlKeys = new Map((await openingsWithSourceUrl(projectId)).map((o) => [o.opportunity.id, o]));
   for (const opportunity of await listOpportunities({ projectId })) {
     const round = opportunity.discoveredByCandidateId ? roundOf.get(opportunity.discoveredByCandidateId) : undefined;
     const method = row(methods, round?.bucketId ?? 'unattributed');
@@ -88,6 +97,13 @@ export async function discoveryYield(projectId: string): Promise<DiscoveryYield>
       card: cashEngineCard({ opportunity, facts: facts.get(opportunity.id) ?? [] }),
       readiness: evidenceCard(opportunity).readiness,
     }).tier;
+    const held = urlKeys.get(opportunity.id);
+    outcomes.push({
+      urlKey: openingSourceKey(held?.sourceUrl),
+      verified: !!held?.hasWork,
+      useful: tierRank(tier) >= tierRank('CANDIDATE'),
+      qualified: tierRank(tier) >= tierRank('QUALIFIED'),
+    });
     if (tierRank(tier) >= tierRank('CANDIDATE')) {
       method.useful += 1;
       source.useful += 1;
@@ -98,7 +114,7 @@ export async function discoveryYield(projectId: string): Promise<DiscoveryYield>
     }
   }
   const order = (a: YieldRow, b: YieldRow) => b.qualified - a.qualified || b.useful - a.useful || b.openings - a.openings || a.key.localeCompare(b.key);
-  return { byMethod: [...methods.values()].sort(order), bySource: [...sources.values()].sort(order) };
+  return { byMethod: [...methods.values()].sort(order), bySource: [...sources.values()].sort(order), byFeed: await sourceYield(outcomes) };
 }
 
 /** Research fragments each discovery idea's missions spent. */
@@ -156,6 +172,10 @@ export function yieldGuidance(reading: DiscoveryYield): string {
     parts.push(
       `Sources that produced many openings and none with a known payer: ${noisy.map((one) => `${one.key} (0 of ${one.openings})`).join(', ')} — do not rely on them.`,
     );
+  }
+  const feeds = reading.byFeed.filter((one) => one.qualified > 0 || one.useful > 0).slice(0, 4);
+  if (feeds.length > 0) {
+    parts.push(`Collected feeds whose leads became openings with a known payer: ${feeds.map((one) => `${one.source} (${one.useful} of ${one.shortlisted} shortlisted)`).join(', ')}.`);
   }
   return parts.join(' ');
 }
