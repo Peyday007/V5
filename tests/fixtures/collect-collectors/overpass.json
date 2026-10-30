@@ -1,0 +1,1 @@
+{"elements":[{"type":"node","id":1,"lat":41.1,"lon":-81.5,"tags":{"name":"Joe's Garage","website":"https://joes.test/","addr:street":"Main","addr:housenumber":"5"}},{"type":"way","id":2,"center":{"lat":1,"lon":2},"tags":{"amenity":"x"}}]}
