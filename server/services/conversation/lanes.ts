@@ -22,6 +22,8 @@
  * stops "the fast lane" from quietly becoming "whatever is cheapest".
  */
 
+import { destinationFor, type BoundaryWorkKind, type WorkDestination } from '../routing/boundary/boundary.ts';
+
 export const LANES = ['FAST', 'DEEP', 'WORK'] as const;
 export type Lane = (typeof LANES)[number];
 
@@ -71,6 +73,11 @@ export interface TurnSignals {
   conflictsWithKnowledge?: boolean;
   /** Whether the fast lane is even available — no key, no ceiling, no model. */
   fastLaneAvailable: boolean;
+  /**
+   * What the work is, when the caller holds a declaration of it (a change
+   * request, a research goal). Never inferred from the text.
+   */
+  workKind?: BoundaryWorkKind;
 }
 
 export interface LaneDecision {
@@ -78,6 +85,11 @@ export interface LaneDecision {
   escalations: Escalation[];
   /** The sentence a person reads when the answer is going to take longer. */
   explanation: string | null;
+  /**
+   * The only place declared work may go: software change to the Factory,
+   * research to the research queue. Null when the caller declared no kind.
+   */
+  destination: WorkDestination | null;
 }
 
 /**
@@ -197,6 +209,11 @@ export function decideLane(signals: TurnSignals): LaneDecision {
   // condition, so it can be argued with.
   if (signals.turnCount >= 40) escalations.push('COMPLEXITY');
 
+  // A declared kind is work, whatever the words say: it is never answered in
+  // a direct lane, so it cannot be answered by the wrong resource either.
+  const declared = signals.workKind ?? null;
+  if (declared && !escalations.includes('ASKED_TO_DO_WORK')) escalations.push('ASKED_TO_DO_WORK');
+
   const wantsWork = escalations.includes('ASKED_TO_DO_WORK');
   const wantsDeep = escalations.some(
     (escalation) => escalation !== 'ASKED_TO_DO_WORK' && escalation !== 'COMPLEXITY',
@@ -217,7 +234,7 @@ export function decideLane(signals: TurnSignals): LaneDecision {
         ? `This one is taking longer because ${ESCALATION_WORDS[escalations[0]!]}.`
         : 'This one is going through the slower path because the quick one is not available.';
 
-  return { lane, escalations, explanation };
+  return { lane, escalations, explanation, destination: declared ? destinationFor(declared) : null };
 }
 
 /**
