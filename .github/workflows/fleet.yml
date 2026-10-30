@@ -227,19 +227,7 @@ jobs:
           python3 - <<'PY'
           text = open('fleet.txt', encoding='utf-8', errors='replace').read()
           enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-          chunks = [text[i:i + 6000] for i in range(0, len(text), 6000)][:10]
-          for n, chunk in enumerate(chunks, 1):
-              print(f'::notice title=fleet {n}/{len(chunks)}::{enc(chunk)}')
-          PY
-
-      - name: Publish the output as annotations
-        if: always()
-        run: |
-          [ -f fleet.txt ] || exit 0
-          python3 - <<'PY'
-          text = open('fleet.txt', encoding='utf-8', errors='replace').read()
-          enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-          chunks = [text[i:i + 6000] for i in range(0, len(text), 6000)][:10]
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][:10]
           for n, chunk in enumerate(chunks, 1):
               print(f'::notice title=fleet {n}/{len(chunks)}::{enc(chunk)}')
           PY
