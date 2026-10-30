@@ -18,8 +18,22 @@
 import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { insertFeedItems, pullState, recordFeedPull } from '../../repos/feeds.ts';
+import type { SourceRow } from './sources.ts';
 
 export const SITE_SOURCE = 'broken-site';
+
+/** The sweep as a registry row: same behaviour, described as data. Each metro is a `params` entry. */
+export const SITE_SWEEP_ROW: SourceRow = {
+  id: SITE_SOURCE,
+  label: 'OpenStreetMap businesses with a broken website',
+  kind: 'OSM_OVERPASS',
+  url: 'https://overpass-api.de/api/interpreter',
+  params: Object.fromEntries(['phoenix', 'dallas', 'atlanta', 'tampa', 'denver', 'charlotte', 'nashville', 'austin', 'houston', 'orlando', 'las-vegas', 'san-antonio'].map((m) => [m, 'metro'])),
+  intervalHours: 7 * 24,
+  spacingMs: 30 * 60_000,
+  robots: { status: 'ALLOWED_PUBLIC_API', checkedAt: '2026-10-30', note: 'Overpass public API, spaced thirty minutes; each metro mapped weekly' },
+  ownerProjectId: null,
+};
 
 /** Metro areas to look in, as bounding boxes [south, west, north, east]. No state names: a lead line must name none. */
 export const METROS: readonly { id: string; city: string; bbox: [number, number, number, number] }[] = [
