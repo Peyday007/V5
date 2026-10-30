@@ -24,7 +24,9 @@ import { getDb } from '../server/db/database.ts';
 import { admitQueued, queueObjective } from '../server/services/factory/line.ts';
 import { setAdmissionPolicy } from '../server/repos/factoryLine.ts';
 import { unitKeysOfBin } from '../server/services/factory/remote.ts';
-import { tickRemoteCampaign } from '../server/services/factory/remoteLoop.ts';
+import { HOLD_ESCALATION_MS, tickRemoteCampaign } from '../server/services/factory/remoteLoop.ts';
+import { listFactoryEvents } from '../server/repos/factoryFleet.ts';
+import { FACTORY_EVENT_KINDS } from '../server/services/factory/metrics.ts';
 
 const REPO = 'https://github.com/Peyday007/oakwood-junk-removal';
 const BASE = 'a'.repeat(40);
@@ -195,5 +197,52 @@ describe('the tick defers only the colliding unit', () => {
     await promoteReadyUnits(mine);
     await tickRemoteCampaign(mine);
     expect(await unitBinKeys(mine)).toEqual(['alone']);
+  });
+});
+
+describe('a hold that lasts is an escalation, not only a note', () => {
+  const heldRows = (campaignId: string, kind: string) => listFactoryEvents(campaignId, { kinds: [kind], limit: 100 });
+
+  it('records when the wait began once, and escalates once past the bound, naming the holder and its state', async () => {
+    const other = await campaignFor((await objective(['**'])).id);
+    const otherUnit = await unit(other, 'theirs', ['src/shared.ts']);
+    await promoteReadyUnits(other);
+    await setState(otherUnit, 'IMPLEMENTED');
+    // The holding campaign cannot move by itself.
+    await getDb().run(`UPDATE factory_campaigns SET state = 'BLOCKED' WHERE id = ?`, [other]);
+
+    const mine = await campaignFor((await objective(['**'])).id);
+    await unit(mine, 'collides', ['src/shared.ts']);
+    await promoteReadyUnits(mine);
+
+    const first = await tickRemoteCampaign(mine);
+    await tickRemoteCampaign(mine);
+    expect(await heldRows(mine, FACTORY_EVENT_KINDS.unitHeldByOtherCampaign)).toHaveLength(1);
+    expect(await heldRows(mine, FACTORY_EVENT_KINDS.unitHoldEscalated)).toHaveLength(0);
+    expect(first.notes.join('\n')).not.toContain('nothing releases it');
+
+    // The wait began longer ago than the bound.
+    await getDb().run(
+      `UPDATE factory_events SET at = ? WHERE campaign_id = ? AND kind = ?`,
+      [new Date(Date.now() - HOLD_ESCALATION_MS - 60_000).toISOString(), mine, FACTORY_EVENT_KINDS.unitHeldByOtherCampaign],
+    );
+    const escalated = await tickRemoteCampaign(mine);
+    const text = escalated.notes.join('\n');
+    expect(text).toContain(`collides waits for theirs of campaign ${other} (campaign BLOCKED)`);
+    expect(text).toContain('nothing releases it by itself');
+    const rows = await heldRows(mine, FACTORY_EVENT_KINDS.unitHoldEscalated);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.detail).toMatchObject({ holderCampaignId: other, holderCampaignState: 'BLOCKED', holderUnitKey: 'theirs' });
+
+    // Asked again, it is still said but the escalation is not written twice.
+    const again = await tickRemoteCampaign(mine);
+    expect(again.notes.join('\n')).toContain('nothing releases it by itself');
+    expect(await heldRows(mine, FACTORY_EVENT_KINDS.unitHoldEscalated)).toHaveLength(1);
+    expect(await unitBinKeys(mine)).toEqual([]);
+
+    // Nothing was released by time: only the holder finishing frees the unit.
+    await setState(otherUnit, 'INTEGRATED');
+    await tickRemoteCampaign(mine);
+    expect(await unitBinKeys(mine)).toEqual(['collides']);
   });
 });
