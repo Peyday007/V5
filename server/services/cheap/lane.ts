@@ -98,6 +98,19 @@ export interface LeadOutput {
   reason: string;
 }
 
+/** One result of a stored search method whose code check could not settle it. */
+export interface ResultInput {
+  looksFor: string;
+  source: string;
+  title: string;
+  body: string | null;
+}
+
+export interface ResultOutput {
+  verdict: ScreenVerdict;
+  reason: string;
+}
+
 /** The closed set of tasks the lane runs. Each new one is reviewed code. */
 export const TASKS = {
   SCREEN_OPENING: {
@@ -147,6 +160,26 @@ export const TASKS = {
         `Text: ${(input.body ?? '').slice(0, 1500)}`,
         '',
         'Reply exactly: {"verdict":"KEEP|DROP|UNSURE","window":"SHORT|ONGOING|UNKNOWN","deliverable":"KIND","need":"a few words","payer":"a few words or empty","reason":"one sentence"}',
+      ].join('\n');
+    },
+  },
+  CLASSIFY_RESULT: {
+    system:
+      'You check one result a stored search method returned, against what that method looks for. ' +
+      'You only sort: a stronger analyst decides anything that matters. Answer ONLY with a JSON object.',
+    prompt(input: ResultInput): string {
+      return [
+        'Does this result show a real example of what the method looks for?',
+        'KEEP: yes, it plainly is one.',
+        'DROP: no, it is something else, closed, spam or unrelated.',
+        'UNSURE: you cannot tell from this text.',
+        '',
+        `Method looks for: ${input.looksFor}`,
+        `Source: ${input.source}`,
+        `Title: ${input.title}`,
+        `Text: ${(input.body ?? '').slice(0, 1500)}`,
+        '',
+        'Reply exactly: {"verdict":"KEEP|DROP|UNSURE","reason":"one sentence"}',
       ].join('\n');
     },
   },
@@ -208,6 +241,35 @@ export function parseLead(text: string): LeadOutput | null {
     payer: words('payer', 120),
     reason: words('reason', 300),
   };
+}
+
+/** Validate one result classification. Anything off-shape is refused, never repaired. */
+export function parseResult(text: string): ResultOutput | null {
+  const match = /\{[\s\S]*\}/.exec(text);
+  if (!match) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (Object.keys(record).some((key) => key !== 'verdict' && key !== 'reason')) return null;
+  const verdict = record['verdict'];
+  if (typeof verdict !== 'string' || !(SCREEN_VERDICTS as readonly string[]).includes(verdict)) return null;
+  const reason = typeof record['reason'] === 'string' ? record['reason'].slice(0, 300) : '';
+  return { verdict: verdict as ScreenVerdict, reason };
+}
+
+/** Agreement keeps the verdict; disagreement is UNSURE. */
+export function combineResults(answers: (ResultOutput | null)[]): ResultOutput | null {
+  const good = answers.filter((one): one is ResultOutput => one !== null);
+  if (good.length === 0) return null;
+  if (good.length === 1) return good[0]!;
+  const [a, b] = good as [ResultOutput, ResultOutput];
+  if (a.verdict === b.verdict) return a;
+  return { verdict: 'UNSURE', reason: 'The two models disagreed.' };
 }
 
 /**
@@ -403,6 +465,14 @@ export async function screenLead(
   return runTask('SCREEN_LEAD', subjectId, input, (one) => TASKS.SCREEN_LEAD.prompt(one), parseLead, combineLeads, options);
 }
 
+/** Classify one uncertain search result. Null means "no signal", never DROP. */
+export async function classifyResult(
+  subjectId: string,
+  input: ResultInput,
+  options: LaneOptions = {},
+): Promise<ResultOutput | null> {
+  return runTask('CLASSIFY_RESULT', subjectId, input, (one) => TASKS.CLASSIFY_RESULT.prompt(one), parseResult, combineResults, options);
+}
 
 /** The latest screen of each subject, for a reader ordering work. */
 export async function latestScreens(subjectIds: string[]): Promise<Map<string, ScreenOutput>> {
