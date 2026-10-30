@@ -161,3 +161,65 @@ export async function feedReading(now: Date = new Date()): Promise<FeedReading> 
   }
   return { items: Number(total?.n ?? 0), today: Number(today?.n ?? 0), shortlisted: Number(listed?.n ?? 0), bySource };
 }
+
+// ---------------------------------------------------------------------------
+// Change history and cross-source links. Additive: nothing above reads these.
+// ---------------------------------------------------------------------------
+import type { ChangeKind } from '../domain/collect.ts';
+
+export interface ItemVersion {
+  id: string;
+  itemId: string;
+  changeKind: ChangeKind;
+  field: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  contentHash: string | null;
+  observedAt: string;
+}
+
+/** Append one observed change to an item's history. History is never rewritten. */
+export async function recordItemVersion(input: {
+  itemId: string;
+  changeKind: ChangeKind;
+  field?: string | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+  contentHash?: string | null;
+}): Promise<void> {
+  await getDb().run(
+    `INSERT INTO feed_item_versions (id, item_id, change_kind, field, old_value, new_value, content_hash, observed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [newId('fiv'), input.itemId, input.changeKind, input.field ?? null, input.oldValue ?? null,
+      input.newValue ?? null, input.contentHash ?? null, nowIso()],
+  );
+}
+
+export async function itemVersions(itemId: string): Promise<ItemVersion[]> {
+  const rows = await getDb().all<{
+    id: string; item_id: string; change_kind: string; field: string | null; old_value: string | null;
+    new_value: string | null; content_hash: string | null; observed_at: string;
+  }>('SELECT * FROM feed_item_versions WHERE item_id = ? ORDER BY observed_at, id', [itemId]);
+  return rows.map((r) => ({
+    id: r.id, itemId: r.item_id, changeKind: r.change_kind as ChangeKind, field: r.field, oldValue: r.old_value,
+    newValue: r.new_value, contentHash: r.content_hash, observedAt: r.observed_at,
+  }));
+}
+
+/** Say that one stored item was delivered by this source too. Idempotent; a repeat only moves last-seen. */
+export async function linkItemSource(itemId: string, source: string, externalId: string): Promise<void> {
+  const at = nowIso();
+  await getDb().run(
+    `INSERT INTO feed_item_sources (item_id, source, external_id, first_seen_at, last_seen_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (item_id, source, external_id) DO UPDATE SET last_seen_at = excluded.last_seen_at`,
+    [itemId, source, externalId, at, at],
+  );
+}
+
+export async function itemSources(itemId: string): Promise<{ source: string; externalId: string }[]> {
+  const rows = await getDb().all<{ source: string; external_id: string }>(
+    'SELECT source, external_id FROM feed_item_sources WHERE item_id = ? ORDER BY source, external_id', [itemId],
+  );
+  return rows.map((r) => ({ source: r.source, externalId: r.external_id }));
+}
