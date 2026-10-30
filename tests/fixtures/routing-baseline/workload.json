@@ -1,0 +1,77 @@
+{
+ "label": "routing-baseline-v1",
+ "items": [
+  {
+   "id": "b1",
+   "source": "remoteok",
+   "title": "Data Analyst",
+   "organization": "Acme Inc",
+   "daysAgo": 1,
+   "body": ""
+  },
+  {
+   "id": "b2",
+   "source": "remotive",
+   "title": "Analytics Engineer",
+   "organization": "ACME",
+   "daysAgo": 5,
+   "body": ""
+  },
+  {
+   "id": "b3",
+   "source": "remoteok",
+   "title": "BI Developer",
+   "organization": "Acme",
+   "daysAgo": 9,
+   "body": ""
+  },
+  {
+   "id": "b4",
+   "source": "remoteok",
+   "title": "Data Analyst",
+   "organization": "Other Co",
+   "daysAgo": 2,
+   "body": ""
+  },
+  {
+   "id": "b5",
+   "source": "reddit",
+   "title": "Need a spreadsheet cleaned up before our audit next week",
+   "organization": "Birch Dental",
+   "daysAgo": 3,
+   "body": "We must hand our auditor a clean spreadsheet by Friday."
+  },
+  {
+   "id": "b6",
+   "source": "reddit",
+   "title": "Looking for a roommate in Austin",
+   "organization": null,
+   "daysAgo": 2,
+   "body": "Personal post."
+  },
+  {
+   "id": "b7",
+   "source": "reddit",
+   "title": "Website down for our bakery, need fix",
+   "organization": "Corner Bakery",
+   "daysAgo": 1,
+   "body": "Our site shows an error and orders stopped."
+  },
+  {
+   "id": "b8",
+   "source": "remoteok",
+   "title": "Senior Plumber needed on site",
+   "organization": "Pipe Co",
+   "daysAgo": 4,
+   "body": ""
+  },
+  {
+   "id": "b9",
+   "source": "reddit",
+   "title": "Old post about invoices",
+   "organization": "Gamma LLC",
+   "daysAgo": 60,
+   "body": "Stale."
+  }
+ ]
+}
