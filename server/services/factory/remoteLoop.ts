@@ -35,6 +35,7 @@ import type {
   FactoryCampaign,
   FactoryCampaignState,
   FactoryChangeRequest,
+  FactoryWorkUnit,
 } from '../../domain/factory.ts';
 import {
   chargeAndReopenUnit,
@@ -47,6 +48,7 @@ import {
   getChangeRequest,
   listLiveCampaigns,
   listUnits,
+  pathsOverlap,
   patchCampaign,
   promoteReadyUnits,
   releaseCampaignTick,
@@ -1836,14 +1838,26 @@ async function runRemoteTick(
       if (stall) return await blockStage(fresh, 'implementation', stall, report);
     }
     let created = 0;
+    let deferred = 0;
     for (const unit of uncovered) {
+      const clash = await conflictingUnitElsewhere(fresh, changeRequest.repository, unit);
+      if (clash) {
+        deferred += 1;
+        report.notes.push(
+          `${unit.unitKey} deferred: its files overlap unit ${clash.unitKey} of campaign ${clash.campaignId}`,
+        );
+        continue;
+      }
       const bin = await createUnitsBin(fresh, changeRequest, [unit]);
       if (!bin) continue;
       created += 1;
       report.created.push(`units:${bin.id}`);
       await noteBin(fresh, bin, `${unit.unitKey} ready`);
     }
-    const withFleet = `${ready.length} unit(s) with the fleet`;
+    const withFleet =
+      deferred > 0
+        ? `${ready.length - deferred} unit(s) with the fleet; ${deferred} deferred behind another campaign's files`
+        : `${ready.length} unit(s) with the fleet`;
     if (created > 0) {
       report.progress = true;
       report.notes.push(`${created} unit bin(s) created; ${ready.length} unit(s) with the fleet`);
@@ -2269,6 +2283,43 @@ async function runRemoteTick(
     report.stage = 'reviewed and confirmed by the forge';
   }
   return report;
+}
+
+/**
+ * The unit of another live campaign, in this repository, that a ready unit's
+ * files collide with, if any.
+ *
+ * Two campaigns branch from the same base, so a unit that edits a file another
+ * campaign's unit is editing right now produces a second pull request that
+ * arrives conflicted. What holds a file is a unit with a worker (LEASED), one
+ * whose work is not yet on the campaign branch (IMPLEMENTED), or a READY one a
+ * live bin already carries. It lives in the tick, so a directly approved
+ * campaign gets it as well as a queued one; and it defers one unit, never its
+ * independent siblings.
+ */
+async function conflictingUnitElsewhere(
+  campaign: FactoryCampaign,
+  repository: string,
+  unit: FactoryWorkUnit,
+): Promise<{ campaignId: string; unitKey: string } | null> {
+  for (const other of await listLiveCampaigns()) {
+    if (other.id === campaign.id) continue;
+    const request = await getChangeRequest(other.changeRequestId);
+    if (!request || request.repository !== repository) continue;
+    const otherUnits = await listUnits(other.id);
+    let carried: Set<string> | null = null;
+    for (const held of otherUnits) {
+      let holds = held.state === 'LEASED' || held.state === 'IMPLEMENTED';
+      if (!holds && held.state === 'READY') {
+        carried ??= liveUnitKeys(await campaignBins(other.id));
+        holds = carried.has(held.unitKey);
+      }
+      if (holds && pathsOverlap(unit.ownedPaths, held.ownedPaths)) {
+        return { campaignId: other.id, unitKey: held.unitKey };
+      }
+    }
+  }
+  return null;
 }
 
 async function noteBin(campaign: FactoryCampaign, bin: Bin, why: string): Promise<void> {
