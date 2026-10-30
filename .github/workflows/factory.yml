@@ -158,10 +158,11 @@ jobs:
           # that some operators' sandboxes cannot reach, while annotations are
           # served by the ordinary REST API — so an operator who can dispatch
           # this workflow can also read the change request and campaign ids it
-          # printed. Ids, counts and verdict lines only; nothing here is secret,
+          # printed. It is the run log's own text, which a public repository already
+          # shows to anyone; nothing here is secret,
           # and `%`, CR and LF are escaped the way the runner requires.
           if [ -s factory.txt ]; then
-            summary=$(grep -E 'fcr_|fcp_|prj_|wki_|bin_|^FACTORY|^created|^already|^approved|^campaign|^base |^note:|[Rr]efus|[Ee]rror' factory.txt | head -80 \
+            summary=$(grep -v '^[[:space:]]*$' factory.txt | head -120 \
               | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | awk 'BEGIN{ORS="%0A"} {print}')
             if [ -n "$summary" ]; then echo "::notice title=factory ${FACTORY_COMMAND}::${summary}"; fi
           fi
