@@ -19,6 +19,10 @@ import {
 import { reopenConditionFor, type CashDecision, type DecisionVerdict } from '../../domain/cashDecisions.ts';
 import { screenOpportunity, type ScreenFacts, type ScreenLimits } from './screen.ts';
 import { nowIso } from '../../repos/util.ts';
+import { getOpportunity, listOpportunities } from '../../repos/cashPortfolio.ts';
+import { getWorkstream, listWorkstreams } from '../../repos/register.ts';
+import { readTarget } from '../goals/target.ts';
+import { screenFactsFor } from './worthResearching.ts';
 
 /** States a person chose. Nothing here decides over them. */
 const PERSON_STATES: ReadonlySet<string> = new Set(['ARCHIVED', 'DECLINED']);
@@ -159,4 +163,80 @@ export function standingDecision(decisions: readonly CashDecision[]): CashDecisi
   if (current.length === 0) return null;
   if (current.every((one) => one.verdict === 'REJECT')) return current[0]!;
   return current.find((one) => one.verdict === 'PRIORITIZE') ?? current.find((one) => one.verdict === 'HOLD') ?? current[0]!;
+}
+
+
+/** Openings nobody has taken yet: the ones a decision is about. Committed work is never decided over. */
+const DECIDABLE_STATES = ['DISCOVERED', 'EVIDENCE_CARD', 'READY'] as const;
+
+async function limitsOfGoal(goalId: string, now: string): Promise<ScreenLimits | null> {
+  const goal = await getWorkstream(goalId);
+  if (!goal || !goal.target) return null;
+  const reading = await readTarget(goal, new Date(now));
+  if (!reading || reading.achieved) return null;
+  return {
+    metric: reading.metric,
+    daysLeft: reading.daysLeft,
+    capitalCeilingCents: reading.capitalCeilingCents,
+    capitalBeforeProofCents: reading.capitalBeforeProofCents,
+  };
+}
+
+export interface DecisionPass {
+  goals: number;
+  recorded: number;
+  unchanged: number;
+  recomputed: number;
+  released: number;
+  deferred: number;
+}
+
+/**
+ * The producer: for every live goal with a target, decide every untaken
+ * opening under its limits, then recompute whatever a reconsideration flagged.
+ * Derived from rows each pass; a pair is decided once per distinct change, so a
+ * pass over an unchanged project records nothing. Never touches committed
+ * work or a person's own archive or decline.
+ */
+export async function runDecisionPass(projectId: string, options: { now?: string } = {}): Promise<DecisionPass> {
+  const now = options.now ?? nowIso();
+  const out: DecisionPass = { goals: 0, recorded: 0, unchanged: 0, recomputed: 0, released: 0, deferred: 0 };
+  const openings = await listOpportunities({ projectId, states: [...DECIDABLE_STATES] });
+  for (const goal of await listWorkstreams({ projectIds: [projectId] })) {
+    if (goal.projectId !== projectId || !goal.target) continue;
+    const limits = await limitsOfGoal(goal.id, now);
+    if (!limits) continue;
+    out.goals += 1;
+    const changeRef = limitsChangeRef(goal.id, limits);
+    for (const opening of openings) {
+      const result = await decideOpportunity({
+        projectId,
+        opportunityId: opening.id,
+        goalId: goal.id,
+        facts: screenFactsFor(opening),
+        limits,
+        changeRef,
+        evidenceIds: opening.sourceClaimId ? [opening.sourceClaimId] : [],
+        now,
+      });
+      if (result.status === 'RECORDED') out.recorded += 1;
+      else out.unchanged += 1;
+    }
+  }
+  const flagged = await recomputeFlaggedDecisions(
+    projectId,
+    {
+      limitsFor: (goalId) => limitsOfGoal(goalId, now),
+      factsFor: async (opportunityId) => {
+        const opening = await getOpportunity(opportunityId);
+        if (!opening) return null;
+        return { facts: screenFactsFor(opening), evidenceIds: opening.sourceClaimId ? [opening.sourceClaimId] : [] };
+      },
+    },
+    { now },
+  );
+  out.recomputed = flagged.recomputed;
+  out.released = flagged.released;
+  out.deferred = flagged.deferred;
+  return out;
 }

@@ -46,6 +46,7 @@
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { runDecisionPass, type DecisionPass } from './decisions.ts';
 import { reconcileCashJobs, type JobReconciliation } from './jobPipeline.ts';
 import { handOffReadyTests, type FactoryHandoffPass } from './factoryHandoff.ts';
 import { advanceJourney, type JourneyTickReport } from './journey/tick.ts';
@@ -1391,6 +1392,8 @@ export async function operate(
   factory?: FactoryHandoffPass;
   /** Qualified openings made execution jobs, and live jobs kept in step (`jobPipeline.ts`). */
   jobs?: JobReconciliation | { error: string };
+  /** The goal decisions recorded and recomputed this pass (`decisions.ts`). */
+  decisions?: DecisionPass | { error: string };
   /** What changed and who it reconsidered (`reconsider.ts`); absent when Cash Mode is not active. */
   reconsideration?:
     | Omit<ReconsiderPass, 'readings'>
@@ -1535,6 +1538,17 @@ export async function operate(
     jobs = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
   }
   /*
+   * The decision record: REJECT / HOLD / PRIORITIZE for every untaken opening
+   * under each live goal's own limits, and whatever a reconsideration flagged
+   * for recompute. Its own failure domain; it gates nothing by itself.
+   */
+  let decisions: DecisionPass | { error: string };
+  try {
+    decisions = await runDecisionPass(projectId, now ? { now } : {});
+  } catch (error) {
+    decisions = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+  }
+  /*
    * And the possibility ledger, last, reading everything the passes above
    * wrote.
    *
@@ -1598,6 +1612,7 @@ export async function operate(
     journey,
     factory,
     jobs,
+    decisions,
   };
 }
 
