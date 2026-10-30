@@ -569,8 +569,20 @@ export function routeBin(input: RoutingInput): RoutingResult {
   // The fleet target is a ceiling on concurrent activations, not on queued
   // work. Reaching it is an ordinary state: the bins stay, and the next tick
   // after something finishes will route them.
+  //
+  // **Factory work is not held behind it.** The operator's ceiling (policy v5,
+  // 2026-10: target 1, "save Claude capacity for factory build, free lane takes
+  // bulk work, Claude only sporadic") exists to keep bulk research off the paid
+  // subscriptions *so that* the factory has them — and as one fleet-wide number
+  // it held the factory itself to a single activation: four live campaigns, each
+  // with its next unit READY and `FLEET_TARGET_REACHED` on every dispatch. A
+  // FACTORY bin is therefore bounded by what bounds a surface — its Routine and
+  // account targets, a provider's retry window, its delivery standing — and by
+  // nothing else here, while every other family still counts every activation
+  // (factory ones included) against the ceiling, so research cannot spend what
+  // the factory is using.
   const fleetTarget = fleetPolicy ? effective(fleetPolicy, now) : null;
-  if (fleetTarget !== null && fleetInFlight >= fleetTarget) {
+  if (fleetTarget !== null && fleetInFlight >= fleetTarget && familyOf(bin) !== 'FACTORY') {
     return {
       ok: false,
       refusal: 'FLEET_TARGET_REACHED',

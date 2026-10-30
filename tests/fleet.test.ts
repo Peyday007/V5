@@ -354,6 +354,34 @@ describe('routing chooses on fleet state, and says why when it will not', () => 
     expect(result.refusal).toBe('FLEET_TARGET_REACHED');
   });
 
+  it('does not hold factory work behind the fleet-wide ceiling, and still holds everything else', () => {
+    // Policy v5 in production: target 1 to keep bulk research off the paid
+    // subscriptions so the factory has them. One activation in flight must not
+    // stop a factory bin; it must still stop a research bin.
+    const policy = { version: 5, target: 1, paused: false, boostTarget: null, boostUntil: null, exploreCeiling: null, exploreUntil: null, actor: 'op' } as never;
+    const research = routeBin({
+      bin: binLike({ workloadClass: 'RESEARCH_FRAGMENT' } as Partial<Bin>),
+      candidates: [candidate({}, {})], fleetPolicy: policy, fleetInFlight: 1, now: NOW,
+    });
+    expect(research.ok).toBe(false);
+    if (research.ok) throw new Error('unreachable');
+    expect(research.refusal).toBe('FLEET_TARGET_REACHED');
+
+    const factory = routeBin({
+      bin: binLike({ workloadClass: 'FACTORY_UNIT' } as Partial<Bin>),
+      candidates: [candidate({}, {})], fleetPolicy: policy, fleetInFlight: 1, now: NOW,
+    });
+    expect(factory.ok).toBe(true);
+
+    // A surface's own limits still bind factory work.
+    const full = routeBin({
+      bin: binLike({ workloadClass: 'FACTORY_UNIT' } as Partial<Bin>),
+      candidates: [candidate({}, {}, { routineInFlight: 2, routineTarget: 2 })],
+      fleetPolicy: policy, fleetInFlight: 3, now: NOW,
+    });
+    expect(full.ok).toBe(false);
+  });
+
   it('separates account headroom from Routine headroom', () => {
     // The distinction the whole step turns on: a Routine with room on an
     // account that has none must not be chosen.
