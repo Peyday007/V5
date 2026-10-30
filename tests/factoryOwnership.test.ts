@@ -727,6 +727,17 @@ describe('a path written from inside a package', () => {
     expect((ownership as { ownedPaths: string[] }).ownedPaths).toContain('server/repos/cashDecisions.ts');
   });
 
+  it('also resolves against a scope glob when no unit names the file exactly', () => {
+    const finding = {
+      findingKey: 'g', category: 'unwired-mechanism', severity: 'BLOCKER',
+      statement: 'recordDecision in repos/cashDecisions.ts has no caller.', evidence: '',
+    } as unknown as FactoryFinding;
+    const globUnits = [{ unitKey: 'd', kind: 'IMPLEMENTATION', state: 'INTEGRATED', ownedPaths: ['server/repos/cash*.ts'] }];
+    const ownership = ownershipForRepair(finding, scope, globUnits as never);
+    expect(ownership).toMatchObject({ ok: true });
+    expect((ownership as { ownedPaths: string[] }).ownedPaths).toContain('server/repos/cashDecisions.ts');
+  });
+
   it('leaves an ambiguous tail as written, so it still asks a person', () => {
     const finding = {
       findingKey: 'y', category: 'correctness', severity: 'BLOCKER',

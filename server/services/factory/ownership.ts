@@ -675,10 +675,32 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
       ...input.mutationScope,
     ].filter(isConcrete)),
   ];
+  // The leading directories of every glob a unit owns or the scope grants, so
+  // `repos/x.ts` can also resolve against `server/repos/cash*.ts`.
+  const globDirs = [
+    ...new Set(
+      [...input.units.flatMap((unit) => unit.ownedPaths), ...input.mutationScope]
+        .filter((glob) => !isConcrete(glob))
+        .flatMap((glob) => {
+          const segments = glob.split('/');
+          const fixed: string[] = [];
+          for (const segment of segments.slice(0, -1)) {
+            if (!isConcrete(segment)) break;
+            fixed.push(segment);
+          }
+          return fixed.map((_, i) => `${fixed.slice(0, i + 1).join('/')}/`);
+        }),
+    ),
+  ];
   const canonical = (path: string): string => {
     if (knownPaths.includes(path)) return path;
-    const tails = knownPaths.filter((known) => known.endsWith(`/${path}`));
-    return tails.length === 1 ? tails[0]! : path;
+    if (input.mutationScope.some((glob) => matchesGlob(path, glob))) return path;
+    const candidates = new Set(knownPaths.filter((known) => known.endsWith(`/${path}`)));
+    for (const dir of globDirs) {
+      const candidate = `${dir}${path}`;
+      if (input.mutationScope.some((glob) => matchesGlob(candidate, glob))) candidates.add(candidate);
+    }
+    return candidates.size === 1 ? [...candidates][0]! : path;
   };
   const evidenceFiles = [...new Set(named.filter(isConcrete).map(canonical))];
 
