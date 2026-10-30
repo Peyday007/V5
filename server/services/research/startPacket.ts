@@ -54,6 +54,8 @@ import { listMembershipsForProject } from '../../repos/identity.ts';
 import { workType } from '../queue/workTypes.ts';
 import { advancePacket, refusedByBudget, type AdvanceResult } from './packetRunner.ts';
 import { getApprovalEnvelope } from './approvalEnvelope.ts';
+import { decideReuse } from '../routing/reuse/reuse.ts';
+import { sharedClaimsForProject } from '../knowledge/shared.ts';
 
 /**
  * How much research this goal is authorized to consume.
@@ -592,9 +594,43 @@ export async function placePlan(
     coverage.decisions.map((decision) => [decision.fragmentKey, decision.requirementId]),
   );
 
+  // Reuse before research: a fragment whose requirement the archive already
+  // answers from claims that are still inside their freshness window is not
+  // created. Stale or partly stale answers are not reused, so the part that is
+  // missing or old is exactly the part that is researched. Reads are scoped to
+  // this project (plus the shared pool, which is validated findings only), and
+  // a read that fails costs a duplicate fragment, never a wrongly skipped one.
+  const reused = new Set<string>();
+  try {
+    const claims = [
+      ...(await inventoryProject(orchestration.projectId)).claims,
+      ...(await sharedClaimsForProject(orchestration.projectId)),
+    ];
+    const now = new Date().toISOString();
+    for (const decision of coverage.decisions) {
+      const verdict = decideReuse({
+        status: decision.status,
+        needsResearch: decision.needsResearch,
+        claimIds: decision.claimIds,
+        claims,
+        now,
+      });
+      if (verdict.verdict === 'REUSE') reused.add(decision.fragmentKey);
+    }
+  } catch {
+    reused.clear();
+  }
+  if (!(reused.size > 0 && reused.size < plan.length)) {
+    // Never reuse the whole plan away: a packet with no fragment has nothing to
+    // audit, so an entirely answered plan keeps its fragments and the coverage
+    // record beside them says why they were not needed.
+    reused.clear();
+  }
+  const toCreate = plan.filter((fragment) => !reused.has(fragment.fragmentKey));
+
   try {
     return await createFragments(
-      plan.map((fragment, index) => {
+      toCreate.map((fragment, index) => {
         const requirementId = requirementByKey.get(fragment.fragmentKey);
         return {
           ...fragment,
