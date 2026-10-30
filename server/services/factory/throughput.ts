@@ -28,7 +28,9 @@
  */
 import { getCampaign } from '../../repos/factory.ts';
 import type { FactoryEvidenceClass } from '../../domain/factory.ts';
-import { campaignMetrics, type CampaignMetrics } from './metrics.ts';
+import { campaignBinFacts, campaignMetrics, FACTORY_EVENT_KINDS, maxOverlap, type BinFact, type CampaignMetrics } from './metrics.ts';
+import { listFactoryEvents } from '../../repos/factoryFleet.ts';
+import type { FactoryEvent } from '../../domain/factory.ts';
 
 export interface EvidenceNumber {
   value: number | null;
@@ -94,6 +96,91 @@ export interface ThroughputReport {
   perWorker: ThroughputBreakdownEntry[];
   perRole: ThroughputBreakdownEntry[];
   perAccountRef: ThroughputBreakdownEntry[];
+  /** Where the campaign's time went, stage by stage. Every figure is null when its rows do not exist. */
+  stages: StageLatency;
+}
+
+export interface QueueDelay {
+  average: EvidenceNumber;
+  max: EvidenceNumber;
+  samples: number;
+}
+
+export interface StageLatency {
+  planDurationMs: EvidenceNumber;
+  timeToFirstCodingMs: EvidenceNumber;
+  /** Per bin kind: READY to first lease. */
+  queueDelayByKind: Record<string, QueueDelay>;
+  integrationDelayMs: EvidenceNumber;
+  reviewDelayMs: EvidenceNumber;
+  concurrentUnitBinsMax: EvidenceNumber;
+  unitsPerHour: EvidenceNumber;
+  completionMs: EvidenceNumber;
+}
+
+export interface StageInput {
+  campaignId: string;
+  campaignCreatedAt: string | null;
+  /** The campaign's terminal instant, when it has one. */
+  completedAt: string | null;
+  bins: BinFact[];
+  events: Pick<FactoryEvent, 'kind' | 'at'>[];
+  integratedUnits: number;
+  now: Date;
+}
+
+const NOT_MEASURED = 'not measured';
+const missing = (why: string): EvidenceNumber => ({ value: null, evidence: 'UNKNOWN', basis: `${NOT_MEASURED}: ${why}` });
+const gap = (from: string | null, to: string | null): number | null => {
+  if (!from || !to) return null;
+  const v = Date.parse(to) - Date.parse(from);
+  return Number.isFinite(v) && v >= 0 ? v : null;
+};
+const measured = (v: number | null, basis: string, why: string, evidence: FactoryEvidenceClass = 'MEASURED'): EvidenceNumber =>
+  v === null ? missing(why) : { value: v, evidence, basis };
+
+/** Pure: the stage block from recorded bins and events. */
+export function computeStages(input: StageInput): StageLatency {
+  const id = input.campaignId;
+  const firstEvent = (kind: string) => input.events.filter((e) => e.kind === kind).map((e) => e.at).sort()[0] ?? null;
+  const byKind = (kind: string) => input.bins.filter((b) => b.kind === kind);
+  const earliest = (xs: (string | null)[]) => xs.filter((x): x is string => !!x).sort()[0] ?? null;
+  const latest = (xs: (string | null)[]) => xs.filter((x): x is string => !!x).sort().at(-1) ?? null;
+
+  const planBin = byKind('FACTORY_PLAN')[0] ?? null;
+  const planDuration = gap(planBin?.createdAt ?? null, firstEvent(FACTORY_EVENT_KINDS.planInstalled));
+  const firstCoding = gap(input.campaignCreatedAt, earliest(byKind('FACTORY_UNITS').map((b) => b.firstLeaseAt)));
+
+  const queueDelayByKind: Record<string, QueueDelay> = {};
+  for (const kind of [...new Set(input.bins.map((b) => b.kind))].sort()) {
+    const delays = byKind(kind).map((b) => gap(b.readyAt, b.firstLeaseAt)).filter((d): d is number => d !== null);
+    const basis = `bin_events BIN_READY to first BIN_ASSIGNED/BIN_TAKEOVER, ${kind} bins of campaign ${id}`;
+    const why = `no ${kind} bin of campaign ${id} has both a BIN_READY and a lease event`;
+    queueDelayByKind[kind] = {
+      samples: delays.length,
+      average: delays.length ? { value: Math.round(delays.reduce((a, b) => a + b, 0) / delays.length), evidence: 'DERIVED', basis } : missing(why),
+      max: delays.length ? { value: Math.max(...delays), evidence: 'MEASURED', basis } : missing(why),
+    };
+  }
+
+  const integrationDelay = gap(firstEvent(FACTORY_EVENT_KINDS.unitImplemented), earliest(byKind('FACTORY_INTEGRATE').map((b) => b.firstLeaseAt)));
+  const reviewDelay = gap(latest(byKind('FACTORY_INTEGRATE').map((b) => b.lastEndAt)), earliest(byKind('FACTORY_REVIEW').map((b) => b.firstLeaseAt)));
+
+  const now = input.now.getTime();
+  const holds = byKind('FACTORY_UNITS').flatMap((b) => b.holds).map((h) => ({ start: Date.parse(h.start), end: h.end ? Date.parse(h.end) : now }));
+  const span = gap(input.campaignCreatedAt, input.completedAt ?? input.now.toISOString());
+  const rate = span !== null && span > 0 && input.integratedUnits > 0 ? Math.round((input.integratedUnits / (span / 3_600_000)) * 100) / 100 : null;
+
+  return {
+    planDurationMs: measured(planDuration, `plan bin created to first PLAN_INSTALLED event, campaign ${id}`, `campaign ${id} has no plan bin or no PLAN_INSTALLED event`),
+    timeToFirstCodingMs: measured(firstCoding, `campaign created to the first FACTORY_UNITS bin's first lease, campaign ${id}`, `campaign ${id} has no FACTORY_UNITS bin that was ever leased`),
+    queueDelayByKind,
+    integrationDelayMs: measured(integrationDelay, `first UNIT_IMPLEMENTED to the first FACTORY_INTEGRATE lease, campaign ${id}`, `campaign ${id} has no UNIT_IMPLEMENTED event or no leased integrate bin`),
+    reviewDelayMs: measured(reviewDelay, `last FACTORY_INTEGRATE hold end to the first FACTORY_REVIEW lease, campaign ${id}`, `campaign ${id} has no finished integrate bin or no leased review bin`),
+    concurrentUnitBinsMax: holds.length ? { value: maxOverlap(holds), evidence: 'MEASURED', basis: `peak overlap of FACTORY_UNITS bin lease intervals in bin_events, campaign ${id}` } : missing(`no FACTORY_UNITS bin of campaign ${id} was ever leased`),
+    unitsPerHour: rate === null ? missing(`campaign ${id} has no integrated unit or no elapsed time`) : { value: rate, evidence: 'DERIVED', basis: `${input.integratedUnits} integrated unit(s) over campaign ${id}'s creation-to-${input.completedAt ? 'completion' : 'now'} span` },
+    completionMs: input.completedAt ? measured(gap(input.campaignCreatedAt, input.completedAt), `campaign ${id} created to completed`, 'no creation time') : missing(`campaign ${id} has not completed`),
+  };
 }
 
 function num(value: number | null, evidence: FactoryEvidenceClass, basis: string): EvidenceNumber {
@@ -445,7 +532,7 @@ function perAccountRefBreakdown(metrics: CampaignMetrics): ThroughputBreakdownEn
  * read a declared target from. `throughputReport` fills it in afterward, purely
  * for display — never for a calculation.
  */
-export function computeThroughput(metrics: CampaignMetrics): ThroughputReport {
+export function computeThroughput(metrics: CampaignMetrics, stages?: StageLatency): ThroughputReport {
   const observed = observedConcurrency(metrics);
   return {
     campaignId: metrics.campaignId,
@@ -477,6 +564,7 @@ export function computeThroughput(metrics: CampaignMetrics): ThroughputReport {
     perWorker: perWorkerBreakdown(metrics),
     perRole: perRoleBreakdown(metrics),
     perAccountRef: perAccountRefBreakdown(metrics),
+    stages: stages ?? computeStages({ campaignId: metrics.campaignId, campaignCreatedAt: null, completedAt: null, bins: [], events: [], integratedUnits: 0, now: new Date(0) }),
   };
 }
 
@@ -489,8 +577,18 @@ export function computeThroughput(metrics: CampaignMetrics): ThroughputReport {
  */
 export async function throughputReport(campaignId: string): Promise<ThroughputReport> {
   const metrics = await campaignMetrics(campaignId);
-  const report = computeThroughput(metrics);
   const campaign = await getCampaign(campaignId);
+  const [bins, events] = await Promise.all([campaignBinFacts(campaignId), listFactoryEvents(campaignId, { limit: 5000 })]);
+  const stages = computeStages({
+    campaignId,
+    campaignCreatedAt: campaign?.createdAt ?? null,
+    completedAt: campaign?.state === 'COMPLETE' ? campaign.finishedAt : null,
+    bins,
+    events,
+    integratedUnits: metrics.units.integrated,
+    now: new Date(),
+  });
+  const report = computeThroughput(metrics, stages);
   if (!campaign) return report;
   return {
     ...report,
