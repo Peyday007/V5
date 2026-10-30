@@ -19,6 +19,8 @@ import {
 import { reopenConditionFor, type CashDecision, type DecisionVerdict } from '../../domain/cashDecisions.ts';
 import { screenOpportunity, type ScreenFacts, type ScreenLimits } from './screen.ts';
 import { nowIso } from '../../repos/util.ts';
+import { getOpportunity, listOpportunities } from '../../repos/cashPortfolio.ts';
+import { liveGoalLimits, screenFactsFor } from './worthResearching.ts';
 
 /** States a person chose. Nothing here decides over them. */
 const PERSON_STATES: ReadonlySet<string> = new Set(['ARCHIVED', 'DECLINED']);
@@ -159,4 +161,90 @@ export function standingDecision(decisions: readonly CashDecision[]): CashDecisi
   if (current.length === 0) return null;
   if (current.every((one) => one.verdict === 'REJECT')) return current[0]!;
   return current.find((one) => one.verdict === 'PRIORITIZE') ?? current.find((one) => one.verdict === 'HOLD') ?? current[0]!;
+}
+
+
+/** Openings the screen still has a say over: not yet worked, not decided by a person. */
+const DECIDABLE_STATES = ['DISCOVERED', 'EVIDENCE_CARD', 'READY'] as const;
+
+/** A ref for what the opening's own row establishes, so new facts are a distinct change. */
+export function factsChangeRef(facts: ScreenFacts): string {
+  return createHash('sha256').update(JSON.stringify(facts)).digest('hex').slice(0, 16);
+}
+
+export interface DecideOpeningsPass {
+  goals: number;
+  considered: number;
+  recorded: number;
+  unchanged: number;
+  byVerdict: Record<DecisionVerdict, number>;
+  recompute: { recomputed: number; released: number; deferred: number };
+}
+
+/**
+ * The producer: every decidable opening, under every live goal with a target,
+ * gets one current REJECT / HOLD / PRIORITIZE from the deterministic screen.
+ *
+ * Run on each Cash Mode tick. Idempotent: the change ref is the goal's limits
+ * plus the opening's own facts, so an unchanged pair is a no-op and a changed
+ * limit or a new fact is decided again. Then whatever `reconsider.ts` flagged
+ * is recomputed from the same two readers. Code only; no model is asked.
+ */
+export async function decideOpenings(
+  projectId: string,
+  options: { now?: string; limit?: number } = {},
+): Promise<DecideOpeningsPass> {
+  const now = options.now ?? nowIso();
+  const out: DecideOpeningsPass = {
+    goals: 0,
+    considered: 0,
+    recorded: 0,
+    unchanged: 0,
+    byVerdict: { REJECT: 0, HOLD: 0, PRIORITIZE: 0 },
+    recompute: { recomputed: 0, released: 0, deferred: 0 },
+  };
+  const goals = await liveGoalLimits(projectId, now);
+  out.goals = goals.length;
+  if (goals.length > 0) {
+    const limit = options.limit ?? 500;
+    const openings = await listOpportunities({ projectId, states: [...DECIDABLE_STATES] });
+    for (const opening of openings) {
+      if (out.considered >= limit) break;
+      const facts = screenFactsFor(opening);
+      const factsRef = factsChangeRef(facts);
+      for (const goal of goals) {
+        out.considered += 1;
+        const result = await decideOpportunity({
+          projectId,
+          opportunityId: opening.id,
+          goalId: goal.goalId,
+          facts,
+          limits: goal.limits,
+          changeRef: `${limitsChangeRef(goal.goalId, goal.limits)}|F:${factsRef}`,
+          ...(opening.sourceClaimId ? { evidenceIds: [opening.sourceClaimId] } : {}),
+          now,
+        });
+        if (result.status === 'RECORDED') {
+          out.recorded += 1;
+          out.byVerdict[result.decision.verdict] += 1;
+        } else {
+          out.unchanged += 1;
+        }
+      }
+    }
+  }
+  const limitsByGoal = new Map(goals.map((one) => [one.goalId, one.limits]));
+  out.recompute = await recomputeFlaggedDecisions(
+    projectId,
+    {
+      limitsFor: async (goalId) => limitsByGoal.get(goalId) ?? null,
+      factsFor: async (opportunityId) => {
+        const opening = await getOpportunity(opportunityId);
+        if (!opening) return null;
+        return { facts: screenFactsFor(opening), ...(opening.sourceClaimId ? { evidenceIds: [opening.sourceClaimId] } : {}) };
+      },
+    },
+    { now },
+  );
+  return out;
 }

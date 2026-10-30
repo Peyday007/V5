@@ -134,21 +134,29 @@ export function screenFactsFor(opportunity: CashOpportunity): ScreenFacts {
   };
 }
 
-/** The limits of every live goal in the project that has a target, read from the goal itself. */
-export async function goalLimitsFor(projectId: string, now: string): Promise<ScreenLimits[]> {
-  const out: ScreenLimits[] = [];
+/** Every live goal in the project that has a target, with its limits read from the goal itself. */
+export async function liveGoalLimits(projectId: string, now: string): Promise<Array<{ goalId: string; limits: ScreenLimits }>> {
+  const out: Array<{ goalId: string; limits: ScreenLimits }> = [];
   for (const goal of await listWorkstreams({ projectIds: [projectId] })) {
     if (goal.projectId !== projectId || !goal.target) continue;
     const reading = await readTarget(goal, new Date(now));
     if (!reading || reading.achieved) continue;
     out.push({
-      metric: reading.metric,
-      daysLeft: reading.daysLeft,
-      capitalCeilingCents: reading.capitalCeilingCents,
-      capitalBeforeProofCents: reading.capitalBeforeProofCents,
+      goalId: goal.id,
+      limits: {
+        metric: reading.metric,
+        daysLeft: reading.daysLeft,
+        capitalCeilingCents: reading.capitalCeilingCents,
+        capitalBeforeProofCents: reading.capitalBeforeProofCents,
+      },
     });
   }
   return out;
+}
+
+/** The limits of every live goal in the project that has a target, read from the goal itself. */
+export async function goalLimitsFor(projectId: string, now: string): Promise<ScreenLimits[]> {
+  return (await liveGoalLimits(projectId, now)).map((one) => one.limits);
 }
 
 /**

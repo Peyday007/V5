@@ -111,6 +111,7 @@ import {
 } from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
+import { decideOpenings, type DecideOpeningsPass } from './decisions.ts';
 import { describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
 import { orderFieldsByCost } from './infoValue.ts';
 import { recordQuestionsSkipped } from './screenMetrics.ts';
@@ -1396,6 +1397,8 @@ export async function operate(
     | Omit<ReconsiderPass, 'readings'>
     | { error: string }
     | null;
+  /** One current REJECT / HOLD / PRIORITIZE per opening per goal, from the code screen (`decisions.ts`). */
+  decisions?: DecideOpeningsPass | { error: string };
   /** Reopen watches recorded on derived dead ends, and standing changes written. */
   standing?: { derived: DerivedCondition[]; changes: StandingChange[] } | { error: string } | { skipped: string };
 }> {
@@ -1459,6 +1462,17 @@ export async function operate(
   );
   const research = await applyResearchAnswers(projectId);
   const proposed = await proposeCommercialTerms(projectId);
+  /*
+   * Decide every opening under every live goal before research is withdrawn or
+   * launched, so the record a person reads is the one the gate acted on. Its
+   * own failure domain: a decision pass that throws must not stop the rest.
+   */
+  let decisions: DecideOpeningsPass | { error: string };
+  try {
+    decisions = await decideOpenings(projectId, now ? { now } : {});
+  } catch (error) {
+    decisions = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+  }
   const withdrawnResearch = await withdrawResearchNotWorthIt(projectId);
   const gaps = [...(await reconcileDiscoverableGaps(projectId)), ...(await reconcileEngineGaps(projectId))];
   const continuations = await runNeedContinuations(projectId, now);
@@ -1586,6 +1600,7 @@ export async function operate(
     capabilities,
     gaps,
     withdrawnResearch,
+    decisions,
     research,
     proposed,
     continuations,
