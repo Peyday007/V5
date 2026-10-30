@@ -709,3 +709,31 @@ describe('the re-review’s findings, pinned', () => {
     expect(source.slice(at, at + 1200)).toMatch(/block\(report, campaign, 'CONTRADICTORY_CONTRACT'/);
   });
 });
+
+describe('a path written from inside a package', () => {
+  const units = [
+    { unitKey: 'decision', kind: 'IMPLEMENTATION', state: 'INTEGRATED', ownedPaths: ['server/repos/cashDecisions.ts', 'server/services/cash/decisions.ts'] },
+  ];
+  const scope = { mutationScope: ['server/repos/cash*.ts', 'server/services/cash/*.ts'] } as unknown as FactoryChangeRequest;
+
+  it('resolves to the one campaign path it is the tail of, rather than blocking on an amendment', () => {
+    // Production, fcp_0b8d9fcc, 2026-10-30: the reviewer wrote repos/cashDecisions.ts.
+    const finding = {
+      findingKey: 'decision-record-no-producer', category: 'unwired-mechanism', severity: 'BLOCKER',
+      statement: 'recordDecision in repos/cashDecisions.ts has no caller outside tests.', evidence: '',
+    } as unknown as FactoryFinding;
+    const ownership = ownershipForRepair(finding, scope, units as never);
+    expect(ownership).toMatchObject({ ok: true });
+    expect((ownership as { ownedPaths: string[] }).ownedPaths).toContain('server/repos/cashDecisions.ts');
+  });
+
+  it('leaves an ambiguous tail as written, so it still asks a person', () => {
+    const finding = {
+      findingKey: 'y', category: 'correctness', severity: 'BLOCKER',
+      statement: 'cash/x.ts is wrong', evidence: '',
+    } as unknown as FactoryFinding;
+    const two = [{ unitKey: 'a', kind: 'IMPLEMENTATION', state: 'INTEGRATED', ownedPaths: ['server/cash/x.ts', 'client/cash/x.ts'] }];
+    const ownership = ownershipForRepair(finding, { mutationScope: ['server/**', 'client/**'] } as unknown as FactoryChangeRequest, two as never);
+    expect(ownership).toMatchObject({ ok: false, reason: 'REQUIRED_FILE_NOT_WRITABLE', outsideScope: ['cash/x.ts'] });
+  });
+});
