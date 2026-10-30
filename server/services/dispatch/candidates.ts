@@ -471,6 +471,12 @@ export interface FleetSnapshot {
   candidates: RoutingCandidate[];
   fleetPolicy: FleetPolicy | null;
   fleetInFlight: number;
+  /**
+   * Of `fleetInFlight`, the activations on repository surfaces — the Software
+   * Factory's. The fleet target bounds everything else; Factory work is
+   * bounded by its own surfaces' Routine and account targets (see `routeBin`).
+   */
+  factoryInFlight: number;
   /** Routines registered but skipped because their secret is not deployed. */
   missingSecrets: { routineId: string; secretName: string }[];
 }
@@ -515,7 +521,18 @@ export interface FleetSnapshot {
  *      claimable work everywhere else in this codebase (§19); a session whose
  *      lease Brain has already written off is not occupying a slot.
  *
- *   4. **The fire is recent**, which is `IN_FLIGHT_WINDOW_MS` and was already
+ *   4. **The bin was not handed back after this fire.** A bin is fired at
+ *      generation g; taking it advances the generation and releasing it
+ *      advances it again, back to READY. So a READY bin whose generation is past
+ *      its newest fire's was taken and given back — the session that fire
+ *      started has had its turn. It held the slot for the rest of the window
+ *      anyway, and on 2026-10-30 that was the dominant refusal in the fleet:
+ *      12,398 fires withheld for `FLEET_TARGET_REACHED` in 24 hours while ready
+ *      work waited, the "in flight" sessions largely ones that had handed their
+ *      bin back because the next audit role needs another session (§23). A
+ *      fire nobody answered keeps its generation and is still counted.
+ *
+ *   5. **The fire is recent**, which is `IN_FLIGHT_WINDOW_MS` and was already
  *      here. It is the backstop for everything the first three cannot see.
  *
  * Every one of these can only *lower* the count, so the failure mode this
@@ -587,6 +604,7 @@ async function readInFlight(since: string, now: string): Promise<Map<string, num
               SELECT MAX(d2.lease_generation) FROM bin_dispatch d2
                WHERE d2.bin_id = d.bin_id AND d2.state = 'SENT')
         AND (b.state <> 'LEASED' OR b.lease_expires_at > ?)
+        AND NOT (b.state = 'READY' AND b.lease_generation > d.lease_generation)
       GROUP BY d.routine_id`,
     [since, now],
   );
@@ -748,8 +766,12 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
 
   let fleetInFlight = 0;
   for (const n of perRoutine.values()) fleetInFlight += n;
+  let factoryInFlight = 0;
+  for (const routine of routines) {
+    if (routine.capabilities.includes('repository')) factoryInFlight += perRoutine.get(routine.id) ?? 0;
+  }
 
-  return { candidates, fleetPolicy, fleetInFlight, missingSecrets };
+  return { candidates, fleetPolicy, fleetInFlight, factoryInFlight, missingSecrets };
 }
 
 /**

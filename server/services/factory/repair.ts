@@ -491,6 +491,32 @@ export async function reconcileRepairs(campaignId: string): Promise<{
 }
 
 /**
+ * Repair units whose failure does not stand in the way of finishing.
+ *
+ * A review that PASSes still queues repairs for its MINOR findings, and those
+ * repairs are ordinary units with ordinary attempts. When one retires FAILED the
+ * campaign used to stop at `UNIT_EXHAUSTED_ATTEMPTS` for ever — production,
+ * fcp_0d2f161801a94944a18d, 2026-10-30: review PASS, five of six units
+ * integrated, and a MINOR repair whose worker reported three times, correctly,
+ * that making the finding untrue would break the contract's own acceptance
+ * condition. Nothing could answer it short of retiring the campaign.
+ *
+ * A failed repair of a **non-gating** finding is therefore set aside rather than
+ * blocking: the finding stays OPEN — it is not repaired and is never reported as
+ * repaired — so the pull request lists it as a remaining limitation and a
+ * person reads it there. A gating finding's failed repair still blocks, exactly
+ * as before.
+ */
+export async function nonGatingFailedRepairIds(campaignId: string): Promise<Set<string>> {
+  const findings = await listOpenFindings(campaignId);
+  return new Set(
+    findings
+      .filter((finding) => finding.repairUnitId !== null && !GATING_SEVERITIES.has(finding.severity))
+      .map((finding) => finding.repairUnitId as string),
+  );
+}
+
+/**
  * Findings that still stand in the way of finishing.
  *
  * Read from rows rather than from the last review's verdict, because a review is

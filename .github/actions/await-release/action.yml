@@ -1,7 +1,7 @@
 name: Wait for a release to finish
 description: >
-  Hold a console command until no Deploy run is building or restarting the
-  Brain. Read the long comment in this file before changing it — it is the
+  Hold a console command while a Deploy run is replacing or restarting the
+  Brain's machine — a few minutes, never the whole hour-long run. Read the long comment in this file before changing it — it is the
   other half of a concurrency design, and removing it silently re-creates the
   defect the group split was made to fix.
 
@@ -12,7 +12,7 @@ inputs:
       not disable administration for ever, so this is a bound rather than a
       lock.
     required: false
-    default: '1500'
+    default: '900'
   poll-seconds:
     description: How often to re-ask.
     required: false
@@ -72,14 +72,54 @@ runs:
         # group gave, and failing closed on a permission change would disable
         # every operator command at once.
 
+        # ------------------------------------------------------------------
+        # Only the minutes that replace the machine
+        # ------------------------------------------------------------------
+        #
+        # This waited for the whole Deploy run, and a Deploy run is about an
+        # hour: twenty minutes of tests before anything touches the machine and
+        # two forty-minute hosted verifications after it, against a Brain that
+        # is up and serving the whole time. So every console command sat for
+        # the full 25-minute bound whenever a deploy was anywhere in flight —
+        # measured on 2026-10-30 at 25 minutes per `factory status`, with
+        # deploys landing back to back — while the machine was actually being
+        # replaced for about three of those minutes.
+        #
+        # A command is held now only while a Deploy run is inside one of the
+        # steps that replace or restart the machine (the `MACHINE_STEPS`
+        # pattern), or is between steps inside its "Deploy to Fly" job, which
+        # lasts seconds. Tests, pre-flight and both hosted verifications do
+        # not hold anything: the Brain those verifications talk to is the same
+        # Brain this command talks to. The fail-open bound and the warnings
+        # are unchanged, and the command's own ssh session still fails loudly
+        # if a restart interrupts it.
+
+        export MACHINE_STEPS='^(Deploy|What the Brain said when it started|Wait for it to answer|Restart it, so persistence means something|Wait for it to answer after the restart)$'
+
+        machine_busy() {
+          runs=$(gh api \
+                  "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?per_page=20" \
+                  --jq '.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "waiting") | .id' \
+                2>/dev/null) || return 2
+          count=0
+          for run in $runs; do
+            n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run}/jobs?filter=latest&per_page=50" \
+                  --jq '[.jobs[]
+                    | select(.status == "in_progress")
+                    | select(
+                        ([.steps[]? | select(.status == "in_progress") | .name | test($ENV.MACHINE_STEPS)] | any)
+                        or (.name == "Deploy to Fly" and ([.steps[]? | select(.status == "in_progress")] | length) == 0)
+                      )] | length' 2>/dev/null) || return 2
+            count=$(( count + n ))
+          done
+          echo "$count"
+        }
+
         deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
         waited=0
 
         while :; do
-          busy=$(gh api \
-                  "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?per_page=20" \
-                  --jq '[.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "waiting")] | length' \
-                2>/dev/null) || busy=""
+          busy=$(machine_busy) || busy=""
 
           if [ -z "$busy" ]; then
             echo "::warning::Could not read the Actions API to see whether a release is running, so this command is not waiting for one. If a deploy is in flight, the ssh session below will fail rather than report half a Brain."
@@ -88,19 +128,19 @@ runs:
 
           if [ "$busy" = "0" ]; then
             if [ "$waited" -gt 0 ]; then
-              echo "No release in flight after waiting ${waited}s. Proceeding."
+              echo "No release is replacing the machine after waiting ${waited}s. Proceeding."
             else
-              echo "No release in flight. Proceeding."
+              echo "No release is replacing the machine. Proceeding."
             fi
             exit 0
           fi
 
           if [ "$(date +%s)" -ge "$deadline" ]; then
-            echo "::warning::A Deploy run has been in flight for longer than ${TIMEOUT_SECONDS}s. Running anyway rather than leaving the Brain unadministrable — if that deploy restarts the machine mid-command, this run fails loudly rather than reporting half a Brain."
+            echo "::warning::A Deploy run has been replacing the machine for longer than ${TIMEOUT_SECONDS}s. Running anyway rather than leaving the Brain unadministrable — if that deploy restarts the machine mid-command, this run fails loudly rather than reporting half a Brain."
             exit 0
           fi
 
-          echo "$busy Deploy run(s) in flight; waiting ${POLL_SECONDS}s (waited ${waited}s so far)."
+          echo "$busy Deploy job(s) replacing the machine; waiting ${POLL_SECONDS}s (waited ${waited}s so far)."
           sleep "$POLL_SECONDS"
           waited=$(( waited + POLL_SECONDS ))
         done

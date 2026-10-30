@@ -47,3 +47,17 @@ jobs:
             2>&1 | tee connection-report.txt
           set -e
           grep -q '^CONNECTION-REPORT: OK' connection-report.txt
+
+      # Logs live on storage some sessions cannot reach; annotations come
+      # through the GitHub API itself.
+      - name: Publish the output as annotations
+        if: always()
+        run: |
+          [ -f connection-report.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('connection-report.txt', encoding='utf-8', errors='replace').read()
+          enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          chunks = [text[i:i + 6000] for i in range(0, len(text), 6000)][:10]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=connection-report {n}/{len(chunks)}::{enc(chunk)}')
+          PY
