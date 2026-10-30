@@ -216,3 +216,18 @@ jobs:
           # The verdict comes from a line the command printed, not from an exit
           # code that had to survive an SSH session, a shell and a CLI.
           grep -q '^FLEET: OK' fleet.txt
+
+      # Logs live on storage some sessions cannot reach; annotations come
+      # through the GitHub API itself. Nothing printed here is a secret: `fleet`
+      # prints secret *names* and digests' presence, never a value.
+      - name: Publish the output as annotations
+        if: always()
+        run: |
+          [ -f fleet.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('fleet.txt', encoding='utf-8', errors='replace').read()
+          enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          chunks = [text[i:i + 6000] for i in range(0, len(text), 6000)][:10]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=fleet {n}/{len(chunks)}::{enc(chunk)}')
+          PY
