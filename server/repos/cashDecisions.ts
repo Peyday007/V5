@@ -100,6 +100,15 @@ export async function currentDecisionsForGoal(projectId: string, goalId: string)
 }
 
 /** Counts of current decisions by verdict, for the measurement report. */
+/** Every current decision in a project, across its goals, for a reader that wants them all at once. */
+export async function currentDecisionsForProject(projectId: string): Promise<CashDecision[]> {
+  const rows = await getDb().all<Row>(
+    'SELECT * FROM cash_decisions WHERE project_id = ? AND is_current = 1 ORDER BY decided_at, id',
+    [projectId],
+  );
+  return rows.map(map);
+}
+
 export async function decisionCounts(projectId: string, goalId: string): Promise<Record<DecisionVerdict, number>> {
   const rows = await getDb().all<{ verdict: DecisionVerdict; n: number | string }>(
     `SELECT verdict, COUNT(*) AS n FROM cash_decisions

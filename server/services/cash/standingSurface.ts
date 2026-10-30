@@ -44,6 +44,9 @@ import { evidenceCard } from './card.ts';
 import { cashOutcomeLessons, measuredByMechanism } from './journey/learning.ts';
 import type { DiveRefusal } from './validation.ts';
 import { goalCompareFor } from './rankGoal.ts';
+import { reopenConditionFor, type CashDecision } from '../../domain/cashDecisions.ts';
+import { currentDecisionsForProject } from '../../repos/cashDecisions.ts';
+import { standingDecision } from './decisions.ts';
 
 /** How many history rows per piece travel with the page. The total is reported beside them. */
 export const HISTORY_SHOWN = 8;
@@ -650,9 +653,88 @@ export interface ExplainInput {
   keys: readonly string[];
   hasSourceClaim: boolean;
   reconsiderationRequested?: boolean;
+  /**
+   * The current row of the decision record for this piece, when there is one.
+   * It is then the single source of the stance, the reason, the binding limit,
+   * what is missing and what would reopen it - the standing kind only says
+   * where the piece is, and a person's own archive or decline still speaks for
+   * itself. Without one the explanation comes from the standing alone.
+   */
+  decision?: CashDecision | null;
+  /** The owner's reading may quote the decision's own sentence; a member's never does. */
+  privateDetail?: boolean;
+}
+
+/** What each reason the screen gives means, with no figure in it. */
+const REASON_WORDS: Readonly<Record<string, string>> = Object.freeze({
+  EXPIRED: 'Its closing date has passed.',
+  DUPLICATE: 'It is a second record of another opening.',
+  EXCLUDED_REQUIREMENT: 'It needs something this operation has ruled out.',
+  NOT_ELIGIBLE: 'It needs something this operation does not have.',
+  CAPITAL_TOO_HIGH: 'It needs more capital than the goal allows.',
+  PAID_TOO_LATE: 'It would pay after the goal\'s deadline, so it cannot count.',
+  NO_CAPITAL_ROUTE_TO_CONFIRM: 'It needs capital, but a route that needs none is named and not yet confirmed.',
+  MISSING_FACTS: 'Facts it depends on are not established yet.',
+  ELIGIBILITY_UNKNOWN: 'What it requires cannot be checked until the operation records what it can do.',
+  STALE_SOURCE: 'Its source has not been read recently enough to rely on.',
+  UNFAMILIAR_TYPE: 'Brain has no history with this kind of opportunity, so it is investigated rather than judged.',
+  CLEAR: 'Nothing known rules it out under the goal.',
+});
+
+/** Whether a person put the piece away: their decision is never replaced by a recorded one. */
+const isPersonsDecision = (input: ExplainInput): boolean =>
+  input.kind === 'NOT_WORTH_PURSUING' && (input.cause === 'ARCHIVED' || input.cause === 'DECLINED');
+
+function explainFromDecision(input: ExplainInput, decision: CashDecision, evidence: string[]): DecisionExplanation {
+  const why = REASON_WORDS[decision.reason] ?? 'The goal\'s screen decided it.';
+  const reason = input.privateDetail && decision.detail ? `${why} (${decision.detail})` : why;
+  const limit = decision.bindingConstraint
+    ? input.privateDetail
+      ? `The limit that binds is ${decision.bindingConstraint}.`
+      : 'A limit of the goal binds.'
+    : decision.verdict === 'REJECT'
+      ? 'No single goal limit is named; the reason above decided it.'
+      : 'No goal limit is binding it.';
+  const supported = decision.evidenceIds.length > 0
+    ? [...evidence, 'The decision rests on rows that are recorded and can be read back.']
+    : evidence;
+  const reopen = decision.reopenCondition || reopenConditionFor(decision.reason);
+  switch (decision.verdict) {
+    case 'REJECT':
+      return {
+        stance: 'REJECTED',
+        headline: 'Rejected under the goal\'s own limits.',
+        reason, bindingLimit: limit, missing: [], reopenWhen: [reopen], evidence: supported,
+        furtherResearch: 'None; no answer to a research question could change this, so none is spent.',
+      };
+    case 'HOLD':
+      return {
+        stance: 'HELD',
+        headline: 'Held: a named fact is missing.',
+        reason, bindingLimit: limit, missing: [...decision.missingFacts], reopenWhen: [reopen], evidence: supported,
+        furtherResearch: decision.missingFacts.length > 0
+          ? 'One narrow factual question would settle it, asked of published sources only; it costs fleet time, not money.'
+          : 'It is investigated rather than judged; the question is asked of published sources only and costs fleet time, not money.',
+      };
+    case 'PRIORITIZE':
+      return {
+        stance: 'PRIORITIZED',
+        headline: 'Prioritized: nothing known rules it out under the goal.',
+        reason, bindingLimit: limit, missing: [], reopenWhen: [reopen], evidence: supported,
+        furtherResearch: 'Any research it needs is Brain\'s own work on the subscription already paid for; it spends no money.',
+      };
+  }
 }
 
 export function explainStanding(input: ExplainInput): DecisionExplanation {
+  const decided = !isPersonsDecision(input) && input.kind !== 'DONE' ? input.decision ?? null : null;
+  if (decided) {
+    return explainFromDecision(input, decided, [
+      input.hasSourceClaim
+        ? 'The opening came from a sourced claim that is recorded with its passage.'
+        : 'No sourced claim is recorded for this opening.',
+    ]);
+  }
   const words = input.keys.map(keyInWords);
   const evidence = [
     input.hasSourceClaim
@@ -732,15 +814,27 @@ export function explainStanding(input: ExplainInput): DecisionExplanation {
 }
 
 /** Explanations for every piece whose standing is told, keyed by opportunity id. */
-function explanationsFor(
+async function explanationsFor(
+  projectId: string,
   opportunities: readonly CashOpportunity[],
-  read: (opportunity: CashOpportunity) => Omit<ExplainInput, 'hasSourceClaim'> | null,
-): Record<string, DecisionExplanation> {
+  privateDetail: boolean,
+  read: (opportunity: CashOpportunity) => Omit<ExplainInput, 'hasSourceClaim' | 'decision' | 'privateDetail'> | null,
+): Promise<Record<string, DecisionExplanation>> {
+  // The decision record is the one reader of what was decided; the standing says where the piece is.
+  const byPiece = new Map<string, CashDecision[]>();
+  for (const decision of await currentDecisionsForProject(projectId)) {
+    byPiece.set(decision.opportunityId, [...(byPiece.get(decision.opportunityId) ?? []), decision]);
+  }
   const out: Record<string, DecisionExplanation> = {};
   for (const opportunity of opportunities) {
     const input = read(opportunity);
     if (!input) continue;
-    out[opportunity.id] = explainStanding({ ...input, hasSourceClaim: Boolean(opportunity.sourceClaimId) });
+    out[opportunity.id] = explainStanding({
+      ...input,
+      hasSourceClaim: Boolean(opportunity.sourceClaimId),
+      decision: standingDecision(byPiece.get(opportunity.id) ?? []),
+      privateDetail,
+    });
   }
   return out;
 }
@@ -812,7 +906,7 @@ export async function sharedStandingSurface(input: {
       withhold: withholdIds,
     }),
     refinement: researchProgress(input.rows),
-    explanations: explanationsFor(input.opportunities, (opportunity) => {
+    explanations: await explanationsFor(input.projectId, input.opportunities, false, (opportunity) => {
       const shared = input.shared.get(opportunity.id);
       if (!shared || shared.withheld || shared.kind === null) return null;
       return { kind: shared.kind, cause: shared.cause, keys: shared.keys };
@@ -872,7 +966,7 @@ export async function ownerStandingSurface(input: {
     reopenConditions,
     reconsider,
     actionablePageSize: ACTIONABLE_PAGE_SIZE,
-    explanations: explanationsFor(input.opportunities, (opportunity) => {
+    explanations: await explanationsFor(input.projectId, input.opportunities, true, (opportunity) => {
       const standing = input.standings.get(opportunity.id);
       if (!standing) return null;
       return {
