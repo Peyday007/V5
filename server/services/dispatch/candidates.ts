@@ -471,6 +471,12 @@ export interface FleetSnapshot {
   candidates: RoutingCandidate[];
   fleetPolicy: FleetPolicy | null;
   fleetInFlight: number;
+  /**
+   * Of `fleetInFlight`, the activations on repository surfaces — the Software
+   * Factory's. The fleet target bounds everything else; Factory work is
+   * bounded by its own surfaces' Routine and account targets (see `routeBin`).
+   */
+  factoryInFlight: number;
   /** Routines registered but skipped because their secret is not deployed. */
   missingSecrets: { routineId: string; secretName: string }[];
 }
@@ -760,8 +766,12 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
 
   let fleetInFlight = 0;
   for (const n of perRoutine.values()) fleetInFlight += n;
+  let factoryInFlight = 0;
+  for (const routine of routines) {
+    if (routine.capabilities.includes('repository')) factoryInFlight += perRoutine.get(routine.id) ?? 0;
+  }
 
-  return { candidates, fleetPolicy, fleetInFlight, missingSecrets };
+  return { candidates, fleetPolicy, fleetInFlight, factoryInFlight, missingSecrets };
 }
 
 /**
