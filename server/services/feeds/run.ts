@@ -17,7 +17,9 @@
  * volume has nowhere to go but Claude.
  */
 import { getDb } from '../../db/database.ts';
-import { insertFeedItems, markShortlisted, pullState, recordFeedPull, unlistedFeedItems, type StoredFeedItem } from '../../repos/feeds.ts';
+import type { SourceKind as CollectSourceKind } from '../../domain/collect.ts';
+import { recordPullMetrics } from '../../repos/collectMetrics.ts';
+import { insertFeedItems, markShortlisted, pullState, unlistedFeedItems, type StoredFeedItem } from '../../repos/feeds.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { openingsWithSourceUrl } from '../../repos/cashPortfolio.ts';
 import { listRounds, openRound } from '../../repos/cashDiscovery.ts';
@@ -114,6 +116,11 @@ export const SHORTLIST_SIZE = 10;
 /** One shortlist round a day at most. */
 export const SHORTLIST_INTERVAL_MS = 20 * 3_600_000;
 
+/** The registry's kind names, as the metrics column spells them. */
+const METRIC_KIND: Record<string, CollectSourceKind> = {
+  JSON_API: 'JSON_API', RSS_ATOM: 'RSS_ATOM', CSV: 'CSV_DATASET', PAGE_WATCH: 'PAGE_WATCH', OSM_OVERPASS: 'OVERPASS',
+};
+
 export async function pullDueFeeds(input: {
   now?: Date;
   fetcher?: Fetcher;
@@ -141,16 +148,24 @@ export async function pullDueFeeds(input: {
       out.push({ source: source.id, inserted: 0, error: String(error instanceof Error ? error.message : error).slice(0, 300), outcome: 'SOURCE_UNREACHABLE', duplicates: 0 });
       continue;
     }
+    const startedAt = Date.now();
+    const method = source.row ? (METRIC_KIND[source.row.kind] ?? null) : null;
     try {
       const body = await (input.fetcher ?? httpFetcher)(source.url, source.headers ?? {}, source.timeoutMs, source.format ?? 'json');
       const parsed = source.parse(body);
       const { kept: items, duplicates } = dedupeItems(parsed);
       const inserted = await insertFeedItems(source.id, items);
-      await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at: now.toISOString() });
+      await recordPullMetrics(source.id, true, {
+        method, fetched: items.length, inserted, duplicates, relevant: null, signals: null, failureCause: null,
+        wallMs: Date.now() - startedAt, bytes: null, memoryBytes: null, cheapCalls: null, claudeJobs: null,
+      }, null, now.toISOString());
       out.push({ source: source.id, inserted, error: null, outcome: items.length === 0 ? 'NO_MATCHING_RECORDS' : 'COLLECTED', duplicates });
     } catch (error) {
       const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
-      await recordFeedPull({ source: source.id, ok: false, fetched: 0, inserted: 0, error: message, at: now.toISOString() });
+      await recordPullMetrics(source.id, false, {
+        method, fetched: 0, inserted: 0, duplicates: null, relevant: null, signals: null, failureCause: 'SOURCE_UNREACHABLE',
+        wallMs: Date.now() - startedAt, bytes: null, memoryBytes: null, cheapCalls: null, claudeJobs: null,
+      }, message, now.toISOString());
       out.push({ source: source.id, inserted: 0, error: message, outcome: 'SOURCE_UNREACHABLE', duplicates: 0 });
     }
   }

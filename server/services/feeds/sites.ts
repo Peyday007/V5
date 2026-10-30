@@ -17,7 +17,8 @@
  */
 import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
-import { insertFeedItems, pullState, recordFeedPull } from '../../repos/feeds.ts';
+import { insertFeedItems, pullState } from '../../repos/feeds.ts';
+import { recordPullMetrics } from '../../repos/collectMetrics.ts';
 import type { SourceRow } from './sources.ts';
 
 export const SITE_SOURCE = 'broken-site';
@@ -282,11 +283,17 @@ export async function mapNextMetro(input: { now?: Date; fetcher?: (url: string) 
       );
       added += result.changes ?? 0;
     }
-    await recordFeedPull({ source, ok: true, fetched: businesses.length, inserted: added, error: null, at: now.toISOString() });
+    await recordPullMetrics(source, true, {
+      method: 'OVERPASS', fetched: businesses.length, inserted: added, duplicates: businesses.length - added, relevant: null, signals: null,
+      failureCause: null, wallMs: null, bytes: null, memoryBytes: null, cheapCalls: null, claudeJobs: null,
+    }, null, now.toISOString());
     return { metro: due.metro.id, added, error: null };
   } catch (error) {
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
-    await recordFeedPull({ source, ok: false, fetched: 0, inserted: 0, error: message, at: now.toISOString() });
+    await recordPullMetrics(source, false, {
+      method: 'OVERPASS', fetched: 0, inserted: 0, duplicates: null, relevant: null, signals: null,
+      failureCause: 'SOURCE_UNREACHABLE', wallMs: null, bytes: null, memoryBytes: null, cheapCalls: null, claudeJobs: null,
+    }, message, now.toISOString());
     return { metro: due.metro.id, added: 0, error: message };
   }
 }
