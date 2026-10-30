@@ -81,7 +81,7 @@ jobs:
           python3 - <<'PY'
           text = open('productivity-report.txt', encoding='utf-8', errors='replace').read()
           enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-          chunks = [text[i:i + 6000] for i in range(0, len(text), 6000)][:10]
+          chunks = [text[i:i + 60000] for i in range(0, len(text), 60000)][:10]
           for n, chunk in enumerate(chunks, 1):
               print(f'::notice title=productivity-report {n}/{len(chunks)}::{enc(chunk)}')
           PY
