@@ -170,7 +170,7 @@ export async function pullDueFeeds(input: {
         },
         input.fetcher ? { maxAttempts: 3, baseMs: 1, maxMs: 1 } : undefined,
       );
-      if (!report.ok || report.failure) throw new Error(`${report.failure?.cause ?? 'UNKNOWN'}: ${report.failure?.message ?? 'fetch failed'}`);
+      if (!report.ok || report.failure) throw new Error(report.failure?.message ?? 'fetch failed');
       const parsed = source.parse(report.value);
       const { kept: items, duplicates } = dedupeItems(parsed);
       // Committed in checkpointed batches; the insert is keyed, so a redelivered batch writes nothing twice.
