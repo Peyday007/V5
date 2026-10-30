@@ -81,6 +81,15 @@ export const FACTORY_EVENT_KINDS = {
   unitImplemented: 'UNIT_IMPLEMENTED',
   unitFailed: 'UNIT_FAILED',
   unitDeferred: 'UNIT_DEFERRED',
+  /**
+   * A READY unit was not handed out because a unit of another live campaign
+   * holds files it would edit. Written once per (unit, holding unit), so its
+   * time is when the wait began. Not `UNIT_DEFERRED`: that row means a provider
+   * refused the work and refunds the attempt it cost.
+   */
+  unitHeldByOtherCampaign: 'UNIT_HELD_BY_OTHER_CAMPAIGN',
+  /** The same wait, once it has lasted past `HOLD_ESCALATION_MS`: no longer a note, a record somebody must answer. */
+  unitHoldEscalated: 'UNIT_HOLD_ESCALATED',
   unitRefused: 'UNIT_REFUSED',
   unitCancelled: 'UNIT_CANCELLED',
   sessionStarted: 'SESSION_STARTED',
