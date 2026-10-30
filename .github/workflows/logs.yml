@@ -79,8 +79,8 @@ jobs:
           # Through the environment, never interpolated into the shell.
           # `inputs` is empty on a push, so each falls back to the default the
           # dispatch form already shows.
-          LOG_SECONDS: ${{ inputs.seconds || '900' }}
-          LOG_PATTERN: ${{ inputs.pattern || 'mcp-tool-failure' }}
+          LOG_SECONDS: ${{ inputs.seconds || '120' }}
+          LOG_PATTERN: ${{ inputs.pattern || 'none' }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
 
@@ -108,7 +108,7 @@ jobs:
           esac
 
           echo "::group::Machine state"
-          flyctl status --app "$app" 2>&1 | tail -40 || true
+          flyctl status --app "$app" 2>&1 | tail -40 | tee status.txt || true
           echo "::endgroup::"
 
           # Why a machine last stopped. `flyctl logs` keeps a short buffer, so
@@ -120,7 +120,7 @@ jobs:
           # destroy, so only the whole form is allowed.
           echo "::group::Machine events (exit code, OOM)"
           for id in $(flyctl status --app "$app" --json 2>/dev/null | jq -r '.Machines[]?.id' 2>/dev/null); do
-            flyctl machine status "$id" --app "$app" --display-config=false 2>&1 | tail -30 || true
+            flyctl machine status "$id" --app "$app" --display-config=false 2>&1 | tail -60 | tee -a machine.txt || true
           done
           echo "::endgroup::"
 
@@ -177,6 +177,28 @@ jobs:
             fi
           fi
           echo "LOGS: OK app=$app seconds=$LOG_SECONDS lines=$(wc -l < all.txt)"
+
+      - name: Publish what was read as annotations
+        if: always()
+        run: |
+          python3 - <<'PYX'
+          import re
+          enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          def read(n):
+              try: return open(n, encoding='utf-8', errors='replace').read()
+              except OSError: return ''
+          out = []
+          out.append(('machine', read('machine.txt')[-6000:]))
+          out.append(('status', read('status.txt')[-3000:]))
+          logs = read('all.txt')
+          hits = [l for l in logs.splitlines() if re.search(r'quota|throttl|oom|out of memory|memory|killed|heap|exited|restart', l, re.I)]
+          out.append(('signals', '\n'.join(hits)[-6000:] or '(none)'))
+          tail = logs[-24000:]
+          for i in range(0, len(tail), 6000):
+              out.append((f'tail {i//6000+1}', tail[i:i+6000]))
+          for title, body in out[:10]:
+              print(f'::notice title={title}::{enc(body)}')
+          PYX
 
 
   # The durable record of the failure, which needs the `production` environment
