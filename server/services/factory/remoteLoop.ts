@@ -64,6 +64,7 @@ import { FactoryError } from './errors.ts';
 import {
   amendmentNeededDetail,
   gatingFindings,
+  nonGatingFailedRepairIds,
   ownershipBlockedDetail,
   queueRepairs,
   reconcileRepairs,
@@ -1985,7 +1986,8 @@ async function runRemoteTick(
    * worker keeps the campaign in flight while another has failed, because its
    * report still has to be read.
    */
-  const failedUnits = units.filter((unit) => unit.state === 'FAILED');
+  const setAside = await nonGatingFailedRepairIds(fresh.id);
+  const failedUnits = units.filter((unit) => unit.state === 'FAILED' && !setAside.has(unit.id));
   const working = outstanding.filter((unit) => unit.state !== 'BLOCKED');
   if (outstanding.length > 0 && (failedUnits.length === 0 || working.length > 0)) {
     report.notes.push(`${outstanding.length} unit(s) still in flight`);
@@ -2017,7 +2019,7 @@ async function runRemoteTick(
    * not: an amendment touches no unit, and nothing moved a FAILED unit back out,
    * so the only real way past was retiring the whole campaign.
    */
-  const failed = units.filter((unit) => unit.state === 'FAILED');
+  const failed = units.filter((unit) => unit.state === 'FAILED' && !setAside.has(unit.id));
   if (failed.length > 0) {
     await patchCampaign(fresh.id, {
       state: 'BLOCKED',
