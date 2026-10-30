@@ -31,7 +31,15 @@ import type {
   FactoryRiskClass,
   FactoryWorkUnit,
 } from '../../domain/factory.ts';
-import { ensureUnit, getUnit, listDependencies, listUnits, promoteReadyUnits } from '../../repos/factory.ts';
+import {
+  ensureUnit,
+  getUnit,
+  listDependencies,
+  listUnits,
+  promoteReadyUnits,
+  regrantUnitAttempts,
+  widenUnitOwnership,
+} from '../../repos/factory.ts';
 import {
   attachRepair,
   listFactoryEvents,
@@ -41,7 +49,9 @@ import {
   resolveFinding,
 } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
-import { forbiddenPathsFor } from './forbidden.ts';
+import { forbiddenPathsFor, ownershipReachesForbidden } from './forbidden.ts';
+import { matchesGlob } from './glob.ts';
+import { MAX_UNIT_ATTEMPTS } from './regrant.ts';
 import {
   graphFromRows,
   pathsNamedIn as namedIn,
@@ -344,6 +354,80 @@ export async function queueRepairs(
 
   await promoteReadyUnits(campaign.id);
   return result;
+}
+
+/** How many more attempts a widened repair gets. */
+export const WIDENED_REPAIR_ATTEMPTS = 3;
+
+/**
+ * A repair that ran out of attempts because it did not own the files it had to
+ * change, put back once with those files.
+ *
+ * The repair's ownership is derived from the finding, and for an unwired
+ * mechanism the finding names the mechanism while the fix is its caller — a
+ * file nobody named. Production, fcp_0b8d9fcc, 2026-10-30: the repair owned
+ * `server/repos/cashDecisions.ts`, spent three attempts, and each worker said
+ * exactly which files the fix needed. `factory regrant-unit --add-owned-paths`
+ * answers it, but only when a person reads the blocker; this answers it on the
+ * tick, from the worker's own words, with the same bounds.
+ *
+ * What it may add is narrow: concrete files the worker's own failure detail
+ * names, each inside the scope a person approved and none the repository
+ * forbids. So nothing here widens the contract — it moves a repair to files the
+ * contract already allows. Once per unit, recorded, held to the same validator
+ * as every other unit, with the failure history left on the row.
+ */
+export async function widenExhaustedRepairs(
+  campaign: FactoryCampaign,
+  changeRequest: FactoryChangeRequest,
+): Promise<{ unitKey: string; added: string[] }[]> {
+  const units = await listUnits(campaign.id);
+  const candidates = units.filter(
+    (unit) => unit.kind === 'REPAIR' && unit.state === 'FAILED' && unit.repairsFindingId && unit.failureDetail,
+  );
+  if (candidates.length === 0) return [];
+  const already = new Set(
+    (await listFactoryEvents(campaign.id, { kinds: [FACTORY_EVENT_KINDS.repairScopeWidened] })).map((event) =>
+      String(event.detail['unitId']),
+    ),
+  );
+  const forbiddenPaths = forbiddenPathsFor(changeRequest.repository);
+  const dependencies = await listDependencies(campaign.id);
+  const widened: { unitKey: string; added: string[] }[] = [];
+
+  for (const unit of candidates) {
+    if (already.has(unit.id)) continue;
+    const added = pathsNamedIn(unit.failureDetail ?? '').filter(
+      (path) =>
+        !unit.ownedPaths.includes(path) &&
+        changeRequest.mutationScope.some((glob) => matchesGlob(path, glob)) &&
+        ownershipReachesForbidden(path, forbiddenPaths) === null,
+    );
+    if (added.length === 0) continue;
+    const ownedPaths = [...unit.ownedPaths, ...added];
+    const verdict = validateUnitGraph(
+      [
+        ...graphFromRows(units, dependencies).filter((row) => row.key !== unit.unitKey),
+        { key: unit.unitKey, kind: 'REPAIR', ownedPaths, dependsOn: [], acceptance: [] },
+      ],
+      { mutationScope: changeRequest.mutationScope, forbiddenPaths },
+    );
+    if (verdict.issues.some((issue) => issue.fatal && issue.units.includes(unit.unitKey))) continue;
+    const maxAttempts = Math.min(MAX_UNIT_ATTEMPTS, unit.maxAttempts + WIDENED_REPAIR_ATTEMPTS);
+    if (maxAttempts <= unit.attempt) continue;
+    if (!(await widenUnitOwnership(unit.id, ownedPaths))) continue;
+    const moved = (await regrantUnitAttempts({ unitId: unit.id, maxAttempts })).raised;
+    if (!moved) continue;
+    await recordFactoryEvent({
+      campaignId: campaign.id,
+      unitId: unit.id,
+      kind: FACTORY_EVENT_KINDS.repairScopeWidened,
+      evidenceClass: 'DERIVED',
+      detail: { unitId: unit.id, unitKey: unit.unitKey, added, from: unit.maxAttempts, to: maxAttempts },
+    });
+    widened.push({ unitKey: unit.unitKey, added });
+  }
+  return widened;
 }
 
 /**

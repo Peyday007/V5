@@ -35,7 +35,8 @@ import { createUser } from '../server/repos/identity.ts';
 import { approveObjective, submitObjective } from '../server/services/factory/contract.ts';
 import { installPlan, validatePlan, type UnitSpec } from '../server/services/factory/planner.ts';
 import { checkOwnership } from '../server/services/factory/integrate.ts';
-import { ownershipForRepair, queueRepairs } from '../server/services/factory/repair.ts';
+import { ownershipForRepair, queueRepairs, widenExhaustedRepairs } from '../server/services/factory/repair.ts';
+import { getDb } from '../server/db/database.ts';
 import {
   graphFromRows,
   OWNERSHIP_REASONS,
@@ -557,6 +558,51 @@ describe('B — a repair owns where the defect must be fixed, not only where it 
       verificationFiles: ['src/impl.test.ts'],
       ownedPaths: ['src/impl.ts', 'src/impl.test.ts'],
     });
+  });
+
+  async function exhaustedRepair(changeRequest: FactoryChangeRequest, detail: string) {
+    const { campaign } = await seededCampaign(changeRequest);
+    await review(
+      campaign.id,
+      'src/impl.test.ts:3 fails: value is 1 where the change requires 2',
+      'Suggested paths: src/impl.test.ts',
+    );
+    await queueRepairs(campaign, changeRequest);
+    const repair = (await listUnits(campaign.id)).find((u) => u.kind === 'REPAIR')!;
+    await getDb().run(
+      `UPDATE factory_work_units SET state = 'FAILED', attempt = max_attempts,
+         failure_category = 'WORKER_ERROR', failure_detail = ? WHERE id = ?`,
+      [detail, repair.id],
+    );
+    return { campaign, repair };
+  }
+
+  it('is put back once with the in-scope files its worker named, and more attempts', async () => {
+    const changeRequest = await approved();
+    const { campaign, repair } = await exhaustedRepair(
+      changeRequest,
+      'The unit owns only src/impl.ts. The fix needs a caller in src/wire.ts; lib/outside.ts would help too.',
+    );
+    const widened = await widenExhaustedRepairs(campaign, changeRequest);
+    expect(widened).toEqual([{ unitKey: repair.unitKey, added: ['src/wire.ts'] }]);
+    const after = (await listUnits(campaign.id)).find((u) => u.id === repair.id)!;
+    expect(after.state).toBe('READY');
+    expect(after.ownedPaths).toContain('src/wire.ts');
+    expect(after.ownedPaths).not.toContain('lib/outside.ts');
+    expect(after.maxAttempts).toBe(repair.maxAttempts + 3);
+    expect(after.failureDetail).toContain('src/wire.ts');
+    // Once per unit, however many ticks ask.
+    await getDb().run(`UPDATE factory_work_units SET state = 'FAILED', attempt = max_attempts WHERE id = ?`, [repair.id]);
+    expect(await widenExhaustedRepairs(campaign, changeRequest)).toEqual([]);
+    const events = (await listFactoryEvents(campaign.id)).filter((e) => e.kind === 'REPAIR_SCOPE_WIDENED');
+    expect(events.length).toBe(1);
+  });
+
+  it('names nothing new, and stays failed', async () => {
+    const changeRequest = await approved();
+    const { campaign, repair } = await exhaustedRepair(changeRequest, 'The value is still wrong in src/impl.ts.');
+    expect(await widenExhaustedRepairs(campaign, changeRequest)).toEqual([]);
+    expect((await listUnits(campaign.id)).find((u) => u.id === repair.id)!.state).toBe('FAILED');
   });
 });
 
