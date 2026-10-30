@@ -30,6 +30,7 @@
  */
 import { getClaim } from '../../repos/research.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
+import { screenOpportunity, type ScreenFacts, type ScreenLimits } from './screen.ts';
 
 /**
  * Hosts whose pages are individual freelance-marketplace listings.
@@ -86,7 +87,8 @@ export function closesWithin(expiresAt: string | null, now: string, runwayMs = D
 
 export type NotWorthResearching =
   | { kind: 'MARKETPLACE_LISTING'; marketplace: string }
-  | { kind: 'CLOSES_TOO_SOON'; at: string };
+  | { kind: 'CLOSES_TOO_SOON'; at: string }
+  | { kind: 'SCREENED_OUT'; reason: string; detail: string; limit: string | null };
 
 export function describeNotWorthResearching(reason: NotWorthResearching): string {
   switch (reason.kind) {
@@ -94,17 +96,21 @@ export function describeNotWorthResearching(reason: NotWorthResearching): string
       return 'a freelance-marketplace listing — this operation takes no freelance work, so nothing a dive found could be acted on';
     case 'CLOSES_TOO_SOON':
       return `it closes ${reason.at}, sooner than a dive could finish and the first step be taken`;
+    case 'SCREENED_OUT':
+      return `${reason.detail}${reason.limit ? ` (${reason.limit})` : ''}`;
   }
 }
 
 /**
  * The first reason this opening is not worth researching now, or null.
- * Capital is not one of them: it decides whether work may begin, never
- * whether it may be researched.
+ * Capital alone is not one of them: it decides whether work may begin. It
+ * counts here only when the caller passes the goal's limits and the screen
+ * finds a known need above a stated limit with no route needing none named -
+ * and a HOLD, which is a question rather than a refusal, never stops research.
  */
 export async function notWorthResearching(
   opportunity: CashOpportunity,
-  context: { now: string },
+  context: { now: string; screen?: { facts: ScreenFacts; limits: ScreenLimits } | null },
 ): Promise<NotWorthResearching | null> {
   if (opportunity.sourceClaimId) {
     const claim = await getClaim(opportunity.sourceClaimId);
@@ -113,6 +119,14 @@ export async function notWorthResearching(
   }
   if (closesWithin(opportunity.expiresAt, context.now)) {
     return { kind: 'CLOSES_TOO_SOON', at: opportunity.expiresAt! };
+  }
+  // The goal's own limits, when the caller has them. Only a REJECT stops research:
+  // a HOLD is a question to answer, and answering it is what research is for.
+  if (context.screen) {
+    const verdict = screenOpportunity(context.screen.facts, context.screen.limits, context.now);
+    if (verdict.verdict === 'REJECT') {
+      return { kind: 'SCREENED_OUT', reason: verdict.reason, detail: verdict.detail, limit: verdict.limit };
+    }
   }
   return null;
 }
