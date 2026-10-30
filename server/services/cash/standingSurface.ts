@@ -568,6 +568,181 @@ export function reconsiderEligibility(
 }
 
 /* --------------------------------------------------------------------------
+ * The decision, in words
+ * ------------------------------------------------------------------------ */
+
+export type DecisionStance = 'PRIORITIZED' | 'HELD' | 'REJECTED' | 'DONE';
+
+/**
+ * What a person reads about one piece's standing: why, what binds it, what is
+ * missing, what would reopen it, what supports it and what more research would
+ * cost. Words only — no score, no percentage, no figure — which is also why the
+ * same explanation is safe for a member: it is composed from the kind, the cause
+ * and the blocker keys alone, never from a person's recorded sentence or a
+ * money value.
+ */
+export interface DecisionExplanation {
+  stance: DecisionStance;
+  headline: string;
+  reason: string;
+  bindingLimit: string;
+  missing: string[];
+  reopenWhen: string[];
+  evidence: string[];
+  furtherResearch: string;
+}
+
+/** A blocker key as a person would say it. */
+export function keyInWords(key: string): string {
+  if (key === 'CASH') return 'cash that can be deployed';
+  if (key === 'SLOT') return 'a free research slot';
+  if (key === 'PERSON') return 'a decision only a person can make';
+  const index = key.indexOf(':');
+  const kind = index < 0 ? key : key.slice(0, index);
+  const arg = (index < 0 ? '' : key.slice(index + 1)).replace(/[_-]+/g, ' ').toLowerCase();
+  switch (kind) {
+    case 'FIELD':
+      return `the missing fact "${arg}" on its card`;
+    case 'EVIDENCE':
+      return `evidence about ${arg}`;
+    case 'CAPABILITY':
+      return `a capability Brain does not have yet (${arg})`;
+    case 'AUTHORITY':
+      return `a standing permission (${arg})`;
+    case 'DEPENDENCY':
+      return `another opening to finish first (${arg})`;
+    case 'DATE':
+      return `a date (${arg})`;
+    case 'SOURCE_HOST':
+      return `access to a source (${arg})`;
+    case 'MANUFACTURING':
+      return `a production capability (${arg})`;
+    case 'SUPPLIER':
+      return `a supplier (${arg})`;
+    case 'COST':
+      return `a cost to settle (${arg})`;
+    case 'CUSTOMER':
+      return `a customer (${arg})`;
+    case 'REGULATION':
+      return `a regulatory question (${arg})`;
+    default:
+      return arg ? `${kind.toLowerCase()} ${arg}` : kind.toLowerCase();
+  }
+}
+
+const CAUSE_LIMIT: Record<string, string> = {
+  ARCHIVED: 'A person put it away.',
+  DECLINED: 'A person passed on it.',
+  DISQUALIFIED: 'A published fact rules it out.',
+  ROUNDS_SPENT: 'The bounded deep dives for what is known now are spent.',
+  EXPIRED: 'Its closing date has passed.',
+  WEAK_ECONOMICS: 'The economics did not hold.',
+  DUPLICATE: 'It is a second record of another opening.',
+};
+
+export interface ExplainInput {
+  kind: StandingKind;
+  cause: string | null;
+  /** Waiting-on keys (WAITING) or reopen keys (DORMANT); CASH may be present. */
+  keys: readonly string[];
+  hasSourceClaim: boolean;
+  reconsiderationRequested?: boolean;
+}
+
+export function explainStanding(input: ExplainInput): DecisionExplanation {
+  const words = input.keys.map(keyInWords);
+  const evidence = [
+    input.hasSourceClaim
+      ? 'The opening came from a sourced claim that is recorded with its passage.'
+      : 'No sourced claim is recorded for this opening.',
+  ];
+  switch (input.kind) {
+    case 'ADVANCING':
+      return {
+        stance: 'PRIORITIZED',
+        headline: 'Prioritized: something is being done about it now.',
+        reason: 'Nothing recorded stops it, so Brain is working on it.',
+        bindingLimit: 'Nothing is holding it back right now.',
+        missing: [],
+        reopenWhen: [],
+        evidence,
+        furtherResearch: 'Any research it needs is Brain\'s own work on the subscription already paid for; it spends no money.',
+      };
+    case 'WAITING': {
+      const research = input.keys.some((k) => /^(FIELD|EVIDENCE):/.test(k));
+      const capability = input.keys.some((k) => /^(CAPABILITY|MANUFACTURING|AUTHORITY):/.test(k));
+      return {
+        stance: 'HELD',
+        headline: 'Held: it waits on something named.',
+        reason: words.length > 0 ? `It cannot move until ${words.join(' and ')} is settled.` : 'It waits on something Brain has not named.',
+        bindingLimit: words.length > 0 ? `The limit that binds is ${words[0]}.` : 'No limit is recorded as binding.',
+        missing: words,
+        reopenWhen: words.map((w) => `${w} is settled`),
+        evidence,
+        furtherResearch: research
+          ? 'One narrow factual question would settle it, asked of published sources only; it costs fleet time, not money.'
+          : capability
+            ? 'Research cannot supply this; it has to be connected or granted, so no research is spent on it meanwhile.'
+            : 'No research is needed; it moves when the thing it waits on changes.',
+      };
+    }
+    case 'DORMANT': {
+      const cause = input.cause ? (CAUSE_LIMIT[input.cause] ?? input.cause.toLowerCase()) : 'It was stopped.';
+      return {
+        stance: 'HELD',
+        headline: 'Held: stopped for now, with a way back.',
+        reason: cause,
+        bindingLimit: cause,
+        missing: [],
+        reopenWhen: words.map((w) => `${w} changes`),
+        evidence,
+        furtherResearch: input.reconsiderationRequested
+          ? 'A condition named for it has changed, so it is waiting to be reconsidered; nothing more is researched until then.'
+          : 'None until a reopening condition changes; Brain does not research it in the meantime.',
+      };
+    }
+    case 'NOT_WORTH_PURSUING': {
+      const cause = input.cause ? (CAUSE_LIMIT[input.cause] ?? input.cause.toLowerCase()) : 'Nothing worth pursuing is recorded.';
+      return {
+        stance: 'REJECTED',
+        headline: 'Rejected: stopped, and nothing named would reopen it.',
+        reason: cause,
+        bindingLimit: cause,
+        missing: [],
+        reopenWhen: [],
+        evidence,
+        furtherResearch: 'None; no answer to any question would change this.',
+      };
+    }
+    case 'DONE':
+      return {
+        stance: 'DONE',
+        headline: 'Done: the money for it is in.',
+        reason: 'It was carried through and the payment is recorded.',
+        bindingLimit: 'Nothing is holding it back.',
+        missing: [],
+        reopenWhen: [],
+        evidence,
+        furtherResearch: 'None; it is finished.',
+      };
+  }
+}
+
+/** Explanations for every piece whose standing is told, keyed by opportunity id. */
+function explanationsFor(
+  opportunities: readonly CashOpportunity[],
+  read: (opportunity: CashOpportunity) => Omit<ExplainInput, 'hasSourceClaim'> | null,
+): Record<string, DecisionExplanation> {
+  const out: Record<string, DecisionExplanation> = {};
+  for (const opportunity of opportunities) {
+    const input = read(opportunity);
+    if (!input) continue;
+    out[opportunity.id] = explainStanding({ ...input, hasSourceClaim: Boolean(opportunity.sourceClaimId) });
+  }
+  return out;
+}
+
+/* --------------------------------------------------------------------------
  * The two surfaces
  * ------------------------------------------------------------------------ */
 
@@ -580,6 +755,8 @@ export interface SharedStandingSurface {
   reconsidered: ReconsideredEntry[];
   history: StandingHistory;
   refinement: ResearchProgress;
+  /** Each told piece's decision in words; a withheld piece has none. */
+  explanations: Record<string, DecisionExplanation>;
 }
 
 export function emptyByKind(): Record<StandingKind, number> {
@@ -632,6 +809,11 @@ export async function sharedStandingSurface(input: {
       withhold: withholdIds,
     }),
     refinement: researchProgress(input.rows),
+    explanations: explanationsFor(input.opportunities, (opportunity) => {
+      const shared = input.shared.get(opportunity.id);
+      if (!shared || shared.withheld || shared.kind === null) return null;
+      return { kind: shared.kind, cause: shared.cause, keys: shared.keys };
+    }),
   };
 }
 
@@ -643,6 +825,8 @@ export interface OwnerStandingSurface {
   reopenConditions: Record<string, CashReopenCondition[]>;
   reconsider: Record<string, ReconsiderEligibility>;
   actionablePageSize: number;
+  /** Each piece's decision in words: why, the binding limit, what is missing, what reopens it. */
+  explanations: Record<string, DecisionExplanation>;
 }
 
 /** The owner's reading: every piece, the recorded sentences, the conditions and the control. */
@@ -685,5 +869,19 @@ export async function ownerStandingSurface(input: {
     reopenConditions,
     reconsider,
     actionablePageSize: ACTIONABLE_PAGE_SIZE,
+    explanations: explanationsFor(input.opportunities, (opportunity) => {
+      const standing = input.standings.get(opportunity.id);
+      if (!standing) return null;
+      return {
+        kind: standing.kind,
+        cause: standing.kind === 'DORMANT' || standing.kind === 'NOT_WORTH_PURSUING' ? standing.cause : null,
+        keys: (standing.kind === 'WAITING'
+          ? standing.on
+          : standing.kind === 'DORMANT'
+            ? standing.reopenWhen
+            : []) as readonly string[],
+        reconsiderationRequested: standing.kind === 'DORMANT' && standing.reconsiderationRequested,
+      };
+    }),
   };
 }
