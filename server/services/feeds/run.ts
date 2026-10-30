@@ -30,7 +30,12 @@ import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { openingSourceKey } from '../cash/duplicates.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
 import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
-import { FEED_SOURCES, type FeedSource } from './sources.ts';
+import { GENERIC_PARSER, profileFor, seedRows, type FeedItem, type FeedSource } from './sources.ts';
+import { addCollectSource, getCheckpoint, listCollectSources, saveCheckpoint, setRobotsStatus } from '../../repos/collectSources.ts';
+import { newId } from '../../repos/util.ts';
+import { collect, type CollectorKind, type FetchedBody } from '../collect/collectors/index.ts';
+import { classifyFailure, fakeClock, HostLimiter, hostOf, systemClock, type Failure } from '../collect/runtime/index.ts';
+import type { CollectFailureCause, CollectSource, RobotsStatus, SourceKind } from '../../domain/collect.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
@@ -58,7 +63,7 @@ export const httpFetcher: Fetcher = async (url, headers, timeoutMs = 20_000) => 
  * source six hours. Pure.
  */
 export function nextPullAt(
-  source: Pick<FeedSource, 'intervalMs'>,
+  source: { intervalMs: number },
   state: { lastSuccessAt: string | null; failuresSince: number; lastFailureAt: string | null },
 ): number {
   if (state.failuresSince > 0 && state.lastFailureAt) {
@@ -108,31 +113,345 @@ export const SHORTLIST_SIZE = 10;
 /** One shortlist round a day at most. */
 export const SHORTLIST_INTERVAL_MS = 20 * 3_600_000;
 
+/** A source ready to pull, whether it came from a registry row or was handed in. */
+export interface Runnable {
+  slug: string;
+  url: string;
+  intervalMs: number;
+  headers: Record<string, string>;
+  timeoutMs?: number;
+  /** Requests per minute allowed to this source's host; null is unconstrained. */
+  hostRatePerMin: number | null;
+  /** The owning project, or null when the source is public. */
+  projectId: string | null;
+  kind: SourceKind;
+  row: { id: string; robotsStatus: RobotsStatus; pagination: string | null } | null;
+  /** A bespoke parser, or null when the shared collector for `kind` reads it. */
+  parse: ((body: unknown) => FeedItem[]) | null;
+}
+
+/** A hardcoded definition, run exactly as it always was. */
+export function runnableFromSource(source: FeedSource): Runnable {
+  return {
+    slug: source.id,
+    url: source.url,
+    intervalMs: source.intervalMs,
+    headers: source.headers ?? {},
+    timeoutMs: source.timeoutMs,
+    hostRatePerMin: source.spacingMs ? 60_000 / source.spacingMs : null,
+    projectId: null,
+    kind: 'JSON_API',
+    row: null,
+    parse: (body) => source.parse(body),
+  };
+}
+
+/** A registry row, with its parser looked up by id. Null when the row names a parser this code does not have. */
+export function runnableFromRow(row: CollectSource): Runnable | null {
+  const profile = row.parserId === GENERIC_PARSER ? null : profileFor(row.parserId);
+  if (row.parserId !== GENERIC_PARSER && !profile) return null;
+  return {
+    slug: row.slug,
+    url: row.urlTemplate,
+    intervalMs: row.intervalMs,
+    headers: profile?.headers ?? {},
+    timeoutMs: profile?.timeoutMs,
+    hostRatePerMin: row.hostRatePerMin,
+    projectId: row.projectId,
+    kind: row.kind,
+    row: { id: row.id, robotsStatus: row.robotsStatus, pagination: row.pagination },
+    parse: profile ? profile.parse : null,
+  };
+}
+
+/** Insert the hardcoded sources and the site sweep as rows, once. A row an operator changed is left alone. */
+export async function ensureSeededSources(): Promise<void> {
+  const held = new Set((await listCollectSources(null)).map((one) => one.slug));
+  for (const seed of seedRows()) {
+    if (held.has(seed.slug)) continue;
+    const row = await addCollectSource({
+      slug: seed.slug,
+      label: seed.label,
+      kind: seed.kind,
+      urlTemplate: seed.urlTemplate,
+      parserId: seed.parserId,
+      intervalMs: seed.intervalMs,
+      hostRatePerMin: seed.hostRatePerMin,
+    });
+    // These are the publishers' own programmatic interfaces, read within their stated limits.
+    if (row.robotsStatus === 'UNCHECKED') {
+      await setRobotsStatus(row.id, 'ALLOWED', 'A public programmatic interface, read at the publisher\'s stated interval.');
+    }
+  }
+}
+
+interface RegistryRow {
+  id: string; project_id: string | null; slug: string; label: string; kind: string; url_template: string;
+  pagination: string | null; parser_id: string; interval_ms: number; host_rate_per_min: number | null;
+  robots_status: string; robots_checked_at: string | null; robots_note: string | null; enabled: number;
+  created_at: string; updated_at: string;
+}
+
+/** Every enabled source of every project: collection is global, reading is not. */
+async function enabledRows(): Promise<CollectSource[]> {
+  const rows = await getDb().all<RegistryRow>('SELECT * FROM collect_sources WHERE enabled = 1 ORDER BY slug');
+  return rows.map((r) => ({
+    id: r.id, projectId: r.project_id, slug: r.slug, label: r.label, kind: r.kind as SourceKind,
+    urlTemplate: r.url_template, pagination: r.pagination, parserId: r.parser_id, intervalMs: r.interval_ms,
+    hostRatePerMin: r.host_rate_per_min, robotsStatus: r.robots_status as RobotsStatus,
+    robotsCheckedAt: r.robots_checked_at, robotsNote: r.robots_note, enabled: true,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  }));
+}
+
+/** A body as text, with the validators the next conditional request needs. Never throws on a refusal. */
+export type TextFetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<FetchedBody>;
+
+export const httpTextFetcher: TextFetcher = async (url, headers, timeoutMs = 20_000) => {
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: { 'user-agent': 'brain-feed/1.0', ...headers }, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (error) {
+    const name = error instanceof Error ? error.name : '';
+    if (name === 'TimeoutError') throw new Error(`timed out after ${timeoutMs}ms`);
+    const cause = error instanceof Error ? ((error as Error & { cause?: { code?: string } }).cause ?? null) : null;
+    throw new Error(`fetch failed${cause?.code ? ` (${cause.code})` : ''}`);
+  }
+  return {
+    status: response.status,
+    body: response.status === 304 ? '' : await response.text(),
+    etag: response.headers.get('etag'),
+    lastModified: response.headers.get('last-modified'),
+  };
+};
+
+/**
+ * Whether robots.txt lets `agent` fetch `path`. Pure. The longest matching rule
+ * wins and Allow beats Disallow on a tie, as the standard says; no rule allows.
+ */
+export function robotsAllows(robots: string, path: string, agent = 'brain-feed'): boolean {
+  const groups: { agents: string[]; rules: { allow: boolean; prefix: string }[] }[] = [];
+  let current: (typeof groups)[number] | null = null;
+  let lastWasAgent = false;
+  for (const raw of robots.split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, '').trim();
+    const m = /^([A-Za-z-]+)\s*:\s*(.*)$/.exec(line);
+    if (!m) continue;
+    const field = m[1]!.toLowerCase();
+    const value = m[2]!.trim();
+    if (field === 'user-agent') {
+      if (!current || !lastWasAgent) {
+        current = { agents: [], rules: [] };
+        groups.push(current);
+      }
+      current.agents.push(value.toLowerCase());
+      lastWasAgent = true;
+    } else if ((field === 'allow' || field === 'disallow') && current) {
+      lastWasAgent = false;
+      if (value) current.rules.push({ allow: field === 'allow', prefix: value });
+    } else lastWasAgent = false;
+  }
+  const mine = groups.filter((g) => g.agents.some((a) => a !== '*' && agent.toLowerCase().includes(a)));
+  const applicable = mine.length > 0 ? mine : groups.filter((g) => g.agents.includes('*'));
+  let best: { allow: boolean; len: number } | null = null;
+  for (const group of applicable) {
+    for (const rule of group.rules) {
+      const pattern = rule.prefix.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$');
+      if (!new RegExp(`^${pattern}`).test(path)) continue;
+      const len = rule.prefix.length;
+      if (!best || len > best.len || (len === best.len && rule.allow)) best = { allow: rule.allow, len };
+    }
+  }
+  return best ? best.allow : true;
+}
+
+const COLLECTOR_KIND: Record<SourceKind, CollectorKind> = {
+  RSS_ATOM: 'RSS_ATOM', JSON_API: 'JSON_API', CSV_DATASET: 'CSV', SITEMAP: 'SITEMAP',
+  HTML_LIST: 'HTML_LIST', OVERPASS: 'OVERPASS', PAGE_WATCH: 'PAGE_WATCH',
+};
+
+/** What a failure is called on the pull's row. SOURCE_UNREACHABLE and NO_MATCHING_RECORDS are never the same. */
+export function failureCauseOf(failure: Failure): CollectFailureCause {
+  switch (failure.cause) {
+    case 'TIMEOUT': return 'TIMEOUT';
+    case 'RATE_LIMITED': return 'RATE_LIMITED';
+    case 'SERVER_ERROR': return 'SERVER_ERROR';
+    case 'UNAUTHORIZED': case 'FORBIDDEN': case 'GONE': case 'ROBOTS_DISALLOWED': case 'CLIENT_ERROR': case 'NOT_FOUND':
+      return 'REFUSED';
+    default: return 'SOURCE_UNREACHABLE';
+  }
+}
+
+async function recordPull(input: {
+  source: string; ok: boolean; fetched: number; inserted: number; error: string | null; at: string;
+  method: SourceKind; duplicates: number | null; cause: CollectFailureCause | null; wallMs: number; bytes: number | null; memoryBytes: number;
+}): Promise<void> {
+  // Written here rather than through recordFeedPull because a pull's timestamp is its caller's `now`.
+  await getDb().run(
+    `INSERT INTO feed_pulls
+       (id, source, ok, fetched, inserted, error, created_at, method, duplicates, failure_cause, wall_ms, bytes, memory_bytes,
+        cheap_calls, claude_jobs)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+    [newId('fdp'), input.source, input.ok ? 1 : 0, input.fetched, input.inserted, input.error, input.at, input.method,
+      input.duplicates, input.cause, input.wallMs, input.bytes, input.memoryBytes],
+  );
+}
+
+/** One page of a registry source, read by its shared collector. */
+async function collectGeneric(job: Runnable, textFetcher: TextFetcher): Promise<{ items: FeedItem[]; bytes: number; unchanged: boolean }> {
+  const checkpoint = job.row ? await getCheckpoint(job.row.id) : null;
+  const maxPages = Math.min(10, Math.max(1, Number(/^pages:(\d+)$/.exec(job.row?.pagination ?? '')?.[1] ?? 1)));
+  const items: FeedItem[] = [];
+  let url = job.url;
+  let bytes = 0;
+  let first: { etag: string | null; lastModified: string | null; contentHash: string } | null = null;
+  for (let page = 0; page < maxPages; page++) {
+    const conditional: Record<string, string> = { ...job.headers };
+    if (page === 0 && checkpoint?.etag) conditional['if-none-match'] = checkpoint.etag;
+    if (page === 0 && checkpoint?.lastModified) conditional['if-modified-since'] = checkpoint.lastModified;
+    const fetched = await textFetcher(url, conditional, job.timeoutMs);
+    bytes += fetched.body.length;
+    const outcome = collect(COLLECTOR_KIND[job.kind], fetched, {
+      url,
+      previous: page === 0 && checkpoint ? { etag: checkpoint.etag, lastModified: checkpoint.lastModified, contentHash: checkpoint.contentHash } : undefined,
+    });
+    if (outcome.kind === 'REFUSED') {
+      // A refusal is recorded with its status, and never worked around.
+      throw new Error(`HTTP ${outcome.refusal.status ?? 403}: ${outcome.refusal.reason} - ${outcome.refusal.detail}`);
+    }
+    if (outcome.kind === 'UNCHANGED') return { items, bytes, unchanged: page === 0 };
+    if (page === 0) first = { etag: outcome.kind === 'RECORDS' || outcome.kind === 'NO_MATCHING_RECORDS' ? outcome.etag : null, lastModified: outcome.kind === 'RECORDS' || outcome.kind === 'NO_MATCHING_RECORDS' ? outcome.lastModified : null, contentHash: outcome.contentHash };
+    if (outcome.kind === 'NO_MATCHING_RECORDS') break;
+    for (const record of outcome.records) {
+      if (!record.title) continue;
+      items.push({
+        externalId: record.externalId,
+        url: record.url ?? job.url,
+        title: record.title,
+        body: record.body,
+        organization: record.organization,
+        publishedAt: record.publishedAt,
+      });
+    }
+    if (!outcome.nextPage) break;
+    url = outcome.nextPage;
+  }
+  if (job.row && first) await saveCheckpoint(job.row.id, { etag: first.etag, lastModified: first.lastModified, contentHash: first.contentHash });
+  return { items, bytes, unchanged: false };
+}
+
+/** Whether a source's robots.txt allows us, recorded on its row the first time. False means do not pull. */
+async function robotsPermits(job: Runnable, textFetcher: TextFetcher): Promise<boolean> {
+  if (!job.row) return true;
+  if (job.row.robotsStatus === 'ALLOWED') return true;
+  if (job.row.robotsStatus !== 'UNCHECKED') return false;
+  try {
+    const target = new URL(job.url);
+    const fetched = await textFetcher(`${target.origin}/robots.txt`, {}, 10_000);
+    if (fetched.status >= 200 && fetched.status < 300 && !robotsAllows(fetched.body, `${target.pathname}${target.search}`)) {
+      await setRobotsStatus(job.row.id, 'DISALLOWED', 'robots.txt disallows this path for this client.');
+      return false;
+    }
+    await setRobotsStatus(job.row.id, 'ALLOWED', fetched.status >= 200 && fetched.status < 300 ? 'robots.txt allows this path.' : 'No robots.txt was published.');
+    return true;
+  } catch {
+    // An unanswered robots.txt is not a verdict: leave it unchecked and let the pull itself say what happened.
+    return true;
+  }
+}
+
 export async function pullDueFeeds(input: {
   now?: Date;
   fetcher?: Fetcher;
+  textFetcher?: TextFetcher;
+  /** Explicit definitions, run as given. Without them the registry decides. */
   sources?: readonly FeedSource[];
 } = {}): Promise<{ source: string; inserted: number; error: string | null }[]> {
   const now = input.now ?? new Date();
   const out: { source: string; inserted: number; error: string | null }[] = [];
-  for (const source of input.sources ?? FEED_SOURCES) {
-    if (now.getTime() < nextPullAt(source, await pullState(source.id))) continue;
-    if (source.spacingMs && out.length > 0 && !input.fetcher) {
-      await new Promise((resolve) => setTimeout(resolve, source.spacingMs));
-    }
+  let jobs: Runnable[];
+  if (input.sources) jobs = input.sources.map(runnableFromSource);
+  else {
+    await ensureSeededSources();
+    jobs = (await enabledRows()).map(runnableFromRow).filter((one): one is Runnable => !!one);
+  }
+  // Each host's tightest stated rate governs every source on it. Tests and injected fetchers never wait.
+  const clock = input.fetcher || input.textFetcher ? fakeClock(now.getTime()) : systemClock;
+  const overrides: Record<string, { capacity: number; refillPerSecond: number }> = {};
+  for (const job of jobs) {
+    if (!job.hostRatePerMin) continue;
+    const host = hostOf(job.url);
+    const refillPerSecond = job.hostRatePerMin / 60;
+    const held = overrides[host];
+    if (!held || refillPerSecond < held.refillPerSecond) overrides[host] = { capacity: 1, refillPerSecond };
+  }
+  const limiter = new HostLimiter(clock, { capacity: 1_000_000, refillPerSecond: 1_000_000 }, overrides);
+  const fetcher = input.fetcher ?? httpFetcher;
+  const textFetcher = input.textFetcher ?? httpTextFetcher;
+  for (const job of jobs) {
+    if (now.getTime() < nextPullAt(job, await pullState(job.slug))) continue;
+    // One source's failure is its own result; the next one is still asked.
+    const started = Date.now();
     try {
-      const body = await (input.fetcher ?? httpFetcher)(source.url, source.headers ?? {}, source.timeoutMs);
-      const items = source.parse(body);
-      const inserted = await insertFeedItems(source.id, items);
-      await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at: now.toISOString() });
-      out.push({ source: source.id, inserted, error: null });
+      if (!(await robotsPermits(job, textFetcher))) continue;
+      await limiter.acquire(hostOf(job.url));
+      let items: FeedItem[];
+      let bytes: number | null = null;
+      if (job.parse) {
+        const body = await fetcher(job.url, job.headers, job.timeoutMs);
+        items = job.parse(body);
+        try { bytes = JSON.stringify(body)?.length ?? null; } catch { bytes = null; }
+      } else {
+        const read = await collectGeneric(job, textFetcher);
+        items = read.items;
+        bytes = read.bytes;
+      }
+      const inserted = await insertFeedItems(job.slug, items);
+      // A private source's items are read only by its project.
+      if (job.projectId) await getDb().run('UPDATE feed_items SET project_id = ? WHERE source = ? AND project_id IS NULL', [job.projectId, job.slug]);
+      await recordPull({
+        source: job.slug, ok: true, fetched: items.length, inserted, error: null, at: now.toISOString(), method: job.kind,
+        duplicates: items.length - inserted, cause: items.length === 0 ? 'NO_MATCHING_RECORDS' : null,
+        wallMs: Date.now() - started, bytes, memoryBytes: process.memoryUsage().rss,
+      });
+      out.push({ source: job.slug, inserted, error: null });
     } catch (error) {
       const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
-      await recordFeedPull({ source: source.id, ok: false, fetched: 0, inserted: 0, error: message, at: now.toISOString() });
-      out.push({ source: source.id, inserted: 0, error: message });
+      const failure = classifyFailure(error);
+      await recordPull({
+        source: job.slug, ok: false, fetched: 0, inserted: 0, error: message, at: now.toISOString(), method: job.kind,
+        duplicates: null, cause: failureCauseOf(failure), wallMs: Date.now() - started, bytes: null, memoryBytes: process.memoryUsage().rss,
+      });
+      out.push({ source: job.slug, inserted: 0, error: message });
     }
   }
   return out;
+}
+
+/** Items a project may read: public sources' and its own. Passing null reads only the public ones. */
+export async function feedItemsVisibleTo(projectId: string | null): Promise<StoredFeedItem[]> {
+  const rows = await getDb().all<{
+    id: string; source: string; external_id: string; url: string; title: string; body: string | null;
+    organization: string | null; published_at: string | null; fetched_at: string; shortlisted_round_id: string | null;
+  }>(
+    'SELECT * FROM feed_items WHERE project_id IS NULL OR project_id = ? ORDER BY fetched_at DESC, id DESC',
+    [projectId],
+  );
+  return rows.map((r) => ({
+    id: r.id, source: r.source, externalId: r.external_id, url: r.url, title: r.title, body: r.body,
+    organization: r.organization, publishedAt: r.published_at, fetchedAt: r.fetched_at, shortlistedRoundId: r.shortlisted_round_id,
+  }));
+}
+
+/** Of these item ids, the ones another project owns and this one may not read. */
+async function foreignItemIds(ids: readonly string[], projectId: string | null): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT id FROM feed_items WHERE project_id IS NOT NULL AND (project_id <> ? OR ? IS NULL)
+        AND id IN (${ids.map(() => '?').join(',')})`,
+    [projectId ?? '', projectId, ...ids],
+  );
+  return new Set(rows.map((r) => r.id));
 }
 
 /** The latest SCREEN_LEAD answers, per item, already combined. */
@@ -366,7 +685,9 @@ export interface ShortlistFunnel {
 /** Which leads would go to Claude now, with the count at every step. Writes nothing. */
 export async function shortlistFunnel(projectId: string, now: Date = new Date()): Promise<ShortlistFunnel> {
   const since = new Date(now.getTime() - LEAD_MAX_AGE_MS).toISOString();
-  const pool = await unlistedFeedItems({ since, limit: 2_000 });
+  const unfiltered = await unlistedFeedItems({ since, limit: 2_000 });
+  const foreign = await foreignItemIds(unfiltered.map((one) => one.id), projectId);
+  const pool = unfiltered.filter((one) => !foreign.has(one.id));
   const screens = await leadScreens(pool);
   const held = new Set(
     (await openingsWithSourceUrl(projectId))

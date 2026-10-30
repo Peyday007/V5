@@ -230,3 +230,85 @@ export const FEED_SOURCES: readonly FeedSource[] = [
   gdelt('news-closures', 'News: a competitor closing, leaving customers behind', '("closing all" OR "closes its doors" OR "going out of business") (business OR company OR store)'),
   gdelt('news-event-rush', 'News: an event businesses are rushing to prepare for', '("ahead of" OR "in time for") ("holiday season" OR "black friday" OR "tax season" OR "open enrollment" OR "festival")'),
 ];
+
+// ---------------------------------------------------------------------------
+// The registry's side of these sources.
+//
+// A source is a row (`collect_sources`); the three bulk feeds, the GDELT
+// searches and the OSM site sweep are its first rows, seeded from the
+// definitions above so the behaviour is the one the code always had. What a row
+// cannot hold - a parser - is named by `parserId` and looked up here, so adding
+// a source of an existing kind is an insert, and only a new *parser* is code.
+// ---------------------------------------------------------------------------
+
+/** How a parser id is run. A row's own interval and rate always win. */
+export interface ParserProfile {
+  id: string;
+  parse(body: unknown): FeedItem[];
+  headers?: Record<string, string>;
+  timeoutMs?: number;
+}
+
+/** A row naming this parser is read by the shared collector for its kind, not by a bespoke parser. */
+export const GENERIC_PARSER = 'collector';
+
+export const PARSERS: Readonly<Record<string, ParserProfile>> = Object.freeze({
+  remoteok: { id: 'remoteok', parse: parseRemoteOk, headers: { 'user-agent': 'brain-feed/1.0' } },
+  remotive: { id: 'remotive', parse: parseRemotive },
+  'federal-register': { id: 'federal-register', parse: parseFederalRegister },
+  // GDELT's day-long article list is slow: it gets longer than the default.
+  'gdelt-artlist': { id: 'gdelt-artlist', parse: parseGdelt, timeoutMs: 60_000 },
+});
+
+const PARSER_BY_SOURCE: Readonly<Record<string, string>> = {
+  remoteok: 'remoteok',
+  remotive: 'remotive',
+  'federal-register-rules': 'federal-register',
+};
+
+/** The parser id a hardcoded definition runs under. */
+export function parserIdFor(source: Pick<FeedSource, 'id'>): string {
+  return PARSER_BY_SOURCE[source.id] ?? 'gdelt-artlist';
+}
+
+/** The OSM broken-site sweep's row. Its query and its checks stay in sites.ts. */
+export const SITE_SWEEP_SLUG = 'osm-broken-sites';
+
+export interface SeedRow {
+  slug: string;
+  label: string;
+  kind: 'JSON_API' | 'OVERPASS';
+  urlTemplate: string;
+  parserId: string;
+  intervalMs: number;
+  hostRatePerMin: number | null;
+}
+
+/** Every hardcoded source as the row that replaces it. Pure. */
+export function seedRows(): SeedRow[] {
+  const rows: SeedRow[] = FEED_SOURCES.map((source) => ({
+    slug: source.id,
+    label: source.label,
+    kind: 'JSON_API' as const,
+    urlTemplate: source.url,
+    parserId: parserIdFor(source),
+    intervalMs: source.intervalMs,
+    // A publisher's "one request every N seconds" is a rate per minute.
+    hostRatePerMin: source.spacingMs ? Math.max(1, Math.round(60_000 / source.spacingMs)) : null,
+  }));
+  rows.push({
+    slug: SITE_SWEEP_SLUG,
+    label: 'OpenStreetMap: businesses with a website, by metro',
+    kind: 'OVERPASS',
+    urlTemplate: 'https://overpass-api.de/api/interpreter?data={query}',
+    parserId: 'osm-broken-sites',
+    intervalMs: 7 * 86_400_000,
+    hostRatePerMin: null,
+  });
+  return rows;
+}
+
+/** The runnable form of a hardcoded definition, with the profile's headers and timeout. */
+export function profileFor(parserId: string): ParserProfile | null {
+  return PARSERS[parserId] ?? null;
+}

@@ -18,6 +18,7 @@
 import { getDb } from '../../db/database.ts';
 import { newId } from '../../repos/util.ts';
 import { insertFeedItems, pullState, recordFeedPull } from '../../repos/feeds.ts';
+import { SITE_SWEEP_SLUG } from './sources.ts';
 
 export const SITE_SOURCE = 'broken-site';
 
@@ -235,8 +236,26 @@ interface Row {
 }
 
 /** Map the next due metro, at most one Overpass request per spacing. */
+/**
+ * The sweep's registry row. With none (a Brain that has not pulled a feed yet)
+ * the constants below govern, which is what the row is seeded from.
+ */
+async function sweepRow(): Promise<{ id: string; intervalMs: number; urlTemplate: string; enabled: boolean; allowed: boolean } | null> {
+  const row = await getDb().get<{ id: string; interval_ms: number; url_template: string; enabled: number; robots_status: string }>(
+    'SELECT id, interval_ms, url_template, enabled, robots_status FROM collect_sources WHERE slug = ?',
+    [SITE_SWEEP_SLUG],
+  );
+  return row
+    ? { id: row.id, intervalMs: row.interval_ms, urlTemplate: row.url_template, enabled: row.enabled === 1, allowed: row.robots_status === 'ALLOWED' || row.robots_status === 'UNCHECKED' }
+    : null;
+}
+
 export async function mapNextMetro(input: { now?: Date; fetcher?: (url: string) => Promise<unknown> } = {}): Promise<{ metro: string; added: number; error: string | null } | null> {
   const now = input.now ?? new Date();
+  const row = await sweepRow();
+  // An operator who disabled the row, or a robots verdict against it, stops the sweep.
+  if (row && (!row.enabled || !row.allowed)) return null;
+  const metroIntervalMs = row?.intervalMs ?? METRO_INTERVAL_MS;
   const states = await Promise.all(METROS.map(async (metro) => ({ metro, state: await pullState(`osm:${metro.id}`) })));
   const lastAny = states
     .map(({ state }) => [state.lastSuccessAt, state.lastFailureAt])
@@ -245,12 +264,14 @@ export async function mapNextMetro(input: { now?: Date; fetcher?: (url: string) 
     .reduce((max, at) => Math.max(max, Date.parse(at)), 0);
   if (now.getTime() - lastAny < OVERPASS_SPACING_MS) return null;
   const due = states
-    .filter(({ state }) => !state.lastSuccessAt || now.getTime() - Date.parse(state.lastSuccessAt) >= METRO_INTERVAL_MS)
+    .filter(({ state }) => !state.lastSuccessAt || now.getTime() - Date.parse(state.lastSuccessAt) >= metroIntervalMs)
     .sort((a, b) => (a.state.lastSuccessAt ?? '').localeCompare(b.state.lastSuccessAt ?? ''))[0];
   if (!due) return null;
   const source = `osm:${due.metro.id}`;
   try {
-    const url = `${OVERPASS_URL}?data=${encodeURIComponent(overpassQuery(due.metro.bbox))}`;
+    const query = encodeURIComponent(overpassQuery(due.metro.bbox));
+    const url = row?.urlTemplate.includes('{query}') ? row.urlTemplate.replace('{query}', query) : `${OVERPASS_URL}?data=${query}`;
+    const startedAt = Date.now();
     const body = input.fetcher
       ? await input.fetcher(url)
       : await (async () => {
@@ -269,6 +290,10 @@ export async function mapNextMetro(input: { now?: Date; fetcher?: (url: string) 
       added += result.changes ?? 0;
     }
     await recordFeedPull({ source, ok: true, fetched: businesses.length, inserted: added, error: null, at: now.toISOString() });
+    await getDb().run(
+      'UPDATE feed_pulls SET method = ?, duplicates = ?, wall_ms = ?, failure_cause = ?, cheap_calls = 0, claude_jobs = 0 WHERE source = ? AND created_at = ?',
+      ['OVERPASS', businesses.length - added, Date.now() - startedAt, businesses.length === 0 ? 'NO_MATCHING_RECORDS' : null, source, now.toISOString()],
+    );
     return { metro: due.metro.id, added, error: null };
   } catch (error) {
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
