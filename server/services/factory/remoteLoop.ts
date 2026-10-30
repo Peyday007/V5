@@ -68,6 +68,7 @@ import {
   ownershipBlockedDetail,
   queueRepairs,
   reconcileRepairs,
+  widenExhaustedRepairs,
 } from './repair.ts';
 import { listCampaignsPendingOutcome, recordCampaignOutcome } from './writeback.ts';
 import {
@@ -2019,6 +2020,20 @@ async function runRemoteTick(
    * not: an amendment touches no unit, and nothing moved a FAILED unit back out,
    * so the only real way past was retiring the whole campaign.
    */
+  // A repair that ran out because its files were not its own is put back once
+  // with the files its worker named, inside the approved scope. See
+  // `widenExhaustedRepairs`.
+  const widenedRepairs = units.some((unit) => unit.kind === 'REPAIR' && unit.state === 'FAILED')
+    ? await widenExhaustedRepairs(fresh, changeRequest)
+    : [];
+  if (widenedRepairs.length > 0) {
+    report.notes.push(
+      `widened ${widenedRepairs.map((w) => `${w.unitKey} (+${w.added.join(', ')})`).join('; ')}`,
+    );
+    report.progress = true;
+    // The unit is READY again; the next pass hands it out from fresh rows.
+    return report;
+  }
   const failed = units.filter((unit) => unit.state === 'FAILED' && !setAside.has(unit.id));
   if (failed.length > 0) {
     await patchCampaign(fresh.id, {
