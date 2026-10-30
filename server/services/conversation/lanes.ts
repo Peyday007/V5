@@ -22,6 +22,8 @@
  * stops "the fast lane" from quietly becoming "whatever is cheapest".
  */
 
+import { destinationFor, type Destination } from '../routing/boundary/index.ts';
+
 export const LANES = ['FAST', 'DEEP', 'WORK'] as const;
 export type Lane = (typeof LANES)[number];
 
@@ -71,6 +73,12 @@ export interface TurnSignals {
   conflictsWithKnowledge?: boolean;
   /** Whether the fast lane is even available — no key, no ceiling, no model. */
   fastLaneAvailable: boolean;
+  /**
+   * Whether the person asked for a change to software, as decided by the
+   * caller from its own rows (`asksForExecution`) — never read from the text
+   * here. A software change goes to the Factory and nowhere else.
+   */
+  asksForSoftwareChange?: boolean;
 }
 
 export interface LaneDecision {
@@ -78,6 +86,11 @@ export interface LaneDecision {
   escalations: Escalation[];
   /** The sentence a person reads when the answer is going to take longer. */
   explanation: string | null;
+  /**
+   * Where WORK goes: the Factory for a software change, the research queue for
+   * everything else. Null for FAST and DEEP, which are answered directly.
+   */
+  destination: Destination | null;
 }
 
 /**
@@ -197,6 +210,10 @@ export function decideLane(signals: TurnSignals): LaneDecision {
   // condition, so it can be argued with.
   if (signals.turnCount >= 40) escalations.push('COMPLEXITY');
 
+  const softwareChange = signals.asksForSoftwareChange === true;
+  if (softwareChange && !escalations.includes('ASKED_TO_DO_WORK')) {
+    escalations.push('ASKED_TO_DO_WORK');
+  }
   const wantsWork = escalations.includes('ASKED_TO_DO_WORK');
   const wantsDeep = escalations.some(
     (escalation) => escalation !== 'ASKED_TO_DO_WORK' && escalation !== 'COMPLEXITY',
@@ -217,7 +234,10 @@ export function decideLane(signals: TurnSignals): LaneDecision {
         ? `This one is taking longer because ${ESCALATION_WORDS[escalations[0]!]}.`
         : 'This one is going through the slower path because the quick one is not available.';
 
-  return { lane, escalations, explanation };
+  const destination: Destination | null =
+    lane === 'WORK' ? destinationFor(softwareChange ? 'SOFTWARE_CHANGE' : 'RESEARCH') : null;
+
+  return { lane, escalations, explanation, destination };
 }
 
 /**
