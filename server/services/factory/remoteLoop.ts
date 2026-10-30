@@ -84,6 +84,8 @@ import {
   createUnitsBin,
   integrationChecks,
   liveBinOfKind,
+  liveUnitKeys,
+  unitKeysOfBin,
   pullRequestNumber,
   readDeliveryReport,
   readIntegrationReport,
@@ -1817,25 +1819,53 @@ async function runRemoteTick(
       await stageIsLive(fresh, 'EXECUTING', waiting, report);
       return report;
     }
-    if (liveBinOfKind(liveBins, 'FACTORY_UNITS')) {
-      report.notes.push(`waiting for a worker on ${ready.length} ready unit(s)`);
-      await stageIsLive(fresh, 'EXECUTING', `${ready.length} unit(s) with the fleet`, report);
+    /*
+     * One bin per ready unit, so independent units run on as many surfaces as
+     * the fleet will fire — see `liveUnitKeys`. A unit already carried by a live
+     * bin is never handed out twice; the stall ceiling is asked per unit, of the
+     * bins that carried that unit, so one unit's failures cannot hold its
+     * independent siblings and cannot be hidden by them either.
+     */
+    const carried = liveUnitKeys(liveBins);
+    const uncovered = ready.filter((unit) => !carried.has(unit.unitKey));
+    for (const unit of uncovered) {
+      const mine = liveBins.filter(
+        (bin) => bin.kind === 'FACTORY_UNITS' && unitKeysOfBin(bin).includes(unit.unitKey),
+      );
+      const stall = stalledStage(mine, 'FACTORY_UNITS', reauthorizedAt);
+      if (stall) return await blockStage(fresh, 'implementation', stall, report);
+    }
+    let created = 0;
+    for (const unit of uncovered) {
+      const bin = await createUnitsBin(fresh, changeRequest, [unit]);
+      if (!bin) continue;
+      created += 1;
+      report.created.push(`units:${bin.id}`);
+      await noteBin(fresh, bin, `${unit.unitKey} ready`);
+    }
+    const withFleet = `${ready.length} unit(s) with the fleet`;
+    if (created > 0) {
+      report.progress = true;
+      report.notes.push(`${created} unit bin(s) created; ${ready.length} unit(s) with the fleet`);
+    } else {
+      report.notes.push(`waiting for workers on ${ready.length} ready unit(s)`);
+    }
+    /*
+     * Implemented work does not wait for its siblings. Integration is its own
+     * single-lease stage and only it moves the campaign branch, so starting it
+     * while other units are still with workers changes no guarantee — every unit
+     * branch is judged against the base its own bin recorded, and the integrator
+     * against the union of the units it actually merged — and it is what makes a
+     * dependent unit READY one integration earlier instead of one wave later.
+     */
+    if (implemented.length === 0 || liveBinOfKind(liveBins, 'FACTORY_INTEGRATE')) {
+      if (created > 0) {
+        await patchCampaign(fresh.id, { state: 'EXECUTING', stageDetail: withFleet, ...cleared });
+      } else {
+        await stageIsLive(fresh, 'EXECUTING', withFleet, report);
+      }
       return report;
     }
-    const stall = stalledStage(liveBins, 'FACTORY_UNITS', reauthorizedAt);
-    if (stall) return await blockStage(fresh, 'implementation', stall, report);
-    const bin = await createUnitsBin(fresh, changeRequest, ready);
-    if (bin) {
-      report.created.push(`units:${bin.id}`);
-      await noteBin(fresh, bin, `${ready.length} unit(s) ready`);
-      await patchCampaign(fresh.id, {
-        state: 'EXECUTING',
-        stageDetail: `${ready.length} unit(s) with the fleet`,
-        ...cleared,
-      });
-      report.progress = true;
-    }
-    return report;
   }
 
   /*

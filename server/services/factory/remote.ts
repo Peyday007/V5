@@ -338,7 +338,16 @@ export async function createPlanBin(
           'mutation scope, every verification command must be one the contract already ' +
           'declares, no two units may own an overlapping path unless one depends on the ' +
           'other, and every mandatory acceptance condition must be served by some unit. ' +
-          'Brain refuses the whole plan for any of those, so read the repository first.',
+          'Brain refuses the whole plan for any of those, so read the repository first.\n\n' +
+          'Shape the plan for parallel work. Every unit gets its own worker and every unit ' +
+          'without an outstanding dependency starts at once, while a dependency costs a whole ' +
+          'implement-and-integrate round before the dependent unit can even begin. So: size ' +
+          'each unit as one coherent, independently testable change a single session can finish ' +
+          '(typically one module and its test); split a large change by file ownership rather ' +
+          'than by step; and declare `dependsOn` only where a unit genuinely needs code another ' +
+          'unit creates (it imports a new symbol, calls a new route, reads a new column). Two ' +
+          'units touching related features in different files are independent. Prefer a wide, ' +
+          'shallow graph over a deep chain. A one-file objective is one unit.',
         input: JSON.stringify({
           expectedOutcome: changeRequest.expectedOutcome,
           nonGoals: changeRequest.nonGoals,
@@ -1612,6 +1621,33 @@ async function createFactoryBin(input: CreateBinInput): Promise<Bin> {
 /** Whether this campaign already has a live bin for a stage, so a tick adds no second one. */
 export function liveBinOfKind(bins: Bin[], kind: string): Bin | null {
   return bins.find((bin) => bin.kind === kind && isLiveBin(bin)) ?? null;
+}
+
+/** The unit keys a bin's manifest hands out. */
+export function unitKeysOfBin(bin: Bin): string[] {
+  return (bin.manifest.units ?? []).map((unit) => unit.key);
+}
+
+/**
+ * The unit keys a live implementation bin already carries.
+ *
+ * Implementation is the one stage that is *not* one-bin-per-campaign. A units bin
+ * holds one lease, so a bin carrying every ready unit was one worker doing all of
+ * them in sequence while every other healthy surface sat idle — production,
+ * 2026-10-30: four live campaigns, each "1 unit(s) with the fleet", each unit a
+ * separate session's worth of work that could have run beside the others. The
+ * units a plan makes ready together are disjoint by construction (`validatePlan`
+ * refuses overlapping ownership between units that do not depend on each other),
+ * so each one gets its own bin and its own lease, and the stage's guard becomes
+ * "no unit is handed out twice" rather than "no stage is handed out twice".
+ */
+export function liveUnitKeys(bins: Bin[]): Set<string> {
+  const keys = new Set<string>();
+  for (const bin of bins) {
+    if (bin.kind !== 'FACTORY_UNITS' || !isLiveBin(bin)) continue;
+    for (const key of unitKeysOfBin(bin)) keys.add(key);
+  }
+  return keys;
 }
 
 /**
