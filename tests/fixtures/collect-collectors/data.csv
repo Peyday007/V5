@@ -1,0 +1,4 @@
+id,Name,Org,Posted,Value,City
+1,"Road, repair","Dept ""A""",2026-09-30,"€3.5k",Lyon
+2,,Dept B,2026-09-30,,Paris
+3,Bridge,Dept C,not a date,,
