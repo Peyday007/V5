@@ -33,6 +33,7 @@ import type { CashOpportunity } from '../../domain/types.ts';
 import { screenOpportunity, type ScreenFacts, type ScreenLimits, type ScreenVerdict } from './screen.ts';
 import { listWorkstreams } from '../../repos/register.ts';
 import { readTarget } from '../goals/target.ts';
+import { outcomesFor } from '../../repos/cashJourney.ts';
 
 /**
  * Hosts whose pages are individual freelance-marketplace listings.
@@ -116,8 +117,24 @@ const NO_CAPITAL_ROUTE: Partial<Record<CashOpportunity['mechanism'], string>> = 
   SUBCONTRACTED_FULFILMENT: 'subcontracting the fulfilment',
 };
 
-/** What the opening's own row establishes, for the screen. Nothing unknown is invented. */
-export function screenFactsFor(opportunity: CashOpportunity): ScreenFacts {
+/**
+ * The mechanisms this project has a recorded outcome for, from `cash_outcomes`.
+ * "History" is a row Brain wrote after something happened to an opportunity of
+ * that kind (a deal learned from, a rejection recorded) - never an assumption.
+ */
+export async function mechanismsWithHistory(projectId: string): Promise<ReadonlySet<string>> {
+  const out = new Set<string>();
+  for (const outcome of await outcomesFor({ projectId })) if (outcome.mechanism) out.add(outcome.mechanism);
+  return out;
+}
+
+/**
+ * What the opening's own row establishes, for the screen. Nothing unknown is
+ * invented, and whether Brain has history with this kind of opportunity is
+ * asked of the caller rather than assumed: it is required, so no caller can
+ * leave it out and quietly make every type familiar.
+ */
+export function screenFactsFor(opportunity: CashOpportunity, history: ReadonlySet<string>): ScreenFacts {
   return {
     capitalRequiredCents: opportunity.peakFundingCents ?? null,
     noCapitalRoute: NO_CAPITAL_ROUTE[opportunity.mechanism] ?? null,
@@ -129,7 +146,7 @@ export function screenFactsFor(opportunity: CashOpportunity): ScreenFacts {
     exclusions: [],
     hasPayer: !!opportunity.payer,
     hasPrice: opportunity.priceCents !== null && opportunity.priceCents !== undefined,
-    typeHasHistory: true,
+    typeHasHistory: history.has(opportunity.mechanism),
     sourceObservedAt: opportunity.signalObservedAt ?? null,
   };
 }
@@ -160,7 +177,7 @@ async function screenVerdictFor(opportunity: CashOpportunity, now: string): Prom
   if (!opportunity.projectId) return null;
   const all = await goalLimitsFor(opportunity.projectId, now);
   if (all.length === 0) return null;
-  const facts = screenFactsFor(opportunity);
+  const facts = screenFactsFor(opportunity, await mechanismsWithHistory(opportunity.projectId));
   let reject: ScreenVerdict | null = null;
   for (const limits of all) {
     const verdict = screenOpportunity(facts, limits, now);

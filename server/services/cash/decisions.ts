@@ -22,7 +22,7 @@ import { nowIso } from '../../repos/util.ts';
 import { getOpportunity, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { getWorkstream, listWorkstreams } from '../../repos/register.ts';
 import { readTarget } from '../goals/target.ts';
-import { screenFactsFor } from './worthResearching.ts';
+import { mechanismsWithHistory, screenFactsFor } from './worthResearching.ts';
 
 /** States a person chose. Nothing here decides over them. */
 const PERSON_STATES: ReadonlySet<string> = new Set(['ARCHIVED', 'DECLINED']);
@@ -202,6 +202,7 @@ export async function runDecisionPass(projectId: string, options: { now?: string
   const now = options.now ?? nowIso();
   const out: DecisionPass = { goals: 0, recorded: 0, unchanged: 0, recomputed: 0, released: 0, deferred: 0 };
   const openings = await listOpportunities({ projectId, states: [...DECIDABLE_STATES] });
+  const history = await mechanismsWithHistory(projectId);
   for (const goal of await listWorkstreams({ projectIds: [projectId] })) {
     if (goal.projectId !== projectId || !goal.target) continue;
     const limits = await limitsOfGoal(goal.id, now);
@@ -213,7 +214,7 @@ export async function runDecisionPass(projectId: string, options: { now?: string
         projectId,
         opportunityId: opening.id,
         goalId: goal.id,
-        facts: screenFactsFor(opening),
+        facts: screenFactsFor(opening, history),
         limits,
         changeRef,
         evidenceIds: opening.sourceClaimId ? [opening.sourceClaimId] : [],
@@ -230,7 +231,7 @@ export async function runDecisionPass(projectId: string, options: { now?: string
       factsFor: async (opportunityId) => {
         const opening = await getOpportunity(opportunityId);
         if (!opening) return null;
-        return { facts: screenFactsFor(opening), evidenceIds: opening.sourceClaimId ? [opening.sourceClaimId] : [] };
+        return { facts: screenFactsFor(opening, await mechanismsWithHistory(projectId)), evidenceIds: opening.sourceClaimId ? [opening.sourceClaimId] : [] };
       },
     },
     { now },
