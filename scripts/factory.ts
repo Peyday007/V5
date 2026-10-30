@@ -57,6 +57,7 @@ import { campaignMetrics, FACTORY_EVENT_KINDS } from '../server/services/factory
 import { throughputReport } from '../server/services/factory/throughput.ts';
 import { pullRequestFor } from '../server/services/factory/pullRequest.ts';
 import { factoryAllocation } from '../server/services/factory/allocation.ts';
+import { formatReport, readRoutingReport } from '../server/services/routing/report/index.ts';
 import type { FactoryCapability, FactoryWorkerKind } from '../server/domain/factory.ts';
 import { campaignSpecFor } from '../server/services/factory/remote.ts';
 import {
@@ -783,6 +784,14 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'routing-report': {
+      // Read-only: which resource ran each unit of work, against the stored baseline.
+      const projectId = flagString(flags, 'project') ?? fail('--project is required');
+      const report = await readRoutingReport(projectId, { baselineLabel: flagString(flags, 'baseline') });
+      process.stdout.write(formatReport(report));
+      break;
+    }
+
     case 'throughput': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const report = await throughputReport(campaignId);
@@ -1448,7 +1457,7 @@ async function main(): Promise<void> {
         'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
           '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
-          '  answer-bin,\n' +
+          '  answer-bin, routing-report,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
           '  authorize-release, release-plan, release-may-merge, release-advance, release-verify, release-status\n',
       );
