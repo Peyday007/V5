@@ -373,7 +373,7 @@ async function printSearching(reading: PlanReading): Promise<void> {
   );
   console.log(`  free AI     24h: ${cheap.reduce((n, r) => n + Number(r.total), 0)} answers, ${cheap.reduce((n, r) => n + Number(r.failed ?? 0), 0)} failed`);
   for (const r of cheap) console.log(`    free AI   ${r.kind} ${r.model}: ${r.total} answers, ${r.failed ?? 0} failed`);
-  const feeds = await getDb().get<{ n: number | string }>(`SELECT COUNT(*) AS n FROM feed_items WHERE created_at >= ?`, [new Date(Date.now() - 24 * 60 * 60_000).toISOString()]).catch(() => null);
+  const feeds = await getDb().get<{ n: number | string }>(`SELECT COUNT(*) AS n FROM feed_items WHERE fetched_at >= ?`, [new Date(Date.now() - 24 * 60 * 60_000).toISOString()]).catch(() => null);
   const funnel = await shortlistFunnel(reading.target.projectId).catch(() => null);
   console.log(`  code feeds  24h: ${feeds ? Number(feeds.n) : '?'} new items pulled; ${funnel ? `pool ${funnel.pool}, screened by free AI ${funnel.screened}, kept ${funnel.kept}, passed rules ${funnel.passedRules}, sent to Claude ${funnel.chosen.length}` : 'funnel unreadable'}`);
   console.log(`  searching   ${rounds.length} round(s) of this goal's own search`);
