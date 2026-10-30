@@ -1,112 +1,96 @@
 /**
- * The screen's counters are rows read back, and the explore/exploit balance is
- * the yield measurement, not a fixed split.
+ * The measurement and the candidate set have consumers: a question no answer to
+ * which could change the decision is recorded as skipped when the gap pass
+ * declines to raise it, and both the metrics and the surviving set are on the
+ * owner's Cash view.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
-import { createNeed, createOpportunity } from '../server/repos/cashPortfolio.ts';
-import { recordDecision } from '../server/repos/cashDecisions.ts';
-import { recordCashEvent } from '../server/repos/cashMode.ts';
-import { getDb } from '../server/db/database.ts';
-import { screenMetrics, QUESTION_SKIPPED_EVENT } from '../server/services/cash/screenMetrics.ts';
-import { yieldBalance, type DiscoveryYield, type YieldRow } from '../server/services/cash/discoveryYield.ts';
+import { createOpportunity, updateOpportunity } from '../server/repos/cashPortfolio.ts';
+import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
+import { setTerms } from '../server/services/goals/decide.ts';
+import { setTarget } from '../server/services/goals/target.ts';
+import { reconcileDiscoverableGaps } from '../server/services/cash/operate.ts';
+import { screenMetrics } from '../server/services/cash/screenMetrics.ts';
+import { cashView } from '../server/services/cash/view.ts';
 
 let projectId = '';
-let modeId = '';
-let ownerId = '';
+let userId = '';
 
 beforeEach(async () => {
-  const fixture = await freshProject();
-  projectId = fixture.project.id;
-  const owner = await createUser({
+  projectId = (await freshProject()).project.id;
+  userId = (await createUser({
     email: `metrics-${Math.random().toString(36).slice(2, 10)}@example.com`,
     displayName: 'Owner',
     password: 'a-long-enough-password',
     isBrainAdmin: true,
-  });
-  ownerId = owner.id;
-  const started = await activate({ projectId, ownerUserId: owner.id, actorUserId: owner.id, objective: 'Maximize usable cash.' });
-  if (!started.ok) throw new Error('could not activate');
-  modeId = started.mode.id;
+  })).id;
+  expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
 });
 
-const open = (title: string) =>
-  createOpportunity({ projectId, cashModeId: modeId, ownerUserId: ownerId, title, mechanism: 'EXPLICIT_PAID_REQUEST', currency: 'USD' });
+async function goalWithCeiling(capitalCeilingCents: number | null): Promise<string> {
+  const g = await createWorkstream({ projectId, title: 'Collect cash', intent: 'Collect cash.', purpose: 'REVENUE_DIRECT', createdByUserId: userId });
+  await setTerms(g.id, { dueAt: new Date(Date.now() + 30 * 86_400_000).toISOString(), ownerUserId: userId }, `person:${userId}`);
+  const set = await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 500_000, currency: 'USD', projectId, capitalCeilingCents, now: new Date(Date.now() - 60_000) });
+  expect(set.ok).toBe(true);
+  return g.id;
+}
 
-const decide = (opportunityId: string, verdict: 'REJECT' | 'HOLD' | 'PRIORITIZE', changeRef: string, goalId = 'goal_1') =>
-  recordDecision({ projectId, opportunityId, goalId, verdict, reason: `${verdict} because`, detail: 'd', reopenCondition: 'r', changeRef });
+async function opening(title: string, peakFundingCents: number | null): Promise<string> {
+  const o = await createOpportunity({
+    projectId, cashModeId: (await import('../server/repos/cashMode.ts').then((m) => m.getCashMode(projectId)))!.id,
+    ownerUserId: userId, title, mechanism: 'EXPLICIT_PAID_REQUEST', opportunitySignal: 'PAID_TASK_OR_CONTRACT', currency: 'USD',
+  });
+  if (peakFundingCents !== null) await updateOpportunity(o.id, { peak_funding_cents: peakFundingCents });
+  return o.id;
+}
 
-describe('screen metrics', () => {
-  it('reads zero from an empty scope and says so', async () => {
-    const m = await screenMetrics(projectId);
-    expect(m.decisions).toEqual({ REJECT: 0, HOLD: 0, PRIORITIZE: 0 });
-    expect(m.claudeJobsAvoided.total).toBe(0);
-    expect(m.notes.length).toBeGreaterThan(0);
+describe('skipped questions are recorded, and the measurement can be read', () => {
+  it('records a question no answer could change, once, and still asks it of an opening that is not rejected', async () => {
+    await goalWithCeiling(100_000);
+    const tooBig = await opening('Needs a lot of capital', 5_000_000);
+    const fine = await opening('Needs nothing', null);
+
+    const first = await reconcileDiscoverableGaps(projectId);
+    expect(first.some((gap) => gap.opportunityId === fine)).toBe(true);
+    expect(first.some((gap) => gap.opportunityId === tooBig && gap.field === 'payer')).toBe(false);
+
+    const metrics = await screenMetrics(projectId);
+    expect(metrics.questionsSkipped).toBeGreaterThan(0);
+    expect(metrics.claudeJobsAvoided.questionsSkipped).toBe(metrics.questionsSkipped);
+
+    // A second pass records nothing again.
+    await reconcileDiscoverableGaps(projectId);
+    expect((await screenMetrics(projectId)).questionsSkipped).toBe(metrics.questionsSkipped);
   });
 
-  it('counts current decisions by verdict, and keeps superseded ones apart', async () => {
-    const a = await open('a');
-    const b = await open('b');
-    const c = await open('c');
-    await decide(a.id, 'HOLD', 'ref-1');
-    await decide(a.id, 'REJECT', 'ref-2');
-    await decide(b.id, 'PRIORITIZE', 'ref-1');
-    await decide(c.id, 'REJECT', 'ref-1', 'goal_2');
-    const m = await screenMetrics(projectId, 'goal_1');
-    expect(m.decisions).toEqual({ REJECT: 1, HOLD: 0, PRIORITIZE: 1 });
-    expect(m.superseded).toBe(1);
-    expect((await screenMetrics(projectId)).decisions.REJECT).toBe(2);
+  it('asks every question when there is no live goal to judge against', async () => {
+    const tooBig = await opening('Needs a lot of capital', 5_000_000);
+    const gaps = await reconcileDiscoverableGaps(projectId);
+    expect(gaps.some((gap) => gap.opportunityId === tooBig)).toBe(true);
+    expect((await screenMetrics(projectId)).questionsSkipped).toBe(0);
   });
 
-  it('counts jobs avoided only for rejected openings that never had a dive, plus recorded skips', async () => {
-    const a = await open('never dived');
-    const b = await open('dived');
-    await decide(a.id, 'REJECT', 'r1');
-    await decide(b.id, 'REJECT', 'r1');
-    await getDb().run('UPDATE cash_opportunities SET validation_orchestration_id = ? WHERE id = ?', ['orc_x', b.id]);
-    await recordCashEvent({ projectId, opportunityId: a.id, kind: QUESTION_SKIPPED_EVENT, actorRef: 'BRAIN', summary: 'skipped' });
-    const m = await screenMetrics(projectId);
-    expect(m.claudeJobsAvoided).toEqual({ rejectedBeforeAnyDive: 1, questionsSkipped: 1, total: 2 });
+  it('puts the metrics and the surviving set on the owner\'s Cash view', async () => {
+    await goalWithCeiling(100_000);
+    await opening('Needs a lot of capital', 5_000_000);
+    await opening('Small and open', null);
+    await reconcileDiscoverableGaps(projectId);
+
+    const view = await cashView({ projectId });
+    const screening = view.myCurrentWork.screening;
+    expect(screening.metrics.questionsSkipped).toBeGreaterThan(0);
+    expect(screening.candidateSet).not.toBeNull();
+    expect(screening.candidateSet!.members.map((m) => m.title)).toContain('Small and open');
+    expect(screening.candidateSet!.excluded.length + screening.candidateSet!.members.length).toBe(2);
   });
 
-  it('counts withdrawn research only for rejected openings', async () => {
-    const a = await open('rejected');
-    const b = await open('kept');
-    await decide(a.id, 'REJECT', 'r1');
-    for (const o of [a, b]) {
-      const need = await createNeed({
-        projectId, opportunityId: o.id, actorRef: 'BRAIN', blockedAction: 'x', whyItMatters: 'y',
-        recommendedPath: 'z', setupEffort: 'e', nextStep: 'n', completionCondition: 'c', blocksState: 'EXECUTING', requestKey: `k-${o.id}`,
-      } as never);
-      await getDb().run("UPDATE cash_needs SET state = 'WITHDRAWN', resolution = 'Not researched: because.' WHERE id = ?", [(need as { id: string }).id]);
-    }
-    expect((await screenMetrics(projectId)).research.needsWithdrawn).toBe(1);
-  });
-});
-
-const row = (key: string, over: Partial<YieldRow> = {}): YieldRow => ({
-  key, rounds: 0, failedRounds: 0, fragments: 0, openings: 0, useful: 0, qualified: 0, duplicates: 0, ...over,
-});
-
-describe('yield balance', () => {
-  it('derives modes from measurements and never stops discovery', () => {
-    const reading: DiscoveryYield = { byMethod: [row('a', { rounds: 4, openings: 5, useful: 2 }), row('b', { rounds: 1, openings: 2 })], bySource: [] };
-    const b = yieldBalance(reading, ['a', 'b', 'c']);
-    expect(b.exploit).toEqual(['a']);
-    expect(b.investigate).toEqual(['b']);
-    expect(b.explore).toEqual(['c']);
-    expect(b.share!.EXPLOIT).toBeCloseTo(1 / 3);
-    expect(b.discoveryContinues).toBe(true);
-  });
-  it('with nothing supported, weight falls on investigating and exploring', () => {
-    const b = yieldBalance({ byMethod: [row('b', { rounds: 5, openings: 3 })], bySource: [] }, ['b', 'c']);
-    expect(b.exploit).toEqual([]);
-    expect(b.share!.EXPLOIT).toBe(0);
-    expect(b.discoveryContinues).toBe(true);
-  });
-  it('reports no share when nothing is measured or known', () => {
-    expect(yieldBalance({ byMethod: [], bySource: [] }).share).toBeNull();
+  it('has no candidate set without a live goal, and says nothing was measured', async () => {
+    await opening('Small and open', null);
+    const view = await cashView({ projectId });
+    expect(view.myCurrentWork.screening.candidateSet).toBeNull();
+    expect(view.myCurrentWork.screening.metrics.notes.join(' ')).toMatch(/No question has been recorded as skipped/);
   });
 });

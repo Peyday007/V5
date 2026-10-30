@@ -38,6 +38,9 @@ import { authorityFor } from './opportunities.ts';
 import { sharedFrontier, type SharedFrontier } from './shared.ts';
 import { readStandingRows } from './standing.ts';
 import { ownerStandingSurface, type OwnerStandingSurface } from './standingSurface.ts';
+import { candidateSetForGoal, type CandidateSet } from './candidateSet.ts';
+import { screenMetrics, type ScreenMetrics } from './screenMetrics.ts';
+import { liveGoalTarget } from './infoValue.ts';
 import type {
   CashCardFact,
   CashCommitment,
@@ -111,6 +114,13 @@ export interface CashView {
     commitments: CashCommitment[];
   };
   myCurrentWork: AssembledPlan & {
+    /**
+     * What the goal screen did, counted from rows (decisions by type, questions
+     * skipped, research released, Claude jobs avoided), and the set of small
+     * opportunities that survived the live goal's limits, for a planner that
+     * combines them. The set is null when the project has no live goal.
+     */
+    screening: { metrics: ScreenMetrics; candidateSet: CandidateSet | null };
     /**
      * The compiled instruction for each live piece, in dependency order.
      *
@@ -259,6 +269,17 @@ export interface CashView {
    * state; see `services/cash/prepared.ts`.
    */
   prepared: PreparedDecision[];
+}
+
+async function screeningFor(
+  projectId: string,
+  opportunities: Parameters<typeof candidateSetForGoal>[1],
+): Promise<CashView['myCurrentWork']['screening']> {
+  const live = await liveGoalTarget(projectId);
+  return {
+    metrics: await screenMetrics(projectId),
+    candidateSet: live ? await candidateSetForGoal(projectId, opportunities, live.target) : null,
+  };
 }
 
 export async function cashView(input: {
@@ -466,6 +487,7 @@ export async function cashView(input: {
     },
     myCurrentWork: {
       ...plan,
+      screening: await screeningFor(input.projectId, opportunities),
       standingSurface: await ownerStandingSurface({
         projectId: input.projectId,
         opportunities,

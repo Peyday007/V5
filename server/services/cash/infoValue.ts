@@ -21,6 +21,11 @@
  * question in its own right, never inferred from one listing's size.
  */
 import { screenOpportunity, type ScreenFacts, type ScreenLimits, type ScreenVerdict } from './screen.ts';
+import { listWorkstreams } from '../../repos/register.ts';
+import { cashEventsOfKindInProject, recordCashEvent } from '../../repos/cashMode.ts';
+import { readTarget, type TargetReading } from '../goals/target.ts';
+import { QUESTION_SKIPPED_EVENT } from './screenMetrics.ts';
+import type { CashOpportunity } from '../../domain/types.ts';
 
 export const RESEARCH_QUESTIONS = [
   'CAPITAL_REQUIRED',
@@ -142,4 +147,87 @@ export function orderFieldsByCost<T extends { key: string }>(fields: readonly T[
     return q ? COST[q] : 4;
   };
   return fields.map((f, i) => ({ f, i })).sort((a, b) => cost(a.f) - cost(b.f) || a.i - b.i).map((x) => x.f);
+}
+
+/* --------------------------------------------------------------------------
+ * Using the decision where questions are raised
+ * ------------------------------------------------------------------------ */
+
+/** The live goal whose limits the screen reads, or null when the project has none. */
+export async function liveGoalTarget(
+  projectId: string,
+  now: Date = new Date(),
+): Promise<{ goalId: string; target: TargetReading } | null> {
+  for (const goal of await listWorkstreams({ projectIds: [projectId] })) {
+    if (goal.projectId !== projectId || !goal.target) continue;
+    const target = await readTarget(goal, now);
+    if (target && !target.achieved) return { goalId: goal.id, target };
+  }
+  return null;
+}
+
+/**
+ * What the screen can read about an opening from its own row. Nothing is
+ * invented: a fact the row does not hold stays unknown, so it can only ever
+ * produce a HOLD, and capabilities stay unrecorded so eligibility is never
+ * decided from a list Brain does not have.
+ */
+export function screenFactsFor(opportunity: CashOpportunity, siblings: readonly CashOpportunity[]): ScreenFacts {
+  return {
+    capitalRequiredCents: opportunity.peakFundingCents,
+    noCapitalRoute: null,
+    daysToPayment: null,
+    expiresAt: opportunity.expiresAt,
+    duplicateOf: opportunity.duplicateOfId,
+    requirements: [],
+    capabilities: null,
+    exclusions: [],
+    hasPayer: opportunity.payer !== null,
+    hasPrice: opportunity.priceCents !== null,
+    typeHasHistory: siblings.some((one) => one.id !== opportunity.id && one.mechanism === opportunity.mechanism),
+    sourceObservedAt: opportunity.signalObservedAt,
+  };
+}
+
+/** Which (opening, question) pairs already have a skipped row, so a pass writes each once. */
+export async function loadSkipLedger(projectId: string): Promise<Set<string>> {
+  const seen = new Set<string>();
+  for (const event of await cashEventsOfKindInProject(projectId, QUESTION_SKIPPED_EVENT)) {
+    const question = (event.detail as { question?: unknown }).question;
+    if (event.opportunityId && typeof question === 'string') seen.add(`${event.opportunityId}|${question}`);
+  }
+  return seen;
+}
+
+/**
+ * Decide one card field's question under the goal's limits. A question no
+ * answer to which could change the decision is recorded as skipped - once, with
+ * why - and reported as not to be asked. An unmapped field is always asked.
+ */
+export async function askOrSkipField(input: {
+  projectId: string;
+  opportunity: CashOpportunity;
+  fieldKey: string;
+  goal: { goalId: string; limits: ScreenLimits };
+  siblings: readonly CashOpportunity[];
+  ledger: Set<string>;
+  now: string;
+}): Promise<boolean> {
+  const question = FIELD_QUESTION[input.fieldKey];
+  if (!question) return true;
+  const decision = questionDecision(question, screenFactsFor(input.opportunity, input.siblings), input.goal.limits, input.now);
+  if (decision.ask) return true;
+  const mark = `${input.opportunity.id}|${question}`;
+  if (!input.ledger.has(mark)) {
+    input.ledger.add(mark);
+    await recordCashEvent({
+      projectId: input.projectId,
+      opportunityId: input.opportunity.id,
+      kind: QUESTION_SKIPPED_EVENT,
+      actorRef: 'BRAIN',
+      summary: `Did not ask ${question.toLowerCase().replace(/_/g, ' ')} about "${input.opportunity.title}": ${decision.why}.`,
+      detail: { question, why: decision.why, goalId: input.goal.goalId, cost: decision.cost },
+    });
+  }
+  return false;
 }

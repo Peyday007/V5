@@ -25,6 +25,7 @@ import type {
   StandingHistoryEntry,
 } from '../../../server/services/cash/standingSurface.ts';
 import type { CashReopenCondition } from '../../../server/domain/types.ts';
+import type { CashView } from '../../../server/services/cash/view.ts';
 
 export const STANDING_LABEL: Record<string, string> = {
   ADVANCING: 'Moving',
@@ -425,6 +426,42 @@ export function ResearchProgressBlock({ page }: { page: CashPage }): JSX.Element
             </ul>
           ) : null}
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What the goal screen did, in words, and the small openings that survive the
+ * live goal's limits. Counts come from rows; a count nothing has recorded says
+ * so rather than reading as a measurement.
+ */
+export function ScreeningReading({ page }: { page: CashPage }): JSX.Element | null {
+  // The client's hand-written payload type predates this field; the server sends it.
+  const screening = (page.full?.myCurrentWork as { screening?: CashView['myCurrentWork']['screening'] } | undefined)?.screening;
+  if (!screening) return null;
+  const { metrics, candidateSet } = screening;
+  const decided = metrics.decisions.REJECT + metrics.decisions.HOLD + metrics.decisions.PRIORITIZE;
+  return (
+    <div className="rs-screening">
+      <h4>What the goal screen did</h4>
+      <p className="rs-item-meta">
+        {decided === 0
+          ? 'No decision has been recorded yet. '
+          : `${metrics.decisions.REJECT} rejected, ${metrics.decisions.HOLD} held, ${metrics.decisions.PRIORITIZE} prioritized. `}
+        {metrics.questionsSkipped} {metrics.questionsSkipped === 1 ? 'question was' : 'questions were'} skipped because no
+        answer could change the decision; {metrics.research.needsWithdrawn} need(s) and {metrics.research.missionsCancelled}{' '}
+        mission(s) were released; {metrics.claudeJobsAvoided.total} research job(s) were avoided.
+      </p>
+      {metrics.notes.map((note) => (
+        <p key={note} className="rs-hint">{note}</p>
+      ))}
+      {candidateSet ? (
+        <p className="rs-item-meta">
+          {candidateSet.note} {candidateSet.excluded.length > 0 ? `${candidateSet.excluded.length} left out for breaking a limit of the goal.` : ''}
+        </p>
+      ) : (
+        <p className="rs-hint">No live goal, so no candidate set was built.</p>
       )}
     </div>
   );

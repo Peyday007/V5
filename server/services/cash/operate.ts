@@ -112,7 +112,7 @@ import {
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
 import { describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
-import { orderFieldsByCost } from './infoValue.ts';
+import { askOrSkipField, liveGoalTarget, loadSkipLedger, orderFieldsByCost } from './infoValue.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
 
 /** Brain acting on its own account, never a person and never a worker. */
@@ -424,6 +424,11 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
   const out: DiscoverableGap[] = [];
   const open = await listNeeds({ projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
+  // The goal's own limits decide whether a question could change anything; with
+  // no live goal there is nothing to judge against and every question is asked.
+  const liveGoal = await liveGoalTarget(projectId);
+  const skipLedger = liveGoal ? await loadSkipLedger(projectId) : new Set<string>();
+  const everyOpportunity = liveGoal ? await listOpportunities({ projectId }) : [];
 
   for (const opportunity of await listOpportunities({
     projectId,
@@ -497,6 +502,20 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
       if (!field.loadBearing || field.owner !== 'BRAIN_RESEARCH' || field.value !== null) continue;
       const key = questionKey(opportunity.id, field.key);
       if (keys.has(key)) continue;
+      if (
+        liveGoal &&
+        !(await askOrSkipField({
+          projectId,
+          opportunity,
+          fieldKey: field.key,
+          goal: { goalId: liveGoal.goalId, limits: liveGoal.target },
+          siblings: everyOpportunity,
+          ledger: skipLedger,
+          now: cashNow(),
+        }))
+      ) {
+        continue;
+      }
       const raised = await raiseNeed({
         projectId,
         opportunityId: opportunity.id,

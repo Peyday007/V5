@@ -35,6 +35,7 @@ import {
   DormantPieces,
   ReconsideredRecently,
   ResearchProgressBlock,
+  ScreeningReading,
   SharedBlockers,
   StandingLine,
 } from './CashStanding.tsx';
@@ -3176,6 +3177,7 @@ function Details({ page, onChanged }: { page: CashPage; onChanged(): void }): JS
           </span>
         </summary>
         <ResearchProgressBlock page={page} />
+        <ScreeningReading page={page} />
         <Roadmap roadmap={frontier.roadmap} discoveryReason={frontier.discovery.reason} />
       </details>
       <details className="rs-card rs-cash-money-detail">

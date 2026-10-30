@@ -7,7 +7,36 @@
  * a plan and imports nothing from the goal planners; it hands them a set and
  * says, in words, whether the set could reach the target on what is counted.
  */
+import { listValueLayers } from '../../repos/cashValueLayers.ts';
+import type { CashOpportunity } from '../../domain/types.ts';
 import { rankForGoal, type RankGoal, type RankInput } from './rankGoal.ts';
+
+/** Pieces nobody has committed to, in the states a plan could still take. */
+const OPEN_STATES = new Set(['DISCOVERED', 'EVIDENCE_CARD', 'READY']);
+
+/**
+ * The set for one project's live goal, built from the opportunities' own value
+ * layers. This is the exported entrance a planner (or the Cash view) calls:
+ * what is not known stays unknown, and a duplicate or closed piece is never a member.
+ */
+export async function candidateSetForGoal(
+  projectId: string,
+  opportunities: readonly CashOpportunity[],
+  goal: RankGoal,
+): Promise<CandidateSet> {
+  const items: RankInput[] = [];
+  for (const opportunity of opportunities) {
+    if (!OPEN_STATES.has(opportunity.state) || opportunity.duplicateOfId) continue;
+    items.push({
+      opportunity,
+      readings: await listValueLayers(projectId, opportunity.id),
+      daysToCash: null,
+      repeatable: null,
+      combinable: null,
+    });
+  }
+  return candidateSet(items, goal);
+}
 
 export interface CandidateMember {
   id: string;
