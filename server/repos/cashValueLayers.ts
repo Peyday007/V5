@@ -22,12 +22,55 @@ function map(row: ValueLayerRow): ValueLayerReading {
   };
 }
 
+/**
+ * The LEDGER layer, derived from the append-only money entries rather than
+ * written by anybody: money agreed (less what was released) or received (less
+ * refunds), whichever is larger so the same money is never counted twice.
+ * Null when the opportunity has no entry, or its entries span currencies —
+ * summing across currencies would invent a figure.
+ */
+async function derivedLedger(projectId: string, opportunityId: string): Promise<ValueLayerReading | null> {
+  const rows = await getDb().all<{ kind: string; currency: string; total: number }>(
+    `SELECT kind, currency, SUM(amount_cents) AS total FROM cash_money_entries
+      WHERE project_id = ? AND opportunity_id = ?
+        AND kind IN ('PIPELINE_AGREED', 'PIPELINE_RELEASED', 'CUSTOMER_PAYMENT', 'REFUND')
+      GROUP BY kind, currency`,
+    [projectId, opportunityId],
+  );
+  if (rows.length === 0) return null;
+  const currencies = new Set(rows.map((row) => row.currency));
+  if (currencies.size !== 1) return null;
+  const sum = (kind: string): number => Number(rows.find((row) => row.kind === kind)?.total ?? 0);
+  const agreed = Math.max(0, sum('PIPELINE_AGREED') - sum('PIPELINE_RELEASED'));
+  const received = Math.max(0, sum('CUSTOMER_PAYMENT') - sum('REFUND'));
+  const at = nowIso();
+  return {
+    id: `derived:ledger:${opportunityId}`,
+    projectId,
+    opportunityId,
+    layer: 'LEDGER',
+    status: 'VERIFIED',
+    amountCents: Math.max(agreed, received),
+    currency: [...currencies][0]!,
+    source: 'cash money ledger',
+    note: 'Derived from the append-only money entries; not stored here.',
+    createdAt: at,
+    updatedAt: at,
+  };
+}
+
 export async function listValueLayers(projectId: string, opportunityId: string): Promise<ValueLayerReading[]> {
   const rows = await getDb().all<ValueLayerRow>(
     'SELECT * FROM cash_value_layers WHERE project_id = ? AND opportunity_id = ? ORDER BY layer',
     [projectId, opportunityId],
   );
-  return rows.map(map);
+  const stored = rows.map(map);
+  // The ledger is the authority on money agreed or received, so its derived
+  // reading replaces any stored LEDGER row: a hand-written one could only ever
+  // disagree with the rows it summarises.
+  const ledger = await derivedLedger(projectId, opportunityId);
+  if (!ledger) return stored;
+  return [...stored.filter((reading) => reading.layer !== 'LEDGER'), ledger];
 }
 
 /** Record one layer. Refuses a layer that breaks the rules rather than storing it. */
