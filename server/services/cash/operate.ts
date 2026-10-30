@@ -113,6 +113,7 @@ import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
 import { describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
 import { orderFieldsByCost } from './infoValue.ts';
+import { recordQuestionsSkipped } from './screenMetrics.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
 
 /** Brain acting on its own account, never a person and never a worker. */
@@ -459,7 +460,26 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * blank is asked once it has settled, which is what this pass is for.
      */
     if (diveOwnsItsQuestions(opportunity)) continue;
-    if (await notWorthResearching(opportunity, { now: cashNow() })) continue;
+    const unworthy = await notWorthResearching(opportunity, { now: cashNow() });
+    if (unworthy) {
+      /*
+       * A screened-out opening is not asked its card's questions, and that is a
+       * decision worth counting: each question no answer could change is
+       * recorded as skipped, with why, rather than dropped without a trace.
+       */
+      if (unworthy.kind === 'SCREENED_OUT') {
+        const skipped = evidenceCard(opportunity).fields
+          .filter((one) => one.loadBearing && one.owner === 'BRAIN_RESEARCH' && one.value === null)
+          .map((one) => one.key);
+        await recordQuestionsSkipped({
+          projectId,
+          opportunityId: opportunity.id,
+          fields: skipped,
+          why: `No answer could change the decision: ${describeNotWorthResearching(unworthy)}.`,
+        });
+      }
+      continue;
+    }
     const card = evidenceCard(opportunity);
     const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
     /*

@@ -23,3 +23,15 @@ caller writes a `QUESTION_SKIPPED` event.
 yet) and EXPLORE (known, never asked). The shares are counts of those methods,
 so they move with the rows; there is no fixed percentage. With nothing yielding,
 discovery keeps running (`discoveryContinues` is always true).
+
+## Where the measurements and the surviving set are read
+
+- `screenMetrics` (decisions by type, questions skipped, research released, Claude
+  jobs avoided) and `candidateSet` (the openings that survive the goal's own
+  limits, for a planner that combines them) are both on the owner's Cash view as
+  `screening`, beside the other owner-only blocks. The set is `null` when the
+  project has no goal with a target, because there is then no limit to survive.
+- A question the screen decides is not worth asking is recorded as a
+  `QUESTION_SKIPPED` cash event, once per opening and card field, by the research
+  pass in `operate.ts` (`recordQuestionsSkipped`). Before this nothing wrote that
+  event and the counter could only read zero.
