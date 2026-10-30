@@ -49,6 +49,9 @@ import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { listNeeds } from '../server/repos/cashPortfolio.ts';
 import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
 import { getCycle } from '../server/repos/russellCycle.ts';
+import { getDb } from '../server/db/database.ts';
+import { workforceView } from '../server/services/fleet/workforce.ts';
+import { shortlistFunnel } from '../server/services/feeds/run.ts';
 import { discoveryYield, type YieldRow } from '../server/services/cash/discoveryYield.ts';
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
@@ -356,6 +359,23 @@ async function printSearching(reading: PlanReading): Promise<void> {
   const show = (r: YieldRow) => `${r.key} ${r.useful}/${r.openings} useful${r.qualified ? ` ${r.qualified} qualified` : ''}${r.rounds ? `, ${r.rounds} search(es) ${r.failedRounds} failed, ${r.fragments} research jobs` : ''}`;
   console.log(`  methods     ${found.byMethod.slice(0, 12).map(show).join(' · ')}`);
   console.log(`  sources     ${found.bySource.slice(0, 12).map(show).join(' · ')}`);
+  // How the workforce, the free AI and the code feeds ran in the last day.
+  const wf = await workforceView({ mayRead: () => true });
+  console.log(`  workforce   24h: ${wf.totals.completed24h} jobs finished, ${wf.totals.researchPasses24h} research passes, ${wf.totals.connected} accounts connected, ${wf.totals.working} working now, ${wf.totals.idleWithWork} idle with work waiting; queue ${wf.queue.ready} ready ${wf.queue.leased} in progress`);
+  for (const a of wf.accounts) {
+    const d = a.last24h;
+    console.log(`    account   ${a.name}: ${a.status} · routines ${a.routines.usable}/${a.routines.total} usable · 24h started ${d.started} arrived ${d.arrived} took ${d.assigned} finished ${d.completed} handed back ${d.handedBack} failed ${d.failed} passes ${d.researchPasses}${a.heldReasons.length ? ` · held: ${a.heldReasons.join('; ').slice(0, 200)}` : ''}`);
+  }
+  const cheap = await getDb().all<{ kind: string; model: string; total: number | string; failed: number | string }>(
+    `SELECT kind, model, COUNT(*) AS total, SUM(CASE WHEN ok = 1 THEN 0 ELSE 1 END) AS failed
+       FROM cheap_results WHERE created_at >= ? GROUP BY kind, model ORDER BY kind, model`,
+    [new Date(Date.now() - 24 * 60 * 60_000).toISOString()],
+  );
+  console.log(`  free AI     24h: ${cheap.reduce((n, r) => n + Number(r.total), 0)} answers, ${cheap.reduce((n, r) => n + Number(r.failed ?? 0), 0)} failed`);
+  for (const r of cheap) console.log(`    free AI   ${r.kind} ${r.model}: ${r.total} answers, ${r.failed ?? 0} failed`);
+  const feeds = await getDb().get<{ n: number | string }>(`SELECT COUNT(*) AS n FROM feed_items WHERE fetched_at >= ?`, [new Date(Date.now() - 24 * 60 * 60_000).toISOString()]).catch(() => null);
+  const funnel = await shortlistFunnel(reading.target.projectId).catch(() => null);
+  console.log(`  code feeds  24h: ${feeds ? Number(feeds.n) : '?'} new items pulled; ${funnel ? `pool ${funnel.pool}, screened by free AI ${funnel.screened}, kept ${funnel.kept}, passed rules ${funnel.passedRules}, sent to Claude ${funnel.chosen.length}` : 'funnel unreadable'}`);
   console.log(`  searching   ${rounds.length} round(s) of this goal's own search`);
   for (const round of rounds) {
     const mission = await latestMissionForCandidate(round.candidateId);
