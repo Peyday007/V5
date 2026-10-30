@@ -14,6 +14,7 @@
  * has not been observed it is reported as unknown rather than as zero, because
  * zero is a measurement and unknown is not.
  */
+import { getDb } from '../../db/database.ts';
 import type {
   FactoryEvent,
   FactoryIntegration,
@@ -604,4 +605,70 @@ export function computeMetrics(input: MetricsInput): CampaignMetrics {
       (e) => e.kind === FACTORY_EVENT_KINDS.sessionFinished && e.detail['paidApi'] === true,
     ).length,
   };
+}
+
+/**
+ * One factory bin as the stage-latency block reads it: when it became READY,
+ * when it was first leased, and every interval a worker held it. Taken from
+ * `bins` and `bin_events` only; nothing is inferred from a state column.
+ */
+export interface BinFact {
+  id: string;
+  kind: string;
+  createdAt: string;
+  /** First BIN_READY event, or null when the bin never recorded one. */
+  readyAt: string | null;
+  /** First BIN_ASSIGNED or BIN_TAKEOVER event, or null when no worker ever held it. */
+  firstLeaseAt: string | null;
+  /** Last event that ended a hold (released, expired, terminal), or null while still held or never held. */
+  lastEndAt: string | null;
+  /** [start, end] of each hold, end null while the hold is still open. */
+  holds: { start: string; end: string | null }[];
+}
+
+const HOLD_START = new Set(['BIN_ASSIGNED', 'BIN_TAKEOVER']);
+const HOLD_END = new Set(['BIN_RELEASED', 'BIN_LEASE_EXPIRED', 'BIN_TERMINAL']);
+
+/** Pure: fold a bin's events (oldest first) into its `BinFact`. */
+export function binFactOf(bin: { id: string; kind: string; createdAt: string }, events: { eventType: string; at: string }[]): BinFact {
+  const holds: BinFact['holds'] = [];
+  let readyAt: string | null = null;
+  let firstLeaseAt: string | null = null;
+  let lastEndAt: string | null = null;
+  for (const e of events) {
+    if (e.eventType === 'BIN_READY' && readyAt === null) readyAt = e.at;
+    if (HOLD_START.has(e.eventType)) {
+      const open = holds[holds.length - 1];
+      if (open && open.end === null) open.end = e.at; // a takeover ends the previous hold
+      holds.push({ start: e.at, end: null });
+      if (firstLeaseAt === null) firstLeaseAt = e.at;
+    } else if (HOLD_END.has(e.eventType)) {
+      const open = holds[holds.length - 1];
+      if (open && open.end === null) {
+        open.end = e.at;
+        lastEndAt = e.at;
+      }
+    }
+  }
+  return { id: bin.id, kind: bin.kind, createdAt: bin.createdAt, readyAt, firstLeaseAt, lastEndAt, holds };
+}
+
+/** Every bin a campaign has served, with the events the stage block needs. */
+export async function campaignBinFacts(campaignId: string): Promise<BinFact[]> {
+  const db = getDb();
+  const bins = await db.all<{ id: string; kind: string; created_at: string }>(
+    `SELECT id, kind, created_at FROM bins WHERE factory_campaign_id = ? ORDER BY created_at, id`,
+    [campaignId],
+  );
+  const out: BinFact[] = [];
+  for (const bin of bins) {
+    const events = await db.all<{ event_type: string; at: string }>(
+      `SELECT event_type, at FROM bin_events
+        WHERE bin_id = ? AND event_type IN ('BIN_READY','BIN_ASSIGNED','BIN_TAKEOVER','BIN_RELEASED','BIN_LEASE_EXPIRED','BIN_TERMINAL')
+        ORDER BY at, rowid`,
+      [bin.id],
+    );
+    out.push(binFactOf({ id: bin.id, kind: bin.kind, createdAt: bin.created_at }, events.map((e) => ({ eventType: e.event_type, at: e.at }))));
+  }
+  return out;
 }
