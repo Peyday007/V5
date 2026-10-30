@@ -39,9 +39,9 @@ const toItem = (row: Row): StoredFeedItem => ({
 });
 
 /** Insert what is new; an item already held is left exactly as it was. */
-export async function insertFeedItems(source: string, items: readonly FeedItem[]): Promise<number> {
+export async function insertFeedItems(source: string, items: readonly FeedItem[], fetchedAt?: string): Promise<number> {
   let inserted = 0;
-  const at = nowIso();
+  const at = fetchedAt ?? nowIso();
   for (const item of items) {
     const result = await getDb().run(
       `INSERT INTO feed_items
