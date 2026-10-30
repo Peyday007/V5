@@ -144,3 +144,19 @@ export async function recomputeFlaggedDecisions(
   }
   return out;
 }
+
+
+/**
+ * The one decision a reader tells when a piece has several, one per goal.
+ *
+ * It mirrors the research gate: a piece is rejected only when every goal that
+ * decided it rejected it, because an opening that serves one goal is worth
+ * pursuing. Otherwise a PRIORITIZE under any goal wins over a HOLD, and the
+ * earliest decision breaks a tie. Pure.
+ */
+export function standingDecision(decisions: readonly CashDecision[]): CashDecision | null {
+  const current = decisions.filter((one) => one.isCurrent);
+  if (current.length === 0) return null;
+  if (current.every((one) => one.verdict === 'REJECT')) return current[0]!;
+  return current.find((one) => one.verdict === 'PRIORITIZE') ?? current.find((one) => one.verdict === 'HOLD') ?? current[0]!;
+}
