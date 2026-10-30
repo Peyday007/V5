@@ -857,7 +857,7 @@ jobs:
                   print(f'::warning title={name}::not written: the pass never started')
                   continue
               verdict = re.findall(r'^HOSTED-VERIFICATION:.*$', text, re.M)
-              fails = re.findall(r'^ *FAIL .*$', text, re.M)
+              fails = re.findall(r'^ *FAIL .*$|^HOSTED-VERIFY-GUARD.*$', text, re.M)
               head = (verdict[-1] if verdict else 'NO VERDICT LINE: the pass did not finish') + '\n'
               print(f'::notice title={name} verdict::{enc(head + chr(10).join(fails)[:5500])}')
               tail = text[-24000:]
