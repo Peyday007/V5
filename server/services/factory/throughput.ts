@@ -31,6 +31,10 @@ import type { FactoryEvidenceClass } from '../../domain/factory.ts';
 import { campaignBinFacts, campaignMetrics, FACTORY_EVENT_KINDS, maxOverlap, type BinFact, type CampaignMetrics } from './metrics.ts';
 import { listFactoryEvents } from '../../repos/factoryFleet.ts';
 import type { FactoryEvent } from '../../domain/factory.ts';
+import type { Bin, BinDispatch } from '../../domain/types.ts';
+import { listBins, listDispatchesForBin } from '../../repos/bins.ts';
+import { fleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.ts';
+import { routeBin, type RoutingCandidate } from '../dispatch/router.ts';
 
 export interface EvidenceNumber {
   value: number | null;
@@ -601,4 +605,107 @@ export async function throughputReport(campaignId: string): Promise<ThroughputRe
       ),
     },
   };
+}
+
+/* ---------------------------------------------------------------------------
+ * Why is ready work not moving?
+ *
+ * A reading of the fleet that composes what already decides it — `fleetSnapshot`
+ * for the surfaces and `routeBin` for the verdict on each waiting bin — and
+ * re-derives no eligibility of its own. It decides nothing and writes nothing.
+ * ------------------------------------------------------------------------- */
+
+export type SurfaceStatus = 'QUARANTINED' | 'RATE_LIMITED' | 'IN_FLIGHT' | 'IDLE';
+
+export interface IdleBin {
+  binId: string;
+  kind: string;
+  campaignId: string | null;
+  waitedMs: number | null;
+  /** The newest dispatch row's refusal, as recorded when it was written. */
+  dispatch: { state: string; lastErrorKind: string | null; lastError: string | null } | null;
+  /** What `routeBin` says about this bin against the fleet now. */
+  routing: { ok: true; routine: string } | { ok: false; refusal: string; reason: string; retryAt: string | null };
+  fleet: { inFlight: number; target: number | null; factoryInFlight: number };
+}
+
+export interface IdleSurface {
+  routineId: string;
+  name: string;
+  accountId: string;
+  status: SurfaceStatus;
+  inFlight: number;
+  retryAt: string | null;
+  stateReason: string | null;
+}
+
+export interface IdleReading {
+  at: string;
+  bins: IdleBin[];
+  surfaces: IdleSurface[];
+}
+
+export interface IdleInput {
+  now: Date;
+  bins: { bin: Bin; dispatches: BinDispatch[] }[];
+  snapshot: FleetSnapshot;
+}
+
+export function surfaceStatus(candidate: RoutingCandidate, nowIso: string): SurfaceStatus {
+  const { routine, account, routineInFlight } = candidate;
+  if (routine.state === 'QUARANTINED') return 'QUARANTINED';
+  const until = [routine.retryAt, account.retryAt].filter((t): t is string => !!t && t > nowIso).sort().at(-1);
+  if (until) return 'RATE_LIMITED';
+  return routineInFlight > 0 ? 'IN_FLIGHT' : 'IDLE';
+}
+
+/** Pure: the reading from bins, their dispatches and a fleet snapshot. */
+export function computeIdle(input: IdleInput): IdleReading {
+  const nowIso = input.now.toISOString();
+  const { snapshot } = input;
+  const bins: IdleBin[] = input.bins.map(({ bin, dispatches }) => {
+    const since = bin.readyAt ?? bin.createdAt;
+    const waited = Date.parse(nowIso) - Date.parse(since);
+    const newest = dispatches.at(-1) ?? null;
+    const decision = routeBin({
+      bin,
+      candidates: snapshot.candidates,
+      fleetPolicy: snapshot.fleetPolicy,
+      fleetInFlight: snapshot.fleetInFlight,
+      factoryInFlight: snapshot.factoryInFlight,
+      now: nowIso,
+    });
+    return {
+      binId: bin.id,
+      kind: bin.kind,
+      campaignId: bin.factoryCampaignId,
+      waitedMs: Number.isFinite(waited) && waited >= 0 ? waited : null,
+      dispatch: newest ? { state: newest.state, lastErrorKind: newest.lastErrorKind, lastError: newest.lastError } : null,
+      routing: decision.ok
+        ? { ok: true, routine: decision.routine.name }
+        : { ok: false, refusal: decision.refusal, reason: decision.reason, retryAt: decision.retryAt },
+      fleet: { inFlight: snapshot.fleetInFlight, target: snapshot.fleetPolicy?.target ?? null, factoryInFlight: snapshot.factoryInFlight },
+    };
+  });
+  const surfaces: IdleSurface[] = snapshot.candidates.map((c) => {
+    const status = surfaceStatus(c, nowIso);
+    const retryAt = [c.routine.retryAt, c.account.retryAt].filter((t): t is string => !!t && t > nowIso).sort().at(-1) ?? null;
+    return {
+      routineId: c.routine.id,
+      name: c.routine.name,
+      accountId: c.account.id,
+      status,
+      inFlight: c.routineInFlight,
+      retryAt: status === 'RATE_LIMITED' ? retryAt : null,
+      stateReason: status === 'QUARANTINED' ? c.routine.stateReason : null,
+    };
+  });
+  return { at: nowIso, bins: bins.sort((a, b) => (b.waitedMs ?? -1) - (a.waitedMs ?? -1)), surfaces };
+}
+
+/** Read every READY factory bin and the fleet now, and report why each is or is not moving. */
+export async function idleReading(now = new Date()): Promise<IdleReading> {
+  const ready = (await listBins({ states: ['READY'], limit: 500 })).filter((b) => b.kind.startsWith('FACTORY') || b.factoryCampaignId !== null);
+  const bins = await Promise.all(ready.map(async (bin) => ({ bin, dispatches: await listDispatchesForBin(bin.id) })));
+  return computeIdle({ now, bins, snapshot: await fleetSnapshot(now) });
 }

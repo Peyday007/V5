@@ -54,7 +54,7 @@ import { INITIAL_LANE_TARGET } from '../server/services/factory/scheduler.ts';
 import { installPlan, validatePlan } from '../server/services/factory/planner.ts';
 import { runCampaign, tickAllCampaigns, tickCampaign } from '../server/services/factory/loop.ts';
 import { campaignMetrics, FACTORY_EVENT_KINDS } from '../server/services/factory/metrics.ts';
-import { throughputReport } from '../server/services/factory/throughput.ts';
+import { idleReading, throughputReport } from '../server/services/factory/throughput.ts';
 import { pullRequestFor } from '../server/services/factory/pullRequest.ts';
 import { factoryAllocation } from '../server/services/factory/allocation.ts';
 import type { FactoryCapability, FactoryWorkerKind } from '../server/domain/factory.ts';
@@ -783,6 +783,28 @@ async function main(): Promise<void> {
       break;
     }
 
+    case 'idle': {
+      const reading = await idleReading();
+      const mins = (ms: number | null): string => (ms === null ? 'not measured' : `${Math.round(ms / 60_000)}m`);
+      process.stdout.write(`READY factory bins: ${reading.bins.length}\n`);
+      for (const b of reading.bins) {
+        process.stdout.write(
+          `${b.binId} ${b.kind}${b.campaignId ? ` campaign=${b.campaignId}` : ''} waited ${mins(b.waitedMs)}\n` +
+            `    dispatch ${b.dispatch ? `${b.dispatch.state}${b.dispatch.lastErrorKind ? ` ${b.dispatch.lastErrorKind}: ${(b.dispatch.lastError ?? '').slice(0, 200)}` : ''}` : 'none yet'}\n` +
+            `    routing  ${b.routing.ok ? `would fire ${b.routing.routine}` : `${b.routing.refusal}${b.routing.retryAt ? ` retry ${b.routing.retryAt}` : ''}: ${b.routing.reason.slice(0, 220)}`}\n` +
+            `    fleet    in-flight ${b.fleet.inFlight} (factory ${b.fleet.factoryInFlight}) target ${b.fleet.target ?? 'none'}\n`,
+        );
+      }
+      process.stdout.write(`\nroutable Routines: ${reading.surfaces.length}\n`);
+      for (const r of reading.surfaces) {
+        process.stdout.write(
+          `${r.name.padEnd(28)} ${r.status.padEnd(12)} in-flight ${r.inFlight}` +
+            `${r.retryAt ? ` rate-limited until ${r.retryAt}` : ''}${r.stateReason ? ` — ${r.stateReason.slice(0, 160)}` : ''}\n`,
+        );
+      }
+      break;
+    }
+
     case 'throughput': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const report = await throughputReport(campaignId);
@@ -808,6 +830,22 @@ async function main(): Promise<void> {
           figure('rate-limited sessions', report.rateLimited.sessions) +
           figure('rate-limited deferred ms', report.rateLimited.deferredMs),
       );
+      {
+        const st = report.stages;
+        process.stdout.write(
+          '\nstages\n' +
+            figure('plan duration ms', st.planDurationMs) +
+            figure('time to first coding ms', st.timeToFirstCodingMs) +
+            figure('integration delay ms', st.integrationDelayMs) +
+            figure('review delay ms', st.reviewDelayMs) +
+            figure('max concurrent unit bins', st.concurrentUnitBinsMax) +
+            figure('stage units per hour', st.unitsPerHour) +
+            figure('completion ms', st.completionMs),
+        );
+        for (const [kind, delay] of Object.entries(st.queueDelayByKind)) {
+          process.stdout.write(figure(`queue ${kind} avg ms`, delay.average) + figure(`queue ${kind} max ms`, delay.max));
+        }
+      }
       for (const [heading, entries] of [
         ['per worker', report.perWorker],
         ['per role', report.perRole],
@@ -1446,7 +1484,7 @@ async function main(): Promise<void> {
     default:
       process.stdout.write(
         'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
+          '  remote-tick, campaigns, bins, status, events, throughput, idle, pull-request,\n' +
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
           '  answer-bin,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
