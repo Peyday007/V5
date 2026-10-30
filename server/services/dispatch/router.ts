@@ -311,6 +311,19 @@ export interface RoutingCandidate {
   accountTarget: number | null;
   /** A person's timestamped gauge reading, never a measured provider balance. */
   allowanceReport?: AllowanceReport | null;
+  /**
+   * The stored per-account routing preference. `LAST_RESORT` is data, not an
+   * access grant: it widens no project, family, repository or capability, and
+   * only orders accounts that are already eligible. Absent is NORMAL.
+   */
+  routingPreference?: RoutingPreference | null;
+}
+
+export const ROUTING_PREFERENCES = ['NORMAL', 'LAST_RESORT'] as const;
+export type RoutingPreference = (typeof ROUTING_PREFERENCES)[number];
+
+export function isLastResort(candidate: { routingPreference?: RoutingPreference | null }): boolean {
+  return candidate.routingPreference === 'LAST_RESORT';
 }
 
 export interface RoutingInput {
@@ -904,6 +917,23 @@ export function routeBin(input: RoutingInput): RoutingResult {
     };
   }
 
+  /*
+   * A LAST_RESORT account is chosen only when no eligible NORMAL account can
+   * take this bin. Eligibility above already applied project, family,
+   * repository, capability, web, target and rate-limit rules, so holding one
+   * back can only reorder accounts that were allowed to take the work.
+   */
+  if (eligible.some((one) => !isLastResort(one)) && eligible.some(isLastResort)) {
+    for (let i = eligible.length - 1; i >= 0; i--) {
+      const one = eligible[i]!;
+      if (!isLastResort(one)) continue;
+      considered.push({
+        routineId: one.routine.id,
+        verdict: `account ${one.account.name} is LAST_RESORT and an eligible NORMAL account can take this bin`,
+      });
+      eligible.splice(i, 1);
+    }
+  }
   const comparableAllowance = eligible.every((one) =>
     freshAllowancePercent(one.allowanceReport, now) !== null,
   );
@@ -939,6 +969,15 @@ export function routeBin(input: RoutingInput): RoutingResult {
 
   const chosen = eligible[0]!;
   considered.push({ routineId: chosen.routine.id, verdict: 'selected' });
+  const lastResortNote = isLastResort(chosen)
+    ? ` ${chosen.account.name} is a LAST_RESORT account, selected because no eligible NORMAL account ` +
+      `could take this bin: ` +
+      (considered
+        .filter((one) => one.routineId !== chosen.routine.id)
+        .map((one) => `${one.routineId}: ${one.verdict}`)
+        .join('; ') || 'no other account was a candidate') +
+      '.'
+    : '';
   return {
     ok: true,
     routine: chosen.routine,
@@ -952,7 +991,8 @@ export function routeBin(input: RoutingInput): RoutingResult {
         ? ` Compared fresh person-reported balances; ${chosen.account.name} reported ` +
           `${freshAllowancePercent(chosen.allowanceReport, now)}% remaining.`
         : ' Remaining allowance was not compared, because not every eligible account has a ' +
-          'person-reported reading from the last six hours; chose on measured headroom.'),
+          'person-reported reading from the last six hours; chose on measured headroom.') +
+      lastResortNote,
   };
 }
 

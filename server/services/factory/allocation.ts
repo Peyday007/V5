@@ -145,6 +145,7 @@ export async function factoryAllocation(input: {
         report: AllowanceReport | null;
         unavailable: string[];
         anyAvailable: boolean;
+        lastResort: boolean;
       }>();
       for (const candidate of inScope) {
         const entry = byAccount.get(candidate.account.id) ?? {
@@ -152,6 +153,7 @@ export async function factoryAllocation(input: {
           report: candidate.allowanceReport ?? null,
           unavailable: [],
           anyAvailable: false,
+          lastResort: candidate.routingPreference === 'LAST_RESORT',
         };
         const verdict = verdicts.get(candidate.routine.id);
         if (verdict === undefined || verdict === 'selected') entry.anyAvailable = true;
@@ -170,6 +172,7 @@ export async function factoryAllocation(input: {
           reportedAt: entry.report?.reportedAt ?? null,
           reportFresh: freshAllowancePercent(entry.report, nowIso) !== null,
           ...countFor(id),
+          routingPreference: entry.lastResort ? 'LAST_RESORT' : 'NORMAL',
           unavailable: entry.anyAvailable ? null : entry.unavailable.join('; ') || null,
         })),
       };
