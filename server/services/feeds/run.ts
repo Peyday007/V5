@@ -166,13 +166,15 @@ export async function pullDueFeeds(input: {
       const parsed = source.parse(report.value);
       const { kept: items, duplicates } = dedupeItems(parsed);
       // Committed in checkpointed batches; the insert is keyed, so a redelivered batch writes nothing twice.
+      // One fetch time for the whole pull, so batching never reorders what the detectors read.
+      const fetchedAt = new Date().toISOString();
       let inserted = 0;
       await runCheckpointed({
         jobKey: `${source.id}:${now.toISOString()}`,
         items,
         keyOf: (item) => item.externalId,
         commit: async (batch) => {
-          inserted += await insertFeedItems(source.id, batch);
+          inserted += await insertFeedItems(source.id, batch, fetchedAt);
         },
         store: memoryCheckpoints(),
         batchSize: PULL_BATCH,
