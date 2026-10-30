@@ -22,6 +22,7 @@ import {
   WORKER_RECORDABLE_SOURCES,
   EVIDENCE_STATUSES,
   classifyBlocker,
+  STOP_REASONS,
   duplicateMechanismCheck,
   fullGateKey,
   nextEngineeringAction,
@@ -536,7 +537,9 @@ const blockerTool: McpTool = {
     'EXTERNAL_SERVICE, DEFECT or AMBIGUOUS_REQUIREMENT. Only MISSING_AUTHORITY, HUMAN_DECISION and ' +
     'AMBIGUOUS_REQUIREMENT reach a person, and the last two are refused unless you name what you checked ' +
     'first (repo, git_history, database, brain_records, github, workflow_logs, configuration) — a question ' +
-    'Brain can answer from its own records is not a person\'s.',
+    'Brain can answer from its own records is not a person\'s. HUMAN_DECISION and AMBIGUOUS_REQUIREMENT are also ' +
+    'refused unless stop_reason names one of SPEND_OVER_CEILING, IRREVERSIBLE_PRODUCTION_LOSS, LEGAL_RISK, ' +
+    'SECRET_EXPOSED or MAJOR_NEWS (rule 11: decide, don\'t ask — record the call under DECIDED instead).',
   inputSchema: {
     type: 'object',
     properties: {
@@ -546,6 +549,7 @@ const blockerTool: McpTool = {
       statement: { type: 'string' },
       remedy: { type: 'string', description: 'What would clear it, and who performs that.' },
       checked: { type: 'array', items: { type: 'string' } },
+      stop_reason: { type: 'string', enum: [...STOP_REASONS] },
     },
     required: ['project_id', 'kind', 'statement', 'remedy'],
     additionalProperties: false,
@@ -558,7 +562,7 @@ const blockerTool: McpTool = {
     const statement = requiredString(args, 'statement');
     const checked = stringList(args, 'checked');
     const taskRef = optionalString(args, 'task_ref');
-    const verdict = classifyBlocker({ kind, statement, checked });
+    const verdict = classifyBlocker({ kind, statement, checked, stopReason: optionalString(args, 'stop_reason') });
     if (!verdict.accepted) {
       await recordIntervention({
         projectId,
