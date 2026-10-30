@@ -131,7 +131,7 @@ beforeEach(async () => {
   });
   campaignId = campaign.id;
   await unit('alpha', ['src/alpha.ts']);
-  await unit('beta', ['src/beta.ts']);
+  await unit('beta', ['src/beta.ts', 'server/db/migrations/**']);
   const gamma = await unit('gamma', ['src/gamma.ts']);
   const alpha = (await getUnitByKey(campaignId, 'alpha'))!.id;
   await addDependency(campaignId, gamma, alpha, 'imports alpha');
@@ -157,6 +157,18 @@ describe('independent units are separately claimable', () => {
 
     await tickRemoteCampaign(campaignId);
     expect(await unitBins()).toHaveLength(2);
+  });
+
+  it('tells a unit that owns migrations to take the next number, and only that unit', async () => {
+    // Two campaigns reserved numbers for each other and both were refused for
+    // a numbering gap; the instruction is what a unit reads before choosing.
+    stubForge({});
+    await tickRemoteCampaign(campaignId);
+    const bins = await unitBins();
+    const text = (key: string) =>
+      bins.find((bin) => unitKeysOfBin(bin).includes(key))!.manifest.units!.map((u) => u.establishes).join('\n');
+    expect(text('beta')).toContain('Never skip a number');
+    expect(text('alpha')).not.toContain('Never skip a number');
   });
 
   it('lets two workers hold the two units at once', async () => {
