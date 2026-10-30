@@ -190,3 +190,17 @@ jobs:
           fi
           echo "::error::The command did not complete. Its output is above; an unknown command prints the list of the ones that exist."
           exit 1
+
+      # Logs live on storage some sessions cannot reach, so the output is also
+      # published as annotations, which the GitHub API itself serves.
+      - name: Publish the output as annotations
+        if: always()
+        run: |
+          [ -f factory.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('factory.txt', encoding='utf-8', errors='replace').read()
+          enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][:10]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=factory {n}/{len(chunks)}::{enc(chunk)}')
+          PY
