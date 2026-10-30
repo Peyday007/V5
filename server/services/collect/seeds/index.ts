@@ -14,8 +14,7 @@
  */
 import { addCollectSource } from '../../../repos/collectSources.ts';
 import type { CollectSource, SourceKind } from '../../../domain/collect.ts';
-
-const HOUR = 3_600_000;
+import { SOURCE_ROWS, expandUrl } from '../../feeds/sources.ts';
 
 export interface SeedSource {
   slug: string;
@@ -30,49 +29,31 @@ export interface SeedSource {
   basis: string;
 }
 
-const FR =
-  'https://www.federalregister.gov/api/v1/documents.json?per_page=100&order=newest&conditions%5Btype%5D%5B%5D=';
-const FR_FIELDS =
-  '&fields%5B%5D=document_number&fields%5B%5D=title&fields%5B%5D=abstract&fields%5B%5D=html_url&fields%5B%5D=publication_date';
+const HOUR = 3_600_000;
+const DEFAULT_RATE_PER_MIN = 10;
+const REGISTRY_KIND: Record<string, SourceKind> = { JSON_API: 'JSON_API', RSS_ATOM: 'RSS_ATOM', CSV: 'CSV_DATASET', PAGE_WATCH: 'PAGE_WATCH', OSM_OVERPASS: 'OVERPASS' };
+const KIND_PREFIX: Record<string, string> = { JSON_API: 'json', RSS_ATOM: 'rss', PAGE_WATCH: 'watch', CSV_DATASET: 'csv' };
 
-export const SEED_SOURCES: readonly SeedSource[] = [
-  {
-    slug: 'fr-proposed-rules', label: 'Federal Register: proposed rules open for comment', kind: 'JSON_API',
-    urlTemplate: `${FR}PRORULE${FR_FIELDS}`, parserId: 'json:federal-register', intervalMs: 12 * HOUR, hostRatePerMin: 10,
-    basis: 'US government public API, no key (federalregister.gov/developers)',
-  },
-  {
-    slug: 'fr-notices', label: 'Federal Register: new agency notices', kind: 'JSON_API',
-    urlTemplate: `${FR}NOTICE${FR_FIELDS}`, parserId: 'json:federal-register', intervalMs: 12 * HOUR, hostRatePerMin: 10,
-    basis: 'US government public API, no key (federalregister.gov/developers)',
-  },
-  {
-    slug: 'fda-recalls-rss', label: 'FDA recalls and safety alerts', kind: 'RSS_ATOM',
-    urlTemplate: 'https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/recalls/rss.xml', parserId: 'rss:default',
-    intervalMs: 6 * HOUR, hostRatePerMin: 6, basis: 'US government public RSS feed',
-  },
-  {
-    slug: 'cisa-advisories-rss', label: 'CISA cybersecurity advisories', kind: 'RSS_ATOM',
-    urlTemplate: 'https://www.cisa.gov/cybersecurity-advisories/all.xml', parserId: 'rss:default',
-    intervalMs: 6 * HOUR, hostRatePerMin: 6, basis: 'US government public RSS feed',
-  },
-  {
-    slug: 'grants-gov-new-opportunities', label: 'Grants.gov: newly posted funding opportunities', kind: 'RSS_ATOM',
-    urlTemplate: 'https://www.grants.gov/rss/GG_NewOppByCategory.xml', parserId: 'rss:default',
-    intervalMs: 12 * HOUR, hostRatePerMin: 6, basis: 'US government public RSS feed (funding, not procurement)',
-  },
-  {
-    slug: 'watch-dol-state-minimum-wage', label: 'US DOL: state minimum wage laws page', kind: 'PAGE_WATCH',
-    urlTemplate: 'https://www.dol.gov/agencies/whd/minimum-wage/state', parserId: 'watch:default',
-    intervalMs: 24 * HOUR, hostRatePerMin: 2, basis: 'Public US government page; one read a day, change recorded by content hash',
-  },
-];
+/**
+ * There is one registry definition: `SOURCE_ROWS` in `feeds/sources.ts`, which is
+ * what `pullDueFeeds` pulls. These seeds are a projection of its shared rows
+ * into `collect_sources`, never a second list that can drift from it.
+ */
+export const SEED_SOURCES: readonly SeedSource[] = SOURCE_ROWS.filter((r) => r.ownerProjectId === null).map((r) => ({
+  slug: r.id,
+  label: r.label,
+  kind: REGISTRY_KIND[r.kind] ?? 'JSON_API',
+  urlTemplate: expandUrl(r),
+  parserId: `${KIND_PREFIX[REGISTRY_KIND[r.kind] ?? r.kind] ?? r.kind.toLowerCase()}:${r.parserId ?? 'default'}`,
+  intervalMs: r.intervalHours * HOUR,
+  hostRatePerMin: r.spacingMs ? Math.max(1, Math.floor(60_000 / r.spacingMs)) : DEFAULT_RATE_PER_MIN,
+  basis: r.robots.note,
+}));
 
-/** How the collectors read each parserId. */
+/** How the collectors read each parserId. Federal Register has a mapping; the rest read by their kind's default. */
 export const SEED_MAPPINGS: Record<string, Record<string, string>> = {
+  ...Object.fromEntries(SEED_SOURCES.map((s) => [s.parserId, {} as Record<string, string>])),
   'json:federal-register': { items: 'results', id: 'document_number', title: 'title', url: 'html_url', publishedAt: 'publication_date', body: 'abstract' },
-  'rss:default': {},
-  'watch:default': {},
 };
 
 /** Insert every seed source that is not already there. Safe to run any number of times. */
