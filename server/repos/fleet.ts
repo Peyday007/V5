@@ -1259,3 +1259,48 @@ export async function getWorkerSession(sessionRef: string): Promise<WorkerSessio
       }
     : null;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Routing preference                                                         */
+/* ------------------------------------------------------------------------- */
+
+export const ROUTING_PREFERENCES = ['NORMAL', 'LAST_RESORT'] as const;
+export type RoutingPreference = (typeof ROUTING_PREFERENCES)[number];
+
+/**
+ * How an account is ordered when several are eligible. Data, not an access
+ * grant: it changes the order a router prefers accounts in and authorizes
+ * nothing. An account Brain has no row for reads NORMAL.
+ */
+export async function getRoutingPreference(accountId: string): Promise<RoutingPreference> {
+  const row = await getDb().get<{ routing_preference: string }>(
+    'SELECT routing_preference FROM fleet_accounts WHERE id = ?',
+    [accountId],
+  );
+  return row?.routing_preference === 'LAST_RESORT' ? 'LAST_RESORT' : 'NORMAL';
+}
+
+/** Every account's preference in one read, keyed by account id. */
+export async function listRoutingPreferences(): Promise<Record<string, RoutingPreference>> {
+  const rows = await getDb().all<{ id: string; routing_preference: string }>(
+    'SELECT id, routing_preference FROM fleet_accounts',
+  );
+  const out: Record<string, RoutingPreference> = {};
+  for (const r of rows) out[r.id] = r.routing_preference === 'LAST_RESORT' ? 'LAST_RESORT' : 'NORMAL';
+  return out;
+}
+
+/** Guarded on the preference that was read, so two writers produce one move. Returns whether it moved. */
+export async function setRoutingPreference(input: {
+  accountId: string;
+  from: RoutingPreference;
+  to: RoutingPreference;
+}): Promise<boolean> {
+  if (!ROUTING_PREFERENCES.includes(input.to)) return false;
+  const result = await getDb().run(
+    `UPDATE fleet_accounts SET routing_preference = ?, updated_at = ?
+      WHERE id = ? AND routing_preference = ?`,
+    [input.to, nowIso(), input.accountId, input.from],
+  );
+  return result.changes === 1;
+}
