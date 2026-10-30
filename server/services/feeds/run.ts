@@ -30,17 +30,17 @@ import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { openingSourceKey } from '../cash/duplicates.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
 import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
-import { FEED_SOURCES, type FeedSource } from './sources.ts';
+import { FEED_SOURCES, dedupeItems, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
 import { CODE_SIGNAL_SOURCE, coveredItems, detectionsForLeads } from './detectors.ts';
 
-export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number) => Promise<unknown>;
+export type Fetcher = (url: string, headers: Record<string, string>, timeoutMs?: number, format?: 'json' | 'text') => Promise<unknown>;
 
-export const httpFetcher: Fetcher = async (url, headers, timeoutMs = 20_000) => {
+export const httpFetcher: Fetcher = async (url, headers, timeoutMs = 20_000, format = 'json') => {
   let response: Response;
   try {
-    response = await fetch(url, { headers: { accept: 'application/json', ...headers }, signal: AbortSignal.timeout(timeoutMs) });
+    response = await fetch(url, { headers: { accept: format === 'json' ? 'application/json' : '*/*', ...headers }, signal: AbortSignal.timeout(timeoutMs) });
   } catch (error) {
     // Name the cause: "fetch failed" alone cannot tell a timeout from a refusal.
     const cause = error instanceof Error ? ((error as Error & { cause?: { code?: string; message?: string } }).cause ?? null) : null;
@@ -49,7 +49,7 @@ export const httpFetcher: Fetcher = async (url, headers, timeoutMs = 20_000) => 
     throw new Error(`fetch failed${cause?.code ? ` (${cause.code})` : cause?.message ? ` (${cause.message})` : ''}`);
   }
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
+  return format === 'json' ? response.json() : response.text();
 };
 
 /**
@@ -59,16 +59,22 @@ export const httpFetcher: Fetcher = async (url, headers, timeoutMs = 20_000) => 
  */
 export function nextPullAt(
   source: Pick<FeedSource, 'intervalMs'>,
-  state: { lastSuccessAt: string | null; failuresSince: number; lastFailureAt: string | null },
+  state: { lastSuccessAt: string | null; failuresSince: number; lastFailureAt: string | null; permanent?: boolean },
 ): number {
   if (state.failuresSince > 0 && state.lastFailureAt) {
-    const backoff = Math.min(source.intervalMs, PULL_RETRY_MS * 2 ** (state.failuresSince - 1));
+    // A permanent refusal is not retried sooner than the source's own interval.
+    const backoff = state.permanent ? source.intervalMs : Math.min(source.intervalMs, PULL_RETRY_MS * 2 ** (state.failuresSince - 1));
     return Date.parse(state.lastFailureAt) + backoff;
   }
   return state.lastSuccessAt ? Date.parse(state.lastSuccessAt) + source.intervalMs : 0;
 }
 
 /** The first wait after a failed pull. */
+/** HTTP 401/403/410 and robots refusals are permanent; timeouts, 429 and 5xx are temporary. */
+export function isPermanentRefusal(message: string): boolean {
+  return /HTTP (401|403|410)\b|robots/i.test(message);
+}
+
 export const PULL_RETRY_MS = 20 * 60_000;
 
 /** How far back a lead may have been published and still be worth asking about. */
@@ -112,27 +118,52 @@ export async function pullDueFeeds(input: {
   now?: Date;
   fetcher?: Fetcher;
   sources?: readonly FeedSource[];
-} = {}): Promise<{ source: string; inserted: number; error: string | null }[]> {
+  /** Only sources this project may see: shared ones and its own. */
+  projectId?: string | null;
+} = {}): Promise<{ source: string; inserted: number; error: string | null; outcome: 'COLLECTED' | 'NO_MATCHING_RECORDS' | 'SOURCE_UNREACHABLE'; duplicates: number }[]> {
   const now = input.now ?? new Date();
-  const out: { source: string; inserted: number; error: string | null }[] = [];
-  for (const source of input.sources ?? FEED_SOURCES) {
-    if (now.getTime() < nextPullAt(source, await pullState(source.id))) continue;
-    if (source.spacingMs && out.length > 0 && !input.fetcher) {
-      await new Promise((resolve) => setTimeout(resolve, source.spacingMs));
+  const out: { source: string; inserted: number; error: string | null; outcome: 'COLLECTED' | 'NO_MATCHING_RECORDS' | 'SOURCE_UNREACHABLE'; duplicates: number }[] = [];
+  const list = (input.sources ?? FEED_SOURCES).filter(
+    (s) => input.projectId === undefined || !s.row || s.row.ownerProjectId === null || s.row.ownerProjectId === input.projectId,
+  );
+  let asked = 0;
+  for (const source of list) {
+    try {
+      const state = await pullState(source.id);
+      const last = await lastFailureMessage(source.id, state.failuresSince);
+      if (now.getTime() < nextPullAt(source, { ...state, permanent: last ? isPermanentRefusal(last) : false })) continue;
+      if (source.spacingMs && asked > 0 && !input.fetcher) {
+        await new Promise((resolve) => setTimeout(resolve, source.spacingMs));
+      }
+      asked += 1;
+    } catch (error) {
+      // One source's bookkeeping failing never stops the others.
+      out.push({ source: source.id, inserted: 0, error: String(error instanceof Error ? error.message : error).slice(0, 300), outcome: 'SOURCE_UNREACHABLE', duplicates: 0 });
+      continue;
     }
     try {
-      const body = await (input.fetcher ?? httpFetcher)(source.url, source.headers ?? {}, source.timeoutMs);
-      const items = source.parse(body);
+      const body = await (input.fetcher ?? httpFetcher)(source.url, source.headers ?? {}, source.timeoutMs, source.format ?? 'json');
+      const parsed = source.parse(body);
+      const { kept: items, duplicates } = dedupeItems(parsed);
       const inserted = await insertFeedItems(source.id, items);
       await recordFeedPull({ source: source.id, ok: true, fetched: items.length, inserted, error: null, at: now.toISOString() });
-      out.push({ source: source.id, inserted, error: null });
+      out.push({ source: source.id, inserted, error: null, outcome: items.length === 0 ? 'NO_MATCHING_RECORDS' : 'COLLECTED', duplicates });
     } catch (error) {
       const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
       await recordFeedPull({ source: source.id, ok: false, fetched: 0, inserted: 0, error: message, at: now.toISOString() });
-      out.push({ source: source.id, inserted: 0, error: message });
+      out.push({ source: source.id, inserted: 0, error: message, outcome: 'SOURCE_UNREACHABLE', duplicates: 0 });
     }
   }
   return out;
+}
+
+async function lastFailureMessage(source: string, failuresSince: number): Promise<string | null> {
+  if (failuresSince === 0) return null;
+  const row = await getDb().get<{ error: string | null }>(
+    'SELECT error FROM feed_pulls WHERE source = ? AND ok = 0 ORDER BY created_at DESC LIMIT 1',
+    [source],
+  );
+  return row?.error ?? null;
 }
 
 /** The latest SCREEN_LEAD answers, per item, already combined. */
