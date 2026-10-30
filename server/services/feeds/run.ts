@@ -32,6 +32,7 @@ import { statesNamedIn } from '../../domain/jurisdiction.ts';
 import { openingSourceKey } from '../cash/duplicates.ts';
 import { discoveryAllowed } from '../cash/lifecycle.ts';
 import { DELIVERABLE_LABEL } from '../cash/deliverables/spec.ts';
+import { HostLimiter, classifyFailure, hostOf, memoryCheckpoints, runCheckpointed, systemClock, withRetry, type Clock } from '../collect/runtime/index.ts';
 import { FEED_SOURCES, dedupeItems, type FeedSource } from './sources.ts';
 import { FEED_SHORTLIST_BUCKET } from './bucket.ts';
 import { SITE_SOURCE } from './sites.ts';
@@ -120,9 +121,15 @@ export const SHORTLIST_INTERVAL_MS = 20 * 3_600_000;
 const METRIC_KIND: Record<string, CollectSourceKind> = {
   JSON_API: 'JSON_API', RSS_ATOM: 'RSS_ATOM', CSV: 'CSV_DATASET', PAGE_WATCH: 'PAGE_WATCH', OSM_OVERPASS: 'OVERPASS',
 };
+/** One bucket per host for the whole process, so sources sharing a host share its rate. */
+const hostLimiter = new HostLimiter(systemClock, { capacity: 1, refillPerSecond: 1 });
+/** Items committed per checkpointed batch. */
+const PULL_BATCH = 100;
 
 export async function pullDueFeeds(input: {
   now?: Date;
+  limiter?: HostLimiter;
+  clock?: Clock;
   fetcher?: Fetcher;
   sources?: readonly FeedSource[];
   /** Only sources this project may see: shared ones and its own. */
@@ -151,17 +158,43 @@ export async function pullDueFeeds(input: {
     const startedAt = Date.now();
     const method = source.row ? (METRIC_KIND[source.row.kind] ?? null) : null;
     try {
-      const body = await (input.fetcher ?? httpFetcher)(source.url, source.headers ?? {}, source.timeoutMs, source.format ?? 'json');
-      const parsed = source.parse(body);
+      const clock = input.clock ?? systemClock;
+      const limiter = input.limiter ?? hostLimiter;
+      const fetcher = input.fetcher ?? httpFetcher;
+      // Temporary failures (timeout, 429, 5xx) back off and retry; permanent ones stop at once.
+      const report = await withRetry(
+        clock,
+        async () => {
+          await limiter.acquire(hostOf(source.url));
+          return fetcher(source.url, source.headers ?? {}, source.timeoutMs, source.format ?? 'json');
+        },
+        input.fetcher ? { maxAttempts: 3, baseMs: 1, maxMs: 1 } : undefined,
+      );
+      if (!report.ok || report.failure) throw new Error(`${report.failure?.cause ?? 'UNKNOWN'}: ${report.failure?.message ?? 'fetch failed'}`);
+      const parsed = source.parse(report.value);
       const { kept: items, duplicates } = dedupeItems(parsed);
-      const inserted = await insertFeedItems(source.id, items);
+      // Committed in checkpointed batches; the insert is keyed, so a redelivered batch writes nothing twice.
+      // One fetch time for the whole pull, so batching never reorders what the detectors read.
+      const fetchedAt = new Date().toISOString();
+      let inserted = 0;
+      await runCheckpointed({
+        jobKey: `${source.id}:${now.toISOString()}`,
+        items,
+        keyOf: (item) => item.externalId,
+        commit: async (batch) => {
+          inserted += await insertFeedItems(source.id, batch, fetchedAt);
+        },
+        store: memoryCheckpoints(),
+        batchSize: PULL_BATCH,
+      });
       await recordPullMetrics(source.id, true, {
         method, fetched: items.length, inserted, duplicates, relevant: null, signals: null, failureCause: null,
         wallMs: Date.now() - startedAt, bytes: null, memoryBytes: null, cheapCalls: null, claudeJobs: null,
       }, null, now.toISOString());
       out.push({ source: source.id, inserted, error: null, outcome: items.length === 0 ? 'NO_MATCHING_RECORDS' : 'COLLECTED', duplicates });
     } catch (error) {
-      const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+      const failure = classifyFailure(error);
+      const message = failure.message.slice(0, 300);
       await recordPullMetrics(source.id, false, {
         method, fetched: 0, inserted: 0, duplicates: null, relevant: null, signals: null, failureCause: 'SOURCE_UNREACHABLE',
         wallMs: Date.now() - startedAt, bytes: null, memoryBytes: null, cheapCalls: null, claudeJobs: null,

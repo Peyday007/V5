@@ -98,3 +98,30 @@ describe('reliability', () => {
     expect(nextPullAt(src, state) - Date.parse(state.lastFailureAt)).toBeLessThan(6 * 3_600_000);
   });
 });
+
+describe('pullDueFeeds runs under the collection runtime', () => {
+  const row: SourceRow = { id: 'collect-runtime-rss', label: 'Runtime feed', kind: 'RSS_ATOM', url: 'https://runtime.test/feed', intervalHours: 1, robots: { status: 'ALLOWED_PUBLIC_FEED', checkedAt: '2026-10-30', note: 't' }, ownerProjectId: null };
+  const now = new Date('2026-10-30T00:00:00Z');
+  it('takes a token from the host bucket for every request', async () => {
+    const { HostLimiter } = await import('../server/services/collect/runtime/index.ts');
+    const hosts: string[] = [];
+    const limiter = new HostLimiter({ now: () => 0, sleep: async () => undefined });
+    const real = limiter.acquire.bind(limiter);
+    limiter.acquire = (h: string) => { hosts.push(h); return real(h); };
+    await pullDueFeeds({ now, sources: [sourceFromRow(row)], limiter, fetcher: async () => RSS });
+    expect(hosts).toEqual(['runtime.test']);
+  });
+  it('retries a temporary failure and then succeeds', async () => {
+    let calls = 0;
+    const out = await pullDueFeeds({ now, sources: [sourceFromRow({ ...row, id: 'collect-runtime-retry' })], fetcher: async () => { calls += 1; if (calls < 3) throw new Error('HTTP 503'); return RSS; } });
+    expect(calls).toBe(3);
+    expect(out[0]).toMatchObject({ inserted: 1, error: null, outcome: 'COLLECTED' });
+  });
+  it('does not retry a permanent refusal and records its cause', async () => {
+    let calls = 0;
+    const out = await pullDueFeeds({ now, sources: [sourceFromRow({ ...row, id: 'collect-runtime-403' })], fetcher: async () => { calls += 1; throw new Error('HTTP 403'); } });
+    expect(calls).toBe(1);
+    expect(out[0]).toMatchObject({ outcome: 'SOURCE_UNREACHABLE' });
+    expect(out[0]?.error).toMatch(/HTTP 403/);
+  });
+});
