@@ -353,6 +353,21 @@ describe('capacity counts occupied slots, not stale reservations', () => {
     expect((await inFlightByRoutine(Date.now())).get(routineId)).toBe(1);
   });
 
+  it('stops counting a fire whose session took the bin and handed it back', async () => {
+    // Fired at g, taken (g+1), released (g+2, READY). The session that fire
+    // started has had its turn; holding its slot for the rest of the window
+    // withheld fires for ready work while nobody was running.
+    const binId = await aFiredBin();
+    await assignNextBin({ workerId, projectIds: [projectId] });
+    const leased = (await getBin(binId))!;
+    await releaseBin(
+      { binId, leaseId: leased.leaseId!, leaseGeneration: leased.leaseGeneration, workerId },
+      'the work left is for a different session',
+    );
+    expect((await getBin(binId))!.state).toBe('READY');
+    expect((await inFlightByRoutine(Date.now())).get(routineId)).toBeUndefined();
+  });
+
   it('stops counting a bin parked for a person', async () => {
     const binId = await aFiredBin();
     await getDb().run("UPDATE bins SET state = 'NEEDS_HUMAN', terminal_reason = ? WHERE id = ?", [
