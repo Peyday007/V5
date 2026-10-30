@@ -1835,19 +1835,40 @@ async function runRemoteTick(
       const stall = stalledStage(mine, 'FACTORY_UNITS', reauthorizedAt);
       if (stall) return await blockStage(fresh, 'implementation', stall, report);
     }
-    let created = 0;
+    /*
+     * A unit waits only for a unit of another live campaign, in the same
+     * repository, that already holds files it would edit: one that is leased,
+     * implemented, or ready and carried by a live bin. Its independent siblings
+     * keep going, and it gets its bin on the first tick after the other unit is
+     * integrated. See `foreignUnitHolding`.
+     */
+    const { foreignUnitHolding } = await import('./line.ts');
+    const startable: typeof uncovered = [];
+    const deferred: string[] = [];
     for (const unit of uncovered) {
+      const holding = await foreignUnitHolding(fresh, changeRequest.repository, unit);
+      if (holding) {
+        deferred.push(`${unit.unitKey} waits for ${holding.unitKey} of campaign ${holding.campaignId}`);
+      } else {
+        startable.push(unit);
+      }
+    }
+    let created = 0;
+    for (const unit of startable) {
       const bin = await createUnitsBin(fresh, changeRequest, [unit]);
       if (!bin) continue;
       created += 1;
       report.created.push(`units:${bin.id}`);
       await noteBin(fresh, bin, `${unit.unitKey} ready`);
     }
-    const withFleet = `${ready.length} unit(s) with the fleet`;
+    for (const line of deferred) report.notes.push(`deferred: ${line}`);
+    const withFleet =
+      `${ready.length - deferred.length} unit(s) with the fleet` +
+      (deferred.length > 0 ? `; ${deferred.length} deferred (${deferred[0]})` : '');
     if (created > 0) {
       report.progress = true;
-      report.notes.push(`${created} unit bin(s) created; ${ready.length} unit(s) with the fleet`);
-    } else {
+      report.notes.push(`${created} unit bin(s) created; ${ready.length - deferred.length} unit(s) with the fleet`);
+    } else if (deferred.length === 0) {
       report.notes.push(`waiting for workers on ${ready.length} ready unit(s)`);
     }
     /*

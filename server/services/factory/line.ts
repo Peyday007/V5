@@ -33,6 +33,7 @@ import {
   getCampaignByChangeRequest,
   getChangeRequest,
   listLiveCampaigns,
+  listUnits,
   pathsOverlap,
 } from '../../repos/factory.ts';
 import { listFactoryEvents, recordFactoryEvent } from '../../repos/factoryFleet.ts';
@@ -47,7 +48,7 @@ import {
 } from '../../repos/factoryLine.ts';
 import { listBins, listDispatchesForBin } from '../../repos/bins.ts';
 import { approveObjective } from './contract.ts';
-import { campaignSpecFor } from './remote.ts';
+import { campaignBins, campaignSpecFor, liveUnitKeys } from './remote.ts';
 import { INITIAL_LANE_TARGET } from './scheduler.ts';
 import { fleetSnapshot, sharedFleetSnapshot } from '../dispatch/candidates.ts';
 import { surfaceIneligibility } from '../dispatch/router.ts';
@@ -180,36 +181,89 @@ async function countWorking(campaigns: FactoryCampaign[]): Promise<number> {
 
 
 /**
- * The live campaign a queued objective's mutation scope intersects, if any.
- *
- * Two campaigns whose declared scopes overlap would each branch from the same
- * base and edit the same files, and the second pull request would arrive
- * conflicted with the first. The factory already refuses to lease two *units*
- * whose surfaces intersect (`pathsOverlap`, the same coarse prefix comparison,
- * whose expensive mistake is answering no); this is that rule one level up.
- * Compared against every live campaign — a BLOCKED one still owns its branch —
- * and never against a finished one, whose work is on a pull request a person
- * merges. It is a wait, not a refusal: the entry starts on the pass after the
- * other campaign stops being live, and lower-priority work that does not
- * overlap is started meanwhile.
+ * A unit of a live campaign that still owns files: not integrated, cancelled,
+ * failed or superseded. This, and not the campaign's declared scope, is what
+ * another campaign can actually collide with. A scope like `tests/**` or
+ * `server/db/migrations/**` is a ceiling on what a campaign may touch; the
+ * units its plan installed are what it does.
  */
-async function overlappingLiveCampaign(
-  scope: string[],
-  live: Array<{ campaignId: string; scope: string[] }>,
-): Promise<string | null> {
-  for (const other of live) {
-    if (pathsOverlap(scope, other.scope)) return other.campaignId;
+export interface OwnedUnit {
+  campaignId: string;
+  repository: string;
+  unitKey: string;
+  state: string;
+  ownedPaths: string[];
+  /** True while a live bin of its campaign is carrying it. */
+  carried: boolean;
+}
+
+const RELEASED_UNIT_STATES: ReadonlySet<string> = new Set(['INTEGRATED', 'CANCELLED', 'FAILED', 'SUPERSEDED']);
+
+/** What every live campaign's unfinished units own, optionally leaving one campaign out. */
+export async function liveUnitOwnership(
+  live: readonly FactoryCampaign[],
+  options: { excludeCampaignId?: string } = {},
+): Promise<OwnedUnit[]> {
+  const out: OwnedUnit[] = [];
+  for (const campaign of live) {
+    if (campaign.id === options.excludeCampaignId) continue;
+    const units = (await listUnits(campaign.id)).filter((unit) => !RELEASED_UNIT_STATES.has(unit.state));
+    if (units.length === 0) continue;
+    const request = await getChangeRequest(campaign.changeRequestId);
+    if (!request) continue;
+    const carried = liveUnitKeys(await campaignBins(campaign.id));
+    for (const unit of units) {
+      out.push({
+        campaignId: campaign.id,
+        repository: request.repository,
+        unitKey: unit.unitKey,
+        state: unit.state,
+        ownedPaths: unit.ownedPaths,
+        carried: carried.has(unit.unitKey),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * The unit of another live campaign that a queued objective's declared scope
+ * intersects, if any.
+ *
+ * Two campaigns editing the same files would each branch from the same base
+ * and the second pull request would arrive conflicted with the first. That is
+ * decided by the files the units own (`pathsOverlap`, the coarse prefix
+ * comparison, whose expensive mistake is answering no) and not by the declared
+ * scopes, so two objectives that both *may* touch `tests/**` but whose units
+ * own disjoint files are not serialized. A live campaign with no units yet owns
+ * nothing and blocks nothing; the unit-level hold in the tick protects it once
+ * its plan is installed. A BLOCKED campaign's unfinished units still count, and
+ * a finished campaign's never do. It is a wait, not a refusal.
+ */
+function overlappingLiveUnit(scope: string[], repository: string, owned: readonly OwnedUnit[]): OwnedUnit | null {
+  for (const unit of owned) {
+    if (unit.repository === repository && pathsOverlap(scope, unit.ownedPaths)) return unit;
   }
   return null;
 }
 
-async function liveScopes(live: FactoryCampaign[]): Promise<Array<{ campaignId: string; scope: string[] }>> {
-  const scopes: Array<{ campaignId: string; scope: string[] }> = [];
-  for (const campaign of live) {
-    const request = await getChangeRequest(campaign.changeRequestId);
-    if (request) scopes.push({ campaignId: campaign.id, scope: request.mutationScope });
+/**
+ * The unit of another live campaign, in the same repository, that a ready unit
+ * must wait for: one that is LEASED, IMPLEMENTED, or READY and already carried
+ * by a live bin. Only this unit waits; its independent siblings keep going.
+ */
+export async function foreignUnitHolding(
+  campaign: FactoryCampaign,
+  repository: string,
+  unit: { unitKey: string; ownedPaths: string[] },
+): Promise<OwnedUnit | null> {
+  const owned = await liveUnitOwnership(await listLiveCampaigns(), { excludeCampaignId: campaign.id });
+  for (const other of owned) {
+    if (other.repository !== repository) continue;
+    const holding = other.state === 'LEASED' || other.state === 'IMPLEMENTED' || (other.state === 'READY' && other.carried);
+    if (holding && pathsOverlap(unit.ownedPaths, other.ownedPaths)) return other;
   }
-  return scopes;
+  return null;
 }
 
 /**
@@ -225,7 +279,7 @@ export async function admitQueued(): Promise<AdmissionReport> {
   let working = await countWorking(live);
   const report: AdmissionReport = { policy, working, admitted: [], skipped: [] };
   if (working >= policy.maxActive) return report;
-  const scopes = await liveScopes(live);
+  const owned = await liveUnitOwnership(live);
 
   for (const entry of await listQueueEntries(['QUEUED'])) {
     if (working >= policy.maxActive) break;
@@ -241,11 +295,11 @@ export async function admitQueued(): Promise<AdmissionReport> {
 
     const already = await getCampaignByChangeRequest(changeRequest.id);
     if (!already) {
-      const clash = await overlappingLiveCampaign(changeRequest.mutationScope, scopes);
+      const clash = overlappingLiveUnit(changeRequest.mutationScope, changeRequest.repository, owned);
       if (clash) {
         report.skipped.push({
           entryId: entry.id,
-          reason: `its mutation scope overlaps live campaign ${clash}; it starts once that campaign is no longer live`,
+          reason: `its mutation scope overlaps files owned by unit ${clash.unitKey} of live campaign ${clash.campaignId}; it starts once that unit is integrated`,
         });
         continue;
       }
@@ -282,7 +336,6 @@ export async function admitQueued(): Promise<AdmissionReport> {
       },
     });
     report.admitted.push({ entryId: entry.id, changeRequestId: changeRequest.id, campaignId: campaign.id });
-    scopes.push({ campaignId: campaign.id, scope: changeRequest.mutationScope });
     if (await holdsSlot(campaign)) working += 1;
   }
   report.working = working;
@@ -580,16 +633,13 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
   const workingCampaigns = campaigns.filter((one) => one.working).length;
   const room = Math.max(0, policy.maxActive - workingCampaigns);
   const queued: LineQueued[] = [];
-  const scopes = await liveScopes(allLive);
+  const owned = await liveUnitOwnership(allLive);
   let slotsLeft = room;
   for (const [index, entry] of queue.entries()) {
     const request = await getChangeRequest(entry.changeRequestId);
-    const clash = request ? await overlappingLiveCampaign(request.mutationScope, scopes) : null;
+    const clash = request ? overlappingLiveUnit(request.mutationScope, request.repository, owned) : null;
     const executableNow = policy.maxActive > 0 && clash === null && slotsLeft > 0;
-    if (executableNow) {
-      slotsLeft -= 1;
-      if (request) scopes.push({ campaignId: `queued:${entry.id}`, scope: request.mutationScope });
-    }
+    if (executableNow) slotsLeft -= 1;
     queued.push({
       entry,
       objective: request?.objective ?? '',
@@ -599,7 +649,7 @@ export async function readLine(now: Date = new Date(), options: { projectId?: st
         policy.maxActive === 0
           ? 'AUTO is off.'
           : clash
-            ? `Priority ${entry.priority}; its files overlap live campaign ${clash.startsWith('queued:') ? 'an objective ahead of it' : clash}, so it waits for that to finish.`
+            ? `Priority ${entry.priority}; its files overlap unit ${clash.unitKey} of live campaign ${clash.campaignId}, so it waits for that unit to be integrated.`
             : executableNow
               ? `Priority ${entry.priority}; a slot is free, so the next pass starts it.`
               : `Priority ${entry.priority}; waits for one of ${policy.maxActive} slot(s) to free.`,
