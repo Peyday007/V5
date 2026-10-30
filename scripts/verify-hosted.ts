@@ -218,11 +218,14 @@ let base = '';
  * How long any one request to the deployed Brain may take before this gate
  * stops waiting.
  *
- * Fifteen minutes: comfortably past the five-minute wall every previous run
- * hit, and far inside the job's own budget, so a slow judge pass gets to
- * finish and be timed rather than being cut off and reported as nothing.
+ * It was fifteen minutes, chosen to let a slow judge pass finish and be timed.
+ * That pass was repaired (deploy 323: 1m42s over 434 documents), and fifteen
+ * minutes became the shape of every failed deploy from 2026-10-21: three
+ * requests that nothing answered, end to end, filled the step's forty-five.
+ * Four minutes is still more than twice the slowest step measured since, and
+ * the pass as a whole is bounded by `.github/workflows/hosted-verify.sh`.
  */
-const REQUEST_TIMEOUT_MS = 15 * 60 * 1000;
+const REQUEST_TIMEOUT_MS = 4 * 60 * 1000;
 
 async function call(
   path: string,

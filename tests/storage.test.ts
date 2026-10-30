@@ -738,3 +738,52 @@ describe('an object key is an address, and both stores have to accept it', () =>
     expect(safeSegment('Qualification Logic v3.1.pdf')).toBe('Qualification Logic v3.1.pdf');
   });
 });
+
+describe('a store that stops answering is abandoned, not waited on', () => {
+  /*
+   * Brain's requests to Supabase Storage had no bound but Node's own five
+   * minutes for headers and five for a body, so a store that stopped answering
+   * held the page, the plan or the transaction that asked. A request that runs
+   * out of time is the same fact as one the network dropped: the store did not
+   * answer, which an existence question reads as UNKNOWN — never as ABSENT.
+   */
+  function silentStore() {
+    const signals: AbortSignal[] = [];
+    const fetchImpl = ((_url: string | URL | Request, init?: RequestInit) => {
+      const signal = init?.signal;
+      if (signal) signals.push(signal);
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(signal.reason));
+      });
+    }) as unknown as typeof fetch;
+    return {
+      signals,
+      store: new SupabaseStorageProvider({
+        url: 'https://example.supabase.co',
+        serviceRoleKey: 'service-role-secret-value',
+        bucket: 'brain',
+        fetchImpl,
+        timeouts: { requestMs: 50, transferMs: 80 },
+      }),
+    };
+  }
+
+  it('gives up on a listing inside its bound, with the store named and no status', async () => {
+    const { store, signals } = silentStore();
+    const started = Date.now();
+    const error = await store.exists('projects/p/documents/a.md').catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(StorageConfigurationError);
+    expect((error as StorageConfigurationError).status ?? null).toBeNull();
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(signals.length).toBeGreaterThan(0);
+  });
+
+  it('gives up on an upload too, without calling it a refusal that is safe to repeat', async () => {
+    const { store } = silentStore();
+    const error = await store
+      .put({ key: 'projects/p/documents/b.md', body: Buffer.from('x') })
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(StorageConfigurationError);
+    expect((error as StorageConfigurationError).status ?? null).toBeNull();
+  });
+});

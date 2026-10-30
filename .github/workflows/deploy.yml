@@ -675,21 +675,25 @@ jobs:
       # measurement this file exists to insist on.
       - name: Prove the live Brain is actually shut
         id: hosted
-        timeout-minutes: 45
+        timeout-minutes: 25
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # Bounded, and names an OOM kill or a restart when the pass did not
+          # finish: see the script.
           set +e
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev --leave-beacon" \
-            2>&1 | tee hosted-verification.txt
+          bash .github/workflows/hosted-verify.sh --leave-beacon hosted-verification.txt
           set -e
           # The verdict comes from a line the script printed, not from an exit
           # code that had to survive an SSH session, a shell and a CLI.
           if grep -q '^HOSTED-VERIFICATION: PASS' hosted-verification.txt; then
             grep '^HOSTED-VERIFICATION' hosted-verification.txt
             exit 0
+          fi
+          if grep -q '^HOSTED-VERIFY-GUARD' hosted-verification.txt; then
+            grep '^HOSTED-VERIFY-GUARD' hosted-verification.txt
+            echo "::error::The hosted verification did not finish. The lines above say whether it ran out of time or the machine was killed or restarted under it."
+            exit 1
           fi
           if ! grep -q '^HOSTED-VERIFICATION' hosted-verification.txt; then
             echo "::error::The hosted verification never ran. If the output above says the SSH connection failed, the Fly token cannot open a console on this app; nothing else in this deploy is affected."
@@ -815,7 +819,7 @@ jobs:
         id: hosted_after
         # Bounded for the reason the pre-restart probe is, and this is the step
         # that demonstrated the need.
-        timeout-minutes: 45
+        timeout-minutes: 25
         # `always()` because the step before it may have failed, and this one
         # answers a different question: the pre-restart pass says what the new
         # image refuses, this says what survived. A restart nobody checked is
@@ -830,11 +834,8 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           set +e
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev --check-beacon" \
-            2>&1 | tee hosted-after-restart.txt
+          bash .github/workflows/hosted-verify.sh --check-beacon hosted-after-restart.txt
           set -e
           grep -q '^HOSTED-VERIFICATION: PASS' hosted-after-restart.txt
 

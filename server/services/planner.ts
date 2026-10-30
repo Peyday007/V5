@@ -33,7 +33,7 @@ import { getProject } from '../repos/projects.ts';
 import { listActiveRuns } from '../repos/runs.ts';
 import { nowIso } from '../repos/util.ts';
 import { computeLayerState, recomputeLayer } from './stateEngine.ts';
-import { objectExists, storageKeyOf} from './storage.ts';
+import { insideExistenceMemo, objectExists, prefetchExistence, storageKeyOf, withExistenceMemo } from './storage.ts';
 
 /**
  * The priority ladder. Lower sorts first, and the numbers are deliberately
@@ -95,7 +95,27 @@ interface PlannedLayer {
  * never writes, so the API can call it on every page load without generating
  * events or fighting a concurrent recompute.
  */
+/*
+ * Every store question asked once, at most sixteen at a time.
+ *
+ * `buildPlan` asks whether each document's bytes exist, once in the layer state
+ * and again in `usableDocuments` — and outside a recompute nothing bounded it,
+ * so `GET /api/projects/:id` on the release gate's own project (hundreds of
+ * documents, more every deploy) put every one of those questions to Supabase
+ * Storage at once. Each is a `storage.search` on the same Postgres Brain's
+ * control plane depends on. `withProjectExistence` already fixed this for the
+ * MCP door; a guard on one entrance is not a guard, so it lives here now and
+ * every caller inherits it. Inside a recompute's memo this adds nothing.
+ */
 export async function buildPlan(projectId: string): Promise<PlannerResult> {
+  if (insideExistenceMemo()) return await planWithin(projectId);
+  return await withExistenceMemo(async () => {
+    await prefetchExistence((await listDocuments(projectId)).map((document) => storageKeyOf(document)));
+    return await planWithin(projectId);
+  });
+}
+
+async function planWithin(projectId: string): Promise<PlannerResult> {
   const project = await requireProject(projectId);
   const layers = await listLayers(projectId);
   const documentsByLayer = groupByLayer(await listDocuments(projectId));

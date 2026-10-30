@@ -629,6 +629,14 @@ async function main(): Promise<void> {
     } else {
       console.log('    event loop   (not measured by this revision)');
     }
+    const memory = r['memory'] as { rssMB: number; heapUsedMB: number; heapLimitMB: number; externalMB: number; peakRssMB: number; peakRssAt: string | null } | null | undefined;
+    if (memory) {
+      console.log(
+        `    memory       rss=${memory.rssMB}MB heap=${memory.heapUsedMB}/${memory.heapLimitMB}MB external=${memory.externalMB}MB; peak rss ${memory.peakRssMB}MB at ${memory.peakRssAt ?? '-'}`,
+      );
+    } else {
+      console.log('    memory       (not measured by this revision)');
+    }
     // Requests that reached /mcp with no credential: a Routine's connector that
     // lost its token shows here, where a Routine that never called shows nothing.
     const bare = r['credentialless'] as { byClient: Array<{ key: string; count: number; first: string; last: string }>; recent: Array<{ at: string; key: string }> } | undefined;
