@@ -56,6 +56,7 @@ import { commissionView, type CommissionView } from './monetization/inFlight.ts'
 import { commissionCapacity } from './monetization/commissionPass.ts';
 import { journeyView, type JourneyView } from './journey/view.ts';
 import { cashOutcomeLessons, measuredByMechanism } from './journey/learning.ts';
+import { goalCompareFor } from './rankGoal.ts';
 
 /** The states a piece has been decided on, so it has a record worth reading. */
 const RECORD_STATES = new Set(['READY', 'EXECUTING', 'DELIVERING', 'COLLECTED']);
@@ -322,6 +323,7 @@ export async function cashView(input: {
 
   const lessons = await cashOutcomeLessons(input.projectId);
   const standingRows = await readStandingRows(input.projectId, opportunities);
+  const goalCompare = await goalCompareFor(input.projectId, opportunities);
   const plan = assemble({
     opportunities,
     tiers,
@@ -340,6 +342,7 @@ export async function cashView(input: {
      */
     standingInputs: standingRows.standingInputs,
     diveRoom: standingRows.diveRoom,
+    ...(goalCompare ? { goalCompare } : {}),
   });
   const standings = new Map(plan.placements.map((p) => [p.opportunity.id, p.standing]));
 

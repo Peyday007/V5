@@ -174,6 +174,8 @@ export interface PortfolioInput {
   standingInputs?: Record<string, StandingRows>;
   /** Whether the sprint can start a deep dive now. Unread is read as free. */
   diveRoom?: DiveRoom;
+  /** The goal's own ordering (`rankGoal.goalCompareFor`); absent, the ranking is unchanged. */
+  goalCompare?: (a: CashOpportunity, b: CashOpportunity) => number;
 }
 
 /**
@@ -190,7 +192,7 @@ export function placements(input: PortfolioInput): Placement[] {
 
   // Ready pieces compete for the headroom in rank order, so which of them is
   // told to wait is a property of the ranking rather than of insertion order.
-  const ranked = rank(input.opportunities, input.tiers, input.measured ?? {});
+  const ranked = rank(input.opportunities, input.tiers, input.measured ?? {}, input.goalCompare);
   const startable = new Set<string>();
   let remaining = headroom;
   for (const candidate of ranked) {
