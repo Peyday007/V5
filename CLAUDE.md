@@ -33,6 +33,7 @@ The rules it applies, in one line each:
 8. Independent work (no dependency, disjoint paths, separate branches) runs in parallel.
 9. Executable work beside idle capacity is a defect; the watchdog records it and the dispatch tick continues it.
 10. Production broken → restore the journey first, harden after.
+11. **Decide, don't ask.** Peyton's standing order: make the best call for the Brain, record it, and run to done. Stop for a person only on `SPEND_OVER_CEILING`, `IRREVERSIBLE_PRODUCTION_LOSS`, `LEGAL_RISK`, `SECRET_EXPOSED` or `MAJOR_NEWS` (a big win or a big failure), or a secret/login only he holds (`MISSING_AUTHORITY`). `brain_engineering_blocker` refuses any other question. Needs from him that do not block other work go in the end report, not mid-run.
 
 `.claude/hooks/engineering-guard.mjs` enforces the two hard edges (a full suite on
 an intermediate commit; a delayed check-in under 45 minutes) and names the way
@@ -40,8 +41,10 @@ past each. What the policy refused is in `engineering_interventions`; `npm run
 engineering -- report` prints it with the metrics.
 
 **Report milestones, not activity.** Conversation output is for `DONE`,
-`BLOCKED`, `DECISION_REQUIRED`, an important defect, or a meaningful status
-change. Do not narrate "reading X", "now checking Y", "waiting", "let me
+`BLOCKED` (rule 11 reasons only), an important defect, or a meaningful status
+change. The final report is four short parts and nothing else: **DONE** (what is
+live), **DECIDED** (calls you made, one line each), **YOU DO** (only what needs
+Peyton's hands — logins, payments — or "nothing"), **BIG NEWS** (only if any). Do not narrate "reading X", "now checking Y", "waiting", "let me
 inspect Z" — tool activity is already in the tool log and Brain's records.
 
 ---

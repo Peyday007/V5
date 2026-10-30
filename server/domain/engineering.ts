@@ -76,6 +76,22 @@ export const HUMAN_BLOCKER_KINDS: readonly BlockerKind[] = [
 ];
 
 /**
+ * Rule 11 — decide, don't ask. Peyton's standing instruction: a worker makes the
+ * best call for the Brain, records it, and keeps going. A HUMAN_DECISION or an
+ * AMBIGUOUS_REQUIREMENT reaches him only when it names one of these; anything
+ * else is the worker's to decide and goes in the end report under DECIDED.
+ * MISSING_AUTHORITY (a secret, credential or login only he holds) is unaffected.
+ */
+export const STOP_REASONS = [
+  'SPEND_OVER_CEILING',
+  'IRREVERSIBLE_PRODUCTION_LOSS',
+  'LEGAL_RISK',
+  'SECRET_EXPOSED',
+  'MAJOR_NEWS',
+] as const;
+export type StopReason = (typeof STOP_REASONS)[number];
+
+/**
  * Where a question can be answered without a person (rule 7). A blocker that
  * asks a person must say which of these it consulted first.
  */
@@ -638,6 +654,7 @@ export function classifyBlocker(input: {
   kind: BlockerKind;
   statement: string;
   checked: readonly string[];
+  stopReason?: string | null;
 }): { accepted: boolean; needsHuman: boolean; reason: string } {
   const needsHuman = HUMAN_BLOCKER_KINDS.includes(input.kind);
   if (!needsHuman) {
@@ -659,6 +676,18 @@ export function classifyBlocker(input: {
       reason:
         'Rule 7: a question for a person must first be looked up where Brain can know it — name what you checked ' +
         `(${SELF_ANSWERABLE_SOURCES.join(', ')}).`,
+    };
+  }
+  if (
+    input.kind !== 'MISSING_AUTHORITY' &&
+    !(STOP_REASONS as readonly string[]).includes(input.stopReason ?? '')
+  ) {
+    return {
+      accepted: false,
+      needsHuman: false,
+      reason:
+        'Rule 11: decide it yourself — take the reading that is best for the Brain, record it, and list it ' +
+        `under DECIDED in the end report. A person is stopped only for: ${STOP_REASONS.join(', ')}.`,
     };
   }
   return { accepted: true, needsHuman: true, reason: `${input.kind} is a person's to answer.` };
