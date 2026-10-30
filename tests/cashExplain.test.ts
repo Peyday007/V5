@@ -58,3 +58,38 @@ describe('explaining a decision', () => {
     expect(keyInWords('PERSON')).toMatch(/only a person/);
   });
 });
+
+describe('the explanation reads the decision record', () => {
+  const decision = {
+    id: 'cdc_1', projectId: 'p', opportunityId: 'o', goalId: 'g', verdict: 'REJECT' as const,
+    reason: 'CAPITAL_TOO_HIGH', detail: 'it needs 9000 against a limit of 100', bindingConstraint: 'capitalCeilingCents',
+    missingFacts: [], evidenceIds: ['clm_1'], reopenCondition: "the goal's capital limit changes, or a route needing no capital is named",
+    changeRef: 'x', isCurrent: true, recomputeChangeRef: null, recomputeRequestedAt: null, decidedAt: 't', supersededAt: null,
+  };
+
+  it('takes stance, reason, limit, missing facts and reopen condition from the decision, not from standing', () => {
+    const e = explainStanding({ kind: 'ADVANCING', cause: null, keys: [], hasSourceClaim: true, decision, privateDetail: true });
+    expect(e.stance).toBe('REJECTED');
+    expect(e.reason).toMatch(/capital/);
+    expect(e.bindingLimit).toContain('capitalCeilingCents');
+    expect(e.reopenWhen).toEqual([decision.reopenCondition]);
+    const held = explainStanding({
+      kind: 'ADVANCING', cause: null, keys: [], hasSourceClaim: true,
+      decision: { ...decision, verdict: 'HOLD', reason: 'MISSING_FACTS', bindingConstraint: null, missingFacts: ['a payer'] },
+    });
+    expect(held.stance).toBe('HELD');
+    expect(held.missing).toEqual(['a payer']);
+  });
+
+  it('shows a member no figure from the decision detail', () => {
+    const e = explainStanding({ kind: 'ADVANCING', cause: null, keys: [], hasSourceClaim: true, decision, privateDetail: false });
+    expect([e.reason, e.bindingLimit].join(' ')).not.toMatch(/\d|capitalCeilingCents/);
+  });
+
+  it("never overrides a person's decline or finished money, and falls back to standing without a record", () => {
+    const declined = explainStanding({ kind: 'NOT_WORTH_PURSUING', cause: 'DECLINED', keys: [], hasSourceClaim: true, decision: { ...decision, verdict: 'PRIORITIZE', reason: 'CLEAR' } });
+    expect(declined.reason).toMatch(/passed on it/);
+    expect(explainStanding({ kind: 'DONE', cause: null, keys: [], hasSourceClaim: true, decision }).stance).toBe('DONE');
+    expect(explainStanding({ kind: 'ADVANCING', cause: null, keys: [], hasSourceClaim: true, decision: null }).stance).toBe('PRIORITIZED');
+  });
+});
