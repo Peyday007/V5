@@ -1529,6 +1529,20 @@ export async function regrantUnitAttempts(input: {
 }
 
 /**
+ * Widen a not-yet-finished unit's owned paths. The caller has already checked
+ * every path is inside the contract's mutation scope and outside the forbidden
+ * set; this only writes, guarded on the unit not being leased or finished.
+ */
+export async function widenUnitOwnership(unitId: string, ownedPaths: string[]): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE factory_work_units SET owned_paths = ?, updated_at = ?
+      WHERE id = ? AND state IN ('FAILED', 'READY', 'IMPLEMENTED', 'BLOCKED')`,
+    [JSON.stringify(ownedPaths), factoryNow(), unitId],
+  );
+  return result.changes === 1;
+}
+
+/**
  * Charge a READY unit one attempt.
  *
  * The remote plane needs this and the local one does not, and the reason is
