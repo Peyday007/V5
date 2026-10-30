@@ -24,10 +24,10 @@ record here what is worth porting.
 `server/services/collect/seeds/index.ts` (the sources as data), `seeds/robots.ts` (reads and
 records robots.txt), `report/index.ts` and `report/cli.ts` (the report).
 
-## Two registries exist and should be reconciled
+## One registry definition
 
-`server/services/feeds/sources.ts` now carries its own `SOURCE_ROWS` (in code), while the database
-registry `collect_sources` is what this unit seeds. Nothing in the base calls `listCollectSources`
-to pull, so today the seeded rows are data that no loop consumes. A follow-up unit must make
-`pullDueFeeds` read `collect_sources` (through `collect()` and `recordPullMetrics`) and retire the
-duplicate in-code rows.
+`SOURCE_ROWS` in `server/services/feeds/sources.ts` is the only place a source is defined, and it is
+what `pullDueFeeds` pulls. `SEED_SOURCES` (`collect/seeds/index.ts`) is derived from its shared rows,
+so the `collect_sources` table cannot be seeded with a different list; a test holds the two equal.
+Still open, and not done here: `pullDueFeeds` does not yet read `collect_sources`, so adding a database
+row alone does not make it pulled, and there is no Postgres migration for `131_collect_registry`.
