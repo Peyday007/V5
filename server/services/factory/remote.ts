@@ -417,6 +417,18 @@ export async function createUnitsBin(
         'same commit and owns paths no other one owns — so they may be implemented ' +
         'concurrently. Do not merge them into each other and do not touch the integration ' +
         'branch: a later bin integrates them in the order Brain decides.',
+      ...(unit.ownedPaths.some((path) => /migrations\//.test(path))
+        ? [
+            // Production, 2026-10-30: two campaigns each "reserved" 131-132 for a
+            // sibling and took 133/134, and both integrations were refused for a
+            // numbering gap — one campaign spent all three attempts on it.
+            'A new migration takes the next number after the highest one in that base commit, ' +
+              'in each chain (server/db/migrations and server/db/pg-migrations are numbered ' +
+              'independently). Never skip a number or leave room for another campaign: a gap ' +
+              'fails the repository\'s own tests. If another change lands the same number first, ' +
+              'the next attempt renumbers to the next free one.',
+          ]
+        : []),
       'Commit your work and push that branch. Then submit a result for this unit key with a ' +
         'JSON value of the shape {"unitKey","outcome":"IMPLEMENTED"|"BLOCKED","branch",' +
         '"headSha","filesChanged":[],"commands":[{"command","exitCode"}],"summary",' +
