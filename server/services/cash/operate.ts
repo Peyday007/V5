@@ -112,6 +112,7 @@ import {
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
 import { describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
+import { orderFieldsByCost } from './infoValue.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
 
 /** Brain acting on its own account, never a person and never a worker. */
@@ -492,7 +493,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
         ? card.fields.filter((one) => (CAPTURE_INPUTS as readonly string[]).includes(one.key))
         : card.fields;
 
-    for (const field of asking) {
+    for (const field of orderFieldsByCost(asking)) {
       if (!field.loadBearing || field.owner !== 'BRAIN_RESEARCH' || field.value !== null) continue;
       const key = questionKey(opportunity.id, field.key);
       if (keys.has(key)) continue;
