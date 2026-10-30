@@ -28,6 +28,7 @@
  * rule holds: not being able to act today is a named gap, never a reason to
  * drop an opening.
  */
+import { getDb } from '../../db/database.ts';
 import { getClaim } from '../../repos/research.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 import { screenOpportunity, type ScreenFacts, type ScreenLimits, type ScreenVerdict } from './screen.ts';
@@ -116,20 +117,105 @@ const NO_CAPITAL_ROUTE: Partial<Record<CashOpportunity['mechanism'], string>> = 
   SUBCONTRACTED_FULFILMENT: 'subcontracting the fulfilment',
 };
 
-/** What the opening's own row establishes, for the screen. Nothing unknown is invented. */
-export function screenFactsFor(opportunity: CashOpportunity): ScreenFacts {
+/**
+ * Requirements the operation has decided it will never meet. A reviewed
+ * constant: adding one is a code change somebody reads. These are the standing
+ * exclusions the screen's EXCLUDED_REQUIREMENT reads.
+ */
+export const STANDING_EXCLUSIONS: readonly string[] = Object.freeze([
+  'SAM.gov registration',
+  'freelance marketplace work',
+]);
+
+/**
+ * Phrases in an opening's own text that state something it requires of us, and
+ * the requirement each names. Matching is on the opening's recorded words only;
+ * it never infers a requirement the text does not state.
+ */
+const REQUIREMENT_PATTERNS: readonly { requirement: string; pattern: RegExp }[] = Object.freeze([
+  { requirement: 'SAM.gov registration', pattern: /\bsam\.gov\b|system for award management/i },
+  { requirement: 'contractor licence', pattern: /\b(contractor'?s?|trade|professional) licen[cs]e\b/i },
+  { requirement: 'bonding', pattern: /\b(bid|performance|payment) bond\b|\bbonded\b/i },
+  { requirement: 'vendor registration', pattern: /\b(vendor|supplier) (registration|pre-?qualification)\b/i },
+]);
+
+/** Requirements the opening's own words state. Empty when it states none. */
+export function requirementsOf(opportunity: CashOpportunity): string[] {
+  const text = [opportunity.title, opportunity.offerScope, opportunity.requiredInputs, opportunity.economicsNote]
+    .filter((one): one is string => !!one)
+    .join('\n');
+  const out = REQUIREMENT_PATTERNS.filter((one) => one.pattern.test(text)).map((one) => one.requirement);
+  if (marketplaceOf(opportunity.source)) out.push('freelance marketplace work');
+  return out;
+}
+
+/**
+ * Whole days from now until the opening's own recorded payment terms say money
+ * arrives ("net 30", "paid within 14 days", "on delivery"), or null when the
+ * terms are absent or say nothing a day count can be read from.
+ */
+export function daysToPaymentOf(paymentTerms: string | null | undefined): number | null {
+  if (!paymentTerms) return null;
+  const text = paymentTerms.toLowerCase();
+  const net = /\bnet[\s-]*(\d{1,3})\b/.exec(text) ?? /\bwithin\s+(\d{1,3})\s*(?:calendar\s+|business\s+)?days?\b/.exec(text)
+    ?? /\b(\d{1,3})\s*days?\b/.exec(text);
+  if (net) return Number(net[1]);
+  if (/\b(upfront|up-front|on delivery|on completion|on receipt|prepaid|deposit)\b/.test(text)) return 0;
+  return null;
+}
+
+/**
+ * What a caller can supply that the row alone cannot say. Absent fields are
+ * unknown, and unknown is what the screen is built to hold on.
+ */
+export interface ScreenContext {
+  /** What this operation holds against stated requirements; null when none are recorded. */
+  capabilities?: readonly string[] | null;
+  /** Whether Brain has any recorded history with this kind of opening. */
+  typeHasHistory?: boolean;
+}
+
+/**
+ * Whether Brain has history with this opening's mechanism: another opening of
+ * the same mechanism in the same project that went through validation, or a
+ * recorded outcome for it. Read from rows, never assumed.
+ */
+export async function mechanismHasHistory(opportunity: CashOpportunity): Promise<boolean> {
+  const db = getDb();
+  const dived = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM cash_opportunities
+      WHERE project_id = ? AND mechanism = ? AND id <> ? AND validation_state IS NOT NULL`,
+    [opportunity.projectId, opportunity.mechanism, opportunity.id],
+  );
+  if (Number(dived?.n ?? 0) > 0) return true;
+  const outcomes = await db.get<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM cash_outcomes WHERE project_id = ? AND mechanism = ?',
+    [opportunity.projectId, opportunity.mechanism],
+  );
+  return Number(outcomes?.n ?? 0) > 0;
+}
+
+/**
+ * What the opening's own row establishes, for the screen. Nothing unknown is
+ * invented. Requirements, exclusions and days to payment come from the row and
+ * the reviewed constants above; capabilities and type history come from the
+ * caller's context, and a caller that supplies none leaves them unknown
+ * (capabilities null) or assumed familiar (history) - `notWorthResearching`
+ * always supplies history from rows.
+ */
+export function screenFactsFor(opportunity: CashOpportunity, context: ScreenContext = {}): ScreenFacts {
   return {
     capitalRequiredCents: opportunity.peakFundingCents ?? null,
     noCapitalRoute: NO_CAPITAL_ROUTE[opportunity.mechanism] ?? null,
-    daysToPayment: null,
+    daysToPayment: daysToPaymentOf(opportunity.paymentTerms),
     expiresAt: opportunity.expiresAt ?? null,
     duplicateOf: opportunity.duplicateOfId ?? null,
-    requirements: [],
-    capabilities: null,
-    exclusions: [],
+    requirements: requirementsOf(opportunity),
+    capabilities: context.capabilities ?? null,
+    exclusions: [...STANDING_EXCLUSIONS],
     hasPayer: !!opportunity.payer,
     hasPrice: opportunity.priceCents !== null && opportunity.priceCents !== undefined,
-    typeHasHistory: true,
+    typeHasHistory: context.typeHasHistory ?? true,
     sourceObservedAt: opportunity.signalObservedAt ?? null,
   };
 }
@@ -160,7 +246,7 @@ async function screenVerdictFor(opportunity: CashOpportunity, now: string): Prom
   if (!opportunity.projectId) return null;
   const all = await goalLimitsFor(opportunity.projectId, now);
   if (all.length === 0) return null;
-  const facts = screenFactsFor(opportunity);
+  const facts = screenFactsFor(opportunity, { typeHasHistory: await mechanismHasHistory(opportunity) });
   let reject: ScreenVerdict | null = null;
   for (const limits of all) {
     const verdict = screenOpportunity(facts, limits, now);
