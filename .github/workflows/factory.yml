@@ -154,6 +154,18 @@ jobs:
           flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh $args" 2>&1 | tee factory.txt
           set -e
 
+          # The same output, as one annotation. A run's log lives in blob storage
+          # that some operators' sandboxes cannot reach, while annotations are
+          # served by the ordinary REST API — so an operator who can dispatch
+          # this workflow can also read the change request and campaign ids it
+          # printed. Ids, counts and verdict lines only; nothing here is secret,
+          # and `%`, CR and LF are escaped the way the runner requires.
+          if [ -s factory.txt ]; then
+            summary=$(grep -E 'fcr_|fcp_|prj_|wki_|bin_|^FACTORY|^created|^already|^approved|^campaign|^base |^note:|[Rr]efus|[Ee]rror' factory.txt | head -80 \
+              | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            if [ -n "$summary" ]; then echo "::notice title=factory ${FACTORY_COMMAND}::${summary}"; fi
+          fi
+
           # The verdict comes from a line the script printed, not from an exit
           # code that had to survive an SSH session, a shell and a CLI — the
           # same reasoning `deploy.yml` states beside its hosted verification
