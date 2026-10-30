@@ -5,6 +5,7 @@ import { judgeRobots, recordRobotsChecks, robotsAllows } from '../server/service
 import { buildReport, renderReport } from '../server/services/collect/report/index.ts';
 import { listCollectSources } from '../server/repos/collectSources.ts';
 import { recordPullMetrics } from '../server/repos/collectMetrics.ts';
+import { SOURCE_ROWS } from '../server/services/feeds/sources.ts';
 import { collect } from '../server/services/collect/collectors/index.ts';
 
 beforeEach(async () => { await freshProject(); });
@@ -18,6 +19,10 @@ describe('seed sources', () => {
       expect(s.urlTemplate).not.toMatch(/api[_-]?key|token|secret/i);
       expect(SEED_MAPPINGS[s.parserId]).toBeDefined();
     }
+  });
+  it('has one definition: every shared in-code source is seeded, and nothing is seeded that is not in code', () => {
+    const shared = SOURCE_ROWS.filter((r) => r.ownerProjectId === null).map((r) => r.id).sort();
+    expect(SEED_SOURCES.map((s) => s.slug).sort()).toEqual(shared);
   });
   it('seeds idempotently and leaves robots unchecked, so nothing is due before it is read', async () => {
     const first = await seedSources();
