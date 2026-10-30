@@ -74,7 +74,7 @@ import {
 } from '../../repos/factory.ts';
 import { recordFactoryEvent, recordIntegration } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
-import { matchesGlob } from './integrate.ts';
+import { ownsPath } from './glob.ts';
 import { forbiddenIn, forbiddenPathsFor } from './forbidden.ts';
 
 /**
@@ -426,7 +426,8 @@ export async function createUnitsBin(
               'in each chain (server/db/migrations and server/db/pg-migrations are numbered ' +
               'independently). Never skip a number or leave room for another campaign: a gap ' +
               'fails the repository\'s own tests. If another change lands the same number first, ' +
-              'the next attempt renumbers to the next free one.',
+              'the next attempt renumbers to the next free one. A migration path above is owned by its ' +
+              'name, not its number: write it under the right number even if the path above says another.',
           ]
         : []),
       'Commit your work and push that branch. Then submit a result for this unit key with a ' +
@@ -821,7 +822,7 @@ export async function verifyUnitReport(
   }
 
   const outside = comparison.body.files.filter(
-    (file) => !expected.ownedPaths.some((glob) => matchesGlob(file, glob)),
+    (file) => !expected.ownedPaths.some((glob) => ownsPath(file, glob)),
   );
   if (outside.length > 0) {
     problems.push(
@@ -1138,7 +1139,7 @@ export async function verifyIntegrationReport(
     .filter((unit): unit is { unitKey: string; headSha: string; ownedPaths: string[] } => !!unit)
     .flatMap((unit) => unit.ownedPaths);
   const outside = comparison.body.files.filter(
-    (file) => !allowed.some((glob) => matchesGlob(file, glob)),
+    (file) => !allowed.some((glob) => ownsPath(file, glob)),
   );
   if (outside.length > 0) {
     problems.push(

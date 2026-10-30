@@ -2141,9 +2141,24 @@ describe('a unit out of attempts stops the campaign before any review', () => {
     expect(regranted.attempt).toBe(spent.attempt);
     expect(regranted.failureDetail).toBe('the surface could not reach the repository');
 
+    // Widening what it owns: in scope is added; a forbidden path is refused and
+    // nothing is written.
+    const refusedWiden = await regrantUnit({
+      campaignId: campaign.id, unitKey: 'spent', maxAttempts: spent.maxAttempts + 3,
+      reasonCode: 'ownership-widened', operator: 'operator:t', addOwnedPaths: ['.github/workflows/deploy.yml'],
+    });
+    expect(refusedWiden.ok).toBe(false);
+    expect((await getUnitByKey(campaign.id, 'spent'))?.ownedPaths).toEqual(['index.html']);
+    const widened = await regrantUnit({
+      campaignId: campaign.id, unitKey: 'spent', maxAttempts: spent.maxAttempts + 3,
+      reasonCode: 'ownership-widened', operator: 'operator:t', addOwnedPaths: ['src/app.js'],
+    });
+    expect(widened.ok).toBe(true);
+    expect((await getUnitByKey(campaign.id, 'spent'))?.ownedPaths).toEqual(['index.html', 'src/app.js']);
+
     const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
     const events = await listFactoryEvents(campaign.id, { kinds: ['UNIT_ATTEMPTS_REGRANTED'] });
-    expect(events).toHaveLength(1);
+    expect(events).toHaveLength(2);
     expect(events[0]?.detail).toMatchObject({ code: 'surface-blocked', from: spent.maxAttempts });
 
     const next = await tickRemoteCampaign(campaign.id);
