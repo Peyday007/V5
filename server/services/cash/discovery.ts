@@ -68,6 +68,7 @@
  * rather than being asserted away by whoever created it.
  */
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
+import { learnedLensesForProject } from '../knowledge/subjects/subjects.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -545,7 +546,9 @@ export async function openDiscovery(input: {
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   let frame: ExecutionFrame | null | undefined;
-  for (const bucket of fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : [])], rounds)) {
+  // Subjects Brain learned are offered beside the constants, merged at read time.
+  const learned = await learnedLensesForProject(input.projectId);
+  for (const bucket of fairOrder([...SEARCH_BUCKETS, ...(triggersEnabled() ? TRIGGER_BUCKETS : []), ...learned], rounds)) {
     if (out.length >= limit) break;
     const history = byBucket.get(bucket.id) ?? [];
     const next = nextRoundFor(history, now);
@@ -1183,7 +1186,7 @@ async function liveRounds(
   // Trigger buckets always resolve, so a round opened while triggers were on is
   // still harvested after they are switched off.
   const byId = new Map(
-    [...SEARCH_BUCKETS, ...TRIGGER_BUCKETS, FEED_SHORTLIST_BUCKET].map((bucket) => [bucket.id, bucket]),
+    [...SEARCH_BUCKETS, ...TRIGGER_BUCKETS, FEED_SHORTLIST_BUCKET, ...(await learnedLensesForProject(projectId))].map((bucket) => [bucket.id, bucket]),
   );
   const out = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>();
   for (const [candidateId, round] of await openRoundsByCandidate(projectId)) {
