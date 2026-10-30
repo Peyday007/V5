@@ -1,0 +1,2 @@
+<feed xmlns="http://www.w3.org/2005/Atom"><link rel="next" href="https://ex.test/atom?page=2"/>
+<entry><id>urn:1</id><title>Atom entry</title><link rel="alternate" href="https://ex.test/e1"/><updated>2025-10-01T00:00:00Z</updated><author><name>Org A</name></author><summary>hello</summary></entry></feed>
