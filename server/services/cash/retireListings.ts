@@ -24,17 +24,13 @@
  * It contacts nobody, spends nothing and reverses no person's decision: an
  * opening a person archived or declined is left exactly as they left it.
  */
-import { getClaim, getOrchestration } from '../../repos/research.ts';
+import { getClaim } from '../../repos/research.ts';
 import { listNeeds, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
-import { getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
-import { getMissionByOrchestration, missionsForCandidate, transitionMission } from '../../repos/russellMissions.ts';
-import { cancelResearch } from '../research/queue.ts';
 import { archiveOpportunity } from './opportunities.ts';
-import { closeNeed } from './needs.ts';
-import { diveStarts } from './diveStage.ts';
+import { releaseOpportunityResearch, type ResearchReleased } from './releaseResearch.ts';
 import { marketplaceOf } from './worthResearching.ts';
-import type { CandidateState, CashOpportunity, CashOpportunityState, MissionState, RussellMission } from '../../domain/types.ts';
+import type { CashOpportunity, CashOpportunityState } from '../../domain/types.ts';
 
 const BRAIN = 'BRAIN';
 
@@ -46,81 +42,15 @@ export const LISTING_ARCHIVE_REASON =
 export const LISTINGS_RETIRED_EVENT = 'CASH_MARKETPLACE_LISTINGS_RETIRED';
 
 const UNCOMMITTED: CashOpportunityState[] = ['DISCOVERED', 'EVIDENCE_CARD', 'READY'];
-const LIVE_MISSIONS: ReadonlySet<MissionState> = new Set(['PLANNED', 'LAUNCHING', 'RUNNING', 'WAITING', 'NEEDS_HUMAN']);
-const UNLAUNCHED_CANDIDATES: ReadonlySet<CandidateState> = new Set(['CAPTURED', 'PROMOTED', 'QUEUED', 'PARKED']);
 
-export interface ListingsRetired {
+export interface ListingsRetired extends ResearchReleased {
   archived: string[];
-  needsWithdrawn: string[];
-  candidatesRejected: string[];
-  missionsCancelled: string[];
-  packetsCancelled: string[];
 }
 
 async function isListing(opportunity: CashOpportunity): Promise<boolean> {
   if (!opportunity.sourceClaimId) return false;
   const claim = await getClaim(opportunity.sourceClaimId);
   return marketplaceOf(claim?.sourceUrl) !== null;
-}
-
-const FINISHED_PACKETS = new Set(['COMPLETE', 'COMPLETE_WITH_GAPS', 'CANCELLED', 'FAILED']);
-
-async function stopPacket(orchestrationId: string, out: ListingsRetired): Promise<void> {
-  const packet = await getOrchestration(orchestrationId);
-  if (!packet || FINISHED_PACKETS.has(packet.status)) return;
-  const after = await cancelResearch(orchestrationId, LISTING_ARCHIVE_REASON);
-  if (after?.status === 'CANCELLED') out.packetsCancelled.push(orchestrationId);
-}
-
-async function stopMission(mission: RussellMission, out: ListingsRetired): Promise<void> {
-  if (!LIVE_MISSIONS.has(mission.state)) return;
-  if (mission.orchestrationId) await stopPacket(mission.orchestrationId, out);
-  const moved = await transitionMission({
-    missionId: mission.id,
-    from: mission.state,
-    to: 'CANCELLED',
-    terminalReason: LISTING_ARCHIVE_REASON,
-  });
-  if (moved) out.missionsCancelled.push(mission.id);
-}
-
-async function stopResearch(
-  opportunity: CashOpportunity,
-  needs: Awaited<ReturnType<typeof listNeeds>>,
-  out: ListingsRetired,
-): Promise<void> {
-  const candidates = new Set<string>();
-  for (const need of needs) {
-    if (need.opportunityId !== opportunity.id) continue;
-    if (need.candidateId) candidates.add(need.candidateId);
-    if (need.state !== 'OPEN') continue;
-    const closed = await closeNeed({
-      needId: need.id,
-      to: 'WITHDRAWN',
-      resolution: `Not researched: ${LISTING_ARCHIVE_REASON} Nothing was established, so this is withdrawn rather than resolved.`,
-      actorUserId: BRAIN,
-    });
-    if (closed.ok) out.needsWithdrawn.push(need.id);
-  }
-  if (opportunity.candidateId) candidates.add(opportunity.candidateId);
-  for (const start of await diveStarts(opportunity.id)) candidates.add(start.candidateId);
-  // The bucket that discovered this opening asks about the whole sprint, never this one.
-  if (opportunity.discoveredByCandidateId) candidates.delete(opportunity.discoveredByCandidateId);
-
-  for (const candidateId of candidates) {
-    for (const mission of await missionsForCandidate(candidateId)) await stopMission(mission, out);
-    const candidate = await getCandidate(candidateId);
-    if (candidate && UNLAUNCHED_CANDIDATES.has(candidate.state)) {
-      if (await transitionCandidate({ candidateId, from: candidate.state, to: 'REJECTED' })) {
-        out.candidatesRejected.push(candidateId);
-      }
-    }
-  }
-  if (opportunity.validationOrchestrationId) {
-    const mission = await getMissionByOrchestration(opportunity.validationOrchestrationId);
-    if (mission) await stopMission(mission, out);
-    else await stopPacket(opportunity.validationOrchestrationId, out);
-  }
 }
 
 export async function retireMarketplaceListings(projectId: string): Promise<ListingsRetired> {
@@ -149,7 +79,9 @@ export async function retireMarketplaceListings(projectId: string): Promise<List
   }
   if (retire.length === 0) return out;
   const needs = await listNeeds({ projectId });
-  for (const opportunity of retire) await stopResearch(opportunity, needs, out);
+  for (const opportunity of retire) {
+    await releaseOpportunityResearch({ opportunity, needs, reason: LISTING_ARCHIVE_REASON, out });
+  }
 
   const changed =
     out.archived.length + out.needsWithdrawn.length + out.candidatesRejected.length +
