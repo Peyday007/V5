@@ -43,6 +43,7 @@ import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { cashOutcomeLessons, measuredByMechanism } from './journey/learning.ts';
 import type { DiveRefusal } from './validation.ts';
+import { goalCompareFor } from './rankGoal.ts';
 
 /** How many history rows per piece travel with the page. The total is reported beside them. */
 export const HISTORY_SHOWN = 8;
@@ -95,6 +96,7 @@ export async function standingsForProject(input: {
     projectId: input.projectId,
     currency: mode?.currency ?? 'USD',
   });
+  const goalCompare = await goalCompareFor(input.projectId, opportunities);
   const plan = assemble({
     opportunities: [...opportunities],
     tiers,
@@ -104,6 +106,7 @@ export async function standingsForProject(input: {
     discoveryOpen: mode?.state === 'ACTIVE',
     standingInputs: rows.standingInputs,
     diveRoom: rows.diveRoom,
+    ...(goalCompare ? { goalCompare } : {}),
   });
   for (const placement of plan.placements) out.set(placement.opportunity.id, placement.standing);
   return out;

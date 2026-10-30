@@ -18,6 +18,9 @@ import type { CashOpportunity } from '../../domain/types.ts';
 import type { ValueLayerReading } from '../../domain/cashValueLayers.ts';
 import type { TargetReading } from '../goals/target.ts';
 import { goalContribution } from './valueLayers.ts';
+import { listValueLayers } from '../../repos/cashValueLayers.ts';
+import { listWorkstreams } from '../../repos/register.ts';
+import { readTarget } from '../goals/target.ts';
 
 export type RankGoal = Pick<TargetReading, 'metric' | 'targetCents' | 'daysLeft' | 'capitalCeilingCents' | 'capitalBeforeProofCents' | 'hoursCeiling' | 'currency'>;
 
@@ -196,4 +199,39 @@ export function goalComparator(inputs: Map<string, RankInput>, goal: RankGoal): 
     }
     return 0;
   };
+}
+
+/**
+ * The project's own goal as a ranking, or undefined when it has none.
+ *
+ * With several live, unachieved goals the one due soonest decides (a goal with
+ * no due date after those with one), because its deadline is the tightest limit
+ * anything is being ranked against. Value layers are read per opportunity; the
+ * time, repeatability and combinability facts nobody has established stay null,
+ * which sorts last on their criteria rather than helping.
+ */
+export async function goalCompareFor(
+  projectId: string,
+  opportunities: readonly CashOpportunity[],
+  now: Date = new Date(),
+): Promise<((a: CashOpportunity, b: CashOpportunity) => number) | undefined> {
+  const goals: RankGoal[] = [];
+  for (const workstream of await listWorkstreams({ projectIds: [projectId] })) {
+    if (workstream.projectId !== projectId || !workstream.target) continue;
+    const reading = await readTarget(workstream, now);
+    if (reading && !reading.achieved) goals.push(reading);
+  }
+  if (goals.length === 0) return undefined;
+  goals.sort((a, b) => (a.daysLeft ?? Number.POSITIVE_INFINITY) - (b.daysLeft ?? Number.POSITIVE_INFINITY));
+  const inputs = new Map<string, RankInput>();
+  for (const opportunity of opportunities) {
+    inputs.set(opportunity.id, {
+      opportunity,
+      readings: await listValueLayers(projectId, opportunity.id),
+      daysToCash: null,
+      repeatable: null,
+      combinable: null,
+    });
+  }
+  return goalComparator(inputs, goals[0]!);
 }
