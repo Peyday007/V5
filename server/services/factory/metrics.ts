@@ -605,3 +605,94 @@ export function computeMetrics(input: MetricsInput): CampaignMetrics {
     ).length,
   };
 }
+
+/* ---------------------------------------------------------------------------
+ * Idle reasons: why ready work and idle capacity sit side by side.
+ *
+ * Pure over readings the caller took — the bins, their newest dispatch, the
+ * fleet snapshot's candidates and a `routeBin` verdict per bin — so eligibility
+ * is never re-derived here. `surfaceIneligibility` is the router's own answer.
+ * ------------------------------------------------------------------------- */
+
+export interface IdleBinInput {
+  id: string;
+  kind: string;
+  /** When the bin became READY, else its creation. */
+  readySince: string;
+  dispatch: { state: string; lastErrorKind: string | null; lastError: string | null } | null;
+  /** What `routeBin` says now: a refusal with its reason, or the surface it would pick. */
+  routing: { ok: true; routineName: string } | { ok: false; refusal: string; reason: string } | null;
+}
+
+export interface IdleRoutineInput {
+  id: string;
+  name: string;
+  state: string;
+  inFlight: number;
+  retryAt: string | null;
+  /** `surfaceIneligibility(candidate)`, null when eligible. */
+  ineligibility: string | null;
+}
+
+export type IdleRoutineStatus = 'IN_FLIGHT' | 'RATE_LIMITED' | 'QUARANTINED' | 'UNAVAILABLE' | 'IDLE';
+
+export interface IdleReading {
+  bins: {
+    id: string;
+    kind: string;
+    waitedMs: number | null;
+    dispatchState: string | null;
+    refusalKind: string | null;
+    reason: string;
+  }[];
+  routines: { id: string; name: string; status: IdleRoutineStatus; detail: string }[];
+}
+
+export function readIdle(input: { now: string; bins: IdleBinInput[]; routines: IdleRoutineInput[] }): IdleReading {
+  const nowMs = Date.parse(input.now);
+  const bins = input.bins
+    .filter((bin) => bin.kind.startsWith('FACTORY_'))
+    .map((bin) => {
+      const since = Date.parse(bin.readySince);
+      const refusalKind = bin.dispatch?.lastErrorKind ?? (bin.routing && !bin.routing.ok ? bin.routing.refusal : null);
+      const reason =
+        bin.dispatch?.lastError ??
+        (bin.routing === null
+          ? 'no routing reading'
+          : bin.routing.ok
+            ? `would route to ${bin.routing.routineName}`
+            : bin.routing.reason);
+      return {
+        id: bin.id,
+        kind: bin.kind,
+        waitedMs: Number.isFinite(since) && Number.isFinite(nowMs) ? Math.max(0, nowMs - since) : null,
+        dispatchState: bin.dispatch?.state ?? null,
+        refusalKind,
+        reason,
+      };
+    })
+    .sort((a, b) => (b.waitedMs ?? -1) - (a.waitedMs ?? -1));
+  const routines = input.routines.map((routine) => {
+    const limited = routine.retryAt !== null && Date.parse(routine.retryAt) > nowMs;
+    let status: IdleRoutineStatus;
+    let detail: string;
+    if (routine.state === 'QUARANTINED') {
+      status = 'QUARANTINED';
+      detail = routine.ineligibility ?? 'quarantined';
+    } else if (routine.ineligibility !== null) {
+      status = 'UNAVAILABLE';
+      detail = routine.ineligibility;
+    } else if (limited) {
+      status = 'RATE_LIMITED';
+      detail = `rate limited until ${routine.retryAt}`;
+    } else if (routine.inFlight > 0) {
+      status = 'IN_FLIGHT';
+      detail = `${routine.inFlight} activation(s) in flight`;
+    } else {
+      status = 'IDLE';
+      detail = 'eligible, nothing in flight';
+    }
+    return { id: routine.id, name: routine.name, status, detail };
+  });
+  return { bins, routines };
+}
