@@ -159,3 +159,53 @@ export function yieldGuidance(reading: DiscoveryYield): string {
   }
   return parts.join(' ');
 }
+
+export type SearchMode = 'EXPLOIT' | 'INVESTIGATE' | 'EXPLORE';
+
+export interface YieldBalance {
+  /** Ways of looking that have produced openings with a known payer. */
+  exploit: string[];
+  /** Asked, but not yet enough to say: openings without a payer, or too few rounds to judge. */
+  investigate: string[];
+  /** Known ways of looking that have never been asked. */
+  explore: string[];
+  /** Each mode's share of the rounds already measured, plus the unasked ways; null when nothing is measured. */
+  share: Record<SearchMode, number> | null;
+  /** Discovery keeps running whether or not anything is supported. */
+  discoveryContinues: true;
+  note: string;
+}
+
+/** Rounds a way of looking needs before "no payer found" counts as a result rather than a start. */
+export const YIELD_MIN_ROUNDS = 3;
+
+/**
+ * The exploit / investigate / explore balance, read from the measurements
+ * above rather than fixed. A method that has yielded is exploited; one asked
+ * fewer than `YIELD_MIN_ROUNDS` times with nothing usable is still being
+ * investigated, not written off; a known method never asked is explored. The
+ * shares are counts of those methods, so the balance moves as the rows do.
+ * With nothing yielding, the weight falls on investigating and exploring and
+ * discovery carries on — a barren reading never stops the search.
+ */
+export function yieldBalance(reading: DiscoveryYield, knownMethods: readonly string[] = []): YieldBalance {
+  const asked = new Map(reading.byMethod.filter((one) => one.key !== 'unattributed').map((one) => [one.key, one]));
+  const exploit: string[] = [];
+  const investigate: string[] = [];
+  for (const one of asked.values()) {
+    if (one.useful > 0) exploit.push(one.key);
+    else investigate.push(one.key);
+  }
+  const explore = knownMethods.filter((key) => !asked.has(key));
+  const total = exploit.length + investigate.length + explore.length;
+  const share = total === 0 ? null : {
+    EXPLOIT: exploit.length / total,
+    INVESTIGATE: investigate.length / total,
+    EXPLORE: explore.length / total,
+  };
+  const note =
+    exploit.length === 0
+      ? 'Nothing measured has yielded a usable opening yet; discovery keeps asking and the weight stays on investigating and exploring.'
+      : `${exploit.length} way(s) of looking have yielded; the rest stay open so a new kind of opening is still found.`;
+  return { exploit, investigate, explore, share, discoveryContinues: true, note };
+}
