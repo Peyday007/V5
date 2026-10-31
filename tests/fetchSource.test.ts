@@ -61,6 +61,22 @@ describe('which addresses Brain will open', () => {
     const mixed: Resolver = async () => ['93.184.216.34', '127.0.0.1'];
     expect(await checkDestination('https://rebind.example/', mixed)).toMatchObject({ ok: false, reason: 'ADDRESS_NOT_PUBLIC' });
   });
+
+  it('refuses loopback and private IPv4 written inside an IPv6 literal, however it is spelled', async () => {
+    // The URL parser rewrites [::ffff:127.0.0.1] as [::ffff:7f00:1]; a check
+    // that only knew the dotted spelling let it through to loopback.
+    for (const raw of [
+      'http://[::ffff:127.0.0.1]/', 'http://[::ffff:7f00:1]/', 'http://[0:0:0:0:0:ffff:7f00:1]/',
+      'http://[::127.0.0.1]/', 'http://[::ffff:a9fe:a9fe]/', 'http://[::ffff:a00:1]/', 'http://[2002:7f00:1::]/',
+    ]) {
+      expect(await checkDestination(raw, publicResolver), raw).toMatchObject({ ok: false, reason: 'ADDRESS_NOT_PUBLIC' });
+    }
+    for (const address of ['::ffff:7f00:1', '::ffff:c0a8:101', '::7f00:1', '2002:a00:1::1', 'fe80::1%eth0']) {
+      expect(isPublicAddress(address), address).toBe(false);
+    }
+    expect(isPublicAddress('::ffff:808:808')).toBe(true);
+    expect(isPublicAddress('2002:5db8:d822::1')).toBe(true);
+  });
 });
 
 describe('reading a page', () => {

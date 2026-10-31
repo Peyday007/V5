@@ -108,9 +108,17 @@ export function isPublicAddress(address: string): boolean {
   }
   if (family === 6) {
     const lower = address.toLowerCase();
-    if (lower === '::' || lower === '::1') return false;
-    const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isPublicAddress(mapped[1]!);
+    // Expanded to eight hextets, because the URL parser rewrites
+    // [::ffff:127.0.0.1] as [::ffff:7f00:1] and a dotted-only check misses it.
+    const words = ipv6Words(lower);
+    if (!words) return false;
+    if (words.slice(0, 5).every((w) => w === 0) && (words[5] === 0 || words[5] === 0xffff)) {
+      // Unspecified, loopback, IPv4-compatible and IPv4-mapped: judge the
+      // embedded IPv4 address (::/96 and ::ffff:0:0/96).
+      if (words[5] === 0 && words[6] === 0 && words[7]! <= 1) return false;
+      const v4 = `${words[6]! >> 8}.${words[6]! & 255}.${words[7]! >> 8}.${words[7]! & 255}`;
+      return isPublicAddress(v4);
+    }
     if (lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) {
       return false; // link-local
     }
@@ -118,9 +126,33 @@ export function isPublicAddress(address: string): boolean {
     if (lower.startsWith('ff')) return false; // multicast
     if (lower.startsWith('2001:db8')) return false; // documentation
     if (lower.startsWith('64:ff9b')) return false; // NAT64 can reach private IPv4
+    if (words[0] === 0x2002) {
+      // 6to4 embeds an IPv4 address in the next 32 bits.
+      return isPublicAddress(`${words[1]! >> 8}.${words[1]! & 255}.${words[2]! >> 8}.${words[2]! & 255}`);
+    }
     return true;
   }
   return false;
+}
+
+/** An IPv6 address as eight 16-bit words, or null. Accepts a dotted IPv4 tail. */
+function ipv6Words(address: string): number[] | null {
+  let text = address.split('%')[0]!;
+  const dotted = text.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted) {
+    const octets = ipv4(dotted[2]!);
+    if (!octets) return null;
+    text = `${dotted[1]}${((octets[0]! << 8) | octets[1]!).toString(16)}:${((octets[2]! << 8) | octets[3]!).toString(16)}`;
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 1) return null;
+  const parts = [...head, ...(halves.length === 2 ? Array(missing).fill('0') : []), ...tail];
+  const words = parts.map((part) => (/^[0-9a-f]{1,4}$/.test(part) ? parseInt(part, 16) : NaN));
+  return words.every((w) => Number.isInteger(w)) ? words : null;
 }
 
 export type Resolver = (hostname: string) => Promise<string[]>;
