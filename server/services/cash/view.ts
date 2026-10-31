@@ -15,6 +15,7 @@
  *
  * It writes nothing.
  */
+import { withGoalLimitsMemo } from './worthResearching.ts';
 import { preparedDecisions } from './prepared.ts';
 import type { PreparedDecision } from '../../repos/cashPrepared.ts';
 import { cashNow, listCashEvents } from '../../repos/cashMode.ts';
@@ -272,7 +273,12 @@ export interface CashView {
   screening: { metrics: ScreenMetrics; candidates: CandidateSet | null };
 }
 
-export async function cashView(input: {
+/** cashView, with goal limits read once for the whole read (see `withGoalLimitsMemo`). */
+export function cashView(input: Parameters<typeof cashViewUnmemoized>[0]): ReturnType<typeof cashViewUnmemoized> {
+  return withGoalLimitsMemo(() => cashViewUnmemoized(input));
+}
+
+async function cashViewUnmemoized(input: {
   projectId: string;
   now?: string;
 }): Promise<CashView> {
