@@ -55,6 +55,7 @@ import { workType } from '../queue/workTypes.ts';
 import { advancePacket, refusedByBudget, type AdvanceResult } from './packetRunner.ts';
 import { getApprovalEnvelope } from './approvalEnvelope.ts';
 import { decideReuse } from '../routing/reuse/reuse.ts';
+import { classifyAndRecord } from '../routing/classify/index.ts';
 import { sharedClaimsForProject } from '../knowledge/shared.ts';
 
 /**
@@ -627,6 +628,35 @@ export async function placePlan(
     reused.clear();
   }
   const toCreate = plan.filter((fragment) => !reused.has(fragment.fragmentKey));
+
+  // Route every fragment that survives reuse through the classifier, so the
+  // ledger records which resource runs it and why. A researched question reads
+  // sources on the internet and its claims must pass the evidence gate, so no
+  // algorithm or ACTIVE detector declared for it exists and the free lane is
+  // not eligible: the honest answer is STRONG, with the alternatives written
+  // down. A ledger failure never blocks creating the fragment.
+  for (const fragment of toCreate) {
+    try {
+      await classifyAndRecord({
+        projectId: orchestration.projectId,
+        workKind: 'RESEARCH_FRAGMENT',
+        workRef: `${orchestration.id}:${fragment.fragmentKey}`,
+        requirements: {
+          algorithmAvailable: false,
+          activeDetectorId: null,
+          structuredInput: false,
+          needsTools: true,
+          needsInternet: true,
+          closedAnswerSet: false,
+          verification: 'EVIDENCE_GATE',
+        },
+        cheapMeasure: null,
+        cheapThreshold: 1,
+      });
+    } catch {
+      // routing ledger is advisory at this seam
+    }
+  }
 
   try {
     return await createFragments(
