@@ -22,6 +22,8 @@ import { cashTier, tierRank } from './tier.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { hostOf } from '../research/gate.ts';
+import type { SearchReader } from '../../domain/searchIntelligence.ts';
+import { readMethodMetrics, type MethodReading } from '../research/searchMetrics/read.ts';
 
 export interface YieldRow {
   /** The bucket id, or a source host. */
@@ -158,4 +160,17 @@ export function yieldGuidance(reading: DiscoveryYield): string {
     );
   }
   return parts.join(' ');
+}
+
+/**
+ * Per-method metrics beyond cash: every search method the reader can see, with
+ * the cash bucket outcomes attached where a method shares a bucket's key. A
+ * method with no cash counterpart reports no downstream reading (null).
+ */
+export async function discoveryMethodMetrics(projectId: string, reader: SearchReader): Promise<MethodReading[]> {
+  const reading = await discoveryYield(projectId);
+  const downstream = new Map(
+    reading.byMethod.map((one) => [one.key, { useful: one.useful, qualified: one.qualified, duplicates: one.duplicates }] as const),
+  );
+  return readMethodMetrics(reader, { downstream });
 }
