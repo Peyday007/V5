@@ -128,8 +128,13 @@ export interface StartFacts {
   nowMs: number;
   /** Its own session reached Brain (an arrival or an assignment matched to it). */
   arrived: boolean;
-  /** The leases its session took, and what became of each. */
-  leases: { productive: boolean; live: boolean }[];
+  /**
+   * The leases its session took, and what became of each. `withheldByBrain`:
+   * the holder was handed nothing because Brain withheld the work (an
+   * admission refusal, or nothing claimable at the moment) — Brain's choice of
+   * bin, not the account's failure.
+   */
+  leases: { productive: boolean; live: boolean; withheldByBrain?: boolean }[];
   /** Some session — any session — arrived at Brain within its settle window. */
   brainAnswering: boolean;
 }
@@ -138,6 +143,11 @@ export interface StartFacts {
 export function classifyStart(facts: StartFacts): StartVerdict {
   if (facts.leases.some((one) => one.productive)) return 'PRODUCTIVE';
   if (facts.leases.some((one) => one.live)) return 'PENDING';
+  // Every lease ended with Brain withholding the work: the session turned up
+  // and was given nothing it could do. Charging that to the account refused
+  // its productive fires for an hour (production, 2026-10-30: 152 fires
+  // withheld) for a choice the dispatcher made.
+  if (facts.leases.length > 0 && facts.leases.every((one) => one.withheldByBrain)) return 'NOT_JUDGED';
   if (facts.leases.length > 0) return 'UNPRODUCTIVE_NO_WORK';
   const settled = facts.nowMs - facts.sentAtMs >= ARRIVAL_SETTLE_MS;
   if (facts.arrived) return settled ? 'UNPRODUCTIVE_NO_WORK' : 'PENDING';
@@ -238,6 +248,15 @@ async function readProductivity(
     [since, ...PRODUCTIVE_EVENTS],
   );
   const productive = new Set(worked.map((row) => `${row.bin_id}#${row.lease_generation}`));
+  const withheld = new Set(
+    (
+      await db.all<{ bin_id: string; lease_generation: number | null }>(
+        `SELECT bin_id, lease_generation FROM bin_events
+          WHERE event_type = 'BIN_ITEM_WITHHELD' AND at >= ? AND bin_id IS NOT NULL`,
+        [since],
+      )
+    ).map((row) => `${row.bin_id}#${row.lease_generation}`),
+  );
 
   const binIds = [...new Set(assignments.map((row) => row.bin_id))];
   const bins = new Map<string, { state: string; lease_generation: number; lease_expires_at: string | null; orchestration_id: string | null }>();
@@ -305,6 +324,7 @@ async function readProductivity(
       return {
         productive:
           productive.has(`${row.bin_id}#${generation}`) || passes.some((at) => at >= row.at),
+        withheldByBrain: withheld.has(`${row.bin_id}#${generation}`),
         live:
           bin !== undefined &&
           bin.state === 'LEASED' &&
