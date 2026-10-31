@@ -515,6 +515,35 @@ export async function updateOrchestration(
   return getOrchestration(id);
 }
 
+/**
+ * Park a packet for a person, unless it is already parked for exactly this
+ * reason. Every pass re-derives a parked packet (NEEDS_HUMAN is deliberately
+ * not terminal), and each restart walks every one of them, so an unconditional
+ * write re-stamped `updated_at` and `completed_at` on hundreds of packets that
+ * had not changed: a write per packet per boot, and a report that read old
+ * parks as new ones (2026-10-31: 58 "parked" in three hours, almost all
+ * September packets re-touched by two restarts). The guard is in the statement,
+ * so a real change of status or reason still lands, and a park that must
+ * record when the packet stopped still does when nothing has. True when it wrote.
+ */
+export async function parkOrchestration(
+  id: string,
+  reason: string | null,
+  options: { stampCompleted?: boolean } = {},
+): Promise<boolean> {
+  const at = nowIso();
+  const done = await getDb().run(
+    `UPDATE research_orchestrations
+        SET status = 'NEEDS_HUMAN', failure_reason = ?,
+            completed_at = CASE WHEN ? = 1 THEN ? ELSE completed_at END,
+            updated_at = ?
+      WHERE id = ? AND NOT (status = 'NEEDS_HUMAN' AND COALESCE(failure_reason, '') = ?
+                             AND (? = 0 OR completed_at IS NOT NULL))`,
+    [reason, options.stampCompleted ? 1 : 0, at, at, id, reason ?? '', options.stampCompleted ? 1 : 0],
+  );
+  return done.changes === 1;
+}
+
 /** Cheap liveness write, so a dead process is distinguishable from a slow one. */
 export async function beat(id: string): Promise<void> {
   const ts = nowIso();
