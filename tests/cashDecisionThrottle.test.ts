@@ -15,7 +15,7 @@ describe('the Cash decision pass is throttled on the production tick', () => {
   });
 
   it('is the only call site of decideOpenings, so nothing else runs it per tick', () => {
-    expect(source.match(/await decideOpenings\(/g)?.length).toBe(1);
+    expect(source.match(/[^A-Za-z]decideOpenings\(projectId/g)?.length).toBe(1);
   });
 
   it('the production loop calls operate with no clock, which is the throttled path', () => {
