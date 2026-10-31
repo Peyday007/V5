@@ -629,6 +629,14 @@ async function main(): Promise<void> {
     } else {
       console.log('    event loop   (not measured by this revision)');
     }
+    const stalls = r['stalls'] as { byActivity: { label: string; stalls: number; totalMs: number; maxMs: number }[]; recent: { ms: number; at: string; active: string[] }[]; thresholdMs: number } | null | undefined;
+    if (stalls) {
+      if (stalls.byActivity.length === 0) console.log(`    stalls       none over ${stalls.thresholdMs}ms since start`);
+      for (const s of stalls.byActivity) {
+        console.log(`    stalls in    ${s.label.padEnd(36)} n=${s.stalls} total=${Math.round(s.totalMs / 1000)}s max=${s.maxMs}ms`);
+      }
+      for (const s of stalls.recent) console.log(`    stall        ${s.ms}ms at ${s.at} in [${s.active.join(', ')}]`);
+    }
     const memory = r['memory'] as { rssMB: number; heapUsedMB: number; heapLimitMB: number; externalMB: number; peakRssMB: number; peakRssAt: string | null } | null | undefined;
     if (memory) {
       console.log(

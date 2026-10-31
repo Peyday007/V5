@@ -135,7 +135,7 @@ import {
 } from './planning.ts';
 import { resumeParkedAcrossProjects } from './resumeParked.ts';
 import { promoteEligibleClaims } from '../../repos/sharedFindings.ts';
-import { classifyInfraFailure } from '../../db/infra.ts';
+import { classifyInfraFailure, withActivity } from '../../db/infra.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
 import {
@@ -693,7 +693,7 @@ export async function runPass(
     return false;
   }
   try {
-    await fn();
+    await withActivity(`russell:${name}`, fn);
     return true;
   } catch (error) {
     const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);

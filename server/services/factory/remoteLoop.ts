@@ -29,6 +29,7 @@
  * That is deliberately stronger than a flag. A flag can be set by a tick that
  * then dies before doing the work it claimed; rows cannot.
  */
+import { withActivity } from '../../db/infra.ts';
 import type { Bin } from '../../domain/types.ts';
 import type {
   FactoryBlockerKind,
@@ -2730,7 +2731,7 @@ export function startFactoryRemoteLoop(intervalMs = DEFAULT_INTERVAL_MS): void {
   timer = setInterval(() => {
     if (running) return;
     running = true;
-    void tickAllRemoteCampaigns()
+    void withActivity('factory:remote-tick', () => tickAllRemoteCampaigns())
       .then(async (ticked) => {
         /*
          * The step between campaigns, on the same timer as the step between

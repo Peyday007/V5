@@ -11,6 +11,7 @@
  * explicitly: instead of a dead port, a minimal app answers every `/api` request
  * with the reason it could not start.
  */
+import { activityPath, beginActivity } from './db/infra.ts';
 import { registerCommercialProviders } from './services/cash/providers/register.ts';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -155,6 +156,13 @@ function buildApp(gate: AccessGateConfig): Express {
   // before anything can try to read one. Ahead of the body parsers, so that a
   // request refused for its *size* still has an id in the log.
   app.use(requestContext());
+  // Which request was in flight when the event loop stalled (db/infra.ts).
+  app.use((req: Request, res: Response, next: () => void) => {
+    const end = beginActivity(`http:${req.method} ${activityPath(req.path)}`);
+    res.once('finish', end);
+    res.once('close', end);
+    next();
+  });
 
   // The MCP endpoint, mounted before the application-wide body parser so that
   // it can enforce its own, much smaller, limit. It is deliberately outside

@@ -1,3 +1,4 @@
+import { withActivity } from '../../db/infra.ts';
 /**
  * The part where Brain does something about a need, rather than filing it.
  *
@@ -1460,7 +1461,7 @@ export async function operate(
    * rather than by noticing. It archives nothing and moves nothing — see
    * `reclassify.ts`.
    */
-  const reclassified = await recordWorkModelReclassification(projectId);
+  const reclassified = await withActivity('cash:recordWorkModelReclassification', () => recordWorkModelReclassification(projectId));
   /*
    * Then what changed in the world since the last pass, and everyone waiting
    * on it (`reconsider.ts`). Before the capability path, because it reads the
@@ -1470,16 +1471,16 @@ export async function operate(
    */
   let reconsidered: ReconsiderPass | { error: string } | null = null;
   try {
-    reconsidered = await reconsiderAffected(projectId, { now });
+    reconsidered = await withActivity('cash:reconsiderAffected', () => reconsiderAffected(projectId, { now }));
   } catch (error) {
     reconsidered = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
   }
-  const capabilities = await reconcileCapabilityNeeds(
+  const capabilities = await withActivity('cash:reconcileCapabilityNeeds', () => reconcileCapabilityNeeds(
     projectId,
     reconsidered && 'readings' in reconsidered ? { readings: reconsidered.readings } : {},
-  );
-  const research = await applyResearchAnswers(projectId);
-  const proposed = await proposeCommercialTerms(projectId);
+  ));
+  const research = await withActivity('cash:applyResearchAnswers', () => applyResearchAnswers(projectId));
+  const proposed = await withActivity('cash:proposeCommercialTerms', () => proposeCommercialTerms(projectId));
   /*
    * Decide every opening under every live goal before research is withdrawn or
    * launched, so the record a person reads is the one the gate acted on. Its
@@ -1491,15 +1492,15 @@ export async function operate(
     decisions = { skipped: `the decision pass runs at most every ${DECISION_PASS_INTERVAL_MS / 60_000} minutes` };
   } else {
     try {
-      decisions = await decideOpenings(projectId, now ? { now } : {});
+      decisions = await withActivity('cash:decideOpenings', () => decideOpenings(projectId, now ? { now } : {}));
     } catch (error) {
       decisions = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
     }
   }
-  const withdrawnResearch = await withdrawResearchNotWorthIt(projectId);
-  const gaps = [...(await reconcileDiscoverableGaps(projectId)), ...(await reconcileEngineGaps(projectId))];
-  const continuations = await runNeedContinuations(projectId, now);
-  const dependentWork = await startDependentWork(projectId);
+  const withdrawnResearch = await withActivity('cash:withdrawResearchNotWorthIt', () => withdrawResearchNotWorthIt(projectId));
+  const gaps = [...(await withActivity('cash:reconcileDiscoverableGaps', () => reconcileDiscoverableGaps(projectId))), ...(await withActivity('cash:reconcileEngineGaps', () => reconcileEngineGaps(projectId)))];
+  const continuations = await withActivity('cash:runNeedContinuations', () => runNeedContinuations(projectId, now));
+  const dependentWork = await withActivity('cash:startDependentWork', () => startDependentWork(projectId));
   /*
    * And the bounded deep dive on each opening, which is where the commercial
    * questions actually get answered.
@@ -1510,7 +1511,7 @@ export async function operate(
    * and `mayReplace` decides which answer stands — by authority rather than by
    * whichever arrived last.
    */
-  const validations = await runValidations(projectId);
+  const validations = await withActivity('cash:runValidations', () => runValidations(projectId));
   /*
    * Last, and that order is the point: a piece only becomes ready because the
    * research landed on its card and the proposal filled what the research could
@@ -1527,15 +1528,15 @@ export async function operate(
    * buyer. It sends nothing, and it runs in every sprint state, because
    * writing down history is not new discovery.
    */
-  const recovered = await recoverAbandonedEffects(projectId);
-  const effects = [...recovered, ...(await reconcileConfirmedEffects(projectId))];
+  const recovered = await withActivity('cash:recoverAbandonedEffects', () => recoverAbandonedEffects(projectId));
+  const effects = [...recovered, ...(await withActivity('cash:reconcileConfirmedEffects', () => reconcileConfirmedEffects(projectId)))];
   /*
    * Then the journey after the first action, from rows: ledger entries for
    * agreements, Brain's own fulfilment work read back, acceptance applied,
    * silence recorded, the state moved, and what finished deals taught. It
    * sends nothing.
    */
-  const authority = await advanceWithinAuthority(projectId);
+  const authority = await withActivity('cash:advanceWithinAuthority', () => advanceWithinAuthority(projectId));
   /*
    * And a READY_TO_TEST opening whose test is software goes to the Factory,
    * under the standing grant's BUILD_A_TEST. After the readiness pass above,
@@ -1543,7 +1544,7 @@ export async function operate(
    */
   // Its own failure domain: a Factory that cannot be reached must not stop
   // invoicing, the journey or the ledger below; the next pass asks again.
-  const factory = await handOffReadyTests(projectId).catch(
+  const factory = await withActivity('cash:handOffReadyTests', () => handOffReadyTests(projectId)).catch(
     (error: unknown): FactoryHandoffPass => ({
       handedOff: [],
       waiting: [{ opportunityId: '', reason: error instanceof Error ? error.message.slice(0, 200) : 'failed' }],
@@ -1556,8 +1557,8 @@ export async function operate(
    * the contact pass because nothing here depends on it, and before the
    * journey because the journey reads money this may have just recorded.
    */
-  const invoicing = await runInvoicing(projectId, now ? new Date(now) : new Date());
-  const journey = await advanceJourney(projectId, now ? new Date(now) : new Date());
+  const invoicing = await withActivity('cash:runInvoicing', () => runInvoicing(projectId, now ? new Date(now) : new Date()));
+  const journey = await withActivity('cash:advanceJourney', () => advanceJourney(projectId, now ? new Date(now) : new Date()));
   /*
    * Then the jobs: every opening the passes above qualified, readied or took
    * into execution gets its one canonical execution job, and each live job
@@ -1567,7 +1568,7 @@ export async function operate(
    */
   let jobs: JobReconciliation | { error: string };
   try {
-    jobs = await reconcileCashJobs(projectId);
+    jobs = await withActivity('cash:reconcileCashJobs', () => reconcileCashJobs(projectId));
   } catch (error) {
     jobs = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
   }
@@ -1587,7 +1588,7 @@ export async function operate(
    * evidence. And it gates nothing — no pass here refuses a piece, charges an
    * attempt, starts work or spends anything.
    */
-  const monetization = await runMonetizationLedger(projectId, now);
+  const monetization = await withActivity('cash:runMonetizationLedger', () => runMonetizationLedger(projectId, now));
   /*
    * Last of all, the standing of every piece as the passes above left it: each
    * derived dead end is given the watch that could reopen it, and a standing
@@ -1603,9 +1604,9 @@ export async function operate(
     if (!standingDue(projectId, now ? Date.parse(now) : Date.now(), triggeredThisTick(reconsidered))) {
       standing = { skipped: 'standing was composed recently; nothing triggered since' };
     } else {
-    const standings = await projectStandings(projectId);
-    const derived = await recordDerivedReopenConditions(projectId, standings);
-    standing = { derived, changes: await recordStandingChanges(projectId, standings) };
+    const standings = await withActivity('cash:projectStandings', () => projectStandings(projectId));
+    const derived = await withActivity('cash:recordDerivedReopenConditions', () => recordDerivedReopenConditions(projectId, standings));
+    standing = { derived, changes: await withActivity('cash:recordStandingChanges', () => recordStandingChanges(projectId, standings)) };
     }
   } catch (error) {
     standing = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };

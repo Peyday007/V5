@@ -613,6 +613,103 @@ export function eventLoopReading(now = Date.now()): EventLoopReading | null {
   loopWindowStartedAt = now;
   return reading;
 }
+/* ------------------------------------------------------------------------- */
+/* Stall attribution                                                         */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Which work was in flight when the event loop stopped (2026-10-31).
+ *
+ * The delay histogram says the loop was blocked for up to 31 s on a 2 GB
+ * machine with a third of its heap in use, so the stall is synchronous work and
+ * not collection — and nothing said whose. A synchronous block runs inside one
+ * of the activities in flight at that instant, so each stall is charged to every
+ * labelled activity that was open across it. One stall cannot name the culprit;
+ * the label present in every long stall can, and the totals here are that
+ * intersection read as counts.
+ */
+const STALL_PROBE_MS = 250;
+const STALL_RECORD_MS = 2_000;
+const activeActivities = new Map<string, number>();
+const stallTotals = new Map<string, { stalls: number; totalMs: number; maxMs: number }>();
+const recentStalls: { ms: number; at: string; active: string[] }[] = [];
+let stallTimer: ReturnType<typeof setInterval> | null = null;
+let stallLast = Date.now();
+
+function ensureStallProbe(): void {
+  if (stallTimer) return;
+  stallLast = Date.now();
+  stallTimer = setInterval(() => {
+    const now = Date.now();
+    const late = now - stallLast - STALL_PROBE_MS;
+    stallLast = now;
+    if (late < STALL_RECORD_MS) return;
+    const active = [...activeActivities.keys()].sort();
+    recentStalls.push({ ms: late, at: new Date(now).toISOString(), active });
+    if (recentStalls.length > 20) recentStalls.shift();
+    for (const label of active.length > 0 ? active : ['(nothing labelled)']) {
+      const t = stallTotals.get(label) ?? { stalls: 0, totalMs: 0, maxMs: 0 };
+      t.stalls += 1;
+      t.totalMs += late;
+      t.maxMs = Math.max(t.maxMs, late);
+      stallTotals.set(label, t);
+    }
+  }, STALL_PROBE_MS);
+  stallTimer.unref?.();
+}
+
+/** Run `fn` labelled, so a stall while it is in flight is charged to it. */
+export async function withActivity<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  const end = beginActivity(label);
+  try {
+    return await fn();
+  } finally {
+    end();
+  }
+}
+
+/** Open a labelled activity; the returned function closes it, once. */
+export function beginActivity(label: string): () => void {
+  ensureStallProbe();
+  activeActivities.set(label, (activeActivities.get(label) ?? 0) + 1);
+  let open = true;
+  return () => {
+    if (!open) return;
+    open = false;
+    const n = (activeActivities.get(label) ?? 1) - 1;
+    if (n <= 0) activeActivities.delete(label);
+    else activeActivities.set(label, n);
+  };
+}
+
+/** A request path with ids collapsed, so labels stay a small set. */
+export function activityPath(path: string): string {
+  return path
+    .split('/')
+    .map((seg) => (/^[a-z]{2,6}_[0-9a-f]{8,}$/.test(seg) || /^[0-9a-f-]{16,}$/.test(seg) || /^\d+$/.test(seg) ? ':id' : seg))
+    .join('/')
+    .slice(0, 80);
+}
+
+export interface StallReading {
+  /** Per label: stalls of at least STALL_RECORD_MS it was in flight across. */
+  byActivity: { label: string; stalls: number; totalMs: number; maxMs: number }[];
+  recent: { ms: number; at: string; active: string[] }[];
+  thresholdMs: number;
+}
+
+export function stallReading(limit = 15): StallReading {
+  ensureStallProbe();
+  return {
+    byActivity: [...stallTotals.entries()]
+      .map(([label, t]) => ({ label, ...t }))
+      .sort((a, b) => b.totalMs - a.totalMs)
+      .slice(0, limit),
+    recent: recentStalls.slice(-8),
+    thresholdMs: STALL_RECORD_MS,
+  };
+}
+
 /**
  * How much memory this process holds, against the ceiling that ends it.
  *
