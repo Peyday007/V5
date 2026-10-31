@@ -35,6 +35,7 @@
  * ordinary text — nothing found in model output, a document, a web page or an
  * adapter row is ever executed.
  */
+import { unverifiedChanceClaims } from '../scenario/planCheck.ts';
 import { decideProjectAccess } from '../identity/policy.ts';
 import { CANDIDATE_PRIORITIES } from '../../domain/types.ts';
 import type { CandidatePriority, Principal } from '../../domain/types.ts';
@@ -114,7 +115,8 @@ export interface ProposalRefusal {
     | 'UNRESOLVABLE_REFERENCE'
     | 'MISSING_REQUIRED_PART'
     | 'BAD_DUPLICATE_REFERENCE'
-    | 'PROBE_OUT_OF_BOUNDS';
+    | 'PROBE_OUT_OF_BOUNDS'
+    | 'UNVERIFIED_PROBABILITY';
 }
 export type ProposalResult = { ok: true; proposal: ValidatedProposal } | ProposalRefusal;
 
@@ -287,6 +289,14 @@ export function validateProposal(input: {
     return typeof body['answer'] === 'string' && body['answer'].trim().length > FIELD_LIMITS.answer
       ? refuse('ANSWER_TOO_LONG', 'the answer was longer than a turn may be')
       : refuse('MISSING_ANSWER', 'the proposal had nothing to say to the person');
+  }
+
+  // A chance of success is computed (`scenario/planCheck.ts`), never written.
+  // An answer that tells a person how likely something is to work, with no
+  // checked plan behind it, is refused whole — the same rule a plan's own
+  // narrative is held to, at the surface where prose reaches a person most.
+  if (unverifiedChanceClaims(answer).length > 0) {
+    return refuse('UNVERIFIED_PROBABILITY', 'the answer stated a chance of success that no checked model computed');
   }
 
   let confidence: number | null = null;

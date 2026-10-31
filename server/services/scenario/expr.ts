@@ -23,6 +23,7 @@ import { SCENARIO_LIMITS } from '../../domain/scenario.ts';
 
 export class ExpressionError extends Error {}
 
+export type ExprNode = Node;
 type Node =
   | { t: 'num'; v: number }
   | { t: 'id'; name: string }
