@@ -52,6 +52,7 @@ import type { McpTool } from './toolkit.ts';
 import { RESEARCH_TOOLS } from './researchTools.ts';
 import { BIN_TOOLS } from './binTools.ts';
 import { ENGINEERING_TOOLS } from './engineeringTools.ts';
+import { fetchSourceTool } from './sourceTools.ts';
 import { activeBinForWorker, confinementFor } from '../repos/bins.ts';
 import { RESEARCH_METHOD, RESEARCH_METHOD_VERSION } from '../services/research/method.ts';
 import {
@@ -945,6 +946,8 @@ export const TOOLS: readonly McpTool[] = [
   documentTextTool,
   searchEvidenceTool,
   researchMethodTool,
+  // A page the worker's own sandbox cannot open, read by Brain under its lease.
+  fetchSourceTool,
   // Step 9. In a second file because there are eight of them and this one was
   // already long, and in the *same* array because there is one surface. A
   // second registry would be a second place to forget something.
