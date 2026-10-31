@@ -749,6 +749,13 @@ export async function openGoalDiscovery(input: {
   /** Openings Brain already holds for the goal, so a new round looks elsewhere. */
   heldTitles?: string[];
   now?: string;
+  /**
+   * How many of this goal's rounds may be open at once. Defaults to
+   * `MAX_LIVE_GOAL_ROUNDS`; the plan pass raises it by the research surfaces
+   * that are idle with nothing waiting (`spareResearchSurfaces`), so a goal's
+   * search widens when the fleet has room and narrows when work queues up.
+   */
+  liveCap?: number;
 }): Promise<OpenedDiscovery | null> {
   /*
    * Not behind `BRAIN_CLAUDE_DISCOVERY`. That switch stops *bulk* finding so the
@@ -772,7 +779,8 @@ export async function openGoalDiscovery(input: {
    */
   const prefix = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
   const mine = (await listRounds(t.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
-  if (mine.filter((one) => one.state === 'OPEN').length >= MAX_LIVE_GOAL_ROUNDS) return null;
+  const liveCap = Math.max(MAX_LIVE_GOAL_ROUNDS, Math.trunc(input.liveCap ?? MAX_LIVE_GOAL_ROUNDS));
+  if (mine.filter((one) => one.state === 'OPEN').length >= liveCap) return null;
   /*
    * The fixed angles are a starting point, not the whole map: Brain's own
    * industry map (`industry_nodes`, filled from classification systems and

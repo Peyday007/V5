@@ -73,7 +73,16 @@ export async function researchGoalPaths(input: {
   trace?: string[];
   /** Decide only: raise and withdraw nothing. */
   dryRun?: boolean;
+  /**
+   * Research surfaces idle with nothing waiting. Each one lets one more
+   * opening, and two more questions, be researched at once — the caps below
+   * are a floor for a busy fleet, not a ceiling on an idle one.
+   */
+  spare?: number;
 }): Promise<string[]> {
+  const spare = Math.max(0, Math.trunc(input.spare ?? 0));
+  const openingCap = PATH_RESEARCH_OPENINGS + spare;
+  const questionCap = MAX_OPEN_PATH_QUESTIONS + 2 * spare;
   const note = (line: string) => input.trace?.push(line);
   const now = input.now ?? new Date();
   const raised: string[] = [];
@@ -113,7 +122,7 @@ export async function researchGoalPaths(input: {
   );
   let openings = 0;
   for (const one of order) {
-    if (openings >= PATH_RESEARCH_OPENINGS || openHere >= MAX_OPEN_PATH_QUESTIONS) break;
+    if (openings >= openingCap || openHere >= questionCap) break;
     let asks = one.missing.flatMap((link) => FIELDS_FOR[link] ?? []);
     if (asks.length === 0) continue;
     /*
@@ -144,7 +153,7 @@ export async function researchGoalPaths(input: {
     // next ones unresearched.
     let actedHere = false;
     for (const { field, ask } of asks) {
-      if (openHere >= MAX_OPEN_PATH_QUESTIONS) break;
+      if (openHere >= questionCap) break;
       const key = questionKey(opportunity.id, field);
       // Already established from a source or by a person: asking again would
       // be settled the instant it was raised and re-raised on the next read.
@@ -218,7 +227,7 @@ export async function researchGoalPaths(input: {
     }
     if (actedHere) openings += 1;
   }
-  note(`live path questions ${openHere} of ${MAX_OPEN_PATH_QUESTIONS}; openings researched ${openings} of ${PATH_RESEARCH_OPENINGS}`);
+  note(`live path questions ${openHere} of ${questionCap}; openings researched ${openings} of ${openingCap}`);
   return raised;
 }
 

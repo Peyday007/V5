@@ -29,4 +29,10 @@ describe('BRAIN_CASH_RESEARCH_MAX', () => {
     expect(applyOperatorMax(room(1, 0), 5)).toEqual(room(1, 0));
     expect(applyOperatorMax(room(2, 0), null)).toEqual(room(2, 0));
   });
+
+  it('rises by the idle surfaces nothing is waiting for, and never past the grant', () => {
+    expect(applyOperatorMax(room(4, 1), 1, 3)).toMatchObject({ room: 3, limitedBy: 'OPERATOR' });
+    expect(applyOperatorMax(room(4, 1), 1, 6)).toEqual(room(4, 1));
+    expect(applyOperatorMax(room(4, 1), 1, 0).room).toBe(0);
+  });
 });

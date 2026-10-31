@@ -13806,6 +13806,33 @@ On 2026-10-31 a session presented the owner a mailer plan as "roughly 90%" likel
 
 `plans/mailer-2026-10-31-as-presented.json` is the regression. It is rejected nine ways. `plans/mailer-corrected-2026-10-31.json` passes as an analysis: at the assumed rates the mailer collects $5,400, short of the target. `tests/planCheck.test.ts` was run against each disabled safeguard to watch it fail.
 
+## 78. A throttle binds only while capacity is contended, and a goal's search grows with the idle fleet.
+
+Production, 2026-10-31 21:41Z (`8f12c88`), six hours: 114 fires, 1 packet completed, items
+succeeded 30–57/h, and 2 activations in flight across 8 routable research surfaces and a
+fleet target of 12 — while the $10K goal read NOT_VIABLE over 32 openings and asked for more.
+Dispatch was not the limit (it fired every bin that had claimable work). Generation was:
+
+- **`BRAIN_CASH_RESEARCH_MAX` was a fixed number.** It caps deep dives and monetization
+  questions so low-yield research does not take Routine time from better work — and with
+  nothing else queued it only left surfaces idle (rule 9). `applyOperatorMax` now adds the
+  measured spare (`spareResearchSurfaces`: routable research surfaces with nothing in flight,
+  less the bins already waiting to be fired). Spare is zero the moment work queues up, so the
+  ceiling binds exactly where it was meant to. It never raises the room past the grant.
+- **A goal's search was one lens per 30-minute refresh, three open at once.** The plan pass
+  opens `1 + spare` rounds with a live cap of `MAX_LIVE_GOAL_ROUNDS + spare`, tops up every
+  five minutes between refreshes from the last reading, and path research takes one more
+  opening and two more questions per spare surface. Every round is linked to the goal
+  (`CANDIDATE`/`PURSUES`), so the goal's rank reaches the bins it creates. Target goals
+  complete only from the ledger, so a link cannot complete one.
+- **A pinned bin on a quarantined Routine ended every dispatch burst.** Its candidate list is
+  one Routine, so `ALL_SURFACES_INELIGIBLE` (FLEET-scoped) was a fact about one bin.
+  It is `PINNED_SURFACE_UNAVAILABLE` (BIN-scoped) now: 136 burst-ending refusals in six hours.
+
+Downstream stages are fleet work on the same surfaces, so they scale with it: more busy
+sessions is also more distinct sessions for the audit-independence floor. Nothing here touches
+a gate, an envelope, a grant, a spending limit or an authorization.
+
 ## Repository map
 
 ```
