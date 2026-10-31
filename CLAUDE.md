@@ -13787,6 +13787,25 @@ withdrawn, unlaunched ideas rejected, missions and packets cancelled), and
 `retireUnjudgeableBins` retires any live bin whose contract has no evaluator.
 No row and no migration was removed; the old tables are history nothing reads.
 
+## 77. A number a person reads is one of a checked model's numbers, or it is not shown.
+
+On 2026-10-31 a session presented the owner a mailer plan as "roughly 90%" likely to reach $10,000. Every figure in it was arithmetic, and the figures did not agree: 4,000 contacts at 3% and 20% is 24 sales beside "23" stated; the checkpoint (2 per 1,000) projected 8; four cities of three mailings at $1,300 was $15,600 owed and carried nowhere; and the 90% came from no model. Each figure had been worked out alone, so nothing made one answer to another.
+
+`server/services/scenario/planCheck.ts` is the gate, on the scenario engine (§60) rather than beside it, and `npm run plan:check -- <plan.json>` is its door.
+
+- **A plan is a scenario model plus what a model cannot say alone.** It also states which quantity the goal reads, its limits (deadline, capital ceiling, spending before the first payment), what prepaid revenue obliges it to deliver, its checkpoints, any probability, and the narrative a person reads. All of it is evaluated from one set of inputs.
+- **Units are checked** (`units.ts`). Every expression's unit is inferred and held to the declared one, so a cost per card times spots is an error, not a number.
+- **Every sampled input is stated at the point the figures quote.** Counts of whole things must be whole. Capacity bounds must hold.
+- **An obligation is costed and carried.** A money line charges it, and the plan's exposure depends on it, by walking the dependency graph. A cash goal reached at a negative contribution is refused.
+- **A checkpoint below the rate the plan itself needs is refused**, with what it would project.
+- **A probability is computed, never stated.** It is admitted only from a Monte Carlo run whose sampled inputs carry sourced distributions. It must be for the plan's own outcome, target and limits, and equal to what the engine computed. A sweep's share is printed as coverage, never as a chance.
+- **The narrative may contain only the model's numbers**, at the precision written. "About" admits rounding; a bare figure does not. Spelled-out numbers and likelihood wording ("almost certain", "nine in ten") count. The narrative is inside the digest, so an edit after verification is an unverified plan.
+- **A plan that does not reach its goal is an ANALYSIS**, never a plan to run.
+- **The same rule holds where prose reaches a person.** A Russell answer stating a chance of success is refused (`UNVERIFIED_PROBABILITY`). Brain's own goal plans quote a chance only from their measured record (`services/goals/plan.ts`).
+- **The rule for sessions.** A quantitative recommendation to the owner is presented only as the narrative printed under `PLAN: VERIFIED <digest>` (or `VERIFIED_ANALYSIS`), quoted unchanged with its digest. A plan the gate rejects is reported as rejected, with its problems.
+
+`plans/mailer-2026-10-31-as-presented.json` is the regression. It is rejected nine ways. `plans/mailer-corrected-2026-10-31.json` passes as an analysis: at the assumed rates the mailer collects $5,400, short of the target. `tests/planCheck.test.ts` was run against each disabled safeguard to watch it fail.
+
 ## Repository map
 
 ```
@@ -14173,6 +14192,8 @@ server/
       worker.ts         the thread itself; worker-boot.mjs registers tsx before loading it
       service.ts        a run written down before it starts; the read-only demonstration
       demo.ts           the illustrative demonstration model
+      units.ts          the unit of every expression, inferred and held to the declared one
+      planCheck.ts      a plan reconciled from one model before anybody is shown it (§77)
     russell/
       home.ts           the eight things home says, in the order S6 fixes them
       collections.ts    threads organized without inventing a category, ranked by meaning
@@ -14330,6 +14351,7 @@ scripts/
   labor-report.ts           §13's six readings, and the four figures nothing measures
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
   scenario-bench.ts         time the engine at 50,000 evaluations on this machine
+  plan-check.ts             npm run plan:check — the one door a quantitative plan goes through
   connection-report.ts      pools, incidents, auth refusals, misses by cause, every connector
   connection-report.sh      the same, inside the deployed container, on one connection
   puzzle-report.ts          what was made, proved, sold and learned; one puzzle re-rendered
