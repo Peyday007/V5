@@ -265,6 +265,26 @@ describe('a probability is computed or it is not stated', () => {
     }
     expect(unverifiedChanceClaims('Send 300 emails a day and track replies.')).toEqual([]);
   });
+
+  it('ordinary prose with the same words is not a chance claim (the review’s probes)', () => {
+    for (const text of [
+      "I'll check back in 10 minutes.",
+      'Results arrived in 100 documents.',
+      'Three out of 10 packets parked.',
+      'The refund is not guaranteed by the vendor.',
+      'Shipping is guaranteed within 5 days.',
+      'It is very likely the source is stale.',
+      "I'm confident 40% of the fragments are blocked.",
+      'It is certain that 12% tax applies.',
+      'Each mailing goes out in 10 days.',
+      'We start with one city.',
+    ]) {
+      expect(unverifiedChanceClaims(text), text).toEqual([]);
+    }
+    for (const text of ['9 out of 10 cities will buy.', 'The chance of success is 90%.', 'Guaranteed to make $10,000.']) {
+      expect(unverifiedChanceClaims(text).length, text).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('the other doors: a Russell answer is held to the same rule', () => {
@@ -280,6 +300,24 @@ describe('the other doors: a Russell answer is held to the same rule', () => {
     const result = validateProposal({ raw: { action: 'ANSWER_ONLY', answer: 'Postage is $0.26 a piece and a card holds 16 spots.' }, principal });
     expect(result.ok).toBe(true);
   });
+});
+
+describe('malformed plans are refused, never thrown', () => {
+  for (const [name, mutate] of [
+    ['a checkpoint with no atLeast', (p: any) => { p.checkpoints = [{ label: 'x', numerator: 'spots_sold', denominator: 'contacts' }]; }],
+    ['bounds that are not a list', (p: any) => { p.bounds = {}; }],
+    ['a null obligation', (p: any) => { p.obligations = [null]; }],
+    ['integers that are a string', (p: any) => { p.integers = 'abc'; }],
+    ['a point that is a list', (p: any) => { p.point = [1]; }],
+  ] as const) {
+    it(name, () => {
+      const plan = corrected();
+      mutate(plan);
+      const check = checkPlan(plan);
+      expect(check.verdict).toBe('REJECTED');
+      expect(codes(check)).toContain('MALFORMED');
+    });
+  }
 });
 
 describe('generated cases', () => {

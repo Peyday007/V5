@@ -216,6 +216,29 @@ export function checkPlan(input: unknown): PlanCheck {
   for (const [name, value] of Object.entries({ deadlineDays: plan.goal?.deadlineDays, capitalCeiling: plan.goal?.capitalCeiling, preFirstPaymentCeiling: plan.goal?.preFirstPaymentCeiling })) {
     if (value !== undefined && (!Number.isFinite(value) || (value as number) < 0)) problems.push(problem('MALFORMED', `goal.${name} must be a non-negative finite number when given.`));
   }
+  const listOf = (name: string, value: unknown, fields: string[]): void => {
+    if (value === undefined) return;
+    if (!Array.isArray(value)) { problems.push(problem('MALFORMED', `${name} must be a list.`)); return; }
+    value.forEach((item, i) => {
+      if (fields.length === 0) {
+        if (typeof item !== 'string') problems.push(problem('MALFORMED', `${name}[${i}] must be a key.`));
+        return;
+      }
+      if (!item || typeof item !== 'object') { problems.push(problem('MALFORMED', `${name}[${i}] must be an object.`)); return; }
+      for (const f of fields) if (typeof (item as Record<string, unknown>)[f] !== 'string') problems.push(problem('MALFORMED', `${name}[${i}].${f} must be a string.`));
+    });
+  };
+  listOf('integers', plan.integers, []);
+  listOf('bounds', plan.bounds, ['label', 'quantity', 'atMost']);
+  listOf('obligations', plan.obligations, ['label', 'revenueLine', 'costLine', 'costDerived']);
+  listOf('checkpoints', plan.checkpoints, ['label', 'numerator', 'denominator']);
+  for (const [i, c] of (Array.isArray(plan.checkpoints) ? plan.checkpoints : []).entries()) {
+    const a = (c as { atLeast?: { numerator?: unknown; denominator?: unknown } } | null)?.atLeast;
+    if (!a || typeof a.numerator !== 'number' || typeof a.denominator !== 'number' || !Number.isFinite(a.numerator) || !(a.denominator > 0)) {
+      problems.push(problem('MALFORMED', `checkpoints[${i}].atLeast needs a finite numerator and a positive denominator.`));
+    }
+  }
+  if (plan.point !== undefined && (plan.point === null || typeof plan.point !== 'object' || Array.isArray(plan.point))) problems.push(problem('MALFORMED', 'point must be an object of variable values.'));
   if (problems.length > 0) return empty();
 
   let model: CompiledModel;
@@ -431,6 +454,10 @@ export function checkPlan(input: unknown): PlanCheck {
 
     for (const c of plan.checkpoints ?? []) {
       const ratioNeeded = at(c.numerator) / at(c.denominator);
+      if (!Number.isFinite(ratioNeeded)) {
+        problems.push(problem('INVALID_EVALUATION', `checkpoint "${c.label}": the plan's own ${c.numerator} per ${c.denominator} is not a finite number at the stated point, so the checkpoint cannot be judged.`));
+        continue;
+      }
       const given = c.atLeast.numerator / c.atLeast.denominator;
       figures.push({ key: `checkpoint:${c.label}:numerator`, label: `${c.label} (passes at)`, unit: unitText.get(c.numerator) ?? '', value: c.atLeast.numerator, provenance: 'CHECKPOINT' });
       figures.push({ key: `checkpoint:${c.label}:denominator`, label: `${c.label} (out of)`, unit: unitText.get(c.denominator) ?? '', value: c.atLeast.denominator, provenance: 'CHECKPOINT' });
@@ -541,7 +568,10 @@ function round(value: number, places: number): number {
 
 const MONTHS = /(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s*$/i;
 const APPROX = /(about|approximately|approx\.?|around|roughly|nearly|~|≈|some)\s*\$?$/i;
-const CHANCE = /(chance|probabilit|likel|odds|confiden|certain)/i;
+/** After a percentage: "90% chance", "90% likely", "a 90% probability". */
+const CHANCE_AFTER = /^\s*(chance|probabilit|likel|odds\b|likelihood)/i;
+/** Before a percentage: "the chance of success is 90%", "odds of 90%". */
+const CHANCE_BEFORE = /(chance|probability|odds|likelihood)\s+(of\s+\w+(\s+\w+)?\s+)?(is|are|of|at|about|around|roughly|near|=)?\s*(about|around|roughly|approximately|~)?\s*$/i;
 
 export interface NarrativeNumber {
   text: string;
@@ -569,7 +599,7 @@ export function numbersIn(text: string): NarrativeNumber[] {
     const frac = m[3] ? Number(m[3]) : 0;
     const word = (m[5] ?? '').toLowerCase();
     const scale: NarrativeNumber['scale'] = word === '%' || word === 'percent' ? 'PERCENT' : word === 'k' || word === 'thousand' ? 'THOUSAND' : word === 'm' || word === 'million' ? 'MILLION' : 'NONE';
-    const chanceContext = scale === 'PERCENT' && (CHANCE.test(after.slice(0, 30)) || CHANCE.test(before));
+    const chanceContext = scale === 'PERCENT' && (CHANCE_AFTER.test(after) || CHANCE_BEFORE.test(text.slice(Math.max(0, start - 40), start)));
     found.push({ text: m[0].trim(), value: whole + frac, places: m[3] ? m[3].length - 1 : 0, scale, approximate: APPROX.test(before), chance: chanceContext });
   }
   // Spelled-out numbers are numbers: "ninety percent likely" is a probability
@@ -584,7 +614,13 @@ export function numbersIn(text: string): NarrativeNumber[] {
     const scale: NarrativeNumber['scale'] = word === '%' || word === 'percent' ? 'PERCENT' : word === 'thousand' ? 'THOUSAND' : word === 'million' ? 'MILLION' : 'NONE';
     const before = text.slice(Math.max(0, start - 16), start);
     const after = text.slice(start + m[0].length, start + m[0].length + 40);
-    found.push({ text: m[0].trim(), value: first + second, places: 0, scale, approximate: APPROX.test(before), chance: scale === 'PERCENT' && (CHANCE.test(after.slice(0, 30)) || CHANCE.test(before)) });
+        // A spelled-out number is checked only when it is a chance of success:
+    // "one city" and "a hundred ways" are ordinary prose, "ninety percent
+    // likely" is a probability claim in other spelling.
+    const chance = scale === 'PERCENT' && (CHANCE_AFTER.test(after) || CHANCE_BEFORE.test(text.slice(Math.max(0, start - 40), start)));
+    if (!chance) continue;
+    void before;
+    found.push({ text: m[0].trim(), value: first + second, places: 0, scale, approximate: APPROX.test(before), chance });
   }
   return found;
 }
@@ -601,7 +637,22 @@ const NUMBER_WORDS: Record<string, number> = {
  * "nine in ten", "guaranteed". A plan with no computed probability may not
  * use it, because it is the same claim in other words.
  */
-const CHANCE_WORDING = /\b(guarantee[sd]?|almost certain(ly)?|near(ly)?[- ]certain(ly)?|virtually certain|high (probability|chance|likelihood)|very likely|highly likely|safe bet|can'?t miss|sure thing|(\w+|\d+) (in|out of) (ten|10|a hundred|100)\b)/i;
+const SUCCESS = '(to\\s+)?(work|succeed|success|reach|hit|make|earn|pay\\s+off|close|fill|sell\\s+out|win|get\\s+(you|us|there)|the\\s+(goal|target)|\\$)';
+const CHANCE_WORDING = new RegExp(
+  [
+    // "guaranteed to work", "a guaranteed $10k", "guarantees results"
+    `\\bguarantee[sd]?\\s+(you\\s+|that\\s+(you|we|it|this)\\s+(will|'ll)\\s+)?${SUCCESS}`,
+    `\\bguaranteed\\s+(results|income|revenue|profit|returns?)`,
+    // "almost certain to reach", "very likely to work"
+    `\\b(almost|nearly|near|virtually)[- ]certain(ly)?\\s+${SUCCESS}`,
+    `\\b(very|highly|extremely)\\s+likely\\s+${SUCCESS}`,
+    `\\bhigh\\s+(probability|chance|likelihood)\\s+(of|that)\\b`,
+    `\\b(safe\\s+bet|can'?t\\s+miss|sure\\s+thing)\\b`,
+    // "nine in ten", "9 out of 10" — a number, not "back in 10 minutes"
+    `\\b(one|two|three|four|five|six|seven|eight|nine|\\d{1,2})\\s+(in|out\\s+of)\\s+(ten|10)\\b(\\s+\\w+)?\\s+(will|would|should|could|can|are\\s+likely)\\b`,
+  ].join('|'),
+  'i',
+);
 
 function matches(n: NarrativeNumber, candidate: number): boolean {
   if (!Number.isFinite(candidate)) return false;
