@@ -108,7 +108,7 @@ jobs:
           esac
 
           echo "::group::Machine state"
-          flyctl status --app "$app" 2>&1 | tail -40 || true
+          flyctl status --app "$app" 2>&1 | tail -40 | tee state.txt || true
           echo "::endgroup::"
 
           # Why a machine last stopped. `flyctl logs` keeps a short buffer, so
@@ -120,7 +120,7 @@ jobs:
           # destroy, so only the whole form is allowed.
           echo "::group::Machine events (exit code, OOM)"
           for id in $(flyctl status --app "$app" --json 2>/dev/null | jq -r '.Machines[]?.id' 2>/dev/null); do
-            flyctl machine status "$id" --app "$app" --display-config=false 2>&1 | tail -30 || true
+            flyctl machine status "$id" --app "$app" --display-config=false 2>&1 | tail -30 | tee -a state.txt || true
           done
           echo "::endgroup::"
 
@@ -184,9 +184,12 @@ jobs:
       - name: Publish the capture as annotations
         if: always()
         run: |
-          [ -f all.txt ] || exit 0
+          [ -f all.txt ] || [ -f state.txt ] || exit 0
           python3 - <<'PY'
-          text = open('all.txt', encoding='utf-8', errors='replace').read()[-35000:]
+          import os
+          read = lambda p: open(p, encoding='utf-8', errors='replace').read() if os.path.exists(p) else ''
+          # Machine state and exit/OOM events first, then the tail of the log.
+          text = read('state.txt')[-6000:] + '\n---\n' + read('all.txt')[-29000:]
           enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
           chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][:10]
           for n, chunk in enumerate(chunks, 1):
