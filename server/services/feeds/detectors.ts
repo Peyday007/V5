@@ -25,6 +25,8 @@
  * second tick finds the same row and only ever adds members to it.
  */
 import { getDb } from '../../db/database.ts';
+import { learnedDetectorsFor } from './learned.ts';
+import { runSearchMaintenance } from './searchMaintenance.ts';
 import { newId } from '../../repos/util.ts';
 import { insertFeedItems } from '../../repos/feeds.ts';
 import { DELIVERABLE_LABEL, type DeliverableKind } from '../cash/deliverables/spec.ts';
@@ -252,7 +254,26 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
   const now = input.now ?? new Date();
   const db = getDb();
   const reports: DetectorRunReport[] = [];
-  for (const detector of input.detectors ?? DETECTORS) {
+  let installed: readonly Detector[] | undefined = input.detectors;
+  if (!installed) {
+    // What was learned is judged first (failing methods paused, detectors
+    // promoted or demoted on measured precision), then the GENERAL detectors
+    // run beside the code ones. Feed items are shared, so a private detector
+    // never fires on them. A failure here must not stop the code detectors.
+    try {
+      await runSearchMaintenance(now);
+    } catch {
+      /* the code detectors below still run */
+    }
+    let learned: Detector[] = [];
+    try {
+      learned = await learnedDetectorsFor({ projectIds: [], userId: null });
+    } catch {
+      /* none */
+    }
+    installed = [...DETECTORS, ...learned];
+  }
+  for (const detector of installed) {
     const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
     const rows = await db.all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string }>(
       `SELECT id, source, url, title, organization, published_at, fetched_at FROM feed_items

@@ -230,6 +230,16 @@ export async function listSearchMethods(reader: SearchReader, opts: { trustState
   return rows.map(toMethod);
 }
 
+/**
+ * Every method, whoever owns it. For the system's own maintenance only: it
+ * judges and moves trust from each method's own runs and returns nothing to a
+ * caller that acts for a person.
+ */
+export async function listAllSearchMethods(): Promise<SearchMethod[]> {
+  const rows = await getDb().all<Row>(`SELECT * FROM search_methods ORDER BY created_at, id`, []);
+  return rows.map(toMethod);
+}
+
 /** Move a method's trust state; guarded on the state the caller read. */
 export async function setMethodTrust(id: string, from: MethodTrustState, to: MethodTrustState, reason: string): Promise<boolean> {
   const r = await getDb().run(
@@ -316,6 +326,12 @@ export async function listLearnedDetectors(reader: SearchReader, opts: { mode?: 
     `SELECT * FROM learned_detectors WHERE ${vis.sql}${extra} ORDER BY created_at, id`,
     params,
   );
+  return rows.map(toDetector);
+}
+
+/** Every detector, whoever owns it; system maintenance only (see listAllSearchMethods). */
+export async function listAllLearnedDetectors(): Promise<LearnedDetector[]> {
+  const rows = await getDb().all<Row>(`SELECT * FROM learned_detectors ORDER BY created_at, id`, []);
   return rows.map(toDetector);
 }
 
