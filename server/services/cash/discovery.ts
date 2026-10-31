@@ -68,7 +68,7 @@
  * rather than being asserted away by whoever created it.
  */
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
-import { learnedLensesForProject } from '../knowledge/subjects/subjects.ts';
+import { learnedLensesForProject, learnSubject, SUBJECT_LENS_PREFIX } from '../knowledge/subjects/subjects.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -125,6 +125,9 @@ import type {
  * about; "something else" is not a question, and a producer that emitted one
  * would be asking a worker to decide what to research.
  */
+/** Learned subjects kept per project as lenses; discovery never grows past it. */
+const MAX_LEARNED_SUBJECTS = 60;
+
 export interface SearchBucket {
   id: string;
   mechanism: CashMechanism;
@@ -1408,6 +1411,25 @@ export async function harvest(input: {
       buying_signal: clamp(claim.claim, 1_000),
       signal_observed_at: claim.sourceDate ?? claim.retrievedAt ?? null,
     });
+
+    /*
+     * What exists, kept. The claim that produced an opening names a subject
+     * nobody hard-coded; it is stored with the claim it came from and offered
+     * as a lens on later runs (see `learnedLensesForProject`). A round that was
+     * itself asked through a learned lens does not teach another, so the set
+     * grows from the constant buckets and cannot feed on itself, and the set is
+     * bounded. A failure here never stops the harvest.
+     */
+    if (!context?.bucket.id.startsWith(SUBJECT_LENS_PREFIX)) {
+      try {
+        if ((await learnedLensesForProject(input.projectId)).length < MAX_LEARNED_SUBJECTS) {
+          await learnSubject({
+            scope: 'PROJECT', projectId: input.projectId, label: clamp(claim.claim, 120),
+            kind: 'MARKET', origin: 'harvest', sourceRef: `claim:${claim.id}`,
+          });
+        }
+      } catch { /* the opening is filed; the lens is an addition */ }
+    }
 
     const missionId = await missionFor(entry.orchestrationId);
     await recordCashEvent({
