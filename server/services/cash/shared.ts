@@ -63,6 +63,7 @@
  *
  * It writes nothing, enqueues nothing and moves no state.
  */
+import { withGoalLimitsMemo } from './worthResearching.ts';
 import { listCashEvents } from '../../repos/cashMode.ts';
 import { listNeeds, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { getClaim, listClaimsForFragment } from '../../repos/research.ts';
@@ -732,7 +733,12 @@ export async function sharedCashView(input: { projectId: string }): Promise<Shar
   return { scope: 'SHARED', ...(await sharedFrontier(input)) };
 }
 
-export async function sharedFrontier(input: {
+/** sharedFrontier, with goal limits read once for the whole read (see `withGoalLimitsMemo`). */
+export function sharedFrontier(input: Parameters<typeof sharedFrontierUnmemoized>[0]): ReturnType<typeof sharedFrontierUnmemoized> {
+  return withGoalLimitsMemo(() => sharedFrontierUnmemoized(input));
+}
+
+async function sharedFrontierUnmemoized(input: {
   projectId: string;
   /**
    * The possibility ledger, where the caller has already composed one.

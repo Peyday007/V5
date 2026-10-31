@@ -157,6 +157,7 @@ import { runManufacturingKernel } from '../manufacturing/kernel.ts';
 import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
+import { withGoalLimitsMemo } from '../cash/worthResearching.ts';
 import { retireMarketplaceListings, type ListingsRetired } from '../cash/retireListings.ts';
 import { retireUnjudgeableBins } from '../bins/retireUnjudgeable.ts';
 import { getAudit } from '../../repos/audits.ts';
@@ -2048,7 +2049,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
            * gates nothing: an open need is a valid execution state and Brain
            * carries on around it.
            */
-          const operated = await operate(project.id);
+          const operated = await withGoalLimitsMemo(() => operate(project.id));
           const raised = [
             ...operated.capabilities.raised,
             ...operated.gaps.map((one) => one.needId),

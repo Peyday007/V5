@@ -28,6 +28,7 @@
  * rule holds: not being able to act today is a named gap, never a reason to
  * drop an opening.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { getClaim } from '../../repos/research.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 import { screenOpportunity, type ScreenFacts, type ScreenLimits, type ScreenVerdict } from './screen.ts';
@@ -134,8 +135,35 @@ export function screenFactsFor(opportunity: CashOpportunity): ScreenFacts {
   };
 }
 
+/*
+ * One Cash tick asks this for every opening in several passes, and each answer
+ * lists every workstream and sums the ledger per goal. In production that was
+ * hundreds of full reads per tick and starved the process (2026-10-31). Inside
+ * `withGoalLimitsMemo` the answer is read once per (project, now) and reused;
+ * outside it nothing is cached, so every other caller reads current rows.
+ */
+const goalLimitsScope = new AsyncLocalStorage<Map<string, Promise<Array<{ goalId: string; limits: ScreenLimits }>>>>();
+
+export function withGoalLimitsMemo<T>(fn: () => Promise<T>): Promise<T> {
+  return goalLimitsScope.run(new Map(), fn);
+}
+
 /** Every live goal in the project that has a target, with its limits read from the goal itself. */
 export async function liveGoalLimits(projectId: string, now: string): Promise<Array<{ goalId: string; limits: ScreenLimits }>> {
+  const memo = goalLimitsScope.getStore();
+  if (!memo) return readLiveGoalLimits(projectId, now);
+  // To the minute: a pass reads `now` per call, and the limits move by the day.
+  const key = `${projectId}|${now.slice(0, 16)}`;
+  let hit = memo.get(key);
+  if (!hit) {
+    hit = readLiveGoalLimits(projectId, now);
+    memo.set(key, hit);
+    hit.catch(() => memo.delete(key));
+  }
+  return hit;
+}
+
+async function readLiveGoalLimits(projectId: string, now: string): Promise<Array<{ goalId: string; limits: ScreenLimits }>> {
   const out: Array<{ goalId: string; limits: ScreenLimits }> = [];
   for (const goal of await listWorkstreams({ projectIds: [projectId] })) {
     if (goal.projectId !== projectId || !goal.target) continue;
