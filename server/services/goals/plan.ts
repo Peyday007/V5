@@ -49,6 +49,8 @@ import { runIsolated, ScenarioBusyError } from '../scenario/isolate.ts';
 import { ScenarioRunError } from '../scenario/engine.ts';
 import type { ScenarioResult } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
+import { decideResearch, type ResearchDecision } from '../quant/deadline.ts';
+import type { EvidenceTier } from '../../domain/quant.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
@@ -145,7 +147,55 @@ export interface PlanReading {
    * so evaluating them again teaches nothing: more must be found.
    */
   needsMoreOpenings: boolean;
+  /**
+   * Every unknown the model reconstructed from comparable or component
+   * evidence instead of sweeping blind (§78), with how far it climbed.
+   */
+  inferred: InferredInput[];
+  /**
+   * Which unknowns could change the choice of strategy, measured on the run's
+   * own worlds, and what to do about each given the calendar (§78). Empty when
+   * no run finished.
+   */
+  researchPriority: ResearchPriority[];
 }
+
+export interface InferredInput {
+  opportunityId: string;
+  title: string;
+  field: 'daysToCash' | 'directCosts' | 'requiredCapital' | 'close';
+  tier: EvidenceTier;
+  /** True when the estimate may be read as a distribution; false means bounds only. */
+  justified: boolean;
+  p10: number;
+  p50: number;
+  p90: number;
+  observations: number;
+}
+
+export interface ResearchPriority {
+  /** The model variable, e.g. `o2_days`. */
+  variable: string;
+  opportunityId: string | null;
+  /** The card field research would settle, or null for something learned only by doing. */
+  field: string | null;
+  /** Gain in the goal-met share from knowing it first; over a sweep, over tested conditions. */
+  value: number;
+  changesDecision: boolean;
+  decision: ResearchDecision;
+  reason: string;
+}
+
+/** A path-research question takes about this long to come back, measured from the fleet's turnaround. */
+export const RESEARCH_TURNAROUND_DAYS = 2;
+const VARIABLE_FIELD: Record<string, { field: string | null; learnable: boolean }> = {
+  days: { field: 'timeToFirstCash', learnable: false },
+  cost: { field: 'directCosts', learnable: false },
+  capital: { field: 'requiredCapital', learnable: false },
+  price: { field: 'revenueRange', learnable: false },
+  close: { field: null, learnable: true },
+  hours: { field: null, learnable: true },
+};
 
 export interface ConsideredOpening {
   opportunityId: string;
@@ -352,13 +402,15 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       bestReach: null,
       considered: [],
       needsMoreOpenings: !target.achieved && target.daysLeft !== null && target.daysLeft > 0,
+      inferred: inferredInputs(model.considered),
+      researchPriority: [],
     };
     if (input.persist) await persistReading(goal, reading, null);
     return reading;
   }
 
   // Run the existing engine. Stored and versioned when persisting.
-  const options = { seed: parseInt(sha256(goal.id).slice(0, 8), 16) >>> 0, evaluations: input.evaluations ?? 20_000 };
+  const options = { seed: parseInt(sha256(goal.id).slice(0, 8), 16) >>> 0, evaluations: input.evaluations ?? 20_000, informationValue: { metric: 'goal_met' } };
   let result: ScenarioResult | null = null;
   let scenarioModelId: string | null = null;
   let scenarioRunId: string | null = null;
@@ -421,6 +473,10 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       }
       if (one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && target.daysLeft !== null && one.daysToCash.value > target.daysLeft) {
         constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" settles in ${one.daysToCash.value} days, after the ${target.daysLeft} left`);
+      }
+      // Reconstructed from comparable evidence (§78): nine worlds in ten settle too late.
+      if (one.daysToCash.value === null && one.daysToCash.inferred?.justified && target.daysLeft !== null && one.daysToCash.inferred.p10 > target.daysLeft) {
+        constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" would settle in at least ${Math.round(one.daysToCash.inferred.p10)} days in nine of ten reconstructed cases (${one.daysToCash.inferred.tier.toLowerCase()} evidence, ${one.daysToCash.inferred.observations} observations), after the ${target.daysLeft} left`);
       }
       if (one.price.value !== null && one.directCost.value !== null && one.directCost.provenance !== 'UNKNOWN' && one.price.value <= one.directCost.value) {
         constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" costs at least what it pays`);
@@ -556,9 +612,51 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     // Sufficient means a realistic, evidence-supported plan — a recommendation —
     // never openings that merely look valuable. Until there is one, keep looking.
     needsMoreOpenings: !target.achieved && verdict !== 'RECOMMENDABLE',
+    inferred: inferredInputs(model.considered),
+    researchPriority: researchPriority(result, model.included, target, chosen?.key ?? null),
   };
   if (input.persist) await persistReading(goal, reading, chosen);
   return reading;
+}
+
+function inferredInputs(considered: ModelledOpportunity[]): InferredInput[] {
+  const out: InferredInput[] = [];
+  const fields: Array<[InferredInput['field'], keyof ModelledOpportunity]> = [['daysToCash', 'daysToCash'], ['directCosts', 'directCost'], ['requiredCapital', 'capital'], ['close', 'close']];
+  for (const one of considered) {
+    for (const [field, key] of fields) {
+      const input = one[key] as ModelledOpportunity['price'];
+      if (!input.inferred) continue;
+      out.push({ opportunityId: one.opportunity.id, title: one.opportunity.title, field, tier: input.inferred.tier, justified: input.inferred.justified, p10: input.inferred.p10, p50: input.inferred.p50, p90: input.inferred.p90, observations: input.inferred.observations });
+    }
+  }
+  return out;
+}
+
+/**
+ * Turn the run's information value into research decisions: which unknown
+ * could change the choice, and whether to research it now, learn it by doing,
+ * act on the reconstruction, or leave it alone because the answer would not
+ * change anything (§78).
+ */
+export function researchPriority(result: ScenarioResult | null, included: ModelledOpportunity[], target: TargetReading, chosen: string | null): ResearchPriority[] {
+  const iv = result?.informationValue;
+  // A flat metric — no input could move it at all — says nothing about which
+  // question matters, so it decides nothing and the existing order stands.
+  if (!iv || target.daysLeft === null || iv.perfect <= 0) return [];
+  const strategy = result!.strategies.find((one) => one.key === (chosen ?? iv.baseline.strategy));
+  const executionDaysP90 = strategy?.metrics['days']?.p90 ?? 0;
+  const out: ResearchPriority[] = [];
+  for (const input of iv.inputs) {
+    const match = /^o(\d+)_([a-z]+)$/.exec(input.key);
+    const member = match ? included.find((one) => one.index === Number(match[1])) : undefined;
+    const kind = match ? VARIABLE_FIELD[match[2]!] : undefined;
+    const verdict = decideResearch(
+      { key: input.key, informationValue: input.value, changesDecision: input.changesDecision, researchDays: RESEARCH_TURNAROUND_DAYS, learnableInExecution: kind?.learnable ?? true },
+      { daysLeft: target.daysLeft, executionDaysP90 },
+    );
+    out.push({ variable: input.key, opportunityId: member?.opportunity.id ?? null, field: kind?.field ?? null, value: input.value, changesDecision: input.changesDecision, decision: verdict.decision, reason: verdict.reason });
+  }
+  return out;
 }
 
 interface ReadingRow {

@@ -1129,6 +1129,26 @@ export async function getClaim(id: string): Promise<ResearchClaim | null> {
   return row ? mapClaim(row) : null;
 }
 
+/**
+ * Where each claim came from, in one statement: the source URL, publisher and
+ * date. Quantitative inference uses these as the lineage that decides whether
+ * two observations share data (§78), so it reads them in a batch rather than
+ * one claim at a time.
+ */
+export async function claimSources(ids: string[]): Promise<Map<string, { sourceUrl: string | null; sourcePublisher: string | null; sourceDate: string | null }>> {
+  const out = new Map<string, { sourceUrl: string | null; sourcePublisher: string | null; sourceDate: string | null }>();
+  const unique = [...new Set(ids)];
+  for (let i = 0; i < unique.length; i += 200) {
+    const batch = unique.slice(i, i + 200);
+    const rows = await getDb().all<{ id: string; source_url: string | null; source_publisher: string | null; source_date: string | null }>(
+      `SELECT id, source_url, source_publisher, source_date FROM research_claims WHERE id IN (${batch.map(() => '?').join(', ')})`,
+      batch,
+    );
+    for (const row of rows) out.set(row.id, { sourceUrl: row.source_url, sourcePublisher: row.source_publisher, sourceDate: row.source_date });
+  }
+  return out;
+}
+
 export async function listClaimsForFragment(fragmentId: string): Promise<ResearchClaim[]> {
   return (await getDb().all<ResearchClaimRow>(
       'SELECT * FROM research_claims WHERE fragment_id = ? ORDER BY created_at, rowid',

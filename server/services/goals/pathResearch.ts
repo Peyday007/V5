@@ -111,6 +111,16 @@ export async function researchGoalPaths(input: {
       b.supportedReach - a.supportedReach ||
       a.missing.length - b.missing.length,
   );
+  /*
+   * What the run measured (§78): an unknown whose answer cannot change the
+   * choice of strategy is not researched, and one that waiting for would cost
+   * the deadline is acted on or learned by doing instead. Questions that do
+   * change the choice go first, largest value first.
+   */
+  const priority = new Map<string, NonNullable<PlanReading['researchPriority']>[number]>();
+  for (const one of input.reading.researchPriority ?? []) if (one.opportunityId && one.field) priority.set(`${one.opportunityId}:${one.field}`, one);
+  const valueOf = (id: string) => Math.max(0, ...[...priority.values()].filter((one) => one.opportunityId === id && one.decision === 'RESEARCH_FIRST').map((one) => one.value));
+  if (priority.size > 0) order.sort((a, b) => valueOf(b.opportunityId) - valueOf(a.opportunityId));
   let openings = 0;
   for (const one of order) {
     if (openings >= PATH_RESEARCH_OPENINGS || openHere >= MAX_OPEN_PATH_QUESTIONS) break;
@@ -145,6 +155,11 @@ export async function researchGoalPaths(input: {
     let actedHere = false;
     for (const { field, ask } of asks) {
       if (openHere >= MAX_OPEN_PATH_QUESTIONS) break;
+      const measured = priority.get(`${one.opportunityId}:${field}`);
+      if (measured && measured.decision !== 'RESEARCH_FIRST') {
+        note(`${one.title.slice(0, 60)} ${field}: not asked — ${measured.decision.toLowerCase().replace(/_/g, ' ')}: ${measured.reason}`);
+        continue;
+      }
       const key = questionKey(opportunity.id, field);
       // Already established from a source or by a person: asking again would
       // be settled the instant it was raised and re-raised on the next read.

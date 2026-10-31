@@ -13806,6 +13806,56 @@ On 2026-10-31 a session presented the owner a mailer plan as "roughly 90%" likel
 
 `plans/mailer-2026-10-31-as-presented.json` is the regression. It is rejected nine ways. `plans/mailer-corrected-2026-10-31.json` passes as an analysis: at the assumed rates the mailer collects $5,400, short of the target. `tests/planCheck.test.ts` was run against each disabled safeguard to watch it fail.
 
+## 78. A number nobody published is reconstructed from the mechanism, and says how far it travelled.
+
+Before this, every goal-plan unknown was swept over a range somebody typed:
+days to cash 3–60, direct cost 0–60% of the price, agreement rate 2–50%. On
+2026-10-31 production read the $10K goal (`wst_7b4fcbb5f2384f31b6c3`) over 32
+openings with nothing inferred, while the same project held published payment
+terms, costs and capital for other openings. `server/services/quant/` and
+`docs/QUANT.md` are the repair. It extends the scenario engine and the plan
+gate and adds no second simulator, evidence store or approval path.
+
+- **The ladder stops at the first rung that is enough.** DIRECT, then
+  COMPARABLE, then COMPONENT (a formula over child quantities, recursively),
+  then MECHANISM, then ASSUMED or UNKNOWN. A quantity that direct evidence
+  settles never resolves its parts. `notNeeded` lists the research it did not
+  have to pay for.
+- **A transfer names what differs.** A difference on a dimension the quantity
+  declares material excludes the observation, unless an adjustment with its
+  own source bridges exactly that difference. A material dimension a source
+  does not state is never assumed to match. Every exclusion keeps its reason.
+- **Shared data is counted once.** Observations with intersecting lineage
+  collapse to the most informative one, and the collapse is reported.
+- **Only evidence becomes a distribution.** A DIRECT, COMPARABLE or
+  COMPONENT estimate whose every part is evidence exports as an `EMPIRICAL`
+  variable. MECHANISM, ASSUMED and UNKNOWN export as a `RANGE`, so a run over
+  them is a sweep, and §77 refuses to call it a chance.
+- **An inference never establishes a gate link.** In `goalScenario.ts` an
+  inferred input keeps `value: null`. It narrows the sweep and can make a
+  strategy NOT_VIABLE when a justified reconstruction settles too late in nine
+  worlds of ten. It never counts as a fact about the opening.
+- **A question is worth asking only if its answer could change the choice.**
+  A scenario run may be asked for `informationValue`, computed on the run's
+  worker thread. A bin switches strategy only on a paired gain above two
+  standard errors, because an unguarded max over bins rewards noise.
+  `pathResearch` skips a question measured at zero, and one that waiting for
+  would cost the deadline (`deadline.ts`: learn while executing, or act on the
+  reconstruction).
+- **Combinations are evaluated world by world.** `portfolio.ts` checks shared
+  capacity, recycles capital in start order, draws shared risks through a
+  common factor, and counts only cash settled by the deadline. It never sums
+  chances.
+- **The conventions are constants, not hidden choices:**
+  - an unsized published rate is worth ten events;
+  - a single published figure has a 10% reading error;
+  - the between-population spread has floors of 0, 0.3 and 0.8 by tier.
+
+The demonstration is `plans/quant/two-mechanisms-2026-10-31.json`
+(`npm run quant`). It runs two unrelated mechanisms from cited public figures:
+a food-truck holiday-lunch brokerage constructed from parts, and catch-up
+bookkeeping. One engine runs both, with no special case for either.
+
 ## Repository map
 
 ```
@@ -14194,6 +14244,16 @@ server/
       demo.ts           the illustrative demonstration model
       units.ts          the unit of every expression, inferred and held to the declared one
       planCheck.ts      a plan reconciled from one model before anybody is shown it (§77)
+    quant/              §78: a number nobody published, reconstructed from the mechanism
+      pool.ts           transfer, shared data and random-effects pooling, refusals first
+      reconstruct.ts    the evidence ladder, recursive, stopping where the evidence is enough
+      mechanism.ts      demand × supply × capture, for arrangements with no name
+      value.ts          which unknown could change the choice, with noise held out
+      deadline.ts       research first, learn by doing, act on the estimate, or ignore
+      portfolio.ts      combinations under shared resources, recycled capital, shared risk
+      export.ts         an estimate as a scenario input, never stronger than its evidence
+      knowledge.ts      Brain's own card facts and outcomes, as transferable observations
+      problem.ts        one question end to end, from a file (`npm run quant`)
     russell/
       home.ts           the eight things home says, in the order S6 fixes them
       collections.ts    threads organized without inventing a category, ranked by meaning
@@ -14352,6 +14412,7 @@ scripts/
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
   scenario-bench.ts         time the engine at 50,000 evaluations on this machine
   plan-check.ts             npm run plan:check — the one door a quantitative plan goes through
+  quant.ts                  npm run quant — reconstruct, combine and value one problem file (§78)
   connection-report.ts      pools, incidents, auth refusals, misses by cause, every connector
   connection-report.sh      the same, inside the deployed container, on one connection
   puzzle-report.ts          what was made, proved, sold and learned; one puzzle re-rendered
