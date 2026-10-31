@@ -36,3 +36,13 @@ describe('BRAIN_CASH_RESEARCH_MAX', () => {
     expect(applyOperatorMax(room(4, 1), 1, 0).room).toBe(0);
   });
 });
+
+describe('spareResearchSurfaces', () => {
+  it('reads an empty fleet as no spare, on either backend', async () => {
+    const { freshProject } = await import('./helpers.ts');
+    const { spareResearchSurfaces, forgetResearchSurfaces } = await import('../server/services/cash/researchRoom.ts');
+    const project = await freshProject();
+    forgetResearchSurfaces();
+    expect(await spareResearchSurfaces(project.project.id)).toBe(0);
+  });
+});
