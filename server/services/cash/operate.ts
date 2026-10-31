@@ -117,6 +117,24 @@ import { orderFieldsByCost } from './infoValue.ts';
 import { recordQuestionsSkipped } from './screenMetrics.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
 
+/*
+ * The decision pass re-screens every opening under every live goal, about two
+ * statements a pair, and the Cash tick runs every few seconds. Its decisions
+ * are idempotent and derived from rows, so running it less often loses
+ * nothing; running it every tick over ~340 openings was a standing load on a
+ * database that was already timing out (production, 2026-10-31). At most once
+ * per interval per project, per process.
+ */
+export const DECISION_PASS_INTERVAL_MS = 5 * 60_000;
+const lastDecisionPass = new Map<string, number>();
+function decisionPassDue(projectId: string): boolean {
+  const at = Date.now();
+  const last = lastDecisionPass.get(projectId);
+  if (last !== undefined && at - last < DECISION_PASS_INTERVAL_MS) return false;
+  lastDecisionPass.set(projectId, at);
+  return true;
+}
+
 /** Brain acting on its own account, never a person and never a worker. */
 const BRAIN = 'BRAIN';
 
@@ -1398,7 +1416,7 @@ export async function operate(
     | { error: string }
     | null;
   /** One current REJECT / HOLD / PRIORITIZE per opening per goal, from the code screen (`decisions.ts`). */
-  decisions?: DecideOpeningsPass | { error: string };
+  decisions?: DecideOpeningsPass | { error: string } | { skipped: string };
   /** Reopen watches recorded on derived dead ends, and standing changes written. */
   standing?: { derived: DerivedCondition[]; changes: StandingChange[] } | { error: string } | { skipped: string };
 }> {
@@ -1467,11 +1485,16 @@ export async function operate(
    * launched, so the record a person reads is the one the gate acted on. Its
    * own failure domain: a decision pass that throws must not stop the rest.
    */
-  let decisions: DecideOpeningsPass | { error: string };
-  try {
-    decisions = await decideOpenings(projectId, now ? { now } : {});
-  } catch (error) {
-    decisions = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+  let decisions: DecideOpeningsPass | { error: string } | { skipped: string };
+  // A caller that supplies `now` is driving time itself (tests, replays) and is never throttled.
+  if (!now && !decisionPassDue(projectId)) {
+    decisions = { skipped: `the decision pass runs at most every ${DECISION_PASS_INTERVAL_MS / 60_000} minutes` };
+  } else {
+    try {
+      decisions = await decideOpenings(projectId, now ? { now } : {});
+    } catch (error) {
+      decisions = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+    }
   }
   const withdrawnResearch = await withdrawResearchNotWorthIt(projectId);
   const gaps = [...(await reconcileDiscoverableGaps(projectId)), ...(await reconcileEngineGaps(projectId))];
