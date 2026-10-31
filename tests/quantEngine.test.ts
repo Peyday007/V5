@@ -368,3 +368,15 @@ describe('the demonstration file: two unrelated mechanisms, one engine, no speci
     expect(by('trucks', 'trucks_days').p10).toBeGreaterThan(27);
   });
 });
+
+describe('one comparable population is an anecdote', () => {
+  it('bounds the answer and never exports a distribution', () => {
+    const node: QuantityNode = { key: 'cost_share', label: 'c', unit: 'share', kind: 'RATE', context: { opportunity: 'o2', mechanism: 'service' }, material: ['mechanism'], observations: [point('other_opening', 0.4, { opportunity: 'o1', mechanism: 'service' })] };
+    const est = reconstruct({ nodes: [node] }, 'cost_share', now).estimates.cost_share!;
+    expect(est.tier).toBe('COMPARABLE');
+    expect(est.distributionJustified).toBe(false);
+    expect(toScenarioInput(est).spec.kind).toBe('RANGE');
+    const two = reconstruct({ nodes: [{ ...node, observations: [...node.observations!, point('third', 0.5, { opportunity: 'o3', mechanism: 'service' })] }] }, 'cost_share', now).estimates.cost_share!;
+    expect(two.distributionJustified).toBe(true);
+  });
+});
