@@ -68,7 +68,7 @@ export interface ModelInput {
   source: SourceRef | null;
   note: string;
   /**
-   * A distribution or narrowed range the quantitative inference engine (§78)
+   * A distribution or narrowed range the quantitative inference engine (§79)
    * reconstructed for an unknown from comparable or component evidence. `value`
    * stays null: an inferred number never establishes a link of the plan's
    * causal chain, it only replaces a blind sweep with an evidenced one.

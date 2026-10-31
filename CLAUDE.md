@@ -13806,7 +13806,35 @@ On 2026-10-31 a session presented the owner a mailer plan as "roughly 90%" likel
 
 `plans/mailer-2026-10-31-as-presented.json` is the regression. It is rejected nine ways. `plans/mailer-corrected-2026-10-31.json` passes as an analysis: at the assumed rates the mailer collects $5,400, short of the target. `tests/planCheck.test.ts` was run against each disabled safeguard to watch it fail.
 
-## 78. A number nobody published is reconstructed from the mechanism, and says how far it travelled.
+## 78. A throttle binds only while capacity is contended, and a goal's search grows with the idle fleet.
+
+Production, 2026-10-31 21:41Z (`8f12c88`), six hours: 114 fires, 1 packet completed, items
+succeeded 30–57/h, and 2 activations in flight across 8 routable research surfaces and a
+fleet target of 12 — while the $10K goal read NOT_VIABLE over 32 openings and asked for more.
+Dispatch was not the limit (it fired every bin that had claimable work). Generation was:
+
+- **`BRAIN_CASH_RESEARCH_MAX` was a fixed number.** It caps deep dives and monetization
+  questions so low-yield research does not take Routine time from better work — and with
+  nothing else queued it only left surfaces idle (rule 9). `applyOperatorMax` now adds the
+  measured spare (`spareResearchSurfaces`: routable research surfaces with nothing in flight,
+  less the bins already waiting to be fired). Spare is zero the moment work queues up, so the
+  ceiling binds exactly where it was meant to. It never raises the room past the grant.
+- **A goal's search was one lens per 30-minute refresh, three open at once.** The plan pass
+  opens `1 + spare` rounds with a live cap of `MAX_LIVE_GOAL_ROUNDS + spare`, tops up every
+  five minutes between refreshes from the last reading, and path research takes one more
+  opening and two more questions per spare surface. Every round is linked to the goal
+  (`CANDIDATE`/`PURSUES`), so the goal's rank reaches the bins it creates. Target goals
+  complete only from the ledger, so a link cannot complete one.
+- **A pinned bin on a quarantined Routine ended every dispatch burst.** Its candidate list is
+  one Routine, so `ALL_SURFACES_INELIGIBLE` (FLEET-scoped) was a fact about one bin.
+  The loop asks `endsBurst(bin, refusal)`, which never ends the burst for a pinned bin; the
+  refusal's name is unchanged because the Build card reads it: 136 such refusals in six hours.
+
+Downstream stages are fleet work on the same surfaces, so they scale with it: more busy
+sessions is also more distinct sessions for the audit-independence floor. Nothing here touches
+a gate, an envelope, a grant, a spending limit or an authorization.
+
+## 79. A number nobody published is reconstructed from the mechanism, and says how far it travelled.
 
 Before this, every goal-plan unknown was swept over a range somebody typed:
 days to cash 3–60, direct cost 0–60% of the price, agreement rate 2–50%. On
@@ -14244,7 +14272,7 @@ server/
       demo.ts           the illustrative demonstration model
       units.ts          the unit of every expression, inferred and held to the declared one
       planCheck.ts      a plan reconciled from one model before anybody is shown it (§77)
-    quant/              §78: a number nobody published, reconstructed from the mechanism
+    quant/              §79: a number nobody published, reconstructed from the mechanism
       pool.ts           transfer, shared data and random-effects pooling, refusals first
       reconstruct.ts    the evidence ladder, recursive, stopping where the evidence is enough
       mechanism.ts      demand × supply × capture, for arrangements with no name
@@ -14412,7 +14440,7 @@ scripts/
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
   scenario-bench.ts         time the engine at 50,000 evaluations on this machine
   plan-check.ts             npm run plan:check — the one door a quantitative plan goes through
-  quant.ts                  npm run quant — reconstruct, combine and value one problem file (§78)
+  quant.ts                  npm run quant — reconstruct, combine and value one problem file (§79)
   connection-report.ts      pools, incidents, auth refusals, misses by cause, every connector
   connection-report.sh      the same, inside the deployed container, on one connection
   puzzle-report.ts          what was made, proved, sold and learned; one puzzle re-rendered

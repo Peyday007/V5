@@ -1,4 +1,4 @@
-# Quantitative inference (§78)
+# Quantitative inference (§79)
 
 Brain can now estimate a number nobody has published, from what the world does
 know about the mechanism behind it, and say exactly how far that estimate can

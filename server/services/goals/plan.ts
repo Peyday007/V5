@@ -40,7 +40,8 @@ import { readCapabilities } from '../cash/capabilities.ts';
 import { checkCommercialAuthority } from '../cash/authority.ts';
 import { bestCaseReach, composeGoalModel, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
-import { openGoalDiscovery } from '../cash/discovery.ts';
+import { MAX_LIVE_GOAL_ROUNDS, openGoalDiscovery } from '../cash/discovery.ts';
+import { spareResearchSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
 import { getScenarioModel } from '../../repos/scenario.ts';
@@ -149,12 +150,12 @@ export interface PlanReading {
   needsMoreOpenings: boolean;
   /**
    * Every unknown the model reconstructed from comparable or component
-   * evidence instead of sweeping blind (§78), with how far it climbed.
+   * evidence instead of sweeping blind (§79), with how far it climbed.
    */
   inferred: InferredInput[];
   /**
    * Which unknowns could change the choice of strategy, measured on the run's
-   * own worlds, and what to do about each given the calendar (§78). Empty when
+   * own worlds, and what to do about each given the calendar (§79). Empty when
    * no run finished.
    */
   researchPriority: ResearchPriority[];
@@ -474,7 +475,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       if (one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && target.daysLeft !== null && one.daysToCash.value > target.daysLeft) {
         constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" settles in ${one.daysToCash.value} days, after the ${target.daysLeft} left`);
       }
-      // Reconstructed from comparable evidence (§78): nine worlds in ten settle too late.
+      // Reconstructed from comparable evidence (§79): nine worlds in ten settle too late.
       if (one.daysToCash.value === null && one.daysToCash.inferred?.justified && target.daysLeft !== null && one.daysToCash.inferred.p10 > target.daysLeft) {
         constraintsFailed.push(`"${one.opportunity.title.slice(0, 60)}" would settle in at least ${Math.round(one.daysToCash.inferred.p10)} days in nine of ten reconstructed cases (${one.daysToCash.inferred.tier.toLowerCase()} evidence, ${one.daysToCash.inferred.observations} observations), after the ${target.daysLeft} left`);
       }
@@ -636,7 +637,7 @@ function inferredInputs(considered: ModelledOpportunity[]): InferredInput[] {
  * Turn the run's information value into research decisions: which unknown
  * could change the choice, and whether to research it now, learn it by doing,
  * act on the reconstruction, or leave it alone because the answer would not
- * change anything (§78).
+ * change anything (§79).
  */
 export function researchPriority(result: ScenarioResult | null, included: ModelledOpportunity[], target: TargetReading, chosen: string | null): ResearchPriority[] {
   const iv = result?.informationValue;
@@ -763,6 +764,65 @@ export async function recordGoalOutcome(goalId: string, now: Date = new Date()):
 /** The tick's pass: re-read every targeted goal's plan at most this often. */
 export const PLAN_REFRESH_MS = 30 * 60_000;
 
+/**
+ * The last reading of each goal this process took, so the search can be topped
+ * up between refreshes. Re-reading the plan is a scenario run; asking one more
+ * question needs only the target, the best reach and the titles already held,
+ * which change slowly. Lost on restart, which only means the first top-up
+ * waits for the first refresh.
+ */
+const lastReadings = new Map<string, PlanReading>();
+const lastTopUp = new Map<string, number>();
+/** A top-up between refreshes at most this often per goal: rounds settle in minutes, not seconds. */
+export const GOAL_TOP_UP_MS = 5 * 60_000;
+
+/** Tests. */
+export function forgetGoalReadings(): void {
+  lastReadings.clear();
+  lastTopUp.clear();
+}
+
+/**
+ * Widen a goal's search to the capacity that would otherwise sit idle.
+ *
+ * One lens a refresh and three rounds at once were fixed numbers. Production,
+ * 2026-10-31: the $10K goal read NOT_VIABLE over 32 openings with its plan
+ * asking for more, while eight routable research surfaces held two activations.
+ * Each idle surface with nothing waiting may now carry one more of the goal's
+ * own rounds, opened in this pass rather than one per half hour — and every
+ * round is linked to the goal, so the goal's rank reaches the bins it creates.
+ * When work queues up the spare is zero and this is exactly the old behaviour.
+ */
+async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, spare: number): Promise<{ asked: number; researched: number }> {
+  const goal = await getWorkstream(goalId);
+  if (!goal) return { asked: 0, researched: 0 };
+  let asked = 0;
+  const attempts = 1 + spare;
+  for (let i = 0; i < attempts; i += 1) {
+    const opened = await openGoalDiscovery({
+      goal,
+      target: reading.target,
+      bestReach: reading.bestReach,
+      heldTitles: reading.considered.map((one) => one.title),
+      now: now.toISOString(),
+      liveCap: MAX_LIVE_GOAL_ROUNDS + spare,
+    });
+    if (!opened) break;
+    asked += 1;
+    await linkWorkstream({
+      workstreamId: goal.id,
+      kind: 'CANDIDATE',
+      ref: opened.candidateId,
+      relation: 'PURSUES',
+      recordedBy: 'BRAIN',
+      recordedByUserId: null,
+    });
+  }
+  // And dig into the openings already held: the path to their money.
+  const researched = (await researchGoalPaths({ reading, projectId: reading.target.projectId, now, spare })).length;
+  return { asked, researched };
+}
+
 export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; researched: number; busy: boolean }> {
   const goals = await getDb().all<{ id: string }>(
     `SELECT id FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
@@ -782,7 +842,21 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       [id],
     );
     const since = [last?.at, lastRun?.at].filter((one): one is string => !!one).reduce((max, at) => Math.max(max, Date.parse(at)), 0);
-    if (since && now.getTime() - since < PLAN_REFRESH_MS) continue;
+    if (since && now.getTime() - since < PLAN_REFRESH_MS) {
+      // Not due for a re-read; top the search up if the fleet has room for it.
+      const held = lastReadings.get(id);
+      const toppedUp = lastTopUp.get(id) ?? 0;
+      if (held?.needsMoreOpenings && now.getTime() - toppedUp >= GOAL_TOP_UP_MS) {
+        lastTopUp.set(id, now.getTime());
+        const spare = (await spareResearchSurfaces(held.target.projectId)) ?? 0;
+        if (spare > 0) {
+          const more = await widenGoalSearch(id, held, now, spare);
+          asked += more.asked;
+          researched += more.researched;
+        }
+      }
+      continue;
+    }
     let reading: PlanReading | null;
     try {
       reading = await readGoalPlan({ goalId: id, now, persist: true });
@@ -791,25 +865,16 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       if (error instanceof ScenarioBusyError) return { read, outcomes, asked, researched, busy: true };
       throw error;
     }
+    if (reading) lastReadings.set(id, reading);
+    else lastReadings.delete(id);
     // What Brain holds cannot reach the goal however it is combined: look for
     // more, through the same discovery every bucket uses, instead of reading
     // the same openings again in thirty minutes.
     if (reading?.needsMoreOpenings) {
-      const goal = await getWorkstream(id);
-      if (
-        goal &&
-        (await openGoalDiscovery({
-          goal,
-          target: reading.target,
-          bestReach: reading.bestReach,
-          heldTitles: reading.considered.map((one) => one.title),
-          now: now.toISOString(),
-        }))
-      ) {
-        asked += 1;
-      }
-      // And dig into the openings already held: the path to their money.
-      researched += (await researchGoalPaths({ reading, projectId: reading.target.projectId, now })).length;
+      const spare = (await spareResearchSurfaces(reading.target.projectId)) ?? 0;
+      const more = await widenGoalSearch(id, reading, now, spare);
+      asked += more.asked;
+      researched += more.researched;
     }
   }
   return { read, outcomes, asked, researched, busy: false };

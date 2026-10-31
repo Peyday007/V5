@@ -2,7 +2,7 @@
  * `npm run quant -- <problem.json> [--json]`
  *
  * Reconstruct, combine, optimize and value the questions of one quantitative
- * problem (§78). Reads one file, touches no database, writes nothing, and
+ * problem (§79). Reads one file, touches no database, writes nothing, and
  * prints `QUANT: OK` only when the problem solved. An analysis printed here is
  * not a plan: a quantitative recommendation to a person still goes through
  * `npm run plan:check` (§77).

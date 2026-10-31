@@ -1,5 +1,5 @@
 /**
- * The quantitative inference vocabulary (§78).
+ * The quantitative inference vocabulary (§79).
  *
  * The scenario engine (§60) evaluates a model somebody wrote down. This is what
  * comes before it: turning "nobody has published this exact number" into a

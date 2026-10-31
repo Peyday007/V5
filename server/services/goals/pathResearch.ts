@@ -73,7 +73,16 @@ export async function researchGoalPaths(input: {
   trace?: string[];
   /** Decide only: raise and withdraw nothing. */
   dryRun?: boolean;
+  /**
+   * Research surfaces idle with nothing waiting. Each one lets one more
+   * opening, and two more questions, be researched at once — the caps below
+   * are a floor for a busy fleet, not a ceiling on an idle one.
+   */
+  spare?: number;
 }): Promise<string[]> {
+  const spare = Math.max(0, Math.trunc(input.spare ?? 0));
+  const openingCap = PATH_RESEARCH_OPENINGS + spare;
+  const questionCap = MAX_OPEN_PATH_QUESTIONS + 2 * spare;
   const note = (line: string) => input.trace?.push(line);
   const now = input.now ?? new Date();
   const raised: string[] = [];
@@ -112,7 +121,7 @@ export async function researchGoalPaths(input: {
       a.missing.length - b.missing.length,
   );
   /*
-   * What the run measured (§78): an unknown whose answer cannot change the
+   * What the run measured (§79): an unknown whose answer cannot change the
    * choice of strategy is not researched, and one that waiting for would cost
    * the deadline is acted on or learned by doing instead. Questions that do
    * change the choice go first, largest value first.
@@ -123,7 +132,7 @@ export async function researchGoalPaths(input: {
   if (priority.size > 0) order.sort((a, b) => valueOf(b.opportunityId) - valueOf(a.opportunityId));
   let openings = 0;
   for (const one of order) {
-    if (openings >= PATH_RESEARCH_OPENINGS || openHere >= MAX_OPEN_PATH_QUESTIONS) break;
+    if (openings >= openingCap || openHere >= questionCap) break;
     let asks = one.missing.flatMap((link) => FIELDS_FOR[link] ?? []);
     if (asks.length === 0) continue;
     /*
@@ -154,7 +163,7 @@ export async function researchGoalPaths(input: {
     // next ones unresearched.
     let actedHere = false;
     for (const { field, ask } of asks) {
-      if (openHere >= MAX_OPEN_PATH_QUESTIONS) break;
+      if (openHere >= questionCap) break;
       const measured = priority.get(`${one.opportunityId}:${field}`);
       if (measured && measured.decision !== 'RESEARCH_FIRST') {
         note(`${one.title.slice(0, 60)} ${field}: not asked — ${measured.decision.toLowerCase().replace(/_/g, ' ')}: ${measured.reason}`);
@@ -233,7 +242,7 @@ export async function researchGoalPaths(input: {
     }
     if (actedHere) openings += 1;
   }
-  note(`live path questions ${openHere} of ${MAX_OPEN_PATH_QUESTIONS}; openings researched ${openings} of ${PATH_RESEARCH_OPENINGS}`);
+  note(`live path questions ${openHere} of ${questionCap}; openings researched ${openings} of ${openingCap}`);
   return raised;
 }
 

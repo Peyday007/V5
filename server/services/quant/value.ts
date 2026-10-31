@@ -11,7 +11,7 @@
  * estimated by sorting the worlds into quantile bins of that input. It is zero
  * exactly when the same action is best in every bin — the input cannot change
  * the decision, so researching it is spending to learn nothing actionable
- * (§78: abandon a question whose answer would not change the decision).
+ * (§79: abandon a question whose answer would not change the decision).
  *
  * Over a SWEEP the "expectation" is over tested conditions, not a probability,
  * and the caller must say so; the ranking of which input matters most is still

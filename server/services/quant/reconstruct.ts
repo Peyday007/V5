@@ -4,7 +4,7 @@
  * `reconstruct(graph, target)` climbs the evidence ladder for the target and
  * stops at the first rung that is *enough* — the node's own sufficiency width —
  * so an answer that is already established is never re-derived from parts
- * (§78's first rule: the shortest defensible route). When a rung is not
+ * (§79's first rule: the shortest defensible route). When a rung is not
  * enough it climbs:
  *
  *   DIRECT      pooled evidence about this exact population

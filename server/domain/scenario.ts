@@ -237,7 +237,7 @@ export interface RunOptions {
   /**
    * Measure which uncertain input could change the choice of strategy, by the
    * expected gain in this metric (or `contribution`) from knowing it first
-   * (§78). An infeasible or invalid evaluation scores the metric's worst value.
+   * (§79). An infeasible or invalid evaluation scores the metric's worst value.
    */
   informationValue?: { metric: string };
 }

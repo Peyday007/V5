@@ -1,5 +1,5 @@
 /**
- * §78 inside the live goal workflow: what other openings' research established
+ * §79 inside the live goal workflow: what other openings' research established
  * is reused to reconstruct an opening's unknowns, the plan's simulation runs on
  * the reconstruction instead of a blind sweep, the gate still refuses to count
  * an inference as an established link, a reconstruction that settles too late

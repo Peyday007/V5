@@ -1,5 +1,5 @@
 /**
- * The quantitative inference engine (§78), against the cases the brief names
+ * The quantitative inference engine (§79), against the cases the brief names
  * A–N, each in a different industry so a rule that secretly needed one subject
  * fails on the others. Every case asserts the property, not the picture: which
  * rung answered, what was refused and why, what the numbers are within the

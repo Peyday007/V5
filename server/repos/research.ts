@@ -1132,7 +1132,7 @@ export async function getClaim(id: string): Promise<ResearchClaim | null> {
 /**
  * Where each claim came from, in one statement: the source URL, publisher and
  * date. Quantitative inference uses these as the lineage that decides whether
- * two observations share data (§78), so it reads them in a batch rather than
+ * two observations share data (§79), so it reads them in a batch rather than
  * one claim at a time.
  */
 export async function claimSources(ids: string[]): Promise<Map<string, { sourceUrl: string | null; sourcePublisher: string | null; sourceDate: string | null }>> {

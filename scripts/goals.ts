@@ -434,7 +434,7 @@ function printPlan(reading: PlanReading): void {
   }
   for (const one of reading.excluded.slice(0, 15)) console.log(`  left out    ${one.opportunityId} ${one.title.slice(0, 70)}: ${one.reason}`);
   if (reading.excluded.length > 15) console.log(`  left out    … and ${reading.excluded.length - 15} more`);
-  // §78: what was reconstructed instead of swept, and which questions could change the choice.
+  // §79: what was reconstructed instead of swept, and which questions could change the choice.
   const tiers = new Map<string, number>();
   for (const one of reading.inferred) tiers.set(one.tier, (tiers.get(one.tier) ?? 0) + 1);
   console.log(`  inferred    ${reading.inferred.length} unknown(s) reconstructed from evidence instead of swept blind${tiers.size ? ` (${[...tiers].map(([k, v]) => `${k} ${v}`).join(', ')})` : ''}`);
