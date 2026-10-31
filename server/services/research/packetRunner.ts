@@ -69,6 +69,7 @@ import {
   listPendingOrchestrations,
   updateFragment,
   updateOrchestration,
+  parkOrchestration,
 } from '../../repos/research.ts';
 import { auditRoundFor, auditRoundStartedAt, earlierAuditRole } from './auditBrief.ts';
 import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
@@ -469,11 +470,7 @@ async function faultedOut(input: {
       completedAt: new Date().toISOString(),
     });
   }
-  await updateOrchestration(input.orchestration.id, {
-    status: 'NEEDS_HUMAN',
-    failureReason: reason,
-    completedAt: new Date().toISOString(),
-  });
+  await parkOrchestration(input.orchestration.id, reason, { stampCompleted: true });
   return {
     orchestrationId: input.orchestration.id,
     status: 'NEEDS_HUMAN',
@@ -1295,15 +1292,11 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
       ? await assessRepairs({ orchestration, fragments })
       : { mintable: [], refused: [] };
     const detail = repairs.refused.map((entry) => entry.reason).join('; ');
-    await updateOrchestration(orchestrationId, {
-      status: 'NEEDS_HUMAN',
-      failureReason:
+    await parkOrchestration(orchestrationId,
         'The packet was left awaiting a repair that has no claimable work and no scheduled ' +
         'time to return' +
         (detail ? ` (${detail})` : '') +
-        '. Nothing would ever pick it up, so it is a decision rather than a wait.',
-      completedAt: new Date().toISOString(),
-    });
+        '. Nothing would ever pick it up, so it is a decision rather than a wait.', { stampCompleted: true });
     return { ...result, status: 'NEEDS_HUMAN', waitingOn: 'a person: no repair is actually pending' };
   }
 
@@ -1333,14 +1326,10 @@ export async function advancePacket(orchestrationId: string): Promise<AdvanceRes
    * exists for. It is reported rather than repaired: inventing work here would
    * hide whichever branch failed to mint or to conclude.
    */
-  await updateOrchestration(orchestrationId, {
-    status: 'NEEDS_HUMAN',
-    failureReason:
+  await parkOrchestration(orchestrationId,
       `The packet was left ${result.status} with nothing queued and nothing to do` +
       `${result.waitingOn ? ` (waiting on: ${result.waitingOn})` : ''}. That state cannot ` +
-      'resolve itself, so it is a decision rather than a wait.',
-    completedAt: new Date().toISOString(),
-  });
+      'resolve itself, so it is a decision rather than a wait.', { stampCompleted: true });
   return { ...result, status: 'NEEDS_HUMAN', waitingOn: `a person: left ${result.status} with an empty queue` };
 }
 
@@ -1366,11 +1355,7 @@ export async function refusedByBudget(
     `${detail}. Nothing was researched and nothing was spent on this plan. ` +
     'Raising that limit on the permission you gave lets it continue; ' +
     'everything already used stays used.';
-  await updateOrchestration(orchestration.id, {
-    status: 'NEEDS_HUMAN',
-    failureReason: reason,
-    completedAt: new Date().toISOString(),
-  });
+  await parkOrchestration(orchestration.id, reason, { stampCompleted: true });
   return {
     orchestrationId: orchestration.id,
     status: 'NEEDS_HUMAN',
@@ -1633,11 +1618,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
         'attempt and accepted claim is kept. Renewing or extending that permission lets the ' +
         'repair run on the next tick; stopping the work is the other answer.';
       if (orchestration.status !== 'NEEDS_HUMAN' || orchestration.failureReason !== reason) {
-        await updateOrchestration(orchestrationId, {
-          status: 'NEEDS_HUMAN',
-          failureReason: reason,
-          completedAt: new Date().toISOString(),
-        });
+        await parkOrchestration(orchestrationId, reason, { stampCompleted: true });
       }
       return { orchestrationId, status: 'NEEDS_HUMAN', enqueued: [], waitingOn: `a person: ${reason}` };
     }
@@ -1726,12 +1707,9 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     if (orchestration.approvalEnvelopeId && !envelope) {
       // The id names nothing this build defines. "No rules matched" must never
       // be read as "everything is allowed".
-      await updateOrchestration(orchestrationId, {
-        status: 'NEEDS_HUMAN',
-        failureReason:
+      await parkOrchestration(orchestrationId,
           `This packet names approval envelope "${orchestration.approvalEnvelopeId}", which this ` +
-          'build does not define. It cannot be validated, so it waits for a person.',
-      });
+          'build does not define. It cannot be validated, so it waits for a person.');
       return {
         orchestrationId,
         status: 'NEEDS_HUMAN',
@@ -1758,12 +1736,9 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
         orchestrationId,
       });
       if (!availability.available) {
-        await updateOrchestration(orchestrationId, {
-          status: 'NEEDS_HUMAN',
-          failureReason:
+        await parkOrchestration(orchestrationId,
             'The named approval envelope cannot be applied to this packet: ' +
-            availability.reasons.join(' '),
-        });
+            availability.reasons.join(' '));
         return {
           orchestrationId,
           status: 'NEEDS_HUMAN',
@@ -1805,12 +1780,9 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
       });
 
       if (!verdict.fits) {
-        await updateOrchestration(orchestrationId, {
-          status: 'NEEDS_HUMAN',
-          failureReason:
+        await parkOrchestration(orchestrationId,
             'The proposed plan falls outside the preauthorized envelope: ' +
-            verdict.reasons.join(' '),
-        });
+            verdict.reasons.join(' '));
         return {
           orchestrationId,
           status: 'NEEDS_HUMAN',
@@ -1854,12 +1826,9 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
             ? `the DEADLINE of research goal ${goal.id} (${goal.expiresAt}) has passed`
             : null;
       if (!goal || stopped) {
-        await updateOrchestration(orchestrationId, {
-          status: 'NEEDS_HUMAN',
-          failureReason:
+        await parkOrchestration(orchestrationId,
             `This packet's plan is not approved: ${stopped}. Extending the goal or ` +
-            'starting a new one is a decision for a person.',
-        });
+            'starting a new one is a decision for a person.');
         return {
           orchestrationId,
           status: 'NEEDS_HUMAN',
@@ -2070,13 +2039,9 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
         waitingOn: 'nothing: the goal decides whether another round starts',
       };
     }
-    await updateOrchestration(orchestration.id, {
-      status: 'NEEDS_HUMAN',
-      failureReason:
+    await parkOrchestration(orchestration.id,
         'No fragment cleared its evidence gate, so there is nothing to synthesize. ' +
-        noFragmentClearedDetail(fragments, repairs),
-      completedAt: new Date().toISOString(),
-    });
+        noFragmentClearedDetail(fragments, repairs), { stampCompleted: true });
     return {
       orchestrationId,
       status: 'NEEDS_HUMAN',
@@ -2105,11 +2070,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     }
     const claims = await acceptedClaims(orchestration.id);
     if (claims.length === 0) {
-      await updateOrchestration(orchestration.id, {
-        status: 'NEEDS_HUMAN',
-        failureReason: 'Fragments were accepted but no claim was, so the packet has no evidence.',
-        completedAt: new Date().toISOString(),
-      });
+      await parkOrchestration(orchestration.id, 'Fragments were accepted but no claim was, so the packet has no evidence.', { stampCompleted: true });
       return {
         orchestrationId,
         status: 'NEEDS_HUMAN',
@@ -2147,9 +2108,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     const failed = coverage.checks.filter((check) => !check.passed);
     const mandatoryGap = failed.find((check) => check.check === MANDATORY_COVERAGE_CHECK);
     if (mandatoryGap) {
-      await updateOrchestration(orchestration.id, {
-        status: 'NEEDS_HUMAN',
-        failureReason:
+      await parkOrchestration(orchestration.id,
           'The packet does not cover the goal\'s mandatory part, so it was not synthesized. ' +
           `${mandatoryGap.detail}` +
           (failed.length > 1
@@ -2157,9 +2116,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
                 .filter((check) => check !== mandatoryGap)
                 .map((check) => check.check)
                 .join(', ')}.`
-            : ''),
-        completedAt: new Date().toISOString(),
-      });
+            : ''), { stampCompleted: true });
       await recordEvent({
         projectId: orchestration.projectId,
         layerId: orchestration.layerId,
@@ -2231,10 +2188,7 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
        * is the absorbing state §27 is written against. A person decides, which
        * is an answering transition: reissue, repair, or narrow.
        */
-      await updateOrchestration(orchestration.id, {
-        status: 'NEEDS_HUMAN',
-        failureReason: proceed.because,
-      });
+      await parkOrchestration(orchestration.id, proceed.because);
       return {
         orchestrationId,
         status: 'NEEDS_HUMAN',
