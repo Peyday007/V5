@@ -675,21 +675,25 @@ jobs:
       # measurement this file exists to insist on.
       - name: Prove the live Brain is actually shut
         id: hosted
-        timeout-minutes: 45
+        timeout-minutes: 25
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # Bounded, and names an OOM kill or a restart when the pass did not
+          # finish: see the script.
           set +e
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev --leave-beacon" \
-            2>&1 | tee hosted-verification.txt
+          bash .github/workflows/hosted-verify.sh --leave-beacon hosted-verification.txt
           set -e
           # The verdict comes from a line the script printed, not from an exit
           # code that had to survive an SSH session, a shell and a CLI.
           if grep -q '^HOSTED-VERIFICATION: PASS' hosted-verification.txt; then
             grep '^HOSTED-VERIFICATION' hosted-verification.txt
             exit 0
+          fi
+          if grep -q '^HOSTED-VERIFY-GUARD' hosted-verification.txt; then
+            grep '^HOSTED-VERIFY-GUARD' hosted-verification.txt
+            echo "::error::The hosted verification did not finish. The lines above say whether it ran out of time or the machine was killed or restarted under it."
+            exit 1
           fi
           if ! grep -q '^HOSTED-VERIFICATION' hosted-verification.txt; then
             echo "::error::The hosted verification never ran. If the output above says the SSH connection failed, the Fly token cannot open a console on this app; nothing else in this deploy is affected."
@@ -815,7 +819,7 @@ jobs:
         id: hosted_after
         # Bounded for the reason the pre-restart probe is, and this is the step
         # that demonstrated the need.
-        timeout-minutes: 45
+        timeout-minutes: 25
         # `always()` because the step before it may have failed, and this one
         # answers a different question: the pre-restart pass says what the new
         # image refuses, this says what survived. A restart nobody checked is
@@ -830,13 +834,37 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           set +e
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev --check-beacon" \
-            2>&1 | tee hosted-after-restart.txt
+          bash .github/workflows/hosted-verify.sh --check-beacon hosted-after-restart.txt
           set -e
           grep -q '^HOSTED-VERIFICATION: PASS' hosted-after-restart.txt
+
+      # Job logs and artifacts live on storage some sessions cannot reach;
+      # annotations come through the GitHub API itself (#347's reason). A
+      # verification that hangs or fails must be readable by whoever is
+      # operating the release unattended, so both passes publish their verdict,
+      # every FAIL line and the tail — the tail is where a hang stopped.
+      - name: Publish both verification passes as annotations
+        if: always() && steps.release.outcome == 'success'
+        run: |
+          python3 - <<'PY'
+          import re
+          enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          for name in ('hosted-verification.txt', 'hosted-after-restart.txt'):
+              try:
+                  text = open(name, encoding='utf-8', errors='replace').read()
+              except OSError:
+                  print(f'::warning title={name}::not written: the pass never started')
+                  continue
+              verdict = re.findall(r'^HOSTED-VERIFICATION:.*$', text, re.M)
+              fails = re.findall(r'^ *FAIL .*$|^HOSTED-VERIFY-GUARD.*$', text, re.M)
+              head = (verdict[-1] if verdict else 'NO VERDICT LINE: the pass did not finish') + '\n'
+              print(f'::notice title={name} verdict::{enc(head + chr(10).join(fails)[:5500])}')
+              tail = text[-24000:]
+              chunks = [tail[i:i + 6000] for i in range(0, len(tail), 6000)]
+              for n, chunk in enumerate(chunks, 1):
+                  print(f'::notice title={name} tail {n}/{len(chunks)}::{enc(chunk)}')
+          PY
 
       # Neither verification step is `continue-on-error` any more: a failed
       # check reads as failed, and the steps that must still run say so

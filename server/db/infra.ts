@@ -32,6 +32,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
+import { getHeapStatistics } from 'node:v8';
 
 /* ------------------------------------------------------------------------- */
 /* Classification                                                            */
@@ -612,6 +613,59 @@ export function eventLoopReading(now = Date.now()): EventLoopReading | null {
   loopWindowStartedAt = now;
   return reading;
 }
+/**
+ * How much memory this process holds, against the ceiling that ends it.
+ *
+ * Production runs on a 1 GB machine, the Brain alone sits near half of it after
+ * boot, and on 2026-10-30 the machine was OOM-killed (`exit_code=137`) three
+ * minutes into a release verification, after a pass that had spent forty-five
+ * minutes in garbage collection near the heap limit. Nothing Brain recorded
+ * could say so: the event-loop reading showed stalls and no reading said why.
+ * The peak is kept, because the reading taken after a recovery is the one that
+ * lies.
+ */
+export interface MemoryReading {
+  rssMB: number;
+  heapUsedMB: number;
+  /** V8's own ceiling for this process; a heap pressing it collects constantly. */
+  heapLimitMB: number;
+  externalMB: number;
+  peakRssMB: number;
+  peakRssAt: string | null;
+}
+
+let peakRss = 0;
+let peakRssAt: string | null = null;
+
+export function memoryReading(now = Date.now()): MemoryReading | null {
+  try {
+    const usage = process.memoryUsage();
+    if (usage.rss > peakRss) {
+      peakRss = usage.rss;
+      peakRssAt = new Date(now).toISOString();
+    }
+    const mb = (bytes: number): number => Math.round(bytes / 1_048_576);
+    return {
+      rssMB: mb(usage.rss),
+      heapUsedMB: mb(usage.heapUsed),
+      heapLimitMB: mb(v8HeapLimit()),
+      externalMB: mb(usage.external),
+      peakRssMB: mb(peakRss),
+      peakRssAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function v8HeapLimit(): number {
+  try {
+    return getHeapStatistics().heap_size_limit;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * The first caller frame outside the database layer, as `file:line`. Read
  * only when a transaction opens, never per statement.

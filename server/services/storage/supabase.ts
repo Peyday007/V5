@@ -33,6 +33,8 @@ export interface SupabaseStorageOptions {
   bucket: string;
   /** Injectable so the provider can be tested without a live project. */
   fetchImpl?: typeof fetch;
+  /** How long one small request and one transfer may take; tests shorten them. */
+  timeouts?: { requestMs?: number; transferMs?: number };
 }
 
 /** What Supabase returns from a list call. Only the fields Brain uses. */
@@ -70,6 +72,11 @@ function retryAfterMs(response: Response, attempt: number): number {
   return attempt === 1 ? 250 : 750;
 }
 
+/** A listing, a head or a move: small answers the store gives in well under a second when healthy. */
+export const STORE_REQUEST_TIMEOUT_MS = 30_000;
+/** Moving a document's bytes in or out. */
+export const STORE_TRANSFER_TIMEOUT_MS = 120_000;
+
 export class SupabaseStorageProvider implements StorageProvider {
   readonly kind = 'supabase' as const;
 
@@ -77,12 +84,16 @@ export class SupabaseStorageProvider implements StorageProvider {
   #key: string;
   #bucket: string;
   #fetch: typeof fetch;
+  #requestMs: number;
+  #transferMs: number;
 
   constructor(options: SupabaseStorageOptions) {
     this.#base = options.url.replace(/\/+$/, '');
     this.#key = options.serviceRoleKey;
     this.#bucket = options.bucket;
     this.#fetch = options.fetchImpl ?? fetch;
+    this.#requestMs = options.timeouts?.requestMs ?? STORE_REQUEST_TIMEOUT_MS;
+    this.#transferMs = options.timeouts?.transferMs ?? STORE_TRANSFER_TIMEOUT_MS;
   }
 
   describe(): string {
@@ -107,11 +118,27 @@ export class SupabaseStorageProvider implements StorageProvider {
     };
   }
 
-  /** One request, with the key kept out of the failure message's blast radius. */
-  async #request(url: string, init: RequestInit, what: string): Promise<Response> {
+  /**
+   * One request, with the key kept out of the failure message's blast radius,
+   * and a bound on how long Brain waits for it.
+   *
+   * There was no bound. Node's fetch waits five minutes for headers and five
+   * more for a body, so a store that stopped answering held the request that
+   * asked — and the transaction or page around it — for up to ten minutes per
+   * call. A request that runs out of time is the same fact as one the network
+   * dropped: `StorageConfigurationError` with no status, which every reader
+   * already treats as *the store did not answer* — UNKNOWN for an existence
+   * question, never ABSENT, and never "the upload did not happen" (invariant 26).
+   */
+  async #request(
+    url: string,
+    init: RequestInit,
+    what: string,
+    timeoutMs: number = this.#requestMs,
+  ): Promise<Response> {
     let response: Response;
     try {
-      response = await this.#fetch(url, init);
+      response = await this.#fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
     } catch (error) {
       throw new StorageConfigurationError(
         `Could not reach the document store at ${this.describe()} to ${what}.`,
@@ -140,6 +167,7 @@ export class SupabaseStorageProvider implements StorageProvider {
         body: new Uint8Array(input.body),
       },
       'store a document',
+      this.#transferMs,
     );
 
     if (!response.ok) {
@@ -186,7 +214,13 @@ export class SupabaseStorageProvider implements StorageProvider {
    */
   async #getWithRetry(key: string, purpose: string): Promise<Response> {
     return this.#readWithRetry(
-      () => this.#request(this.#objectUrl(key), { method: 'GET', headers: this.#headers() }, purpose),
+      () =>
+        this.#request(
+          this.#objectUrl(key),
+          { method: 'GET', headers: this.#headers() },
+          purpose,
+          this.#transferMs,
+        ),
     );
   }
 

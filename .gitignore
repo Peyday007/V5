@@ -21,3 +21,4 @@ data/factory/
 .vitest/
 .claude/worktrees/
 scripts/tmp-*.ts
+_server.mjs
