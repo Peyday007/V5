@@ -356,11 +356,11 @@ async function packets(window: Window, projectId: string | null): Promise<void> 
   );
   // Why they are parked, so a count of parks names its causes.
   const parkReasons = await db.all<{ reason: string; n: number }>(
-    `SELECT SUBSTR(COALESCE(blocked_reason, '(no reason recorded)'), 1, 110) AS reason, COUNT(*) AS n
+    `SELECT SUBSTR(COALESCE(failure_reason, '(no reason recorded)'), 1, 110) AS reason, COUNT(*) AS n
        FROM research_orchestrations
       WHERE status = 'NEEDS_HUMAN' AND updated_at >= ? AND updated_at < ?
         AND (CAST(? AS TEXT) IS NULL OR project_id = ?)
-      GROUP BY SUBSTR(COALESCE(blocked_reason, '(no reason recorded)'), 1, 110)
+      GROUP BY SUBSTR(COALESCE(failure_reason, '(no reason recorded)'), 1, 110)
       ORDER BY n DESC LIMIT 8`,
     [window.from, window.to, projectId, projectId],
   );
