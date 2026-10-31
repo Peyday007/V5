@@ -45,13 +45,30 @@ const STOP = new Set([
   'across', 'within', 'each', 'every', 'used', 'using', 'does', 'whether',
 ]);
 
+/*
+ * `relevance` is asked for every claim against every requirement, and it
+ * re-tokenized both each time: the requirement once per claim, and each claim
+ * once per requirement and per reading. Over an archive of thousands of claims
+ * that is the judging pass's CPU, on the event loop that also answers sign-in
+ * (production, 2026-10-31: a 39 s stall with `russell:judge-unjudged` in
+ * flight). Terms are a pure function of the text, so each text is tokenized
+ * once per process; the memo is bounded and simply restarts when full.
+ */
+const termsMemo = new Map<string, Set<string>>();
+const TERMS_MEMO_MAX = 50_000;
+
 function terms(text: string): Set<string> {
-  return new Set(
+  const hit = termsMemo.get(text);
+  if (hit) return hit;
+  const computed = new Set(
     text
       .toLowerCase()
       .split(/[^a-z0-9]+/)
       .filter((word) => word.length > 3 && !STOP.has(word)),
   );
+  if (termsMemo.size >= TERMS_MEMO_MAX) termsMemo.clear();
+  termsMemo.set(text, computed);
+  return computed;
 }
 
 /** How much of the requirement's vocabulary a claim actually uses. */
