@@ -154,8 +154,15 @@ function deriveNextAction(state: WorkstreamState, readings: LinkReading[]): stri
       return 'Deploy the canonical branch, then record the deployment against this workstream.';
     case 'DEPLOYED':
       return 'Verify it live, and record what was checked.';
-    case 'PROPOSED':
+    case 'PROPOSED': {
+      // A captured idea is judged by Brain itself and launched under the
+      // standing research grant; nobody is being asked to approve it.
+      const proposed = readings.filter((one) => one.state === 'PROPOSED');
+      if (proposed.length > 0 && proposed.every((one) => one.kind === 'CANDIDATE')) {
+        return 'Brain judges each idea on its next pass and launches the ones its standing research authority covers.';
+      }
       return 'Approve it, or say why not.';
+    }
     case 'UNKNOWN':
       return null;
     default:
