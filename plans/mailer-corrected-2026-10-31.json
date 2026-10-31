@@ -1,0 +1,328 @@
+{
+  "version": 1,
+  "title": "Local mailer, one shared card per city, single mailings \u2014 corrected model",
+  "claim": "ANALYSIS",
+  "goal": {
+    "metric": "SETTLED_CASH",
+    "target": 10000,
+    "unit": "USD",
+    "deadlineDays": 25,
+    "capitalCeiling": 3000,
+    "preFirstPaymentCeiling": 300,
+    "goalId": "wst_7b4fcbb5f2384f31b6c3"
+  },
+  "model": {
+    "title": "Mailer, corrected",
+    "currency": "USD",
+    "horizon": "the 25 days to the goal deadline",
+    "variables": [
+      {
+        "key": "spot_price",
+        "label": "Price of one ad spot on one mailing (market rate, not yet ours)",
+        "unit": "USD/spot",
+        "provenance": "EVIDENCE",
+        "controllable": false,
+        "spec": {
+          "kind": "FIXED",
+          "value": 150
+        },
+        "sources": [
+          {
+            "kind": "URL",
+            "ref": "https://pod.wave.co/podcast/the-side-hustle-show/719-1000-per-postcard-the-every-door-direct-mail-side-hustle"
+          }
+        ]
+      },
+      {
+        "key": "spots_per_card",
+        "label": "Ad spots on one card",
+        "unit": "spot/card",
+        "provenance": "EVIDENCE",
+        "controllable": false,
+        "spec": {
+          "kind": "FIXED",
+          "value": 16
+        },
+        "sources": [
+          {
+            "kind": "URL",
+            "ref": "https://pod.wave.co/podcast/the-side-hustle-show/719-1000-per-postcard-the-every-door-direct-mail-side-hustle"
+          }
+        ]
+      },
+      {
+        "key": "cost_per_card",
+        "label": "Print, EDDM postage and fulfilment for one card to about 2,500 homes",
+        "unit": "USD/card",
+        "provenance": "EVIDENCE",
+        "controllable": false,
+        "spec": {
+          "kind": "FIXED",
+          "value": 1300
+        },
+        "sources": [
+          {
+            "kind": "URL",
+            "ref": "https://pod.wave.co/podcast/the-side-hustle-show/719-1000-per-postcard-the-every-door-direct-mail-side-hustle"
+          },
+          {
+            "kind": "URL",
+            "ref": "https://v2.4over4.com/guide/eddm-pricing-explained",
+            "note": "postage $0.26 a piece"
+          }
+        ]
+      },
+      {
+        "key": "cards",
+        "label": "Cards (cities) opened",
+        "unit": "card",
+        "provenance": "ASSUMPTION",
+        "controllable": true,
+        "spec": {
+          "kind": "RANGE",
+          "min": 1,
+          "max": 8
+        }
+      },
+      {
+        "key": "reply_rate",
+        "label": "Interested replies per business contacted",
+        "unit": "reply/contact",
+        "provenance": "UNKNOWN",
+        "controllable": false,
+        "spec": {
+          "kind": "RANGE",
+          "min": 0.005,
+          "max": 0.05
+        }
+      },
+      {
+        "key": "close_rate",
+        "label": "Spots sold per interested reply",
+        "unit": "spot/reply",
+        "provenance": "UNKNOWN",
+        "controllable": false,
+        "spec": {
+          "kind": "RANGE",
+          "min": 0.05,
+          "max": 0.3
+        }
+      },
+      {
+        "key": "inboxes",
+        "label": "Sending inboxes",
+        "unit": "inbox",
+        "provenance": "ASSUMPTION",
+        "controllable": false,
+        "spec": {
+          "kind": "FIXED",
+          "value": 10
+        }
+      },
+      {
+        "key": "sends_per_inbox_day",
+        "label": "Cold emails per inbox per day",
+        "unit": "contact/inbox/day",
+        "provenance": "ASSUMPTION",
+        "controllable": false,
+        "spec": {
+          "kind": "FIXED",
+          "value": 30
+        }
+      },
+      {
+        "key": "selling_days",
+        "label": "Days spent selling",
+        "unit": "day",
+        "provenance": "ASSUMPTION",
+        "controllable": true,
+        "spec": {
+          "kind": "RANGE",
+          "min": 1,
+          "max": 25
+        }
+      },
+      {
+        "key": "settle_days",
+        "label": "Days from card payment to settled cash",
+        "unit": "day",
+        "provenance": "ASSUMPTION",
+        "controllable": false,
+        "spec": {
+          "kind": "FIXED",
+          "value": 2
+        }
+      },
+      {
+        "key": "lead_cost",
+        "label": "Lead lists bought before any sale",
+        "unit": "USD",
+        "provenance": "ASSUMPTION",
+        "controllable": false,
+        "spec": {
+          "kind": "FIXED",
+          "value": 100
+        }
+      },
+      {
+        "key": "goal_target",
+        "label": "The goal's target",
+        "unit": "USD",
+        "provenance": "ASSUMPTION",
+        "controllable": false,
+        "spec": {
+          "kind": "FIXED",
+          "value": 10000
+        }
+      }
+    ],
+    "derived": [
+      {
+        "key": "contacts",
+        "label": "Businesses contacted (sending capacity, all used)",
+        "unit": "contact",
+        "expr": "inboxes * sends_per_inbox_day * selling_days"
+      },
+      {
+        "key": "replies",
+        "label": "Interested replies",
+        "unit": "reply",
+        "expr": "floor(contacts * reply_rate)"
+      },
+      {
+        "key": "card_slots",
+        "label": "Spots available across every card",
+        "unit": "spot",
+        "expr": "cards * spots_per_card"
+      },
+      {
+        "key": "spots_sold",
+        "label": "Spots sold",
+        "unit": "spot",
+        "expr": "min(floor(replies * close_rate), card_slots)"
+      },
+      {
+        "key": "collected",
+        "label": "Collected and settled",
+        "unit": "USD",
+        "expr": "spots_sold * spot_price"
+      },
+      {
+        "key": "cards_mailed",
+        "label": "Cards that must be mailed",
+        "unit": "card",
+        "expr": "ceil(spots_sold / spots_per_card)"
+      },
+      {
+        "key": "fulfilment",
+        "label": "Cost of every mailing sold",
+        "unit": "USD",
+        "expr": "cards_mailed * cost_per_card"
+      },
+      {
+        "key": "peak_exposure",
+        "label": "Owner money at risk at once",
+        "unit": "USD",
+        "expr": "lead_cost + max(0, fulfilment - collected)"
+      },
+      {
+        "key": "pre_payment",
+        "label": "Spent before the first payment",
+        "unit": "USD",
+        "expr": "lead_cost"
+      },
+      {
+        "key": "days_to_settled",
+        "label": "Days until the last payment settles",
+        "unit": "day",
+        "expr": "selling_days + settle_days"
+      },
+      {
+        "key": "assumed_sale_rate",
+        "label": "Spots sold per contact, assumed",
+        "unit": "spot/contact",
+        "expr": "reply_rate * close_rate"
+      },
+      {
+        "key": "spots_needed",
+        "label": "Spots the target needs",
+        "unit": "spot",
+        "expr": "ceil(goal_target / spot_price)"
+      },
+      {
+        "key": "needed_sale_rate",
+        "label": "Spots per contact the target needs",
+        "unit": "spot/contact",
+        "expr": "spots_needed / contacts"
+      }
+    ],
+    "lines": [
+      {
+        "key": "sales",
+        "label": "Spot sales",
+        "kind": "REVENUE",
+        "expr": "collected"
+      },
+      {
+        "key": "fulfilment_cost",
+        "label": "Printing, postage, fulfilment",
+        "kind": "COST",
+        "expr": "fulfilment"
+      },
+      {
+        "key": "leads",
+        "label": "Lead lists",
+        "kind": "COST",
+        "expr": "lead_cost"
+      }
+    ],
+    "strategies": [
+      {
+        "key": "five_cards",
+        "label": "Five cities, one card each, 20 days selling",
+        "set": {
+          "cards": 5,
+          "selling_days": 20
+        }
+      }
+    ]
+  },
+  "strategy": "five_cards",
+  "point": {
+    "reply_rate": 0.03,
+    "close_rate": 0.2
+  },
+  "roles": {
+    "outcome": "collected",
+    "daysToOutcome": "days_to_settled",
+    "peakExposure": "peak_exposure",
+    "preFirstPaymentSpend": "pre_payment"
+  },
+  "bounds": [
+    {
+      "label": "Spots sold fit on the cards",
+      "quantity": "spots_sold",
+      "atMost": "card_slots"
+    }
+  ],
+  "obligations": [
+    {
+      "label": "Each spot sold is one mailing owed",
+      "revenueLine": "sales",
+      "costLine": "fulfilment_cost",
+      "costDerived": "fulfilment"
+    }
+  ],
+  "checkpoints": [
+    {
+      "label": "After 1,000 contacts",
+      "numerator": "spots_sold",
+      "denominator": "contacts",
+      "atLeast": {
+        "numerator": 6,
+        "denominator": 1000
+      }
+    }
+  ],
+  "narrative": "The mailer cannot reach the goal on its own. Ten inboxes sending 30 emails a day for 20 days reach 6,000 businesses. At the assumed 3% reply rate and 20% close rate that sells 36 spots at $150, so $5,400 is collected. Three cards must then be mailed at $1,300 each ($3,900), which leaves $1,400 after costs. That is short of the $10,000 target. The target needs about 1.1% of contacts to buy; the assumption is 0.6%. Both rates are unknown. Across the tested ranges the target is met in 4.4% of conditions. That is coverage of guesses, not a probability. Money at risk stays at $100, and the last payment settles by day 22. The first checkpoint has to show at least 6 spots sold per 1,000 contacts, or the mailer is dropped as a main play."
+}
