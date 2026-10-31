@@ -34,6 +34,9 @@ import { classify, collapseLineage, combine, fromScale, pool, scaleFor, SPREAD_F
 
 export class ReconstructionError extends Error {}
 
+/** Independent comparable populations needed before transferred evidence may be a distribution. */
+export const MIN_COMPARABLE_POPULATIONS = 2;
+
 const Q = { p05: -1.6448536, p10: -1.2815516, p50: 0, p90: 1.2815516, p95: 1.6448536 };
 
 function seedOf(text: string): number {
@@ -179,7 +182,10 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
       ...fromNormal(node, scale, pooled.mean, pooled.sd),
       effectiveSample: pooled.effective,
       heterogeneity: pooled.tau,
-      distributionJustified: true,
+      // One other population is an anecdote, not a pattern: with no direct
+      // evidence beside it, a lone comparable bounds the answer and never
+      // becomes a distribution.
+      distributionJustified: pooledSet.kept.length >= MIN_COMPARABLE_POPULATIONS || pooledSet.kept.some((one) => one.distance === 0),
       sources: sourcesOf(pooledSet.kept),
       used: pooledSet.kept.map((one) => one.obs.id),
       collapsed: pooledSet.collapsed,
@@ -189,7 +195,8 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
     trace.push(
       `COMPARABLE: ${pooledSet.kept.length} independent observation(s) after transfer, spread between populations ${fmt(pooled.tau)} on the ${scale.toLowerCase()} scale${adjusted.length ? `; adjusted: ${adjusted.join(', ')}` : ''}.`,
     );
-    if (sufficient(node, est)) return finish(est, sorted, trace);
+    if (!est.distributionJustified) trace.push('COMPARABLE: a single comparable population with no direct evidence beside it: bounds only.');
+    if (sufficient(node, est) && est.distributionJustified) return finish(est, sorted, trace);
   } else {
     trace.push('COMPARABLE: no transferable observation of a comparable population.');
   }
@@ -250,6 +257,12 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
     return finish(best, sorted, trace);
   }
 
+  const weakComponent = candidates.find((one) => one.tier === 'COMPONENT' || one.tier === 'COMPARABLE');
+  if (weakComponent) {
+    trace.push(weakComponent.tier === 'COMPARABLE' ? 'Only one comparable population answers it; reported as bounds, never as a probability.' : 'Rebuilt from parts some of which rest on broad evidence, an assumption or bounds alone; reported as bounds, never as a probability.');
+    return finish(weakComponent, sorted, trace);
+  }
+
   // MECHANISM — broad evidence: bounds only.
   const broad = collapseLineage(sorted.broad);
   if (broad.kept.length > 0) {
@@ -267,12 +280,6 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
     trace.push(`MECHANISM: only broad economic evidence (${broad.kept.length} independent); reported as bounds, never as a probability.`);
     return finish(est, sorted, trace);
   }
-  const weakComponent = candidates.find((one) => one.tier === 'COMPONENT');
-  if (weakComponent) {
-    trace.push('Rebuilt from parts some of which rest on broad evidence, an assumption or bounds alone; reported as bounds, never as a probability.');
-    return finish(weakComponent, sorted, trace);
-  }
-
   if (node.assumed) {
     const est: Estimate = { ...blank(node, 'ASSUMED'), ...uniform(node, node.assumed.low, node.assumed.high), sources: [node.assumed.source] };
     trace.push(`ASSUMED: nothing establishes it; a person's range ${fmt(node.assumed.low)}–${fmt(node.assumed.high)} is used as bounds.`);
