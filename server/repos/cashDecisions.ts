@@ -49,6 +49,17 @@ export async function recordDecision(input: NewDecision): Promise<boolean> {
   const at = input.at ?? nowIso();
   const ref = input.changeRef.trim();
   if (!ref) return false;
+  // The producer asks this for every opening on every pass, and almost every
+  // pair is unchanged. Answer that from the unique index without opening a
+  // transaction: production held one write transaction per pair per pass,
+  // each superseding the current row only to roll it back (2026-10-31, 584
+  // transactions in 32 minutes). A pair that changes between this read and the
+  // insert is still decided by the transaction below.
+  const seen = await getDb().get<{ one: number }>(
+    'SELECT 1 AS one FROM cash_decisions WHERE opportunity_id = ? AND goal_id = ? AND change_ref = ?',
+    [input.opportunityId, input.goalId, ref],
+  );
+  if (seen) return false;
   try {
     return await getDb().transaction(async () => {
       await getDb().run(

@@ -71,6 +71,29 @@ describe('decisions per goal', () => {
   });
 });
 
+describe('an unchanged pair', () => {
+  it('is answered without opening a write transaction', async () => {
+    const id = await piece('Unchanged');
+    const l = limits();
+    const ref = limitsChangeRef('goal_same', l);
+    const first = await decideOpportunity({ projectId, opportunityId: id, goalId: 'goal_same', facts: facts(), limits: l, changeRef: ref, now: NOW });
+    expect(first.status).toBe('RECORDED');
+    const db = getDb();
+    const original = db.transaction.bind(db);
+    let opened = 0;
+    db.transaction = (async (fn: () => Promise<unknown>) => { opened += 1; return original(fn as never); }) as typeof db.transaction;
+    try {
+      const again = await decideOpportunity({ projectId, opportunityId: id, goalId: 'goal_same', facts: facts(), limits: l, changeRef: ref, now: NOW });
+      expect(again.status).toBe('UNCHANGED');
+    } finally {
+      db.transaction = original;
+    }
+    expect(opened).toBe(0);
+    expect((await currentDecision(id, 'goal_same'))?.verdict).toBe('PRIORITIZE');
+    expect((await decisionHistory(id, 'goal_same')).length).toBe(1);
+  });
+});
+
 describe('recompute', () => {
   it('a changed goal limit supersedes the decision exactly once and keeps history', async () => {
     const id = await piece('C');
