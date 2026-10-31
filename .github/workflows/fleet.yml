@@ -76,8 +76,14 @@ on:
 
 # Never at the same time as a deploy, for `step10.yml`'s reason: the machine is
 # being replaced during one.
+# A read cannot be evicted. GitHub keeps one pending run per group and the
+# newest pending cancels the one waiting, so with every command in one group a
+# `status` dispatched by one session was cancelled by another session's `submit`
+# (measured 2026-10-30: three reads in a row cancelled before starting). Reads
+# change nothing, so each holds a group of its own run; writes still queue
+# behind one another. Keeping off a machine mid-release is await-release's job.
 concurrency:
-  group: brain-console-fleet
+  group: brain-console-fleet-${{ contains(fromJSON('["show","policy-history","explain-route","attribution","trace-session","work-audit","scale-advice","profile","simulate"]'), inputs.command) && format('read-{0}', github.run_id) || 'write' }}
   cancel-in-progress: false
 
 jobs:

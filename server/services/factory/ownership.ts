@@ -661,7 +661,48 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
   // A glob is not a file anybody saw a defect in; it would be a reviewer asking
   // for a directory. Recorded and left out, so a hint can never widen.
   const globHints = [...new Set([...suggestedGlobs, ...named.filter((path) => !isConcrete(path))])];
-  const evidenceFiles = [...new Set(named.filter(isConcrete))];
+  /*
+   * A reviewer routinely writes a path from inside a package — `repos/x.ts`
+   * for `server/repos/x.ts`. Read literally that names no real file, sits
+   * outside every scope glob, and blocks the campaign on an amendment that
+   * cannot help (production, fcp_0b8d9fcc, 2026-10-30). It is resolved to the
+   * one path a unit of this campaign owns that it is the tail of; none, or
+   * two, and it stays as written.
+   */
+  const knownPaths = [
+    ...new Set([
+      ...input.units.flatMap((unit) => unit.ownedPaths),
+      ...input.mutationScope,
+    ].filter(isConcrete)),
+  ];
+  // The leading directories of every glob a unit owns or the scope grants, so
+  // `repos/x.ts` can also resolve against `server/repos/cash*.ts`.
+  const globDirs = [
+    ...new Set(
+      [...input.units.flatMap((unit) => unit.ownedPaths), ...input.mutationScope]
+        .filter((glob) => !isConcrete(glob))
+        .flatMap((glob) => {
+          const segments = glob.split('/');
+          const fixed: string[] = [];
+          for (const segment of segments.slice(0, -1)) {
+            if (!isConcrete(segment)) break;
+            fixed.push(segment);
+          }
+          return fixed.map((_, i) => `${fixed.slice(0, i + 1).join('/')}/`);
+        }),
+    ),
+  ];
+  const canonical = (path: string): string => {
+    if (knownPaths.includes(path)) return path;
+    if (input.mutationScope.some((glob) => matchesGlob(path, glob))) return path;
+    const candidates = new Set(knownPaths.filter((known) => known.endsWith(`/${path}`)));
+    for (const dir of globDirs) {
+      const candidate = `${dir}${path}`;
+      if (input.mutationScope.some((glob) => matchesGlob(candidate, glob))) candidates.add(candidate);
+    }
+    return candidates.size === 1 ? [...candidates][0]! : path;
+  };
+  const evidenceFiles = [...new Set(named.filter(isConcrete).map(canonical))];
 
   if (evidenceFiles.length === 0) {
     const union = [...new Set(input.units.flatMap((unit) => unit.ownedPaths))];
@@ -687,7 +728,9 @@ export function resolveRepairScope(input: RepairScopeInput): RepairScope {
 
   const unitOwned = (path: string): boolean => input.units.some((unit) => owns(unit.ownedPaths, path));
   const namedInScope = (path: string): boolean => input.mutationScope.includes(path);
-  const cited = new Set([...pathsCitedAtLine(input.statement), ...(named === fromEvidence ? fromEvidence : [])]);
+  const cited = new Set(
+    [...pathsCitedAtLine(input.statement), ...(named === fromEvidence ? fromEvidence : [])].map(canonical),
+  );
   const anchored = (path: string): boolean =>
     unitOwned(path) || namedInScope(path) || cited.has(path);
   const allowed = (path: string): boolean =>

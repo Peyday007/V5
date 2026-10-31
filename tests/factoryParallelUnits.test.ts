@@ -12,6 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
+import { getDb as getDbForTest } from '../server/db/database.ts';
 import { createUser, createWorker } from '../server/repos/identity.ts';
 import {
   addDependency,
@@ -21,9 +22,11 @@ import {
   ensureUnit,
   getUnitByKey,
   promoteReadyUnits,
+  getCampaign,
+  getChangeRequest,
 } from '../server/repos/factory.ts';
 import { assignNextBin, finishBin, listBins, putBinUnitResult } from '../server/repos/bins.ts';
-import { declaredBranchFor, unitKeysOfBin } from '../server/services/factory/remote.ts';
+import { createIntegrateBin, declaredBranchFor, unitKeysOfBin } from '../server/services/factory/remote.ts';
 import { tickRemoteCampaign } from '../server/services/factory/remoteLoop.ts';
 
 const REPO = 'https://github.com/Peyday007/oakwood-junk-removal';
@@ -131,7 +134,7 @@ beforeEach(async () => {
   });
   campaignId = campaign.id;
   await unit('alpha', ['src/alpha.ts']);
-  await unit('beta', ['src/beta.ts']);
+  await unit('beta', ['src/beta.ts', 'server/db/migrations/**']);
   const gamma = await unit('gamma', ['src/gamma.ts']);
   const alpha = (await getUnitByKey(campaignId, 'alpha'))!.id;
   await addDependency(campaignId, gamma, alpha, 'imports alpha');
@@ -157,6 +160,35 @@ describe('independent units are separately claimable', () => {
 
     await tickRemoteCampaign(campaignId);
     expect(await unitBins()).toHaveLength(2);
+  });
+
+  it('tells a unit that owns migrations to take the next number, and only that unit', async () => {
+    // Two campaigns reserved numbers for each other and both were refused for
+    // a numbering gap; the instruction is what a unit reads before choosing.
+    stubForge({});
+    await tickRemoteCampaign(campaignId);
+    const bins = await unitBins();
+    const text = (key: string) =>
+      bins.find((bin) => unitKeysOfBin(bin).includes(key))!.manifest.units!.map((u) => u.establishes).join('\n');
+    expect(text('beta')).toContain('Never skip a number');
+    expect(text('alpha')).not.toContain('Never skip a number');
+  });
+
+  it('lets the integrator renumber a unit migration, and only when a unit owns one', async () => {
+    // Three production campaigns stopped because a migration numbered at
+    // planning no longer fit the base, and the integrator was forbidden to
+    // rename it. It may now — a unit owns its migration by name.
+    const campaign = (await getCampaign(campaignId))!;
+    const changeRequest = (await getChangeRequest(campaign.changeRequestId))!;
+    const done = async (key: string) => ({ ...(await getUnitByKey(campaignId, key))!, branch: `b/${key}`, headSha: 'd'.repeat(40) });
+    const text = (bin: Awaited<ReturnType<typeof createIntegrateBin>>) =>
+      [...bin!.manifest.units!.map((u) => u.establishes), ...(bin!.manifest.prohibitedActions ?? [])].join('\n');
+    const withMigration = await createIntegrateBin(campaign, changeRequest, [await done('beta')]);
+    expect(text(withMigration)).toContain('One edit is yours to make: a migration number');
+    expect(text(withMigration)).toContain('Never renumber a migration that is already in the base commit');
+    await getDbForTest().run("UPDATE bins SET state = 'CANCELLED' WHERE id = ?", [withMigration!.id]);
+    const without = await createIntegrateBin(campaign, changeRequest, [await done('alpha')]);
+    expect(text(without)).not.toContain('a migration number');
   });
 
   it('lets two workers hold the two units at once', async () => {

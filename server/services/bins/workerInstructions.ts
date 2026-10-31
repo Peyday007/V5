@@ -37,7 +37,7 @@
  */
 
 /** Bumped when the text changes, and recorded on every dispatch that used it. */
-export const WORKER_INSTRUCTIONS_VERSION = '2026-10-20.1';
+export const WORKER_INSTRUCTIONS_VERSION = '2026-10-30.1';
 
 /**
  * The prompt itself.
@@ -164,8 +164,10 @@ Brain checks what you claim against what it can see, so there is nothing to gain
 by overstating and something real to lose.
 
 - Record what you actually found, including what you could not establish.
-- If a source could not be read, say so through the proper field rather than
-  inferring what it said.
+- If your environment cannot open a public source (DNS failure, proxy 403,
+  allowlist), read it through \`brain_fetch_source\` with the research item you
+  hold — Brain opens the page for you. If that is unreadable too, say so
+  through the proper field rather than inferring what it said.
 - If a unit cannot be done, use the blocker tool and say why. An honest blocker
   is a result; a fabricated success is the one outcome this platform exists to
   prevent.

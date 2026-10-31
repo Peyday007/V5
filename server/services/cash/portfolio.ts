@@ -174,6 +174,8 @@ export interface PortfolioInput {
   standingInputs?: Record<string, StandingRows>;
   /** Whether the sprint can start a deep dive now. Unread is read as free. */
   diveRoom?: DiveRoom;
+  /** The goal's own ordering (`rankGoal.goalCompareFor`); absent, the ranking is unchanged. */
+  goalCompare?: (a: CashOpportunity, b: CashOpportunity) => number;
 }
 
 /**
@@ -190,7 +192,7 @@ export function placements(input: PortfolioInput): Placement[] {
 
   // Ready pieces compete for the headroom in rank order, so which of them is
   // told to wait is a property of the ranking rather than of insertion order.
-  const ranked = rank(input.opportunities, input.tiers, input.measured ?? {});
+  const ranked = rank(input.opportunities, input.tiers, input.measured ?? {}, input.goalCompare);
   const startable = new Set<string>();
   let remaining = headroom;
   for (const candidate of ranked) {
@@ -397,6 +399,12 @@ export function rank(
    * behind it, and read only as a late tie-break: one result is not a market.
    */
   measured: Record<string, number> = {},
+  /**
+   * The goal's own ordering (`rankGoal.goalComparator`), consulted right after
+   * the stage so criteria and their order come from the goal's metric, deadline
+   * and capital limits. Absent, the ordering below is unchanged.
+   */
+  goalCompare?: (a: CashOpportunity, b: CashOpportunity) => number,
 ): CashOpportunity[] {
   const tierOf = (o: CashOpportunity): CashTier => tiers[o.id]?.tier ?? 'SIGNAL';
   return [...opportunities].sort((a, b) => {
@@ -411,6 +419,11 @@ export function rank(
      */
     const stage = tierRank(tierOf(b)) - tierRank(tierOf(a));
     if (stage !== 0) return stage;
+
+    if (goalCompare) {
+      const byGoal = goalCompare(a, b);
+      if (byGoal !== 0) return byGoal;
+    }
 
     /*
      * Among qualified pieces, what an hour of somebody's time is worth here.

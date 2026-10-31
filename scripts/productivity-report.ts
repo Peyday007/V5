@@ -354,6 +354,16 @@ async function packets(window: Window, projectId: string | null): Promise<void> 
         AND (CAST(? AS TEXT) IS NULL OR project_id = ?)`,
     [window.from, window.to, projectId, projectId],
   );
+  // Why they are parked, so a count of parks names its causes.
+  const parkReasons = await db.all<{ reason: string; n: number }>(
+    `SELECT SUBSTR(COALESCE(blocked_reason, '(no reason recorded)'), 1, 110) AS reason, COUNT(*) AS n
+       FROM research_orchestrations
+      WHERE status = 'NEEDS_HUMAN' AND updated_at >= ? AND updated_at < ?
+        AND (CAST(? AS TEXT) IS NULL OR project_id = ?)
+      GROUP BY SUBSTR(COALESCE(blocked_reason, '(no reason recorded)'), 1, 110)
+      ORDER BY n DESC LIMIT 8`,
+    [window.from, window.to, projectId, projectId],
+  );
   const leases = await db.get<{ n: number; workers: number }>(
     `SELECT COUNT(*) AS n, COUNT(DISTINCT worker_id) AS workers FROM work_leases
       WHERE claimed_at >= ? AND claimed_at < ? AND (CAST(? AS TEXT) IS NULL OR project_id = ?)`,
@@ -379,6 +389,7 @@ async function packets(window: Window, projectId: string | null): Promise<void> 
   console.log(
     `    resumed rounds=${resumed.length} (${rate(resumed.length)}/h)  parked-or-reparked (last write in window)=${Number(parkedNow?.n ?? 0)}`,
   );
+  for (const row of parkReasons) console.log(`      park ${String(row.n).padStart(4)}  ${row.reason}`);
   const assignments = Number(binAssignments?.n ?? 0);
   console.log(
     `    bin assignments=${assignments} fires=${Number(fires?.n ?? 0)} item leases=${Number(leases?.n ?? 0)}  ` +

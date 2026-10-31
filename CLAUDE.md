@@ -14234,6 +14234,7 @@ server/
     providers/
       connection.ts     detect / authenticate / test / models / paid overage
     sources/
+      fetchForWorker.ts reads one public page for a worker whose sandbox cannot; public addresses only
       segmenter.ts      conversation- and topic-aware segmentation
       classify.ts       content-based layer proposals, and injection detection
       ingest.ts         the ingestion pipeline and its counted report
@@ -14260,6 +14261,7 @@ server/
     limits.ts           sizes, pages, rate and concurrency
     tools.ts            the permanent tool surface, over existing services
     engineeringTools.ts the seven engineering-connector tools every coding worker shares
+    sourceTools.ts      brain_fetch_source: Brain opens a page under a worker's live research lease
     execute.ts          one call: rate slot, authorize, bound, audit
     modern.ts           the 2026-07-28 dispatcher
     legacy.ts           the 2025-11-25 front-end, over the official SDK

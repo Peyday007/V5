@@ -60,6 +60,11 @@ export const FACTORY_EVENT_KINDS = {
    */
   repairOwnershipBlocked: 'REPAIR_OWNERSHIP_BLOCKED',
   /**
+   * A repair that ran out of attempts because the files it had to change were
+   * not its own, put back with the files its worker named. Once per unit.
+   */
+  repairScopeWidened: 'REPAIR_SCOPE_WIDENED',
+  /**
    * A completed plan bin whose plan the validator refused over the rows it
    * re-read at install. Once per bin, so the ledger says why the campaign has no
    * units rather than only a tick note that lives as long as the process.

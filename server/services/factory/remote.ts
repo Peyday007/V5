@@ -74,7 +74,7 @@ import {
 } from '../../repos/factory.ts';
 import { recordFactoryEvent, recordIntegration } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
-import { matchesGlob } from './integrate.ts';
+import { ownsPath } from './glob.ts';
 import { forbiddenIn, forbiddenPathsFor } from './forbidden.ts';
 
 /**
@@ -417,6 +417,19 @@ export async function createUnitsBin(
         'same commit and owns paths no other one owns — so they may be implemented ' +
         'concurrently. Do not merge them into each other and do not touch the integration ' +
         'branch: a later bin integrates them in the order Brain decides.',
+      ...(unit.ownedPaths.some((path) => /migrations\//.test(path))
+        ? [
+            // Production, 2026-10-30: two campaigns each "reserved" 131-132 for a
+            // sibling and took 133/134, and both integrations were refused for a
+            // numbering gap — one campaign spent all three attempts on it.
+            'A new migration takes the next number after the highest one in that base commit, ' +
+              'in each chain (server/db/migrations and server/db/pg-migrations are numbered ' +
+              'independently). Never skip a number or leave room for another campaign: a gap ' +
+              'fails the repository\'s own tests. If another change lands the same number first, ' +
+              'the next attempt renumbers to the next free one. A migration path above is owned by its ' +
+              'name, not its number: write it under the right number even if the path above says another.',
+          ]
+        : []),
       'Commit your work and push that branch. Then submit a result for this unit key with a ' +
         'JSON value of the shape {"unitKey","outcome":"IMPLEMENTED"|"BLOCKED","branch",' +
         '"headSha","filesChanged":[],"commands":[{"command","exitCode"}],"summary",' +
@@ -518,6 +531,7 @@ export async function createIntegrateBin(
   const mergeable = units.filter((unit) => unit.branch !== null && unit.headSha !== null);
   if (mergeable.length === 0) return null;
   const base = roundBaseFor(campaign);
+  const touchesMigrations = mergeable.some((unit) => unit.ownedPaths.some((path) => /(^|\/)(pg-)?migrations\//.test(path)));
   const order = mergeable.map((unit) => ({
     unitKey: unit.unitKey,
     branch: unit.branch,
@@ -564,6 +578,28 @@ export async function createIntegrateBin(
             'you, and the wrong one when a command failed, because then the work goes back ' +
             'unchanged and the next integrator meets the same failure.',
           '',
+          ...(touchesMigrations
+            ? [
+                /*
+                 * Production, 2026-10-30/31: three campaigns stopped here because a
+                 * unit's migration was numbered at planning time and another change
+                 * took or skipped those numbers before integration, leaving a gap or
+                 * a collision the repository's own tests refuse. The integrator was
+                 * forbidden to touch it and the unit had no attempts left, so a
+                 * mechanical rename stranded whole campaigns. A unit owns its
+                 * migration by name, not by number (`ownsPath`), so renaming it stays
+                 * inside what the unit declared.
+                 */
+                '**One edit is yours to make: a migration number.** If, after the merges, either ' +
+                  'chain (server/db/migrations, server/db/pg-migrations — numbered independently) ' +
+                  'has a gap or two files with one number, and the cause is a migration a unit in ' +
+                  'this list added, rename that file with `git mv` to the next free number in its ' +
+                  'chain (keep its name after the number, change nothing inside it and nothing else), ' +
+                  'commit that as its own commit, and then run the ' +
+                  'commands. Never renumber a migration that is already in the base commit.',
+                '',
+              ]
+            : []),
           'Then submit a result for unit key `integrate` with a JSON value of the shape ' +
             '{"outcome":"IMPLEMENTED"|"BLOCKED","integrationBranch","headSha",' +
             '"merged":[{"unitKey","branch","headSha"}],"conflicts":[],' +
@@ -613,7 +649,8 @@ export async function createIntegrateBin(
     'rewrite, force-push or delete any unit branch',
     'open, update or comment on a pull request — delivery is a later bin',
     'change any file yourself: resolving a conflict by editing the work is implementing, and ' +
-      'this bin does not implement',
+      'this bin does not implement' +
+      (touchesMigrations ? ' (the one exception is renumbering a unit\'s migration, described above)' : ''),
   ];
 
   return await createFactoryBin({
@@ -809,7 +846,7 @@ export async function verifyUnitReport(
   }
 
   const outside = comparison.body.files.filter(
-    (file) => !expected.ownedPaths.some((glob) => matchesGlob(file, glob)),
+    (file) => !expected.ownedPaths.some((glob) => ownsPath(file, glob)),
   );
   if (outside.length > 0) {
     problems.push(
@@ -1126,7 +1163,7 @@ export async function verifyIntegrationReport(
     .filter((unit): unit is { unitKey: string; headSha: string; ownedPaths: string[] } => !!unit)
     .flatMap((unit) => unit.ownedPaths);
   const outside = comparison.body.files.filter(
-    (file) => !allowed.some((glob) => matchesGlob(file, glob)),
+    (file) => !allowed.some((glob) => ownsPath(file, glob)),
   );
   if (outside.length > 0) {
     problems.push(

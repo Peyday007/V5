@@ -111,7 +111,10 @@ import {
 } from './perform.ts';
 import type { ExternalOutcome } from '../effects/external.ts';
 import { cashNow, getCashMode } from '../../repos/cashMode.ts';
+import { decideOpenings, type DecideOpeningsPass } from './decisions.ts';
 import { describeNotWorthResearching, notWorthResearching } from './worthResearching.ts';
+import { orderFieldsByCost } from './infoValue.ts';
+import { recordQuestionsSkipped } from './screenMetrics.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
 
 /** Brain acting on its own account, never a person and never a worker. */
@@ -458,7 +461,26 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * blank is asked once it has settled, which is what this pass is for.
      */
     if (diveOwnsItsQuestions(opportunity)) continue;
-    if (await notWorthResearching(opportunity, { now: cashNow() })) continue;
+    const unworthy = await notWorthResearching(opportunity, { now: cashNow() });
+    if (unworthy) {
+      /*
+       * A screened-out opening is not asked its card's questions, and that is a
+       * decision worth counting: each question no answer could change is
+       * recorded as skipped, with why, rather than dropped without a trace.
+       */
+      if (unworthy.kind === 'SCREENED_OUT') {
+        const skipped = evidenceCard(opportunity).fields
+          .filter((one) => one.loadBearing && one.owner === 'BRAIN_RESEARCH' && one.value === null)
+          .map((one) => one.key);
+        await recordQuestionsSkipped({
+          projectId,
+          opportunityId: opportunity.id,
+          fields: skipped,
+          why: `No answer could change the decision: ${describeNotWorthResearching(unworthy)}.`,
+        });
+      }
+      continue;
+    }
     const card = evidenceCard(opportunity);
     const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
     /*
@@ -492,7 +514,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
         ? card.fields.filter((one) => (CAPTURE_INPUTS as readonly string[]).includes(one.key))
         : card.fields;
 
-    for (const field of asking) {
+    for (const field of orderFieldsByCost(asking)) {
       if (!field.loadBearing || field.owner !== 'BRAIN_RESEARCH' || field.value !== null) continue;
       const key = questionKey(opportunity.id, field.key);
       if (keys.has(key)) continue;
@@ -1375,6 +1397,8 @@ export async function operate(
     | Omit<ReconsiderPass, 'readings'>
     | { error: string }
     | null;
+  /** One current REJECT / HOLD / PRIORITIZE per opening per goal, from the code screen (`decisions.ts`). */
+  decisions?: DecideOpeningsPass | { error: string };
   /** Reopen watches recorded on derived dead ends, and standing changes written. */
   standing?: { derived: DerivedCondition[]; changes: StandingChange[] } | { error: string } | { skipped: string };
 }> {
@@ -1438,6 +1462,17 @@ export async function operate(
   );
   const research = await applyResearchAnswers(projectId);
   const proposed = await proposeCommercialTerms(projectId);
+  /*
+   * Decide every opening under every live goal before research is withdrawn or
+   * launched, so the record a person reads is the one the gate acted on. Its
+   * own failure domain: a decision pass that throws must not stop the rest.
+   */
+  let decisions: DecideOpeningsPass | { error: string };
+  try {
+    decisions = await decideOpenings(projectId, now ? { now } : {});
+  } catch (error) {
+    decisions = { error: error instanceof Error ? error.message.slice(0, 300) : 'failed' };
+  }
   const withdrawnResearch = await withdrawResearchNotWorthIt(projectId);
   const gaps = [...(await reconcileDiscoverableGaps(projectId)), ...(await reconcileEngineGaps(projectId))];
   const continuations = await runNeedContinuations(projectId, now);
@@ -1565,6 +1600,7 @@ export async function operate(
     capabilities,
     gaps,
     withdrawnResearch,
+    decisions,
     research,
     proposed,
     continuations,

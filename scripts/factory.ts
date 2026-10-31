@@ -1005,6 +1005,7 @@ async function main(): Promise<void> {
         maxAttempts: to,
         reasonCode: code,
         operator: `operator:${operator!.id}`,
+        addOwnedPaths: (flagString(flags, 'own') ?? '').split(',').filter((one) => one.length > 0),
       });
       if (!outcome.ok) {
         process.stdout.write(`FACTORY REFUSED: regrant-unit — ${outcome.reason}\n`);

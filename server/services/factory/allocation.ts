@@ -131,6 +131,7 @@ export async function factoryAllocation(input: {
         candidates: snapshot.candidates,
         fleetPolicy: snapshot.fleetPolicy,
         fleetInFlight: snapshot.fleetInFlight,
+        factoryInFlight: snapshot.factoryInFlight,
         now: nowIso,
       });
       /*
