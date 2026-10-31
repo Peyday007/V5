@@ -1654,10 +1654,39 @@ export interface MonetizationPass {
   commissions: CommissionPass;
 }
 
+/**
+ * The monetization ledger is history and a reading — it gates nothing — and at
+ * ~8 000 possibilities it is the largest synchronous derivation on the tick:
+ * production, 2026-10-31, stalled the event loop 11.5 s with this pass the only
+ * cash work in flight (`stalls in cash:runMonetizationLedger`). A position
+ * recorded ten minutes late describes the same movement, so on the production
+ * path it runs at most once per interval per project. A caller that supplies
+ * `now` drives time itself and is never throttled.
+ */
+export const MONETIZATION_PASS_INTERVAL_MS = 10 * 60_000;
+const lastMonetizationPass = new Map<string, number>();
+function monetizationPassDue(projectId: string): boolean {
+  const at = Date.now();
+  const last = lastMonetizationPass.get(projectId);
+  if (last !== undefined && at - last < MONETIZATION_PASS_INTERVAL_MS) return false;
+  lastMonetizationPass.set(projectId, at);
+  return true;
+}
+
 async function runMonetizationLedger(
   projectId: string,
   now?: string,
 ): Promise<MonetizationPass> {
+  if (!now && !monetizationPassDue(projectId)) {
+    return {
+      pathsAdded: [],
+      figuresCarried: [],
+      evidenced: [],
+      moved: 0,
+      evaluated: 0,
+      commissions: { opened: [], recorded: [], settled: [], declined: [], openNow: 0 },
+    };
+  }
   const enumerated = await enumeratePossibilities(projectId);
 
   /*
