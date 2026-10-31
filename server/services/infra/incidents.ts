@@ -36,6 +36,7 @@ import {
   connectionChurnReading,
   connectionHolds,
   eventLoopReading,
+  stallReading,
   memoryReading,
   databaseFailureCounts,
   infraFailureCounts,
@@ -474,6 +475,7 @@ export function processReadings(): Record<string, unknown> {
     checkouts: checkoutSummary(),
     churn: connectionChurnReading(),
     eventLoop: eventLoopReading(),
+    stalls: stallReading(),
     memory: memoryReading(),
     // Whether optional work is being deferred because the database is not
     // answering well enough (`db/pressure.ts`), and why.

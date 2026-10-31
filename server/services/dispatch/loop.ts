@@ -51,6 +51,7 @@
  * attempt. That is Step 10's job — a correct basic dispatcher — and
  * capacity-aware routing is explicitly Step 11's.
  */
+import { withActivity } from '../../db/infra.ts';
 import type { Bin } from '../../domain/types.ts';
 import { getDb } from '../../db/database.ts';
 import { reconcileConnectorBindings, recoverReauthorizedSurfaces } from '../fleet/connectorBinding.ts';
@@ -1027,7 +1028,7 @@ export function startDispatcher(intervalMs = DISPATCH_TICK_MS): void {
   timer = setInterval(() => {
     if (running) return;
     running = true;
-    void dispatchTick()
+    void withActivity('dispatch:tick', () => dispatchTick())
       .catch(async (error: unknown) => {
         await recordBinEvent({
           eventType: 'DISPATCH_TICK_FAILED',
