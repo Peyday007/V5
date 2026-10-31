@@ -200,8 +200,9 @@ export async function mechanismHasHistory(opportunity: CashOpportunity): Promise
  * invented. Requirements, exclusions and days to payment come from the row and
  * the reviewed constants above; capabilities and type history come from the
  * caller's context, and a caller that supplies none leaves them unknown
- * (capabilities null) or assumed familiar (history) - `notWorthResearching`
- * always supplies history from rows.
+ * (capabilities null, history false): an unestablished history is never read
+ * as familiarity, so the screen holds to investigate. Callers with a database
+ * should use `screenFactsWithHistory`, which reads history from rows.
  */
 export function screenFactsFor(opportunity: CashOpportunity, context: ScreenContext = {}): ScreenFacts {
   return {
@@ -215,9 +216,17 @@ export function screenFactsFor(opportunity: CashOpportunity, context: ScreenCont
     exclusions: [...STANDING_EXCLUSIONS],
     hasPayer: !!opportunity.payer,
     hasPrice: opportunity.priceCents !== null && opportunity.priceCents !== undefined,
-    typeHasHistory: context.typeHasHistory ?? true,
+    typeHasHistory: context.typeHasHistory ?? false,
     sourceObservedAt: opportunity.signalObservedAt ?? null,
   };
+}
+
+/** `screenFactsFor` with the opening's type history read from rows, for every real caller. */
+export async function screenFactsWithHistory(
+  opportunity: CashOpportunity,
+  context: Omit<ScreenContext, 'typeHasHistory'> = {},
+): Promise<ScreenFacts> {
+  return screenFactsFor(opportunity, { ...context, typeHasHistory: await mechanismHasHistory(opportunity) });
 }
 
 /** The limits of every live goal in the project that has a target, read from the goal itself. */
@@ -246,7 +255,7 @@ async function screenVerdictFor(opportunity: CashOpportunity, now: string): Prom
   if (!opportunity.projectId) return null;
   const all = await goalLimitsFor(opportunity.projectId, now);
   if (all.length === 0) return null;
-  const facts = screenFactsFor(opportunity, { typeHasHistory: await mechanismHasHistory(opportunity) });
+  const facts = await screenFactsWithHistory(opportunity);
   let reject: ScreenVerdict | null = null;
   for (const limits of all) {
     const verdict = screenOpportunity(facts, limits, now);

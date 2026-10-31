@@ -22,7 +22,7 @@ import { nowIso } from '../../repos/util.ts';
 import { getOpportunity, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { getWorkstream, listWorkstreams } from '../../repos/register.ts';
 import { readTarget } from '../goals/target.ts';
-import { screenFactsFor } from './worthResearching.ts';
+import { screenFactsWithHistory } from './worthResearching.ts';
 
 /** States a person chose. Nothing here decides over them. */
 const PERSON_STATES: ReadonlySet<string> = new Set(['ARCHIVED', 'DECLINED']);
@@ -213,7 +213,7 @@ export async function runDecisionPass(projectId: string, options: { now?: string
         projectId,
         opportunityId: opening.id,
         goalId: goal.id,
-        facts: screenFactsFor(opening),
+        facts: await screenFactsWithHistory(opening),
         limits,
         changeRef,
         evidenceIds: opening.sourceClaimId ? [opening.sourceClaimId] : [],
@@ -230,7 +230,7 @@ export async function runDecisionPass(projectId: string, options: { now?: string
       factsFor: async (opportunityId) => {
         const opening = await getOpportunity(opportunityId);
         if (!opening) return null;
-        return { facts: screenFactsFor(opening), evidenceIds: opening.sourceClaimId ? [opening.sourceClaimId] : [] };
+        return { facts: await screenFactsWithHistory(opening), evidenceIds: opening.sourceClaimId ? [opening.sourceClaimId] : [] };
       },
     },
     { now },
