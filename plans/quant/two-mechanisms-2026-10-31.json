@@ -1,0 +1,101 @@
+{
+  "title": "Two unrelated mechanisms toward 10,000 USD settled in 27 days, from published evidence (2026-10-31)",
+  "currency": "USD",
+  "arrangements": [
+    {
+      "key": "trucks",
+      "label": "Broker food trucks to small offices for December holiday lunches, paid a commission by the truck",
+      "period": "the goal window",
+      "currency": "USD",
+      "demand": {
+        "buyers": { "label": "Offices emailed (a choice the plan makes)", "observations": [
+          { "id": "plan_emails_trucks", "value": { "kind": "POINT", "value": 2000 }, "context": {}, "lineage": ["plan"], "source": { "kind": "PERSON", "ref": "plan", "note": "a decision, not a measurement" } }
+        ] },
+        "needRate": { "label": "Share of offices holding an in-person holiday event", "kind": "RATE", "context": { "population": "small-offices" }, "material": ["population"], "min": 0, "max": 1, "observations": [
+          { "id": "harris_48", "value": { "kind": "POINT", "value": 0.48 }, "context": { "population": "us-workplaces" }, "lineage": ["harris-poll"], "broad": true, "source": { "kind": "URL", "ref": "https://www.newswire.com/news/the-end-of-the-traditional-holiday-party-younger-generations-are-22487314" }, "measures": "workplaces hosting regular in-person holiday events; undated" },
+          { "id": "challenger_64", "value": { "kind": "POINT", "value": 0.64 }, "context": { "population": "us-companies" }, "lineage": ["challenger-gray"], "broad": true, "source": { "kind": "URL", "ref": "https://www.costar.com/article/107802197/corporate-holiday-parties-are-back-in-vogue-but-with-new-twists" }, "measures": "US companies expecting in-person celebrations; year not shown" },
+          { "id": "battalia_88", "value": { "kind": "POINT", "value": 0.88 }, "context": { "population": "large-companies" }, "lineage": ["battalia-winston"], "broad": true, "source": { "kind": "URL", "ref": "https://www.hrreporter.com/news/hr-news/holiday-party-time/310974" }, "measures": "companies (mostly large) planning a party; year not stated" }
+        ] },
+        "reach": { "label": "Share of emailed offices actually reached", "observations": [
+          { "id": "plan_reach", "value": { "kind": "POINT", "value": 0.95 }, "context": {}, "lineage": ["plan"], "source": { "kind": "PERSON", "ref": "plan", "note": "deliverability assumption" } }
+        ] },
+        "conversion": { "label": "Share of reached offices who book", "formula": "reply_rate * book_after_reply" }
+      },
+      "value": { "label": "What an office pays a truck for one catered event", "context": { "event": "corporate" }, "material": ["event"], "observations": [
+        { "id": "bft_median", "value": { "kind": "RANGE", "low": 1500, "high": 2800 }, "context": { "event": "any" }, "lineage": ["bestfoodtrucks-bookings"], "source": { "kind": "URL", "ref": "https://www.bestfoodtrucks.com/blog/how-much-does-it-cost-to-hire-a-food-truck-2026" }, "measures": "all US food truck events, median 1,900" },
+        { "id": "corporate_guide", "value": { "kind": "RANGE", "low": 800, "high": 2500 }, "context": { "event": "corporate" }, "lineage": ["corporate-guide"], "source": { "kind": "URL", "ref": "https://roaminghunger.com/food-truck-catering/corporate-catering/" }, "measures": "corporate food-truck catering packages, average 1,541" },
+        { "id": "taco_minimum", "value": { "kind": "RANGE", "low": 1000, "high": 1500 }, "context": { "event": "corporate" }, "lineage": ["foodtruckleague"], "source": { "kind": "URL", "ref": "https://foodtruckleague.com/blog/food-truck-catering-cost" }, "measures": "taco truck minimum spend" }
+      ], "adjustments": [] },
+      "capture": { "kind": "COMMISSION", "rate": { "label": "Booking commission paid by the truck", "observations": [
+        { "id": "pulse_commission", "value": { "kind": "RANGE", "low": 0.10, "high": 0.20 }, "context": {}, "lineage": ["pulserevops"], "source": { "kind": "URL", "ref": "https://pulserevops.com/tools/tl0653" }, "measures": "third-party estimate of a booking platform's commission" },
+        { "id": "fto_operator", "value": { "kind": "POINT", "value": 0.10 }, "context": {}, "lineage": ["foodtruckoperator-2018"], "source": { "kind": "URL", "ref": "https://www.foodtruckoperator.com/articles/booking-services-help-more-clients-find-food-trucks" }, "measures": "one operator's average commission to booking services, 2018" }
+      ] } },
+      "cost": { "label": "Arranger cost per booking", "formula": "0" },
+      "extra": [
+        { "key": "reply_rate", "label": "Cold-email reply rate (any reply)", "unit": "share", "kind": "RATE", "context": { "channel": "cold-email", "reply": "any", "contacts": "net-new" }, "material": ["channel", "reply", "contacts"], "observations": [
+          { "id": "belkins_2025", "value": { "kind": "POINT", "value": 0.0045 }, "context": { "channel": "cold-email", "reply": "any", "contacts": "net-new" }, "lineage": ["belkins-2025"], "source": { "kind": "URL", "ref": "https://belkins.io/blog/cold-email-response-rates" }, "measures": "7.5M emails across client campaigns; clustering unpublished, so unsized" },
+          { "id": "instantly_2026", "value": { "kind": "POINT", "value": 0.0343 }, "context": { "channel": "cold-email", "reply": "any", "contacts": "mixed" }, "lineage": ["instantly-platform"], "source": { "kind": "URL", "ref": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks" }, "measures": "platform-wide average" },
+          { "id": "scrapine_median", "value": { "kind": "POINT", "value": 0.032 }, "context": { "channel": "cold-email", "reply": "any", "contacts": "mixed" }, "lineage": ["scrapine"], "source": { "kind": "URL", "ref": "https://scrapine-website.pages.dev/benchmarks/cold-email-reply-rate" }, "measures": "median across B2B industries" },
+          { "id": "digitalbloom_range", "value": { "kind": "RANGE", "low": 0.03, "high": 0.051 }, "context": { "channel": "cold-email", "reply": "any", "contacts": "mixed" }, "lineage": ["digitalbloom"], "source": { "kind": "URL", "ref": "https://thedigitalbloom.com/learn/cold-outbound-reply-rate-benchmarks/" }, "measures": "average B2B range 2024-2025" },
+          { "id": "positive_reply", "value": { "kind": "RANGE", "low": 0.003, "high": 0.01 }, "context": { "channel": "cold-email", "reply": "positive", "contacts": "mixed" }, "lineage": ["roundup-positive"], "source": { "kind": "URL", "ref": "https://www.tario.ai/blogs/good-cold-email-reply-rate-benchmarks-for-b2b" }, "measures": "positive replies only — a different definition" }
+        ] },
+        { "key": "book_after_reply", "label": "Share of replies that become a booking", "unit": "share", "kind": "RATE", "min": 0, "max": 0.5 },
+        { "key": "trucks_days", "label": "Days from now until the commission is usable", "unit": "days", "kind": "POSITIVE", "min": 0, "formula": "days_to_event + payout_days" },
+        { "key": "days_to_event", "label": "Days until a December holiday lunch happens", "unit": "days", "kind": "POSITIVE", "observations": [
+          { "id": "calendar_december", "value": { "kind": "RANGE", "low": 32, "high": 50 }, "context": {}, "lineage": ["calendar"], "source": { "kind": "OTHER", "ref": "calendar", "note": "holiday lunches fall 2–19 December; today is 31 October" } }
+        ] },
+        { "key": "payout_days", "label": "Days for a truck to pay the commission after the event", "unit": "days", "kind": "POSITIVE", "min": 1, "max": 14 }
+      ]
+    },
+    {
+      "key": "books",
+      "label": "Year-end catch-up bookkeeping for small businesses that are months behind",
+      "period": "the goal window",
+      "currency": "USD",
+      "demand": {
+        "buyers": { "label": "Businesses emailed (a choice the plan makes)", "observations": [
+          { "id": "plan_emails_books", "value": { "kind": "POINT", "value": 2000 }, "context": {}, "lineage": ["plan"], "source": { "kind": "PERSON", "ref": "plan", "note": "a decision, not a measurement" } }
+        ] },
+        "needRate": { "label": "Share of small businesses behind on their books", "kind": "RATE", "context": { "population": "small-business" }, "material": ["population"], "observations": [
+          { "id": "xendoo_25", "value": { "kind": "POINT", "value": 0.25 }, "context": { "population": "small-business" }, "lineage": ["xendoo"], "source": { "kind": "URL", "ref": "https://xendoo.com/catchmeup" }, "measures": "vendor claim; no study cited, 'behind' undefined" }
+        ] },
+        "reach": { "label": "Share of emailed businesses actually reached", "observations": [
+          { "id": "plan_reach_books", "value": { "kind": "POINT", "value": 0.95 }, "context": {}, "lineage": ["plan"], "source": { "kind": "PERSON", "ref": "plan", "note": "deliverability assumption" } }
+        ] },
+        "conversion": { "label": "Share of reached businesses who buy", "formula": "reply_rate * buy_after_reply" }
+      },
+      "value": { "label": "Price of one catch-up job", "formula": "months_behind * price_per_month" },
+      "capture": { "kind": "FEE", "fee": { "label": "Fee kept per job (the whole price)", "formula": "books_value" } },
+      "cost": { "label": "Direct cost per job (Brain produces the work)", "formula": "0" },
+      "extra": [
+        { "key": "reply_rate", "label": "Cold-email reply rate (any reply)", "unit": "share", "kind": "RATE", "context": { "channel": "cold-email", "reply": "any", "contacts": "net-new" }, "material": ["channel", "reply", "contacts"], "observations": [
+          { "id": "belkins_2025", "value": { "kind": "POINT", "value": 0.0045 }, "context": { "channel": "cold-email", "reply": "any", "contacts": "net-new" }, "lineage": ["belkins-2025"], "source": { "kind": "URL", "ref": "https://belkins.io/blog/cold-email-response-rates" } },
+          { "id": "instantly_2026", "value": { "kind": "POINT", "value": 0.0343 }, "context": { "channel": "cold-email", "reply": "any", "contacts": "mixed" }, "lineage": ["instantly-platform"], "source": { "kind": "URL", "ref": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks" } },
+          { "id": "scrapine_median", "value": { "kind": "POINT", "value": 0.032 }, "context": { "channel": "cold-email", "reply": "any", "contacts": "mixed" }, "lineage": ["scrapine"], "source": { "kind": "URL", "ref": "https://scrapine-website.pages.dev/benchmarks/cold-email-reply-rate" } },
+          { "id": "digitalbloom_range", "value": { "kind": "RANGE", "low": 0.03, "high": 0.051 }, "context": { "channel": "cold-email", "reply": "any", "contacts": "mixed" }, "lineage": ["digitalbloom"], "source": { "kind": "URL", "ref": "https://thedigitalbloom.com/learn/cold-outbound-reply-rate-benchmarks/" } }
+        ] },
+        { "key": "buy_after_reply", "label": "Share of replies that become a paid job", "unit": "share", "kind": "RATE", "min": 0, "max": 0.5 },
+        { "key": "months_behind", "label": "Months of backlog per job", "unit": "months", "kind": "POSITIVE", "observations": [
+          { "id": "taxstra_3_6", "value": { "kind": "RANGE", "low": 3, "high": 6 }, "context": {}, "lineage": ["taxstra"], "source": { "kind": "URL", "ref": "https://taxstra.com/business-owners/catch-up-bookkeeping/" }, "measures": "a firm's observation of its own clients" }
+        ] },
+        { "key": "price_per_month", "label": "Price per month of backlog", "unit": "USD/month", "kind": "POSITIVE", "observations": [
+          { "id": "range_300_500", "value": { "kind": "RANGE", "low": 300, "high": 500 }, "context": {}, "lineage": ["sdocpa"], "source": { "kind": "URL", "ref": "https://www.sdocpa.com/small-business-bookkeeping-catch-up-services/" } },
+          { "id": "range_300_800", "value": { "kind": "RANGE", "low": 300, "high": 800 }, "context": {}, "lineage": ["monacocpa"], "source": { "kind": "URL", "ref": "https://www.monacocpa.cpa/post/bookkeeping-cleanup-cost-small-business-2026" } },
+          { "id": "range_150_500", "value": { "kind": "RANGE", "low": 150, "high": 500 }, "context": {}, "lineage": ["cocountant"], "source": { "kind": "URL", "ref": "https://cocountant.com/blog/bookkeeping/bookkeeping-cleanup-cost-guide/" } },
+          { "id": "remotebooks_320", "value": { "kind": "POINT", "value": 320 }, "context": {}, "lineage": ["remotebooks"], "source": { "kind": "URL", "ref": "https://www.remotebooksonline.com/blog/catch-up-bookkeeping-options" } }
+        ] },
+        { "key": "books_days", "label": "Days from first email to usable cash", "unit": "days", "kind": "POSITIVE", "min": 3, "max": 21 }
+      ]
+    }
+  ],
+  "portfolio": {
+    "target": 10000,
+    "deadlineDays": 27,
+    "capacity": { "email_sends": 4000 },
+    "startingCapital": 300,
+    "activities": [
+      { "key": "trucks", "label": "food-truck holiday lunches", "arrangement": "trucks", "daysNode": "trucks_days", "uses": { "email_sends": 2000 }, "learnableInExecution": true },
+      { "key": "books", "label": "catch-up bookkeeping", "arrangement": "books", "daysNode": "books_days", "uses": { "email_sends": 2000 }, "learnableInExecution": true }
+    ]
+  }
+}

@@ -434,14 +434,31 @@ function printPlan(reading: PlanReading): void {
   }
   for (const one of reading.excluded.slice(0, 15)) console.log(`  left out    ${one.opportunityId} ${one.title.slice(0, 70)}: ${one.reason}`);
   if (reading.excluded.length > 15) console.log(`  left out    … and ${reading.excluded.length - 15} more`);
+  // §79: what was reconstructed instead of swept, and which questions could change the choice.
+  const tiers = new Map<string, number>();
+  for (const one of reading.inferred) tiers.set(one.tier, (tiers.get(one.tier) ?? 0) + 1);
+  console.log(`  inferred    ${reading.inferred.length} unknown(s) reconstructed from evidence instead of swept blind${tiers.size ? ` (${[...tiers].map(([k, v]) => `${k} ${v}`).join(', ')})` : ''}`);
+  for (const one of reading.inferred.slice(0, 12)) {
+    console.log(`    ${one.tier.padEnd(10)} ${one.field.padEnd(15)} p10 ${round(one.p10)} · p50 ${round(one.p50)} · p90 ${round(one.p90)} from ${one.observations} obs ${one.justified ? '(distribution)' : '(bounds only)'} · ${one.title.slice(0, 50)}`);
+  }
+  console.log(`  questions   ${reading.researchPriority.length === 0 ? 'no input moves the goal-met share, so none is ranked' : `${reading.researchPriority.filter((one) => one.changesDecision).length} of ${reading.researchPriority.length} unknown(s) could change the choice`}`);
+  for (const one of reading.researchPriority.slice(0, 10)) {
+    console.log(`    ${one.decision.padEnd(22)} ${one.variable.padEnd(10)} value ${one.value.toFixed(4)}${one.field ? ` ${one.field}` : ''} — ${one.reason}`);
+  }
+}
+
+function round(x: number): string {
+  return Math.abs(x) < 1 ? x.toFixed(3) : x < 100 ? x.toFixed(1) : String(Math.round(x));
 }
 
 async function plan(): Promise<void> {
   const [, goalId] = words();
   if (!goalId) fail('plan needs a goal id.');
+  const started = Date.now();
   const reading = await readGoalPlan({ goalId, persist: false });
   if (!reading) fail(`No targeted goal ${goalId}.`);
   printPlan(reading);
+  console.log(`  timing      plan read in ${Date.now() - started} ms; ${reading.inferred.length} inferred input(s), ${reading.researchPriority.length} ranked question(s)`);
   await printSearching(reading);
   const history = await listReadings(goalId);
   for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);

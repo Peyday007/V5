@@ -36,6 +36,10 @@ import type { CashOpportunity, CashCardFact } from '../../domain/types.ts';
 import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, type SourceRef, type StrategySpec, type VariableProvenance } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
+import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity } from '../quant/knowledge.ts';
+import { toScenarioInput } from '../quant/export.ts';
+import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
+import type { VariableSpec } from '../../domain/scenario.ts';
 
 /** Variables the model declares once, and per opportunity. */
 export const GOAL_MODEL_VARIABLES = 4;
@@ -63,6 +67,14 @@ export interface ModelInput {
   provenance: VariableProvenance;
   source: SourceRef | null;
   note: string;
+  /**
+   * A distribution or narrowed range the quantitative inference engine (§79)
+   * reconstructed for an unknown from comparable or component evidence. `value`
+   * stays null: an inferred number never establishes a link of the plan's
+   * causal chain, it only replaces a blind sweep with an evidenced one.
+   */
+  distribution?: VariableSpec;
+  inferred?: { tier: EvidenceTier; justified: boolean; p10: number; p50: number; p90: number; observations: number };
 }
 
 export interface ModelledOpportunity {
@@ -140,6 +152,34 @@ function unknown(low: number, high: number, note: string): ModelInput {
   return { value: null, low, high, provenance: 'UNKNOWN', source: null, note };
 }
 
+/**
+ * An unknown, inferred from what the project already holds — or the blind
+ * fallback range when nothing bears on it. `scale` turns a share of the price
+ * into money at this opening's price.
+ */
+function inferOr(knowledge: CashKnowledge | null, quantity: CashQuantity, opportunity: CashOpportunity, now: Date, fallback: ModelInput, scale = 1, what = ''): ModelInput {
+  if (!knowledge) return fallback;
+  let est: Estimate | null = null;
+  try {
+    est = inferCashQuantity(knowledge, quantity, opportunity, now);
+  } catch {
+    est = null;
+  }
+  if (!est) return fallback;
+  const scaled: Estimate = scale === 1 ? est : { ...est, p05: est.p05 * scale, p10: est.p10 * scale, p50: est.p50 * scale, p90: est.p90 * scale, p95: est.p95 * scale, samples: est.samples.map((x) => x * scale) };
+  const exported = toScenarioInput(scaled);
+  return {
+    value: null,
+    low: scaled.p05,
+    high: scaled.p95,
+    provenance: exported.provenance,
+    source: exported.sources[0] ?? null,
+    note: `inferred${what}: ${exported.note}`,
+    distribution: exported.spec,
+    inferred: { tier: est.tier, justified: exported.provenance === 'EVIDENCE', p10: scaled.p10, p50: scaled.p50, p90: scaled.p90, observations: est.used.length },
+  };
+}
+
 /** Wilson score interval for a rate measured as successes out of trials. */
 export function wilson(successes: number, trials: number, z = 1.96): { low: number; high: number } {
   if (trials <= 0) return { low: 0, high: 1 };
@@ -157,6 +197,8 @@ async function modelOpportunity(
   tier: string,
   currency: string,
   lessons: Awaited<ReturnType<typeof cashOutcomeLessons>>,
+  knowledge: CashKnowledge | null = null,
+  now: Date = new Date(),
 ): Promise<ModelledOpportunity | { reason: string }> {
   const fact = await cardFactMap(opportunity.id);
   const ref: SourceRef = { kind: 'CASH_OPPORTUNITY', ref: opportunity.id };
@@ -187,7 +229,7 @@ async function modelOpportunity(
       ? known(opportunity.peakFundingCents / 100, kindToProvenance(exposure).provenance === 'UNKNOWN' ? 'ASSUMPTION' : kindToProvenance(exposure).provenance, kindToProvenance(exposure).source ?? ref, 'money tied up before it pays')
       : capitalFigures.length > 0
         ? known(Math.max(...capitalFigures.map((one) => one.cents)) / 100, kindToProvenance(capitalFact).provenance, kindToProvenance(capitalFact).source, 'the most that goes out before any comes back')
-        : unknown(0, top, 'nobody has established the money tied up; swept from nothing to the whole price');
+        : inferOr(knowledge, 'capitalShare', opportunity, now, unknown(0, top, 'nobody has established the money tied up; swept from nothing to the whole price'), top, ' as a share of the top price');
 
   const hoursFact = fact('hours');
   const hours =
@@ -200,14 +242,14 @@ async function modelOpportunity(
   const daysToCash =
     ttcDays !== null
       ? known(ttcDays, kindToProvenance(ttc).provenance, kindToProvenance(ttc).source, 'days from start to usable cash')
-      : unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days');
+      : inferOr(knowledge, 'daysToCash', opportunity, now, unknown(3, 60, 'nobody has established when the money would settle; swept from 3 to 60 days'));
 
   const costFact = fact('directCosts');
   const costFigures = costFact ? readMoneyFigures(costFact.value, currency).filter((one) => !one.perUnit) : [];
   const directCost =
     costFigures.length > 0
       ? known(Math.max(...costFigures.map((one) => one.cents)) / 100, kindToProvenance(costFact).provenance, kindToProvenance(costFact).source, 'the highest published direct cost')
-      : unknown(0, Math.max(1, top * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the price');
+      : inferOr(knowledge, 'costShare', opportunity, now, unknown(0, Math.max(1, top * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the price'), top, ' as a share of the top price');
 
   const agreements = (await agreementsFor(opportunity.id)).filter((one) => !one.releasedAt);
   const lesson = lessons.find((one) => one.mechanism === opportunity.mechanism && one.contacts >= LESSON_MIN_SAMPLE);
@@ -225,7 +267,7 @@ async function modelOpportunity(
       note: `measured on this Brain: ${lesson.agreements} of ${lesson.contacts} contacts agreed`,
     };
   } else {
-    close = unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing');
+    close = inferOr(knowledge, 'close', opportunity, now, unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing'));
   }
 
   const fulfilmentFact = fact('fulfillment');
@@ -261,13 +303,13 @@ async function modelOpportunity(
  */
 /** A price buyers are shown to pay — a source or this Brain's own record — rather than a guess. */
 export function priceSupported(one: Pick<ModelledOpportunity, 'price'>): boolean {
-  return one.price.provenance === 'EVIDENCE' || one.price.provenance === 'HISTORICAL';
+  return !one.price.inferred && (one.price.provenance === 'EVIDENCE' || one.price.provenance === 'HISTORICAL');
 }
 
 /** How many of an opening's money facts rest on a source or a measurement rather than a guess. */
 export function evidenceCount(one: ModelledOpportunity): number {
   return [one.price, one.close, one.daysToCash, one.directCost, one.capital, one.hours].filter(
-    (input) => input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL',
+    (input) => !input.inferred && (input.provenance === 'EVIDENCE' || input.provenance === 'HISTORICAL'),
   ).length;
 }
 
@@ -283,10 +325,12 @@ export function bestCaseReach(one: ModelledOpportunity, remaining: number, daysL
 }
 
 function variable(key: string, label: string, unit: string, input: ModelInput): ScenarioVariable {
-  const spec =
+  const spec: VariableSpec =
     input.value !== null
       ? { kind: 'FIXED' as const, value: input.value }
-      : { kind: 'RANGE' as const, min: input.low ?? 0, max: Math.max(input.high ?? 0, (input.low ?? 0) + 1e-9) };
+      : input.distribution
+        ? input.distribution
+        : { kind: 'RANGE' as const, min: input.low ?? 0, max: Math.max(input.high ?? 0, (input.low ?? 0) + 1e-9) };
   return {
     key,
     label,
@@ -334,6 +378,13 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   });
 
   const lessons = await cashOutcomeLessons(target.projectId);
+  // What the project already established about other openings, for inference.
+  let knowledge: CashKnowledge | null = null;
+  try {
+    knowledge = await loadCashKnowledge(target.projectId);
+  } catch {
+    knowledge = null;
+  }
   const included: ModelledOpportunity[] = [];
   for (const opportunity of ordered) {
     const tier = tierOf.get(opportunity.id) ?? 'SIGNAL';
@@ -349,7 +400,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `closed on ${opportunity.expiresAt.slice(0, 10)}` });
       continue;
     }
-    const modelled = await modelOpportunity(opportunity, 0, tier, target.currency, lessons);
+    const modelled = await modelOpportunity(opportunity, 0, tier, target.currency, lessons, knowledge, input.now ?? new Date());
     if ('reason' in modelled) excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: modelled.reason });
     else candidates.push(modelled);
   }

@@ -234,6 +234,23 @@ export interface RunOptions {
   objective?: SelectedObjective;
   /** What "acceptable" means for robustness. Default: feasible and contribution ≥ 0. */
   acceptable?: { minContributionCents: number };
+  /**
+   * Measure which uncertain input could change the choice of strategy, by the
+   * expected gain in this metric (or `contribution`) from knowing it first
+   * (§79). An infeasible or invalid evaluation scores the metric's worst value.
+   */
+  informationValue?: { metric: string };
+}
+
+/** Which inputs could change the choice of strategy, measured on the run's own worlds. */
+export interface InformationValueResult {
+  metric: string;
+  /** Over a sweep the gains are over tested conditions, not expectations. */
+  basis: RunBasis;
+  baseline: { strategy: string; expected: number };
+  /** With every input known at once — the ceiling on what research could buy. */
+  perfect: number;
+  inputs: Array<{ key: string; value: number; changesDecision: boolean; bestByBin: string[] }>;
 }
 
 export const SUMMARY_STATISTICS = ['MEAN', 'P10', 'P50', 'P90', 'MIN', 'MAX'] as const;
@@ -405,5 +422,7 @@ export interface ScenarioResult {
   dominanceCriteria: string[];
   ranking: ObjectiveRanking | null;
   sensitivity: Sensitivity;
+  /** Present only when the run was asked for it. */
+  informationValue?: InformationValueResult;
   limitations: string[];
 }

@@ -54,7 +54,8 @@
     "manufacturing": "tsx --env-file-if-exists=.env scripts/manufacturing.ts",
     "scenario:bench": "tsx scripts/scenario-bench.ts",
     "puzzle-book": "tsx scripts/puzzle-book.ts",
-    "plan:check": "tsx scripts/plan-check.ts"
+    "plan:check": "tsx scripts/plan-check.ts",
+    "quant": "tsx scripts/quant.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
