@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'oauth trace | connectors show | connectors derive | connectors attach | connectors reconnect | connectors probe | connectors probe-status | connectors repoint-worker | people list | people rename | people foundation | capacity show | capacity adopt | factory invite | projects list | projects create | workers list | workers create | access show | access grant | research start | research goal | packets list | packets syntheses | packets recover-synthesis | cash seed-industry | cash constraints'
+        description: 'oauth trace | connectors show | connectors derive | connectors attach | connectors reconnect | connectors probe | connectors probe-status | connectors repoint-worker | people list | people rename | people foundation | capacity show | capacity adopt | factory invite | projects list | projects create | workers list | workers create | access show | access grant | research start | research goal | packets list | packets syntheses | packets judge-parks | packets recover-synthesis | cash seed-industry | cash constraints'
         required: true
         default: projects list
       subject:
@@ -97,7 +97,7 @@ jobs:
           # happened to `people list`, and what made a deployed image
           # unverifiable by the one command that could have proved it.
           case "$ADMIN_COMMAND" in
-            'oauth trace'|'connectors show'|'connectors derive'|'connectors attach'|'connectors reconnect'|'connectors probe'|'connectors probe-status'|'connectors repoint-worker'|'people list'|'people rename'|'people foundation'|'capacity show'|'capacity adopt'|'factory invite'|'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start'|'research goal'|'packets list'|'packets syntheses'|'packets recover-synthesis'|'cash seed-industry'|'cash constraints') ;;
+            'oauth trace'|'connectors show'|'connectors derive'|'connectors attach'|'connectors reconnect'|'connectors probe'|'connectors probe-status'|'connectors repoint-worker'|'people list'|'people rename'|'people foundation'|'capacity show'|'capacity adopt'|'factory invite'|'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start'|'research goal'|'packets list'|'packets syntheses'|'packets judge-parks'|'packets recover-synthesis'|'cash seed-industry'|'cash constraints') ;;
             *)
               echo "::error::Refusing '$ADMIN_COMMAND': see the command list on this workflow."
               exit 1
