@@ -75,4 +75,12 @@ primary_region = "iad"        # pick the region nearest your Supabase project
   # OCR spawns tesseract per page; 256 MB gets an out-of-memory kill partway
   # through a large import, which looks like a mysterious restart rather than
   # like a memory limit.
-  memory = "1gb"
+  #
+  # 2 GB since 2026-10-31. On 1 GB the machine was OOM-killed during the
+  # post-deploy verification even after #356 bounded the verifier's own heap to
+  # 384 MB: `oom_killed=true` read from the machine's event log by
+  # hosted-verify.sh on Deploy run 41175178800, with event-loop stalls of
+  # 50-84 s and 34 process restarts in the 24 hours before it. The verifier runs
+  # inside this machine beside the Brain, so the Brain alone fitting is not
+  # enough. About $5 a month more on Fly's shared-cpu-1x pricing.
+  memory = "2gb"
