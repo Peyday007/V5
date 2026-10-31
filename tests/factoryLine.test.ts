@@ -15,6 +15,7 @@ import { freshProject, teardown, type TestProject } from './helpers.ts';
 import {
   ensureCampaign,
   ensureChangeRequest,
+  ensureUnit,
   getCampaignByChangeRequest,
   patchCampaign,
 } from '../server/repos/factory.ts';
@@ -338,38 +339,71 @@ describe('a project reads its own line and nobody else\'s', () => {
 });
 
 describe('two objectives that would edit the same files are not run at once', () => {
-  it('holds an overlapping objective and starts the independent one behind it, then the held one when the first is done', async () => {
-    const first = await objective('shared-a', true, ['server/services/shared/**']);
-    const clash = await objective('shared-b', true, ['server/services/shared/thing.ts']);
-    const independent = await objective('elsewhere', true, ['client/src/elsewhere.tsx']);
+  async function unit(campaignId: string, key: string, ownedPaths: string[], state: 'READY' | 'IMPLEMENTED' = 'IMPLEMENTED') {
+    const { unit: row } = await ensureUnit({
+      campaignId,
+      unitKey: key,
+      kind: 'IMPLEMENTATION',
+      role: 'IMPLEMENTER',
+      title: key,
+      objective: key,
+      acceptance: [key],
+      ownedPaths,
+      requiredContext: [],
+      verification: [],
+      expectedArtifact: 'a commit',
+      state,
+    });
+    return row;
+  }
+
+  it('admits objectives with broad scopes while no live unit owns an overlapping path', async () => {
+    const first = await objective('broad-a', true, ['tests/**']);
+    const second = await objective('broad-b', true, ['tests/**']);
     await queueObjective({ changeRequestId: first.id, userId: adminId, priority: 1 });
+    await queueObjective({ changeRequestId: second.id, userId: adminId, priority: 2 });
+    await setAdmissionPolicy({ maxActive: 3, actor: 'test', reason: 'room' });
+    // A campaign with no units yet owns nothing, so it blocks nothing.
+    const pass = await admitQueued();
+    expect(pass.admitted.map((one) => one.changeRequestId)).toEqual([first.id, second.id]);
+  });
+
+  it('holds an objective while a live, unintegrated unit of another campaign owns an overlapping path, then releases it once INTEGRATED', async () => {
+    const first = await objective('owner-a', true, ['tests/**']);
+    await queueObjective({ changeRequestId: first.id, userId: adminId, priority: 1 });
+    await setAdmissionPolicy({ maxActive: 3, actor: 'test', reason: 'room' });
+    const started = (await admitQueued()).admitted[0]!;
+    const owning = await unit(started.campaignId, 'edit-shared', ['tests/shared.test.ts']);
+
+    const clash = await objective('owner-b', true, ['tests/**']);
+    const disjoint = await objective('owner-c', true, ['client/src/elsewhere.tsx']);
     await queueObjective({ changeRequestId: clash.id, userId: adminId, priority: 2 });
-    await queueObjective({ changeRequestId: independent.id, userId: adminId, priority: 3 });
-    await setAdmissionPolicy({ maxActive: 3, actor: 'test', reason: 'room for all three' });
+    await queueObjective({ changeRequestId: disjoint.id, userId: adminId, priority: 3 });
 
     const pass = await admitQueued();
-    expect(pass.admitted.map((one) => one.changeRequestId)).toEqual([first.id, independent.id]);
-    expect(pass.skipped.find((one) => one.reason.includes('overlaps'))).toBeTruthy();
+    expect(pass.admitted.map((one) => one.changeRequestId)).toEqual([disjoint.id]);
+    const skipped = pass.skipped.find((one) => one.reason.includes('overlaps'));
+    expect(skipped?.reason).toContain(started.campaignId);
 
     const line = await readLine(new Date(), { projectId: fixture.project.id });
     const held = line.queue.find((row) => row.entry.changeRequestId === clash.id)!;
     expect(held.executableNow).toBe(false);
-    expect(held.why).toMatch(/overlap/);
+    expect(held.why).toContain(started.campaignId);
     // A wait with a reason is not idle work.
     expect(line.executable.queued).toBe(0);
 
-    const firstCampaign = pass.admitted[0]!.campaignId;
-    await patchCampaign(firstCampaign, { state: 'COMPLETE', prUrl: 'https://example.invalid/pr/2' });
+    await getDb().run(`UPDATE factory_work_units SET state = 'INTEGRATED' WHERE id = ?`, [owning.id]);
     expect((await admitQueued()).admitted.map((one) => one.changeRequestId)).toEqual([clash.id]);
   });
 
-  it('holds it while the overlapping campaign is BLOCKED, because a blocked campaign still owns its branch', async () => {
+  it('holds it while the owning campaign is BLOCKED, because a blocked campaign still owns its units', async () => {
     const first = await objective('owner', true, ['server/services/owned/**']);
     const clash = await objective('waiter', true, ['server/services/owned/**']);
     await queueObjective({ changeRequestId: first.id, userId: adminId, priority: 1 });
-    await queueObjective({ changeRequestId: clash.id, userId: adminId, priority: 2 });
     await setAdmissionPolicy({ maxActive: 2, actor: 'test', reason: 'two' });
     const started = (await admitQueued()).admitted[0]!;
+    await unit(started.campaignId, 'owned', ['server/services/owned/a.ts'], 'IMPLEMENTED');
+    await queueObjective({ changeRequestId: clash.id, userId: adminId, priority: 2 });
     await patchCampaign(started.campaignId, {
       state: 'BLOCKED',
       blockerKind: 'UNIT_EXHAUSTED_ATTEMPTS',

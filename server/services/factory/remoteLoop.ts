@@ -48,6 +48,7 @@ import {
   listLiveCampaigns,
   listUnits,
   patchCampaign,
+  pathsOverlap,
   promoteReadyUnits,
   releaseCampaignTick,
 } from '../../repos/factory.ts';
@@ -1604,6 +1605,97 @@ async function noteSurfaceBlocker(
 }
 
 /**
+ * The unit of another live campaign, in the same repository, that already holds
+ * files this unit would edit: one that is with a worker (`LEASED`), finished but
+ * not yet integrated (`IMPLEMENTED`), or `READY` and already carried by a live
+ * bin. Two such units branch from different bases and conflict at integration,
+ * so only the later one waits. Independent units, and units of the same
+ * campaign, are never held by this.
+ */
+async function conflictingUnitOfOtherCampaign(
+  campaign: { id: string },
+  repository: string,
+  unit: { ownedPaths: string[] },
+): Promise<{ campaignId: string; campaignState: string; unitId: string; unitKey: string } | null> {
+  for (const other of await listLiveCampaigns()) {
+    if (other.id === campaign.id) continue;
+    const otherRequest = await getChangeRequest(other.changeRequestId);
+    if (!otherRequest || otherRequest.repository !== repository) continue;
+    const otherUnits = await listUnits(other.id);
+    let carried: Set<string> | null = null;
+    for (const held of otherUnits) {
+      if (!pathsOverlap(unit.ownedPaths, held.ownedPaths)) continue;
+      const hit = { campaignId: other.id, campaignState: other.state, unitId: held.id, unitKey: held.unitKey };
+      if (held.state === 'LEASED' || held.state === 'IMPLEMENTED') return hit;
+      if (held.state === 'READY') {
+        carried ??= liveUnitKeys(await campaignBins(other.id));
+        if (carried.has(held.unitKey)) return hit;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * How long a unit may wait on another campaign's unit before the wait is an
+ * escalation rather than a note.
+ *
+ * Nothing releases the unit when it passes: handing it out anyway would branch
+ * it from a base that the holding unit is about to change, and the conflict
+ * would surface at integration - the cost this deferral exists to avoid. What
+ * the bound changes is that the wait stops being only a line in the latest
+ * tick: it is a recorded `UNIT_HOLD_ESCALATED` row, written once, naming the
+ * holder, its state and its campaign's state, and the campaign's stage detail
+ * says who has to act. A holder that is itself BLOCKED will not integrate by
+ * itself, so that is what the escalation tells the reader first.
+ */
+export const HOLD_ESCALATION_MS = 60 * 60_000;
+
+/**
+ * Record that a unit is held, once, and say how long it has been. Returns the
+ * wait in milliseconds and whether this call is the one that escalated it.
+ */
+async function recordHold(
+  campaign: { id: string },
+  unit: { id: string; unitKey: string },
+  holder: { campaignId: string; campaignState: string; unitId: string; unitKey: string },
+  nowMs: number,
+): Promise<{ waitedMs: number; escalatedNow: boolean }> {
+  const events = await listFactoryEvents(campaign.id, {
+    kinds: [FACTORY_EVENT_KINDS.unitHeldByOtherCampaign, FACTORY_EVENT_KINDS.unitHoldEscalated],
+    limit: 500,
+  });
+  const mine = (kind: string) =>
+    events.filter((event) => {
+      if (event.kind !== kind || event.unitId !== unit.id) return false;
+      return ((event.detail ?? {}) as { holderUnitId?: unknown }).holderUnitId === holder.unitId;
+    });
+  const detail = {
+    unitKey: unit.unitKey,
+    holderCampaignId: holder.campaignId,
+    holderCampaignState: holder.campaignState,
+    holderUnitId: holder.unitId,
+    holderUnitKey: holder.unitKey,
+  };
+  let began = mine(FACTORY_EVENT_KINDS.unitHeldByOtherCampaign).map((event) => Date.parse(event.at)).sort((a, b) => a - b)[0];
+  if (began === undefined) {
+    const written = await recordFactoryEvent({
+      campaignId: campaign.id, unitId: unit.id, kind: FACTORY_EVENT_KINDS.unitHeldByOtherCampaign,
+      evidenceClass: 'DERIVED', detail,
+    });
+    began = Date.parse(written.at);
+  }
+  const waitedMs = Math.max(0, nowMs - began);
+  if (waitedMs < HOLD_ESCALATION_MS) return { waitedMs, escalatedNow: false };
+  if (mine(FACTORY_EVENT_KINDS.unitHoldEscalated).length > 0) return { waitedMs, escalatedNow: false };
+  await recordFactoryEvent({
+    campaignId: campaign.id, unitId: unit.id, kind: FACTORY_EVENT_KINDS.unitHoldEscalated,
+    evidenceClass: 'DERIVED', detail: { ...detail, waitedMs },
+  });
+  return { waitedMs, escalatedNow: true };
+}
+
+/**
  * Say what is true of a stage that has a live bin, and take a stale blocker off.
  *
  * `noteSurfaceBlocker` states the rule directly above this one — a blocker is a
@@ -1838,14 +1930,34 @@ async function runRemoteTick(
       if (stall) return await blockStage(fresh, 'implementation', stall, report);
     }
     let created = 0;
+    const deferred: string[] = [];
     for (const unit of uncovered) {
+      const clash = await conflictingUnitOfOtherCampaign(fresh, changeRequest.repository, unit);
+      if (clash) {
+        const hold = await recordHold(fresh, unit, clash, Date.now());
+        const base = `${unit.unitKey} waits for ${clash.unitKey} of campaign ${clash.campaignId}`;
+        if (hold.waitedMs >= HOLD_ESCALATION_MS) {
+          deferred.push(
+            `${base} (campaign ${clash.campaignState}) for ${Math.round(hold.waitedMs / 60_000)} min: ` +
+              'nothing releases it by itself - that campaign must integrate or cancel the unit, or a person must',
+          );
+          if (hold.escalatedNow) report.notes.push(`escalated: ${deferred[deferred.length - 1]}`);
+        } else {
+          deferred.push(base);
+        }
+        continue;
+      }
       const bin = await createUnitsBin(fresh, changeRequest, [unit]);
       if (!bin) continue;
       created += 1;
       report.created.push(`units:${bin.id}`);
       await noteBin(fresh, bin, `${unit.unitKey} ready`);
     }
-    const withFleet = `${ready.length} unit(s) with the fleet`;
+    for (const note of deferred) report.notes.push(`deferred: ${note}`);
+    const withFleet =
+      deferred.length > 0
+        ? `${ready.length - deferred.length} unit(s) with the fleet; ${deferred.join('; ')}`
+        : `${ready.length} unit(s) with the fleet`;
     if (created > 0) {
       report.progress = true;
       report.notes.push(`${created} unit bin(s) created; ${ready.length} unit(s) with the fleet`);

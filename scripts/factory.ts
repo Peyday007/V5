@@ -783,6 +783,75 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * Why ready work and idle capacity coexist: every READY factory bin with
+     * its wait and its dispatch refusal, and every Routine's standing. The
+     * eligibility is the router's own (`routeBin`, `surfaceIneligibility`).
+     */
+    case 'idle': {
+      const { readIdle } = await import('../server/services/factory/metrics.ts');
+      const { fleetSnapshot } = await import('../server/services/dispatch/candidates.ts');
+      const { routeBin, surfaceIneligibility } = await import('../server/services/dispatch/router.ts');
+      const { listBins, listDispatchesForBin } = await import('../server/repos/bins.ts');
+      const now = new Date().toISOString();
+      const snapshot = await fleetSnapshot(new Date(now));
+      const ready = (await listBins({ states: ['READY'], limit: 500 })).filter((bin) =>
+        bin.kind.startsWith('FACTORY_'),
+      );
+      const bins = [];
+      for (const bin of ready) {
+        const dispatches = await listDispatchesForBin(bin.id);
+        const newest = dispatches.reduce<(typeof dispatches)[number] | null>(
+          (best, one) => (best === null || one.leaseGeneration >= best.leaseGeneration ? one : best),
+          null,
+        );
+        const verdict = routeBin({
+          bin,
+          candidates: snapshot.candidates,
+          fleetPolicy: snapshot.fleetPolicy,
+          fleetInFlight: snapshot.fleetInFlight,
+          factoryInFlight: snapshot.factoryInFlight,
+          now,
+        });
+        bins.push({
+          id: bin.id,
+          kind: bin.kind,
+          readySince: bin.readyAt ?? bin.createdAt,
+          dispatch: newest
+            ? { state: newest.state, lastErrorKind: newest.lastErrorKind, lastError: newest.lastError }
+            : null,
+          routing: verdict.ok
+            ? { ok: true as const, routineName: verdict.routine.name }
+            : { ok: false as const, refusal: verdict.refusal, reason: verdict.reason },
+        });
+      }
+      const reading = readIdle({
+        now,
+        bins,
+        routines: snapshot.candidates.map((c) => ({
+          id: c.routine.id,
+          name: c.routine.name,
+          state: c.routine.state,
+          inFlight: c.routineInFlight,
+          retryAt: c.routine.retryAt,
+          ineligibility: surfaceIneligibility(c),
+        })),
+      });
+      process.stdout.write(`READY factory bins: ${reading.bins.length}\n`);
+      for (const bin of reading.bins) {
+        const mins = bin.waitedMs === null ? 'unknown' : `${Math.round(bin.waitedMs / 60_000)}m`;
+        process.stdout.write(
+          `  ${bin.id} ${bin.kind} waited ${mins} dispatch=${bin.dispatchState ?? '—'} ` +
+            `${bin.refusalKind ?? '—'}: ${bin.reason.slice(0, 240)}\n`,
+        );
+      }
+      process.stdout.write(`\nRoutines: ${reading.routines.length}\n`);
+      for (const routine of reading.routines) {
+        process.stdout.write(`  ${routine.name} ${routine.status} — ${routine.detail}\n`);
+      }
+      break;
+    }
+
     case 'throughput': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const report = await throughputReport(campaignId);
@@ -808,6 +877,24 @@ async function main(): Promise<void> {
           figure('rate-limited sessions', report.rateLimited.sessions) +
           figure('rate-limited deferred ms', report.rateLimited.deferredMs),
       );
+      const stages = report.stages;
+      process.stdout.write(
+        '\nstages\n' +
+          figure('plan duration ms', stages.planDurationMs) +
+          figure('time to first coding ms', stages.timeToFirstCodingMs) +
+          figure('integration delay ms', stages.integrationDelayMs) +
+          figure('review delay ms', stages.reviewDelayMs) +
+          figure('max concurrent unit bins', stages.concurrentUnitBinsMax) +
+          figure('units per hour', stages.unitsPerHour) +
+          figure('completion ms', stages.completionMs),
+      );
+      for (const [kind, delay] of Object.entries(stages.queueDelayByKind)) {
+        process.stdout.write(
+          figure(`${kind} queue avg ms`, delay.average) +
+            figure(`${kind} queue max ms`, delay.max) +
+            figure(`${kind} queue samples`, delay.samples),
+        );
+      }
       for (const [heading, entries] of [
         ['per worker', report.perWorker],
         ['per role', report.perRole],
@@ -1447,7 +1534,7 @@ async function main(): Promise<void> {
     default:
       process.stdout.write(
         'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
+          '  remote-tick, campaigns, bins, status, events, throughput, idle, pull-request,\n' +
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
           '  answer-bin,\n' +
           '  reauthorize, regrant-unit, retire, release,\n' +
