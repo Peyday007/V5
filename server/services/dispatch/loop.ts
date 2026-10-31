@@ -88,7 +88,7 @@ import {
 import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from './candidates.ts';
 import { shouldQuarantine } from './scaler.ts';
 import { routeBin } from './router.ts';
-import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator } from './router.ts';
+import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator, type RoutingRefusal } from './router.ts';
 import { binNeedsWeb, markDispatchRoutine } from '../../repos/bins.ts';
 import {
   claimRoutineFireSlot,
@@ -155,6 +155,20 @@ export const DISPATCH_TICK_MS = 10_000;
  * point.
  */
 export const DISPATCH_BURST = 5;
+
+/**
+ * Whether one bin's refusal ends the whole burst.
+ *
+ * A fleet-wide refusal does — except for a pinned bin, whose candidate list is
+ * one Routine by construction, so even `ALL_SURFACES_INELIGIBLE` is a fact
+ * about that bin. Production, 2026-10-31: 136 such refusals in six hours, each
+ * one a stale pinned probe on a quarantined Routine ending the tick for every
+ * bin behind it.
+ */
+export function endsBurst(bin: Pick<Bin, 'pinnedRoutineId'>, refusal: RoutingRefusal): boolean {
+  if (bin.pinnedRoutineId) return false;
+  return refusalEndsBurst(refusal);
+}
 
 export interface TickResult {
   superseded: number;
@@ -714,7 +728,7 @@ export async function dispatchTick(
        * is the classification, beside the union it classifies, for the reason
        * `REFUSAL_WAIT` is.
        */
-      if (refusalEndsBurst(decision.refusal)) break;
+      if (endsBurst(bin, decision.refusal)) break;
       continue;
     }
 

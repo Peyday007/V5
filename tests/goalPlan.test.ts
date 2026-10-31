@@ -377,6 +377,10 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     expect(first.asked).toBe(1);
     const rounds = await mine();
     expect(rounds.map((one) => one.bucketId)).toEqual([`goal-${g.id}-open`]);
+    // The round is the goal's own work, so the goal's rank reaches its bins.
+    expect(
+      (await listLinks(g.id)).some((one) => one.kind === 'CANDIDATE' && one.ref === rounds[0]!.candidateId && one.relation === 'PURSUES'),
+    ).toBe(true);
     const statement = (await getCandidate(rounds[0]!.candidateId))!.statement;
     expect(statement).toMatch(/any way at all, in any market, industry or arrangement/);
     expect(statement).toMatch(/reach at most USD 300/);
