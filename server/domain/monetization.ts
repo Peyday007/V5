@@ -899,7 +899,27 @@ export function isMonetizationEdgeKind(value: unknown): value is MonetizationEdg
  * only pairs worth asking about are paths on one subject, which is where
  * "instead of" and "on the way to" actually mean something.
  */
+/*
+ * Pure in the two methods, and asked for every ordered pair of paths on every
+ * subject: ~180 000 times over a production ledger of 8 000 possibilities, on
+ * the event loop that also answers sign-in. The table is static, so the
+ * answer for a pair is computed once per process.
+ */
+const relationMemo = new Map<string, readonly MonetizationEdgeKind[]>();
+
 export function derivedRelations(
+  from: MonetizationMethod,
+  to: MonetizationMethod,
+): MonetizationEdgeKind[] {
+  const memoKey = `${from}>${to}`;
+  const hit = relationMemo.get(memoKey);
+  if (hit) return [...hit];
+  const computed = derivedRelationsUncached(from, to);
+  relationMemo.set(memoKey, computed);
+  return [...computed];
+}
+
+function derivedRelationsUncached(
   from: MonetizationMethod,
   to: MonetizationMethod,
 ): MonetizationEdgeKind[] {
