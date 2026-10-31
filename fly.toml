@@ -70,7 +70,13 @@ primary_region = "iad"        # pick the region nearest your Supabase project
     path = "/healthz"
 
 [[vm]]
-  size = "shared-cpu-1x"
+  size = "shared-cpu-2x"
+  # Two shared vCPUs since 2026-10-31. With one, the scenario worker thread and
+  # the event loop share a single core: a 50 000-evaluation run measured 959 ms
+  # before a restart and 15 203 ms after it (Deploy 41226725636), and event-loop
+  # stalls of 30-39 s were charged to work merely in flight beside a running
+  # simulation. A second vCPU lets the worker thread run off the request loop,
+  # which is the whole reason it is a worker thread. About $2 a month more.
   # 1 GB rather than the 256 MB default. Reading a PDF decodes it in memory and
   # OCR spawns tesseract per page; 256 MB gets an out-of-memory kill partway
   # through a large import, which looks like a mysterious restart rather than
