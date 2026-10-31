@@ -812,25 +812,6 @@ export function routeBin(input: RoutingInput): RoutingResult {
      * set-state`. §23's own rule about naming the right refusal, applied to the
      * one condition that bypasses every test it names.
      */
-    /*
-     * A pinned bin's candidate list is one Routine by construction, so its
-     * Routine being quarantined is a fact about this bin and not about the
-     * fleet. Reported as ALL_SURFACES_INELIGIBLE it was FLEET-scoped and ended
-     * the whole dispatch burst, so every bin behind a stale pinned probe waited
-     * for the next tick — 136 times in six hours on 2026-10-31.
-     */
-    if (pinned && !sawRoutable) {
-      return {
-        ok: false,
-        refusal: 'PINNED_SURFACE_UNAVAILABLE',
-        reason:
-          `This bin may only be fired at Routine ${pinned}, and that Routine or its account is ` +
-          'disabled, draining or quarantined, or its worker is disabled. Nothing is lost by ' +
-          'waiting, and no other surface will be tried for it.',
-        considered,
-        retryAt: null,
-      };
-    }
     if (!sawRoutable) {
       return {
         ok: false,

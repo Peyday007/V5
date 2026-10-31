@@ -57,7 +57,7 @@ import {
   listDispatchesForBin,
   markDispatchSent,
 } from '../server/repos/bins.ts';
-import { dispatchTick } from '../server/services/dispatch/loop.ts';
+import { dispatchTick, endsBurst } from '../server/services/dispatch/loop.ts';
 import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from '../server/services/dispatch/candidates.ts';
 import { refusalEndsBurst, routeBin } from '../server/services/dispatch/router.ts';
 import { decideBinRouting } from '../server/services/bins/routing.ts';
@@ -719,7 +719,7 @@ describe('proving each surface, one at a time', () => {
     if (!decision.ok) expect(decision.refusal).toBe('PINNED_SURFACE_UNAVAILABLE');
   });
 
-  it('refuses a pinned bin on a quarantined Routine per bin, so the burst carries on', async () => {
+  it('does not end the burst for a pinned bin on a quarantined Routine', async () => {
     const target = surfaces[0]!;
     await setRoutineState({ routineId: target.routineId, from: 'ENABLED', to: 'QUARANTINED', reason: 'test' });
     const binId = await factoryBin('pinned-quarantined', { pinnedRoutineId: target.routineId });
@@ -733,9 +733,11 @@ describe('proving each surface, one at a time', () => {
     });
     expect(decision.ok).toBe(false);
     if (!decision.ok) {
-      // ALL_SURFACES_INELIGIBLE is FLEET-scoped and ends every burst it is met in.
-      expect(decision.refusal).toBe('PINNED_SURFACE_UNAVAILABLE');
-      expect(refusalEndsBurst(decision.refusal)).toBe(false);
+      // FLEET-scoped, so it would end every burst it is met in — but the pin
+      // makes it a fact about this one bin.
+      expect(refusalEndsBurst(decision.refusal)).toBe(true);
+      expect(endsBurst((await getBin(binId))!, decision.refusal)).toBe(false);
+      expect(endsBurst({ pinnedRoutineId: null }, decision.refusal)).toBe(true);
     }
   });
 

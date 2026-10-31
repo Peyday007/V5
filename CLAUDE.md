@@ -13827,7 +13827,8 @@ Dispatch was not the limit (it fired every bin that had claimable work). Generat
   complete only from the ledger, so a link cannot complete one.
 - **A pinned bin on a quarantined Routine ended every dispatch burst.** Its candidate list is
   one Routine, so `ALL_SURFACES_INELIGIBLE` (FLEET-scoped) was a fact about one bin.
-  It is `PINNED_SURFACE_UNAVAILABLE` (BIN-scoped) now: 136 burst-ending refusals in six hours.
+  The loop asks `endsBurst(bin, refusal)`, which never ends the burst for a pinned bin; the
+  refusal's name is unchanged because the Build card reads it: 136 such refusals in six hours.
 
 Downstream stages are fleet work on the same surfaces, so they scale with it: more busy
 sessions is also more distinct sessions for the audit-independence floor. Nothing here touches
