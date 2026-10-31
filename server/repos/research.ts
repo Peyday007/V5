@@ -523,7 +523,8 @@ export async function updateOrchestration(
  * had not changed: a write per packet per boot, and a report that read old
  * parks as new ones (2026-10-31: 58 "parked" in three hours, almost all
  * September packets re-touched by two restarts). The guard is in the statement,
- * so a real change of status or reason still lands. True when it wrote.
+ * so a real change of status or reason still lands, and a park that must
+ * record when the packet stopped still does when nothing has. True when it wrote.
  */
 export async function parkOrchestration(
   id: string,
@@ -536,8 +537,9 @@ export async function parkOrchestration(
         SET status = 'NEEDS_HUMAN', failure_reason = ?,
             completed_at = CASE WHEN ? = 1 THEN ? ELSE completed_at END,
             updated_at = ?
-      WHERE id = ? AND NOT (status = 'NEEDS_HUMAN' AND COALESCE(failure_reason, '') = ?)`,
-    [reason, options.stampCompleted ? 1 : 0, at, at, id, reason ?? ''],
+      WHERE id = ? AND NOT (status = 'NEEDS_HUMAN' AND COALESCE(failure_reason, '') = ?
+                             AND (? = 0 OR completed_at IS NOT NULL))`,
+    [reason, options.stampCompleted ? 1 : 0, at, at, id, reason ?? '', options.stampCompleted ? 1 : 0],
   );
   return done.changes === 1;
 }
