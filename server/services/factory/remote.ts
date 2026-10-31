@@ -531,6 +531,7 @@ export async function createIntegrateBin(
   const mergeable = units.filter((unit) => unit.branch !== null && unit.headSha !== null);
   if (mergeable.length === 0) return null;
   const base = roundBaseFor(campaign);
+  const touchesMigrations = mergeable.some((unit) => unit.ownedPaths.some((path) => /(^|\/)(pg-)?migrations\//.test(path)));
   const order = mergeable.map((unit) => ({
     unitKey: unit.unitKey,
     branch: unit.branch,
@@ -577,6 +578,28 @@ export async function createIntegrateBin(
             'you, and the wrong one when a command failed, because then the work goes back ' +
             'unchanged and the next integrator meets the same failure.',
           '',
+          ...(touchesMigrations
+            ? [
+                /*
+                 * Production, 2026-10-30/31: three campaigns stopped here because a
+                 * unit's migration was numbered at planning time and another change
+                 * took or skipped those numbers before integration, leaving a gap or
+                 * a collision the repository's own tests refuse. The integrator was
+                 * forbidden to touch it and the unit had no attempts left, so a
+                 * mechanical rename stranded whole campaigns. A unit owns its
+                 * migration by name, not by number (`ownsPath`), so renaming it stays
+                 * inside what the unit declared.
+                 */
+                '**One edit is yours to make: a migration number.** If, after the merges, either ' +
+                  'chain (server/db/migrations, server/db/pg-migrations — numbered independently) ' +
+                  'has a gap or two files with one number, and the cause is a migration a unit in ' +
+                  'this list added, rename that file with `git mv` to the next free number in its ' +
+                  'chain (keep its name after the number, change nothing inside it and nothing else), ' +
+                  'commit that as its own commit, and then run the ' +
+                  'commands. Never renumber a migration that is already in the base commit.',
+                '',
+              ]
+            : []),
           'Then submit a result for unit key `integrate` with a JSON value of the shape ' +
             '{"outcome":"IMPLEMENTED"|"BLOCKED","integrationBranch","headSha",' +
             '"merged":[{"unitKey","branch","headSha"}],"conflicts":[],' +
@@ -626,7 +649,8 @@ export async function createIntegrateBin(
     'rewrite, force-push or delete any unit branch',
     'open, update or comment on a pull request — delivery is a later bin',
     'change any file yourself: resolving a conflict by editing the work is implementing, and ' +
-      'this bin does not implement',
+      'this bin does not implement' +
+      (touchesMigrations ? ' (the one exception is renumbering a unit\'s migration, described above)' : ''),
   ];
 
   return await createFactoryBin({
