@@ -198,6 +198,11 @@ export function asDetector(learned: LearnedDetector): Detector {
   };
 }
 
+/** Re-decide each detector's mode from its measured precision (promote or demote). */
+export async function settleLearnedModes(reader: SearchReader): Promise<void> {
+  for (const d of await listLearnedDetectors(reader)) await settleDetectorMode(reader, d.id);
+}
+
 /** The stored detectors this reader may use, as runnable rules. */
 export async function learnedDetectorsFor(reader: SearchReader): Promise<Detector[]> {
   return (await listLearnedDetectors(reader)).map(asDetector);

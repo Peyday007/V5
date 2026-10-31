@@ -252,7 +252,16 @@ export async function runDetectors(input: { now?: Date; detectors?: readonly Det
   const now = input.now ?? new Date();
   const db = getDb();
   const reports: DetectorRunReport[] = [];
-  for (const detector of input.detectors ?? DETECTORS) {
+  let installed: readonly Detector[] | undefined = input.detectors;
+  if (!installed) {
+    // Learned detectors are rows. Only GENERAL ones run here: detections are
+    // shared rows, so a project's or a person's private pattern never files one.
+    const { learnedDetectorsFor, settleLearnedModes } = await import('./learned.ts');
+    const reader = { projectIds: [], userId: null };
+    await settleLearnedModes(reader);
+    installed = [...DETECTORS, ...(await learnedDetectorsFor(reader))];
+  }
+  for (const detector of installed) {
     const since = new Date(now.getTime() - detector.lookbackMs - DAY).toISOString();
     const rows = await db.all<{ id: string; source: string; url: string; title: string; organization: string | null; published_at: string | null; fetched_at: string }>(
       `SELECT id, source, url, title, organization, published_at, fetched_at FROM feed_items
