@@ -20,6 +20,7 @@ describe('the Cash decision pass is throttled on the production tick', () => {
 
   it('the production loop calls operate with no clock, which is the throttled path', () => {
     const loop = readFileSync('server/services/russell/loop.ts', 'utf8');
-    expect(loop).toMatch(/await operate\(project\.id\)/);
+    expect(loop).toMatch(/operate\(project\.id\)/);
+    expect(loop).not.toMatch(/operate\(project\.id, *\{/);
   });
 });
