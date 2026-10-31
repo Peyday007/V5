@@ -24,6 +24,7 @@ import { composeBuyerMessage } from '../outreach.ts';
 import { offerVersion } from '../perform.ts';
 import type { CashOpportunity } from '../../../domain/types.ts';
 import { agreementAnswering, type CashOutcome, type OutcomeKind } from '../../../domain/cashJourney.ts';
+import { asReason, reasonBinds, reasonClass, type GoalConditions, type OutcomeReason } from '../../../domain/cashOutcomeReasons.ts';
 
 /** Below this many observations a figure is an anecdote, and says so. */
 export const LESSON_MIN_SAMPLE = 3;
@@ -313,4 +314,66 @@ export function measuredByMechanism(lessons: CashLesson[]): Record<string, numbe
     }
   }
   return out;
+}
+
+
+/**
+ * How far to mark a similar candidate down, from what Brain has measured.
+ *
+ * Only opportunity reasons that bind under the current goal count, only for the
+ * same mechanism and channel, and only once the same reason has repeated at
+ * least `LESSON_MIN_SAMPLE` times - fewer is an anecdote. The demotion is the
+ * repeat count itself, so it grows in proportion to the evidence and is an
+ * ordering input, never a refusal: nothing is banned, and the effect is gone
+ * the moment the goal stops binding on the reason or a new method postdates the
+ * failures. Method failures are counted separately and never demote anything.
+ */
+export interface Deprioritization {
+  demotion: number;
+  reasons: { reason: OutcomeReason; repeats: number }[];
+  /** Method failures seen, reported beside - they never demote. */
+  methodFailures: { reason: OutcomeReason; repeats: number }[];
+  words: string;
+}
+
+export function deprioritization(input: {
+  outcomes: CashOutcome[];
+  mechanism: string | null;
+  channel: string | null;
+  goal: GoalConditions;
+  /** When the method last changed; failures before it say nothing about the new method. */
+  methodChangedAt?: string | null;
+}): Deprioritization {
+  const counts = new Map<OutcomeReason, Set<string>>();
+  for (const row of input.outcomes) {
+    if (row.kind !== 'FAILURE_REASON') continue;
+    if (row.mechanism !== input.mechanism || row.channel !== input.channel) continue;
+    const reason = asReason(row.valueText);
+    if (!reason) continue;
+    // A deal fails once per opportunity for a given reason.
+    counts.set(reason, (counts.get(reason) ?? new Set()).add(row.opportunityId));
+    if (input.methodChangedAt && reasonClass(reason) === 'METHOD' && row.createdAt < input.methodChangedAt) {
+      counts.get(reason)!.delete(row.opportunityId);
+    }
+  }
+  const reasons: Deprioritization['reasons'] = [];
+  const methodFailures: Deprioritization['methodFailures'] = [];
+  for (const [reason, ids] of counts) {
+    const repeats = ids.size;
+    if (reasonClass(reason) === 'METHOD') {
+      if (repeats > 0) methodFailures.push({ reason, repeats });
+      continue;
+    }
+    if (repeats >= LESSON_MIN_SAMPLE && reasonBinds(reason, input.goal)) reasons.push({ reason, repeats });
+  }
+  reasons.sort((a, b) => b.repeats - a.repeats || a.reason.localeCompare(b.reason));
+  const demotion = reasons.reduce((n, r) => n + r.repeats, 0);
+  return {
+    demotion,
+    reasons,
+    methodFailures,
+    words: demotion === 0
+      ? 'Nothing measured marks this kind of candidate down under this goal.'
+      : `Marked down: ${reasons.map((r) => `${r.reason.toLowerCase().replace(/_/g, ' ')} ${r.repeats} times`).join(', ')} for this kind of candidate under this goal. It stays eligible and lifts when the goal or the method changes.`,
+  };
 }

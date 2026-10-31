@@ -30,6 +30,9 @@
  */
 import { getClaim } from '../../repos/research.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
+import { screenOpportunity, type ScreenFacts, type ScreenLimits, type ScreenVerdict } from './screen.ts';
+import { listWorkstreams } from '../../repos/register.ts';
+import { readTarget } from '../goals/target.ts';
 
 /**
  * Hosts whose pages are individual freelance-marketplace listings.
@@ -86,7 +89,8 @@ export function closesWithin(expiresAt: string | null, now: string, runwayMs = D
 
 export type NotWorthResearching =
   | { kind: 'MARKETPLACE_LISTING'; marketplace: string }
-  | { kind: 'CLOSES_TOO_SOON'; at: string };
+  | { kind: 'CLOSES_TOO_SOON'; at: string }
+  | { kind: 'SCREENED_OUT'; reason: string; detail: string; limit: string | null };
 
 export function describeNotWorthResearching(reason: NotWorthResearching): string {
   switch (reason.kind) {
@@ -94,17 +98,89 @@ export function describeNotWorthResearching(reason: NotWorthResearching): string
       return 'a freelance-marketplace listing — this operation takes no freelance work, so nothing a dive found could be acted on';
     case 'CLOSES_TOO_SOON':
       return `it closes ${reason.at}, sooner than a dive could finish and the first step be taken`;
+    case 'SCREENED_OUT':
+      return `${reason.detail}${reason.limit ? ` (${reason.limit})` : ''}`;
   }
 }
 
 /**
  * The first reason this opening is not worth researching now, or null.
- * Capital is not one of them: it decides whether work may begin, never
- * whether it may be researched.
+ * Capital alone is not one of them: it decides whether work may begin. It
+ * counts here only when the caller passes the goal's limits and the screen
+ * finds a known need above a stated limit with no route needing none named -
+ * and a HOLD, which is a question rather than a refusal, never stops research.
  */
+/** Mechanisms whose own shape names a way to be paid that needs no capital of ours. */
+const NO_CAPITAL_ROUTE: Partial<Record<CashOpportunity['mechanism'], string>> = {
+  SUPPLY_DEMAND_MISMATCH: 'brokering the match for a fee',
+  SUBCONTRACTED_FULFILMENT: 'subcontracting the fulfilment',
+};
+
+/** What the opening's own row establishes, for the screen. Nothing unknown is invented. */
+export function screenFactsFor(opportunity: CashOpportunity): ScreenFacts {
+  return {
+    capitalRequiredCents: opportunity.peakFundingCents ?? null,
+    noCapitalRoute: NO_CAPITAL_ROUTE[opportunity.mechanism] ?? null,
+    daysToPayment: null,
+    expiresAt: opportunity.expiresAt ?? null,
+    duplicateOf: opportunity.duplicateOfId ?? null,
+    requirements: [],
+    capabilities: null,
+    exclusions: [],
+    hasPayer: !!opportunity.payer,
+    hasPrice: opportunity.priceCents !== null && opportunity.priceCents !== undefined,
+    typeHasHistory: true,
+    sourceObservedAt: opportunity.signalObservedAt ?? null,
+  };
+}
+
+/** Every live goal in the project that has a target, with its limits read from the goal itself. */
+export async function liveGoalLimits(projectId: string, now: string): Promise<Array<{ goalId: string; limits: ScreenLimits }>> {
+  const out: Array<{ goalId: string; limits: ScreenLimits }> = [];
+  for (const goal of await listWorkstreams({ projectIds: [projectId] })) {
+    if (goal.projectId !== projectId || !goal.target) continue;
+    const reading = await readTarget(goal, new Date(now));
+    if (!reading || reading.achieved) continue;
+    out.push({
+      goalId: goal.id,
+      limits: {
+        metric: reading.metric,
+        daysLeft: reading.daysLeft,
+        capitalCeilingCents: reading.capitalCeilingCents,
+        capitalBeforeProofCents: reading.capitalBeforeProofCents,
+      },
+    });
+  }
+  return out;
+}
+
+/** The limits of every live goal in the project that has a target, read from the goal itself. */
+export async function goalLimitsFor(projectId: string, now: string): Promise<ScreenLimits[]> {
+  return (await liveGoalLimits(projectId, now)).map((one) => one.limits);
+}
+
+/**
+ * The screen's verdict for an opening: a REJECT only when it fails every live
+ * goal's limits, because an opening that serves one goal is worth researching.
+ * No goal with a target means no limits to screen against, so no verdict.
+ */
+async function screenVerdictFor(opportunity: CashOpportunity, now: string): Promise<ScreenVerdict | null> {
+  if (!opportunity.projectId) return null;
+  const all = await goalLimitsFor(opportunity.projectId, now);
+  if (all.length === 0) return null;
+  const facts = screenFactsFor(opportunity);
+  let reject: ScreenVerdict | null = null;
+  for (const limits of all) {
+    const verdict = screenOpportunity(facts, limits, now);
+    if (verdict.verdict !== 'REJECT') return null;
+    reject ??= verdict;
+  }
+  return reject;
+}
+
 export async function notWorthResearching(
   opportunity: CashOpportunity,
-  context: { now: string },
+  context: { now: string; screen?: { facts: ScreenFacts; limits: ScreenLimits } | null },
 ): Promise<NotWorthResearching | null> {
   if (opportunity.sourceClaimId) {
     const claim = await getClaim(opportunity.sourceClaimId);
@@ -113,6 +189,17 @@ export async function notWorthResearching(
   }
   if (closesWithin(opportunity.expiresAt, context.now)) {
     return { kind: 'CLOSES_TOO_SOON', at: opportunity.expiresAt! };
+  }
+  // The goal's own limits, when the caller has them. Only a REJECT stops research:
+  // a HOLD is a question to answer, and answering it is what research is for.
+  // With none passed (every production caller), the project's own goals decide.
+  const verdict = context.screen
+    ? screenOpportunity(context.screen.facts, context.screen.limits, context.now)
+    : context.screen === undefined
+      ? await screenVerdictFor(opportunity, context.now)
+      : null;
+  if (verdict && verdict.verdict === 'REJECT') {
+    return { kind: 'SCREENED_OUT', reason: verdict.reason, detail: verdict.detail, limit: verdict.limit };
   }
   return null;
 }
