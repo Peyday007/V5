@@ -15,7 +15,7 @@
  * already spent in part.
  */
 import { getDb } from '../../db/database.ts';
-import { cashEventsOfKindInProject, recordCashEvent } from '../../repos/cashMode.ts';
+import { cashEventsOfKind, cashEventsOfKindInProject, recordCashEvent } from '../../repos/cashMode.ts';
 import type { DecisionVerdict } from '../../domain/cashDecisions.ts';
 
 /** The cash event kind a caller writes when a question is skipped for want of any decision it could change. */
@@ -109,9 +109,15 @@ export async function recordQuestionsSkipped(input: {
   why: string;
 }): Promise<number> {
   if (input.fields.length === 0) return 0;
+  /*
+   * Read this opening's own events through the (opportunity_id, kind) index.
+   * This runs for every screened-out opening on every Cash tick, and reading
+   * the whole project's QUESTION_SKIPPED history each time grew with openings
+   * times events (production, 2026-10-31).
+   */
   const held = new Set(
-    (await cashEventsOfKindInProject(input.projectId, QUESTION_SKIPPED_EVENT))
-      .filter((event) => event.opportunityId === input.opportunityId)
+    (await cashEventsOfKind(input.opportunityId, QUESTION_SKIPPED_EVENT))
+      .filter((event) => event.projectId === input.projectId)
       .map((event) => String((event.detail as { field?: unknown } | null)?.field ?? '')),
   );
   let recorded = 0;

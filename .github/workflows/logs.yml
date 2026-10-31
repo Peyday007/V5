@@ -178,6 +178,21 @@ jobs:
           fi
           echo "LOGS: OK app=$app seconds=$LOG_SECONDS lines=$(wc -l < all.txt)"
 
+      # Job logs live on storage some sessions cannot reach (Forbidden), so the
+      # tail of the capture is also published as annotations, which the GitHub
+      # API itself serves — the same remedy factory.yml uses.
+      - name: Publish the capture as annotations
+        if: always()
+        run: |
+          [ -f all.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('all.txt', encoding='utf-8', errors='replace').read()[-35000:]
+          enc = lambda s: s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)][:10]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=logs {n}/{len(chunks)}::{enc(chunk)}')
+          PY
+
 
   # The durable record of the failure, which needs the `production` environment
   # because that is where `BRAIN_DATABASE_URL` lives. It is a **read**, not a
