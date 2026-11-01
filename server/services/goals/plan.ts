@@ -38,9 +38,10 @@ import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
 import { checkCommercialAuthority } from '../cash/authority.ts';
-import { bestCaseReach, composeGoalModel, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { bestCaseReach, composeGoalModel, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
-import { MAX_LIVE_GOAL_ROUNDS, openGoalDiscovery } from '../cash/discovery.ts';
+import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery } from '../cash/discovery.ts';
+import { constructArrangements } from '../cash/construct.ts';
 import { spareResearchSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
@@ -57,7 +58,7 @@ export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] a
 export type PlanVerdict = (typeof PLAN_VERDICTS)[number];
 
 /** The links of a cash plan's causal chain, in the order they are checked. */
-export const CHAIN_LINKS = ['REACHABLE_BUYER', 'CURRENT_DEMAND', 'OFFER_AND_PRICE', 'CONVERSION', 'FULFILMENT', 'ECONOMICS', 'SETTLES_IN_TIME'] as const;
+export const CHAIN_LINKS = ['REACHABLE_BUYER', 'CURRENT_DEMAND', 'OFFER_AND_PRICE', 'CONVERSION', 'MARKET_VOLUME', 'FULFILMENT', 'ECONOMICS', 'SETTLES_IN_TIME'] as const;
 export type ChainLink = (typeof CHAIN_LINKS)[number];
 
 export const CHAIN_LABEL: Record<ChainLink, string> = {
@@ -65,6 +66,7 @@ export const CHAIN_LABEL: Record<ChainLink, string> = {
   CURRENT_DEMAND: 'a dated sign they need it now',
   OFFER_AND_PRICE: 'an offer and a price',
   CONVERSION: 'buyers who have actually agreed to it',
+  MARKET_VOLUME: 'enough buyers, buying often enough, for the deals the plan needs',
   FULFILMENT: 'proof it can be delivered — by Brain or by whoever is named to do it',
   ECONOMICS: 'known costs and money tied up, inside the limits',
   SETTLES_IN_TIME: 'cash that settles before the deadline',
@@ -159,6 +161,13 @@ export interface PlanReading {
    * no run finished.
    */
   researchPriority: ResearchPriority[];
+  /**
+   * What the openings Brain holds say about the goal — never about the world.
+   * `POOL_INSUFFICIENT` means the openings held cannot reach it however they
+   * are combined; it is not a finding that nothing could, and the search for
+   * new openings and new arrangements continues (§81).
+   */
+  pool: { conclusion: 'NO_POOL' | 'POOL_INSUFFICIENT' | 'POOL_COULD_REACH'; sentence: string };
 }
 
 export interface InferredInput {
@@ -187,6 +196,20 @@ export interface ResearchPriority {
   reason: string;
 }
 
+/** What the held openings say about the goal, kept apart from what exists. */
+export function poolConclusion(bestReach: number, target: TargetReading, read: number): PlanReading['pool'] {
+  const remaining = target.remainingCents / 100;
+  if (bestReach >= remaining) {
+    return { conclusion: 'POOL_COULD_REACH', sentence: `The ${read} openings held could reach the ${Math.round(remaining)} ${target.currency} still needed at prices buyers are shown to pay, if every link is established.` };
+  }
+  return {
+    conclusion: 'POOL_INSUFFICIENT',
+    sentence:
+      `The ${read} openings held reach at most ${Math.round(bestReach)} of the ${Math.round(remaining)} ${target.currency} still needed at prices buyers are shown to pay. ` +
+      'That limits this pool only: Brain keeps searching for new openings and constructing new arrangements rather than concluding nothing viable exists.',
+  };
+}
+
 /** A path-research question takes about this long to come back, measured from the fleet's turnaround. */
 export const RESEARCH_TURNAROUND_DAYS = 2;
 const VARIABLE_FIELD: Record<string, { field: string | null; learnable: boolean }> = {
@@ -195,6 +218,7 @@ const VARIABLE_FIELD: Record<string, { field: string | null; learnable: boolean 
   capital: { field: 'requiredCapital', learnable: false },
   price: { field: 'revenueRange', learnable: false },
   close: { field: null, learnable: true },
+  volume: { field: 'buyerVolume', learnable: false },
   hours: { field: null, learnable: true },
 };
 
@@ -212,6 +236,8 @@ export interface ConsideredOpening {
    */
   potentialReach: number | null;
   competitiveAward: boolean;
+  /** Whether research established how many deals the market can take (§81). */
+  volumeEstablished: boolean;
 }
 
 const DAY = 86_400_000;
@@ -249,6 +275,7 @@ function linkChecks(one: ModelledOpportunity, deals: number, target: TargetReadi
             ? one.close.note
             : `${deals} new buyer(s) would be offered and nobody knows how many would agree${one.agreed ? ` (one agreement of ${one.agreedValue} is recorded)` : ''}`,
     },
+    volumeCheck(one, deals),
     fulfilmentCheck(one, caps, allPresent, capabilities),
     {
       link: 'ECONOMICS',
@@ -294,6 +321,24 @@ function fulfilmentCheck(one: ModelledOpportunity, caps: string[], allPresent: b
   return { link: 'FULFILMENT', ok: false, basis: 'nobody has established who would do the work' };
 }
 
+/**
+ * Whether the market can take the deals this strategy needs. A one-off needs
+ * its one buyer; a repeatable play needs research to have established that
+ * enough buyers exist, buying often enough, inside the window — never the
+ * number of buyers the strategy would like to ask.
+ */
+function volumeCheck(one: ModelledOpportunity, deals: number): LinkCheck {
+  const needed = one.repeatable ? Math.ceil(deals / OUTREACH_MULTIPLE) : Math.min(deals, 1);
+  if (!one.repeatable || needed === 0) return { link: 'MARKET_VOLUME', ok: true, basis: one.repeatable ? 'no new deals needed' : 'a one-off needs its one buyer' };
+  if (!volumeEstablished(one)) return { link: 'MARKET_VOLUME', ok: false, basis: `${needed} deal(s) needed and nobody has established how many buyers exist or how often they buy` };
+  const available = one.volume.value ?? 0;
+  return {
+    link: 'MARKET_VOLUME',
+    ok: available >= needed,
+    basis: available >= needed ? `${needed} deal(s) needed, ${available} available in the window (${one.volume.note})` : `${needed} deal(s) needed but only ${available} in the window (${one.volume.note})`,
+  };
+}
+
 /** The deals a strategy actually needs taken, as opposed to the buyers it asks. */
 function dealsTaken(one: ModelledOpportunity, deals: number): number {
   return one.agreedDeals + (one.repeatable ? Math.ceil(deals / OUTREACH_MULTIPLE) : deals);
@@ -310,6 +355,8 @@ async function nextTestFor(link: ChainLink, one: ModelledOpportunity, projectId:
       if (message?.state !== 'PRESENT') return { link, test, by: 'PERSON', blocker: 'No message provider is connected, so Brain cannot send the offer. Connect one.' };
       return { link, test, by: 'BRAIN', blocker: null };
     }
+    case 'MARKET_VOLUME':
+      return { link, test: `Establish how many buyers for "${title}" exist and can be reached, and how often each buys, from a published directory, register or list.`, by: 'BRAIN', blocker: null };
     case 'FULFILMENT':
       return one.opportunity.requiredCapabilities.length > 0
         ? { link, test: `Prove Brain can produce what "${title}" needs, on a real sample, and record the hours.`, by: 'BRAIN', blocker: null }
@@ -339,8 +386,10 @@ function conservative(members: { one: ModelledOpportunity; deals: number }[], ta
     const cost = one.directCost.value;
     const capital = one.capital.value;
     const hours = one.hours.value;
-    if (close === null || price === null || days === null || cost === null || capital === null || hours === null) return { settled: null, exposure: null, labour: null };
-    const won = deals * close;
+    const volume = volumeEstablished(one) ? one.volume.value : null;
+    if (volume === null ||
+      close === null || price === null || days === null || cost === null || capital === null || hours === null) return { settled: null, exposure: null, labour: null };
+    const won = Math.min(deals * close, volume);
     settled += days <= (target.daysLeft ?? 0) ? one.agreedValue + won * price : 0;
     exposure += (won + one.agreedDeals) * capital;
     labour += won * hours;
@@ -405,6 +454,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       needsMoreOpenings: !target.achieved && target.daysLeft !== null && target.daysLeft > 0,
       inferred: inferredInputs(model.considered),
       researchPriority: [],
+      pool: { conclusion: 'NO_POOL', sentence: `No opening held is far enough along to model (${model.considered.length} read). That is a statement about what Brain holds, not about what exists, so it keeps searching and constructing.` },
     };
     if (input.persist) await persistReading(goal, reading, null);
     return reading;
@@ -448,12 +498,13 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     missing: linkChecks(one, dealsForGoal(one, target.remainingCents / 100), target, capabilities, now)
       .filter((check) => !check.ok)
       .map((check) => check.link),
-    supportedReach: one.agreed || priceSupported(one) ? bestCaseReach(one, target.remainingCents / 100, target.daysLeft ?? 0) : 0,
+    supportedReach: one.agreed || priceSupported(one) ? bestCaseReach(one, target.remainingCents / 100, target.daysLeft ?? 0, true) : 0,
     potentialReach:
       one.agreed || one.price.value !== null || one.price.high !== null
         ? bestCaseReach(one, target.remainingCents / 100, target.daysLeft ?? 0)
         : null,
     competitiveAward: one.competitiveAward,
+    volumeEstablished: one.repeatable ? volumeEstablished(one) : one.volume.provenance === 'EVIDENCE',
   }));
   considered.sort((a, b) => a.missing.length - b.missing.length || b.supportedReach - a.supportedReach);
   const strategies: StrategyReading[] = [];
@@ -494,7 +545,9 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       if (late) return sum;
       // Agreed money is reach. New deals are reach only at a price buyers are
       // shown to pay — never at a guessed or listed one.
-      return sum + one.agreedValue + (unproven || !priceSupported(one) ? 0 : deals * (one.price.high ?? one.price.value ?? 0));
+      // A repeatable play takes no more deals than research shows the market holds.
+      const taken = volumeEstablished(one) && one.repeatable ? Math.min(deals, one.volume.value ?? deals) : deals;
+      return sum + one.agreedValue + (unproven || !priceSupported(one) ? 0 : taken * (one.price.high ?? one.price.value ?? 0));
     }, 0);
     if (best < target.remainingCents / 100) {
       constraintsFailed.push(`cannot reach the ${target.remainingCents / 100} ${target.currency} still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most ${Math.round(best)})`);
@@ -615,6 +668,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     needsMoreOpenings: !target.achieved && verdict !== 'RECOMMENDABLE',
     inferred: inferredInputs(model.considered),
     researchPriority: researchPriority(result, model.included, target, chosen?.key ?? null),
+    pool: poolConclusion(bestReach, target, considered.length),
   };
   if (input.persist) await persistReading(goal, reading, chosen);
   return reading;
@@ -793,11 +847,22 @@ export function forgetGoalReadings(): void {
  * round is linked to the goal, so the goal's rank reaches the bins it creates.
  * When work queues up the spare is zero and this is exactly the old behaviour.
  */
-async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, spare: number): Promise<{ asked: number; researched: number }> {
+async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, spare: number): Promise<{ asked: number; constructed: number; researched: number }> {
   const goal = await getWorkstream(goalId);
-  if (!goal) return { asked: 0, researched: 0 };
+  if (!goal) return { asked: 0, constructed: 0, researched: 0 };
   let asked = 0;
   const attempts = 1 + spare;
+  /*
+   * New mechanisms first (§81): arrangements Brain composed itself from the
+   * buyer populations, needs and supply it knows of, decomposed so the round
+   * asks only for the parts nothing establishes. Then the world is asked from
+   * the next lens. Both are new-opening work; the existing openings' paths are
+   * researched separately below, so one never crowds the other out.
+   */
+  const constructed = await askConstructedArrangements(goal, reading, now, Math.max(1, Math.ceil(attempts / 2)), MAX_LIVE_GOAL_ROUNDS + spare);
+  for (const candidateId of constructed) {
+    await linkWorkstream({ workstreamId: goal.id, kind: 'CANDIDATE', ref: candidateId, relation: 'PURSUES', recordedBy: 'BRAIN', recordedByUserId: null });
+  }
   for (let i = 0; i < attempts; i += 1) {
     const opened = await openGoalDiscovery({
       goal,
@@ -820,16 +885,33 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
   }
   // And dig into the openings already held: the path to their money.
   const researched = (await researchGoalPaths({ reading, projectId: reading.target.projectId, now, spare })).length;
-  return { asked, researched };
+  return { asked, constructed: constructed.length, researched };
 }
 
-export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; researched: number; busy: boolean }> {
+/** Open rounds for the best-ranked arrangements Brain constructed, at most `max` this pass. */
+export async function askConstructedArrangements(goal: Workstream, reading: PlanReading, now: Date, max: number, liveCap: number): Promise<string[]> {
+  const t = reading.target;
+  if (t.daysLeft === null || t.daysLeft <= 0 || t.remainingCents <= 0) return [];
+  const frame = await executionFrame(t.projectId, t.currency);
+  const arrangements = await constructArrangements({ projectId: t.projectId, currency: t.currency, delivers: frame?.delivers ?? [], capitalCeilingCents: t.capitalCeilingCents, daysLeft: t.daysLeft, now });
+  const opened: string[] = [];
+  for (const one of arrangements) {
+    if (opened.length >= max) break;
+    const round = await openConstructedRound({ goal, projectId: t.projectId, key: one.key, title: `Constructed: ${one.label}`, question: one.question, now: now.toISOString(), liveCap });
+    // Null is this arrangement's cool-off, the live cap or a closed gate: the next one is tried.
+    if (round) opened.push(round.candidateId);
+  }
+  return opened;
+}
+
+export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean }> {
   const goals = await getDb().all<{ id: string }>(
     `SELECT id FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
   );
   let read = 0;
   let outcomes = 0;
   let asked = 0;
+  let constructed = 0;
   let researched = 0;
   for (const { id } of goals) {
     if (await recordGoalOutcome(id, now)) outcomes += 1;
@@ -852,6 +934,7 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
         if (spare > 0) {
           const more = await widenGoalSearch(id, held, now, spare);
           asked += more.asked;
+          constructed += more.constructed;
           researched += more.researched;
         }
       }
@@ -862,7 +945,7 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       reading = await readGoalPlan({ goalId: id, now, persist: true });
       read += 1;
     } catch (error) {
-      if (error instanceof ScenarioBusyError) return { read, outcomes, asked, researched, busy: true };
+      if (error instanceof ScenarioBusyError) return { read, outcomes, asked, constructed, researched, busy: true };
       throw error;
     }
     if (reading) lastReadings.set(id, reading);
@@ -874,8 +957,9 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       const spare = (await spareResearchSurfaces(reading.target.projectId)) ?? 0;
       const more = await widenGoalSearch(id, reading, now, spare);
       asked += more.asked;
+      constructed += more.constructed;
       researched += more.researched;
     }
   }
-  return { read, outcomes, asked, researched, busy: false };
+  return { read, outcomes, asked, constructed, researched, busy: false };
 }

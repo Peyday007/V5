@@ -57,6 +57,7 @@ async function opening(input: { title: string; priceCents: number; mechanism?: C
   await updateOpportunity(o.id, { payer: 'Property managers', price_cents: input.priceCents, offer_scope: 'One report', reachable_channel: 'Published emails', buying_signal: 'Posted asking', signal_observed_at: inDays(-2) });
   await fact('price', `$${input.priceCents / 100}`);
   if (input.days) await fact('timeToFirstCash', input.days);
+  await fact('buyerVolume', '400 property managers are listed in the state directory; each orders monthly.');
   return o;
 }
 

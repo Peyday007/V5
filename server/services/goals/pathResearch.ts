@@ -60,6 +60,15 @@ const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> =
     { field: 'directCosts', ask: 'Find the published costs of delivering one sale: tools, materials, fees, subcontracted work, shipping.' },
     { field: 'requiredCapital', ask: 'State the most money that goes out before any comes back for one sale, and when it goes out.' },
   ],
+  MARKET_VOLUME: [
+    {
+      field: 'buyerVolume',
+      ask:
+        'Count how many buyers of exactly this kind exist and can be reached through a published channel — a directory, ' +
+        'register, association list or marketplace category, with its number and source — and how often one buyer buys this ' +
+        '(weekly, monthly, yearly or once). State both as numbers; "many" or "thousands" is not a count.',
+    },
+  ],
   OFFER_AND_PRICE: [
     { field: 'revenueRange', ask: 'Find what buyers are published as actually paying for this — a figure or a range, each with its source and date.' },
   ],
@@ -134,7 +143,7 @@ export async function researchGoalPaths(input: {
   for (const one of order) {
     if (openings >= openingCap || openHere >= questionCap) break;
     let asks = one.missing.flatMap((link) => FIELDS_FOR[link] ?? []);
-    if (asks.length === 0) continue;
+    if (asks.length === 0 && (one.volumeEstablished !== false || one.competitiveAward)) continue;
     /*
      * Worth asking about only if the answer could change what Brain pursues.
      * An opening whose most, even with every buyer agreeing, is under a tenth
@@ -151,6 +160,10 @@ export async function researchGoalPaths(input: {
       // No supported price big enough yet: what buyers actually pay decides
       // whether anything else about it is worth asking, so ask that alone.
       asks = [FIELDS_FOR.OFFER_AND_PRICE![0]!];
+    } else if (!one.volumeEstablished && one.supportedReach < remaining && !one.competitiveAward && !asks.some((a) => a.field === 'buyerVolume')) {
+      // One deal cannot carry the goal: whether it sells again — how many
+      // buyers, how often — is investigated, never assumed (§81).
+      asks = [...asks, FIELDS_FOR.MARKET_VOLUME![0]!];
     }
     const opportunity = await getOpportunity(one.opportunityId);
     if (!opportunity) continue;

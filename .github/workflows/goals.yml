@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan'
+        description: 'show | file | pause | resume | cancel | reinstate | depends | terms | create | target | plan | construct'
         required: true
         default: show
       goal:

@@ -53,8 +53,13 @@ export type QuantityKind = 'RATE' | 'POSITIVE' | 'REAL';
 export type ObservationValue =
   /** Successes out of trials — a measured rate with its sample. */
   | { kind: 'COUNT'; successes: number; trials: number }
-  /** A published point figure. `sampleSize` when the source states one. */
-  | { kind: 'POINT'; value: number; sampleSize?: number }
+  /**
+   * A published point figure. `sampleSize` when the source states one.
+   * `exact` when the figure is not a sampled rate but a ratio of two published
+   * amounts about one case (a cost over a price): it describes that case
+   * exactly, so its only error is reading error.
+   */
+  | { kind: 'POINT'; value: number; sampleSize?: number; exact?: boolean }
   /** A published range: read as the spread of the population it describes. */
   | { kind: 'RANGE'; low: number; high: number };
 

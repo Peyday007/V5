@@ -13875,7 +13875,8 @@ gate and adds no second simulator, evidence store or approval path.
   common factor, and counts only cash settled by the deadline. It never sums
   chances.
 - **The conventions are constants, not hidden choices:**
-  - an unsized published rate is worth ten events;
+  - an unsized published rate is worth four events, and bounds only — it locates
+    a rate without a measured precision (reviewed in §81);
   - a single published figure has a 10% reading error;
   - the between-population spread has floors of 0, 0.3 and 0.8 by tier.
 
@@ -13923,6 +13924,36 @@ models had kept 670 feed leads, and ten every twenty hours reached Claude.
 `shortlistPace` sizes and spaces the feed shortlist by `spareResearchSurfaces`:
 10 + 5 per idle surface (at most 25), as soon as two hours after the last one
 settled. A busy fleet keeps the daily ten (§78's rule).
+
+## 81. Brain constructs mechanisms nobody published, and never assumes a second sale.
+
+§79 reconstructed numbers for openings Brain held. It could not add an opening,
+and a goal whose held openings could not reach it read NOT_VIABLE over the same
+33 openings while its lens rounds asked the world in prose.
+`services/cash/construct.ts`, `services/cash/volume.ts` and `docs/QUANT.md`
+are the repair.
+
+- **An arrangement is composed from parts the project holds independently.**
+  A buyer population (a `BUYER_TYPE` on the industry map, or an evidenced
+  payer), a need (a `BOTTLENECK`, or what that payer pays for), a way to fulfil
+  it (a `FULFILMENT_SOURCE`, or a proved deliverable) and a capture structure
+  from a closed table. Nothing names a business, and an opening already held
+  in that shape is left out.
+- **The decomposition decides the question.** `composeArrangement` and
+  `reconstruct` name every part nothing establishes, and those parts are what
+  the round asks; an established part is stated and only confirmed.
+- **It goes through the one door.** `openConstructedRound` is the lens rounds'
+  gate, frame, candidate transaction, harvest and live cap. What comes back is
+  an ordinary opening the model reads like any other.
+- **A pool falling short is not a finding about the world.** The reading's
+  `pool` says `POOL_INSUFFICIENT` and Brain keeps searching and constructing;
+  nothing concludes that nothing viable exists.
+- **Repeatability is researched.** `buyerVolume` (reachable buyers, how often
+  each buys) is read only where a source states a count. Unstated, the model
+  sweeps it, `MARKET_VOLUME` is a missing link and a supported reach counts one
+  deal; any opening becomes repeatable once research shows more than one deal.
+- **An unsized published rate is bounds.** It locates a rate and states no
+  precision, so an estimate resting only on such rates is never a distribution.
 
 ## Repository map
 
@@ -14322,6 +14353,8 @@ server/
       export.ts         an estimate as a scenario input, never stronger than its evidence
       knowledge.ts      Brain's own card facts and outcomes, as transferable observations
       problem.ts        one question end to end, from a file (`npm run quant`)
+    cash/construct.ts   §80: arrangements composed from the map, decomposed into the round's question
+    cash/volume.ts      §80: deals the market can take, read only where a source states a count
     russell/
       home.ts           the eight things home says, in the order S6 fixes them
       collections.ts    threads organized without inventing a category, ranked by meaning

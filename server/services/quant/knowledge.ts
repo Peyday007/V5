@@ -151,7 +151,8 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
       const figures = readMoneyFigures(fact.value, opportunity.currency).filter((one) => !one.perUnit);
       if (price && price > 0 && figures.length > 0) {
         const share = Math.max(...figures.map((one) => one.cents)) / price;
-        if (share >= 0 && share <= 1) value = { kind: 'POINT', value: share };
+        // Two published amounts about one opening: an exact ratio, not a sampled rate.
+        if (share >= 0 && share <= 1) value = { kind: 'POINT', value: share, exact: true };
       }
     }
     if (!value) continue;
