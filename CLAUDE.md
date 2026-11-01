@@ -13908,6 +13908,13 @@ and its reason says in words that Brain decided it and under which grant. A
 `RUSSELL_ROUTINE_DECISION` event sits beside it. A capability-authority card,
 a reconsider card and a project with no live grant are never answered here.
 
+**Filing short needs no research slot.** Carrying out a person's answer waits
+for the grant's concurrency because it may put research back to work. A
+RECORD_GAPS answer on a packet with nothing left to start goes straight to
+COMPLETE_WITH_GAPS, so it is not made to wait. The first reading after release
+had 89 answered parks queued behind thirteen live missions for a slot they would
+have held for one tick.
+
 **The audit limit is measured, and it is the number of Claude accounts.** A
 session is a connector's access token for its hour (§23, `sessionWindow.ts`),
 and every Routine on one account presents the same one. Three research
