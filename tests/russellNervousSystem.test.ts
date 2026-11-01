@@ -95,6 +95,7 @@ import { createRun } from '../server/repos/runs.ts';
 import {
   NEEDS_HUMAN_CHOICES,
   parkStoppedMissions,
+  resumeAnsweredRequest,
   reaskRefusedPlans,
   unparkResolvedMissions,
 } from '../server/services/russell/needsHuman.ts';
@@ -830,6 +831,60 @@ describe('the loop keeps going without anybody watching', () => {
     // And a second tick does not resume it again.
     const second = await tick('instance-a');
     expect(second.resumed).not.toContain(request.id);
+  });
+
+  it('files a recorded-gaps answer without waiting for a research slot it would not use (§80)', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'one at a time',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 5,
+      maxFragments: 5,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const launchOne = async (title: string, statement: string) => {
+      const captured = await capture({ title, statement, projectId, visibility: 'SHARED' });
+      const launched = await launch({
+        projectId,
+        layerId,
+        candidateId: captured.candidate!.id,
+        visibility: 'SHARED',
+        title,
+        assignment: `Under Florida law as in force in 2026, ${statement}?`,
+        objective: 'Settle the Florida position.',
+        whyNow: 'The layer names Florida as open.',
+        acceptableSources: ['Florida Statutes'],
+        excludedSources: [],
+        evidence: ['the exact section'],
+        startedBy: { kind: 'PERSON', id: userId },
+        envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+        authorizedBy: userId,
+      });
+      expect(launched.ok, launched.reason).toBe(true);
+      return launched.mission!;
+    };
+    const parked = await launchOne('Florida licensing', 'is a broker licence required');
+    await withResearch(parked.orchestrationId!, layerId, projectId);
+    await updateOrchestration(parked.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'The evidence bar was not met and the repair ladder is spent.',
+    });
+    await parkStoppedMissions(10);
+    await renewLiveMissionReservations(10);
+    expect((await getMission(parked.id))!.state).toBe('NEEDS_HUMAN');
+    // The one slot is now taken by live research.
+    const running = await launchOne('Florida bonding', 'is a surety bond required');
+    expect((await getMission(running.id))!.state).not.toBe('NEEDS_HUMAN');
+
+    const request = (await listOpenRequests(projectId)).find((entry) => entry.missionId === parked.id)!;
+    await answerHumanRequest({ requestId: request.id, actorUserId: userId, choice: NEEDS_HUMAN_CHOICES.RECORD_GAPS.key });
+    const outcome = await resumeAnsweredRequest((await getHumanRequest(request.id))!);
+    expect(outcome.deferred ?? false).toBe(false);
+    expect(outcome.settled, outcome.reason).toBe(true);
+    expect((await getOrchestration(parked.orchestrationId!))!.unresolvedGapPolicy).toBe('RECORD_GAPS');
   });
 
   it('answers a routine research park itself, under the standing grant (§80)', async () => {

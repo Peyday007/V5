@@ -583,6 +583,20 @@ export async function parkStoppedMissions(limit: number): Promise<ParkResult[]> 
  * take back and is never what blocks a resume; only a live-or-lapsed `HELD`
  * hold is an admission, and `readmitReservation` decides it.
  */
+/**
+ * Whether recording the gaps only files what was already researched.
+ *
+ * A packet with no fragment left to start or in flight goes straight to
+ * COMPLETE_WITH_GAPS (`outcome.ts`): nothing is put back to work, so it needs
+ * no research slot. Production, 2026-11-01: 89 answered parks waited behind
+ * thirteen live missions for a slot they would have held for one tick (§80).
+ */
+async function filingOnly(orchestrationId: string | null): Promise<boolean> {
+  if (!orchestrationId) return false;
+  const fragments = await currentFragments(orchestrationId);
+  return !fragments.some((fragment) => ['PLANNED', 'QUEUED', 'RUNNING', 'VALIDATING'].includes(fragment.status));
+}
+
 async function admitResume(reservationId: string | null): Promise<boolean> {
   if (!reservationId) return true;
   const reservation = await getReservation(reservationId);
@@ -901,6 +915,7 @@ export async function resumeAnsweredRequest(
    */
   if (
     (choice === NEEDS_HUMAN_CHOICES.RECORD_GAPS.key || choice === NEEDS_HUMAN_CHOICES.APPROVE_PLAN.key) &&
+    !(choice === NEEDS_HUMAN_CHOICES.RECORD_GAPS.key && (await filingOnly(mission.orchestrationId))) &&
     !(await admitResume(mission.reservationId))
   ) {
     return {
