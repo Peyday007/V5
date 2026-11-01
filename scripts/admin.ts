@@ -360,18 +360,23 @@ interface GoalPreset {
   days: number;
 }
 
+/*
+ * Brain-improvement goals run 14 days, the money ones 2. Every improvement goal
+ * expired at 2 days with 1 of 5 packets spent (production, 2026-10-31), so the
+ * Routines had no Brain work left and idle-fill handed them cash research.
+ */
 const GOAL_PRESETS: Record<string, GoalPreset> = {
-  methods: { prefix: 'Methods:', name: 'Methods: how Brain researches and judges (v2)', assignment: METHODS_ASSIGNMENT, maxPackets: 10, maxFragments: 60, days: 2 },
+  methods: { prefix: 'Methods:', name: 'Methods: how Brain researches and judges (v2)', assignment: METHODS_ASSIGNMENT, maxPackets: 10, maxFragments: 60, days: 14 },
   signals: { prefix: 'Signals:', name: 'Signals: where buyers show up in free public data', assignment: SIGNALS_ASSIGNMENT, maxPackets: 6, maxFragments: 36, days: 2 },
   strategy: { prefix: 'Strategy:', name: 'Strategy: which kinds of business are worth building', assignment: STRATEGY_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  learning: { prefix: 'Learning:', name: 'Learning: getting smarter from what actually paid', assignment: LEARNING_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+  learning: { prefix: 'Learning:', name: 'Learning: getting smarter from what actually paid', assignment: LEARNING_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
   ladder: { prefix: 'Ladder:', name: 'Ladder: stacking small cash into large ventures', assignment: LADDER_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  memory: { prefix: 'Memory:', name: 'Memory: storing and recalling what Brain learns', assignment: MEMORY_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  judgment: { prefix: 'Judgment:', name: 'Judgment: AI that checks its own reasoning', assignment: JUDGMENT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  research: { prefix: 'Research:', name: 'Research: how top research agents search and verify', assignment: RESEARCH_METHOD_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  agents: { prefix: 'Agents:', name: 'Agents: running many AI workers well', assignment: AGENTS_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  selfimprove: { prefix: 'Self-improvement:', name: 'Self-improvement: a system that upgrades its own rules', assignment: SELFIMPROVE_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
-  split: { prefix: 'Split:', name: 'Split: free models for small steps, Claude for hard ones', assignment: SPLIT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 2 },
+  memory: { prefix: 'Memory:', name: 'Memory: storing and recalling what Brain learns', assignment: MEMORY_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
+  judgment: { prefix: 'Judgment:', name: 'Judgment: AI that checks its own reasoning', assignment: JUDGMENT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
+  research: { prefix: 'Research:', name: 'Research: how top research agents search and verify', assignment: RESEARCH_METHOD_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
+  agents: { prefix: 'Agents:', name: 'Agents: running many AI workers well', assignment: AGENTS_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
+  selfimprove: { prefix: 'Self-improvement:', name: 'Self-improvement: a system that upgrades its own rules', assignment: SELFIMPROVE_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
+  split: { prefix: 'Split:', name: 'Split: free models for small steps, Claude for hard ones', assignment: SPLIT_ASSIGNMENT, maxPackets: 5, maxFragments: 30, days: 14 },
 };
 
 async function administrator(): Promise<User> {
