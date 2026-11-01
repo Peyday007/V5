@@ -228,3 +228,19 @@ export async function getPrinting(id: string): Promise<CatalogPrinting | null> {
   const row = await getDb().get<MagicPrintingRow>('SELECT * FROM magic_printings WHERE id = ?', [id]);
   return row ? mapPrinting(row) : null;
 }
+
+/**
+ * Every card legal in a format, with the cheapest price any printing carries.
+ * This is the candidate pool a design build draws from when no names are given,
+ * read in one statement rather than a lookup per card.
+ */
+export async function listLegalCardsWithPrice(formatKey: 'commander' | 'standard'): Promise<(CatalogCard & { minPriceCents: number | null })[]> {
+  const rows = await getDb().all<MagicCardRow & { min_price: number | string | null }>(
+    `SELECT c.*, (SELECT MIN(p.price_usd_cents) FROM magic_printings p WHERE p.oracle_id = c.oracle_id) AS min_price
+       FROM magic_cards c
+      WHERE c.legalities LIKE ? ESCAPE '!'
+      ORDER BY c.name_key, c.oracle_id`,
+    [`%"${likeEscape(formatKey)}":"legal"%`],
+  );
+  return rows.map((r) => ({ ...mapCard(r), minPriceCents: r.min_price === null ? null : Number(r.min_price) }));
+}

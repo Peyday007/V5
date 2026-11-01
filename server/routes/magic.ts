@@ -19,7 +19,7 @@ import {
   badRequest, bodyOf, handler, notFound, optionalInteger, optionalString, pathId, queryOf, requirePerson, requiredString,
   unprocessable,
 } from './helpers.ts';
-import { getCard, findCardsByName, listPrintings, getPrinting, type CatalogCard } from '../repos/magicCatalog.ts';
+import { getCard, findCardsByName, listLegalCardsWithPrice, listPrintings, getPrinting, type CatalogCard } from '../repos/magicCatalog.ts';
 import {
   appendLedger, appendLeagueDeck, appendObservation, appendPurchase,
   getLeague, getPlayer, listGames, listLeagueDecks, listLeagues, listLedger, listObservations, listPlayers, listPurchases, listRules,
@@ -27,7 +27,7 @@ import {
 } from '../repos/magicLeague.ts';
 import { getDeck, currentVersion, getVersion, saveAnalysis, saveDesignIntent, type DeckCardInput } from '../repos/magicDecks.ts';
 import { latestPrice, listPriceSnapshots, lockPriceSnapshot, PriceRefused, recordPriceSnapshot } from '../repos/magicPrices.ts';
-import { catalogStatus, lookupCard, searchCatalog, startCatalogRefresh } from '../services/magic/catalog/index.ts';
+import { catalogStatus, ensureCatalogFresh, lookupCard, searchCatalog, startCatalogRefresh } from '../services/magic/catalog/index.ts';
 import {
   changeCommander, diff, exportDeck, importDeck, listCollection, listDecks, listVersions, restoreVersion, saveVersion,
   setCollectionQuantity, undo, validateCards, validateSaved,
@@ -125,7 +125,12 @@ async function poolFrom(names: unknown, who: string): Promise<{ pool: OptCard[];
 
 /* ------------------------------------------------------------------ catalog */
 
-magicRouter.get('/magic/catalog/status', handler(async () => { owner(); return catalogStatus(); }));
+/** Reading the status is what keeps the catalog filled: an empty or stale one starts a refresh off the request path. */
+magicRouter.get('/magic/catalog/status', handler(async () => {
+  owner();
+  await ensureCatalogFresh();
+  return catalogStatus();
+}));
 
 magicRouter.get('/magic/catalog/search', handler(async (req) => {
   owner();
@@ -389,6 +394,21 @@ magicRouter.post('/magic/optimize', handler(async (req) => {
 
 /* ------------------------------------------------------------------- design */
 
+/**
+ * The candidate pool when the person named none: every card legal in the
+ * format, priced from the cheapest printing the catalog knows. The price is
+ * Scryfall's, so it is an estimate; a person's confirmed price only applies to
+ * a card they priced, which the optimizer reads per printing.
+ */
+async function catalogPool(format: MagicFormat): Promise<OptCard[]> {
+  const rows = await listLegalCardsWithPrice(format === 'COMMANDER' ? 'commander' : 'standard');
+  return rows.map((card) => ({
+    oracleId: card.oracleId, name: card.name, typeLine: card.typeLine, oracleText: card.oracleText, keywords: card.keywords,
+    colorIdentity: card.colorIdentity, legalities: card.legalities, manaCost: card.manaCost, cmc: card.cmc,
+    priceCents: card.minPriceCents, priceStatus: card.minPriceCents === null ? null : 'ESTIMATE',
+  }));
+}
+
 function intentOf(value: unknown): DesignIntent {
   if (!value || typeof value !== 'object' || typeof (value as DesignIntent).idea !== 'string') throw badRequest('"intent" must be a design intent returned by this API.');
   return value as DesignIntent;
@@ -431,12 +451,21 @@ magicRouter.post('/magic/design/build', handler(async (req) => {
   const who = owner();
   const b = bodyOf(req);
   const intent = intentOf(b.intent);
-  const { pool, unknown } = await poolFrom(b.poolNames, who);
-  if (pool.length === 0) throw unprocessable('Name the cards to build from with "poolNames"; the whole catalog is not searched.', { unknown });
+  const named = Array.isArray(b.poolNames) && b.poolNames.length > 0;
+  const { pool, unknown } = named ? await poolFrom(b.poolNames, who) : { pool: await catalogPool(intent.format), unknown: [] as string[] };
+  if (pool.length === 0) {
+    throw unprocessable(named
+      ? 'None of the named cards is in the catalog.'
+      : 'The card catalog has not been loaded yet, so there is nothing to build from. It is loading now; try again shortly.', { unknown, catalog: await catalogStatus() });
+  }
   let commander: OptCard | undefined;
   if (typeof b.commander === 'string') {
     commander = pool.find((p) => p.name === b.commander);
-    if (!commander) throw unprocessable('The commander must be one of the pool cards.');
+    if (!commander) {
+      const found = await findCardsByName(b.commander);
+      if (found.length === 1) { commander = await optCardFor(found[0]!, null, who); pool.push(commander); }
+    }
+    if (!commander) throw unprocessable('That commander is not in the catalog.');
   }
   const owned: Record<string, number> = {};
   for (const row of await listCollection(who)) if (row.status === 'OWNED') owned[row.card_name] = Number(row.quantity);

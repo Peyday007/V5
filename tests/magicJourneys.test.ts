@@ -96,6 +96,12 @@ describe('journey 1: describe a deck in words', () => {
     expect(chosen.body.question).toBeNull();
     const refined = await call('POST', '/magic/design/refine', { intent: chosen.body.intent, utterance: 'under $50' });
     expect(refined.body.intent.budgetCents).toBe(5000);
+    // With no pool named, the build draws on every format-legal card in the catalog.
+    const built = await call('POST', '/magic/design/build', { intent: chosen.body.intent });
+    expect(built.status, built.text).toBe(200);
+    const cards = built.body.build.cards as { quantity: number }[];
+    expect(built.body.build.validation.ok, JSON.stringify(built.body.build.validation)).toBe(true);
+    expect(cards.reduce((n, c) => n + c.quantity, 0)).toBe(100); // the commander is one of them
   });
 });
 
