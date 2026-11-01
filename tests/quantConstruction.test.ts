@@ -279,6 +279,18 @@ describe('arrangements Brain constructs from what it knows', () => {
     expect(strategy.links.find((l) => l.link === 'MARKET_VOLUME')).toMatchObject({ ok: true });
   });
 
+  it('spreads a pass across buyer populations before asking one twice', async () => {
+    await sector('Veterinary care', { buyer: 'Independent veterinary clinics', bottleneck: 'After-hours phone coverage', supply: 'Remote answering services' });
+    await sector('Commercial grounds care', { buyer: 'Homeowner association boards', bottleneck: 'Snow removal surges', supply: 'Independent plow operators' });
+    const id = await goal(600_000);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
+    const opened = await askConstructedArrangements((await getWorkstream(id))!, reading, now, 2, MAX_LIVE_GOAL_ROUNDS);
+    expect(opened).toHaveLength(2);
+    const statements = await Promise.all(opened.map(async (c) => (await getCandidate(c))!.statement));
+    expect(statements.some((one) => one.includes('Independent veterinary clinics'))).toBe(true);
+    expect(statements.some((one) => one.includes('Homeowner association boards'))).toBe(true);
+  });
+
   it('asks each constructed arrangement once, then the next, within the live cap', async () => {
     await sector('Veterinary care', { buyer: 'Independent veterinary clinics', bottleneck: 'After-hours phone coverage', supply: 'Remote answering services' });
     const id = await goal(600_000);

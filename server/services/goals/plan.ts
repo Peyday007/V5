@@ -42,6 +42,7 @@ import { bestCaseReach, composeGoalModel, dealsForGoal, OUTREACH_MULTIPLE, price
 import { readTarget, type TargetReading } from './target.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery } from '../cash/discovery.ts';
 import { constructArrangements } from '../cash/construct.ts';
+import { listRounds } from '../../repos/cashDiscovery.ts';
 import { spareResearchSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
@@ -895,11 +896,24 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
   const frame = await executionFrame(t.projectId, t.currency);
   const arrangements = await constructArrangements({ projectId: t.projectId, currency: t.currency, delivers: frame?.delivers ?? [], capitalCeilingCents: t.capitalCeilingCents, daysLeft: t.daysLeft, now });
   const opened: string[] = [];
-  for (const one of arrangements) {
+  /*
+   * One buyer population per pass before a second: ranking favours the best-
+   * evidenced parts, and production's first pass sent all five askings to one
+   * buyer. Spread first; a population already asked waits for the next pass.
+   */
+  const askedDemand = new Set((await listRounds(t.projectId)).filter((r) => r.state === 'OPEN' && r.bucketId.startsWith(`goal-${goal.id}-mx-`)).map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4)));
+  const openDemand = new Set(arrangements.filter((one) => askedDemand.has(one.key)).map((one) => one.demand.ref));
+  const spread = [...arrangements.filter((one) => !openDemand.has(one.demand.ref)), ...arrangements.filter((one) => openDemand.has(one.demand.ref))];
+  const thisPass = new Set<string>();
+  for (const one of spread) {
     if (opened.length >= max) break;
+    if (thisPass.has(one.demand.ref) && spread.some((other) => !thisPass.has(other.demand.ref) && !openDemand.has(other.demand.ref))) continue;
     const round = await openConstructedRound({ goal, projectId: t.projectId, key: one.key, title: `Constructed: ${one.label}`, question: one.question, now: now.toISOString(), liveCap });
     // Null is this arrangement's cool-off, the live cap or a closed gate: the next one is tried.
-    if (round) opened.push(round.candidateId);
+    if (round) {
+      opened.push(round.candidateId);
+      thisPass.add(one.demand.ref);
+    }
   }
   return opened;
 }
