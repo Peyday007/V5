@@ -41,6 +41,8 @@ import {
 import { SEED_RULES } from '../services/magic/league/seed.ts';
 import { ensureWorkspace } from '../services/magic/league/workspace.ts';
 import { standings } from '../services/magic/league/standings.ts';
+import { rankSwaps } from '../services/magic/league/nextTen.ts';
+import { attackOnlyDefenseStops, valueInPod } from '../services/magic/league/matchups.ts';
 import type { MagicFormat, MagicZone } from '../domain/magicTypes.ts';
 import { MAGIC_FORMATS, MAGIC_ZONES } from '../domain/magicTypes.ts';
 
@@ -603,16 +605,168 @@ magicRouter.post('/magic/leagues/:leagueId/purchases', handler(async (req, res) 
   return { purchase: row };
 }));
 
+/** The owner's league deck: the latest version on the owner's record, with its cards when it has a deck. */
+async function ownerLeagueDeck(who: string, leagueId: string) {
+  const players = await listPlayers(who, leagueId);
+  const ownerPlayer = players.find((p) => p.isOwner);
+  if (!ownerPlayer) throw gone();
+  const versions = await listLeagueDecks(who, ownerPlayer.id);
+  const latest = versions[versions.length - 1];
+  // The deck's current version, so an edit or a recorded swap is what gets evaluated.
+  const version = latest?.deckId ? await currentVersion(who, latest.deckId) : latest?.deckVersionId ? await getVersion(who, latest.deckVersionId) : null;
+  return { players, ownerPlayer, latest, version };
+}
+
+function textOf(card: CatalogCard): string {
+  return `${card.oracleText ?? ''}`.toLowerCase();
+}
+
+/**
+ * "Evaluate the next $10": one-for-one swaps into the owner's current league
+ * deck, searched by the optimizer over format-legal catalog cards in the
+ * commander's colours that cost at most the weekly allowance. Every candidate
+ * carries its price and whether that price is verified; only a verified
+ * price within the allowance is approvable, and a suggestion is never a
+ * purchase.
+ */
+magicRouter.post('/magic/leagues/:leagueId/next-ten', handler(async (req) => {
+  const who = owner();
+  const league = await leagueOf(who, pathId(req, 'leagueId'));
+  const allowance = (await listRules(who, league.id)).find((r) => r.ruleKey === 'weekly_allowance_cents');
+  const allowanceCents = Number.isInteger(Number(allowance?.value)) ? Number(allowance?.value) : SEED_RULES.weeklyAllowanceCents;
+  const { version } = await ownerLeagueDeck(who, league.id);
+  if (!version) throw unprocessable('The owner deck has no card list to improve yet.');
+  const deck: DeckLine[] = [];
+  const missing: string[] = [];
+  for (const c of version.cards) {
+    const card = await cardFor(c);
+    if (!card) { missing.push(c.cardName); continue; }
+    deck.push({ zone: c.zone, quantity: c.quantity, card: await optCardFor(card, c.printingId, who) });
+  }
+  if (missing.length) {
+    throw unprocessable('Some cards in the owner deck are not in the catalog yet, so swaps cannot be evaluated.', { unknown: missing.slice(0, 20), catalog: await catalogStatus() });
+  }
+  const identity = new Set(deck.filter((l) => l.zone === 'commander').flatMap((l) => l.card.colorIdentity));
+  const inDeck = new Set(deck.map((l) => l.card.name));
+  const pool = (await catalogPool('COMMANDER'))
+    .filter((c) => c.priceCents !== null && c.priceCents <= allowanceCents && !inDeck.has(c.name))
+    .filter((c) => c.colorIdentity.every((col) => identity.has(col)));
+  if (pool.length === 0) throw unprocessable('No priced catalog card within the allowance fits this commander yet.', { catalog: await catalogStatus() });
+  const protectedNames = deck.filter((l) => l.zone === 'commander').map((l) => l.card.name);
+  const result = optimizeDeck({
+    format: 'COMMANDER', deck, pool, analysisDate: today(), opponents: league.pod_size ? Number(league.pod_size) - 1 : 3,
+    constraints: { protectedNames, priceCeilingCents: allowanceCents }, maxSwaps: 1, beamWidth: 4, maxScoredPerLevel: 400, topN: 20,
+  });
+  const ranked = [];
+  for (const u of result.upgrades.slice(0, 20)) {
+    const found = await findCardsByName(u.swap.add);
+    const printings = found.length === 1 ? await listPrintings(found[0]!.oracleId) : [];
+    const pick = [...printings].filter((p) => p.priceUsdCents !== null).sort((a, b) => (a.priceUsdCents ?? 0) - (b.priceUsdCents ?? 0))[0];
+    const mine = pick ? (await verifiedFor(pick.id, who))[0] : undefined;
+    ranked.push({
+      add: u.swap.add, cut: u.swap.cut, gain: u.gain,
+      price: { printingId: pick?.id ?? 'unknown', cents: mine?.priceCents ?? pick?.priceUsdCents ?? null, status: mine ? 'CONFIRMED' as const : 'ESTIMATE' as const },
+      printing: pick ? { setCode: pick.setCode, collectorNumber: pick.collectorNumber } : null,
+    });
+  }
+  return {
+    allowanceCents, suggestions: rankSwaps(ranked, allowanceCents), baseline: result.baseline.build.composite,
+    note: 'Suggestions are not purchases. A Scryfall price is an estimate, not a verified TCGplayer market price, so only a price a person confirmed for that exact printing can be approved. Gains are HEURISTIC_SCORE changes, not win rates.',
+    catalog: await catalogStatus(),
+  };
+}));
+
+/**
+ * How the owner deck stands against each recorded opponent. Pod and 1v1 are
+ * separate answers: Kardur's goad redirects attacks in a pod and protects
+ * nothing in a duel, while his own life-loss trigger is valued either way. An
+ * attack-only defence does nothing against an opponent observed to drain life
+ * without attacking. Results are counted from recorded games with their sample
+ * size; nothing here is a win probability.
+ */
+magicRouter.get('/magic/leagues/:leagueId/matchups', handler(async (req) => {
+  const who = owner();
+  const league = await leagueOf(who, pathId(req, 'leagueId'));
+  const { players, ownerPlayer, latest, version } = await ownerLeagueDeck(who, league.id);
+  let usesGoad = false;
+  let ownLifeLossTrigger = false;
+  let unknownCards = 0;
+  for (const c of version?.cards ?? []) {
+    const card = await cardFor(c);
+    if (!card) { unknownCards++; continue; }
+    const t = textOf(card);
+    if (/\bgoad|attack a player other than you/.test(t)) usesGoad = true; // Kardur's forced attack is goad in all but name
+    if (/(each opponent|that player|target player|target opponent) loses \d+ life/.test(t)) ownLifeLossTrigger = true;
+  }
+  const podOpponents = Math.max(1, Number(league.pod_size ?? 4) - 1);
+  const traits = { usesGoad, ownLifeLossTrigger, defenseIsAttackOnly: true, noncombatDrain: false };
+  const games = await listGames(who, league.id);
+  const opponents = [];
+  for (const p of players.filter((x) => !x.isOwner)) {
+    const decks = await listLeagueDecks(who, p.id);
+    const current = decks[decks.length - 1];
+    const observed = (decks[0]?.detail?.observedTraits ?? {}) as { noncombatDrain?: boolean; manyCreatures?: boolean };
+    const together = games.filter((g) => g.participants.some((x) => x.player_id === p.id) && g.participants.some((x) => x.player_id === ownerPlayer.id));
+    const ownerPoints = together.reduce((n, g) => n + g.eliminations.filter((e) => e.credited_player_id === ownerPlayer.id).reduce((m, e) => m + Number(e.points), 0), 0);
+    opponents.push({
+      playerId: p.id, label: p.label, commander: current?.commander ?? 'UNKNOWN', cardListStatus: current?.cardListStatus ?? 'UNVERIFIED',
+      versions: decks.length, observedTraits: observed,
+      attackOnlyDefenseStopsThem: attackOnlyDefenseStops(true, observed.noncombatDrain === true),
+      goadAgainstThem: observed.manyCreatures ? 'Many creatures observed, so goad has attackers to redirect.' : null,
+      record: { games: together.length, ownerPoints, ownerPointsPerGame: together.length ? ownerPoints / together.length : null, label: 'EMPIRICAL_MATCH_RESULT' },
+    });
+  }
+  return {
+    owner: {
+      label: ownerPlayer.label, commander: latest?.commander ?? null, unknownCards,
+      goadInPod: valueInPod(traits, podOpponents), goadIn1v1: valueInPod(traits, 1),
+      ownLifeLossTrigger: ownLifeLossTrigger
+        ? 'The deck has its own life-loss effects, which score eliminations for you in a pod and close a duel without attacking.'
+        : 'No own life-loss effect was found in the deck text.',
+    },
+    opponents,
+    note: 'Pod and 1v1 are separate readings. Records are counts from logged games with their sample size; nothing here is a win probability.',
+  };
+}));
+
 magicRouter.post('/magic/leagues/:leagueId/observations', handler(async (req, res) => {
   const who = owner();
   const b = bodyOf(req);
   const kinds = ['REVEALED_CARD', 'COMMANDER', 'PURCHASE', 'RESULT', 'NOTE'];
   if (typeof b.kind !== 'string' || !kinds.includes(b.kind)) throw badRequest(`"kind" must be one of ${kinds.join(', ')}.`);
-  const row = await appendObservation(who, pathId(req, 'leagueId'), {
-    playerId: optionalString(b.playerId, 'playerId') ?? null, kind: b.kind as never, label: b.label === 'HYPOTHESIS' ? 'HYPOTHESIS' : 'OBSERVED',
-    detail: b.detail ?? {}, confidence: typeof b.confidence === 'number' ? b.confidence : null, observedOn: requiredString(b.observedOn, 'observedOn'),
+  const leagueId = pathId(req, 'leagueId');
+  const label = b.label === 'HYPOTHESIS' ? 'HYPOTHESIS' : 'OBSERVED';
+  const playerId = optionalString(b.playerId, 'playerId') ?? null;
+  const observedOn = requiredString(b.observedOn, 'observedOn');
+  const detail = (b.detail && typeof b.detail === 'object' ? b.detail : {}) as Record<string, unknown>;
+  // An observed commander or revealed card is a new version of that opponent's deck; the version
+  // before it, and the baseline, are never changed. A hypothesis is recorded but versions nothing.
+  let version = null;
+  if (label === 'OBSERVED' && playerId && (b.kind === 'COMMANDER' || b.kind === 'REVEALED_CARD')) {
+    const player = await getPlayer(who, playerId);
+    if (!player || player.leagueId !== leagueId) throw gone();
+    const history = await listLeagueDecks(who, playerId);
+    const cur = history[history.length - 1];
+    const revealedBefore = Array.isArray(cur?.detail?.revealed) ? (cur!.detail.revealed as string[]) : [];
+    const commander = b.kind === 'COMMANDER' ? requiredString(detail.commander, 'detail.commander') : cur?.commander ?? null;
+    const revealed = b.kind === 'REVEALED_CARD' ? [...new Set([...revealedBefore, requiredString(detail.card, 'detail.card')])] : revealedBefore;
+    if (commander !== (cur?.commander ?? null) || revealed.length !== revealedBefore.length) {
+      version = await appendLeagueDeck(who, playerId, {
+        product: cur?.product ?? null, commander, deckId: cur?.deckId ?? null, deckVersionId: cur?.deckVersionId ?? null,
+        cardListStatus: cur?.cardListStatus ?? 'UNVERIFIED', sourceCitation: cur?.sourceCitation ?? null, sourceDate: cur?.sourceDate ?? null,
+        observedAt: observedOn,
+        detail: {
+          ...(cur?.detail ?? {}), revealed, basedOnLeagueDeckId: cur?.id ?? null,
+          ...(b.kind === 'COMMANDER' && cur?.commander !== commander ? { priorCommander: cur?.commander ?? cur?.detail?.priorCommander ?? null, needsRevalidation: true } : {}),
+        },
+      });
+    }
+  }
+  const row = await appendObservation(who, leagueId, {
+    playerId, kind: b.kind as never, label, detail, confidence: typeof b.confidence === 'number' ? b.confidence : null,
+    resultingLeagueDeckId: version?.id ?? null, observedOn,
   });
   if (!row) throw gone();
   res.status(201);
-  return { observation: row };
+  return { observation: row, version };
 }));

@@ -104,6 +104,8 @@ and the same body. A database that did not answer is a retryable 503, never a re
 - `POST /api/magic/leagues/:leagueId/players/:playerId/decks`
 - `POST /api/magic/leagues/:leagueId/games`
 - `GET /api/magic/leagues/:leagueId/games`
+- `POST /api/magic/leagues/:leagueId/next-ten` — the next $10 of swaps into the owner deck, each with its price and whether that price is verified
+- `GET /api/magic/leagues/:leagueId/matchups` — pod and 1v1 readings against each recorded opponent, with logged results and their sample size
 - `POST /api/magic/leagues/:leagueId/ledger`
 - `POST /api/magic/leagues/:leagueId/purchases`
 - `POST /api/magic/leagues/:leagueId/observations`

@@ -38,7 +38,7 @@ async function seedBaseline(who: string, player: PlayerView, p: SeedPlayer): Pro
   if (!cards) {
     await appendLeagueDeck(who, player.id, {
       product, commander, cardListStatus: 'UNVERIFIED', isBaseline: true,
-      detail: { listLabel: 'unverified cardlist', listStatus: p.listStatus },
+      detail: { listLabel: 'unverified cardlist', listStatus: p.listStatus, ...(p.observedTraits ? { observedTraits: p.observedTraits } : {}) },
     });
     return;
   }
@@ -57,6 +57,7 @@ async function seedBaseline(who: string, player: PlayerView, p: SeedPlayer): Pro
       listLabel: p.commander === 'UNKNOWN' ? 'official 99, commander unknown' : 'official 100',
       listStatus: p.listStatus, cards: cards.reduce((n, c) => n + c.quantity, 0),
       ...(p.priorCommander ? { priorCommander: p.priorCommander } : {}),
+      ...(p.observedTraits ? { observedTraits: p.observedTraits } : {}),
     },
   });
 }

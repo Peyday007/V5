@@ -246,8 +246,8 @@ describe('journey 7: a replacement commander is observed', () => {
 
     const obs = await call('POST', `/magic/leagues/${id}/observations`, { playerId: sky, kind: 'COMMANDER', label: 'OBSERVED', detail: { commander: 'Aesi, Tyrant of Gyre Strait' }, observedOn: '2026-11-08' });
     expect(obs.status).toBe(201);
-    const next = await call('POST', `/magic/leagues/${id}/players/${sky}/decks`, { commander: 'Aesi, Tyrant of Gyre Strait', cardListStatus: 'UNVERIFIED', observedAt: '2026-11-08', detail: { priorCommander: before[0].commander, candidateContext: 'replacement observed' } });
-    expect(next.status).toBe(201);
+    // The observation itself is what creates the new version.
+    expect(obs.body.version.commander).toBe('Aesi, Tyrant of Gyre Strait');
 
     const after = (await call('GET', `/magic/leagues/${id}`)).body;
     const versions = after.decks[sky];
@@ -297,5 +297,53 @@ describe('docs/MAGIC.md', () => {
   it('names every table, and every number label', () => {
     for (const t of MAGIC_TABLES) expect(doc, t).toContain(t);
     for (const label of ['EXACT_PROBABILITY', 'MODEL_ESTIMATE', 'HEURISTIC_SCORE', 'EMPIRICAL_MATCH_RESULT', 'CONFIRMED', 'ESTIMATE']) expect(doc, label).toContain(label);
+  });
+});
+
+describe('league intelligence over the real routes', () => {
+  it('reads goad as weak in a duel, own drain as valuable, and attack-only defence as useless against Grave Danger', async () => {
+    const { id, detail, byLabel } = await workspace();
+    // Put the owner deck on cards the fixture catalog knows, as a person editing it would.
+    const kardurDeck = detail.decks[byLabel('CHAOS INCARNATE').id][0].deckId as string;
+    const edited = await call('POST', `/magic/decks/${kardurDeck}/versions`, {
+      reason: 'fixture deck', cards: [{ zone: 'commander', cardName: 'Kardur, Doomscourge' }, { cardName: 'Mountain', quantity: 50 }, { cardName: 'Swamp', quantity: 49 }],
+    });
+    expect(edited.status, edited.text).toBe(201);
+    const m = await call('GET', `/magic/leagues/${id}/matchups`);
+    expect(m.status, m.text).toBe(200);
+    expect(m.body.owner.goadIn1v1.goad).toBe('WEAK_OR_HARMFUL');
+    expect(m.body.owner.goadInPod.goad).toBe('USEFUL');
+    expect(m.body.owner.ownLifeLossTrigger).toMatch(/own life-loss/);
+    const grave = m.body.opponents.find((o: any) => o.label === 'Undead Girl / Grave Danger');
+    expect(grave.attackOnlyDefenseStopsThem).toBe(false);
+    expect(grave.record).toMatchObject({ games: 0, ownerPointsPerGame: null, label: 'EMPIRICAL_MATCH_RESULT' });
+
+    const next = await call('POST', `/magic/leagues/${id}/next-ten`, {});
+    expect(next.status, next.text).toBe(200);
+    expect(next.body.allowanceCents).toBe(1000);
+    for (const s of next.body.suggestions) {
+      expect(s.price.cents).toBeLessThanOrEqual(1000);
+      expect(s.priceFlag).toBe('ESTIMATE'); // nobody confirmed a price, so nothing is approvable
+      expect(s.approvable).toBe(false);
+    }
+    expect(next.body.note).toMatch(/not purchases/);
+  });
+
+  it('versions an opponent on an observed commander, keeps the baseline, and versions nothing on a hypothesis', async () => {
+    const { id, byLabel } = await workspace();
+    const sky = byLabel('Sky Warden / First Flight').id as string;
+    const before = (await call('GET', `/magic/leagues/${id}`)).body.decks[sky];
+    const hyp = await call('POST', `/magic/leagues/${id}/observations`, { playerId: sky, kind: 'PURCHASE', label: 'HYPOTHESIS', detail: { card: 'Zombie Lord' }, observedOn: '2026-11-02' });
+    expect(hyp.status).toBe(201);
+    expect(hyp.body.version).toBeNull();
+    const seen = await call('POST', `/magic/leagues/${id}/observations`, { playerId: sky, kind: 'COMMANDER', label: 'OBSERVED', detail: { commander: 'Aesi, Tyrant of Gyre Strait' }, observedOn: '2026-11-03' });
+    expect(seen.status, seen.text).toBe(201);
+    expect(seen.body.version.commander).toBe('Aesi, Tyrant of Gyre Strait');
+    expect(seen.body.version.detail.priorCommander).toBe('Isperia, Supreme Judge');
+    expect(seen.body.version.detail.needsRevalidation).toBe(true);
+    expect(seen.body.observation.resulting_league_deck_id).toBe(seen.body.version.id);
+    const after = (await call('GET', `/magic/leagues/${id}`)).body.decks[sky];
+    expect(after).toHaveLength(before.length + 1);
+    expect(after[0]).toEqual(before[0]);
   });
 });

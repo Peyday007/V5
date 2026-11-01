@@ -17,6 +17,8 @@ export interface SeedPlayer {
   readonly official?: OfficialDeckKey;
   /** The commander the precon was printed with, kept apart from the one now in use. */
   readonly priorCommander?: string;
+  /** What has been seen at the table, recorded as observation rather than as a card list. */
+  readonly observedTraits?: { readonly noncombatDrain?: boolean; readonly manyCreatures?: boolean };
 }
 
 export const LEAGUE_NAME = 'Precon Commander League';
@@ -26,8 +28,8 @@ export const SEED_PLAYERS: readonly SeedPlayer[] = [
   { slot: 1, label: 'Red Foundations', product: 'UNKNOWN', commander: 'UNKNOWN', provisional: false, listStatus: 'UNVERIFIED_CARDLIST', notes: ['Label confirmed; product, commander and list unknown.'] },
   { slot: 2, label: 'Other Chaos Incarnate (provisional)', product: '2022 Starter Commander (Chaos Incarnate)', commander: 'UNKNOWN', provisional: true, listStatus: 'UNVERIFIED_CARDLIST', notes: ['Probably another Chaos Incarnate player; unverified and editable.'] },
   { slot: 3, label: 'Sky Warden / First Flight', product: '2022 First Flight', commander: 'UNKNOWN', provisional: false, listStatus: 'VERIFIED_OFFICIAL_99_COMMANDER_UNKNOWN', official: 'FIRST_FLIGHT', priorCommander: 'Isperia, Supreme Judge', notes: ['Player is changing commander, not deck. The stock 99 is loaded from the official list; the replacement commander is UNKNOWN until observed, and the printed commander is kept separately as prior context. Revalidate the 99 when the change is confirmed.'] },
-  { slot: 4, label: 'Undead Girl / Grave Danger', product: '2022 Grave Danger', commander: 'Gisa and Geralf', provisional: false, listStatus: 'VERIFIED_OFFICIAL_100', official: 'GRAVE_DANGER', notes: ['Baseline is the official precon list. Observed noncombat life drain of roughly 3/6/9 per turn without attacks; the causing cards are NOT confirmed, and no purchases or trigger identity are assumed.'] },
-  { slot: 5, label: 'Green Foundations', product: 'UNKNOWN', commander: 'UNKNOWN', provisional: false, listStatus: 'UNVERIFIED_CARDLIST', notes: ['Product, commander and list unknown. Observed many creatures, which made Kardur\'s goad useful.'] },
+  { slot: 4, label: 'Undead Girl / Grave Danger', product: '2022 Grave Danger', commander: 'Gisa and Geralf', provisional: false, listStatus: 'VERIFIED_OFFICIAL_100', official: 'GRAVE_DANGER', observedTraits: { noncombatDrain: true }, notes: ['Baseline is the official precon list. Observed noncombat life drain of roughly 3/6/9 per turn without attacks; the causing cards are NOT confirmed, and no purchases or trigger identity are assumed.'] },
+  { slot: 5, label: 'Green Foundations', product: 'UNKNOWN', commander: 'UNKNOWN', provisional: false, listStatus: 'UNVERIFIED_CARDLIST', observedTraits: { manyCreatures: true }, notes: ['Product, commander and list unknown. Observed many creatures, which made Kardur\'s goad useful.'] },
   { slot: 6, label: 'Token Triumph', product: '2022 Token Triumph (Emmara)', commander: 'Emmara, Soul of the Accord', provisional: false, listStatus: 'VERIFIED_OFFICIAL_100', official: 'TOKEN_TRIUMPH', notes: ['Baseline is the official precon list.'] },
 ];
 
