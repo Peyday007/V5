@@ -50,6 +50,18 @@ export interface Arrangement {
   value: Part;
   capture: { kind: 'COMMISSION'; rate: Part } | { kind: 'FEE'; fee: Part } | { kind: 'MARGIN'; supplyCost: Part };
   cost: Part;
+  /**
+   * Several buyers sharing one fulfilment run (§82): a fixed cost paid once per
+   * run whatever the number of buyers, and the participation it needs. With a
+   * threshold the run is bought only once `minParticipants` have committed and
+   * everybody is refunded otherwise, so a short run contributes nothing rather
+   * than losing the fixed cost.
+   */
+  pooling?: { fixedCost: Part; minParticipants: Part; threshold: boolean };
+  /** Share of the money buyers pay before the fulfilment is bought (§82). */
+  funding?: { prepayShare: Part };
+  /** Share of buyers who buy again in a later run or period (§82): asked, never multiplied in. */
+  repeat?: { rate: Part };
   /** Deeper parts any of the above refer to in their formulas, keyed by name. */
   extra?: QuantityNode[];
   correlations?: QuantGraph['correlations'];
@@ -59,6 +71,8 @@ export interface ComposedArrangement {
   graph: QuantGraph;
   /** The node keys the caller reads. */
   transactions: string;
+  /** Money of the arranger's tied up before buyers pay, per run or deal (§82); null when the design ties up none. */
+  exposure: string | null;
   revenue: string;
   contribution: string;
   /** Which side limits the transactions in the formula, as written. */
@@ -98,12 +112,31 @@ export function composeArrangement(a: Arrangement): ComposedArrangement {
   formulas[k('capture')] = capture;
   nodes.push({ key: k('capture'), label: 'What the arranger keeps per transaction, before its own costs', unit: a.currency, kind: 'REAL', formula: capture });
   const cost = part('cost', 'Arranger cost per transaction', a.currency, 'POSITIVE', a.cost, { min: 0 });
-  formulas[k('revenue')] = `${k('transactions')} * ${k('capture')}`;
-  formulas[k('contribution')] = `${k('transactions')} * (${k('capture')} - ${cost})`;
+  const t = k('transactions');
+  formulas[k('revenue')] = `${t} * ${k('capture')}`;
+  formulas[k('contribution')] = `${t} * (${k('capture')} - ${cost})`;
+  const prepay = a.funding ? part('prepay_share', 'Share of the price buyers pay before fulfilment is bought', 'share', 'RATE', a.funding.prepayShare) : null;
+  const unfunded = prepay ? ` * (1 - ${prepay})` : '';
+  if (a.pooling) {
+    const fixed = part('fixed_cost', 'Fixed cost of one shared run', a.currency, 'POSITIVE', a.pooling.fixedCost, { min: 0 });
+    const minimum = part('min_participants', 'Buyers one run needs', 'buyers', 'POSITIVE', a.pooling.minParticipants, { min: 0 });
+    if (a.pooling.threshold) {
+      formulas[k('revenue')] = `if(${t} >= ${minimum}, ${t} * ${k('capture')}, 0)`;
+      formulas[k('contribution')] = `if(${t} >= ${minimum}, ${t} * (${k('capture')} - ${cost}) - ${fixed}, 0)`;
+      // Nothing is bought until enough have prepaid: no exposure node at all.
+    } else {
+      formulas[k('contribution')] = `${t} * (${k('capture')} - ${cost}) - ${fixed}`;
+      formulas[k('exposure')] = `${fixed}${unfunded}`;
+    }
+  } else if (a.capture.kind === 'MARGIN') {
+    formulas[k('exposure')] = `${k('supply_cost')}${unfunded}`;
+  }
+  if (formulas[k('exposure')]) nodes.push({ key: k('exposure'), label: 'Money of ours tied up before buyers pay, per run or deal', unit: a.currency, kind: 'REAL', formula: formulas[k('exposure')] });
+  if (a.repeat) part('repeat_rate', 'Share of buyers who buy again', 'share', 'RATE', a.repeat.rate);
   nodes.push(
     { key: k('revenue'), label: 'Revenue to the arranger', unit: a.currency, kind: 'REAL', formula: formulas[k('revenue')] },
     { key: k('contribution'), label: 'Contribution to the arranger', unit: a.currency, kind: 'REAL', formula: formulas[k('contribution')] },
   );
   for (const node of a.extra ?? []) nodes.push(node);
-  return { graph: { nodes, correlations: a.correlations }, transactions: k('transactions'), revenue: k('revenue'), contribution: k('contribution'), formulas };
+  return { graph: { nodes, correlations: a.correlations }, transactions: k('transactions'), exposure: formulas[k('exposure')] ? k('exposure') : null, revenue: k('revenue'), contribution: k('contribution'), formulas };
 }

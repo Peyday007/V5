@@ -116,6 +116,20 @@ over it is a sweep. §77 then refuses to read its coverage as a chance.
 * `npm run goals -- plan <goal>` prints the arrangements and their unknown
   parts; `goals construct <goal>` opens this pass's rounds now, as the tick would.
 
+## Designs, properties and reverse construction (§82)
+
+Every constructed arrangement carries a transaction design (base structure,
+funding, aggregation, repeat) and the economic properties derived from it
+(`server/services/cash/properties.ts`). A property adds the parts that would
+establish it to the decomposition, so the round asks for them. Reverse
+construction starts from the properties the goal's limits require and asks the
+world for buyers that fit; transfer carries a design a gated opening shows
+working to another buyer. `stressDesign` judges the worst case on bounds, and
+`composeArrangement` takes `pooling`, `funding` and `repeat` parts so a shared
+run's threshold, fixed cost and unfunded exposure are formulas, not prose.
+`npm run goals -- plan <goal>` prints the targets, exclusions, origins and
+worst cases of what was constructed.
+
 ## Information value
 
 EVPPI is estimated by sorting worlds into ten quantile bins of an input. A bin

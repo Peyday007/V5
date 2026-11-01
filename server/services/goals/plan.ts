@@ -42,6 +42,7 @@ import { bestCaseReach, composeGoalModel, dealsForGoal, OUTREACH_MULTIPLE, price
 import { readTarget, type TargetReading } from './target.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery } from '../cash/discovery.ts';
 import { constructArrangements } from '../cash/construct.ts';
+import { goalExclusions } from '../cash/exclusions.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { spareResearchSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
@@ -889,19 +890,52 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
   return { asked, constructed: constructed.length, researched };
 }
 
+/** The goal's own limits, as construction reads them (§82). */
+export function goalLimits(reading: PlanReading): import('../cash/properties.ts').GoalLimits {
+  const t = reading.target;
+  return {
+    daysLeft: t.daysLeft,
+    remainingCents: t.remainingCents,
+    capitalCeilingCents: t.capitalCeilingCents,
+    capitalBeforeProofCents: t.capitalBeforeProofCents,
+    bestReachCents: reading.bestReach === null ? null : Math.round(reading.bestReach * 100),
+  };
+}
+
 /** Open rounds for the best-ranked arrangements Brain constructed, at most `max` this pass. */
 export async function askConstructedArrangements(goal: Workstream, reading: PlanReading, now: Date, max: number, liveCap: number): Promise<string[]> {
   const t = reading.target;
   if (t.daysLeft === null || t.daysLeft <= 0 || t.remainingCents <= 0) return [];
   const frame = await executionFrame(t.projectId, t.currency);
-  const arrangements = await constructArrangements({ projectId: t.projectId, currency: t.currency, delivers: frame?.delivers ?? [], capitalCeilingCents: t.capitalCeilingCents, daysLeft: t.daysLeft, now });
+  const arrangements = (await constructArrangements({
+    projectId: t.projectId,
+    currency: t.currency,
+    delivers: frame?.delivers ?? [],
+    capitalCeilingCents: t.capitalCeilingCents,
+    daysLeft: t.daysLeft,
+    limits: goalLimits(reading),
+    exclusions: await goalExclusions(goal),
+    now,
+  }))
+    // A design whose known worst case is more money than the goal may tie up is rejected, not asked (§82).
+    .filter((one) => one.stress.exposure !== 'EXCEEDS');
   const opened: string[] = [];
   /*
    * One buyer population per pass before a second: ranking favours the best-
    * evidenced parts, and production's first pass sent all five askings to one
    * buyer. Spread first; a population already asked waits for the next pass.
    */
-  const askedDemand = new Set((await listRounds(t.projectId)).filter((r) => r.state === 'OPEN' && r.bucketId.startsWith(`goal-${goal.id}-mx-`)).map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4)));
+  const openMx = (await listRounds(t.projectId)).filter((r) => r.state === 'OPEN' && r.bucketId.startsWith(`goal-${goal.id}-mx-`));
+  /*
+   * Constructed rounds share the goal's live cap with the lenses that ask the
+   * world from a new angle. Since reverse construction (§82) always has a
+   * design to ask about, an unbounded share would take every slot and the
+   * lenses would never run, so construction holds at most half of it.
+   */
+  const room = Math.max(1, Math.floor(liveCap / 2)) - openMx.length;
+  if (room <= 0) return [];
+  max = Math.min(max, room);
+  const askedDemand = new Set(openMx.map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4)));
   const openDemand = new Set(arrangements.filter((one) => askedDemand.has(one.key)).map((one) => one.demand.ref));
   const spread = [...arrangements.filter((one) => !openDemand.has(one.demand.ref)), ...arrangements.filter((one) => openDemand.has(one.demand.ref))];
   const thisPass = new Set<string>();

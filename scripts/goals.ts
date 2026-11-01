@@ -56,8 +56,10 @@ import { discoveryYield, type YieldRow } from '../server/services/cash/discovery
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { askConstructedArrangements, CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
+import { askConstructedArrangements, CHAIN_LABEL, goalLimits, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
 import { constructArrangements } from '../server/services/cash/construct.ts';
+import { goalExclusions } from '../server/services/cash/exclusions.ts';
+import { targetProperties } from '../server/services/cash/properties.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS } from '../server/services/cash/discovery.ts';
 
 class Halt extends Error {}
@@ -381,14 +383,27 @@ async function printSearching(reading: PlanReading): Promise<void> {
   const t = reading.target;
   const frame = await executionFrame(t.projectId, t.currency);
   const built = t.daysLeft && t.daysLeft > 0
-    ? await constructArrangements({ projectId: t.projectId, currency: t.currency, delivers: frame?.delivers ?? [], capitalCeilingCents: t.capitalCeilingCents, daysLeft: t.daysLeft })
+    ? await constructArrangements({
+        projectId: t.projectId, currency: t.currency, delivers: frame?.delivers ?? [], capitalCeilingCents: t.capitalCeilingCents, daysLeft: t.daysLeft,
+        limits: goalLimits(reading), exclusions: await goalExclusions((await getWorkstream(reading.goalId))!),
+      })
     : [];
+  console.log(`  targets     ${targetProperties(goalLimits(reading)).map((one) => `${one.property} (${one.because})`).join('; ') || 'none: the limits of this goal ask for no particular property'}`);
+  console.log(`  excluded    ${(await goalExclusions((await getWorkstream(reading.goalId))!)).join(', ') || 'nothing the owner said to leave out'}`);
+  const byOrigin = new Map<string, number>();
+  const byExposure = new Map<string, number>();
+  for (const one of built) {
+    byOrigin.set(one.origin, (byOrigin.get(one.origin) ?? 0) + 1);
+    byExposure.set(one.stress.exposure, (byExposure.get(one.stress.exposure) ?? 0) + 1);
+  }
+  console.log(`  designs     ${[...byOrigin].map(([k, v]) => `${k} ${v}`).join(', ')} · worst case ${[...byExposure].map(([k, v]) => `${k} ${v}`).join(', ')}`);
   const byStructure = new Map<string, number>();
   for (const one of built) byStructure.set(one.structure, (byStructure.get(one.structure) ?? 0) + 1);
   console.log(`  constructed ${built.length} arrangement(s) composed from the industry map, evidenced payers and proved deliverables${byStructure.size ? ` (${[...byStructure].map(([k, v]) => `${k} ${v}`).join(', ')})` : ''}`);
-  for (const one of built.slice(0, 12)) {
+  for (const one of built.slice(0, 16)) {
     const asked = rounds.filter((r) => r.bucketId.endsWith(`-mx-${one.key}`));
-    console.log(`    ${one.key} ${one.structure.padEnd(11)} claims ${one.evidenced} · value ${one.value.tier}${one.value.observations ? ` p10 ${round(one.value.p10)} p50 ${round(one.value.p50)} p90 ${round(one.value.p90)} (${one.value.observations} obs)` : ''} · to establish: ${one.unknownParts.join(', ')} · ${asked.length ? `asked ${asked.length}x (${asked.map((r) => r.state).join(',')})` : 'not asked yet'} · ${one.label.slice(0, 90)}`);
+    console.log(`    ${one.key} ${one.origin.padEnd(8)} ${one.structure.padEnd(11)} ${one.design.funding}/${one.design.aggregation}/${one.design.repeat} · worst case ${one.stress.exposure}${one.stress.worstCaseCents ? ` ${one.stress.worstCaseCents / 100}` : ''} · meets ${one.targetsMet.join(',') || '—'}${one.emergent.length ? ` · also ${one.emergent.join(',')}` : ''}${one.precedent ? ` · from "${one.precedent.title.slice(0, 40)}"` : ''}`);
+    console.log(`      claims ${one.evidenced} · value ${one.value.tier}${one.value.observations ? ` p10 ${round(one.value.p10)} p50 ${round(one.value.p50)} p90 ${round(one.value.p90)} (${one.value.observations} obs)` : ''} · to establish: ${one.unknownParts.join(', ')} · ${asked.length ? `asked ${asked.length}x (${asked.map((r) => r.state).join(',')})` : 'not asked yet'} · ${one.label.slice(0, 90)}`);
   }
   console.log(`  searching   ${rounds.length} round(s) of this goal's own search`);
   for (const round of rounds) {
