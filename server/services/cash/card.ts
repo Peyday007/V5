@@ -296,6 +296,7 @@ const FIELD_OWNER: Readonly<Record<string, FieldOwner>> = Object.freeze({
   directCosts: 'BRAIN_RESEARCH',
   requiredCapital: 'BRAIN_PROPOSES',
   timeToFirstCash: 'BRAIN_RESEARCH',
+  buyerVolume: 'BRAIN_RESEARCH',
   hours: 'BRAIN_RESEARCH',
   laborNeeds: 'BRAIN_RESEARCH',
   eligibility: 'BRAIN_RESEARCH',

@@ -31,6 +31,7 @@ import { readMoneyFigures } from './figures.ts';
 import { readDays } from './monetization/commissionPass.ts';
 import { cashOutcomeLessons, LESSON_MIN_SAMPLE } from './journey/learning.ts';
 import { isTestFirstPlay } from './tier.ts';
+import { readVolume } from './volume.ts';
 import { sharedFrontier } from './shared.ts';
 import type { CashOpportunity, CashCardFact } from '../../domain/types.ts';
 import { SCENARIO_LIMITS, type ScenarioModelDefinition, type ScenarioVariable, type SourceRef, type StrategySpec, type VariableProvenance } from '../../domain/scenario.ts';
@@ -43,7 +44,7 @@ import type { VariableSpec } from '../../domain/scenario.ts';
 
 /** Variables the model declares once, and per opportunity. */
 export const GOAL_MODEL_VARIABLES = 4;
-export const OPPORTUNITY_MODEL_VARIABLES = 8;
+export const OPPORTUNITY_MODEL_VARIABLES = 9;
 /**
  * At most this many opportunities in one model, derived from the engine's own
  * variable limit rather than written beside it — a constant written beside it
@@ -89,6 +90,13 @@ export interface ModelledOpportunity {
   daysToCash: ModelInput;
   close: ModelInput;
   directCost: ModelInput;
+  /**
+   * Deals the market can take inside the window: reachable buyers times how
+   * often each buys, as research stated them (`volume.ts`). A one-off is one
+   * deal. A repeatable play whose volume nobody has established is a swept
+   * range here and a missing link in the plan — never a number a plan assumes.
+   */
+  volume: ModelInput;
   /** A live agreement already recorded for this opportunity. */
   agreed: boolean;
   /** What those agreements are worth, in major units: money a buyer has already agreed to. */
@@ -199,6 +207,7 @@ async function modelOpportunity(
   lessons: Awaited<ReturnType<typeof cashOutcomeLessons>>,
   knowledge: CashKnowledge | null = null,
   now: Date = new Date(),
+  windowDays = 30,
 ): Promise<ModelledOpportunity | { reason: string }> {
   const fact = await cardFactMap(opportunity.id);
   const ref: SourceRef = { kind: 'CASH_OPPORTUNITY', ref: opportunity.id };
@@ -270,6 +279,23 @@ async function modelOpportunity(
     close = inferOr(knowledge, 'close', opportunity, now, unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing'));
   }
 
+  const volumeFact = fact('buyerVolume');
+  const volumeRead = volumeFact ? readVolume(volumeFact.value, windowDays) : null;
+  /*
+   * Repeatable is a fact about the market, not a category: a test-first play
+   * is one by construction, and any other opening becomes one when research
+   * establishes more than one deal inside the window. Nothing else may assume
+   * a second sale.
+   */
+  const repeatable = isTestFirstPlay(opportunity) || (volumeRead !== null && volumeRead.deals > 1 && volumeFact!.kind === 'EVIDENCE');
+  const volume: ModelInput = !repeatable
+    ? known(1, 'ASSUMPTION', ref, 'a one-off opening is one deal')
+    : volumeRead && volumeFact
+      ? known(volumeRead.deals, kindToProvenance(volumeFact).provenance, kindToProvenance(volumeFact).source, volumeRead.basis)
+      : unknown(1, MAX_BUYERS_OFFERED, volumeFact
+        ? 'the volume on the card states no count of buyers or orders; swept from 1 deal to the most a strategy offers'
+        : 'nobody has established how many buyers exist or how often they buy; swept from 1 deal to the most a strategy offers');
+
   const fulfilmentFact = fact('fulfillment');
   const fulfilledBy =
     fulfilmentFact && fulfilmentFact.kind !== 'RECOMMENDATION' && opportunity.fulfillmentOwner
@@ -280,13 +306,14 @@ async function modelOpportunity(
     opportunity,
     index,
     tier,
-    repeatable: isTestFirstPlay(opportunity),
+    repeatable,
     price,
     capital,
     hours,
     daysToCash,
     close,
     directCost,
+    volume,
     agreed: agreements.length > 0,
     agreedValue: agreements.reduce((sum, one) => sum + one.amountCents, 0) / 100,
     agreedDeals: agreements.length,
@@ -313,14 +340,26 @@ export function evidenceCount(one: ModelledOpportunity): number {
   ).length;
 }
 
-export function bestCaseReach(one: ModelledOpportunity, remaining: number, daysLeft: number): number {
+/** Whether research has established how many deals the market can take. */
+export function volumeEstablished(one: Pick<ModelledOpportunity, 'volume' | 'repeatable'>): boolean {
+  return !one.repeatable || (one.volume.value !== null && (one.volume.provenance === 'EVIDENCE' || one.volume.provenance === 'HISTORICAL'));
+}
+
+/**
+ * `established` counts a repeatable play's deals only up to the volume research
+ * established — one deal when nobody has — so a supported reach never rests on
+ * buyers nobody has shown exist. Without it the reach is the most the opening
+ * could be worth if research confirms the volume.
+ */
+export function bestCaseReach(one: ModelledOpportunity, remaining: number, daysLeft: number, established = false): number {
   const late = one.daysToCash.value !== null && one.daysToCash.provenance !== 'UNKNOWN' && one.daysToCash.value > daysLeft;
   if (late) return 0;
   // An award nobody has shown pays inside the window does not count as reach:
   // first it must be won, then delivered, then paid on the buyer's terms.
   if (one.competitiveAward && !(one.daysToCash.provenance === 'EVIDENCE' || one.daysToCash.provenance === 'HISTORICAL')) return 0;
   const price = one.price.high ?? one.price.value ?? 0;
-  const deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(remaining / Math.max(1, price))) : one.agreedValue > 0 ? 0 : 1;
+  let deals = one.repeatable ? Math.min(MAX_BUYERS_OFFERED, Math.ceil(remaining / Math.max(1, price))) : one.agreedValue > 0 ? 0 : 1;
+  if (established && one.repeatable) deals = Math.min(deals, volumeEstablished(one) ? one.volume.value ?? 1 : 1);
   return Math.min(remaining, one.agreedValue + deals * price);
 }
 
@@ -400,7 +439,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `closed on ${opportunity.expiresAt.slice(0, 10)}` });
       continue;
     }
-    const modelled = await modelOpportunity(opportunity, 0, tier, target.currency, lessons, knowledge, input.now ?? new Date());
+    const modelled = await modelOpportunity(opportunity, 0, tier, target.currency, lessons, knowledge, input.now ?? new Date(), target.daysLeft);
     if ('reason' in modelled) excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: modelled.reason });
     else candidates.push(modelled);
   }
@@ -418,8 +457,8 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       (IN_FLIGHT.has(a.opportunity.state) || a.agreed ? 0 : 1) - (IN_FLIGHT.has(b.opportunity.state) || b.agreed ? 0 : 1) ||
       Number(a.competitiveAward) - Number(b.competitiveAward) ||
       // Reach at a price buyers are shown to pay comes before reach at a guess.
-      (priceSupported(b) ? bestCaseReach(b, remainingMajor, target.daysLeft!) : 0) -
-        (priceSupported(a) ? bestCaseReach(a, remainingMajor, target.daysLeft!) : 0) ||
+      (priceSupported(b) ? bestCaseReach(b, remainingMajor, target.daysLeft!, true) : 0) -
+        (priceSupported(a) ? bestCaseReach(a, remainingMajor, target.daysLeft!, true) : 0) ||
       evidenceCount(b) - evidenceCount(a) ||
       bestCaseReach(b, remainingMajor, target.daysLeft!) - bestCaseReach(a, remainingMajor, target.daysLeft!) ||
       (TIER_ORDER[a.tier] ?? 3) - (TIER_ORDER[b.tier] ?? 3),
@@ -480,6 +519,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       variable(`${o}_days`, `${name}: days to usable cash`, 'days', one.daysToCash),
       variable(`${o}_close`, `${name}: share of buyers who agree`, 'share', one.close),
       variable(`${o}_cost`, `${name}: direct cost per deal`, target.currency, one.directCost),
+      variable(`${o}_volume`, `${name}: deals the market can take in the window`, 'deals', one.volume),
       variable(`${o}_agreed`, `${name}: already agreed by a buyer`, target.currency, known(one.agreedValue, 'EVIDENCE', { kind: 'CASH_OPPORTUNITY', ref: one.opportunity.id, note: 'recorded buyer agreements' }, 'money a buyer has agreed to')),
       {
         key: `${o}_n`,
@@ -492,7 +532,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       },
     );
     derived.push(
-      { key: `${o}_won`, label: `${name}: deals won`, unit: 'deals', expr: `${o}_n * ${o}_close` },
+      { key: `${o}_won`, label: `${name}: deals won`, unit: 'deals', expr: `min(${o}_n * ${o}_close, ${o}_volume)` },
       { key: `${o}_in`, label: `${name}: settles before the deadline`, unit: 'flag', expr: `if(${o}_days <= days_left, 1, 0)` },
     );
     lines.push(

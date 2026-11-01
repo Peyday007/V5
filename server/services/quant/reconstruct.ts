@@ -30,7 +30,7 @@ import { compile, identifiers, parse } from '../scenario/expr.ts';
 import { cholesky, inverseNormal, makeRng, normalCdf } from '../scenario/random.ts';
 import { DISTRIBUTION_TIERS, QUANT_LIMITS, type Estimate, type EvidenceTier, type QuantGraph, type QuantityNode, type Reconstruction } from '../../domain/quant.ts';
 import type { SourceRef } from '../../domain/scenario.ts';
-import { classify, collapseLineage, combine, fromScale, pool, scaleFor, SPREAD_FLOOR, toScale, type Scale, type Scaled } from './pool.ts';
+import { allUnsized, classify, collapseLineage, combine, fromScale, pool, scaleFor, SPREAD_FLOOR, toScale, type Scale, type Scaled } from './pool.ts';
 
 export class ReconstructionError extends Error {}
 
@@ -157,13 +157,15 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
       ...fromNormal(node, scale, pooled.mean, pooled.sd),
       effectiveSample: pooled.effective,
       heterogeneity: pooled.tau,
-      distributionJustified: true,
+      // A rate nobody stated a sample for locates the answer and bounds it.
+      distributionJustified: !allUnsized(direct.kept),
       sources: sourcesOf(direct.kept),
       used: direct.kept.map((one) => one.obs.id),
       collapsed: direct.collapsed,
     };
     candidates.push(est);
-    if (sufficient(node, est)) {
+    if (!est.distributionJustified) trace.push('DIRECT: every observation is a published rate with no stated sample, so it locates the answer but cannot justify a distribution: bounds only.');
+    if (sufficient(node, est) && est.distributionJustified) {
       trace.push(`DIRECT: ${direct.kept.length} independent observation(s) of this exact population are enough (p10 ${fmt(est.p10)}, p90 ${fmt(est.p90)}); nothing further was reconstructed.`);
       return finish(est, sorted, trace);
     }
@@ -185,7 +187,7 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
       // One other population is an anecdote, not a pattern: with no direct
       // evidence beside it, a lone comparable bounds the answer and never
       // becomes a distribution.
-      distributionJustified: pooledSet.kept.length >= MIN_COMPARABLE_POPULATIONS || pooledSet.kept.some((one) => one.distance === 0),
+      distributionJustified: (pooledSet.kept.length >= MIN_COMPARABLE_POPULATIONS || pooledSet.kept.some((one) => one.distance === 0)) && !allUnsized(pooledSet.kept),
       sources: sourcesOf(pooledSet.kept),
       used: pooledSet.kept.map((one) => one.obs.id),
       collapsed: pooledSet.collapsed,
@@ -195,7 +197,13 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
     trace.push(
       `COMPARABLE: ${pooledSet.kept.length} independent observation(s) after transfer, spread between populations ${fmt(pooled.tau)} on the ${scale.toLowerCase()} scale${adjusted.length ? `; adjusted: ${adjusted.join(', ')}` : ''}.`,
     );
-    if (!est.distributionJustified) trace.push('COMPARABLE: a single comparable population with no direct evidence beside it: bounds only.');
+    if (!est.distributionJustified) {
+      trace.push(
+        allUnsized(pooledSet.kept)
+          ? 'COMPARABLE: only published rates with no stated sample: they locate the answer but cannot justify a distribution, so bounds only.'
+          : 'COMPARABLE: a single comparable population with no direct evidence beside it: bounds only.',
+      );
+    }
     if (sufficient(node, est) && est.distributionJustified) return finish(est, sorted, trace);
   } else {
     trace.push('COMPARABLE: no transferable observation of a comparable population.');
@@ -257,9 +265,17 @@ function climb(ctx: Context, node: QuantityNode, depth: number): Estimate {
     return finish(best, sorted, trace);
   }
 
-  const weakComponent = candidates.find((one) => one.tier === 'COMPONENT' || one.tier === 'COMPARABLE');
+  const weakComponent = candidates
+    .filter((one) => one.tier === 'DIRECT' || one.tier === 'COMPONENT' || one.tier === 'COMPARABLE')
+    .sort((a, b) => tierRank(a.tier) - tierRank(b.tier))[0];
   if (weakComponent) {
-    trace.push(weakComponent.tier === 'COMPARABLE' ? 'Only one comparable population answers it; reported as bounds, never as a probability.' : 'Rebuilt from parts some of which rest on broad evidence, an assumption or bounds alone; reported as bounds, never as a probability.');
+    trace.push(
+      weakComponent.tier === 'DIRECT'
+        ? 'Only unsized published rates of this population answer it; reported as bounds, never as a probability.'
+        : weakComponent.tier === 'COMPARABLE'
+          ? 'Only one comparable population, or only unsized rates, answer it; reported as bounds, never as a probability.'
+          : 'Rebuilt from parts some of which rest on broad evidence, an assumption or bounds alone; reported as bounds, never as a probability.',
+    );
     return finish(weakComponent, sorted, trace);
   }
 

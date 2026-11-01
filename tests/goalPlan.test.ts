@@ -52,7 +52,7 @@ async function fact(o: CashOpportunity, field: string, value: string, kind: 'EVI
 }
 
 /** A qualified, repeatable play with the given economics. */
-async function play(input: { title: string; priceCents: number; days?: number; capitalCents?: number; hours?: number; costCents?: number; reach?: boolean; signal?: boolean }): Promise<CashOpportunity> {
+async function play(input: { title: string; priceCents: number; days?: number; capitalCents?: number; hours?: number; costCents?: number; reach?: boolean; signal?: boolean; volume?: string | null }): Promise<CashOpportunity> {
   const o = await createOpportunity({
     projectId,
     cashModeId,
@@ -82,6 +82,9 @@ async function play(input: { title: string; priceCents: number; days?: number; c
   if (input.days !== undefined) await fact(o, 'timeToFirstCash', `${input.days} days`);
   if (input.costCents !== undefined) await fact(o, 'directCosts', `$${input.costCents / 100}`);
   if (input.capitalCents !== undefined) await fact(o, 'exposure', `$${input.capitalCents / 100}`);
+  // Established by default, so each test exercises the link it names; the
+  // market-volume link has its own tests.
+  if (input.volume !== null) await fact(o, 'buyerVolume', input.volume ?? '400 property managers are listed in the state directory; each orders monthly.');
   return o;
 }
 
@@ -372,9 +375,13 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     await setTerms(g.id, { dueAt: inDays(30), ownerUserId: userId }, `person:${userId}`);
     await setTarget({ goal: (await getWorkstream(g.id))!, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId, resources: 'a box truck and two weekend helpers' });
 
-    const mine = async () => (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${g.id}-`));
+    const all = async () => (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${g.id}-`));
+    // Lens rounds ask the world; `-mx-` rounds ask about arrangements Brain constructed (§81).
+    const mine = async () => (await all()).filter((one) => !one.bucketId.includes('-mx-'));
     const first = await advanceGoalPlans(now);
     expect(first.asked).toBe(1);
+    expect(first.constructed).toBe(1);
+    expect((await all()).filter((one) => one.bucketId.includes('-mx-'))).toHaveLength(1);
     const rounds = await mine();
     expect(rounds.map((one) => one.bucketId)).toEqual([`goal-${g.id}-open`]);
     // The round is the goal's own work, so the goal's rank reaches its bins.
@@ -391,16 +398,16 @@ describe("a goal's own resources, combinations and reach (2026-10-28)", () => {
     // Each later read asks from a different angle, never the same one twice at once…
     for (let i = 1; i <= 4; i += 1) await advanceGoalPlans(new Date(now.getTime() + i * 31 * 60_000));
     const lenses = (await mine()).map((one) => one.bucketId.slice(`goal-${g.id}-`.length));
-    expect(lenses.sort()).toEqual(['brokerage', 'consumer', 'open']);
-    // …and no more than three are open at once.
-    expect((await mine()).filter((one) => one.state === 'OPEN')).toHaveLength(3);
+    expect(lenses.sort()).toEqual(['consumer', 'open']);
+    // …and no more than three are open at once, constructed rounds included.
+    expect((await all()).filter((one) => one.state === 'OPEN')).toHaveLength(3);
     // Three is how many run at once, not how many are asked: when one settles,
     // a new angle is asked in its place.
     const settled = (await mine()).find((one) => one.bucketId.endsWith('-open'))!;
     await getDb().run(`UPDATE cash_discovery_rounds SET state = 'HARVESTED', found = 0, harvested_at = ? WHERE candidate_id = ?`, [now.toISOString(), settled.candidateId]);
     await advanceGoalPlans(new Date(now.getTime() + 6 * 31 * 60_000));
     const after = (await mine()).map((one) => one.bucketId.slice(`goal-${g.id}-`.length));
-    expect(after.sort()).toEqual(['brokerage', 'consumer', 'open', 'subcontract']);
+    expect(after.sort()).toEqual(['brokerage', 'consumer', 'open']);
   });
 });
 
@@ -558,7 +565,7 @@ describe('how the money actually arrives (2026-10-28)', () => {
     process.env['BRAIN_CLAUDE_DISCOVERY'] = 'off';
     try {
       expect((await advanceGoalPlans(now)).asked).toBe(1);
-      expect((await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-`))).toHaveLength(1);
+      expect((await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-`) && !one.bucketId.includes('-mx-'))).toHaveLength(1);
     } finally {
       if (before === undefined) delete process.env['BRAIN_CLAUDE_DISCOVERY'];
       else process.env['BRAIN_CLAUDE_DISCOVERY'] = before;

@@ -52,8 +52,14 @@ group keeps its most informative member and reports the others as collapsed.
 
 ### Conventions, named so a reader can see what was assumed
 
-* An unsized published rate carries ten events' worth of information (log-odds
-  variance 1/10), whatever the rate.
+* An unsized published rate carries four events' worth of information (log-odds
+  variance 1/4), whatever the rate, and **an estimate resting only on unsized
+  rates is bounds, never a distribution**: the source stated where the rate is,
+  not how precisely anyone measured it. (Reviewed 2026-11-01; it was ten events
+  and always a distribution, which let three unsized benchmarks pool into a
+  spread as narrow as a few dozen observed contacts.) A ratio of two published
+  amounts about one case — a cost over a price — is marked `exact` and is not a
+  sampled rate.
 * One published magnitude has a 10% reading error.
 * A published range is read as a 90% interval.
 
@@ -81,6 +87,34 @@ over it is a sweep. §77 then refuses to read its coverage as a chance.
   choice, or one that waiting for would cost the deadline.
 * `npm run goals -- plan <goal>` and the Goals workflow print what was
   inferred, which questions matter, and the time taken.
+
+## Constructing arrangements and asking whether they repeat (§81)
+
+* `services/cash/construct.ts` composes arrangements from parts the project
+  holds independently — a `BUYER_TYPE`, `BOTTLENECK` and `FULFILMENT_SOURCE` on
+  the industry map, an evidenced payer on an opening, a deliverable Brain proved
+  — and a closed table of capture structures (produce for a fee, broker for a
+  commission, refer for a fee, subcontract for a margin, pool purchases for a
+  margin). A structure applies only where its parts exist, and an opening
+  already held in that shape is not offered back.
+* Each arrangement is decomposed with `composeArrangement` and resolved by
+  `reconstruct`. The parts nothing establishes become the research round's
+  question; a part already established (what this buyer pays, from the
+  project's own priced openings) is stated and only confirmed.
+* When the held pool cannot reach a goal, the plan pass opens rounds for the
+  best-ranked arrangements (`goal-<id>-mx-<key>`) beside the lens rounds,
+  through the same gate, frame, harvest and live cap. The reading says
+  `POOL_INSUFFICIENT` — a fact about what Brain holds, never that nothing
+  viable exists.
+* A play sold repeatedly is worth its price times the deals the market can
+  take in the window, and that number is `buyerVolume` on the card: reachable
+  buyers and how often each buys, read by `services/cash/volume.ts` only where
+  a source states a count. Until research states it the model sweeps it, the
+  plan's `MARKET_VOLUME` link is missing, and a supported reach counts one
+  deal. Any opening becomes repeatable when research shows more than one deal
+  in the window; path research asks it whenever one deal cannot carry the goal.
+* `npm run goals -- plan <goal>` prints the arrangements and their unknown
+  parts; `goals construct <goal>` opens this pass's rounds now, as the tick would.
 
 ## Information value
 

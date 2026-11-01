@@ -31,13 +31,20 @@
 import type { ExcludedObservation, Observation, QuantityKind, QuantityNode, TransferAdjustment } from '../../domain/quant.ts';
 
 /**
- * A published rate with no stated sample carries this many events' worth of
- * information: its log-odds variance is 1/10, about ±37% on the odds, whatever
- * the rate. Counting it as ten *trials* instead would make a rare rate (0.45%)
- * say nothing at all and a common one say a lot, which is the scale talking
- * rather than the evidence.
+ * A published rate with no stated sample says where the rate is and nothing
+ * about how precisely anybody measured it. It is read with this many events'
+ * worth of information — log-odds variance 1/4, about ±65% on the odds — so it
+ * locates the rate without pretending to a precision the source never stated.
+ * And precision a source never stated cannot make a probability: an estimate
+ * resting only on unsized rates is bounds, never a distribution (`allUnsized`).
+ *
+ * Reviewed 2026-11-01. The first value was ten events (±37% on the odds),
+ * which let three unsized published rates pool into a distribution as narrow
+ * as one measured on a few dozen contacts — sampled evidence nobody observed.
+ * Counting it as trials instead would make a rare rate (0.45%) say nothing and
+ * a common one say a lot, which is the scale talking rather than the evidence.
  */
-export const UNSIZED_RATE_EVENTS = 10;
+export const UNSIZED_RATE_EVENTS = 4;
 /** One published figure for a magnitude is read with this log-scale reading error (≈ ±10%). */
 export const POINT_LOG_SD = 0.1;
 /** Each immaterial difference halves an observation's weight… roughly: weight × 0.7. */
@@ -81,10 +88,21 @@ export interface Scaled {
   /** How far it travelled: 0 direct, else the number of discounted differences + 1. */
   distance: number;
   adjusted: string[];
+  /** A rate whose source stated no sample: location, not precision. */
+  unsized?: boolean;
+}
+
+/**
+ * Whether every observation kept is an unsized published rate. Such evidence
+ * locates a rate and bounds it; it cannot justify a probability distribution,
+ * because the precision that distribution would claim was never measured.
+ */
+export function allUnsized(items: readonly Scaled[]): boolean {
+  return items.length > 0 && items.every((one) => one.unsized);
 }
 
 /** An observation's centre and sampling variance on the pooling scale. */
-export function onScale(obs: Observation, kind: QuantityKind): { y: number; v: number } | null {
+export function onScale(obs: Observation, kind: QuantityKind): { y: number; v: number; unsized?: boolean } | null {
   const scale = scaleFor(kind);
   const value = obs.value;
   if (value.kind === 'COUNT') {
@@ -97,8 +115,11 @@ export function onScale(obs: Observation, kind: QuantityKind): { y: number; v: n
     if (kind === 'RATE') {
       if (value.value < 0 || value.value > 1) return null;
       const p = clampRate(value.value);
-      const information = value.sampleSize && value.sampleSize > 0 ? value.sampleSize * p * (1 - p) : UNSIZED_RATE_EVENTS;
-      return { y: toScale(scale, p), v: 1 / information };
+      // A ratio of two published amounts about one case: reading error only.
+      if (value.exact) return { y: toScale(scale, p), v: POINT_LOG_SD ** 2 };
+      const sized = !!(value.sampleSize && value.sampleSize > 0);
+      const information = sized ? value.sampleSize! * p * (1 - p) : UNSIZED_RATE_EVENTS;
+      return { y: toScale(scale, p), v: 1 / information, unsized: !sized };
     }
     if (kind === 'POSITIVE') {
       if (value.value <= 0) return null;
@@ -142,7 +163,7 @@ export function classify(node: QuantityNode, now: Date): Classified {
       continue;
     }
     if (obs.broad) {
-      out.broad.push({ obs, y: base.y, v: base.v, distance: 99, adjusted: [] });
+      out.broad.push({ obs, y: base.y, v: base.v, distance: 99, adjusted: [], unsized: base.unsized });
       continue;
     }
     let { y, v } = base;
@@ -176,7 +197,7 @@ export function classify(node: QuantityNode, now: Date): Classified {
     }
     if (immaterial > 0) v = v / IMMATERIAL_DISCOUNT ** immaterial;
     const distance = immaterial + adjusted.length;
-    const scaled = { obs, y, v, distance: distance === 0 ? 0 : distance + 1, adjusted };
+    const scaled = { obs, y, v, distance: distance === 0 ? 0 : distance + 1, adjusted, unsized: base.unsized };
     if (distance === 0) out.direct.push(scaled);
     else out.comparable.push(scaled);
   }

@@ -314,13 +314,17 @@ describe('N. a numerically consistent model that rests on invalid transfers', ()
 });
 
 describe('scale conversions are honest about sample size', () => {
-  it('weights a counted rate by its trials, and an unsized one as ten events whatever its size', () => {
+  it('weights a counted rate by its trials, and an unsized one as four events whatever its size', () => {
     const sized = onScale(count('a', 50, 1000, {}), 'RATE')!;
     const unsized = onScale(point('b', 0.05, {}), 'RATE')!;
     const rare = onScale(point('c', 0.0045, {}), 'RATE')!;
     expect(sized.v).toBeLessThan(unsized.v);
     expect(rare.v).toBeCloseTo(unsized.v, 10);
-    expect(unsized.v).toBeCloseTo(0.1, 10);
+    expect(unsized.v).toBeCloseTo(0.25, 10);
+    expect(unsized.unsized).toBe(true);
+    expect(sized.unsized).toBeFalsy();
+    // A ratio of two published amounts about one case is not a sampled rate.
+    expect(onScale({ ...point('d', 0.3, {}), value: { kind: 'POINT', value: 0.3, exact: true } }, 'RATE')!.unsized).toBeFalsy();
   });
 });
 
@@ -376,7 +380,13 @@ describe('one comparable population is an anecdote', () => {
     expect(est.tier).toBe('COMPARABLE');
     expect(est.distributionJustified).toBe(false);
     expect(toScenarioInput(est).spec.kind).toBe('RANGE');
+    // Two unsized published rates locate it, but nobody measured their precision.
     const two = reconstruct({ nodes: [{ ...node, observations: [...node.observations!, point('third', 0.5, { opportunity: 'o3', mechanism: 'service' })] }] }, 'cost_share', now).estimates.cost_share!;
-    expect(two.distributionJustified).toBe(true);
+    expect(two.distributionJustified).toBe(false);
+    expect(two.trace.join(' ')).toMatch(/no stated sample/);
+    // Two measured ones are a pattern.
+    const measured = (id: string, s: number, opp: string) => ({ ...point(id, s / 50, { opportunity: opp, mechanism: 'service' }), value: { kind: 'COUNT' as const, successes: s, trials: 50 } });
+    const counted = reconstruct({ nodes: [{ ...node, observations: [measured('a', 20, 'o1'), measured('b', 25, 'o3')] }] }, 'cost_share', now).estimates.cost_share!;
+    expect(counted.distributionJustified).toBe(true);
   });
 });

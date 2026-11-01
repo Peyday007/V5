@@ -876,6 +876,48 @@ export async function openGoalDiscovery(input: {
 }
 
 /**
+ * Open one round for an arrangement Brain constructed itself (§81).
+ *
+ * The construction module decides *what* to ask — an arrangement composed from
+ * a buyer population, a need, a way to fulfil it and a way to be paid, none of
+ * which a person named — and this is the only door it asks through: the same
+ * gate, the same frame, the same candidate-and-round transaction and the same
+ * harvest every goal lens uses. The bucket id carries the arrangement's key,
+ * so each arrangement keeps its own history and backoff, and its rounds count
+ * against the goal's live cap like any lens.
+ */
+export async function openConstructedRound(input: {
+  goal: { id: string; title: string };
+  projectId: string;
+  /** Stable, short, url-safe: becomes `goal-<goalId>-mx-<key>`. */
+  key: string;
+  title: string;
+  question: string;
+  now?: string;
+  liveCap?: number;
+}): Promise<OpenedDiscovery | null> {
+  const gate = await discoveryAllowed(input.projectId);
+  if (!gate.allowed || !gate.mode) return null;
+  const mode = gate.mode;
+  const now = input.now ?? new Date().toISOString();
+  const prefix = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
+  const mine = (await listRounds(input.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
+  const liveCap = Math.max(MAX_LIVE_GOAL_ROUNDS, Math.trunc(input.liveCap ?? MAX_LIVE_GOAL_ROUNDS));
+  if (mine.filter((one) => one.state === 'OPEN').length >= liveCap) return null;
+  const lens = `mx-${input.key}`;
+  const id = `${prefix}-${lens}`;
+  const history = mine.filter((one) => one.bucketId === id);
+  const next = nextGoalRoundFor(history, now);
+  if (next === null) return null;
+  const bucket = goalBucket(input.goal.id, input.goal.title, input.question, lens);
+  bucket.title = input.title.slice(0, 160);
+  const frame = await executionFrame(input.projectId, mode.currency);
+  const held = await heldExclusions({ projectId: input.projectId, bucket, history });
+  const round = await openBucketRound({ projectId: input.projectId, mode, bucket, next, statement: questionFor(bucket, mode.objective, next, history, held, frame) });
+  return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
+}
+
+/**
  * The order buckets are offered in: the least-asked mechanism first.
  *
  * `openDiscovery` opens one round a tick and every bucket is re-asked after its

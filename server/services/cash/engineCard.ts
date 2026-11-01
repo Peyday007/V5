@@ -75,6 +75,12 @@ export const ENGINE_FIELDS = [
   'directCosts',
   'requiredCapital',
   'timeToFirstCash',
+  /*
+   * How many deals the market can take: reachable buyers and how often each
+   * buys. What a repeatable play is worth turns on it, and a plan may never
+   * assume it (`volume.ts`).
+   */
+  'buyerVolume',
   'hours',
   'laborNeeds',
   /*
@@ -111,6 +117,7 @@ export const NEED_RESEARCHABLE_ENGINE_FIELDS: readonly EngineFieldKey[] = Object
   'directCosts',
   'requiredCapital',
   'timeToFirstCash',
+  'buyerVolume',
   'hours',
   'laborNeeds',
   'phoneDependency',
@@ -280,6 +287,14 @@ const LABELS: Record<EngineFieldKey, { label: string; task: string }> = {
     task:
       'Find the published payment terms, payout schedule or decision date, and say when money ' +
       'would actually be usable rather than when the work is done.',
+  },
+  buyerVolume: {
+    label: 'Buyers and how often they buy',
+    task:
+      'Count how many buyers of exactly this kind exist and can be reached through a published ' +
+      'channel — a directory, register or list, with its number — and say how often one buyer ' +
+      'buys it (weekly, monthly, yearly, or once). State both as numbers with their sources; ' +
+      '"many" or "thousands" is not a count.',
   },
   hours: {
     label: 'Expected human hours',

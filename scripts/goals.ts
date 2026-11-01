@@ -56,7 +56,9 @@ import { discoveryYield, type YieldRow } from '../server/services/cash/discovery
 import { sharedFleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { researchGoalPaths } from '../server/services/goals/pathResearch.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
+import { askConstructedArrangements, CHAIN_LABEL, readGoalPlan, listReadings, type PlanReading } from '../server/services/goals/plan.ts';
+import { constructArrangements } from '../server/services/cash/construct.ts';
+import { executionFrame, MAX_LIVE_GOAL_ROUNDS } from '../server/services/cash/discovery.ts';
 
 class Halt extends Error {}
 
@@ -376,6 +378,18 @@ async function printSearching(reading: PlanReading): Promise<void> {
   const feeds = await getDb().get<{ n: number | string }>(`SELECT COUNT(*) AS n FROM feed_items WHERE fetched_at >= ?`, [new Date(Date.now() - 24 * 60 * 60_000).toISOString()]).catch(() => null);
   const funnel = await shortlistFunnel(reading.target.projectId).catch(() => null);
   console.log(`  code feeds  24h: ${feeds ? Number(feeds.n) : '?'} new items pulled; ${funnel ? `pool ${funnel.pool}, screened by free AI ${funnel.screened}, kept ${funnel.kept}, passed rules ${funnel.passedRules}, sent to Claude ${funnel.chosen.length}` : 'funnel unreadable'}`);
+  const t = reading.target;
+  const frame = await executionFrame(t.projectId, t.currency);
+  const built = t.daysLeft && t.daysLeft > 0
+    ? await constructArrangements({ projectId: t.projectId, currency: t.currency, delivers: frame?.delivers ?? [], capitalCeilingCents: t.capitalCeilingCents, daysLeft: t.daysLeft })
+    : [];
+  const byStructure = new Map<string, number>();
+  for (const one of built) byStructure.set(one.structure, (byStructure.get(one.structure) ?? 0) + 1);
+  console.log(`  constructed ${built.length} arrangement(s) composed from the industry map, evidenced payers and proved deliverables${byStructure.size ? ` (${[...byStructure].map(([k, v]) => `${k} ${v}`).join(', ')})` : ''}`);
+  for (const one of built.slice(0, 12)) {
+    const asked = rounds.filter((r) => r.bucketId.endsWith(`-mx-${one.key}`));
+    console.log(`    ${one.key} ${one.structure.padEnd(11)} claims ${one.evidenced} · value ${one.value.tier}${one.value.observations ? ` p10 ${round(one.value.p10)} p50 ${round(one.value.p50)} p90 ${round(one.value.p90)} (${one.value.observations} obs)` : ''} · to establish: ${one.unknownParts.join(', ')} · ${asked.length ? `asked ${asked.length}x (${asked.map((r) => r.state).join(',')})` : 'not asked yet'} · ${one.label.slice(0, 90)}`);
+  }
   console.log(`  searching   ${rounds.length} round(s) of this goal's own search`);
   for (const round of rounds) {
     const mission = await latestMissionForCandidate(round.candidateId);
@@ -413,6 +427,7 @@ function printPlan(reading: PlanReading): void {
   console.log(`  resources   ${t.resources ?? 'not stated'}`);
   console.log(`  spending    ${spendingRuleSentence(t) ?? 'no pace set'}`);
   console.log(`  verdict     ${reading.summary}`);
+  console.log(`  pool        ${reading.pool.conclusion}: ${reading.pool.sentence}`);
   console.log(`  considered  ${reading.considered.length} opening(s), ${reading.considered.filter((one) => one.modelled).length} in the simulation; ${reading.needsMoreOpenings ? 'not enough yet, so Brain keeps searching' : 'a realistic plan exists'}`);
   for (const one of reading.considered.slice(0, 8)) {
     console.log(`    ${one.modelled ? 'model' : '     '} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
@@ -465,6 +480,19 @@ async function plan(): Promise<void> {
   console.log('GOALS: OK');
 }
 
+/** Open this pass's constructed rounds now, exactly as the tick would (§81). */
+async function construct(): Promise<void> {
+  const [, goalId] = words();
+  if (!goalId) fail('construct needs a goal id.');
+  const goal = await getWorkstream(goalId);
+  const reading = await readGoalPlan({ goalId, persist: false });
+  if (!goal || !reading) fail(`No targeted goal ${goalId}.`);
+  const opened = await askConstructedArrangements(goal, reading, new Date(), Number(flag('max') ?? 2), MAX_LIVE_GOAL_ROUNDS + Number(flag('spare') ?? 0));
+  for (const id of opened) await linkWorkstream({ workstreamId: goal.id, kind: 'CANDIDATE', ref: id, relation: 'PURSUES', recordedBy: 'BRAIN', recordedByUserId: null });
+  console.log(`construct ${goalId}: opened ${opened.length} round(s)${opened.length ? `: ${opened.join(', ')}` : ' (cool-off, live cap or a closed gate)'}`);
+  console.log('GOALS: OK');
+}
+
 async function main(): Promise<void> {
   await initDatabase();
   const [command] = words();
@@ -486,8 +514,10 @@ async function main(): Promise<void> {
       return await targetCommand(command);
     case 'plan':
       return await plan();
+    case 'construct':
+      return await construct();
     default:
-      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan');
+      console.error('commands: show, file, pause, resume, cancel, reinstate, terms, depends, create, target, plan, construct');
       process.exitCode = 1;
       console.log('GOALS: FAIL');
   }
