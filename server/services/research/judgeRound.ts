@@ -522,3 +522,70 @@ export async function correctionsForRound(orchestration: ResearchOrchestration):
   }
   return null;
 }
+
+/** How far back a judge's corrections still teach a first synthesis. */
+export const RECENT_CORRECTIONS_WINDOW_MS = 14 * 86_400_000;
+/** At most this many are handed over, most frequent first. */
+export const RECENT_CORRECTIONS_LIMIT = 6;
+const recentCorrectionsCache = new Map<string, { at: number; value: RecentJudgeCorrections | null }>();
+
+export interface RecentJudgeCorrections {
+  /** How many PATCH corrections independent judges recorded in the window. */
+  sample: number;
+  corrections: Array<{ title: string; times: number }>;
+  instruction: string;
+}
+
+/** Tests: forget the reading. */
+export function resetRecentCorrections(): void {
+  recentCorrectionsCache.clear();
+}
+
+/**
+ * What independent judges in this project recently asked other reports to
+ * correct, for a first synthesis to avoid before it is judged (§80).
+ *
+ * Production, 2026-11-01: of 45 packets judged in six hours, 22 drew PATCH or
+ * MORE_RESEARCH, and a PATCH costs a corrected round — a new synthesis and all
+ * three audit roles again, on the scarcest capacity Brain has (three
+ * concurrent session identities). Telling the author what judges keep
+ * correcting is context, never a control: the judge, the gate and the floor are
+ * untouched, and the titles are the judges' own words. Cached ten minutes per
+ * project, because a judgement a minute old changes nothing (§61).
+ */
+export async function recentJudgeCorrections(projectId: string, nowMs: number = Date.now()): Promise<RecentJudgeCorrections | null> {
+  const hit = recentCorrectionsCache.get(projectId);
+  const reuse = process.env['BRAIN_SHARED_SNAPSHOT_MS'] === '0' ? 0 : 10 * 60_000;
+  if (hit && nowMs - hit.at >= 0 && nowMs - hit.at < reuse) return hit.value;
+  const since = new Date(nowMs - RECENT_CORRECTIONS_WINDOW_MS).toISOString();
+  const rows = await getDb().all<{ title: string }>(
+    `SELECT g.title AS title FROM audit_gaps g JOIN audits a ON a.id = g.audit_id
+      WHERE a.project_id = ? AND g.classification = 'PATCH' AND g.created_at >= ?
+      ORDER BY g.created_at DESC LIMIT 300`,
+    [projectId, since],
+  );
+  const counts = new Map<string, { title: string; times: number }>();
+  for (const row of rows) {
+    const title = row.title.trim().slice(0, 200);
+    if (!title) continue;
+    const key = title.toLowerCase().replace(/\s+/g, ' ');
+    const entry = counts.get(key) ?? { title, times: 0 };
+    entry.times += 1;
+    counts.set(key, entry);
+  }
+  const corrections = [...counts.values()]
+    .sort((a, b) => b.times - a.times || a.title.localeCompare(b.title))
+    .slice(0, RECENT_CORRECTIONS_LIMIT);
+  const value: RecentJudgeCorrections | null =
+    corrections.length === 0
+      ? null
+      : {
+          sample: rows.length,
+          corrections,
+          instruction:
+            'Independent judges recently asked other reports in this project to correct these. Before you submit, ' +
+            'check this report does not make the same mistakes. This changes no rule: the judge still decides.',
+        };
+  recentCorrectionsCache.set(projectId, { at: nowMs, value });
+  return value;
+}

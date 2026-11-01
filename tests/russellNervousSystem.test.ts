@@ -832,6 +832,88 @@ describe('the loop keeps going without anybody watching', () => {
     expect(second.resumed).not.toContain(request.id);
   });
 
+  it('answers a routine research park itself, under the standing grant (§80)', async () => {
+    const goal = await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'standing',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 1,
+      maxFragments: 1,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const captured = await capture({
+      title: 'Florida licensing',
+      statement: 'establish the Florida broker licence position from the 2026 statute',
+      projectId,
+      visibility: 'SHARED',
+    });
+    const launched = await launch({
+      projectId,
+      layerId,
+      candidateId: captured.candidate!.id,
+      visibility: 'SHARED',
+      title: 'Florida broker licensing',
+      assignment: 'Under Florida law as in force in 2026, is a broker licence required?',
+      objective: 'Settle the Florida position.',
+      whyNow: 'The layer names Florida as open.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: [],
+      evidence: ['the exact section'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    const mission = launched.mission!;
+    await withResearch(mission.orchestrationId!, layerId, projectId);
+    await updateOrchestration(mission.orchestrationId!, {
+      status: 'NEEDS_HUMAN',
+      failureReason: 'The evidence bar was not met and the repair ladder is spent.',
+    });
+
+    await tick('instance-a');
+    const request = (await listOpenRequests(projectId)).find((entry) => entry.missionId === mission.id)!;
+    expect(request).toBeDefined();
+
+    // Inside the grace period nothing is decided: the repair passes go first.
+    const { answerRoutineParks, ROUTINE_DECISION_GRACE_MS } = await import(
+      '../server/services/russell/routineDecisions.ts'
+    );
+    expect((await answerRoutineParks()).filter((d) => d.choice)).toHaveLength(0);
+    expect((await getHumanRequest(request.id))!.state).toBe('OPEN');
+
+    const old = new Date(Date.now() - ROUTINE_DECISION_GRACE_MS - 60_000).toISOString();
+    await getDb().run('UPDATE russell_human_requests SET created_at = ? WHERE id = ?', [old, request.id]);
+
+    const ran = await tick('instance-a');
+    expect(ran.routineDecisions.map((d) => d.requestId)).toContain(request.id);
+    expect(ran.resumed).toContain(request.id);
+    const answered = (await getHumanRequest(request.id))!;
+    expect(answered.answeredChoice).toBe('RECORD_GAPS');
+    expect(answered.answeredByUserId).toBe(userId);
+    expect(answered.answeredReason).toMatch(/Decided by Brain under the standing research grant/);
+    expect(answered.answeredReason).toContain(goal.id);
+    const orchestration = await getOrchestration(mission.orchestrationId!);
+    expect(orchestration!.unresolvedGapPolicy).toBe('RECORD_GAPS');
+    expect((await listEvents(projectId)).some((e) => e.eventType === 'RUSSELL_ROUTINE_DECISION')).toBe(true);
+    // And a second pass decides nothing again.
+    expect((await answerRoutineParks()).filter((d) => d.requestId === request.id)).toHaveLength(0);
+  });
+
+  it('never authorizes a plan, and leaves a person’s own goal plan with them', async () => {
+    const { routineChoiceFor } = await import('../server/services/russell/routineDecisions.ts');
+    expect(routineChoiceFor({ choiceKeys: ['APPROVE_PLAN', 'STOP'], brainCompiled: true }).choice).toBe('STOP');
+    expect(routineChoiceFor({ choiceKeys: ['APPROVE_PLAN', 'STOP'], brainCompiled: false }).choice).toBeNull();
+    expect(routineChoiceFor({ choiceKeys: ['RECORD_GAPS', 'STOP'], brainCompiled: false }).choice).toBe('RECORD_GAPS');
+    expect(routineChoiceFor({ choiceKeys: ['STOP'], brainCompiled: false }).choice).toBe('STOP');
+    expect(routineChoiceFor({ choiceKeys: ['approve'], brainCompiled: true }).choice).toBeNull();
+    for (const keys of [['APPROVE_PLAN', 'STOP'], ['RECORD_GAPS', 'STOP'], ['STOP']]) {
+      expect(routineChoiceFor({ choiceKeys: keys, brainCompiled: true }).choice).not.toBe('APPROVE_PLAN');
+    }
+  });
+
   it('holds the concurrency slot for as long as the mission actually runs', async () => {
     /*
      * The defect this exists for, and the reason no existing test caught it.
