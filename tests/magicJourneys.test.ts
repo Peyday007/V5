@@ -158,8 +158,38 @@ describe('journey 5: the league is already there', () => {
       expect(d.commander).toBeNull();
       expect(d.cardListStatus).toBe('UNVERIFIED');
     }
-    expect(detail.decks[byLabel('CHAOS INCARNATE').id][0].commander).toBe('Kardur, Doomscourge');
-    expect(detail.decks[byLabel('CHAOS INCARNATE').id][0].cardListStatus).toBe('UNVERIFIED'); // no official list is verified, so none is loaded
+    const kardur = detail.decks[byLabel('CHAOS INCARNATE').id][0];
+    expect(kardur.commander).toBe('Kardur, Doomscourge');
+    expect(kardur.cardListStatus).toBe('VERIFIED');
+    expect(kardur.sourceDate).toBe('2022-10-20');
+    expect(kardur.sourceCitation).toContain('magic.wizards.com');
+    // The baseline is a real 100-card deck in the deck store, commander in the command zone.
+    const deck = await call('GET', `/magic/decks/${kardur.deckId}`);
+    expect(deck.status).toBe(200);
+    const cards = deck.body.version.cards as { zone: string; cardName: string; quantity: number }[];
+    expect(cards.reduce((n, c) => n + c.quantity, 0)).toBe(100);
+    expect(cards.filter((c) => c.zone === 'commander').map((c) => c.cardName)).toEqual(['Kardur, Doomscourge']);
+    // Token Triumph and Grave Danger load their official 100; First Flight its 99 with the commander unknown.
+    for (const [label, commander] of [['Token Triumph', 'Emmara, Soul of the Accord'], ['Undead Girl / Grave Danger', 'Gisa and Geralf']] as const) {
+      const d = detail.decks[byLabel(label).id][0];
+      expect(d.cardListStatus).toBe('VERIFIED');
+      expect(d.commander).toBe(commander);
+      expect(d.detail.cards).toBe(100);
+    }
+    const sky = detail.decks[byLabel('Sky Warden / First Flight').id][0];
+    expect(sky.commander).toBeNull();
+    expect(sky.detail.cards).toBe(99);
+    expect(sky.detail.priorCommander).toBe('Isperia, Supreme Judge');
+    expect(detail.decks[byLabel('Other Chaos Incarnate (provisional)').id][0].cardListStatus).toBe('UNVERIFIED');
+  });
+
+  it('seeds exactly once: a second visit adds no league, player or deck', async () => {
+    await workspace();
+    const before = (await call('GET', '/magic/decks')).body.decks.length;
+    const again = await workspace();
+    expect(again.detail.players).toHaveLength(7);
+    expect((await call('GET', '/magic/leagues')).body.leagues).toHaveLength(1);
+    expect((await call('GET', '/magic/decks')).body.decks.length).toBe(before);
   });
 });
 

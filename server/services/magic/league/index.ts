@@ -5,3 +5,4 @@ export * from './versions.ts';
 export * from './nextTen.ts';
 export * from './matchups.ts';
 export * from './standings.ts';
+export * from './officialLists.ts';

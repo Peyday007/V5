@@ -21,7 +21,7 @@ import {
 } from './helpers.ts';
 import { getCard, findCardsByName, listPrintings, getPrinting, type CatalogCard } from '../repos/magicCatalog.ts';
 import {
-  appendLedger, appendLeagueDeck, appendObservation, appendPurchase, ensureBaselineDeck, ensureLeague, ensurePlayer, ensureRule,
+  appendLedger, appendLeagueDeck, appendObservation, appendPurchase,
   getLeague, getPlayer, listGames, listLeagueDecks, listLeagues, listLedger, listObservations, listPlayers, listPurchases, listRules,
   recordGame, setRule, updateLeague, updatePlayer, type GameInput,
 } from '../repos/magicLeague.ts';
@@ -38,7 +38,8 @@ import { buildDeck, chooseAlternative, parseIdea, planDesign, refineIntent, type
 import {
   alternatePrintings, approveSingles, priceFor, resolvePrinting, validateVerifiedEntry, type PrintingPrice, type VerifiedPrice,
 } from '../services/magic/prices/prices.ts';
-import { SEED_PLAYERS, SEED_RULES, LEAGUE_NAME, playerKey } from '../services/magic/league/seed.ts';
+import { SEED_RULES } from '../services/magic/league/seed.ts';
+import { ensureWorkspace } from '../services/magic/league/workspace.ts';
 import { standings } from '../services/magic/league/standings.ts';
 import type { MagicFormat, MagicZone } from '../domain/magicTypes.ts';
 import { MAGIC_FORMATS, MAGIC_ZONES } from '../domain/magicTypes.ts';
@@ -445,38 +446,6 @@ magicRouter.post('/magic/design/build', handler(async (req) => {
 }));
 
 /* ------------------------------------------------------------------ leagues */
-
-/**
- * The owner's league workspace, created on first access and never again
- * rewritten: every insert is `ON CONFLICT DO NOTHING`, so an edit survives and a
- * second visit changes nothing. No official list is loaded here: none has been
- * verified with a source and date, so every deck is a named record labelled
- * "unverified cardlist" until one is.
- */
-async function ensureWorkspace(who: string): Promise<void> {
-  const league = await ensureLeague(who, { seedKey: 'precon-commander-league', name: LEAGUE_NAME, podSize: SEED_RULES.podSize, startingLife: SEED_RULES.startingLife });
-  const rules: [string, unknown, 'CONFIRMED' | 'PENDING' | 'ASSUMED', string][] = [
-    ['weekly_allowance_cents', SEED_RULES.weeklyAllowanceCents, 'CONFIRMED', '$10 market value of singles each week.'],
-    ['booster_option', SEED_RULES.boosterOption, 'PENDING', 'Two booster packs instead of singles; exact sets pending confirmation and never blocking singles.'],
-    ['rollover', SEED_RULES.rollover, 'PENDING', 'Not confirmed: assumed none, and unconfirmed money is never accumulated.'],
-    ['scoring', SEED_RULES.scoring, 'CONFIRMED', 'First two eliminations 1 point each, final elimination 2, credited to the controller of the causing source.'],
-    ['house_rules_pending', SEED_RULES.houseRulesPending, 'PENDING', 'Simultaneous elimination, commander damage and alternate losses are editable house rules, never silently assigned.'],
-  ];
-  for (const [ruleKey, value, status, note] of rules) await ensureRule(who, league.id, { ruleKey, value, status: status as never, note });
-  for (const p of SEED_PLAYERS) {
-    const unknowns = [p.product === 'UNKNOWN' ? 'product' : null, p.commander === 'UNKNOWN' ? 'commander' : null, 'cardlist'].filter((x): x is string => x !== null);
-    const player = await ensurePlayer(who, league.id, {
-      seedKey: playerKey(p), ordinal: p.slot, label: p.label, isOwner: p.slot === 0, status: p.provisional ? 'PROVISIONAL' : 'CONFIRMED',
-      unknowns, notes: p.notes.join(' '),
-    });
-    if (player) {
-      await ensureBaselineDeck(who, player.id, {
-        product: p.product === 'UNKNOWN' ? null : p.product, commander: p.commander === 'UNKNOWN' ? null : p.commander,
-        cardListStatus: 'UNVERIFIED', detail: { listLabel: 'unverified cardlist', listStatus: p.listStatus },
-      });
-    }
-  }
-}
 
 async function leagueOf(who: string, id: string) {
   const league = await getLeague(who, id);
