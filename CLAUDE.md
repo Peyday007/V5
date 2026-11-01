@@ -44,7 +44,10 @@ engineering -- report` prints it with the metrics.
 `BLOCKED` (rule 11 reasons only), an important defect, or a meaningful status
 change. The final report is four short parts and nothing else: **DONE** (what is
 live), **DECIDED** (calls you made, one line each), **YOU DO** (only what needs
-Peyton's hands — logins, payments — or "nothing"), **BIG NEWS** (only if any). Do not narrate "reading X", "now checking Y", "waiting", "let me
+Peyton's hands — logins, payments — or "nothing"), **BIG NEWS** (only big
+*good* news — e.g. a play that is clearly working or a goal that just became
+viable; bad news, setbacks and defects go in DONE or BLOCKED instead; if there
+is no big good news, leave this part out entirely). Do not narrate "reading X", "now checking Y", "waiting", "let me
 inspect Z" — tool activity is already in the tool log and Brain's records.
 
 ---
