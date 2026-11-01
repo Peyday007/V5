@@ -24,8 +24,10 @@ pass the weekly allowance and $10.01 does not.
 ## Who owns which fact
 
 - **The catalog** is shared and keyed by Scryfall Oracle ID, with printings kept apart. The bulk file is discovered at
-  run time from the Scryfall manifest, streamed with bounds, and refreshed off the request path. On an outage the cached
-  index is served and labelled stale. Tests use committed fixtures.
+  run time from the Scryfall manifest, streamed with bounds, and refreshed off the request path. Reading the catalog
+  status is what starts a refresh: an empty catalog, or one older than 48 hours, begins one, and a failure is not
+  retried for 15 minutes. On an outage the cached index is served and labelled stale. Tests use committed fixtures and
+  never reach the network.
 - **Rules** (copy limits, "any number" cards, partner and background pairs, colour identity, legality as of the analysis
   date) come from committed rules data, never from matching strings loosely.
 - **A deck** belongs to one person. Versions are append-only; undo moves a pointer. The collection (owned or proxy) is
@@ -36,12 +38,17 @@ pass the weekly allowance and $10.01 does not.
 
 ## Unknowns that stay unknown
 
-The league seed is a set of named records, not a set of invented card lists. No official 100-card list has been verified
-with a source and a date, so none is loaded: every deck is labelled *unverified cardlist* until one is. Red Foundations
-and Green Foundations have an unknown product, commander and list. Sky Warden's replacement commander is unknown until it
-is observed, and when it is observed it becomes a new version; the baseline is not rewritten. Rollover is not confirmed:
-it is assumed to be none, shown as pending and editable, and unconfirmed money is never accumulated. The booster-pack
-option is recorded with its sets unconfirmed and never blocks singles. Simultaneous elimination, commander damage and
+The league seed loads card lists only from the official source. Chaos Incarnate (the owner's deck, Kardur), Token
+Triumph (Emmara) and Grave Danger (Gisa and Geralf) are loaded as their official 100-card lists from Wizards of the
+Coast's *Starter Commander Decks Decklists*, published 2022-10-20
+(https://magic.wizards.com/en/news/announcements/starter-commander-decks-decklists-2022-10-20), and the league record
+carries that URL and date. First Flight loads its stock 99 with the commander unknown, because that player is changing
+commander; the printed commander, Isperia, is kept as prior context only. Red Foundations, Green Foundations and the
+provisional second Chaos Incarnate keep an unknown list and are labelled *unverified cardlist*. Grave Danger's observed
+noncombat drain is recorded as an observation; the cards causing it are not guessed. An observed commander or revealed
+card becomes a new version of that opponent's deck; the baseline is never rewritten, and a hypothesis versions nothing.
+Rollover is not confirmed: it is assumed to be none, shown as pending and editable, and unconfirmed money is never
+accumulated. The booster-pack option is recorded with its sets unconfirmed and never blocks singles. Simultaneous elimination, commander damage and
 alternate losses are house rules a person decides.
 
 ## Scoring
@@ -110,7 +117,10 @@ and the same body. A database that did not answer is a retryable 503, never a re
 - `POST /api/magic/leagues/:leagueId/purchases`
 - `POST /api/magic/leagues/:leagueId/observations`
 
-`optimize` and `design/build` take an explicit `poolNames` list; the whole catalog is not searched.
+`optimize` takes an explicit `poolNames` list. `design/build` draws on every format-legal card in the catalog when no
+`poolNames` are given. `next-ten` searches format-legal catalog cards in the commander's colours that cost at most the
+weekly allowance; every Scryfall price is an estimate, so no suggestion is approvable until a person confirms the price
+of that exact printing, and a suggestion is never a purchase.
 
 ## Tables
 
