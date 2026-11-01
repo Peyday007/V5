@@ -75,7 +75,7 @@ import { cardFact } from '../../repos/cashCardFacts.ts';
 import { getClaim } from '../../repos/research.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
-import { profileFor, validationScreenProfile, type CompilerProfile } from './compilerProfiles.ts';
+import { goalMechanismProfile, profileFor, validationScreenProfile, type CompilerProfile } from './compilerProfiles.ts';
 import { diveStageForCandidate } from '../cash/diveStage.ts';
 import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
 import { dealRoundForCandidate } from '../../repos/dealflow.ts';
@@ -650,6 +650,19 @@ export async function compileMission(input: {
     const opening = await opportunityForOwnCandidate(project.id, candidate.id);
     if (opening && (await diveStageForCandidate(opening.id, candidate.id)) === 'SCREEN') {
       profile = validationScreenProfile(envelopeId) ?? profile;
+    }
+  }
+  /*
+   * A goal's own search round asks for ways to reach a sum, and a repeating
+   * buyer pattern answers that as well as one open request (§80). Read from
+   * the round row the idea was opened for, so one idea compiles one way.
+   */
+  if (profile?.id === 'MARKET_DISCOVERY') {
+    const { roundForCandidate } = await import('../../repos/cashDiscovery.ts');
+    const { GOAL_BUCKET_PREFIX } = await import('../cash/discovery.ts');
+    const round = await roundForCandidate(candidate.id);
+    if (round && round.bucketId.startsWith(GOAL_BUCKET_PREFIX)) {
+      profile = goalMechanismProfile(envelopeId) ?? profile;
     }
   }
   if (!profile) {

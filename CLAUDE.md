@@ -13925,6 +13925,19 @@ models had kept 670 feed leads, and ten every twenty hours reached Claude.
 10 + 5 per idle surface (at most 25), as soon as two hours after the last one
 settled. A busy fleet keeps the daily ten (§78's rule).
 
+**A goal's own search may answer with a repeating buyer pattern.** The $10K
+goal had run 100 search rounds, and nearly every one ended "required evidence
+lane has no accepted claim: demand_signal". `MARKET_DISCOVERY` files only one
+open request, so a goal asking *which ways could bring this sum* kept recycling
+that one shape. `GOAL_MECHANISM` is that profile with `demand_signal`
+CONDITIONAL and a `demand_pattern` lane (`MARKET_PATTERN`: two distinct dated
+examples) beside it. The compiler picks it from the round row, as it picks the
+screen profile. The envelope, the gate, the floors and the harvest are
+unchanged: a pattern becomes an opening only when its reader declared an
+`opportunity_signal`. §81's constructed rounds open under the same goal prefix,
+so they compile this way too — a constructed arrangement has no single open
+request to find.
+
 ## 81. Brain constructs mechanisms nobody published, and never assumes a second sale.
 
 §79 reconstructed numbers for openings Brain held. It could not add an opening,
