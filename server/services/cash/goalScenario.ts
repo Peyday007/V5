@@ -24,6 +24,7 @@
  * pays after the deadline contributes nothing, which is what lets a smaller,
  * faster plan beat a bigger, slower one.
  */
+import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactMap } from '../../repos/cashCardFacts.ts';
 import { agreementsFor } from '../../repos/cashJourney.ts';
@@ -425,8 +426,15 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     knowledge = null;
   }
   const included: ModelledOpportunity[] = [];
+  // What the goal's owner said to leave out (§82): an excluded opening takes no slot, and says why.
+  const exclusions = await goalExclusions(input.goal);
   for (const opportunity of ordered) {
     const tier = tierOf.get(opportunity.id) ?? 'SIGNAL';
+    const excludedClass = IN_FLIGHT.has(opportunity.state) ? null : excludedBy(`${opportunity.title} ${opportunity.payer ?? ''} ${opportunity.industry ?? ''}`, exclusions);
+    if (excludedClass) {
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `left out by the goal: ${EXCLUSION_CLASSES[excludedClass].label}` });
+      continue;
+    }
     if (tier === 'SIGNAL' && !IN_FLIGHT.has(opportunity.state)) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: 'evidence only: nobody has shown who would pay us' });
       continue;

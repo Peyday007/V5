@@ -13975,6 +13975,63 @@ are the repair.
 - **An unsized published rate is bounds.** It locates a rate and states no
   precision, so an estimate resting only on such rates is never a distribution.
 
+## 82. Brain learns why an arrangement makes money, and builds new ones from that.
+
+§81 composed arrangements from the industry map with one flat list of ways to be
+paid. On 2026-11-01 production held 23 of them, all on the one buyer population
+the map held (an anime production committee), because forward construction can
+only combine parts somebody already filed. `services/cash/properties.ts` and
+`services/cash/exclusions.ts` extend the §81 constructor; there is no second
+invention engine.
+
+- **A design, not a business.** Each arrangement carries independent choices:
+  the base structure (who fulfils, who is paid what), when money moves
+  (on delivery, prepaid, or a threshold presale bought only once enough have
+  prepaid), whether buyers share one fulfilment run, and what recurs (one-off,
+  a fresh group each run, a subscription). Who pays and who carries the loss
+  are read off the design. Coherence rules refuse combinations that cannot
+  exist; nothing names a sector, a business or a price. The local shared
+  mailer is one such design, used only in a test to show its properties are
+  derived.
+- **Properties are derived, and each names its evidence.** Shared fixed cost,
+  affordable unit price, prepaid fulfilment, nothing at risk before buyers
+  commit, short time to cash, low buyer risk, low marginal cost, repeatable,
+  reusable infrastructure, recurring revenue. A property is a hypothesis: it
+  adds the decomposition parts that would establish it (`fixed_cost`,
+  `min_participants`, `prepay_share`, `repeat_rate`, `days_to_cash`,
+  `refund_terms`), and those parts are what the round asks. Prepayment is never
+  assumed; repeat buying is never assumed.
+- **Reverse construction.** `targetProperties` reads which properties the goal
+  needs from its own figures — pre-income money against the remainder, the
+  days left, the best reach against the remainder — and up to four
+  structurally different designs that deliver them are asked about with no
+  buyer at all: the round asks the world, in any industry, for buyers, needs
+  and supply that fit. That is what keeps a sparse map from defining the
+  universe.
+- **Transfer.** A held opening whose payer and way of being paid are gated is a
+  precedent for its design; the design carried to a different buyer is a
+  TRANSFER arrangement that names the precedent.
+- **Failure is structural.** `stressDesign` judges each design's worst case on
+  bounds (an unknown is never favourable): SAFE when nothing of ours is spent
+  before buyers commit by construction, BOUNDED or EXCEEDS when what a deal or
+  a shared run ties up is known from held openings, UNKNOWN otherwise. A tight
+  goal ranks SAFE first; EXCEEDS is never asked, and its threshold-presale
+  revision usually survives. `composeArrangement` models a shared run: below
+  its minimum a threshold presale contributes 0 and an unprotected run loses
+  its fixed cost.
+- **Exclusions are the owner's words.** `exclusionsIn` reads a closed set of
+  classes (government contracting, website repair) only where a negator governs
+  them, from the goal's text and the sprint's operator additions. Excluded map
+  parts are not composed, excluded openings take no model slot and say why,
+  and every constructed question names what to leave out.
+- **Construction holds at most half the goal's live cap**, because reverse
+  construction always has something to ask and would otherwise starve the
+  world-search lenses.
+
+What it does not do: decide that buyers exist, prepay or repeat. Those come back
+through the ordinary gate and harvest as openings, and the goal plan's chain
+gate judges them like any other.
+
 ## Repository map
 
 ```
@@ -14374,6 +14431,8 @@ server/
       knowledge.ts      Brain's own card facts and outcomes, as transferable observations
       problem.ts        one question end to end, from a file (`npm run quant`)
     cash/construct.ts   §80: arrangements composed from the map, decomposed into the round's question
+    cash/properties.ts  §82: transaction designs, the properties they produce, reverse targets, stress
+    cash/exclusions.ts  §82: what the goal's owner said to leave out, read where a negator governs it
     cash/volume.ts      §80: deals the market can take, read only where a source states a count
     russell/
       home.ts           the eight things home says, in the order S6 fixes them

@@ -188,12 +188,15 @@ describe('arrangements Brain constructs from what it knows', () => {
   it('composes new arrangements in unrelated industries with no per-industry code, and leaves out what it already holds', async () => {
     await sector('Veterinary care', { buyer: 'Independent veterinary clinics', bottleneck: 'After-hours phone coverage', supply: 'Remote answering services' });
     await sector('Commercial grounds care', { buyer: 'Homeowner association boards', bottleneck: 'Snow removal surges', supply: 'Independent plow operators' });
-    const built = await constructArrangements({ projectId, currency: 'USD', delivers: ['spreadsheets'], capitalCeilingCents: null, daysLeft: 30, now });
+    const all = await constructArrangements({ projectId, currency: 'USD', delivers: ['spreadsheets'], capitalCeilingCents: null, daysLeft: 30, now });
+    // Reverse arrangements (§82) belong to no sector: they ask the world for one.
+    const built = all.filter((one) => one.origin !== 'REVERSE');
+    expect(all.some((one) => one.origin === 'REVERSE')).toBe(true);
     const sectors = new Set(built.map((one) => one.sector));
     expect(sectors).toEqual(new Set(['Veterinary care', 'Commercial grounds care']));
     const structures = new Set(built.map((one) => one.structure));
     for (const s of ['PRODUCE', 'BROKER', 'REFERRAL', 'SUBCONTRACT', 'POOL']) expect(structures.has(s as never)).toBe(true);
-    const vet = built.find((one) => one.structure === 'BROKER' && one.sector === 'Veterinary care')!;
+    const vet = built.find((one) => one.structure === 'BROKER' && one.sector === 'Veterinary care' && one.design.repeat === 'ONE_OFF' && one.design.aggregation === 'SINGLE')!;
     expect(vet.demand.name).toBe('Independent veterinary clinics');
     expect(vet.need!.name).toBe('After-hours phone coverage');
     expect(vet.supply!.name).toBe('Remote answering services');
@@ -202,15 +205,20 @@ describe('arrangements Brain constructs from what it knows', () => {
     expect(vet.question).toMatch(/how many buyers of exactly this kind exist/);
     expect(vet.question).toMatch(/commission share/);
     expect(vet.question).toMatch(/refutes the arrangement/);
-    // With no capital allowed, arrangements that tie up money rank after those that do not.
-    const firstCapital = built.findIndex((one) => STRUCTURES[one.structure].capital !== 'NONE');
-    const lastFree = built.map((one) => STRUCTURES[one.structure].capital).lastIndexOf('NONE');
-    expect(firstCapital).toBeGreaterThan(lastFree);
+    // With no capital allowed, arrangements whose worst case ties up money rank after those that cannot (§82).
+    const firstAtRisk = all.findIndex((one) => one.stress.exposure !== 'SAFE');
+    const lastSafe = all.map((one) => one.stress.exposure).lastIndexOf('SAFE');
+    expect(firstAtRisk).toBeGreaterThan(lastSafe);
+    // A structure that needs per-deal capital can still be safe when its design is a threshold presale.
+    expect(all.some((one) => STRUCTURES[one.structure].capital !== 'NONE' && one.stress.exposure === 'SAFE' && one.design.funding === 'THRESHOLD_PRESALE')).toBe(true);
 
     // A payer already held as a subcontracted job is not offered back as one.
     await opening({ title: 'Clinic overflow calls, subcontracted', priceCents: 30_000, mechanism: 'SUBCONTRACTED_FULFILMENT', payer: 'Independent veterinary clinics' });
     const again = await constructArrangements({ projectId, currency: 'USD', delivers: ['spreadsheets'], capitalCeilingCents: null, daysLeft: 30, now });
-    expect(again.some((one) => one.structure === 'SUBCONTRACT' && one.demand.name === 'Independent veterinary clinics' && one.sector === 'Veterinary care')).toBe(false);
+    const sameAsHeld = (one: (typeof again)[number]) => one.structure === 'SUBCONTRACT' && one.demand.name === 'Independent veterinary clinics' && one.sector === 'Veterinary care';
+    expect(again.some((one) => sameAsHeld(one) && one.design.funding === 'ON_DELIVERY' && one.design.aggregation === 'SINGLE' && one.design.repeat === 'ONE_OFF')).toBe(false);
+    // The same structure designed differently — pooled and presold — is a new mechanism, so it is kept.
+    expect(again.some((one) => sameAsHeld(one) && one.design.funding === 'THRESHOLD_PRESALE')).toBe(true);
   });
 
   it('uses what Brain holds about the buyer directly when it is enough, and asks only what is missing', async () => {
@@ -220,11 +228,13 @@ describe('arrangements Brain constructs from what it knows', () => {
     }
     await createNode({ projectId, parentId: null, kind: 'BUYER_TYPE', name: 'Feed stores', origin: 'SEED' });
     const built = await constructArrangements({ projectId, currency: 'USD', delivers: [], capitalCeilingCents: null, daysLeft: 30, now });
-    // No supply on the map and no deliverable proved: nothing can be composed for clinics yet.
-    expect(built).toHaveLength(0);
+    // No supply on the map and no deliverable proved: nothing can be composed for clinics yet —
+    // only reverse arrangements, which ask the world for buyers and supply (§82).
+    expect(built.filter((one) => one.origin !== 'REVERSE')).toHaveLength(0);
+    expect(built.every((one) => one.demand.from === 'REVERSE')).toBe(true);
     await sector('Veterinary care', { buyer: 'Independent veterinary clinics', bottleneck: 'After-hours phone coverage', supply: 'Remote answering services' });
     const withSupply = await constructArrangements({ projectId, currency: 'USD', delivers: [], capitalCeilingCents: null, daysLeft: 30, now });
-    const clinic = withSupply.find((one) => one.demand.name === 'Independent veterinary clinics' && one.structure === 'BROKER')!;
+    const clinic = withSupply.find((one) => one.demand.name === 'Independent veterinary clinics' && one.structure === 'BROKER' && one.design.repeat === 'ONE_OFF' && one.design.aggregation === 'SINGLE')!;
     expect(clinic.value.tier).toBe('COMPARABLE');
     expect(clinic.value.observations).toBe(2);
     expect(clinic.unknownParts).not.toContain('value');
@@ -284,7 +294,8 @@ describe('arrangements Brain constructs from what it knows', () => {
     await sector('Commercial grounds care', { buyer: 'Homeowner association boards', bottleneck: 'Snow removal surges', supply: 'Independent plow operators' });
     const id = await goal(600_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
-    const opened = await askConstructedArrangements((await getWorkstream(id))!, reading, now, 2, MAX_LIVE_GOAL_ROUNDS);
+    // Spare surfaces widen the cap; construction may hold half of it (§82).
+    const opened = await askConstructedArrangements((await getWorkstream(id))!, reading, now, 2, MAX_LIVE_GOAL_ROUNDS + 1);
     expect(opened).toHaveLength(2);
     const statements = await Promise.all(opened.map(async (c) => (await getCandidate(c))!.statement));
     expect(statements.some((one) => one.includes('Independent veterinary clinics'))).toBe(true);
@@ -296,10 +307,10 @@ describe('arrangements Brain constructs from what it knows', () => {
     const id = await goal(600_000);
     const w = (await getWorkstream(id))!;
     const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
-    const first = await askConstructedArrangements(w, reading, now, 2, MAX_LIVE_GOAL_ROUNDS);
+    const first = await askConstructedArrangements(w, reading, now, 2, 2 * MAX_LIVE_GOAL_ROUNDS);
     expect(first).toHaveLength(2);
-    const second = await askConstructedArrangements(w, reading, now, 2, MAX_LIVE_GOAL_ROUNDS);
-    // The cap of three is shared; only one more fits, and it is a different arrangement.
+    const second = await askConstructedArrangements(w, reading, now, 2, 2 * MAX_LIVE_GOAL_ROUNDS);
+    // Construction holds half the cap of six; only one more fits, and it is a different arrangement.
     expect(second).toHaveLength(1);
     const keys = (await listRounds(projectId)).filter((one) => one.bucketId.includes('-mx-')).map((one) => one.bucketId);
     expect(new Set(keys).size).toBe(3);
