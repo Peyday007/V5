@@ -1698,8 +1698,9 @@ async function tickOnce(owner: string): Promise<TickReport> {
         await screenFeedLeads();
         const target = await shortlistProject((await listProjects()).map((one) => one.id));
         if (target) {
-          const { spareResearchSurfaces } = await import('../cash/researchRoom.ts');
-          const spare = (await spareResearchSurfaces(target).catch(() => 0)) ?? 0;
+          // Under focus idle Routines are kept for Brain work, so the shortlist is not widened.
+          const { cashSpareSurfaces } = await import('../cash/researchRoom.ts');
+          const spare = await cashSpareSurfaces(target).catch(() => 0);
           await openFeedShortlist({ projectId: target, spare });
         }
       });

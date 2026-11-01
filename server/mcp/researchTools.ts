@@ -1891,6 +1891,24 @@ const submitClaimsTool: McpTool = {
     const proof = proofFrom(args, item.id, workerId);
 
     const rows = objectArray(args, 'claims', MAX_CLAIMS_PER_SUBMISSION);
+    /*
+     * The schema says `additionalProperties: false`, and a client is free not to
+     * honour it. Production, 2026-10-31: a worker sent its source under a field
+     * name the contract does not define, every claim was stored with no URL, and
+     * the submission could not be redone — one per work item. An unknown field is
+     * refused here, before anything is stored, naming the field, so the worker
+     * resends with the right name instead of filing claims nobody can source.
+     */
+    const declared = claimFieldNames();
+    rows.forEach((row, index) => {
+      const unknown = Object.keys(row).filter((key) => !declared.has(key));
+      if (unknown.length > 0) {
+        throw invalidInput(
+          `claims[${index}] carries field(s) this tool does not define: ${unknown.join(', ')}. ` +
+            'Nothing was stored. Use the declared names (the source goes in source_url) and send again.',
+        );
+      }
+    });
     const claims = rows.map((row, index) => {
       const where = `claims[${index}]`;
       return {
@@ -3234,3 +3252,10 @@ export const RESEARCH_TOOLS: readonly McpTool[] = [
   getAuditBriefTool,
   submitAuditTool,
 ];
+
+/** The claim fields `brain_submit_claims` declares, read from its own schema so the two cannot drift. */
+export function claimFieldNames(): Set<string> {
+  const claims = (submitClaimsTool.inputSchema as unknown as { properties: { claims: { items: { properties: Record<string, unknown> } } } })
+    .properties.claims.items.properties;
+  return new Set(Object.keys(claims));
+}

@@ -594,6 +594,20 @@ describe('how the money actually arrives (2026-10-28)', () => {
       else process.env['BRAIN_CLAUDE_DISCOVERY'] = before;
     }
   });
+
+  it('opens no goal round on a Claude Routine while the Routines are on focus', async () => {
+    await oneOff({ title: 'Federal RFP, too slow', priceCents: 13_502_000, days: null });
+    const id = await pacedGoalFor();
+    const before = process.env['BRAIN_CASH_RESEARCH_MAX'];
+    process.env['BRAIN_CASH_RESEARCH_MAX'] = '1';
+    try {
+      expect((await advanceGoalPlans(now)).asked).toBe(0);
+      expect((await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-`))).toHaveLength(0);
+    } finally {
+      if (before === undefined) delete process.env['BRAIN_CASH_RESEARCH_MAX'];
+      else process.env['BRAIN_CASH_RESEARCH_MAX'] = before;
+    }
+  });
 });
 
 

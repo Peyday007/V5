@@ -44,7 +44,7 @@ import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDis
 import { constructArrangements } from '../cash/construct.ts';
 import { goalExclusions } from '../cash/exclusions.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
-import { spareResearchSurfaces } from '../cash/researchRoom.ts';
+import { cashSpareSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
 import { getScenarioModel } from '../../repos/scenario.ts';
@@ -978,7 +978,7 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       const toppedUp = lastTopUp.get(id) ?? 0;
       if (held?.needsMoreOpenings && now.getTime() - toppedUp >= GOAL_TOP_UP_MS) {
         lastTopUp.set(id, now.getTime());
-        const spare = (await spareResearchSurfaces(held.target.projectId)) ?? 0;
+        const spare = await cashSpareSurfaces(held.target.projectId);
         if (spare > 0) {
           const more = await widenGoalSearch(id, held, now, spare);
           asked += more.asked;
@@ -1002,7 +1002,7 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     // more, through the same discovery every bucket uses, instead of reading
     // the same openings again in thirty minutes.
     if (reading?.needsMoreOpenings) {
-      const spare = (await spareResearchSurfaces(reading.target.projectId)) ?? 0;
+      const spare = await cashSpareSurfaces(reading.target.projectId);
       const more = await widenGoalSearch(id, reading, now, spare);
       asked += more.asked;
       constructed += more.constructed;

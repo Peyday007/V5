@@ -252,6 +252,30 @@ export function operatorResearchMax(env = process.env): number | null {
 }
 
 /**
+ * Whether the operator has put the Routines on focus: Claude works on what
+ * improves every job, and cash finding moves to the free models and feeds.
+ *
+ * `cheap-lane.yml focus` sets `BRAIN_CASH_RESEARCH_MAX` (with
+ * `BRAIN_CLAUDE_DISCOVERY=off`); the ceiling is the owner saying so.
+ * `claude-discovery-off` alone stops bulk rounds and keeps a goal's own search. Under focus
+ * idle Routine capacity is **never** a reason to start more cash research: an
+ * idle Routine is capacity kept for Brain-improvement work, not a gap to fill.
+ * Production, 2026-10-31: the idle-fill lift (#385) undid focus within hours and
+ * a Routine spent its run hunting buyers for one Pennsylvania farm opening.
+ */
+export function routineFocus(env = process.env): boolean {
+  return operatorResearchMax(env) !== null;
+}
+
+/**
+ * Idle research surfaces cash research may use: none under focus.
+ */
+export async function cashSpareSurfaces(projectId: string): Promise<number> {
+  if (routineFocus()) return 0;
+  return (await spareResearchSurfaces(projectId)) ?? 0;
+}
+
+/**
  * The operator's ceiling binds only while capacity is contended.
  *
  * `BRAIN_CASH_RESEARCH_MAX` exists so low-yield dives do not take Routine time
@@ -337,5 +361,5 @@ export async function researchRoom(input: {
   if (room.room <= 0) return room;
   const max = operatorResearchMax();
   if (max === null) return room;
-  return applyOperatorMax(room, max, (await spareResearchSurfaces(input.projectId)) ?? 0);
+  return applyOperatorMax(room, max, await cashSpareSurfaces(input.projectId));
 }
