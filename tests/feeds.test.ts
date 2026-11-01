@@ -19,6 +19,7 @@ import {
 import {
   leadPassesRules,
   openFeedShortlist,
+  shortlistPace,
   pullDueFeeds,
   screenFeedLeads,
   SHORTLIST_SIZE,
@@ -175,6 +176,26 @@ describe('the shortlist', () => {
     const leads2 = (await getCandidate(all.find((one) => one.id === second)!.candidateId))!.statement.match(/- lead:/g);
     expect(leads2).toHaveLength(3);
     expect((await feedReading(now)).shortlisted).toBe(SHORTLIST_SIZE + 3);
+  });
+
+  it('hands more leads, sooner, while research surfaces sit idle (§78)', async () => {
+    expect(shortlistPace(0)).toEqual({ size: SHORTLIST_SIZE, intervalMs: 20 * 3_600_000 });
+    expect(shortlistPace(2).size).toBe(SHORTLIST_SIZE + 10);
+    expect(shortlistPace(99).size).toBe(25);
+    expect((await activate({ projectId, ownerUserId: userId, actorUserId: userId, objective: 'Maximize usable cash over the next few weeks.' })).ok).toBe(true);
+    await seeded(40, keep);
+    const roundId = await openFeedShortlist({ projectId, now, spare: 2 });
+    expect(roundId).not.toBeNull();
+    const first = (await listRounds(projectId)).find((one) => one.id === roundId)!;
+    expect((await getCandidate(first.candidateId))!.statement.match(/- lead:/g)).toHaveLength(SHORTLIST_SIZE + 10);
+    // Not while it is open, even with idle capacity.
+    expect(await openFeedShortlist({ projectId, now, spare: 2 })).toBeNull();
+    await getDb().run("UPDATE cash_discovery_rounds SET state = 'HARVESTED', harvested_at = ? WHERE id = ?", [now.toISOString(), roundId]);
+    // An hour after it settled: still too soon. Three hours: the next one opens.
+    expect(await openFeedShortlist({ projectId, now: new Date(now.getTime() + 3_600_000), spare: 2 })).toBeNull();
+    // Busy fleet: the daily spacing still holds.
+    expect(await openFeedShortlist({ projectId, now: new Date(now.getTime() + 3 * 3_600_000), spare: 0 })).toBeNull();
+    expect(await openFeedShortlist({ projectId, now: new Date(now.getTime() + 3 * 3_600_000), spare: 1 })).not.toBeNull();
   });
 
   it('opens nothing when the free models kept nothing, or with no sprint', async () => {

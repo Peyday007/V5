@@ -473,6 +473,21 @@ async function packets(window: Window, projectId: string | null): Promise<void> 
   console.log(
     `    fires withheld: ${deferred.map((row) => `${row.outcome ?? '-'}=${row.n}`).join(' ') || 'none'}`,
   );
+  // Which project and workload each withheld fire was for, and how many bins.
+  const byProject = await db.all<{ outcome: string | null; project_id: string | null; workload_class: string | null; n: number; bins: number }>(
+    `SELECT e.outcome AS outcome, e.project_id AS project_id, b.workload_class AS workload_class,
+            COUNT(*) AS n, COUNT(DISTINCT e.bin_id) AS bins
+       FROM bin_events e LEFT JOIN bins b ON b.id = e.bin_id
+      WHERE e.event_type IN ('DISPATCH_DEFERRED', 'DISPATCH_UNROUTED') AND e.at >= ? AND e.at < ?
+        AND (CAST(? AS TEXT) IS NULL OR e.project_id = ?)
+      GROUP BY e.outcome, e.project_id, b.workload_class ORDER BY COUNT(*) DESC LIMIT 12`,
+    [window.from, window.to, projectId, projectId],
+  );
+  for (const row of byProject) {
+    console.log(
+      `      ${String(row.n).padStart(5)}  ${row.outcome ?? '-'}  project=${row.project_id ?? '—'}  class=${row.workload_class ?? '—'}  bins=${row.bins}`,
+    );
+  }
 }
 
 /** What is waiting, now: the recoverable backlog and where its packets are. */

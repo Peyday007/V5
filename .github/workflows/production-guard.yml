@@ -49,9 +49,31 @@ jobs:
           base="https://$app.fly.dev"
           failed=0
 
+          # A 5xx or no answer at all is the proxy reporting that the Brain did
+          # not answer in time — not the console answering. 2026-11-01 run 258:
+          # /operator/workers -> 502 after 22s, with every other path 404. So a
+          # gateway failure is asked again, and if it never clears it is
+          # reported as production being unreachable, which is a different
+          # fact with a different remedy.
+          probe() {
+            local url=$1 code
+            for attempt in 1 2 3 4; do
+              code=$(curl -s -m 30 -o /tmp/body -w '%{http_code}' "$url" || echo 000)
+              case "$code" in 5??|000) sleep $((attempt * 10)) ;; *) break ;; esac
+            done
+            echo "$code"
+          }
+
           for path in /operator /operator/ /operator/workers /operator/credentials; do
-            code=$(curl -s -o /tmp/body -w '%{http_code}' "$base$path" || echo 000)
+            code=$(probe "$base$path")
             echo "GET $path -> $code"
+            case "$code" in
+              5??|000)
+                echo "::error::$path did not answer after four attempts ($code). That is production being unreachable or overloaded, not the operator console."
+                failed=1
+                continue
+                ;;
+            esac
             if [ "$code" != "404" ]; then
               echo "::error::$path answered $code. The operator console is gone; anything but 404 means production is running a build from before its removal — almost certainly a deploy from a non-canonical branch. See docs/DEPLOYMENT.md."
               failed=1
@@ -80,7 +102,12 @@ jobs:
           failed=0
 
           # Liveness, and the gate still shut.
-          health=$(curl -s -o /dev/null -w '%{http_code}' "$base/healthz" || echo 000)
+          health=000
+          for attempt in 1 2 3 4; do
+            health=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$base/healthz" || echo 000)
+            [ "$health" = "200" ] && break
+            sleep $((attempt * 10))
+          done
           [ "$health" = "200" ] || { echo "::error::/healthz answered $health"; failed=1; }
 
           anon=$(curl -s -o /dev/null -w '%{http_code}' "$base/api/projects" || echo 000)

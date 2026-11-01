@@ -503,6 +503,8 @@ export const EVENT_TYPES = [
   // The answering transition for a work item whose attempt ceiling now
   // binds at the claim as well as at `failWork`.
   'WORK_ATTEMPTS_REGRANTED',
+  /** A research park Brain answered under the standing grant (§80). */
+  'RUSSELL_ROUTINE_DECISION',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

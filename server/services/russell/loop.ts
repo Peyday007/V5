@@ -448,6 +448,8 @@ export interface TickReport {
    * visible backlog.
    */
   unresolvedAnswers: { requestId: string; reason: string }[];
+  /** Research parks Brain answered under the standing grant (§80). */
+  routineDecisions: { requestId: string; missionId: string | null; choice: string | null; reason: string }[];
   /**
    * Budget holds pushed out because their mission is still alive. A silence
    * here beside a running mission means its hold is about to lapse and refund
@@ -795,6 +797,7 @@ const EMPTY: TickReport = {
   linkedNext: [],
   needsHuman: [],
   unresolvedAnswers: [],
+  routineDecisions: [],
   renewedReservations: [],
   frontier: [],
   lensInquiries: { dispatched: 0, settled: 0 },
@@ -873,6 +876,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
     linkedNext: [],
     needsHuman: [],
     unresolvedAnswers: [],
+  routineDecisions: [],
   renewedReservations: [],
     frontier: [],
     /*
@@ -1693,7 +1697,11 @@ async function tickOnce(owner: string): Promise<TickReport> {
         await checkDueSites();
         await screenFeedLeads();
         const target = await shortlistProject((await listProjects()).map((one) => one.id));
-        if (target) await openFeedShortlist({ projectId: target });
+        if (target) {
+          const { spareResearchSurfaces } = await import('../cash/researchRoom.ts');
+          const spare = (await spareResearchSurfaces(target).catch(() => 0)) ?? 0;
+          await openFeedShortlist({ projectId: target, spare });
+        }
       });
       for (const project of await listProjects()) {
         // The five kernels start new questions; under database pressure they
@@ -2174,6 +2182,18 @@ async function tickOnce(owner: string): Promise<TickReport> {
      * undoes the answer and narrows the choices to the ones that can still act,
      * so what comes back is a card whose remaining options are true.
      */
+    /*
+     * 1g. Answer the research parks the standing grant already covers (§80):
+     * file what was accepted with its gaps named, or decline what nothing
+     * cleared. Before the resume step, so the answer is carried out this tick.
+     */
+    await runPass(report, 'routine-decisions', async () => {
+      const { answerRoutineParks } = await import('./routineDecisions.ts');
+      for (const decision of await answerRoutineParks({ limit: 200 })) {
+        if (decision.choice) report.routineDecisions.push(decision);
+      }
+    });
+
     await runPass(report, 'answered-requests', async () => {
       // The whole backlog, not one cycle's worth: an answer waiting for a
       // research slot keeps its place, and a window that size would hide a

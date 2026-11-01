@@ -13884,6 +13884,46 @@ The demonstration is `plans/quant/two-mechanisms-2026-10-31.json`
 a food-truck holiday-lunch brokerage constructed from parts, and catch-up
 bookkeeping. One engine runs both, with no special case for either.
 
+## 80. A research park the standing grant already covers is Brain's to answer, and audits are bounded by accounts, not Routines.
+
+Production, 2026-11-01 (`b2da4b3`, six hours): 293 packets at NEEDS_HUMAN, and
+of 45 packets judged, 36 parked for the owner while 9 completed. The owner's
+instruction is that routine research decisions are Brain's.
+`services/russell/routineDecisions.ts` answers a mission's Needs You card on the
+tick, after a ten-minute grace so a corrected judge round or a re-asked
+envelope acts first, and only under a live standing research grant:
+
+- **RECORD_GAPS where it is offered**: the audited report is filed with what it
+  could not settle named. This is a recorded correction to §24's "filing short
+  is a decision the domain reserves to a person". It spends nothing beyond the
+  grant's concurrency, lowers no bar and claims nothing as answered.
+- **STOP where nothing cleared the gate**, and where Brain's own compiled plan
+  fell outside its envelope. Declining is within authority.
+- **Never APPROVE_PLAN.** Widening an envelope stays a person's, and a plan
+  from a person's own research goal keeps its card.
+
+The answer is recorded against the grant's owner, whose authority it carries,
+and its reason says in words that Brain decided it and under which grant. A
+`RUSSELL_ROUTINE_DECISION` event sits beside it. A capability-authority card,
+a reconsider card and a project with no live grant are never answered here.
+
+**The audit limit is measured, and it is the number of Claude accounts.** A
+session is a connector's access token for its hour (§23, `sessionWindow.ts`),
+and every Routine on one account presents the same one. Three research
+accounts were routable (Brain Research A's 1-B/C/D, Caleb, Airyn), so a packet
+had three concurrent identities for four roles, and the judge waited for a
+token to rotate: synthesis→judge p50 50 min, adversarial→judge p50 27 min.
+Throughput kept pace anyway: 49 syntheses against 45 judged in six hours.
+Adding Routines to an account adds no audit capacity. Only another account
+does, and connecting one is a person's step in Claude (§22). friend-2's `V2`
+holds that place and has been on an operator hold since 2026-09-05.
+
+**Idle research capacity pulls the free models' work through.** The free
+models had kept 670 feed leads, and ten every twenty hours reached Claude.
+`shortlistPace` sizes and spaces the feed shortlist by `spareResearchSurfaces`:
+10 + 5 per idle surface (at most 25), as soon as two hours after the last one
+settled. A busy fleet keeps the daily ten (§78's rule).
+
 ## Repository map
 
 ```
