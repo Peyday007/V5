@@ -142,9 +142,17 @@ jobs:
       # run of the program being shipped.
       - name: Install the OCR tooling the runtime image has
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            poppler-utils tesseract-ocr tesseract-ocr-eng
+          # Bounded and retried: on 2026-10-31 three runners hung inside this
+          # step for over 80 minutes, and the deploy waiting on the suite waited
+          # with them. A normal install takes seconds; a hang now fails over to
+          # a fresh attempt after five minutes, three times at most.
+          ok=0
+          for attempt in 1 2 3; do
+            if timeout 300 sudo apt-get update && timeout 300 sudo apt-get install -y --no-install-recommends \
+                poppler-utils tesseract-ocr tesseract-ocr-eng; then ok=1; break; fi
+            echo "::warning::OCR tooling install attempt $attempt did not finish; retrying."
+          done
+          [ "$ok" = 1 ] || { echo '::error::Could not install the OCR tooling in three bounded attempts.'; exit 1; }
           tesseract --version | head -1
 
       - name: Start the cluster already on this runner, and make a database for it
