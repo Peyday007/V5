@@ -41,6 +41,7 @@ import type { EvidenceLane } from '../../domain/types.ts';
 export type CompilerProfileId =
   | 'PUBLIC_RECORDS'
   | 'MARKET_DISCOVERY'
+  | 'GOAL_MECHANISM'
   | 'COMMERCIAL_VALIDATION'
   | 'COMMERCIAL_VALIDATION_SCREEN'
   | 'MONETIZATION_ATTRIBUTE'
@@ -620,6 +621,61 @@ const COMMERCIAL_VALIDATION_SCREEN: CompilerProfile = {
       'filled or awarded, or a published rule excludes a supplier like this one.',
   ],
 };
+
+/**
+ * A goal's own search: a way to reach the goal, which need not be one open request.
+ *
+ * Production, 2026-11-01: the $10K goal had run 100 rounds of its own search,
+ * and almost every one ended "1 required evidence lane(s) have no accepted
+ * claim: demand_signal". `MARKET_DISCOVERY` files only a specific open request,
+ * because everything in that lane becomes work somebody may go and pursue —
+ * right for a bucket that asks who has published a request, and wrong for a
+ * goal that asks which lawful ways could bring it a sum, where the best answer
+ * is often a kind of buyer that keeps paying rather than one posting. So the
+ * goal kept recycling the one shape it could file and read NOT_VIABLE.
+ *
+ * Here a repeating buyer pattern is evidence beside a single request.
+ * `demand_pattern` is `MARKET_PATTERN`, so it needs two distinct dated
+ * published examples (§33's floor, unchanged), and both lanes are CONDITIONAL
+ * so either may carry the answer. The harvest still files only a claim whose
+ * reader declared an `opportunity_signal`, so a pattern becomes an opening only
+ * when somebody says what kind of opening it is. Same envelope, same source
+ * classes, same gate, the same verification and audit roles.
+ */
+const GOAL_MECHANISM: CompilerProfile = {
+  ...MARKET_DISCOVERY,
+  id: 'GOAL_MECHANISM',
+  lanes: [
+    ...MARKET_DISCOVERY.lanes.map((lane) =>
+      lane.id === 'demand_signal' ? { ...lane, necessity: 'CONDITIONAL' as const } : lane,
+    ),
+    {
+      id: 'demand_pattern',
+      evidenceKind: 'MARKET_PATTERN',
+      description:
+        'A kind of buyer that repeatedly pays for this: at least two distinct, dated published ' +
+        'examples of such buyers paying for it (requests, listings, price pages, case studies), ' +
+        'each attributed and with its URL. Say who those buyers are and how they are reached. ' +
+        'One example is a request and belongs in demand_signal; a general statement that a ' +
+        'market is large is neither.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  failureConditions: [
+    'Neither a specific open request nor a repeating pattern of buyers paying for the same ' +
+      'thing can be located — only general statements that a need exists.',
+    ...MARKET_DISCOVERY.failureConditions.slice(1),
+  ],
+};
+
+/**
+ * The goal-search profile, for the compiler to use in place of
+ * `MARKET_DISCOVERY` when the idea is one of a goal's own search rounds. Null
+ * for any envelope whose profile is not market discovery.
+ */
+export function goalMechanismProfile(envelopeId: string): CompilerProfile | null {
+  return profileFor(envelopeId)?.id === 'MARKET_DISCOVERY' ? GOAL_MECHANISM : null;
+}
 
 /**
  * The screen profile, for the compiler to use in place of

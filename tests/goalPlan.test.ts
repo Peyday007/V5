@@ -558,6 +558,29 @@ describe('how the money actually arrives (2026-10-28)', () => {
     expect(statement).toMatch(/only pays after a competitive award/);
   });
 
+  it("compiles a goal's own round to accept a repeating buyer pattern as well as one open request (§80)", async () => {
+    await oneOff({ title: 'Federal RFP, too slow', priceCents: 13_502_000, days: null });
+    const id = await pacedGoalFor();
+    expect((await advanceGoalPlans(now)).asked).toBe(1);
+    const round = (await listRounds(projectId)).find((one) => one.bucketId.startsWith(`goal-${id}-`))!;
+    // Off the in-code slug map, so the round compiles under the sprint's own discovery envelope.
+    await getDb().run('UPDATE projects SET slug = ? WHERE id = ?', [`goalmech-${projectId.slice(-6)}`, projectId]);
+    const { compileMission } = await import('../server/services/russell/compiler.ts');
+    const { getProject } = await import('../server/repos/projects.ts');
+    const compiled = await compileMission({
+      candidate: (await getCandidate(round.candidateId))!,
+      project: (await getProject(projectId))!,
+      archive: { claimsConsidered: 0, contradicting: [] },
+    });
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+    const lanes = compiled.mission.fragments[0]!.requiredEvidence;
+    expect(lanes.find((lane) => lane.id === 'demand_signal')!.necessity).toBe('CONDITIONAL');
+    const pattern = lanes.find((lane) => lane.id === 'demand_pattern')!;
+    expect(pattern.necessity).toBe('CONDITIONAL');
+    expect(pattern.evidenceKind).toBe('MARKET_PATTERN');
+  });
+
   it("searches for the goal even while bulk Claude discovery is switched off", async () => {
     await oneOff({ title: 'Federal RFP, too slow', priceCents: 13_502_000, days: null });
     const id = await pacedGoalFor();
