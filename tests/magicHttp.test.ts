@@ -137,7 +137,7 @@ describe('end to end on the fixture catalog', () => {
     expect(r.status).toBe(200);
     expect(r.body.optimization.comparison).toMatch(/unchanged deck|baseline|recommended/i);
     expect(r.body.unknownPoolNames).toEqual(['Not A Card']);
-    expect((await call('POST', '/magic/optimize', { deckId })).status).toBe(422);
+    expect((await call('POST', '/magic/optimize', { deckId, poolNames: ['Not A Card'] })).status).toBe(422); // a named pool none of which is known
   });
 
   it('turns an idea into a conflict with alternatives, then a decision', async () => {

@@ -371,9 +371,20 @@ magicRouter.post('/magic/optimize', handler(async (req) => {
     deck.push({ zone: c.zone === 'sideboard' ? 'sideboard' : c.zone, quantity: c.quantity, card: await optCardFor(card, c.printingId, who) });
   }
   if (missing.length) throw unprocessable('Some cards are not in the catalog, so the deck cannot be optimized.', { unknown: missing });
-  const { pool, unknown } = await poolFrom(b.poolNames, who);
-  if (pool.length === 0) throw unprocessable('Name the cards to consider with "poolNames"; the whole catalog is not searched.', { unknown });
   const c = (b.constraints ?? {}) as Record<string, unknown>;
+  if (c.priceCeilingCents !== undefined && c.priceCeilingCents !== null && !Number.isInteger(Number(c.priceCeilingCents))) throw badRequest('"priceCeilingCents" must be whole cents.');
+  const named = Array.isArray(b.poolNames) && b.poolNames.length > 0;
+  let pool: OptCard[];
+  let unknown: string[] = [];
+  if (named) {
+    ({ pool, unknown } = await poolFrom(b.poolNames, who));
+  } else {
+    // No pool named: every format-legal catalog card, in the commander's colours for Commander.
+    const identity = new Set(deck.filter((l) => l.zone === 'commander').flatMap((l) => l.card.colorIdentity));
+    const inDeck = new Set(deck.map((l) => l.card.name));
+    pool = (await catalogPool(src.format)).filter((p) => !inDeck.has(p.name) && (src.format !== 'COMMANDER' || p.colorIdentity.every((col) => identity.has(col))));
+  }
+  if (pool.length === 0) throw unprocessable(named ? 'None of the named cards is in the catalog.' : 'The catalog has no candidate cards for this deck yet.', { unknown, catalog: await catalogStatus() });
   const owned: Record<string, number> = {};
   for (const row of await listCollection(who)) if (row.status === 'OWNED') owned[row.card_name] = Number(row.quantity);
   const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
@@ -389,7 +400,6 @@ magicRouter.post('/magic/optimize', handler(async (req) => {
     maxSwaps: optionalInteger(b.maxSwaps, 'maxSwaps', { min: 1, max: 8 }),
     beamWidth: optionalInteger(b.beamWidth, 'beamWidth', { min: 1, max: 8 }),
   });
-  if (c.priceCeilingCents !== undefined && c.priceCeilingCents !== null && !Number.isInteger(Number(c.priceCeilingCents))) throw badRequest('"priceCeilingCents" must be whole cents.');
   if (src.deckId) await saveAnalysis(who, { deckId: src.deckId, versionId: src.versionId, kind: 'OPTIMIZE', assumptions: { constraints: c, unknownPool: unknown }, result });
   return { optimization: result, unknownPoolNames: unknown, catalog: await catalogStatus() };
 }));
@@ -705,7 +715,7 @@ magicRouter.get('/magic/leagues/:leagueId/matchups', handler(async (req) => {
   for (const p of players.filter((x) => !x.isOwner)) {
     const decks = await listLeagueDecks(who, p.id);
     const current = decks[decks.length - 1];
-    const observed = (decks[0]?.detail?.observedTraits ?? {}) as { noncombatDrain?: boolean; manyCreatures?: boolean };
+    const observed = Object.assign({}, ...decks.map((d) => (d.detail?.observedTraits ?? {}) as object)) as { noncombatDrain?: boolean; manyCreatures?: boolean };
     const together = games.filter((g) => g.participants.some((x) => x.player_id === p.id) && g.participants.some((x) => x.player_id === ownerPlayer.id));
     const ownerPoints = together.reduce((n, g) => n + g.eliminations.filter((e) => e.credited_player_id === ownerPlayer.id).reduce((m, e) => m + Number(e.points), 0), 0);
     opponents.push({
@@ -741,10 +751,12 @@ magicRouter.post('/magic/leagues/:leagueId/observations', handler(async (req, re
   const detail = (b.detail && typeof b.detail === 'object' ? b.detail : {}) as Record<string, unknown>;
   // An observed commander or revealed card is a new version of that opponent's deck; the version
   // before it, and the baseline, are never changed. A hypothesis is recorded but versions nothing.
-  let version = null;
-  if (label === 'OBSERVED' && playerId && (b.kind === 'COMMANDER' || b.kind === 'REVEALED_CARD')) {
+  if (playerId) {
     const player = await getPlayer(who, playerId);
     if (!player || player.leagueId !== leagueId) throw gone();
+  }
+  let version = null;
+  if (label === 'OBSERVED' && playerId && (b.kind === 'COMMANDER' || b.kind === 'REVEALED_CARD')) {
     const history = await listLeagueDecks(who, playerId);
     const cur = history[history.length - 1];
     const revealedBefore = Array.isArray(cur?.detail?.revealed) ? (cur!.detail.revealed as string[]) : [];

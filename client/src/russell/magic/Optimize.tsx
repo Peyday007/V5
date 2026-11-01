@@ -1,44 +1,56 @@
-/** Optimize: analysis (labelled numbers) and the multi-objective optimizer. */
+/**
+ * Optimize: swaps into a saved deck from cards a person names, under a price
+ * ceiling, compared against the unchanged deck. Every score is a
+ * HEURISTIC_SCORE and is labelled so; nothing here is a win rate.
+ */
 import { useState } from 'react';
 import {
   MagicApi,
   formatCents,
   parseDollars,
-  type AnalysisView,
-  type OptimizeView,
-  type OptimizeWeights,
+  type OptimizeResponse,
+  type ScoredBuild,
 } from '../../lib/magicApi.ts';
 import { useAsync } from '../useAsync.ts';
+import { AnalysisBlock } from './Decks.tsx';
 import { ErrorLine, Gate, Num, StaleNote, errorText } from './shared.tsx';
+import type { AnalyzeResponse } from '../../lib/magicApi.ts';
 
-const WEIGHT_NAMES: [keyof OptimizeWeights, string][] = [
-  ['consistency', 'Consistency'],
-  ['earlyDevelopment', 'Early development'],
-  ['threatsAnswered', 'Threats answered'],
-  ['survival', 'Survival'],
-  ['closing', 'Independent closing'],
-  ['pointsPotential', 'Points potential'],
-  ['price', 'Price'],
-  ['preference', 'Preference match'],
-];
+function lines(text: string): string[] {
+  return text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
 
-const DEFAULT_WEIGHTS: OptimizeWeights = {
-  consistency: 1, earlyDevelopment: 1, threatsAnswered: 1, survival: 1,
-  closing: 1, pointsPotential: 1, price: 1, preference: 1,
-};
+function BuildSummary({ build }: { build: ScoredBuild }): JSX.Element {
+  return (
+    <>
+      {build.swaps.length === 0
+        ? 'no changes'
+        : build.swaps.map((s) => `+${s.add} (${formatCents(s.addPriceCents)}) / −${s.cut}`).join('; ')}
+      {' · cost '}
+      {formatCents(build.costCents)}
+      {' · composite '}
+      <Num n={build.composite} as="plain" />
+    </>
+  );
+}
 
 export function OptimizeSection({ initialDeckId }: { initialDeckId: string | null }): JSX.Element {
   const decks = useAsync(() => MagicApi.decks(), []);
   const [picked, setPicked] = useState<string | null>(initialDeckId);
-  const [weights, setWeights] = useState<OptimizeWeights>(DEFAULT_WEIGHTS);
+  const [pool, setPool] = useState('');
+  const [protect, setProtect] = useState('');
   const [budget, setBudget] = useState('');
-  const [analysis, setAnalysis] = useState<AnalysisView | null>(null);
-  const [result, setResult] = useState<OptimizeView | null>(null);
+  const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
+  const [result, setResult] = useState<OptimizeResponse | null>(null);
   const [busy, setBusy] = useState<'analyze' | 'optimize' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const budgetCents = budget.trim() === '' ? null : parseDollars(budget);
   const budgetInvalid = budget.trim() !== '' && budgetCents === null;
+  const poolNames = lines(pool);
 
   const run = async (kind: 'analyze' | 'optimize', action: () => Promise<void>): Promise<void> => {
     setBusy(kind);
@@ -52,9 +64,10 @@ export function OptimizeSection({ initialDeckId }: { initialDeckId: string | nul
     }
   };
 
+  const opt = result?.optimization;
   return (
     <div className="rs-stack">
-      <section className="rs-card">
+      <section className="rs-card" aria-label="Optimize a saved deck">
         <h3>Optimize a saved deck</h3>
         <Gate query={decks} what="your decks">
           {({ decks: list }) =>
@@ -75,21 +88,14 @@ export function OptimizeSection({ initialDeckId }: { initialDeckId: string | nul
             )
           }
         </Gate>
-        <fieldset>
-          <legend>Weights (adjustable — they change the ranking, never the rules)</legend>
-          {WEIGHT_NAMES.map(([key, label]) => (
-            <label key={key}>
-              {label} {weights[key]}
-              <input
-                type="range"
-                min={0}
-                max={5}
-                value={weights[key]}
-                onChange={(e) => setWeights({ ...weights, [key]: Number(e.target.value) })}
-              />
-            </label>
-          ))}
-        </fieldset>
+        <label>
+          Cards to consider adding (one per line; leave empty to search every legal catalog card in the deck's colours)
+          <textarea rows={5} value={pool} onChange={(e) => setPool(e.target.value)} />
+        </label>
+        <label>
+          Cards never to cut (one per line, optional)
+          <textarea rows={2} value={protect} onChange={(e) => setProtect(e.target.value)} />
+        </label>
         <label>
           Price ceiling in dollars (optional, e.g. 10.00)
           <input value={budget} onChange={(e) => setBudget(e.target.value)} inputMode="decimal" />
@@ -112,7 +118,14 @@ export function OptimizeSection({ initialDeckId }: { initialDeckId: string | nul
             disabled={!picked || busy !== null || budgetInvalid}
             onClick={() =>
               void run('optimize', async () => {
-                if (picked) setResult(await MagicApi.optimize({ deckId: picked, weights, budgetCents }));
+                if (!picked) return;
+                setResult(
+                  await MagicApi.optimize({
+                    deckId: picked,
+                    ...(poolNames.length > 0 ? { poolNames } : {}),
+                    constraints: { priceCeilingCents: budgetCents, protectedNames: lines(protect) },
+                  }),
+                );
               })
             }
           >
@@ -123,78 +136,58 @@ export function OptimizeSection({ initialDeckId }: { initialDeckId: string | nul
       </section>
 
       {analysis ? (
-        <section className="rs-card" aria-label="Analysis">
-          <h3>Analysis</h3>
-          <StaleNote freshness={analysis.freshness} />
-          <p className="rs-meta">{analysis.librarySize}-card library; the command zone is counted separately.</p>
-          <p>
-            Keepable opening hand: <Num n={analysis.openingHand.keepable} />
-          </p>
-          <ul>
-            {Object.entries(analysis.scores).map(([name, value]) => (
-              <li key={name}>
-                {name}: <Num n={value} />
-              </li>
-            ))}
-            {analysis.answers.map((a) => (
-              <li key={a.type}>
-                {a.type} answer by turn 6 ({a.count} in deck): <Num n={a.byTurn6} />
-              </li>
-            ))}
-          </ul>
-          {analysis.redundancy.some((r) => r.thin) ? (
-            <p role="status">
-              Thin: {analysis.redundancy.filter((r) => r.thin).map((r) => r.role).join(', ')}
-            </p>
-          ) : null}
-          {analysis.simulation ? (
-            <p className="rs-meta">
-              Simulation: {analysis.simulation.runs} runs, seed {analysis.simulation.seed}
-              {analysis.simulation.mulliganPolicy ? `, ${analysis.simulation.mulliganPolicy}` : ''}.
-              {(analysis.simulation.assumptions ?? []).join(' ')}
-            </p>
-          ) : null}
-          {analysis.notes.map((n) => (
-            <p key={n} className="rs-meta">
-              {n}
-            </p>
-          ))}
+        <section className="rs-card">
+          <AnalysisBlock analysis={analysis.analysis} catalog={analysis.catalog} />
         </section>
       ) : null}
 
-      {result ? (
+      {result && opt ? (
         <section className="rs-card" aria-label="Optimizer result">
-          <h3>Candidates against your unchanged deck</h3>
-          <StaleNote freshness={result.freshness} />
-          {result.rejected.count > 0 ? (
-            <p className="rs-meta">
-              {result.rejected.count} candidates were invalid before scoring ({result.rejected.reasons.join('; ')}).
+          <h3>Against your unchanged deck</h3>
+          <StaleNote catalog={result.catalog} />
+          {result.unknownPoolNames.length > 0 ? (
+            <p className="rs-magic-issues" role="status">
+              Not in the catalog, so not considered: {result.unknownPoolNames.join(', ')}.
             </p>
           ) : null}
-          {result.candidates.length === 0 ? (
-            <p className="rs-empty">No valid candidate beats the baseline inside your limits.</p>
+          <p>
+            Baseline{opt.baseline.valid ? '' : ' (not legal as it stands)'}: <BuildSummary build={opt.baseline.build} />
+          </p>
+          <p>
+            Recommended: <BuildSummary build={opt.recommended} />
+          </p>
+          <p>{opt.comparison}</p>
+          <h4>Upgrades, best gain per dollar first</h4>
+          {opt.upgrades.length === 0 ? (
+            <p className="rs-empty">No valid swap improves the deck inside your limits.</p>
           ) : (
             <ol>
-              {result.candidates.map((c) => (
-                <li key={c.id}>
-                  <strong>{c.frontier ? 'Non-dominated: ' : ''}</strong>
-                  add {c.adds.map((a) => `${a.name} (${formatCents(a.priceCents)}${a.priceStatus === 'ESTIMATE' ? ', estimate' : ''})`).join(', ') || 'nothing'}; cut{' '}
-                  {c.cuts.map((x) => x.name).join(', ') || 'nothing'}; total {formatCents(c.totalCostCents)}
-                  {c.gainPerDollar ? (
+              {opt.upgrades.map((u) => (
+                <li key={`${u.swap.add}-${u.swap.cut}`}>
+                  +{u.swap.add} / −{u.swap.cut} · {u.free ? 'already owned or free' : formatCents(u.costCents)} · gain{' '}
+                  <Num n={{ value: u.gain, label: 'HEURISTIC_SCORE' }} as="plain" />
+                  {u.gainPerDollar !== null ? (
                     <>
                       {' '}
-                      · gain per dollar <Num n={c.gainPerDollar} as="plain" />
+                      · gain per dollar <Num n={{ value: u.gainPerDollar, label: 'HEURISTIC_SCORE' }} as="plain" />
                     </>
                   ) : null}
-                  <ul>
-                    {c.tradeoffs.map((t) => (
-                      <li key={t}>{t}</li>
-                    ))}
-                  </ul>
                 </li>
               ))}
             </ol>
           )}
+          <h4>Non-dominated builds ({opt.frontier.length})</h4>
+          <ul>
+            {opt.frontier.map((b) => (
+              <li key={b.key}>
+                <BuildSummary build={b} />
+              </li>
+            ))}
+          </ul>
+          <p className="rs-meta">
+            Searched {opt.searched.scored} builds over {opt.searched.levels} level(s); {opt.searched.rejected} rejected before
+            scoring. {opt.notes.join(' ')}
+          </p>
         </section>
       ) : null}
     </div>

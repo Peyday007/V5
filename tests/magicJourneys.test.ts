@@ -124,14 +124,20 @@ describe('journey 2: import, validate, analyze', () => {
 });
 
 describe('journey 3: optimize a saved deck', () => {
-  it('compares to the unchanged baseline and refuses a pool it was not given', async () => {
+  it('compares to the unchanged baseline, with a named pool or the catalog in the commander colours', async () => {
     const deckId = (await call('POST', '/magic/decks/import', { name: 'D', format: 'COMMANDER', text: 'Commander\n1 Kardur, Doomscourge\n\nDeck\n1 Mountain\n' })).body.deck.id as string;
     const r = await call('POST', '/magic/optimize', { deckId, poolNames: ['Lightning Bolt', 'Sol Ring'], maxSwaps: 1, constraints: { priceCeilingCents: 100000, protectedNames: ['Mountain'] } });
     expect(r.status).toBe(200);
     expect(r.body.optimization.baseline.build.swaps).toEqual([]);
     for (const b of r.body.optimization.candidates) for (const s of b.swaps) expect(s.cut).not.toBe('Mountain');
     expect(r.body.optimization.comparison).toMatch(/unchanged deck|recommended/i);
-    expect((await call('POST', '/magic/optimize', { deckId })).status).toBe(422);
+    // No pool named: the catalog's format-legal cards in Kardur's colours (B/R), never off-colour ones.
+    const all = await call('POST', '/magic/optimize', { deckId, maxSwaps: 1 });
+    expect(all.status, all.text).toBe(200);
+    const adds = all.body.optimization.candidates.flatMap((b: any) => b.swaps.map((s: any) => s.add));
+    expect(adds).not.toContain('Forest');
+    expect(adds).not.toContain('Delver of Secrets // Insectile Aberration');
+    expect((await call('POST', '/magic/optimize', { deckId, constraints: { priceCeilingCents: 9.5 } })).status).toBe(400);
     expect((await call('GET', `/magic/decks/${deckId}/versions`)).body.versions).toHaveLength(1); // optimizing saves no version
   });
 });

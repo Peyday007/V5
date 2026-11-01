@@ -5,7 +5,7 @@
  * with the kind of claim it is, and a stale card index or a failed call is said
  * out loud — there is no silent green result.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   MAGIC_SECTIONS,
   MagicApi,
@@ -18,7 +18,7 @@ import { CollectionSection, DecksSection, ExportsSection, ImportForm } from './m
 import { DesignSection } from './magic/Design.tsx';
 import { LeagueSection, MatchupsSection } from './magic/League.tsx';
 import { OptimizeSection } from './magic/Optimize.tsx';
-import { StaleNote } from './magic/shared.tsx';
+import { ErrorLine, errorText } from './magic/shared.tsx';
 
 const LABELS: Record<MagicSection, string> = {
   design: 'Design',
@@ -30,28 +30,84 @@ const LABELS: Record<MagicSection, string> = {
   exports: 'Exports',
 };
 
-function CatalogBanner(): JSX.Element | null {
+/** How long to wait before re-reading a catalog that is still loading, and how many times. */
+const CATALOG_POLL_MS = 15_000;
+const CATALOG_POLLS = 8;
+
+/**
+ * The catalog the whole lab resolves names against, as the server reads it.
+ * Reading the status is what starts a refresh of an empty or stale catalog, so
+ * a loading catalog is re-read on a bounded timer rather than left to look stuck.
+ */
+function CatalogBanner(): JSX.Element {
   const status = useAsync(() => MagicApi.catalogStatus(), []);
-  if (status.error) {
-    return (
-      <p className="rs-magic-stale" role="status">
-        Card catalog status unavailable: {status.error.message}
-      </p>
-    );
-  }
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const polls = useRef(0);
   const data = status.data;
-  if (!data) return null;
-  if (data.status === 'NEVER') {
-    return <p className="rs-magic-stale" role="status">The card catalog has not been loaded yet, so names cannot be resolved.</p>;
-  }
-  if (data.status === 'FAILED') {
-    return (
+  const loading = data ? data.state === 'LOADING' || data.state === 'EMPTY' : false;
+  const { reload } = status;
+  useEffect(() => {
+    if (!loading || polls.current >= CATALOG_POLLS) return undefined;
+    const timer = setTimeout(() => {
+      polls.current += 1;
+      reload();
+    }, CATALOG_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [loading, data, reload]);
+
+  const refresh = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await MagicApi.refreshCatalog();
+      polls.current = 0;
+      reload();
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  let line: JSX.Element | null = null;
+  if (status.error && !data) {
+    line = (
       <p className="rs-magic-stale" role="status">
-        The last catalog refresh failed ({data.lastError ?? 'no reason given'}); serving the cached index.
+        Card catalog status unavailable{status.error.retryable ? ' for now' : ''}: {status.error.message}
+      </p>
+    );
+  } else if (!data) {
+    line = <p className="rs-meta">Reading the card catalog…</p>;
+  } else if (loading) {
+    line = (
+      <p className="rs-magic-stale" role="status">
+        The card catalog is loading ({data.cards} cards so far). {data.reason ?? ''} Names cannot all be resolved until it finishes.
+      </p>
+    );
+  } else if (data.stale) {
+    line = (
+      <p className="rs-magic-stale" role="status">
+        Stale card catalog ({data.cards} cards{data.fetchedAt ? `, fetched ${data.fetchedAt}` : ''}): {data.reason ?? 'it could not be refreshed.'}
+      </p>
+    );
+  } else {
+    line = (
+      <p className="rs-magic-fresh">
+        Card catalog: {data.cards} cards{data.fetchedAt ? `, fetched ${data.fetchedAt}` : ''}.
       </p>
     );
   }
-  return <StaleNote freshness={data} />;
+  return (
+    <section className="rs-magic-catalog" aria-label="Card catalog">
+      {line}
+      {data?.lastError && !data.stale ? <p className="rs-meta">Last refresh error: {data.lastError}</p> : null}
+      <button type="button" disabled={busy} onClick={() => void refresh()}>
+        {busy ? 'Starting refresh…' : 'Refresh card catalog'}
+      </button>
+      <ErrorLine message={error} />
+    </section>
+  );
 }
 
 export function MagicView({
@@ -124,7 +180,7 @@ export function MagicView({
           </div>
         </section>
       ) : null}
-      {section === 'design' ? <DesignSection onBuilt={openDeck} /> : null}
+      {section === 'design' ? <DesignSection onSaved={openDeck} /> : null}
       {section === 'decks' ? <DecksSection selected={deckId} onSelect={setDeckId} /> : null}
       {section === 'optimize' ? <OptimizeSection initialDeckId={deckId} /> : null}
       {section === 'matchups' ? <MatchupsSection /> : null}
