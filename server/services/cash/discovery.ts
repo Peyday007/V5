@@ -67,6 +67,7 @@
  * never a favourable assumption, arriving at the moment an opportunity is born
  * rather than being asserted away by whoever created it.
  */
+import { routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
@@ -765,6 +766,13 @@ export async function openGoalDiscovery(input: {
    * so every goal round was refused before it was asked and the goal read
    * "keeps searching" over zero rounds. Like the feed shortlist, it asks anyway.
    */
+  /*
+   * Except under focus. A goal round is a Claude Routine hunting openings —
+   * bulk finding for one goal — and focus is the owner saying Routines do not
+   * hunt; the feeds and the free models do (the feed shortlist still reaches a
+   * strong model). Rounds already open finish and are harvested.
+   */
+  if (routineFocus()) return null;
   const gate = await discoveryAllowed(input.target.projectId);
   if (!gate.allowed || !gate.mode) return null;
   const mode = gate.mode;
@@ -896,6 +904,8 @@ export async function openConstructedRound(input: {
   now?: string;
   liveCap?: number;
 }): Promise<OpenedDiscovery | null> {
+  // A constructed round is a Routine hunting for one goal, so focus stops it like a goal round.
+  if (routineFocus()) return null;
   const gate = await discoveryAllowed(input.projectId);
   if (!gate.allowed || !gate.mode) return null;
   const mode = gate.mode;
