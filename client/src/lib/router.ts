@@ -11,6 +11,7 @@
  * addresses a person can bookmark, send to somebody, and reload onto. The server
  * already serves the app for any unknown path, so nothing here needs a hash.
  */
+import { MAGIC_SECTIONS, type MagicSection } from './magicApi.ts';
 import { useCallback, useEffect, useState } from 'react';
 
 /** Every place the shell can be. */
@@ -51,6 +52,8 @@ export type Route =
    * from, so no one of them is a standalone destination in the navigation.
    */
   | { name: 'SYSTEMS' }
+  /** Magic Deck Lab: a secondary destination (§57), each subsection its own address. */
+  | { name: 'MAGIC'; section: MagicSection | null }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -123,6 +126,13 @@ export function parseRoute(pathname: string): Route {
       return { name: 'SCENARIOS' };
     case 'systems':
       return { name: 'SYSTEMS' };
+    case 'magic': {
+      if (parts.length === 1) return { name: 'MAGIC', section: null };
+      const section = parts[1] as MagicSection;
+      return parts.length === 2 && (MAGIC_SECTIONS as readonly string[]).includes(section)
+        ? { name: 'MAGIC', section }
+        : { name: 'NOT_FOUND', path: pathname };
+    }
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
@@ -176,6 +186,8 @@ export function pathFor(route: Route): string {
       return '/scenarios';
     case 'SYSTEMS':
       return '/systems';
+    case 'MAGIC':
+      return route.section ? `/magic/${route.section}` : '/magic';
     case 'SEARCH':
       return '/search';
     case 'INVITE':
