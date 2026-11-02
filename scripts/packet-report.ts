@@ -192,6 +192,13 @@ async function main(): Promise<void> {
         `      tagged    ${[...tally.entries()].map(([lane, n]) => `${lane}×${n}`).join(', ')}`,
       );
     }
+    // What the harvest reads: an accepted claim becomes an opening only with an opportunity_signal.
+    for (const claim of accepted) {
+      console.log(
+        `      claim     ${claim.id} ${claim.evidenceLane ?? '(untagged)'} signal ${claim.opportunitySignal ?? '—'}` +
+          ` · ${claim.claim.replace(/\s+/g, ' ').slice(0, 140)}`,
+      );
+    }
     /**
      * Why the rejected claims were rejected, grouped.
      *
