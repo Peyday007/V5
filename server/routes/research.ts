@@ -57,7 +57,6 @@ import {
   bodyOf,
   conflict,
   handler,
-  conflict,
   notFound,
   optionalBoolean,
   optionalString,
