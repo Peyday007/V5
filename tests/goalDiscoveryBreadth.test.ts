@@ -45,3 +45,26 @@ describe('constructed arrangements are dealt one buyer population at a time', ()
     expect(out).toEqual(['a1', 'h1', 'r1', 'a2', 'a3', 'x1']);
   });
 });
+
+describe('domain speculation, as the owner excluded it on 2026-11-02', () => {
+  it('reads the owner\'s words as an exclusion and recognises the openings production named', async () => {
+    const { exclusionsIn } = await import('../server/services/cash/exclusions.ts');
+    expect(exclusionsIn('No government contracts. No high-priced domain speculation.')).toEqual(['GOVERNMENT_CONTRACTING', 'DOMAIN_SPECULATION']);
+    expect(exclusionsIn('Sell domain names to buyers who want them')).toEqual([]);
+    for (const title of [
+      'dujo.com is listed for sale on Afternic (a GoDaddy marketplace) with a live Buy Now',
+      "Appraise.net's retail appraisal for VJN.com was $55,000-$85,000",
+      'Domain brokerage (domain acquisition and sale brokers)',
+    ]) {
+      expect(excludedBy(title, ['DOMAIN_SPECULATION'])).toBe('DOMAIN_SPECULATION');
+    }
+    expect(excludedBy('Holiday tree delivery in Mechanicsburg, booked on example.com', ['DOMAIN_SPECULATION'])).toBeNull();
+  });
+
+  it('halves the samples when the portfolio doubles', async () => {
+    const { defaultEvaluations } = await import('../server/services/goals/plan.ts');
+    expect(defaultEvaluations(4)).toBe(20_000);
+    expect(defaultEvaluations(8)).toBe(10_000);
+    expect(defaultEvaluations(1)).toBe(20_000);
+  });
+});

@@ -29,6 +29,16 @@ export const EXCLUSION_CLASSES = {
     triggers: /\b(?:broken[- ]website|website[- ](?:repair|fix)|broken site)/i,
     matches: /\b(?:broken (?:web)?site|website (?:repair|fix|rebuild|redesign)|fix(?:ing)? (?:their|the|a) (?:web)?site|dead links?|site (?:is )?down|outdated website)\b/i,
   },
+  /*
+   * Added 2026-11-02: the owner's $10K assignment says "no high-priced domain
+   * speculation", and the first market tests the ladder named were domain resales
+   * (dujo.com, vjn.com listed on Afternic, appraised by Appraise.net).
+   */
+  DOMAIN_SPECULATION: {
+    label: 'domain-name speculation and resale',
+    triggers: /\b(?:domain(?:[- ]name)?s? ?(?:speculation|flipping|flips?|investing|investments?|resale|trading)|high[- ]priced domains?)\b/i,
+    matches: /\b(?:afternic|sedo|dan\.com|namejet|godaddy auctions?|appraise\.net|domain[- ]name aftermarket|domain aftermarket|domain (?:name )?(?:for sale|appraisal|brokerage|broker|resale|flip(?:ping)?)|[a-z0-9-]+\.(?:com|net|org|io|ai|co) (?:is )?(?:listed|for sale|valued|appraised))\b/i,
+  },
 } as const satisfies Record<string, { label: string; triggers: RegExp; matches: RegExp }>;
 export type ExclusionClass = keyof typeof EXCLUSION_CLASSES;
 export const EXCLUSION_KEYS = Object.keys(EXCLUSION_CLASSES) as ExclusionClass[];

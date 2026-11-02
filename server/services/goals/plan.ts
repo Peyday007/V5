@@ -531,7 +531,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
   }
 
   // Run the existing engine. Stored and versioned when persisting.
-  const options = { seed: parseInt(sha256(goal.id).slice(0, 8), 16) >>> 0, evaluations: input.evaluations ?? 20_000, informationValue: { metric: 'goal_met' } };
+  const options = { seed: parseInt(sha256(goal.id).slice(0, 8), 16) >>> 0, evaluations: input.evaluations ?? defaultEvaluations(model.included.length), informationValue: { metric: 'goal_met' } };
   let result: ScenarioResult | null = null;
   let scenarioModelId: string | null = null;
   let scenarioRunId: string | null = null;
@@ -767,6 +767,16 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
   };
   if (input.persist) await persistReading(goal, reading, chosen);
   return reading;
+}
+
+/**
+ * Samples for a goal's run. Each evaluation's cost grows with the openings in the
+ * model, so a portfolio of eight takes half the evaluations four took and the
+ * plan read stays inside the tick's time (production 2026-11-02: 15 s at four,
+ * 64 s at eight with the count unchanged).
+ */
+export function defaultEvaluations(openings: number): number {
+  return Math.round(20_000 * Math.min(1, 4 / Math.max(1, openings)));
 }
 
 /** At most this many market tests are named at once: a test is a person's or a sender's time. */
