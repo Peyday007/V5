@@ -14082,6 +14082,13 @@ and the idle-fill lift stay stopped.
   with its two dated examples carries `RECURRING_OUTSOURCED_WORK`. The gate,
   the floor and the harvest are unchanged.
 
+- **A constructed question names how an opening is reported.** Harvest files
+  only a claim carrying `opportunity_signal`, and the question said "report an
+  opening" without naming it: ten constructed rounds with accepted claims read
+  "found 0" (orc_d083edfc645c47e6b99d among them). `OPENING_SENTENCE` in
+  `construct.ts` names the field and the three kinds a constructed design can
+  be; the worker still decides, and no bar moves.
+
 ## Repository map
 
 ```
