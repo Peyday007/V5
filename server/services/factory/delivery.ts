@@ -127,16 +127,33 @@ async function defaultForge(): Promise<ForgePort> {
 export const DELIVERY_LIST_EVERY_MS = 10 * 60_000;
 /** At most this many single-request or compare reads per sweep, for the shared forge budget. */
 const SINGLE_READS_PER_SWEEP = 2;
+/**
+ * And at most this many in any hour. Production reads the forge unauthenticated
+ * — sixty calls an hour shared with the Factory's own unit and integration
+ * verification — so delivery observation may spend a third of it at most.
+ * Two a sweep every two minutes was the whole budget.
+ */
+export const DELIVERY_READS_PER_HOUR = 20;
 
 const listedAt = new Map<string, number>();
 const listCache = new Map<string, Map<number, { state: string; merged: boolean; mergeCommitSha: string | null }>>();
 const singleAt = new Map<string, number>();
+/** `${commit}|${revision}` → whether the revision contains the commit. One answer serves every campaign it delivered. */
+const containsCache = new Map<string, boolean>();
+const readTimes: number[] = [];
+
+function budgetLeft(now: number): boolean {
+  while (readTimes.length > 0 && now - readTimes[0]! >= 3_600_000) readTimes.shift();
+  return readTimes.length < DELIVERY_READS_PER_HOUR;
+}
 
 /** Tests: forget the throttles. */
 export function resetDeliveryThrottle(): void {
   listedAt.clear();
   listCache.clear();
   singleAt.clear();
+  containsCache.clear();
+  readTimes.length = 0;
 }
 
 /**
@@ -169,8 +186,9 @@ export async function observeDeliveries(
     forge ??= await defaultForge();
 
     let list = listCache.get(remote) ?? null;
-    if (!list || now - (listedAt.get(remote) ?? 0) >= DELIVERY_LIST_EVERY_MS) {
+    if (!previous?.via && (!list || now - (listedAt.get(remote) ?? 0) >= DELIVERY_LIST_EVERY_MS) && budgetLeft(now)) {
       listedAt.set(remote, now);
+      readTimes.push(now);
       list = await forge.recent(remote).catch(() => null);
       if (list) listCache.set(remote, list);
     }
@@ -179,8 +197,9 @@ export async function observeDeliveries(
     if (!pr) {
       // Older than the recent list reaches: one direct read, rate-bounded.
       const key = `${remote}#${number}`;
-      if (singles >= SINGLE_READS_PER_SWEEP || now - (singleAt.get(key) ?? 0) < DELIVERY_LIST_EVERY_MS * 6) continue;
+      if (singles >= SINGLE_READS_PER_SWEEP || !budgetLeft(now) || now - (singleAt.get(key) ?? 0) < DELIVERY_LIST_EVERY_MS * 6) continue;
       singles += 1;
+      readTimes.push(now);
       singleAt.set(key, now);
       pr = await forge.one(remote, number).catch(() => null);
       if (!pr) continue;
@@ -193,9 +212,14 @@ export async function observeDeliveries(
     if (state === 'MERGED' && mergeSha && revision) {
       if (previous?.state === 'MERGED' && previous.revision === revision && !previous.deployed) {
         deployed = false; // Already compared against this very revision.
-      } else if (singles < SINGLE_READS_PER_SWEEP) {
+      } else if (containsCache.has(`${mergeSha}|${revision}`)) {
+        deployed = containsCache.get(`${mergeSha}|${revision}`) === true;
+      } else if (singles < SINGLE_READS_PER_SWEEP && budgetLeft(now)) {
         singles += 1;
-        deployed = (await forge.contains(remote, mergeSha, revision).catch(() => null)) === true;
+        readTimes.push(now);
+        const answer = await forge.contains(remote, mergeSha, revision).catch(() => null);
+        if (answer !== null) containsCache.set(`${mergeSha}|${revision}`, answer);
+        deployed = answer === true;
       } else {
         continue; // Compare on a later sweep rather than record a guess.
       }
