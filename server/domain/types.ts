@@ -4132,7 +4132,9 @@ export type WorkerStatus = (typeof WORKER_STATUSES)[number];
 export const ACTOR_TYPES = ['HUMAN', 'WORKER', 'SYSTEM', 'ANONYMOUS'] as const;
 export type ActorType = (typeof ACTOR_TYPES)[number];
 
-export const IDENTITY_RESULTS = ['SUCCESS', 'DENIED', 'FAILED'] as const;
+// UNKNOWN: an MCP call answered at its time limit while the work was still
+// running — invariant 26, the outcome is not known and is not "failed".
+export const IDENTITY_RESULTS = ['SUCCESS', 'DENIED', 'FAILED', 'UNKNOWN'] as const;
 export type IdentityResult = (typeof IDENTITY_RESULTS)[number];
 
 /**

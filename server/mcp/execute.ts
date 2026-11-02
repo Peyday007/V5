@@ -10,7 +10,7 @@ import { recordIdentityEvent } from '../repos/identity.ts';
 import type { Principal } from '../domain/types.ts';
 import { ToolError, type ToolErrorCategory } from './errors.ts';
 import { TerminalEffectFailure } from '../services/effects/engine.ts';
-import { assertResultWithinBounds, takeRateSlot } from './limits.ts';
+import { assertResultWithinBounds, takeRateSlot, TOOL_CALL_TIMEOUT_MS } from './limits.ts';
 import { findTool, type McpTool, type ToolContext } from './tools.ts';
 import { asControlPlane, asWorkload, classifyInfraFailure, noteInfraFailure, noteLatency } from '../db/infra.ts';
 import { outsideTransaction } from '../db/database.ts';
@@ -41,7 +41,7 @@ export interface CallInput {
 async function audit(input: {
   call: CallInput;
   projectId: string | null;
-  result: 'SUCCESS' | 'DENIED' | 'FAILED';
+  result: 'SUCCESS' | 'DENIED' | 'FAILED' | 'UNKNOWN';
   metadata: Record<string, unknown>;
 }): Promise<void> {
   try {
@@ -235,12 +235,61 @@ export async function callTool(input: CallInput): Promise<CallOutput> {
   }
 
   const started = Date.now();
+  const work = tool.plane === 'CONTROL' ? asControlPlane(() => runTool(tool, input)) : runTool(tool, input);
+  // The time limit. Without it a call that never returns holds its slot
+  // forever, and eight of them lock the credential out until a restart
+  // (production, 2026-11-02). The work is not cancelled — nothing here can
+  // cancel it safely — so when it does finish, runTool still writes its own
+  // audit row with the real outcome.
+  let timer: NodeJS.Timeout | undefined;
+  const timedOut = new Promise<'TIMED_OUT'>((resolve) => {
+    timer = setTimeout(() => resolve('TIMED_OUT'), toolCallTimeoutMs);
+  });
   try {
-    return await (tool.plane === 'CONTROL' ? asControlPlane(() => runTool(tool, input)) : runTool(tool, input));
+    const outcome = await Promise.race([work, timedOut]);
+    if (outcome !== 'TIMED_OUT') return outcome;
+    // eslint-disable-next-line no-console
+    console.error('[mcp] tool call exceeded its time limit', input.toolName, input.requestId, toolCallTimeoutMs);
+    // Invariant 26: a timeout is not evidence the effect did not happen, so
+    // the record says UNKNOWN, never FAILED. Not awaited: whatever stalled the
+    // call may be the database the audit would wait on.
+    void outsideTransaction(() => asWorkload(() => audit({
+      call: input,
+      projectId: null,
+      result: 'UNKNOWN',
+      metadata: { category: 'TIMEOUT_OUTCOME_UNKNOWN', timeoutMs: toolCallTimeoutMs },
+    })));
+    return { result: timeoutResult(input.requestId) };
   } finally {
+    if (timer) clearTimeout(timer);
     if (tool.plane === 'CONTROL') noteLatency(input.toolName, Date.now() - started);
     slot.release();
   }
+}
+
+let toolCallTimeoutMs = TOOL_CALL_TIMEOUT_MS;
+
+/** Test seam. Never called by the server. */
+export function setToolCallTimeoutForTests(ms: number | null): void {
+  toolCallTimeoutMs = ms ?? TOOL_CALL_TIMEOUT_MS;
+}
+
+/**
+ * The answer when a call reached its time limit. Retryable, and honest that
+ * the work may still complete: every mutating tool is idempotent by its work
+ * item, so the same call again either finds the effect recorded or performs it.
+ */
+function timeoutResult(requestId: string): CallToolBody {
+  const message =
+    'That call did not finish within its time limit. Its outcome is unknown — it may still complete. ' +
+    `Send the same call again shortly; it is safe to repeat. Reference ${requestId}.`;
+  return {
+    content: [{ type: 'text', text: message }],
+    structuredContent: {
+      error: { category: 'UNAVAILABLE', message, requestId, retryable: true, kind: 'TIMEOUT_OUTCOME_UNKNOWN' },
+    },
+    isError: true,
+  };
 }
 
 async function runTool(tool: McpTool, input: CallInput): Promise<CallOutput> {

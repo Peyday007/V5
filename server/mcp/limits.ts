@@ -63,13 +63,35 @@ export const RATE_WINDOW_MS = 60_000;
 export const RATE_MAX_CALLS = 120;
 export const MAX_CONCURRENT_PER_CREDENTIAL = 8;
 
+/**
+ * The longest one tool call may hold its slot before the caller is answered.
+ *
+ * 2026-11-02 ~18:45 UTC: every call on the owner's credential was refused
+ * "Too many calls in flight" for minutes with no worker running. A slot was
+ * given back only when the tool returned, nothing bounded how long that took,
+ * and eight calls that never returned locked the credential until the process
+ * restarted. Comfortably above the slowest bounded step a tool takes (a store
+ * transfer is 120 s), so reaching it means a call is stuck, not slow.
+ */
+export const TOOL_CALL_TIMEOUT_MS = 180_000;
+
+/**
+ * The backstop: a slot older than this stops counting, whether or not anything
+ * gave it back. The time limit above should always release first; this exists
+ * so that a slot leaked by a path nobody foresaw costs minutes, never the
+ * credential.
+ */
+export const SLOT_MAX_AGE_MS = 2 * TOOL_CALL_TIMEOUT_MS;
+
 interface Bucket {
   windowStart: number;
   count: number;
-  inFlight: number;
+  /** Slot id → when it was taken. A map rather than a count so a slot can age out. */
+  inFlight: Map<number, number>;
 }
 
 const buckets = new Map<string, Bucket>();
+let nextSlotId = 1;
 
 /** Test seam. Never called by the server. */
 export function resetRateLimits(): void {
@@ -79,11 +101,17 @@ export function resetRateLimits(): void {
 function bucketFor(credentialId: string, now: number): Bucket {
   const existing = buckets.get(credentialId);
   if (existing && now - existing.windowStart < RATE_WINDOW_MS) return existing;
-  // A fresh window keeps the in-flight count, which is not windowed: a call
+  // A fresh window keeps the in-flight slots, which are not windowed: a call
   // that is still running is still running whatever the clock did.
-  const bucket: Bucket = { windowStart: now, count: 0, inFlight: existing?.inFlight ?? 0 };
+  const bucket: Bucket = { windowStart: now, count: 0, inFlight: existing?.inFlight ?? new Map() };
   buckets.set(credentialId, bucket);
   return bucket;
+}
+
+function expireStaleSlots(bucket: Bucket, now: number): void {
+  for (const [id, takenAt] of bucket.inFlight) {
+    if (now - takenAt >= SLOT_MAX_AGE_MS) bucket.inFlight.delete(id);
+  }
 }
 
 export interface RateLease {
@@ -99,26 +127,27 @@ export interface RateLease {
  */
 export function takeRateSlot(credentialId: string, now = Date.now()): RateLease {
   const bucket = bucketFor(credentialId, now);
+  expireStaleSlots(bucket, now);
 
   if (bucket.count >= RATE_MAX_CALLS) {
     const retryAfterMs = Math.max(0, RATE_WINDOW_MS - (now - bucket.windowStart));
     throw limitExceeded('Too many calls. Slow down and retry.', { retryAfterMs });
   }
-  if (bucket.inFlight >= MAX_CONCURRENT_PER_CREDENTIAL) {
+  if (bucket.inFlight.size >= MAX_CONCURRENT_PER_CREDENTIAL) {
     throw limitExceeded('Too many calls in flight for this credential.', {
       retryAfterMs: 1000,
     });
   }
 
   bucket.count += 1;
-  bucket.inFlight += 1;
+  const id = nextSlotId++;
+  bucket.inFlight.set(id, now);
 
-  let released = false;
   return {
+    // Idempotent by construction: deleting an absent id is a no-op, so a
+    // release after the slot aged out cannot free somebody else's slot.
     release: () => {
-      if (released) return;
-      released = true;
-      bucket.inFlight = Math.max(0, bucket.inFlight - 1);
+      bucket.inFlight.delete(id);
     },
   };
 }
