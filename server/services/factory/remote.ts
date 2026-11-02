@@ -478,8 +478,17 @@ export async function createUnitsBin(
   });
   manifest.prohibitedActions = [
     ...manifest.prohibitedActions,
-    `push, merge into or otherwise move ${campaign.integrationBranch} — integrating is a ` +
-      'separate bin, judged by a session that did not implement any of this',
+    /*
+     * In *this* bin. It used to add "judged by a session that did not implement
+     * any of this" — a guarantee nothing enforces (a separate session is a
+     * property of the fleet, see `createIntegrateBin`). A worker that went on to
+     * take the integrate bin believed it, refused as "not independent", and two
+     * refusals parked the bin for a person (fcp_8cd968ad, 2026-11-02); each
+     * five-second refusal also counted as an unproductive start, and three
+     * throttled the only account, so the campaign's parallel unit waited 44 min.
+     */
+    `push, merge into or otherwise move ${campaign.integrationBranch} from this bin — integrating ` +
+      'is a separate bin, which any session, including this one, may take afterwards',
     'open, update or comment on a pull request',
   ];
 
@@ -608,7 +617,10 @@ export async function createIntegrateBin(
     why:
       'These unit branches are implemented and confirmed by the forge. The campaign has one ' +
       'branch, and this is the bin that moves it: merge them in the order given, run the ' +
-      "repository's own commands on the merged tree, and push only if they pass.",
+      "repository's own commands on the merged tree, and push only if they pass. If your " +
+      'session implemented one of these units, take this bin anyway: integration is not a review ' +
+      'and needs no independence (the review is a later, separate bin), and a unit bin\'s "do not ' +
+      'move the integration branch" applied to that bin only.',
     campaign,
     changeRequest,
     units: [
