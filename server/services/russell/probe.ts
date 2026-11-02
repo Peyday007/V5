@@ -31,6 +31,7 @@ import {
   completeProbe,
   createProbe,
   destinationAllowed,
+  failProbe,
   getProbe,
   listObservations,
   permitLookup,
@@ -180,74 +181,90 @@ export async function runProbe(input: {
   // `startProbe` is guarded on PENDING, so a second runner arriving at a probe
   // already under way does not restart it — but it may still finish it, which
   // is what makes crash recovery work without a supervisor.
-  await startProbe(probe.id);
+  // A probe already ended as FAILED stays as it is: a repeat call changes nothing.
+  if (probe.state === 'FAILED') {
+    return { ok: false, reason: 'failed', outcome: null, lookups: [] };
+  }
 
   const lookups: LookupReport[] = [];
-  const fetcher = input.fetcher ?? (globalThis.fetch as unknown as ProbeFetch);
+  try {
+    await startProbe(probe.id);
+    const fetcher = input.fetcher ?? (globalThis.fetch as unknown as ProbeFetch);
 
-  for (const source of envelope.sources) {
-    let destination = destinationFor(source, probe.question);
+    for (const source of envelope.sources) {
+      let destination = destinationFor(source, probe.question);
 
-    for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-      const permission = await permitLookup({ probeId: probe.id, url: destination });
-      if (!permission.ok) {
-        // Out of budget, past the deadline, or the destination is not allowed.
-        // All three end this source rather than the whole probe: another source
-        // may still be inside the envelope.
-        // Deliberately *not* an observation. The observations table is the
-        // budget, and a refusal consumed none of it — writing a row here would
-        // make the next `permitLookup` believe an allowance had been spent.
-        lookups.push({
-          url: source.label,
-          retrieval: 'REFUSED',
-          note: permission.detail,
-          mentioned: false,
-        });
-        break;
-      }
-
-      const attempt = await fetchOnce(fetcher, destination, envelope);
-      await recordObservation({
-        probeId: probe.id,
-        ordinal: permission.ordinal,
-        sourceUrl: destination,
-        retrieval: attempt.retrieval,
-        note: attempt.note,
-      });
-      lookups.push({
-        url: destination,
-        retrieval: attempt.retrieval,
-        note: attempt.note,
-        mentioned: attempt.retrieval === 'RETRIEVED' && mentions(probe.question, attempt.body),
-      });
-
-      if (attempt.redirectTo) {
-        if (!destinationAllowed(attempt.redirectTo, probe.allowedSources)) {
-          // A redirect out of the envelope is where an allowlist earns its
-          // keep. Refused by name, and the probe does not follow it.
+      for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+        const permission = await permitLookup({ probeId: probe.id, url: destination });
+        if (!permission.ok) {
+          // Out of budget, past the deadline, or the destination is not allowed.
+          // All three end this source rather than the whole probe: another source
+          // may still be inside the envelope.
+          // Deliberately *not* an observation. The observations table is the
+          // budget, and a refusal consumed none of it — writing a row here would
+          // make the next `permitLookup` believe an allowance had been spent.
           lookups.push({
             url: source.label,
             retrieval: 'REFUSED',
-            note: 'the redirect left this probe’s allowlist',
+            note: permission.detail,
             mentioned: false,
           });
           break;
         }
-        destination = attempt.redirectTo;
-        continue;
+
+        const attempt = await fetchOnce(fetcher, destination, envelope);
+        await recordObservation({
+          probeId: probe.id,
+          ordinal: permission.ordinal,
+          sourceUrl: destination,
+          retrieval: attempt.retrieval,
+          note: attempt.note,
+        });
+        lookups.push({
+          url: destination,
+          retrieval: attempt.retrieval,
+          note: attempt.note,
+          mentioned: attempt.retrieval === 'RETRIEVED' && mentions(probe.question, attempt.body),
+        });
+
+        if (attempt.redirectTo) {
+          if (!destinationAllowed(attempt.redirectTo, probe.allowedSources)) {
+            // A redirect out of the envelope is where an allowlist earns its
+            // keep. Refused by name, and the probe does not follow it.
+            lookups.push({
+              url: source.label,
+              retrieval: 'REFUSED',
+              note: 'the redirect left this probe’s allowlist',
+              mentioned: false,
+            });
+            break;
+          }
+          destination = attempt.redirectTo;
+          continue;
+        }
+
+        break;
       }
-
-      break;
     }
-  }
 
-  const outcome = verdictFrom(lookups);
-  await completeProbe({
-    probeId: probe.id,
-    outcome,
-    explanation: explain(outcome, lookups),
-  });
-  return { ok: true, reason: 'ran', outcome, lookups };
+    const outcome = verdictFrom(lookups);
+    await completeProbe({
+      probeId: probe.id,
+      outcome,
+      explanation: explain(outcome, lookups),
+    });
+    return { ok: true, reason: 'ran', outcome, lookups };
+  } catch (error) {
+    // Anything other than a classified network failure (those are caught inside
+    // fetchOnce) is a crash, and is recorded as one. Only the error's class is
+    // written, never its message, which may carry a path or a value.
+    const name = error instanceof Error && error.constructor?.name ? error.constructor.name : 'non-Error value';
+    await failProbe({
+      probeId: probe.id,
+      explanation: `The probe stopped because a step failed (${name}); it did not run out of time.`,
+    }).catch(() => false);
+    return { ok: false, reason: 'failed', outcome: null, lookups };
+  }
 }
 
 /**
