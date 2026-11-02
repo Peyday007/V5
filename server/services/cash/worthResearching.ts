@@ -34,6 +34,7 @@ import type { CashOpportunity } from '../../domain/types.ts';
 import { screenOpportunity, type ScreenFacts, type ScreenLimits, type ScreenVerdict } from './screen.ts';
 import { listWorkstreams } from '../../repos/register.ts';
 import { readTarget } from '../goals/target.ts';
+import { tooSmallForGoals } from '../goals/materiality.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions, type ExclusionClass } from './exclusions.ts';
 
 /**
@@ -231,6 +232,18 @@ export async function notWorthResearching(
         const label = EXCLUSION_CLASSES[hits[0]!].label;
         return { kind: 'SCREENED_OUT', reason: 'EXCLUDED_BY_GOAL', detail: `it is ${label}, which the goal's owner excluded`, limit: label };
       }
+    }
+  }
+  // Too small for every goal that judged it: no answer could make it a plan (goals/materiality.ts).
+  if (context.screen === undefined) {
+    const small = tooSmallForGoals(opportunity.id, Date.parse(context.now));
+    if (small) {
+      return {
+        kind: 'SCREENED_OUT',
+        reason: 'TOO_SMALL_FOR_GOAL',
+        detail: `at most ${Math.round(small.potential)} toward a goal whose research floor is ${Math.round(small.floor)}, even if every buyer agreed`,
+        limit: 'a tenth of what the goal still needs',
+      };
     }
   }
   if (closesWithin(opportunity.expiresAt, context.now)) {

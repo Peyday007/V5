@@ -45,6 +45,7 @@ import { constructArrangements } from '../cash/construct.ts';
 import { goalExclusions } from '../cash/exclusions.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { listMoneyEntries } from '../../repos/cashLedger.ts';
+import { recordMateriality } from './materiality.ts';
 import { cashSpareSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
@@ -584,6 +585,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     volumeEstablished: one.repeatable ? volumeEstablished(one) : one.volume.provenance === 'EVIDENCE',
   }));
   considered.sort((a, b) => a.missing.length - b.missing.length || b.supportedReach - a.supportedReach);
+  recordMateriality(goal.id, target.remainingCents / 100, considered);
   const strategies: StrategyReading[] = [];
   for (const spec of model.definition.strategies) {
     const members = model.included

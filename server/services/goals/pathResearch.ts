@@ -36,7 +36,8 @@ import type { ChainLink, PlanReading } from './plan.ts';
  * but each has to matter: an opening that cannot bring a tenth of the gap even
  * if every buyer agreed costs research it can never repay.
  */
-export const MIN_SHARE_WORTH_RESEARCHING = 0.1;
+export { MIN_SHARE_WORTH_RESEARCHING } from './materiality.ts';
+import { MIN_SHARE_WORTH_RESEARCHING } from './materiality.ts';
 
 /** At most this many openings per goal get path research at once. */
 export const PATH_RESEARCH_OPENINGS = 4;
