@@ -8,6 +8,7 @@
  * have nothing to do with mail, with no code naming any of them.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import { OPPORTUNITY_SIGNALS } from '../server/domain/types.ts';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate, setConstraints } from '../server/services/cash/lifecycle.ts';
@@ -228,6 +229,13 @@ describe('reverse construction starts from what the goal needs', () => {
       expect(one.question).toMatch(/starting from the economics the goal needs/);
       expect(one.question).toMatch(/refutes the arrangement/);
       expect(one.question).toMatch(/how many buyers of exactly this kind exist/);
+      // The harvest files only a claim carrying opportunity_signal, so the
+      // question has to say so: ten production rounds with accepted claims
+      // harvested nothing because it did not.
+      expect(one.question).toMatch(/setting opportunity_signal on the claim that names those buyers/);
+      for (const named of one.question.match(/\b[A-Z]+(?:_[A-Z]+)+\b/g) ?? []) {
+        if (/(WORK|DEMAND|MISMATCH)$/.test(named)) expect(OPPORTUNITY_SIGNALS as readonly string[]).toContain(named);
+      }
     }
     // A presold design names prepayment as a hypothesis to establish, not a fact.
     const presold = reverse.find((one) => one.design.funding !== 'ON_DELIVERY')!;

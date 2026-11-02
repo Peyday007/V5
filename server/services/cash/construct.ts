@@ -491,14 +491,14 @@ function compose(args: {
         'Find kinds of buyers — in any industry, consumer or business — for whom this design would work: numerous, reachable, with a recurring need they are published as paying for, ' +
         `${facts.fulfiller === 'SUPPLIER' ? 'and suppliers who publish the capacity and the terms to fulfil it, ' : ''}` +
         `and name each with its published evidence. For each, find a published source: ${asks}.${reliesText}${failureText}${exclusionSentence(args.exclusions)} ` +
-        'Report an opening only where a source shows a payer, a price and a published way to reach them; ' +
-        'where no source shows any buyers pay for this, say so plainly — that refutes the arrangement and is a useful answer.'
+        OPENING_SENTENCE +
+        'Where no source shows any buyers pay for this, say so plainly — that refutes the arrangement and is a useful answer.'
       : `Brain composed an arrangement nobody has published as an opening, and needs the world to confirm or refute it: ` +
         `buyers described as "${demand.name}" pay ${need ? `to deal with "${need.name}"` : 'for what they need most'}, fulfilled by ${supply ? (supply.from === 'CAPABILITY' ? `Brain producing it (${supply.name})` : `"${supply.name}"`) : 'a supplier'}, and the operation is designed as: ${shape}. ` +
         `Establish whether such buyers actually pay for this and whether ${def.needsSupply ? 'such suppliers would take the work on these terms' : 'the deliverable is what they buy'}.${why} ` +
         `For each part, find a published source: ${asks}.${established}${reliesText}${failureText}${exclusionSentence(args.exclusions)} ` +
-        'Report an opening only where a source shows a payer, a price and a published way to reach them; ' +
-        'where no source shows buyers pay for this, say so plainly — that refutes the arrangement and is a useful answer.';
+        OPENING_SENTENCE +
+        'Where no source shows buyers pay for this, say so plainly — that refutes the arrangement and is a useful answer.';
   return {
     key,
     structure,
@@ -521,6 +521,29 @@ function compose(args: {
     question,
   };
 }
+
+/**
+ * How a constructed round's answer becomes an opening, said in the question.
+ *
+ * The harvest files only a claim whose reader set `opportunity_signal`
+ * (`signalledClaims`), and the question used to say "report an opening" without
+ * naming the field. Production, 2026-11-02: ten constructed rounds finished
+ * with accepted claims — orc_d083edfc645c47e6b99d's fragment was ACCEPTED with
+ * a demand_pattern claim and two economics claims — and every one read
+ * "found 0", because a constructed arrangement is not a published opening and
+ * the profile asks for a signal only on "a concrete opening". The worker still
+ * decides whether a claim is one; this only names the field and the three
+ * kinds a constructed design can be. It lowers no bar: a signalled claim passes
+ * the same gate, and the harvested piece starts as evidence and is qualified
+ * like any other.
+ */
+export const OPENING_SENTENCE =
+  'Report an opening only where a source shows a payer, a price and a published way to reach them, ' +
+  'and report it by setting opportunity_signal on the claim that names those buyers: ' +
+  'RECURRING_OUTSOURCED_WORK where such buyers repeatedly commission the same brief, ' +
+  'ACTIVE_BUYER_DEMAND where a named buyer is published as paying for it now, or ' +
+  'SUPPLY_DEMAND_MISMATCH where published demand and a published supply are not yet connected. ' +
+  'A claim with no opportunity_signal is kept as evidence and never becomes an opening. ';
 
 /** The design every structure had before §82, for callers that still name a structure. */
 export { defaultDesign };
