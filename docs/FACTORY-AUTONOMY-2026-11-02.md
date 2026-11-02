@@ -41,6 +41,50 @@ merge). With the 17 rows over 600 min removed (overnight idling):
 Caveats: timing starts at session creation (includes investigation and owner
 reply time); merge only, not deploy; the small class has four rows.
 
-## Benchmark: real objectives on the corrected Factory
+## Benchmark: three real objectives, submission to production
 
-_Filled in from the runs below._
+Real backlog work: one new defect found during this work, and two stale Factory
+objectives (#53+#63, #66) re-run against current production. Each was submitted
+through the operator door with `--ref`, so no deploy was needed before
+submission. Each was approved, built by the Factory, and carried to production
+by the session protocol (`.claude/skills/factory-objective`). Times are UTC on
+2026-11-02. "Live" is the time Deploy's release step completed.
+
+| objective | files | submitted | PR | merged by session | live | submission → live |
+|---|---|---|---|---|---|---|
+| small — `fcp_90dacf0a`, next-action reads the objective outcome | 2 | 10:40:05 | #427 14:33 | 14:59 | 15:35 | **4 h 55 m** |
+| substantial — `fcp_8cd968ad`, Russell turn boundary + Build preview (2 independent parts) | 6 | 10:41:53 | #431 15:37 | 15:42 | 16:01 | **5 h 20 m** |
+| medium — `fcp_cc5ef744`, one writer for goal dependencies | 4 | 10:48:23 | #435 17:09 | 17:13 | 17:33 | **6 h 45 m** |
+
+Every acceptance condition was met, and each PR had an independent review pass.
+They were verified on production as follows:
+- **Small:** `brain_next_engineering_action` returned DONE for a LIVE campaign and NEEDS_HUMAN for a person-blocked one with `human_blocker_open:false`. A building campaign still read BRANCH.
+- **Substantial:** the new Build disclosures are in the live client bundle.
+- **Medium:** the Factory's own delivery observation read the merge running in production and recorded `OBJECTIVE_FINISHED` LIVE at 17:35:27, 97 s after the release.
+
+Owner interventions: **0**. Every merge and deploy was done by the session, under the owner's standing order. One integrate bin needed a session `answer-bin`, because Brain had spent its attempts on its own defect.
+
+### Where the hours went
+
+Useful worker time per objective was a few minutes each: plans took 15–44 s, units 4–11 min, and integration rounds a few minutes. The rest was defects found by these runs. Each is fixed and deployed:
+
+| cost | measured on | cause | fix |
+|---|---|---|---|
+| ~2 h 15 m (small), ~1 h 30 m (substantial) | integrate stage | The unit manifest promised that an independent session would integrate. The implementer took the integrate bin, believed the promise, and refused it twice, so the bin parked for a person. Each refusal also counted as an unproductive start, which throttled the only account, so the substantial campaign's independent second unit started 44 min late. | #424 |
+| 4 h 35 m (medium) | before implementation | The objective was held by `fcp_3a8b4e75`, BLOCKED on a person since 10-30 and still holding the same files. | #430 |
+| full suite ×3–4 per objective | integration, review, Deploy | Every round and the reviewer re-ran the whole suite. | #417, #423: once, in CI |
+| 8–11 min per stage | plan, each stage | A fire wait. A no-show held its slot for 30 min; abandoned intents revived after 2 h. | #417: 8 min / 20 min |
+| 25–36 min per release | merge → live | Deploys serialise, each runs the full suite, and newer canonical tips (often other sessions') supersede them. | not changed (§28) |
+
+### Compared with direct Claude Code
+
+Direct sessions (above): about **70 min** median from session start to merged PR, **4–5 h** at p90, merge only. On 2026-11-02 the Factory took **4 h 55 m – 6 h 45 m** from submission to *live*: roughly 4–6× slower than the direct median, and in line with the direct p90.
+
+**The Factory is not yet as fast as direct Claude Code, and these runs do not show that it is.** The defects above account for most of the difference, and all are fixed. Removing them leaves a critical path of about 8 min plan + 5–11 min units + ~10 min integration + review + 25–35 min Deploy. That is about 1–1.5 h submission → live, which would match direct sessions *including deploy*. This is a projection from measured stage times. No run has been timed after every fix landed.
+
+### Remaining limitations that constrain the workflow
+
+1. **One usable worker surface.** `factory line` at 15:02 showed seven Factory surfaces: one free, the rest retired or quarantined. Observed concurrency was 1 on every campaign, so independent units cannot run in parallel. Restoring surfaces is configuration (accounts and Routines).
+2. **The production machine stalls when operator consoles run.** Every operator command and the hosted verifier is a `node --import tsx` process on the `shared-cpu-2x` machine that serves Brain. `/healthz` took 25–30 s at the times console sessions appear in the Fly log, and post-restart verification passes ran out of time. Mitigated (#434: `nice`, probes every 15 min). The structural options are precompiled operator scripts or dedicated CPU; dedicated CPU is a spending decision.
+3. **The database pool fills right after a restart.** The session pooler allows 15 clients. After a restart the app retries its boot and answers 503 for minutes. The verifier now waits out a refusal (#417) and names an unfinished pass as such (#428). Raising the pool limit is the owner's Supabase setting.
+4. **MEDIUM/HIGH objectives finish at a PR by design** (§58). The waiting session merges and deploys them. Only LOW-risk objectives with a grant release with no session at all.
