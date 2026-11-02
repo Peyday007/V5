@@ -13876,3 +13876,9 @@ and the idle-fill lift stay stopped.
   the envelope's own-action screen read it as "instructs the researcher to
   purchase" and refused the corrected round. `actorScope` skips a forbidden
   phrase joined to a word by a hyphen; the bare verb is still refused.
+- **A RECORD_GAPS answer files from the evidence; it does not re-park on new
+  research.** The envelope refuses any packet with that policy, so a judge's
+  follow-up proposed after it could never be approved: the packet parked, was
+  answered RECORD_GAPS again, and parked again (orc_d083edfc645c47e6b99d). The
+  runner now cancels such PLANNED work with the reason and files the packet
+  from what it holds. Nothing is approved and no bar moves.
