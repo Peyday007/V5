@@ -145,6 +145,7 @@ export function ownActionMatches(prose: string, pattern: RegExp): OwnActionMatch
   const out: OwnActionMatch[] = [];
   for (const match of prose.matchAll(scanner)) {
     const at = match.index ?? 0;
+    if (insideCompound(prose, at, match[0].length)) continue;
     const clauseStart = clauseStartBefore(prose, at);
     const before = prose.slice(clauseStart, at);
     if (!isOwnAction(before)) continue;
@@ -154,6 +155,23 @@ export function ownActionMatches(prose: string, pattern: RegExp): OwnActionMatch
     });
   }
   return out;
+}
+
+/**
+ * A phrase hyphenated into a word is part of a name, not a verb.
+ *
+ * *"Which published group-purchase operators publish an arranger fee"* is a
+ * judge's follow-up question about a kind of business, and "group-purchase" is
+ * the operator's description of itself. Read as an instruction it refused the
+ * corrected round of `orc_d083edfc645c47e6b99d` (2026-11-02) for "instructs
+ * the researcher to purchase". A word joined by a hyphen on either side —
+ * `group-purchase`, `purchase-order` — names a thing; Brain is never told to
+ * do something with a hyphen in front of the verb.
+ */
+function insideCompound(prose: string, at: number, length: number): boolean {
+  const before = prose.slice(Math.max(0, at - 2), at);
+  const after = prose.slice(at + length, at + length + 2);
+  return /[a-z]-$/i.test(before) || /^-[a-z]/i.test(after);
 }
 
 /** The convenience every caller of the screen actually wants. */
