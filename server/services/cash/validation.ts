@@ -74,7 +74,8 @@ import {
 } from './engineCard.ts';
 import { evidenceCard } from './card.ts';
 import { cashTier } from './tier.ts';
-import { COLUMN, UNDELIVERABLE, deliveryReading } from './answers.ts';
+import { COLUMN } from './answers.ts';
+import { UNDELIVERABLE, deliveryReading } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
 import { researchMissionSlotsFull } from '../russell/launch.ts';
