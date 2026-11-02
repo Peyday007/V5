@@ -138,6 +138,18 @@ export async function closeRound(input: {
   return result.changes === 1;
 }
 
+/**
+ * Count one opening a closed round's research filed after the round closed
+ * (§83). Never reopens the round; an OPEN round is counted when it closes.
+ */
+export async function countSettledRoundOpening(id: string): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE cash_discovery_rounds SET found = found + 1, updated_at = ? WHERE id = ? AND state <> 'OPEN'`,
+    [nowIso(), id],
+  );
+  return result.changes === 1;
+}
+
 /** The highest round this bucket has reached, and 0 when it has never run. */
 export async function latestRound(projectId: string, bucketId: string): Promise<number> {
   const rows = await getDb().all<{ highest: number | null }>(

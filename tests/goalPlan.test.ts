@@ -595,14 +595,17 @@ describe('how the money actually arrives (2026-10-28)', () => {
     }
   });
 
-  it('opens no goal round on a Claude Routine while the Routines are on focus', async () => {
+  it('opens no lens round on a Claude Routine while the Routines are on focus, only its constructed search (§83)', async () => {
     await oneOff({ title: 'Federal RFP, too slow', priceCents: 13_502_000, days: null });
     const id = await pacedGoalFor();
     const before = process.env['BRAIN_CASH_RESEARCH_MAX'];
     process.env['BRAIN_CASH_RESEARCH_MAX'] = '1';
     try {
       expect((await advanceGoalPlans(now)).asked).toBe(0);
-      expect((await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-`))).toHaveLength(0);
+      const rounds = (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${id}-`));
+      // At most the operator ceiling (1 here), and every one a constructed arrangement.
+      expect(rounds.length).toBeLessThanOrEqual(1);
+      expect(rounds.every((one) => one.bucketId.startsWith(`goal-${id}-mx-`))).toBe(true);
     } finally {
       if (before === undefined) delete process.env['BRAIN_CASH_RESEARCH_MAX'];
       else process.env['BRAIN_CASH_RESEARCH_MAX'] = before;

@@ -14032,6 +14032,32 @@ What it does not do: decide that buyers exist, prepay or repeat. Those come back
 through the ordinary gate and harvest as openings, and the goal plan's chain
 gate judges them like any other.
 
+## 83. Focus keeps one search: an approved cash goal's constructed arrangements.
+
+Focus (`BRAIN_CASH_RESEARCH_MAX`, §78) stops Routines hunting openings, and
+#389 stopped constructed rounds with it. That left the $10K goal reading
+NOT_VIABLE over 28 openings with nothing able to add one: feeds and the free
+models find published requests, and nobody publishes an arrangement nobody has
+named. So `openConstructedRound` runs under focus, inside an ACTIVE sprint, at
+most `focusConstructedCap` open per goal (`FOCUS_CONSTRUCTED_LIVE` = 2, never
+above the operator ceiling, so 0 still stops it). Lens rounds, bulk discovery
+and the idle-fill lift stay stopped.
+
+- **One buyer population at a time.** `constructedOrder` skips a population
+  with a round open, leads with a reverse design when none is open (it needs no
+  buyer on the map), then prefers a structure not already open. Production had
+  nine open rounds, all one anime production committee.
+- **A goal round's slot is never held for ever.** A goal round whose idea is
+  still unlaunched after `UNLAUNCHED_GOAL_ROUND_MS` (6 h) is ABANDONED, and its
+  idea moved to REJECTED first by a guarded swap, so it cannot launch later and
+  duplicate the round asked in its place.
+- **A late result keeps its lineage.** A round closes ABANDONED when its mission
+  parks; the routine decision then files it short and the mission ends DONE.
+  Its openings were harvested unattributed (24 rounds read "found 0" over DONE
+  missions). `harvest` now reads the closed round by the mission's candidate,
+  attributes the opening to it and counts it (`countSettledRoundOpening`),
+  never reopening the round.
+
 ## Repository map
 
 ```

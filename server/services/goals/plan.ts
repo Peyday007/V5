@@ -902,6 +902,45 @@ export function goalLimits(reading: PlanReading): import('../cash/properties.ts'
   };
 }
 
+/**
+ * Which constructed arrangements to try asking, in order (§83).
+ *
+ * Ranking favours the best-evidenced parts, and the industry map held one
+ * buyer population, so every round Brain opened was a variant of that one
+ * buyer (production, 2026-11-01: nine OPEN rounds, all the same anime
+ * production committee, every reverse design waiting behind them). So:
+ *
+ *   - a buyer population with a round already open is not asked again until
+ *     that round settles — its variants are one question, not several;
+ *   - a reverse-constructed design comes first when none is open, because it
+ *     needs no buyer on the map and is the only search a sparse map cannot
+ *     starve;
+ *   - then a base structure not already open before one that is, so a pass
+ *     reaches different transaction shapes rather than the same one re-dressed.
+ *
+ * Within each, the constructor's own rank (which reads the goal's targets and
+ * worst-case exposure) decides. Pure, so the order is testable without rows.
+ */
+export function constructedOrder<T extends { key: string; origin: string; structure: string; demand: { ref: string } }>(
+  ranked: readonly T[],
+  openKeys: readonly string[],
+): T[] {
+  const open = new Set(openKeys);
+  const openOnes = ranked.filter((one) => open.has(one.key));
+  const busyDemand = new Set(openOnes.map((one) => one.demand.ref));
+  const busyStructure = new Set(openOnes.map((one) => one.structure));
+  const reverseOpen = openOnes.some((one) => one.origin === 'REVERSE');
+  const free = ranked.filter((one) => !open.has(one.key) && !busyDemand.has(one.demand.ref));
+  const out: T[] = [];
+  const take = (one: T | undefined) => {
+    if (one && !out.includes(one)) out.push(one);
+  };
+  if (!reverseOpen) take(free.find((one) => one.origin === 'REVERSE'));
+  for (const one of free) if (!busyStructure.has(one.structure)) take(one);
+  for (const one of free) take(one);
+  return out;
+}
+
 /** Open rounds for the best-ranked arrangements Brain constructed, at most `max` this pass. */
 export async function askConstructedArrangements(goal: Workstream, reading: PlanReading, now: Date, max: number, liveCap: number): Promise<string[]> {
   const t = reading.target;
@@ -935,13 +974,12 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
   const room = Math.max(1, Math.floor(liveCap / 2)) - openMx.length;
   if (room <= 0) return [];
   max = Math.min(max, room);
-  const askedDemand = new Set(openMx.map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4)));
-  const openDemand = new Set(arrangements.filter((one) => askedDemand.has(one.key)).map((one) => one.demand.ref));
-  const spread = [...arrangements.filter((one) => !openDemand.has(one.demand.ref)), ...arrangements.filter((one) => openDemand.has(one.demand.ref))];
+  const order = constructedOrder(arrangements, openMx.map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4)));
   const thisPass = new Set<string>();
-  for (const one of spread) {
+  for (const one of order) {
     if (opened.length >= max) break;
-    if (thisPass.has(one.demand.ref) && spread.some((other) => !thisPass.has(other.demand.ref) && !openDemand.has(other.demand.ref))) continue;
+    // One buyer population per pass: a population that opened a round this pass waits for the next.
+    if (thisPass.has(one.demand.ref)) continue;
     const round = await openConstructedRound({ goal, projectId: t.projectId, key: one.key, title: `Constructed: ${one.label}`, question: one.question, now: now.toISOString(), liveCap });
     // Null is this arrangement's cool-off, the live cap or a closed gate: the next one is tried.
     if (round) {
