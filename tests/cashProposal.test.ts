@@ -33,7 +33,7 @@ import {
   ALWAYS_PROHIBITED_COMMERCIAL,
   COMMERCIAL_ACTIONS,
 } from '../server/services/cash/authority.ts';
-import { capture, fillCard } from '../server/services/cash/opportunities.ts';
+import { capture, fillCard, markReady } from '../server/services/cash/opportunities.ts';
 import { applyProposal, proposeTerms } from '../server/services/cash/answers.ts';
 import type { ProposedTerm } from '../server/services/cash/answers.ts';
 import { advanceWithinAuthority } from '../server/services/cash/operate.ts';
@@ -203,6 +203,25 @@ describe('Brain proposes terms', () => {
     expect(price.cents).toBe(120_000);
     expect(price.value).toContain('as published');
     expect(price.uncertainty).toContain('ceiling');
+  });
+
+  /*
+   * Recommended-approach change #4 (2026-10-15): Campo Brokers' own $5
+   * membership fee, read off its sales page, became the price of production's
+   * only READY piece (`cop_6ec9dafa33f44c268b1d`).
+   */
+  it("never reads a seller's own fee schedule as the price a buyer would pay us", async () => {
+    const text = 'Annual membership USD 5. Copart deposit USD 800, refundable.';
+    const seller = await opening(text);
+    await updateOpportunity(seller.id, { opportunity_signal: 'PRICING_OR_INFORMATION_ASYMMETRY' });
+    const proposal = await proposeTerms((await getOpportunity(seller.id))!);
+    expect(term(proposal.terms, 'price')).toBeUndefined();
+    expect(proposal.withheld.find((one) => one.field === 'price')!.because).toMatch(/seller's own page/);
+
+    // The same words as a buyer's request are a figure that buyer published.
+    const buyer = await opening(text);
+    await updateOpportunity(buyer.id, { opportunity_signal: 'ACTIVE_BUYER_DEMAND' });
+    expect(term((await proposeTerms((await getOpportunity(buyer.id))!)).terms, 'price')!.cents).toBe(500);
   });
 
   it('takes the low end of a range and says why, rather than the number it could least defend', async () => {
@@ -376,6 +395,37 @@ describe('Brain acts inside the standing authority', () => {
       (one) => one.kind === 'CASH_OPPORTUNITY_READY' && one.opportunityId === piece.id,
     )!;
     expect(event.actorRef).toBe('BRAIN');
+  });
+
+  /*
+   * Recommended-approach change #1 (2026-10-15): `cop_6ec9dafa33f44c268b1d`
+   * read "USD -795.00 expected" and Brain marked it READY by itself. Production
+   * now refuses it in `advanceWithinAuthority` (`losesMoneyOnItsFigures`); this
+   * is the test that drives that path, which nothing did.
+   */
+  it('neither readies nor contacts for a complete card whose own figures lose money', async () => {
+    await granted();
+    const piece = await readyToTest();
+    await updateOpportunity(piece.id, { peak_funding_cents: 80_000, price_cents: 500 } as never);
+
+    const advanced = await advanceWithinAuthority(projectId);
+    expect(advanced.took.some((one) => one.opportunityId === piece.id)).toBe(false);
+    expect(advanced.withheld.find((one) => one.opportunityId === piece.id)!.because).toMatch(
+      /one sale loses money/,
+    );
+    expect((await getOpportunity(piece.id))!.state).toBe('DISCOVERED');
+
+    // A piece already READY whose figures then turn negative — the legacy
+    // shape — is never contacted for either. (`markReady` itself now refuses
+    // a losing piece for anybody, because the tier caps it at CANDIDATE.)
+    await updateOpportunity(piece.id, { peak_funding_cents: 0, price_cents: 120_000 } as never);
+    expect((await markReady({ opportunityId: piece.id, actorRef: 'usr_person' })).ok).toBe(true);
+    await updateOpportunity(piece.id, { peak_funding_cents: 80_000, price_cents: 500 } as never);
+    const after = await advanceWithinAuthority(projectId);
+    expect(after.withheld.find((one) => one.opportunityId === piece.id)!.because).toMatch(
+      /one sale loses money/,
+    );
+    expect(after.took.some((one) => one.opportunityId === piece.id)).toBe(false);
   });
 
   it('leaves an incomplete card alone rather than reporting it as withheld every tick', async () => {

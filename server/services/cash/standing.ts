@@ -279,6 +279,14 @@ export function standingFor(input: StandingInput): Standing {
           'Nothing published names a buying signal for it, so there is nothing for a deep dive ' +
           'to ask about. What moves it is a person filling in the card.',
       };
+    case 'CANNOT_DELIVER':
+      return {
+        kind: 'WAITING',
+        on: ['PERSON'],
+        because:
+          `No deep dive is spent on it, because Brain could not deliver it: ${dive.because} ` +
+          'What moves it is somebody named for that work, or the capability being proved.',
+      };
     case 'ELIGIBLE': {
       const room = input.diveRoom ?? { kind: 'FREE' as const };
       if (room.kind === 'FULL') {

@@ -117,3 +117,42 @@ describe('the stage-one screen passes the same envelope', () => {
     expect(verdict.fits).toBe(true);
   });
 });
+
+/*
+ * Recommended-approach change #5 (2026-10-15): the Artisanal Sudoku opening's
+ * second dive re-asked the whole qualification and left `directCosts` blank —
+ * nothing is bought to make a puzzle, so no source publishes that cost. A
+ * second full round now asks the open lanes by name, says a documented absence
+ * is an answer, and still restates the payer the gate requires.
+ */
+describe('a second full dive asks what the first left open, by lane', () => {
+  const envelope = APPROVAL_ENVELOPES['RUSSELL_CASH_VALIDATION_V1']!;
+  const opening = {
+    title: 'Puzzle submissions',
+    buyingSignal: 'Artisanal Sudoku pays $50 per accepted original puzzle.',
+    source: 'https://artisanalsudoku.substack.com/p/submissions',
+    signalObservedAt: '2026-10-14',
+  } as unknown as CashOpportunity;
+
+  it('names cost_evidence, invites a NEGATIVE_EXISTENCE answer, and keeps the payer', () => {
+    const question = validationQuestion(opening, 'FULL', [
+      'delivery',
+      'directCosts',
+      'requiredCapital',
+      'recommendation',
+    ]);
+    expect(question).toContain('cost_evidence (directCosts)');
+    expect(question).toContain('NEGATIVE_EXISTENCE');
+    expect(question).toMatch(/restated in the payer lane/);
+    // Not the whole qualification again, and nothing composed is asked as a lane.
+    expect(question).not.toContain('what comparable work is published at');
+    expect(question).not.toMatch(/\(delivery\)|\(recommendation\)/);
+    expect(ownActionMatches(question, envelope.forbiddenActions)).toEqual([]);
+  });
+
+  it('asks the whole qualification on a first round, or when nothing open has a lane', () => {
+    const whole = validationQuestion(opening, 'FULL');
+    expect(whole).toContain('what comparable work is published at');
+    expect(validationQuestion(opening, 'FULL', ['recommendation'])).toBe(whole);
+  });
+});

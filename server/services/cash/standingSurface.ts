@@ -478,6 +478,7 @@ const REFUSAL_LABEL: Record<DiveRefusal['kind'], string> = {
   DUPLICATE: 'a second record of another opening',
   EXPIRED: 'its closing date has passed',
   NOT_WORTH_RESEARCHING: 'no answer could make it executable now: a marketplace listing, a close too soon, or capital the ledger does not hold',
+  CANNOT_DELIVER: 'Brain could not deliver it: it needs physical work or a kind of deliverable Brain has not proved it can produce',
 };
 
 export interface ResearchProgress {

@@ -351,8 +351,21 @@ export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
     missingEvidence: unreadable
       ? `The last attempt could not read its sources${
           unreadHosts.length > 0 ? ` (${unreadHosts.join(', ')})` : ''
-        }, so nothing was judged. Reach the same evidence by a different route — do not retry the ` +
-        'same addresses, and if no authorized route reaches it, say so and list where you looked.'
+        }, so nothing was judged. ` +
+        /*
+         * Read through Brain first, whichever surface runs this attempt.
+         *
+         * Recommended-approach change #6 (2026-10-15) proposed routing a
+         * repair after SOURCE_ACCESS to a different surface. `brain_fetch_source`
+         * (#368) made that the wrong lever: Brain opens the public page itself,
+         * so which surface asks no longer decides whether it can be read. This
+         * line used to forbid the same addresses outright, which steered the
+         * worker away from the one route that now reaches them.
+         */
+        'Open those same addresses through brain_fetch_source before anything else — it reads ' +
+        'a public page from Brain rather than from your own environment. Only if Brain cannot ' +
+        'read them either, reach the same evidence by a different route, and if no authorized ' +
+        'route reaches it, say so and list where you looked.'
       : missingLanes.length > 0 && untagged > 0
         ? `${untagged} accepted claim(s) carry no evidence lane, so ${missingLanes.length} ` +
           `declared lane(s) read as empty: ${missingLanes.join(', ')}. The evidence is not ` +
@@ -361,6 +374,21 @@ export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
           'has nothing in it.'
         : missingLanes.length > 0
         ? `No accepted evidence in: ${missingLanes.join(', ')}.`
+        : /*
+           * Nothing accepted is not a corroboration failure.
+           *
+           * With zero accepted claims the source count is zero too, and the
+           * branch below told the next attempt that "the same fact from
+           * different publishers" was missing. Production, Cash Mode 1
+           * (`orc_aca8bfb9c38947059e4b`, recommended-approach change #2): the
+           * attempt read that as a demand to corroborate a publisher's own
+           * terms independently, which only that publisher can state, and
+           * blocked on it. A reading failure now takes the branch above; this
+           * catches every other cause that accepted nothing.
+           */
+          gate.acceptedClaims === 0 && fragment.blockedReason
+          ? 'No claim was accepted on the last attempt, so nothing needs corroborating yet. ' +
+            `It ended: ${fragment.blockedReason.slice(0, 400)}`
         : gate.independentSources < fragment.minIndependentSources
           ? `Corroboration is missing: the accepted evidence rests on ${gate.independentSources} ` +
             `independent source(s) and this fragment needs ${fragment.minIndependentSources}, so ` +

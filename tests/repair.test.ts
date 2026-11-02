@@ -198,6 +198,30 @@ describe('a repair plan', () => {
     expect(text).toMatch(/2 attempts remain/);
   });
 
+  /*
+   * Recommended-approach change #2 (2026-10-15, `orc_aca8bfb9c38947059e4b`):
+   * an attempt that accepted nothing was told corroboration was missing, and
+   * the next attempt blocked on corroborating a publisher's own terms. A
+   * reading failure now takes the unreadable branch; any other cause that
+   * accepted nothing — here a work item that faulted — must not read as one.
+   */
+  it('names the recorded failure when nothing was accepted, rather than asking for corroboration of nothing', () => {
+    const plan = buildRepairPlan({
+      fragment: fragment({
+        blockedReason: 'A research work item for this fragment finished without recording a result.',
+      }),
+      gate: gate({ acceptedClaims: 0, independentSources: 0 }),
+      history: [fragment()],
+      claims: [],
+      splitRequired: false,
+      remainingBudget: 2,
+      blockCause: 'WORK_FAULTED',
+    });
+    expect(plan.missingEvidence).not.toMatch(/different publishers/i);
+    expect(plan.missingEvidence).toMatch(/nothing needs corroborating/);
+    expect(plan.missingEvidence).toMatch(/finished without recording/);
+  });
+
   /**
    * The failure the first fresh acceptance packet was told it had, and did not.
    *
