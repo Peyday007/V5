@@ -52,6 +52,8 @@ export interface KernelPass {
   /** The map as it stood when the decision was made. */
   nodes: number;
   openRounds: number;
+  /** What failed this pass, in words. A failure in one step no longer stops the others. */
+  failures?: string[];
 }
 
 const EMPTY: KernelPass = {
@@ -76,7 +78,19 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
    * about those on this pass rather than on the next one. Allocating first
    * would make every discovery a tick late, for ever.
    */
-  const absorbed = await absorb({ projectId });
+  /*
+   * A finding that will not absorb must not stop the map growing. Production,
+   * 2026-11-02: four rounds in the project's whole history, four asks reported
+   * ready and never opened, and the tick swallowed whatever threw here.
+   */
+  const failures: string[] = [];
+  let absorbed: Absorbed;
+  try {
+    absorbed = await absorb({ projectId });
+  } catch (error) {
+    failures.push(`absorb: ${error instanceof Error ? error.message : String(error)}`);
+    absorbed = { nodes: [], constraints: [], capital: [], settled: [], refused: [] };
+  }
 
   const snapshot = await graphSnapshot(projectId);
   const gate = await discoveryAllowed(projectId);
@@ -91,7 +105,12 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
   }
 
   const plan = await planFrom(snapshot);
-  const opened = await openAsks({ projectId, asks: plan.asks, snapshot });
+  let opened: OpenedRound[] = [];
+  try {
+    opened = await openAsks({ projectId, asks: plan.asks, snapshot });
+  } catch (error) {
+    failures.push(`open: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   return {
     opened,
@@ -99,6 +118,7 @@ export async function runIndustryKernel(projectId: string): Promise<KernelPass> 
     declined: plan.declined,
     nodes: snapshot.nodes.filter((one) => one.retiredAt === null).length,
     openRounds: snapshot.rounds.filter((one) => one.state === 'OPEN').length,
+    failures,
   };
 }
 
