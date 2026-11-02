@@ -276,10 +276,14 @@ export function allocate(input: AllocationInput): Allocation {
         bucketId: bucket.id,
         opportunityId: null,
         round: nextRound(snapshot.rounds, 'SCAN', coverage.node.id, bucket.id, null, snapshot.at),
-        rank: 400 + coverage.depth,
+        // A subject a person put on the map is an instruction about where to look,
+        // so it is scanned before Brain's own bootstrap sectors (still after any
+        // subject that has produced openings), which otherwise
+        // come first by age (production 2026-11-02: three seeds behind 35 sectors).
+        rank: (coverage.node.origin === 'SEED' ? 250 : 400) + coverage.depth,
         subject: coverage.path.join(' → '),
         since: coverage.node.createdAt,
-        why: `Nothing has ever searched ${coverage.path.join(' → ')} for an opening.`,
+        why: `Nothing has ever searched ${coverage.path.join(' → ')} for an opening${coverage.node.origin === 'SEED' ? ', and a person seeded it' : ''}.`,
       });
     }
 

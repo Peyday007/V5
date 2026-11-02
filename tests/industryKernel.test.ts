@@ -699,6 +699,25 @@ describe('research prioritization', () => {
     expect(new Set(subjects).size).toBe(subjects.length);
   });
 
+  it("scans a subject a person seeded before Brain's own bootstrap sectors", async () => {
+    // Production, 2026-11-02: three seeds waited behind 35 never-scanned bootstrap sectors, ordered by age.
+    await activated();
+    const seeded = await seedSubject({ projectId, name: 'Residential seasonal home services', actorRef: userId });
+    const plan = await planFrom(await graphSnapshot(projectId));
+    const first = plan.asks.find((one) => one.purpose === 'SCAN');
+    expect(first?.nodeId).toBe(seeded.node.id);
+    expect(first?.why).toMatch(/a person seeded it/);
+  });
+
+  it('runs under database pressure, because shedding it starved construction of buyer populations', () => {
+    const loop = readFileSync(new URL('../server/services/russell/loop.ts', import.meta.url), 'utf8');
+    const at = loop.indexOf('const kernel = await runIndustryKernel(project.id);');
+    const guard = loop.lastIndexOf('if (!shedKernels) try {', at);
+    const opened = loop.lastIndexOf('try {', at);
+    // The nearest enclosing try is not the shed-guarded one.
+    expect(opened).toBeGreaterThan(guard + 'if (!shedKernels) '.length);
+  });
+
   it('is a pure decision over a snapshot, so the same input gives the same plan', async () => {
     await activated();
     await seedSubject({ projectId, name: 'A sector', actorRef: userId });
