@@ -171,7 +171,10 @@ jobs:
             deadline=$(( $(date +%s) + ${FACTORY_WAIT_SECONDS:-20400} ))
             : > factory.txt
             while :; do
-              flyctl ssh console --app "$app" \
+              # Bounded: a console opened while a deploy replaced the machine
+              # hung for hours and held the wait past the objective's end
+              # (fcp_90dacf0a finished 14:33; its wait was still open at 14:57).
+              timeout --kill-after=15 180 flyctl ssh console --app "$app" \
                 -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh outcome --campaign $FACTORY_CAMPAIGN" \
                 > probe.txt 2>&1 || true
               if grep -q '^FACTORY-OUTCOME-TERMINAL:' probe.txt; then
