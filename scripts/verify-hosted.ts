@@ -1878,7 +1878,15 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
   const beforeRefusal = (await currentFragments(orchestrationId)).find(
     (fragment) => fragment.id === planned[0]!.id,
   );
-  const proseLane = await worker.callTool('brain_submit_claims', {
+  /*
+   * Asked up to three times while there is no answer at all. Deploy 41447315272
+   * recorded this check as "accepted" on the pass after a real restart while its
+   * two siblings — nothing stored, no attempt spent — passed: the call had come
+   * back with no tool result (a transport or protocol failure under the restart's
+   * load), and "not an error result" was read as "accepted". A refusal is still
+   * required of every answer that arrives; only silence is asked again.
+   */
+  const submitProseLane = () => worker.callTool('brain_submit_claims', {
     ...proofOf(fragmentClaim),
     claims: [
       {
@@ -1892,10 +1900,19 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
       },
     ],
   });
+  let proseLane = await submitProseLane();
+  for (let retry = 0; retry < 2 && !proseLane.result; retry += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    proseLane = await submitProseLane();
+  }
   record(
     'a claim labelled with a lane description rather than its id is refused',
     proseLane.result?.isError === true,
-    proseLane.result?.isError === true ? 'isError true' : 'accepted, which it must not be',
+    proseLane.result?.isError === true
+      ? 'isError true'
+      : proseLane.result
+        ? 'accepted, which it must not be'
+        : `no answer after three asks: HTTP ${String(proseLane.status)}${proseLane.error ? ` ${proseLane.error.code} ${proseLane.error.message}` : ''}`,
   );
   const afterRefusal = (await currentFragments(orchestrationId)).find(
     (fragment) => fragment.id === planned[0]!.id,
