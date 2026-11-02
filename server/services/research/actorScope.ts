@@ -196,7 +196,7 @@ function insideCompound(prose: string, at: number, length: number): boolean {
  * the nouns a commercial question measures, so "purchase the list" is untouched.
  */
 const MODIFIED_NOUN =
-  /^\s+(?:frequency|frequencies|price|prices|volume|volumes|history|histories|order|orders|decision|decisions|cycle|cycles|terms|records?|data|amount|amounts|size|sizes|count|counts|rate|rates|value|values|date|dates|pattern|patterns|behaviou?r|intent|channel|channels|process|processes)\b/i;
+  /^\s+(?:frequency|frequencies|price|prices|volume|volumes|history|histories|decision|decisions|cycle|cycles|terms|amount|amounts|size|sizes|count|counts|rate|rates|value|values|date|dates|pattern|patterns|behaviou?r|intent|channel|channels|process|processes)\b/i;
 
 function namesAThing(prose: string, end: number): boolean {
   return MODIFIED_NOUN.test(prose.slice(end, end + 30));
