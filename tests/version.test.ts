@@ -128,3 +128,14 @@ describe('extractVersionToken', () => {
     expect(extractVersionToken('overview.pdf')).toBeNull();
   });
 });
+
+describe('maxVersion with unparseable strings', () => {
+  it('ignores strings that are not versions', () => {
+    expect(maxVersion(['v2', 'draft'])).toBe('v2');
+  });
+
+  it('returns null when no string is a version', () => {
+    expect(maxVersion(['draft'])).toBeNull();
+    expect(maxVersion([])).toBeNull();
+  });
+});
