@@ -39,3 +39,14 @@ describe('a fire nobody answered stops holding the fleet after minutes, not half
     expect(ABANDONED_REVIVE_AFTER_MS).toBeLessThanOrEqual(30 * 60_000);
   });
 });
+
+describe('the integrate stage promises nothing the code does not enforce', () => {
+  it('never tells a unit worker its integrator will be a different session, and lets the implementer integrate', async () => {
+    const fs = await import('node:fs');
+    const source = fs.readFileSync(new URL('../server/services/factory/remote.ts', import.meta.url), 'utf8');
+    // fcp_8cd968ad: a worker believed this, refused the integrate bin twice and parked it for a person.
+    expect(source).not.toMatch(/judged by a session that did not implement any of this/);
+    expect(source).toMatch(/any session, including this one, may take afterwards/);
+    expect(source).toMatch(/integration is not a review/);
+  });
+});
