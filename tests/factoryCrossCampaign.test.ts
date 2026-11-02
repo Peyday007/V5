@@ -186,6 +186,41 @@ describe('the tick defers only the colliding unit', () => {
     expect(await unitBinKeys(mine)).toEqual(['collides', 'free']);
   });
 
+  it('is not held by a campaign that is stopped on a person', async () => {
+    const other = await campaignFor((await objective(['**'])).id);
+    const otherUnit = await unit(other, 'theirs', ['src/shared.ts']);
+    await promoteReadyUnits(other);
+    await setState(otherUnit, 'IMPLEMENTED');
+    // fcp_3a8b4e75 held fcp_cc5ef744's goal files for four hours like this.
+    await getDb().run(
+      "UPDATE factory_campaigns SET state = 'BLOCKED', blocker_kind = 'UNIT_EXHAUSTED_ATTEMPTS' WHERE id = ?",
+      [other],
+    );
+
+    const mine = await campaignFor((await objective(['**'])).id);
+    await unit(mine, 'collides', ['src/shared.ts']);
+    await promoteReadyUnits(mine);
+    await tickRemoteCampaign(mine);
+    expect(await unitBinKeys(mine)).toEqual(['collides']);
+  });
+
+  it('is still held by a campaign blocked on something Brain re-examines by itself', async () => {
+    const other = await campaignFor((await objective(['**'])).id);
+    const otherUnit = await unit(other, 'theirs', ['src/shared.ts']);
+    await promoteReadyUnits(other);
+    await setState(otherUnit, 'IMPLEMENTED');
+    await getDb().run(
+      "UPDATE factory_campaigns SET state = 'BLOCKED', blocker_kind = 'NO_HEALTHY_EXECUTION_SURFACE' WHERE id = ?",
+      [other],
+    );
+
+    const mine = await campaignFor((await objective(['**'])).id);
+    await unit(mine, 'collides', ['src/shared.ts']);
+    await promoteReadyUnits(mine);
+    await tickRemoteCampaign(mine);
+    expect(await unitBinKeys(mine)).toEqual([]);
+  });
+
   it('does not defer for a unit that owns nothing in common', async () => {
     const other = await campaignFor((await objective(['**'])).id);
     const otherUnit = await unit(other, 'theirs', ['src/shared.ts']);

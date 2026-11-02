@@ -1618,8 +1618,19 @@ async function conflictingUnitOfOtherCampaign(
   repository: string,
   unit: { ownedPaths: string[] },
 ): Promise<{ campaignId: string; campaignState: string; unitId: string; unitKey: string } | null> {
+  const { BLOCKER_WAIT } = await import('./line.ts');
   for (const other of await listLiveCampaigns()) {
     if (other.id === campaign.id) continue;
+    /*
+     * A campaign stopped on something only a person can answer holds nothing.
+     * Its units will not move until somebody acts, and if they ever do its own
+     * integration re-judges them against the moved base like any other change.
+     * Production, 2026-11-02: fcp_cc5ef744 was planned in 16 s and then held for
+     * four hours by fcp_3a8b4e75, BLOCKED (UNIT_EXHAUSTED_ATTEMPTS) since
+     * 2026-10-30, through a unit owning the same goal files; the escalation was
+     * recorded and nothing could release it.
+     */
+    if (other.state === 'BLOCKED' && other.blockerKind && BLOCKER_WAIT[other.blockerKind]?.wait === 'PERSON') continue;
     const otherRequest = await getChangeRequest(other.changeRequestId);
     if (!otherRequest || otherRequest.repository !== repository) continue;
     const otherUnits = await listUnits(other.id);
