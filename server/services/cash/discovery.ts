@@ -67,6 +67,7 @@
  * never a favourable assumption, arriving at the moment an opportunity is born
  * rather than being asserted away by whoever created it.
  */
+import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
 import { focusConstructedCap, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
@@ -1175,7 +1176,9 @@ export function executionFrameSentence(frame: ExecutionFrame): string {
     'operation, so on its own it is not an opening. A kind of business that publicly and ' +
     'repeatedly pays for something this operation delivers, with a published place to find those ' +
     'businesses and their email addresses, is an opening, and the prices others charge them are ' +
-    'its price evidence.'
+    'its price evidence. ' +
+    // The standing operating rule (domain/operatingModel.ts), in every question Brain asks.
+    OPERATING_MODEL_SENTENCE
   );
 }
 

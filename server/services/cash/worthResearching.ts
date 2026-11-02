@@ -28,6 +28,7 @@
  * rule holds: not being able to act today is a named gap, never a reason to
  * drop an opening.
  */
+import { breaksOperatingModel, operatingFit } from '../../domain/operatingModel.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { getClaim, sourceUrlsForProject } from '../../repos/research.ts';
 import { inReadScope, scopedRead } from '../../repos/readScope.ts';
@@ -228,6 +229,19 @@ export async function notWorthResearching(
   opportunity: CashOpportunity,
   context: { now: string; screen?: { facts: ScreenFacts; limits: ScreenLimits } | null },
 ): Promise<NotWorthResearching | null> {
+  /*
+   * The standing operating rule: the owner does no physical work. An opening
+   * that would need it is not researched at all — no answer could make it one
+   * this operation would run. Brokered physical work is kept.
+   */
+  const fit = operatingFit({
+    title: opportunity.title,
+    offerScope: opportunity.offerScope,
+    fulfillmentOwner: opportunity.fulfillmentOwner,
+  });
+  if (breaksOperatingModel(fit)) {
+    return { kind: 'SCREENED_OUT', reason: 'OWNER_PHYSICAL_WORK', detail: fit.because, limit: 'the owner does no physical work' };
+  }
   const sourceUrl = await sourceUrlOf(opportunity);
   const marketplace = marketplaceOf(sourceUrl);
   if (marketplace) return { kind: 'MARKETPLACE_LISTING', marketplace };

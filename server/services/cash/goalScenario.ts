@@ -24,6 +24,7 @@
  * pays after the deadline contributes nothing, which is what lets a smaller,
  * faster plan beat a bigger, slower one.
  */
+import { breaksOperatingModel, operatingFit } from '../../domain/operatingModel.ts';
 import { EXCLUSION_CLASSES, excludedBy, goalExclusions } from './exclusions.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { cardFactMap } from '../../repos/cashCardFacts.ts';
@@ -456,6 +457,12 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     const excludedClass = IN_FLIGHT.has(opportunity.state) ? null : excludedBy(`${opportunity.title} ${opportunity.payer ?? ''} ${opportunity.industry ?? ''}`, exclusions);
     if (excludedClass) {
       excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `left out by the goal: ${EXCLUSION_CLASSES[excludedClass].label}` });
+      continue;
+    }
+    // The standing operating rule: a plan never rests on the owner's physical work.
+    const fit = operatingFit({ title: opportunity.title, offerScope: opportunity.offerScope, fulfillmentOwner: opportunity.fulfillmentOwner });
+    if (breaksOperatingModel(fit)) {
+      excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: `needs the owner's physical work: ${fit.because}` });
       continue;
     }
     if (tier === 'SIGNAL' && !IN_FLIGHT.has(opportunity.state)) {

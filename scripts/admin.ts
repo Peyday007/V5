@@ -74,7 +74,7 @@ import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
 import { CASH_LAYER_NAME, setConstraints } from '../server/services/cash/lifecycle.ts';
 import { splitObjective } from '../server/services/cash/root.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
-import { seedSubject } from '../server/services/industry/seed.ts';
+import { retireSubject, seedSubject } from '../server/services/industry/seed.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
 import { binForOrchestration, createBin } from '../server/repos/bins.ts';
 import fs from 'node:fs';
@@ -2259,6 +2259,32 @@ async function main(): Promise<void> {
           ? '  Brain decides when to ask about it. Nothing was spent and no research started.'
           : '  It was already on the map, so nothing changed.',
       );
+      break;
+    }
+    /*
+     * Taking a subject off the map, from the terminal: the same function the
+     * Cash page's retire route calls, with the administrator as the actor and
+     * the reason recorded, so the retirement stays answerable.
+     */
+    case 'cash retire-industry': {
+      const actor = await administrator();
+      const project = await projectFrom(rest[0] ?? fail('Name the project.'));
+      // The workflow passes "<ind_…> <reason words>" as one argument; a terminal may pass them apart.
+      const [nodeId, ...words] = rest.slice(1).join(' ').trim().split(/\s+/);
+      if (!nodeId) fail('Name the subject (ind_...).');
+      const reason = words.join(' ').trim() || fail('Say why it is retired.');
+      const node = await retireSubject({ projectId: project.id, nodeId, reason, actorRef: actor.id });
+      if (!node) fail('No subject with that id in this project.');
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'UPDATE_PROJECT',
+        targetType: 'PROJECT',
+        targetId: project.id,
+        projectId: project.id,
+        result: 'SUCCESS',
+      });
+      console.log(`  ${node.id}  ${node.name}  retired: ${node.retiredReason ?? reason}`);
       break;
     }
     case 'packets scope': {

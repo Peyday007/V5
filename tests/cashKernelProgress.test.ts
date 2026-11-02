@@ -774,7 +774,8 @@ async function claimedOpening(
 describe('RES-6: being able to research is not being able to deliver', () => {
   it('withholds delivery and fulfilment when nothing records what delivering needs', async () => {
     const { proposeTerms } = await import('../server/services/cash/answers.ts');
-    const piece = await opening('PAID_TASK_OR_CONTRACT', 'Haul gravel to a job site.');
+    // A neutral title: one that reads as the owner's physical work is refused earlier, by the operating rule.
+    const piece = await opening('PAID_TASK_OR_CONTRACT', 'Compile a supplier price comparison for a buyer.');
     const proposal = await proposeTerms(piece);
     expect(proposal.terms.map((one) => one.field)).not.toContain('delivery');
     expect(proposal.terms.map((one) => one.field)).not.toContain('fulfillment');
@@ -833,7 +834,10 @@ describe('RES-6: being able to research is not being able to deliver', () => {
     const { createWorkflow, createTask, recordAllocation } = await import(
       '../server/repos/labor.ts'
     );
-    const piece = await opening('PAID_TASK_OR_CONTRACT', 'Weld and fabricate railings on site.', {
+    // Work the owner would do on site is refused before any dive by the standing operating rule.
+    const onSite = await opening('PAID_TASK_OR_CONTRACT', 'Weld and fabricate railings on site.', { requiredCapabilities: [] });
+    expect((await whyNotDiving((await getOpportunity(onSite.id))!)).kind).toBe('NOT_WORTH_RESEARCHING');
+    const piece = await opening('PAID_TASK_OR_CONTRACT', 'Fabricate railings for a client.', {
       requiredCapabilities: [],
     });
     // Nothing recorded about delivery: a blank, so the dive still goes ahead.

@@ -59,6 +59,7 @@
  *     decides what may be spent, executing still needs a recorded action, and a
  *     person's own answer outranks a proposal permanently.
  */
+import { breaksOperatingModel, operatingFit } from '../../domain/operatingModel.ts';
 import { citableClaims } from '../../repos/research.ts';
 import { getMission } from '../../repos/russellMissions.ts';
 import { missionsForRounds } from '../russell/roundMissions.ts';
@@ -576,6 +577,10 @@ export type DeliveryReading =
  * requirement and proposing past it are the same mistake.
  */
 export async function deliveryReading(opportunity: CashOpportunity): Promise<DeliveryReading> {
+  const fit = operatingFit({ title: opportunity.title, offerScope: opportunity.offerScope, fulfillmentOwner: opportunity.fulfillmentOwner });
+  if (breaksOperatingModel(fit)) {
+    return { kind: 'WITHHOLD', bar: 'PHYSICAL', because: `Not proposed: ${fit.because}.` };
+  }
   const workflow = (await listWorkflows(opportunity.projectId)).find(
     (one) => one.opportunityId === opportunity.id && one.retiredAt === null,
   );

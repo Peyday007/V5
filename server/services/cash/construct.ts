@@ -39,6 +39,7 @@
  * goal does not have and how much of it rests on gated claims; a weighted
  * score would need weights nobody set.
  */
+import { breaksOperatingModel, operatingFit } from '../../domain/operatingModel.ts';
 import { createHash } from 'node:crypto';
 import { listNodes } from '../../repos/industry.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
@@ -305,6 +306,8 @@ export async function constructArrangements(input: ConstructionInput): Promise<C
         const needs = s.needs.length > 0 ? s.needs : [null];
         for (const need of needs) {
           const supplies = def.needsSupply ? s.supply : [capability];
+          // Brain produces only what it can make online; a physical need is brokered or subcontracted, never produced by the owner.
+          if (!def.needsSupply && need && breaksOperatingModel(operatingFit({ title: need.name }))) continue;
           for (const supply of supplies) {
             if (out.length >= MAX_CONSTRUCTIONS) break outer;
             out.push(compose({ ...ctx, design, origin: transfer ? 'TRANSFER' : 'FORWARD', precedent: transfer, sector: s.name, demand, need, supply, related }));
