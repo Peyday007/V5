@@ -63,6 +63,25 @@ group keeps its most informative member and reports the others as collapsed.
 * One published magnitude has a 10% reading error.
 * A published range is read as a 90% interval.
 
+## Shared quantities and spending (2026-11-02)
+
+* **A quantity used by two formulas is one quantity.** Each node's samples are
+  world-aligned: an uncorrelated child contributes its own world `i`, so orders
+  feeding both revenue and cost, or one response rate feeding three lines, keep
+  their dependence across the graph and across separate `reconstruct` calls.
+  Before, every formula drew its own independent copy of a shared input, which
+  invented diversification and unpaired cash from cost. A child a declared
+  correlation touches is still drawn through the copula.
+* **A spending ceiling binds per world.** An activity may carry `spend`
+  samples paired with its `cash` (`spendNode` in a problem file), and a
+  portfolio a `spendCeiling`; a world over it does not reach the target, and
+  the reading reports `overSpend`.
+* **A goal plan's demand is a problem file.** Write each line's demand as
+  quantity nodes with their observations (reply ≠ interest ≠ order; counts made
+  whole with a rounding draw), put the lines that share a market in one risk
+  group, and read reach from `solveProblem`. Hand-typed ranges in a scenario
+  model are a sweep over a guess. Template: `fast-cash/10k/demand-model.ts`.
+
 ## What may become a probability
 
 Only DIRECT, COMPARABLE, or COMPONENT estimates whose parts all rest on

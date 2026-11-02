@@ -390,3 +390,52 @@ describe('one comparable population is an anecdote', () => {
     expect(counted.distributionJustified).toBe(true);
   });
 });
+
+describe('Q. one quantity feeding two formulas is one quantity (seasonal home services, 2026-11-02)', () => {
+  const nodes: QuantityNode[] = [
+    { key: 'orders', label: 'Orders', unit: 'orders', kind: 'POSITIVE', min: 5, max: 50 },
+    { key: 'price', label: 'Price', unit: 'USD', kind: 'POSITIVE', min: 100, max: 300 },
+    { key: 'revenue', label: 'Revenue', unit: 'USD', kind: 'POSITIVE', min: 0, formula: 'orders * price' },
+    { key: 'cost', label: 'Cost', unit: 'USD', kind: 'POSITIVE', min: 0, formula: 'orders * 40' },
+    { key: 'lights', label: 'Lights', unit: 'USD', kind: 'POSITIVE', min: 0, formula: 'orders * 100' },
+    { key: 'trees', label: 'Trees', unit: 'USD', kind: 'POSITIVE', min: 0, formula: 'orders * 60' },
+    { key: 'both', label: 'Both lines', unit: 'USD', kind: 'POSITIVE', min: 0, formula: 'lights + trees' },
+  ];
+
+  it('gives a shared input one value per world across separate formula nodes and separate calls', () => {
+    const revenue = reconstruct({ nodes }, 'revenue', now).estimates.revenue!;
+    const cost = reconstruct({ nodes }, 'cost', now).estimates.cost!;
+    const orders = reconstruct({ nodes }, 'orders', now).estimates.orders!;
+    for (let i = 0; i < 200; i++) expect(cost.samples[i]!).toBeCloseTo(orders.samples[i]! * 40, 6);
+    // Revenue per order is the price, so it can never fall below 100 if orders and cost are paired.
+    for (let i = 0; i < 200; i++) expect(revenue.samples[i]! / (cost.samples[i]! / 40)).toBeGreaterThanOrEqual(100 - 1e-6);
+  });
+
+  it('does not diversify two lines driven by the same demand', () => {
+    const both = reconstruct({ nodes }, 'both', now).estimates.both!;
+    // Fully dependent: both = orders × 160, so its spread is the whole orders spread (p90/p10 ≈ 45.5/9.5).
+    expect(both.p90 / both.p10).toBeGreaterThan(4);
+  });
+});
+
+describe('R. a spending ceiling binds on the world, not the average (prepaid local lines)', () => {
+  it('counts a world over the ceiling as missing the target, and says how often it happened', () => {
+    const n = 1_000;
+    const cash = Array.from({ length: n }, (_, i) => 5_000 + 10 * i); // 5,000 … 14,990
+    const spend = cash.map((c) => c * 0.4); // outflows scale with sales
+    const act: Activity = { key: 'home', label: 'home', justified: true, cash, days: new Array(n).fill(10), spend };
+    const free = optimizePortfolio({ target: 10_000, deadlineDays: 30, activities: [act], worlds: 4_000 }).best!;
+    const capped = optimizePortfolio({ target: 10_000, deadlineDays: 30, spendCeiling: 3_000, activities: [act], worlds: 4_000 }).best!;
+    expect(free.reach).toBeGreaterThan(0.45);
+    // Reaching 10,000 needs 4,000 of outflows, so no world under a 3,000 ceiling reaches it.
+    expect(capped.reach).toBe(0);
+    // Outflows pass 3,000 once cash passes 7,500: three worlds in four.
+    expect(capped.overSpend).toBeGreaterThan(0.7);
+    expect(capped.overSpend).toBeLessThan(0.8);
+  });
+
+  it('refuses spend samples that are not paired with the cash', () => {
+    const act: Activity = { key: 'x', label: 'x', justified: true, cash: [1, 2, 3], days: [1, 1, 1], spend: [1] };
+    expect(() => optimizePortfolio({ target: 1, deadlineDays: 30, activities: [act] })).toThrow(/paired/);
+  });
+});

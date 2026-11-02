@@ -344,13 +344,36 @@ function propagate(ctx: Context, node: QuantityNode, names: string[], children: 
   }
   const factor = cholesky(matrix);
   if (!factor) throw new ReconstructionError(`The correlations declared among ${names.join(', ')} cannot all hold at once.`);
-  const rng = makeRng(seedOf(node.key), 3);
+  // A child a declared correlation touches is drawn through the copula; the rest keep their worlds.
+  const remixed = names.map((_, j) => matrix[j]!.some((rho, m) => m !== j && rho !== 0));
+  /*
+   * World i draws each child's quantile from a stream keyed by the CHILD, not
+   * by this node. One quantity used by two formulas (orders feeding both
+   * revenue and cost; one response rate feeding three product lines) is then
+   * at the same quantile in world i of both, so sums and pairs built from it
+   * keep their dependence. Keyed by the parent, every formula drew its own
+   * copy of a shared quantity independently, which manufactured
+   * diversification that does not exist (2026-11-02, the $10K plan).
+   */
+  const streams = children.map((child) => {
+    const rng = makeRng(seedOf(child.key), 3);
+    const zs = new Float64Array(n);
+    for (let i = 0; i < n; i++) zs[i] = inverseNormal(rng());
+    return zs;
+  });
   const env = new Float64Array(k);
   const z = new Float64Array(k);
   const out = new Array<number>(n);
   for (let i = 0; i < n; i++) {
-    for (let j = 0; j < k; j++) z[j] = inverseNormal(rng());
+    for (let j = 0; j < k; j++) z[j] = streams[j]![i]!;
     for (let j = 0; j < k; j++) {
+      // Uncorrelated child with world-aligned samples: take its own world i, so a
+      // quantity shared at any depth carries one value per world across the graph.
+      const own = children[j]!.samples;
+      if (!remixed[j] && own.length === n) {
+        env[j] = own[i]!;
+        continue;
+      }
       let sum = 0;
       for (let m = 0; m <= j; m++) sum += factor[j]![m]! * z[m]!;
       const s = sortedChildren[j]!;

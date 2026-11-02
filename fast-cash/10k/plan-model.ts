@@ -1,5 +1,7 @@
 /**
- * The $10K plan as a scenario model, run by Brain's own engine (§60, §79).
+ * The $10K plan as a scenario model (§60). SUPERSEDED for demand: its rates are
+ * hand ranges and its BASE/ADVERSE cases are hand picks. Demand is estimated by
+ * fast-cash/10k/demand-model.ts through the quant engine (§79).
  *
  *   npx tsx fast-cash/10k/plan-model.ts
  *
