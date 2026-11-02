@@ -1006,7 +1006,17 @@ jobs:
               || echo "(no FAIL line: read the step for what it did print)"
           done
           if [ -n "$failing" ]; then
-            echo "::error::The hosted verification did not pass ($failing). The failing conditions are printed directly above."
+            # Which of the three it is, said once: the release itself
+            # succeeded above, so this is either verification that could not
+            # run or behaviour that is defective, and the two send somebody to
+            # different places. A pass before the restart that printed no
+            # verdict never judged anything, and the restart pass's "no beacon"
+            # is then its consequence, not a second finding.
+            if ! grep -q '^HOSTED-VERIFICATION' hosted-verification.txt 2>/dev/null; then
+              echo "::error::RELEASED, VERIFICATION COULD NOT RUN: this commit is serving, and the pass before the restart never ran a check (see its first error above). Not evidence of a defect; the release is not verified."
+            else
+              echo "::error::RELEASED, BEHAVIOUR DEFECTIVE: the hosted verification did not pass ($failing). The failing conditions are printed directly above."
+            fi
             exit 1
           fi
           echo "The live Brain refused everything it should have, twice, either side of a real restart,"
