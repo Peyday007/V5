@@ -65,6 +65,28 @@ describe('a Cash deep dive is not refused by its own envelope', () => {
     expect(ownActionMatches('Record the purchase-order terms each buyer publishes.', discovery)).toEqual([]);
     expect(ownActionMatches('Purchase the supplier list and record its price.', discovery).length).toBeGreaterThan(0);
   });
+
+  // Production, 2026-11-02: orc_eefa0aa5fb194685b079's judge follow-up asked
+  // for buyers' "purchase frequency" and was refused, so the buyer-economics
+  // question was cancelled unresearched.
+  it('reads a modifier or a third party’s verb as subject matter, and still refuses Brain’s own', () => {
+    const discovery = APPROVAL_ENVELOPES['RUSSELL_CASH_DISCOVERY_V1']!.forbiddenActions;
+    for (const text of [
+      'Which kinds of buyers repeatedly pay for spreadsheet or website work, each with a published directory count, purchase frequency and the price they pay?',
+      'Which small firms that hire freelancers for presentation work publish what they paid?',
+      'Record the purchase price and purchase volume each listing states.',
+    ]) {
+      expect(ownActionMatches(text, discovery), text).toEqual([]);
+    }
+    for (const text of [
+      'Purchase the directory and count its members.',
+      'Find the cheapest supplier, then we will purchase the list.',
+      'Hire a contractor to build the sample.',
+      'Find the vendor that we purchase from and purchase it.',
+    ]) {
+      expect(ownActionMatches(text, discovery).length, text).toBeGreaterThan(0);
+    }
+  });
 });
 
 /*

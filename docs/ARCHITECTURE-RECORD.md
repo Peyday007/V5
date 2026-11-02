@@ -13876,6 +13876,13 @@ and the idle-fill lift stay stopped.
   the envelope's own-action screen read it as "instructs the researcher to
   purchase" and refused the corrected round. `actorScope` skips a forbidden
   phrase joined to a word by a hyphen; the bare verb is still refused.
+- **A modifier or a third party's verb is subject matter.** The second
+  constructed round's judge asked for buyers' "purchase frequency", was refused
+  as "instructs the researcher to purchase", parked, and the routine
+  RECORD_GAPS answer cancelled the only question about buyer economics
+  (orc_eefa0aa5fb194685b079). `actorScope` skips a forbidden word followed by a
+  measured noun (frequency, price, volume…) or introduced by a relative pronoun
+  ("firms that hire"); an imperative or "we will purchase" is still refused.
 - **A RECORD_GAPS answer files from the evidence; it does not re-park on new
   research.** The envelope refuses any packet with that policy, so a judge's
   follow-up proposed after it could never be approved: the packet parked, was
