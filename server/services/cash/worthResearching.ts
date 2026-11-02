@@ -34,6 +34,7 @@ import type { CashOpportunity } from '../../domain/types.ts';
 import { screenOpportunity, type ScreenFacts, type ScreenLimits, type ScreenVerdict } from './screen.ts';
 import { listWorkstreams } from '../../repos/register.ts';
 import { readTarget } from '../goals/target.ts';
+import { EXCLUSION_CLASSES, excludedBy, goalExclusions, type ExclusionClass } from './exclusions.ts';
 
 /**
  * Hosts whose pages are individual freelance-marketplace listings.
@@ -142,14 +143,14 @@ export function screenFactsFor(opportunity: CashOpportunity): ScreenFacts {
  * `withGoalLimitsMemo` the answer is read once per (project, now) and reused;
  * outside it nothing is cached, so every other caller reads current rows.
  */
-const goalLimitsScope = new AsyncLocalStorage<Map<string, Promise<Array<{ goalId: string; limits: ScreenLimits }>>>>();
+const goalLimitsScope = new AsyncLocalStorage<Map<string, Promise<Array<{ goalId: string; limits: ScreenLimits; exclusions: ExclusionClass[] }>>>>();
 
 export function withGoalLimitsMemo<T>(fn: () => Promise<T>): Promise<T> {
   return goalLimitsScope.run(new Map(), fn);
 }
 
 /** Every live goal in the project that has a target, with its limits read from the goal itself. */
-export async function liveGoalLimits(projectId: string, now: string): Promise<Array<{ goalId: string; limits: ScreenLimits }>> {
+export async function liveGoalLimits(projectId: string, now: string): Promise<Array<{ goalId: string; limits: ScreenLimits; exclusions: ExclusionClass[] }>> {
   const memo = goalLimitsScope.getStore();
   if (!memo) return readLiveGoalLimits(projectId, now);
   // To the minute: a pass reads `now` per call, and the limits move by the day.
@@ -163,14 +164,15 @@ export async function liveGoalLimits(projectId: string, now: string): Promise<Ar
   return hit;
 }
 
-async function readLiveGoalLimits(projectId: string, now: string): Promise<Array<{ goalId: string; limits: ScreenLimits }>> {
-  const out: Array<{ goalId: string; limits: ScreenLimits }> = [];
+async function readLiveGoalLimits(projectId: string, now: string): Promise<Array<{ goalId: string; limits: ScreenLimits; exclusions: ExclusionClass[] }>> {
+  const out: Array<{ goalId: string; limits: ScreenLimits; exclusions: ExclusionClass[] }> = [];
   for (const goal of await listWorkstreams({ projectIds: [projectId] })) {
     if (goal.projectId !== projectId || !goal.target) continue;
     const reading = await readTarget(goal, new Date(now));
     if (!reading || reading.achieved) continue;
     out.push({
       goalId: goal.id,
+      exclusions: await goalExclusions(goal),
       limits: {
         metric: reading.metric,
         daysLeft: reading.daysLeft,
@@ -210,10 +212,26 @@ export async function notWorthResearching(
   opportunity: CashOpportunity,
   context: { now: string; screen?: { facts: ScreenFacts; limits: ScreenLimits } | null },
 ): Promise<NotWorthResearching | null> {
-  if (opportunity.sourceClaimId) {
-    const claim = await getClaim(opportunity.sourceClaimId);
-    const marketplace = marketplaceOf(claim?.sourceUrl);
-    if (marketplace) return { kind: 'MARKETPLACE_LISTING', marketplace };
+  const sourceUrl = opportunity.sourceClaimId ? (await getClaim(opportunity.sourceClaimId))?.sourceUrl ?? null : null;
+  const marketplace = marketplaceOf(sourceUrl);
+  if (marketplace) return { kind: 'MARKETPLACE_LISTING', marketplace };
+  /*
+   * What the goal's owner excluded is excluded before research is spent, not
+   * only when the plan is read. Production, 2026-11-02: the $10K goal excluded
+   * government work, and 128 of its project's openings were still researched
+   * and then "left out by the goal" at plan time. Only when every live goal
+   * excludes the opening — an opening one goal may use is still worth a dive.
+   */
+  if (context.screen === undefined && opportunity.projectId) {
+    const goals = await liveGoalLimits(opportunity.projectId, context.now);
+    if (goals.length > 0) {
+      const text = `${opportunity.title} ${opportunity.payer ?? ''} ${opportunity.industry ?? ''} ${sourceUrl ?? ''}`;
+      const hits = goals.map((one) => excludedBy(text, one.exclusions));
+      if (hits.every((hit) => hit !== null)) {
+        const label = EXCLUSION_CLASSES[hits[0]!].label;
+        return { kind: 'SCREENED_OUT', reason: 'EXCLUDED_BY_GOAL', detail: `it is ${label}, which the goal's owner excluded`, limit: label };
+      }
+    }
   }
   if (closesWithin(opportunity.expiresAt, context.now)) {
     return { kind: 'CLOSES_TOO_SOON', at: opportunity.expiresAt! };

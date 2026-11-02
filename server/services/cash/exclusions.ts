@@ -22,7 +22,7 @@ export const EXCLUSION_CLASSES = {
   GOVERNMENT_CONTRACTING: {
     label: 'government and public-sector contracts',
     triggers: /\b(?:government|federal|public[- ]sector|public procurement|state agenc(?:y|ies)|municipal)\b/i,
-    matches: /\b(?:government|federal|sam\.gov|public[- ]sector|procurement|solicitation|rfp|rfq|rfi|tender|state agenc(?:y|ies)|municipal|county (?:commission|board|government)|city of|department of|commonwealth of|navy|army|air force|veterans affairs|bureau of)\b/i,
+    matches: /\b(?:government|federal|sam\.gov|public[- ]sector|procurement|solicitation|rfp|rfq|rfi|tender|state agenc(?:y|ies)|municipal|county (?:commission|board|government)|city of|department of|commonwealth of|navy|army|air force|veterans affairs|bureau of|rfpmart|publicsurplus|govdeals|bidnet|[a-z0-9-]+\.gov|[a-z0-9-]+\.mil)\b/i,
   },
   WEBSITE_REPAIR: {
     label: 'broken-website and website-repair plays',
@@ -54,6 +54,12 @@ export function exclusionsIn(text: string | null | undefined): ExclusionClass[] 
 export function excludedBy(text: string | null | undefined, classes: readonly ExclusionClass[]): ExclusionClass | null {
   if (!text) return null;
   return classes.find((key) => EXCLUSION_CLASSES[key].matches.test(text)) ?? null;
+}
+
+/** The classes any live goal in a project excludes, for project-wide discovery questions. */
+export function unionOf(goals: ReadonlyArray<{ exclusions: readonly ExclusionClass[] }>): ExclusionClass[] {
+  const all = new Set(goals.flatMap((one) => one.exclusions));
+  return EXCLUSION_KEYS.filter((key) => all.has(key));
 }
 
 /** A sentence for a research question, naming what to leave out. */

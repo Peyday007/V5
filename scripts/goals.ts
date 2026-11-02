@@ -445,7 +445,12 @@ function printPlan(reading: PlanReading): void {
   console.log(`  pool        ${reading.pool.conclusion}: ${reading.pool.sentence}`);
   console.log(`  considered  ${reading.considered.length} opening(s), ${reading.considered.filter((one) => one.modelled).length} in the simulation; ${reading.needsMoreOpenings ? 'not enough yet, so Brain keeps searching' : 'a realistic plan exists'}`);
   for (const one of reading.considered.slice(0, 8)) {
-    console.log(`    ${one.modelled ? 'model' : '     '} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
+    console.log(`    ${one.modelled ? 'model' : '     '} ${one.stage.slice(0, 1)} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
+  }
+  console.log(`  ladder      ${Object.entries(reading.ladder).map(([stage, n]) => `${stage} ${n}`).join(' · ')}`);
+  for (const one of reading.marketTests) {
+    console.log(`  market test ${one.opportunityId} up to ${one.potentialReach === null ? '?' : Math.round(one.potentialReach)} · [${one.test.by}] ${one.title.slice(0, 70)}`);
+    if (one.test.blocker) console.log(`    blocker   ${one.test.blocker}`);
   }
   if (reading.scenarioRunId) console.log(`  scenario    model ${reading.scenarioModelId} run ${reading.scenarioRunId}`);
   if (reading.basisNote) console.log(`  basis       ${reading.basisNote}`);
