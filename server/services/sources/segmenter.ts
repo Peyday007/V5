@@ -68,6 +68,29 @@ const SAID_RE = /^\s{0,3}(You|ChatGPT|Assistant|User)\s+said\s*:?\s*$/i;
 const TIMESTAMP_RE =
   /(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?)|(\[\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\s*\])|(\d{1,2}\/\d{1,2}\/\d{2,4})/i;
 
+const TIMESTAMP_FILLER_RE = new RegExp(
+  '\\b(?:am|pm|mon|tue|wed|thu|fri|sat|sun|(?:mon|tues|wednes|thurs|fri|satur|sun)day|' +
+    'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|' +
+    'sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\b',
+  'gi',
+);
+
+/**
+ * A block is a pure timestamp marker only when, once the matched timestamp is
+ * removed, nothing is left but punctuation, AM/PM, weekday or month names.
+ * Anything else is content (a short sentence that happens to contain a date)
+ * and must reach a segment, or a claim about the transcript stops resolving to
+ * a passage in it.
+ */
+function isBareTimestamp(firstLine: string, text: string): boolean {
+  const trimmed = text.trim();
+  if (!TIMESTAMP_RE.test(firstLine) || trimmed.length > 40) return false;
+  const rest = trimmed
+    .replace(new RegExp(TIMESTAMP_RE.source, 'gi'), ' ')
+    .replace(TIMESTAMP_FILLER_RE, ' ');
+  return !/[\p{L}\p{N}]/u.test(rest);
+}
+
 /** Markdown and setext headings, plus bare ALL-CAPS section titles. */
 const ATX_HEADING_RE = /^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/;
 const CAPS_HEADING_RE = /^\s{0,3}([A-Z][A-Z0-9 ,'()\/&.-]{5,80})\s*$/;
@@ -288,7 +311,7 @@ export function segmentBlocks(blocks: DocumentBlock[]): Segment[] {
     const isHeadingBlock = block.blockType === 'HEADING';
     const capsHeading = !atx && !isHeadingBlock ? CAPS_HEADING_RE.exec(firstLine) : null;
     const isRule = RULE_RE.test(text.trim());
-    const bareTimestamp = TIMESTAMP_RE.test(firstLine) && text.trim().length <= 40;
+    const bareTimestamp = isBareTimestamp(firstLine, text);
 
     // Markers carrying no content of their own: remember them and move on.
     if (isRule && lines.length === 1) {

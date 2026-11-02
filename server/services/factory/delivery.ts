@@ -56,6 +56,13 @@ export interface DeliveryObservation {
   deployed: boolean;
   /** The revision that was compared, when one was. */
   revision: string | null;
+  /**
+   * The pull request that actually carried the work, when it was not the
+   * campaign's own: a stale campaign PR re-landed onto the moved branch through
+   * another, merged request (`recordDeliveredBy`). Its own PR is then closed
+   * unmerged and must not be read as "nothing delivered".
+   */
+  via: number | null;
 }
 
 /** The newest observation for a campaign, or null when nobody has looked. */
@@ -70,6 +77,7 @@ export async function latestDelivery(campaignId: string): Promise<DeliveryObserv
     mergeSha: typeof detail.mergeSha === 'string' ? detail.mergeSha : null,
     deployed: detail.deployed === true,
     revision: typeof detail.revision === 'string' ? detail.revision : null,
+    via: typeof detail.via === 'number' ? detail.via : null,
   };
 }
 
@@ -166,7 +174,8 @@ export async function observeDeliveries(
       list = await forge.recent(remote).catch(() => null);
       if (list) listCache.set(remote, list);
     }
-    let pr = list?.get(number) ?? null;
+    // Carried by another, merged request: only whether production runs it can change.
+    let pr = previous?.via ? { state: 'closed', merged: true, mergeCommitSha: previous.mergeSha } : list?.get(number) ?? null;
     if (!pr) {
       // Older than the recent list reaches: one direct read, rate-bounded.
       const key = `${remote}#${number}`;
@@ -191,7 +200,13 @@ export async function observeDeliveries(
         continue; // Compare on a later sweep rather than record a guess.
       }
     }
-    const next: DeliveryObservation = { state, mergeSha, deployed, revision: state === 'MERGED' ? revision : null };
+    const next: DeliveryObservation = {
+      state,
+      mergeSha,
+      deployed,
+      revision: state === 'MERGED' ? revision : null,
+      via: previous?.via ?? null,
+    };
     if (
       previous &&
       previous.state === next.state &&
@@ -205,7 +220,7 @@ export async function observeDeliveries(
       campaignId: campaign.id,
       kind: FACTORY_EVENT_KINDS.deliveryObserved,
       evidenceClass: 'MEASURED',
-      detail: { ...next, pullRequest: number },
+      detail: { ...next, pullRequest: next.via ?? number },
     });
     changed.push(campaign.id);
   }
@@ -333,4 +348,53 @@ export async function campaignsAwaitingDelivery(limit = 200): Promise<FactoryCam
     [limit],
   );
   return rows.map(mapCampaign);
+}
+
+/**
+ * Record that these campaigns' work reached the canonical branch through
+ * another pull request — `landing` — rather than their own. Verified, never
+ * asserted: the forge must report `landing` merged, and only campaigns whose
+ * own pull request is one of `closes` are touched. Their own requests can then
+ * be closed without the objective reading as "nothing delivered"; whether
+ * production runs the merge is still observed like any other.
+ */
+export async function recordDeliveredBy(input: {
+  remote: string;
+  landing: number;
+  closes: number[];
+  forge?: ForgePort;
+}): Promise<{ recorded: string[]; refused: string | null }> {
+  const forge = input.forge ?? (await defaultForge());
+  const landing = await forge.one(input.remote, input.landing);
+  if (!landing || !landing.merged || !landing.mergeCommitSha) {
+    return { recorded: [], refused: `pull request #${input.landing} is not merged, so it delivered nothing` };
+  }
+  const { pullRequestNumber } = await import('./remote.ts');
+  const wanted = new Set(input.closes);
+  const recorded: string[] = [];
+  for (const campaign of await campaignsAwaitingDelivery(1000)) {
+    if (campaign.state !== 'COMPLETE') continue;
+    const own = pullRequestNumber(campaign);
+    if (own === null || !wanted.has(own)) continue;
+    const changeRequest = await getChangeRequest(campaign.changeRequestId);
+    if (!changeRequest || changeRequest.repository.replace(/\.git$/, '').toLowerCase() !== input.remote.replace(/\.git$/, '').toLowerCase()) continue;
+    const previous = await latestDelivery(campaign.id);
+    if (previous?.via === input.landing) continue;
+    await recordFactoryEvent({
+      campaignId: campaign.id,
+      kind: FACTORY_EVENT_KINDS.deliveryObserved,
+      evidenceClass: 'MEASURED',
+      detail: {
+        state: 'MERGED',
+        mergeSha: landing.mergeCommitSha,
+        deployed: false,
+        revision: null,
+        via: input.landing,
+        pullRequest: input.landing,
+        supersedes: own,
+      },
+    });
+    recorded.push(campaign.id);
+  }
+  return { recorded, refused: null };
 }

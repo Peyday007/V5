@@ -89,13 +89,20 @@ function tryChatGptExport(body: string): ParsedTranscript | null {
   // The export is an array of conversations; a single conversation copied out
   // of it is the same object on its own. Both are accepted.
   const conversation = Array.isArray(parsed) ? parsed[0] : parsed;
+  const notes: string[] = [];
   if (!conversation || typeof conversation !== 'object') return null;
   const record = conversation as Record<string, unknown>;
   const mapping = record.mapping;
   if (!mapping || typeof mapping !== 'object') return null;
+  // Said only once the first conversation is known to be readable: a note about
+  // what was left behind is meaningless when nothing was read at all.
+  if (Array.isArray(parsed) && parsed.length > 1) {
+    notes.push(
+      `The export held ${parsed.length} conversations; only the first was read and ${parsed.length - 1} were not.`,
+    );
+  }
 
   const nodes = mapping as Record<string, ExportNode>;
-  const notes: string[] = [];
 
   /*
    * Walk the chain from the root.
@@ -107,24 +114,72 @@ function tryChatGptExport(body: string): ParsedTranscript | null {
    * §11 already requires an ambiguous branch to be visible rather than resolved
    * silently.
    */
-  const root = Object.values(nodes).find((node) => node.parent == null);
-  if (!root) return null;
-
   const messages: IncomingMessage[] = [];
   let ordinal = 0;
-  let current: ExportNode | undefined = root;
-  const guard = new Set<string>();
 
-  while (current) {
-    const id = typeof current.id === 'string' ? current.id : null;
-    if (id) {
-      if (guard.has(id)) {
+  /*
+   * The record's own `current_node` is the leaf the person was looking at, so
+   * when it names a node in the mapping the path is its parent links read back
+   * to the root and reversed. Only without it does the last-child walk apply.
+   */
+  const chain: ExportNode[] = [];
+  const leafId = record.current_node;
+  if (typeof leafId === 'string' && nodes[leafId]) {
+    const seen = new Set<string>();
+    let cursor: ExportNode | undefined = nodes[leafId];
+    let cursorId: string = leafId;
+    while (cursor) {
+      if (seen.has(cursorId)) {
         notes.push('The export loops back on itself; the walk stopped where it repeated.');
         break;
       }
-      guard.add(id);
+      seen.add(cursorId);
+      chain.push(cursor);
+      const parentId: unknown = cursor.parent;
+      if (typeof parentId !== 'string') break;
+      cursor = nodes[parentId];
+      cursorId = parentId;
     }
+    chain.reverse();
+    let position = 0;
+    for (const node of chain) {
+      const kids: unknown[] = Array.isArray(node.children) ? node.children : [];
+      if (kids.length > 1) {
+        notes.push(
+          `Position ${position} had ${kids.length} branches in the export; the one the person last read was followed and the rest were not read.`,
+        );
+      }
+      const msg = node.message;
+      if (msg && msg.author && Array.isArray(msg.content?.parts)) position += 1;
+    }
+  } else {
+    const root = Object.values(nodes).find((node) => node.parent == null);
+    if (!root) return null;
+    let current: ExportNode | undefined = root;
+    const guard = new Set<string>();
+    while (current) {
+      const id = typeof current.id === 'string' ? current.id : null;
+      if (id) {
+        if (guard.has(id)) {
+          notes.push('The export loops back on itself; the walk stopped where it repeated.');
+          break;
+        }
+        guard.add(id);
+      }
+      chain.push(current);
+      const children: unknown[] = Array.isArray(current.children) ? current.children : [];
+      if (children.length > 1) {
+        notes.push(
+          `Position ${chain.length - 1} had ${children.length} branches in the export; the last one was followed and the rest were not read.`,
+        );
+      }
+      const nextId: unknown = children[children.length - 1];
+      current = typeof nextId === 'string' ? nodes[nextId] : undefined;
+    }
+  }
 
+  for (const current of chain) {
+    const id = typeof current.id === 'string' ? current.id : null;
     const message = current.message;
     if (message && message.author && Array.isArray(message.content?.parts)) {
       const parts = (message.content?.parts ?? []).filter(
@@ -147,14 +202,6 @@ function tryChatGptExport(body: string): ParsedTranscript | null {
       }
     }
 
-    const children: unknown[] = Array.isArray(current.children) ? current.children : [];
-    if (children.length > 1) {
-      notes.push(
-        `Position ${ordinal} had ${children.length} branches in the export; the last one was followed and the rest were not read.`,
-      );
-    }
-    const nextId: unknown = children[children.length - 1];
-    current = typeof nextId === 'string' ? nodes[nextId] : undefined;
   }
 
   if (messages.length === 0) return null;
@@ -188,6 +235,7 @@ export function parseMarkedText(body: string, title?: string): ParsedTranscript 
   let role: BridgeRole | null = null;
   let label: string | null = null;
   let buffer: string[] = [];
+  const preamble: string[] = [];
 
   const flush = (): void => {
     if (role === null) return;
@@ -209,6 +257,7 @@ export function parseMarkedText(body: string, title?: string): ParsedTranscript 
       continue;
     }
     if (role !== null) buffer.push(line);
+    else preamble.push(line);
   }
   flush();
 
@@ -231,12 +280,24 @@ export function parseMarkedText(body: string, title?: string): ParsedTranscript 
     };
   }
 
+  const notes: string[] = [];
+  const lead = preamble.join('\n').trim();
+  if (lead) {
+    messages.unshift({ ordinal: 0, role: 'UNKNOWN', content: lead });
+    messages.forEach((one, index) => {
+      one.ordinal = index;
+    });
+    notes.push(
+      'Text before the first speaker marker was kept as one message with an unknown speaker rather than discarded or attributed.',
+    );
+  }
+
   return {
     title: title?.trim() || firstLineTitle(messages[0]?.content ?? ''),
     messages,
     format: 'MARKED_TEXT',
     externalId: null,
-    notes: [],
+    notes,
   };
 }
 

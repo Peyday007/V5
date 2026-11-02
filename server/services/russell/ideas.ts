@@ -37,11 +37,13 @@ import { listDependenciesForProject } from '../../repos/dependencies.ts';
 import { countVisibleConversationsForProject } from '../../repos/russellConversations.ts';
 import { knowsForProject } from './knows.ts';
 import { plainLayerName } from './dealDispatch.ts';
+import { conversationIsReadable, ownerPrincipal } from './turn.ts';
 import { ideaProgress, milestoneStateOfLayer, progressOf, type Progress } from './progress.ts';
 import { CANDIDATE_PRIORITY_LABELS } from '../../domain/types.ts';
 import type {
   CandidatePriority,
   LayerStatus,
+  Principal,
   RussellCandidate,
   RussellMission,
 } from '../../domain/types.ts';
@@ -210,12 +212,59 @@ export function plainLayerState(status: LayerStatus): string {
  * Missions carry a `layer_id`; candidates do not. So the answer is a fact about
  * the work that was actually launched for the idea, which is the strongest
  * evidence available and is null when there is none.
+ *
+ * Callers must pass only missions the viewer may see. A SHARED candidate whose
+ * only mission is PRIVATE and owned by someone else would otherwise be filed
+ * under — and counted in — a major the viewer cannot actually see any work in,
+ * which is the same leak as showing the mission itself.
  */
 function layerOfCandidate(candidateId: string, missions: RussellMission[]): string | null {
   for (const mission of missions) {
     if (mission.candidateId === candidateId && mission.layerId) return mission.layerId;
   }
   return null;
+}
+
+/**
+ * The same visibility rule `requireCandidate` applies to one idea at a time,
+ * reproduced here rather than re-derived.
+ *
+ * A SHARED candidate is always visible: the caller already gated project READ
+ * access before this projection ran. A PRIVATE one belongs to the thread it
+ * came from, so it is visible only to a viewer who can read that conversation
+ * — the owner, or anybody who may READ the project when the thread is itself
+ * SHARED. A viewer this Brain cannot resolve to a live principal reads no
+ * private candidate at all, since there is nobody to check readability for.
+ */
+async function candidateIsVisibleTo(
+  candidate: RussellCandidate,
+  viewerPrincipal: Principal | null,
+): Promise<boolean> {
+  if (candidate.visibility !== 'PRIVATE') return true;
+  if (!viewerPrincipal || !candidate.conversationId) return false;
+  return conversationIsReadable(viewerPrincipal, candidate.conversationId);
+}
+
+/**
+ * The same rule, read from a mission's own fields rather than through the
+ * candidate that produced it.
+ *
+ * A mission carries the visibility of the candidate it was launched for, so
+ * this is not a second policy — it is the identical rule, applied directly to
+ * the row so a mission survives being judged correctly even if its candidate
+ * has since dropped out of the (bounded, 500-row) candidates list. Any place
+ * that reports a count derived from missions — a layer's work count, a
+ * project's work count — must filter through this first, or a private idea's
+ * mission inflates a number every other member can see, which is the same
+ * leak as showing the idea node itself.
+ */
+async function missionIsVisibleTo(
+  mission: RussellMission,
+  viewerPrincipal: Principal | null,
+): Promise<boolean> {
+  if (mission.visibility !== 'PRIVATE') return true;
+  if (!viewerPrincipal || !mission.conversationId) return false;
+  return conversationIsReadable(viewerPrincipal, mission.conversationId);
 }
 
 /**
@@ -252,6 +301,32 @@ export async function ideaMapForProject(input: {
       countVisibleConversationsForProject(project.id, input.viewerUserId),
     ]);
 
+  const viewerPrincipal = await ownerPrincipal(input.viewerUserId);
+  const visibility = new Map(
+    await Promise.all(
+      candidates.map(
+        async (candidate) =>
+          [candidate.id, await candidateIsVisibleTo(candidate, viewerPrincipal)] as const,
+      ),
+    ),
+  );
+  const isVisible = (candidateId: string) => visibility.get(candidateId) ?? false;
+
+  // Every count derived from missions — a layer's work count, the project's
+  // own work count — reads this rather than `missions` directly. A count
+  // computed over the unfiltered list inflates for a mission launched against
+  // a PRIVATE candidate the viewer cannot read, which discloses that hidden
+  // work exists even though the idea node itself stays correctly absent.
+  const missionVisibility = new Map(
+    await Promise.all(
+      missions.map(
+        async (mission) => [mission.id, await missionIsVisibleTo(mission, viewerPrincipal)] as const,
+      ),
+    ),
+  );
+  const isMissionVisible = (missionId: string) => missionVisibility.get(missionId) ?? false;
+  const visibleMissions = missions.filter((mission) => isMissionVisible(mission.id));
+
   const probedCandidates = new Set(probes.map((probe) => probe.candidateId));
   const nodes: IdeaNode[] = [];
   const edges: IdeaEdge[] = [];
@@ -273,7 +348,12 @@ export async function ideaMapForProject(input: {
    */
   const mergedInto = new Map<string, number>();
   for (const candidate of candidates) {
+    if (!isVisible(candidate.id)) continue;
     if (candidate.state !== 'MERGED' || !candidate.canonicalCandidateId) continue;
+    // A visible candidate folded into a canonical the viewer cannot read is not
+    // countable as folded here either — the canonical itself contributes no
+    // node for it to be folded into.
+    if (!isVisible(candidate.canonicalCandidateId)) continue;
     mergedInto.set(
       candidate.canonicalCandidateId,
       (mergedInto.get(candidate.canonicalCandidateId) ?? 0) + 1,
@@ -281,9 +361,13 @@ export async function ideaMapForProject(input: {
   }
 
   for (const candidate of candidates) {
-    const own = missions.filter((mission) => mission.candidateId === candidate.id);
-    const layerId = layerOfCandidate(candidate.id, missions);
-    const folded = candidate.state === 'MERGED' && candidate.canonicalCandidateId !== null;
+    if (!isVisible(candidate.id)) continue;
+    const own = visibleMissions.filter((mission) => mission.candidateId === candidate.id);
+    const layerId = layerOfCandidate(candidate.id, visibleMissions);
+    const folded =
+      candidate.state === 'MERGED' &&
+      candidate.canonicalCandidateId !== null &&
+      isVisible(candidate.canonicalCandidateId);
     // A folded idea is filed under the one it folded into, and is not a second
     // child of the layer. Counting it there would inflate every major idea by
     // however many times a person happened to ask the same question.
@@ -365,7 +449,7 @@ export async function ideaMapForProject(input: {
    * ------------------------------------------------------------------ */
   for (const layer of layers) {
     const layerKnows = knows.filter((entry) => entry.layerId === layer.id);
-    const layerMissions = missions.filter((mission) => mission.layerId === layer.id);
+    const layerMissions = visibleMissions.filter((mission) => mission.layerId === layer.id);
     const versions = layer.expectedVersions;
 
     nodes.push({
@@ -506,7 +590,7 @@ export async function ideaMapForProject(input: {
         (entry) =>
           entry.kind === 'GAP' || entry.kind === 'UNKNOWN' || entry.kind === 'CONTRADICTION',
       ).length,
-      work: missions.length,
+      work: visibleMissions.length,
       conversations: conversationCount,
       children: layers.length,
     },
