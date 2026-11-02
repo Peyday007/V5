@@ -4901,3 +4901,17 @@ details.rs-card > section.rs-card {
   min-height: 2.5rem;
   font-size: 1rem;
 }
+
+/* Magic Deck Lab — scoped to .rs-magic. */
+.rs-magic-nav { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.rs-magic-nav a { min-height: 44px; display: inline-flex; align-items: center; padding: 0 0.75rem; }
+.rs-magic-nav a[aria-current='page'] { font-weight: 600; text-decoration: underline; }
+.rs-magic-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.rs-magic button, .rs-magic input, .rs-magic select, .rs-magic textarea { font-size: 16px; max-width: 100%; }
+.rs-magic textarea { width: 100%; box-sizing: border-box; }
+.rs-magic label { display: block; margin: 0.5rem 0; }
+.rs-magic-stale, .rs-magic-error { border-left: 3px solid currentColor; padding-left: 0.5rem; }
+.rs-magic-tag, .rs-magic-ci { font-size: 0.85em; opacity: 0.8; }
+.rs-magic .rs-table { display: block; overflow-x: auto; }
+.rs-magic-fields { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+@media (max-width: 520px) { .rs-magic-fields { grid-template-columns: 1fr; } }

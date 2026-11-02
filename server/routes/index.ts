@@ -31,6 +31,7 @@ import { peopleRouter } from './people.ts';
 import { registerRouter } from './register.ts';
 import { goalsRouter } from './goals.ts';
 import { bridgeRouter } from './bridge.ts';
+import { magicRouter } from './magic.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -77,6 +78,12 @@ export function createApiRouter(): Router {
    * arrived on one.
    */
   router.use(bridgeRouter);
+
+  /*
+   * Magic Deck Lab. Every route is `requirePerson` and owner-scoped in the
+   * repository, so another person's deck and a missing one answer identically.
+   */
+  router.use(magicRouter);
 
   router.use(healthRouter);
   // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),
