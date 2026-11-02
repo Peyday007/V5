@@ -33,6 +33,19 @@ import { listUnits } from '../../repos/factory.ts';
 export const FACTORY_EVENT_KINDS = {
   campaignState: 'CAMPAIGN_STATE',
   /**
+   * What the forge says happened to a finished campaign's pull request: still
+   * open, merged (and whether the running Brain carries the merge), or closed
+   * unmerged. Written only when the answer changes; read by the objective
+   * outcome so a pull request nobody merged is never reported as delivered.
+   */
+  deliveryObserved: 'DELIVERY_OBSERVED',
+  /**
+   * The one record that an objective reached a terminal outcome: LIVE,
+   * CANCELLED, or BLOCKED on something only a person can do. Exactly once per
+   * (campaign, outcome fingerprint); `factory wait` and Needs-you read it.
+   */
+  objectiveFinished: 'OBJECTIVE_FINISHED',
+  /**
    * A person moved a worker's availability, and why.
    *
    * The quarantine at three consecutive failures is written by the factory and

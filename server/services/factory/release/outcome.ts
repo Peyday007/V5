@@ -10,6 +10,7 @@
  */
 import type { FactoryBlockerKind, FactoryCampaign } from '../../../domain/factory.ts';
 import { MAX_RELEASE_ATTEMPTS, type ObjectiveOutcome, type ReleaseGrant, type ReleaseRun } from '../../../domain/factoryRelease.ts';
+import type { DeliveryObservation } from '../delivery.ts';
 
 /**
  * Which campaign blockers wait on a person rather than on Brain. A blocker Brain
@@ -36,6 +37,11 @@ export interface OutcomeInput {
   latestRun: ReleaseRun | null;
   /** The public origin of this Brain, for the page link. */
   origin: string | null;
+  /**
+   * What the forge last said happened to the pull request (`delivery.ts`).
+   * Without it a pull request nobody merged read as finished for weeks.
+   */
+  delivery?: DeliveryObservation | null;
 }
 
 function pageUrl(input: OutcomeInput): string | null {
@@ -110,6 +116,34 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
   }
 
   // COMPLETE: reviewed and confirmed by the forge. What happens next is release.
+  /*
+   * Unless the forge has already said what happened to the pull request by some
+   * other route than an automatic release — a person or a session merged it, or
+   * closed it. A request closed unmerged is not delivered, and a merge that the
+   * running Brain does not carry yet is not live: both were read as "complete"
+   * while 53 such requests sat open (docs/FACTORY-PERFORMANCE-2026-11-02.md).
+   */
+  const delivery = input.delivery ?? null;
+  if (delivery && (!run || !base.autoRelease)) {
+    if (delivery.state === 'CLOSED') {
+      return make('CANCELLED', 'The pull request was closed without merging; nothing was delivered.');
+    }
+    if (delivery.state === 'MERGED' && delivery.deployed) {
+      return make(
+        'LIVE',
+        `Merged as ${delivery.mergeSha?.slice(0, 12) ?? '—'} and running in production ` +
+          `(${delivery.revision?.slice(0, 12) ?? '—'}), released by the canonical Deploy.`,
+      );
+    }
+    if (delivery.state === 'MERGED') {
+      return make(
+        'BLOCKED',
+        `Merged as ${delivery.mergeSha?.slice(0, 12) ?? '—'}; production does not run it yet.`,
+        'The merge is not deployed.',
+        'Dispatch Deploy on the canonical branch, then verify the objective on production.',
+      );
+    }
+  }
   if (!base.autoRelease) {
     return make(
       'BLOCKED',
@@ -164,6 +198,11 @@ export function deriveOutcome(input: OutcomeInput): ObjectiveOutcome {
 /** The outcome for one campaign, read from its rows. */
 export async function objectiveOutcome(campaign: FactoryCampaign): Promise<ObjectiveOutcome> {
   const { latestRun: readLatest, liveGrantFor } = await import('../../../repos/factoryRelease.ts');
-  const [grant, latest] = await Promise.all([liveGrantFor(campaign.changeRequestId), readLatest(campaign.id)]);
-  return deriveOutcome({ campaign, grant, latestRun: latest, origin: null });
+  const { latestDelivery } = await import('../delivery.ts');
+  const [grant, latest, delivery] = await Promise.all([
+    liveGrantFor(campaign.changeRequestId),
+    readLatest(campaign.id),
+    campaign.state === 'COMPLETE' ? latestDelivery(campaign.id) : Promise.resolve(null),
+  ]);
+  return deriveOutcome({ campaign, grant, latestRun: latest, origin: null, delivery });
 }

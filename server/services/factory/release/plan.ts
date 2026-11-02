@@ -325,6 +325,22 @@ export async function advanceRelease(request: AdvanceRequest): Promise<{ moved: 
         failureDetail: run.failureDetail,
       },
     });
+    /*
+     * A release run that reached an end is the objective's end, and the one
+     * finished record is written here rather than on the next sweep, so a
+     * session waiting on `factory wait` hears LIVE (or the failure) the moment
+     * it is true. Best effort: the sweep in the remote loop writes it anyway.
+     */
+    if (['LIVE', 'FAILED', 'ROLLED_BACK', 'REFUSED'].includes(request.to)) {
+      try {
+        const { getCampaign } = await import('../../../repos/factory.ts');
+        const { noteObjectiveOutcome } = await import('../delivery.ts');
+        const campaign = await getCampaign(run.campaignId);
+        if (campaign) await noteObjectiveOutcome(campaign);
+      } catch (error) {
+        console.warn('[factory-release] the finished record was not written now:', (error as Error).message);
+      }
+    }
   }
   return { moved, run };
 }

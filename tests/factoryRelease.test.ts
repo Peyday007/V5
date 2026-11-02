@@ -25,6 +25,15 @@ import {
   withdrawAutomaticRelease,
 } from '../server/services/factory/release/grant.ts';
 import { deriveOutcome, objectiveOutcome } from '../server/services/factory/release/outcome.ts';
+import {
+  finishedRecords,
+  isTerminalOutcome,
+  latestDelivery,
+  noteObjectiveOutcome,
+  observeDeliveries,
+  resetDeliveryThrottle,
+  type ForgePort,
+} from '../server/services/factory/delivery.ts';
 import { verifyLive, type VerifyDeps } from '../server/services/factory/release/verify.ts';
 import { latestRun, listRuns, openRun } from '../server/repos/factoryRelease.ts';
 import { forbiddenPathsFor } from '../server/services/factory/forbidden.ts';
@@ -754,5 +763,90 @@ describe('the release workflow’s own readings', () => {
   it('the Postgres runner never puts its cluster where its owner cannot reach it', () => {
     const runner = fs.readFileSync('scripts/test-postgres.sh', 'utf8');
     expect(runner).toMatch(/if \[ "\$\(id -u\)" = "0" \] \|\| \[ "\$\{#TMP_BASE\}" -gt 60 \]; then\n\s*TMP_BASE=\/tmp/);
+  });
+});
+
+describe('a finished campaign is delivered only when the forge says so', () => {
+  const MERGE = 'b'.repeat(40);
+  const REV = 'c'.repeat(40);
+  function forgePort(pr: { state: string; merged: boolean; mergeCommitSha: string | null }, contains: boolean | null = true) {
+    const calls = { recent: 0, one: 0, contains: 0 };
+    const port: ForgePort = {
+      async recent() {
+        calls.recent += 1;
+        return new Map([[77, pr]]);
+      },
+      async one() {
+        calls.one += 1;
+        return pr;
+      },
+      async contains() {
+        calls.contains += 1;
+        return contains;
+      },
+    };
+    return { port, calls };
+  }
+
+  beforeEach(() => resetDeliveryThrottle());
+
+  it('an open pull request is BLOCKED for a person, recorded once however often it is judged', async () => {
+    const campaign = await completeCampaign(await approved());
+    const { port } = forgePort({ state: 'open', merged: false, mergeCommitSha: null });
+    await observeDeliveries([campaign], { forge: port, revision: REV });
+    expect(await latestDelivery(campaign.id)).toMatchObject({ state: 'OPEN', deployed: false });
+    const outcome = await objectiveOutcome(campaign);
+    expect(outcome).toMatchObject({ status: 'BLOCKED', needsPerson: true });
+    expect(await noteObjectiveOutcome(campaign)).not.toBeNull();
+    expect(await noteObjectiveOutcome(campaign)).toBeNull();
+    expect(await finishedRecords(campaign.id)).toHaveLength(1);
+  });
+
+  it('a merge production does not run yet is not LIVE; once it does, LIVE is a new, single record', async () => {
+    const campaign = await completeCampaign(await approved());
+    const notYet = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }, false);
+    await observeDeliveries([campaign], { forge: notYet.port, revision: REV });
+    expect(await objectiveOutcome(campaign)).toMatchObject({ status: 'BLOCKED', needsPerson: true });
+    expect((await objectiveOutcome(campaign)).personAction).toMatch(/Dispatch Deploy/);
+    await noteObjectiveOutcome(campaign);
+
+    // Same revision again: no second compare and no second row.
+    await observeDeliveries([campaign], { forge: notYet.port, revision: REV, now: Date.now() + 11 * 60_000 });
+    expect(notYet.calls.contains).toBe(1);
+
+    resetDeliveryThrottle();
+    const live = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }, true);
+    await observeDeliveries([campaign], { forge: live.port, revision: 'd'.repeat(40) });
+    const outcome = await objectiveOutcome(campaign);
+    expect(outcome.status).toBe('LIVE');
+    expect(await noteObjectiveOutcome(campaign)).toMatchObject({ status: 'LIVE' });
+    expect((await finishedRecords(campaign.id)).map((r) => r.status)).toEqual(['BLOCKED', 'LIVE']);
+
+    // Final: nothing reads the forge for it again.
+    resetDeliveryThrottle();
+    const after = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }, true);
+    await observeDeliveries([campaign], { forge: after.port, revision: 'd'.repeat(40) });
+    expect(after.calls.recent + after.calls.one + after.calls.contains).toBe(0);
+  });
+
+  it('a pull request closed unmerged is CANCELLED, never complete', async () => {
+    const campaign = await completeCampaign(await approved());
+    const { port } = forgePort({ state: 'closed', merged: false, mergeCommitSha: null });
+    await observeDeliveries([campaign], { forge: port, revision: REV });
+    expect((await objectiveOutcome(campaign)).status).toBe('CANCELLED');
+    expect(isTerminalOutcome(await objectiveOutcome(campaign))).toBe(true);
+  });
+
+  it('a campaign still building is not terminal and writes nothing', async () => {
+    const changeRequest = await approved();
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: changeRequest.baseSha,
+      laneTarget: 1,
+      laneTargetReason: 'initial',
+    });
+    expect(await noteObjectiveOutcome(campaign)).toBeNull();
+    expect(await finishedRecords(campaign.id)).toHaveLength(0);
   });
 });

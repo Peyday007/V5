@@ -39,7 +39,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'submit | approve | status | allocation | events | throughput | pull-request | campaigns | bins | remote-tick | amend | plan | release | set-state | answer-bin | reauthorize | regrant-unit | retire'
+        description: 'submit | approve | status | outcome | wait | allocation | events | throughput | pull-request | campaigns | bins | remote-tick | amend | plan | release | set-state | answer-bin | reauthorize | regrant-unit | retire'
         required: true
         default: status
       file:
@@ -71,7 +71,7 @@ on:
 # change nothing, so each holds a group of its own run; writes still queue
 # behind one another. Keeping off a machine mid-release is await-release's job.
 concurrency:
-  group: brain-console-factory-${{ contains(fromJSON('["status","allocation","events","throughput","pull-request","campaigns","bins"]'), inputs.command) && format('read-{0}', github.run_id) || 'write' }}
+  group: brain-console-factory-${{ contains(fromJSON('["status","outcome","wait","allocation","events","throughput","pull-request","campaigns","bins"]'), inputs.command) && format('read-{0}', github.run_id) || 'write' }}
   cancel-in-progress: false
 
 jobs:
@@ -94,7 +94,9 @@ jobs:
       - uses: ./.github/actions/await-release
 
       - name: Run
-        timeout-minutes: 20
+        # `wait` watches one objective to its end, up to a little under the
+        # six hours GitHub allows a job; every other command is bounded at 20.
+        timeout-minutes: ${{ inputs.command == 'wait' && 350 || 20 }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           # Through the environment, never interpolated into the shell: an input
@@ -156,9 +158,39 @@ jobs:
           if [ -n "$FACTORY_EXTRA" ];    then args="$args $FACTORY_EXTRA"; fi
 
           echo "factory $args"
-          set +e
-          flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh $args" 2>&1 | tee factory.txt
-          set -e
+          if [ "$FACTORY_COMMAND" = 'wait' ]; then
+            # One run that ends when the objective does, so a session watches
+            # this run to termination instead of dispatching `status` every few
+            # minutes (41 of 60 factory.yml runs were exactly that). Each probe
+            # is a short `factory outcome` on its own one-connection console, so
+            # nothing holds one of the pooler's fifteen clients between probes.
+            # A probe that fails — a deploy replacing the machine — is retried.
+            [ -n "$FACTORY_CAMPAIGN" ] || { echo "FACTORY REFUSED: wait needs --campaign"; exit 1; }
+            deadline=$(( $(date +%s) + ${FACTORY_WAIT_SECONDS:-20400} ))
+            : > factory.txt
+            while :; do
+              flyctl ssh console --app "$app" \
+                -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh outcome --campaign $FACTORY_CAMPAIGN" \
+                > probe.txt 2>&1 || true
+              if grep -q '^FACTORY-OUTCOME-TERMINAL:' probe.txt; then
+                cat probe.txt | tee -a factory.txt
+                echo "FACTORY: OK" | tee -a factory.txt
+                break
+              fi
+              if [ "$(date +%s)" -ge "$deadline" ]; then
+                cat probe.txt | tee -a factory.txt
+                echo "FACTORY-WAIT: STILL-RUNNING — dispatch wait again for $FACTORY_CAMPAIGN" | tee -a factory.txt
+                echo "FACTORY: OK" | tee -a factory.txt
+                break
+              fi
+              grep -m1 -E '^(BUILDING|VERIFYING|RELEASING|BLOCKED|LIVE|CANCELLED) — ' probe.txt || true
+              sleep "${FACTORY_WAIT_PROBE_SECONDS:-300}"
+            done
+          else
+            set +e
+            flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh $args" 2>&1 | tee factory.txt
+            set -e
+          fi
 
           # The same output, as one annotation. A run's log lives in blob storage
           # that some operators' sandboxes cannot reach, while annotations are
