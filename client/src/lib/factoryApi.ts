@@ -26,6 +26,7 @@ import type {
   CampaignBriefing,
 } from '../../../server/services/factory/projections.ts';
 import type { CampaignMetrics } from '../../../server/services/factory/metrics.ts';
+import type { ThroughputReport } from '../../../server/services/factory/throughput.ts';
 import type { CampaignStory } from '../../../server/services/factory/story.ts';
 import type { ObjectiveOutcome, ReleaseGrant } from '../../../server/domain/factoryRelease.ts';
 export type { ObjectiveOutcome, ReleaseGrant };
@@ -327,6 +328,13 @@ export const FactoryApi = {
 
   briefing: (campaignId: string): Promise<CampaignBriefing | null> =>
     api(`/api/factory/campaigns/${encodeURIComponent(campaignId)}/briefing`),
+
+  /** The title and body the campaign's pull request would open with; both null until one is rendered. */
+  pullRequest: (campaignId: string): Promise<{ title: string | null; body: string | null }> =>
+    api(`/api/factory/campaigns/${encodeURIComponent(campaignId)}/pull-request`),
+
+  throughput: (campaignId: string): Promise<ThroughputReport> =>
+    api(`/api/factory/campaigns/${encodeURIComponent(campaignId)}/throughput`),
 
   submit: (projectId: string, input: SubmitObjectiveInput): Promise<SubmitResponse> =>
     api(`/api/projects/${encodeURIComponent(projectId)}/factory/change-requests`, {
