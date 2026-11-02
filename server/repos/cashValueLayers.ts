@@ -1,4 +1,5 @@
 /** The seven value layers of an opportunity; one row per layer, replaced rather than accumulated. */
+import { inReadScope, scopedRead } from './readScope.ts';
 import { getDb } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
 import type { ValueLayerReading, ValueLayerRow } from '../domain/cashValueLayers.ts';
@@ -23,6 +24,13 @@ function map(row: ValueLayerRow): ValueLayerReading {
 }
 
 export async function listValueLayers(projectId: string, opportunityId: string): Promise<ValueLayerReading[]> {
+  // Inside a read scope, one statement for the whole project (readScope.ts).
+  if (inReadScope()) {
+    const all = await scopedRead(`valueLayers:${projectId}`, async () =>
+      (await getDb().all<ValueLayerRow>('SELECT * FROM cash_value_layers WHERE project_id = ? ORDER BY opportunity_id, layer', [projectId])).map(map),
+    );
+    return all.filter((one) => one.opportunityId === opportunityId);
+  }
   const rows = await getDb().all<ValueLayerRow>(
     'SELECT * FROM cash_value_layers WHERE project_id = ? AND opportunity_id = ? ORDER BY layer',
     [projectId, opportunityId],

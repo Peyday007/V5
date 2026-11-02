@@ -228,7 +228,7 @@ async function modelOpportunity(
   now: Date = new Date(),
   windowDays = 30,
 ): Promise<ModelledOpportunity | { reason: string }> {
-  const fact = await cardFactMap(opportunity.id);
+  const fact = await cardFactMap(opportunity.id, opportunity.projectId ?? undefined);
   const ref: SourceRef = { kind: 'CASH_OPPORTUNITY', ref: opportunity.id };
 
   // Price: the column, else the low end of a published revenue range.
@@ -279,7 +279,7 @@ async function modelOpportunity(
       ? known(Math.max(...costFigures.map((one) => one.cents)) / 100, kindToProvenance(costFact).provenance, kindToProvenance(costFact).source, 'the highest published direct cost')
       : inferOr(knowledge, 'costShare', opportunity, now, unknown(0, Math.max(1, top * 0.6), 'nobody has established the direct cost; swept from nothing to 60% of the price'), top, ' as a share of the top price');
 
-  const agreements = (await agreementsFor(opportunity.id)).filter((one) => !one.releasedAt);
+  const agreements = (await agreementsFor(opportunity.id, opportunity.projectId ?? undefined)).filter((one) => !one.releasedAt);
   const lesson = lessons.find((one) => one.mechanism === opportunity.mechanism && one.contacts >= LESSON_MIN_SAMPLE);
   // An agreement is one buyer's yes, and is counted as that money — never as a
   // rate the next buyer will match. More buyers need a measured rate of their own.

@@ -29,7 +29,8 @@
  * drop an opening.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { getClaim } from '../../repos/research.ts';
+import { getClaim, sourceUrlsForProject } from '../../repos/research.ts';
+import { inReadScope, scopedRead } from '../../repos/readScope.ts';
 import type { CashOpportunity } from '../../domain/types.ts';
 import { screenOpportunity, type ScreenFacts, type ScreenLimits, type ScreenVerdict } from './screen.ts';
 import { listWorkstreams } from '../../repos/register.ts';
@@ -209,11 +210,25 @@ async function screenVerdictFor(opportunity: CashOpportunity, now: string): Prom
   return reject;
 }
 
+/**
+ * The opening's source URL. Inside a read scope, every source URL of the
+ * project's openings in one statement (readScope.ts); outside one, its claim.
+ */
+async function sourceUrlOf(opportunity: CashOpportunity): Promise<string | null> {
+  if (!opportunity.sourceClaimId) return null;
+  if (opportunity.projectId && inReadScope()) {
+    const urls = await scopedRead(`sourceUrls:${opportunity.projectId}`, () => sourceUrlsForProject(opportunity.projectId!));
+    // The batch holds every source claim of the project's openings, so a miss is an absent claim.
+    return urls.get(opportunity.sourceClaimId) ?? null;
+  }
+  return (await getClaim(opportunity.sourceClaimId))?.sourceUrl ?? null;
+}
+
 export async function notWorthResearching(
   opportunity: CashOpportunity,
   context: { now: string; screen?: { facts: ScreenFacts; limits: ScreenLimits } | null },
 ): Promise<NotWorthResearching | null> {
-  const sourceUrl = opportunity.sourceClaimId ? (await getClaim(opportunity.sourceClaimId))?.sourceUrl ?? null : null;
+  const sourceUrl = await sourceUrlOf(opportunity);
   const marketplace = marketplaceOf(sourceUrl);
   if (marketplace) return { kind: 'MARKETPLACE_LISTING', marketplace };
   /*

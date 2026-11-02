@@ -672,6 +672,25 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(reading.considered.find((c) => c.opportunityId === heavy.id)!.stage).not.toBe('C_MARKET_TEST_READY');
   });
 
+  it('reads a large project in a bounded number of statements, not several per opening', async () => {
+    // Production, 2026-11-02: 841 statements for 150 openings put the read past 15 minutes on the remote database.
+    for (let i = 0; i < 40; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 20_000 + i });
+    const id = await goal(1_000_000);
+    const db = getDb() as unknown as Record<'all' | 'get' | 'run', (...args: unknown[]) => unknown>;
+    const originals = { all: db.all, get: db.get, run: db.run };
+    let statements = 0;
+    for (const m of ['all', 'get', 'run'] as const) {
+      const orig = originals[m].bind(db);
+      db[m] = (...args: unknown[]) => { statements += 1; return orig(...args); };
+    }
+    try {
+      expect(await readGoalPlan({ goalId: id, evaluations: 2_000 })).not.toBeNull();
+    } finally {
+      Object.assign(db, originals);
+    }
+    expect(statements).toBeLessThan(120);
+  });
+
   it('raises research for the path to the money on the openings closest to a plan', async () => {
     const o = await oneOff({ title: 'Freight loads with unknown payment timing', priceCents: 2_000_000, days: null });
     const id = await goal(1_000_000);

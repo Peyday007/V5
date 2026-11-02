@@ -1124,6 +1124,16 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
   return loaded.filter((claim): claim is ResearchClaim => claim !== null);
 }
 
+/** The source URL of every claim a project's openings were filed from, in one statement. */
+export async function sourceUrlsForProject(projectId: string): Promise<Map<string, string | null>> {
+  const rows = await getDb().all<{ id: string; source_url: string | null }>(
+    `SELECT c.id, c.source_url FROM research_claims c
+      WHERE c.id IN (SELECT o.source_claim_id FROM cash_opportunities o WHERE o.project_id = ? AND o.source_claim_id IS NOT NULL)`,
+    [projectId],
+  );
+  return new Map(rows.map((row) => [row.id, row.source_url]));
+}
+
 export async function getClaim(id: string): Promise<ResearchClaim | null> {
   const row = await getDb().get<ResearchClaimRow>('SELECT * FROM research_claims WHERE id = ?', [id]);
   return row ? mapClaim(row) : null;
