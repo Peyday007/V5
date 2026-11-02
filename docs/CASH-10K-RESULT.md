@@ -54,16 +54,19 @@ Each line's buyer, price evidence, fulfilment, cash needed, payment timing, capa
 | #438 | A goal plan's "too small to matter" judgement screens every research spender | Deployed on `c27e0ab` |
 | #439 | The plan read prints its phase timings | Production trace: shared frontier 38.7 s of 52 s |
 | #440 | A plan read is one read: 841 → 96 statements for 150 openings | Production plan read went from timing out at 15 minutes (run 41507873358) to 52 s (run 41520558648) |
-| #441 | The industry kernel runs under database pressure; seeded subjects are scanned before bootstrap sectors | See §4 |
+| #441 | The industry kernel runs under database pressure; seeded subjects are scanned before bootstrap sectors | Serving `055738f`; the seeded subject entered the kernel's top asks |
+| #442 | Industry kernel failures are recorded instead of swallowed | Production log: `industry kernel prj_22fb…: open: … violates check constraint "industry_rounds_check"` |
+| #443 | No CAPITAL round for an opening that is off the industry map; one failing ask no longer stops the others | `INDUSTRY_ROUND_OPENED` 4 (lifetime) → **8** on the first ticks after release (Cash report 41539191683, `811bf1c`) |
 
 ## 4. Do Brain's capabilities work together?
 
 - **Goal plan → ladder → next action:** works on production. The plan names a C-stage market test and its exact blocker.
 - **Quant engine on a real plan:** works. The $10K plan runs through `runScenarioModel` and is labelled a sweep.
-- **Construction → opening:** **not yet demonstrated.**
-  - The root cause is now fixed (#441): the industry map behind construction was barely ever researched, because the tick skipped the industry kernel under database pressure.
-  - The three seeded subjects (seasonal home services, client gifting, senior activities) can now be scanned.
-  - Scans then research, and construction composes from what they file. That cycle takes hours to days, so this link is unverified on production at the time of writing.
+- **Construction → opening:** the chain was broken at its source, and that is now repaired on production. Not yet demonstrated end to end.
+  - **What was wrong:** for weeks, every tick's first industry ask (a capital round for the off-map Campo opening) failed `industry_rounds_check`. The exception ended the batch and the tick swallowed it, so the map never grew past one seeded subject: 37 sectors, two ever scanned. Construction composes from the map, so every arrangement used the same anime production-committee buyers.
+  - **Now:** after #443, four kernel rounds opened at once, filling all four slots.
+  - **Which subjects:** Agriculture and Animation show "a question is running". By the allocator's order, the other two are the highest-ranked seeds (rank 250). That is inferred: the report's listing is truncated, and Brain's MCP endpoint was unavailable to confirm it.
+  - **Still to come:** research has to answer those rounds and construction has to compose from the new buyer populations. That takes hours to days, so the opening step is not yet demonstrated in production.
 
 ## 5. Assumptions that still need validation
 
@@ -104,4 +107,9 @@ None of the plan waits on Brain's email or invoicing integrations.
    - The read fix went out as one PR.
    - The kernel fix went out as one PR.
 3. **The check everything depends on was repaired first** (#440, 841 → 96 statements). Each later check now takes about 1 minute instead of timing out.
-4. **The cause of construction's narrowness was fixed at its root** (#441), instead of tuning the ranking further.
+4. **The cause of construction's narrowness was found at its root and fixed** (#441–#443), instead of tuning the ranking further.
+   - #442 made the silent failure visible.
+   - The next production log named the constraint.
+   - #443 fixed it with one condition, without a schema change.
+
+**One mechanism behind the tiny steps sat in the code: silent `catch {}` blocks around tick passes.** A pass that failed every tick looked like a pass that had nothing to do, so each session diagnosed symptoms one at a time (narrow construction, then ranking, then focus) instead of the failure. #442 recorded the kernel's failure, and the root cause showed up in the first log read after release.
