@@ -14058,6 +14058,19 @@ and the idle-fill lift stay stopped.
   attributes the opening to it and counts it (`countSettledRoundOpening`),
   never reopening the round.
 
+- **The next three, found reading production on 2026-11-02, and fixed on top.**
+  All nine of the goal's constructed rounds had already closed, so
+  `constructedOrder`, which reads *open* rounds only, put the anime variants
+  first again. `byLeastAsked` runs before it and counts every round the goal
+  has asked: a population already asked comes after one never asked, a SAFE
+  worst case stays first, and rank breaks ties. Second, `mx-7b4358e63f7c` read
+  ABANDONED over a RUNNING mission. Under focus the cap now counts research
+  still running under a closed round (`liveConstructedResearch`), and a design
+  is not asked again while an earlier round's mission is live. Third, the
+  six-hour expiry rejected an idea that was only waiting for a mission slot. It
+  now leaves it alone while `researchMissionSlotsFull`, because that wait is the
+  grant's, not the idea's.
+
 ## Repository map
 
 ```

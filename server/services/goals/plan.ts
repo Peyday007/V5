@@ -941,6 +941,48 @@ export function constructedOrder<T extends { key: string; origin: string; struct
   return out;
 }
 
+/**
+ * The constructor's ranking, re-ordered so a buyer population every earlier
+ * round of this goal already asked about comes after one never asked (§83).
+ *
+ * `constructedOrder` spreads across *open* rounds only, so once those settle
+ * the next pass starts from the same best-evidenced buyers again. Production,
+ * 2026-11-02: all nine of the goal's constructed rounds had closed, every one
+ * an anime production committee variant, and the next sixteen ranked designs
+ * were the same buyers. Counting every round asked keeps a variant of a
+ * researched population behind a population never asked. A design whose worst
+ * case is SAFE stays ahead of one that might lose money, and the constructor's
+ * own rank breaks every tie. Lexicographic, never a score.
+ */
+export function byLeastAsked<T extends { key: string; structure: string; demand: { ref: string }; stress?: { exposure: string } }>(
+  ranked: readonly T[],
+  rounds: readonly { bucketId: string }[],
+): T[] {
+  const asked = new Map<string, number>();
+  for (const r of rounds) {
+    const key = r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4);
+    asked.set(key, (asked.get(key) ?? 0) + 1);
+  }
+  const byDemand = new Map<string, number>();
+  const byStructure = new Map<string, number>();
+  for (const one of ranked) {
+    const n = asked.get(one.key) ?? 0;
+    if (n === 0) continue;
+    byDemand.set(one.demand.ref, (byDemand.get(one.demand.ref) ?? 0) + n);
+    byStructure.set(one.structure, (byStructure.get(one.structure) ?? 0) + n);
+  }
+  return ranked
+    .map((one, index) => ({ one, index }))
+    .sort(
+      (a, b) =>
+        Number(a.one.stress?.exposure !== 'SAFE') - Number(b.one.stress?.exposure !== 'SAFE') ||
+        (byDemand.get(a.one.demand.ref) ?? 0) - (byDemand.get(b.one.demand.ref) ?? 0) ||
+        (byStructure.get(a.one.structure) ?? 0) - (byStructure.get(b.one.structure) ?? 0) ||
+        a.index - b.index,
+    )
+    .map(({ one }) => one);
+}
+
 /** Open rounds for the best-ranked arrangements Brain constructed, at most `max` this pass. */
 export async function askConstructedArrangements(goal: Workstream, reading: PlanReading, now: Date, max: number, liveCap: number): Promise<string[]> {
   const t = reading.target;
@@ -974,7 +1016,8 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
   const room = Math.max(1, Math.floor(liveCap / 2)) - openMx.length;
   if (room <= 0) return [];
   max = Math.min(max, room);
-  const order = constructedOrder(arrangements, openMx.map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4)));
+  const askedBefore = (await listRounds(t.projectId)).filter((r) => r.bucketId.startsWith(`goal-${goal.id}-mx-`));
+  const order = constructedOrder(byLeastAsked(arrangements, askedBefore), openMx.map((r) => r.bucketId.slice(r.bucketId.lastIndexOf('-mx-') + 4)));
   const thisPass = new Set<string>();
   for (const one of order) {
     if (opened.length >= max) break;

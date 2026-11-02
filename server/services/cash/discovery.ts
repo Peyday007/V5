@@ -922,18 +922,47 @@ export async function openConstructedRound(input: {
    * research that could add an opening the held ones cannot reach.
    */
   const focusCap = focusConstructedCap();
-  if (focusCap !== null && mine.filter((one) => one.state === 'OPEN' && one.bucketId.startsWith(`${prefix}-mx-`)).length >= focusCap) return null;
+  const mx = mine.filter((one) => one.bucketId.startsWith(`${prefix}-mx-`));
+  /*
+   * Under focus the cap counts constructed research still running under a
+   * round already closed, not only OPEN rounds (§83): a park closes a round
+   * while its research goes on, and that research is still a Routine's.
+   */
+  if (focusCap !== null && (await liveConstructedResearch(mx)) >= focusCap) return null;
   const lens = `mx-${input.key}`;
   const id = `${prefix}-${lens}`;
   const history = mine.filter((one) => one.bucketId === id);
   const next = nextGoalRoundFor(history, now);
   if (next === null) return null;
+  /*
+   * An earlier round of this design closed while its research ran on: asking
+   * again now would research the same design twice. Production, 2026-11-02:
+   * mx-7b4358e63f7c read ABANDONED over a RUNNING mission.
+   */
+  if (history.length > 0) {
+    const missions = await missionsForRounds(history.map((one) => one.candidateId));
+    if ([...missions.values()].some((one) => one.latest && !TERMINAL_MISSION.has(one.latest.state))) return null;
+  }
   const bucket = goalBucket(input.goal.id, input.goal.title, input.question, lens);
   bucket.title = input.title.slice(0, 160);
   const frame = await executionFrame(input.projectId, mode.currency);
   const held = await heldExclusions({ projectId: input.projectId, bucket, history });
   const round = await openBucketRound({ projectId: input.projectId, mode, bucket, next, statement: questionFor(bucket, mode.objective, next, history, held, frame) });
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
+}
+
+const TERMINAL_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);
+
+/**
+ * Constructed research live among these rounds: OPEN ones, plus closed ones
+ * whose idea's latest mission has not ended.
+ */
+export async function liveConstructedResearch(rounds: readonly CashDiscoveryRound[]): Promise<number> {
+  const open = rounds.filter((one) => one.state === 'OPEN').length;
+  const closed = rounds.filter((one) => one.state !== 'OPEN');
+  if (closed.length === 0) return open;
+  const missions = await missionsForRounds(closed.map((one) => one.candidateId));
+  return open + [...missions.values()].filter((one) => one.latest && !TERMINAL_MISSION.has(one.latest.state)).length;
 }
 
 /**
@@ -1633,6 +1662,10 @@ export const UNLAUNCHED_GOAL_ROUND_MS = 6 * 60 * 60 * 1000;
 async function expireUnlaunchedGoalRound(round: CashDiscoveryRound, candidateId: string): Promise<boolean> {
   if (!round.bucketId.startsWith(GOAL_BUCKET_PREFIX)) return false;
   if (Date.now() - Date.parse(round.openedAt) < UNLAUNCHED_GOAL_ROUND_MS) return false;
+  // Not while every research mission slot is held: that wait is the grant's, not the idea's,
+  // and rejecting the idea for it would discard a question that was simply queued.
+  const { researchMissionSlotsFull } = await import('../russell/launch.ts');
+  if ((await researchMissionSlotsFull(round.projectId).catch(() => null)) === true) return false;
   const candidate = await getCandidate(candidateId);
   if (!candidate || !['CAPTURED', 'PROMOTED', 'QUEUED', 'PARKED'].includes(candidate.state)) return false;
   return transitionCandidate({ candidateId, from: candidate.state, to: 'REJECTED' });
