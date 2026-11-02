@@ -44,6 +44,7 @@ import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDis
 import { constructArrangements } from '../cash/construct.ts';
 import { goalExclusions } from '../cash/exclusions.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
+import { listMoneyEntries } from '../../repos/cashLedger.ts';
 import { cashSpareSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
@@ -170,6 +171,13 @@ export interface PlanReading {
    * new openings and new arrangements continues (§81).
    */
   pool: { conclusion: 'NO_POOL' | 'POOL_INSUFFICIENT' | 'POOL_COULD_REACH'; sentence: string };
+  /** How many openings stand on each rung of the validation ladder. */
+  ladder: Record<ValidationStage, number>;
+  /**
+   * The bounded buyer tests Brain can name now: openings at C, largest
+   * potential first. Each says who runs it and what stops it.
+   */
+  marketTests: MarketTest[];
 }
 
 export interface InferredInput {
@@ -240,6 +248,64 @@ export interface ConsideredOpening {
   competitiveAward: boolean;
   /** Whether research established how many deals the market can take (§81). */
   volumeEstablished: boolean;
+  /** Where it stands on the commercial validation ladder, derived from its links and the ledger. */
+  stage: ValidationStage;
+}
+
+/**
+ * The commercial validation ladder (owner's specification, 2026-11-02).
+ *
+ * A THEORETICAL — an idea or a buyer population nothing yet evidences.
+ * B EVIDENCED — research established a payer and a buying signal or a route to them.
+ * C MARKET_TEST_READY — a reachable buyer, an offer and a price, and a first step
+ *   inside the owner's before-income limit. What buyers will do is unknown, and
+ *   it can only be learned by asking them: this is where the old gate went in a
+ *   circle, demanding conversion evidence that only a market test produces.
+ * D BUYER_VALIDATED — buyers have been shown to say yes (this Brain's own history).
+ * E COMMITTED — a buyer's agreement is recorded.
+ * F COLLECTED — the ledger holds a customer payment for it.
+ *
+ * Derived, never stored: a stage is a reading of rows, so it cannot drift from them.
+ * Reaching C asks nothing new of the world — it names a bounded test whose result
+ * is D or a recorded rejection, never a figure anyone assumed.
+ */
+export type ValidationStage = 'A_THEORETICAL' | 'B_EVIDENCED' | 'C_MARKET_TEST_READY' | 'D_BUYER_VALIDATED' | 'E_COMMITTED' | 'F_COLLECTED';
+
+export interface MarketTest {
+  opportunityId: string;
+  title: string;
+  /** What it could bring at the card's price if buyers agree; null when nothing says. */
+  potentialReach: number | null;
+  test: NextTest;
+}
+
+/** Pure: the stage one opening has reached, from its links and whether money arrived. */
+export function validationStage(one: ModelledOpportunity, checks: LinkCheck[], target: TargetReading, collected: boolean): ValidationStage {
+  if (collected) return 'F_COLLECTED';
+  if (one.agreed) return 'E_COMMITTED';
+  const ok = (link: ChainLink) => checks.find((check) => check.link === link)?.ok === true;
+  if (ok('CONVERSION')) return 'D_BUYER_VALIDATED';
+  const o = one.opportunity;
+  const price = one.price.value;
+  const capital = one.capital.value;
+  const limit = target.capitalBeforeProofCents !== null ? target.capitalBeforeProofCents / 100 : null;
+  const cost = one.directCost.value;
+  if (
+    ok('REACHABLE_BUYER') &&
+    !!o.offerScope &&
+    price !== null &&
+    price > 0 &&
+    // A test is a few offers at the card's price, so the price itself is what it measures.
+    (cost === null || cost < price) &&
+    // A first step the owner allows before any money comes in; unknown capital is a question, not a yes (invariant 39).
+    capital !== null &&
+    (limit === null || capital <= limit) &&
+    !one.competitiveAward
+  ) {
+    return 'C_MARKET_TEST_READY';
+  }
+  if (o.payer && (ok('CURRENT_DEMAND') || ok('REACHABLE_BUYER') || !!o.buyingSignal)) return 'B_EVIDENCED';
+  return 'A_THEORETICAL';
 }
 
 const DAY = 86_400_000;
@@ -457,6 +523,8 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
       inferred: inferredInputs(model.considered),
       researchPriority: [],
       pool: { conclusion: 'NO_POOL', sentence: `No opening held is far enough along to model (${model.considered.length} read). That is a statement about what Brain holds, not about what exists, so it keeps searching and constructing.` },
+      ladder: emptyLadder(),
+      marketTests: [],
     };
     if (input.persist) await persistReading(goal, reading, null);
     return reading;
@@ -493,13 +561,20 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
   let bestReach = 0;
   const capabilities = new Map((await readCapabilities([...new Set(model.considered.flatMap((one) => one.opportunity.requiredCapabilities)), 'SEND_A_MESSAGE'])).map((one) => [one.id, one.state]));
   const modelledIds = new Set(model.included.map((one) => one.opportunity.id));
+  const collected = new Set(
+    (await listMoneyEntries({ projectId: target.projectId, limit: 2000 }))
+      .filter((entry) => entry.opportunityId && (entry.kind === 'CUSTOMER_PAYMENT' || entry.kind === 'SETTLEMENT'))
+      .map((entry) => entry.opportunityId!),
+  );
+  const checksOf = new Map(model.considered.map((one) => [one.opportunity.id, linkChecks(one, dealsForGoal(one, target.remainingCents / 100), target, capabilities, now)]));
   const considered: ConsideredOpening[] = model.considered.map((one) => ({
     opportunityId: one.opportunity.id,
     title: one.opportunity.title,
     modelled: modelledIds.has(one.opportunity.id),
-    missing: linkChecks(one, dealsForGoal(one, target.remainingCents / 100), target, capabilities, now)
+    missing: checksOf.get(one.opportunity.id)!
       .filter((check) => !check.ok)
       .map((check) => check.link),
+    stage: validationStage(one, checksOf.get(one.opportunity.id)!, target, collected.has(one.opportunity.id)),
     supportedReach: one.agreed || priceSupported(one) ? bestCaseReach(one, target.remainingCents / 100, target.daysLeft ?? 0, true) : 0,
     potentialReach:
       one.agreed || one.price.value !== null || one.price.high !== null
@@ -646,6 +721,22 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
   );
   const chosen = ordered[0] ?? null;
   const verdict: PlanVerdict = chosen?.verdict ?? 'NEEDS_EVIDENCE';
+  /*
+   * The bounded tests the ladder allows now. A plan whose held openings cannot
+   * reach the goal is still NOT_VIABLE — a test changes no verdict — but its next
+   * step is no longer nothing: production, 2026-11-02, read NOT_VIABLE with no
+   * next action for days while openings sat with a buyer, an offer and a price
+   * that only a buyer could validate.
+   */
+  const byId = new Map(model.considered.map((one) => [one.opportunity.id, one]));
+  const marketTests: MarketTest[] = [];
+  for (const one of [...considered].filter((c) => c.stage === 'C_MARKET_TEST_READY').sort((a, b) => (b.potentialReach ?? 0) - (a.potentialReach ?? 0)).slice(0, MAX_MARKET_TESTS)) {
+    let test = await nextTestFor('CONVERSION', byId.get(one.opportunityId)!, target.projectId);
+    if (target.capitalBeforeProofCents !== null && !target.proven) {
+      test = { ...test, test: `${test.test} Tie up no more than ${target.capitalBeforeProofCents / 100} ${target.currency} until money comes in.` };
+    }
+    marketTests.push({ opportunityId: one.opportunityId, title: one.title, potentialReach: one.potentialReach, test });
+  }
   const summary =
     verdict === 'RECOMMENDABLE'
       ? `"${chosen!.label}" is recommendable: every link is established and the cautious numbers reach the target inside the limits.`
@@ -658,7 +749,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     summary,
     chosen: chosen?.key ?? null,
     strategies,
-    nextTest: chosen?.nextTest ?? null,
+    nextTest: chosen?.nextTest ?? marketTests[0]?.test ?? null,
     scenarioModelId,
     scenarioRunId,
     basisNote: result?.basisNote ?? null,
@@ -671,9 +762,26 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     inferred: inferredInputs(model.considered),
     researchPriority: researchPriority(result, model.included, target, chosen?.key ?? null),
     pool: poolConclusion(bestReach, target, considered.length),
+    ladder: ladderOf(considered),
+    marketTests,
   };
   if (input.persist) await persistReading(goal, reading, chosen);
   return reading;
+}
+
+/** At most this many market tests are named at once: a test is a person's or a sender's time. */
+export const MAX_MARKET_TESTS = 5;
+
+const STAGES: ValidationStage[] = ['A_THEORETICAL', 'B_EVIDENCED', 'C_MARKET_TEST_READY', 'D_BUYER_VALIDATED', 'E_COMMITTED', 'F_COLLECTED'];
+
+function emptyLadder(): Record<ValidationStage, number> {
+  return Object.fromEntries(STAGES.map((stage) => [stage, 0])) as Record<ValidationStage, number>;
+}
+
+function ladderOf(considered: ConsideredOpening[]): Record<ValidationStage, number> {
+  const out = emptyLadder();
+  for (const one of considered) out[one.stage] += 1;
+  return out;
 }
 
 function inferredInputs(considered: ModelledOpportunity[]): InferredInput[] {

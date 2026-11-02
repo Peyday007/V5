@@ -588,13 +588,6 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     if (!same && strategies.length < SCENARIO_LIMITS.maxStrategies) strategies.push(spec);
   };
   const canonical = (set: StrategySpec['set']) => JSON.stringify(Object.entries(set).sort(([a], [b]) => a.localeCompare(b)));
-  for (const one of included) {
-    add({
-      key: `only_o${one.index}`,
-      label: `Only: ${one.opportunity.title.slice(0, 60)}`,
-      set: { ...none(), [`o${one.index}_n`]: dealsFor(one) },
-    });
-  }
   /*
    * Combinations are built from the openings themselves, never from a split.
    * Each walks the openings in one order and asks each for only what is still
@@ -638,6 +631,16 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       key: 'basket_all',
       label: 'Every modelled opening at full reach',
       set: { ...none(), ...Object.fromEntries(included.map((one) => [`o${one.index}_n`, dealsFor(one)])) },
+    });
+  }
+  // Single-opening strategies fill what the engine's strategy limit leaves, after
+  // the combinations: with eight openings modelled, eight "only" strategies would
+  // otherwise take every slot and no portfolio would ever be evaluated.
+  for (const one of included) {
+    add({
+      key: `only_o${one.index}`,
+      label: `Only: ${one.opportunity.title.slice(0, 60)}`,
+      set: { ...none(), [`o${one.index}_n`]: dealsFor(one) },
     });
   }
 

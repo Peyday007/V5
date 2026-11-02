@@ -21,6 +21,7 @@ import { createWorkstream, getWorkstream, listLinks } from '../server/repos/regi
 import { setTerms } from '../server/services/goals/decide.ts';
 import { readTarget, setTarget } from '../server/services/goals/target.ts';
 import { advanceGoalPlans, listReadings, readGoalPlan, recordGoalOutcome } from '../server/services/goals/plan.ts';
+import { MAX_MODEL_OPPORTUNITIES } from '../server/services/cash/goalScenario.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
 import { linkWorkstream } from '../server/repos/register.ts';
@@ -629,11 +630,46 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
   });
 
   it('judges every opening it holds, not only the few the simulation fits', async () => {
-    for (let i = 0; i < 7; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 200_000 + i });
+    // One more than the engine fits, so the judgement covers what the simulation leaves out.
+    const held = MAX_MODEL_OPPORTUNITIES + 1;
+    for (let i = 0; i < held; i += 1) await oneOff({ title: `Opening ${i}`, priceCents: 200_000 + i });
     const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
-    expect(reading.considered).toHaveLength(7);
-    expect(reading.considered.filter((one) => one.modelled)).toHaveLength(4);
+    expect(reading.considered).toHaveLength(held);
+    expect(reading.considered.filter((one) => one.modelled)).toHaveLength(MAX_MODEL_OPPORTUNITIES);
+    // A portfolio of eight, not a shortlist of four (production modelled 4 of 28 on 2026-11-02).
+    expect(MAX_MODEL_OPPORTUNITIES).toBeGreaterThanOrEqual(8);
+    // Combinations are evaluated even when every single-opening strategy would fill the limit.
+    expect(reading.strategies.some((one) => one.key.startsWith('combine_'))).toBe(true);
     expect(reading.considered.every((one) => Array.isArray(one.missing))).toBe(true);
+  });
+
+  it('names a bounded market test for an opening with a buyer, an offer and a price, without asking for conversion evidence first', async () => {
+    const o = await oneOff({ title: 'Arrange a load for a shipper', priceCents: 40_000, capitalCents: 0 });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    const one = reading.considered.find((c) => c.opportunityId === o.id)!;
+    // Conversion is unknown, and only asking buyers can establish it.
+    expect(one.missing).toContain('CONVERSION');
+    expect(one.stage).toBe('C_MARKET_TEST_READY');
+    expect(reading.ladder.C_MARKET_TEST_READY).toBeGreaterThanOrEqual(1);
+    const test = reading.marketTests.find((m) => m.opportunityId === o.id)!;
+    expect(test.test.link).toBe('CONVERSION');
+    expect(test.test.test).toMatch(/bounded offer test/);
+    // Brain may not contact anyone it has no permission to: the test names that, not a guess.
+    expect(test.test.by).toBe('PERSON');
+    expect(test.test.blocker).toMatch(/CONTACT_BUYER|message provider/);
+    expect(reading.nextTest).not.toBeNull();
+  });
+
+  it('reads collected money as the top of the ladder, and a step over the before-income limit as not test-ready', async () => {
+    const paid = await oneOff({ title: 'A paid arrangement', priceCents: 30_000 });
+    const heavy = await oneOff({ title: 'Needs stock bought first', priceCents: 90_000, capitalCents: 80_000 });
+    await recordMoney({ projectId, opportunityId: paid.id, kind: 'CUSTOMER_PAYMENT', amountCents: 30_000, currency: 'USD', recordedBy: 'PERSON', idempotencyKey: `k${Math.random().toString(36).slice(2, 10)}`, verifiedReference: 'pi_ladder' });
+    const id = await goal(1_000_000, 300_000);
+    const w = (await getWorkstream(id))!;
+    await setTarget({ goal: w, metric: 'SETTLED_CASH', amountCents: 1_000_000, currency: 'USD', projectId, capitalCeilingCents: 300_000, capitalBeforeProofCents: 30_000, hoursCeiling: 200, now: new Date(now.getTime() - 30_000) });
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
+    expect(reading.considered.find((c) => c.opportunityId === paid.id)!.stage).toBe('F_COLLECTED');
+    expect(reading.considered.find((c) => c.opportunityId === heavy.id)!.stage).not.toBe('C_MARKET_TEST_READY');
   });
 
   it('raises research for the path to the money on the openings closest to a plan', async () => {

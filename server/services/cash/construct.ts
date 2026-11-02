@@ -364,7 +364,7 @@ function rank(out: ConstructedArrangement[], limits: GoalLimits, targets: Econom
     const at = EXPOSURE_ORDER.indexOf(one.stress.exposure);
     return tight ? at : one.stress.exposure === 'EXCEEDS' ? 1 : 0;
   };
-  return out.sort(
+  const sorted = out.sort(
     (a, b) =>
       // Cannot lose money the goal does not have.
       exposure(a) - exposure(b) ||
@@ -380,6 +380,40 @@ function rank(out: ConstructedArrangement[], limits: GoalLimits, targets: Econom
       a.unknownParts.length - b.unknownParts.length ||
       a.key.localeCompare(b.key),
   );
+  return interleaveByPopulation(sorted, exposure);
+}
+
+/**
+ * The ranking, dealt one buyer population at a time.
+ *
+ * Production, 2026-11-02: 262 arrangements, and the top of the list was one
+ * sector's buyers ("production committee investor companies…") in every
+ * design × need × supply combination it held, because a sector with many map
+ * nodes multiplies and nothing in the sort penalises a repeat. The owner asked
+ * for discovery not to be confined to one buyer group. Within each exposure
+ * class (a safer arrangement never yields to a riskier one), the best of each
+ * sector comes first, then each sector's second, and so on — the order inside
+ * a sector is the sort's.
+ */
+export function interleaveByPopulation(sorted: ConstructedArrangement[], exposure: (one: ConstructedArrangement) => number): ConstructedArrangement[] {
+  const out: ConstructedArrangement[] = [];
+  let i = 0;
+  while (i < sorted.length) {
+    const tier = exposure(sorted[i]!);
+    let j = i;
+    while (j < sorted.length && exposure(sorted[j]!) === tier) j += 1;
+    const groups = new Map<string, ConstructedArrangement[]>();
+    for (const one of sorted.slice(i, j)) {
+      const k = one.sector !== null ? `s:${norm(one.sector)}` : `d:${one.demand.ref}`;
+      groups.set(k, [...(groups.get(k) ?? []), one]);
+    }
+    const lanes = [...groups.values()];
+    for (let depth = 0; lanes.some((lane) => lane.length > depth); depth += 1) {
+      for (const lane of lanes) if (lane[depth]) out.push(lane[depth]!);
+    }
+    i = j;
+  }
+  return out;
 }
 
 function compose(args: {

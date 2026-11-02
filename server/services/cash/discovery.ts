@@ -94,6 +94,8 @@ import {
 } from '../../repos/cashDiscovery.ts';
 import { listNodes, openIndustryRoundsByCandidate } from '../../repos/industry.ts';
 import { discoveryYield, yieldGuidance } from './discoveryYield.ts';
+import { exclusionSentence, unionOf, type ExclusionClass } from './exclusions.ts';
+import { liveGoalLimits } from './worthResearching.ts';
 import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { missionsForRounds, type RoundMissions } from '../russell/roundMissions.ts';
@@ -573,7 +575,7 @@ export async function openDiscovery(input: {
       mode,
       bucket,
       next,
-      statement: questionFor(bucket, mode.objective, next, history, held, frame),
+      statement: questionFor(bucket, mode.objective, next, history, held, frame, unionOf(await liveGoalLimits(input.projectId, new Date().toISOString()))),
     });
     if (!round) continue;
     out.push({ bucketId: bucket.id, candidateId: round.candidateId, round: next });
@@ -880,7 +882,7 @@ export async function openGoalDiscovery(input: {
     mode,
     bucket,
     next,
-    statement: questionFor(bucket, mode.objective, next, history, heldLines, frame),
+    statement: questionFor(bucket, mode.objective, next, history, heldLines, frame, unionOf(await liveGoalLimits(t.projectId, new Date().toISOString()))),
   });
   return round ? { bucketId: id, candidateId: round.candidateId, round: next } : null;
 }
@@ -1089,9 +1091,15 @@ export function questionFor(
   history: readonly CashDiscoveryRound[],
   held: HeldExclusions = { lines: [], omitted: 0 },
   frame: ExecutionFrame | null = null,
+  exclusions: readonly ExclusionClass[] = [],
 ): string {
   const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`];
   if (frame) parts.push(executionFrameSentence(frame));
+  // What a live goal's owner excluded is said in the question, so a worker never
+  // spends a pass on it (production 2026-11-02: 128 government openings filed and
+  // then left out at plan time). A constructed round already carries it in its own text.
+  const leaveOut = exclusionSentence(exclusions).trim();
+  if (leaveOut && !bucket.question.includes(leaveOut)) parts.push(leaveOut);
   if (round > 1) {
     const found = history.reduce((total, one) => total + one.found, 0);
     parts.push(

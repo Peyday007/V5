@@ -1,5 +1,5 @@
 /**
- * `npm run puzzle-book -- --volume v1 --count 100 --out <dir> [--layout large-print]`
+ * `npm run puzzle-book -- --volume v1 --count 100 --out <dir> [--layout large-print] [--title T --subtitle S --notice N]`
  *
  * Makes one sudoku volume from Brain's own generator. Every puzzle is proved by
  * the format's independent validator, duplicates are refused by canonical form,
@@ -71,9 +71,10 @@ async function main(): Promise<void> {
   );
 
   const book = await typesetSudokuBook({
-    title: `${layout === 'LARGE_PRINT' ? 'Large Print ' : ''}Sudoku: ${count} Puzzles With Exactly One Solution`,
-    subtitle: `Easy to Expert, solutions included. Volume ${volume.replace(/^v/, '')}.`,
-    rightsNotice:
+    // A consumer edition (a gift book for a senior community, say) names itself and its own terms.
+    title: flag('title') ?? `${layout === 'LARGE_PRINT' ? 'Large Print ' : ''}Sudoku: ${count} Puzzles With Exactly One Solution`,
+    subtitle: flag('subtitle') ?? `Easy to Expert, solutions included. Volume ${volume.replace(/^v/, '')}.`,
+    rightsNotice: flag('notice') ??
       'Puzzles generated and independently verified by the Brain puzzle kernel. The buyer of this ' +
       'interior is granted a non-exclusive commercial licence to print, publish and sell the ' +
       'puzzles in their own books, including on Amazon KDP, and to change the layout, cover and ' +
