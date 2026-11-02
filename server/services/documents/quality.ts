@@ -192,6 +192,18 @@ export function assessExtraction(input: AssessInput): ExtractionQuality {
 
   let status: ExtractionStatus;
   let blockedReason: string | null = null;
+  // Say which kind of unreadable it was. "0 of 1 pages could be read" on a
+  // page that plainly has words on it is the sort of message that sends
+  // someone hunting for a bug that is not there. Since only trusted characters
+  // count, a low-confidence scan can stop on either of the first two checks
+  // below, and both must say why.
+  const distrustedHere = failed.filter((page) => distrusted.has(page));
+  const because =
+    distrustedHere.length === 0
+      ? ''
+      : ` Page(s) ${distrustedHere.join(', ')} were recognised, but at confidence below ` +
+        `${Math.round(THRESHOLDS.ocrConfidenceFloor * 100)}%, so the text cannot be trusted — ` +
+        'rescan them at a higher resolution.';
 
   if (pagesExpected === 0) {
     status = 'BLOCKED';
@@ -200,19 +212,10 @@ export function assessExtraction(input: AssessInput): ExtractionQuality {
     status = 'BLOCKED';
     blockedReason =
       `Only ${trustedCharacterCount} characters could be read from ${pagesExpected} page(s), ` +
-      'which is not enough to audit. The file may be a scan with no OCR available, or empty.';
+      'which is not enough to audit.' +
+      (because || ' The file may be a scan with no OCR available, or empty.');
   } else if (coverageRatio < THRESHOLDS.minCoverageRatio) {
     status = 'BLOCKED';
-    // Say which kind of unreadable it was. "0 of 1 pages could be read" on a
-    // page that plainly has words on it is the sort of message that sends
-    // someone hunting for a bug that is not there.
-    const distrustedHere = failed.filter((page) => distrusted.has(page));
-    const because =
-      distrustedHere.length === 0
-        ? ''
-        : ` Page(s) ${distrustedHere.join(', ')} were recognised, but at confidence below ` +
-          `${Math.round(THRESHOLDS.ocrConfidenceFloor * 100)}%, so the text cannot be trusted — ` +
-          'rescan them at a higher resolution.';
     blockedReason =
       `Only ${readable.length} of ${pagesExpected} pages could be read ` +
       `(${Math.round(coverageRatio * 100)}% coverage, ${Math.round(THRESHOLDS.minCoverageRatio * 100)}% required). ` +
