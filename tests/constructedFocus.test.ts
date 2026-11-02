@@ -138,4 +138,12 @@ describe('a goal’s own round launches ahead of broad discovery', () => {
     expect(goalProfile.launchOrdinal).toBeLessThan(broad.launchOrdinal);
     expect(goalProfile.launchOrdinal).toBeGreaterThan(dive.launchOrdinal);
   });
+
+  it('tells a worker a repeating buyer pattern is an opening of a declared kind', async () => {
+    const { goalMechanismProfile, profileFor } = await import('../server/services/russell/compilerProfiles.ts');
+    const goalCriteria = goalMechanismProfile('RUSSELL_CASH_DISCOVERY_V1')!.completionCriteria('any market');
+    const broadCriteria = profileFor('RUSSELL_CASH_DISCOVERY_V1')!.completionCriteria('any market');
+    expect(goalCriteria.some((one) => one.includes('demand_pattern') && one.includes('RECURRING_OUTSOURCED_WORK'))).toBe(true);
+    expect(broadCriteria.some((one) => one.includes('RECURRING_OUTSOURCED_WORK'))).toBe(false);
+  });
 });

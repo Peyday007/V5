@@ -670,6 +670,24 @@ const GOAL_MECHANISM: CompilerProfile = {
       necessity: 'CONDITIONAL',
     },
   ],
+  /*
+   * Saying what a pattern is, at the end of the job a worker reads first (§83).
+   *
+   * The inherited criteria tell a worker a general need is "context rather than
+   * a signal", and nothing told it that a *repeating pattern of buyers paying*
+   * is an opening of a declared kind. Production, 2026-11-02: seven constructed
+   * rounds of the $10K goal filed reports and harvested nothing — no accepted
+   * claim carried an opportunity_signal. RECURRING_OUTSOURCED_WORK is exactly
+   * that kind. The gate, the two-example floor and the harvest are unchanged.
+   */
+  completionCriteria: (scope) => [
+    ...MARKET_DISCOVERY.completionCriteria(scope),
+    'A demand_pattern claim that establishes a kind of buyer repeatedly paying for the same ' +
+      'narrow thing, with its two dated examples and how those buyers are reached, is an ' +
+      'opening: set its opportunity_signal to RECURRING_OUTSOURCED_WORK (or a more specific ' +
+      'kind where one fits). A statement that a market is large is still context and carries ' +
+      'none.',
+  ],
   failureConditions: [
     'Neither a specific open request nor a repeating pattern of buyers paying for the same ' +
       'thing can be located — only general statements that a need exists.',
