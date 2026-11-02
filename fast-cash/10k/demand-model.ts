@@ -223,6 +223,78 @@ export function demandProblem(v: Variant, options: { rho?: number; spendCeiling?
   };
 }
 
+/* ------------------------------------------------------------------ the current plan: online lines, one outreach pool */
+
+/**
+ * The plan rebuilt for remote operation (#445): AI-receptionist setups, gift
+ * brokerage, trigger lists and puzzle packs, all sold through one pool of
+ * interested conversations. One graph and one activity, so every line reads the
+ * same pool in the same world (activities from one graph would be drawn apart).
+ */
+function online(split: { high: number; gift: number; list: number }): QuantGraph {
+  const t = { audience: 'smb-owners', sender: 'new-no-case-studies' };
+  const RES = 'fast-cash/10k/research-high-ticket-remote.md';
+  return { nodes: [
+    decide('n_emails', 'Cold emails from one aged mailbox, Nov 4–23', 'emails', 600),
+    decide('n_invites', 'LinkedIn invites, Nov 4–23', 'invites', 300),
+    {
+      key: 'n_reply', label: 'Cold email reply rate', unit: 'share', kind: 'RATE', min: 0, max: 1, context: t, material: [],
+      observations: [
+        obs('n_belkins', { kind: 'COUNT', successes: 33_750, trials: 7_500_000 }, { audience: 'b2b' }, 'belkins', url('https://belkins.io/blog/cold-email-response-rates.md'), '0.45% of ~7.5M B2B emails, 2025'),
+        obs('n_instantly', { kind: 'POINT', value: 0.0343 }, { audience: 'b2b' }, 'instantly', url('https://instantly.ai/blog/cold-email-reply-rate-benchmarks'), 'platform average reply rate 2026'),
+        obs('n_salesco', { kind: 'POINT', value: 0.0209 }, { audience: 'b2b' }, 'salesco-2026', url('https://somethinginc.com/blog/cold-email-response-rates-2026-data/'), 'reply rate, Feb 2026'),
+        obs('n_hunter', { kind: 'POINT', value: 0.045 }, { audience: 'b2b' }, 'hunter', url('https://hunter.io/the-state-of-cold-email-2025'), 'average reply rate'),
+      ],
+    },
+    {
+      key: 'n_positive', label: 'Replies that are interested', unit: 'share', kind: 'RATE', min: 0, max: 1, context: t, material: [],
+      observations: [
+        obs('n_pos_salesco', { kind: 'POINT', value: 0.141 }, { audience: 'b2b' }, 'salesco-2026', url('https://somethinginc.com/blog/cold-email-response-rates-2026-data/'), '14.1% of replies positive'),
+        obs('n_pos_saleshandy', { kind: 'RANGE', low: 0.25, high: 0.5 }, { audience: 'b2b', campaign: 'top-performing' }, 'saleshandy-2026-interest', url('https://saleshandy.com/blog/cold-email-statistics/'), 'strongest campaigns only'),
+      ],
+    },
+    { key: 'n_accept', label: 'LinkedIn invites accepted', unit: 'share', kind: 'RATE', min: 0, max: 1, observations: [
+      obs('n_expandi_acc', { kind: 'COUNT', successes: 3_762_000, trials: 13_200_000 }, {}, 'expandi-2026', url('https://expandi.io/blog/linkedin-outreach-benchmarks-2026/'), '28.5% of 13.2M attempts'),
+      obs('n_belkins_acc', { kind: 'POINT', value: 0.264 }, {}, 'belkins-linkedin', url('https://belkins.io/blog/linkedin-outreach-study.md'), '26.4% acceptance'),
+    ] },
+    { key: 'n_li_reply', label: 'Accepted connections who reply (interested share not separated)', unit: 'share', kind: 'RATE', min: 0, max: 1, observations: [
+      obs('n_expandi_rep', { kind: 'POINT', value: 0.104 }, {}, 'expandi-2026', url('https://expandi.io/blog/linkedin-outreach-benchmarks-2026/'), '10.4% reply on messages after acceptance'),
+    ] },
+    // LinkedIn replies are counted as conversations only at the email positive share: a reply is not interest.
+    formula('n_conv', 'Interested conversations', 'conversations', 'n_emails * n_reply * n_positive + n_invites * n_accept * n_li_reply * n_positive'),
+    assume('n_close_high', 'Conversations that buy a $1,500 AI setup', 'share', 'RATE', 0.05, 0.25, `${RES}: no published close rate for a new seller without case studies.`),
+    assume('n_settle_high', 'Setups whose payment settles by Nov 27', 'share', 'RATE', 0.5, 1, 'ACH or wire over $1k; Stripe first payout 7–14 days.'),
+    assume('n_close_gift', 'Conversations that place a gift order', 'share', 'RATE', 0.1, 0.4, 'No published rate.'),
+    assume('n_gift_order', 'Gross per gift order', 'USD', 'POSITIVE', 690, 3450, '10–50 recipients × $60 × 1.15; recipient count unmeasured.'),
+    assume('n_close_list', 'Conversations that buy a list', 'share', 'RATE', 0.1, 0.4, 'No published rate.'),
+    assume('n_p_list', 'List price', 'USD', 'POSITIVE', 149, 499, 'Comparable list products.'),
+    roundingDraw('n_u1'), roundingDraw('n_u2'), roundingDraw('n_u3'),
+    formula('n_high', 'AI setups settled', 'deals', `floor(n_conv * ${split.high} * n_close_high * n_settle_high + n_u1)`),
+    formula('n_gift', 'Gift orders', 'orders', `floor(n_conv * ${split.gift} * n_close_gift + n_u2)`),
+    formula('n_list', 'Lists sold', 'lists', `floor(n_conv * ${split.list} * n_close_list + n_u3)`),
+    assume('n_packs', 'Puzzle-pack cash settled', 'USD', 'POSITIVE', 0, 500, 'fast-cash/10k/research-digital-automated.md.'),
+    formula('n_cash', 'Settled cash by Nov 27', 'USD', 'n_high * 1797 + n_gift * n_gift_order + n_list * n_p_list + n_packs'),
+    formula('n_spend', 'Outflows', 'USD', 'n_gift * n_gift_order / 1.15 + n_high * 150 + 60 + 0.03 * n_cash'),
+  ] };
+}
+
+export function onlineProblem(split: { high: number; gift: number; list: number }, options: { spendCeiling?: number | null } = {}): QuantProblem {
+  return {
+    title: `$10K plan demand, online lines (AI setups ${split.high}, gifts ${split.gift}, lists ${split.list} of the outreach), Nov 3–27 2026`,
+    currency: 'USD',
+    graphs: [{ key: 'online', graph: online(split) }],
+    report: [
+      { graph: 'online', node: 'n_reply' }, { graph: 'online', node: 'n_positive' }, { graph: 'online', node: 'n_conv' },
+      { graph: 'online', node: 'n_high' }, { graph: 'online', node: 'n_gift' }, { graph: 'online', node: 'n_list' },
+    ],
+    portfolio: {
+      target: 10_000, deadlineDays: 25, startingCapital: 375,
+      ...(options.spendCeiling === null ? {} : { spendCeiling: options.spendCeiling ?? 3_000 }),
+      activities: [{ key: 'online', label: 'Online lines on one outreach pool', graph: 'online', cashNode: 'n_cash', spendNode: 'n_spend', days: 20, startDay: 1, capital: 60, learnableInExecution: true, researchDays: 7 }],
+    },
+  };
+}
+
 if (process.argv[1]?.endsWith('demand-model.ts')) {
   const now = new Date('2026-11-02T23:00:00Z');
   const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -244,6 +316,22 @@ if (process.argv[1]?.endsWith('demand-model.ts')) {
     if (process.argv.includes('--write')) {
       const file = `plans/quant/cash-10k-demand-${v.toLowerCase()}-2026-11-02.json`;
       writeFileSync(file, `${JSON.stringify(demandProblem(v), null, 2)}\n`);
+      console.log(`  wrote ${file}`);
+    }
+  }
+  for (const [name, split] of [['high_focus', { high: 0.5, gift: 0.3, list: 0.2 }], ['gift_focus', { high: 0.2, gift: 0.7, list: 0.1 }]] as const) {
+    const s = solveProblem(onlineProblem(split), now);
+    console.log(`\n=== ONLINE ${name}: ${s.title}`);
+    for (const e of s.estimates.filter((one) => /^n_(reply|positive|conv|high|gift|list|cash|spend)$/.test(one.key))) {
+      console.log(`  ${e.tier.padEnd(10)} ${e.key.padEnd(10)} p10 ${e.p10.toFixed(e.p50 < 1 ? 4 : 0)}  p50 ${e.p50.toFixed(e.p50 < 1 ? 4 : 0)}  p90 ${e.p90.toFixed(e.p50 < 1 ? 4 : 0)}  ${e.justified ? 'distribution' : 'bounds only'}`);
+    }
+    for (const ceiling of [3_000, null] as const) {
+      const b = solveProblem(onlineProblem(split, { spendCeiling: ceiling }), now).portfolio!.best!;
+      console.log(`  ceiling ${ceiling === null ? 'none ' : '$3,000'}: reaches $10k in ${pct(b.reach)} (settled p10 ${usd(b.settledP10)} p50 ${usd(b.settledP50)} p90 ${usd(b.settledP90)}; over the ceiling ${pct(b.overSpend)}; basis ${b.basis})`);
+    }
+    if (process.argv.includes('--write')) {
+      const file = `plans/quant/cash-10k-demand-online-${name.replace('_', '-')}-2026-11-02.json`;
+      writeFileSync(file, `${JSON.stringify(onlineProblem(split), null, 2)}\n`);
       console.log(`  wrote ${file}`);
     }
   }

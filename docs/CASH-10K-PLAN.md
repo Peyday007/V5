@@ -23,6 +23,32 @@ The previous seven-line plan rested on the owner installing lights, delivering t
 - The highest-revenue mix reaches **$10k in 4% of tested conditions**. Its revenue is mostly the gift suppliers' money passing through: it keeps $850 at p50.
 - These come from Brain's scenario engine (`npx tsx fast-cash/10k/plan-model-remote.ts`; output in `plan-model-remote-output.txt`), a sweep of 10,000 conditions. Its shares are coverage of the tested conditions, not probabilities.
 
+### Demand estimated by the quant engine (2026-11-02, evening)
+
+The sweep above, and the withdrawn local plan's $15.7k base / $4.35k adverse
+cases, typed every demand rate in as a hand range; the quant engine (§79) was
+never called. `npx tsx fast-cash/10k/demand-model.ts` now pools the published
+evidence for each rate, keeps reply, interest and order apart, makes counts
+whole and reads total outflows against $3,000 in the same world as the cash
+(problem files `plans/quant/cash-10k-demand-*-2026-11-02.json`).
+
+| Plan | Settled by Nov 27, p10 · p50 · p90 | $10k, owner-funded spend only | $10k, all outflows ≤ $3,000 |
+|---|---|---|---|
+| This plan, half on AI setups | $0.2k · $2.1k · $6.7k | 6% | 0% |
+| This plan, mostly gifts | $0.2k · $2.7k · $9.9k | 10% | 0% (gift pass-through) |
+| Withdrawn local plan, as written | $3.8k · $6.9k · $11.3k | 17% | 0% |
+| Withdrawn local plan, subcontracted | $3.5k · $6.1k · $10.2k | 11% | 0% |
+
+Shares are coverage over evidence-weighted inputs, not calibrated probabilities:
+no source states a sample size for this seller. Interested conversations are
+p50 6 (p10 2, p90 22), not 10. **90% is not supported by any plan on file.**
+Its 10th percentile would have to rise roughly 3–50×.
+
+What blocks a 90% claim: close rates for a new seller (AI setups, gift orders,
+lists: no published figure), gift-order size, reply rate for this audience, and
+— for anything that passes supplier money through — a $3,000 ceiling on total
+outflows that gross collection of $10k breaks.
+
 **The binding constraint is interested conversations, not products or fulfilment.**
 - Every remote line sells through one pool of outreach. A warmed mailbox sends about 30 a day safely, LinkedIn allows about 100 invites a week, and a new sending domain needs 2–4 weeks of warm-up.
 - About 900 touches by Nov 23 yield about **10 interested conversations** at the median: p10 6.7, p90 14.7.

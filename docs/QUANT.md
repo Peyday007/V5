@@ -81,6 +81,10 @@ group keeps its most informative member and reports the others as collapsed.
   whole with a rounding draw), put the lines that share a market in one risk
   group, and read reach from `solveProblem`. Hand-typed ranges in a scenario
   model are a sweep over a guess. Template: `fast-cash/10k/demand-model.ts`.
+* **Lines that share one pool go in one activity.** The portfolio draws each
+  activity's world on its own (through its risk group), so two activities read
+  from one graph are not world-aligned. Lines fed by one outreach pool are one
+  activity whose cash is their sum.
 
 ## What may become a probability
 

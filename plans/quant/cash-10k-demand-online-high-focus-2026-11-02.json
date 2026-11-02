@@ -1,0 +1,473 @@
+{
+  "title": "$10K plan demand, online lines (AI setups 0.5, gifts 0.3, lists 0.2 of the outreach), Nov 3–27 2026",
+  "currency": "USD",
+  "graphs": [
+    {
+      "key": "online",
+      "graph": {
+        "nodes": [
+          {
+            "key": "n_emails",
+            "label": "Cold emails from one aged mailbox, Nov 4–23",
+            "unit": "emails",
+            "kind": "POSITIVE",
+            "min": 600,
+            "max": 600
+          },
+          {
+            "key": "n_invites",
+            "label": "LinkedIn invites, Nov 4–23",
+            "unit": "invites",
+            "kind": "POSITIVE",
+            "min": 300,
+            "max": 300
+          },
+          {
+            "key": "n_reply",
+            "label": "Cold email reply rate",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "context": {
+              "audience": "smb-owners",
+              "sender": "new-no-case-studies"
+            },
+            "material": [],
+            "observations": [
+              {
+                "id": "n_belkins",
+                "value": {
+                  "kind": "COUNT",
+                  "successes": 33750,
+                  "trials": 7500000
+                },
+                "context": {
+                  "audience": "b2b"
+                },
+                "lineage": [
+                  "belkins"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://belkins.io/blog/cold-email-response-rates.md"
+                },
+                "measures": "0.45% of ~7.5M B2B emails, 2025"
+              },
+              {
+                "id": "n_instantly",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.0343
+                },
+                "context": {
+                  "audience": "b2b"
+                },
+                "lineage": [
+                  "instantly"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks"
+                },
+                "measures": "platform average reply rate 2026"
+              },
+              {
+                "id": "n_salesco",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.0209
+                },
+                "context": {
+                  "audience": "b2b"
+                },
+                "lineage": [
+                  "salesco-2026"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://somethinginc.com/blog/cold-email-response-rates-2026-data/"
+                },
+                "measures": "reply rate, Feb 2026"
+              },
+              {
+                "id": "n_hunter",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.045
+                },
+                "context": {
+                  "audience": "b2b"
+                },
+                "lineage": [
+                  "hunter"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://hunter.io/the-state-of-cold-email-2025"
+                },
+                "measures": "average reply rate"
+              }
+            ]
+          },
+          {
+            "key": "n_positive",
+            "label": "Replies that are interested",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "context": {
+              "audience": "smb-owners",
+              "sender": "new-no-case-studies"
+            },
+            "material": [],
+            "observations": [
+              {
+                "id": "n_pos_salesco",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.141
+                },
+                "context": {
+                  "audience": "b2b"
+                },
+                "lineage": [
+                  "salesco-2026"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://somethinginc.com/blog/cold-email-response-rates-2026-data/"
+                },
+                "measures": "14.1% of replies positive"
+              },
+              {
+                "id": "n_pos_saleshandy",
+                "value": {
+                  "kind": "RANGE",
+                  "low": 0.25,
+                  "high": 0.5
+                },
+                "context": {
+                  "audience": "b2b",
+                  "campaign": "top-performing"
+                },
+                "lineage": [
+                  "saleshandy-2026-interest"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://saleshandy.com/blog/cold-email-statistics/"
+                },
+                "measures": "strongest campaigns only"
+              }
+            ]
+          },
+          {
+            "key": "n_accept",
+            "label": "LinkedIn invites accepted",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "observations": [
+              {
+                "id": "n_expandi_acc",
+                "value": {
+                  "kind": "COUNT",
+                  "successes": 3762000,
+                  "trials": 13200000
+                },
+                "context": {},
+                "lineage": [
+                  "expandi-2026"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://expandi.io/blog/linkedin-outreach-benchmarks-2026/"
+                },
+                "measures": "28.5% of 13.2M attempts"
+              },
+              {
+                "id": "n_belkins_acc",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.264
+                },
+                "context": {},
+                "lineage": [
+                  "belkins-linkedin"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://belkins.io/blog/linkedin-outreach-study.md"
+                },
+                "measures": "26.4% acceptance"
+              }
+            ]
+          },
+          {
+            "key": "n_li_reply",
+            "label": "Accepted connections who reply (interested share not separated)",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "observations": [
+              {
+                "id": "n_expandi_rep",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.104
+                },
+                "context": {},
+                "lineage": [
+                  "expandi-2026"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://expandi.io/blog/linkedin-outreach-benchmarks-2026/"
+                },
+                "measures": "10.4% reply on messages after acceptance"
+              }
+            ]
+          },
+          {
+            "key": "n_conv",
+            "label": "Interested conversations",
+            "unit": "conversations",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "n_emails * n_reply * n_positive + n_invites * n_accept * n_li_reply * n_positive"
+          },
+          {
+            "key": "n_close_high",
+            "label": "Conversations that buy a $1,500 AI setup",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0.05,
+              "high": 0.25,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "fast-cash/10k/research-high-ticket-remote.md: no published close rate for a new seller without case studies."
+              }
+            }
+          },
+          {
+            "key": "n_settle_high",
+            "label": "Setups whose payment settles by Nov 27",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0.5,
+              "high": 1,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "ACH or wire over $1k; Stripe first payout 7–14 days."
+              }
+            }
+          },
+          {
+            "key": "n_close_gift",
+            "label": "Conversations that place a gift order",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0.1,
+              "high": 0.4,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "No published rate."
+              }
+            }
+          },
+          {
+            "key": "n_gift_order",
+            "label": "Gross per gift order",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "assumed": {
+              "low": 690,
+              "high": 3450,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "10–50 recipients × $60 × 1.15; recipient count unmeasured."
+              }
+            }
+          },
+          {
+            "key": "n_close_list",
+            "label": "Conversations that buy a list",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0.1,
+              "high": 0.4,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "No published rate."
+              }
+            }
+          },
+          {
+            "key": "n_p_list",
+            "label": "List price",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "assumed": {
+              "low": 149,
+              "high": 499,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "Comparable list products."
+              }
+            }
+          },
+          {
+            "key": "n_u1",
+            "label": "Rounding draw",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1
+          },
+          {
+            "key": "n_u2",
+            "label": "Rounding draw",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1
+          },
+          {
+            "key": "n_u3",
+            "label": "Rounding draw",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1
+          },
+          {
+            "key": "n_high",
+            "label": "AI setups settled",
+            "unit": "deals",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "floor(n_conv * 0.5 * n_close_high * n_settle_high + n_u1)"
+          },
+          {
+            "key": "n_gift",
+            "label": "Gift orders",
+            "unit": "orders",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "floor(n_conv * 0.3 * n_close_gift + n_u2)"
+          },
+          {
+            "key": "n_list",
+            "label": "Lists sold",
+            "unit": "lists",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "floor(n_conv * 0.2 * n_close_list + n_u3)"
+          },
+          {
+            "key": "n_packs",
+            "label": "Puzzle-pack cash settled",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "assumed": {
+              "low": 0,
+              "high": 500,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "fast-cash/10k/research-digital-automated.md."
+              }
+            }
+          },
+          {
+            "key": "n_cash",
+            "label": "Settled cash by Nov 27",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "n_high * 1797 + n_gift * n_gift_order + n_list * n_p_list + n_packs"
+          },
+          {
+            "key": "n_spend",
+            "label": "Outflows",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "n_gift * n_gift_order / 1.15 + n_high * 150 + 60 + 0.03 * n_cash"
+          }
+        ]
+      }
+    }
+  ],
+  "report": [
+    {
+      "graph": "online",
+      "node": "n_reply"
+    },
+    {
+      "graph": "online",
+      "node": "n_positive"
+    },
+    {
+      "graph": "online",
+      "node": "n_conv"
+    },
+    {
+      "graph": "online",
+      "node": "n_high"
+    },
+    {
+      "graph": "online",
+      "node": "n_gift"
+    },
+    {
+      "graph": "online",
+      "node": "n_list"
+    }
+  ],
+  "portfolio": {
+    "target": 10000,
+    "deadlineDays": 25,
+    "startingCapital": 375,
+    "spendCeiling": 3000,
+    "activities": [
+      {
+        "key": "online",
+        "label": "Online lines on one outreach pool",
+        "graph": "online",
+        "cashNode": "n_cash",
+        "spendNode": "n_spend",
+        "days": 20,
+        "startDay": 1,
+        "capital": 60,
+        "learnableInExecution": true,
+        "researchDays": 7
+      }
+    ]
+  }
+}
