@@ -89,3 +89,27 @@ owner types is a correction that, in a long session, cannot be delivered.
 - **A model can still choose to stop.** The instructions and the restored
   requirements make the definition of done impossible to lose; they cannot
   force it. The record above is the way to check.
+
+## Evidence the corrections work (measured after PR #408 merged)
+
+- **Starting context.** A fresh session opened on `production` after the merge
+  (`session_01QF5Tk7rgftgZLGaBk52Uew`) recorded `first_request_input_tokens:
+  79,472`, against 410,942 before. About 700k of working room instead of ~370k.
+- **The hook in a real session.** When this investigation's own session
+  resumed, the `SessionStart` hook re-injected the owner's original mission
+  verbatim ahead of the summary.
+- **A previously unfinished assignment, replayed.** The 10-15 "Recommended
+  Approach" session stopped at "2 of 6 fixes, not deployed, no PR". The fresh
+  session was given that assignment with an explicit completion list. It:
+  settled all six with evidence (two already in production plus a new test,
+  three implemented, one replaced by a smaller fix with the reason given),
+  passed typecheck and `test:impacted` (509 tests), **merged PR #409 itself**,
+  dispatched Deploy, and confirmed `726f77e` released. It ended turns only with
+  a background task or check-in armed and finished in 50 minutes with no
+  message from the owner. Its final report disclosed the one red item, a
+  pre-restart hosted check that the same revision passed 280/280 after the
+  restart, instead of hiding it.
+- **CI.** The Postgres suite passed on both merges (`60c9a1e`, `726f77e`).
+
+Friction seen in the replay, not a stop: the engineering hook refused one
+15-minute check-in (rule 4) and the session re-armed it within the rules.
