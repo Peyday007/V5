@@ -180,12 +180,26 @@ export function allocate(input: AllocationInput): Allocation {
     if (open.some((one) => one.purpose === 'CAPITAL' && one.opportunityId === opportunity.id)) {
       continue;
     }
+    /*
+     * Only an opening that sits on the map. `industry_rounds` requires a node on
+     * every round but the bootstrap, and production's first-ranked ask was a
+     * CAPITAL round for an opening filed outside the map: its insert failed the
+     * check constraint on every tick, the batch stopped there, and no kernel
+     * round opened for weeks (2026-11-02).
+     */
+    if (!opportunity.industryNodeId) {
+      declined.push({
+        subject: opportunity.title,
+        why: 'Its capital is not decomposed here because it was filed outside the industry map; a round needs a subject on the map.',
+      });
+      continue;
+    }
     candidates.push({
       purpose: 'CAPITAL',
       nodeId: opportunity.industryNodeId,
       bucketId: null,
       opportunityId: opportunity.id,
-      round: nextRound(snapshot.rounds, 'CAPITAL', null, null, opportunity.id, snapshot.at),
+      round: nextRound(snapshot.rounds, 'CAPITAL', opportunity.industryNodeId, null, opportunity.id, snapshot.at),
       rank: 100,
       subject: opportunity.title,
       since: opportunity.createdAt,
