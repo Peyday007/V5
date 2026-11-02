@@ -13,8 +13,10 @@ import { getSchemaVersion } from '../db/migrate.ts';
 import { BRAIN_REVISION, DATA_ROOT, DB_PATH } from '../env.ts';
 import { defaultProviderName, listProviderStatuses } from '../providers/index.ts';
 import { ocrStatus } from '../services/documents/ocr.ts';
+import { readingBacklog } from '../services/documents/backlog.ts';
 import { antigravityStatus, recheckAntigravity } from '../providers/antigravity/runtime.ts';
 import { storageHealth } from '../services/storageHealth.ts';
+import { listAdapters } from '../services/effects/adapter.ts';
 import { handler } from './helpers.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
 
@@ -87,6 +89,18 @@ healthRouter.get(
       // work — and it is measured, with anything unmeasurable absent rather
       // than estimated.
       storage: await storageHealth(),
+      // Whether this Brain is keeping up with reading what it holds. §9 makes
+      // an unread document something the auditor does not have; this reports,
+      // never enqueues and never refuses.
+      reading: await readingBacklog(),
+      // Which effect classes this process can actually keep §20's guarantees
+      // for. Never a receipt, a business id or a payload — just what is
+      // registered.
+      effects: listAdapters().map((adapter) => ({
+        name: adapter.name,
+        effectClass: adapter.effectClass,
+        namespace: adapter.namespace,
+      })),
     };
   }),
 );
