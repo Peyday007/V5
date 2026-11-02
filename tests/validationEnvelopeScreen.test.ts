@@ -80,6 +80,9 @@ describe('a Cash deep dive is not refused by its own envelope', () => {
     }
     for (const text of [
       'Purchase the directory and count its members.',
+      'Purchase data from the directory.',
+      'Purchase records from the county.',
+      'Purchase order forms from the supplier.',
       'Find the cheapest supplier, then we will purchase the list.',
       'Hire a contractor to build the sample.',
       'Find the vendor that we purchase from and purchase it.',
