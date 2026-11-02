@@ -32,7 +32,7 @@ started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 timeout --signal=TERM --kill-after=30 "$limit" \
   flyctl ssh console --app "$app" \
-    -C "sh /app/scripts/verify-hosted.sh https://$app.fly.dev $flag" \
+    -C "nice -n 10 sh /app/scripts/verify-hosted.sh https://$app.fly.dev $flag" \
   2>&1 | tee "$out"
 status=${PIPESTATUS[0]}
 

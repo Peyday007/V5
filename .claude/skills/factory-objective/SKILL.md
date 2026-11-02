@@ -31,7 +31,7 @@ Brain's rows; `factory outcome` reads it on demand.
 ## 2. Wait on one run, not a polling loop
 
 Dispatch `command=wait campaign=fcp_…`. That one run probes `factory outcome`
-every five minutes on its own and ends when the objective does (or after ~5.6 h,
+every fifteen minutes on its own and ends when the objective does (or after ~5.6 h,
 printing `FACTORY-WAIT: STILL-RUNNING`). Watch **that run** to termination in the
 background — GitHub's API only, never Brain's database:
 
