@@ -821,6 +821,55 @@ describe('RES-6: being able to research is not being able to deliver', () => {
     );
   });
 
+  /*
+   * Recommended-approach change #3 (2026-10-15): a welding contract, NEH grants
+   * and employment listings were dived, and only afterwards did the delivery
+   * reading withhold each. The question is now asked before a slot is spent —
+   * and only a known bar refuses: an unrecorded or unallocated delivery is a
+   * blank, which a dive may still answer (invariant 39).
+   */
+  it('spends no deep dive on an opening whose delivery needs physical work, and still dives a blank one', async () => {
+    const { whyNotDiving } = await import('../server/services/cash/validation.ts');
+    const { createWorkflow, createTask, recordAllocation } = await import(
+      '../server/repos/labor.ts'
+    );
+    const piece = await opening('PAID_TASK_OR_CONTRACT', 'Weld and fabricate railings on site.', {
+      requiredCapabilities: [],
+    });
+    // Nothing recorded about delivery: a blank, so the dive still goes ahead.
+    expect((await whyNotDiving((await getOpportunity(piece.id))!)).kind).toBe('ELIGIBLE');
+
+    const { workflow } = await createWorkflow({
+      projectId,
+      name: 'Delivering: railings',
+      description: 'd',
+      origin: 'SEED',
+      opportunityId: piece.id,
+    });
+    const { task } = await createTask({
+      projectId,
+      workflowId: workflow.id,
+      name: 'Weld the railings',
+      output: 'Railings installed',
+      origin: 'SEED',
+    });
+    // A task nobody has allocated is still a blank.
+    expect((await whyNotDiving((await getOpportunity(piece.id))!)).kind).toBe('ELIGIBLE');
+
+    await recordAllocation({
+      projectId,
+      taskId: task.id,
+      productionLayer: 'PHYSICAL_OPERATOR',
+      necessityReason: 'PHYSICAL_EXECUTION',
+      decidedBy: 'PERSON',
+      decidedByRef: userId,
+      rationale: 'Welding is done by somebody on site.',
+    } as never);
+    const refusal = await whyNotDiving((await getOpportunity(piece.id))!);
+    expect(refusal.kind).toBe('CANNOT_DELIVER');
+    expect(refusal.kind === 'CANNOT_DELIVER' && refusal.because).toMatch(/physical work \(Weld the railings\)/);
+  });
+
   it('withdraws the old research-only proposal, guarded on its exact text, once', async () => {
     const { proposeTerms, applyProposal } = await import('../server/services/cash/answers.ts');
     const { recordCardFact, cardFact } = await import('../server/repos/cashCardFacts.ts');

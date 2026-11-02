@@ -75,6 +75,7 @@ import {
 import { evidenceCard } from './card.ts';
 import { cashTier } from './tier.ts';
 import { COLUMN } from './answers.ts';
+import { UNDELIVERABLE, deliveryReading } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
 import { researchMissionSlotsFull } from '../russell/launch.ts';
@@ -317,7 +318,15 @@ export type DiveRefusal =
    * listing, a close inside the runway, or capital the ledger does not hold.
    * Derived on every read, so it lifts by itself (`worthResearching.ts`).
    */
-  | { kind: 'NOT_WORTH_RESEARCHING'; reason: NotWorthResearching };
+  | { kind: 'NOT_WORTH_RESEARCHING'; reason: NotWorthResearching }
+  /**
+   * Brain could not fulfil it even if every commercial question were answered:
+   * its delivery needs physical work, or a `PRODUCE_*` capability whose proof
+   * has not passed. Read from `deliveryReading`, the same rows the card's own
+   * delivery field reads, so it lifts by itself when they change. A blank —
+   * nothing recorded about delivery — is not this (invariant 39).
+   */
+  | { kind: 'CANNOT_DELIVER'; because: string };
 
 /** One line, for a report or an operator. */
 export function describeDiveRefusal(refusal: DiveRefusal): string {
@@ -355,6 +364,8 @@ export function describeDiveRefusal(refusal: DiveRefusal): string {
       return `closed on ${refusal.at} — a dive cannot win an opening that has already closed`;
     case 'NOT_WORTH_RESEARCHING':
       return `not worth a dive now: ${describeNotWorthResearching(refusal.reason)}`;
+    case 'CANNOT_DELIVER':
+      return `Brain could not deliver it: ${refusal.because.slice(0, 160)}`;
   }
 }
 
@@ -448,6 +459,18 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
   }
   const waste = await notWorthResearching(opportunity, { now: cashNow() });
   if (waste) return { kind: 'NOT_WORTH_RESEARCHING', reason: waste };
+  /*
+   * Whether Brain could deliver it, before a slot is spent asking.
+   *
+   * Recommended-approach change #3 (2026-10-15): a welding contract, NEH grants
+   * for nonprofits and employment listings were each dived, and the delivery
+   * reading withheld every one afterwards. Last, because it reads the
+   * project's labor rows and every cheaper refusal above has already passed.
+   */
+  const delivery = await deliveryReading(opportunity);
+  if (delivery.kind === 'WITHHOLD' && UNDELIVERABLE.has(delivery.bar)) {
+    return { kind: 'CANNOT_DELIVER', because: delivery.because };
+  }
   return { kind: 'ELIGIBLE' };
 }
 
@@ -539,6 +562,11 @@ export interface ValidationProgress {
 export function validationQuestion(
   opportunity: CashOpportunity,
   stage: DiveStage = 'FULL',
+  /**
+   * The fields an earlier full dive this epoch left open. Given, a FULL
+   * question asks those lanes by name instead of the whole qualification.
+   */
+  stillOpen?: readonly string[],
 ): string {
   const signal = (opportunity.buyingSignal ?? opportunity.title).replace(/\s+/g, ' ').trim();
   const observed = opportunity.signalObservedAt
@@ -556,6 +584,40 @@ export function validationQuestion(
       'how a supplier reaches them; and whether anything published would disqualify it ' +
       'outright. Nothing else about it is asked at this stage. Where no published source ' +
       'names a payer, say so plainly with where you looked rather than naming a kind of buyer.'
+    );
+  }
+  /*
+   * The second round asks what the first left open, by lane.
+   *
+   * Recommended-approach change #5 (2026-10-15): the Artisanal Sudoku opening's
+   * second dive re-asked the whole qualification and never asked `directCosts`,
+   * the one researchable field still blank — nothing is bought to make a
+   * puzzle, so no source publishes that cost, and a documented absence in
+   * `cost_evidence` is exactly the answer `applyValidationAnswers` writes.
+   * Fields with no lane (a delivery path, a recommendation) are composed from
+   * the others and are not asked.
+   */
+  const lanes = (stillOpen ?? [])
+    .map((field) => ({ field, lane: LANE_FOR_FIELD[field] }))
+    .filter((one): one is { field: string; lane: string } => Boolean(one.lane));
+  if (stage === 'FULL' && lanes.length > 0) {
+    return (
+      `An earlier dive on this specific opening — "${signal}" — answered most of what acting on ` +
+      `it needs.${source}${observed} First confirm it is still open to a supplier like us; if it ` +
+      'has closed or a published rule excludes us, submit that one fact in the ruled_out lane ' +
+      'with its source and stop. Otherwise answer only what is still open, each in its own lane: ' +
+      lanes.map((one) => `${one.lane} (${one.field})`).join('; ') +
+      '. Nothing else about it is asked this round' +
+      // The gate requires the payer lane of every full dive, so a round that
+      // skipped it would block however well it answered the rest.
+      (lanes.some((one) => one.lane === 'payer')
+        ? '. '
+        : ', except that who pays must be restated in the payer lane with the source that names ' +
+          'them, so this round stands on its own evidence. ') +
+      'Where the answer is that something does not ' +
+      'exist — no fee is charged, nothing is bought to deliver it, no licence is required — ' +
+      'that is an answer: submit it as a NEGATIVE_EXISTENCE claim in that lane, with the source ' +
+      'that states it or the published terms you read, rather than leaving the lane empty.'
     );
   }
   return (
@@ -892,6 +954,7 @@ export async function startValidations(input: {
     } as DiveValueFacts,
   }));
   valued.sort((a, b) => compareDiveValue(a.value, b.value));
+  const tierById = new Map(tiered.map(({ opportunity, tier }) => [opportunity.id, tier]));
   /*
    * The cheap lane's screen, as a preference and never a refusal: an opening
    * two free models agree is junk is dived after everything else, and starts
@@ -929,11 +992,22 @@ export async function startValidations(input: {
 
     const stage = value.stage;
     const epoch = diveEpoch(opportunity);
+    /*
+     * A second full dive asks what the first left open, by lane, rather than
+     * the whole qualification again (recommended-approach change #5).
+     */
+    const askedBefore =
+      stage === 'FULL' &&
+      startsInEpoch(await diveStarts(opportunity.id), epoch).some((one) => one.stage === 'FULL');
     const candidate = await createCandidate({
       projectId: input.projectId,
       visibility: 'SHARED',
       title: `${stage === 'SCREEN' ? 'Screen' : 'Qualify'}: ${opportunity.title}`,
-      statement: validationQuestion(opportunity, stage),
+      statement: validationQuestion(
+        opportunity,
+        stage,
+        askedBefore ? fieldsWorthResearching(opportunity, tierById.get(opportunity.id)!) : undefined,
+      ),
     });
     /*
      * The first dive after a distinct change is round one of its epoch, so the
@@ -1686,6 +1760,22 @@ export const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
 export const ALSO_ANSWERS_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
   contact_mode: 'access',
 });
+
+/**
+ * The lane a dive answers each card field in: `FIELD_BY_LANE` read backwards,
+ * the first lane declared for a field winning (`disqualifier` before
+ * `ruled_out`, which is declared only when something does rule it out), and
+ * `contact_mode` for `access` as well.
+ */
+const LANE_FOR_FIELD: Readonly<Record<string, string>> = Object.freeze(
+  Object.entries({ ...FIELD_BY_LANE, ...ALSO_ANSWERS_BY_LANE }).reduce<Record<string, string>>(
+    (out, [lane, field]) => {
+      out[field] ??= lane;
+      return out;
+    },
+    {},
+  ),
+);
 
 /** The lane where a dive records what bears on ruling an opening out, absences included. */
 export const DISQUALIFIER_LANE = 'disqualifier';

@@ -70,6 +70,32 @@ export function mechanismForSignal(signal: OpportunitySignal): CashMechanism {
   return MECHANISM[signal];
 }
 
+/**
+ * Which signals name the same kind of opening.
+ *
+ * A worker declares a signal per claim, and two workers reading one RFQ
+ * declared it `EXPIRING_OPENING` and `ACTIVE_BUYER_DEMAND`: production held six
+ * records of one St. Louis RFQ split across those two, so a signal-exact
+ * identity kept them apart. A buyer asking for something — with or without a
+ * deadline, as a request or as a paid task — is one opening at one address.
+ * The other kinds stay apart, because one price page can genuinely be both a
+ * resale opening and a pricing asymmetry. A `Record` over the whole union, so a
+ * signal added later is a compile error until somebody says which it joins.
+ *
+ * Read for identity (`duplicates.ts`) and for whose figures a signal's text
+ * states (`proposeTerms`): only a buyer's request publishes what a buyer would
+ * pay us.
+ */
+export const OPENING_FAMILY: Readonly<Record<OpportunitySignal, string>> = Object.freeze({
+  ACTIVE_BUYER_DEMAND: 'BUYER_REQUEST',
+  EXPIRING_OPENING: 'BUYER_REQUEST',
+  PAID_TASK_OR_CONTRACT: 'BUYER_REQUEST',
+  RECURRING_OUTSOURCED_WORK: 'RECURRING_OUTSOURCED_WORK',
+  PRICING_OR_INFORMATION_ASYMMETRY: 'PRICING_OR_INFORMATION_ASYMMETRY',
+  SUPPLY_DEMAND_MISMATCH: 'SUPPLY_DEMAND_MISMATCH',
+  RESALABLE_ASSET_OPENING: 'RESALABLE_ASSET_OPENING',
+});
+
 /** One line per signal, for the prompt that asks a worker to choose one. */
 export const SIGNAL_GUIDE: Record<OpportunitySignal, string> = {
   ACTIVE_BUYER_DEMAND:
