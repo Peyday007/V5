@@ -54,13 +54,13 @@ by the session protocol (`.claude/skills/factory-objective`). Times are UTC on
 |---|---|---|---|---|---|---|
 | small — `fcp_90dacf0a`, next-action reads the objective outcome | 2 | 10:40:05 | #427 14:33 | 14:59 | 15:35 | **4 h 55 m** |
 | substantial — `fcp_8cd968ad`, Russell turn boundary + Build preview (2 independent parts) | 6 | 10:41:53 | #431 15:37 | 15:42 | 16:01 | **5 h 20 m** |
-| medium — `fcp_cc5ef744`, one writer for goal dependencies | 4 | 10:48:23 | #435 17:09 | 17:13 | see the Deploy record | **~6 h 50 m** |
+| medium — `fcp_cc5ef744`, one writer for goal dependencies | 4 | 10:48:23 | #435 17:09 | 17:13 | 17:33 | **6 h 45 m** |
 
 Every acceptance condition was met, and each PR had an independent review pass.
 They were verified on production as follows:
 - **Small:** `brain_next_engineering_action` returned DONE for a LIVE campaign and NEEDS_HUMAN for a person-blocked one with `human_blocker_open:false`. A building campaign still read BRANCH.
 - **Substantial:** the new Build disclosures are in the live client bundle.
-- **Medium:** live with the release that carried #435.
+- **Medium:** the Factory's own delivery observation read the merge running in production and recorded `OBJECTIVE_FINISHED` LIVE at 17:35:27, 97 s after the release.
 
 Owner interventions: **0**. Every merge and deploy was done by the session, under the owner's standing order. One integrate bin needed a session `answer-bin`, because Brain had spent its attempts on its own defect.
 
@@ -78,7 +78,7 @@ Useful worker time per objective was a few minutes each: plans took 15–44 s, u
 
 ### Compared with direct Claude Code
 
-Direct sessions (above): about **70 min** median from session start to merged PR, **4–5 h** at p90, merge only. On 2026-11-02 the Factory took **4 h 55 m – 6 h 50 m** from submission to *live*: roughly 4–6× slower than the direct median, and in line with the direct p90.
+Direct sessions (above): about **70 min** median from session start to merged PR, **4–5 h** at p90, merge only. On 2026-11-02 the Factory took **4 h 55 m – 6 h 45 m** from submission to *live*: roughly 4–6× slower than the direct median, and in line with the direct p90.
 
 **The Factory is not yet as fast as direct Claude Code, and these runs do not show that it is.** The defects above account for most of the difference, and all are fixed. Removing them leaves a critical path of about 8 min plan + 5–11 min units + ~10 min integration + review + 25–35 min Deploy. That is about 1–1.5 h submission → live, which would match direct sessions *including deploy*. This is a projection from measured stage times. No run has been timed after every fix landed.
 

@@ -1021,6 +1021,14 @@ jobs:
               # of slowness first. Deploy 41452489625: 27 s answers after the
               # restart, three unrelated checks failed, no verdict line.
               echo "::error::RELEASED, VERIFICATION DID NOT FINISH: a pass was stopped before its verdict (the live Brain answered too slowly). Its failed checks are above; the release is not verified."
+            elif grep -h -q -E '^ *FAIL  ' hosted-verification.txt hosted-after-restart.txt 2>/dev/null \
+                && ! grep -h -E '^ *FAIL  ' hosted-verification.txt hosted-after-restart.txt 2>/dev/null \
+                  | grep -v -q -E ' — 50[0-9]( |$)'; then
+              # Every failed check was answered 5xx: the Brain was unavailable
+              # (booting, or out of database connections), which says nothing
+              # about whether its behaviour is right. Deploy 41488989210: four
+              # 503/502 answers after the restart, 276/280.
+              echo "::error::RELEASED, BRAIN UNAVAILABLE DURING VERIFICATION: every failed check above was answered 5xx. Availability, not behaviour; the release is not verified."
             else
               echo "::error::RELEASED, BEHAVIOUR DEFECTIVE: the hosted verification did not pass ($failing). The failing conditions are printed directly above."
             fi
