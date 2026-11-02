@@ -1718,6 +1718,45 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
       };
     }
 
+    if (envelope && orchestration.unresolvedGapPolicy === 'RECORD_GAPS') {
+      /*
+       * A packet authorized to record its gaps can never be approved by an
+       * envelope (`planFitsEnvelope` refuses the policy outright), so research
+       * proposed after that answer — a judge's follow-up, a director's
+       * question — would park, be answered RECORD_GAPS again, and park again
+       * on every pass. Production, 2026-11-02: orc_d083edfc645c47e6b99d. The
+       * answer already given was "file what you have", so that is what
+       * happens: the proposal is cancelled with its reason, and the packet
+       * files from the evidence it holds. Nothing is approved and no bar moves.
+       */
+      const at = new Date().toISOString();
+      for (const fragment of awaitingApproval) {
+        await updateFragment(fragment.id, {
+          status: 'CANCELLED',
+          blockedReason:
+            'Not researched: this packet was answered RECORD_GAPS, so it files from the evidence it ' +
+            'holds and its envelope cannot approve new research. Recorded as an unresolved gap.',
+          completedAt: at,
+        });
+      }
+      await recordEvent({
+        projectId: orchestration.projectId,
+        layerId: orchestration.layerId,
+        entityType: 'RUN',
+        entityId: orchestration.runId,
+        eventType: 'RESEARCH_PLAN_REVIEWED',
+        payload: {
+          orchestrationId,
+          approvedByUserId: null,
+          approved: 0,
+          rejected: awaitingApproval.length,
+          because: 'RECORD_GAPS',
+          fragmentKeys: awaitingApproval.map((fragment) => fragment.fragmentKey),
+        },
+      });
+      return await advancePacket(orchestrationId);
+    }
+
     if (envelope) {
       /*
        * Two questions before the plan is even read: is this envelope for this

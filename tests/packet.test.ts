@@ -3760,6 +3760,28 @@ describe('the audit passes', () => {
     expect(after.unresolvedGapPolicy).toBeNull();
   });
 
+  it('files a RECORD_GAPS packet from its evidence rather than parking on a follow-up no envelope can approve', async () => {
+    // Production, 2026-11-02: orc_d083edfc645c47e6b99d was answered RECORD_GAPS
+    // while its judge follow-up was PLANNED, and the envelope refuses any packet
+    // with that policy, so it re-parked on every pass.
+    const parked = await judgedPacket({});
+    expect((await resumeJudgeRound(parked.id)).outcome).toBe('RESUMED');
+    await updateOrchestration(parked.id, {
+      approvalEnvelopeId: 'RUSSELL_CASH_DISCOVERY_V1',
+      unresolvedGapPolicy: 'RECORD_GAPS',
+    });
+    await advancePacket(parked.id);
+
+    const followUp = (await currentFragments(parked.id)).find((fragment) => fragment.fragmentKey.startsWith('judge-r1-'));
+    expect(followUp?.status).toBe('CANCELLED');
+    expect(followUp?.blockedReason).toMatch(/RECORD_GAPS/);
+    const after = (await getOrchestration(parked.id))!;
+    expect(after.status).not.toBe('NEEDS_HUMAN');
+    // It files: the synthesis is the next thing a worker is offered.
+    const synth = await claimNext('RESEARCH_SYNTHESIZE');
+    expect(synth.workItemId).toBeTruthy();
+  });
+
   it('leaves a MORE_RESEARCH park with no bounded question to a person, untouched', async () => {
     const parked = await judgedPacket({
       gap_classifications: [
