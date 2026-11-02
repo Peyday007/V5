@@ -645,6 +645,15 @@ const COMMERCIAL_VALIDATION_SCREEN: CompilerProfile = {
 const GOAL_MECHANISM: CompilerProfile = {
   ...MARKET_DISCOVERY,
   id: 'GOAL_MECHANISM',
+  /*
+   * Ahead of broad discovery, behind the deep dives (§83). A goal's own round
+   * is one bounded question an approved goal needs, and it inherited broad
+   * discovery's 500, so under a full grant a constructed design waited behind
+   * every queued bucket idea. Production, 2026-11-02: the $10K goal's one
+   * constructed round sat QUEUED at 500 among 36 queued ideas. The grant's
+   * concurrency and the focus cap still bound it; this changes only the order.
+   */
+  launchOrdinal: 150,
   lanes: [
     ...MARKET_DISCOVERY.lanes.map((lane) =>
       lane.id === 'demand_signal' ? { ...lane, necessity: 'CONDITIONAL' as const } : lane,

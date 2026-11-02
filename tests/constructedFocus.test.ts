@@ -128,3 +128,14 @@ describe('one buyer population does not monopolize constructed research', () => 
     expect(byLeastAsked(ranked, []).map((one) => one.key)).toEqual(['a1', 'a2', 'a3', 'r1', 'b1', 'u1']);
   });
 });
+
+describe('a goal’s own round launches ahead of broad discovery', () => {
+  it('orders the goal-mechanism profile after the deep dives and before broad discovery buckets', async () => {
+    const { goalMechanismProfile, profileFor } = await import('../server/services/russell/compilerProfiles.ts');
+    const goalProfile = goalMechanismProfile('RUSSELL_CASH_DISCOVERY_V1')!;
+    const broad = profileFor('RUSSELL_CASH_DISCOVERY_V1')!;
+    const dive = profileFor('RUSSELL_CASH_VALIDATION_V1')!;
+    expect(goalProfile.launchOrdinal).toBeLessThan(broad.launchOrdinal);
+    expect(goalProfile.launchOrdinal).toBeGreaterThan(dive.launchOrdinal);
+  });
+});
