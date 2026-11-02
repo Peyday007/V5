@@ -1591,6 +1591,34 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * Stale campaign pull requests re-landed through one merged request:
+     * `--pull-request <landing> --closes 40,41,...` records, for each campaign
+     * whose own request is listed, that its work was delivered by the landing
+     * request (verified merged with the forge). See `recordDeliveredBy`.
+     */
+    case 'delivered-by': {
+      const landing = Number(flagString(flags, 'pull-request') ?? fail('--pull-request <landing number> is required'));
+      const closes = (flagString(flags, 'closes') ?? fail('--closes 40,41,... is required'))
+        .split(',')
+        .map((one) => Number(one.trim()))
+        .filter((one) => Number.isInteger(one) && one > 0);
+      if (!Number.isInteger(landing) || landing <= 0 || closes.length === 0) fail('numbers, please');
+      const { recordDeliveredBy } = await import('../server/services/factory/delivery.ts');
+      const result = await recordDeliveredBy({
+        remote: flagString(flags, 'repository') ?? 'https://github.com/Peyday007/V5',
+        landing,
+        closes,
+      });
+      if (result.refused) {
+        process.stdout.write(`FACTORY REFUSED: ${result.refused}\n`);
+        process.exitCode = 1;
+        break;
+      }
+      process.stdout.write(`recorded ${result.recorded.length} campaign(s) as delivered by #${landing}: ${result.recorded.join(', ')}\n`);
+      break;
+    }
+
     case 'release-status': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const campaign = await getCampaign(campaignId);

@@ -31,6 +31,7 @@ import {
   latestDelivery,
   noteObjectiveOutcome,
   observeDeliveries,
+  recordDeliveredBy,
   resetDeliveryThrottle,
   type ForgePort,
 } from '../server/services/factory/delivery.ts';
@@ -835,6 +836,39 @@ describe('a finished campaign is delivered only when the forge says so', () => {
     await observeDeliveries([campaign], { forge: port, revision: REV });
     expect((await objectiveOutcome(campaign)).status).toBe('CANCELLED');
     expect(isTerminalOutcome(await objectiveOutcome(campaign))).toBe(true);
+  });
+
+  it('a campaign whose stale PR was re-landed through another merged PR is delivered, not cancelled', async () => {
+    const campaign = await completeCampaign(await approved());
+    // Its own #77 was closed unmerged when #500 landed the same change.
+    const own = forgePort({ state: 'closed', merged: false, mergeCommitSha: null });
+    await observeDeliveries([campaign], { forge: own.port, revision: REV });
+    expect((await objectiveOutcome(campaign)).status).toBe('CANCELLED');
+
+    const refused = await recordDeliveredBy({
+      remote: REMOTE,
+      landing: 500,
+      closes: [77],
+      forge: forgePort({ state: 'open', merged: false, mergeCommitSha: null }).port,
+    });
+    expect(refused.refused).toMatch(/not merged/);
+    expect(refused.recorded).toEqual([]);
+
+    const landed = await recordDeliveredBy({
+      remote: REMOTE,
+      landing: 500,
+      closes: [77, 12345],
+      forge: forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }).port,
+    });
+    expect(landed.recorded).toEqual([campaign.id]);
+    expect(await latestDelivery(campaign.id)).toMatchObject({ state: 'MERGED', via: 500, mergeSha: MERGE });
+
+    resetDeliveryThrottle();
+    // Its own closed PR is not read again; only whether production runs the landing merge.
+    const live = forgePort({ state: 'closed', merged: false, mergeCommitSha: null }, true);
+    await observeDeliveries([campaign], { forge: live.port, revision: REV });
+    expect(live.calls.contains).toBe(1);
+    expect((await objectiveOutcome(campaign)).status).toBe('LIVE');
   });
 
   it('a campaign still building is not terminal and writes nothing', async () => {
