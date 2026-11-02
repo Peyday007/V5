@@ -1812,8 +1812,15 @@ async function tickOnce(owner: string): Promise<TickReport> {
               settled: kernel.absorbed.settled.map((one) => one.roundId),
             });
           }
-        } catch {
-          /* a map that could not be advanced is left exactly as it was */
+          for (const failure of kernel.failures ?? []) {
+            report.passFailures.push({ pass: `industry-kernel ${project.id}`, error: failure });
+            console.error(`[brain] industry kernel ${project.id}: ${failure}`);
+          }
+        } catch (error) {
+          // Recorded, never swallowed: a silent kernel is how the map stopped growing.
+          const message = error instanceof Error ? error.message : String(error);
+          report.passFailures.push({ pass: `industry-kernel ${project.id}`, error: message });
+          console.error(`[brain] industry kernel ${project.id}: ${message}`);
         }
 
         if (!shedKernels) try {
