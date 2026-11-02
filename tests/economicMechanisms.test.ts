@@ -23,7 +23,7 @@ import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
-import { askConstructedArrangements, forgetGoalReadings, goalLimits, readGoalPlan } from '../server/services/goals/plan.ts';
+import { askConstructedArrangements, constructedOrder, forgetGoalReadings, goalLimits, readGoalPlan } from '../server/services/goals/plan.ts';
 import { constructArrangements, type ConstructedArrangement } from '../server/services/cash/construct.ts';
 import {
   allDesigns,
@@ -381,5 +381,106 @@ describe('the live goal: a structurally new arrangement becomes an opening and m
     expect(considered.volumeEstablished).toBe(true);
     // A new mechanism moved the goal: more is reachable than before.
     expect(after.bestReach ?? 0).toBeGreaterThan(reading.bestReach ?? 0);
+  });
+});
+
+describe('focus keeps the goal’s constructed search and nothing else (§83)', () => {
+  const withFocus = async <T>(max: string, fn: () => Promise<T>): Promise<T> => {
+    const before = process.env['BRAIN_CASH_RESEARCH_MAX'];
+    process.env['BRAIN_CASH_RESEARCH_MAX'] = max;
+    try {
+      return await fn();
+    } finally {
+      if (before === undefined) delete process.env['BRAIN_CASH_RESEARCH_MAX'];
+      else process.env['BRAIN_CASH_RESEARCH_MAX'] = before;
+    }
+  };
+
+  it('opens constructed rounds under focus, at most two, while lens rounds stay stopped', async () => {
+    await sector('Animation', { buyer: 'Production committees', bottleneck: 'Licensing paperwork', supply: 'Licensing agents' });
+    const id = await goal(1_000_000, { days: 25, capitalCents: 300_000, beforeProofCents: 30_000 });
+    const w = (await getWorkstream(id))!;
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
+    await withFocus('3', async () => {
+      const opened = await askConstructedArrangements(w, reading, now, 5, 4 * MAX_LIVE_GOAL_ROUNDS);
+      expect(opened.length).toBe(2);
+      // A second pass while both are open adds nothing: the focus cap is a live cap.
+      expect(await askConstructedArrangements(w, reading, now, 5, 4 * MAX_LIVE_GOAL_ROUNDS)).toHaveLength(0);
+      const { openGoalDiscovery } = await import('../server/services/cash/discovery.ts');
+      expect(await openGoalDiscovery({ goal: w, target: reading.target, bestReach: reading.bestReach, now: now.toISOString(), liveCap: 10 })).toBeNull();
+    });
+  });
+
+  it('opens nothing when the operator ceiling is zero', async () => {
+    const id = await goal(1_000_000, { days: 25, capitalCents: 300_000, beforeProofCents: 30_000 });
+    const w = (await getWorkstream(id))!;
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
+    await withFocus('0', async () => {
+      expect(await askConstructedArrangements(w, reading, now, 5, 4 * MAX_LIVE_GOAL_ROUNDS)).toHaveLength(0);
+    });
+  });
+});
+
+describe('one buyer population does not monopolise construction (§83)', () => {
+  const a = (key: string, origin: string, structure: string, ref: string) => ({ key, origin, structure, demand: { ref } });
+  it('skips a population with a round open, puts a reverse design first, then new structures', () => {
+    const ranked = [
+      a('anime1', 'FORWARD', 'BROKER', 'anime'),
+      a('anime2', 'FORWARD', 'POOL', 'anime'),
+      a('vets', 'FORWARD', 'BROKER', 'vets'),
+      a('clubs', 'FORWARD', 'POOL', 'clubs'),
+      a('rev1', 'REVERSE', 'PRODUCE', 'reverse:1'),
+      a('rev2', 'REVERSE', 'POOL', 'reverse:2'),
+    ];
+    const order = constructedOrder(ranked, ['anime1']).map((one) => one.key);
+    expect(order).not.toContain('anime2');
+    expect(order[0]).toBe('rev1');
+    // BROKER is already open (anime1), so POOL arrangements come before another BROKER.
+    expect(order.indexOf('clubs')).toBeLessThan(order.indexOf('vets'));
+  });
+
+  it('with a reverse round already open, leads with the best-ranked new population', () => {
+    const ranked = [a('anime1', 'FORWARD', 'BROKER', 'anime'), a('rev1', 'REVERSE', 'PRODUCE', 'reverse:1'), a('rev2', 'REVERSE', 'POOL', 'reverse:2')];
+    expect(constructedOrder(ranked, ['rev1']).map((one) => one.key)).toEqual(['anime1', 'rev2']);
+  });
+});
+
+describe('a goal round never holds its slot for ever, and its late results keep their lineage (§83)', () => {
+  it('retires a goal round whose idea never launched after six hours, and the idea can no longer launch', async () => {
+    const id = await goal(1_000_000, { days: 25, capitalCents: 300_000, beforeProofCents: 30_000 });
+    const w = (await getWorkstream(id))!;
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
+    const [candidateId] = await askConstructedArrangements(w, reading, now, 1, 2 * MAX_LIVE_GOAL_ROUNDS);
+    expect(candidateId).toBeDefined();
+    const round = () => listRounds(projectId).then((all) => all.find((r) => r.candidateId === candidateId)!);
+    await harvest({ projectId });
+    expect((await round()).state).toBe('OPEN');
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run('UPDATE cash_discovery_rounds SET opened_at = ? WHERE candidate_id = ?', [new Date(Date.now() - 7 * 3_600_000).toISOString(), candidateId]);
+    await harvest({ projectId });
+    expect((await round()).state).toBe('ABANDONED');
+    expect((await getCandidate(candidateId!))!.state).toBe('REJECTED');
+  });
+
+  it('attributes an opening to its round when the mission finished after the round closed', async () => {
+    const id = await goal(1_000_000, { days: 25, capitalCents: 300_000, beforeProofCents: 30_000 });
+    const w = (await getWorkstream(id))!;
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
+    const [candidateId] = await askConstructedArrangements(w, reading, now, 1, 2 * MAX_LIVE_GOAL_ROUNDS);
+    const { closeRound } = await import('../server/repos/cashDiscovery.ts');
+    const before = (await listRounds(projectId)).find((r) => r.candidateId === candidateId)!;
+    // Closed when its mission parked, as production does; the mission then ends DONE.
+    expect(await closeRound({ id: before.id, to: 'ABANDONED', found: 0 })).toBe(true);
+    await finishedMission(candidateId!, [
+      { claim: 'Dog-walking cooperatives publish a monthly group booking for pet-sitting cover, $40 a visit, prepaid.', signal: 'RECURRING_OUTSOURCED_WORK', sourceUrl: 'https://example.test/dog-coop' },
+    ]);
+    const filed = await harvest({ projectId });
+    expect(filed).toHaveLength(1);
+    const o = (await getOpportunity(filed[0]!.opportunity.id))!;
+    expect(o.discoveredByCandidateId).toBe(candidateId);
+    expect(o.discoveryRoundId).toBe(before.id);
+    const after = (await listRounds(projectId)).find((r) => r.id === before.id)!;
+    expect(after.state).toBe('ABANDONED');
+    expect(after.found).toBe(1);
   });
 });

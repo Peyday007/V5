@@ -294,9 +294,9 @@ describe('arrangements Brain constructs from what it knows', () => {
     await sector('Commercial grounds care', { buyer: 'Homeowner association boards', bottleneck: 'Snow removal surges', supply: 'Independent plow operators' });
     const id = await goal(600_000);
     const reading = (await readGoalPlan({ goalId: id, evaluations: 1_000 }))!;
-    // Spare surfaces widen the cap; construction may hold half of it (§82).
-    const opened = await askConstructedArrangements((await getWorkstream(id))!, reading, now, 2, MAX_LIVE_GOAL_ROUNDS + 1);
-    expect(opened).toHaveLength(2);
+    // Spare surfaces widen the cap; construction may hold half of it (§82). A reverse design leads (§83).
+    const opened = await askConstructedArrangements((await getWorkstream(id))!, reading, now, 3, 2 * MAX_LIVE_GOAL_ROUNDS);
+    expect(opened).toHaveLength(3);
     const statements = await Promise.all(opened.map(async (c) => (await getCandidate(c))!.statement));
     expect(statements.some((one) => one.includes('Independent veterinary clinics'))).toBe(true);
     expect(statements.some((one) => one.includes('Homeowner association boards'))).toBe(true);

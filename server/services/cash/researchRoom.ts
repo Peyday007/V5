@@ -268,6 +268,24 @@ export function routineFocus(env = process.env): boolean {
 }
 
 /**
+ * Constructed rounds one goal may hold open under focus (§83).
+ *
+ * Focus stops Routines hunting openings, and one kind of hunting is kept: a
+ * round asking about an arrangement Brain constructed for an approved cash goal
+ * whose held openings cannot reach it. That is the one search the plan cannot
+ * replace with feeds, because nobody publishes an arrangement nobody has named.
+ * It stays inside the operator's ceiling (never above `BRAIN_CASH_RESEARCH_MAX`,
+ * so a ceiling of 0 still stops it) and inside this small fixed number, so focus
+ * keeps meaning what the owner set it to mean. Null when focus is off.
+ */
+export const FOCUS_CONSTRUCTED_LIVE = 2;
+export function focusConstructedCap(env = process.env): number | null {
+  const max = operatorResearchMax(env);
+  if (max === null) return null;
+  return Math.min(max, FOCUS_CONSTRUCTED_LIVE);
+}
+
+/**
  * Idle research surfaces cash research may use: none under focus.
  */
 export async function cashSpareSurfaces(projectId: string): Promise<number> {

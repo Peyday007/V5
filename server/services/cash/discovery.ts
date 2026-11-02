@@ -67,7 +67,7 @@
  * never a favourable assumption, arriving at the moment an opportunity is born
  * rather than being asserted away by whoever created it.
  */
-import { routineFocus } from './researchRoom.ts';
+import { focusConstructedCap, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
@@ -83,9 +83,11 @@ import {
 import { APPROVAL_ENVELOPES } from '../research/approvalEnvelope.ts';
 import { describesOwnAction } from '../research/actorScope.ts';
 import { statesNamedIn } from '../../domain/jurisdiction.ts';
-import { createCandidate } from '../../repos/russellCandidates.ts';
+import { createCandidate, getCandidate, transitionCandidate } from '../../repos/russellCandidates.ts';
 import {
   closeRound,
+  countSettledRoundOpening,
+  roundForCandidate,
   listRounds,
   openRound,
   openRoundsByCandidate,
@@ -904,8 +906,6 @@ export async function openConstructedRound(input: {
   now?: string;
   liveCap?: number;
 }): Promise<OpenedDiscovery | null> {
-  // A constructed round is a Routine hunting for one goal, so focus stops it like a goal round.
-  if (routineFocus()) return null;
   const gate = await discoveryAllowed(input.projectId);
   if (!gate.allowed || !gate.mode) return null;
   const mode = gate.mode;
@@ -914,6 +914,15 @@ export async function openConstructedRound(input: {
   const mine = (await listRounds(input.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
   const liveCap = Math.max(MAX_LIVE_GOAL_ROUNDS, Math.trunc(input.liveCap ?? MAX_LIVE_GOAL_ROUNDS));
   if (mine.filter((one) => one.state === 'OPEN').length >= liveCap) return null;
+  /*
+   * Focus keeps exactly this search (§83): an approved goal's constructed
+   * arrangements, inside an ACTIVE sprint (the gate above), at most
+   * `focusConstructedCap` open at once. Lens rounds, bulk discovery and the
+   * idle-fill lift stay stopped. #389 stopped this too, and with it the only
+   * research that could add an opening the held ones cannot reach.
+   */
+  const focusCap = focusConstructedCap();
+  if (focusCap !== null && mine.filter((one) => one.state === 'OPEN' && one.bucketId.startsWith(`${prefix}-mx-`)).length >= focusCap) return null;
   const lens = `mx-${input.key}`;
   const id = `${prefix}-${lens}`;
   const history = mine.filter((one) => one.bucketId === id);
@@ -1240,19 +1249,20 @@ export function safeExclusion(text: string): boolean {
 async function liveRounds(
   projectId: string,
 ): Promise<Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>> {
-  // Trigger buckets always resolve, so a round opened while triggers were on is
-  // still harvested after they are switched off.
-  const byId = new Map(
-    [...SEARCH_BUCKETS, ...TRIGGER_BUCKETS, FEED_SHORTLIST_BUCKET].map((bucket) => [bucket.id, bucket]),
-  );
   const out = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>();
   for (const [candidateId, round] of await openRoundsByCandidate(projectId)) {
-    const bucket =
-      byId.get(round.bucketId) ??
-      (round.bucketId.startsWith(GOAL_BUCKET_PREFIX) ? goalBucket(round.bucketId.slice(GOAL_BUCKET_PREFIX.length), 'a goal') : undefined);
+    const bucket = bucketForRound(round);
     if (bucket) out.set(candidateId, { round, bucket });
   }
   return out;
+}
+
+/** The bucket a round asked, from its id: a listed bucket, or a goal's own. */
+function bucketForRound(round: CashDiscoveryRound): SearchBucket | undefined {
+  // Trigger buckets always resolve, so a round opened while triggers were on is
+  // still harvested after they are switched off.
+  const listed = [...SEARCH_BUCKETS, ...TRIGGER_BUCKETS, FEED_SHORTLIST_BUCKET].find((bucket) => bucket.id === round.bucketId);
+  return listed ?? (round.bucketId.startsWith(GOAL_BUCKET_PREFIX) ? goalBucket(round.bucketId.slice(GOAL_BUCKET_PREFIX.length), 'a goal') : undefined);
 }
 
 export interface Harvested {
@@ -1364,6 +1374,29 @@ export async function harvest(input: {
     return missionIdOf.get(orchestrationId) ?? null;
   };
 
+  /*
+   * The round behind a claim whose round has already closed (§83).
+   *
+   * A round closes ABANDONED the moment its mission parks at a decision, so the
+   * bucket can be asked again; the routine-decision pass then files the parked
+   * report short and the mission ends DONE. Its claims are still harvested, but
+   * production filed every one of them unattributed: 24 of a goal's rounds read
+   * "ABANDONED found 0" over DONE missions, so a constructed arrangement that
+   * did find an opening could never be shown to have. The round is read by the
+   * mission's own candidate, for attribution only: it is never reopened, and
+   * the opening is counted on it below.
+   */
+  const settledByOrchestration = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket } | null>();
+  const settledRoundFor = async (orchestrationId: string) => {
+    if (!settledByOrchestration.has(orchestrationId)) {
+      const mission = await getMissionByOrchestration(orchestrationId);
+      const round = mission?.candidateId ? await roundForCandidate(mission.candidateId) : null;
+      const bucket = round && round.projectId === input.projectId && round.state !== 'OPEN' ? bucketForRound(round) : undefined;
+      settledByOrchestration.set(orchestrationId, round && bucket ? { round, bucket } : null);
+    }
+    return settledByOrchestration.get(orchestrationId) ?? null;
+  };
+
   const signalled = await signalledClaims({ projectId: input.projectId, limit: limit * 4 });
 
   const out: Harvested[] = [];
@@ -1383,7 +1416,7 @@ export async function harvest(input: {
      */
     if (claim.claimType === 'NEGATIVE_EXISTENCE') continue;
 
-    const context = roundByOrchestration.get(entry.orchestrationId) ?? null;
+    const context = roundByOrchestration.get(entry.orchestrationId) ?? (await settledRoundFor(entry.orchestrationId));
 
     /*
      * One opportunity per supported opening, decided by the database.
@@ -1450,6 +1483,7 @@ export async function harvest(input: {
         'asked; it does not say who pays.',
     });
     if (!created) continue;
+    if (context && context.round.state !== 'OPEN') await countSettledRoundOpening(context.round.id);
 
     /*
      * The signal, and only the signal.
@@ -1541,8 +1575,10 @@ async function closeEndedRounds(input: {
   for (const [candidateId, entry] of input.live) {
     const missions = input.roundMissions.get(candidateId);
     const mission = missions?.latest ?? null;
-    const to: 'HARVESTED' | 'ABANDONED' | null =
+    let to: 'HARVESTED' | 'ABANDONED' | null =
       missions?.outcome ?? (mission?.state === 'NEEDS_HUMAN' ? 'ABANDONED' : null);
+    const expired = !to && !mission && (await expireUnlaunchedGoalRound(entry.round, candidateId));
+    if (expired) to = 'ABANDONED';
     if (!to) continue;
     opportunities ??= await listOpportunities({ projectId: input.projectId });
     const found = opportunities.filter((one) => one.discoveryRoundId === entry.round.id).length;
@@ -1551,7 +1587,9 @@ async function closeEndedRounds(input: {
     if (to === 'HARVESTED') continue;
     const why = mission
       ? `its research is ${mission.state.toLowerCase()}`
-      : 'the archive already answered it, so nothing launched';
+      : expired
+        ? `its idea never launched in ${UNLAUNCHED_GOAL_ROUND_MS / 3_600_000} hours, so it was retired to free the goal's slot`
+        : 'the archive already answered it, so nothing launched';
     await recordCashEvent({
       projectId: input.projectId,
       kind: 'CASH_DISCOVERY_ROUND_STOPPED',
@@ -1570,6 +1608,34 @@ async function closeEndedRounds(input: {
     });
   }
   return closed;
+}
+
+/**
+ * How long a goal's own round may wait for its idea to become a mission (§83).
+ *
+ * A goal round's idea is launched within minutes on a healthy tick. One that
+ * is still unlaunched after this has met something that will not answer by
+ * itself — a compiler refusal that parked it, a launch queue it never reached —
+ * and its OPEN round holds one of the goal's few live slots (two under focus)
+ * for ever. Ordinary buckets are untouched: their rounds hold no goal's slot.
+ */
+export const UNLAUNCHED_GOAL_ROUND_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Retire a goal round whose idea never launched, so it stops holding a slot.
+ *
+ * The idea is moved to REJECTED first, guarded on the state read, so it can
+ * never launch afterwards and duplicate the round asked next in its place; if
+ * it launched in the meantime the swap fails and the round stays OPEN for its
+ * mission. Nothing is deleted: the idea, its judgment and the round keep their
+ * rows, and the arrangement may be asked again after its cool-off.
+ */
+async function expireUnlaunchedGoalRound(round: CashDiscoveryRound, candidateId: string): Promise<boolean> {
+  if (!round.bucketId.startsWith(GOAL_BUCKET_PREFIX)) return false;
+  if (Date.now() - Date.parse(round.openedAt) < UNLAUNCHED_GOAL_ROUND_MS) return false;
+  const candidate = await getCandidate(candidateId);
+  if (!candidate || !['CAPTURED', 'PROMOTED', 'QUEUED', 'PARKED'].includes(candidate.state)) return false;
+  return transitionCandidate({ candidateId, from: candidate.state, to: 'REJECTED' });
 }
 
 function clamp(text: string, max: number): string {
