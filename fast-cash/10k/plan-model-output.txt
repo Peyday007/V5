@@ -1,0 +1,86 @@
+basis SWEEP · probabilistic=false · 10000 scenarios
+Sweep (Latin hypercube) over declared ranges: shares are coverage of the tested conditions, not probabilities.
+
+full: All lines, 3,000 hangers, 80 businesses  (infeasible 352/10000)
+  collected p10 $8256  p50 $12414  p90 $16933  · hours p50 237 p90 265
+  share of tested conditions collecting ≥$10k 76% · ≥$9k 85% · ≥$8k 92%
+  contribution p10 $3,950 p50 $6,181 p90 $8,744
+    r_lights   mean $2,642  p50 $2,559
+    r_trees    mean $2,147  p50 $2,114
+    r_cleanup  mean $1,746  p50 $1,700
+    r_mailer   mean $1,523  p50 $0
+    r_gift     mean $1,742  p50 $1,580
+    r_org      mean $2,480  p50 $2,300
+    r_remote   mean $250  p50 $251
+
+full_wide: All lines, 6,000 hangers, 160 businesses  (infeasible 8755/10000)
+  collected p10 $8366  p50 $11798  p90 $15883  · hours p50 270 p90 278
+  share of tested conditions collecting ≥$10k 74% · ≥$9k 84% · ≥$8k 92%
+  contribution p10 $3,619 p50 $5,069 p90 $6,573
+    r_lights   mean $2,086  p50 $2,041
+    r_trees    mean $1,687  p50 $1,688
+    r_cleanup  mean $1,377  p50 $1,365
+    r_mailer   mean $1,494  p50 $0
+    r_gift     mean $2,560  p50 $2,237
+    r_org      mean $2,518  p50 $2,342
+    r_remote   mean $250  p50 $248
+
+no_mailer_wide: No mailer, 6,000 hangers, 160 businesses  (infeasible 5852/10000)
+  collected p10 $9067  p50 $12867  p90 $16768  · hours p50 255 p90 275
+  share of tested conditions collecting ≥$10k 83% · ≥$9k 91% · ≥$8k 95%
+  contribution p10 $4,289 p50 $6,328 p90 $8,242
+    r_lights   mean $2,822  p50 $2,754
+    r_trees    mean $2,284  p50 $2,291
+    r_cleanup  mean $1,855  p50 $1,832
+    r_mailer   mean $0  p50 $0
+    r_gift     mean $3,227  p50 $2,898
+    r_org      mean $2,486  p50 $2,311
+    r_remote   mean $252  p50 $253
+
+home_only: Home services only, 3,000 hangers  (infeasible 0/10000)
+  collected p10 $4185  p50 $6782  p90 $9977  · hours p50 168 p90 198
+  share of tested conditions collecting ≥$10k 10% · ≥$9k 19% · ≥$8k 32%
+  contribution p10 $2,861 p50 $4,855 p90 $7,340
+    r_lights   mean $2,712  p50 $2,605
+    r_trees    mean $2,203  p50 $2,154
+    r_cleanup  mean $1,792  p50 $1,729
+    r_mailer   mean $0  p50 $0
+    r_gift     mean $0  p50 $0
+    r_org      mean $0  p50 $0
+    r_remote   mean $250  p50 $250
+
+what moves the result most (full_wide, rank correlation with contribution):
+  0.82  Door-hanger response rate
+  0.32  Responses that book and pay
+  0.18  Businesses contacted that order
+  0.17  Light install price
+  0.16  Mailer slots sold by Nov 12
+  0.15  Personal contacts who buy
+  0.10  Leaf + single-story gutter cleanup
+  0.09  Boxes per order
+
+BASE: collected $15740 in 243 person-hours
+  lights         $2814
+  trees_wreaths  $2283
+  cleanup        $1693
+  mailer         $3500
+  gift_boxes     $2200
+  org_wreaths    $3000
+  remote         $250
+
+ADVERSE: collected $4350 in 200 person-hours
+  lights         $1037
+  trees_wreaths  $932
+  cleanup        $656
+  mailer         $0
+  gift_boxes     $825
+  org_wreaths    $900
+  remote         $0
+
+ADVERSE gap to $8,000: $3650
+  mailer fills to 8 slots at $300: collected $6750, hours 200
+  +3,000 door hangers (second batch): collected $5840, hours 259
+  gift orders at the 1.6% median reply rate: collected $4581, hours 201
+  +80 more businesses contacted: collected $5175, hours 202
+  one more organisation (2 of 30): collected $5250, hours 200
+  all five together: collected $10427, hours 263
