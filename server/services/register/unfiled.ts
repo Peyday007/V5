@@ -50,8 +50,16 @@ export async function unfiledWork(projectIds: string[]): Promise<UnfiledItem[]> 
   const filed = await alreadyFiled();
   const items: UnfiledItem[] = [];
 
+  /*
+   * Two paths can name one change request — the request itself and the
+   * software request that became it — so an item is offered once however many
+   * readers reach it.
+   */
+  const seen = new Set<string>();
   const push = (item: UnfiledItem): void => {
-    if (filed.has(`${item.kind}:${item.ref}`)) return;
+    const key = `${item.kind}:${item.ref}`;
+    if (filed.has(key) || seen.has(key)) return;
+    seen.add(key);
     items.push(item);
   };
 
@@ -72,21 +80,13 @@ export async function unfiledWork(projectIds: string[]): Promise<UnfiledItem[]> 
   }
 
   for (const projectId of projectIds) {
-    for (const request of await listChangeRequests(projectId)) {
-      if (request.state === 'WITHDRAWN') continue;
-      push({
-        kind: 'CHANGE_REQUEST',
-        ref: request.id,
-        title: request.objective,
-        status: request.state,
-        projectId,
-        why:
-          request.state === 'DRAFT'
-            ? 'A change request is waiting for a person to approve it.'
-            : 'An approved change request is not accounted for in the register.',
-      });
-    }
+    const changeRequests = await listChangeRequests(projectId);
+    const states = new Map(changeRequests.map((one) => [one.id, one.state]));
 
+    /*
+     * Software requests go first: when both name one change request the
+     * software request's title is the richer one, and the first push wins.
+     */
     /*
      * A software request that has not become a change request yet has nothing
      * a `CHANGE_REQUEST` link could resolve.
@@ -104,6 +104,8 @@ export async function unfiledWork(projectIds: string[]): Promise<UnfiledItem[]> 
     for (const request of await listSoftwareRequests({ projectId })) {
       if (request.state === 'DECLINED') continue;
       if (!request.changeRequestId) continue;
+      // A withdrawn change request is not work anybody is holding.
+      if (states.get(request.changeRequestId) === 'WITHDRAWN') continue;
       push({
         kind: 'CHANGE_REQUEST',
         ref: request.changeRequestId,
@@ -111,6 +113,21 @@ export async function unfiledWork(projectIds: string[]): Promise<UnfiledItem[]> 
         status: request.state,
         projectId,
         why: `A software change came out of a conversation and is ${request.state}.`,
+      });
+    }
+
+    for (const request of changeRequests) {
+      if (request.state === 'WITHDRAWN') continue;
+      push({
+        kind: 'CHANGE_REQUEST',
+        ref: request.id,
+        title: request.objective,
+        status: request.state,
+        projectId,
+        why:
+          request.state === 'DRAFT'
+            ? 'A change request is waiting for a person to approve it.'
+            : 'An approved change request is not accounted for in the register.',
       });
     }
 
