@@ -109,7 +109,7 @@ import {
   recordReview,
   resolveFinding,
 } from '../server/repos/factoryFleet.ts';
-import { recordCampaignOutcome } from '../server/services/factory/writeback.ts';
+import { FACTORY_CAMPAIGN_OUTCOME, recordCampaignOutcome } from '../server/services/factory/writeback.ts';
 import { listEventsByEntity } from '../server/repos/events.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
 import { listOrchestrationsByProject, updateOrchestration } from '../server/repos/research.ts';
@@ -4558,7 +4558,11 @@ async function checkFactoryBeacon(required: boolean): Promise<void> {
     `${Number(takeovers[0]?.total ?? 0)} row(s)`,
   );
 
-  const outcomes = await listEventsByEntity('FACTORY_CAMPAIGN', campaign.id);
+  // The writeback by its own event type: a campaign also carries other facts
+  // (an objective's finished record), and "exactly one" is about this one.
+  const outcomes = (await listEventsByEntity('FACTORY_CAMPAIGN', campaign.id)).filter(
+    (event) => event.eventType === FACTORY_CAMPAIGN_OUTCOME,
+  );
   record(
     'the writeback survived, and there is still exactly one of it',
     outcomes.length === 1,

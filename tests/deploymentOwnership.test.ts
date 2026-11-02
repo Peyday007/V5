@@ -368,10 +368,14 @@ describe('an operator command cannot cancel a deployment', () => {
    * A read cannot be evicted by somebody else's dispatch.
    */
   it('gives Factory and Fleet read commands a group of their own run', () => {
-    for (const file of ['.github/workflows/factory.yml', '.github/workflows/fleet.yml']) {
+    for (const file of ['.github/workflows/fleet.yml']) {
       expect(read(file)).toMatch(/group: brain-console-\w+-\$\{\{ contains\(fromJSON\('\["(status|show)"/);
       expect(read(file)).toMatch(/format\('read-\{0\}', github\.run_id\) \|\| 'write'/);
     }
+    // The Factory door gives every run, read or write, a group of its own: a
+    // shared write group cancelled the middle two of four back-to-back writes
+    // (2026-11-02), and every write it runs is guarded and idempotent.
+    expect(read('.github/workflows/factory.yml')).toMatch(/group: brain-console-factory-\$\{\{ github\.run_id \}\}/);
   });
 
   /**

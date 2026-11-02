@@ -64,14 +64,16 @@ on:
         default: ''
 
 # Never at the same time as a deploy: the machine is being replaced during one.
-# A read cannot be evicted. GitHub keeps one pending run per group and the
-# newest pending cancels the one waiting, so with every command in one group a
-# `status` dispatched by one session was cancelled by another session's `submit`
-# (measured 2026-10-30: three reads in a row cancelled before starting). Reads
-# change nothing, so each holds a group of its own run; writes still queue
-# behind one another. Keeping off a machine mid-release is await-release's job.
+# Every run holds a group of its own. GitHub keeps one pending run per group and
+# the newest pending cancels the one waiting, so a shared group drops work: a
+# `status` was cancelled by another session's `submit` (2026-10-30), and on
+# 2026-11-02 a session that dispatched approve, authorize-release, submit and
+# submit back to back had the middle two cancelled without a word. Reads change
+# nothing, and every write here is a guarded, idempotent database operation
+# (§19, §20), so nothing needs the queue; keeping off a machine mid-release is
+# await-release's job.
 concurrency:
-  group: brain-console-factory-${{ contains(fromJSON('["status","outcome","wait","allocation","events","throughput","pull-request","campaigns","bins"]'), inputs.command) && format('read-{0}', github.run_id) || 'write' }}
+  group: brain-console-factory-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
