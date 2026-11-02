@@ -24,7 +24,7 @@ import {
   requirePerson,
 } from './helpers.ts';
 import { GOAL_COMMITMENTS, type GoalCommitment } from '../domain/goals.ts';
-import { getWorkstream, linkWorkstream, listLinks, listWorkstreamEvents, recordWorkstreamEvent } from '../repos/register.ts';
+import { getWorkstream, listWorkstreamEvents } from '../repos/register.ts';
 import { snapshotHistory } from '../repos/goals.ts';
 import { getMembership } from '../repos/identity.ts';
 import { listProjects } from '../repos/projects.ts';
