@@ -14075,6 +14075,12 @@ and the idle-fill lift stay stopped.
   round sat QUEUED among 36 queued ideas. It is 150 now: after the deep dives,
   before the buckets. Only the order changed; the grant and the focus cap still
   bound it.
+- **A repeating buyer pattern is an opening, and the worker is told so.**
+  `GOAL_MECHANISM` inherited discovery's "a general need is context, not a
+  signal" and said nothing about a pattern, so seven constructed rounds filed
+  reports and harvested nothing. Its criteria now say a `demand_pattern` claim
+  with its two dated examples carries `RECURRING_OUTSOURCED_WORK`. The gate,
+  the floor and the harvest are unchanged.
 
 ## Repository map
 
