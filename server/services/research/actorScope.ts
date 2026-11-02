@@ -107,6 +107,16 @@ const GOVERNOR =
  */
 const COPULA_COMPLEMENT = /\b(?:is|are|was|were|be|being|been)\s+(?:only\s+)?(?:an?|the)?\s*$/i;
 
+/**
+ * A relative clause hands the verb to somebody else.
+ * *"Which kinds of buyers who hire freelancers for this work publish a rate?"*
+ * describes the buyers; the hiring is theirs. Anchored to the text immediately
+ * before the phrase, after the researcher check, so *"…that we purchase"* is
+ * still Brain's own action.
+ */
+const THIRD_PARTY_RELATIVE =
+  /\b(?:who|that|which)\s+(?:\w+ly\s+)?(?:(?:will|would|can|could|may|might|must|do|does|did)\s+)?$/i;
+
 const LEADING_FILLER = /^(?:\s|[-*•]|\d+[.)])+/;
 
 /**
@@ -146,6 +156,7 @@ export function ownActionMatches(prose: string, pattern: RegExp): OwnActionMatch
   for (const match of prose.matchAll(scanner)) {
     const at = match.index ?? 0;
     if (insideCompound(prose, at, match[0].length)) continue;
+    if (namesAThing(prose, at + match[0].length)) continue;
     const clauseStart = clauseStartBefore(prose, at);
     const before = prose.slice(clauseStart, at);
     if (!isOwnAction(before)) continue;
@@ -172,6 +183,23 @@ function insideCompound(prose: string, at: number, length: number): boolean {
   const before = prose.slice(Math.max(0, at - 2), at);
   const after = prose.slice(at + length, at + length + 2);
   return /[a-z]-$/i.test(before) || /^-[a-z]/i.test(after);
+}
+
+/**
+ * A forbidden word used as a modifier names a measurement, not a step.
+ * *"…each with a published directory count, purchase frequency and price
+ * paid"* asks how often buyers buy; "purchase" is an adjective on
+ * "frequency". Production, 2026-11-02: the judge's follow-up on
+ * `orc_eefa0aa5fb194685b079` was refused for "instructs the researcher to
+ * purchase", parked, and cancelled by the RECORD_GAPS answer — so the one
+ * question that asked for buyer economics was never researched. Closed list of
+ * the nouns a commercial question measures, so "purchase the list" is untouched.
+ */
+const MODIFIED_NOUN =
+  /^\s+(?:frequency|frequencies|price|prices|volume|volumes|history|histories|order|orders|decision|decisions|cycle|cycles|terms|records?|data|amount|amounts|size|sizes|count|counts|rate|rates|value|values|date|dates|pattern|patterns|behaviou?r|intent|channel|channels|process|processes)\b/i;
+
+function namesAThing(prose: string, end: number): boolean {
+  return MODIFIED_NOUN.test(prose.slice(end, end + 30));
 }
 
 /** The convenience every caller of the screen actually wants. */
@@ -209,6 +237,7 @@ function clauseEndAfter(prose: string, at: number): number {
 function isOwnAction(before: string): boolean {
   const head = before.replace(LEADING_FILLER, '');
   if (RESEARCHER_SUBJECT.test(head)) return true;
+  if (THIRD_PARTY_RELATIVE.test(head)) return false;
   if (COPULA_COMPLEMENT.test(head)) return false;
   return !GOVERNOR.test(head.slice(-GOVERNOR_WINDOW));
 }
