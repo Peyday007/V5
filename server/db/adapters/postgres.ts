@@ -342,7 +342,14 @@ export class PostgresAdapter implements Database {
     // a burst above the floor still gives its backends back. Carved out of the
     // same ceiling, so the app's total against the pooler cannot grow.
     const floor = Math.min(readCount('BRAIN_DATABASE_POOL_MIN', 0), this.#max);
-    this.#pool = new Pool({ ...config, max: this.#max, min: floor });
+    const workloadTimeoutMs = readPositiveMs('BRAIN_DATABASE_STATEMENT_TIMEOUT_MS', WORKLOAD_STATEMENT_TIMEOUT_MS);
+    // A client-side bound just outside the server's `statement_timeout`, as the
+    // control pool already has. Production, 2026-11-02 18:32–18:58: the pooler
+    // dropped connections silently, a workload query on one waited on TCP
+    // keepalive for many minutes, and every MCP call waiting behind it held a
+    // rate slot until the credential was locked out. "Query read timeout" is
+    // classified CONNECTION_LOST, so the dead client is destroyed, not reused.
+    this.#pool = new Pool({ ...config, max: this.#max, min: floor, query_timeout: workloadTimeoutMs + 15_000 });
     // A pool that emits an error with no listener takes the process down. An
     // idle client dropped by the far end is ordinary; the pool replaces it.
     this.#pool.on('error', () => undefined);
@@ -365,7 +372,6 @@ export class PostgresAdapter implements Database {
      * Sent one at a time, because a server that does not know the last one must
      * not lose the first two with it.
      */
-    const workloadTimeoutMs = readPositiveMs('BRAIN_DATABASE_STATEMENT_TIMEOUT_MS', WORKLOAD_STATEMENT_TIMEOUT_MS);
     this.#sessionSettings.set(this.#pool, [
       `SET statement_timeout = ${workloadTimeoutMs}`,
       `SET idle_in_transaction_session_timeout = ${WORKLOAD_IDLE_IN_TRANSACTION_MS}`,
