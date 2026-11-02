@@ -33,8 +33,10 @@ import {
   type EvidenceStatus,
   type OutcomeLevel,
 } from '../domain/engineering.ts';
-import type { FactoryCampaignState } from '../domain/factory.ts';
+import type { FactoryCampaign, FactoryCampaignState } from '../domain/factory.ts';
+import type { ObjectiveOutcome } from '../domain/factoryRelease.ts';
 import { getCampaign } from '../repos/factory.ts';
+import { objectiveOutcome } from '../services/factory/release/outcome.ts';
 import {
   canonicalRepository,
   observationsFor,
@@ -455,6 +457,30 @@ export function reachedForCampaign(state: FactoryCampaignState, prOpen: boolean)
   }
 }
 
+/**
+ * How far a campaign has got and whether a person holds it up, read from its
+ * objective outcome (the one status a person reads) rather than from its stage
+ * alone: a LIVE campaign reached production, a release already merged and
+ * deploying or verifying has a merge sha, and `needsPerson` is a human blocker.
+ * Everything else keeps the stage mapping.
+ */
+export function campaignReading(
+  campaign: Pick<FactoryCampaign, 'state' | 'prRef' | 'prUrl'>,
+  outcome: Pick<ObjectiveOutcome, 'status' | 'needsPerson' | 'release'>,
+): { reached: OutcomeLevel | null; humanBlockerOpen: boolean } {
+  let reached = reachedForCampaign(campaign.state, Boolean(campaign.prRef || campaign.prUrl));
+  if (outcome.status === 'LIVE') {
+    reached = 'PRODUCTION_WORKING';
+  } else if (
+    outcome.status === 'RELEASING' &&
+    outcome.release &&
+    (outcome.release.state === 'DEPLOYING' || outcome.release.state === 'VERIFYING')
+  ) {
+    reached = 'MERGED';
+  }
+  return { reached, humanBlockerOpen: outcome.needsPerson };
+}
+
 const nextActionTool: McpTool = {
   name: 'brain_next_engineering_action',
   title: 'What to do next',
@@ -487,13 +513,17 @@ const nextActionTool: McpTool = {
     const taskRef = optionalString(args, 'task_ref');
     let reached = oneOf(optionalString(args, 'reached'), OUTCOME_LEVELS, 'reached');
     let derivedFrom = 'caller';
+    let campaignBlocker = false;
     if (taskRef?.startsWith('fcp_')) {
       const campaign = await getCampaign(taskRef);
       if (campaign) {
         await authorize(principal, campaign.projectId, 'READ', 'project:read');
         projectId = campaign.projectId;
-        reached = reachedForCampaign(campaign.state, Boolean(campaign.prRef || campaign.prUrl));
-        derivedFrom = `campaign ${campaign.id} is ${campaign.state}`;
+        const outcome = await objectiveOutcome(campaign);
+        const reading = campaignReading(campaign, outcome);
+        reached = reading.reached;
+        campaignBlocker = reading.humanBlockerOpen;
+        derivedFrom = `campaign ${campaign.id} is ${campaign.state} (${outcome.status})`;
       }
     }
     const observable = optionalBoolean(args, 'running_process_observable');
@@ -506,7 +536,7 @@ const nextActionTool: McpTool = {
           : { observable, expectedMinutes: optionalInteger(args, 'running_process_expected_minutes') },
       proposedWaitMinutes: optionalInteger(args, 'proposed_wait_minutes'),
       independentWorkAvailable: optionalBoolean(args, 'independent_work_available') ?? false,
-      humanBlockerOpen: optionalBoolean(args, 'human_blocker_open') ?? false,
+      humanBlockerOpen: (optionalBoolean(args, 'human_blocker_open') ?? false) || campaignBlocker,
       proposingToStop: optionalBoolean(args, 'proposing_to_stop') ?? false,
     });
     for (const intervention of decision.interventions) {
