@@ -13871,3 +13871,8 @@ and the idle-fill lift stay stopped.
   "found 0" (orc_d083edfc645c47e6b99d among them). `OPENING_SENTENCE` in
   `construct.ts` names the field and the three kinds a constructed design can
   be; the worker still decides, and no bar moves.
+- **A hyphenated word is a name, not an order.** The judge's follow-up on the
+  first launched constructed round asked about "group-purchase operators", and
+  the envelope's own-action screen read it as "instructs the researcher to
+  purchase" and refused the corrected round. `actorScope` skips a forbidden
+  phrase joined to a word by a hyphen; the bare verb is still refused.

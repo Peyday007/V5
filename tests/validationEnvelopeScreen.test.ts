@@ -52,6 +52,19 @@ describe('a Cash deep dive is not refused by its own envelope', () => {
       expect(ownActionMatches(text, pattern), text).toEqual([]);
     }
   });
+
+  // Production, 2026-11-02: orc_d083edfc645c47e6b99d's judge follow-up was
+  // refused for "instructs the researcher to purchase". A hyphenated compound
+  // names a kind of business; the verb on its own is still refused.
+  it('reads a hyphenated compound as a name, and still refuses the verb', () => {
+    const discovery = APPROVAL_ENVELOPES['RUSSELL_CASH_DISCOVERY_V1']!.forbiddenActions;
+    const judge =
+      'Which published group-purchase operators (for example heating-oil or freight co-ops and ' +
+      'bulk-buy clubs) publish an arranger fee or commission, a minimum run size and two dated runs?';
+    expect(ownActionMatches(judge, discovery)).toEqual([]);
+    expect(ownActionMatches('Record the purchase-order terms each buyer publishes.', discovery)).toEqual([]);
+    expect(ownActionMatches('Purchase the supplier list and record its price.', discovery).length).toBeGreaterThan(0);
+  });
 });
 
 /*
