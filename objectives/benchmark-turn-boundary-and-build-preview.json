@@ -1,0 +1,81 @@
+{
+  "objective": "Two independent components, one objective; they share no file and may be built in parallel. PART 1 (Russell turn boundary): Close two gaps docs/STEP-12B-BACKLOG.md recorded during the connected integration pass (\"The proposal validator's unknown-field rule stops at the top level\" and \"`failProbe` still has no caller\") and deferred only because an acceptance run was live. (1) `validateProposal` in server/services/russell/proposal.ts (~259) refuses a whole proposal for an unknown top-level field (KNOWN_FIELDS ~122, loop ~272) \u2014 the rule \u00a724 states \u2014 but inside the `candidate` (~329-355), `probe` (~360-386) and `software` (~389-424) objects an unrecognised key is silently ignored, so \u00a724's claim is broader than the code: a worker that believed an extra instruction nested in one of those objects would take effect has it dropped and the rest acted on. The turn manifest in server/services/russell/turn.ts already tells workers exactly `title`/`statement`/`duplicateOf` for a candidate (~420, ~500) and `title`/`objective`/`expectedOutcome` for software (~438), so compliant workers are unaffected. (2) `failProbe` (server/repos/russellProbes.ts ~293) has no caller: `runProbe` (server/services/russell/probe.ts ~169) catches network failures inside `fetchOnce`, but any other exception thrown after `startProbe` (for example a failed `permitLookup` or `recordObservation` write) escapes, leaves the probe RUNNING, and is resolved only when `listExpiredProbes` ends it at UNKNOWN on a later tick \u2014 so \"the probe crashed\" and \"the probe ran out of time\" are recorded identically and the candidate waits out the deadline. PART 2 (Build campaign row): Put the factory's two campaign readers that have routes and no browser caller on the Build screen. GET /api/factory/campaigns/:campaignId/pull-request (server/routes/factory.ts ~636-643, returns pullRequestFor's {title, body} from server/services/factory/pullRequest.ts ~182, or {title:null, body:null}) and GET /api/factory/campaigns/:campaignId/throughput (~626-633, returns ThroughputReport from server/services/factory/throughput.ts ~77, every number an EvidenceNumber {value, evidence, basis}). client/src/lib/factoryApi.ts (~311-314) has campaign() and briefing() only. CLAUDE.md \u00a727 records that on the local plane the rendered pull-request body is the campaign's whole deliverable and 'the one person who has to act on it had nowhere to read what they were about to open'; client/src/russell/Build.tsx `CampaignRow` (~1045-1120) still says for a campaign with prRef and no prUrl that 'opening the pull request is a person's step' (~1100-1112) without showing the title or body. Add `FactoryApi.pullRequest(campaignId)` and `FactoryApi.throughput(campaignId)` (typing throughput with `import type { ThroughputReport }`). In CampaignRow add a 'Read the pull request it would open' disclosure, fetched only when opened, that renders the title and the body in a <pre> (or says plainly that none has been rendered when title is null), and a 'How fast it ran' disclosure, fetched only when opened, listing unitsPerHour, maxObservedConcurrency, concurrency.observed and concurrency.declared with each number's evidence class; a null value renders the words 'not measured' with its basis, never 0 or a dash.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "PART 1: proposal.ts exports the allowed key sets for each part (candidate: title, statement, duplicateOf; probe: question, maxLookups; software: title, objective, expectedOutcome) and `validateProposal` refuses the whole proposal with a new refusal code `UNKNOWN_PART_FIELD` (added to the refusal union) when any of those objects carries a key outside its set, before anything else about that part is used; the refusal sentence names the part but not the offending key's value. probe.ts wraps the body of `runProbe` after `startProbe` so that an exception calls `failProbe` with a fixed explanation naming the failure category (the error's class name, never its message, since a message can carry row values) and returns `{ ok: false, reason: 'failed', outcome: null, lookups }` instead of throwing; a probe already COMPLETE is not overwritten (failProbe is guarded on PENDING/RUNNING). A FAILED probe is already picked up by the post-probe re-judgement (`probedAwaitingDecision` in server/services/russell/loop.ts reads state IN ('COMPLETE','FAILED')), so no loop change is needed. PART 2: Build's campaign rows can show the pull-request title/body and the throughput report on demand, using the existing routes, with UNKNOWN figures labelled as not measured.",
+  "nonGoals": [
+    "Any migration, schema or policy change.",
+    "Any server route or service change",
+    "Changing ReleaseDecision, Submit, Repositories or allocation behaviour",
+    "Changing the probe envelope, the lookup budget, the verdict rules, listExpiredProbes or the loop.",
+    "Changing the turn manifest in server/services/russell/turn.ts, the action set, REQUIRED_PART, FIELD_LIMITS or any refusal that exists today.",
+    "Editing docs/STEP-12B-BACKLOG.md (it belongs to another objective's scope).",
+    "Fetching either reader before its disclosure is opened",
+    "Opening, publishing or merging a pull request from Brain",
+    "Recording an exception's message or stack in russell_probes.",
+    "Stripping unknown keys instead of refusing: the rule is refusal of the whole proposal."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "PART 1: validateProposal refuses with UNKNOWN_PART_FIELD a CAPTURE_CANDIDATE proposal whose candidate carries an extra key (e.g. \"projectId\" or \"priority\" nested inside it), a proposal whose probe carries an extra key, and a REQUEST_SOFTWARE_CHANGE proposal whose software carries \"repository\"; each otherwise-identical proposal without the extra key validates exactly as before.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "PART 1: Every key in each exported part key set appears as a quoted field name in server/services/russell/turn.ts's manifest instructions for the parts the manifest describes (candidate and software), asserted by reading that file, so the validator cannot refuse a key workers are told to send.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "PART 1: When a step inside runProbe after startProbe throws (the test forces this by making the observation write reject), the probe row ends FAILED with completed_at set and an explanation that names the error class and does not contain the thrown message, and runProbe resolves rather than rejects.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "PART 1: A probe that ran to completion is still COMPLETE with its verdict after the change, and calling runProbe again on a FAILED probe does not change it.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "PART 1: tests/russellNervousSystem.test.ts, tests/russellRecovery.test.ts, tests/russellSoftwareJourney.test.ts and tests/intakeToResult.test.ts still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    },
+    {
+      "statement": "PART 2: tests/buildPullRequestPreview.test.tsx: opening the pull-request disclosure on a campaign row requests /api/factory/campaigns/<id>/pull-request exactly once and renders the returned title and body text; no such request is made before it is opened.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "PART 2: When the route returns {title:null, body:null} the disclosure says no pull request has been rendered and renders no empty <pre>.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "PART 2: Opening the throughput disclosure renders each listed figure with its evidence class, and a figure whose value is null renders 'not measured' and its basis, never '0'.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "PART 2: tests/buildRepositories.test.tsx and tests/factoryHttp.test.ts still pass and the repository typechecks.",
+      "verification": "npm run typecheck",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/russell/proposal.ts",
+    "server/services/russell/probe.ts",
+    "tests/russellTurnBoundary.test.ts",
+    "client/src/lib/factoryApi.ts",
+    "client/src/russell/Build.tsx",
+    "tests/buildPullRequestPreview.test.tsx"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "MEDIUM",
+  "rollbackRequirement": "Revert the merge commit; no schema or data change.",
+  "submissionKey": "benchmark-turn-boundary-and-build-preview-v1"
+}

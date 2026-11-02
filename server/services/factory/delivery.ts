@@ -293,7 +293,10 @@ export async function noteObjectiveOutcome(campaign: FactoryCampaign): Promise<F
       async () => {
         const event = await recordEvent({
           projectId: campaign.projectId,
-          entityType: 'FACTORY_CAMPAIGN',
+          // Its own entity type: the campaign's single writeback event
+          // (FACTORY_CAMPAIGN_COMPLETED) is counted as "exactly one" by the
+          // hosted verifier and by tests, and this is a different fact.
+          entityType: 'FACTORY_OBJECTIVE',
           entityId: campaign.id,
           eventType: FACTORY_OBJECTIVE_FINISHED,
           payload: record,
