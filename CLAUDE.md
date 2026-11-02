@@ -14070,6 +14070,11 @@ and the idle-fill lift stay stopped.
   six-hour expiry rejected an idea that was only waiting for a mission slot. It
   now leaves it alone while `researchMissionSlotsFull`, because that wait is the
   grant's, not the idea's.
+- **A goal's own round launches ahead of broad discovery.** `GOAL_MECHANISM`
+  inherited broad discovery's launch ordinal (500), so the one constructed
+  round sat QUEUED among 36 queued ideas. It is 150 now: after the deep dives,
+  before the buckets. Only the order changed; the grant and the focus cap still
+  bound it.
 
 ## Repository map
 
