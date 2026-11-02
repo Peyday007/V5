@@ -9,6 +9,7 @@
  * have. The only mutations are guarded transitions naming the state they come
  * from; nothing here deletes, and an amount is never updated.
  */
+import { inReadScope, scopedRead } from './readScope.ts';
 import { getDb } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
 import type {
@@ -185,7 +186,13 @@ export async function insertAgreement(input: {
   return { row: mapAgreement(row!), created: s(row!.id) === id };
 }
 
-export async function agreementsFor(opportunityId: string): Promise<CashAgreement[]> {
+export async function agreementsFor(opportunityId: string, projectId?: string): Promise<CashAgreement[]> {
+  if (projectId && inReadScope()) {
+    const all = await scopedRead(`agreements:${projectId}`, async () =>
+      (await getDb().all<Row>('SELECT * FROM cash_agreements WHERE project_id = ? ORDER BY created_at, id', [projectId])).map(mapAgreement),
+    );
+    return all.filter((one) => one.opportunityId === opportunityId);
+  }
   const rows = await getDb().all<Row>(
     'SELECT * FROM cash_agreements WHERE opportunity_id = ? ORDER BY created_at, id',
     [opportunityId],

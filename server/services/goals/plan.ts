@@ -46,6 +46,7 @@ import { goalExclusions } from '../cash/exclusions.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { listMoneyEntries } from '../../repos/cashLedger.ts';
 import { recordMateriality } from './materiality.ts';
+import { withReadScope } from '../../repos/readScope.ts';
 import { cashSpareSurfaces } from '../cash/researchRoom.ts';
 import { researchGoalPaths } from './pathResearch.ts';
 import { compileModel, canonicalJson, sha256 } from '../scenario/model.ts';
@@ -495,7 +496,12 @@ export async function measuredPlanChance(): Promise<PlanReading['measuredChance'
  * scenario model and run (through the scenario service) and an append-only
  * reading when the conclusion changed.
  */
-export async function readGoalPlan(input: { goalId: string; now?: Date; persist?: boolean; evaluations?: number }): Promise<PlanReading | null> {
+/** A plan read is one read: project-wide lists are fetched once inside it (repos/readScope.ts). */
+export function readGoalPlan(input: { goalId: string; now?: Date; persist?: boolean; evaluations?: number }): Promise<PlanReading | null> {
+  return withReadScope(() => readGoalPlanUnscoped(input));
+}
+
+async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist?: boolean; evaluations?: number }): Promise<PlanReading | null> {
   const now = input.now ?? new Date();
   const goal = await getWorkstream(input.goalId);
   if (!goal) return null;

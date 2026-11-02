@@ -64,6 +64,7 @@
  * It writes nothing, enqueues nothing and moves no state.
  */
 import { withGoalLimitsMemo } from './worthResearching.ts';
+import { withReadScope } from '../../repos/readScope.ts';
 import { listCashEvents } from '../../repos/cashMode.ts';
 import { listNeeds, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { getClaim, listClaimsForFragment } from '../../repos/research.ts';
@@ -735,7 +736,7 @@ export async function sharedCashView(input: { projectId: string }): Promise<Shar
 
 /** sharedFrontier, with goal limits read once for the whole read (see `withGoalLimitsMemo`). */
 export function sharedFrontier(input: Parameters<typeof sharedFrontierUnmemoized>[0]): ReturnType<typeof sharedFrontierUnmemoized> {
-  return withGoalLimitsMemo(() => sharedFrontierUnmemoized(input));
+  return withReadScope(() => withGoalLimitsMemo(() => sharedFrontierUnmemoized(input)));
 }
 
 async function sharedFrontierUnmemoized(input: {

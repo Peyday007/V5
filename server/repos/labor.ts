@@ -15,6 +15,7 @@
  * answering one decision produce one successor and the loser's supersede
  * matches nothing.
  */
+import { scopedRead } from './readScope.ts';
 import { getDb } from '../db/database.ts';
 import { newId, nowIso } from './util.ts';
 import type {
@@ -138,7 +139,11 @@ export async function createWorkflow(input: {
   return { workflow: mapWorkflow(rows[0]), created: rows[0].id === id };
 }
 
-export async function listWorkflows(projectId: string): Promise<LaborWorkflow[]> {
+export function listWorkflows(projectId: string): Promise<LaborWorkflow[]> {
+  return scopedRead(`labor:listWorkflows:${projectId}`, () => listWorkflowsUnscoped(projectId));
+}
+
+async function listWorkflowsUnscoped(projectId: string): Promise<LaborWorkflow[]> {
   const rows = await getDb().all<LaborWorkflowRow>(
     `SELECT * FROM labor_workflows
       WHERE project_id = ?
@@ -245,7 +250,11 @@ export async function createTask(input: {
   return { task: mapTask(rows[0]), created: rows[0].id === id };
 }
 
-export async function listTasks(projectId: string): Promise<LaborTask[]> {
+export function listTasks(projectId: string): Promise<LaborTask[]> {
+  return scopedRead(`labor:listTasks:${projectId}`, () => listTasksUnscoped(projectId));
+}
+
+async function listTasksUnscoped(projectId: string): Promise<LaborTask[]> {
   const rows = await getDb().all<LaborTaskRow>(
     `SELECT * FROM labor_tasks
       WHERE project_id = ?
@@ -364,7 +373,11 @@ export async function recordAllocation(input: {
   return rows[0] ? mapAllocation(rows[0]) : null;
 }
 
-export async function listAllocations(projectId: string): Promise<LaborAllocation[]> {
+export function listAllocations(projectId: string): Promise<LaborAllocation[]> {
+  return scopedRead(`labor:listAllocations:${projectId}`, () => listAllocationsUnscoped(projectId));
+}
+
+async function listAllocationsUnscoped(projectId: string): Promise<LaborAllocation[]> {
   const rows = await getDb().all<LaborAllocationRow>(
     `SELECT * FROM labor_allocations
       WHERE project_id = ?
