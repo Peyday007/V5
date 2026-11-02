@@ -871,6 +871,19 @@ describe('a finished campaign is delivered only when the forge says so', () => {
     expect((await objectiveOutcome(campaign)).status).toBe('LIVE');
   });
 
+  it('one compare answers every campaign the same merge delivered', async () => {
+    const one = await completeCampaign(await approved('First greeting line on the Build page.'));
+    await getDb().run('UPDATE factory_campaigns SET pr_ref = ? WHERE id = ?', ['#78', one.id]);
+    const two = await completeCampaign(await approved('Second greeting line on the Build page.'));
+    const merged = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }, true);
+    await recordDeliveredBy({ remote: REMOTE, landing: 500, closes: [77, 78], forge: merged.port });
+    const live = forgePort({ state: 'closed', merged: true, mergeCommitSha: MERGE }, true);
+    await observeDeliveries([one, two], { forge: live.port, revision: REV });
+    expect(live.calls.contains).toBe(1);
+    expect((await latestDelivery(one.id))?.deployed).toBe(true);
+    expect((await latestDelivery(two.id))?.deployed).toBe(true);
+  });
+
   it('a campaign still building is not terminal and writes nothing', async () => {
     const changeRequest = await approved();
     const { campaign } = await ensureCampaign({
