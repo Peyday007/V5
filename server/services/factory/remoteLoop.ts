@@ -2075,7 +2075,9 @@ async function runRemoteTick(
           `${drift.expected.slice(0, 12)}; recorded, and the integrator is told`,
       );
     }
-    const bin = await createIntegrateBin(fresh, changeRequest, implemented, drift);
+    // The final round is the one whose tree ships: nothing else is outstanding.
+    // Every earlier round runs the intermediate commands (`intermediateRoundCommands`).
+    const bin = await createIntegrateBin(fresh, changeRequest, implemented, drift, outstanding.length === 0);
     if (bin) {
       report.created.push(`integrate:${bin.id}`);
       await noteBin(fresh, bin, `${implemented.length} implemented unit(s) to integrate`);

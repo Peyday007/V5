@@ -440,7 +440,11 @@ export async function createUnitsBin(
       branch: remoteBranchFor(campaign, unit),
       baseSha: base,
       ownedPaths: unit.ownedPaths,
-      verification: unit.verification.length > 0 ? unit.verification : changeRequest.verificationCommands,
+      // A unit is never what ships, so it runs the intermediate-round commands.
+      verification: intermediateRoundCommands(
+        unit.verification.length > 0 ? unit.verification : changeRequest.verificationCommands,
+        base,
+      ).commands,
       expectedArtifact: unit.expectedArtifact,
       requiredContext: unit.requiredContext,
     }),
@@ -499,6 +503,46 @@ export async function createUnitsBin(
 }
 
 /**
+ * The commands an intermediate round runs: the contract's, with its full test
+ * suite replaced by the tests the round's change can reach.
+ *
+ * CLAUDE.md rule 3 — typecheck and `test:impacted` while developing, the full
+ * gate once, on what is released — applied to the Factory's own rounds. Every
+ * unit bin and every integration round used to run the contract's full suite,
+ * so a fourteen-unit campaign paid for it more than a dozen times before the
+ * final integration and the release gate paid for it again. The final
+ * integration round (nothing else outstanding) and the release gate still run
+ * every command the contract declares, so what ships is judged by the whole
+ * suite exactly as before; only the rounds in between stop repeating it.
+ *
+ * A repository with no `test:impacted` script runs its full command, as the
+ * note says, so this changes nothing for one that cannot take it.
+ */
+const FULL_SUITE_COMMANDS = new Set(['npm test', 'npm run test', 'npx vitest run', 'vitest run', 'npm t']);
+
+export function intermediateRoundCommands(
+  commands: readonly string[],
+  base: string,
+): { commands: string[]; note: string | null } {
+  if (!commands.some((command) => FULL_SUITE_COMMANDS.has(command.trim()))) {
+    return { commands: [...commands], note: null };
+  }
+  const impacted = `npm run test:impacted -- --base ${base}`;
+  const out: string[] = [];
+  for (const command of commands) {
+    const next = FULL_SUITE_COMMANDS.has(command.trim()) ? impacted : command;
+    if (!out.includes(next)) out.push(next);
+  }
+  return {
+    commands: out,
+    note:
+      `This is an intermediate round, so \`${impacted}\` stands in for the contract's full test ` +
+      'suite: the final integration and the release gate run the whole suite on what ships. If ' +
+      "package.json has no `test:impacted` script, run the contract's full test command instead.",
+  };
+}
+
+/**
  * The integration bin: the campaign's one branch, moved once, by somebody else.
  *
  * Three reasons it is its own bin rather than a last step of the implementation
@@ -527,10 +571,19 @@ export async function createIntegrateBin(
    * is already up to date and have no words for why.
    */
   drift?: { expected: string; actual: string } | null,
+  /**
+   * True when no other unit is outstanding, so this round's tree is what will
+   * ship: it runs every command the contract declares. Any earlier round runs
+   * `intermediateRoundCommands`.
+   */
+  finalRound = true,
 ): Promise<Bin | null> {
   const mergeable = units.filter((unit) => unit.branch !== null && unit.headSha !== null);
   if (mergeable.length === 0) return null;
   const base = roundBaseFor(campaign);
+  const round = finalRound
+    ? { commands: [...changeRequest.verificationCommands], note: null }
+    : intermediateRoundCommands(changeRequest.verificationCommands, base);
   const touchesMigrations = mergeable.some((unit) => unit.ownedPaths.some((path) => /(^|\/)(pg-)?migrations\//.test(path)));
   const order = mergeable.map((unit) => ({
     unitKey: unit.unitKey,
@@ -556,8 +609,9 @@ export async function createIntegrateBin(
             `order given, starting from ${base}.`,
           '',
           'Create the integration branch from that commit if it does not exist yet; otherwise ' +
-            'start from where it is. Merge each unit branch in turn. Then run every command the ' +
-            'contract declares on the merged tree.',
+            'start from where it is. Merge each unit branch in turn. Then run every command in ' +
+            '`verification` below on the merged tree.' +
+            (round.note ? ` ${round.note}` : ''),
           '',
           '**Push the integration branch only if every command exits 0.** If one fails, or if a ' +
             'merge conflicts, push nothing and report BLOCKED with the command, its exit code ' +
@@ -625,9 +679,10 @@ export async function createIntegrateBin(
           baseSha: base,
           mergeInOrder: order,
           verification:
-            changeRequest.verificationCommands.length > 0
-              ? changeRequest.verificationCommands
+            round.commands.length > 0
+              ? round.commands
               : ['(this contract declares no verification commands)'],
+          finalRound,
         }),
         transform: 'FACTORY_INTEGRATE',
         dependsOn: [],

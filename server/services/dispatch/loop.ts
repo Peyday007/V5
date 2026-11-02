@@ -85,7 +85,7 @@ import {
   recordAllowanceObservation,
   resolveToken,
 } from './fire.ts';
-import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from './candidates.ts';
+import { fleetSnapshot, NO_SHOW_WINDOW_MS } from './candidates.ts';
 import { shouldQuarantine } from './scaler.ts';
 import { routeBin } from './router.ts';
 import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator, type RoutingRefusal } from './router.ts';
@@ -354,12 +354,14 @@ export async function dispatchTick(
    * *did* arrive and whose session then ended mid-stage, because that bin is
    * `LEASED` for ever after and this read used to skip it.
    *
-   * The window is `IN_FLIGHT_WINDOW_MS` and it is passed rather than re-stated,
-   * because `inFlightByRoutine` owns that number: a dispatch stops being
-   * counted as an activation and becomes reopenable at the same instant, so
-   * this can never race a fire Brain still believes is running.
+   * The window is `NO_SHOW_WINDOW_MS` and it is passed rather than re-stated,
+   * because `inFlightByRoutine` owns that number for an unanswered fire: a
+   * dispatch stops being counted as an activation and becomes reopenable at
+   * the same instant, so this can never race a fire Brain still believes is
+   * running. It used to be the thirty-minute `IN_FLIGHT_WINDOW_MS`, which made
+   * every no-show cost half an hour (see `NO_SHOW_WINDOW_MS`).
    */
-  const reopened = await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 50);
+  const reopened = await reopenNoShowDispatches(NO_SHOW_WINDOW_MS, 50);
   for (const entry of reopened) {
     if (entry.outcome === 'REOPENED') result.reopenedNoShows += 1;
     else result.abandonedNoShows += 1;

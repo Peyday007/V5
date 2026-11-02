@@ -40,6 +40,23 @@ import { sameProviderSession } from '../../domain/sessionRef.ts';
 export const IN_FLIGHT_WINDOW_MS = 30 * 60_000;
 
 /**
+ * How long a fire nobody answered still holds a slot and still blocks a re-fire.
+ *
+ * Shorter than `IN_FLIGHT_WINDOW_MS` on purpose. That window is right for a
+ * session that *arrived* and is working; it was also being applied to one that
+ * never arrived, so every no-show cost thirty minutes before the bin could be
+ * fired again. A cold start measures about 35 s. Factory campaign fcp_0157 lost
+ * 31 minutes this way before its architect started, and its first integration
+ * 41 minutes, most of it the same wait. A fire is "unanswered" only while the
+ * bin is still at the generation it was fired at — nobody took the lease — so a
+ * session that did arrive is still counted for the full window. The cost of a
+ * session that arrives later than this is one extra fire that finds no work.
+ * `reopenNoShowDispatches` is passed this same number, so a fire stops being
+ * counted and becomes reopenable at the same instant.
+ */
+export const NO_SHOW_WINDOW_MS = 8 * 60_000;
+
+/**
  * Unproductive session starts per account: the adaptive control that replaced
  * the fixed hourly activation budget.
  *
@@ -625,8 +642,11 @@ async function readInFlight(since: string, now: string): Promise<Map<string, num
                WHERE d2.bin_id = d.bin_id AND d2.state = 'SENT')
         AND (b.state <> 'LEASED' OR b.lease_expires_at > ?)
         AND NOT (b.state = 'READY' AND b.lease_generation > d.lease_generation)
+        -- A fire nobody answered (the bin is still at its generation) holds a
+        -- slot only for NO_SHOW_WINDOW_MS; one somebody took keeps the window.
+        AND (b.lease_generation <> d.lease_generation OR d.sent_at >= ?)
       GROUP BY d.routine_id`,
-    [since, now],
+    [since, now, new Date(Date.parse(now) - NO_SHOW_WINDOW_MS).toISOString()],
   );
   const out = new Map<string, number>();
   for (const row of rows) {

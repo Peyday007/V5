@@ -3466,7 +3466,10 @@ export async function reopenNoShowDispatches(
  * How long an intent that gave up on unanswered fires waits before Brain asks
  * once more, and how many times it may.
  */
-export const ABANDONED_REVIVE_AFTER_MS = 2 * 3_600_000;
+// Twenty minutes, not two hours: Factory campaign plans waited 2 h 07 m on this
+// cool-off with surfaces healthy again long before. Still bounded by
+// MAX_ABANDONED_REVIVALS, so a dead surface costs two more rounds, not a loop.
+export const ABANDONED_REVIVE_AFTER_MS = 20 * 60_000;
 export const MAX_ABANDONED_REVIVALS = 2;
 /** What one revival adds to the intent's ceiling: one more intent's worth of fires. */
 const REVIVAL_STEP = 5;
