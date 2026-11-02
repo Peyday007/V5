@@ -3,7 +3,7 @@
  * LIVE is production working, a person's blocker is NEEDS_HUMAN, and a campaign
  * still building keeps the stage mapping.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { campaignReading, reachedForCampaign } from '../server/mcp/engineeringTools.ts';
 import { nextEngineeringAction } from '../server/domain/engineering.ts';
 import type { FactoryCampaign } from '../server/domain/factory.ts';
@@ -44,5 +44,43 @@ describe('campaignReading', () => {
       expect(r.reached).toBe(reachedForCampaign(state, true));
       expect(r.humanBlockerOpen).toBe(false);
     }
+  });
+});
+
+/**
+ * The handler itself, not the helper: the tool is called with the caller's
+ * human_blocker_open false and the campaign's outcome decides.
+ */
+describe('brain_next_engineering_action handler', () => {
+  const handler = async (outcomeValue: O, args: Record<string, unknown>) => {
+    vi.resetModules();
+    vi.doMock('../server/repos/factory.ts', () => ({
+      getCampaign: async () => ({ id: 'fcp_x', projectId: 'prj_x', state: 'BLOCKED', prRef: null, prUrl: null }),
+    }));
+    vi.doMock('../server/services/factory/release/outcome.ts', () => ({ objectiveOutcome: async () => outcomeValue }));
+    vi.doMock('../server/repos/engineering.ts', () => ({ recordIntervention: async () => undefined }));
+    vi.doMock('../server/mcp/toolkit.ts', async (orig) => ({
+      ...(await orig<typeof import('../server/mcp/toolkit.ts')>()),
+      authorize: async () => undefined,
+    }));
+    const mod = await import('../server/mcp/engineeringTools.ts');
+    const tool = mod.ENGINEERING_TOOLS.find((t) => t.name === 'brain_next_engineering_action')!;
+    const result = await tool.run(args, { principal: { type: 'USER', id: 'u' } } as never);
+    return (result as { value: Record<string, unknown> }).value;
+  };
+
+  it('A02: a campaign stopped on a person is NEEDS_HUMAN though the caller passes false', async () => {
+    const value = await handler(outcome('BLOCKED', true), {
+      task_ref: 'fcp_x',
+      intended_outcome: 'PRODUCTION_WORKING',
+      human_blocker_open: false,
+    });
+    expect(value.action).toBe('NEEDS_HUMAN');
+  });
+
+  it('A01: a LIVE campaign is DONE for PRODUCTION_WORKING', async () => {
+    const value = await handler(outcome('LIVE'), { task_ref: 'fcp_x', intended_outcome: 'PRODUCTION_WORKING' });
+    expect(value.reached).toBe('PRODUCTION_WORKING');
+    expect(value.action).toBe('DONE');
   });
 });
