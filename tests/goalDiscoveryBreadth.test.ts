@@ -68,3 +68,25 @@ describe('domain speculation, as the owner excluded it on 2026-11-02', () => {
     expect(defaultEvaluations(1)).toBe(20_000);
   });
 });
+
+describe('an opening the goal plan judged too small is not researched by any other spender', () => {
+  it('screens it out once every goal that read it found it under the floor, and not before', async () => {
+    const { recordMateriality, clearMateriality } = await import('../server/services/goals/materiality.ts');
+    const { notWorthResearching } = await import('../server/services/cash/worthResearching.ts');
+    clearMateriality();
+    const now = new Date().toISOString();
+    const sneaker = { id: 'cop_sneaker', projectId: '', title: 'Air Jordan resale at $783', sourceClaimId: null, expiresAt: null } as never;
+    // Nobody has read it: nothing to say.
+    expect(await notWorthResearching(sneaker, { now })).toBeNull();
+    recordMateriality('wst_a', 10_000, [{ opportunityId: 'cop_sneaker', supportedReach: 0, potentialReach: 205 }]);
+    const reason = await notWorthResearching(sneaker, { now });
+    expect(reason).toMatchObject({ kind: 'SCREENED_OUT', reason: 'TOO_SMALL_FOR_GOAL' });
+    // A second goal that could use it keeps it worth researching.
+    recordMateriality('wst_b', 1_000, [{ opportunityId: 'cop_sneaker', supportedReach: 0, potentialReach: 205 }]);
+    expect(await notWorthResearching(sneaker, { now })).toBeNull();
+    // An opening with no price at all is asked what buyers pay, never called small.
+    clearMateriality();
+    recordMateriality('wst_a', 10_000, [{ opportunityId: 'cop_sneaker', supportedReach: 0, potentialReach: null }]);
+    expect(await notWorthResearching(sneaker, { now })).toBeNull();
+  });
+});
