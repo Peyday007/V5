@@ -691,6 +691,16 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(statements).toBeLessThan(120);
   });
 
+  it('never builds a plan on the owner doing physical work, and still plans the same service brokered', async () => {
+    // The standing rule (domain/operatingModel.ts), owner 2026-11-02: "I DO NOT WANT TO PERFORM PHYSICAL WORK."
+    const own = await oneOff({ title: 'Holiday light installation on single-story homes', priceCents: 35_000 });
+    const brokered = await oneOff({ title: 'Holiday light installation for homeowners', priceCents: 35_000, fulfilledBy: { who: 'An independent installer crew (subcontractor)', kind: 'PERSON' } });
+    const reading = (await readGoalPlan({ goalId: await goal(1_000_000), evaluations: 2_000 }))!;
+    expect(reading.considered.some((one) => one.opportunityId === own.id)).toBe(false);
+    expect(reading.excluded.find((one) => one.opportunityId === own.id)?.reason).toMatch(/owner's physical work/);
+    expect(reading.considered.some((one) => one.opportunityId === brokered.id)).toBe(true);
+  });
+
   it('raises research for the path to the money on the openings closest to a plan', async () => {
     const o = await oneOff({ title: 'Freight loads with unknown payment timing', priceCents: 2_000_000, days: null });
     const id = await goal(1_000_000);
