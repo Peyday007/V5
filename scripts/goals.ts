@@ -506,11 +506,14 @@ async function plan(): Promise<void> {
   const [, goalId] = words();
   if (!goalId) fail('plan needs a goal id.');
   const started = Date.now();
+  process.env['BRAIN_PLAN_TRACE'] ??= '1';
   const reading = await readGoalPlan({ goalId, persist: false });
   if (!reading) fail(`No targeted goal ${goalId}.`);
   printPlan(reading);
   console.log(`  timing      plan read in ${Date.now() - started} ms; ${reading.inferred.length} inferred input(s), ${reading.researchPriority.length} ranked question(s)`);
+  const searching = Date.now();
   await printSearching(reading);
+  console.log(`  timing      search and digging listed in ${Date.now() - searching} ms`);
   const history = await listReadings(goalId);
   for (const row of history.slice(-10)) console.log(`  history     ${row.created_at} ${row.verdict} chosen=${row.chosen_strategy ?? '—'}${row.scenario_run_id ? ` run=${row.scenario_run_id}` : ''}`);
   console.log('GOALS: OK');

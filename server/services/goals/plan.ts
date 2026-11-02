@@ -38,7 +38,7 @@ import { newId } from '../../repos/util.ts';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent } from '../../repos/register.ts';
 import { readCapabilities } from '../cash/capabilities.ts';
 import { checkCommercialAuthority } from '../cash/authority.ts';
-import { bestCaseReach, composeGoalModel, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
+import { bestCaseReach, composeGoalModel, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
 import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery } from '../cash/discovery.ts';
 import { constructArrangements } from '../cash/construct.ts';
@@ -501,7 +501,9 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
   if (!goal) return null;
   const target = await readTarget(goal, now);
   if (!target) return null;
+  const trace = planTrace('plan');
   const model = await composeGoalModel({ goal, target, now });
+  trace('composed');
   const measuredChance = await measuredPlanChance();
   const base = { goalId: goal.id, target, excluded: model.excluded, measuredChance };
   if (model.refusal) {
@@ -560,6 +562,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
   }
 
   let bestReach = 0;
+  trace('scenario run');
   const capabilities = new Map((await readCapabilities([...new Set(model.considered.flatMap((one) => one.opportunity.requiredCapabilities)), 'SEND_A_MESSAGE'])).map((one) => [one.id, one.state]));
   const modelledIds = new Set(model.included.map((one) => one.opportunity.id));
   const collected = new Set(
@@ -586,6 +589,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
   }));
   considered.sort((a, b) => a.missing.length - b.missing.length || b.supportedReach - a.supportedReach);
   recordMateriality(goal.id, target.remainingCents / 100, considered);
+  trace('considered openings judged');
   const strategies: StrategyReading[] = [];
   for (const spec of model.definition.strategies) {
     const members = model.included
@@ -739,6 +743,7 @@ export async function readGoalPlan(input: { goalId: string; now?: Date; persist?
     }
     marketTests.push({ opportunityId: one.opportunityId, title: one.title, potentialReach: one.potentialReach, test });
   }
+  trace('strategies and market tests');
   const summary =
     verdict === 'RECOMMENDABLE'
       ? `"${chosen!.label}" is recommendable: every link is established and the cautious numbers reach the target inside the limits.`

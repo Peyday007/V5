@@ -43,6 +43,24 @@ import { toScenarioInput } from '../quant/export.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
 
+/**
+ * Phase timings for a plan read, printed as they happen when BRAIN_PLAN_TRACE is
+ * set (the Goals workflow sets it). Production, 2026-11-02: the read went from
+ * 15 s to past the workflow's 15-minute bound, while the same code reads a
+ * 25-opening plan locally in 0.7 s — only a timing taken where it is slow can
+ * say which phase it is.
+ */
+export function planTrace(scope: string, env = process.env): (label: string) => void {
+  if (!env['BRAIN_PLAN_TRACE']) return () => {};
+  const start = Date.now();
+  let last = start;
+  return (label) => {
+    const now = Date.now();
+    console.error(`  trace ${scope} +${now - last}ms (${now - start}ms) ${label}`);
+    last = now;
+  };
+}
+
 /** Variables the model declares once, and per opportunity. */
 export const GOAL_MODEL_VARIABLES = 4;
 export const OPPORTUNITY_MODEL_VARIABLES = 9;
@@ -399,7 +417,9 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   if (target.daysLeft <= 0) return refuse('The goal is past its due date.');
   if (target.achieved) return refuse('The target is already met.');
 
+  const trace = planTrace('compose');
   const frontier = await sharedFrontier({ projectId: target.projectId });
+  trace(`shared frontier: ${frontier.opportunities.length} opening(s)`);
   const tierOf = new Map(frontier.opportunities.map((one) => [one.id, one.tier.tier as string]));
   const live = (await listOpportunities({ projectId: target.projectId })).filter(
     (one) => LIVE.has(one.state) && !one.duplicateOfId && one.currency === target.currency,
@@ -417,7 +437,9 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     return b.createdAt.localeCompare(a.createdAt);
   });
 
+  trace(`live openings: ${live.length}`);
   const lessons = await cashOutcomeLessons(target.projectId);
+  trace('outcome lessons');
   // What the project already established about other openings, for inference.
   let knowledge: CashKnowledge | null = null;
   try {
@@ -425,6 +447,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   } catch {
     knowledge = null;
   }
+  trace('cash knowledge');
   const included: ModelledOpportunity[] = [];
   // What the goal's owner said to leave out (§82): an excluded opening takes no slot, and says why.
   const exclusions = await goalExclusions(input.goal);
@@ -448,6 +471,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
       continue;
     }
     const modelled = await modelOpportunity(opportunity, 0, tier, target.currency, lessons, knowledge, input.now ?? new Date(), target.daysLeft);
+    trace(`modelled ${opportunity.id}`);
     if ('reason' in modelled) excluded.push({ opportunityId: opportunity.id, title: opportunity.title, reason: modelled.reason });
     else candidates.push(modelled);
   }
