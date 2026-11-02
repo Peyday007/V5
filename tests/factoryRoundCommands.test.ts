@@ -9,7 +9,7 @@ describe('an intermediate Factory round does not re-run the full suite', () => {
   it('replaces the full test command with the impacted selection against the round base', () => {
     const round = intermediateRoundCommands(['npm run typecheck', 'npm test'], BASE);
     expect(round.commands).toEqual(['npm run typecheck', `npm run test:impacted -- --base ${BASE}`]);
-    expect(round.note).toMatch(/final integration and the release gate run the whole suite/);
+    expect(round.note).toMatch(/CI runs the whole suite once, on the commit that is released/);
     expect(round.note).toMatch(/no `test:impacted` script/);
   });
 

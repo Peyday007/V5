@@ -509,11 +509,12 @@ export async function createUnitsBin(
  * CLAUDE.md rule 3 — typecheck and `test:impacted` while developing, the full
  * gate once, on what is released — applied to the Factory's own rounds. Every
  * unit bin and every integration round used to run the contract's full suite,
- * so a fourteen-unit campaign paid for it more than a dozen times before the
- * final integration and the release gate paid for it again. The final
- * integration round (nothing else outstanding) and the release gate still run
- * every command the contract declares, so what ships is judged by the whole
- * suite exactly as before; only the rounds in between stop repeating it.
+ * so a fourteen-unit campaign paid for it more than a dozen times, and then the
+ * final integration, the review, the release gate and Deploy each paid for it
+ * again. Every Factory round now runs this; the whole suite is run once by CI
+ * on the commit that is released — the release gate's Postgres suite, or
+ * Deploy's test job, which refuses to release on a failure — so what ships is
+ * still judged by the whole suite.
  *
  * A repository with no `test:impacted` script runs its full command, as the
  * note says, so this changes nothing for one that cannot take it.
@@ -536,8 +537,8 @@ export function intermediateRoundCommands(
   return {
     commands: out,
     note:
-      `This is an intermediate round, so \`${impacted}\` stands in for the contract's full test ` +
-      'suite: the final integration and the release gate run the whole suite on what ships. If ' +
+      `\`${impacted}\` stands in for the contract's full test suite: CI runs the whole suite once, ` +
+      'on the commit that is released (the release gate, or Deploy\'s test job). If ' +
       "package.json has no `test:impacted` script, run the contract's full test command instead.",
   };
 }
@@ -581,9 +582,18 @@ export async function createIntegrateBin(
   const mergeable = units.filter((unit) => unit.branch !== null && unit.headSha !== null);
   if (mergeable.length === 0) return null;
   const base = roundBaseFor(campaign);
-  const round = finalRound
-    ? { commands: [...changeRequest.verificationCommands], note: null }
-    : intermediateRoundCommands(changeRequest.verificationCommands, base);
+  /*
+   * Every round, the final one included, runs the change-scoped commands. The
+   * full suite is paid once, where CLAUDE.md rule 3 puts it: in CI on the SHA
+   * that is released — the release gate's whole Postgres suite for an automatic
+   * release, Deploy's test job (which refuses to release on a failure) for one a
+   * session merges. Measured 2026-11-02 on fcp_90dacf0a (a two-file change):
+   * plan 44 s, implementation 5 min, then the final integration, the review and
+   * Deploy each ran the whole suite (~40 min of CI shards each on one worker).
+   * `finalRound` is still recorded so the integrator can say so.
+   */
+  void finalRound;
+  const round = intermediateRoundCommands(changeRequest.verificationCommands, base);
   const touchesMigrations = mergeable.some((unit) => unit.ownedPaths.some((path) => /(^|\/)(pg-)?migrations\//.test(path)));
   const order = mergeable.map((unit) => ({
     unitKey: unit.unitKey,
@@ -774,7 +784,13 @@ export async function createReviewBin(
           reviewedSha,
           round,
           acceptanceConditions: changeRequest.acceptanceConditions.map((c) => c.id),
-          verification: changeRequest.verificationCommands,
+          // The change-scoped commands against the campaign base: the reviewer
+          // judges this change, and the whole suite runs once in CI on what is
+          // released (see createIntegrateBin).
+          verification: intermediateRoundCommands(changeRequest.verificationCommands, campaign.baseSha).commands,
+          wholeSuite:
+            'Not yours to run: CI runs the whole suite on the released commit (the release gate, or ' +
+            "Deploy's test job, which refuses to release on a failure).",
         }),
         transform: 'FACTORY_REVIEW',
         dependsOn: [],
