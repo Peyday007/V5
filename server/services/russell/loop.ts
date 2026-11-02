@@ -1758,7 +1758,16 @@ async function tickOnce(owner: string): Promise<TickReport> {
           });
         }
 
-        if (!shedKernels) try {
+        /*
+         * The industry kernel runs under database pressure, as discovery does.
+         * It is a handful of reads and at most four inserts (MAX_OPEN_KERNEL_ROUNDS),
+         * and shedding it starved the one thing construction composes from:
+         * production, 2026-11-02, held 37 top-level sectors of which two had ever
+         * been scanned, INDUSTRY_ROUND_OPENED=4 in the project's whole history,
+         * and four asks reported ready that nothing opened — so every constructed
+         * arrangement was the same anime buyer population.
+         */
+        try {
           /*
            * And the axis the ten buckets never had: *where* to look.
            *
