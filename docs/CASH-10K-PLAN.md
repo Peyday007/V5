@@ -162,7 +162,7 @@ This is a threshold presale: pooled buyers share one fixed cost, and payment com
 **Base case reaching 90% ($9k):**
 - It is met with $6.7k of margin.
 - Without the mailer it is $12.2k.
-- It still clears $9k if hanger response falls to about 1.0% with everything else at base.
+- It still clears $9k if hanger response falls with everything else at base: $14.3k at 1.0% ($10.8k without the mailer), $12.9k at 0.5% ($9.4k without the mailer).
 
 **Adverse case reaching 80% ($8k): the gap is $3.65k.** One lever at a time:
 
