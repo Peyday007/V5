@@ -4,7 +4,9 @@ import { riskForPaths, testPolicy } from '../server/domain/engineering.ts';
 describe('riskForPaths normalises before matching', () => {
   it.each([
     ['./server/db/migrations/x.sql'],
-    ['/home/user/V5/server/repos/x.ts'],
+    // An absolute path inside this checkout, wherever the checkout lives (a
+    // worktree or a CI runner is not /home/user/V5).
+    [`${process.cwd().replace(/\\/g, '/')}/server/repos/x.ts`],
     ['server\\repos\\x.ts'],
     ['././server/repos/x.ts'],
   ])('%s is TIER_3', (path) => {
