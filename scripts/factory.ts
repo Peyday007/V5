@@ -92,6 +92,28 @@ function flagString(flags: Args['flags'], key: string): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+/**
+ * An objective file, from this image or — with `--ref <branch>` — from that
+ * branch through the forge. Without `--ref` a new objective had to be merged
+ * and deployed (about half an hour) before the Factory could start on it; with
+ * it a session pushes the file to its own branch and submits at once. The file
+ * is data, validated by `submitObjective` exactly like one read from disk, and
+ * the repository is `--repository` or the brain repository, never anything else
+ * from the command line beyond the branch name.
+ */
+async function readObjectiveText(file: string, flags: Map<string, string | true> | Record<string, unknown>): Promise<string> {
+  const ref = flagString(flags as never, 'ref');
+  if (!ref) return fs.readFileSync(file, 'utf8');
+  const { parseRemote, readFile } = await import('../server/services/factory/forge.ts');
+  const remote = flagString(flags as never, 'repository') ?? 'https://github.com/Peyday007/V5';
+  const repository = parseRemote(remote) ?? fail(`not a repository this factory can read: ${remote}`);
+  const reply = await readFile(repository, file, ref);
+  if (!reply.ok || reply.body === null) {
+    fail(`could not read ${file} at ${ref}: ${reply.reason ?? `the forge answered ${reply.status}`}`);
+  }
+  return reply.body;
+}
+
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);
   process.exit(1);
@@ -236,7 +258,18 @@ async function main(): Promise<void> {
       const projectFlag = flagString(flags, 'project');
       const projects = await listProjects();
       const projectId = projectFlag ?? projects[0]?.id ?? fail('no project exists');
-      const spec = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+      /*
+       * `--ref <branch>` reads the objective file from that branch through the
+       * forge instead of from this image. Without it a new objective had to be
+       * merged and deployed (about half an hour) before the Factory could even
+       * start on it; with it a session pushes the file to its own branch and
+       * submits at once. The file is data — it is parsed and validated by
+       * `submitObjective` exactly like one read from disk — and the repository
+       * is the spec's own or the brain grant's, never a value from the command
+       * line beyond the branch name.
+       */
+      const text = await readObjectiveText(file, flags);
+      const spec = JSON.parse(text) as Record<string, unknown>;
       const result = await submitObjective({
         projectId,
         objective: String(spec['objective'] ?? ''),
@@ -574,6 +607,15 @@ async function main(): Promise<void> {
       const scope = projectFlag ? projects.filter((project) => project.id === projectFlag) : projects;
       if (projectFlag && scope.length === 0) fail(`no project ${projectFlag}`);
       let total = 0;
+      /*
+       * Each campaign's objective outcome beside its stage, and a tally of the
+       * outcomes. The stage COMPLETE means "reviewed and opened as a pull
+       * request"; it was read as "delivered" while 53 of those requests sat
+       * open. The outcome is what was delivered: LIVE only when production
+       * runs it (`release/outcome.ts`, `delivery.ts`).
+       */
+      const { objectiveOutcome } = await import('../server/services/factory/release/outcome.ts');
+      const tally = new Map<string, number>();
       for (const project of scope) {
         const campaigns = await listCampaigns(project.id);
         if (campaigns.length === 0) continue;
@@ -581,16 +623,24 @@ async function main(): Promise<void> {
         for (const campaign of campaigns) {
           total += 1;
           const changeRequest = await getChangeRequest(campaign.changeRequestId);
+          const outcome = await objectiveOutcome(campaign);
+          const label = outcome.status === 'BLOCKED' && outcome.needsPerson ? 'BLOCKED(person)' : outcome.status;
+          tally.set(label, (tally.get(label) ?? 0) + 1);
           process.stdout.write(
-            `  ${campaign.id} ${campaign.executionMode} ${campaign.state} ` +
+            `  ${campaign.id} ${campaign.executionMode} ${campaign.state} -> ${label} ` +
               `${campaign.prUrl ?? campaign.prRef ?? '(no pull request)'} — ` +
               `${(changeRequest?.objective ?? '').slice(0, 70)}\n` +
-              `      ${campaign.stageDetail ?? ''}` +
+              `      ${outcome.detail}` +
               `${campaign.blockerKind ? ` [${campaign.blockerKind}]` : ''}\n`,
           );
         }
       }
       if (total === 0) process.stdout.write('no campaign in scope\n');
+      else {
+        process.stdout.write(
+          `outcomes: ${[...tally.entries()].sort().map(([k, v]) => `${k} ${v}`).join(', ')} (of ${total})\n`,
+        );
+      }
       break;
     }
 
@@ -1416,7 +1466,7 @@ async function main(): Promise<void> {
       );
       const file = flagString(flags, 'file');
       const fromFile = file
-        ? (JSON.parse(fs.readFileSync(file, 'utf8')) as { release?: Record<string, unknown> }).release ?? {}
+        ? (JSON.parse(await readObjectiveText(file, flags)) as { release?: Record<string, unknown> }).release ?? {}
         : {};
       try {
         const { grant, created } = await authorizeAutomaticRelease({
@@ -1504,6 +1554,43 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * Where one objective has got to, and — when it has ended — the one
+     * finished record (`delivery.ts`). `factory wait` runs this every few
+     * minutes from the workflow and stops on the TERMINAL line, so a session
+     * that submitted an objective watches one run to termination instead of
+     * dispatching `status` every four minutes.
+     */
+    case 'outcome': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const campaign = await getCampaign(campaignId);
+      if (!campaign) fail('no such campaign');
+      const { observeDeliveries, noteObjectiveOutcome, isTerminalOutcome, finishedRecords } = await import(
+        '../server/services/factory/delivery.ts'
+      );
+      const { objectiveOutcome } = await import('../server/services/factory/release/outcome.ts');
+      if (campaign.state === 'COMPLETE') await observeDeliveries([campaign]).catch(() => undefined);
+      const fresh = (await getCampaign(campaignId)) ?? campaign;
+      await noteObjectiveOutcome(fresh);
+      const outcome = await objectiveOutcome(fresh);
+      process.stdout.write(
+        `${outcome.status} — ${outcome.detail}\n` +
+          `${outcome.blocker ? `blocker: ${outcome.blocker}\n` : ''}` +
+          `needs a person: ${outcome.needsPerson ? outcome.personAction : 'no'}\n` +
+          `campaign stage: ${fresh.state} — ${fresh.stageDetail ?? ''}\n` +
+          `pull request ${outcome.prUrl ?? '—'}; page ${outcome.pageUrl ?? '—'}\n`,
+      );
+      process.stdout.write(`FACTORY-OUTCOME: ${JSON.stringify({ campaignId, ...outcome })}\n`);
+      if (isTerminalOutcome(outcome)) {
+        const records = await finishedRecords(campaignId);
+        process.stdout.write(
+          `FACTORY-OUTCOME-TERMINAL: ${outcome.status}${outcome.needsPerson ? ' (needs: ' + outcome.personAction + ')' : ''}` +
+            ` recorded ${records.at(-1)?.at ?? 'now'}\n`,
+        );
+      }
+      break;
+    }
+
     case 'release-status': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const campaign = await getCampaign(campaignId);
@@ -1533,7 +1620,7 @@ async function main(): Promise<void> {
 
     default:
       process.stdout.write(
-        'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
+        'commands: fleet, allocation, register, submit, approve, amend, plan, run, tick, tick-all, outcome,\n' +
           '  remote-tick, campaigns, bins, status, events, throughput, idle, pull-request,\n' +
           '  set-state, queue, withdraw, admission, line, burnin,\n' +
           '  answer-bin,\n' +

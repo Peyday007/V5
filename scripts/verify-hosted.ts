@@ -65,6 +65,7 @@ import {
 } from '../server/repos/fleet.ts';
 import { auditAdmission, lineageForWorker } from '../server/services/research/auditAdmission.ts';
 import { initStorage } from '../server/services/storage/index.ts';
+import { openPatiently } from './hostedOpen.ts';
 import {
   createUser,
   createWorker,
@@ -4661,7 +4662,10 @@ async function main(): Promise<void> {
     process.env['BRAIN_DATABASE_CONNECT_TIMEOUT_MS'] = '120000';
   }
 
-  await initDatabase();
+  // A capacity refusal while the restarted Brain opens its own pool is waited
+  // out, a bounded number of times; anything else still fails here. See
+  // `hostedOpen.ts` for the deploys this cost.
+  await openPatiently('the database', () => initDatabase());
   /**
    * The store, opened explicitly.
    *
@@ -4672,7 +4676,7 @@ async function main(): Promise<void> {
    * bytes. It cost one deploy to find out, which is one more than the line
    * below costs.
    */
-  await initStorage();
+  await openPatiently('the document store', () => initStorage());
 
   let failed = false;
   try {

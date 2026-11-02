@@ -340,6 +340,8 @@ export interface ForgePullRequest {
   headRef: string;
   baseRef: string;
   merged: boolean;
+  /** The commit the merge produced, once `merged`. */
+  mergeCommitSha: string | null;
   url: string;
   title: string;
   updatedAt: string;
@@ -354,6 +356,7 @@ export async function readPullRequest(
     number?: number;
     state?: string;
     merged?: boolean;
+    merge_commit_sha?: string | null;
     html_url?: string;
     title?: string;
     updated_at?: string;
@@ -380,6 +383,7 @@ export async function readPullRequest(
       headRef: String(body.head.ref ?? ''),
       baseRef: String(body.base?.ref ?? ''),
       merged: body.merged === true,
+      mergeCommitSha: body.merged === true && typeof body.merge_commit_sha === 'string' ? body.merge_commit_sha : null,
       url: String(body.html_url ?? ''),
       title: String(body.title ?? ''),
       updatedAt: String(body.updated_at ?? ''),
@@ -457,6 +461,8 @@ export async function findPullRequestForBranch(
       headRef: String(match.head.ref ?? branch),
       baseRef: String(match.base?.ref ?? ''),
       merged: typeof match.merged_at === 'string' && match.merged_at.length > 0,
+      // The list endpoint does not carry it; `readPullRequest` does.
+      mergeCommitSha: null,
       url: String(match.html_url ?? ''),
       title: String(match.title ?? ''),
       updatedAt: String(match.updated_at ?? ''),
@@ -532,4 +538,34 @@ export function unverifiable(reason: string): FactoryError {
   return new FactoryError(`The repository could not be verified: ${reason}`, {
     reason: 'FORGE_UNREADABLE',
   });
+}
+
+/**
+ * The repository's most recently updated pull requests, open and closed, in one
+ * call — so a sweep over every finished campaign costs one read per repository
+ * rather than one per campaign. Production reads the forge without a token, and
+ * that budget is sixty calls an hour shared with everything else here.
+ */
+export async function listRecentPullRequests(
+  repository: ForgeRepository,
+): Promise<ForgeReply<{ number: number; state: string; merged: boolean; mergeCommitSha: string | null }[]>> {
+  const reply = await get<
+    { number?: number; state?: string; merged_at?: string | null; merge_commit_sha?: string | null }[]
+  >(`/repos/${repository.slug}/pulls?state=all&sort=updated&direction=desc&per_page=100`);
+  if (!reply.ok) return { ...reply, body: null };
+  const rows = Array.isArray(reply.body) ? reply.body : [];
+  return {
+    ...reply,
+    body: rows
+      .filter((row) => typeof row.number === 'number')
+      .map((row) => {
+        const merged = typeof row.merged_at === 'string' && row.merged_at.length > 0;
+        return {
+          number: Number(row.number),
+          state: String(row.state ?? 'unknown'),
+          merged,
+          mergeCommitSha: merged && typeof row.merge_commit_sha === 'string' ? row.merge_commit_sha : null,
+        };
+      }),
+  };
 }

@@ -2075,7 +2075,9 @@ async function runRemoteTick(
           `${drift.expected.slice(0, 12)}; recorded, and the integrator is told`,
       );
     }
-    const bin = await createIntegrateBin(fresh, changeRequest, implemented, drift);
+    // The final round is the one whose tree ships: nothing else is outstanding.
+    // Every earlier round runs the intermediate commands (`intermediateRoundCommands`).
+    const bin = await createIntegrateBin(fresh, changeRequest, implemented, drift, outstanding.length === 0);
     if (bin) {
       report.created.push(`integrate:${bin.id}`);
       await noteBin(fresh, bin, `${implemented.length} implemented unit(s) to integrate`);
@@ -2251,8 +2253,25 @@ async function runRemoteTick(
     if (alreadyReviewed && latest?.verdict === 'PASS') {
       report.notes.push('the current commit already passed review');
     } else if (liveBinOfKind(liveBins, 'FACTORY_REVIEW')) {
-      report.notes.push('waiting for a reviewer');
-      await stageIsLive(fresh, 'REVIEWING', 'waiting for a reviewer', report);
+      /*
+       * Say why, when reviewers are arriving and being refused. fcp_0157 sat
+       * "waiting for a reviewer" for hours with no review started: every session
+       * that came was refused at assignment (`reviewLineage`) and the only place
+       * that said so was `bin_session_refusals`. The stage stays live — the
+       * refusal is re-asked on every arrival — but its detail names the cause and
+       * the remedy, so `factory outcome` and Build read the stall instead of
+       * patience.
+       */
+      const reviewBin = liveBinOfKind(liveBins, 'FACTORY_REVIEW');
+      const { listSessionRefusals } = await import('../../repos/bins.ts');
+      const refusals = reviewBin && reviewBin.state === 'READY' ? await listSessionRefusals(reviewBin.id) : [];
+      const detail =
+        refusals.length > 0
+          ? `waiting for a reviewer: ${refusals.reduce((n, row) => n + row.refusals, 0)} arrival(s) refused since ` +
+            `${refusals.map((row) => row.firstAt).sort()[0]} — ${refusals[0]?.reason ?? 'no reason recorded'}`
+          : 'waiting for a reviewer';
+      report.notes.push(detail);
+      await stageIsLive(fresh, 'REVIEWING', detail.slice(0, 500), report);
       return report;
     } else if (stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt, await refusedReviewBins(fresh.id))) {
       const stall = stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt, await refusedReviewBins(fresh.id));
@@ -2586,9 +2605,19 @@ async function blockedWatermark(campaign: FactoryCampaign): Promise<string> {
         (SELECT updated_at FROM factory_campaigns WHERE id = ?) AS c,
         (SELECT MAX(updated_at) FROM factory_work_units WHERE campaign_id = ?) AS u,
         (SELECT MAX(updated_at) FROM bins WHERE factory_campaign_id = ?) AS b,
-        (SELECT MAX(at) FROM factory_events WHERE campaign_id = ?) AS e,
+        (SELECT MAX(at) FROM factory_events WHERE campaign_id = ? AND kind NOT IN (?, ?)) AS e,
         (SELECT MAX(created_at) FROM factory_contract_amendments WHERE change_request_id = ?) AS a`,
-    [campaign.id, campaign.id, campaign.id, campaign.id, campaign.changeRequestId],
+    // The finished record and a delivery observation report a stop; neither can
+    // end one, so neither may wake a campaign that is waiting on a person.
+    [
+      campaign.id,
+      campaign.id,
+      campaign.id,
+      campaign.id,
+      FACTORY_EVENT_KINDS.objectiveFinished,
+      FACTORY_EVENT_KINDS.deliveryObserved,
+      campaign.changeRequestId,
+    ],
   );
   return ['c', 'u', 'b', 'e', 'a'].map((key) => row?.[key] ?? '').join('|');
 }
@@ -2672,7 +2701,54 @@ export async function tickAllRemoteCampaigns(
       await recordTickFailure(campaign.id, `the outcome writeback threw: ${message}`).catch(() => undefined);
     }
   }
+  await sweepFinishedObjectives().catch((error: unknown) => {
+    console.warn('[factory] the finished-objective sweep failed:', (error as Error).message);
+  });
   return reports;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Delivery and the one finished record                                       */
+/* ------------------------------------------------------------------------- */
+
+/** How often the delivery observation and finished-record sweep runs. */
+const FINISHED_SWEEP_EVERY_MS = 2 * 60_000;
+let finishedSweptAt = 0;
+/** Campaign id → what it looked like when its outcome was last judged. */
+const finishedJudged = new Map<string, string>();
+
+/** Tests: forget the sweep's throttle and memo. */
+export function resetFinishedSweep(): void {
+  finishedSweptAt = 0;
+  finishedJudged.clear();
+}
+
+/**
+ * Observe what happened to finished campaigns' pull requests and record, once,
+ * every objective that reached an end (`delivery.ts`). A campaign is judged
+ * again only when its row or its delivery changed, so a quiet backlog costs one
+ * indexed read per campaign every two minutes and no forge call it does not need.
+ */
+export async function sweepFinishedObjectives(now = Date.now()): Promise<{ noted: string[] }> {
+  if (now - finishedSweptAt < FINISHED_SWEEP_EVERY_MS) return { noted: [] };
+  finishedSweptAt = now;
+  const { campaignsAwaitingDelivery, observeDeliveries, noteObjectiveOutcome } = await import('./delivery.ts');
+  const campaigns = await campaignsAwaitingDelivery();
+  const { changed } = await observeDeliveries(campaigns.filter((one) => one.state === 'COMPLETE'));
+  const changedSet = new Set(changed);
+  const noted: string[] = [];
+  for (const campaign of campaigns) {
+    const mark = campaign.updatedAt;
+    if (!changedSet.has(campaign.id) && finishedJudged.get(campaign.id) === mark) continue;
+    try {
+      const record = await noteObjectiveOutcome(campaign);
+      if (record) noted.push(campaign.id);
+      finishedJudged.set(campaign.id, mark);
+    } catch (error) {
+      await recordTickFailure(campaign.id, `the finished record threw: ${(error as Error).message}`).catch(() => undefined);
+    }
+  }
+  return { noted };
 }
 
 /** How long one tick-failure message is kept to a single row. */
