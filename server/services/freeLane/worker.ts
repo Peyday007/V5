@@ -44,6 +44,7 @@ import { fetchForWorker, type SourceFetch } from '../sources/fetchForWorker.ts';
 
 /** The research work types the free lane answers, and the tool that answers each. */
 export const FREE_LANE_WORK_TYPES = [
+  'RESEARCH_PLAN',
   'RESEARCH_FRAGMENT',
   'RESEARCH_VERIFY',
   'RESEARCH_SYNTHESIZE',
@@ -549,6 +550,32 @@ async function audit(ctx: Ctx, role: string): Promise<boolean> {
   );
 }
 
+async function plan(ctx: Ctx, assignment: Record<string, unknown>): Promise<boolean> {
+  const orchestration = (assignment['orchestration'] ?? {}) as Record<string, unknown>;
+  const schema = schemaForModel('brain_propose_fragments');
+  const prompt =
+    `Research assignment: ${String(orchestration['assignment'] ?? '')}\nTitle: ${String(orchestration['title'] ?? '')}\n` +
+    `Context Brain holds for it: ${JSON.stringify({
+      corrections: assignment['correctionsRequested'] ?? null,
+      judge: assignment['recentJudgeCorrections'] ?? null,
+      checkpoints: assignment['checkpoints'] ?? [],
+    }).slice(0, 8000)}\n\n` +
+    'Decompose the assignment into the smallest set of bounded research fragments (usually 2-6) that ' +
+    'together answer it. Each fragment asks one answerable question, states its geography, timeframe, ' +
+    'population and definitions, and declares the evidence lanes that would settle it and what counts ' +
+    `as complete. Reply with one JSON object matching: ${JSON.stringify(schema)}`;
+  const answer = await ask(ctx.completer, ctx.config, ctx.worker.model, prompt);
+  if (!answer || !Array.isArray(answer['fragments'])) return false;
+  const ok = await submitWithRepair(
+    ctx,
+    'brain_propose_fragments',
+    answer,
+    (error, previous) => `${prompt}\n\nBrain refused your previous answer: ${error}\nPrevious: ${JSON.stringify(previous).slice(0, 6000)}\nCorrect it.`,
+  );
+  if (ok) await complete(ctx, 'free lane: fragments proposed');
+  return ok;
+}
+
 async function answerItem(ctx: Ctx): Promise<boolean> {
   const type = ctx.claimed.workType;
   if (type === 'RESEARCH_AUDIT') {
@@ -557,6 +584,7 @@ async function answerItem(ctx: Ctx): Promise<boolean> {
   }
   const view = await call(ctx, 'brain_get_assignment', { work_item_id: ctx.claimed.workItemId });
   const assignment = (view['assignment'] ?? {}) as Record<string, unknown>;
+  if (type === 'RESEARCH_PLAN') return plan(ctx, assignment);
   if (type === 'RESEARCH_FRAGMENT') return fragment(ctx, assignment);
   if (type === 'RESEARCH_VERIFY') return verify(ctx, assignment);
   if (type === 'RESEARCH_SYNTHESIZE') return synthesize(ctx, assignment);
