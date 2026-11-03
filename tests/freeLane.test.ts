@@ -319,6 +319,28 @@ describe('the free research lane', () => {
     expect(citedExcerpt({ sentences: ['S9.1'] }, numbered)).toBeNull();
   });
 
+  it('reads every way models write a citation instead of dropping the claim (FREE_LANE:CITATION_DROPPED)', async () => {
+    const { citedExcerpt, citationFailure } = await import('../server/services/freeLane/worker.ts');
+    const s = ['First sentence of the page here.', 'Second sentence of the page here.', 'Third sentence of the page here.', 'Fourth sentence of the page here.', 'Fifth sentence of the page here.'];
+    const one = [{ url: 'https://a', sentences: s }];
+    const two = [...one, { url: 'https://b', sentences: ['Other source sentence number one.'] }];
+    expect(citedExcerpt({ sentences: ['S1.3, S1.4'] }, one)?.excerpt).toBe(`${s[2]} ${s[3]}`);
+    expect(citedExcerpt({ sentences: ['[S1.3] [S1.4]'] }, one)?.excerpt).toBe(`${s[2]} ${s[3]}`);
+    expect(citedExcerpt({ sentences: ['S1.3-S1.5'] }, one)?.excerpt).toBe(`${s[2]} ${s[3]} ${s[4]}`);
+    expect(citedExcerpt({ sentences: ['S1.3-5'] }, one)?.locator).toBe('sentences 3, 4, 5');
+    expect(citedExcerpt({ sentences: ['3-5'] }, one)?.excerpt).toBe(`${s[2]} ${s[3]} ${s[4]}`);
+    expect(citedExcerpt({ sentences: ['S3'] }, one)?.excerpt).toBe(s[2]);
+    expect(citedExcerpt({ sentences: 'sentences 3 and 4' }, one)?.excerpt).toBe(`${s[2]} ${s[3]}`);
+    expect(citedExcerpt({ sentences: '1, 2' }, one)?.excerpt).toBe(`${s[0]} ${s[1]}`);
+    expect(citedExcerpt({ source: 'https://b', sentences: [1] }, two)?.url).toBe('https://b');
+    expect(citedExcerpt({ source: 'SOURCE 2 \u2014 https://b', sentences: ['1'] }, two)?.url).toBe('https://b');
+    expect(citedExcerpt({ source: '2', sentences: ['S2.1'] }, two)?.url).toBe('https://b');
+    // Still never invented: a number outside the page, or no number at all, is dropped and says which.
+    expect(citedExcerpt({ sentences: ['S1.9'] }, one)).toBeNull();
+    expect(citationFailure({ sentences: ['S1.9'] }, one)).toBe('cited sentences outside the page');
+    expect(citationFailure({ sentences: ['the first one'] }, one)).toBe('citation not readable as sentence numbers');
+  });
+
   it('accepts a quote that differs from the page only in typography, and never in words', () => {
     const page = 'The median hourly wage for receptionists was $17.39 in May 2024 \u2014 the \u201Cnational\u201D figure.';
     expect(quotedIn('wage for receptionists was $17.39 in May 2024 - the "national" figure.', page)).toBe(true);

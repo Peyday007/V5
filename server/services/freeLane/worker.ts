@@ -321,29 +321,71 @@ export function sentencesOf(text: string, max = 90): string[] {
     .slice(0, max);
 }
 
-/** The verbatim excerpt a claim cites by sentence number, or null. */
+type Citation =
+  | { ok: true; url: string; excerpt: string; locator: string }
+  | { ok: false; why: 'unparseable' | 'out of range' };
+
+/** One reference as a model wrote it: an optional source, a sentence, and an optional end of a range. */
+const REF = /S?(\d+)(?:\.(\d+))?(?:\s*(?:-|\u2013|\u2014|to)\s*S?(?:(\d+)\.)?(\d+))?/gi;
+
+/** Every reference in a citation value: 3, "3", "S2.3", "[S2.3]", "S1.3, S1.4", "S1.3-S1.5", "3-5", "sentences 3 and 4". */
+function referencesIn(value: unknown): { source: number | null; from: number; to: number }[] {
+  const texts = Array.isArray(value) ? value.flat(Infinity) : [value];
+  const refs: { source: number | null; from: number; to: number }[] = [];
+  for (const text of texts) {
+    if (text === undefined || text === null || typeof text === 'object') continue;
+    for (const m of String(text).matchAll(REF)) {
+      const dotted = m[2] !== undefined;
+      const from = Number(dotted ? m[2] : m[1]);
+      const to = m[4] !== undefined ? Number(m[4]) : from;
+      refs.push({ source: dotted ? Number(m[1]) : null, from, to: to >= from && to - from < 4 ? to : from });
+    }
+  }
+  return refs.filter((r) => Number.isInteger(r.from) && r.from >= 1);
+}
+
+/** The source number a claim names: 3, "SOURCE 3", "SOURCE 3 \u2014 url", or the url itself. */
+function sourceNumber(value: unknown, numbered: { url: string }[]): number | null {
+  if (value === undefined || value === null) return null;
+  const given = String(value).trim();
+  const byUrl = numbered.findIndex((one) => given !== '' && (given === one.url || given.includes(one.url)));
+  if (byUrl >= 0) return byUrl + 1;
+  const m = /^(?:SOURCE\s*)?S?(\d+)\b/i.exec(given);
+  return m ? Number(m[1]) : null;
+}
+
+function resolveCitation(claim: Record<string, unknown>, numbered: { url: string; sentences: string[] }[]): Citation {
+  const refs = referencesIn(claim['sentences']);
+  if (refs.length === 0) return { ok: false, why: 'unparseable' };
+  // The explicit source wins, then the S-form's own source, then the only source there is.
+  const sourceNo = sourceNumber(claim['source'], numbered) ?? refs.find((r) => r.source !== null)?.source ?? (numbered.length === 1 ? 1 : NaN);
+  const source = Number.isInteger(sourceNo) ? numbered[sourceNo - 1] : undefined;
+  if (!source) return { ok: false, why: 'out of range' };
+  const picks: number[] = [];
+  for (const r of refs) {
+    if (r.source !== null && r.source !== sourceNo) continue;
+    for (let n = r.from; n <= r.to; n += 1) picks.push(n);
+  }
+  const chosen = [...new Set(picks)].sort((a, b) => a - b).slice(0, 4);
+  const lines = chosen.map((n) => source.sentences[n - 1]).filter((one): one is string => typeof one === 'string');
+  if (lines.length === 0) return { ok: false, why: 'out of range' };
+  const excerpt = lines.join(' ').slice(0, 800);
+  return { ok: true, url: source.url, excerpt, locator: `sentence${chosen.length > 1 ? 's' : ''} ${chosen.join(', ')}` };
+}
+
+/** The verbatim excerpt a claim cites by sentence number, or null. Brain copies the sentences; the model never retypes them. */
 export function citedExcerpt(
   claim: Record<string, unknown>,
   numbered: { url: string; sentences: string[] }[],
 ): { url: string; excerpt: string; locator: string } | null {
-  const raw = Array.isArray(claim['sentences']) ? (claim['sentences'] as unknown[]) : claim['sentences'] !== undefined ? [claim['sentences']] : [];
-  // Models write a sentence as 3, "3", "S2.3" or "[S2.3]"; the S-form carries its source.
-  const refs = raw.map((n) => /S?(\d+)\.(\d+)/i.exec(String(n)) ?? /^\[?(\d+)\]?$/.exec(String(n).trim()));
-  const fromRef = refs.map((m) => (m && m.length === 3 ? Number(m[1]) : null)).find((n) => n !== null);
-  const given = claim['source'] === undefined || claim['source'] === null ? '' : String(claim['source']).replace(/^SOURCE\s*/i, '').trim();
-  const sourceNo = given !== '' && Number.isInteger(Number(given)) && Number(given) >= 1
-    ? Number(given)
-    : (fromRef ?? (numbered.length === 1 ? 1 : NaN));
-  const source = Number.isInteger(sourceNo) ? numbered[sourceNo - 1] : undefined;
-  const picks = refs
-    .map((m) => (m ? Number(m.length === 3 ? m[2] : m[1]) : NaN))
-    .filter((n) => Number.isInteger(n) && n >= 1);
-  if (!source || picks.length === 0) return null;
-  const chosen = [...new Set(picks)].sort((a, b) => a - b).slice(0, 4);
-  const lines = chosen.map((n) => source.sentences[n - 1]).filter((one): one is string => typeof one === 'string');
-  if (lines.length === 0) return null;
-  const excerpt = lines.join(' ').slice(0, 800);
-  return { url: source.url, excerpt, locator: `sentence${chosen.length > 1 ? 's' : ''} ${chosen.join(', ')}` };
+  const found = resolveCitation(claim, numbered);
+  return found.ok ? { url: found.url, excerpt: found.excerpt, locator: found.locator } : null;
+}
+
+/** Why a citation was dropped, so the recorded failure says which kind it was. */
+export function citationFailure(claim: Record<string, unknown>, numbered: { url: string; sentences: string[] }[]): string {
+  const found = resolveCitation(claim, numbered);
+  return found.ok ? 'cited' : found.why === 'out of range' ? 'cited sentences outside the page' : 'citation not readable as sentence numbers';
 }
 
 /** Free, keyless public search: Wikipedia's own API. Candidates only; Brain reads each page itself. */
@@ -579,7 +621,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         claims.push(rest);
         continue;
       }
-      drop(c['sentences'] !== undefined ? 'cited sentences not found' : 'no citation and no verbatim quote');
+      drop(c['sentences'] !== undefined ? citationFailure(c, numbered) : 'no citation and no verbatim quote');
     }
     if (claims.length === 0) {
       ctx.why = `the answer did not survive Brain's own checks: ${listed.length} claim(s) offered, dropped ${JSON.stringify(dropped)}`;
