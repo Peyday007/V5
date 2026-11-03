@@ -335,6 +335,10 @@ describe('the free research lane', () => {
     expect(citedExcerpt({ source: 'https://b', sentences: [1] }, two)?.url).toBe('https://b');
     expect(citedExcerpt({ source: 'SOURCE 2 \u2014 https://b', sentences: ['1'] }, two)?.url).toBe('https://b');
     expect(citedExcerpt({ source: '2', sentences: ['S2.1'] }, two)?.url).toBe('https://b');
+    // A number in prose is not a reference: a year or a count does not become a cited sentence.
+    expect(citedExcerpt({ sentences: ['published in 2 papers'] }, one)).toBeNull();
+    expect(citationFailure({ sentences: ['the 2nd one, from 2019'] }, one)).toBe('citation not readable as sentence numbers');
+    expect(citedExcerpt({ sentences: ['see S1.2 (published in 2019)'] }, one)?.excerpt).toBe(s[1]);
     // Still never invented: a number outside the page, or no number at all, is dropped and says which.
     expect(citedExcerpt({ sentences: ['S1.9'] }, one)).toBeNull();
     expect(citationFailure({ sentences: ['S1.9'] }, one)).toBe('cited sentences outside the page');
