@@ -34,6 +34,8 @@ import {
   deriveStage,
   freeLaneWeaknesses,
   MAX_ATTEMPTS,
+  BEFORE_WINDOW_HOURS,
+  RECENT_WINDOW_HOURS,
   MEASURE_WINDOW_HOURS,
   METRICS,
   packetWeaknesses,
@@ -105,12 +107,13 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
   const day = new Date(now.getTime() - 24 * HOUR).toISOString();
   const week = new Date(now.getTime() - 7 * 24 * HOUR).toISOString();
   const lane = await freeLaneFailures(day, to);
+  const recentLane = await freeLaneFailures(new Date(now.getTime() - RECENT_WINDOW_HOURS * HOUR).toISOString(), to);
   const claims = await claimRejections(week, to);
   const packets = await packetOutcomes(week, to);
   const asks = await ownerInterventions(week, to);
   return [
     ...ownerInterventionWeaknesses(asks.causes, asks.total),
-    ...freeLaneWeaknesses(lane.failures, lane.attempts),
+    ...freeLaneWeaknesses(lane.failures, lane.attempts, recentLane),
     ...claimRejectionWeaknesses(claims.rejections, claims.claims),
     ...packetWeaknesses(packets.causes, packets.settled),
   ];
@@ -439,13 +442,16 @@ async function measureAndDecide(candidate: ImprovementCandidate, now: Date, repo
   const to = new Date(Math.min(now.getTime(), delivered + BASELINE_HOURS * HOUR)).toISOString();
   const after = await readMetric(candidate.metric, candidate.deliveredAt!, to);
   const afterDown = candidate.downstreamMetric ? await readMetric(candidate.downstreamMetric, candidate.deliveredAt!, to) : null;
-  const base = (candidate.baseline ?? {}) as { primary?: MetricReading; downstream?: MetricReading | null };
-  const before = base.primary ?? (await readMetric(candidate.metric, new Date(delivered - BASELINE_HOURS * HOUR).toISOString(), candidate.deliveredAt!));
-  const beforeDown = base.downstream ?? null;
+  // The verdict compares with the period right before delivery: anything else that changed the
+  // owner between submission and delivery is then already in the baseline. The submission-time
+  // baseline stays on the row as the record of what the weakness was when it was chosen.
+  const beforeFrom = new Date(delivered - BEFORE_WINDOW_HOURS * HOUR).toISOString();
+  const before = await readMetric(candidate.metric, beforeFrom, candidate.deliveredAt!);
+  const beforeDown = candidate.downstreamMetric ? await readMetric(candidate.downstreamMetric, beforeFrom, candidate.deliveredAt!) : null;
   const primary = compare(before, after);
   const downstream = beforeDown && afterDown ? compare(beforeDown, afterDown) : null;
   const decision = decideAfterMeasurement({ primary, downstream, hoursSinceDelivery: (now.getTime() - delivered) / HOUR });
-  const result = { after, afterDownstream: afterDown, primary, downstream, at: now.toISOString() };
+  const result = { before, beforeDownstream: beforeDown, after, afterDownstream: afterDown, primary, downstream, at: now.toISOString() };
   await patchCandidate(candidate.id, { result });
   if (!decision.decision) return;
   if (decision.revert) {
@@ -662,7 +668,7 @@ export interface ImprovementReading {
   scoreboard: { window: string; metrics: MetricReading[] }[];
   failureClasses: { attempts: number; failures: { cls: string; n: number }[] };
   /** The other detectors' inputs (7 d), so a reader sees why each did or did not fire. */
-  detectors: { claims: string; packets: string; owner: string };
+  detectors: { claims: string; packets: string; owner: string; freeLaneRecent: string };
   candidates: Array<{
     key: string;
     title: string;
@@ -690,6 +696,7 @@ export async function improvementReading(now = new Date()): Promise<ImprovementR
     scoreboard.push({ window: label, metrics: board.metrics });
   }
   const lane = await freeLaneFailures(new Date(now.getTime() - 24 * HOUR).toISOString(), to);
+  const recentLane = await freeLaneFailures(new Date(now.getTime() - RECENT_WINDOW_HOURS * HOUR).toISOString(), to);
   const week = new Date(now.getTime() - 7 * 24 * HOUR).toISOString();
   const brief = (rows: { cls: string; n: number }[]) => rows.slice(0, 8).map((r) => `${r.cls}:${r.n}`).join(' ');
   const claims = await claimRejections(week, to);
@@ -697,6 +704,7 @@ export async function improvementReading(now = new Date()): Promise<ImprovementR
   const asks = await ownerInterventions(week, to);
   const detectors = {
     claims: `${claims.claims} claims; rejected ${brief(claims.rejections)}`,
+    freeLaneRecent: `${recentLane.attempts} settled in ${RECENT_WINDOW_HOURS}h; ${brief(recentLane.failures)}`,
     packets: `${packets.settled} settled (cancelled excluded); ${brief(packets.causes)}`,
     owner: `${asks.total} requests; ${brief(asks.causes)}`,
   };
@@ -705,7 +713,7 @@ export async function improvementReading(now = new Date()): Promise<ImprovementR
     const link = await linked(c).catch(() => ({ research: null, factory: null, archive: [] }) as Linked);
     const stage = stageOf(c, link, now);
     const base = (c.baseline as { primary?: MetricReading } | null)?.primary ?? null;
-    const result = c.result as { after?: MetricReading; primary?: { verdict: string } } | null;
+    const result = c.result as { before?: MetricReading; after?: MetricReading; primary?: { verdict: string } } | null;
     candidates.push({
       key: c.weaknessKey,
       title: c.title,
@@ -714,7 +722,7 @@ export async function improvementReading(now = new Date()): Promise<ImprovementR
       next: stage.next,
       decision: c.decision,
       reason: c.decisionReason,
-      baseline: base?.value ?? null,
+      baseline: result?.before?.value ?? base?.value ?? null,
       after: result?.after?.value ?? null,
       verdict: result?.primary?.verdict ?? null,
       links: [c.researchGoalId, c.changeRequestId, c.campaignId, c.deliveredRef].filter(Boolean).join(' '),
