@@ -310,6 +310,15 @@ describe('the free research lane', () => {
     expect(String(claims[0]!.evidenceLocator)).toMatch(/^sentence/);
   });
 
+  it('reads a sentence cited as "S1.n" with no separate source, the way models often write it', async () => {
+    const { citedExcerpt, sentencesOf } = await import('../server/services/freeLane/worker.ts');
+    const numbered = [{ url: 'https://a', sentences: sentencesOf(PAGE) }, { url: 'https://b', sentences: ['Another source sentence that says something.'] }];
+    expect(citedExcerpt({ sentences: ['S1.1'] }, numbered)?.excerpt).toBe(sentencesOf(PAGE)[0]);
+    expect(citedExcerpt({ sentences: ['[S2.1]'] }, numbered)?.url).toBe('https://b');
+    expect(citedExcerpt({ source: 'SOURCE 1', sentences: [1] }, numbered)?.url).toBe('https://a');
+    expect(citedExcerpt({ sentences: ['S9.1'] }, numbered)).toBeNull();
+  });
+
   it('accepts a quote that differs from the page only in typography, and never in words', () => {
     const page = 'The median hourly wage for receptionists was $17.39 in May 2024 \u2014 the \u201Cnational\u201D figure.';
     expect(quotedIn('wage for receptionists was $17.39 in May 2024 - the "national" figure.', page)).toBe(true);
