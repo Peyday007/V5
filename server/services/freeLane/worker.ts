@@ -311,8 +311,36 @@ export function quotedIn(excerpt: string, text: string): boolean {
   return needle.length >= 12 && normal(text).includes(needle);
 }
 
+/** A page as sentences, for citing by number. Bounded, and short fragments dropped. */
+export function sentencesOf(text: string, max = 90): string[] {
+  return text
+    .replace(/\r/g, '')
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9"'(\u201C])|\n{1,}/)
+    .map((one) => one.replace(/\s+/g, ' ').trim())
+    .filter((one) => one.length >= 20 && one.length <= 700)
+    .slice(0, max);
+}
+
+/** The verbatim excerpt a claim cites by sentence number, or null. */
+export function citedExcerpt(
+  claim: Record<string, unknown>,
+  numbered: { url: string; sentences: string[] }[],
+): { url: string; excerpt: string; locator: string } | null {
+  const sourceNo = Number(claim['source']);
+  const source = Number.isInteger(sourceNo) ? numbered[sourceNo - 1] : undefined;
+  const picks = (Array.isArray(claim['sentences']) ? (claim['sentences'] as unknown[]) : [])
+    .map((n) => Number(String(n).replace(/^S?\d+\./i, '')))
+    .filter((n) => Number.isInteger(n) && n >= 1);
+  if (!source || picks.length === 0) return null;
+  const chosen = [...new Set(picks)].sort((a, b) => a - b).slice(0, 4);
+  const lines = chosen.map((n) => source.sentences[n - 1]).filter((one): one is string => typeof one === 'string');
+  if (lines.length === 0) return null;
+  const excerpt = lines.join(' ').slice(0, 800);
+  return { url: source.url, excerpt, locator: `sentence${chosen.length > 1 ? 's' : ''} ${chosen.join(', ')}` };
+}
+
 /** Free, keyless public search: Wikipedia's own API. Candidates only; Brain reads each page itself. */
-async function wikipediaCandidates(query: string): Promise<string[]> {
+export async function wikipediaCandidates(query: string): Promise<string[]> {
   try {
     const url =
       'https://en.wikipedia.org/w/api.php?action=opensearch&limit=3&namespace=0&format=json&search=' +
@@ -483,34 +511,45 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     return false;
   }
 
-  // 2. Claims, quoted from those pages only.
+  // 2. Claims, cited by sentence number. Brain copies the sentences itself, so
+  //    every excerpt is verbatim by construction: the model never retypes a quote.
   const claimSchema = schemaForModel('brain_submit_claims', 'claims');
-  const sources = readable.map((one, i) => `SOURCE ${i + 1} — ${one.url}\n${one.text}`).join('\n\n---\n\n');
+  const numbered = readable.map((one) => ({ url: one.url, sentences: sentencesOf(one.text) }));
+  const sources = numbered
+    .map((one, i) => `SOURCE ${i + 1} — ${one.url}\n${one.sentences.map((t, n) => `[S${i + 1}.${n + 1}] ${t}`).join('\n')}`)
+    .join('\n\n---\n\n');
   const prompt =
-    `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nSources Brain fetched:\n\n${sources}\n\n` +
-    'Extract the material claims these sources establish for the brief. Rules: source_url must be one of ' +
-    'the SOURCE urls above exactly; evidence_excerpt must be copied verbatim from that source (30-400 ' +
-    'characters); evidence_lane must be one of the lane ids ' +
+    `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nSources Brain fetched, split into numbered sentences:\n\n${sources}\n\n` +
+    'Extract the material claims these sources establish for the brief. For each claim give "source" (the ' +
+    'SOURCE number) and "sentences" (the sentence numbers within that source that state it, e.g. [3,4]); ' +
+    'Brain copies those sentences as the quoted evidence, so cite only sentences that say the claim. ' +
+    'evidence_lane must be one of ' +
     JSON.stringify(lanes.map((l) => l.id)) +
     '; state geography/timeframe limits inside the claim. Include no claim the sources do not support. ' +
-    `Reply as {"claims":[...]} where each claim matches: ${JSON.stringify(claimSchema)}`;
+    `Reply as {"claims":[...]} where each claim has "source", "sentences" and the fields of: ${JSON.stringify(claimSchema)}`;
   const answer = await askFor(ctx, prompt);
   const laneIds = new Set(lanes.map((l) => l.id));
   const onlyLane = laneIds.size === 1 ? [...laneIds][0]! : null;
   const finalize = (raw: Record<string, unknown>): Record<string, unknown> | null => {
     const listed = Array.isArray(raw['claims']) ? (raw['claims'] as Record<string, unknown>[]) : [];
-    // With one declared lane there is only one lane a claim can fill.
-    if (onlyLane) for (const c of listed) if (!laneIds.has(String(c['evidence_lane']))) c['evidence_lane'] = onlyLane;
-    const claims = listed.filter((c) => {
+    const claims: Record<string, unknown>[] = [];
+    for (const c of listed) {
+      // With one declared lane there is only one lane a claim can fill.
+      if (onlyLane && !laneIds.has(String(c['evidence_lane']))) c['evidence_lane'] = onlyLane;
+      if (typeof c['claim'] !== 'string' || (laneIds.size > 0 && !laneIds.has(String(c['evidence_lane'])))) continue;
+      const cited = citedExcerpt(c, numbered);
+      if (cited) {
+        const { source: _s, sentences: _n, ...rest } = c;
+        claims.push({ ...rest, source_url: cited.url, evidence_excerpt: cited.excerpt, evidence_locator: cited.locator });
+        continue;
+      }
+      // A model that quoted instead of citing is still held to the page, word for word.
       const source = readable.find((one) => one.url === c['source_url']);
-      return (
-        source !== undefined &&
-        typeof c['claim'] === 'string' &&
-        typeof c['evidence_excerpt'] === 'string' &&
-        quotedIn(String(c['evidence_excerpt']), source.text) &&
-        (laneIds.size === 0 || laneIds.has(String(c['evidence_lane'])))
-      );
-    });
+      if (source && typeof c['evidence_excerpt'] === 'string' && quotedIn(String(c['evidence_excerpt']), source.text)) {
+        const { source: _s, sentences: _n, ...rest } = c;
+        claims.push(rest);
+      }
+    }
     return claims.length > 0 ? { claims: claims.slice(0, 25) } : null;
   };
   if (!answer) return false;
@@ -707,6 +746,133 @@ async function failingModels(now = Date.now()): Promise<Set<string>> {
  * Never concurrent with itself; a tick that finds the lane unconfigured does
  * nothing and says so, which is what `laneCoverage` reads.
  */
+/**
+ * The order a slot asks the queue in: later stages first, so a packet already
+ * paid for is finished before new research starts and results flow downstream
+ * rather than piling up at the front of the pipeline.
+ */
+const CLAIM_ORDER: readonly (readonly FreeLaneWorkType[])[] = [
+  ['RESEARCH_SYNTHESIZE', 'RESEARCH_AUDIT', 'RESEARCH_VERIFY'],
+  ['RESEARCH_PLAN', 'RESEARCH_FRAGMENT'],
+];
+
+/** Memberships, read at most once a minute per worker rather than once per job. */
+const membershipCache = new Map<string, { at: number; projects: string[] }>();
+async function projectsFor(worker: FreeWorker): Promise<string[]> {
+  const cached = membershipCache.get(worker.workerId);
+  if (cached && Date.now() - cached.at < 60_000) return cached.projects;
+  const projects = await ensureMemberships(worker);
+  membershipCache.set(worker.workerId, { at: Date.now(), projects });
+  return projects;
+}
+
+export interface TakeInput {
+  workers: FreeWorker[];
+  worker: FreeWorker;
+  index: number;
+  completer: Completer;
+  fetchSource: (url: string) => Promise<SourceFetch>;
+  search: (query: string) => Promise<string[]>;
+  config: LaneConfig;
+  /** Take a job whose role prefers the other model, when that model is saturated. */
+  spillover?: boolean;
+}
+
+/**
+ * Claim one free-lane job and answer it. The unit every slot repeats.
+ * Returns the claimed job (null when there was none for this slot) and whether
+ * Brain accepted the answer.
+ */
+export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
+  const { workers, worker, index, config } = input;
+  const projectIds = await projectsFor(worker);
+  if (projectIds.length === 0) return { claimed: null, ok: false, ms: 0 };
+  let session = '';
+  let one: ClaimedWork | undefined;
+  for (const types of CLAIM_ORDER) {
+    const claimed = await claimWork({
+      workerId: worker.workerId,
+      scopes: projectIds.map((projectId) => ({ projectId, scopes: [...CONNECTOR_SCOPES] })),
+      workTypes: [...types],
+      limit: 1,
+      leaseMs: LEASE_MS,
+      admit: async (item) => {
+        if (!input.spillover && workerFor(workers, item) !== index) {
+          return { ok: false, reason: 'the other free worker takes this role' };
+        }
+        if ((cooldown.get(item.id) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
+        if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
+        session = sessionFor(worker, item);
+        return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
+      },
+    });
+    one = claimed[0];
+    if (one) break;
+  }
+  if (!one) return { claimed: null, ok: false, ms: 0 };
+  const started = Date.now();
+  const ctx: Ctx = {
+    worker,
+    principal: principalFor(worker, projectIds, session),
+    claimed: one,
+    completer: input.completer,
+    fetchSource: input.fetchSource,
+    search: input.search,
+    config,
+    why: 'the model returned no usable JSON',
+  };
+  let ok = false;
+  try {
+    ok = await answerItem(ctx);
+  } catch (error) {
+    console.warn(`[free-lane] ${one.workType} ${one.workItemId} threw:`, (error as Error).message);
+  }
+  const transient = !ok && /^(model call failed|no JSON)/.test(ctx.why);
+  const strikes = transient ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
+  if (ok) {
+    transientStrikes.delete(one.workItemId);
+  } else if (transient && strikes < 3) {
+    /*
+     * The model or its provider failed, not the work: hand the item back with
+     * its attempt refunded, and leave it alone for a while so a provider outage
+     * cannot spend the item's attempt budget.
+     */
+    transientStrikes.set(one.workItemId, strikes);
+    cooldown.set(one.workItemId, Date.now() + 5 * 60_000 * strikes);
+    try {
+      await call(ctx, 'brain_release_work', { ...proof(ctx), detail: `free lane: ${ctx.why}`.slice(0, 300) });
+    } catch {
+      // Lease already gone: the queue's expiry returns it.
+    }
+  } else {
+    transientStrikes.delete(one.workItemId);
+    try {
+      await call(ctx, 'brain_fail_work', {
+        ...proof(ctx),
+        category: 'WORKER_ERROR',
+        retryable: true,
+        detail: `free lane (${worker.model}) produced no answer Brain accepted for this ${one.workType}`,
+      });
+    } catch {
+      // Lease already gone: the queue's expiry returns it.
+    }
+  }
+  const ms = Date.now() - started;
+  await recordBinEvent({
+    eventType: 'FREE_LANE_ITEM',
+    projectId: one.projectId,
+    workItemId: one.workItemId,
+    workerId: worker.workerId,
+    sessionRef: session,
+    workloadClass: one.workType,
+    outcome: ok ? 'SUBMITTED' : transient && strikes < 3 ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
+    reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
+    durationMs: ms,
+    evidenceClass: 'MEASURED',
+  });
+  return { claimed: one, ok, ms };
+}
+
 export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeLaneTick> {
   const config = options.config === undefined ? laneConfig() : options.config;
   const tick: FreeLaneTick = { configured: Boolean(config), workers: 0, claimed: 0, submitted: 0, failed: 0, byType: {}, closed: 0 };
@@ -726,91 +892,16 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
     const fetchSource = options.fetchSource ?? ((url: string) => fetchForWorker(url));
     const perWorker = Math.max(1, options.perWorker ?? 2);
 
-    const slots = Math.max(1, Math.min(4, options.slots ?? Number(process.env['BRAIN_FREE_LANE_SLOTS'] ?? 2)));
+    const slots = Math.max(1, Math.min(64, options.slots ?? 2));
     await Promise.all(
       workers.flatMap((worker, index) => Array.from({ length: slots }, () => ({ worker, index }))).map(async ({ worker, index }) => {
-        const projectIds = await ensureMemberships(worker);
-        if (projectIds.length === 0) return;
         for (let n = 0; n < perWorker; n += 1) {
-          let session = '';
-          const claimed = await claimWork({
-            workerId: worker.workerId,
-            scopes: projectIds.map((projectId) => ({ projectId, scopes: [...CONNECTOR_SCOPES] })),
-            workTypes: [...FREE_LANE_WORK_TYPES],
-            limit: 1,
-            leaseMs: LEASE_MS,
-            admit: async (item) => {
-              if (workerFor(workers, item) !== index) return { ok: false, reason: 'the other free worker takes this role' };
-              if ((cooldown.get(item.id) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
-              if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
-              session = sessionFor(worker, item);
-              return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
-            },
-          });
-          const one = claimed[0];
-          if (!one) return;
+          const result = await takeOne({ workers, worker, index, completer, fetchSource, search: options.search ?? wikipediaCandidates, config });
+          if (!result.claimed) return;
           tick.claimed += 1;
-          tick.byType[one.workType] = (tick.byType[one.workType] ?? 0) + 1;
-          const ctx: Ctx = {
-            worker,
-            principal: principalFor(worker, projectIds, session),
-            claimed: one,
-            completer,
-            fetchSource,
-            search: options.search ?? wikipediaCandidates,
-            config,
-            why: 'the model returned no usable JSON',
-          };
-          let ok = false;
-          try {
-            ok = await answerItem(ctx);
-          } catch (error) {
-            console.warn(`[free-lane] ${one.workType} ${one.workItemId} threw:`, (error as Error).message);
-          }
-          const transient = !ok && /^(model call failed|no JSON)/.test(ctx.why);
-          const strikes = transient ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
-          if (ok) {
-            tick.submitted += 1;
-            transientStrikes.delete(one.workItemId);
-          } else if (transient && strikes < 3) {
-            /*
-             * The model or its provider failed, not the work: hand the item back
-             * with its attempt refunded, and leave it alone for a while so a
-             * provider outage cannot spend the item's attempt budget.
-             */
-            tick.failed += 1;
-            transientStrikes.set(one.workItemId, strikes);
-            cooldown.set(one.workItemId, Date.now() + 5 * 60_000 * strikes);
-            try {
-              await call(ctx, 'brain_release_work', { ...proof(ctx), detail: `free lane: ${ctx.why}`.slice(0, 300) });
-            } catch {
-              // Lease already gone: the queue's expiry returns it.
-            }
-          } else {
-            tick.failed += 1;
-            transientStrikes.delete(one.workItemId);
-            try {
-              await call(ctx, 'brain_fail_work', {
-                ...proof(ctx),
-                category: 'WORKER_ERROR',
-                retryable: true,
-                detail: `free lane (${worker.model}) produced no answer Brain accepted for this ${one.workType}`,
-              });
-            } catch {
-              // Lease already gone: the queue's expiry returns it.
-            }
-          }
-          await recordBinEvent({
-            eventType: 'FREE_LANE_ITEM',
-            projectId: one.projectId,
-            workItemId: one.workItemId,
-            workerId: worker.workerId,
-            sessionRef: session,
-            workloadClass: one.workType,
-            outcome: ok ? 'SUBMITTED' : transient && strikes < 3 ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
-            reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
-            evidenceClass: 'MEASURED',
-          });
+          tick.byType[result.claimed.workType] = (tick.byType[result.claimed.workType] ?? 0) + 1;
+          if (result.ok) tick.submitted += 1;
+          else tick.failed += 1;
         }
       }),
     );
@@ -856,13 +947,16 @@ let timer: NodeJS.Timeout | null = null;
  * own restart verification runs, and four model-driven slots competing with it
  * made that verification slow enough not to finish (Deploy 41601470270).
  */
-export function startFreeLaneLoop(intervalMs = 30_000, delayMs = 3 * 60_000): void {
+export function startFreeLaneLoop(_intervalMs = 30_000, delayMs = 3 * 60_000): void {
   if (timer) return;
+  /*
+   * §86: the lane is an adaptive pool now, not a fixed tick. Its controller
+   * sizes each model's slots from measurements (`capacity.ts`).
+   */
   const begin = (): void => {
-    timer = setInterval(() => {
-      void freeLaneTick().catch((error) => console.warn('[free-lane] tick failed:', (error as Error).message));
-    }, intervalMs);
-    timer.unref?.();
+    void import('./capacity.ts')
+      .then(({ startAdaptivePool }) => startAdaptivePool())
+      .catch((error) => console.warn('[free-lane] pool did not start:', (error as Error).message));
   };
   const wait = setTimeout(begin, delayMs);
   wait.unref?.();

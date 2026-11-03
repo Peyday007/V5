@@ -13996,3 +13996,47 @@ never built.
 - **Lanes.** `binLane` reports `FREE_LANE` for PLAY_RESEARCH and GRUNT whenever a
   free model is configured, and `WAITING_FOR_FREE_LANE` only when none is.
 
+## 86. The free lane's concurrency is a controller's output, and a quote is copied, never retyped.
+
+**What limited it.** The free lane (§85) ran a fixed two slots per model, four
+jobs at once. Nothing measured said four: a slot spends almost all its time
+waiting on a model call over HTTP, so the Brain machine and its database were
+idle while research queued. And the first limit on *useful* throughput was not
+concurrency at all — in the 24 hours to 09:54Z fragments had 21 accepted
+submissions against 80 that failed Brain's own quote-and-cite checks
+(`docs/CASH-10K-RESULT.md`). More slots would have multiplied failed work.
+
+- **Quotes are copied by Brain** (`sentencesOf`, `citedExcerpt`). Each fetched
+  page is shown to the model as numbered sentences; a claim cites its source
+  and sentence numbers, and Brain copies those sentences as the
+  `evidence_excerpt`. An excerpt is therefore the page verbatim by construction.
+  A model that quotes instead of citing is still held to the page word for word.
+- **An adaptive pool** (`services/freeLane/capacity.ts`) replaces the tick. Each
+  model has a target number of slots; each slot repeats `takeOne` (claim one
+  job, later stages first, then the other model's roles when its own queue is
+  empty) until the target no longer includes it.
+- **The controller** (`decideTarget`, every 30 seconds, per model, pure) grows the
+  target ×2 while useful research is waiting, provider errors are under 30%,
+  answers are mostly accepted and Brain is not under database, event-loop or CPU
+  pressure. It halves on provider overload or Brain pressure, holds when answers
+  mostly fail or slots are unfilled, and decays ×0.75 when nothing waits. It never
+  grows past what is waiting. `SAFETY_CEILING` (256 per model) is a runaway guard,
+  not the operating limit.
+- **Brain's own capacity is graded, not yes/no.** `databaseUnderPressure` reads
+  a single connection waiter as pressure, which is right for deferring optional
+  work (§63) and wrong for sizing a pool: on the test cluster it halved the lane
+  every step. The controller samples the pools from every slot: an
+  infrastructure failure in the last minute, a waiter on the control pool, or a
+  workload queue as long as the pool halves; mere contention only holds growth.
+- **Persistent and replayable.** Targets and the highest stable concurrency live
+  in `free_lane_capacity` (migration 135 / pg 126); a restart resumes at half of
+  what was learned. Every change is a `FREE_LANE_CAPACITY` event carrying the
+  measurements that drove it. No person sets a worker count.
+- **One provider cannot stop the lane:** each model is its own controller, and a
+  provider failure refunds the job's attempt and cools it down (§85).
+- **Measured, not estimated:** `admin free-lane show` prints jobs running now,
+  each model's target and highest stable concurrency, completed and accepted
+  jobs, accepted claims, filed documents and next-stage items in the last hour,
+  provider errors, and the scaling decisions. Cost is $0: the lane makes no paid
+  call.
+
