@@ -84,7 +84,7 @@ export const METRICS: Record<MetricKey, MetricDefinition> = {
     shape: 'RATE',
     higherIsBetter: true,
     numerator: 'packets that settled COMPLETE or COMPLETE_WITH_GAPS in the window',
-    denominator: 'packets that settled in the window (COMPLETE, COMPLETE_WITH_GAPS, FAILED, NEEDS_HUMAN, CANCELLED)',
+    denominator: 'packets that settled in the window (COMPLETE, COMPLETE_WITH_GAPS, FAILED, NEEDS_HUMAN); CANCELLED is reported beside it, not counted as a failure',
     minSample: 8,
   },
   CONSTRUCTED_ROUND_YIELD: {
@@ -479,6 +479,38 @@ export function packetWeaknesses(causes: FailureCount[], settled: number): Weakn
       scope: 'GENERAL',
       severity: 'MEDIUM',
       researchQuestion: 'How do research pipelines recover blocked sub-questions without a person?',
+      samples: cause.samples.slice(0, 5),
+      knownCause: null,
+    });
+  }
+  return out;
+}
+
+/**
+ * Weaknesses from what reached the owner (7 days): a kind of Needs-You request
+ * raised often is work Brain could not finish by itself, which rule 11 says it
+ * should. The cause is not in the rows, so this goes to method research first.
+ */
+export function ownerInterventionWeaknesses(causes: FailureCount[], total: number): Weakness[] {
+  const out: Weakness[] = [];
+  for (const cause of causes) {
+    if (cause.n < WEAKNESS_MIN_COUNT || total <= 0 || cause.n / total < WEAKNESS_MIN_SHARE) continue;
+    out.push({
+      key: `OWNER:${cause.cls}`,
+      kind: 'OWNER_INTERVENTION',
+      title: `Brain asks the owner for ${cause.cls.toLowerCase().replace(/_/g, ' ')}`,
+      problem:
+        `${cause.n} of ${total} Needs-You requests in seven days asked for ${cause.cls.toLowerCase().replace(/_/g, ' ')}; ` +
+        'each one stops work until a person answers, and rule 11 says Brain decides what it can.',
+      metric: 'OWNER_INTERVENTIONS_PER_DAY',
+      downstreamMetric: 'RESEARCH_JOB_SUCCESS_RATE',
+      ownerComponent: 'server/services/russell/',
+      mutationScope: ['server/services/russell/**', 'server/services/research/**', 'tests/russell*.test.ts', 'tests/research*.test.ts'],
+      frequency: cause.n,
+      denominator: total,
+      scope: 'GENERAL',
+      severity: cause.n / total >= 0.25 ? 'HIGH' : 'MEDIUM',
+      researchQuestion: `How do autonomous agent systems resolve "${cause.cls.toLowerCase().replace(/_/g, ' ')}" decisions without escalating to a person, and when must they escalate?`,
       samples: cause.samples.slice(0, 5),
       knownCause: null,
     });
