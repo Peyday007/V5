@@ -1,3 +1,4 @@
+import type { BinPurpose } from './binPurpose.ts';
 /**
  * Domain contract for Brain.
  *
@@ -5587,6 +5588,9 @@ export interface BinRow {
   ready_at: string | null;
   completed_at: string | null;
   factory_campaign_id: string | null;
+  /** Migration 134: what the bin is for. NULL is unclassified, which is denied to Claude. */
+  purpose?: string | null;
+  purpose_basis?: string | null;
 }
 
 export interface Bin {
@@ -5668,6 +5672,12 @@ export interface Bin {
    * query about either of them ambiguous.
    */
   factoryCampaignId: string | null;
+  /**
+   * What the bin is for (`domain/binPurpose.ts`), set when it was created.
+   * Null is unclassified, and unclassified is denied to Claude (§84).
+   */
+  purpose?: BinPurpose | null;
+  purposeBasis?: string | null;
 }
 
 export interface BinDispatchRow {

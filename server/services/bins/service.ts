@@ -23,6 +23,7 @@
  * evaluates the bin's contract against durable rows and returns the verdict. A
  * worker saying it finished is an input to nothing.
  */
+import { brainOnlyMode } from './brainOnly.ts';
 import type {
   Bin,
   BinManifest,
@@ -151,6 +152,11 @@ export interface Assignment {
 export type CheckInResult =
   | { assigned: true; assignment: Assignment }
   | { assigned: false; reason: 'NO_READY_BINS' }
+  /**
+   * Brain-only mode is on and no Brain-improvement bin is ready for this
+   * worker (§84). Whatever else is queued is not Claude's, so the session ends.
+   */
+  | { assigned: false; reason: 'NO_WORK' }
   /**
    * The session was established and Brain could not finish choosing its work —
    * the database did not answer, or choosing ran past the check-in's time
@@ -656,6 +662,9 @@ export async function checkIn(input: {
       noteSessionUnserved(input, choosing.infra ?? 'CHECK_IN_BUDGET');
       return { assigned: false, reason: 'RETRY_LATER' };
     }
+    if (!result.assigned && result.reason === 'NO_READY_BINS' && (await brainOnlyModeOrOn())) {
+      return { assigned: false, reason: 'NO_WORK' };
+    }
     return result;
   } catch (error) {
     const kind = classifyInfraFailure(error);
@@ -663,6 +672,15 @@ export async function checkIn(input: {
     noteInfraFailure(kind, 'check_in:choose');
     noteSessionUnserved(input, kind);
     return { assigned: false, reason: 'RETRY_LATER' };
+  }
+}
+
+/** The mode, read once for the answer's wording; an unreadable switch reads as ON. */
+async function brainOnlyModeOrOn(): Promise<boolean> {
+  try {
+    return await brainOnlyMode();
+  } catch {
+    return true;
   }
 }
 

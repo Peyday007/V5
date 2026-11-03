@@ -162,9 +162,15 @@ const checkInTool: McpTool = {
         value: {
           assigned: false,
           reason: result.reason,
+          // §84: an empty check-in is not news. Nothing is pushed to anyone.
+          notify: false,
           message:
-            'There is no ready bin for you. End the session now — a new worker is activated when ' +
-            'work appears, so waiting costs allowance and gains nothing.',
+            result.reason === 'NO_WORK'
+              ? 'NO_WORK: Claude routines take only Brain-improvement work, and none is ready for you. ' +
+                'End the session now and do not send a notification — work that is not Brain ' +
+                'improvement is parked by Brain and is not yours.'
+              : 'There is no ready bin for you. End the session now — a new worker is activated when ' +
+                'work appears, so waiting costs allowance and gains nothing.',
         },
         projectId: null,
       };

@@ -65,6 +65,7 @@ import {
   ensureDispatchIntent,
   getBin,
   isDispatchable,
+  binPurposeAdmits,
   listDispatchableBinHeads,
   markDispatchDeferred,
   markDispatchFailed,
@@ -238,6 +239,10 @@ export function forgetUnansweredRead(): void {
   unansweredMark = null;
 }
 
+/** How often the brain-only pass runs inside the tick. */
+const BRAIN_ONLY_PASS_MS = 60_000;
+let lastBrainOnlyPass = 0;
+
 export async function dispatchTick(
   options: { burst?: number; projectIds?: string[] } = {},
 ): Promise<TickResult> {
@@ -262,6 +267,22 @@ export async function dispatchTick(
     unrouted: {},
     missingSecrets: 0,
   };
+
+  /*
+   * Brain-only mode (§84): tag any live bin that has no purpose and take
+   * non-Brain work out of the Claude lane, before intents are superseded so a
+   * bin parked here has its pending fire retired in this same tick. At most
+   * once a minute; it is idempotent by rows and never stops the tick.
+   */
+  if (Date.now() - lastBrainOnlyPass >= BRAIN_ONLY_PASS_MS) {
+    lastBrainOnlyPass = Date.now();
+    try {
+      const { enforceBrainOnly } = await import('../bins/brainOnly.ts');
+      await enforceBrainOnly();
+    } catch (error) {
+      console.warn('[dispatch] brain-only pass failed:', (error as Error).message);
+    }
+  }
 
   result.superseded = await supersedeStaleIntents();
 
@@ -550,7 +571,13 @@ export async function dispatchTick(
     // the milliseconds since, and an activation for a bin somebody already
     // holds is a wasted one.
     const bin = await getBin(intent.binId);
-    if (!bin || !isDispatchable(bin) || bin.leaseGeneration !== intent.leaseGeneration) {
+    if (
+      !bin ||
+      !isDispatchable(bin) ||
+      bin.leaseGeneration !== intent.leaseGeneration ||
+      // Brain-only mode, asked again at the fire (§84).
+      !(await binPurposeAdmits(bin.id))
+    ) {
       await markDispatchFailed(intent.id, {
         kind: 'SUPERSEDED',
         message: 'The bin was taken or moved on before this intent was sent.',
