@@ -357,6 +357,20 @@ export async function spareResearchSurfaces(projectId: string): Promise<number |
       [projectId, now],
     );
     count = Math.max(0, idle - Number(waiting?.n ?? 0));
+    /*
+     * §86: under brain-only mode a non-Brain project's research is the free
+     * lane's, not the routines' (§84), so its spare is the free lane's measured
+     * idle capacity rather than idle Claude surfaces that may not take it.
+     */
+    const { brainOnlyMode } = await import('../bins/brainOnly.ts');
+    if (await brainOnlyMode()) {
+      const project = await getDb().get<{ slug: string; purpose: string }>('SELECT slug, purpose FROM projects WHERE id = ?', [projectId]);
+      const { isBrainProject } = await import('../../domain/binPurpose.ts');
+      if (!isBrainProject(project ?? null)) {
+        const { freeLaneSpareSurfaces } = await import('../freeLane/capacity.ts');
+        count = await freeLaneSpareSurfaces(nowMs);
+      }
+    }
   } catch {
     count = null;
   }

@@ -232,6 +232,8 @@ export interface PoolOptions {
   fetchSource?: (url: string) => Promise<SourceFetch>;
   search?: (query: string) => Promise<string[]>;
   config?: LaneConfig;
+  /** Test seam: the pressure reading, instead of this process's own. */
+  pressure?: () => Pressure;
 }
 let poolOptions: PoolOptions = {};
 
@@ -305,7 +307,7 @@ export async function controlStep(): Promise<ControlReading | null> {
     }
   }
   const waiting = await waitingNow();
-  const pressure = readPressure();
+  const pressure = poolOptions.pressure ? poolOptions.pressure() : readPressure();
   const reading: ControlReading = { waiting, pressure, models: [] };
   for (const pool of pools.values()) {
     const window = await windowFor(pool.worker.model);
@@ -364,4 +366,39 @@ export function stopAdaptivePool(): void {
   controlTimer = null;
   pools.clear();
   workersCache = [];
+}
+
+/**
+ * Spare free-lane capacity, in research "surfaces", for §78's generation sizing.
+ *
+ * §78 grows a goal's search with the idle fleet, and counted the fleet as
+ * Claude routine surfaces. Under §84 those cannot take play research, so for a
+ * non-Brain project the spare is the free lane's: slots its controller has
+ * granted that are neither busy nor already spoken for by waiting work, in
+ * units of `SLOTS_PER_SURFACE` (a round queues several jobs). Zero while answers
+ * are mostly failing, so generation never outruns useful work, and capped per
+ * reading so a burst of room is opened in steps the controller can follow.
+ */
+export const SLOTS_PER_SURFACE = 4;
+const MAX_SPARE_SURFACES = 8;
+
+export async function freeLaneSpareSurfaces(now = Date.now()): Promise<number> {
+  if (!laneConfig()) return 0;
+  const db = getDb();
+  const rows = await readCapacity();
+  const granted = rows.reduce((sum, r) => sum + r.target, 0) || START_TARGET * 2;
+  const busy = await db.get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM work_items WHERE state = 'LEASED' AND lease_expires_at > ?
+       AND worker_id IN (SELECT k.id FROM workers k WHERE k.name IN ('free-lane-a', 'free-lane-b'))`,
+    [new Date(now).toISOString()],
+  );
+  const recent = await db.all<{ outcome: string; n: number | string }>(
+    "SELECT outcome, COUNT(*) AS n FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? GROUP BY outcome",
+    [new Date(now - 30 * 60_000).toISOString()],
+  );
+  const ok = Number(recent.find((r) => r.outcome === 'SUBMITTED')?.n ?? 0);
+  const all = recent.reduce((sum, r) => sum + Number(r.n), 0);
+  if (all >= 10 && ok / all < 0.3) return 0;
+  const free = granted - Number(busy?.n ?? 0) - (await waitingNow());
+  return Math.max(0, Math.min(MAX_SPARE_SURFACES, Math.floor(free / SLOTS_PER_SURFACE)));
 }
