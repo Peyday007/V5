@@ -98,7 +98,7 @@ jobs:
 
           # The allowlist is the control; the input's description is a label.
           case "$G_COMMAND" in
-            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan) ;;
+            show|file|pause|resume|cancel|reinstate|depends|terms|create|target|plan|construct) ;;
             *) echo "::error::Refusing '$G_COMMAND'."; exit 1 ;;
           esac
 
