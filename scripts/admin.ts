@@ -1376,6 +1376,7 @@ async function main(): Promise<void> {
       console.log(`  packets resumed   ${reading.packetsTouched}`);
       console.log(`  claims            ${reading.claimsAccepted} accepted of ${reading.claimsSubmitted} submitted by free workers`);
       console.log(`  packets filed     ${reading.documentsFiled}`);
+      for (const failure of reading.recentFailures) console.log(`  failed            ${failure}`);
       break;
     }
     case 'free-lane run': {
