@@ -14,6 +14,8 @@ import { getDb } from '../server/db/database.ts';
 import { recordBinEvent } from '../server/repos/bins.ts';
 import { createProject, getProjectBySlug } from '../server/repos/projects.ts';
 import { createLayer } from '../server/repos/layers.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createOrchestration } from '../server/repos/research.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { decideCandidate, getCandidateByKey, listCandidates, listImprovementEvents, patchCandidate } from '../server/repos/improvement.ts';
 import {
@@ -25,6 +27,7 @@ import {
   dependencyCheckFor,
   deriveStage,
   freeLaneWeaknesses,
+  ownerInterventionWeaknesses,
   MAX_ATTEMPTS,
   rankCandidates,
   reading,
@@ -51,6 +54,13 @@ describe('the decisions, pure', () => {
     expect(many.map((w) => w.key)).toEqual(['FREE_LANE:NO_READABLE_SOURCE']);
     expect(many[0]!.scope).toBe('GENERAL');
     expect(freeLaneWeaknesses([{ cls: 'NO_READABLE_SOURCE', n: 20, samples: [] }], 1000)).toEqual([]);
+  });
+
+  it('turns a frequent kind of Needs-You request into method research, not engineering', () => {
+    const found = ownerInterventionWeaknesses([{ cls: 'APPROVE_PACKET', n: 40, samples: ['x'] }, { cls: 'RARE', n: 2, samples: [] }], 100);
+    expect(found.map((w) => w.key)).toEqual(['OWNER:APPROVE_PACKET']);
+    expect(found[0]!.knownCause).toBeNull();
+    expect(deriveStage({ decision: null, researchGoalId: null, research: null, archiveClaims: 0, knownCause: found[0]!.knownCause, changeRequestId: null, factory: null, deliveredAt: null, windowClosed: false }).owner).toBe('CLAUDE_ROUTINE');
   });
 
   it('says INSUFFICIENT DATA rather than inventing success', () => {
@@ -177,6 +187,26 @@ describe('the loop on real rows', () => {
     const pass = await readMetric('FREE_LANE_FRAGMENT_PASS_RATE', new Date(now.getTime() - 3_600_000).toISOString(), new Date(now.getTime() + 1000).toISOString());
     expect(pass).toMatchObject({ numerator: 10, denominator: 30, status: 'MEASURED' });
     expect(pass.value).toBeCloseTo(1 / 3, 3);
+  });
+
+  it('does not count a packet Brain cancelled as a research job that failed', async () => {
+    const at = new Date().toISOString();
+    const layerId = (await createLayer({ projectId: brainId, name: 'Packets', orderIndex: 1 })).id;
+    const ids: string[] = [];
+    for (const [status, n] of [['COMPLETE', 2], ['CANCELLED', 5], ['FAILED', 1]] as const) {
+      for (let i = 0; i < n; i += 1) {
+        const run = await createRun({ projectId: brainId, layerId, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: `p${status}${i}` });
+        const o = await createOrchestration({ projectId: brainId, layerId, runId: run.id, title: 't', assignment: 'a', provider: 'WORKER', autoApprove: false });
+        await getDb().run(
+          'UPDATE research_orchestrations SET status = ?, completed_at = ?, failed_at = ?, cancelled_at = ?, updated_at = ? WHERE id = ?',
+          [status, status === 'COMPLETE' ? at : null, status === 'FAILED' ? at : null, status === 'CANCELLED' ? at : null, at, o.id],
+        );
+        ids.push(o.id);
+      }
+    }
+    expect(ids.length).toBe(8);
+    const success = await readMetric('RESEARCH_JOB_SUCCESS_RATE', new Date(Date.now() - 3_600_000).toISOString(), new Date(Date.now() + 1000).toISOString());
+    expect(success).toMatchObject({ numerator: 2, denominator: 3, context: { cancelled: 5 } });
   });
 
   it('turns an empty improvement queue into genuine Brain work when the rows justify it, once', async () => {

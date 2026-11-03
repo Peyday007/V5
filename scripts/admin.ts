@@ -1421,6 +1421,9 @@ async function main(): Promise<void> {
         }
       }
       console.log(`  FREE-LANE FRAGMENT FAILURES (24h, ${reading.failureClasses.attempts} settled): ${JSON.stringify(reading.failureClasses.failures)}`);
+      console.log(`  CLAIM REJECTIONS (7d): ${reading.detectors.claims}`);
+      console.log(`  PACKET OUTCOMES (7d): ${reading.detectors.packets}`);
+      console.log(`  OWNER INTERVENTIONS (7d): ${reading.detectors.owner}`);
       console.log(`  CANDIDATES ${reading.candidates.length}`);
       for (const c of reading.candidates) {
         console.log(`    ${c.key}  ${c.stage}  ${c.owner}  ${c.decision ?? ''}  baseline=${c.baseline ?? '—'} after=${c.after ?? '—'} ${c.verdict ?? ''}`);

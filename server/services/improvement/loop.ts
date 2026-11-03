@@ -37,6 +37,7 @@ import {
   MEASURE_WINDOW_HOURS,
   METRICS,
   packetWeaknesses,
+  ownerInterventionWeaknesses,
   rankCandidates,
   type MetricKey,
   type MetricReading,
@@ -54,7 +55,7 @@ import {
   type ImprovementCandidate,
 } from '../../repos/improvement.ts';
 import { BRAIN_PROJECT_SLUG, BRAIN_REPOSITORY_ID } from '../../domain/binPurpose.ts';
-import { claimRejections, freeLaneFailures, packetOutcomes, readMetric } from './scoreboard.ts';
+import { claimRejections, freeLaneFailures, ownerInterventions, packetOutcomes, readMetric } from './scoreboard.ts';
 import { improvementPerson, improvementSwitch } from './authority.ts';
 
 export const IMPROVEMENT_TICK_MS = 10 * 60_000;
@@ -106,7 +107,9 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
   const lane = await freeLaneFailures(day, to);
   const claims = await claimRejections(week, to);
   const packets = await packetOutcomes(week, to);
+  const asks = await ownerInterventions(week, to);
   return [
+    ...ownerInterventionWeaknesses(asks.causes, asks.total),
     ...freeLaneWeaknesses(lane.failures, lane.attempts),
     ...claimRejectionWeaknesses(claims.rejections, claims.claims),
     ...packetWeaknesses(packets.causes, packets.settled),
@@ -658,6 +661,8 @@ export interface ImprovementReading {
   switch: Awaited<ReturnType<typeof improvementSwitch>>;
   scoreboard: { window: string; metrics: MetricReading[] }[];
   failureClasses: { attempts: number; failures: { cls: string; n: number }[] };
+  /** The other detectors' inputs (7 d), so a reader sees why each did or did not fire. */
+  detectors: { claims: string; packets: string; owner: string };
   candidates: Array<{
     key: string;
     title: string;
@@ -685,6 +690,16 @@ export async function improvementReading(now = new Date()): Promise<ImprovementR
     scoreboard.push({ window: label, metrics: board.metrics });
   }
   const lane = await freeLaneFailures(new Date(now.getTime() - 24 * HOUR).toISOString(), to);
+  const week = new Date(now.getTime() - 7 * 24 * HOUR).toISOString();
+  const brief = (rows: { cls: string; n: number }[]) => rows.slice(0, 8).map((r) => `${r.cls}:${r.n}`).join(' ');
+  const claims = await claimRejections(week, to);
+  const packets = await packetOutcomes(week, to);
+  const asks = await ownerInterventions(week, to);
+  const detectors = {
+    claims: `${claims.claims} claims; rejected ${brief(claims.rejections)}`,
+    packets: `${packets.settled} settled (cancelled excluded); ${brief(packets.causes)}`,
+    owner: `${asks.total} requests; ${brief(asks.causes)}`,
+  };
   const candidates = [];
   for (const c of await listCandidates()) {
     const link = await linked(c).catch(() => ({ research: null, factory: null, archive: [] }) as Linked);
@@ -710,6 +725,7 @@ export async function improvementReading(now = new Date()): Promise<ImprovementR
     switch: await improvementSwitch(),
     scoreboard,
     failureClasses: { attempts: lane.attempts, failures: lane.failures.map((f) => ({ cls: f.cls, n: f.n })) },
+    detectors,
     candidates,
     recent,
   };

@@ -59,8 +59,10 @@ export async function readMetric(key: MetricKey, from: string, to: string): Prom
         [from, to],
       );
       const ok = rows.filter((r) => r.status === 'COMPLETE' || r.status === 'COMPLETE_WITH_GAPS').reduce((a, r) => a + n(r.n), 0);
-      const all = rows.reduce((a, r) => a + n(r.n), 0);
-      return reading(key, from, to, ok, all);
+      // A packet Brain cancelled (superseded, retired) was not a job that failed; it is reported beside the rate.
+      const cancelled = n(rows.find((r) => r.status === 'CANCELLED')?.n);
+      const all = rows.reduce((a, r) => a + n(r.n), 0) - cancelled;
+      return reading(key, from, to, ok, all, undefined, { cancelled });
     }
     case 'CONSTRUCTED_ROUND_YIELD': {
       const row = await db.get<{ total: number | string; yielded: number | string | null }>(
@@ -179,11 +181,29 @@ export async function packetOutcomes(from: string, to: string): Promise<{ settle
   );
   const byClass = new Map<string, FailureCount>();
   for (const row of rows) {
+    if (row.status === 'CANCELLED') continue;
     if (row.status !== 'NEEDS_HUMAN' && row.status !== 'FAILED') continue;
     const entry = byClass.get(row.status) ?? { cls: row.status, n: 0, samples: [] };
     entry.n += 1;
     if (entry.samples.length < 5 && row.failure_reason) entry.samples.push(row.failure_reason.slice(0, 300));
     byClass.set(row.status, entry);
   }
-  return { settled: rows.length, causes: [...byClass.values()] };
+  return { settled: rows.filter((r) => r.status !== 'CANCELLED').length, causes: [...byClass.values()] };
+}
+
+/** Needs-You requests opened over [from, to), by the authority each asked for. */
+export async function ownerInterventions(from: string, to: string): Promise<{ total: number; causes: FailureCount[] }> {
+  const rows = await getDb().all<{ authority_needed: string; why_not_russell: string | null }>(
+    'SELECT authority_needed, why_not_russell FROM russell_human_requests WHERE created_at >= ? AND created_at < ? LIMIT 5000',
+    [from, to],
+  );
+  const byClass = new Map<string, FailureCount>();
+  for (const row of rows) {
+    const cls = row.authority_needed.replace(/[^A-Za-z0-9 _-]/g, '').trim().slice(0, 60).toUpperCase().replace(/\s+/g, '_') || 'UNSTATED';
+    const entry = byClass.get(cls) ?? { cls, n: 0, samples: [] };
+    entry.n += 1;
+    if (entry.samples.length < 5 && row.why_not_russell) entry.samples.push(row.why_not_russell.slice(0, 300));
+    byClass.set(cls, entry);
+  }
+  return { total: rows.length, causes: [...byClass.values()].sort((a, b) => b.n - a.n) };
 }
