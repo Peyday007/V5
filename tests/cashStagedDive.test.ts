@@ -382,3 +382,35 @@ describe('an opening a goal’s own search found is dived first', () => {
     expect(started.map((one) => one.opportunityId)).not.toContain(older);
   });
 });
+
+describe('under brain-only mode a goal’s own openings dive beside the operator ceiling', () => {
+  it('starts a few goal-found dives past a ceiling of one, and none past it without brain-only', async () => {
+    const { setBrainOnlyMode } = await import('../server/services/bins/brainOnly.ts');
+    const saved = process.env['BRAIN_CASH_RESEARCH_MAX'];
+    process.env['BRAIN_CASH_RESEARCH_MAX'] = '1';
+    try {
+      const at = new Date().toISOString();
+      await getDb().run(
+        `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, found, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, 'HARVESTED', ?, 3, ?, ?)`,
+        ['cdr_goalmany', projectId, modeId, 'goal-wst_y-mx-def', 'GOAL_MECHANISM', 'rcn_goalmany', at, at, at],
+      );
+      const ids: string[] = [];
+      for (const title of ['Firms repeatedly pay for gift brokerage', 'Contractors repeatedly pay for missed-call setup', 'Shops repeatedly pay for shared postcards']) {
+        const id = await opening(title);
+        await getDb().run('UPDATE cash_opportunities SET discovery_round_id = ? WHERE id = ?', ['cdr_goalmany', id]);
+        ids.push(id);
+      }
+      const without = await startValidations({ projectId });
+      expect(without.length).toBeLessThanOrEqual(1);
+      await setBrainOnlyMode(true, 'test', 'research is the free lane’s');
+      const beside = await startValidations({ projectId });
+      expect(without.length + beside.length).toBeGreaterThan(1);
+      expect([...without, ...beside].every((one) => ids.includes(one.opportunityId))).toBe(true);
+    } finally {
+      await setBrainOnlyMode(false, 'test', null);
+      if (saved === undefined) delete process.env['BRAIN_CASH_RESEARCH_MAX'];
+      else process.env['BRAIN_CASH_RESEARCH_MAX'] = saved;
+    }
+  });
+});
