@@ -11,6 +11,7 @@
  * explicitly: instead of a dead port, a minimal app answers every `/api` request
  * with the reason it could not start.
  */
+import { startFreeLaneLoop } from './services/freeLane/worker.ts';
 import { activityPath, beginActivity } from './db/infra.ts';
 import { registerCommercialProviders } from './services/cash/providers/register.ts';
 import fs from 'node:fs';
@@ -815,6 +816,13 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
      * stage per firing.
      */
     startFactoryRemoteLoop();
+
+    /*
+     * The free research lane (§85): commercial research Claude routines no
+     * longer take, answered by the cheap lane's free models through the same
+     * queue, tools and gates. Off when no cheap lane is configured.
+     */
+    startFreeLaneLoop();
 
     /*
      * One reading of Brain's own parts, if the last one is no longer about this
