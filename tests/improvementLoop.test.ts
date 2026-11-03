@@ -238,6 +238,20 @@ describe('the loop on real rows', () => {
     expect((await listImprovementEvents({ kinds: ['RESEARCH_OPENED'] })).length).toBe(1);
   });
 
+  it('lets research that found nothing conclude honestly: REJECTED with the reason, and no engineering', async () => {
+    await failures(30, 'model a: brain_submit_claims refused: evidence_lane is not a declared lane id', 5);
+    await improvementTick(new Date(Date.now() + 1000));
+    const candidate = (await getCandidateByKey('FREE_LANE:SUBMISSION_REFUSED'))!;
+    // The research goal ran out with no packet and no accepted claim.
+    await getDb().run("UPDATE russell_goals SET expires_at = '2026-01-01T00:00:00.000Z' WHERE id = ?", [candidate.researchGoalId]);
+    const report = await improvementTick(new Date(Date.now() + 2000));
+    expect(report.decided).toContain('FREE_LANE:SUBMISSION_REFUSED REJECTED');
+    const decided = (await getCandidateByKey('FREE_LANE:SUBMISSION_REFUSED'))!;
+    expect(decided.decision).toBe('REJECTED');
+    expect(decided.decisionReason).toContain('no change is justified');
+    expect(decided.changeRequestId).toBeNull();
+  });
+
   it('makes no work and no alert when nothing is weak', async () => {
     await failures(2, 'model a: no readable source among 1 candidate page(s)', 50);
     const report = await improvementTick(new Date(Date.now() + 1000));
