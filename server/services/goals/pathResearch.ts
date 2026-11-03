@@ -17,8 +17,9 @@
  * and money in the account, who decides it, how long it takes and the payment
  * terms — because that is what turns "3 to 60 days" into a fact.
  *
- * What research cannot settle is not asked here: whether buyers will say yes
- * is a test, and reaching them is a permission.
+ * What research cannot settle is not asked here: whether these buyers will say
+ * yes is a test, and reaching them is a permission. How often comparable buyers
+ * said yes is published, and is asked.
  */
 import { getOpportunity, listNeeds } from '../../repos/cashPortfolio.ts';
 import { closeNeed, raiseNeed } from '../cash/needs.ts';
@@ -68,6 +69,20 @@ const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> =
         'Count how many buyers of exactly this kind exist and can be reached through a published channel — a directory, ' +
         'register, association list or marketplace category, with its number and source — and how often one buyer buys this ' +
         '(weekly, monthly, yearly or once). State both as numbers; "many" or "thousands" is not a count.',
+    },
+  ],
+  /*
+   * Whether buyers say yes is finally a test, but how often buyers of this kind
+   * say yes to offers like it is published, and the quant engine estimates
+   * sales from it before Brain has made any (owner, 2026-11-03).
+   */
+  CONVERSION: [
+    {
+      field: 'conversionRates',
+      ask:
+        'Find published reply and close rates for selling this kind of offer to buyers of exactly this kind through a channel run ' +
+        'online: the share of prospects contacted who reply with interest, and the share of those who buy, each as a percentage ' +
+        'with its source, date and the population it was measured on.',
     },
   ],
   OFFER_AND_PRICE: [
@@ -123,9 +138,12 @@ export async function researchGoalPaths(input: {
   const potential = (one: (typeof considered)[number]) => Math.max(one.supportedReach, one.potentialReach ?? 0);
   // Biggest possible contribution first, so research goes where an answer can
   // change what Brain pursues; an award only after ways that pay in steps.
+  // The quant engine's best combination is what the plan rests on: its members' facts first.
+  const inBest = new Set(input.reading.portfolio?.best?.members.map((one) => one.opportunityId) ?? []);
   const order = [...considered].sort(
     (a, b) =>
       Number(a.competitiveAward) - Number(b.competitiveAward) ||
+      Number(inBest.has(b.opportunityId)) - Number(inBest.has(a.opportunityId)) ||
       potential(b) - potential(a) ||
       b.supportedReach - a.supportedReach ||
       a.missing.length - b.missing.length,

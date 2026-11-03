@@ -78,6 +78,7 @@ import { CASH_LAYER_NAME, setConstraints } from '../server/services/cash/lifecyc
 import { splitObjective } from '../server/services/cash/root.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import { retireSubject, seedSubject } from '../server/services/industry/seed.ts';
+import { INDUSTRY_NODE_KINDS, type IndustryNodeKind } from '../server/domain/types.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
 import { binForOrchestration, createBin } from '../server/repos/bins.ts';
 import fs from 'node:fs';
@@ -2310,6 +2311,40 @@ async function main(): Promise<void> {
     case 'cash seed-industry': {
       const actor = await administrator();
       const project = await projectFrom(rest[0] ?? fail('Name the project.'));
+      /*
+       * A whole subtree at once, from `--text-b64`: one subject a line,
+       * `KIND | name | description`, a child indented under its parent. Each
+       * line is the same `seedSubject` call, so each is recorded and every
+       * narrower part is still something research confirms or retires.
+       */
+      const tree = flag('text-b64');
+      if (tree) {
+        const lines = Buffer.from(tree, 'base64').toString('utf8').split('\n').filter((line) => line.trim());
+        const stack: Array<{ indent: number; id: string }> = [];
+        for (const line of lines) {
+          const indent = line.length - line.trimStart().length;
+          const [kindText, nameText, description] = line.trim().split('|').map((part) => part.trim());
+          const kind = (kindText ?? '').toUpperCase();
+          if (!(INDUSTRY_NODE_KINDS as readonly string[]).includes(kind)) fail(`"${kindText}" is not a kind of subject (${INDUSTRY_NODE_KINDS.join(', ')}).`);
+          if (!nameText) fail(`A line names no subject: ${line.trim()}`);
+          while (stack.length && stack[stack.length - 1]!.indent >= indent) stack.pop();
+          const parentId = stack[stack.length - 1]?.id ?? null;
+          const seeded = await seedSubject({
+            projectId: project.id,
+            name: nameText,
+            kind: kind as IndustryNodeKind,
+            description: description || null,
+            parentId,
+            actorRef: actor.id,
+            reason: `Seeded from the terminal by ${actor.email ?? actor.id}, on a recorded instruction.`,
+          });
+          stack.push({ indent, id: seeded.node.id });
+          console.log(`  ${seeded.node.id}  ${'  '.repeat(stack.length - 1)}${seeded.node.name}  [${seeded.node.kind}/${seeded.node.origin}]  ${seeded.created ? 'seeded' : 'already on the map'}`);
+        }
+        await recordIdentityEvent({ actorType: 'HUMAN', actorId: actor.id, action: 'UPDATE_PROJECT', targetType: 'PROJECT', targetId: project.id, projectId: project.id, result: 'SUCCESS' });
+        console.log('  Brain decides when to ask about each. Nothing was spent and no research started.');
+        break;
+      }
       const name = rest.slice(1).join(' ').trim() || fail('Name the subject to seed.');
 
       const result = await seedSubject({

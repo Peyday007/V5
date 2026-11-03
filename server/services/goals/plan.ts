@@ -57,6 +57,7 @@ import { ScenarioRunError } from '../scenario/engine.ts';
 import type { ScenarioResult } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { decideResearch, type ResearchDecision } from '../quant/deadline.ts';
+import type { GoalPortfolio } from './portfolio.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
@@ -180,6 +181,13 @@ export interface PlanReading {
    * potential first. Each says who runs it and what stops it.
    */
   marketTests: MarketTest[];
+  /**
+   * The quant engine's combined plan (§79): each opening's customer demand
+   * estimated from verified evidence, and the combination most likely to reach
+   * the target under the spending, capital and timing limits, with the shared
+   * outreach counted as one risk. A probability only when its basis says so.
+   */
+  portfolio: GoalPortfolio | null;
 }
 
 export interface InferredInput {
@@ -534,6 +542,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       pool: { conclusion: 'NO_POOL', sentence: `No opening held is far enough along to model (${model.considered.length} read). That is a statement about what Brain holds, not about what exists, so it keeps searching and constructing.` },
       ladder: emptyLadder(),
       marketTests: [],
+      portfolio: model.portfolio,
     };
     if (input.persist) await persistReading(goal, reading, null);
     return reading;
@@ -777,6 +786,7 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     pool: poolConclusion(bestReach, target, considered.length),
     ladder: ladderOf(considered),
     marketTests,
+    portfolio: model.portfolio,
   };
   if (input.persist) await persistReading(goal, reading, chosen);
   return reading;

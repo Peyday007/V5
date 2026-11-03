@@ -41,7 +41,16 @@ export const CASH_QUANTITIES = {
   daysToCash: { label: 'Days from start to usable cash', unit: 'days', kind: 'POSITIVE', fields: ['timeToFirstCash'], material: ['mechanism'], freshDays: 365 },
   costShare: { label: 'Direct cost as a share of the price', unit: 'share', kind: 'RATE', fields: ['directCosts'], material: ['mechanism'], freshDays: 365 },
   capitalShare: { label: 'Money tied up as a share of the price', unit: 'share', kind: 'RATE', fields: ['requiredCapital', 'exposure'], material: ['mechanism'], freshDays: 365 },
-  close: { label: 'Share of buyers asked who agree', unit: 'share', kind: 'RATE', fields: [], material: ['mechanism'], freshDays: 730 },
+  /*
+   * The two demand rates (owner, 2026-11-03: "Do not require our own completed
+   * sales before making mathematical estimates"). Brain's own outcomes are the
+   * best evidence of either, and come first; until there are some, a published
+   * rate that research put on an opening's card — a reply rate for reaching
+   * buyers of that kind, a close rate for selling them that offer — is a
+   * comparable, discounted for every way its population differs.
+   */
+  respond: { label: 'Share of prospects contacted who reply with interest', unit: 'share', kind: 'RATE', fields: ['conversionRates', 'buyingEvidence'], material: ['mechanism'], freshDays: 1095 },
+  close: { label: 'Share of interested buyers who agree', unit: 'share', kind: 'RATE', fields: ['conversionRates', 'buyingEvidence'], material: ['mechanism'], freshDays: 1095 },
 } as const;
 export type CashQuantity = keyof typeof CASH_QUANTITIES;
 
@@ -104,6 +113,43 @@ export function readDayRange(text: string): { low: number; high: number } | null
   return { low, high };
 }
 
+/** The words that say which demand rate a sentence states. */
+const RATE_WORDS: Record<'respond' | 'close', RegExp> = {
+  respond: /\b(?:repl(?:y|ies|ied)|respon(?:se|ses|d|ded|ding)|positive repl|interested|meetings? booked|booking rate|lead rate|open rate)\b/i,
+  close: /\b(?:clos(?:e|ed|ing)(?: rate)?|conver(?:t|ts|ted|sion)|win rate|won|signed|purchase rate|bought|buy(?:s|ing)?)\b/i,
+};
+const PERCENT = /(\d{1,2}(?:\.\d+)?)\s*%?\s*(?:-|–|to)\s*(\d{1,3}(?:\.\d+)?)\s*(?:%|percent)|(\d{1,3}(?:\.\d+)?)\s*(?:%|percent)/gi;
+
+/**
+ * A published rate of one kind, read from a researched sentence: a single
+ * figure ("a 3.4% reply rate") or a range ("closes 10–25%"). Only a sentence
+ * that names the rate's own words counts, so a reply rate is never read as a
+ * close rate; a figure over 100% is not a rate. Several figures in the
+ * sentences that qualify become one range spanning them — the reader never
+ * picks the convenient one.
+ */
+export function readRate(text: string, kind: 'respond' | 'close'): Observation['value'] | null {
+  const words = RATE_WORDS[kind];
+  const other = RATE_WORDS[kind === 'respond' ? 'close' : 'respond'];
+  const figures: number[] = [];
+  for (const sentence of text.split(/(?<=[.;!?])\s+|\n+/)) {
+    if (!words.test(sentence)) continue;
+    // A sentence naming both rates: each figure belongs to whichever rate's words stand nearest it.
+    const both = other.test(sentence);
+    const distance = (re: RegExp, at: number, end: number) =>
+      Math.min(...[...sentence.matchAll(new RegExp(re.source, 'gi'))].map((m) => (m.index! >= end ? m.index! - end : Math.max(0, at - (m.index! + m[0].length)))));
+    for (const match of sentence.matchAll(PERCENT)) {
+      if (both && distance(other, match.index!, match.index! + match[0].length) < distance(words, match.index!, match.index! + match[0].length)) continue;
+      const values = match[3] !== undefined ? [Number(match[3])] : [Number(match[1]), Number(match[2])];
+      for (const v of values) if (Number.isFinite(v) && v > 0 && v <= 100) figures.push(Math.round(v * 1e4) / 1e6);
+    }
+  }
+  if (figures.length === 0) return null;
+  const low = Math.min(...figures);
+  const high = Math.max(...figures);
+  return low === high ? { kind: 'POINT', value: low } : { kind: 'RANGE', low, high };
+}
+
 function lineageOf(fact: CashCardFact, knowledge: CashKnowledge): string[] {
   const src = fact.claimId ? knowledge.sources.get(fact.claimId) : null;
   if (src?.sourceUrl) {
@@ -135,14 +181,15 @@ export function observationsFor(knowledge: CashKnowledge, quantity: CashQuantity
         measures: 'agreements per contact, measured on this Brain',
       });
     }
-    return out;
   }
   for (const fact of knowledge.facts) {
     if (!(spec.fields as readonly string[]).includes(fact.field)) continue;
     const opportunity = knowledge.opportunities.get(fact.opportunityId);
     if (!opportunity || opportunity.duplicateOfId) continue;
     let value: Observation['value'] | null = null;
-    if (quantity === 'daysToCash') {
+    if (quantity === 'respond' || quantity === 'close') {
+      value = readRate(fact.value, quantity);
+    } else if (quantity === 'daysToCash') {
       const days = readDayRange(fact.value);
       if (days) value = days.low === days.high ? { kind: 'POINT', value: days.low } : { kind: 'RANGE', low: days.low, high: days.high };
     } else {
