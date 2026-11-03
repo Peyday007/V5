@@ -96,10 +96,14 @@ export async function initDatabase(
 async function seedSwitchesForTestRunner(database: Database): Promise<void> {
   if (process.env['VITEST'] !== 'true') return;
   if (process.env['BRAIN_TEST_BRAIN_ONLY_MODE'] !== 'off') return;
-  await database.run(
-    "UPDATE brain_switches SET enabled = 0, updated_by = 'test-runner' WHERE name = 'brain_only_mode' AND updated_by = 'migration'",
-    [],
-  );
+  try {
+    await database.run(
+      "UPDATE brain_switches SET enabled = 0, updated_by = 'test-runner' WHERE name = 'brain_only_mode' AND updated_by = 'migration'",
+      [],
+    );
+  } catch {
+    // A suite that migrates from its own partial chain has no such table yet.
+  }
 }
 
 /**
