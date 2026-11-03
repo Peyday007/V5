@@ -48,6 +48,20 @@ PRs:
 - Of 14 constructed rounds, none has filed an opening: 11 abandoned, 2 harvested empty, 1 open.
 - **Status:** unblocked (#441–#443) and running, **not yet demonstrated**. Nothing is failing: the industry kernel's log line records any failure (#442), and none appeared.
 
+### Construction → opening: the 09:54Z check-in (Cash report 41614832497, free-lane report 41615182345, serving `edb6c66`)
+
+- Unchanged since 01:40Z: `INDUSTRY_ROUND_OPENED=8`, `INDUSTRY_FINDINGS_ABSORBED=4`. The same four kernel rounds still hold every slot.
+- **Why:** the owner's §84 order (2026-11-03) reserves paid Claude routines for Brain improvement, so all cash research runs on the free-model lane (§85).
+- **That lane in the last 24h:**
+  - 2 packets filed;
+  - 17 of 31 claims accepted;
+  - fragments: 21 submitted, 80 failed its own quote-and-cite checks.
+- The kernel rounds will settle at that pace, and the remote seeds open only after them.
+- **Brain enforces this in SQL:** its claim path refuses play-research items to Claude workers, so no session can do this research in its place.
+- **What would speed it** is the owner's call, not a session's:
+  - allow cash-goal research on Claude routines (`admin brain-only off`), or exempt goal-critical rounds;
+  - or improve the free models' answers until they survive Brain's checks.
+
 ### The rebuilt plan
 
 The plan is in `docs/CASH-10K-PLAN.md`; the model is `fast-cash/10k/plan-model-remote.ts`. Five online lines:
