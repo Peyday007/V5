@@ -276,7 +276,12 @@ export async function fetchForWorker(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const timeout = /abort|timeout/i.test(message) || (error instanceof Error && error.name === 'TimeoutError');
-      return refused(timeout ? 'TIMEOUT' : 'NETWORK_ERROR', message.slice(0, 200), current, null);
+      // `fetch failed` says nothing; the cause's code (ECONNREFUSED, ECONNRESET, a TLS error) says why.
+      const cause = error instanceof Error ? (error as Error & { cause?: { code?: unknown; message?: unknown } }).cause : undefined;
+      const code = cause && typeof cause.code === 'string' ? cause.code : null;
+      const causeText = cause && typeof cause.message === 'string' ? cause.message : null;
+      const detail = [message, code, causeText].filter(Boolean).join(': ');
+      return refused(timeout ? 'TIMEOUT' : 'NETWORK_ERROR', detail.slice(0, 200), current, null);
     }
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location');
