@@ -36,6 +36,27 @@ function model(options: { quote?: string } = {}): { completer: Completer; calls:
   const completer: Completer = async (_config, name, _system, prompt) => {
     calls.push(name);
     if (prompt.includes('Name up to')) return JSON.stringify({ urls: [PAGE_URL], search: 'receptionist wage' });
+    if (prompt.includes('Extract the material claims') && !options.quote) {
+      // Cites by sentence number, as the prompt asks; Brain copies the sentence.
+      const line = prompt.split('\n').find((one) => one.startsWith('[S') && one.includes('median hourly wage'));
+      const ref = /\[S(\d+)\.(\d+)\]/.exec(line ?? '');
+      return JSON.stringify({
+        claims: [
+          {
+            claim: 'The US median hourly wage for receptionists was $17.39 in May 2024.',
+            claim_type: 'SOURCED_FACT',
+            source: Number(ref?.[1]),
+            sentences: [Number(ref?.[2])],
+            source_title: 'Receptionists — Occupational Outlook Handbook',
+            source_publisher: 'U.S. Bureau of Labor Statistics',
+            source_date: '2025-04-18',
+            evidence_lane: 'wage',
+            primary_source: true,
+            confidence: 0.9,
+          },
+        ],
+      });
+    }
     if (prompt.includes('Extract the material claims')) {
       return (
         '```json\n' +
@@ -277,6 +298,16 @@ describe('the free research lane', () => {
     // Cooling down: the next tick does not spend another call on it.
     const second = await freeLaneTick({ config: CONFIG, completer: down, fetchSource, search: async () => [] });
     expect(second.claimed).toBe(0);
+  });
+
+  it('copies the cited sentences itself, so the excerpt is the page verbatim', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    await freeLaneTick({ config: CONFIG, completer: model().completer, fetchSource, search: async () => [] });
+    const claims = await listClaimsForFragment(fragment.id);
+    expect(claims).toHaveLength(1);
+    expect(PAGE).toContain(String(claims[0]!.evidenceExcerpt));
+    expect(String(claims[0]!.evidenceLocator)).toMatch(/^sentence/);
   });
 
   it('accepts a quote that differs from the page only in typography, and never in words', () => {

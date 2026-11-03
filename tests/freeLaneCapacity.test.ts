@@ -1,0 +1,129 @@
+/**
+ * The free lane's concurrency is a controller's output, not a constant (§86).
+ */
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { freshProject, type TestProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
+import { createBin } from '../server/repos/bins.ts';
+import { createRun } from '../server/repos/runs.ts';
+import { createFragments, createOrchestration } from '../server/repos/research.ts';
+import { enqueueWork } from '../server/repos/workQueue.ts';
+import { workType } from '../server/services/queue/workTypes.ts';
+import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
+import {
+  controlStep,
+  decideTarget,
+  readCapacity,
+  startAdaptivePool,
+  stopAdaptivePool,
+  waitingNow,
+} from '../server/services/freeLane/capacity.ts';
+import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
+import type { SourceFetch } from '../server/services/sources/fetchForWorker.ts';
+
+const calm = { db: false, lagMs: 5, cpu: 0.1 };
+
+describe('the decision', () => {
+  it('doubles while useful work waits and errors are acceptable', () => {
+    const d = decideTarget({ target: 4, active: 4, waiting: 100, window: { ok: 8, content: 2, transient: 0 }, pressure: calm });
+    expect(d.target).toBe(8);
+    expect(d.stable).toBe(true);
+  });
+  it('grows through 8, 16, 32, 64 and beyond with the queue to fill them', () => {
+    let target = 8;
+    for (const next of [16, 32, 64, 128, 256]) {
+      target = decideTarget({ target, active: target, waiting: 10_000, window: { ok: 20, content: 5, transient: 1 }, pressure: calm }).target;
+      expect(target).toBe(next);
+    }
+  });
+  it('halves when the provider overloads, and when Brain is under pressure', () => {
+    expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 5, content: 1, transient: 6 }, pressure: calm }).target).toBe(16);
+    expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 9, content: 0, transient: 0 }, pressure: { ...calm, db: true } }).target).toBe(16);
+    expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 9, content: 0, transient: 0 }, pressure: { ...calm, lagMs: 900 } }).target).toBe(16);
+  });
+  it('does not multiply failed work', () => {
+    const d = decideTarget({ target: 8, active: 8, waiting: 99, window: { ok: 1, content: 9, transient: 0 }, pressure: calm });
+    expect(d.target).toBe(8);
+    expect(d.reason).toMatch(/not multiplying failed work/);
+  });
+  it('decays when nothing is waiting, and never grows past what is waiting', () => {
+    expect(decideTarget({ target: 16, active: 2, waiting: 0, window: { ok: 2, content: 0, transient: 0 }, pressure: calm }).target).toBe(12);
+    expect(decideTarget({ target: 2, active: 2, waiting: 1, window: { ok: 2, content: 0, transient: 0 }, pressure: calm }).target).toBe(3);
+  });
+});
+
+const CONFIG: LaneConfig = { url: 'http://lane.test/v1', key: null, models: ['brain-a', 'brain-b'], dailyBudget: 100, timeoutMs: 1000 };
+const PAGE = 'The median hourly wage for receptionists was $17.39 in May 2024. ' + 'Employment is projected to show little change through 2034. '.repeat(4);
+let play: TestProject;
+let inFlight = 0;
+let peak = 0;
+
+/** A model that takes a moment, so concurrency is observable. */
+const completer: Completer = async (_c, _m, _s, prompt) => {
+  inFlight += 1;
+  peak = Math.max(peak, inFlight);
+  await new Promise((r) => setTimeout(r, 40));
+  inFlight -= 1;
+  if (prompt.includes('Name up to')) return JSON.stringify({ urls: ['https://www.bls.gov/x'] });
+  const line = prompt.split('\n').find((one) => one.startsWith('[S') && one.includes('median hourly wage'));
+  const ref = /\[S(\d+)\.(\d+)\]/.exec(line ?? '');
+  return JSON.stringify({
+    claims: [{ claim: 'US median receptionist wage was $17.39 an hour in May 2024.', claim_type: 'SOURCED_FACT', source: Number(ref?.[1]), sentences: [Number(ref?.[2])], evidence_lane: 'wage' }],
+  });
+};
+const fetchSource = async (url: string): Promise<SourceFetch> => ({
+  readable: true, requestedUrl: url, finalUrl: url, status: 200, contentType: 'text/html',
+  retrievedAt: new Date().toISOString(), sha256: 'x', text: PAGE, truncated: false, totalChars: PAGE.length,
+});
+
+async function queueFragments(n: number): Promise<void> {
+  const layerId = (await play.layerByName('Monetization Logic')).id;
+  for (let i = 0; i < n; i += 1) {
+    const run = await createRun({ projectId: play.project.id, layerId, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: `p${i}` });
+    const orchestration = await createOrchestration({ projectId: play.project.id, layerId, runId: run.id, title: `Receptionist wage ${i}`, assignment: 'wage', provider: 'WORKER', autoApprove: false });
+    const [fragment] = await createFragments([{
+      orchestrationId: orchestration.id, projectId: play.project.id, layerId, fragmentIndex: 0, fragmentKey: `wage-${i}`,
+      question: 'What is the US median hourly wage of a receptionist?', geography: 'United States', timeframe: '2024',
+      population: 'Receptionists', definitions: 'Median hourly wage',
+      requiredEvidence: [{ id: 'wage', description: 'official wage statistic', necessity: 'REQUIRED' }],
+      acceptableSourceTypes: [], excludedSourceTypes: [], completionCriteria: ['one figure'], dependsOn: [], minIndependentSources: 1, status: 'QUEUED',
+    }]);
+    await createBin({
+      projectId: play.project.id, kind: 'RESEARCH_PACKET', title: `Receptionist wage ${i}`, objective: 'wage', orchestrationId: orchestration.id,
+      manifest: { objective: 'wage', why: 't', lineage: { projectId: play.project.id, layerId, goal: 'wage', orchestrationId: orchestration.id }, units: [], acceptableSources: [], excludedSources: [], evidence: [], outputs: [], authorizedActions: [], prohibitedActions: [], budgetUnits: 1, retry: { maxAttempts: 3, backoffSeconds: 60 }, stoppingConditions: [] },
+      completionContract: 'RESEARCH_PACKET_V1', createdByType: 'SYSTEM', createdById: 'test', ready: true,
+    });
+    const def = workType('RESEARCH_FRAGMENT');
+    await enqueueWork({ projectId: play.project.id, workType: 'RESEARCH_FRAGMENT', payload: def.validate({}), requiredScopes: def.requiredScopes, orchestrationId: orchestration.id, fragmentId: fragment!.id, createdByType: 'SYSTEM' });
+  }
+}
+
+beforeEach(async () => {
+  play = await freshProject();
+  await setBrainOnlyMode(true, 'test', 'capacity suite');
+  inFlight = 0;
+  peak = 0;
+});
+afterEach(() => stopAdaptivePool());
+
+describe('the adaptive pool on a real queue', () => {
+  it('scales up past the old four slots, persists what it learned, and finishes the work', async () => {
+    await queueFragments(30);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(await waitingNow()).toBe(30);
+    startAdaptivePool({ config: CONFIG, completer, fetchSource, search: async () => [] }, 60_000);
+    for (let step = 0; step < 40 && (await waitingNow()) > 0; step += 1) {
+      await new Promise((r) => setTimeout(r, 150));
+      await controlStep();
+    }
+    expect(await waitingNow()).toBe(0);
+    const done = await getDb().get<{ n: number | string }>("SELECT COUNT(*) AS n FROM work_items WHERE work_type = 'RESEARCH_FRAGMENT' AND state = 'SUCCEEDED'", []);
+    expect(Number(done?.n)).toBe(30);
+    expect(peak).toBeGreaterThan(4);
+    const rows = await readCapacity();
+    expect(rows.length).toBe(2);
+    expect(Math.max(...rows.map((r) => r.stableHigh))).toBeGreaterThan(2);
+    const grew = await getDb().get<{ n: number | string }>("SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' AND outcome = 'GROW'", []);
+    expect(Number(grew?.n)).toBeGreaterThan(0);
+  }, 60_000);
+});

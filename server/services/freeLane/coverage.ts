@@ -198,3 +198,88 @@ export async function freeLaneReading(): Promise<{
     documentsFiled: Number(filed?.n ?? 0),
   };
 }
+
+/**
+ * Throughput, measured from rows (§86): what `admin free-lane show` prints under
+ * "throughput". Every figure is counted, none is estimated; cost is the free
+ * lane's own (no paid call is ever made from it).
+ */
+export async function freeLaneThroughput(now = new Date()): Promise<{
+  runningNow: number;
+  capacity: Array<{ model: string; target: number; stableHigh: number; updatedAt: string; reason: string }>;
+  maxTargetReached: number;
+  lastHour: { completed: number; accepted: number; failed: number; providerErrors: number; claimsAccepted: number; documents: number; nextStage: number };
+  last10Min: { completed: number; perMinute: number };
+  recentScaling: string[];
+}> {
+  const db = getDb();
+  const hourAgo = new Date(now.getTime() - 3_600_000).toISOString();
+  const tenAgo = new Date(now.getTime() - 600_000).toISOString();
+  const freeWorkers = "(SELECT k.id FROM workers k WHERE k.name IN ('free-lane-a', 'free-lane-b'))";
+  const running = await db.get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM work_items WHERE state = 'LEASED' AND lease_expires_at > ? AND worker_id IN ${freeWorkers}`,
+    [now.toISOString()],
+  );
+  const capacity = await db.all<{ model: string; target: number; stable_high: number; updated_at: string; reason: string }>(
+    'SELECT model, target, stable_high, updated_at, reason FROM free_lane_capacity ORDER BY model',
+    [],
+  );
+  const outcomes = async (since: string) =>
+    db.all<{ outcome: string; n: number | string }>(
+      "SELECT outcome, COUNT(*) AS n FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? GROUP BY outcome",
+      [since],
+    );
+  const count = (rows: { outcome: string; n: number | string }[], outcome: string): number =>
+    Number(rows.find((r) => r.outcome === outcome)?.n ?? 0);
+  const hour = await outcomes(hourAgo);
+  const ten = await outcomes(tenAgo);
+  const claims = await db.get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM research_claims c JOIN research_passes p ON p.id = c.pass_id
+      WHERE c.accepted = 1 AND c.created_at >= ? AND p.executor_worker_id IN ${freeWorkers}`,
+    [hourAgo],
+  );
+  const documents = await db.get<{ n: number | string }>(
+    `SELECT COUNT(DISTINCT p.orchestration_id) AS n FROM research_passes p
+      JOIN research_orchestrations o ON o.id = p.orchestration_id
+     WHERE p.executor_worker_id IN ${freeWorkers} AND p.pass_key = 'SYNTHESIS' AND p.status = 'COMPLETE'
+       AND p.completed_at >= ? AND o.document_id IS NOT NULL`,
+    [hourAgo],
+  );
+  const nextStage = await db.get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM work_items w
+      WHERE w.created_at >= ? AND w.orchestration_id IN (
+        SELECT DISTINCT wi.orchestration_id FROM work_items wi JOIN bin_events e ON e.work_item_id = wi.id
+         WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED' AND e.at >= ?)`,
+    [hourAgo, hourAgo],
+  );
+  const scaling = await db.all<{ at: string; workload_class: string | null; reason: string | null }>(
+    "SELECT at, workload_class, reason FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' ORDER BY at DESC LIMIT 10",
+    [],
+  );
+  const reached = await db.all<{ reason: string | null }>(
+    "SELECT reason FROM bin_events WHERE event_type = 'FREE_LANE_CAPACITY' AND outcome = 'GROW'",
+    [],
+  );
+  const maxTargetReached = Math.max(
+    0,
+    ...capacity.map((c) => Number(c.target)),
+    ...reached.map((r) => Number(/->\s*(\d+)/.exec(r.reason ?? '')?.[1] ?? 0)),
+  );
+  const completed10 = count(ten, 'SUBMITTED') + count(ten, 'FAILED_RETRYABLE');
+  return {
+    runningNow: Number(running?.n ?? 0),
+    capacity: capacity.map((c) => ({ model: c.model, target: Number(c.target), stableHigh: Number(c.stable_high), updatedAt: c.updated_at, reason: c.reason })),
+    maxTargetReached,
+    lastHour: {
+      completed: count(hour, 'SUBMITTED') + count(hour, 'FAILED_RETRYABLE'),
+      accepted: count(hour, 'SUBMITTED'),
+      failed: count(hour, 'FAILED_RETRYABLE'),
+      providerErrors: count(hour, 'RELEASED_TRANSIENT'),
+      claimsAccepted: Number(claims?.n ?? 0),
+      documents: Number(documents?.n ?? 0),
+      nextStage: Number(nextStage?.n ?? 0),
+    },
+    last10Min: { completed: completed10, perMinute: Number((count(ten, 'SUBMITTED') / 10).toFixed(2)) },
+    recentScaling: scaling.map((s) => `${s.at} ${s.workload_class ?? '?'} ${s.reason ?? ''}`),
+  };
+}

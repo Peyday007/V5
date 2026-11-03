@@ -60,7 +60,7 @@
  *   npm run admin -- cash seed-industry <project> "<subject name>" --admin someone@example.com
  *   npm run admin -- cash constraints <project> ["<additions, empty clears>"] --admin someone@example.com
  */
-import { freeLaneReading } from '../server/services/freeLane/coverage.ts';
+import { freeLaneReading, freeLaneThroughput } from '../server/services/freeLane/coverage.ts';
 import { freeLaneTick } from '../server/services/freeLane/worker.ts';
 import { binPurposeReading, brainOnlyReading, setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { ARCHITECTURE_LAYER, ARCHITECTURE_SLUG } from '../server/services/capability/ingest.ts';
@@ -1377,6 +1377,19 @@ async function main(): Promise<void> {
       console.log(`  claims            ${reading.claimsAccepted} accepted of ${reading.claimsSubmitted} submitted by free workers`);
       console.log(`  packets filed     ${reading.documentsFiled}`);
       for (const failure of reading.recentFailures) console.log(`  failed            ${failure}`);
+      // §86: what the adaptive pool is doing, from rows.
+      const t = await freeLaneThroughput();
+      console.log(`  running now       ${t.runningNow} job(s) leased by free workers`);
+      for (const c of t.capacity) {
+        console.log(`  capacity          ${c.model}: target ${c.target}, highest stable ${c.stableHigh} — ${c.reason} (${c.updatedAt})`);
+      }
+      console.log(`  max target        ${t.maxTargetReached}`);
+      const h = t.lastHour;
+      console.log(`  last hour         completed=${h.completed} accepted=${h.accepted} failed=${h.failed} providerErrors=${h.providerErrors}`);
+      console.log(`  last hour output  claimsAccepted=${h.claimsAccepted} documents=${h.documents} nextStageItems=${h.nextStage}`);
+      console.log(`  last 10 min       completed=${t.last10Min.completed} accepted/min=${t.last10Min.perMinute}`);
+      console.log(`  cost              $0 (free providers only; no paid call is made from the lane)`);
+      for (const line of t.recentScaling) console.log(`  scaling           ${line}`);
       break;
     }
     case 'free-lane run': {
