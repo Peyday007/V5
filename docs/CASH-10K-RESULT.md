@@ -1,4 +1,53 @@
-# $10K objective — consolidated result (2026-11-02, evening)
+# $10K objective — consolidated result
+
+## 2026-11-03: corrected to remote operation (this supersedes the plan sections below)
+
+**Owner, 2026-11-02:** *"I DO NOT WANT TO PERFORM PHYSICAL WORK … This must become a permanent rule throughout Brain."*
+
+### The standing rule, now part of Brain
+
+`server/domain/operatingModel.ts`:
+- **No physical work by the owner:** no travel, deliveries, distribution, meeting customers, performing services, or running a physical operation.
+- **Physical work stays in scope only when an independent supplier or subcontractor performs it** and Brain coordinates it online.
+- **Geography is a business choice, never the owner's location.**
+
+| Stage | Where | What it does |
+|---|---|---|
+| Discovery questions, every kernel | `cash/discovery.ts`; `sprintGoalLine` for industry, dealflow, puzzle, feeds | States the rule and the national/international instruction |
+| Before research is spent | `cash/worthResearching.ts` | `SCREENED_OUT: OWNER_PHYSICAL_WORK`. Covers dives, card questions and withdrawal of open questions |
+| Construction | `cash/construct.ts` | Brain never "produces" a physical need |
+| Delivery and terms | `cash/answers.ts` | Withheld with the PHYSICAL bar |
+| Goal plan and ranking | `cash/goalScenario.ts` | Excluded, with the reason "needs the owner's physical work" |
+
+PRs: **#445** (the rule), **#447** (calibrated on production's own openings), **#448** (every kernel's questions). Tests are in `tests/operatingModel.test.ts`, `tests/goalPlan.test.ts` and the RES-6 tests in `tests/cashKernelProgress.test.ts`.
+
+**Production changes made through the admin console:**
+- The local physical-services subject seeded on Nov 2 is retired (`ind_b1bec01e…`, with its reason recorded).
+- Three remote subjects are seeded:
+  - AI receptionist and missed-call automation for home-service businesses (`ind_236ff807…`);
+  - done-for-you AI marketing services for small businesses (`ind_22979ce6…`);
+  - online lead generation and referral brokerage for independent contractors.
+
+### The rebuilt plan
+
+The plan is in `docs/CASH-10K-PLAN.md`; the model is `fast-cash/10k/plan-model-remote.ts`. Five online lines:
+
+1. AI receptionist and missed-call setups for home-service firms
+2. Holiday campaign builds
+3. Corporate gift brokerage, with suppliers shipping to each recipient
+4. Business-level trigger lists
+5. Puzzle licence packs
+
+Lead-ads brokerage was modelled and **dropped**: it lowers contribution.
+
+**Verdict: $10k settled by Nov 27 is not supported.**
+- Best portfolio: **p50 $3.0k** settled (p10 $1.7k, p90 $5.0k), keeping about $1.4k.
+- The binding constraint is about **10 interested conversations** from the ~900 outreach touches available by Nov 23, against about **41 needed**.
+- Closing the gap needs about 4–5 more warmed mailboxes, a warm network, or counting December. That is stated as a requirement, not assumed.
+
+---
+
+## 2026-11-02 (evening), superseded where it conflicts with the above
 
 Goal `wst_7b4fcbb5f2384f31b6c3`: $10,000 of settled cash by Nov 27, with $300 at risk before income and $3,000 committed in total. **$0 collected so far.**
 
