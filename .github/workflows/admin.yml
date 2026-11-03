@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'free-lane show | free-lane run | brain-only show | brain-only on | brain-only off | oauth trace | connectors show | connectors derive | connectors attach | connectors reconnect | connectors probe | connectors probe-status | connectors repoint-worker | people list | people rename | people foundation | capacity show | capacity adopt | factory invite | projects list | projects create | workers list | workers create | access show | access grant | research start | research goal | packets list | packets syntheses | packets judge-parks | packets recover-synthesis | cash seed-industry | cash retire-industry | cash constraints'
+        description: 'improvement show | improvement tick | improvement on | improvement off | free-lane show | free-lane run | brain-only show | brain-only on | brain-only off | oauth trace | connectors show | connectors derive | connectors attach | connectors reconnect | connectors probe | connectors probe-status | connectors repoint-worker | people list | people rename | people foundation | capacity show | capacity adopt | factory invite | projects list | projects create | workers list | workers create | access show | access grant | research start | research goal | packets list | packets syntheses | packets judge-parks | packets recover-synthesis | cash seed-industry | cash retire-industry | cash constraints'
         required: true
         default: projects list
       subject:
@@ -97,7 +97,7 @@ jobs:
           # happened to `people list`, and what made a deployed image
           # unverifiable by the one command that could have proved it.
           case "$ADMIN_COMMAND" in
-            'free-lane show'|'free-lane run'|'brain-only show'|'brain-only on'|'brain-only off'|'oauth trace'|'connectors show'|'connectors derive'|'connectors attach'|'connectors reconnect'|'connectors probe'|'connectors probe-status'|'connectors repoint-worker'|'people list'|'people rename'|'people foundation'|'capacity show'|'capacity adopt'|'factory invite'|'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start'|'research goal'|'packets list'|'packets syntheses'|'packets judge-parks'|'packets recover-synthesis'|'cash seed-industry'|'cash retire-industry'|'cash constraints') ;;
+            'improvement show'|'improvement tick'|'improvement on'|'improvement off'|'free-lane show'|'free-lane run'|'brain-only show'|'brain-only on'|'brain-only off'|'oauth trace'|'connectors show'|'connectors derive'|'connectors attach'|'connectors reconnect'|'connectors probe'|'connectors probe-status'|'connectors repoint-worker'|'people list'|'people rename'|'people foundation'|'capacity show'|'capacity adopt'|'factory invite'|'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start'|'research goal'|'packets list'|'packets syntheses'|'packets judge-parks'|'packets recover-synthesis'|'cash seed-industry'|'cash retire-industry'|'cash constraints') ;;
             *)
               echo "::error::Refusing '$ADMIN_COMMAND': see the command list on this workflow."
               exit 1
@@ -107,7 +107,7 @@ jobs:
           # Every mutating command names who it is recorded against. A creation
           # with no author is the thing `--admin` exists to prevent.
           case "$ADMIN_COMMAND" in
-            *create|'free-lane run'|'brain-only on'|'brain-only off'|'people rename'|'capacity adopt'|'factory invite'|'connectors derive'|'connectors attach'|'connectors reconnect'|'connectors probe'|'connectors repoint-worker'|'access grant'|'research start'|'cash seed-industry'|'cash retire-industry'|'cash constraints'|'packets recover-synthesis')
+            *create|'improvement tick'|'improvement on'|'improvement off'|'free-lane run'|'brain-only on'|'brain-only off'|'people rename'|'capacity adopt'|'factory invite'|'connectors derive'|'connectors attach'|'connectors reconnect'|'connectors probe'|'connectors repoint-worker'|'access grant'|'research start'|'cash seed-industry'|'cash retire-industry'|'cash constraints'|'packets recover-synthesis')
               if [ -z "$ADMIN_ADMIN" ]; then
                 echo "::error::'$ADMIN_COMMAND' changes something, so it needs --admin <email>."
                 exit 1

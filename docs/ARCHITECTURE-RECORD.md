@@ -14047,3 +14047,79 @@ submissions against 80 that failed Brain's own quote-and-cite checks
   provider errors, and the scaling decisions. Cost is $0: the lane makes no paid
   call.
 
+
+## 87. Brain improves itself through one loop, from a weakness in the rows to a measured decision.
+
+**Owner's order, 2026-11-03.** Claude routines devote their capacity to making
+Brain better at every future job, and research about Brain's methods must become
+tested engineering, not only prompt guidance.
+
+**What was wrong.** Every piece existed and nothing connected them. Performance
+records (`FREE_LANE_ITEM` events, retrospectives, usefulness, the self-model)
+fed reports and prompts. 1 177 accepted method claims in `brain-architecture`
+reached workers only as `methodRules.ts` guidance. Factory could build Brain's
+own repository, but nothing in Brain ever submitted to it except a person. §84
+reserved routines for Brain work and nothing created Brain work, so routines
+answered `NO_WORK` while the free lane failed 364 of 436 settled fragments in a
+day. Information stopped at a document or a prompt with no outcome.
+
+`services/improvement/` and `domain/improvement.ts` are the loop. Nothing in it
+is a second task manager, Factory, research engine or monitor:
+
+- **One register, keyed by the weakness.** `improvement_candidates` (migration
+  136 / pg 127) holds one row per general weakness — `FREE_LANE:NO_READABLE_SOURCE`,
+  `CLAIMS:SCOPE_MISMATCH`, `PACKETS:NEEDS_HUMAN` — never per job, with links to
+  the work carrying it and Brain's decision. The stage between (DIAGNOSE,
+  RESEARCHING, ENGINEER, ENGINEERING, MEASURING, DECIDE, CLOSED) is derived from
+  the linked research goal, change request and campaign (§43). Events are
+  append-only in `improvement_events`.
+- **Detection from rows, with thresholds.** A failure class becomes a candidate
+  at 15 occurrences and 10% of the work it touches, so a few odd failures never
+  generate engineering. Each class names the existing owner of its fix and the
+  files a fix may touch.
+- **The archive first (invariant 13).** `relevantMethodClaims` reads the method
+  pool for claims bearing on the weakness. Three or more, or a cause the rows
+  already state, and Brain engineers from what it holds. Otherwise it opens a
+  research goal in `brain-architecture` — BRAIN_IMPROVEMENT by `binPurpose.ts`
+  — so Claude routines research the method; what they establish reaches both
+  the engineering objective and every worker's guidance.
+- **Engineering goes to Factory, complete.** The objective carries the measured
+  frequency, the verbatim failure reasons, the relevant method claims, earlier
+  attempts not to repeat (invariant 16), the owner component, non-goals that
+  forbid lowering any bar, acceptance conditions and a dependency check. It is
+  approved on the owner's standing order — `brain_switches.improvement_loop`,
+  through `approveAndStartCampaign`'s third entrance, Brain's own repository
+  only — and, when a person last set that switch and the risk is LOW, granted
+  an automatic release (§58). `RELEASE_EXCLUDED_PATHS`, review, the gate and
+  the risk class apply exactly as to a person's objective. One live objective
+  per owner component.
+- **Measured against a baseline.** The baseline (the 72 h before submission) is
+  recorded with the objective. After delivery (`objectiveOutcome` LIVE) and a
+  12 h window, `compare` judges the same metric and its downstream metric by a
+  two-proportion z-test or a Poisson rate test, and says INSUFFICIENT_DATA below
+  a metric's minimum sample, when the workload moved fourfold, or when the
+  provider error share moved twenty points.
+- **Decided once.** KEPT; KEPT_NO_EFFECT; REVERTED, with one revert objective,
+  when the metric or the downstream metric regressed (a local gain may not
+  break the larger workflow); HELD on a named dependency (Factory cancelled,
+  blocked 72 h, or no data after seven days); REJECTED when research settled
+  with nothing supported and the rows state no cause; COMBINED into a
+  candidate on the same owner not yet engineered. A weakness that persists 72 h
+  after a decision becomes the next attempt, at most three: a failing
+  improvement cannot loop.
+- **Continuous, and quiet.** One pass of the durable Russell tick, at most every
+  ten minutes, deferrable under database pressure. It never notifies about
+  research, PRs, or recovered failures. Two alerts only, through Needs-You with
+  a resume key per episode: Brain-improvement bins idle 24 h while candidates
+  are actionable, and no candidate moving for 48 h.
+- **A workflow change answers its dependencies first.** `DEPENDENCY_QUESTIONS`
+  (what depends on it, what it displaces, who owns that, whether they measurably
+  can, who accepts the output, the next bottleneck, the production reading that
+  confirms the objective still advances) is required of every improvement and
+  returned by `brain_engineering_preflight` whenever a change touches routing,
+  lanes, queues or dispatch (`WORKFLOW_OWNERS`).
+- **Readable from the terminal.** `admin improvement show` prints the
+  scoreboard (24 h and 7 d, every metric with its numerator and denominator),
+  the free-lane failure classes, every candidate's stage, worker, baseline,
+  after-reading and decision, and the recent events. `admin improvement tick`
+  runs a pass now; `admin improvement on|off --admin …` is the switch.

@@ -291,7 +291,7 @@ There must be no workflow where the user has to remember "now go update the data
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
 
-## 8–86. The architecture record
+## 8–87. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -379,6 +379,7 @@ resolves. Read the section for the area you are changing before you change it
 - §84. Claude routines are reserved for Brain improvement until the owner says otherwise.
 - §85. Displaced work names a replacement that is doing it, and commercial research is the free lane's.
 - §86. The free lane's concurrency is a controller's output, and a quote is copied, never retyped.
+- §87. Brain improves itself through one loop, from a weakness in the rows to a measured decision.
 
 ## Conventions
 

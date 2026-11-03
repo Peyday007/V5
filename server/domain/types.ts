@@ -11128,3 +11128,48 @@ export interface CashPreparedDecisionRow {
   state: 'PREPARED_NOT_SENT';
   created_at: string;
 }
+
+/* --------------------------------------------------------------------------
+ * Brain improving itself (§87, migration 136 / pg 127)
+ * ------------------------------------------------------------------------ */
+
+export interface ImprovementCandidateRow {
+  id: string;
+  weakness_key: string;
+  kind: string;
+  title: string;
+  problem: string;
+  metric_key: string;
+  downstream_metric: string | null;
+  owner_component: string;
+  frequency: number;
+  denominator: number;
+  scope: string;
+  severity: string;
+  evidence: string;
+  proposal: string | null;
+  dependency_check: string | null;
+  research_goal_id: string | null;
+  change_request_id: string | null;
+  campaign_id: string | null;
+  delivered_at: string | null;
+  delivered_ref: string | null;
+  baseline: string | null;
+  result: string | null;
+  decision: string | null;
+  decision_reason: string | null;
+  combined_into_id: string | null;
+  held_on: string | null;
+  attempt: number;
+  parent_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImprovementEventRow {
+  id: string;
+  candidate_id: string | null;
+  kind: string;
+  detail: string;
+  at: string;
+}
