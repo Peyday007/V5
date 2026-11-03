@@ -289,7 +289,21 @@ async function ask(
 /* Sources, opened by Brain                                                   */
 /* ------------------------------------------------------------------------- */
 
-const normal = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
+/**
+ * Whitespace and typography only: curly quotes, dashes, non-breaking spaces and
+ * ellipses are how a page and a model's copy of it differ without the words
+ * differing. The words themselves must still match exactly.
+ */
+const normal = (s: string): string =>
+  s
+    .replace(/[\u2018\u2019\u201A\u2032]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u2033]/g, '"')
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/\u2026/g, '...')
+    .replace(/[\u00A0\u2000-\u200B\u202F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 
 /** Whether a quoted passage is really in the text Brain fetched. */
 export function quotedIn(excerpt: string, text: string): boolean {
@@ -431,6 +445,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   ];
   const tried = new Set<string>();
   const failedUrls: string[] = [];
+  const fetchReasons: string[] = [];
   const readable: { url: string; text: string }[] = [];
   const open = async (urls: string[]): Promise<void> => {
     for (const url of urls) {
@@ -442,6 +457,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
         readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
       } else {
         failedUrls.push(url);
+        fetchReasons.push(fetched.readable ? 'EMPTY' : String(fetched.reason));
       }
     }
   };
@@ -461,7 +477,8 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   if (readable.length === 0) {
     // A model that never answered is a provider failure, not a sourcing one.
     if (!/^(model call failed|no JSON)/.test(ctx.why) || candidates.length > 0) {
-      ctx.why = `no readable source among ${candidates.length} candidate page(s)`;
+      const counts = fetchReasons.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r]: (acc[r] ?? 0) + 1 }), {});
+      ctx.why = `no readable source among ${candidates.length} candidate page(s): ${JSON.stringify(counts)}`;
     }
     return false;
   }
@@ -479,8 +496,12 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     `Reply as {"claims":[...]} where each claim matches: ${JSON.stringify(claimSchema)}`;
   const answer = await askFor(ctx, prompt);
   const laneIds = new Set(lanes.map((l) => l.id));
+  const onlyLane = laneIds.size === 1 ? [...laneIds][0]! : null;
   const finalize = (raw: Record<string, unknown>): Record<string, unknown> | null => {
-    const claims = (Array.isArray(raw['claims']) ? (raw['claims'] as Record<string, unknown>[]) : []).filter((c) => {
+    const listed = Array.isArray(raw['claims']) ? (raw['claims'] as Record<string, unknown>[]) : [];
+    // With one declared lane there is only one lane a claim can fill.
+    if (onlyLane) for (const c of listed) if (!laneIds.has(String(c['evidence_lane']))) c['evidence_lane'] = onlyLane;
+    const claims = listed.filter((c) => {
       const source = readable.find((one) => one.url === c['source_url']);
       return (
         source !== undefined &&
@@ -587,14 +608,17 @@ async function audit(ctx: Ctx, role: string): Promise<boolean> {
     `You are the ${role} auditor of a research packet. Audit brief (the document, its claim ledger and what ` +
     `it was asked to do):\n${JSON.stringify(brief).slice(0, 60_000)}\n\nJudge it strictly against the brief. ` +
     `Reply as {"${key}": <object>} where the object matches: ${JSON.stringify(schema)}`;
-  const answer = await askFor(ctx, prompt);
-  if (!answer || !answer[key]) return false;
+  const raw = await askFor(ctx, prompt);
+  if (!raw) return false;
+  // Models often answer with the role's object itself rather than wrapped in it.
+  const inner = raw[key] && typeof raw[key] === 'object' ? raw[key] : raw;
+  const answer: Record<string, unknown> = { [key]: inner };
   return submitWithRepair(
     ctx,
     'brain_submit_audit',
-    { [key]: answer[key] },
+    answer,
     (error, previous) => `${prompt}\n\nBrain refused your previous answer: ${error}\nPrevious: ${JSON.stringify(previous).slice(0, 4000)}\nCorrect it.`,
-    (raw) => (raw[key] ? { [key]: raw[key] } : null),
+    (r) => ({ [key]: r[key] && typeof r[key] === 'object' ? r[key] : r }),
   );
 }
 
