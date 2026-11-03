@@ -16,6 +16,7 @@
  * until the cheap lane is configured, because without the free models the
  * volume has nowhere to go but Claude.
  */
+import { sprintGoalLine } from '../../domain/operatingModel.ts';
 import { getDb } from '../../db/database.ts';
 import { insertFeedItems, markShortlisted, pullState, recordFeedPull, unlistedFeedItems, type StoredFeedItem } from '../../repos/feeds.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
@@ -323,7 +324,7 @@ export async function openFeedShortlist(input: { projectId: string; now?: Date; 
   const frame = await executionFrame(input.projectId, mode.currency);
   const statement = [
     FEED_SHORTLIST_BUCKET.question,
-    `This is for a short cash sprint whose goal is: ${mode.objective}`,
+    sprintGoalLine(mode.objective),
     frame ? executionFrameSentence(frame) : '',
     'Free models read these public posts and kept them; nothing about them is established yet. ' +
       'Open each page. Report as an opening only what the page itself shows, quoting it, and say ' +

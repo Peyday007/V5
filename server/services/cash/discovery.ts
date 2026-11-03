@@ -1095,7 +1095,8 @@ export function questionFor(
   exclusions: readonly ExclusionClass[] = [],
 ): string {
   const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`];
-  if (frame) parts.push(executionFrameSentence(frame));
+  // The standing operating rule is in every question: inside the frame when there is one, on its own otherwise.
+  parts.push(frame ? executionFrameSentence(frame) : OPERATING_MODEL_SENTENCE);
   // What a live goal's owner excluded is said in the question, so a worker never
   // spends a pass on it (production 2026-11-02: 128 government openings filed and
   // then left out at plan time). A constructed round already carries it in its own text.

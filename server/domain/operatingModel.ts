@@ -165,3 +165,11 @@ export function operatingFit(facts: OperatingFacts): OperatingFit {
 export function breaksOperatingModel(fit: OperatingFit): boolean {
   return fit.kind === 'OWNER_PHYSICAL';
 }
+
+/**
+ * The line every kernel's research question opens its context with, carrying the
+ * standing rule — one place, so no kernel can ask a question without it.
+ */
+export function sprintGoalLine(objective: string, lead = 'This is for'): string {
+  return `${lead} a short cash sprint whose goal is: ${objective} ${OPERATING_MODEL_SENTENCE}`;
+}

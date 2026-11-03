@@ -37,6 +37,7 @@
  * worth reporting — and it widens nothing: the envelope, the evidence gate and
  * the source classes are all the compiler's.
  */
+import { sprintGoalLine } from '../../domain/operatingModel.ts';
 import { PUZZLE_COST_COMPONENTS, PUZZLE_REVENUE_COMPONENTS } from '../../domain/puzzle.ts';
 import type { PuzzleProductClass } from '../../domain/types.ts';
 
@@ -58,7 +59,7 @@ export const SEED_QUESTION =
 export function seedQuestion(objective: string, round: number): string {
   const parts = [
     SEED_QUESTION,
-    `This is the starting map for a short cash sprint whose goal is: ${objective}`,
+    sprintGoalLine(objective, 'This is the starting map for'),
     'Declare every kind of puzzle you establish on its own claim: puzzle_finding set to ' +
       'FORMAT_EVIDENCE, puzzle_subject set to the name of the organisation that publishes or ' +
       'sells it, and puzzle_format set to the kind of puzzle as the trade names it. Where an ' +
@@ -93,7 +94,7 @@ export function demandQuestion(input: {
       'puzzle editor or constructor, or a public statement that they are looking for more of ' +
       'it? For each one: the organisation, where it publishes, what it says it wants, what it ' +
       'says it pays if it says anything, and how often it buys.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     `Declare each organisation with puzzle_finding set to DEMAND_SIGNAL, puzzle_subject set ` +
       `to its own name, and puzzle_format set to exactly "${input.format}" — copy that string ` +
       'verbatim, because a different wording is a different format to Brain and will join ' +
@@ -129,7 +130,7 @@ export function channelQuestion(input: {
       'one, from its own terms page rather than from an article about it: what share it ' +
       'takes, what rights it requires, what its minimums are, how and when it pays, and what ' +
       'it refuses to list.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     `Declare each route with puzzle_finding set to CHANNEL, puzzle_subject set to its own ` +
       `name, and puzzle_format set to exactly "${input.format}". Put the terms in the claim ` +
       'itself: a route whose terms nobody stated cannot be compared to another, and Brain ' +
@@ -160,7 +161,7 @@ export function productionQuestion(input: {
       'published pricing or terms: what it makes, its stated minimum order, its lead time, ' +
       'and what it charges — at a specification you name, because a print price with no page ' +
       'count, trim size, paper and binding attached is a price for nothing.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     'Declare each supplier with puzzle_finding set to PRODUCTION_ROUTE, puzzle_subject set to ' +
       `its own name, and puzzle_format set to exactly "${input.format}". Where it publishes a ` +
       'figure, declare that separately with puzzle_finding set to PRODUCTION_COST, the line ' +
@@ -192,7 +193,7 @@ export function economicsQuestion(input: {
       'and never a receipt you derived by applying an assumed share to a shelf price — if ' +
       'only a retail price is published, say so plainly and Brain will withhold the ' +
       'contribution rather than compute it.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     `Declare every figure with puzzle_finding set to PRICE_POINT (${PUZZLE_REVENUE_COMPONENTS.join(
       ', ',
     )}) or PRODUCTION_COST (${PUZZLE_COST_COMPONENTS.join(', ')}), the line in puzzle_value, ` +
@@ -223,7 +224,7 @@ export function rightsQuestion(input: { format: string; objective: string; round
       'product safety standards where the product is physical or aimed at children; and ' +
       'accessibility requirements where an institutional buyer imposes them. For each, the ' +
       'instrument, register entry, terms page or decision it comes from.',
-    `This is for a short cash sprint whose goal is: ${input.objective}`,
+    sprintGoalLine(input.objective),
     'Declare each rule with puzzle_finding set to RIGHTS_CONSTRAINT, puzzle_value naming which ' +
       'kind it is, and puzzle_subject naming what it is about — the platform, the standard, ' +
       'the mark. Leave puzzle_format out: a rule of this sort applies across formats, and ' +
