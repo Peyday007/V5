@@ -81,6 +81,13 @@ export const ENGINE_FIELDS = [
    * assume it (`volume.ts`).
    */
   'buyerVolume',
+  /*
+   * How buyers of this kind answer being asked: the published share who reply
+   * with interest and the share of those who buy. The quant engine's demand
+   * estimate reads it (`quant/knowledge.ts`), so a plan can estimate sales
+   * before Brain has made any of its own (owner, 2026-11-03).
+   */
+  'conversionRates',
   'hours',
   'laborNeeds',
   /*
@@ -118,6 +125,7 @@ export const NEED_RESEARCHABLE_ENGINE_FIELDS: readonly EngineFieldKey[] = Object
   'requiredCapital',
   'timeToFirstCash',
   'buyerVolume',
+  'conversionRates',
   'hours',
   'laborNeeds',
   'phoneDependency',
@@ -295,6 +303,15 @@ const LABELS: Record<EngineFieldKey, { label: string; task: string }> = {
       'channel — a directory, register or list, with its number — and say how often one buyer ' +
       'buys it (weekly, monthly, yearly, or once). State both as numbers with their sources; ' +
       '"many" or "thousands" is not a count.',
+  },
+  conversionRates: {
+    label: 'Reply and close rates',
+    task:
+      'Find published rates for selling this kind of offer to buyers of exactly this kind through ' +
+      'a channel run online (cold email, LinkedIn, a directory or marketplace listing): the share of ' +
+      'prospects contacted who reply with interest, and the share of those who buy. State each as a ' +
+      'percentage with its source, its date and the population it was measured on; a benchmark for ' +
+      'a different population is still useful when it says which.',
   },
   hours: {
     label: 'Expected human hours',

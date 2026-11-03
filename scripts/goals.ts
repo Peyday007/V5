@@ -463,6 +463,7 @@ function printPlan(reading: PlanReading): void {
   for (const one of reading.considered.slice(0, 8)) {
     console.log(`    ${one.modelled ? 'model' : '     '} ${one.stage.slice(0, 1)} supported ${Math.round(one.supportedReach)} · missing ${one.missing.length ? one.missing.join(',') : 'nothing'} · ${one.title.slice(0, 70)}`);
   }
+  printPortfolio(reading.portfolio);
   console.log(`  ladder      ${Object.entries(reading.ladder).map(([stage, n]) => `${stage} ${n}`).join(' · ')}`);
   for (const one of reading.marketTests) {
     console.log(`  market test ${one.opportunityId} up to ${one.potentialReach === null ? '?' : Math.round(one.potentialReach)} · [${one.test.by}] ${one.title.slice(0, 70)}`);
@@ -526,10 +527,50 @@ async function construct(): Promise<void> {
   const goal = await getWorkstream(goalId);
   const reading = await readGoalPlan({ goalId, persist: false });
   if (!goal || !reading) fail(`No targeted goal ${goalId}.`);
+  await explainConstructedRounds(goal.id, reading.target.projectId);
+  if (flag('explain') !== undefined) {
+    console.log('GOALS: OK');
+    return;
+  }
   const opened = await askConstructedArrangements(goal, reading, new Date(), Number(flag('max') ?? 2), MAX_LIVE_GOAL_ROUNDS + Number(flag('spare') ?? 0));
   for (const id of opened) await linkWorkstream({ workstreamId: goal.id, kind: 'CANDIDATE', ref: id, relation: 'PURSUES', recordedBy: 'BRAIN', recordedByUserId: null });
   console.log(`construct ${goalId}: opened ${opened.length} round(s)${opened.length ? `: ${opened.join(', ')}` : ' (cool-off, live cap or a closed gate)'}`);
   console.log('GOALS: OK');
+}
+
+/**
+ * Where each of the goal's constructed rounds got to: its research packet, its
+ * fragments, the claims the gate accepted, and how many of those said what
+ * kind of opening they are — which is what the harvest files from.
+ */
+async function explainConstructedRounds(goalId: string, projectId: string): Promise<void> {
+  const rounds = (await listRounds(projectId)).filter((r) => r.bucketId.startsWith(`goal-${goalId}-mx-`)).sort((a, b) => b.openedAt.localeCompare(a.openedAt));
+  console.log(`constructed rounds ${rounds.length}: ${['OPEN', 'HARVESTED', 'ABANDONED'].map((s) => `${s}=${rounds.filter((r) => r.state === s).length}`).join(' ')} · openings filed ${rounds.reduce((n, r) => n + r.found, 0)}`);
+  for (const round of rounds.slice(0, Number(flag('rounds') ?? 12))) {
+    const mission = await latestMissionForCandidate(round.candidateId);
+    const orc = mission?.orchestrationId ? await getOrchestration(mission.orchestrationId) : null;
+    console.log(`  ${round.openedAt.slice(0, 16)} ${round.state} found=${round.found} ${round.bucketId.slice(round.bucketId.indexOf('-mx-') + 4, round.bucketId.indexOf('-mx-') + 60)}`);
+    console.log(`    mission ${mission ? `${mission.state}${mission.waitingOn ? ` waiting on ${mission.waitingOn}` : ''}` : 'none'} · packet ${orc ? `${orc.id} ${orc.status}${orc.failureReason ? `: ${orc.failureReason.slice(0, 220)}` : ''}` : 'none'}`);
+    if (!orc) continue;
+    const frags = await getDb().all<{ status: string; n: number }>('SELECT status, COUNT(*) AS n FROM research_fragments WHERE orchestration_id = ? GROUP BY status', [orc.id]);
+    const claims = await getDb().get<{ total: number; accepted: number; signalled: number }>(
+      `SELECT COUNT(*) AS total, SUM(CASE WHEN accepted = 1 THEN 1 ELSE 0 END) AS accepted,
+              SUM(CASE WHEN accepted = 1 AND opportunity_signal IS NOT NULL THEN 1 ELSE 0 END) AS signalled
+         FROM research_claims WHERE orchestration_id = ?`,
+      [orc.id],
+    );
+    const reasons = await getDb().all<{ reason: string; n: number }>(
+      `SELECT COALESCE(rejection_reason, validation_state) AS reason, COUNT(*) AS n FROM research_claims
+        WHERE orchestration_id = ? AND accepted = 0 GROUP BY COALESCE(rejection_reason, validation_state) ORDER BY COUNT(*) DESC LIMIT 3`,
+      [orc.id],
+    );
+    const lanes = await getDb().all<{ lane: string; n: number }>(
+      `SELECT COALESCE(evidence_lane, '-') AS lane, COUNT(*) AS n FROM research_claims WHERE orchestration_id = ? AND accepted = 1 GROUP BY COALESCE(evidence_lane, '-')`,
+      [orc.id],
+    );
+    console.log(`    fragments ${frags.map((f) => `${f.status}=${f.n}`).join(' ') || 'none'} · claims ${claims?.total ?? 0}, accepted ${claims?.accepted ?? 0}, with an opening kind ${claims?.signalled ?? 0} · lanes ${lanes.map((l) => `${l.lane}=${l.n}`).join(' ') || 'none'}`);
+    for (const r of reasons) console.log(`    rejected ${r.n}x ${String(r.reason).slice(0, 160)}`);
+  }
 }
 
 async function main(): Promise<void> {
@@ -572,3 +613,27 @@ main()
     process.exitCode = 1;
   })
   .finally(() => closeDatabase());
+
+/** The quant engine's combined plan and each opening's estimated demand (§79). */
+function printPortfolio(portfolio: import('../server/services/goals/portfolio.ts').GoalPortfolio | null): void {
+  if (!portfolio) return;
+  const r = (x: number) => (Math.abs(x) < 10 ? x.toFixed(x < 1 ? 3 : 1) : String(Math.round(x)));
+  const l = portfolio.limits;
+  console.log(`  quant       ${portfolio.basis === 'PROBABILITY' ? 'probability' : 'coverage of tested conditions, not a probability'}; ${portfolio.searched} combination(s) searched; target ${Math.round(l.target)} in ${l.deadlineDays} day(s)`);
+  console.log(`    limits    start capital ${l.startingCapital ?? 'none'} · per arrangement ${l.perArrangement ?? 'none'} · spend ceiling ${l.spendCeiling ?? 'none'} · outreach ${l.contactsPerDay.value ?? `${l.contactsPerDay.low}–${l.contactsPerDay.high}`}/day (${l.contactsPerDay.source}) · shared-outreach correlation ${l.correlation}`);
+  const b = portfolio.best;
+  if (b) {
+    console.log(`    best      reaches the target in ${(b.reach * 100).toFixed(1)}% of worlds · settled p10 ${Math.round(b.settledP10)} p50 ${Math.round(b.settledP50)} p90 ${Math.round(b.settledP90)} · capital short ${(b.capitalShort * 100).toFixed(0)}% · over spend ${(b.overSpend * 100).toFixed(0)}%`);
+    for (const m of b.members) console.log(`      member  ${m.opportunityId} ${m.share === null ? 'one-off' : `${m.share * 100}% of outreach`} · ${m.title.slice(0, 70)}`);
+  } else {
+    console.log('    best      none: no combination can run inside the limits');
+  }
+  for (const a of portfolio.alternatives) console.log(`    alt       ${(a.reach * 100).toFixed(1)}% · p50 ${Math.round(a.settledP50)} · ${a.members.map((m) => m.title.slice(0, 28)).join(' + ')}`);
+  const shown = [...portfolio.demand].sort((x, y) => y.revenue.p50 - x.revenue.p50 || y.revenue.p90 - x.revenue.p90).slice(0, 12);
+  for (const d of shown) {
+    console.log(
+      `    demand    ${d.opportunityId} ${d.repeatable ? 'repeatable' : 'one-off'} · contacted p50 ${r(d.contacted.p50)} · interested ${r(d.interested.p10)}/${r(d.interested.p50)}/${r(d.interested.p90)} · deals ${r(d.deals.p10)}/${r(d.deals.p50)}/${r(d.deals.p90)} · revenue ${r(d.revenue.p10)}/${r(d.revenue.p50)}/${r(d.revenue.p90)} · reply ${r(d.respond.p50)} close ${r(d.close.p50)} price ${r(d.price.p50)} days ${r(d.days.p50)} · ${d.refused ? `REFUSED ${d.refused}` : d.justified ? 'evidenced' : `not established: ${d.unestablished.join(', ')}`} · ${d.title.slice(0, 50)}`,
+    );
+  }
+  for (const m of portfolio.missing.slice(0, 8)) console.log(`    missing   ${m}`);
+}

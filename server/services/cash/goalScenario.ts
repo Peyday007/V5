@@ -41,6 +41,7 @@ import type { Workstream } from '../../domain/register.ts';
 import type { TargetReading } from '../goals/target.ts';
 import { inferCashQuantity, loadCashKnowledge, type CashKnowledge, type CashQuantity } from '../quant/knowledge.ts';
 import { toScenarioInput } from '../quant/export.ts';
+import { evaluateGoalPortfolio, type GoalPortfolio } from '../goals/portfolio.ts';
 import type { Estimate, EvidenceTier } from '../../domain/quant.ts';
 import type { VariableSpec } from '../../domain/scenario.ts';
 
@@ -109,6 +110,13 @@ export interface ModelledOpportunity {
   hours: ModelInput;
   daysToCash: ModelInput;
   close: ModelInput;
+  /**
+   * The share of prospects contacted who reply with interest, before any of
+   * them buy — the first step of the quant engine's demand estimate
+   * (`goals/portfolio.ts`). One when `close` was measured per contact, since
+   * that measurement already contains it.
+   */
+  respond: ModelInput;
   directCost: ModelInput;
   /**
    * Deals the market can take inside the window: reachable buyers times how
@@ -164,6 +172,13 @@ export interface GoalModel {
   considered: ModelledOpportunity[];
   /** Why nothing could be modelled, when nothing could. */
   refusal: string | null;
+  /**
+   * The quant engine's combined reading over every modelled opening: demand
+   * estimated world by world and the combination most likely to reach the
+   * target (`goals/portfolio.ts`). It decides which openings take the
+   * simulation's slots. Null when nothing could be modelled.
+   */
+  portfolio: GoalPortfolio | null;
 }
 
 function kindToProvenance(fact: CashCardFact | null): { provenance: VariableProvenance; source: SourceRef | null } {
@@ -298,6 +313,10 @@ async function modelOpportunity(
   } else {
     close = inferOr(knowledge, 'close', opportunity, now, unknown(0.02, 0.5, 'no buyer has been asked yet; swept from 2% to 50% of buyers agreeing'));
   }
+  // Agreements per contact already include whether the contact replied.
+  const respond: ModelInput = lesson
+    ? known(1, 'HISTORICAL', close.source, 'the measured rate is agreements per contact, which includes replying')
+    : inferOr(knowledge, 'respond', opportunity, now, unknown(0.002, 0.15, 'nobody has established how many prospects of this kind reply; swept from 0.2% to 15%'));
 
   const volumeFact = fact('buyerVolume');
   const volumeRead = volumeFact ? readVolume(volumeFact.value, windowDays) : null;
@@ -332,6 +351,7 @@ async function modelOpportunity(
     hours,
     daysToCash,
     close,
+    respond,
     directCost,
     volume,
     agreed: agreements.length > 0,
@@ -413,6 +433,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     excluded,
     considered: candidates,
     refusal,
+    portfolio: null,
   });
   if (target.daysLeft === null) return refuse('The goal has no due date, so there is no window to count money inside. Set one with `goals terms --due`.');
   if (target.daysLeft <= 0) return refuse('The goal is past its due date.');
@@ -491,9 +512,32 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
    * then the largest reach inside the window, then the evidence tier.
    */
   const remainingMajor = target.remainingCents / 100;
+  /*
+   * The quant engine reads every modelled opening first (§79, owner
+   * 2026-11-03): its demand estimate and the combination most likely to reach
+   * the target decide which openings take the simulation's slots — members of
+   * that combination first, then each by the cash its own demand settles.
+   */
+  let portfolio: GoalPortfolio | null = null;
+  if (candidates.length > 0) {
+    portfolio = evaluateGoalPortfolio({
+      openings: candidates,
+      remaining: remainingMajor,
+      daysLeft: target.daysLeft,
+      capitalCeiling: target.capitalCeilingCents === null ? null : target.capitalCeilingCents / 100,
+      beforeProof: target.capitalBeforeProofCents === null ? null : target.capitalBeforeProofCents / 100,
+      perWeek: target.capitalPerWeekCents === null ? null : target.capitalPerWeekCents / 100,
+      resources: target.resources,
+    });
+    trace('quant portfolio');
+  }
+  const inBest = new Set(portfolio?.best?.members.map((one) => one.opportunityId) ?? []);
+  const demandP50 = new Map((portfolio?.demand ?? []).map((one) => [one.opportunityId, one.refused ? -1 : one.revenue.p50]));
   candidates.sort(
     (a, b) =>
       (IN_FLIGHT.has(a.opportunity.state) || a.agreed ? 0 : 1) - (IN_FLIGHT.has(b.opportunity.state) || b.agreed ? 0 : 1) ||
+      Number(inBest.has(b.opportunity.id)) - Number(inBest.has(a.opportunity.id)) ||
+      (demandP50.get(b.opportunity.id) ?? 0) - (demandP50.get(a.opportunity.id) ?? 0) ||
       Number(a.competitiveAward) - Number(b.competitiveAward) ||
       // Reach at a price buyers are shown to pay comes before reach at a guess.
       (priceSupported(b) ? bestCaseReach(b, remainingMajor, target.daysLeft!, true) : 0) -
@@ -692,6 +736,7 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
     excluded,
     considered: candidates,
     refusal: null,
+    portfolio,
   };
 }
 
