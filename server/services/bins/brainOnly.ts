@@ -14,7 +14,7 @@
  * variable, header, argument or prompt changes what a worker is handed.
  */
 import { getDb } from '../../db/database.ts';
-import { binLane, type BinPurpose } from '../../domain/binPurpose.ts';
+import { binLane, isBrainProject, type BinPurpose } from '../../domain/binPurpose.ts';
 import type { WorkItemRow } from '../../domain/types.ts';
 import {
   binNow,
@@ -65,7 +65,7 @@ export async function setBrainOnlyMode(enabled: boolean, by: string, reason: str
  * One statement, switch included, so the answer is never a cached copy.
  */
 export async function workItemPurposeAdmits(
-  item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'>,
+  item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'> & { project_id?: string | null },
 ): Promise<boolean> {
   /*
    * The newest owning bin: a packet's live bin is its newest, and its spent
@@ -90,7 +90,21 @@ export async function workItemPurposeAdmits(
   if (purpose === 'BLOCKED_LEGAL') return false;
   const modeOn = Number(row?.mode ?? 1) > 0;
   if (!modeOn) return true;
-  return Number(row?.found ?? 0) > 0 && purpose === 'BRAIN_IMPROVEMENT';
+  if (Number(row?.found ?? 0) > 0) return purpose === 'BRAIN_IMPROVEMENT';
+  /*
+   * No bin owns it: a queue item from before Step 10, or one the hosted
+   * verifier enqueues in its own scope. The project is then the deterministic
+   * rule, exactly as it is for a bin (`isBrainProject`): Brain's own and
+   * technical projects are Brain work, everything else is denied. The first
+   * deploy denied every bin-less item, and the verifier's queue-claim checks in
+   * `verification-scope` failed with it.
+   */
+  if (!item.project_id) return false;
+  const project = await getDb().get<{ slug: string; purpose: string }>(
+    'SELECT slug, purpose FROM projects WHERE id = ?',
+    [item.project_id],
+  );
+  return isBrainProject(project ?? null);
 }
 
 /** Bins still able to be handed out again: everything not finished for good. */
