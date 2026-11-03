@@ -232,6 +232,8 @@ export interface PoolOptions {
   fetchSource?: (url: string) => Promise<SourceFetch>;
   search?: (query: string) => Promise<string[]>;
   config?: LaneConfig;
+  /** Test seam: the pressure reading, instead of this process's own. */
+  pressure?: () => Pressure;
 }
 let poolOptions: PoolOptions = {};
 
@@ -305,7 +307,7 @@ export async function controlStep(): Promise<ControlReading | null> {
     }
   }
   const waiting = await waitingNow();
-  const pressure = readPressure();
+  const pressure = poolOptions.pressure ? poolOptions.pressure() : readPressure();
   const reading: ControlReading = { waiting, pressure, models: [] };
   for (const pool of pools.values()) {
     const window = await windowFor(pool.worker.model);

@@ -119,7 +119,8 @@ describe('the adaptive pool on a real queue', () => {
     await queueFragments(30);
     await new Promise((r) => setTimeout(r, 20));
     expect(await waitingNow()).toBe(30);
-    startAdaptivePool({ config: CONFIG, completer, fetchSource, search: async () => [] }, 60_000);
+    // Brain calm by construction: this test is about growth, and the pressure rules have their own.
+    startAdaptivePool({ config: CONFIG, completer, fetchSource, search: async () => [], pressure: () => calm }, 60_000);
     const succeeded = async (): Promise<number> =>
       Number((await getDb().get<{ n: number | string }>("SELECT COUNT(*) AS n FROM work_items WHERE work_type = 'RESEARCH_FRAGMENT' AND state = 'SUCCEEDED'", []))?.n ?? 0);
     // Until every job has finished, not merely been taken.
