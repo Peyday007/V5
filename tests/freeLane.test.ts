@@ -79,6 +79,32 @@ function model(options: { quote?: string } = {}): { completer: Completer; calls:
         missing_lanes: [],
       });
     }
+    if (prompt.includes('Write the research packet')) {
+      const ids = [...prompt.matchAll(/"claimId":\s*"([^"]+)"/g)].map((m) => m[1]!);
+      return JSON.stringify({
+        report:
+          `# Receptionist labour cost\n\nThe US median hourly wage for receptionists was $17.39 in May 2024 [${ids[0]}]. ` +
+          'That is the wage alone; it excludes benefits and employer taxes, which the evidence here does not establish. ' +
+          'A buyer comparing an AI receptionist against a hire should therefore treat $17.39 an hour as a floor.',
+        cited_claim_ids: ids,
+        still_missing: ['Fully loaded cost including benefits'],
+      });
+    }
+    const role = /You are the (PRIMARY|ADVERSARIAL|JUDGE) auditor/.exec(prompt)?.[1];
+    if (role === 'PRIMARY') {
+      return JSON.stringify({ primary: { assignment_satisfied: 'PARTIAL', requirement_findings: ['Wage established; loaded cost not.'], notes: 'Sound for what it claims.' } });
+    }
+    if (role === 'ADVERSARIAL') {
+      return JSON.stringify({
+        adversarial: {
+          attacks: [{ attack: 'One source only.', assessment: 'NOT_MATERIAL', reasoning: 'It is the official national statistic.' }],
+          strongest_reason_not_to_advance: 'The loaded cost is missing.',
+        },
+      });
+    }
+    if (role === 'JUDGE') {
+      return JSON.stringify({ judge: { verdict: 'PASS', summary: 'Answers the wage question from the official source.', next_action: 'Use the figure.' } });
+    }
     return '{}';
   };
   return { completer, calls };
@@ -284,5 +310,44 @@ describe('a restriction must name a replacement that is doing the work', () => {
     expect(reading.packetsTouched).toBe(1);
     expect(reading.claimsSubmitted).toBe(1);
     expect(reading.outcomesLastDay['RESEARCH_FRAGMENT:SUBMITTED']).toBe(1);
+  });
+});
+
+describe('the whole packet on the free lane', () => {
+  it('carries a packet from fragment to synthesis to its audits, each stage queued by the runner', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await getDb().run("UPDATE research_orchestrations SET status = 'RESEARCHING' WHERE id = ?", [orchestration.id]);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const seen: string[] = [];
+    for (let round = 0; round < 8; round += 1) {
+      const { completer } = model();
+      const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
+      seen.push(JSON.stringify(tick.byType));
+      // The packet runner's own pass, which its loop makes in production.
+      const { advancePacket } = await import('../server/services/research/packetRunner.ts');
+      await advancePacket(orchestration.id);
+      if (tick.claimed === 0 && round > 0) break;
+    }
+    const items = await getDb().all<{ work_type: string; state: string }>(
+      'SELECT work_type, state FROM work_items WHERE orchestration_id = ? ORDER BY created_at',
+      [orchestration.id],
+    );
+    const status = await getDb().get<{ status: string }>('SELECT status FROM research_orchestrations WHERE id = ?', [orchestration.id]);
+    expect(items.map((i) => `${i.work_type}:${i.state}`)).toEqual([
+      'RESEARCH_FRAGMENT:SUCCEEDED',
+      'RESEARCH_VERIFY:SUCCEEDED',
+      'RESEARCH_SYNTHESIZE:SUCCEEDED',
+      'RESEARCH_AUDIT:SUCCEEDED',
+      'RESEARCH_AUDIT:SUCCEEDED',
+      'RESEARCH_AUDIT:SUCCEEDED',
+    ]);
+    expect(status?.status).toBe('COMPLETE');
+    expect(seen.length).toBeGreaterThan(5);
+    // Brain filed the document, and the lane closed the bin nobody leased.
+    const filed = await getDb().get<{ document_id: string | null }>('SELECT document_id FROM research_orchestrations WHERE id = ?', [orchestration.id]);
+    expect(filed?.document_id).toBeTruthy();
+    await freeLaneTick({ config: CONFIG, completer: model().completer, fetchSource, search: async () => [] });
+    const bin = await getDb().get<{ state: string }>('SELECT state FROM bins WHERE orchestration_id = ?', [orchestration.id]);
+    expect(bin?.state).toBe('COMPLETE');
   });
 });

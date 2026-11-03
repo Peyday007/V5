@@ -156,6 +156,7 @@ export async function freeLaneReading(): Promise<{
   claimsAccepted: number;
   claimsSubmitted: number;
   documentsFiled: number;
+  recentFailures: string[];
 }> {
   const db = getDb();
   const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
@@ -182,7 +183,13 @@ export async function freeLaneReading(): Promise<{
        AND o.document_id IS NOT NULL`,
     [],
   );
+  const failures = await db.all<{ at: string; workload_class: string | null; reason: string | null }>(
+    `SELECT at, workload_class, reason FROM bin_events
+      WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'FAILED_RETRYABLE' ORDER BY at DESC LIMIT 8`,
+    [],
+  );
   return {
+    recentFailures: failures.map((f) => `${f.at} ${f.workload_class ?? '?'} ${f.reason ?? ''}`),
     coverage: await laneCoverage(),
     outcomesLastDay: Object.fromEntries(outcomes.map((o) => [o.k, Number(o.n)])),
     packetsTouched: Number(packets?.n ?? 0),

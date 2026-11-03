@@ -72,8 +72,10 @@ export interface FreeLaneOptions {
   /** Candidate pages from a free public search. Wikipedia's API by default. */
   search?: (query: string) => Promise<string[]>;
   config?: LaneConfig | null;
-  /** Items each worker may take this tick. */
+  /** Items each slot may take this tick. */
   perWorker?: number;
+  /** Concurrent slots per worker (default 2, at most 4). Each slot is one model call at a time. */
+  slots?: number;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -266,16 +268,19 @@ async function ask(
   config: LaneConfig,
   model: string,
   prompt: string,
+  onFail: (why: string) => void = () => undefined,
 ): Promise<Record<string, unknown> | null> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let text = '';
     try {
       text = await completer({ ...config, timeoutMs: 180_000 }, model, SYSTEM, prompt, { maxTokens: 8000 });
-    } catch {
+    } catch (error) {
+      onFail(`model call failed: ${String((error as Error).message ?? error).slice(0, 200)}`);
       continue;
     }
     const parsed = firstJson(text);
     if (parsed) return parsed;
+    onFail(`no JSON in a ${text.length}-character reply`);
   }
   return null;
 }
@@ -325,6 +330,15 @@ interface Ctx {
   fetchSource: (url: string) => Promise<SourceFetch>;
   search: (query: string) => Promise<string[]>;
   config: LaneConfig;
+  /** Why the item was not answered, for its event. Never a payload or a credential. */
+  why: string;
+}
+
+/** `ask` for one item, recording why on the item when the model gives nothing usable. */
+async function askFor(ctx: Ctx, prompt: string): Promise<Record<string, unknown> | null> {
+  return ask(ctx.completer, ctx.config, ctx.worker.model, prompt, (why) => {
+    ctx.why = why;
+  });
 }
 
 async function call(ctx: Ctx, tool: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -353,13 +367,17 @@ async function submitWithRepair(
   let answer: Record<string, unknown> | null = first;
   for (let attempt = 0; attempt < 2 && answer; attempt += 1) {
     const args = finalize ? finalize(answer) : answer;
-    if (!args) return false;
+    if (!args) {
+      ctx.why = 'the answer did not survive Brain\'s own checks (unquoted, uncited or empty)';
+      return false;
+    }
     try {
       await call(ctx, tool, { ...args, ...proof(ctx) });
       return true;
     } catch (error) {
+      ctx.why = `${tool} refused: ${String((error as Error).message ?? error).slice(0, 300)}`;
       if (attempt === 1) return false;
-      answer = await ask(ctx.completer, ctx.config, ctx.worker.model, repairPrompt(String((error as Error).message ?? error).slice(0, 1500), answer));
+      answer = await askFor(ctx, repairPrompt(String((error as Error).message ?? error).slice(0, 1500), answer));
     }
   }
   return false;
@@ -416,7 +434,10 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     }
     if (readable.length >= MAX_SOURCES) break;
   }
-  if (readable.length === 0) return false;
+  if (readable.length === 0) {
+    ctx.why = `no readable source among ${candidates.length} candidate page(s)`;
+    return false;
+  }
 
   // 2. Claims, quoted from those pages only.
   const claimSchema = schemaForModel('brain_submit_claims', 'claims');
@@ -429,7 +450,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     JSON.stringify(lanes.map((l) => l.id)) +
     '; state geography/timeframe limits inside the claim. Include no claim the sources do not support. ' +
     `Reply as {"claims":[...]} where each claim matches: ${JSON.stringify(claimSchema)}`;
-  const answer = await ask(ctx.completer, ctx.config, ctx.worker.model, prompt);
+  const answer = await askFor(ctx, prompt);
   const laneIds = new Set(lanes.map((l) => l.id));
   const finalize = (raw: Record<string, unknown>): Record<string, unknown> | null => {
     const claims = (Array.isArray(raw['claims']) ? (raw['claims'] as Record<string, unknown>[]) : []).filter((c) => {
@@ -476,7 +497,7 @@ async function verify(ctx: Ctx, assignment: Record<string, unknown>): Promise<bo
     'For each claim decide from the page text alone whether the page supports it and whether its scope ' +
     'matches the fragment. An unreadable page supports nothing. Then judge sufficiency for the fragment and ' +
     `list missing lanes. Reply with one JSON object matching: ${JSON.stringify(schema)}`;
-  const answer = await ask(ctx.completer, ctx.config, ctx.worker.model, prompt);
+  const answer = await askFor(ctx, prompt);
   if (!answer) return false;
   const known = new Set(claims.map((c) => String(c['claimId'])));
   const finalize = (raw: Record<string, unknown>): Record<string, unknown> | null => {
@@ -507,7 +528,7 @@ async function synthesize(ctx: Ctx, assignment: Record<string, unknown>): Promis
     'Write the research packet as a clear report that answers the assignment from these claims only, citing ' +
     'each claim inline by its claimId in square brackets, e.g. [clm_...]. Say what the evidence does not ' +
     'establish. Reply as {"report":"...","cited_claim_ids":["..."],"still_missing":["..."]}.';
-  const answer = await ask(ctx.completer, ctx.config, ctx.worker.model, prompt);
+  const answer = await askFor(ctx, prompt);
   if (!answer) return false;
   const known = new Set(claims.map((c) => String(c['claimId'])));
   const finalize = (raw: Record<string, unknown>): Record<string, unknown> | null => {
@@ -539,7 +560,7 @@ async function audit(ctx: Ctx, role: string): Promise<boolean> {
     `You are the ${role} auditor of a research packet. Audit brief (the document, its claim ledger and what ` +
     `it was asked to do):\n${JSON.stringify(brief).slice(0, 60_000)}\n\nJudge it strictly against the brief. ` +
     `Reply as {"${key}": <object>} where the object matches: ${JSON.stringify(schema)}`;
-  const answer = await ask(ctx.completer, ctx.config, ctx.worker.model, prompt);
+  const answer = await askFor(ctx, prompt);
   if (!answer || !answer[key]) return false;
   return submitWithRepair(
     ctx,
@@ -564,7 +585,7 @@ async function plan(ctx: Ctx, assignment: Record<string, unknown>): Promise<bool
     'together answer it. Each fragment asks one answerable question, states its geography, timeframe, ' +
     'population and definitions, and declares the evidence lanes that would settle it and what counts ' +
     `as complete. Reply with one JSON object matching: ${JSON.stringify(schema)}`;
-  const answer = await ask(ctx.completer, ctx.config, ctx.worker.model, prompt);
+  const answer = await askFor(ctx, prompt);
   if (!answer || !Array.isArray(answer['fragments'])) return false;
   const ok = await submitWithRepair(
     ctx,
@@ -618,7 +639,7 @@ async function failingModels(now = Date.now()): Promise<Set<string>> {
   );
   const byModel = new Map<string, { ok: number; bad: number }>();
   for (const row of rows) {
-    const model = String(row.reason ?? '').replace(/^model /, '');
+    const model = String(row.reason ?? '').replace(/^model /, '').split(':')[0]!;
     const entry = byModel.get(model) ?? { ok: 0, bad: 0 };
     if (row.outcome === 'SUBMITTED') entry.ok += Number(row.n);
     else entry.bad += Number(row.n);
@@ -651,8 +672,9 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
     const fetchSource = options.fetchSource ?? ((url: string) => fetchForWorker(url));
     const perWorker = Math.max(1, options.perWorker ?? 2);
 
+    const slots = Math.max(1, Math.min(4, options.slots ?? Number(process.env['BRAIN_FREE_LANE_SLOTS'] ?? 2)));
     await Promise.all(
-      workers.map(async (worker, index) => {
+      workers.flatMap((worker, index) => Array.from({ length: slots }, () => ({ worker, index }))).map(async ({ worker, index }) => {
         const projectIds = await ensureMemberships(worker);
         if (projectIds.length === 0) return;
         for (let n = 0; n < perWorker; n += 1) {
@@ -682,6 +704,7 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
             fetchSource,
             search: options.search ?? wikipediaCandidates,
             config,
+            why: 'the model returned no usable JSON',
           };
           let ok = false;
           try {
@@ -712,7 +735,7 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
             sessionRef: session,
             workloadClass: one.workType,
             outcome: ok ? 'SUBMITTED' : 'FAILED_RETRYABLE',
-            reason: `model ${worker.model}`,
+            reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
             evidenceClass: 'MEASURED',
           });
         }
