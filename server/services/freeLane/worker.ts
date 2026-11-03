@@ -474,6 +474,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   const tried = new Set<string>();
   const failedUrls: string[] = [];
   const fetchReasons: string[] = [];
+  const fetchDetails: string[] = [];
   const readable: { url: string; text: string }[] = [];
   const open = async (urls: string[]): Promise<void> => {
     for (const url of urls) {
@@ -486,6 +487,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       } else {
         failedUrls.push(url);
         fetchReasons.push(fetched.readable ? 'EMPTY' : String(fetched.reason));
+        if (!fetched.readable && fetchDetails.length < 2 && !fetchDetails.includes(fetched.detail)) fetchDetails.push(fetched.detail);
       }
     }
   };
@@ -506,7 +508,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     // A model that never answered is a provider failure, not a sourcing one.
     if (!/^(model call failed|no JSON)/.test(ctx.why) || candidates.length > 0) {
       const counts = fetchReasons.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r]: (acc[r] ?? 0) + 1 }), {});
-      ctx.why = `no readable source among ${candidates.length} candidate page(s): ${JSON.stringify(counts)}`;
+      ctx.why = `no readable source among ${candidates.length} candidate page(s): ${JSON.stringify(counts)} ${fetchDetails.join(' | ')}`.slice(0, 400);
     }
     return false;
   }
