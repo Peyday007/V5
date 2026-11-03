@@ -328,13 +328,20 @@ type Citation =
 /** One reference as a model wrote it: an optional source, a sentence, and an optional end of a range. */
 const REF = /S?(\d+)(?:\.(\d+))?(?:\s*(?:-|\u2013|\u2014|to)\s*S?(?:(\d+)\.)?(\d+))?/gi;
 
+/** The S-form alone: "S2.3", "S1.3-S1.5". Unlike a bare number, it cannot be a year or a count in prose. */
+const SFORM = new RegExp(REF.source.replace(/^S\?/, 'S'), 'gi');
+
 /** Every reference in a citation value: 3, "3", "S2.3", "[S2.3]", "S1.3, S1.4", "S1.3-S1.5", "3-5", "sentences 3 and 4". */
 function referencesIn(value: unknown): { source: number | null; from: number; to: number }[] {
   const texts = Array.isArray(value) ? value.flat(Infinity) : [value];
   const refs: { source: number | null; from: number; to: number }[] = [];
   for (const text of texts) {
     if (text === undefined || text === null || typeof text === 'object') continue;
-    for (const m of String(text).matchAll(REF)) {
+    // A value that is only references ("3", "S1.3, S1.4", "sentences 3 and 4") is read whole; a value with
+    // other words in it ("published in 2019") is read only where a reference says it is one (the S-form).
+    const bare = String(text).replace(/\b(?:sentences?|sent\.?|and|or)\b|[[\](){}&;,]/gi, ' ').trim();
+    const onlyRefs = bare !== '' && bare.replace(REF, '').trim() === '';
+    for (const m of String(text).matchAll(onlyRefs ? REF : SFORM)) {
       const dotted = m[2] !== undefined;
       const from = Number(dotted ? m[2] : m[1]);
       const to = m[4] !== undefined ? Number(m[4]) : from;
