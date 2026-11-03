@@ -60,6 +60,7 @@
  *   npm run admin -- cash seed-industry <project> "<subject name>" --admin someone@example.com
  *   npm run admin -- cash constraints <project> ["<additions, empty clears>"] --admin someone@example.com
  */
+import { binPurposeReading, brainOnlyReading, setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { ARCHITECTURE_LAYER, ARCHITECTURE_SLUG } from '../server/services/capability/ingest.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
 import type { GoalBudgetStatus } from '../server/repos/russellAuthority.ts';
@@ -462,6 +463,7 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@example.com]
 
   people    list | foundation | rename <user|email> "<name>"
+  brain-only show [<bin_…> …] | on | off   (Claude routines take only Brain-improvement work, §84)
   capacity  show | adopt <user|email> <trig_…>
   factory   invite <project> <user|email>
   workers   list | disable <name> | enable <name> | archive <name>
@@ -1326,6 +1328,38 @@ async function main(): Promise<void> {
       console.log('');
       console.log('  worker=— is a connection whose surface Brain has not been told about.');
       console.log('  `capacity adopt <user> <trig_…>` is what records one.');
+      break;
+    }
+    /*
+     * Brain-only mode (§84): Claude routines take only Brain-improvement work.
+     *
+     * `show` reads the switch and every live bin by purpose and lane, and with
+     * bin ids after it, each one's purpose, the rule that decided it, and its
+     * lane. `on` and `off` are the only way the switch changes, attributed to a
+     * real administrator; turning it on also runs the clean-up pass at once.
+     * The owner said the mode stays on until they say otherwise.
+     */
+    case 'brain-only show': {
+      const reading = await brainOnlyReading();
+      console.log(`  brain_only_mode  ${reading.mode ? 'ON' : 'OFF'}  (set ${reading.updatedAt ?? '—'} by ${reading.updatedBy ?? '—'})`);
+      for (const lane of reading.lanes) {
+        console.log(`  ${lane.purpose.padEnd(18)} ${lane.state.padEnd(12)} ${lane.lane.padEnd(22)} ${lane.n}`);
+      }
+      for (const binId of rest) {
+        const one = await binPurposeReading(binId);
+        console.log(
+          one
+            ? `  ${one.id}  ${one.state}  purpose=${one.purpose ?? 'UNCLASSIFIED'}  basis=${one.basis ?? '—'}  lane=${one.lane}  leased=${one.leased ? 'yes' : 'no'}`
+            : `  ${binId}  not found`,
+        );
+      }
+      break;
+    }
+    case 'brain-only on':
+    case 'brain-only off': {
+      const actor = await administrator();
+      await setBrainOnlyMode(command === 'on', actor.email ?? actor.id, rest.join(' ').trim() || null);
+      console.log(`  brain_only_mode is ${command === 'on' ? 'ON' : 'OFF'}, recorded against ${actor.email ?? actor.id}.`);
       break;
     }
     case 'projects list': {

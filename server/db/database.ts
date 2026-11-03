@@ -66,6 +66,7 @@ export async function initDatabase(
 
     try {
       migrationReport = await runMigrations(opened.db, opened.describedPath, options.migrationsDir);
+      await seedSwitchesForTestRunner(opened.db);
     } catch (error) {
       await opened.db.close();
       throw error;
@@ -78,6 +79,27 @@ export async function initDatabase(
     bootError = error instanceof Error ? error : new Error(String(error));
     throw bootError;
   }
+}
+
+/**
+ * The test runner's starting value for brain-only mode (§84).
+ *
+ * Migration 134 turns the mode ON, which is right everywhere Brain runs. The
+ * suite predates it: hundreds of tests drive the queue with synthetic bins in
+ * projects that are not Brain's own, to prove the machinery *beneath* the
+ * filter, and under the mode every one of them would be told NO_WORK. So under
+ * vitest only, `tests/setup.ts` starts each fresh database with the switch off,
+ * and the brain-only suite turns it on through `setBrainOnlyMode` — the one
+ * real switch. Outside vitest this does nothing whatever the environment says:
+ * it is not a way for anything that runs in production to be handed play work.
+ */
+async function seedSwitchesForTestRunner(database: Database): Promise<void> {
+  if (process.env['VITEST'] !== 'true') return;
+  if (process.env['BRAIN_TEST_BRAIN_ONLY_MODE'] !== 'off') return;
+  await database.run(
+    "UPDATE brain_switches SET enabled = 0, updated_by = 'test-runner' WHERE name = 'brain_only_mode' AND updated_by = 'migration'",
+    [],
+  );
 }
 
 /**

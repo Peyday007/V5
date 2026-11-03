@@ -13889,3 +13889,58 @@ and the idle-fill lift stay stopped.
   answered RECORD_GAPS again, and parked again (orc_d083edfc645c47e6b99d). The
   runner now cancels such PLANNED work with the reason and files the packet
   from what it holds. Nothing is approved and no bar moves.
+
+## 84. Claude routines are reserved for Brain improvement until the owner says otherwise.
+
+**Owner's order, 2026-11-03.** Paid Claude routines do only work that improves
+Brain itself for every future job: research methods, source finding and judging,
+evidence rules, reasoning and scoring, memory and learning, audits of Brain's own
+methods, and Brain's code, tools and worker system. This stands until the owner
+says otherwise; no session turns it off on its own judgement.
+
+What it answered. `brain_check_in` handed a routine whatever bin was next and
+nothing asked what kind of work it was, so routines were spent on single-play
+questions and on bins only a person could decide.
+`bin_481feaaee88f48ffa917` ("What it costs to land mining dump trucks in Russia
+(round 2)") was fired a dozen times across three accounts, declined three times
+for LEGAL_RISK, and exhausted five attempts; its audit sibling
+`bin_fda69558546e41358288` did the same.
+
+- **A purpose is decided once, at creation** (`domain/binPurpose.ts`, called by
+  `createBin`): `BRAIN_IMPROVEMENT`, `PLAY_RESEARCH`, `GRUNT` or `BLOCKED_LEGAL`,
+  with the rule that decided it in `bins.purpose_basis`. Deterministic rules
+  first — a fleet probe or delivery proof is the worker system; a factory bin on
+  Brain's own repository is Brain work and on any other repository a product; a
+  bin in `brain-architecture` or a `TECHNICAL` project is Brain work, its audits
+  and judges included. Keywords are a backup and only move work *away* from
+  Claude (legal: sanctions, export control, legality, sanctioned jurisdictions;
+  grunt: lead and list building), never towards it. Nothing decided is
+  `PLAY_RESEARCH`: default deny, and a NULL purpose is denied too.
+- **The switch is a row**, `brain_switches.brain_only_mode`, ON from migration
+  134. `admin brain-only show|on|off --admin …` (also in `admin.yml`) is the only
+  way to read or change it. There is no environment variable, header, argument
+  or prompt that changes what a worker is handed. The one exception is the test
+  runner's starting value (`seedSwitchesForTestRunner`), honoured only under
+  vitest, so the existing suite keeps proving the machinery beneath the filter.
+- **Enforced in SQL, at every entrance.** `purposeAdmitsSql` is inside
+  `claimableStateSql`, so the assigner's candidate query, its compare-and-swap,
+  the dispatcher's fire list, the re-arm and the supersede pass all ask it, and
+  read the switch in the same statement. A work item is asked the same question
+  of its owning bin in `workloadAdmission`, which the MCP claim tool, the HTTP
+  route and the bin drain all share. A `BLOCKED_LEGAL` bin is never claimable,
+  whatever the mode.
+- **Lanes.** Under the mode, `PLAY_RESEARCH` and `GRUNT` are
+  `WAITING_FOR_FREE_LANE` (the free-model lane in `services/cheap/lane.ts`
+  answers closed screening tasks only and takes no bins), and `BLOCKED_LEGAL` is
+  `PARKED_LEGAL`. Both are derived from the purpose and the switch, never stored
+  as a second state; a `BIN_PARKED` event records when a bin was parked.
+- **NO_WORK.** With nothing Brain-improving ready, check-in answers `NO_WORK`
+  with `notify: false`, and the routine ends in seconds.
+- **Clean-up runs by itself** (`enforceBrainOnly`): on every dispatch tick (at
+  most once a minute) and whenever the switch is turned on, it tags live bins
+  that have no purpose and releases any lease a routine holds on a bin, or on a
+  work item, the Claude lane may no longer hold. Idempotent by rows.
+- **No noise.** The served worker instructions say routines do only
+  Brain-improvement work and must not notify about skipped, parked, declined or
+  legal work, or about an empty check-in — only a real Brain-improvement result
+  or a real outage. Parking writes events and notifies nobody.

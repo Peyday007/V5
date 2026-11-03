@@ -28,6 +28,11 @@ process.env['BRAIN_SHARED_SNAPSHOT_MS'] ??= '0';
 // The standing pass is throttled to every five minutes in production (§61);
 // tests call operate() back to back and read its standing each time.
 process.env['BRAIN_STANDING_INTERVAL_MS'] ??= '0';
+// Brain-only mode (§84) is ON in every real database. The suite drives the
+// queue with synthetic bins to prove the machinery beneath that filter, so each
+// fresh test database starts with it off; `brainOnlyMode.test.ts` turns it on
+// through the real switch. Honoured only under vitest (`seedSwitchesForTestRunner`).
+process.env['BRAIN_TEST_BRAIN_ONLY_MODE'] ??= 'off';
 /**
  * Old enough that no live suite could own it.
  *
