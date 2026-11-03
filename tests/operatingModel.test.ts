@@ -83,3 +83,18 @@ describe('the rule is applied where Brain finds and screens openings', () => {
     expect(brokered).toBeNull();
   });
 });
+
+describe('every kernel states the rule in its research questions', () => {
+  it('has one place that writes the sprint goal, and it carries the rule', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { sprintGoalLine } = await import('../server/domain/operatingModel.ts');
+    expect(sprintGoalLine('Collect cash.')).toContain(OPERATING_MODEL_SENTENCE);
+    // No builder may write the sprint goal by hand, which is how the dealflow kernel asked
+    // about landing mining trucks in Russia without the rule (production, 2026-11-03).
+    for (const path of ['server/services/industry/questions.ts', 'server/services/puzzle/questions.ts', 'server/services/dealflow/questions.ts', 'server/services/feeds/run.ts']) {
+      const source = readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+      expect(source, path).not.toMatch(/short cash sprint whose goal is: \$\{/);
+      expect(source, path).toContain('sprintGoalLine(');
+    }
+  });
+});
