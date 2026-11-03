@@ -87,6 +87,16 @@ const OWNER_PHYSICAL = new RegExp(
   'i',
 );
 
+/**
+ * Words that say the operator would be the one taking per-job physical work —
+ * a gig a platform hands to its drivers or couriers. "Independent contractor"
+ * here describes the operator's own status, not somebody it brokers to, so no
+ * brokered wording rescues it (production, 2026-11-03: "DropCurb engages drivers
+ * per completed pickup … as independent contractors").
+ */
+const OWNER_AS_GIG_WORKER =
+  /\b(?:engages? (?:drivers|couriers|haulers|cleaners|movers)|drivers? per (?:completed )?(?:pickup|delivery|job|trip)|per completed (?:pickup|delivery|job|trip)|become an? (?:driver|courier|dasher|shopper|tasker|hauler)|sign up (?:to|as an?) (?:drive|driver|courier))\b/i;
+
 /** Words that say somebody else performs the physical part and this operation coordinates it. */
 const BROKERED = new RegExp(
   [
@@ -145,6 +155,10 @@ export function operatingFit(facts: OperatingFacts): OperatingFit {
   const physical = words.match(OWNER_PHYSICAL)?.[0] ?? null;
   const brokered = words.match(BROKERED)?.[0] ?? null;
   const thirdParty = fulfiller && THIRD_PARTY_FULFILLER.test(fulfiller) && !OWNER_OR_BRAIN.test(fulfiller);
+  const gig = words.match(OWNER_AS_GIG_WORKER)?.[0] ?? null;
+  if (gig) {
+    return { kind: 'OWNER_PHYSICAL', because: `it is per-job physical work the operator would do itself ("${gig}"); the owner does no physical work` };
+  }
   if (physical && (brokered || thirdParty)) {
     return {
       kind: 'BROKERED_PHYSICAL',
