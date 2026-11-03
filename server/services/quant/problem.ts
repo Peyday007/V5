@@ -40,6 +40,8 @@ export interface ProblemActivity {
   daysNode?: string;
   /** Or a fixed number of days. */
   days?: number;
+  /** The node holding what it pays out, in the same graph, read against the portfolio's spending ceiling. */
+  spendNode?: string;
   uses?: Record<string, number>;
   capital?: number;
   startDay?: number;
@@ -63,6 +65,8 @@ export interface QuantProblem {
     capacity?: Record<string, number>;
     startingCapital?: number;
     riskCorrelation?: Record<string, number>;
+    /** Total money the combination may pay out in one world. */
+    spendCeiling?: number;
     activities: ProblemActivity[];
   };
 }
@@ -167,12 +171,19 @@ export function solveProblem(problem: QuantProblem, now: Date = new Date()): Pro
       } else {
         days = cash.samples.map(() => a.days ?? 0);
       }
-      const n = Math.min(cash.samples.length, days.length);
+      let spend: number[] | undefined;
+      if (a.spendNode) {
+        const sp = estimate(graph, a.spendNode);
+        reported.push(summary(graph, sp));
+        spend = sp.samples;
+      }
+      const n = Math.min(cash.samples.length, days.length, spend?.length ?? Infinity);
       return {
         key: a.key,
         label: a.label ?? a.key,
         cash: cash.samples.slice(0, n),
         days: days.slice(0, n),
+        spend: spend?.slice(0, n),
         justified,
         uses: a.uses,
         capital: a.capital,
@@ -181,7 +192,7 @@ export function solveProblem(problem: QuantProblem, now: Date = new Date()): Pro
         excludes: a.excludes,
       };
     });
-    portfolio = optimizePortfolio({ activities, target: p.target, deadlineDays: p.deadlineDays, capacity: p.capacity, startingCapital: p.startingCapital, riskCorrelation: p.riskCorrelation });
+    portfolio = optimizePortfolio({ activities, target: p.target, deadlineDays: p.deadlineDays, capacity: p.capacity, startingCapital: p.startingCapital, riskCorrelation: p.riskCorrelation, spendCeiling: p.spendCeiling });
 
     /*
      * Which underlying unknown matters: each uncertain leaf of the best
@@ -201,7 +212,11 @@ export function solveProblem(problem: QuantProblem, now: Date = new Date()): Pro
         const graphKey = act.arrangement ?? act.graph!;
         const g = graphs.get(graphKey)!;
         const ests = [...resolved.entries()].filter(([id]) => id.startsWith(`${graphKey}::`)).flatMap(([, r]) => Object.values(r.estimates));
+        const seenLeaf = new Set<string>();
         const leaves = ests.filter((est) => {
+          // A graph reconstructed for several nodes (cash, days, spend) lists a leaf once per call.
+          if (seenLeaf.has(est.key)) return false;
+          seenLeaf.add(est.key);
           const node = g.nodes.find((one) => one.key === est.key);
           return node && !node.formula && est.p90 - est.p10 > Math.abs(est.p50) * 1e-6;
         });
@@ -212,11 +227,12 @@ export function solveProblem(problem: QuantProblem, now: Date = new Date()): Pro
               if (one.key !== act.key) return one;
               const cash = reconstruct(changed, act.cashNode ?? cashNodeOf.get(graphKey)!, now).estimates[act.cashNode ?? cashNodeOf.get(graphKey)!]!;
               const days = act.daysNode ? reconstruct(changed, act.daysNode, now).estimates[act.daysNode]!.samples : one.days;
-              const n = Math.min(cash.samples.length, days.length);
-              return { ...one, cash: cash.samples.slice(0, n), days: days.slice(0, n) };
+              const spend = act.spendNode ? reconstruct(changed, act.spendNode, now).estimates[act.spendNode]!.samples : one.spend;
+              const n = Math.min(cash.samples.length, days.length, spend?.length ?? Infinity);
+              return { ...one, cash: cash.samples.slice(0, n), days: days.slice(0, n), spend: spend?.slice(0, n) };
             });
             const members = acts.filter((one) => best.keys.includes(one.key));
-            return optimizePortfolio({ activities: members, target: p.target, deadlineDays: p.deadlineDays, capacity: p.capacity, startingCapital: p.startingCapital, riskCorrelation: p.riskCorrelation }).ranked.find((one) => one.keys.length === members.length)?.reach ?? 0;
+            return optimizePortfolio({ activities: members, target: p.target, deadlineDays: p.deadlineDays, capacity: p.capacity, startingCapital: p.startingCapital, riskCorrelation: p.riskCorrelation, spendCeiling: p.spendCeiling }).ranked.find((one) => one.keys.length === members.length)?.reach ?? 0;
           };
           const low = pinned(leaf.p10);
           const high = pinned(leaf.p90);
@@ -265,7 +281,7 @@ export function renderSolution(s: ProblemSolution, currency: string): string {
     const basisWord = (b: string) => (b === 'PROBABILITY' ? 'probability' : 'coverage of tested conditions, not a probability');
     for (const one of s.portfolio.ranked.slice(0, 5)) {
       lines.push(one.feasible
-        ? `  combination ${one.keys.join(' + ')}: reaches the target in ${Math.round(one.reach * 100)}% (${basisWord(one.basis)}); settled p10 ${r(one.settledP10)} · p50 ${r(one.settledP50)} · p90 ${r(one.settledP90)} ${currency}${one.capitalShort > 0 ? `; short of capital in ${Math.round(one.capitalShort * 100)}%` : ''}`
+        ? `  combination ${one.keys.join(' + ')}: reaches the target in ${Math.round(one.reach * 100)}% (${basisWord(one.basis)}); settled p10 ${r(one.settledP10)} · p50 ${r(one.settledP50)} · p90 ${r(one.settledP90)} ${currency}${one.capitalShort > 0 ? `; short of capital in ${Math.round(one.capitalShort * 100)}%` : ''}${one.overSpend > 0 ? `; over the spending ceiling in ${Math.round(one.overSpend * 100)}%` : ''}`
         : `  combination ${one.keys.join(' + ')}: cannot run — ${one.infeasibleBecause}`);
     }
     for (const one of s.portfolio.refused.slice(0, 5)) lines.push(`  refused     ${one.keys.join(' + ')}: ${one.reason}`);

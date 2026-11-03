@@ -1,0 +1,1100 @@
+{
+  "title": "$10K plan demand, remote: no owner physical labour, Nov 3–27 2026",
+  "currency": "USD",
+  "graphs": [
+    {
+      "key": "home",
+      "graph": {
+        "nodes": [
+          {
+            "key": "h_doors",
+            "label": "Door hangers delivered",
+            "unit": "doors",
+            "kind": "POSITIVE",
+            "min": 2000,
+            "max": 2000
+          },
+          {
+            "key": "h_resp",
+            "label": "Door-hanger response rate (calls, texts, scans)",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "context": {
+              "service": "seasonal-home-service",
+              "operator": "new-no-reviews",
+              "season": "november"
+            },
+            "material": [],
+            "observations": [
+              {
+                "id": "hotwinwash",
+                "value": {
+                  "kind": "RANGE",
+                  "low": 0.005,
+                  "high": 0.007
+                },
+                "context": {
+                  "service": "window-cleaning",
+                  "operator": "established"
+                },
+                "lineage": [
+                  "forum-hotwinwash"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://community.windowcleaner.com/t/what-has-been-your-response-rate-for-door-hangers/25593"
+                },
+                "measures": "every campaign over years, operator self-report"
+              },
+              {
+                "id": "doherty",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.02
+                },
+                "context": {
+                  "service": "roof-cleaning",
+                  "operator": "established"
+                },
+                "lineage": [
+                  "forum-doherty"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://community.windowcleaner.com/t/what-has-been-your-response-rate-for-door-hangers/25593"
+                },
+                "measures": "consistent response, operator self-report"
+              },
+              {
+                "id": "phinkle",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.01
+                },
+                "context": {
+                  "service": "exterior-cleaning",
+                  "operator": "established"
+                },
+                "lineage": [
+                  "forum-phinkle"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://community.windowcleaner.com/t/what-has-been-your-response-rate-for-door-hangers/25593"
+                },
+                "measures": "usual response, self-report"
+              },
+              {
+                "id": "wcs",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.01
+                },
+                "context": {
+                  "service": "exterior-cleaning",
+                  "operator": "established"
+                },
+                "lineage": [
+                  "forum-wcs"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://community.windowcleaner.com/t/what-has-been-your-response-rate-for-door-hangers/25593"
+                },
+                "measures": "past door hangers, self-report"
+              },
+              {
+                "id": "printer_claim",
+                "value": {
+                  "kind": "RANGE",
+                  "low": 0.01,
+                  "high": 0.05
+                },
+                "context": {
+                  "service": "any",
+                  "operator": "printer-marketing"
+                },
+                "lineage": [
+                  "4over4-claim"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://www.4over4.com/statistics/door-hanger-advertising-effectiveness-data"
+                },
+                "measures": "printer marketing page, no data basis"
+              }
+            ]
+          },
+          {
+            "key": "h_book",
+            "label": "Responses that book and pay",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "context": {
+              "service": "seasonal-home-service",
+              "operator": "new-no-reviews",
+              "season": "november"
+            },
+            "material": [],
+            "observations": [
+              {
+                "id": "doherty_close",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.5
+                },
+                "context": {
+                  "service": "roof-cleaning",
+                  "operator": "established"
+                },
+                "lineage": [
+                  "forum-doherty"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://community.windowcleaner.com/t/what-has-been-your-response-rate-for-door-hangers/25593"
+                },
+                "measures": "usually around 50% closing"
+              },
+              {
+                "id": "hotwinwash_close",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.9
+                },
+                "context": {
+                  "service": "window-cleaning",
+                  "operator": "established"
+                },
+                "lineage": [
+                  "forum-hotwinwash"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://community.windowcleaner.com/t/what-has-been-your-response-rate-for-door-hangers/25593"
+                },
+                "measures": "reported 100% close on flyer calls; read as 0.9"
+              }
+            ]
+          },
+          {
+            "key": "h_warm_n",
+            "label": "People personally messaged",
+            "unit": "people",
+            "kind": "POSITIVE",
+            "min": 300,
+            "max": 300
+          },
+          {
+            "key": "h_warm_rate",
+            "label": "Personal contacts who buy",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0.01,
+              "high": 0.05,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "No source measures this population. The plan cited house-list response 5–9%, which is a business’s past customers, not the personal contacts of an 18-year-old; excluded below."
+              }
+            },
+            "context": {
+              "relationship": "personal-network"
+            },
+            "material": [
+              "relationship"
+            ],
+            "observations": [
+              {
+                "id": "house_list",
+                "value": {
+                  "kind": "RANGE",
+                  "low": 0.05,
+                  "high": 0.09
+                },
+                "context": {
+                  "relationship": "business-house-list"
+                },
+                "lineage": [
+                  "ana-via-directmail-io"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://directmail.io/direct-mail-response-rate"
+                },
+                "measures": "house-list direct mail response"
+              }
+            ]
+          },
+          {
+            "key": "h_inst",
+            "label": "Light installs finished (balance collected) by Nov 27",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0.4,
+              "high": 0.8,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "Installs run Nov 14–Dec 6; only the 50% deposit is certain inside the window."
+              }
+            }
+          },
+          {
+            "key": "h_wreath",
+            "label": "Tree orders that add a wreath",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0.2,
+              "high": 0.6,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "Unmeasured; the plan’s range."
+              }
+            }
+          },
+          {
+            "key": "h_orders",
+            "label": "Home orders",
+            "unit": "orders",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "h_doors * h_resp * h_book + h_warm_n * h_warm_rate"
+          },
+          {
+            "key": "h_cash",
+            "label": "Home cash collected by Nov 27",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "h_orders * (0.25 * 349 * (0.5 + 0.5 * h_inst) + 0.40 * (159 + 45 * h_wreath) + 0.35 * 150)"
+          },
+          {
+            "key": "h_tree_cost",
+            "label": "Tree cost",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "observations": [
+              {
+                "id": "wesa_farm",
+                "value": {
+                  "kind": "POINT",
+                  "value": 90
+                },
+                "context": {},
+                "lineage": [
+                  "wesa-2025"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://m.washingtontimes.com/news/2025/dec/11/trump-tariffs-drive-artificial-christmas-tree-prices-real-saplings/"
+                },
+                "measures": "6 ft Fraser at a farm, 2025"
+              },
+              {
+                "id": "benkens",
+                "value": {
+                  "kind": "POINT",
+                  "value": 100
+                },
+                "context": {},
+                "lineage": [
+                  "benkens"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://shop.benkens.com/item/638708983105/Fraser-Fir-Tree-6-7ft?cid=43"
+                },
+                "measures": "6–7 ft Fraser retail"
+              }
+            ]
+          },
+          {
+            "key": "h_wreath_cost",
+            "label": "Wreath cost",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "observations": [
+              {
+                "id": "mccarthy",
+                "value": {
+                  "kind": "POINT",
+                  "value": 18.5
+                },
+                "context": {},
+                "lineage": [
+                  "mccarthy-2018"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://cdn.shopify.com/s/files/1/0071/2956/3191/files/Wreath-Fundraiser-Letter-2018-1.pdf"
+                },
+                "measures": "group cost 2018"
+              },
+              {
+                "id": "armstrong",
+                "value": {
+                  "kind": "POINT",
+                  "value": 30
+                },
+                "context": {},
+                "lineage": [
+                  "armstrong"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://www.armstronggarden.com/fundraiser"
+                },
+                "measures": "group cost"
+              }
+            ]
+          },
+          {
+            "key": "h_door_cost",
+            "label": "Hanger printed and delivered by a paid crew",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "observations": [
+              {
+                "id": "dtd_bundle",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.695
+                },
+                "context": {},
+                "lineage": [
+                  "directtodoor-2026"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://doorhangerswork.com/door-hanger-distribution-cost"
+                },
+                "measures": "1,000-piece campaign from about $695, printing bundled, 2026"
+              },
+              {
+                "id": "hired_walker",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.27
+                },
+                "context": {},
+                "lineage": [
+                  "forum-hotwinwash-pace"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://community.windowcleaner.com/t/what-has-been-your-response-rate-for-door-hangers/25593"
+                },
+                "measures": "$0.127 print + $18/h at 125 doors/h (500 in under 4 h)"
+              }
+            ]
+          },
+          {
+            "key": "h_sub_lights",
+            "label": "Share of a light install paid to an insured crew",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "observations": [
+              {
+                "id": "jobber_sub",
+                "value": {
+                  "kind": "RANGE",
+                  "low": 0.6,
+                  "high": 0.7
+                },
+                "context": {},
+                "lineage": [
+                  "jobber-holiday"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://getjobber.com/academy/holiday-lighting/how-to-bid-christmas-light-installation/"
+                },
+                "measures": "subcontract at 60–70% of price (research reading)"
+              }
+            ]
+          },
+          {
+            "key": "h_sub_clean",
+            "label": "Share of a cleanup paid to a crew",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0.65,
+              "high": 0.75,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "fast-cash/10k/research-brokerage-pooled.md: kill test at a crew for ≤75%."
+              }
+            }
+          },
+          {
+            "key": "h_tree_delivery",
+            "label": "Lot or courier delivery and set-up per tree",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "assumed": {
+              "low": 30,
+              "high": 60,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "Unpriced; nobody delivers for us for free."
+              }
+            }
+          },
+          {
+            "key": "h_spend",
+            "label": "Home outflows",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "h_doors * h_door_cost + h_orders * (0.25 * 349 * h_sub_lights + 0.40 * (h_tree_cost + h_tree_delivery + h_wreath * h_wreath_cost) + 0.35 * 150 * h_sub_clean) + 0.033 * h_cash"
+          }
+        ]
+      }
+    },
+    {
+      "key": "mailer",
+      "graph": {
+        "nodes": [
+          {
+            "key": "m_conv",
+            "label": "Advertiser conversations by Nov 12",
+            "unit": "conversations",
+            "kind": "POSITIVE",
+            "min": 60,
+            "max": 60
+          },
+          {
+            "key": "m_close",
+            "label": "Conversations that buy a slot",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0.05,
+              "high": 0.1,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "fast-cash/10k/research-coop-mailer.md: no close rate is published; the research assumed 5–10% for cold contacts."
+              }
+            },
+            "context": {
+              "lead": "cold"
+            },
+            "material": [
+              "lead"
+            ],
+            "observations": [
+              {
+                "id": "vendor_fill",
+                "value": {
+                  "kind": "RANGE",
+                  "low": 0.16,
+                  "high": 0.32
+                },
+                "context": {
+                  "lead": "warm-inbound"
+                },
+                "lineage": [
+                  "9x12tools-claim"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://www.9x12tools.com/postcard-marketing-business"
+                },
+                "measures": "16 slots from 50–100 conversations, vendor claim for warm leads"
+              }
+            ]
+          },
+          {
+            "key": "m_u",
+            "label": "Rounding draw",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1
+          },
+          {
+            "key": "m_slots",
+            "label": "Paid slots",
+            "unit": "slots",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "floor(m_conv * m_close + m_u)"
+          },
+          {
+            "key": "m_cash",
+            "label": "Mailer cash kept (refunded below 8 slots)",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "if(m_slots >= 8, m_slots * 325, 0)"
+          },
+          {
+            "key": "m_fixed",
+            "label": "Print and EDDM postage, 5,000 homes",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "observations": [
+              {
+                "id": "usps_print",
+                "value": {
+                  "kind": "RANGE",
+                  "low": 2100,
+                  "high": 2760
+                },
+                "context": {},
+                "lineage": [
+                  "usps-notice-123"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://pe.usps.com/text/dmm300/Notice123.htm"
+                },
+                "measures": "$0.260/piece postage + 9x12 print $744–1,309"
+              }
+            ]
+          },
+          {
+            "key": "m_drop",
+            "label": "Full-service mailing (nobody walks it to the post office)",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "assumed": {
+              "low": 100,
+              "high": 300,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "Unpriced vendor surcharge."
+              }
+            }
+          },
+          {
+            "key": "m_spend",
+            "label": "Mailer outflows",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "if(m_slots >= 8, m_fixed + m_drop + 0.033 * m_cash, 0)"
+          }
+        ]
+      }
+    },
+    {
+      "key": "gift",
+      "graph": {
+        "nodes": [
+          {
+            "key": "g_contacts",
+            "label": "Businesses contacted",
+            "unit": "contacts",
+            "kind": "POSITIVE",
+            "min": 160,
+            "max": 160
+          },
+          {
+            "key": "g_reply",
+            "label": "Cold contacts who reply at all",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "context": {
+              "audience": "local-smb",
+              "campaign": "new-sender"
+            },
+            "material": [],
+            "observations": [
+              {
+                "id": "belkins",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.0045
+                },
+                "context": {
+                  "audience": "b2b"
+                },
+                "lineage": [
+                  "belkins"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://belkins.io/blog/cold-email-response-rates.md"
+                },
+                "measures": "replies per send"
+              },
+              {
+                "id": "instantly",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.016
+                },
+                "context": {
+                  "audience": "b2b"
+                },
+                "lineage": [
+                  "instantly"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks"
+                },
+                "measures": "median reply rate"
+              },
+              {
+                "id": "hunter",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.045
+                },
+                "context": {
+                  "audience": "b2b"
+                },
+                "lineage": [
+                  "hunter"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://hunter.io/the-state-of-cold-email-2025"
+                },
+                "measures": "average reply rate"
+              },
+              {
+                "id": "saleshandy",
+                "value": {
+                  "kind": "POINT",
+                  "value": 0.045
+                },
+                "context": {
+                  "audience": "b2b"
+                },
+                "lineage": [
+                  "saleshandy-2026"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://saleshandy.com/blog/cold-email-statistics/"
+                },
+                "measures": "average reply rate 2026"
+              }
+            ]
+          },
+          {
+            "key": "g_interest",
+            "label": "Replies that are interested",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "context": {
+              "audience": "local-smb",
+              "campaign": "new-sender"
+            },
+            "material": [],
+            "observations": [
+              {
+                "id": "saleshandy_interest",
+                "value": {
+                  "kind": "RANGE",
+                  "low": 0.25,
+                  "high": 0.5
+                },
+                "context": {
+                  "audience": "b2b",
+                  "campaign": "top-performing"
+                },
+                "lineage": [
+                  "saleshandy-2026-interest"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://saleshandy.com/blog/cold-email-statistics/"
+                },
+                "measures": "interested share of replies, strongest campaigns"
+              }
+            ]
+          },
+          {
+            "key": "g_close",
+            "label": "Interested businesses that prepay an order",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0.2,
+              "high": 0.5,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "No published close rate for a first order from a cold B2B lead."
+              }
+            }
+          },
+          {
+            "key": "g_u",
+            "label": "Rounding draw",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1
+          },
+          {
+            "key": "g_orders",
+            "label": "Prepaid orders",
+            "unit": "orders",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "floor(g_contacts * g_reply * g_interest * g_close + g_u)"
+          },
+          {
+            "key": "g_boxes",
+            "label": "Boxes per order",
+            "unit": "boxes",
+            "kind": "POSITIVE",
+            "min": 0,
+            "assumed": {
+              "low": 10,
+              "high": 30,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "Offer minimum 10; nothing measures the rest."
+              }
+            }
+          },
+          {
+            "key": "g_cash",
+            "label": "Gift cash collected",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "g_orders * g_boxes * 55"
+          },
+          {
+            "key": "g_box_cost",
+            "label": "Cost per box, white-label packed and shipped",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "assumed": {
+              "low": 38,
+              "high": 48,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "No in-house packing under the remote constraint."
+              }
+            }
+          },
+          {
+            "key": "g_spend",
+            "label": "Gift outflows",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "g_orders * g_boxes * g_box_cost + 0.033 * g_cash"
+          }
+        ]
+      }
+    },
+    {
+      "key": "orgs",
+      "graph": {
+        "nodes": [
+          {
+            "key": "o_n",
+            "label": "Organisations contacted",
+            "unit": "orgs",
+            "kind": "POSITIVE",
+            "min": 30,
+            "max": 30
+          },
+          {
+            "key": "o_rate",
+            "label": "Organisations that sign and run a sale",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0,
+              "high": 0.1,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "Nobody has measured it; most school sales already ran."
+              }
+            }
+          },
+          {
+            "key": "o_u",
+            "label": "Rounding draw",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1
+          },
+          {
+            "key": "o_signed",
+            "label": "Organisations signed",
+            "unit": "orgs",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "floor(o_n * o_rate + o_u)"
+          },
+          {
+            "key": "o_wreaths",
+            "label": "Wreaths per organisation",
+            "unit": "wreaths",
+            "kind": "POSITIVE",
+            "min": 0,
+            "assumed": {
+              "low": 30,
+              "high": 80,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "Nobody has measured it."
+              }
+            }
+          },
+          {
+            "key": "o_inwin",
+            "label": "Share of the organisation’s payment that arrives by Nov 27",
+            "unit": "share",
+            "kind": "RATE",
+            "min": 0,
+            "max": 1,
+            "assumed": {
+              "low": 0.3,
+              "high": 1,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "An organisation pays after its own sale closes (about 2 weeks)."
+              }
+            }
+          },
+          {
+            "key": "o_cash",
+            "label": "Organisation cash collected by Nov 27",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "o_signed * o_wreaths * 30 * o_inwin"
+          },
+          {
+            "key": "o_wreath_cost",
+            "label": "Wreath cost",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "observations": [
+              {
+                "id": "o_mccarthy",
+                "value": {
+                  "kind": "POINT",
+                  "value": 18.5
+                },
+                "context": {},
+                "lineage": [
+                  "mccarthy-2018"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://cdn.shopify.com/s/files/1/0071/2956/3191/files/Wreath-Fundraiser-Letter-2018-1.pdf"
+                },
+                "measures": "group cost 2018"
+              },
+              {
+                "id": "o_armstrong",
+                "value": {
+                  "kind": "POINT",
+                  "value": 30
+                },
+                "context": {},
+                "lineage": [
+                  "armstrong"
+                ],
+                "source": {
+                  "kind": "URL",
+                  "ref": "https://www.armstronggarden.com/fundraiser"
+                },
+                "measures": "group cost"
+              }
+            ]
+          },
+          {
+            "key": "o_spend",
+            "label": "Organisation outflows",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "o_signed * o_wreaths * o_wreath_cost"
+          }
+        ]
+      }
+    },
+    {
+      "key": "remote",
+      "graph": {
+        "nodes": [
+          {
+            "key": "r_cash",
+            "label": "Remote pack cash settled by Nov 27",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "assumed": {
+              "low": 0,
+              "high": 500,
+              "source": {
+                "kind": "DOCUMENT",
+                "ref": "fast-cash/10k/demand-model.ts",
+                "note": "fast-cash/10k/research-remote-puzzle-lines.md: Stripe’s first payout lands 7–14 days after the first charge."
+              }
+            }
+          },
+          {
+            "key": "r_spend",
+            "label": "Remote outflows",
+            "unit": "USD",
+            "kind": "POSITIVE",
+            "min": 0,
+            "formula": "r_cash * 0.04"
+          }
+        ]
+      }
+    }
+  ],
+  "report": [
+    {
+      "graph": "home",
+      "node": "h_orders"
+    },
+    {
+      "graph": "home",
+      "node": "h_resp"
+    },
+    {
+      "graph": "home",
+      "node": "h_book"
+    },
+    {
+      "graph": "mailer",
+      "node": "m_slots"
+    },
+    {
+      "graph": "gift",
+      "node": "g_orders"
+    },
+    {
+      "graph": "orgs",
+      "node": "o_signed"
+    }
+  ],
+  "portfolio": {
+    "target": 10000,
+    "deadlineDays": 25,
+    "startingCapital": 375,
+    "spendCeiling": 3000,
+    "riskCorrelation": {
+      "local-new-operator": 0.3
+    },
+    "activities": [
+      {
+        "key": "home",
+        "label": "A+B+C home services",
+        "graph": "home",
+        "cashNode": "h_cash",
+        "spendNode": "h_spend",
+        "days": 18,
+        "startDay": 1,
+        "capital": 300,
+        "riskGroup": "local-new-operator",
+        "learnableInExecution": true,
+        "researchDays": 6
+      },
+      {
+        "key": "mailer",
+        "label": "D co-op mailer",
+        "graph": "mailer",
+        "cashNode": "m_cash",
+        "spendNode": "m_spend",
+        "days": 9,
+        "startDay": 1,
+        "capital": 15,
+        "riskGroup": "local-new-operator",
+        "learnableInExecution": true,
+        "researchDays": 3
+      },
+      {
+        "key": "gift",
+        "label": "E client gift boxes",
+        "graph": "gift",
+        "cashNode": "g_cash",
+        "spendNode": "g_spend",
+        "days": 14,
+        "startDay": 2,
+        "capital": 45,
+        "riskGroup": "local-new-operator",
+        "learnableInExecution": true,
+        "researchDays": 7
+      },
+      {
+        "key": "orgs",
+        "label": "F wreath fundraisers",
+        "graph": "orgs",
+        "cashNode": "o_cash",
+        "spendNode": "o_spend",
+        "days": 22,
+        "startDay": 2,
+        "capital": 0,
+        "riskGroup": "local-new-operator",
+        "learnableInExecution": true,
+        "researchDays": 9
+      },
+      {
+        "key": "remote",
+        "label": "G remote puzzle packs",
+        "graph": "remote",
+        "cashNode": "r_cash",
+        "spendNode": "r_spend",
+        "days": 20,
+        "startDay": 1,
+        "capital": 0
+      }
+    ]
+  }
+}

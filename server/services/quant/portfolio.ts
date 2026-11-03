@@ -44,6 +44,13 @@ export interface Activity {
   riskGroup?: string;
   /** Keys it cannot run alongside (one market, one buyer, one slot). */
   excludes?: string[];
+  /**
+   * Money it pays out in each world, paired with `cash` by index (what it buys
+   * to fulfil, what it pays a subcontractor, what it spends to reach buyers).
+   * Read against the problem's `spendCeiling`, because a spending limit binds on
+   * the combination in one world, never on an activity's average.
+   */
+  spend?: number[];
 }
 
 export interface PortfolioProblem {
@@ -55,6 +62,8 @@ export interface PortfolioProblem {
   startingCapital?: number;
   /** Correlation within a risk group, 0–0.95. */
   riskCorrelation?: Record<string, number>;
+  /** Total money the combination may pay out in one world. A world over it does not reach the target. */
+  spendCeiling?: number;
   worlds?: number;
   seed?: number;
 }
@@ -68,6 +77,8 @@ export interface PortfolioReading {
   settledP90: number;
   /** Share of worlds in which some member could not start for want of capital. */
   capitalShort: number;
+  /** Share of worlds whose combined spending broke the spending ceiling (0 when there is none). */
+  overSpend: number;
   feasible: boolean;
   /** Why it cannot run at all, when it cannot. */
   infeasibleBecause: string | null;
@@ -110,6 +121,7 @@ function drawWorlds(problem: PortfolioProblem, worlds: number): number[][] {
   return problem.activities.map((activity) => {
     const n = activity.cash.length;
     if (n === 0 || activity.days.length !== n) throw new Error(`Activity "${activity.key}" needs paired cash and days samples.`);
+    if (activity.spend && activity.spend.length !== n) throw new Error(`Activity "${activity.key}" needs spend samples paired with its cash samples.`);
     // Rank worlds by cash so a bad shared shock means low cash for every member.
     const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => activity.cash[a]! - activity.cash[b]!);
     const rng = makeRng(seed, seedOf(`activity:${activity.key}`));
@@ -149,16 +161,18 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
   const keys = members.map((m) => problem.activities[m]!.key);
   const refusal = refuse(problem, members);
   const justified = members.every((m) => problem.activities[m]!.justified);
-  if (refusal) return { keys, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, capitalShort: 0, feasible: false, infeasibleBecause: refusal, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
+  if (refusal) return { keys, reach: 0, settledP10: 0, settledP50: 0, settledP90: 0, capitalShort: 0, overSpend: 0, feasible: false, infeasibleBecause: refusal, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
   const ordered = [...members].sort((a, b) => (problem.activities[a]!.startDay ?? 0) - (problem.activities[b]!.startDay ?? 0));
   const settled = new Float64Array(worlds);
   let reached = 0;
   let short = 0;
+  let over = 0;
   const pending: Array<{ day: number; cash: number }> = [];
   for (let i = 0; i < worlds; i++) {
     let capital = problem.startingCapital ?? Infinity;
     let total = 0;
     let wasShort = false;
+    let spent = 0;
     pending.length = 0;
     for (const m of ordered) {
       const act = problem.activities[m]!;
@@ -180,16 +194,19 @@ function evaluate(problem: PortfolioProblem, members: number[], picks: number[][
       const day = start + act.days[s]!;
       // Capital comes back with the cash it earned.
       const cash = act.cash[s]!;
+      spent += act.spend?.[s] ?? 0;
       pending.push({ day, cash: cash + need });
       if (day <= problem.deadlineDays) total += cash;
     }
     settled[i] = total;
-    if (total >= problem.target) reached += 1;
+    const overCeiling = problem.spendCeiling !== undefined && spent > problem.spendCeiling + 1e-9;
+    if (overCeiling) over += 1;
+    if (total >= problem.target && !overCeiling) reached += 1;
     if (wasShort) short += 1;
   }
   const sorted = Array.from(settled).sort((a, b) => a - b);
   const q = (p: number) => sorted[Math.min(worlds - 1, Math.floor(p * worlds))]!;
-  return { keys, reach: reached / worlds, settledP10: q(0.1), settledP50: q(0.5), settledP90: q(0.9), capitalShort: short / worlds, feasible: true, infeasibleBecause: null, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
+  return { keys, reach: reached / worlds, settledP10: q(0.1), settledP50: q(0.5), settledP90: q(0.9), capitalShort: short / worlds, overSpend: over / worlds, feasible: true, infeasibleBecause: null, basis: justified ? 'PROBABILITY' : 'COVERAGE' };
 }
 
 function better(a: PortfolioReading, b: PortfolioReading): number {
