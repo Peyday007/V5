@@ -289,8 +289,41 @@ export function focusConstructedCap(env = process.env): number | null {
  * Idle research surfaces cash research may use: none under focus.
  */
 export async function cashSpareSurfaces(projectId: string): Promise<number> {
-  if (routineFocus()) return 0;
+  if (routineFocus() && !(await freeLaneOwnsResearch(projectId))) return 0;
   return (await spareResearchSurfaces(projectId)) ?? 0;
+}
+
+/**
+ * Whether this project's research is the free lane's rather than the routines'
+ * (§84, §86): brain-only mode is on and the project is not a Brain project.
+ *
+ * Focus exists to keep Routine time for work that improves every job. Under
+ * brain-only mode the Routines never take this project's research at all, so a
+ * focus limit on it protects nothing and only leaves the free lane idle beside
+ * it — production, 2026-11-03: two constructed rounds allowed while the lane
+ * reported its slots unfilled.
+ */
+export async function freeLaneOwnsResearch(projectId: string): Promise<boolean> {
+  try {
+    const { brainOnlyMode } = await import('../bins/brainOnly.ts');
+    if (!(await brainOnlyMode())) return false;
+    const project = await getDb().get<{ slug: string; purpose: string }>('SELECT slug, purpose FROM projects WHERE id = ?', [projectId]);
+    const { isBrainProject } = await import('../../domain/binPurpose.ts');
+    return !isBrainProject(project ?? null);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The constructed rounds a goal may have live: the focus cap, widened by the
+ * free lane's measured spare when the free lane owns this project's research.
+ * Null when no focus is set.
+ */
+export async function constructedCapFor(projectId: string, env = process.env): Promise<number | null> {
+  const cap = focusConstructedCap(env);
+  if (cap === null || !(await freeLaneOwnsResearch(projectId))) return cap;
+  return Math.max(cap, FOCUS_CONSTRUCTED_LIVE + ((await spareResearchSurfaces(projectId)) ?? 0));
 }
 
 /**

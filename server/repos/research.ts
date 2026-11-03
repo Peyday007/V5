@@ -1476,6 +1476,9 @@ export async function claimedMethods(input: {
   return rows.map((row) => ({ claim: mapClaim(row) }));
 }
 
+/** The lane a goal round's repeating-buyer pattern is filed under (`compilerProfiles.ts`). */
+export const PATTERN_LANE = 'demand_pattern';
+
 export async function signalledClaims(input: {
   projectId: string;
   limit?: number;
@@ -1485,7 +1488,22 @@ export async function signalledClaims(input: {
        JOIN research_fragments f ON f.id = c.fragment_id
        JOIN research_orchestrations o ON o.id = c.orchestration_id
       WHERE o.project_id = ? AND c.accepted = 1
-        AND c.opportunity_signal IS NOT NULL
+        AND (
+          c.opportunity_signal IS NOT NULL
+          /*
+           * A repeating-buyer pattern found by a constructed round (§83). The
+           * round asks about one designed arrangement, its profile says such a
+           * claim is that arrangement's opening (RECURRING_OUTSOURCED_WORK),
+           * and the gate held it to two dated examples. Production, 2026-11-03:
+           * fifteen constructed rounds, their pattern claims accepted, none
+           * tagged by the worker — so the harvest filed nothing from any of
+           * them. The lane says what the claim is; the worker need not repeat it.
+           */
+          OR (c.evidence_lane = ? AND EXISTS (
+                SELECT 1 FROM russell_missions pm
+                  JOIN cash_discovery_rounds pr ON pr.candidate_id = pm.candidate_id
+                 WHERE pm.orchestration_id = o.id AND pr.bucket_id LIKE ?))
+        )
         AND f.status IN ('ACCEPTED', 'BLOCKED')
         /*
          * Not the deep dive's own findings.
@@ -1542,10 +1560,11 @@ export async function signalledClaims(input: {
         )
       ORDER BY c.created_at, c.rowid
       LIMIT ?`,
-    [input.projectId, Math.max(1, input.limit ?? 50)],
+    [input.projectId, PATTERN_LANE, 'goal-%-mx-%', Math.max(1, input.limit ?? 50)],
   );
   return rows.map((row) => {
-    const claim = mapClaim(row);
+    const mapped = mapClaim(row);
+    const claim = mapped.opportunitySignal || mapped.evidenceLane !== PATTERN_LANE ? mapped : { ...mapped, opportunitySignal: 'RECURRING_OUTSOURCED_WORK' as const };
     return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
   });
 }
