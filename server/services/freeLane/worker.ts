@@ -62,7 +62,7 @@ const SOURCE_CHARS = 7_000;
 
 export interface FreeWorker {
   workerId: string;
-  name: string;
+  label: string;
   model: string;
 }
 
@@ -98,7 +98,7 @@ export async function ensureFreeWorkers(config: LaneConfig): Promise<FreeWorker[
         createdById: 'free research lane (§85)',
       });
     }
-    out.push({ workerId: worker.id, name: workerIdentity(worker), model: models[i]! });
+    out.push({ workerId: worker.id, label: workerIdentity(worker), model: models[i]! });
   }
   return out;
 }
@@ -153,8 +153,8 @@ function principalFor(worker: FreeWorker, projectIds: string[], sessionRef: stri
   return {
     type: 'WORKER',
     id: worker.workerId,
-    handle: worker.name,
-    displayName: worker.name,
+    handle: worker.label,
+    displayName: worker.label,
     isBrainAdmin: false,
     mustChangePassword: false,
     credentialId: sessionRef,
