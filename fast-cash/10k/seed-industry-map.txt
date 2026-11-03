@@ -1,0 +1,25 @@
+SECTOR | Home-service contractors (HVAC, plumbing, roofing, electrical) | Buyer population from the 2026-11-02/03 remote research (fast-cash/10k/research-high-ticket-remote.md, research-remote-brokerage.md). Not yet verified by Brain.
+  BUYER_TYPE | Owner-operated HVAC, plumbing and roofing firms with 2 to 20 staff | Sold to nationally, online; agencies publish AI receptionist setup fees of 1,500 to 5,500 USD (myaifrontdesk.com pricing guides).
+  BOTTLENECK | Missed inbound calls and slow follow-up on new leads lose booked jobs | The need an AI receptionist and missed-call text-back answer.
+  FULFILMENT_SOURCE | AI voice-agent and SMS platforms configured and resold online (white-label receptionist seats) | Configured remotely; no site visit.
+  BUYER_TYPE | Contractors who buy exclusive homeowner leads per lead | Published per-lead prices exist for junk removal and similar trades; the work is done by the contractor.
+SECTOR | Corporate gifting | From fast-cash/10k/research-b2b-brokerage.md (winecountrygiftbaskets.com corporate tiers, tremendous.com and snappy.com gifting timelines). Not yet verified by Brain.
+  BUYER_TYPE | Small and mid-size firms sending year-end client and employee gifts | Ordered online for 10 to 50 recipients each.
+  BOTTLENECK | Sourcing, personalising and shipping gifts to many recipients before the holidays |
+  FULFILMENT_SOURCE | Food-gift and gift-basket suppliers that drop-ship to each recipient with volume tiers | The supplier ships; the broker handles quotes, recipient lists and orders online.
+SECTOR | Small-business holiday marketing | From fast-cash/10k/research-digital-automated.md and research-high-ticket-remote.md. Not yet verified by Brain.
+  BUYER_TYPE | Small e-commerce brands and local service businesses running holiday promotions |
+  BOTTLENECK | No time to build a holiday landing page and email or SMS sequence before the season |
+SECTOR | B2B prospect data | From fast-cash/10k/research-ai-research-products.md: business-level trigger lists (no named-person data). Not yet verified by Brain.
+  BUYER_TYPE | Marketing agencies and B2B sellers who buy targeted prospect lists |
+  BOTTLENECK | Finding businesses that show a timely buying trigger (new openings, seasonal bookings, hiring) |
+SECTOR | Senior living and community activity programs | From fast-cash/10k/research-remote-puzzle-lines.md (Activity Connection and CarePrints subscription prices). Not yet verified by Brain.
+  BUYER_TYPE | Senior-living activity directors and church program leaders buying printable activity materials |
+  BOTTLENECK | A steady supply of large-print puzzles and activity sheets for weekly programs |
+SECTOR | Shared-cost local advertising | The co-op postcard mailer from fast-cash/10k/research-coop-mailer.md: several local businesses share one USPS EDDM mailing. Not yet verified by Brain.
+  BUYER_TYPE | Local businesses buying a slot on a shared direct-mail postcard |
+  BOTTLENECK | A whole direct-mail campaign costs too much for one small business alone |
+  FULFILMENT_SOURCE | Commercial printers and mail houses that print and enter EDDM mailings on order | The printer and mail house do the physical work; slots are sold and coordinated online.
+SECTOR | Seasonal home-service brokerage | Prepaid and brokered seasonal services from fast-cash/10k/research-brokerage-pooled.md, with independent crews doing all physical work. Not yet verified by Brain.
+  BUYER_TYPE | Homeowners booking holiday decorating and seasonal services online |
+  FULFILMENT_SOURCE | Independent licensed installer crews paid per job by the broker |
