@@ -262,6 +262,22 @@ describe('the free research lane', () => {
     expect(item?.attemptCount).toBe(1);
   });
 
+  it('hands an item back with its attempt refunded when the provider fails, and lets it cool down', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const down: Completer = async () => {
+      throw new Error('cheap lane HTTP 503');
+    };
+    const first = await freeLaneTick({ config: CONFIG, completer: down, fetchSource, search: async () => [] });
+    expect(first.failed).toBe(1);
+    const item = await getWorkItem(itemId);
+    expect(item?.state).toBe('QUEUED');
+    expect(item?.attemptCount).toBe(0);
+    // Cooling down: the next tick does not spend another call on it.
+    const second = await freeLaneTick({ config: CONFIG, completer: down, fetchSource, search: async () => [] });
+    expect(second.claimed).toBe(0);
+  });
+
   it('never takes Brain-improvement or legal work', async () => {
     const brain = await createProject({ name: 'Brain Architecture', slug: 'brain-architecture' });
     const own = await packet(brain.id, 'How Brain judges a source');
