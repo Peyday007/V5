@@ -48,6 +48,7 @@ import { unfiledWork } from '../server/services/register/unfiled.ts';
 import { cancel, changeObjective, pause, reinstate, resume, setDependency, setTerms } from '../server/services/goals/decide.ts';
 import { spendingRuleSentence } from '../server/services/goals/spending.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
+import { harvest } from '../server/services/cash/discovery.ts';
 import { listNeeds } from '../server/repos/cashPortfolio.ts';
 import { latestMissionForCandidate } from '../server/repos/russellMissions.ts';
 import { getCycle } from '../server/repos/russellCycle.ts';
@@ -527,6 +528,14 @@ async function construct(): Promise<void> {
   const goal = await getWorkstream(goalId);
   const reading = await readGoalPlan({ goalId, persist: false });
   if (!goal || !reading) fail(`No targeted goal ${goalId}.`);
+  /*
+   * The same harvest the sprint tick runs, so this command shows what research
+   * already returned becoming openings rather than waiting for the next tick.
+   * Idempotent: a claim already filed is never filed twice.
+   */
+  const filed = await harvest({ projectId: reading.target.projectId, limit: Number(flag('harvest') ?? 20) });
+  console.log(`harvest filed ${filed.length} opening(s)`);
+  for (const one of filed) console.log(`  filed ${JSON.stringify(one).slice(0, 220)}`);
   await explainConstructedRounds(goal.id, reading.target.projectId);
   if (flag('explain') !== undefined) {
     console.log('GOALS: OK');
@@ -570,6 +579,11 @@ async function explainConstructedRounds(goalId: string, projectId: string): Prom
     );
     console.log(`    fragments ${frags.map((f) => `${f.status}=${f.n}`).join(' ') || 'none'} · claims ${claims?.total ?? 0}, accepted ${claims?.accepted ?? 0}, with an opening kind ${claims?.signalled ?? 0} · lanes ${lanes.map((l) => `${l.lane}=${l.n}`).join(' ') || 'none'}`);
     for (const r of reasons) console.log(`    rejected ${r.n}x ${String(r.reason).slice(0, 160)}`);
+    const openings = await getDb().all<{ id: string; state: string; title: string; opportunity_signal: string | null }>(
+      'SELECT id, state, title, opportunity_signal FROM cash_opportunities WHERE orchestration_id = ? ORDER BY created_at',
+      [orc.id],
+    );
+    for (const o of openings) console.log(`    opening ${o.id} ${o.state} ${o.opportunity_signal ?? '-'} · ${o.title.slice(0, 110)}`);
   }
 }
 

@@ -20,6 +20,7 @@
  * is a judgement, and a judgement that can permanently erase a valid idea is a
  * judgement with no appeal.
  */
+import { createHash } from 'node:crypto';
 import { getDb } from '../db/database.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
 import type {
@@ -75,8 +76,21 @@ export function fingerprintOf(statement: string): string {
     .split(/\s+/)
     .filter(Boolean)
     .sort();
-  return words.join(' ');
+  const key = words.join(' ');
+  /*
+   * Postgres refuses a btree entry over 2704 bytes, and this key is indexed.
+   * Production, 2026-11-03: a constructed round's question carrying the
+   * operating rule, the goal's exclusions and the arrangement's parts sorted
+   * to 2,776 bytes and the round could not be opened. A key that long keeps its
+   * first part readable and ends in a digest of the whole, so two identical
+   * statements still collide and two different ones still do not.
+   */
+  if (key.length <= FINGERPRINT_MAX) return key;
+  return `${key.slice(0, FINGERPRINT_MAX - 66)} #${createHash('sha256').update(key).digest('hex')}`;
 }
+
+/** The longest fingerprint stored whole: well under Postgres's btree limit with the project id beside it. */
+export const FINGERPRINT_MAX = 2000;
 
 export async function createCandidate(input: {
   title: string;

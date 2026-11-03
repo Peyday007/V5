@@ -108,3 +108,15 @@ describe('a published rate, read from a researched sentence', () => {
     expect(statedContactsPerDay('Budget around 2000 to 3000 dollars, not fixed.')).toBeNull();
   });
 });
+
+describe('a candidate fingerprint stays indexable', () => {
+  it('keeps a short statement whole and bounds a long one by a digest of the whole', async () => {
+    const { fingerprintOf, FINGERPRINT_MAX } = await import('../server/repos/russellCandidates.ts');
+    expect(fingerprintOf('A fee charged the buyer')).toBe(fingerprintOf('charge the buyer a fee'.replace('charge', 'charged')));
+    const long = Array.from({ length: 600 }, (_, i) => `word${i}`).join(' ');
+    const key = fingerprintOf(long);
+    expect(key.length).toBeLessThanOrEqual(FINGERPRINT_MAX);
+    expect(fingerprintOf(long)).toBe(key);
+    expect(fingerprintOf(`${long} extra`)).not.toBe(key);
+  });
+});
