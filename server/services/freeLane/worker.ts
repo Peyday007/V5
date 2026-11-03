@@ -423,19 +423,46 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       'filings, published price lists, trade bodies). Prefer exact page URLs you are confident exist. ' +
       'Reply as {"urls":["https://..."],"search":"a short search phrase"}.',
   );
-  const proposed = Array.isArray(plan?.['urls']) ? (plan!['urls'] as unknown[]).filter((u): u is string => typeof u === 'string') : [];
-  const wiki = await ctx.search(String(plan?.['search'] ?? question));
-  const candidates = [...new Set([...proposed, ...wiki])].filter((u) => /^https?:\/\//i.test(u)).slice(0, MAX_SOURCES + 2);
+  const urlsOf = (answer: Record<string, unknown> | null): string[] =>
+    Array.isArray(answer?.['urls']) ? (answer!['urls'] as unknown[]).filter((u): u is string => typeof u === 'string') : [];
+  const searched = [
+    ...(await ctx.search(String(plan?.['search'] ?? question))),
+    ...(await ctx.search(question)),
+  ];
+  const tried = new Set<string>();
+  const failedUrls: string[] = [];
   const readable: { url: string; text: string }[] = [];
-  for (const url of candidates) {
-    const fetched = await ctx.fetchSource(url);
-    if (fetched.readable && fetched.text.trim().length > 200) {
-      readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
+  const open = async (urls: string[]): Promise<void> => {
+    for (const url of urls) {
+      if (readable.length >= MAX_SOURCES) return;
+      if (!/^https?:\/\//i.test(url) || tried.has(url)) continue;
+      tried.add(url);
+      const fetched = await ctx.fetchSource(url);
+      if (fetched.readable && fetched.text.trim().length > 200) {
+        readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
+      } else {
+        failedUrls.push(url);
+      }
     }
-    if (readable.length >= MAX_SOURCES) break;
+  };
+  await open([...urlsOf(plan), ...searched]);
+  // A second round: show the model what Brain could not open and ask for other pages.
+  if (readable.length < 2) {
+    const retry = await askFor(
+      ctx,
+      `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nBrain could not open these pages (missing, blocked or ` +
+        `empty): ${JSON.stringify(failedUrls)}. Name up to ${MAX_SOURCES} OTHER public pages likely to hold primary ` +
+        'evidence — prefer stable top-level pages of official bodies, regulators, statistics offices and company ' +
+        'sites over deep links. Reply as {"urls":["https://..."]}.',
+    );
+    await open(urlsOf(retry));
   }
+  const candidates = [...tried];
   if (readable.length === 0) {
-    ctx.why = `no readable source among ${candidates.length} candidate page(s)`;
+    // A model that never answered is a provider failure, not a sourcing one.
+    if (!/^(model call failed|no JSON)/.test(ctx.why) || candidates.length > 0) {
+      ctx.why = `no readable source among ${candidates.length} candidate page(s)`;
+    }
     return false;
   }
 
@@ -628,6 +655,9 @@ export interface FreeLaneTick {
 }
 
 let running = false;
+/** Items handed back after a provider failure, and when they may be taken again. Process-local by design. */
+const cooldown = new Map<string, number>();
+const transientStrikes = new Map<string, number>();
 
 /** Models whose recent free-lane items all failed, from the lane's own events. */
 async function failingModels(now = Date.now()): Promise<Set<string>> {
@@ -687,6 +717,7 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
             leaseMs: LEASE_MS,
             admit: async (item) => {
               if (workerFor(workers, item) !== index) return { ok: false, reason: 'the other free worker takes this role' };
+              if ((cooldown.get(item.id) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
               if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
               session = sessionFor(worker, item);
               return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
@@ -712,10 +743,28 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
           } catch (error) {
             console.warn(`[free-lane] ${one.workType} ${one.workItemId} threw:`, (error as Error).message);
           }
+          const transient = !ok && /^(model call failed|no JSON)/.test(ctx.why);
+          const strikes = transient ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
           if (ok) {
             tick.submitted += 1;
+            transientStrikes.delete(one.workItemId);
+          } else if (transient && strikes < 3) {
+            /*
+             * The model or its provider failed, not the work: hand the item back
+             * with its attempt refunded, and leave it alone for a while so a
+             * provider outage cannot spend the item's attempt budget.
+             */
+            tick.failed += 1;
+            transientStrikes.set(one.workItemId, strikes);
+            cooldown.set(one.workItemId, Date.now() + 5 * 60_000 * strikes);
+            try {
+              await call(ctx, 'brain_release_work', { ...proof(ctx), detail: `free lane: ${ctx.why}`.slice(0, 300) });
+            } catch {
+              // Lease already gone: the queue's expiry returns it.
+            }
           } else {
             tick.failed += 1;
+            transientStrikes.delete(one.workItemId);
             try {
               await call(ctx, 'brain_fail_work', {
                 ...proof(ctx),
@@ -734,7 +783,7 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
             workerId: worker.workerId,
             sessionRef: session,
             workloadClass: one.workType,
-            outcome: ok ? 'SUBMITTED' : 'FAILED_RETRYABLE',
+            outcome: ok ? 'SUBMITTED' : transient && strikes < 3 ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
             reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
             evidenceClass: 'MEASURED',
           });
