@@ -68,7 +68,7 @@
  * rather than being asserted away by whoever created it.
  */
 import { OPERATING_MODEL_SENTENCE } from '../../domain/operatingModel.ts';
-import { focusConstructedCap, routineFocus } from './researchRoom.ts';
+import { constructedCapFor, freeLaneOwnsResearch, routineFocus } from './researchRoom.ts';
 import { TRIGGER_BUCKETS, triggersEnabled } from './triggers.ts';
 import { FEED_SHORTLIST_BUCKET } from '../feeds/bucket.ts';
 import { getDb } from '../../db/database.ts';
@@ -775,9 +775,11 @@ export async function openGoalDiscovery(input: {
    * Except under focus. A goal round is a Claude Routine hunting openings —
    * bulk finding for one goal — and focus is the owner saying Routines do not
    * hunt; the feeds and the free models do (the feed shortlist still reaches a
-   * strong model). Rounds already open finish and are harvested.
+   * strong model). Rounds already open finish and are harvested. Under
+   * brain-only mode a goal round is the free lane's, not a Routine's (§84,
+   * §86), so focus has nothing here to protect and the goal keeps searching.
    */
-  if (routineFocus()) return null;
+  if (routineFocus() && !(await freeLaneOwnsResearch(input.target.projectId))) return null;
   const gate = await discoveryAllowed(input.target.projectId);
   if (!gate.allowed || !gate.mode) return null;
   const mode = gate.mode;
@@ -924,7 +926,7 @@ export async function openConstructedRound(input: {
    * idle-fill lift stay stopped. #389 stopped this too, and with it the only
    * research that could add an opening the held ones cannot reach.
    */
-  const focusCap = focusConstructedCap();
+  const focusCap = await constructedCapFor(input.projectId);
   const mx = mine.filter((one) => one.bucketId.startsWith(`${prefix}-mx-`));
   /*
    * Under focus the cap counts constructed research still running under a
