@@ -25,7 +25,8 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
-import { databaseUnderPressure } from '../bins/service.ts';
+import { databasePoolReadings } from '../../db/database.ts';
+import { recentInfraFailures } from '../../db/infra.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
 import { fetchForWorker, type SourceFetch } from '../sources/fetchForWorker.ts';
 import {
@@ -50,7 +51,10 @@ export interface Window {
 }
 
 export interface Pressure {
+  /** Saturated: an infrastructure failure in the last minute, or the pools' queues at their size. */
   db: boolean;
+  /** Contended: callers waited for a connection since the last step. Holds growth; does not shrink. */
+  dbContended?: boolean;
   lagMs: number;
   cpu: number;
 }
@@ -76,7 +80,7 @@ export function decideTarget(input: {
   const transientRate = samples > 0 ? window.transient / samples : 0;
   const okRate = samples > 0 ? window.ok / samples : 1;
   const half = Math.max(MIN_TARGET, Math.floor(target / 2));
-  if (pressure.db) return { target: half, reason: 'Brain database under pressure', stable: false };
+  if (pressure.db) return { target: half, reason: 'Brain database saturated', stable: false };
   if (pressure.lagMs > 300) return { target: half, reason: `Brain event loop lagging ${Math.round(pressure.lagMs)} ms`, stable: false };
   if (pressure.cpu > 0.85) return { target: half, reason: `Brain CPU at ${Math.round(pressure.cpu * 100)}%`, stable: false };
   if (samples >= 4 && transientRate >= 0.3) {
@@ -85,6 +89,9 @@ export function decideTarget(input: {
   const stable = samples >= 4 && transientRate < 0.1;
   if (waiting <= 0) {
     return { target: Math.max(START_TARGET, Math.ceil(target * 0.75)), reason: 'no research waiting', stable };
+  }
+  if (pressure.dbContended) {
+    return { target, reason: 'database connections contended; holding until they free up', stable };
   }
   if (samples >= 6 && okRate < 0.2) {
     return { target, reason: `answers mostly failing (${Math.round(okRate * 100)}% accepted); not multiplying failed work`, stable };
@@ -106,6 +113,16 @@ lag.enable();
 let lastCpu = process.cpuUsage();
 let lastCpuAt = Date.now();
 
+/** The most callers seen waiting for a connection since the last step, sampled by every slot. */
+let peakWaiting = 0;
+let peakControlWaiting = 0;
+function samplePools(): void {
+  const pools = databasePoolReadings();
+  if (!pools) return;
+  peakWaiting = Math.max(peakWaiting, pools.workload.waiting);
+  peakControlWaiting = Math.max(peakControlWaiting, pools.control?.waiting ?? 0);
+}
+
 function readPressure(): Pressure {
   const lagMs = lag.mean / 1e6;
   lag.reset();
@@ -114,13 +131,26 @@ function readPressure(): Pressure {
   const cpu = (used.user + used.system) / 1000 / Math.max(1, now - lastCpuAt);
   lastCpu = process.cpuUsage();
   lastCpuAt = now;
-  let db = false;
+  /*
+   * Graded, not `databaseUnderPressure`'s yes/no. That reads any single waiter
+   * as pressure, which is right for deferring optional work (§63) and wrong for
+   * sizing a pool: one momentary waiter would halve the lane every step, and it
+   * did, on the test cluster. Saturation halves; contention only holds.
+   */
+  samplePools();
+  const pools = databasePoolReadings();
+  let failures = 0;
   try {
-    db = databaseUnderPressure();
+    failures = recentInfraFailures(new Date(now - 60_000).toISOString()).length;
   } catch {
-    db = false;
+    failures = 0;
   }
-  return { db, lagMs: Number.isFinite(lagMs) ? lagMs : 0, cpu };
+  const max = pools?.workload.max ?? 0;
+  const db = failures > 0 || peakControlWaiting > 0 || (max > 0 && peakWaiting >= max);
+  const dbContended = peakWaiting > 0;
+  peakWaiting = 0;
+  peakControlWaiting = 0;
+  return { db, dbContended, lagMs: Number.isFinite(lagMs) ? lagMs : 0, cpu };
 }
 
 async function windowFor(model: string, now = Date.now()): Promise<Window> {
@@ -188,6 +218,8 @@ interface ModelPool {
   stableHigh: number;
   running: number;
   busy: number;
+  /** The most slots busy at once since the last control step: simultaneous jobs, measured. */
+  peakBusy: number;
 }
 
 const pools = new Map<string, ModelPool>();
@@ -223,7 +255,9 @@ async function slot(pool: ModelPool, k: number, config: LaneConfig): Promise<voi
         search: poolOptions.search ?? wikipediaCandidates,
         config,
       };
+      samplePools();
       pool.busy += 1;
+      pool.peakBusy = Math.max(pool.peakBusy, pool.busy);
       let result: Awaited<ReturnType<typeof takeOne>> = { claimed: null, ok: false, ms: 0 };
       try {
         result = await takeOne(base);
@@ -267,7 +301,7 @@ export async function controlStep(): Promise<ControlReading | null> {
       const saved = persisted.get(worker.model);
       // After a restart, resume at half of what was learned: fast to regain, gentle on a cold machine.
       const target = saved ? Math.max(START_TARGET, Math.floor(saved.target / 2)) : START_TARGET;
-      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0 });
+      pools.set(worker.model, { worker, index, target, stableHigh: saved?.stableHigh ?? 1, running: 0, busy: 0, peakBusy: 0 });
     }
   }
   const waiting = await waitingNow();
@@ -275,15 +309,17 @@ export async function controlStep(): Promise<ControlReading | null> {
   const reading: ControlReading = { waiting, pressure, models: [] };
   for (const pool of pools.values()) {
     const window = await windowFor(pool.worker.model);
-    const decision = decideTarget({ target: pool.target, active: pool.busy, waiting, window, pressure });
-    if (decision.stable) pool.stableHigh = Math.max(pool.stableHigh, pool.busy);
+    const peak = Math.max(pool.peakBusy, pool.busy);
+    const decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure });
+    if (decision.stable) pool.stableHigh = Math.max(pool.stableHigh, peak);
+    pool.peakBusy = pool.busy;
     if (decision.target !== pool.target) {
       await recordBinEvent({
         eventType: 'FREE_LANE_CAPACITY',
         workloadClass: pool.worker.model,
         outcome: decision.target > pool.target ? 'GROW' : 'SHRINK',
         reason: `${pool.target} -> ${decision.target}: ${decision.reason}`,
-        measures: { waiting, busy: pool.busy, ...window, lagMs: Math.round(pressure.lagMs), cpu: Number(pressure.cpu.toFixed(2)), db: pressure.db },
+        measures: { waiting, busy: pool.busy, peakBusy: peak, ...window, lagMs: Math.round(pressure.lagMs), cpu: Number(pressure.cpu.toFixed(2)), db: pressure.db, dbContended: pressure.dbContended ?? false },
         evidenceClass: 'MEASURED',
       });
     }
@@ -294,7 +330,7 @@ export async function controlStep(): Promise<ControlReading | null> {
       model: pool.worker.model,
       target: pool.target,
       running: pool.running,
-      busy: pool.busy,
+      busy: peak,
       stableHigh: pool.stableHigh,
       window,
       reason: decision.reason,

@@ -41,6 +41,12 @@ describe('the decision', () => {
     expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 9, content: 0, transient: 0 }, pressure: { ...calm, db: true } }).target).toBe(16);
     expect(decideTarget({ target: 32, active: 32, waiting: 99, window: { ok: 9, content: 0, transient: 0 }, pressure: { ...calm, lagMs: 900 } }).target).toBe(16);
   });
+  it('holds, rather than shrinks, while database connections are only contended', () => {
+    const d = decideTarget({ target: 16, active: 16, waiting: 99, window: { ok: 9, content: 1, transient: 0 }, pressure: { ...calm, dbContended: true } });
+    expect(d.target).toBe(16);
+    expect(d.reason).toMatch(/contended/);
+  });
+
   it('does not multiply failed work', () => {
     const d = decideTarget({ target: 8, active: 8, waiting: 99, window: { ok: 1, content: 9, transient: 0 }, pressure: calm });
     expect(d.target).toBe(8);
@@ -112,13 +118,17 @@ describe('the adaptive pool on a real queue', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(await waitingNow()).toBe(30);
     startAdaptivePool({ config: CONFIG, completer, fetchSource, search: async () => [] }, 60_000);
-    for (let step = 0; step < 40 && (await waitingNow()) > 0; step += 1) {
+    const succeeded = async (): Promise<number> =>
+      Number((await getDb().get<{ n: number | string }>("SELECT COUNT(*) AS n FROM work_items WHERE work_type = 'RESEARCH_FRAGMENT' AND state = 'SUCCEEDED'", []))?.n ?? 0);
+    // Until every job has finished, not merely been taken.
+    for (let step = 0; step < 200 && (await succeeded()) < 30; step += 1) {
       await new Promise((r) => setTimeout(r, 150));
       await controlStep();
     }
-    expect(await waitingNow()).toBe(0);
-    const done = await getDb().get<{ n: number | string }>("SELECT COUNT(*) AS n FROM work_items WHERE work_type = 'RESEARCH_FRAGMENT' AND state = 'SUCCEEDED'", []);
-    expect(Number(done?.n)).toBe(30);
+    expect(await succeeded()).toBe(30);
+    // The packet runner may already have queued next-stage items; no fragment is left waiting.
+    const fragmentsWaiting = await getDb().get<{ n: number | string }>("SELECT COUNT(*) AS n FROM work_items WHERE work_type = 'RESEARCH_FRAGMENT' AND state = 'QUEUED'", []);
+    expect(Number(fragmentsWaiting?.n)).toBe(0);
     expect(peak).toBeGreaterThan(4);
     const rows = await readCapacity();
     expect(rows.length).toBe(2);

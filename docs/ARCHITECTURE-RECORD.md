@@ -14022,6 +14022,12 @@ submissions against 80 that failed Brain's own quote-and-cite checks
   mostly fail or slots are unfilled, and decays ×0.75 when nothing waits. It never
   grows past what is waiting. `SAFETY_CEILING` (256 per model) is a runaway guard,
   not the operating limit.
+- **Brain's own capacity is graded, not yes/no.** `databaseUnderPressure` reads
+  a single connection waiter as pressure, which is right for deferring optional
+  work (§63) and wrong for sizing a pool: on the test cluster it halved the lane
+  every step. The controller samples the pools from every slot: an
+  infrastructure failure in the last minute, a waiter on the control pool, or a
+  workload queue as long as the pool halves; mere contention only holds growth.
 - **Persistent and replayable.** Targets and the highest stable concurrency live
   in `free_lane_capacity` (migration 135 / pg 126); a restart resumes at half of
   what was learned. Every change is a `FREE_LANE_CAPACITY` event carrying the
