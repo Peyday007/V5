@@ -22,7 +22,7 @@ export const EXCLUSION_CLASSES = {
   GOVERNMENT_CONTRACTING: {
     label: 'government and public-sector contracts',
     triggers: /\b(?:government|federal|public[- ]sector|public procurement|state agenc(?:y|ies)|municipal)\b/i,
-    matches: /\b(?:government|federal|sam\.gov|public[- ]sector|procurement|solicitation|rfp|rfq|rfi|tender|state agenc(?:y|ies)|municipal|county (?:commission|board|government)|city of|department of|commonwealth of|navy|army|air force|veterans affairs|bureau of|rfpmart|publicsurplus|govdeals|bidnet|[a-z0-9-]+\.gov|[a-z0-9-]+\.mil)\b/i,
+    matches: /\b(?:government|federal|sam\.gov|public[- ]sector|procurement|solicitation|rfp|rfq|rfi|tender|state agenc(?:y|ies)|municipal|county (?:commission|board|government)|city of|department of|commonwealth of|navy|army|air force|veterans affairs|bureau of|school district|public school|rfpmart|publicsurplus|govdeals|bidnet|[a-z0-9-]+\.gov|[a-z0-9-]+\.mil)\b/i,
   },
   WEBSITE_REPAIR: {
     label: 'broken-website and website-repair plays',

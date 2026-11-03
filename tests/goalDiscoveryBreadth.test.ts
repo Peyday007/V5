@@ -75,7 +75,7 @@ describe('an opening the goal plan judged too small is not researched by any oth
     const { notWorthResearching } = await import('../server/services/cash/worthResearching.ts');
     clearMateriality();
     const now = new Date().toISOString();
-    const sneaker = { id: 'cop_sneaker', projectId: '', title: 'Air Jordan resale at $783', sourceClaimId: null, expiresAt: null } as never;
+    const sneaker = { id: 'cop_sneaker', projectId: '', title: 'A concert ticket resale at $783', sourceClaimId: null, expiresAt: null } as never;
     // Nobody has read it: nothing to say.
     expect(await notWorthResearching(sneaker, { now })).toBeNull();
     recordMateriality('wst_a', 10_000, [{ opportunityId: 'cop_sneaker', supportedReach: 0, potentialReach: 205 }]);

@@ -19,6 +19,10 @@ describe('what the owner would have to do physically', () => {
       'Hand out 3,000 door hangers in two neighbourhoods',
       'Texas surplus jewelry lots — needs someone in Austin for preview and pickup',
       'Junk removal jobs in Phoenix',
+      // Production's own openings, 2026-11-03, that the first patterns missed.
+      "As of the June 25, 2026 article, the Air Jordan 6 'Bin 23' had a current average resale price above retail",
+      'theshitbot.com, citing current StockX resale-market data as of March 2026',
+      'DropCurb engages drivers per completed pickup rather than as employees',
     ]) {
       const fit = operatingFit({ title });
       expect(fit.kind, title).toBe('OWNER_PHYSICAL');
@@ -46,6 +50,9 @@ describe('what the owner would have to do physically', () => {
       'App install campaign management',
       'Warehouse management software comparison report',
       'Large-print puzzle licence packs for senior-living activity directors',
+      // Tickets transfer electronically: reselling them needs nobody on site.
+      "On FIFA's Official Resale Marketplace, a Category 3 seat for the World Cup 2026 final",
+      'Driver scheduling software for logistics firms',
     ]) {
       expect(operatingFit({ title }).kind, title).toBe('REMOTE');
     }
