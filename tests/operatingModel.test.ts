@@ -23,6 +23,8 @@ describe('what the owner would have to do physically', () => {
       "As of the June 25, 2026 article, the Air Jordan 6 'Bin 23' had a current average resale price above retail",
       'theshitbot.com, citing current StockX resale-market data as of March 2026',
       'DropCurb engages drivers per completed pickup rather than as employees',
+      // Its own drivers are the independent contractors: the operator would be one of them.
+      'DropCurb engages drivers per completed pickup rather than as employees; drivers are independent contractors',
     ]) {
       const fit = operatingFit({ title });
       expect(fit.kind, title).toBe('OWNER_PHYSICAL');
