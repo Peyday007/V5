@@ -14094,7 +14094,12 @@ is a second task manager, Factory, research engine or monitor:
   the risk class apply exactly as to a person's objective. One live objective
   per owner component.
 - **Measured against a baseline.** The baseline (the 72 h before submission) is
-  recorded with the objective. After delivery (`objectiveOutcome` LIVE) and a
+  recorded with the objective as what the weakness was when it was chosen. The
+  verdict compares with the 12 h right before delivery, so a fix that reached
+  the owner in between is not credited to this one. A weakness is engineered
+  only while it still shows in the last 6 h: on the loop's first production
+  pass, most of a day's 246 citation drops predated the fix shipped at 17:20Z.
+  After delivery (`objectiveOutcome` LIVE) and a
   12 h window, `compare` judges the same metric and its downstream metric by a
   two-proportion z-test or a Poisson rate test, and says INSUFFICIENT_DATA below
   a metric's minimum sample, when the workload moved fourfold, or when the

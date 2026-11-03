@@ -328,6 +328,11 @@ export interface Weakness {
 /** A weakness becomes a candidate at this many occurrences and this share of the work it touches. */
 export const WEAKNESS_MIN_COUNT = 15;
 export const WEAKNESS_MIN_SHARE = 0.1;
+/** The recent window a weakness must still show in, and the work it must hold to judge that. */
+export const RECENT_WINDOW_HOURS = 6;
+export const RECENT_MIN_ATTEMPTS = 10;
+/** The verdict compares with the period right before delivery, so an earlier fix is not credited to this one. */
+export const BEFORE_WINDOW_HOURS = 12;
 
 export interface FailureCount {
   cls: string;
@@ -403,13 +408,24 @@ const FREE_LANE_TEMPLATES: Record<FreeLaneFailureClass, {
  * candidate when it is both frequent and a real share of the work, so a
  * handful of odd failures never generates engineering.
  */
-export function freeLaneWeaknesses(failures: FailureCount[], attempts: number): Weakness[] {
+export function freeLaneWeaknesses(
+  failures: FailureCount[],
+  attempts: number,
+  /** The same counts over the recent window: a class that stopped happening is not engineered again. */
+  recent?: { failures: FailureCount[]; attempts: number },
+): Weakness[] {
   const out: Weakness[] = [];
   for (const failure of failures) {
     const cls = failure.cls as FreeLaneFailureClass;
     const template = FREE_LANE_TEMPLATES[cls];
     if (!template || cls === 'OTHER') continue;
     if (failure.n < WEAKNESS_MIN_COUNT || attempts <= 0 || failure.n / attempts < WEAKNESS_MIN_SHARE) continue;
+    if (recent) {
+      // Production, 2026-11-03: 246 citation drops in a day, most of them before
+      // the fix that shipped at 17:20Z. A weakness must still be happening now.
+      const now = recent.failures.find((f) => f.cls === failure.cls)?.n ?? 0;
+      if (recent.attempts < RECENT_MIN_ATTEMPTS || now / recent.attempts < WEAKNESS_MIN_SHARE) continue;
+    }
     out.push({
       key: `FREE_LANE:${cls}`,
       kind: 'FREE_LANE_FAILURE',

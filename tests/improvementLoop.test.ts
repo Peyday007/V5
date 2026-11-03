@@ -63,6 +63,14 @@ describe('the decisions, pure', () => {
     expect(deriveStage({ decision: null, researchGoalId: null, research: null, archiveClaims: 0, knownCause: found[0]!.knownCause, changeRequestId: null, factory: null, deliveredAt: null, windowClosed: false }).owner).toBe('CLAUDE_ROUTINE');
   });
 
+  it('does not engineer a failure class that stopped happening (an earlier fix already removed it)', () => {
+    const day = [{ cls: 'CITATION_DROPPED', n: 246, samples: [] }];
+    const stillNow = freeLaneWeaknesses(day, 456, { failures: [{ cls: 'CITATION_DROPPED', n: 30, samples: [] }], attempts: 100 });
+    const stopped = freeLaneWeaknesses(day, 456, { failures: [{ cls: 'CITATION_DROPPED', n: 2, samples: [] }], attempts: 100 });
+    expect(stillNow.map((w) => w.key)).toEqual(['FREE_LANE:CITATION_DROPPED']);
+    expect(stopped).toEqual([]);
+  });
+
   it('says INSUFFICIENT DATA rather than inventing success', () => {
     const before = reading('FREE_LANE_FRAGMENT_PASS_RATE', FROM, TO, 3, 10);
     const after = reading('FREE_LANE_FRAGMENT_PASS_RATE', FROM, TO, 9, 10);
@@ -280,6 +288,9 @@ describe('the loop on real rows', () => {
     await improvementTick(new Date(Date.now() + 1000));
     const candidate = (await getCandidateByKey('FREE_LANE:SUBMISSION_REFUSED'))!;
     const deliveredAt = new Date(Date.now() - 30 * 3_600_000).toISOString();
+    // The period right before delivery is the comparison: mostly refused.
+    await failures(60, 'model a: brain_submit_claims refused: x', 5);
+    await getDb().run("UPDATE bin_events SET at = ? WHERE event_type = 'FREE_LANE_ITEM'", [new Date(Date.parse(deliveredAt) - 3_600_000).toISOString()]);
     await patchCandidate(candidate.id, {
       changeRequestId: 'fcr_test',
       deliveredAt,
