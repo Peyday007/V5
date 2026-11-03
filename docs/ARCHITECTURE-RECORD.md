@@ -14028,6 +14028,13 @@ submissions against 80 that failed Brain's own quote-and-cite checks
   every step. The controller samples the pools from every slot: an
   infrastructure failure in the last minute, a waiter on the control pool, or a
   workload queue as long as the pool halves; mere contention only holds growth.
+- **Generation follows the lane that does the work.** §78 sizes a goal's research
+  search by idle *Claude* surfaces (`spareResearchSurfaces`), which under §84 may
+  not take play research — so commercial research was generated to the routines'
+  idleness and starved the lane that does it. Under brain-only mode a non-Brain
+  project's spare is `freeLaneSpareSurfaces`: granted free-lane slots that are
+  neither busy nor spoken for by waiting jobs, four slots to a surface, at most
+  eight a reading, and zero while answers mostly fail.
 - **Persistent and replayable.** Targets and the highest stable concurrency live
   in `free_lane_capacity` (migration 135 / pg 126); a restart resumes at half of
   what was learned. Every change is a `FREE_LANE_CAPACITY` event carrying the

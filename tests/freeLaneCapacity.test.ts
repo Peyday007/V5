@@ -17,7 +17,9 @@ import {
   startAdaptivePool,
   stopAdaptivePool,
   waitingNow,
+  freeLaneSpareSurfaces,
 } from '../server/services/freeLane/capacity.ts';
+import { recordBinEvent } from '../server/repos/bins.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 import type { SourceFetch } from '../server/services/sources/fetchForWorker.ts';
 
@@ -137,3 +139,20 @@ describe('the adaptive pool on a real queue', () => {
     expect(Number(grew?.n)).toBeGreaterThan(0);
   }, 60_000);
 });
+
+describe('generation follows the free lane, not idle Claude surfaces', () => {
+  it('opens room in proportion to granted-but-idle slots, and none while answers mostly fail', async () => {
+    process.env['BRAIN_CHEAP_LLM_URL'] = 'http://lane.test/v1';
+    try {
+      await getDb().run("INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES ('brain-a', 16, 16, '2026-11-03T00:00:00Z', 't'), ('brain-b', 8, 8, '2026-11-03T00:00:00Z', 't')", []);
+      expect(await freeLaneSpareSurfaces()).toBe(6);
+      for (let i = 0; i < 12; i += 1) {
+        await recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_FRAGMENT', outcome: 'FAILED_RETRYABLE', reason: 'model brain-a: x' });
+      }
+      expect(await freeLaneSpareSurfaces()).toBe(0);
+    } finally {
+      delete process.env['BRAIN_CHEAP_LLM_URL'];
+    }
+  });
+});
+
