@@ -326,10 +326,17 @@ export function citedExcerpt(
   claim: Record<string, unknown>,
   numbered: { url: string; sentences: string[] }[],
 ): { url: string; excerpt: string; locator: string } | null {
-  const sourceNo = Number(claim['source']);
+  const raw = Array.isArray(claim['sentences']) ? (claim['sentences'] as unknown[]) : claim['sentences'] !== undefined ? [claim['sentences']] : [];
+  // Models write a sentence as 3, "3", "S2.3" or "[S2.3]"; the S-form carries its source.
+  const refs = raw.map((n) => /S?(\d+)\.(\d+)/i.exec(String(n)) ?? /^\[?(\d+)\]?$/.exec(String(n).trim()));
+  const fromRef = refs.map((m) => (m && m.length === 3 ? Number(m[1]) : null)).find((n) => n !== null);
+  const given = claim['source'] === undefined || claim['source'] === null ? '' : String(claim['source']).replace(/^SOURCE\s*/i, '').trim();
+  const sourceNo = given !== '' && Number.isInteger(Number(given)) && Number(given) >= 1
+    ? Number(given)
+    : (fromRef ?? (numbered.length === 1 ? 1 : NaN));
   const source = Number.isInteger(sourceNo) ? numbered[sourceNo - 1] : undefined;
-  const picks = (Array.isArray(claim['sentences']) ? (claim['sentences'] as unknown[]) : [])
-    .map((n) => Number(String(n).replace(/^S?\d+\./i, '')))
+  const picks = refs
+    .map((m) => (m ? Number(m.length === 3 ? m[2] : m[1]) : NaN))
     .filter((n) => Number.isInteger(n) && n >= 1);
   if (!source || picks.length === 0) return null;
   const chosen = [...new Set(picks)].sort((a, b) => a - b).slice(0, 4);
@@ -410,7 +417,10 @@ async function submitWithRepair(
   for (let attempt = 0; attempt < 2 && answer; attempt += 1) {
     const args = finalize ? finalize(answer) : answer;
     if (!args) {
-      ctx.why = 'the answer did not survive Brain\'s own checks (unquoted, uncited or empty)';
+      // A finalizer that said why keeps its reason.
+      if (!ctx.why.startsWith('the answer did not survive')) {
+        ctx.why = 'the answer did not survive Brain\'s own checks (unquoted, uncited or empty)';
+      }
       return false;
     }
     try {
@@ -535,10 +545,27 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   const finalize = (raw: Record<string, unknown>): Record<string, unknown> | null => {
     const listed = Array.isArray(raw['claims']) ? (raw['claims'] as Record<string, unknown>[]) : [];
     const claims: Record<string, unknown>[] = [];
+    const dropped: Record<string, number> = {};
+    const drop = (why: string): void => {
+      dropped[why] = (dropped[why] ?? 0) + 1;
+    };
     for (const c of listed) {
-      // With one declared lane there is only one lane a claim can fill.
+      // With one declared lane there is only one lane a claim can fill; otherwise a
+      // lane named by its description rather than its id is still that lane.
       if (onlyLane && !laneIds.has(String(c['evidence_lane']))) c['evidence_lane'] = onlyLane;
-      if (typeof c['claim'] !== 'string' || (laneIds.size > 0 && !laneIds.has(String(c['evidence_lane'])))) continue;
+      if (!laneIds.has(String(c['evidence_lane']))) {
+        const named = String(c['evidence_lane'] ?? '').trim().toLowerCase();
+        const match = lanes.find((l) => named.length > 0 && (l.description.toLowerCase() === named || l.id.toLowerCase() === named));
+        if (match) c['evidence_lane'] = match.id;
+      }
+      if (typeof c['claim'] !== 'string') {
+        drop('no claim text');
+        continue;
+      }
+      if (laneIds.size > 0 && !laneIds.has(String(c['evidence_lane']))) {
+        drop('unknown evidence lane');
+        continue;
+      }
       const cited = citedExcerpt(c, numbered);
       if (cited) {
         const { source: _s, sentences: _n, ...rest } = c;
@@ -550,9 +577,15 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       if (source && typeof c['evidence_excerpt'] === 'string' && quotedIn(String(c['evidence_excerpt']), source.text)) {
         const { source: _s, sentences: _n, ...rest } = c;
         claims.push(rest);
+        continue;
       }
+      drop(c['sentences'] !== undefined ? 'cited sentences not found' : 'no citation and no verbatim quote');
     }
-    return claims.length > 0 ? { claims: claims.slice(0, 25) } : null;
+    if (claims.length === 0) {
+      ctx.why = `the answer did not survive Brain's own checks: ${listed.length} claim(s) offered, dropped ${JSON.stringify(dropped)}`;
+      return null;
+    }
+    return { claims: claims.slice(0, 25) };
   };
   if (!answer) return false;
   const ok = await submitWithRepair(
