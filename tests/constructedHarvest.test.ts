@@ -113,3 +113,28 @@ describe('focus does not throttle the free lane’s goal search under brain-only
     expect(await openGoalDiscovery({ goal: w, target, bestReach: null })).not.toBeNull();
   });
 });
+
+describe('an approved goal’s own research goes first in the shared queue', () => {
+  it('recognises a constructed round’s packet and a packet about an opening it found, and nothing else', async () => {
+    const { servesGoalSearch } = await import('../server/services/research/packetRunner.ts');
+    const w = (await getWorkstream(await goal()))!;
+    const round = await openConstructedRound({ goal: w, projectId, key: 'p1', title: 'Constructed: gift brokerage', question: 'Which firms pay for year-end gift brokerage?' });
+    await answered(round!.candidateId, 'demand_pattern', 'Firms repeatedly pay brokers to send year-end client gifts.');
+    const mission = await getDb().get<{ orchestration_id: string }>('SELECT orchestration_id FROM russell_missions WHERE candidate_id = ?', [round!.candidateId]);
+    expect(await servesGoalSearch(mission!.orchestration_id)).toBe(true);
+    // A packet nothing ties to a goal is not lifted.
+    const run = await createRun({ projectId, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'q' });
+    const other = await createOrchestration({ projectId, layerId: layer.id, runId: run.id, title: 'q', assignment: 'q', provider: 'WORKER', autoApprove: false });
+    expect(await servesGoalSearch(other.id)).toBe(false);
+    // A dive on the opening that round filed is the goal's too.
+    await harvest({ projectId });
+    const opening = (await listOpportunities({ projectId })).find((one) => one.title.startsWith('Firms repeatedly pay brokers'))!;
+    const dive = await createOrchestration({ projectId, layerId: layer.id, runId: run.id, title: 'dive', assignment: 'dive', provider: 'WORKER', autoApprove: false });
+    await getDb().run('UPDATE cash_opportunities SET validation_orchestration_id = ? WHERE id = ?', [dive.id, opening.id]);
+    const { createCandidate } = await import('../server/repos/russellCandidates.ts');
+    const idea = await createCandidate({ title: 'Dive', statement: 'Qualify the gift brokerage opening.', projectId });
+    const { mission: diveMission } = await launchMission({ projectId, layerId: layer.id, visibility: 'SHARED', objective: 'dive', whyNow: 'goal', idempotencyKey: 'm:dive', candidateId: idea.id });
+    await getDb().run('UPDATE russell_missions SET orchestration_id = ? WHERE id = ?', [dive.id, diveMission.id]);
+    expect(await servesGoalSearch(dive.id)).toBe(true);
+  });
+});

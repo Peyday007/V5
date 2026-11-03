@@ -84,7 +84,7 @@ import { cashPosition } from './money.ts';
 import { CAPTURE_INPUTS, type QualificationKey, type TierReading, type CashTier } from './tier.ts';
 import { DIVE_STARTED_EVENT, diveEpochStart, diveStarts, type DiveStage, type DiveStart } from './diveStage.ts';
 export { diveEpochStart } from './diveStage.ts';
-import { researchRoom, type ResearchRoom, type RoomLimit } from './researchRoom.ts';
+import { freeLaneOwnsResearch, researchCapacity, researchRoom, type ResearchRoom, type RoomLimit } from './researchRoom.ts';
 import { recordReopenCondition, reopenConditionsFor } from '../../repos/cashReconsideration.ts';
 import { formatBlockerKey } from '../../domain/types.ts';
 import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
@@ -97,6 +97,9 @@ import type { CashCardFact, CashOpportunity, OpportunityValidationState } from '
  * it, and counting it made a Brain with two parked missions unable to start a
  * thirty-ninth dive for ever. What holds capacity is what a worker is working on.
  */
+/** Goal-found dives that may run beside the operator's ceiling when the free lane owns the research. */
+export const GOAL_DIVES_BESIDE_CEILING = 3;
+
 const HOLDS_A_SLOT: ReadonlySet<string> = Object.freeze(new Set(['PENDING', 'RUNNING']));
 
 /**
@@ -903,7 +906,31 @@ export async function startValidations(input: {
   const derived = await diveRoom(input.projectId, all);
   let room = derived.room;
   if (input.limit !== undefined) room = Math.min(room, Math.max(0, Math.trunc(input.limit)));
-  if (room <= 0) return [];
+  /*
+   * An approved goal's own openings, beyond the operator's ceiling (§83, §86).
+   *
+   * The ceiling and the surface count are about Routine time; under
+   * brain-only mode these dives are the free lane's, whose controller already
+   * sizes its concurrency from provider errors, so the ceiling protects nothing
+   * and only queues the goal's openings one dive at a time. Production,
+   * 2026-11-03: seven goal-found openings, one slot, and one dive that took
+   * 7.5 hours. A small fixed number of them may run beside the ceiling, inside
+   * the grant's own free slots, and only openings a goal round found.
+   */
+  const { listRounds } = await import('../../repos/cashDiscovery.ts');
+  const goalRounds = new Set((await listRounds(input.projectId)).filter((r) => r.bucketId.startsWith('goal-')).map((r) => r.id));
+  const forGoal = (opportunity: CashOpportunity) => !!opportunity.discoveryRoundId && goalRounds.has(opportunity.discoveryRoundId);
+  let goalExtra = 0;
+  if ((derived.limitedBy === 'OPERATOR' || derived.limitedBy === 'SURFACES') && input.limit === undefined && (await freeLaneOwnsResearch(input.projectId))) {
+    // The grant's own free slots, one held back for discovery: the free lane, not a Routine surface, does the work.
+    const capacity = await researchCapacity(input.projectId);
+    const unlaunched = all.filter((one) => one.validationState === 'PENDING').length;
+    const free = capacity.grantMax === null || capacity.shedding ? 0 : Math.max(0, capacity.grantMax - capacity.grantLive - unlaunched);
+    const grantRoom = free >= 2 ? free - 1 : free;
+    const goalInFlight = all.filter((one) => forGoal(one) && HOLDS_A_SLOT.has(one.validationState ?? '')).length;
+    goalExtra = Math.max(0, Math.min(grantRoom - room, GOAL_DIVES_BESIDE_CEILING - goalInFlight));
+  }
+  if (room + goalExtra <= 0) return [];
 
   /*
    * The order is the decision-value order, and it is a preference rather than
@@ -979,15 +1006,18 @@ export async function startValidations(input: {
    * openings filed from constructed rounds sat NOT_STARTED behind 68 older
    * ones while the plan they were built for read NOT_VIABLE. Junk still last.
    */
-  const { listRounds } = await import('../../repos/cashDiscovery.ts');
-  const goalRounds = new Set((await listRounds(input.projectId)).filter((r) => r.bucketId.startsWith('goal-')).map((r) => r.id));
-  const forGoal = (opportunity: CashOpportunity) => !!opportunity.discoveryRoundId && goalRounds.has(opportunity.discoveryRoundId);
   const band = (opportunity: CashOpportunity) => (dropped(opportunity.id) ? 3 : forGoal(opportunity) ? 0 : quick(opportunity) ? 1 : 2);
   valued.sort((a, b) => band(a.opportunity) - band(b.opportunity));
 
   const out: StartedValidation[] = [];
   for (const { opportunity, value } of valued) {
-    if (out.length >= room) break;
+    if (out.length >= room) {
+      // Beyond the ceiling, only an approved goal's own openings, and only a few.
+      if (goalExtra <= 0) break;
+      if (!forGoal(opportunity)) continue;
+      if ((await whyNotDiving(opportunity)).kind !== 'ELIGIBLE') continue;
+      goalExtra -= 1;
+    }
     /*
      * One condition, and `refinement-report` reads the same one.
      *

@@ -479,6 +479,47 @@ async function faultedOut(input: {
   };
 }
 
+/**
+ * How far an approved goal's own research is lifted in the shared queue.
+ *
+ * Owner, 2026-11-03: the seven openings the $10K goal's constructed rounds
+ * filed must be researched first. Production: their deep dives waited while
+ * the one operator slot spent 7.5 hours on a dive for an unrelated opening,
+ * and path questions about $0.06-a-word content pricing held ten of the
+ * grant's thirteen slots. Capacity was not the lever — the free model
+ * providers were answering 503/429 — the order was. Priority is the queue's
+ * own field, honoured by every claimant (Routine or free lane) alike, so no
+ * second scheduler is involved.
+ */
+export const GOAL_PRIORITY_BOOST = 2;
+
+/**
+ * Whether a packet is an approved goal's own research: a goal round's question
+ * (constructed or lens), or a question about an opening a goal round found.
+ */
+export async function servesGoalSearch(orchestrationId: string): Promise<boolean> {
+  try {
+    const row = await getDb().get<{ one: number }>(
+      `SELECT 1 AS one FROM russell_missions m
+        WHERE m.orchestration_id = ? AND m.candidate_id IS NOT NULL AND (
+          EXISTS (SELECT 1 FROM cash_discovery_rounds r WHERE r.candidate_id = m.candidate_id AND r.bucket_id LIKE ?)
+          OR EXISTS (
+            SELECT 1 FROM cash_opportunities op JOIN cash_discovery_rounds r2 ON r2.id = op.discovery_round_id
+             WHERE r2.bucket_id LIKE ?
+               AND (op.validation_orchestration_id = m.orchestration_id
+                    OR op.candidate_id = m.candidate_id
+                    OR EXISTS (SELECT 1 FROM cash_needs n WHERE n.candidate_id = m.candidate_id AND n.opportunity_id = op.id))
+          )
+        )
+        LIMIT 1`,
+      [orchestrationId, 'goal-%', 'goal-%'],
+    );
+    return !!row;
+  } catch {
+    return false;
+  }
+}
+
 async function enqueueResearchItem(input: {
   orchestration: ResearchOrchestration;
   type: string;
@@ -488,6 +529,7 @@ async function enqueueResearchItem(input: {
   bundleKey?: string | null;
 }): Promise<{ workType: string; workItemId: string; fragmentKey: string | null }> {
   const definition = workType(input.type);
+  const boost = (await servesGoalSearch(input.orchestration.id)) ? GOAL_PRIORITY_BOOST : 0;
   const item = await enqueueWork({
     projectId: input.orchestration.projectId,
     workType: input.type,
@@ -499,7 +541,7 @@ async function enqueueResearchItem(input: {
     // Named on the item so a worker can claim the set a bundle describes,
     // without the bundle ever becoming one item and one idempotency scope.
     bundleKey: input.bundleKey ?? null,
-    priority: input.priority ?? 6,
+    priority: Math.min(9, (input.priority ?? 6) + boost),
     // The Brain created this, not a person and not a worker. A worker cannot
     // create its own work, which is why no worker scope grants enqueueing.
     createdByType: 'SYSTEM',
