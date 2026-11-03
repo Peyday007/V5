@@ -103,7 +103,8 @@ function model(options: { quote?: string } = {}): { completer: Completer; calls:
       });
     }
     if (role === 'JUDGE') {
-      return JSON.stringify({ judge: { verdict: 'PASS', summary: 'Answers the wage question from the official source.', next_action: 'Use the figure.' } });
+      // Unwrapped on purpose: models often answer with the role's object itself.
+      return JSON.stringify({ verdict: 'PASS', summary: 'Answers the wage question from the official source.', next_action: 'Use the figure.' });
     }
     return '{}';
   };
@@ -276,6 +277,12 @@ describe('the free research lane', () => {
     // Cooling down: the next tick does not spend another call on it.
     const second = await freeLaneTick({ config: CONFIG, completer: down, fetchSource, search: async () => [] });
     expect(second.claimed).toBe(0);
+  });
+
+  it('accepts a quote that differs from the page only in typography, and never in words', () => {
+    const page = 'The median hourly wage for receptionists was $17.39 in May 2024 \u2014 the \u201Cnational\u201D figure.';
+    expect(quotedIn('wage for receptionists was $17.39 in May 2024 - the "national" figure.', page)).toBe(true);
+    expect(quotedIn('wage for receptionists was $19.39 in May 2024 - the "national" figure.', page)).toBe(false);
   });
 
   it('never takes Brain-improvement or legal work', async () => {
