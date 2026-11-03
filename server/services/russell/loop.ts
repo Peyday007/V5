@@ -51,6 +51,7 @@
  * Hitting a bound preserves the remaining candidates for the next cycle. It
  * never drops them, and it never consumes a whole tick in one pass.
  */
+import { goalFirstSql } from '../goals/goalWork.ts';
 import {
   claimCycle,
   completeCycle,
@@ -2590,6 +2591,7 @@ export async function nextLaunchable(limit: number): Promise<
              )
         )
       ORDER BY
+        ${goalFirstSql('c')},
         CASE priority
           WHEN 'MUST_DO' THEN 0 WHEN 'BIG_MOVE' THEN 1 WHEN 'WORTH_DOING' THEN 2
           WHEN 'EXPLORE' THEN 3 ELSE 4 END,
@@ -3307,7 +3309,7 @@ async function unjudged(limit: number): Promise<{ id: string }[]> {
   return getDb().all<{ id: string }>(
     `SELECT c.id FROM russell_candidates c
       WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL
-      ORDER BY c.created_at, c.rowid
+      ORDER BY ${goalFirstSql('c')}, c.created_at, c.rowid
       LIMIT ?`,
     [Math.max(1, limit)],
   );

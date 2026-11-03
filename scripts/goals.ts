@@ -537,6 +537,7 @@ async function construct(): Promise<void> {
   console.log(`harvest filed ${filed.length} opening(s)`);
   for (const one of filed) console.log(`  filed ${JSON.stringify(one).slice(0, 220)}`);
   await explainConstructedRounds(goal.id, reading.target.projectId);
+  await explainIdeaBacklog();
   if (flag('explain') !== undefined) {
     console.log('GOALS: OK');
     return;
@@ -585,6 +586,26 @@ async function explainConstructedRounds(goalId: string, projectId: string): Prom
     );
     for (const o of openings) console.log(`    opening ${o.id} ${o.state} ${o.opportunity_signal ?? '-'} · ${o.title.slice(0, 110)}`);
   }
+}
+
+/**
+ * Where an approved goal's own ideas stand in Russell's queues: ideas waiting
+ * to be judged, judged ideas waiting for a launch, and the goal's place in each.
+ */
+async function explainIdeaBacklog(): Promise<void> {
+  const { goalIdeaSql } = await import('../server/services/goals/goalWork.ts');
+  const cycle = await getCycle();
+  const counts = await getDb().all<{ bucket: string; goal: number; n: number; oldest: string | null }>(
+    `SELECT t.bucket, t.goal, COUNT(*) AS n, MIN(t.created_at) AS oldest FROM (
+       SELECT CASE WHEN c.priority IS NULL THEN 'unjudged' WHEN c.state = 'QUEUED' THEN 'queued' ELSE c.state END AS bucket,
+              CASE WHEN ${goalIdeaSql('c')} THEN 1 ELSE 0 END AS goal, c.created_at
+         FROM russell_candidates c
+        WHERE c.project_id IS NOT NULL AND c.state <> 'MERGED'
+          AND (c.priority IS NULL OR c.state = 'QUEUED' OR c.state = 'CAPTURED')) t
+      GROUP BY t.bucket, t.goal ORDER BY t.bucket, t.goal`,
+  );
+  console.log(`ideas      cycle ${cycle ? `launches/cycle ${cycle.maxLaunchesPerCycle}` : 'unreadable'}`);
+  for (const one of counts) console.log(`  ${one.bucket.padEnd(9)} ${one.goal ? 'goal ' : 'other'} ${one.n}  oldest ${one.oldest ?? '-'}`);
 }
 
 async function main(): Promise<void> {

@@ -38,6 +38,7 @@
  * approval is a separate entry point a person calls, and the ordinary advance
  * refuses to queue a PLANNED fragment.
  */
+import { goalIdeaSql } from '../goals/goalWork.ts';
 import { getMissionByOrchestration } from '../../repos/russellMissions.ts';
 import { envelopeAvailable, getApprovalEnvelope, planFitsEnvelope } from './approvalEnvelope.ts';
 import { getProject } from '../../repos/projects.ts';
@@ -500,19 +501,13 @@ export const GOAL_PRIORITY_BOOST = 2;
 export async function servesGoalSearch(orchestrationId: string): Promise<boolean> {
   try {
     const row = await getDb().get<{ one: number }>(
-      `SELECT 1 AS one FROM russell_missions m
-        WHERE m.orchestration_id = ? AND m.candidate_id IS NOT NULL AND (
-          EXISTS (SELECT 1 FROM cash_discovery_rounds r WHERE r.candidate_id = m.candidate_id AND r.bucket_id LIKE ?)
+      `SELECT 1 AS one FROM russell_missions m JOIN russell_candidates c ON c.id = m.candidate_id
+        WHERE m.orchestration_id = ? AND (${goalIdeaSql('c')}
           OR EXISTS (
-            SELECT 1 FROM cash_opportunities op JOIN cash_discovery_rounds r2 ON r2.id = op.discovery_round_id
-             WHERE r2.bucket_id LIKE ?
-               AND (op.validation_orchestration_id = m.orchestration_id
-                    OR op.candidate_id = m.candidate_id
-                    OR EXISTS (SELECT 1 FROM cash_needs n WHERE n.candidate_id = m.candidate_id AND n.opportunity_id = op.id))
-          )
-        )
+            SELECT 1 FROM cash_opportunities vop JOIN cash_discovery_rounds vr ON vr.id = vop.discovery_round_id
+             WHERE vr.bucket_id LIKE 'goal-%' AND vop.validation_orchestration_id = m.orchestration_id))
         LIMIT 1`,
-      [orchestrationId, 'goal-%', 'goal-%'],
+      [orchestrationId],
     );
     return !!row;
   } catch {

@@ -138,3 +138,18 @@ describe('an approved goal’s own research goes first in the shared queue', () 
     expect(await servesGoalSearch(dive.id)).toBe(true);
   });
 });
+
+describe('the goal’s own ideas are judged and launched first', () => {
+  it('orders an idea about a goal-found opening ahead of older ideas that are not', async () => {
+    const { goalFirstSql } = await import('../server/services/goals/goalWork.ts');
+    const { createCandidate } = await import('../server/repos/russellCandidates.ts');
+    const w = (await getWorkstream(await goal()))!;
+    const older = await createCandidate({ title: 'Older', statement: 'An older unrelated question about content pricing.', projectId });
+    const round = await openConstructedRound({ goal: w, projectId, key: 'o1', title: 'Constructed: postcards', question: 'Which shops share postcard costs?' });
+    const rows = await getDb().all<{ id: string }>(
+      `SELECT c.id FROM russell_candidates c WHERE c.id IN (?, ?) ORDER BY ${goalFirstSql('c')}, c.created_at`,
+      [older.id, round!.candidateId],
+    );
+    expect(rows.map((one) => one.id)).toEqual([round!.candidateId, older.id]);
+  });
+});
