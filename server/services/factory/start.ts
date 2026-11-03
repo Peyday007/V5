@@ -55,8 +55,31 @@ export async function approveAndStartCampaign(
      * The authority is recorded on the change request, so "Brain approved this"
      * says under which grant. Only `services/cash/factoryHandoff.ts` passes it.
      */
-    | { changeRequestId: string; standingAuthorityId: string },
+    | { changeRequestId: string; standingAuthorityId: string }
+    /**
+     * Approved on the owner's standing improvement order (§87): the
+     * `improvement_loop` switch, set by a person, for an objective on Brain's
+     * own repository only. Only `services/improvement/loop.ts` passes it.
+     */
+    | { changeRequestId: string; improvementGrant: true },
 ): Promise<StartCampaignOutcome> {
+  if ('improvementGrant' in input) {
+    const changeRequest = await getChangeRequest(input.changeRequestId);
+    if (!changeRequest) throw new Error('No such change request.');
+    const { improvementGrant } = await import('../improvement/authority.ts');
+    const grant = await improvementGrant(changeRequest.repository);
+    if (!grant.ok) return { ok: false, reason: grant.reason, changeRequest };
+    const approval = await approveObjective({
+      changeRequestId: input.changeRequestId,
+      via: 'STANDING_AUTHORITY',
+      userId: null,
+      authorityId: grant.authorityId,
+    });
+    if (!approval.ok) {
+      return { ok: false, reason: approval.reason ?? 'The objective could not be approved.', changeRequest: approval.changeRequest };
+    }
+    return startApproved(approval.changeRequest);
+  }
   /*
    * A standing authority is checked here as well as by the caller, so no
    * future entrance can approve on a grant id that is not live, not this
@@ -96,7 +119,10 @@ export async function approveAndStartCampaign(
     };
   }
 
-  const approved = approval.changeRequest;
+  return startApproved(approval.changeRequest);
+}
+
+async function startApproved(approved: FactoryChangeRequest): Promise<StartCampaignOutcome> {
   /*
    * How this campaign runs, and whether it continues a pull request somebody is
    * already reading — both derived from the contract and the forge rather than

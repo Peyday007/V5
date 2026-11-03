@@ -733,6 +733,7 @@ export const DEFERRABLE_UNDER_PRESSURE: ReadonlySet<string> = new Set([
   'frontier',
   'lens-inquiries',
   'feeds',
+  'improvement-loop',
 ]);
 
 /** True, and recorded on the report, when optional work should wait. */
@@ -1329,6 +1330,16 @@ async function tickOnce(owner: string): Promise<TickReport> {
      */
     await runPass(report, 'idle-watch', async () => {
       await watchIdleOnTick();
+    });
+
+    /*
+     * Brain improving itself (§87): weaknesses from the rows become research
+     * for Claude routines and engineering for Factory, measured after delivery.
+     * At most every ten minutes, idempotent by rows.
+     */
+    await runPass(report, 'improvement-loop', async () => {
+      const { improvementTickIfDue } = await import('../improvement/loop.ts');
+      await improvementTickIfDue();
     });
 
     /*

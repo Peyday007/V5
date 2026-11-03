@@ -1403,6 +1403,46 @@ async function main(): Promise<void> {
       }
       break;
     }
+    /*
+     * Brain improving itself (§87): the scoreboard, the register of
+     * weaknesses from detection to measured decision, and what happened.
+     * `tick` runs one pass of the loop now, the same pass the tick runs.
+     */
+    case 'improvement show': {
+      const { improvementReading } = await import('../server/services/improvement/loop.ts');
+      const reading = await improvementReading();
+      const s = reading.switch;
+      console.log(`  improvement_loop  ${s.enabled ? 'ON' : 'OFF'}  (set ${s.updatedAt ?? '—'} by ${s.updatedBy ?? '—'})`);
+      for (const board of reading.scoreboard) {
+        console.log(`  SCOREBOARD ${board.window}`);
+        for (const m of board.metrics) {
+          const value = m.value === null ? '—' : m.value;
+          console.log(`    ${m.key.padEnd(30)} ${String(value).padEnd(9)} ${m.status === 'MEASURED' ? '' : 'INSUFFICIENT DATA '}(${m.numerator}/${m.denominator})${m.context ? ` ${JSON.stringify(m.context)}` : ''}`);
+        }
+      }
+      console.log(`  FREE-LANE FRAGMENT FAILURES (24h, ${reading.failureClasses.attempts} settled): ${JSON.stringify(reading.failureClasses.failures)}`);
+      console.log(`  CANDIDATES ${reading.candidates.length}`);
+      for (const c of reading.candidates) {
+        console.log(`    ${c.key}  ${c.stage}  ${c.owner}  ${c.decision ?? ''}  baseline=${c.baseline ?? '—'} after=${c.after ?? '—'} ${c.verdict ?? ''}`);
+        console.log(`      ${c.title} — next: ${c.next}${c.reason ? ` — ${c.reason}` : ''}${c.links ? ` [${c.links}]` : ''}`);
+      }
+      for (const line of reading.recent) console.log(`  event  ${line}`);
+      break;
+    }
+    case 'improvement tick': {
+      await administrator();
+      const { improvementTick } = await import('../server/services/improvement/loop.ts');
+      console.log(`  ${JSON.stringify(await improvementTick())}`);
+      break;
+    }
+    case 'improvement on':
+    case 'improvement off': {
+      const actor = await administrator();
+      const { setImprovementSwitch } = await import('../server/services/improvement/authority.ts');
+      await setImprovementSwitch(command === 'on', actor.email ?? actor.id, rest.join(' ').trim() || null);
+      console.log(`  improvement_loop is ${command === 'on' ? 'ON' : 'OFF'}, recorded against ${actor.email ?? actor.id}.`);
+      break;
+    }
     case 'brain-only on':
     case 'brain-only off': {
       const actor = await administrator();

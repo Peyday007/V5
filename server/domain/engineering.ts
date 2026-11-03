@@ -25,6 +25,7 @@
  */
 
 import { fileURLToPath } from 'node:url';
+import { DEPENDENCY_QUESTIONS } from './improvement.ts';
 
 /* ------------------------------------------------------------------------- */
 /* Vocabulary                                                                 */
@@ -431,6 +432,12 @@ export interface Preflight {
   testPolicy: TestPolicy;
   existingEvidence: string[];
   duplicateCheck: DuplicateCheck | null;
+  /**
+   * The questions a workflow change answers before it goes live (§87), present
+   * when the change touches routing, lanes, queues or dispatch: what depends on
+   * it, what it displaces, who takes that work and whether they measurably can.
+   */
+  dependencyCheck: { required: boolean; questions: string[]; why: string } | null;
   parallelismAdvice: string;
   doneWhen: string;
   humanAuthorityRequired: boolean;
@@ -478,6 +485,20 @@ const DONE_TEXT: Record<OutcomeLevel, string> = {
   DEPLOYED: 'the released image is serving this commit',
   PRODUCTION_WORKING: 'the real user journey succeeds in production — not a PR, not a green test, the journey',
 };
+
+/** Where work is routed, laned, queued or dispatched: a change here moves work between workers. */
+export const WORKFLOW_OWNERS = [
+  'server/domain/binPurpose.ts',
+  'server/services/bins/',
+  'server/services/freeLane/',
+  'server/services/dispatch/',
+  'server/services/queue/',
+  'server/repos/workQueue.ts',
+  'server/repos/bins.ts',
+  'server/services/factory/start.ts',
+  'server/services/factory/scheduler.ts',
+  'server/services/improvement/',
+] as const;
 
 export function preflight(input: PreflightInput): Preflight {
   const paths = input.changedPaths ?? [];
@@ -538,6 +559,19 @@ export function preflight(input: PreflightInput): Preflight {
     AUTHORITY_MARKERS.some((marker) => input.objective.toLowerCase().includes(marker));
   if (humanAuthorityRequired) reasons.push('New authority (secret, credential, repository, spend or protected merge) stays with a person.');
 
+  const workflow = paths.filter((p) => WORKFLOW_OWNERS.some((owner) => p.startsWith(owner)));
+  const dependencyCheck = workflow.length > 0
+    ? {
+        required: true,
+        questions: Object.values(DEPENDENCY_QUESTIONS),
+        why:
+          `The change touches workflow routing (${workflow.slice(0, 4).join(', ')}). §85: Claude routines were restricted ` +
+          'before the free lane could do the displaced research, and nothing asked. Answer each question with a ' +
+          'production reading before it goes live, and verify the end-to-end journey after.',
+      }
+    : null;
+  if (dependencyCheck) reasons.push('§87: a workflow change answers the dependency check before it ships.');
+
   const outcome = input.intendedOutcome ?? 'PRODUCTION_WORKING';
   reasons.push(`Rule 5: done means ${DONE_TEXT[outcome]}.`);
 
@@ -551,6 +585,7 @@ export function preflight(input: PreflightInput): Preflight {
     testPolicy: tier === policy.tier ? policy : { ...policy, tier },
     existingEvidence: [...(input.provenProperties ?? [])],
     duplicateCheck,
+    dependencyCheck,
     parallelismAdvice:
       'Independent work (no dependency, disjoint owned paths, separate branches) runs concurrently when a surface is free; do not serialize it.',
     doneWhen: DONE_TEXT[outcome],

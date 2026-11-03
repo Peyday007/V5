@@ -124,3 +124,29 @@ export async function methodRulesFor(now: number, question: string | null = null
   }
   return selectMethodRules(cache.value, question);
 }
+
+/**
+ * Accepted method claims that bear on a question, for the improvement loop
+ * (§87): what Brain already holds about a weakness before it asks for more
+ * research (invariant 13). A claim bears when it shares at least `minOverlap`
+ * content words with the question. Read-only, like everything here.
+ */
+export async function relevantMethodClaims(
+  question: string,
+  minOverlap = 2,
+  limit = 8,
+): Promise<{ claim: string; source: string | null; topic: string | null }[]> {
+  const wanted = words(question);
+  const pool = await readMethodRulePool();
+  return pool
+    .map((row) => {
+      const have = words(`${row.claim} ${row.topic_question ?? ''}`);
+      let overlap = 0;
+      for (const word of wanted) if (have.has(word)) overlap += 1;
+      return { row, overlap };
+    })
+    .filter((one) => one.overlap >= minOverlap)
+    .sort((a, b) => b.overlap - a.overlap)
+    .slice(0, limit)
+    .map(({ row }) => ({ claim: row.claim, source: row.source_url, topic: row.topic_key }));
+}
