@@ -1506,6 +1506,12 @@ export async function signalledClaims(input: {
         )
         AND f.status IN ('ACCEPTED', 'BLOCKED')
         /*
+         * What the harvest skips anyway, so a bounded read never fills with it:
+         * no source to cite, or a documented absence (never an opening).
+         */
+        AND c.source_url IS NOT NULL
+        AND c.claim_type <> 'NEGATIVE_EXISTENCE'
+        /*
          * Not the deep dive's own findings.
          *
          * A validation packet researches one opening that already exists, and
