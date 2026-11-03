@@ -973,7 +973,16 @@ export async function startValidations(input: {
    */
   const quick = (opportunity: CashOpportunity) =>
     opportunity.mechanism === 'TEMPORARY_EXPLOIT' || screens.get(opportunity.id)?.window === 'SHORT';
-  const band = (opportunity: CashOpportunity) => (dropped(opportunity.id) ? 2 : quick(opportunity) ? 0 : 1);
+  /*
+   * An opening an approved goal's own search found comes first (owner,
+   * 2026-11-03: construction must reach the goal's plan). Production: seven
+   * openings filed from constructed rounds sat NOT_STARTED behind 68 older
+   * ones while the plan they were built for read NOT_VIABLE. Junk still last.
+   */
+  const { listRounds } = await import('../../repos/cashDiscovery.ts');
+  const goalRounds = new Set((await listRounds(input.projectId)).filter((r) => r.bucketId.startsWith('goal-')).map((r) => r.id));
+  const forGoal = (opportunity: CashOpportunity) => !!opportunity.discoveryRoundId && goalRounds.has(opportunity.discoveryRoundId);
+  const band = (opportunity: CashOpportunity) => (dropped(opportunity.id) ? 3 : forGoal(opportunity) ? 0 : quick(opportunity) ? 1 : 2);
   valued.sort((a, b) => band(a.opportunity) - band(b.opportunity));
 
   const out: StartedValidation[] = [];

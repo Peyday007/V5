@@ -365,3 +365,20 @@ describe('decision-value order and the fields worth researching', () => {
     expect(worth.every((key) => key === 'payer' || key === 'disqualifiers')).toBe(true);
   });
 });
+
+describe('an opening a goal’s own search found is dived first', () => {
+  it('starts the goal-found opening ahead of an older one when only one dive fits', async () => {
+    const older = await opening('An older county request for a traffic study');
+    const found = await opening('Home-service firms repeatedly pay for missed-call text-back setup');
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, found, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, 'HARVESTED', ?, 1, ?, ?)`,
+      ['cdr_goalfound', projectId, modeId, 'goal-wst_x-mx-abc', 'GOAL_MECHANISM', 'rcn_goalfound', at, at, at],
+    );
+    await getDb().run('UPDATE cash_opportunities SET discovery_round_id = ? WHERE id = ?', ['cdr_goalfound', found]);
+    const started = await startValidations({ projectId, limit: 1 });
+    expect(started.map((one) => one.opportunityId)).toEqual([found]);
+    expect(started.map((one) => one.opportunityId)).not.toContain(older);
+  });
+});
