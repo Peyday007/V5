@@ -39,6 +39,15 @@ PRs:
   - done-for-you AI marketing services for small businesses (`ind_22979ce6…`);
   - online lead generation and referral brokerage for independent contractors.
 
+### Construction → opening: the 03:50Z check-in (Cash report 41574595927, Goals 41574598841, serving `3583c0c`)
+
+- `INDUSTRY_ROUND_OPENED=8` and `INDUSTRY_FINDINGS_ABSORBED=4`, both unchanged since 01:40Z.
+- All four kernel slots hold live questions: Agriculture, Animation, and by rank the two Nov-2 seeds.
+- The three remote seeds wait at rank 250 for a free slot.
+- Construction still composes 247 arrangements from the old map.
+- Of 14 constructed rounds, none has filed an opening: 11 abandoned, 2 harvested empty, 1 open.
+- **Status:** unblocked (#441–#443) and running, **not yet demonstrated**. Nothing is failing: the industry kernel's log line records any failure (#442), and none appeared.
+
 ### The rebuilt plan
 
 The plan is in `docs/CASH-10K-PLAN.md`; the model is `fast-cash/10k/plan-model-remote.ts`. Five online lines:
