@@ -24,6 +24,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { sessionContext } from './finish-job.mjs';
 
 export const FIRST_LIMIT = 6_000;
 export const LATER_LIMIT = 1_200;
@@ -133,7 +134,17 @@ export function run(event) {
   } catch {
     fullPath = null;
   }
-  const reminder = composeReminder(messages, fullPath);
+  let ledger = '';
+  try {
+    ledger = sessionContext(event);
+  } catch {
+    ledger = '';
+  }
+  let reminder = composeReminder(messages, fullPath);
+  if (ledger) {
+    const room = 9_900 - ledger.length - 2;
+    reminder = `${reminder.length <= room ? reminder : `${reminder.slice(0, room - 40)}\n[… cut; read ${fullPath ?? 'the transcript'}]`}\n\n${ledger}`;
+  }
   return JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: reminder } });
 }
 

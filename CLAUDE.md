@@ -71,10 +71,12 @@ routine decision, ended to "wait" with no notification armed, backed off when a
 parallel session touched the same area, or lost the assignment's own words to
 compaction. These rules answer each of those.
 
-1. **The owner's message is the contract.** Before the first tool call, copy its
-   completion requirements — verbatim — into the task list (TaskCreate), one task
-   each. A requirement is closed only by evidence, never by a summary saying it
-   was "completed".
+1. **The owner's message is the contract, and a program checks it.** The
+   `UserPromptSubmit` hook copies each requirement verbatim into a ledger and
+   arms the Ralph Loop plugin, which refuses every stop until
+   `npm run finish -- check` — running the evidence, git and the GitHub API
+   itself — returns DONE, WAITING, BLOCKED or STALLED. Your written status is not
+   read. How to work under it: `.claude/skills/finish-the-job/SKILL.md`.
 2. **Stop only when** every requirement is met, or every remaining one is blocked
    by a rule-11 reason. A blocker on one requirement is not a reason to stop the
    others.
