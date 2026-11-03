@@ -19,7 +19,18 @@
 | Delivery and terms | `cash/answers.ts` | Withheld with the PHYSICAL bar |
 | Goal plan and ranking | `cash/goalScenario.ts` | Excluded, with the reason "needs the owner's physical work" |
 
-PRs: **#445** (the rule), **#447** (calibrated on production's own openings), **#448** (every kernel's questions). Tests are in `tests/operatingModel.test.ts`, `tests/goalPlan.test.ts` and the RES-6 tests in `tests/cashKernelProgress.test.ts`.
+PRs:
+- **#445** — the rule.
+- **#447** — calibrated on production's own openings.
+- **#448** — every kernel's questions.
+- **#449** — a full-suite test that used a surplus-lot opening.
+- **#450** — gig work the operator would do itself.
+
+**Verified on production** (`f890d15`; Goals run 41561426910, Cash report 41561429752):
+- The goal plan's considered openings fell from 23 to **17**. Removed: four sneaker resales and a StockX resale (goods the owner would ship), a gig-driving opening, and a school district (government).
+- None of the remaining 17 needs the owner's physical work.
+- The industry map shows the local subject retired with its reason, and three remote subjects seeded.
+- `INDUSTRY_ROUND_OPENED=8`: all four kernel slots are live. The remote subjects rank next (250) and open as slots free. Tests are in `tests/operatingModel.test.ts`, `tests/goalPlan.test.ts` and the RES-6 tests in `tests/cashKernelProgress.test.ts`.
 
 **Production changes made through the admin console:**
 - The local physical-services subject seeded on Nov 2 is retired (`ind_b1bec01e…`, with its reason recorded).
