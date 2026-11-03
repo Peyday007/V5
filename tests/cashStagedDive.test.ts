@@ -215,7 +215,7 @@ describe('dives are counted per change epoch, with no lifetime cap', () => {
   });
 
   it('the same change ref does not open an epoch twice', async () => {
-    const id = await opening('an expiring surplus lot');
+    const id = await opening('an expiring paid request');
     await spendEpoch(id);
     await tick();
     expect(await requestReconsideration({ projectId, opportunityId: id, changeRef: 'evidence@same' })).toBe(true);
