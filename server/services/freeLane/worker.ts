@@ -824,13 +824,25 @@ export async function closeFiledFreeLaneBins(): Promise<number> {
 
 let timer: NodeJS.Timeout | null = null;
 
-/** The lane's own loop, beside the dispatcher. Off when no cheap lane is configured. */
-export function startFreeLaneLoop(intervalMs = 30_000): void {
+/**
+ * The lane's own loop, beside the dispatcher. Off when no cheap lane is configured.
+ *
+ * It starts after a delay rather than at boot, for the self-scan's reason: the
+ * minutes after a restart are when the database is busiest and when Deploy's
+ * own restart verification runs, and four model-driven slots competing with it
+ * made that verification slow enough not to finish (Deploy 41601470270).
+ */
+export function startFreeLaneLoop(intervalMs = 30_000, delayMs = 3 * 60_000): void {
   if (timer) return;
-  timer = setInterval(() => {
-    void freeLaneTick().catch((error) => console.warn('[free-lane] tick failed:', (error as Error).message));
-  }, intervalMs);
-  timer.unref?.();
+  const begin = (): void => {
+    timer = setInterval(() => {
+      void freeLaneTick().catch((error) => console.warn('[free-lane] tick failed:', (error as Error).message));
+    }, intervalMs);
+    timer.unref?.();
+  };
+  const wait = setTimeout(begin, delayMs);
+  wait.unref?.();
+  timer = wait as unknown as NodeJS.Timeout;
 }
 
 export function stopFreeLaneLoop(): void {
