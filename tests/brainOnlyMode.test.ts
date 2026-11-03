@@ -265,6 +265,12 @@ describe('the clean-up pass', () => {
     expect(await workItemPurposeAdmits({ bin_id: playBin, orchestration_id: null })).toBe(false);
     expect(await workItemPurposeAdmits({ bin_id: brainBin, orchestration_id: null })).toBe(true);
     expect(await workItemPurposeAdmits({ bin_id: null, orchestration_id: null })).toBe(false);
+    // With no bin, the project decides: a play project's item is denied, a Brain project's admitted.
+    expect(await workItemPurposeAdmits({ bin_id: null, orchestration_id: null, project_id: play.project.id })).toBe(false);
+    expect(await workItemPurposeAdmits({ bin_id: null, orchestration_id: null, project_id: brainProjectId })).toBe(true);
+    const technical = await createProject({ name: 'Verification scope', slug: 'verification-scope' });
+    await getDb().run("UPDATE projects SET purpose = 'TECHNICAL' WHERE id = ?", [technical.id]);
+    expect(await workItemPurposeAdmits({ bin_id: null, orchestration_id: null, project_id: technical.id })).toBe(true);
   });
 });
 
