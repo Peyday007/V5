@@ -13944,3 +13944,55 @@ for LEGAL_RISK, and exhausted five attempts; its audit sibling
   Brain-improvement work and must not notify about skipped, parked, declined or
   legal work, or about an empty check-in — only a real Brain-improvement result
   or a real outage. Parking writes events and notifies nobody.
+
+## 85. Displaced work names a replacement that is doing it, and commercial research is the free lane's.
+
+**What §84 got wrong.** Brain-only mode took every non-Brain bin away from
+Claude routines and labelled it `WAITING_FOR_FREE_LANE`. The cheap lane
+(OmniRoute, `services/cheap/lane.ts`) was live, with two free models answering
+in seconds — but it only answered closed screening tasks, and no worker of any
+kind drained research items for it. The restriction displaced the work and named
+a replacement that did not exist as a worker, and nothing checked. The first
+blocker was not routing, permissions or capacity: it was that the consumer was
+never built.
+
+- **The free research lane** (`services/freeLane/worker.ts`) is that consumer.
+  Two Brain-side workers, `free-lane-a` and `free-lane-b`, one per configured
+  model, claim `RESEARCH_FRAGMENT`, `RESEARCH_VERIFY`, `RESEARCH_SYNTHESIZE` and
+  `RESEARCH_AUDIT` items whose owning bin is `PLAY_RESEARCH` or `GRUNT` — never
+  Brain's own, never legal — through the ordinary `claimWork` compare-and-swap
+  and `auditAdmission`, and answer each through the ordinary MCP tool handlers.
+  Every submission is authorized, validated, gated and idempotent exactly as a
+  routine's. Its memberships are the routine connector scopes, granted by Brain
+  only on projects that hold free-lane work.
+- **Brain opens the sources, the model never recalls them.** The model names
+  candidate pages; Wikipedia's keyless public API adds two; `fetchForWorker`
+  reads every one. A claim's `evidence_excerpt` must appear verbatim in the page
+  Brain fetched or it is dropped before submission, and verification re-reads
+  the page itself. The evidence gate, verification gate and audit decide what
+  is accepted; the free lane decides nothing.
+- **Separation.** One session per worker, packet and role — the shape of a
+  fresh routine session per role. With two models, research and synthesis go to
+  the first, verification and the primary and judge audits to the second.
+- **Never silently discarded.** A tool refusal is shown to the model once; then
+  the item is failed retryably and the queue's backoff and attempt budget apply,
+  with a `FREE_LANE_ITEM` event either way. A model whose every item failed in
+  the last half hour (four or more) is skipped and its roles go to the other.
+- **Next work starts by itself.** The tools' own completion advances the packet,
+  so the runner queues the next stage; the lane closes a free-lane bin with
+  `completeUnleasedBin` once its packet filed and its contract is satisfied.
+- **A restriction must name a working replacement** (`services/freeLane/coverage.ts`).
+  `laneCoverage` reports the displaced items by type, whether a free model is
+  configured and answers each type, its submissions and failures in the last
+  hour, and whether the runner consumed its results. `setBrainOnlyMode(true)`
+  refuses while displaced work has no ready replacement, keeping the previous
+  route. While the mode is on, every dispatch tick's brain-only pass runs
+  `watchDisplacedWork`, which records rule 9's `IDLE_WITH_EXECUTABLE_WORK`
+  intervention (at most once per half hour, notifying nobody) when displaced
+  research waits past half an hour with no free-lane submission.
+- **Readable from the terminal.** `admin free-lane show` (also in `admin.yml`)
+  prints the coverage, the outcomes and what reached Brain; `admin free-lane run
+  [ticks] --admin …` takes ticks now through the same path the loop takes.
+- **Lanes.** `binLane` reports `FREE_LANE` for PLAY_RESEARCH and GRUNT whenever a
+  free model is configured, and `WAITING_FOR_FREE_LANE` only when none is.
+

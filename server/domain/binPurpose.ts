@@ -22,7 +22,7 @@ export const BIN_PURPOSES = ['BRAIN_IMPROVEMENT', 'PLAY_RESEARCH', 'GRUNT', 'BLO
 export type BinPurpose = (typeof BIN_PURPOSES)[number];
 
 /** Where a bin goes under brain-only mode. */
-export type BinLane = 'CLAUDE' | 'WAITING_FOR_FREE_LANE' | 'PARKED_LEGAL';
+export type BinLane = 'CLAUDE' | 'FREE_LANE' | 'WAITING_FOR_FREE_LANE' | 'PARKED_LEGAL';
 
 /** The project whose research is how Brain researches (`capability/ingest.ts`). */
 export const BRAIN_PROJECT_SLUG = 'brain-architecture';
@@ -136,13 +136,14 @@ export function classifyBinPurpose(input: PurposeInput): PurposeDecision {
 
 /**
  * Where a bin goes. A bin with no purpose is PLAY_RESEARCH. A legal bin is
- * parked whatever the mode; under brain-only mode everything that is not Brain
- * work waits for a free-model lane, because no free lane takes bins today
- * (`services/cheap/lane.ts` answers closed screening tasks only).
+ * parked whatever the mode; under brain-only mode everything else that is not
+ * Brain work belongs to the free research lane (`services/freeLane/worker.ts`)
+ * when a free model is configured, and waits for one when none is.
  */
-export function binLane(purpose: BinPurpose | null, brainOnlyMode: boolean): BinLane {
+export function binLane(purpose: BinPurpose | null, brainOnlyMode: boolean, freeLaneConfigured = false): BinLane {
   const effective = purpose ?? 'PLAY_RESEARCH';
   if (effective === 'BLOCKED_LEGAL') return 'PARKED_LEGAL';
   if (effective === 'BRAIN_IMPROVEMENT' || !brainOnlyMode) return 'CLAUDE';
-  return 'WAITING_FOR_FREE_LANE';
+  // §85: the free research lane drains PLAY_RESEARCH and GRUNT whenever it is configured.
+  return freeLaneConfigured && purpose !== null ? 'FREE_LANE' : 'WAITING_FOR_FREE_LANE';
 }

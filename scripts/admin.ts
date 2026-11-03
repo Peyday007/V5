@@ -60,6 +60,8 @@
  *   npm run admin -- cash seed-industry <project> "<subject name>" --admin someone@example.com
  *   npm run admin -- cash constraints <project> ["<additions, empty clears>"] --admin someone@example.com
  */
+import { freeLaneReading } from '../server/services/freeLane/coverage.ts';
+import { freeLaneTick } from '../server/services/freeLane/worker.ts';
 import { binPurposeReading, brainOnlyReading, setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { ARCHITECTURE_LAYER, ARCHITECTURE_SLUG } from '../server/services/capability/ingest.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
@@ -464,6 +466,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
 
   people    list | foundation | rename <user|email> "<name>"
   brain-only show [<bin_…> …] | on | off   (Claude routines take only Brain-improvement work, §84)
+  free-lane show | run [ticks]             (free models do the displaced research, §85)
   capacity  show | adopt <user|email> <trig_…>
   factory   invite <project> <user|email>
   workers   list | disable <name> | enable <name> | archive <name>
@@ -1352,6 +1355,36 @@ async function main(): Promise<void> {
             ? `  ${one.id}  ${one.state}  purpose=${one.purpose ?? 'UNCLASSIFIED'}  basis=${one.basis ?? '—'}  lane=${one.lane}  leased=${one.leased ? 'yes' : 'no'}`
             : `  ${binId}  not found`,
         );
+      }
+      break;
+    }
+    /*
+     * The free research lane (§85): what is displaced from Claude routines, what
+     * the free models are doing with it, and what reached Brain. `run` takes
+     * one tick now through the same path the loop takes.
+     */
+    case 'free-lane show': {
+      const reading = await freeLaneReading();
+      const c = reading.coverage;
+      console.log(`  configured        ${c.configured ? `yes (${c.models} model(s))` : 'no'}`);
+      console.log(`  ready             ${c.ready ? 'yes' : 'NO'} — ${c.reason}`);
+      console.log(`  displaced queued  ${JSON.stringify(c.displaced)}`);
+      console.log(`  unsupported       ${JSON.stringify(c.unsupported)}`);
+      console.log(`  last hour         submitted=${c.submittedLastHour} failed=${c.failedLastHour}  last=${c.lastSubmittedAt ?? '—'}`);
+      console.log(`  runner consumed   ${c.consumedLastDay} next-stage item(s) queued after free-lane work (24h)`);
+      console.log(`  outcomes (24h)    ${JSON.stringify(reading.outcomesLastDay)}`);
+      console.log(`  packets resumed   ${reading.packetsTouched}`);
+      console.log(`  claims            ${reading.claimsAccepted} accepted of ${reading.claimsSubmitted} submitted by free workers`);
+      console.log(`  packets filed     ${reading.documentsFiled}`);
+      break;
+    }
+    case 'free-lane run': {
+      await administrator();
+      const ticks = Math.min(Math.max(Number(rest[0] ?? '1') || 1, 1), 10);
+      for (let n = 0; n < ticks; n += 1) {
+        const tick = await freeLaneTick();
+        console.log(`  tick ${n + 1}: ${JSON.stringify(tick)}`);
+        if (!tick.configured || tick.claimed === 0) break;
       }
       break;
     }

@@ -247,9 +247,15 @@ export function inputHash(kind: TaskKind, input: unknown): string {
 }
 
 /** The HTTP call. Injected in tests; nothing else in the lane touches the network. */
-export type Completer = (config: LaneConfig, model: string, system: string, prompt: string) => Promise<string>;
+export type Completer = (
+  config: LaneConfig,
+  model: string,
+  system: string,
+  prompt: string,
+  options?: { maxTokens?: number },
+) => Promise<string>;
 
-export const httpCompleter: Completer = async (config, model, system, prompt) => {
+export const httpCompleter: Completer = async (config, model, system, prompt, options) => {
   const response = await fetch(`${config.url}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -261,7 +267,7 @@ export const httpCompleter: Completer = async (config, model, system, prompt) =>
       temperature: 0,
       // Reasoning models (gpt-oss) spend tokens thinking before they answer;
       // a small budget left them with no answer at all. Low effort, more room.
-      max_tokens: 2000,
+      max_tokens: options?.maxTokens ?? 2000,
       reasoning_effort: 'low',
       messages: [
         { role: 'system', content: system },

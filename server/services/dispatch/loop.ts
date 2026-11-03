@@ -279,6 +279,9 @@ export async function dispatchTick(
     try {
       const { enforceBrainOnly } = await import('../bins/brainOnly.ts');
       await enforceBrainOnly();
+      // §85: displaced research must be progressing on its replacement.
+      const { watchDisplacedWork } = await import('../freeLane/coverage.ts');
+      await watchDisplacedWork();
     } catch (error) {
       console.warn('[dispatch] brain-only pass failed:', (error as Error).message);
     }

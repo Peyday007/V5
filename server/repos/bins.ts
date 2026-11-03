@@ -2723,6 +2723,26 @@ export async function terminateUnleasedBin(
 }
 
 /**
+ * Close a bin nobody holds because its contract is already satisfied (§85).
+ *
+ * The free research lane drains a packet's work items from the queue without
+ * leasing the bin, so when the packet files there is no session to call
+ * `brain_bin_complete`. The caller has evaluated the contract against Brain's
+ * own rows first; this is only the guarded write, on the generation it read.
+ */
+export async function completeUnleasedBin(binId: string, leaseGeneration: number, reason: string): Promise<boolean> {
+  const now = binNow();
+  const result = await getDb().run(
+    `UPDATE bins SET state = 'COMPLETE', terminal_reason = ?, completed_at = ?, updated_at = ?
+      WHERE id = ? AND lease_generation = ? AND state IN ('READY', 'DRAFT', 'NEEDS_HUMAN')`,
+    [bounded(reason, MAX_REASON_CHARS), now, now, binId, leaseGeneration],
+  );
+  if (result.changes !== 1) return false;
+  await recordBinEvent({ eventType: 'BIN_TERMINAL', binId, leaseGeneration, outcome: 'COMPLETE', reason });
+  return true;
+}
+
+/**
  * Expired leases, for metrics.
  *
  * Deliberately not load-bearing: an expired lease is already claimable work, so

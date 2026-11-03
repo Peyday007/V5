@@ -24,6 +24,7 @@ import {
   releaseBin,
 } from '../../repos/bins.ts';
 import { releaseWork } from '../../repos/workQueue.ts';
+import { laneConfig } from '../cheap/lane.ts';
 
 export const BRAIN_ONLY_SWITCH = 'brain_only_mode';
 
@@ -39,6 +40,18 @@ export async function brainOnlyMode(): Promise<boolean> {
 
 /** The only way to change it. `by` is the administrator it is recorded against. */
 export async function setBrainOnlyMode(enabled: boolean, by: string, reason: string | null): Promise<void> {
+  /*
+   * §85: a restriction that displaces work must name a replacement that is
+   * doing it. Turning the mode on is refused while displaced research has no
+   * working free lane, and the previous route stays in force.
+   */
+  if (enabled && !(await brainOnlyMode())) {
+    const { laneCoverage } = await import('../freeLane/coverage.ts');
+    const coverage = await laneCoverage();
+    if (!coverage.ready) {
+      throw new Error(`Brain-only mode was not turned on, so nothing is stranded: ${coverage.reason}`);
+    }
+  }
   const at = binNow();
   await getDb().run(
     `INSERT INTO brain_switches (name, enabled, updated_at, updated_by, reason)
@@ -170,7 +183,7 @@ export async function enforceBrainOnly(): Promise<EnforceReport> {
     );
     if (updated.changes !== 1) continue;
     report.tagged += 1;
-    const lane = binLane(decision.purpose, mode);
+    const lane = binLane(decision.purpose, mode, laneConfig() !== null);
     await recordBinEvent({
       eventType: lane === 'CLAUDE' ? 'BIN_PURPOSE_TAGGED' : 'BIN_PARKED',
       binId: row.id,
@@ -200,7 +213,7 @@ export async function enforceBrainOnly(): Promise<EnforceReport> {
   );
   const now = binNow();
   for (const bin of held) {
-    const lane = binLane((bin.purpose ?? null) as BinPurpose | null, mode);
+    const lane = binLane((bin.purpose ?? null) as BinPurpose | null, mode, laneConfig() !== null);
     const outcome = await releaseBin(
       { binId: bin.id, leaseId: bin.lease_id, leaseGeneration: bin.lease_generation, workerId: bin.worker_id },
       `Taken out of the Claude lane by brain-only mode: ${bin.purpose ?? 'UNCLASSIFIED'} is ${lane}.`,
@@ -219,6 +232,8 @@ export async function enforceBrainOnly(): Promise<EnforceReport> {
        FROM work_items w
       WHERE w.state = 'LEASED' AND w.lease_id IS NOT NULL AND w.worker_id IS NOT NULL
         AND w.lease_expires_at > ?
+        -- The free research lane's own workers hold these by design (§85).
+        AND w.worker_id NOT IN (SELECT k.id FROM workers k WHERE k.name IN ('free-lane-a', 'free-lane-b'))
         AND EXISTS (SELECT 1 FROM bins b
                      WHERE (b.id = w.bin_id OR (b.orchestration_id IS NOT NULL AND b.orchestration_id = w.orchestration_id))
                        AND NOT ${purposeAdmitsSql('b.')})`,
@@ -260,7 +275,7 @@ export async function brainOnlyReading(): Promise<{
       .map((row) => ({
         purpose: row.purpose ?? 'UNCLASSIFIED',
         state: row.state,
-        lane: binLane((row.purpose ?? null) as BinPurpose | null, mode),
+        lane: binLane((row.purpose ?? null) as BinPurpose | null, mode, laneConfig() !== null),
         n: Number(row.n),
       }))
       .sort((a, b) => a.purpose.localeCompare(b.purpose) || a.state.localeCompare(b.state)),
@@ -282,7 +297,7 @@ export async function binPurposeReading(
     state: row.state,
     purpose: row.purpose,
     basis: row.purpose_basis,
-    lane: binLane((row.purpose ?? null) as BinPurpose | null, mode),
+    lane: binLane((row.purpose ?? null) as BinPurpose | null, mode, laneConfig() !== null),
     leased: row.state === 'LEASED' && row.lease_id !== null,
   };
 }
