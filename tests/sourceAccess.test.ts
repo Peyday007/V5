@@ -67,6 +67,15 @@ describe('which failures send a read to which route', () => {
   it('recognises a bot challenge as no source', () => {
     expect(isChallenge(ok('u', 'It needs a human touch. Loading challenge. ERRCODE PXCR10002539'))).toBe(true);
     expect(isChallenge(ok('u'))).toBe(false);
+    // Read in production by the browser, 2026-11-04: each is a block, not the page.
+    for (const block of [
+      'Sorry, you have been blocked You are unable to access payhip.com Why have I been blocked? Cloudflare Ray ID: a5564fdcbb1324c8',
+      'moneywise.com Performing security verification This website uses a security service to protect against malicious bots.',
+      'Please login to continue. Please log in to verify you are not a bot. If you are looking to access data through our API, please visit our developer portal.',
+      'Skip to main content My EUR-Lex English EUR-Lex Access to European Union law You are here EUR-Lex home The requested document does not exist. Help Print MENU Quick search',
+    ]) {
+      expect(isChallenge(ok('u', block))).toBe(true);
+    }
   });
 });
 
@@ -199,6 +208,22 @@ describe('the direct reader reads PDFs', () => {
     const read = await fetchForWorker('https://example.com/report.pdf', { resolve: publicResolver, fetch });
     expect(read).toMatchObject({ readable: true, contentType: 'application/pdf' });
     expect(read.readable && read.text).toContain('Median hourly wage for data entry keyers was 19.20 dollars.');
+  });
+});
+
+describe('site connectors', () => {
+  it('reads a Find a Tender notice through its OCDS API, cited under the notice address', async () => {
+    const { connectorFor } = await import('../server/services/sources/connectors.ts');
+    const page = 'https://www.find-tender.service.gov.uk/Notice/075347-2025';
+    const api = JSON.stringify({ releases: [{ tender: { title: 'Airport fire tender', value: { amount: 1900000, currency: 'GBP' } }, buyer: { name: 'Example Airport' } }] });
+    const direct = async (u: string) => (u.includes('/api/1.0/ocdsReleasePackages/075347-2025') ? ok(u, api, 'application/json') : no(u, 'HTTP_ERROR', 403));
+    const read = await connectorFor(page)!(page, direct);
+    expect(read).toMatchObject({ readable: true, finalUrl: page });
+    expect(read!.readable && read!.text).toContain('[1].tender.title: Airport fire tender');
+    expect(read!.readable && read!.text).toContain('[1].tender.value.amount: 1900000');
+    expect(connectorFor('https://example.com/Notice/075347-2025')).toBeNull();
+    const viaLayer = await readSource(page, deps({ direct }));
+    expect(viaLayer).toMatchObject({ readable: true, method: 'CONNECTOR' });
   });
 });
 

@@ -1431,6 +1431,7 @@ async function main(): Promise<void> {
       console.log(`  sample            ${sample.length} failed research URL(s) from this Brain's own records; browser ${result.browser ? 'configured' : 'NOT configured'}`);
       for (const r of result.rows) {
         console.log(`  ${r.improved ? 'RECOVERED' : 'same     '} ${r.before.padEnd(16)} ${String(r.beforeMs).padStart(6)}ms -> ${r.after.padEnd(16)} ${String(r.afterMs).padStart(6)}ms ${r.method}  ${r.url.slice(0, 140)}`);
+        if (r.preview) console.log(`            read: "${r.preview}"`);
       }
       const read = (s: string) => s.startsWith('READ');
       const ok = result.rows.filter((r) => read(r.after));

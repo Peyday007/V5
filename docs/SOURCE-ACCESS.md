@@ -15,9 +15,17 @@ always did, plus the route that produced it.
 | SITEMAP | 404/410: the page the same site's sitemap or feed now lists for the closest path | the successor page's own address |
 | ARCHIVE | gone, blocked or unreadable and the Internet Archive has a 200 snapshot | the `web.archive.org/web/<ts>/<url>` snapshot address |
 
+Connectors registered (each added from a measured production failure):
+
+- `www.find-tender.service.gov.uk/Notice/<id>` — notice pages answer 403 to a
+  reader and render empty in the browser; the service's own OCDS API
+  (`/api/1.0/ocdsReleasePackages/<id>`) is read instead, as labelled lines.
+
 Never routed around: a private/loopback/metadata address, credentials in the
-URL, a port other than 80/443, and 401/402/451. A bot-challenge page is
-reported unreadable whichever route fetched it.
+URL, a port other than 80/443, and 401/402/451. A bot-challenge, block,
+login-wall or "not found" page is reported unreadable whichever route fetched
+it: the first production comparison showed most browser "reads" of 403 pages
+were Cloudflare/PerimeterX block pages, and none of them is a source.
 
 ## Why Playwright MCP (2026-11-04)
 

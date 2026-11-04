@@ -168,6 +168,8 @@ export interface CompareRow {
   afterMs: number;
   method: string;
   improved: boolean;
+  /** The opening of what a fallback route read, so a reader can see it is the page and not a block. */
+  preview: string | null;
 }
 
 /** Re-read each URL with DIRECT alone and with the whole layer, here and now. */
@@ -176,7 +178,8 @@ export async function compareReaders(urls: string[]): Promise<{ rows: CompareRow
   const rows: CompareRow[] = [];
   for (const url of urls) {
     const t0 = Date.now();
-    const before = await fetchForWorker(url);
+    // "Before" is the reader as it was: direct only, and a PDF refused as not text.
+    const before = await fetchForWorker(url, { readPdf: false });
     const beforeMs = Date.now() - t0;
     const t1 = Date.now();
     const after = await readSource(url, { caller: 'compare', record: async () => undefined });
@@ -190,6 +193,7 @@ export async function compareReaders(urls: string[]): Promise<{ rows: CompareRow
       afterMs,
       method: after.attempts.map((a) => `${a.method}:${a.readable ? 'ok' : a.reason}`).join('>'),
       improved: usable(after) && !usable(before),
+      preview: after.readable && after.method !== 'DIRECT' ? after.text.replace(/\s+/g, ' ').slice(0, 110) : null,
     });
   }
   return { rows, rssBeforeMb, rssAfterMb: Math.round(process.memoryUsage().rss / 1e6), browser: Boolean(browserMcpUrl()) };
