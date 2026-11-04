@@ -19,6 +19,11 @@ describe('own-action screen: third parties doing the forbidden verb (PACKETS:NEE
     'We will hire a translator and record the quote.',
     'Employers post roles; you should hire one and report the cost.',
     'Call the buyer and ask the price.',
+    'Have customers purchase the plan and record the price.',
+    'Make users purchase a subscription.',
+    'Let the buyers purchase it.',
+    'Get employers to hire a translator.',
+    'Ask the vendors to purchase a sample.',
   ])('still refuses the instruction %s', (prose) => {
     expect(describesOwnAction(prose, FORBIDDEN)).toBe(true);
   });
