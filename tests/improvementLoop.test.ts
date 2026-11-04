@@ -295,6 +295,12 @@ describe('the loop on real rows', () => {
     const first = await getCandidateByKey('FREE_LANE:SUBMISSION_REFUSED');
     expect(first?.evidence['combined']).toEqual(['FREE_LANE:NO_USABLE_ANSWER']);
     expect(second?.combinedIntoId).toBe(first?.id);
+    // Once the host's change is delivered, a combined weakness that persists is its own next attempt at once.
+    await patchCandidate(first!.id, { changeRequestId: 'fcr_x', deliveredAt: new Date().toISOString(), deliveredRef: 'abc' });
+    await failures(30, 'model a: the answer returned no usable JSON', 0);
+    await improvementTick(new Date(Date.now() + 3000));
+    const next = await getCandidateByKey('FREE_LANE:NO_USABLE_ANSWER#2');
+    expect(next).toMatchObject({ attempt: 2, parentId: second!.id, decision: null });
   });
 
   it('measures a delivered change against its baseline and decides once', async () => {
