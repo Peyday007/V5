@@ -84,11 +84,13 @@ jobs:
                 flyctl machine destroy "$machine" --app "$app" --force
               fi
               # shellcheck disable=SC2086
-              flyctl machine run "$image" $args --app "$app" --region iad --name browser \
+              # The browser's own arguments come after `--`, so flyctl does not read them as its flags.
+              flyctl machine run "$image" --app "$app" --region iad --name browser \
                 --vm-size shared-cpu-1x --vm-memory 1024 \
                 --port 80:8931/tcp:http \
                 --autostop=stop --autostart=true \
-                --restart on-fail
+                --restart on-fail \
+                -- $args
               flyctl machine list --app "$app"
               echo "::notice title=browser::Playwright MCP is at $url (private). Run this workflow with 'connect' to point the Brain at it."
               ;;
