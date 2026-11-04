@@ -109,4 +109,11 @@ describe('answerRoutineParks window', () => {
     expect(await answerRoutineParks({ limit: 2 })).toHaveLength(0);
     expect((await getHumanRequest(old))!.state).toBe('OPEN');
   });
+
+  it('treats a bounded research goal as no standing grant, as decide does', async () => {
+    await getDb().run(`UPDATE russell_goals SET purpose = 'RESEARCH_GOAL' WHERE project_id = ?`, [projectId]);
+    const old = await card(`russell:needs-human:${missionId}:research-goal-only`, OLD);
+    expect(await answerRoutineParks({ limit: 2 })).toHaveLength(0);
+    expect((await getHumanRequest(old))!.state).toBe('OPEN');
+  });
 });

@@ -109,8 +109,10 @@ export async function answerRoutineParks(input: {
      * ladder is spent": the starvation `parkStoppedMissions` documents for its
      * own window. Two of `decide`'s refusals are facts of the row and are
      * asked here instead: a card that is not about a mission, and a project
-     * with no live standing grant. Authority is unchanged — `decide` still
-     * checks both.
+     * with no live standing grant. The grant test is the one `decide` makes —
+     * `listGoals` returns only `purpose = 'STANDING'` rows, so a RESEARCH_GOAL
+     * is no grant to either — and `decide` still checks both, so authority is
+     * unchanged.
      */
     `SELECT r.id FROM russell_human_requests r
       WHERE r.state = 'OPEN' AND r.mission_id IS NOT NULL AND r.created_at <= ?
