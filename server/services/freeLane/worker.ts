@@ -40,7 +40,8 @@ import { findTool } from '../../mcp/tools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
-import { fetchForWorker, type SourceFetch } from '../sources/fetchForWorker.ts';
+import type { SourceFetch } from '../sources/fetchForWorker.ts';
+import { readSource } from '../sources/access.ts';
 
 /** The research work types the free lane answers, and the tool that answers each. */
 export const FREE_LANE_WORK_TYPES = [
@@ -1098,7 +1099,7 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
     const workers = healthy.length > 0 ? healthy : all;
     tick.workers = workers.length;
     const completer = options.completer ?? httpCompleter;
-    const fetchSource = options.fetchSource ?? ((url: string) => fetchForWorker(url));
+    const fetchSource = options.fetchSource ?? ((url: string) => readSource(url, { caller: 'free-lane' }));
     const perWorker = Math.max(1, options.perWorker ?? 2);
 
     const slots = Math.max(1, Math.min(64, options.slots ?? 2));

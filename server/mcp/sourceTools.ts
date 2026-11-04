@@ -12,7 +12,7 @@
  */
 import { notFoundError } from './errors.ts';
 import { READ_ONLY, requireOwnedItem, requiredString, workerOnly, type McpTool } from './toolkit.ts';
-import { fetchForWorker } from '../services/sources/fetchForWorker.ts';
+import { readSource } from '../services/sources/access.ts';
 
 export const fetchSourceTool: McpTool = {
   name: 'brain_fetch_source',
@@ -48,7 +48,8 @@ export const fetchSourceTool: McpTool = {
     // exist (invariant 23): a credential is not a licence to make Brain fetch.
     if (!live) throw notFoundError();
     const url = requiredString(args, 'url').slice(0, 2048);
-    const result = await fetchForWorker(url);
-    return { projectId: item.projectId, value: { source: result } };
+    // The source-access layer: direct first, then the legitimate fallbacks it names.
+    const { method, attempts: _attempts, ...result } = await readSource(url, { caller: 'brain_fetch_source' });
+    return { projectId: item.projectId, value: { source: result, method } };
   },
 };

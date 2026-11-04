@@ -62,6 +62,7 @@
  */
 import { freeLaneReading, freeLaneThroughput } from '../server/services/freeLane/coverage.ts';
 import { freeLaneTick } from '../server/services/freeLane/worker.ts';
+import { accessWindow, compareReaders, failedUrlSample, laneWindow } from '../server/services/sources/accessReport.ts';
 import { binPurposeReading, brainOnlyReading, setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { ARCHITECTURE_LAYER, ARCHITECTURE_SLUG } from '../server/services/capability/ingest.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
@@ -468,6 +469,7 @@ const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@ex
   people    list | foundation | rename <user|email> "<name>"
   brain-only show [<bin_…> …] | on | off   (Claude routines take only Brain-improvement work, §84)
   free-lane show | run [ticks]             (free models do the displaced research, §85)
+  sources   show [hours] | compare [n]     (how research reads public pages, and what each route recovered)
   capacity  show | adopt <user|email> <trig_…>
   factory   invite <project> <user|email>
   workers   list | disable <name> | enable <name> | archive <name>
@@ -1391,6 +1393,51 @@ async function main(): Promise<void> {
       console.log(`  last 10 min       completed=${t.last10Min.completed} accepted/min=${t.last10Min.perMinute}`);
       console.log(`  cost              $0 (free providers only; no paid call is made from the lane)`);
       for (const line of t.recentScaling) console.log(`  scaling           ${line}`);
+      break;
+    }
+    /*
+     * The source-access layer (services/sources/access.ts): what each route read,
+     * the same window before it, and Brain's own failed URLs re-read both ways.
+     */
+    case 'sources show': {
+      const hours = Math.min(Math.max(Number(rest[0] ?? '24') || 24, 1), 24 * 14);
+      const now = Date.now();
+      const since = new Date(now - hours * 3_600_000).toISOString();
+      const before = new Date(now - 2 * hours * 3_600_000).toISOString();
+      const nowIso = new Date(now).toISOString();
+      const a = await accessWindow(since, nowIso);
+      console.log(`  window            last ${hours}h (previous ${hours}h shown as "before")`);
+      console.log(`  source reads      ${a.reads}: readable ${a.readable}, DIRECT alone would have read ${a.directReadable}`);
+      console.log(`  readable by route ${JSON.stringify(a.byMethod)}`);
+      console.log(`  ms per read       direct=${a.msPerReadDirect ?? '—'} fallback=${a.msPerReadFallback ?? '—'}`);
+      console.log(`  learned per host  ${JSON.stringify(a.learned)}`);
+      for (const h of a.failingHosts) console.log(`  still failing     ${h.host} x${h.failures} ${JSON.stringify(h.reasons)}`);
+      const lanePrint = (label: string, w: Awaited<ReturnType<typeof laneWindow>>): void => {
+        console.log(
+          `  free lane ${label.padEnd(7)} fragments submitted=${w.fragmentsSubmitted} failed=${w.fragmentsFailed} noReadableSource=${w.noReadableSource} ` +
+            `verify=${w.verifySubmitted} syntheses=${w.synthesesSubmitted} claims accepted ${w.claimsAccepted}/${w.claimsSubmitted} ` +
+            `ms/submitted fragment=${w.msPerSubmittedFragment ?? '—'}`,
+        );
+      };
+      lanePrint('before', await laneWindow(before, since));
+      lanePrint('after', await laneWindow(since, nowIso));
+      break;
+    }
+    case 'sources compare': {
+      const n = Math.min(Math.max(Number(rest[0] ?? '25') || 25, 1), 60);
+      const urls = rest.slice(1).filter((u) => /^https?:\/\//.test(u));
+      const sample = urls.length > 0 ? urls : await failedUrlSample(n);
+      const result = await compareReaders(sample);
+      console.log(`  sample            ${sample.length} failed research URL(s) from this Brain's own records; browser ${result.browser ? 'configured' : 'NOT configured'}`);
+      for (const r of result.rows) {
+        console.log(`  ${r.improved ? 'RECOVERED' : 'same     '} ${r.before.padEnd(16)} ${String(r.beforeMs).padStart(6)}ms -> ${r.after.padEnd(16)} ${String(r.afterMs).padStart(6)}ms ${r.method}  ${r.url.slice(0, 140)}`);
+      }
+      const read = (s: string) => s.startsWith('READ');
+      const ok = result.rows.filter((r) => read(r.after));
+      console.log(`  pages read        before ${result.rows.filter((r) => read(r.before)).length}/${result.rows.length}, after ${ok.length}/${result.rows.length}, recovered ${result.rows.filter((r) => r.improved).length}`);
+      const ms = (xs: number[]) => (xs.length ? Math.round(xs.reduce((x, y) => x + y, 0) / xs.length) : 0);
+      console.log(`  ms per success    before ${ms(result.rows.filter((r) => read(r.before)).map((r) => r.beforeMs))}, after ${ms(ok.map((r) => r.afterMs))}`);
+      console.log(`  brain rss         ${result.rssBeforeMb} MB -> ${result.rssAfterMb} MB (the browser runs in its own app)`);
       break;
     }
     case 'free-lane run': {

@@ -28,7 +28,8 @@ import { recordBinEvent } from '../../repos/bins.ts';
 import { databasePoolReadings } from '../../db/database.ts';
 import { recentInfraFailures } from '../../db/infra.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
-import { fetchForWorker, type SourceFetch } from '../sources/fetchForWorker.ts';
+import type { SourceFetch } from '../sources/fetchForWorker.ts';
+import { readSource } from '../sources/access.ts';
 import {
   closeFiledFreeLaneBins,
   ensureFreeWorkers,
@@ -260,7 +261,7 @@ async function slot(pool: ModelPool, k: number, config: LaneConfig): Promise<voi
         worker: pool.worker,
         index: pool.index,
         completer: poolOptions.completer ?? httpCompleter,
-        fetchSource: poolOptions.fetchSource ?? ((url: string) => fetchForWorker(url)),
+        fetchSource: poolOptions.fetchSource ?? ((url: string) => readSource(url, { caller: 'free-lane' })),
         search: poolOptions.search ?? wikipediaCandidates,
         config,
       };

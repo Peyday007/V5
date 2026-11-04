@@ -41,6 +41,13 @@ export const FETCH_TIMEOUT_MS = 20_000;
 export const MAX_BODY_BYTES = 2_000_000;
 export const MAX_TEXT_CHARS = 60_000;
 export const MAX_REDIRECTS = 4;
+/**
+ * A PDF is read whole or not at all — a truncated one does not parse — so its cap is
+ * its own. Official statistics, regulators' reports and filings are very often PDFs,
+ * and refusing every one as "not text" sent the free lane's best candidates to the
+ * failure count (production, 2026-11-04).
+ */
+export const MAX_PDF_BYTES = 8_000_000;
 
 export type FetchRefusal =
   | 'INVALID_URL'
@@ -222,29 +229,46 @@ export function textOf(body: string, contentType: string): string {
 
 const READABLE_TYPE = /^(text\/|application\/(json|xml|xhtml\+xml|rss\+xml|atom\+xml|ld\+json))/i;
 
-async function readCapped(response: Response): Promise<string | null> {
+const PDF_TYPE = /^application\/(pdf|x-pdf)\b/i;
+
+/** The body, up to `cap` bytes; `overflowed` says the cap cut it. */
+async function readBytes(response: Response, cap: number): Promise<{ bytes: Buffer; overflowed: boolean }> {
   const reader = response.body?.getReader();
-  if (!reader) return '';
+  if (!reader) return { bytes: Buffer.alloc(0), overflowed: false };
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > MAX_BODY_BYTES) {
+    if (total > cap) {
       await reader.cancel().catch(() => undefined);
-      chunks.push(value.subarray(0, value.byteLength - (total - MAX_BODY_BYTES)));
-      break;
+      chunks.push(value.subarray(0, value.byteLength - (total - cap)));
+      return { bytes: Buffer.concat(chunks.map((one) => Buffer.from(one))), overflowed: true };
     }
     chunks.push(value);
   }
-  return Buffer.concat(chunks.map((one) => Buffer.from(one))).toString('utf8');
+  return { bytes: Buffer.concat(chunks.map((one) => Buffer.from(one))), overflowed: false };
+}
+
+async function readCapped(response: Response): Promise<string | null> {
+  return (await readBytes(response, MAX_BODY_BYTES)).bytes.toString('utf8');
+}
+
+/** The text of a PDF, page by page, through the same extractor an import uses. Throws when unreadable. */
+export async function pdfText(bytes: Buffer): Promise<string> {
+  const { extractPdf } = await import('../documents/pdf.ts');
+  const extraction = await extractPdf(bytes);
+  return extraction.pages
+    .map((page) => `[page ${page.pageNumber}]\n${page.blocks.map((block) => block.text).join('\n')}`)
+    .join('\n\n')
+    .trim();
 }
 
 /** Fetch one public page for a worker. Never throws. */
 export async function fetchForWorker(
   requestedUrl: string,
-  options: { resolve?: Resolver; fetch?: HttpFetch; now?: () => Date } = {},
+  options: { resolve?: Resolver; fetch?: HttpFetch; now?: () => Date; timeoutMs?: number } = {},
 ): Promise<SourceFetch> {
   const resolve = options.resolve ?? systemResolver;
   const http = options.fetch ?? (globalThis.fetch as unknown as HttpFetch);
@@ -266,11 +290,11 @@ export async function fetchForWorker(
     let response: Response;
     try {
       response = await http(checked.url.toString(), {
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(options.timeoutMs ?? FETCH_TIMEOUT_MS),
         redirect: 'manual',
         headers: {
           'user-agent': 'BrainSourceReader/1.0 (research; reads one public page per request)',
-          accept: 'text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.5',
+          accept: 'text/html,application/xhtml+xml,text/plain,application/json;q=0.9,application/pdf;q=0.8,*/*;q=0.5',
         },
       });
     } catch (error) {
@@ -293,6 +317,35 @@ export async function fetchForWorker(
       return refused('HTTP_ERROR', `the site answered ${response.status}`, current, response.status);
     }
     const contentType = response.headers.get('content-type') ?? 'text/plain';
+    const looksPdf =
+      PDF_TYPE.test(contentType) ||
+      (/^(application\/octet-stream|binary\/octet-stream)/i.test(contentType) && /\.pdf$/i.test(new URL(current).pathname));
+    if (looksPdf) {
+      let whole: string;
+      try {
+        const { bytes, overflowed } = await readBytes(response, MAX_PDF_BYTES);
+        if (overflowed) {
+          return refused('NOT_TEXT', `a PDF over ${MAX_PDF_BYTES} bytes is not read (a truncated PDF does not parse)`, current, response.status);
+        }
+        whole = await pdfText(bytes);
+      } catch (error) {
+        return refused('NOT_TEXT', `the PDF could not be read: ${error instanceof Error ? error.message.slice(0, 160) : 'unreadable'}`, current, response.status);
+      }
+      if (!whole) return refused('EMPTY', 'the PDF had no text layer (a scan needs OCR)', current, response.status);
+      const text = whole.slice(0, MAX_TEXT_CHARS);
+      return {
+        readable: true,
+        requestedUrl,
+        finalUrl: current,
+        status: response.status,
+        contentType: 'application/pdf',
+        retrievedAt: now().toISOString(),
+        sha256: createHash('sha256').update(whole).digest('hex'),
+        text,
+        truncated: text.length < whole.length,
+        totalChars: whole.length,
+      };
+    }
     if (!READABLE_TYPE.test(contentType)) {
       return refused('NOT_TEXT', `content type ${contentType.slice(0, 80)} is not text this reader returns`, current, response.status);
     }

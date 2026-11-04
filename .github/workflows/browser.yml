@@ -1,0 +1,126 @@
+# The research browser: Microsoft's Playwright MCP server, as its own Fly app,
+# and connecting the Brain to it.
+#
+# Why a separate app. The Brain's machine has 2 GB and a record of
+# out-of-memory kills (fly.toml), and its image deliberately has no browser
+# (server/services/design/renderRuntime.ts). A Chromium beside it would compete
+# for exactly the memory it runs out of. So the browser runs here, on its own
+# machine, and the Brain is an MCP client of it
+# (server/services/sources/browserMcp.ts) — reached only when a direct read of
+# a public page failed in a way a browser can help with
+# (server/services/sources/access.ts).
+#
+# Private only. The app gets a Flycast (private) address and no public one, so
+# only apps in the same Fly organization can reach it; it is never an open
+# browser on the internet. It stops itself when idle and Fly's proxy starts it
+# on the next request, so it costs machine time only while it renders.
+#
+#   deploy     — create or update the `northline-browser` app and its machine.
+#   status     — the machine, its recent log, and one render through it.
+#   connect    — set BRAIN_BROWSER_MCP_URL on the Brain (restarts the Brain).
+#   disconnect — remove it; the Brain reads directly again, nothing else changes.
+name: Browser
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'deploy | status | connect | disconnect'
+        required: true
+        default: status
+
+concurrency:
+  group: research-browser
+  cancel-in-progress: false
+
+jobs:
+  browser:
+    name: Research browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: ./.github/actions/await-release
+      - name: Run
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # The Brain's deploy token can only touch the Brain's app; creating a
+          # second app needs the organization token the cheap lane already uses.
+          FLY_ORG_TOKEN: ${{ secrets.FLY_ORG_TOKEN }}
+          ACTION: ${{ inputs.action }}
+        run: |
+          set -eu
+          exec > >(tee browser.txt) 2>&1
+          brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          app=northline-browser
+          # Pinned: the image's entrypoint is `tini -- node /app/cli.js --headless
+          # --browser chromium --no-sandbox`, and these arguments are appended.
+          image=mcr.microsoft.com/playwright/mcp:v0.0.83
+          url="http://$app.flycast/mcp"
+          case "$ACTION" in
+            deploy)
+              [ -n "$FLY_ORG_TOKEN" ] || { echo "::error::Set the FLY_ORG_TOKEN repository secret (an organization token)."; exit 1; }
+              org=$(flyctl status --app "$brain" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); o=d.get("Organization") or d.get("organization") or {}; print(o.get("Slug") or o.get("slug") or "")')
+              echo "organization: ${org:-unknown}"
+              export FLY_API_TOKEN="$FLY_ORG_TOKEN"
+              orgflag=${org:+--org $org}
+              # Not `flyctl deploy`: exactly one workflow ships the Brain
+              # (deploymentOwnership). This is a different app, one machine
+              # from a published image.
+              flyctl apps list $orgflag --json | grep -q "\"$app\"" || flyctl apps create "$app" $orgflag
+              # A Flycast address only: reachable from the organization's private
+              # network, never from the internet.
+              flyctl ips list --app "$app" --json | grep -q '"private_v6"\|"PrivateV6"\|flycast' \
+                || flyctl ips allocate-v6 --private --app "$app"
+              # --isolated: every MCP session is a fresh in-memory profile, so
+              # nothing one page set carries to the next. Requests to Fly's
+              # private names are blocked from inside pages (not a security
+              # boundary on its own; the Brain also refuses a page whose final
+              # address is not public).
+              args="--port 8931 --host 0.0.0.0 --allowed-hosts * --isolated --block-service-workers --timeout-navigation 30000 --blocked-origins http://*.internal;https://*.internal;http://*.flycast;https://*.flycast"
+              set -f  # `--allowed-hosts *` is an argument, not a glob
+              machine=$(flyctl machine list --app "$app" --json | grep -o '"id": *"[0-9a-f]*"' | head -1 | grep -o '[0-9a-f]\{8,\}' || true)
+              if [ -n "$machine" ]; then
+                flyctl machine destroy "$machine" --app "$app" --force
+              fi
+              # shellcheck disable=SC2086
+              flyctl machine run "$image" $args --app "$app" --region iad --name browser \
+                --vm-size shared-cpu-1x --vm-memory 1024 \
+                --port 80:8931/tcp:http \
+                --autostop=stop --autostart=true \
+                --restart on-fail
+              flyctl machine list --app "$app"
+              echo "::notice title=browser::Playwright MCP is at $url (private). Run this workflow with 'connect' to point the Brain at it."
+              ;;
+            status)
+              [ -n "$FLY_ORG_TOKEN" ] || { echo "::error::Set FLY_ORG_TOKEN."; exit 1; }
+              FLY_API_TOKEN="$FLY_ORG_TOKEN" flyctl machine list --app "$app" || true
+              FLY_API_TOKEN="$FLY_ORG_TOKEN" flyctl logs --app "$app" --no-tail 2>&1 | tail -60 || true
+              # One MCP handshake, from inside the Brain's machine, over the private network.
+              probe='(async()=>{const u=process.env.BRAIN_BROWSER_MCP_URL;console.log("BRAIN_BROWSER_MCP_URL",u||"unset");if(!u)return;const t=Date.now();const r=await fetch(u,{method:"POST",headers:{"content-type":"application/json",accept:"application/json, text/event-stream"},body:JSON.stringify({jsonrpc:"2.0",id:1,method:"initialize",params:{protocolVersion:"2025-06-18",capabilities:{},clientInfo:{name:"status",version:"1"}}}),signal:AbortSignal.timeout(60000)}).catch(e=>({status:String(e.cause&&e.cause.code||e.message)}));console.log("initialize",r.status,Date.now()-t,"ms")})()'
+              b64=$(printf '%s' "$probe" | base64 -w0)
+              flyctl ssh console --app "$brain" -C "node -e \"eval(Buffer.from('$b64','base64').toString())\"" || true
+              ;;
+            connect)
+              flyctl secrets set --app "$brain" BRAIN_BROWSER_MCP_URL="$url" >/dev/null
+              echo "::notice title=browser::The Brain now falls back to the research browser at $url."
+              ;;
+            disconnect)
+              flyctl secrets unset --app "$brain" BRAIN_BROWSER_MCP_URL >/dev/null
+              echo "::notice title=browser::The research browser is disconnected; the Brain reads directly."
+              ;;
+            *) echo "::error::Unknown action '$ACTION'."; exit 1 ;;
+          esac
+
+      - name: Publish the output as annotations
+        if: always()
+        run: |
+          [ -f browser.txt ] || exit 0
+          python3 - <<'PY'
+          text = open('browser.txt', encoding='utf-8', errors='replace').read()
+          enc = lambda s: s.replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+          chunks = [text[i:i + 3500] for i in range(0, len(text), 3500)]
+          chunks = chunks if len(chunks) <= 10 else chunks[:5] + chunks[-5:]
+          for n, chunk in enumerate(chunks, 1):
+              print(f'::notice title=output {n}/{len(chunks)}::{enc(chunk)}')
+          PY
