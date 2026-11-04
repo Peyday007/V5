@@ -137,6 +137,27 @@ const LEADING_FILLER = /^(?:\s|[-*•]|\d+[.)])+/;
  */
 const GOVERNOR_WINDOW = 40;
 
+/**
+ * Someone other than Brain is the grammatical subject.
+ *
+ * *"…a buyer cannot purchase directly and must instead go through a broker"*
+ * (IAAI's public-buyer rule, production 2026-11) reports what a buyer may do.
+ * Nothing in it tells Brain to purchase, yet it has no governor word within
+ * the window, so it read as an instruction and parked a plan for a person.
+ * A closed list of third-party subjects, optionally followed by a modal or
+ * negation and one adverb, directly before the phrase. The researcher subject
+ * is tested first and still wins.
+ */
+const THIRD_PARTY_SUBJECT =
+  /\b(?:buyers?|bidders?|customers?|suppliers?|sellers?|applicants?|members?|users?|operators?|vendors?|firms?|they|it)\s+(?:(?:cannot|can't|can|may|must|will|would|should|could|might|do|does|did)(?:\s+not)?\s+)?(?:\w+ly\s+)?$/i;
+
+/** A determiner and up to two modifiers: the phrase is the head of a noun phrase. */
+const NOUN_POSITION =
+  /\b(?:an?|the|any|each|every|their|its|no|one)\s+(?:(?!(?:and|or|then|to|but|so|also)\b)[\w-]+\s+){0,2}$/i;
+
+/** A light verb makes the noun the act itself: *"make a purchase"* is still an instruction. */
+const LIGHT_VERB = /\b(?:make|made|making|place|placing|complete|completing|arrange|arranging|execute|executing|do|doing|go\s+ahead\s+with)\s+(?:an?|the|any|each|every|their|its|no|one)\s+(?:[\w-]+\s+){0,2}$/i;
+
 export interface OwnActionMatch {
   /** The exact phrase the pattern matched, so a refusal can quote it. */
   phrase: string;
@@ -159,7 +180,7 @@ export function ownActionMatches(prose: string, pattern: RegExp): OwnActionMatch
     if (namesAThing(prose, at + match[0].length)) continue;
     const clauseStart = clauseStartBefore(prose, at);
     const before = prose.slice(clauseStart, at);
-    if (!isOwnAction(before)) continue;
+    if (!isOwnAction(before, match[0])) continue;
     out.push({
       phrase: match[0],
       clause: prose.slice(clauseStart, clauseEndAfter(prose, at)).trim(),
@@ -234,10 +255,13 @@ function clauseEndAfter(prose: string, at: number): number {
  * an instruction, which includes the clause-initial imperative and the second
  * verb of "find the listing and purchase it".
  */
-function isOwnAction(before: string): boolean {
+function isOwnAction(before: string, phrase = ''): boolean {
   const head = before.replace(LEADING_FILLER, '');
   if (RESEARCHER_SUBJECT.test(head)) return true;
+  if (THIRD_PARTY_SUBJECT.test(head)) return false;
   if (THIRD_PARTY_RELATIVE.test(head)) return false;
+  // *"a Canadian purchase of one"*: the bare noun, in a noun phrase.
+  if (/^purchase$/i.test(phrase) && NOUN_POSITION.test(head) && !LIGHT_VERB.test(head)) return false;
   if (COPULA_COMPLEMENT.test(head)) return false;
   return !GOVERNOR.test(head.slice(-GOVERNOR_WINDOW));
 }
