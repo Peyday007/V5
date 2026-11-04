@@ -130,8 +130,10 @@ describe('a staged deep dive asks the kill questions first', () => {
     await settle(id, 'BLOCKED');
     expect((await whyNotDiving((await getOpportunity(id))!)).kind).not.toBe('STAGE_ONE_FAILED');
 
-    // It ran, and settled with no payer found.
-    await launchMission({
+    // It became a mission, but its research recorded nothing (the free model
+    // providers answering 503/429 for hours): no source was read, so no payer
+    // was ruled out either.
+    const { mission } = await launchMission({
       projectId,
       visibility: 'SHARED',
       objective: 'screen',
@@ -139,6 +141,31 @@ describe('a staged deep dive asks the kill questions first', () => {
       idempotencyKey: `screen:${first.candidateId}`,
       candidateId: first.candidateId,
     });
+    const { createRun } = await import('../server/repos/runs.ts');
+    const { createOrchestration, createFragments, currentFragments, insertClaims } = await import('../server/repos/research.ts');
+    const fixture = (await getDb().get<{ id: string }>('SELECT id FROM layers WHERE project_id = ? LIMIT 1', [projectId]))!;
+    const run = await createRun({ projectId, layerId: fixture.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'q' });
+    const packet = await createOrchestration({ projectId, layerId: fixture.id, runId: run.id, title: 'screen', assignment: 'screen', provider: 'WORKER', autoApprove: false });
+    await getDb().run('UPDATE russell_missions SET orchestration_id = ? WHERE id = ?', [packet.id, mission.id]);
+    expect((await whyNotDiving((await getOpportunity(id))!)).kind).not.toBe('STAGE_ONE_FAILED');
+
+    // It read sources, and settled with no payer found.
+    await createFragments([
+      {
+        orchestrationId: packet.id, projectId, layerId: fixture.id, geography: 'any market',
+        requiredEvidence: [{ id: 'payer', description: 'who pays', necessity: 'REQUIRED' }],
+        acceptableSourceTypes: ['a page'], excludedSourceTypes: ['a forecast'], completionCriteria: ['a dated source'],
+        minIndependentSources: 1, maxRepairs: 2, fragmentIndex: 0, fragmentKey: 'opening-screen', question: 'q', dependsOn: [], attempt: 1,
+      },
+    ] as unknown as Parameters<typeof createFragments>[0]);
+    const [fragment] = await currentFragments(packet.id);
+    await insertClaims([{
+      orchestrationId: packet.id, fragmentId: fragment!.id, passId: null, passKey: 'BROAD_SCAN' as const,
+      claim: 'No published source names who pays for parcel ownership research here.', sourceUrl: 'https://example.test/parcels', sourceTitle: 'A page', sourcePublisher: 'A publisher', sourceDate: '2026-11-01',
+      evidenceExcerpt: 'x', evidenceLocator: 'the page', evidenceLane: 'payer', opportunitySignal: null, closesOn: null,
+      retrievedAt: '2026-11-02', confidence: 0.5, validationState: 'SOURCED' as const, validationDetail: null, sourced: true,
+      claimType: 'SOURCED_FACT' as const, contentHash: `screen|${id}`,
+    }]);
     expect((await whyNotDiving((await getOpportunity(id))!)).kind).toBe('STAGE_ONE_FAILED');
     const concluded = await concludeScreens(projectId);
     expect(concluded.map((one) => one.opportunityId)).toEqual([id]);
