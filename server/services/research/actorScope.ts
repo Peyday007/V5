@@ -86,7 +86,7 @@ const RESEARCHER_SUBJECT =
  * every sentence and would admit anything; `on` likewise.
  */
 const GOVERNOR =
-  /\b(?:about|whether|how\s+to|where\s+to|when\s+to|regarding|concerning|available|eligible|offered|advertised|listed|for\s+sale|says?|said|states?|stating|explains?|describ(?:es?|ing)|permits?|allows?|requires?|prohibits?|invites?|solicits?|accepts?)\b/i;
+  /\b(?:about|whether|how\s+to|where\s+to|when\s+to|regarding|concerning|available|eligible|offered|advertised|listed|for\s+sale|says?|said|states?|stating|explains?|describ(?:es?|ing)|permits?|allows?|requires?|prohibits?|invites?|solicits?|accepts?|seeks?|seeking|recruit(?:s|ing)|looking\s+for|advertis(?:es|ing))\b/i;
 
 /** Leading list markers and whitespace, which do not change who is acting. */
 /**
@@ -142,6 +142,33 @@ const THIRD_PARTY_SUBJECT =
 const CAUSATIVE_BEFORE =
   /\b(?:have|has|having|make|makes|making|let|lets|letting|get|gets|getting|ask|asks|asking|tell|tells|telling|persuade|convince|encourage|invite|urge|instruct|direct|cause|enable|help|pay|induce|require|request|allow|prompt|incentivi[sz]e)\s+(?:(?:the|a|an|some|all|each|any|those|these|other|more|several|many|new)\s+)*$/i;
 
+/**
+ * A third party's coordinated verbs: *"document where buyers pay for access or
+ * subscribe to a cohort"* reports what buyers do. The subject sits before the
+ * first verb and the forbidden phrase follows `or`/`and`, so neither the
+ * adjacent-subject test nor the governor window reaches it. Requires a
+ * wh-word or complementiser before the subject, so *"find buyers and
+ * purchase it"* (an imperative) is still Brain's own action.
+ */
+const THIRD_PARTY_COORDINATED =
+  /\b(?:where|when|whether|if|that|which|how|what)\s+(?:buyers?|bidders?|customers?|suppliers?|sellers?|applicants?|members?|users?|operators?|vendors?|firms?|they)\s+(?:\w+\s+){1,5}(?:and|or)\s+$/i;
+
+/**
+ * A third party with a modal or negation before the verb: *"a buyer cannot
+ * purchase directly and must instead go through a broker"* (IAAI's public-buyer
+ * rule, production 2026-11) reports what a buyer may do. Tested, like the
+ * adjacent subject above, only when no causative precedes it.
+ */
+const THIRD_PARTY_MODAL_SUBJECT =
+  /\b(?:buyers?|bidders?|customers?|suppliers?|sellers?|applicants?|members?|users?|operators?|vendors?|firms?)\s+(?:(?:cannot|can't|can|may|must|will|would|should|could|might|do|does|did)(?:\s+not)?\s+)?(?:\w+ly\s+)?$/i;
+
+/** A determiner and up to two modifiers: the phrase is the head of a noun phrase. */
+const NOUN_POSITION =
+  /\b(?:an?|the|any|each|every|their|its|no|one)\s+(?:(?!(?:and|or|then|to|but|so|also)\b)[\w-]+\s+){0,2}$/i;
+
+/** A light verb makes the noun the act itself: *"make a purchase"* is still an instruction. */
+const LIGHT_VERB = /\b(?:make|made|making|place|placing|complete|completing|arrange|arranging|execute|executing|do|doing|go\s+ahead\s+with)\s+(?:an?|the|any|each|every|their|its|no|one)\s+(?:[\w-]+\s+){0,2}$/i;
+
 const LEADING_FILLER = /^(?:\s|[-*•]|\d+[.)])+/;
 
 /**
@@ -184,7 +211,7 @@ export function ownActionMatches(prose: string, pattern: RegExp): OwnActionMatch
     if (namesAThing(prose, at + match[0].length)) continue;
     const clauseStart = clauseStartBefore(prose, at);
     const before = prose.slice(clauseStart, at);
-    if (!isOwnAction(before)) continue;
+    if (!isOwnAction(before, match[0])) continue;
     out.push({
       phrase: match[0],
       clause: prose.slice(clauseStart, clauseEndAfter(prose, at)).trim(),
@@ -259,12 +286,22 @@ function clauseEndAfter(prose: string, at: number): number {
  * an instruction, which includes the clause-initial imperative and the second
  * verb of "find the listing and purchase it".
  */
-function isOwnAction(before: string): boolean {
+function isOwnAction(before: string, phrase = ''): boolean {
   const head = before.replace(LEADING_FILLER, '');
   if (RESEARCHER_SUBJECT.test(head)) return true;
   if (THIRD_PARTY_RELATIVE.test(head)) return false;
-  const third = THIRD_PARTY_SUBJECT.exec(head);
-  if (third && !CAUSATIVE_BEFORE.test(head.slice(0, third.index))) return false;
+  // A named third party is the one acting, unless a causative before it makes the act Brain's
+  // ("have customers purchase"), whichever of the third-party shapes it takes.
+  let thirdParty = false;
+  for (const shape of [THIRD_PARTY_SUBJECT, THIRD_PARTY_MODAL_SUBJECT, THIRD_PARTY_COORDINATED]) {
+    const third = shape.exec(head);
+    if (!third) continue;
+    thirdParty = true;
+    if (!CAUSATIVE_BEFORE.test(head.slice(0, third.index))) return false;
+  }
+  // *"a Canadian purchase of one"*: the bare noun, in a noun phrase. Not when a third party
+  // stands right before it ("let the buyers purchase it"): that is the verb, and caused.
+  if (!thirdParty && /^purchase$/i.test(phrase) && NOUN_POSITION.test(head) && !LIGHT_VERB.test(head)) return false;
   if (COPULA_COMPLEMENT.test(head)) return false;
   return !GOVERNOR.test(head.slice(-GOVERNOR_WINDOW));
 }
