@@ -135,9 +135,15 @@ async function register(weakness: Weakness, now: Date, report: ImprovementTickRe
       await upsertCandidate(toInput(weakness, latest.attempt, latest.parentId, latest.weaknessKey));
       return;
     }
-    // Decided: the weakness persisting is a new attempt only after the record has had time to show it.
+    // Decided: the weakness persisting is a new attempt only after the record has had time to show it —
+    // except a weakness combined into another candidate, which is free the moment its host's change is
+    // delivered: the host's objective may not have reached it (production, 2026-11-04: Factory fixed the
+    // citation parser in #482 and nothing about unreadable sources), and the detector says whether it persists.
+    if (latest.attempt >= MAX_ATTEMPTS) return;
     const since = now.getTime() - Date.parse(latest.updatedAt);
-    if (since < RECUR_AFTER_HOURS * HOUR || latest.attempt >= MAX_ATTEMPTS) return;
+    const host = latest.decision === 'COMBINED' && latest.combinedIntoId ? await getCandidate(latest.combinedIntoId) : null;
+    const hostDelivered = Boolean(host && (host.deliveredAt || host.decision));
+    if (!hostDelivered && since < RECUR_AFTER_HOURS * HOUR) return;
     attempt = latest.attempt + 1;
     parentId = latest.id;
   }
