@@ -1019,18 +1019,26 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   }
   const transient = !ok && /^(model call failed|no JSON)/.test(ctx.why);
   const strikes = transient ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
+  // A provider that answers 429/5xx never saw the work: no number of those spends the item's attempt.
+  const providerDown = transient && /^model call failed.*(HTTP (429|5\d\d)|timed? ?out)/i.test(ctx.why);
+  const handBack = transient && (strikes < 3 || providerDown);
   if (ok) {
     transientStrikes.delete(one.workItemId);
-  } else if (transient && strikes < 3) {
+  } else if (handBack) {
     /*
      * The model or its provider failed, not the work: hand the item back with
      * its attempt refunded, and leave it alone for a while so a provider outage
      * cannot spend the item's attempt budget.
      */
     transientStrikes.set(one.workItemId, strikes);
-    cooldown.set(one.workItemId, Date.now() + 5 * 60_000 * strikes);
+    cooldown.set(one.workItemId, Date.now() + 5 * 60_000 * Math.min(strikes, 6));
     try {
-      await call(ctx, 'brain_release_work', { ...proof(ctx), detail: `free lane: ${ctx.why}`.slice(0, 300) });
+      // One key per lease: a later hand-back of the same item is a new effect, not a replay of the first.
+      await call(ctx, 'brain_release_work', {
+        ...proof(ctx),
+        detail: `free lane: ${ctx.why}`.slice(0, 300),
+        idempotency_key: `free-lane-release-${ctx.claimed.leaseId}-${ctx.claimed.leaseGeneration}`,
+      });
     } catch {
       // Lease already gone: the queue's expiry returns it.
     }
@@ -1055,7 +1063,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     workerId: worker.workerId,
     sessionRef: session,
     workloadClass: one.workType,
-    outcome: ok ? 'SUBMITTED' : transient && strikes < 3 ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
+    outcome: ok ? 'SUBMITTED' : handBack ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
     reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
