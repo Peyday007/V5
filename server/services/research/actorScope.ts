@@ -118,6 +118,7 @@ const THIRD_PARTY_RELATIVE =
   /\b(?:who|that|which)\s+(?:\w+ly\s+)?(?:(?:will|would|can|could|may|might|must|do|does|did)\s+)?$/i;
 
 /**
+<<<<<<< Updated upstream
  * A named third party immediately before the verb is the one doing it.
  * *"Which employers post roles and hire for this work"* and *"how many
  * subscribers purchase at the regional price"* describe what other people do,
@@ -131,6 +132,17 @@ const THIRD_PARTY_RELATIVE =
  */
 const THIRD_PARTY_SUBJECT =
   /\b(?:employers?|recruiters?|hirers?|buyers?|customers?|subscribers?|consumers?|companies|firms|agencies|businesses|clients|users|organi[sz]ations|publishers|sellers|vendors|operators|providers|bodies|they)\s+(?:(?:\w+\s+){1,4}?(?:and|or)\s+)?(?:(?:\w+ly|also|typically|usually|actually|often)\s+)*(?:(?:will|would|can|could|may|might|must|do|does|did)\s+)?(?:(?:\w+ly|also|typically|usually|actually|often)\s+)*$/i;
+=======
+ * A named third party as the immediate subject hands the verb to them.
+ * *"…job postings showing how many employers hire translators"* and
+ * *"…which agencies purchase subscriptions"* describe what other parties do;
+ * only the researcher (see `RESEARCHER_SUBJECT`) is ever told to act. Closed
+ * list of the plural actors a commercial question names, anchored to the text
+ * immediately before the phrase, so *"…and we hire"* stays Brain's own action.
+ */
+const THIRD_PARTY_SUBJECT =
+  /\b(?:employers|companies|firms|agencies|buyers|customers|clients|vendors|sellers|operators|bodies|organi[sz]ations|businesses|users|teams|governments)\s+(?:\w+ly\s+)?(?:(?:will|would|can|could|may|might|must|do|does|did|typically|usually)\s+)?$/i;
+>>>>>>> Stashed changes
 
 const LEADING_FILLER = /^(?:\s|[-*•]|\d+[.)])+/;
 
