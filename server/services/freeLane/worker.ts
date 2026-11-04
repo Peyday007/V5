@@ -557,6 +557,10 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     prohibitedEvidence: frag['prohibitedEvidence'] ?? [],
   };
 
+  const unreachableNote = (): string => {
+    const hosts = rememberedUnreachableHosts();
+    return hosts.length > 0 ? `Brain cannot reach these hosts at all, so name no page on them: ${JSON.stringify(hosts)}. ` : '';
+  };
   // 1. Candidates: the model names primary pages it knows; Wikipedia's API adds two. Brain opens them all.
   const plan = await ask(
     ctx.completer,
@@ -565,6 +569,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nName up to ${MAX_SOURCES} specific public web pages ` +
       'most likely to contain primary evidence for this question (official statistics, regulators, company ' +
       'filings, published price lists, trade bodies). Prefer exact page URLs you are confident exist. ' +
+      unreachableNote() +
       'Reply as {"urls":["https://..."],"search":"a short search phrase"}.',
   );
   const urlsOf = (answer: Record<string, unknown> | null): string[] =>
@@ -574,6 +579,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     ...(await ctx.search(question)),
   ];
   const tried = new Set<string>();
+  const skipped = new Set<string>();
   const failedUrls: string[] = [];
   const fetchReasons: string[] = [];
   const fetchDetails: string[] = [];
@@ -584,7 +590,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       if (!/^https?:\/\//i.test(url) || tried.has(url)) continue;
       tried.add(url);
       if (isRememberedUnreachable(url)) {
-        failedUrls.push(url);
+        skipped.add(url);
         fetchReasons.push('HOST_UNREACHABLE');
         continue;
       }
@@ -607,14 +613,14 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     const retry = await askFor(
       ctx,
       `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nBrain could not open these pages (missing, blocked or ` +
-        `empty): ${JSON.stringify(failedUrls)}. Brain cannot reach these hosts at all, so name no page on them: ` +
-        `${JSON.stringify(rememberedUnreachableHosts())}. Name up to ${MAX_SOURCES} OTHER public pages likely to hold primary ` +
+        `empty): ${JSON.stringify(failedUrls)}. ${unreachableNote()}Name up to ${MAX_SOURCES} OTHER public pages likely to hold primary ` +
         'evidence — prefer stable top-level pages of official bodies, regulators, statistics offices and company ' +
         'sites over deep links. Reply as {"urls":["https://..."]}.',
     );
     await open(urlsOf(retry));
   }
-  const candidates = [...tried];
+  // A page skipped because its host is known shut was never a candidate Brain could have read.
+  const candidates = [...tried].filter((u) => !skipped.has(u));
   if (readable.length === 0) {
     // A model that never answered is a provider failure, not a sourcing one.
     if (!/^(model call failed|no JSON)/.test(ctx.why) || candidates.length > 0) {

@@ -147,6 +147,12 @@ describe('unreachable host memory', () => {
     expect(second.failed).toBe(1);
     expect(fetched.length).toBe(spent); // no fetch was spent on a remembered host
     expect(prompts.some((p) => p.includes('Brain cannot reach these hosts') && p.includes('dead.example'))).toBe(true);
+    // The first-pass candidate request names them too, not only the retry round.
+    const firstPass = prompts.filter((p) => p.includes('Name up to 6 specific public web pages'));
+    expect(firstPass.length).toBeGreaterThan(0);
+    expect(firstPass.every((p) => p.includes('Brain cannot reach these hosts') && p.includes('dead.example'))).toBe(true);
+    // A skipped host is not counted as a candidate Brain could have read.
+    expect(second.failed).toBe(1);
   });
 
   it('a 404 does not poison its host', async () => {
