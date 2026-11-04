@@ -72,6 +72,8 @@ describe('which failures send a read to which route', () => {
       'Sorry, you have been blocked You are unable to access payhip.com Why have I been blocked? Cloudflare Ray ID: a5564fdcbb1324c8',
       'moneywise.com Performing security verification This website uses a security service to protect against malicious bots.',
       'Please login to continue. Please log in to verify you are not a bot. If you are looking to access data through our API, please visit our developer portal.',
+      'PLEASE CHECK THE BOX BELOW TO CONTINUE SHOPPING 204.93.227.28 US',
+      'Ensuring a fair fan experience If you still need assistance, our customer support team is here to help!',
       'Skip to main content My EUR-Lex English EUR-Lex Access to European Union law You are here EUR-Lex home The requested document does not exist. Help Print MENU Quick search',
     ]) {
       expect(isChallenge(ok('u', block))).toBe(true);
@@ -167,6 +169,15 @@ describe('what is learned from the record', () => {
       row('b.example', [{ method: 'DIRECT', readable: false }]),
     ]);
     expect(Object.fromEntries(learned)).toEqual({ 'a.example': 'BROWSER' });
+  });
+
+  it('stops leading with a route that has started failing on the host', () => {
+    const rows = [
+      row('c.example', [{ method: 'DIRECT', readable: false }, { method: 'BROWSER', readable: true }]),
+      row('c.example', [{ method: 'DIRECT', readable: false }, { method: 'BROWSER', readable: false }]),
+      row('c.example', [{ method: 'DIRECT', readable: false }, { method: 'BROWSER', readable: false }]),
+    ];
+    expect(learnFrom(rows).has('c.example')).toBe(false);
   });
 
   it('summarises what DIRECT alone would have read beside what the layer read', () => {
