@@ -60,6 +60,78 @@ const LEASE_MS = 20 * 60_000;
 const MAX_SOURCES = 6;
 const SOURCE_CHARS = 7_000;
 
+/**
+ * Hosts Brain could not reach (DNS, connect, timeout), remembered for a while so the next
+ * fragment does not spend its candidates and its attempt on a door already known shut.
+ * Only a host-level refusal counts: a 404, a non-text page or an empty one says nothing
+ * about the host. In-process and TTL-bounded; a success on the host forgives it at once.
+ */
+const UNREACHABLE_TTL_MS = 10 * 60_000;
+/** Refusals that say the host is shut: one is enough. */
+const HOST_LEVEL_REFUSALS = new Set<string>(['DNS_FAILED', 'NETWORK_ERROR']);
+/**
+ * A timeout is also what a slow but live host does, so one is a strike, not a verdict: the host is
+ * remembered only when a second timeout lands inside the TTL of the first.
+ */
+const TIMEOUT_REASON = 'TIMEOUT';
+const unreachableHosts = new Map<string, number>();
+const timeoutStrikes = new Map<string, number>();
+
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase() || null;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberUnreachable(url: string, reason: string, now = Date.now()): void {
+  const host = hostOf(url);
+  if (!host) return;
+  if (HOST_LEVEL_REFUSALS.has(reason)) {
+    unreachableHosts.set(host, now + UNREACHABLE_TTL_MS);
+    return;
+  }
+  if (reason === TIMEOUT_REASON) {
+    const first = timeoutStrikes.get(host);
+    if (first !== undefined && first > now) {
+      unreachableHosts.set(host, now + UNREACHABLE_TTL_MS);
+      timeoutStrikes.delete(host);
+    } else {
+      timeoutStrikes.set(host, now + UNREACHABLE_TTL_MS);
+    }
+  }
+}
+
+/** A readable page from the host clears its strikes and its memory. */
+export function forgiveHost(url: string): void {
+  const host = hostOf(url);
+  if (!host) return;
+  unreachableHosts.delete(host);
+  timeoutStrikes.delete(host);
+}
+
+export function isRememberedUnreachable(url: string, now = Date.now()): boolean {
+  const host = hostOf(url);
+  if (!host) return false;
+  const until = unreachableHosts.get(host);
+  if (until === undefined) return false;
+  if (until <= now) {
+    unreachableHosts.delete(host);
+    return false;
+  }
+  return true;
+}
+
+export function rememberedUnreachableHosts(now = Date.now()): string[] {
+  return [...unreachableHosts].filter(([, until]) => until > now).map(([host]) => host);
+}
+
+export function resetUnreachableHosts(): void {
+  unreachableHosts.clear();
+  timeoutStrikes.clear();
+}
+
 export interface FreeWorker {
   workerId: string;
   label: string;
@@ -514,6 +586,10 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     prohibitedEvidence: frag['prohibitedEvidence'] ?? [],
   };
 
+  const unreachableNote = (): string => {
+    const hosts = rememberedUnreachableHosts();
+    return hosts.length > 0 ? `Brain cannot reach these hosts at all, so name no page on them: ${JSON.stringify(hosts)}. ` : '';
+  };
   // 1. Candidates: the model names primary pages it knows; Wikipedia's API adds two. Brain opens them all.
   const plan = await ask(
     ctx.completer,
@@ -522,6 +598,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nName up to ${MAX_SOURCES} specific public web pages ` +
       'most likely to contain primary evidence for this question (official statistics, regulators, company ' +
       'filings, published price lists, trade bodies). Prefer exact page URLs you are confident exist. ' +
+      unreachableNote() +
       'Reply as {"urls":["https://..."],"search":"a short search phrase"}.',
   );
   const urlsOf = (answer: Record<string, unknown> | null): string[] =>
@@ -531,6 +608,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     ...(await ctx.search(question)),
   ];
   const tried = new Set<string>();
+  const skipped = new Set<string>();
   const failedUrls: string[] = [];
   const fetchReasons: string[] = [];
   const fetchDetails: string[] = [];
@@ -540,7 +618,15 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       if (readable.length >= MAX_SOURCES) return;
       if (!/^https?:\/\//i.test(url) || tried.has(url)) continue;
       tried.add(url);
+      if (isRememberedUnreachable(url)) {
+        skipped.add(url);
+        fetchReasons.push('HOST_UNREACHABLE');
+        continue;
+      }
       const fetched = await ctx.fetchSource(url);
+      const host = hostOf(url);
+      if (fetched.readable && host) forgiveHost(url);
+      if (!fetched.readable) rememberUnreachable(url, String(fetched.reason));
       if (fetched.readable && fetched.text.trim().length > 200) {
         readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
       } else {
@@ -556,13 +642,14 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     const retry = await askFor(
       ctx,
       `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nBrain could not open these pages (missing, blocked or ` +
-        `empty): ${JSON.stringify(failedUrls)}. Name up to ${MAX_SOURCES} OTHER public pages likely to hold primary ` +
+        `empty): ${JSON.stringify(failedUrls)}. ${unreachableNote()}Name up to ${MAX_SOURCES} OTHER public pages likely to hold primary ` +
         'evidence — prefer stable top-level pages of official bodies, regulators, statistics offices and company ' +
         'sites over deep links. Reply as {"urls":["https://..."]}.',
     );
     await open(urlsOf(retry));
   }
-  const candidates = [...tried];
+  // A page skipped because its host is known shut was never a candidate Brain could have read.
+  const candidates = [...tried].filter((u) => !skipped.has(u));
   if (readable.length === 0) {
     // A model that never answered is a provider failure, not a sourcing one.
     if (!/^(model call failed|no JSON)/.test(ctx.why) || candidates.length > 0) {
