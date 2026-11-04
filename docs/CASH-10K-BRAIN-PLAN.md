@@ -121,3 +121,49 @@ The "26 in flight against 13" was never the dive limit. It counted every unfinis
 - **Constructed openings need a deep dive** before they carry a price. Until then they are evidence, not work.
 - **Old anime evidence is still in the pool.** It is filed honestly as found, and the goal's limits and the plan judge it.
 
+## 10. Final production reading (2026-11-04 19:30Z)
+
+The dives that the slot fixes released have now settled. Their results come from the refinement report (runs 41885263516–41892133617 and the settle read after them) and Goals plan run 41895802443.
+
+### The pooled residential-solar opening (`cop_c8545be`)
+
+**Status: BLOCKED.**
+- **Screen 1:** recorded nothing. This was during the provider outage.
+- **Screen 2:** accepted one claim, which says the Connecticut Solarize page is unavailable. A second claim was refused because its geography did not match.
+- **Payer lane:** no accepted claim.
+
+### Three anime-outsourcing openings
+
+**Status: BLOCKED. No payer was established for any of them.**
+- **`cop_b48acec`:** its full verification accepted 11 of 11 claims, but none named a payer.
+- **The other two:** their screens recorded nothing.
+
+### Construction continues
+
+There are 21 constructed rounds: 2 OPEN, 2 HARVESTED, 17 ABANDONED.
+- **New openings:** a shared direct-mail (EDDM) round filed two new openings, `cop_664cef80` and `cop_9546b330`.
+- **Order:** they are goal-found, so they dive first.
+
+### The plan
+
+**Verdict: NOT_VIABLE (POOL_INSUFFICIENT). Brain keeps searching.**
+- **Openings:** 17 considered, 8 in the simulation.
+- **Best combination:**
+  - reaches $10,000 in 0.0% of worlds;
+  - settled p10 $0 · p50 $50 · p90 $225.
+- **Constructed openings:** none enters the model yet. None has an established payer and price.
+- **Next test:** a bounded offer test on Artisanal Sudoku, within $375.
+
+### What limited the dives, and the fixes (all deployed)
+
+| PR | Defect seen in production | Fix |
+|---|---|---|
+| #493 | Screens that recorded nothing during the outage were treated as a failed stage one | STAGE_ONE_FAILED only when the screen recorded claims |
+| #494 | Eligible goal dives were not queued while the grant was full | Queue them; Russell launches goal-first inside the grant |
+| #496 | Three queued anime dives took every goal-dive place, so pooled solar never queued | Only launched goal dives count against the cap |
+| #497 | 13/13 grant slots were held by pricing packets with no pass for 3–15 h, renewed every tick | A packet unmoved for 6 h stops holding its slot and is readmitted when it moves. The grant went from 13/13 to 8/13 and the goal dives launched |
+
+No concurrency was raised. The free lane is still the pace:
+- **Last hour:** 1 accepted of 5 completed, with 47 provider errors.
+- **Failures:** sources answering 403/404/DNS.
+- **Scaling:** the controller lowered concurrency on database saturation. That belongs to the scaling assignment.
