@@ -949,7 +949,14 @@ export async function startValidations(input: {
      */
     const capacity = await researchCapacity(input.projectId);
     const queueable = capacity.grantMax === null || capacity.shedding ? 0 : GOAL_DIVES_BESIDE_CEILING;
-    const goalInFlight = all.filter((one) => forGoal(one) && HOLDS_A_SLOT.has(one.validationState ?? '')).length;
+    /*
+     * Only a launched goal dive holds one of these places. A queued one holds
+     * nothing until Russell launches it inside the grant, so counting it let
+     * three queued dives on one buyer population keep every other goal opening
+     * from even queueing (production, 2026-11-04: the pooled-solar opening sat
+     * ELIGIBLE behind three anime-outsourcing dives that could not launch).
+     */
+    const goalInFlight = all.filter((one) => forGoal(one) && one.validationState === 'RUNNING').length;
     goalExtra = Math.max(0, Math.min(queueable, GOAL_DIVES_BESIDE_CEILING - goalInFlight));
   }
   if (room + goalExtra <= 0) return [];
