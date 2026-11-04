@@ -205,7 +205,7 @@ function toInput(weakness: Weakness, attempt: number, parentId: string | null, k
 /* The stage, from the linked rows                                            */
 /* ------------------------------------------------------------------------- */
 
-interface Linked {
+export interface Linked {
   research: { settled: boolean; acceptedClaims: number; status: string | null; claims: { claim: string; source: string | null }[] } | null;
   factory: { state: string; detail: string; mergeSha: string | null; since: string } | null;
   archive: { claim: string; source: string | null; topic: string | null }[];
@@ -350,7 +350,8 @@ export function composeObjective(candidate: ImprovementCandidate, link: Linked, 
     expectedOutcome:
       `${metric.label} rises after deployment against the recorded baseline` +
       (downstream ? `, and ${downstream.label} does not fall` : '') +
-      '; Brain measures both and keeps, corrects or reverts the change.',
+      `; Brain's improvement loop measures both over the ${MEASURE_WINDOW_HOURS} h after deployment against the ` +
+      'baseline and keeps, corrects or reverts the change. That measurement is Brain\'s, not a unit\'s: no unit should wait for it.',
     nonGoals: [
       'Lowering, bypassing or reconfiguring the evidence gate, verification, audit or any permission.',
       'Any migration, dependency, secret, identity or deployment-configuration change.',
@@ -362,13 +363,12 @@ export function composeObjective(candidate: ImprovementCandidate, link: Linked, 
         verification: 'npm test',
       },
       { statement: 'The repository typechecks and the impacted tests pass.', verification: 'npm run typecheck && npm run test:impacted' },
-      {
-        statement:
-          `In production, ${metric.label} over the ${MEASURE_WINDOW_HOURS} h after deployment is compared with the baseline ` +
-          'by Brain\'s improvement loop, which records KEPT, KEPT_NO_EFFECT or REVERTED.',
-        verification: 'admin improvement show',
-        mandatory: false,
-      },
+      /*
+       * No production-measurement condition here. Production, 2026-11-04: campaign
+       * fcp_f648380f… blocked two units on "A03 is a post-deploy measurement and
+       * cannot be satisfied by a commit" — a Factory unit can only satisfy what a
+       * commit can. Brain measures after delivery itself (the expected outcome says so).
+       */
     ],
     mutationScope: scope,
   };
