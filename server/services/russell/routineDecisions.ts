@@ -99,10 +99,27 @@ export async function answerRoutineParks(input: {
   const nowMs = input.nowMs ?? Date.now();
   const cutoff = new Date(nowMs - ROUTINE_DECISION_GRACE_MS).toISOString();
   const rows = await getDb().all<{ id: string }>(
-    `SELECT id FROM russell_human_requests
-      WHERE state = 'OPEN' AND mission_id IS NOT NULL AND created_at <= ?
-      ORDER BY created_at ASC, id ASC LIMIT ?`,
-    [cutoff, input.limit ?? 200],
+    /*
+     * Only cards Brain could answer, so the rest cannot fill the window.
+     *
+     * The window is the oldest `limit` cards, and a card `decide` leaves open
+     * keeps its old `created_at` — it is first in line on every tick. Once more
+     * than `limit` of them existed, a newer RECORD_GAPS card was never reached
+     * and went to Needs You as "the evidence bar was not met and the repair
+     * ladder is spent": the starvation `parkStoppedMissions` documents for its
+     * own window. Two of `decide`'s refusals are facts of the row and are
+     * asked here instead: a card that is not about a mission, and a project
+     * with no live standing grant. Authority is unchanged — `decide` still
+     * checks both.
+     */
+    `SELECT r.id FROM russell_human_requests r
+      WHERE r.state = 'OPEN' AND r.mission_id IS NOT NULL AND r.created_at <= ?
+        AND ${NOT_ABOUT_A_MISSION.map(() => 'r.resume_key NOT LIKE ?').join(' AND ')}
+        AND EXISTS (SELECT 1 FROM russell_goals g
+                     WHERE g.project_id = r.project_id AND g.purpose = 'STANDING'
+                       AND g.state = 'ACTIVE' AND (g.expires_at IS NULL OR g.expires_at > ?))
+      ORDER BY r.created_at ASC, r.id ASC LIMIT ?`,
+    [cutoff, ...NOT_ABOUT_A_MISSION.map((prefix) => `${prefix}%`), new Date(nowMs).toISOString(), input.limit ?? 200],
   );
   const owners = new Map<string, { goalId: string; name: string; ownerUserId: string } | null>();
   const out: RoutineDecision[] = [];
