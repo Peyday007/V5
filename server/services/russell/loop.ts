@@ -51,7 +51,7 @@
  * Hitting a bound preserves the remaining candidates for the next cycle. It
  * never drops them, and it never consumes a whole tick in one pass.
  */
-import { goalFirstSql } from '../goals/goalWork.ts';
+import { goalFirstSql, goalIdeaSql } from '../goals/goalWork.ts';
 import {
   claimCycle,
   completeCycle,
@@ -1583,7 +1583,20 @@ async function tickOnce(owner: string): Promise<TickReport> {
     });
 
     await runPass(report, 'judge-unjudged', async () => {
-      for (const candidate of await unjudged(cycle.maxLaunchesPerCycle)) {
+      /*
+       * Judging spends nothing (the launch does, and stays bounded by the cycle
+       * and the grant), so an approved goal's own ideas are judged a few more
+       * per tick. Production, 2026-11-03 23:46Z: a tick on the contended
+       * database judged about one idea every thirteen minutes, and the goal's
+       * dives waited behind nine of its own older questions.
+       */
+      const goalIdeas = await unjudgedGoalIdeas(GOAL_JUDGMENTS_PER_TICK);
+      // The cycle's own count still goes to whatever is next, so other work is not starved behind the goal's.
+      const goalIds = new Set(goalIdeas.map((one) => one.id));
+      const ordinary = (await unjudged(cycle.maxLaunchesPerCycle + goalIdeas.length))
+        .filter((one) => !goalIds.has(one.id))
+        .slice(0, cycle.maxLaunchesPerCycle);
+      for (const candidate of [...goalIdeas, ...ordinary]) {
         const outcome = await judgeCandidate(candidate.id);
         if (outcome.answeredByArchive) report.answeredByArchive.push(candidate.id);
         else if (outcome.ok) report.planning.push(candidate.id);
@@ -3305,6 +3318,20 @@ async function retirePlanningDefect(input: {
  * have been excluded from being judged for ever, which is the opposite of what
  * it was written to do.
  */
+/** An approved goal's own ideas judged per tick on top of the cycle's own count. */
+export const GOAL_JUDGMENTS_PER_TICK = 5;
+
+/** The goal's own unjudged ideas, oldest first. */
+async function unjudgedGoalIdeas(limit: number): Promise<{ id: string }[]> {
+  return getDb().all<{ id: string }>(
+    `SELECT c.id FROM russell_candidates c
+      WHERE c.priority IS NULL AND c.state <> 'MERGED' AND c.project_id IS NOT NULL AND ${goalIdeaSql('c')}
+      ORDER BY c.created_at, c.rowid
+      LIMIT ?`,
+    [Math.max(0, limit)],
+  );
+}
+
 async function unjudged(limit: number): Promise<{ id: string }[]> {
   return getDb().all<{ id: string }>(
     `SELECT c.id FROM russell_candidates c
