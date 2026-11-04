@@ -58,3 +58,35 @@ keeps Chromium off the Brain's 2 GB machine.
   URLs with DIRECT alone and with the whole layer, on the production machine.
 
 Both run through the Admin workflow.
+
+## Production results, 2026-11-04
+
+`sources compare 40` on Brain's own failed research URLs (Admin run
+41910342590), old reader vs the layer, on the production machine:
+
+- pages read: **3/40 → 20/40** (two of the 20 were block pages that #502 now
+  refuses, so 18 genuine). Recovered by: PDF reading (6), the Internet Archive
+  (6: g2.com, stockx.com, trade.gov, geibun.co.jp, …), the browser (3: JS-only
+  or slow pages), the Find a Tender connector (1), and two transient 403s.
+- time per successful read: 0.6 s → 8.2 s. Fallbacks are slow (a render is
+  4-8 s, an archive lookup 2-10 s) but they only run after DIRECT failed.
+- resources: the comparison process went 178 → 372 MB RSS, mostly PDF
+  extraction; Chromium runs on `northline-browser` (shared-cpu-1x, 1 GB,
+  stops when idle), not on the Brain's machine.
+
+Live free-lane research, 2 h after vs the 2 h before (Admin run 41911542982):
+fragments submitted 2 → 4, "no readable source" failures 6 → 2, verifications
+2 → 4, syntheses 1 → 2, claims accepted 2 → 3.
+
+What still fails, and why no route here fixes it:
+
+- **Invented deep links (404)** — most remaining failures (sba.gov, census.gov,
+  gsa.gov, business.gov.au, nasscom.in). The archive has no copy because the
+  page never existed; the fix is in how candidates are chosen, not how they are
+  read.
+- **Bot protection** — upwork.com, etsy.com, goat.com, edmunds.com, cars.com,
+  railwayage.com serve Cloudflare/PerimeterX challenges to the browser too.
+  That is the site's access decision; it is reported, not evaded.
+- **ADDRESS_NOT_PUBLIC** — hachettebookgroup.com and herzog.com resolve, from
+  production, to an address that is not public; the access check refuses them.
+- **PDFs over 8 MB** — refused whole (a truncated PDF does not parse).
