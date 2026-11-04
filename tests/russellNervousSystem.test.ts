@@ -1606,6 +1606,32 @@ describe('the loop keeps going without anybody watching', () => {
     await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [new Date().toISOString(), mission.orchestrationId]);
     expect(await renewLiveMissionReservations(10)).toContain(mission.reservationId);
     expect((await authorityFor({ projectId })).grant!.spend.maxConcurrent.used).toBe(1);
+
+    // Lapse it again and let other work take the slot: moving again must not push it over the ceiling.
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [stale, mission.orchestrationId]);
+    await renewLiveMissionReservations(10);
+    const other = await capture({ title: 'Florida escrow', statement: 'is an escrow account required', projectId, visibility: 'SHARED' });
+    const taken = await launch({
+      projectId,
+      layerId,
+      candidateId: other.candidate!.id,
+      visibility: 'SHARED',
+      title: 'Florida escrow',
+      assignment: 'Under Florida law as in force in 2026, is an escrow account required?',
+      objective: 'Settle the Florida position.',
+      whyNow: 'The layer names Florida as open.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: [],
+      evidence: ['the exact section'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    expect(taken.ok, taken.reason).toBe(true);
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [new Date().toISOString(), mission.orchestrationId]);
+    await renewLiveMissionReservations(10);
+    await renewLiveMissionReservations(10);
+    expect((await authorityFor({ projectId })).grant!.spend.maxConcurrent.used).toBe(1);
   });
 
   it('fails a packet that produced nothing rather than asking a person to press the only button', async () => {

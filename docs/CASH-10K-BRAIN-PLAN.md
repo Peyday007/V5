@@ -167,3 +167,15 @@ No concurrency was raised. The free lane is still the pace:
 - **Last hour:** 1 accepted of 5 completed, with 47 provider errors.
 - **Failures:** sources answering 403/404/DNS.
 - **Scaling:** the controller lowered concurrency on database saturation. That belongs to the scaling assignment.
+
+### Check-in at 22:32Z
+
+The constructed EDDM shared-postcard opening `cop_664cef8` has started its dive (round 2), but its research has not launched yet.
+- **First screen:** recorded nothing.
+- **Second gate:** queued.
+
+**Open defect.** At 22:30Z the grant showed 21 live holds against `maxConcurrent=13`.
+- **Before #497:** an overshoot was already visible (14–15 against 13 on 11-04).
+- **Readmission path:** a test shows the hold readmitted by #497 stays within the ceiling when other work takes its slot.
+- **Unknown:** the source of the overshoot is not yet identified. A concurrency question goes to whoever owns the grant's admission path; it is not settled here.
+
