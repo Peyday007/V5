@@ -268,7 +268,7 @@ export async function pdfText(bytes: Buffer): Promise<string> {
 /** Fetch one public page for a worker. Never throws. */
 export async function fetchForWorker(
   requestedUrl: string,
-  options: { resolve?: Resolver; fetch?: HttpFetch; now?: () => Date; timeoutMs?: number } = {},
+  options: { resolve?: Resolver; fetch?: HttpFetch; now?: () => Date; timeoutMs?: number; readPdf?: boolean } = {},
 ): Promise<SourceFetch> {
   const resolve = options.resolve ?? systemResolver;
   const http = options.fetch ?? (globalThis.fetch as unknown as HttpFetch);
@@ -320,7 +320,7 @@ export async function fetchForWorker(
     const looksPdf =
       PDF_TYPE.test(contentType) ||
       (/^(application\/octet-stream|binary\/octet-stream)/i.test(contentType) && /\.pdf$/i.test(new URL(current).pathname));
-    if (looksPdf) {
+    if (looksPdf && options.readPdf !== false) {
       let whole: string;
       try {
         const { bytes, overflowed } = await readBytes(response, MAX_PDF_BYTES);

@@ -71,12 +71,41 @@ export interface AccessDeps {
 }
 
 /** Text that is a bot challenge or a JavaScript shell, not the page. */
-const SHELL =
-  /(just a moment\.\.\.|enable javascript and cookies|attention required! \| cloudflare|please enable javascript|you need to enable javascript|checking your browser|verify you are human|needs a human touch|loading challenge|errcode px|press (and|&) hold|are you a robot|unusual traffic from your computer|request unsuccessful\. incapsula|pardon our interruption)/i;
+const SHELL = new RegExp(
+  [
+    'just a moment\\.\\.\\.',
+    'enable javascript and cookies',
+    'attention required! \\| cloudflare',
+    'please enable javascript',
+    'you need to enable javascript',
+    'checking your browser',
+    'verify you are (a )?human',
+    'verify you are not a bot',
+    'performing security verification',
+    'sorry, you have been blocked',
+    'you are unable to access',
+    'needs a human touch',
+    'loading challenge',
+    'errcode px',
+    'press (and|&) hold',
+    'are you a robot',
+    'unusual traffic from your computer',
+    'request unsuccessful\\. incapsula',
+    'pardon our interruption',
+    'access to this page has been denied',
+    'access denied',
+    'please log ?in to verify',
+  ].join('|'),
+  'i',
+);
 
-/** A page that is a bot challenge rather than the content: readable bytes, no source. Pure. */
+/** A page that says the thing asked for is not there, served with a 200. */
+const SOFT_404 =
+  /(the requested (document|page) does not exist|page not found|this page (doesn't|does not) exist|the page you (are looking for|requested) (could not be found|does not exist|doesn't exist|is no longer available)|404 error)/i;
+
+/** A page that is a bot challenge or a "not found" page rather than the content: readable bytes, no source. Pure. */
 export function isChallenge(read: SourceFetch): boolean {
-  return read.readable && read.text.length < 6000 && SHELL.test(read.text);
+  return read.readable && read.text.length < 6000 && (SHELL.test(read.text) || SOFT_404.test(read.text));
 }
 const THIN_CHARS = 200;
 

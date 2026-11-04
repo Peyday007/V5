@@ -26,6 +26,10 @@ import { checkDestination, MAX_TEXT_CHARS, systemResolver, type Resolver, type S
 
 export const BROWSER_TIMEOUT_MS = 45_000;
 const MAX_CONCURRENT = 2;
+/** Renders allowed to wait for a slot. Beyond this a read goes on to its next route instead of queueing. */
+const MAX_WAITING = 4;
+
+export class BrowserBusy extends Error {}
 
 export function browserMcpUrl(): string | null {
   const raw = (process.env.BRAIN_BROWSER_MCP_URL ?? '').trim();
@@ -35,7 +39,10 @@ export function browserMcpUrl(): string | null {
 let active = 0;
 const waiting: (() => void)[] = [];
 async function slot<T>(work: () => Promise<T>): Promise<T> {
-  if (active >= MAX_CONCURRENT) await new Promise<void>((resolve) => waiting.push(resolve));
+  if (active >= MAX_CONCURRENT) {
+    if (waiting.length >= MAX_WAITING) throw new BrowserBusy('the research browser is busy');
+    await new Promise<void>((resolve) => waiting.push(resolve));
+  }
   active += 1;
   try {
     return await work();
@@ -145,7 +152,7 @@ export async function renderInBrowser(
   if (!checked.ok) {
     return { readable: false, requestedUrl, finalUrl: null, status: null, retrievedAt: now().toISOString(), reason: checked.reason, detail: checked.detail };
   }
-  return slot(async () => {
+  return slot(async (): Promise<SourceFetch> => {
     const signal = AbortSignal.timeout(options.timeoutMs ?? BROWSER_TIMEOUT_MS);
     const mcp = new McpSession(endpoint, options.http ?? (globalThis.fetch as Http), signal);
     try {
@@ -192,5 +199,5 @@ export async function renderInBrowser(
     } finally {
       await mcp.close();
     }
-  });
+  }).catch((error: unknown) => refused('NETWORK_ERROR', error instanceof BrowserBusy ? error.message : `browser: ${String(error)}`, null));
 }
