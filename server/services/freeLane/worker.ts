@@ -60,6 +60,49 @@ const LEASE_MS = 20 * 60_000;
 const MAX_SOURCES = 6;
 const SOURCE_CHARS = 7_000;
 
+/**
+ * Hosts Brain could not reach (DNS, connect, timeout), remembered for a while so the next
+ * fragment does not spend its candidates and its attempt on a door already known shut.
+ * Only a host-level refusal counts: a 404, a non-text page or an empty one says nothing
+ * about the host. In-process and TTL-bounded; a success on the host forgives it at once.
+ */
+const UNREACHABLE_TTL_MS = 10 * 60_000;
+const HOST_LEVEL_REFUSALS = new Set<string>(['DNS_FAILED', 'TIMEOUT', 'NETWORK_ERROR']);
+const unreachableHosts = new Map<string, number>();
+
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase() || null;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberUnreachable(url: string, reason: string, now = Date.now()): void {
+  const host = hostOf(url);
+  if (host && HOST_LEVEL_REFUSALS.has(reason)) unreachableHosts.set(host, now + UNREACHABLE_TTL_MS);
+}
+
+export function isRememberedUnreachable(url: string, now = Date.now()): boolean {
+  const host = hostOf(url);
+  if (!host) return false;
+  const until = unreachableHosts.get(host);
+  if (until === undefined) return false;
+  if (until <= now) {
+    unreachableHosts.delete(host);
+    return false;
+  }
+  return true;
+}
+
+export function rememberedUnreachableHosts(now = Date.now()): string[] {
+  return [...unreachableHosts].filter(([, until]) => until > now).map(([host]) => host);
+}
+
+export function resetUnreachableHosts(): void {
+  unreachableHosts.clear();
+}
+
 export interface FreeWorker {
   workerId: string;
   label: string;
@@ -540,7 +583,15 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       if (readable.length >= MAX_SOURCES) return;
       if (!/^https?:\/\//i.test(url) || tried.has(url)) continue;
       tried.add(url);
+      if (isRememberedUnreachable(url)) {
+        failedUrls.push(url);
+        fetchReasons.push('HOST_UNREACHABLE');
+        continue;
+      }
       const fetched = await ctx.fetchSource(url);
+      const host = hostOf(url);
+      if (fetched.readable && host) unreachableHosts.delete(host);
+      if (!fetched.readable) rememberUnreachable(url, String(fetched.reason));
       if (fetched.readable && fetched.text.trim().length > 200) {
         readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
       } else {
@@ -556,7 +607,8 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     const retry = await askFor(
       ctx,
       `Research brief:\n${JSON.stringify(brief, null, 1)}\n\nBrain could not open these pages (missing, blocked or ` +
-        `empty): ${JSON.stringify(failedUrls)}. Name up to ${MAX_SOURCES} OTHER public pages likely to hold primary ` +
+        `empty): ${JSON.stringify(failedUrls)}. Brain cannot reach these hosts at all, so name no page on them: ` +
+        `${JSON.stringify(rememberedUnreachableHosts())}. Name up to ${MAX_SOURCES} OTHER public pages likely to hold primary ` +
         'evidence — prefer stable top-level pages of official bodies, regulators, statistics offices and company ' +
         'sites over deep links. Reply as {"urls":["https://..."]}.',
     );
