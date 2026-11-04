@@ -12,6 +12,7 @@ import { enqueueWork } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import {
+  forgiveHost,
   freeLaneTick,
   isRememberedUnreachable,
   rememberUnreachable,
@@ -120,6 +121,17 @@ describe('unreachable host memory', () => {
     expect(isRememberedUnreachable('https://notfound.example/b', 2_000)).toBe(false);
     expect(isRememberedUnreachable('https://empty.example/b', 2_000)).toBe(false);
     expect(isRememberedUnreachable('https://dead.example/other', 1_000 + 11 * 60_000)).toBe(false);
+  });
+
+  it('a single timeout does not hide a live host; a second inside the TTL does; a success clears the strike', () => {
+    rememberUnreachable('https://slow.example/a', 'TIMEOUT', 1_000);
+    expect(isRememberedUnreachable('https://slow.example/b', 2_000)).toBe(false);
+    rememberUnreachable('https://slow.example/a', 'TIMEOUT', 3_000);
+    expect(isRememberedUnreachable('https://slow.example/b', 4_000)).toBe(true);
+    rememberUnreachable('https://ok.example/a', 'TIMEOUT', 1_000);
+    forgiveHost('https://ok.example/a');
+    rememberUnreachable('https://ok.example/a', 'TIMEOUT', 2_000);
+    expect(isRememberedUnreachable('https://ok.example/a', 3_000)).toBe(false);
   });
 
   it('a second fragment does not fetch hosts the first found unreachable, and the retry prompt names them', async () => {

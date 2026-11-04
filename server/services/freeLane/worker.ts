@@ -67,8 +67,15 @@ const SOURCE_CHARS = 7_000;
  * about the host. In-process and TTL-bounded; a success on the host forgives it at once.
  */
 const UNREACHABLE_TTL_MS = 10 * 60_000;
-const HOST_LEVEL_REFUSALS = new Set<string>(['DNS_FAILED', 'TIMEOUT', 'NETWORK_ERROR']);
+/** Refusals that say the host is shut: one is enough. */
+const HOST_LEVEL_REFUSALS = new Set<string>(['DNS_FAILED', 'NETWORK_ERROR']);
+/**
+ * A timeout is also what a slow but live host does, so one is a strike, not a verdict: the host is
+ * remembered only when a second timeout lands inside the TTL of the first.
+ */
+const TIMEOUT_REASON = 'TIMEOUT';
 const unreachableHosts = new Map<string, number>();
+const timeoutStrikes = new Map<string, number>();
 
 function hostOf(url: string): string | null {
   try {
@@ -80,7 +87,28 @@ function hostOf(url: string): string | null {
 
 export function rememberUnreachable(url: string, reason: string, now = Date.now()): void {
   const host = hostOf(url);
-  if (host && HOST_LEVEL_REFUSALS.has(reason)) unreachableHosts.set(host, now + UNREACHABLE_TTL_MS);
+  if (!host) return;
+  if (HOST_LEVEL_REFUSALS.has(reason)) {
+    unreachableHosts.set(host, now + UNREACHABLE_TTL_MS);
+    return;
+  }
+  if (reason === TIMEOUT_REASON) {
+    const first = timeoutStrikes.get(host);
+    if (first !== undefined && first > now) {
+      unreachableHosts.set(host, now + UNREACHABLE_TTL_MS);
+      timeoutStrikes.delete(host);
+    } else {
+      timeoutStrikes.set(host, now + UNREACHABLE_TTL_MS);
+    }
+  }
+}
+
+/** A readable page from the host clears its strikes and its memory. */
+export function forgiveHost(url: string): void {
+  const host = hostOf(url);
+  if (!host) return;
+  unreachableHosts.delete(host);
+  timeoutStrikes.delete(host);
 }
 
 export function isRememberedUnreachable(url: string, now = Date.now()): boolean {
@@ -101,6 +129,7 @@ export function rememberedUnreachableHosts(now = Date.now()): string[] {
 
 export function resetUnreachableHosts(): void {
   unreachableHosts.clear();
+  timeoutStrikes.clear();
 }
 
 export interface FreeWorker {
@@ -590,7 +619,7 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       }
       const fetched = await ctx.fetchSource(url);
       const host = hostOf(url);
-      if (fetched.readable && host) unreachableHosts.delete(host);
+      if (fetched.readable && host) forgiveHost(url);
       if (!fetched.readable) rememberUnreachable(url, String(fetched.reason));
       if (fetched.readable && fetched.text.trim().length > 200) {
         readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
