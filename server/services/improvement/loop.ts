@@ -26,6 +26,7 @@
 import { getDb } from '../../db/database.ts';
 import {
   alertsDue,
+  ARCHIVE_OVERLAP_SHARE,
   checkDependencies,
   claimRejectionWeaknesses,
   compare,
@@ -84,6 +85,8 @@ export interface ImprovementTickReport {
   decided: string[];
   alerts: string[];
   errors: string[];
+  /** The free-lane research activation after this pass's evaluation (`activation.ts`). */
+  activation?: string;
 }
 
 /** The durable tick's call: at most every ten minutes. */
@@ -252,9 +255,9 @@ async function linked(candidate: ImprovementCandidate): Promise<Linked> {
       factory = { state: 'BUILDING', detail: 'no campaign yet', mergeSha: null, since: candidate.updatedAt };
     }
   }
-  const { relevantMethodClaims } = await import('../research/methodRules.ts');
+  const { methodClaimsAnswering } = await import('../research/methodRules.ts');
   const question = String(candidate.evidence['researchQuestion'] ?? candidate.title);
-  const archive = await relevantMethodClaims(question).catch(() => []);
+  const archive = await methodClaimsAnswering(question, ARCHIVE_OVERLAP_SHARE).catch(() => []);
   return { research, factory, archive };
 }
 
@@ -285,7 +288,10 @@ async function brainProject(): Promise<{ id: string; layerId: string | null } | 
   return { id: project.id, layerId: layer?.id ?? null };
 }
 
-/** Open method research for a weakness: a research goal in brain-architecture, worked by Claude routines. */
+/**
+ * Open method research for a weakness: a research goal in brain-architecture, worked by Claude
+ * routines and, once the activation gate is ACTIVE, by the free lane beside them (`activation.ts`).
+ */
 async function openResearch(candidate: ImprovementCandidate, now: Date): Promise<string> {
   const project = await brainProject();
   if (!project || !project.layerId) throw new Error('The brain-architecture project or its layer is missing.');
@@ -612,6 +618,14 @@ async function raiseAlerts(now: Date, open: ImprovementCandidate[], actionable: 
 
 export async function improvementTick(now = new Date()): Promise<ImprovementTickReport> {
   const report: ImprovementTickReport = { ran: false, reason: '', detected: 0, opened: [], advanced: [], decided: [], alerts: [], errors: [] };
+  // Whether the free lane may take this loop's research: evaluated on every pass, switch on or off,
+  // so the state is current and a dependency that became ready activates it without anyone asking.
+  try {
+    const { evaluateActivation } = await import('./activation.ts');
+    report.activation = (await evaluateActivation(now, 'TICK')).state;
+  } catch (error) {
+    report.errors.push(`activation: ${String((error as Error).message ?? error).slice(0, 200)}`);
+  }
   const state = await improvementSwitch();
   if (!state.enabled) {
     report.reason = 'switched off';

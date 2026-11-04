@@ -52,7 +52,10 @@ export const FREE_LANE_WORK_TYPES = [
 ] as const;
 export type FreeLaneWorkType = (typeof FREE_LANE_WORK_TYPES)[number];
 
-/** The purposes whose work is the free lane's (§84, §85). Never legal, never Brain's own. */
+/**
+ * The purposes whose work is the free lane's (§84, §85). Never legal; Brain's own only for the
+ * improvement loop's research, and only while its activation gate is ACTIVE (`freeLaneAdmits`).
+ */
 export const FREE_LANE_PURPOSES = ['PLAY_RESEARCH', 'GRUNT'] as const;
 
 const WORKER_NAMES = ['free-lane-a', 'free-lane-b'] as const;
@@ -190,6 +193,9 @@ async function ensureMemberships(worker: FreeWorker): Promise<string[]> {
       [],
     )
   ).map((row) => row.project_id);
+  // §87: while the activation gate is ACTIVE, also the project holding the improvement loop's own research.
+  const { improvementResearchProjects } = await import('../improvement/activation.ts');
+  for (const projectId of await improvementResearchProjects()) if (!projects.includes(projectId)) projects.push(projectId);
   const held = new Set(
     (await listMembershipsForPrincipal('WORKER', worker.workerId)).filter((m) => m.active).map((m) => m.projectId),
   );
@@ -264,9 +270,17 @@ async function owningPurpose(item: Pick<WorkItemRow, 'bin_id' | 'orchestration_i
   return row?.purpose ?? null;
 }
 
-export async function freeLaneAdmits(item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'>): Promise<boolean> {
+/**
+ * Whether the free lane may take this item: commercial research always, and
+ * Brain's own only for the improvement loop's method research while its
+ * activation gate is ACTIVE, within that gate's lease cap (§87, `activation.ts`).
+ */
+export async function freeLaneAdmits(item: Pick<WorkItemRow, 'id' | 'bin_id' | 'orchestration_id'>): Promise<boolean> {
   const purpose = await owningPurpose(item);
-  return purpose !== null && (FREE_LANE_PURPOSES as readonly string[]).includes(purpose);
+  if (purpose !== null && (FREE_LANE_PURPOSES as readonly string[]).includes(purpose)) return true;
+  if (purpose !== 'BRAIN_IMPROVEMENT') return false;
+  const { freeLaneMayTakeImprovement } = await import('../improvement/activation.ts');
+  return freeLaneMayTakeImprovement(item);
 }
 
 /** Which worker takes which role, so verification is not done by the model that found the claim. */
@@ -929,6 +943,11 @@ const CLAIM_ORDER: readonly (readonly FreeLaneWorkType[])[] = [
 
 /** Memberships, read at most once a minute per worker rather than once per job. */
 const membershipCache = new Map<string, { at: number; projects: string[] }>();
+
+/** Forget the memberships read, so the next job re-reads and re-grants them (the activation's recovery). */
+export function resetFreeLaneMemberships(): void {
+  membershipCache.clear();
+}
 async function projectsFor(worker: FreeWorker): Promise<string[]> {
   const cached = membershipCache.get(worker.workerId);
   if (cached && Date.now() - cached.at < 60_000) return cached.projects;
@@ -1090,7 +1109,9 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
 export async function closeFiledFreeLaneBins(): Promise<number> {
   const rows = await getDb().all<{ id: string }>(
     `SELECT b.id FROM bins b JOIN research_orchestrations o ON o.id = b.orchestration_id
-      WHERE b.purpose IN ('PLAY_RESEARCH', 'GRUNT') AND b.completion_contract = 'RESEARCH_PACKET_V1'
+      WHERE (b.purpose IN ('PLAY_RESEARCH', 'GRUNT')
+             OR (b.purpose = 'BRAIN_IMPROVEMENT' AND b.kind = 'RESEARCH_PACKET'))
+        AND b.completion_contract = 'RESEARCH_PACKET_V1'
         AND b.state IN ('READY', 'NEEDS_HUMAN') AND o.status IN ('COMPLETE', 'COMPLETE_WITH_GAPS')
       LIMIT 50`,
     [],

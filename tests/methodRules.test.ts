@@ -18,7 +18,7 @@ import {
   MAX_GUIDANCE_METHOD_RULES,
   composeGuidance,
 } from '../server/services/research/prompts.ts';
-import { readMethodRules, resetMethodRuleCache } from '../server/services/research/methodRules.ts';
+import { methodClaimsAnswering, readMethodRules, relevantMethodClaims, resetMethodRuleCache } from '../server/services/research/methodRules.ts';
 import { guidanceFor } from '../server/services/research/guidance.ts';
 
 let userId: string;
@@ -185,5 +185,22 @@ describe('choosing which method rules a worker reads', () => {
     const chosen = selectMethodRules(pool, 'pricing');
     expect(chosen.filter((entry) => entry.rule.startsWith('pricing rule'))).toHaveLength(MAX_RULES_PER_TOPIC);
     expect(chosen.map((entry) => entry.rule)).toContain('an opportunity rule');
+  });
+});
+
+describe('what the improvement loop reads as the archive answering a weakness (§87)', () => {
+  it('counts a claim that shares the question\'s substance, and not one that only shares two of its words', async () => {
+    const architecture = await ensureArchitectureScope();
+    const packet = await goalPacket(architecture.id, 'round-1');
+    // Production, 2026-11-04: two words in common with 1 177 claims matched every weakness, so the loop
+    // engineered an owner-intervention class from the archive although its own detector says the rows hold no cause.
+    await claim(packet, 'Research workers should record each person and each decision in the ledger.');
+    await claim(packet, 'Autonomous agent systems resolve routine approval decisions without escalating, and escalate only on irreversible or legal risk.');
+    const question = 'How do autonomous agent systems resolve approval decisions without escalating to a person, and when must they escalate?';
+    expect((await relevantMethodClaims(question)).length).toBe(2);
+    const answering = await methodClaimsAnswering(question, 0.5);
+    expect(answering.map((c) => c.claim)).toEqual([
+      'Autonomous agent systems resolve routine approval decisions without escalating, and escalate only on irreversible or legal risk.',
+    ]);
   });
 });

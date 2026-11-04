@@ -14,7 +14,12 @@ import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { checkIn } from '../server/services/bins/service.ts';
-import { firstJson, freeLaneTick, quotedIn } from '../server/services/freeLane/worker.ts';
+import { ensureFreeWorkers, firstJson, freeLaneTick, quotedIn, resetFreeLaneMemberships } from '../server/services/freeLane/worker.ts';
+import { freeLaneMayTakeImprovement, resetActivationCache } from '../server/services/improvement/activation.ts';
+import { createLayer } from '../server/repos/layers.ts';
+import { IMPROVEMENT_RESEARCH_SLOT_CAP } from '../server/domain/improvement.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { createResearchGoal } from '../server/repos/russellAuthority.ts';
 import { freeLaneReading, laneCoverage } from '../server/services/freeLane/coverage.ts';
 import type { Completer, LaneConfig } from '../server/services/cheap/lane.ts';
 import type { SourceFetch } from '../server/services/sources/fetchForWorker.ts';
@@ -361,6 +366,84 @@ describe('the free research lane', () => {
     expect(tick.claimed).toBe(0);
     expect((await getWorkItem(ownItem))?.state).toBe('QUEUED');
     expect((await getWorkItem(legalItem))?.state).toBe('QUEUED');
+  });
+
+  /** A packet of the improvement loop's own research goal, and a Brain packet that is not. */
+  async function improvementPackets() {
+    const brain = await createProject({ name: 'Brain Architecture', slug: 'brain-architecture' });
+    const brainLayer = (await createLayer({ projectId: brain.id, name: 'Methods', orderIndex: 0 })).id;
+    const owner = await createUser({ email: 'gate-owner@example.com', displayName: 'Owner', password: 'correct horse battery staple 1', isBrainAdmin: true });
+    const goal = await createResearchGoal({
+      projectId: brain.id, ownerUserId: owner.id, createdByUserId: owner.id, name: 'Improve: free-lane sources',
+      maxPackets: 1, maxFragments: 4, deadline: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    const saved = layerId;
+    layerId = brainLayer;
+    const ours = await packet(brain.id, 'Improve: free-lane sources');
+    const other = await packet(brain.id, 'How Brain judges a source');
+    layerId = saved;
+    await getDb().run('UPDATE research_orchestrations SET goal_id = ? WHERE id = ?', [goal.id, ours.orchestration.id]);
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO improvement_candidates (id, weakness_key, kind, title, problem, metric_key, owner_component, scope, severity, research_goal_id, created_at, updated_at)
+       VALUES ('imp_t', 'FREE_LANE:NO_READABLE_SOURCE', 'FREE_LANE_FAILURE', 't', 'p', 'FREE_LANE_FRAGMENT_PASS_RATE', 'server/services/freeLane/worker.ts', 'GENERAL', 'HIGH', ?, ?, ?)`,
+      [goal.id, at, at],
+    );
+    return { brain, ours, other };
+  }
+
+  async function activate(): Promise<void> {
+    await getDb().run(
+      "INSERT INTO brain_switches (name, enabled, updated_at, updated_by, reason) VALUES ('improvement_free_research', 1, ?, 'readiness-gate', '{}')",
+      [new Date().toISOString()],
+    );
+    resetActivationCache();
+    resetFreeLaneMemberships();
+  }
+
+  it('takes the improvement loop\'s own research only while its activation is ACTIVE (§87)', async () => {
+    const { brain, ours, other } = await improvementPackets();
+    const ourItem = await enqueue(brain.id, 'RESEARCH_FRAGMENT', ours.orchestration, ours.fragment);
+    const otherItem = await enqueue(brain.id, 'RESEARCH_FRAGMENT', other.orchestration, other.fragment);
+
+    // Inactive: nothing of Brain's is the free lane's.
+    resetActivationCache();
+    expect((await freeLaneTick({ config: CONFIG, completer: model().completer, fetchSource, search: async () => [] })).claimed).toBe(0);
+    expect((await getWorkItem(ourItem))?.state).toBe('QUEUED');
+
+    // ACTIVE: the loop's own research is taken and gated like any other; other Brain research still is not.
+    await activate();
+    const tick = await freeLaneTick({ config: CONFIG, completer: model().completer, fetchSource, search: async () => [] });
+    expect(tick.submitted).toBe(1);
+    expect((await getWorkItem(ourItem))?.state).toBe('SUCCEEDED');
+    expect((await getWorkItem(otherItem))?.state).toBe('QUEUED');
+    expect(await listClaimsForFragment(ours.fragment.id)).toHaveLength(1);
+  });
+
+  it('takes a Brain research packet Claude routines have left unclaimed for hours, while active, and not a fresh one', async () => {
+    const { brain, other } = await improvementPackets();
+    const item = await enqueue(brain.id, 'RESEARCH_FRAGMENT', other.orchestration, other.fragment);
+    await activate();
+    expect((await freeLaneTick({ config: CONFIG, completer: model().completer, fetchSource, search: async () => [] })).claimed).toBe(0);
+    await getDb().run('UPDATE bins SET ready_at = ? WHERE orchestration_id = ?', [new Date(Date.now() - 7 * 3_600_000).toISOString(), other.orchestration.id]);
+    resetFreeLaneMemberships();
+    expect((await freeLaneTick({ config: CONFIG, completer: model().completer, fetchSource, search: async () => [] })).submitted).toBe(1);
+    expect((await getWorkItem(item))?.state).toBe('SUCCEEDED');
+  });
+
+  it('holds no more improvement leases than the cap, so commercial research keeps the rest of the lane', async () => {
+    const { brain, ours } = await improvementPackets();
+    await activate();
+    const [worker] = await ensureFreeWorkers(CONFIG);
+    const items: string[] = [];
+    for (let i = 0; i < IMPROVEMENT_RESEARCH_SLOT_CAP + 1; i += 1) items.push(await enqueue(brain.id, 'RESEARCH_FRAGMENT', ours.orchestration, ours.fragment));
+    const candidate = { id: items.at(-1)!, orchestration_id: ours.orchestration.id };
+    expect(await freeLaneMayTakeImprovement(candidate)).toBe(true);
+    await getDb().run(
+      `UPDATE work_items SET state = 'LEASED', lease_id = 'lse_t' || id, worker_id = ?, lease_expires_at = ? WHERE id IN (${items.slice(0, IMPROVEMENT_RESEARCH_SLOT_CAP).map(() => '?').join(', ')})`,
+      [worker!.workerId, new Date(Date.now() + 600_000).toISOString(), ...items.slice(0, IMPROVEMENT_RESEARCH_SLOT_CAP)],
+    );
+    expect(await freeLaneMayTakeImprovement(candidate)).toBe(false);
   });
 
   it('does nothing, and says so, when no free model is configured', async () => {

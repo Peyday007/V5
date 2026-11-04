@@ -285,6 +285,19 @@ export async function dispatchTick(
     } catch (error) {
       console.warn('[dispatch] brain-only pass failed:', (error as Error).message);
     }
+    /*
+     * §87's fallback: the improvement pass of the Russell tick evaluates the
+     * free-lane research activation every ten minutes. If it has not for half
+     * an hour (the tick died, was shed, or never started), this evaluates it
+     * and runs the improvement pass, so a missed trigger cannot leave the
+     * self-improvement process idle. A no-op while the regular pass keeps up.
+     */
+    try {
+      const { activationFallback } = await import('../improvement/activation.ts');
+      await activationFallback();
+    } catch (error) {
+      console.warn('[dispatch] improvement activation fallback failed:', (error as Error).message);
+    }
   }
 
   result.superseded = await supersedeStaleIntents();

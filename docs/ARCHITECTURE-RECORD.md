@@ -14128,3 +14128,44 @@ is a second task manager, Factory, research engine or monitor:
   the free-lane failure classes, every candidate's stage, worker, baseline,
   after-reading and decision, and the recent events. `admin improvement tick`
   runs a pass now; `admin improvement on|off --admin …` is the switch.
+
+**Free AI researches it, and it starts itself (owner's order, 2026-11-04).**
+In its first day the loop opened no research at all, and two things stopped it.
+`relevantMethodClaims` called a claim relevant at two shared words, so 1 177
+method claims "answered" every weakness — including the owner-intervention
+class whose own detector says the rows hold no cause. And the free lane, the
+only worker with idle capacity, was barred from all of Brain's own work. Now:
+
+- **The archive answers a weakness** only when three claims share half of its
+  question's content words (`methodClaimsAnswering`, `ARCHIVE_OVERLAP_SHARE`);
+  otherwise the loop opens method research, as §87 always said it would.
+- **The free lane takes the loop's own research** — the work items of research
+  goals linked from an open `improvement_candidates` row, nothing else of
+  Brain's — beside the Claude routines, through the same `claimWork`
+  compare-and-swap and gates, at most `IMPROVEMENT_RESEARCH_SLOT_CAP` leases at
+  once and none while the lane's controller reads the database as saturated (§86),
+  so commercial research keeps the rest.
+  A settled packet moves the candidate to ENGINEER from rows, whoever did it.
+- **Only while the activation gate is ACTIVE** (`services/improvement/activation.ts`).
+  Five checks, each read from rows or the process: DEPLOYED (the schema answers,
+  the revision), FREE_LANE_OPERATING (an accepted free-lane answer within
+  2 h), RESEARCH_ASSIGNABLE (`brain-architecture`, a layer, an administrator),
+  RESULTS_REACH_ENGINEERING (`improvement_loop` on — the owner's off switch —
+  and the Brain Factory grant), NO_DISRUPTION (the lane has slots beyond its
+  commercial backlog; checked to start, never to stop). Unrelated development,
+  PRs and other candidates' Factory work are not dependencies.
+- **State is a row**, `brain_switches.improvement_free_research`, holding every
+  check's reading and when it was evaluated; it survives deploys, restarts and
+  sessions. A transition is a compare-and-set on the previous value and only
+  the writer that changed the row records `ACTIVATED`/`DEACTIVATED`, so it
+  cannot activate twice. While inactive, `ACTIVATION_WAITING` names what it
+  waits on, once per change.
+- **Evaluated by the existing ticks.** Every improvement pass of the Russell
+  tick evaluates it first; the dispatch tick's brain-only pass is the fallback,
+  evaluating and running the improvement pass whenever the last evaluation is
+  over 30 min old (`ACTIVATION_FALLBACK`). A lost dependency deactivates it and
+  its return reactivates it. While active, loop research claimable for an hour
+  with no free-lane claim records rule 9's intervention and re-reads the lane's
+  memberships and restarts its pool (`ACTIVATION_RECOVERY`).
+- `admin improvement show` prints the gate, each check and the loop's research
+  with what the free lane did on it.

@@ -165,7 +165,7 @@ async function windowFor(model: string, now = Date.now()): Promise<Window> {
 }
 
 /** Free-lane jobs queued and claimable now. */
-export async function waitingNow(): Promise<number> {
+export async function waitingNow(options: { includeImprovement?: boolean } = {}): Promise<number> {
   const row = await getDb().get<{ n: number | string }>(
     `SELECT COUNT(*) AS n FROM work_items w
       WHERE w.state = 'QUEUED' AND w.available_at <= ? AND w.attempt_count < w.max_attempts
@@ -175,7 +175,14 @@ export async function waitingNow(): Promise<number> {
                        AND b.purpose IN ('PLAY_RESEARCH', 'GRUNT'))`,
     [new Date().toISOString()],
   );
-  return Number(row?.n ?? 0);
+  const commercial = Number(row?.n ?? 0);
+  if (options.includeImprovement === false) return commercial;
+  // §87: Brain research the free lane may take while its activation is ACTIVE, up to the lease cap.
+  const { improvementResearchActive, improvementResearchWaiting } = await import('../improvement/activation.ts');
+  if (!(await improvementResearchActive())) return commercial;
+  const { IMPROVEMENT_RESEARCH_SLOT_CAP } = await import('../../domain/improvement.ts');
+  const ours = { n: await improvementResearchWaiting() };
+  return commercial + Math.min(IMPROVEMENT_RESEARCH_SLOT_CAP, Number(ours?.n ?? 0));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -345,6 +352,11 @@ export async function controlStep(): Promise<ControlReading | null> {
   }
   lastReading = reading;
   return reading;
+}
+
+/** Whether this process's pool is running (the activation's recovery restarts one that is not). */
+export function adaptivePoolRunning(): boolean {
+  return controlTimer !== null;
 }
 
 /** Start the adaptive pool. Off when no free model is configured. */

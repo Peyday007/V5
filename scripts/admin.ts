@@ -1413,6 +1413,13 @@ async function main(): Promise<void> {
       const reading = await improvementReading();
       const s = reading.switch;
       console.log(`  improvement_loop  ${s.enabled ? 'ON' : 'OFF'}  (set ${s.updatedAt ?? '—'} by ${s.updatedBy ?? '—'})`);
+      const { activationReading } = await import('../server/services/improvement/activation.ts');
+      const act = await activationReading();
+      console.log(`  free-lane research  ${act.state}  (evaluated ${act.checkedAt ?? 'never'} by ${act.via ?? '—'})${act.waitingOn.length ? `  waiting on ${act.waitingOn.join(', ')}` : ''}`);
+      for (const c of act.checks) console.log(`    ${c.ok ? 'ok ' : 'NO '} ${c.key.padEnd(26)} ${c.detail}`);
+      const { improvementResearchWork } = await import('../server/services/improvement/activation.ts');
+      const work = await improvementResearchWork();
+      console.log(`  improvement research  goals=${work.goals} items=${JSON.stringify(work.items)} free-lane on loop research (24h)=${JSON.stringify(work.freeLane)} free-lane on all Brain research (24h)=${JSON.stringify(work.freeLaneBrain)} takeable now=${work.waitingNow} settled loop packets=${work.settledPackets}`);
       for (const board of reading.scoreboard) {
         console.log(`  SCOREBOARD ${board.window}`);
         for (const m of board.metrics) {
