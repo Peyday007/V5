@@ -97,15 +97,24 @@ The best combination settles **p10 $0 · p50 $50 · p90 $225** by the deadline, 
 | #470 | Constructed patterns filed as openings; focus no longer throttles the free lane's goal search | Deploy 41696218793 | 7 openings filed from constructed rounds |
 | #473 | Fingerprint fits Postgres; harvest read; construct shows filings | Deploy 41705841772 | Construct run 41709631526 opened a round |
 | #474 | Goal-found openings dived first | Deploy 41711702599 | Construct run 41715265100 on 0f97f5e |
+| #476 | Goal research +2 queue priority; goal dives may run beside the Routine-only ceilings | Deploy 41726679510 | Second goal dive started 22:29Z (`cop_b48acecb`) |
+| #478 | Goal ideas judged and launched first; idea backlog printed | Deploy 41734906156 | Goals construct 41739941397 printed the backlog |
+| #481 | Up to 5 goal ideas judged per tick | Deploy 41743589279 | Both goal dives judged by 00:46Z; `cop_d9ed5f7` mission RUNNING 01:15Z |
+
+### What was actually limiting research (2026-11-03 21:00Z–11-04 01:15Z)
+
+The "26 in flight against 13" was never the dive limit. It counted every unfinished research packet. Dives in flight were **0**, and each stage had its own stall:
+
+| Stage | What production showed | Cause | Fix |
+|---|---|---|---|
+| Dive slot | Room 1, limited by `OPERATOR` (`BRAIN_CASH_RESEARCH_MAX=1`) and by routable Routine surfaces; one unrelated dive held the slot 7.5 h | Both limits protect Routine time, but under brain-only mode the dives are the free lane's | #476: up to 3 goal dives beside them, inside the grant |
+| Free-lane order | Goal work waited behind one-off pricing questions; providers answering 503/429 | Queue order, not concurrency | #476: +2 queue priority for goal research; no concurrency raised |
+| Judging | Both dives sat CAPTURED for 1.5 h; 119 unjudged ideas, 1 judged per ~13-minute tick | FIFO at one per tick on a contended database | #478 goal first, #481 five goal judgments per tick |
+| Launch | Judged dives waited for a grant slot (14 live of 13) held by path questions | Grant full; launch goal-first since #478 | First slot that freed went to `cop_d9ed5f7` |
 
 ## 9. Limitations that remain
 
-- **Research throughput is the binding constraint, and it is outside this change.**
-  - In the hour to 19:54Z, the free lane completed 14 items and accepted 0. The providers answered with HTTP 503/429 errors 48 times.
-  - The free-AI screens failed 26 of 36 answers in 24h.
-  - Research in flight was 27, against a grant of 13.
-  - Path questions sat at 21 open against a cap of 8.
-  - The scaling assignment owns this. No paid API may be added.
+- **The free models are the speed limit.** In the hour to 19:54Z, the free lane completed 14 items and accepted 0, with 48 provider 503/429 errors. That is why concurrency was not raised. The scaling assignment's controller sizes concurrency from those errors.
 - **Outreach capacity is the owner's fact.** Until the goal states it ("N emails a day"), no reading can be a probability.
 - **Constructed openings need a deep dive** before they carry a price. Until then they are evidence, not work.
 - **Old anime evidence is still in the pool.** It is filed honestly as found, and the goal's limits and the plan judge it.
