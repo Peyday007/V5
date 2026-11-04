@@ -675,6 +675,16 @@ const failTool: McpTool = {
         proof,
         suppliedKey: optionalIdempotencyKey(args),
         requestId,
+        /*
+         * One fail per lease, not one per item. The generation is read from
+         * the item Brain holds, never from the caller (invariant 27), so a
+         * retried call on the same lease replays and a fail under a later
+         * lease is its own effect. Production, 2026-11-04: the free lane's
+         * second release of an item replayed the first ("ALREADY_RECORDED"),
+         * left the item leased, and its expiry spent an attempt the release
+         * was meant to refund.
+         */
+        discriminator: `lease:${item.leaseGeneration}`,
         // The category is an input — it is what the caller asked to record —
         // so unlike a summary it belongs in the identity.
         payload: { workItemId: item.id, operation: 'fail', category },
@@ -734,6 +744,16 @@ const releaseTool: McpTool = {
         proof,
         suppliedKey: optionalIdempotencyKey(args),
         requestId,
+        /*
+         * One release per lease, not one per item. The generation is read from
+         * the item Brain holds, never from the caller (invariant 27), so a
+         * retried call on the same lease replays and a release under a later
+         * lease is its own effect. Production, 2026-11-04: the free lane's
+         * second release of an item replayed the first ("ALREADY_RECORDED"),
+         * left the item leased, and its expiry spent an attempt the release
+         * was meant to refund.
+         */
+        discriminator: `lease:${item.leaseGeneration}`,
         payload: { workItemId: item.id, operation: 'release' },
       },
       async () => await releaseWork(proof, detail),

@@ -305,6 +305,22 @@ describe('the free research lane', () => {
     expect(second.claimed).toBe(0);
   });
 
+  it('never lets a provider that keeps answering 503/429 spend the item’s attempts', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const busy: Completer = async () => {
+      throw new Error('cheap lane HTTP 429');
+    };
+    const { endFreeLaneCooldowns } = await import('../server/services/freeLane/worker.ts');
+    for (let i = 0; i < 5; i++) {
+      await freeLaneTick({ config: CONFIG, completer: busy, fetchSource, search: async () => [] });
+      endFreeLaneCooldowns();
+    }
+    const item = await getWorkItem(itemId);
+    expect(item?.state).toBe('QUEUED');
+    expect(item?.attemptCount).toBe(0);
+  });
+
   it('copies the cited sentences itself, so the excerpt is the page verbatim', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
