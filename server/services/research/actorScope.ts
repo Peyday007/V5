@@ -117,6 +117,31 @@ const COPULA_COMPLEMENT = /\b(?:is|are|was|were|be|being|been)\s+(?:only\s+)?(?:
 const THIRD_PARTY_RELATIVE =
   /\b(?:who|that|which)\s+(?:\w+ly\s+)?(?:(?:will|would|can|could|may|might|must|do|does|did)\s+)?$/i;
 
+/**
+ * A named third party immediately before the verb is the one doing it.
+ * *"Which employers post roles and hire for this work"* and *"how many
+ * subscribers purchase at the regional price"* describe what other people do,
+ * and the planning screen refused both as if Brain were told to hire or buy
+ * (production, seven days to 2026-11-04: `job-postings-operational-gap`,
+ * `saas-subscription-regional-price-arbitrage`, each parking a packet for a
+ * person). Anchored to the text immediately before the phrase and limited to a
+ * closed list of third-party nouns, so *"we will hire"*, *"you should
+ * purchase"* and the bare imperative are untouched: the researcher check runs
+ * first and a noun not on the list proves nothing.
+ */
+const THIRD_PARTY_SUBJECT =
+  /\b(?:employers?|recruiters?|hirers?|buyers?|customers?|subscribers?|consumers?|companies|firms|agencies|businesses|clients|users|organi[sz]ations|publishers|sellers|vendors|operators|providers|bodies|they)\s+(?:(?:\w+\s+){1,4}?(?:and|or)\s+)?(?:(?:\w+ly|also|typically|usually|actually|often)\s+)*(?:(?:will|would|can|could|may|might|must|do|does|did)\s+)?(?:(?:\w+ly|also|typically|usually|actually|often)\s+)*$/i;
+
+/**
+ * A causative or directive verb before the third party makes the act Brain's.
+ * *"Have customers purchase the plan"*, *"Make users subscribe"* and *"Let the
+ * buyers purchase it"* tell the researcher to bring about the purchase, which
+ * is an action on the world exactly as the bare imperative is. Tested against
+ * the text before the third-party noun, so the exemption above never admits it.
+ */
+const CAUSATIVE_BEFORE =
+  /\b(?:have|has|having|make|makes|making|let|lets|letting|get|gets|getting|ask|asks|asking|tell|tells|telling|persuade|convince|encourage|invite|urge|instruct|direct|cause|enable|help|pay|induce|require|request|allow|prompt|incentivi[sz]e)\s+(?:(?:the|a|an|some|all|each|any|those|these|other|more|several|many|new)\s+)*$/i;
+
 const LEADING_FILLER = /^(?:\s|[-*•]|\d+[.)])+/;
 
 /**
@@ -238,6 +263,8 @@ function isOwnAction(before: string): boolean {
   const head = before.replace(LEADING_FILLER, '');
   if (RESEARCHER_SUBJECT.test(head)) return true;
   if (THIRD_PARTY_RELATIVE.test(head)) return false;
+  const third = THIRD_PARTY_SUBJECT.exec(head);
+  if (third && !CAUSATIVE_BEFORE.test(head.slice(0, third.index))) return false;
   if (COPULA_COMPLEMENT.test(head)) return false;
   return !GOVERNOR.test(head.slice(-GOVERNOR_WINDOW));
 }

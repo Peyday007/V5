@@ -33,7 +33,7 @@ import {
   reading,
 } from '../server/domain/improvement.ts';
 import { binLane, classifyBinPurpose } from '../server/domain/binPurpose.ts';
-import { improvementTick } from '../server/services/improvement/loop.ts';
+import { composeObjective, improvementTick } from '../server/services/improvement/loop.ts';
 import { improvementGrant, setImprovementSwitch } from '../server/services/improvement/authority.ts';
 import { readMetric } from '../server/services/improvement/scoreboard.ts';
 import { preflight } from '../server/domain/engineering.ts';
@@ -142,6 +142,22 @@ describe('the decisions, pure', () => {
     expect(idle[0]!.episode).toBe('2026-11-02T10:00:00.000Z');
     // Idle with nothing actionable is not a defect, and is not an alert.
     expect(alertsDue({ now, lastImprovementWorkAt: '2026-11-01T10:00:00.000Z', actionableCandidates: 0, lastProgressAt: now, openCandidates: 0 })).toEqual([]);
+  });
+});
+
+describe('the engineering objective Factory receives', () => {
+  it('carries only conditions a commit can satisfy; the production measurement is Brain\'s', async () => {
+    const candidate = {
+      id: 'imp_x', weaknessKey: 'PACKETS:NEEDS_HUMAN', kind: 'PACKET_STALL', title: 't', problem: 'Packets end needing a person.',
+      metric: 'RESEARCH_JOB_SUCCESS_RATE' as const, downstreamMetric: null, ownerComponent: 'server/services/research/orchestrator.ts',
+      frequency: 77, denominator: 394, scope: 'GENERAL' as const, severity: 'MEDIUM' as const,
+      evidence: { samples: ['a'], mutationScope: ['server/services/research/**'] }, proposal: null, dependencyCheck: null,
+      researchGoalId: null, changeRequestId: null, campaignId: null, deliveredAt: null, deliveredRef: null, baseline: null, result: null,
+      decision: null, decisionReason: null, combinedIntoId: null, heldOn: null, attempt: 1, parentId: null, createdAt: FROM, updatedAt: FROM,
+    };
+    const spec = composeObjective(candidate, { research: null, factory: null, archive: [] }, [], reading('RESEARCH_JOB_SUCCESS_RATE', FROM, TO, 298, 327));
+    expect(spec.acceptanceConditions.every((c) => !/production|post-deploy|admin improvement/i.test(`${c.statement} ${c.verification}`))).toBe(true);
+    expect(spec.expectedOutcome).toContain('no unit should wait for it');
   });
 });
 
