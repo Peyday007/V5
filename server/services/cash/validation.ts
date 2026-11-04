@@ -410,10 +410,20 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
        * payer" from a screen with no mission at all. It falls through, and
        * `resumeUnlaunchedDives` gives that round back.
        */
+      /*
+       * Nor a screen whose research recorded nothing at all. Production,
+       * 2026-11-04: four of an approved goal's constructed openings went dormant
+       * as "no payer" after the free model providers answered 503/429 for hours
+       * and every screen fragment "finished without recording anything". No
+       * source was read, so no payer was ruled out; the round is counted, and
+       * the epoch's cap below still bounds how often it is asked again.
+       */
+      const screenMission = current?.stage === 'SCREEN' ? await latestMissionForCandidate(current.candidateId) : null;
       if (
         current?.stage === 'SCREEN' &&
         !payerEstablished(opportunity, fact) &&
-        (await latestMissionForCandidate(current.candidateId)) !== null
+        screenMission !== null &&
+        (await screenRecordedClaims(screenMission.orchestrationId))
       ) {
         return { kind: 'STAGE_ONE_FAILED', open: ['payer'], epochStartedAt: epoch.startedAt };
       }
@@ -475,6 +485,13 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
     return { kind: 'CANNOT_DELIVER', because: delivery.because };
   }
   return { kind: 'ELIGIBLE' };
+}
+
+/** Whether a screen's packet recorded any claim at all, accepted or not. A packet nobody started recorded none. */
+async function screenRecordedClaims(orchestrationId: string | null): Promise<boolean> {
+  if (!orchestrationId) return false;
+  const row = await getDb().get<{ one: number }>('SELECT 1 AS one FROM research_claims WHERE orchestration_id = ? LIMIT 1', [orchestrationId]);
+  return !!row;
 }
 
 export { closedBy } from './closing.ts';
