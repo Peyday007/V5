@@ -153,3 +153,20 @@ describe('the goal’s own ideas are judged and launched first', () => {
     expect(rows.map((one) => one.id)).toEqual([round!.candidateId, older.id]);
   });
 });
+
+describe('a tick judges several of the goal’s own ideas, beside the cycle’s own count', () => {
+  it('judges every one of three goal rounds’ ideas in one tick when the cycle launches one', async () => {
+    const { tick } = await import('../server/services/russell/loop.ts');
+    const { getCycle } = await import('../server/repos/russellCycle.ts');
+    const { getCandidate } = await import('../server/repos/russellCandidates.ts');
+    const w = (await getWorkstream(await goal()))!;
+    const ids: string[] = [];
+    for (const key of ['j1', 'j2', 'j3']) {
+      const round = await openConstructedRound({ goal: w, projectId, key, title: `Constructed: ${key}`, question: `Which buyers pay for design ${key}?` });
+      ids.push(round!.candidateId);
+    }
+    expect((await getCycle())?.maxLaunchesPerCycle ?? 1).toBe(1);
+    await tick('test-goal-judging');
+    for (const id of ids) expect((await getCandidate(id))?.priority, id).not.toBeNull();
+  });
+});
