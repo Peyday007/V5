@@ -1561,6 +1561,53 @@ describe('the loop keeps going without anybody watching', () => {
     expect((await authorityFor({ projectId })).grant!.spend.maxMissions.used).toBe(1);
   });
 
+  it('lets a packet nothing has moved in six hours stop holding a slot, and readmits it when it moves', async () => {
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'stalled hold',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 5,
+      maxFragments: 5,
+      maxConcurrent: 1,
+      maxProbes: 1,
+    });
+    const captured = await capture({ title: 'Florida bonding', statement: 'is a surety bond required', projectId, visibility: 'SHARED' });
+    const launched = await launch({
+      projectId,
+      layerId,
+      candidateId: captured.candidate!.id,
+      visibility: 'SHARED',
+      title: 'Florida bonding',
+      assignment: 'Under Florida law as in force in 2026, is a surety bond required?',
+      objective: 'Settle the Florida position.',
+      whyNow: 'The layer names Florida as open.',
+      acceptableSources: ['Florida Statutes'],
+      excludedSources: [],
+      evidence: ['the exact section'],
+      startedBy: { kind: 'PERSON', id: userId },
+      envelopeId: 'RUSSELL_STATE_LICENSING_V1',
+      authorizedBy: userId,
+    });
+    expect(launched.ok, launched.reason).toBe(true);
+    const mission = launched.mission!;
+    await transitionMission({ missionId: mission.id, from: (await getMission(mission.id))!.state, to: 'RUNNING' });
+    expect((await authorityFor({ projectId })).grant!.spend.maxConcurrent.used).toBe(1);
+
+    // Nothing has moved its packet for seven hours: the hold stops counting.
+    const stale = new Date(Date.now() - 7 * 3_600_000).toISOString();
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [stale, mission.orchestrationId]);
+    expect(await renewLiveMissionReservations(10)).not.toContain(mission.reservationId);
+    expect((await authorityFor({ projectId })).grant!.spend.maxConcurrent.used).toBe(0);
+    expect((await getMission(mission.id))!.state, 'the work itself is untouched').toBe('RUNNING');
+
+    // The packet moves again, and the next tick readmits it under the ceiling.
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [new Date().toISOString(), mission.orchestrationId]);
+    expect(await renewLiveMissionReservations(10)).toContain(mission.reservationId);
+    expect((await authorityFor({ projectId })).grant!.spend.maxConcurrent.used).toBe(1);
+  });
+
   it('fails a packet that produced nothing rather than asking a person to press the only button', async () => {
     /*
      * The production shape, on 2026-09-07, and the correction to how it was
