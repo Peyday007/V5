@@ -23,6 +23,8 @@ describe('own-action screen: third parties and nouns are subject matter', () => 
     'make a purchase of the data',
     'a buyer cannot purchase directly, so we will purchase the list',
     'the buyers like it; Brain should purchase the report',
+    'it should purchase the report',
+    'they should purchase the data',
   ])('still refuses: %s', (text) => {
     expect(ownActionMatches(text, pattern).length).toBeGreaterThan(0);
   });

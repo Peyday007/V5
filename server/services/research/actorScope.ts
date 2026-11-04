@@ -149,7 +149,7 @@ const GOVERNOR_WINDOW = 40;
  * is tested first and still wins.
  */
 const THIRD_PARTY_SUBJECT =
-  /\b(?:buyers?|bidders?|customers?|suppliers?|sellers?|applicants?|members?|users?|operators?|vendors?|firms?|they|it)\s+(?:(?:cannot|can't|can|may|must|will|would|should|could|might|do|does|did)(?:\s+not)?\s+)?(?:\w+ly\s+)?$/i;
+  /\b(?:buyers?|bidders?|customers?|suppliers?|sellers?|applicants?|members?|users?|operators?|vendors?|firms?)\s+(?:(?:cannot|can't|can|may|must|will|would|should|could|might|do|does|did)(?:\s+not)?\s+)?(?:\w+ly\s+)?$/i;
 
 /** A determiner and up to two modifiers: the phrase is the head of a noun phrase. */
 const NOUN_POSITION =
