@@ -86,7 +86,7 @@ const RESEARCHER_SUBJECT =
  * every sentence and would admit anything; `on` likewise.
  */
 const GOVERNOR =
-  /\b(?:about|whether|how\s+to|where\s+to|when\s+to|regarding|concerning|available|eligible|offered|advertised|listed|for\s+sale|says?|said|states?|stating|explains?|describ(?:es?|ing)|permits?|allows?|requires?|prohibits?|invites?|solicits?|accepts?)\b/i;
+  /\b(?:about|whether|how\s+to|where\s+to|when\s+to|regarding|concerning|available|eligible|offered|advertised|listed|for\s+sale|says?|said|states?|stating|explains?|describ(?:es?|ing)|permits?|allows?|requires?|prohibits?|invites?|solicits?|accepts?|seeks?|seeking|recruit(?:s|ing)|looking\s+for|advertis(?:es|ing))\b/i;
 
 /** Leading list markers and whitespace, which do not change who is acting. */
 /**
@@ -116,6 +116,17 @@ const COPULA_COMPLEMENT = /\b(?:is|are|was|were|be|being|been)\s+(?:only\s+)?(?:
  */
 const THIRD_PARTY_RELATIVE =
   /\b(?:who|that|which)\s+(?:\w+ly\s+)?(?:(?:will|would|can|could|may|might|must|do|does|did)\s+)?$/i;
+
+/**
+ * A third party's coordinated verbs: *"document where buyers pay for access or
+ * subscribe to a cohort"* reports what buyers do. The subject sits before the
+ * first verb and the forbidden phrase follows `or`/`and`, so neither the
+ * adjacent-subject test nor the governor window reaches it. Requires a
+ * wh-word or complementiser before the subject, so *"find buyers and
+ * purchase it"* (an imperative) is still Brain's own action.
+ */
+const THIRD_PARTY_COORDINATED =
+  /\b(?:where|when|whether|if|that|which|how|what)\s+(?:buyers?|bidders?|customers?|suppliers?|sellers?|applicants?|members?|users?|operators?|vendors?|firms?|they)\s+(?:\w+\s+){1,5}(?:and|or)\s+$/i;
 
 const LEADING_FILLER = /^(?:\s|[-*•]|\d+[.)])+/;
 
@@ -260,6 +271,7 @@ function isOwnAction(before: string, phrase = ''): boolean {
   if (RESEARCHER_SUBJECT.test(head)) return true;
   if (THIRD_PARTY_SUBJECT.test(head)) return false;
   if (THIRD_PARTY_RELATIVE.test(head)) return false;
+  if (THIRD_PARTY_COORDINATED.test(head)) return false;
   // *"a Canadian purchase of one"*: the bare noun, in a noun phrase.
   if (/^purchase$/i.test(phrase) && NOUN_POSITION.test(head) && !LIGHT_VERB.test(head)) return false;
   if (COPULA_COMPLEMENT.test(head)) return false;
