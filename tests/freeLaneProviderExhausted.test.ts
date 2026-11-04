@@ -132,9 +132,9 @@ beforeEach(async () => {
   await setBrainOnlyMode(true, 'test', 'free lane suite');
 });
 
-async function strikeThree(completer: Completer, itemId: string): Promise<Array<{ failed: number; claimed: number }>> {
+async function strikeThree(completer: Completer, itemId: string, rounds = 4): Promise<Array<{ failed: number; claimed: number }>> {
   const ticks = [];
-  for (let i = 0; i < 4; i += 1) {
+  for (let i = 0; i < rounds; i += 1) {
     ticks.push(await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] }));
     vi.setSystemTime(Date.now() + 60 * 60_000); // past any cooldown
     resetFreeLaneMemberships();
@@ -180,6 +180,19 @@ describe('FREE_LANE:PROVIDER_EXHAUSTED', () => {
     const junk: Completer = async () => 'not json at all';
     await strikeThree(junk, itemId);
     const events = await outcomes(itemId);
+    expect(events.some((e) => e.outcome === 'FAILED_RETRYABLE')).toBe(true);
+  });
+
+  it('escalates a model that stays down for hours to a retryable failure instead of rotating forever', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { orchestration, fragment } = await packet(play.project.id);
+    const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const down: Completer = async () => {
+      throw new Error('cheap lane HTTP 429');
+    };
+    await strikeThree(down, itemId, 14);
+    const events = await outcomes(itemId);
+    expect(events.filter((e) => e.outcome === 'RELEASED_TRANSIENT').length).toBeGreaterThanOrEqual(10);
     expect(events.some((e) => e.outcome === 'FAILED_RETRYABLE')).toBe(true);
   });
 });

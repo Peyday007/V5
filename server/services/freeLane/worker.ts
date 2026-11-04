@@ -906,6 +906,8 @@ let running = false;
 /** Items handed back after a provider failure, and when they may be taken again. Process-local by design. */
 const cooldown = new Map<string, number>();
 const transientStrikes = new Map<string, number>();
+/** Consecutive provider-down hand-backs of one item before it is failed retryably instead. */
+const PROVIDER_HANDBACK_LIMIT = 12;
 
 /** Models whose recent free-lane items all failed, from the lane's own events. */
 async function failingModels(now = Date.now()): Promise<Set<string>> {
@@ -1019,9 +1021,11 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   }
   const transient = !ok && /^(model call failed|no JSON)/.test(ctx.why);
   const strikes = transient ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
-  // A provider that answers 429/5xx never saw the work: no number of those spends the item's attempt.
+  // A provider that answers 429/5xx never saw the work, so it is handed back well past three strikes —
+  // but a model dead for PROVIDER_HANDBACK_LIMIT consecutive tries (hours of cooldowns) escalates to a
+  // retryable failure, so the queue's own backoff and attempt budget see it instead of it rotating forever.
   const providerDown = transient && /^model call failed.*(HTTP (429|5\d\d)|timed? ?out)/i.test(ctx.why);
-  const handBack = transient && (strikes < 3 || providerDown);
+  const handBack = transient && (strikes < 3 || (providerDown && strikes < PROVIDER_HANDBACK_LIMIT));
   if (ok) {
     transientStrikes.delete(one.workItemId);
   } else if (handBack) {
