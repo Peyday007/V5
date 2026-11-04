@@ -95,6 +95,8 @@ const SHELL = new RegExp(
     'access to this page has been denied',
     'access denied',
     'please log ?in to verify',
+    'check the box below to continue',
+    'ensuring a fair fan experience',
   ].join('|'),
   'i',
 );
@@ -334,10 +336,16 @@ let learning: Promise<void> | null = null;
 interface HostTally {
   directOk: number;
   directFail: number;
-  other: Map<AccessMethod, number>;
+  other: Map<AccessMethod, { ok: number; fail: number }>;
 }
 
-/** Which method to lead with on each host, from SOURCE_ACCESS rows. Pure. */
+/**
+ * Which method to lead with on each host, from SOURCE_ACCESS rows. Pure.
+ *
+ * A route leads only where DIRECT has failed at least twice and never worked, and
+ * the route itself has worked more often than it has failed there — so a route that
+ * starts failing on a host (a site that began serving challenges) stops leading.
+ */
 export function learnFrom(rows: { provider: string | null; outcome: string | null; measures: string | null }[]): Map<string, AccessMethod> {
   const tallies = new Map<string, HostTally>();
   for (const row of rows) {
@@ -353,8 +361,11 @@ export function learnFrom(rows: { provider: string | null; outcome: string | nul
       if (attempt.method === 'DIRECT') {
         if (attempt.readable) tally.directOk += 1;
         else tally.directFail += 1;
-      } else if (attempt.readable && (attempt.method === 'BROWSER' || attempt.method === 'CONNECTOR')) {
-        tally.other.set(attempt.method, (tally.other.get(attempt.method) ?? 0) + 1);
+      } else if (attempt.method === 'BROWSER' || attempt.method === 'CONNECTOR') {
+        const entry = tally.other.get(attempt.method) ?? { ok: 0, fail: 0 };
+        if (attempt.readable) entry.ok += 1;
+        else entry.fail += 1;
+        tally.other.set(attempt.method, entry);
       }
     }
     tallies.set(measures.host, tally);
@@ -362,7 +373,7 @@ export function learnFrom(rows: { provider: string | null; outcome: string | nul
   const out = new Map<string, AccessMethod>();
   for (const [host, tally] of tallies) {
     if (tally.directOk > 0 || tally.directFail < 2) continue;
-    const winner = [...tally.other].sort((a, b) => b[1] - a[1])[0];
+    const winner = [...tally.other].filter(([, e]) => e.ok > e.fail).sort((a, b) => b[1].ok - a[1].ok)[0];
     if (winner) out.set(host, winner[0]);
   }
   return out;
