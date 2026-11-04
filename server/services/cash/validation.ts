@@ -938,14 +938,19 @@ export async function startValidations(input: {
   const goalRounds = new Set((await listRounds(input.projectId)).filter((r) => r.bucketId.startsWith('goal-')).map((r) => r.id));
   const forGoal = (opportunity: CashOpportunity) => !!opportunity.discoveryRoundId && goalRounds.has(opportunity.discoveryRoundId);
   let goalExtra = 0;
-  if ((derived.limitedBy === 'OPERATOR' || derived.limitedBy === 'SURFACES') && input.limit === undefined && (await freeLaneOwnsResearch(input.projectId))) {
+  if ((derived.limitedBy === 'OPERATOR' || derived.limitedBy === 'SURFACES' || derived.limitedBy === 'GRANT') && input.limit === undefined && (await freeLaneOwnsResearch(input.projectId))) {
     // The grant's own free slots, one held back for discovery: the free lane, not a Routine surface, does the work.
+    /*
+     * Started means queued, not launched: Russell launches inside the grant and
+     * launches goal ideas first, so a goal dive captured while every slot is
+     * held takes the next one that frees. Production, 2026-11-04: requiring a
+     * free slot here left seven eligible goal dives waiting for hours while
+     * path questions on older openings took each slot as it freed.
+     */
     const capacity = await researchCapacity(input.projectId);
-    const unlaunched = all.filter((one) => one.validationState === 'PENDING').length;
-    const free = capacity.grantMax === null || capacity.shedding ? 0 : Math.max(0, capacity.grantMax - capacity.grantLive - unlaunched);
-    const grantRoom = free >= 2 ? free - 1 : free;
+    const queueable = capacity.grantMax === null || capacity.shedding ? 0 : GOAL_DIVES_BESIDE_CEILING;
     const goalInFlight = all.filter((one) => forGoal(one) && HOLDS_A_SLOT.has(one.validationState ?? '')).length;
-    goalExtra = Math.max(0, Math.min(grantRoom - room, GOAL_DIVES_BESIDE_CEILING - goalInFlight));
+    goalExtra = Math.max(0, Math.min(queueable, GOAL_DIVES_BESIDE_CEILING - goalInFlight));
   }
   if (room + goalExtra <= 0) return [];
 
