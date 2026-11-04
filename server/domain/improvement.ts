@@ -807,3 +807,65 @@ export function alertsDue(input: AlertInput): Alert[] {
   }
   return out;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Activation: free-lane improvement research starts itself when it is safe   */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * What must be true before the free lane takes the loop's own method research
+ * (owner's order, 2026-11-04: "activate automatically when its required
+ * components are ready… only block activation on genuine dependencies").
+ * Each is read from rows or from this process, never from a flag a person set.
+ */
+export const ACTIVATION_CHECKS = [
+  'DEPLOYED',
+  'FREE_LANE_OPERATING',
+  'RESEARCH_ASSIGNABLE',
+  'RESULTS_REACH_ENGINEERING',
+  'NO_DISRUPTION',
+] as const;
+export type ActivationCheckKey = (typeof ACTIVATION_CHECKS)[number];
+
+export interface ActivationCheck {
+  key: ActivationCheckKey;
+  ok: boolean;
+  detail: string;
+}
+
+export interface ActivationDecision {
+  enabled: boolean;
+  /** A change of state, written once by a compare-and-set; null when nothing changes. */
+  transition: 'ACTIVATE' | 'DEACTIVATE' | null;
+  waitingOn: ActivationCheckKey[];
+}
+
+/**
+ * Pure. Active exactly when every check passes. A missing check counts as
+ * failed (an unknown is never a favourable assumption, invariant 39). The
+ * transition is reported only when the state moves, so activating twice is
+ * impossible by construction and the caller's compare-and-set makes it so
+ * across instances too.
+ */
+export function decideActivation(checks: ActivationCheck[], currentlyEnabled: boolean): ActivationDecision {
+  const waitingOn = ACTIVATION_CHECKS.filter((key) => !checks.find((c) => c.key === key)?.ok);
+  const enabled = waitingOn.length === 0;
+  const transition = enabled === currentlyEnabled ? null : enabled ? 'ACTIVATE' : 'DEACTIVATE';
+  return { enabled, transition, waitingOn };
+}
+
+/** Free-lane leases the loop's research may hold at once, so commercial research keeps the rest. */
+export const IMPROVEMENT_RESEARCH_SLOT_CAP = 2;
+/** The free lane is operating when it got an answer accepted this recently. */
+export const FREE_LANE_OPERATING_HOURS = 2;
+/** Improvement research claimable this long with no free-lane claim, while the lane works, is stuck. */
+export const IMPROVEMENT_RESEARCH_STUCK_MINUTES = 60;
+/** The fallback evaluates when the tick's own evaluation is this old. */
+export const ACTIVATION_FALLBACK_MINUTES = 30;
+/**
+ * The archive answers a weakness when at least `ARCHIVE_ENOUGH` accepted claims
+ * share this share of the question's content words. Two words in common with a
+ * pool of 1 177 claims matched every weakness, so the loop never researched
+ * one — not even the owner-intervention class whose cause the rows do not state.
+ */
+export const ARCHIVE_OVERLAP_SHARE = 0.5;

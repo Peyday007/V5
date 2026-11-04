@@ -150,3 +150,18 @@ export async function relevantMethodClaims(
     .slice(0, limit)
     .map(({ row }) => ({ claim: row.claim, source: row.source_url, topic: row.topic_key }));
 }
+
+/**
+ * The claims that answer a question rather than merely mention its words: each
+ * shares at least `share` of the question's content words (never fewer than
+ * two). What the improvement loop asks before it decides the archive already
+ * holds a weakness's method (invariant 13).
+ */
+export async function methodClaimsAnswering(
+  question: string,
+  share: number,
+  limit = 8,
+): Promise<{ claim: string; source: string | null; topic: string | null }[]> {
+  const needed = Math.max(2, Math.ceil(words(question).size * share));
+  return relevantMethodClaims(question, needed, limit);
+}

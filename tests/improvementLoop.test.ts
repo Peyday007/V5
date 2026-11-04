@@ -8,7 +8,7 @@
  * become work for the right worker, that the work is measured against a
  * baseline, and that a failing improvement cannot loop or wake the owner.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { recordBinEvent } from '../server/repos/bins.ts';
@@ -37,6 +37,9 @@ import { improvementTick } from '../server/services/improvement/loop.ts';
 import { improvementGrant, setImprovementSwitch } from '../server/services/improvement/authority.ts';
 import { readMetric } from '../server/services/improvement/scoreboard.ts';
 import { preflight } from '../server/domain/engineering.ts';
+import { decideActivation } from '../server/domain/improvement.ts';
+import { activationFallback, activationReading, evaluateActivation, improvementResearchActive, resetActivationCache } from '../server/services/improvement/activation.ts';
+import { setProjectRepository } from '../server/repos/factory.ts';
 
 const FROM = '2026-11-01T00:00:00.000Z';
 const TO = '2026-11-02T00:00:00.000Z';
@@ -325,4 +328,102 @@ describe('the loop on real rows', () => {
     expect(decided.decision).toBe('KEPT');
     expect((decided.result as { primary: { verdict: string } }).primary.verdict).toBe('IMPROVED');
   });
+});
+
+describe('the free-lane research activation (owner order 2026-11-04)', () => {
+  let brainId = '';
+  const CONFIG = { BRAIN_CHEAP_LLM_URL: 'http://lane.test/v1', BRAIN_CHEAP_LLM_MODELS: 'brain-a,brain-b' };
+
+  beforeEach(async () => {
+    await freshProject();
+    resetActivationCache();
+    const existing = await getProjectBySlug('brain-architecture');
+    brainId = existing?.id ?? (await createProject({ name: 'Brain Architecture', slug: 'brain-architecture' })).id;
+    await createLayer({ projectId: brainId, name: 'Methods', orderIndex: 0 });
+    await createUser({ email: 'owner@example.com', displayName: 'Owner', password: 'correct horse battery staple 1', isBrainAdmin: true });
+    for (const [key, value] of Object.entries(CONFIG)) process.env[key] = value;
+  });
+
+  afterEach(() => {
+    for (const key of Object.keys(CONFIG)) delete process.env[key];
+  });
+
+  async function grantFactory(): Promise<void> {
+    await setProjectRepository({ projectId: brainId, grantId: 'brain', repositoryId: 'peyday007/v5', scopeKind: 'WHOLE_REPOSITORY', pathScope: [], reason: 'test', setBy: 'test' });
+  }
+  async function laneAnswered(at = new Date()): Promise<void> {
+    // The lane has slots (its controller's row) and has had an answer accepted.
+    await getDb().run(
+      `INSERT INTO free_lane_capacity (model, target, stable_high, updated_at, reason) VALUES ('brain-a', 4, 4, ?, 'test')
+       ON CONFLICT (model) DO NOTHING`,
+      [at.toISOString()],
+    );
+    await recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_FRAGMENT', outcome: 'SUBMITTED', reason: 'model brain-a', evidenceClass: 'MEASURED' });
+    await getDb().run("UPDATE bin_events SET at = ? WHERE event_type = 'FREE_LANE_ITEM'", [at.toISOString()]);
+  }
+
+  it('is pure: active exactly when every check passes, a missing check counts as failed, and a transition is reported once', () => {
+    const all = ['DEPLOYED', 'FREE_LANE_OPERATING', 'RESEARCH_ASSIGNABLE', 'RESULTS_REACH_ENGINEERING', 'NO_DISRUPTION'] as const;
+    const ok = all.map((key) => ({ key, ok: true, detail: '' }));
+    expect(decideActivation(ok, false)).toMatchObject({ enabled: true, transition: 'ACTIVATE', waitingOn: [] });
+    expect(decideActivation(ok, true)).toMatchObject({ enabled: true, transition: null });
+    expect(decideActivation(ok.slice(1), false)).toMatchObject({ enabled: false, transition: null, waitingOn: ['DEPLOYED'] });
+    expect(decideActivation([...ok.slice(0, 1), { key: 'FREE_LANE_OPERATING', ok: false, detail: '' }, ...ok.slice(2)], true)).toMatchObject({ enabled: false, transition: 'DEACTIVATE', waitingOn: ['FREE_LANE_OPERATING'] });
+  });
+
+  it('stays inactive while a dependency is not ready, says which, and activates by itself once it is — exactly once', async () => {
+    // The free lane has not had an answer accepted, and no project holds the Factory grant.
+    const first = await evaluateActivation(new Date(), 'TICK');
+    expect(first.state).toBe('INACTIVE');
+    expect(first.waitingOn, JSON.stringify(first.checks)).toEqual(['FREE_LANE_OPERATING', 'RESULTS_REACH_ENGINEERING', 'NO_DISRUPTION']);
+    // Re-evaluating an unchanged state records nothing new.
+    await evaluateActivation(new Date(), 'TICK');
+    expect((await listImprovementEvents({ kinds: ['ACTIVATION_WAITING'] })).length).toBe(1);
+
+    await grantFactory();
+    expect((await evaluateActivation(new Date(), 'TICK')).waitingOn).toEqual(['FREE_LANE_OPERATING', 'NO_DISRUPTION']);
+    await laneAnswered();
+    const ready = await evaluateActivation(new Date(), 'TICK');
+    expect(ready).toMatchObject({ state: 'ACTIVE', transition: 'ACTIVATE', waitingOn: [] });
+    // Repeated evaluation, and two at once, never activate twice.
+    await Promise.all([evaluateActivation(new Date(), 'TICK'), evaluateActivation(new Date(), 'FALLBACK')]);
+    expect((await listImprovementEvents({ kinds: ['ACTIVATED'] })).length).toBe(1);
+    // The state is a row: a restarted process reads it, with no in-memory flag.
+    resetActivationCache();
+    expect(await improvementResearchActive()).toBe(true);
+    expect((await activationReading()).state).toBe('ACTIVE');
+  });
+
+  it('deactivates when a dependency is lost and resumes by itself when it returns', async () => {
+    await grantFactory();
+    await laneAnswered();
+    const on = await evaluateActivation(new Date(), 'TICK');
+    expect(on.state, JSON.stringify(on.checks)).toBe('ACTIVE');
+    // The owner turns the loop off: research results could no longer reach engineering.
+    await setImprovementSwitch(false, 'owner@example.com', 'test');
+    expect(await evaluateActivation(new Date(), 'TICK')).toMatchObject({ state: 'INACTIVE', transition: 'DEACTIVATE', waitingOn: ['RESULTS_REACH_ENGINEERING'] });
+    await setImprovementSwitch(true, 'owner@example.com', 'test');
+    expect(await evaluateActivation(new Date(), 'TICK')).toMatchObject({ state: 'ACTIVE', transition: 'ACTIVATE' });
+    // The free lane stops getting answers accepted (a provider outage): inactive, then back.
+    await getDb().run("UPDATE bin_events SET at = ? WHERE event_type = 'FREE_LANE_ITEM'", [new Date(Date.now() - 5 * 3_600_000).toISOString()]);
+    expect((await evaluateActivation(new Date(), 'TICK')).state).toBe('INACTIVE');
+    await laneAnswered();
+    expect((await evaluateActivation(new Date(), 'TICK')).state).toBe('ACTIVE');
+    expect((await listImprovementEvents({ kinds: ['ACTIVATED'] })).length).toBe(3);
+  });
+
+  it('is evaluated by the improvement pass, and by the dispatch tick\'s fallback when that pass has not run', async () => {
+    await grantFactory();
+    await laneAnswered();
+    const report = await improvementTick(new Date(Date.now() + 1000));
+    expect(report.activation).toBe('ACTIVE');
+    // The regular pass is keeping up: the fallback does nothing.
+    expect(await activationFallback(new Date())).toBeNull();
+    // Forty minutes with no evaluation (the Russell tick died): the fallback evaluates and says so.
+    const later = new Date(Date.now() + 40 * 60_000);
+    const fallback = await activationFallback(later);
+    expect(fallback?.via).toBe('FALLBACK');
+    expect((await listImprovementEvents({ kinds: ['ACTIVATION_FALLBACK'] })).length).toBe(1);
+  });
+
 });
