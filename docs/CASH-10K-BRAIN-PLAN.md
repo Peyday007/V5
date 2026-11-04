@@ -100,6 +100,7 @@ The best combination settles **p10 $0 · p50 $50 · p90 $225** by the deadline, 
 | #476 | Goal research +2 queue priority; goal dives may run beside the Routine-only ceilings | Deploy 41726679510 | Second goal dive started 22:29Z (`cop_b48acecb`) |
 | #478 | Goal ideas judged and launched first; idea backlog printed | Deploy 41734906156 | Goals construct 41739941397 printed the backlog |
 | #481 | Up to 5 goal ideas judged per tick | Deploy 41743589279 | Both goal dives judged by 00:46Z; `cop_d9ed5f7` mission RUNNING 01:15Z |
+| #488 | One release or failure per lease; a provider outage never spends an item's attempts | Deploy 41766360668 | Reproduced: the second release of an item replayed `ALREADY_RECORDED` and its lease expiry spent the attempt. 15 items now held through the 503/429 run instead of failing |
 
 ### What was actually limiting research (2026-11-03 21:00Z–11-04 01:15Z)
 
@@ -111,6 +112,7 @@ The "26 in flight against 13" was never the dive limit. It counted every unfinis
 | Free-lane order | Goal work waited behind one-off pricing questions; providers answering 503/429 | Queue order, not concurrency | #476: +2 queue priority for goal research; no concurrency raised |
 | Judging | Both dives sat CAPTURED for 1.5 h; 119 unjudged ideas, 1 judged per ~13-minute tick | FIFO at one per tick on a contended database | #478 goal first, #481 five goal judgments per tick |
 | Launch | Judged dives waited for a grant slot (14 live of 13) held by path questions | Grant full; launch goal-first since #478 | First slot that freed went to `cop_d9ed5f7` |
+| Free lane | Three goal dives settled BLOCKED: "a research work item for this fragment finished without recording anything" | Provider 503/429 failures exhausted the screens' attempts: a release under a new lease replayed the first (`ALREADY_RECORDED`), and three strikes failed the item | #488. Since 02:46Z the free providers have answered nothing (48 errors an hour, 0 accepted), and the held items wait out the outage |
 
 ## 9. Limitations that remain
 
