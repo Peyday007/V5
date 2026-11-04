@@ -905,6 +905,11 @@ export interface FreeLaneTick {
 let running = false;
 /** Items handed back after a provider failure, and when they may be taken again. Process-local by design. */
 const cooldown = new Map<string, number>();
+
+/** Tests: end every cooldown now, as if its time had passed. Strike counts are kept. */
+export function endFreeLaneCooldowns(): void {
+  cooldown.clear();
+}
 const transientStrikes = new Map<string, number>();
 
 /** Models whose recent free-lane items all failed, from the lane's own events. */
@@ -973,6 +978,9 @@ export interface TakeInput {
  * Returns the claimed job (null when there was none for this slot) and whether
  * Brain accepted the answer.
  */
+/** A provider failure that says the provider was busy or unreachable, not that the work was wrong. */
+export const PROVIDER_BUSY = /\b(?:HTTP (?:408|409|425|429|5\d\d)|timed? ?out|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang up|fetch failed|overloaded|rate.?limit)/i;
+
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
   const { workers, worker, index, config } = input;
   const projectIds = await projectsFor(worker);
@@ -1018,17 +1026,28 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     console.warn(`[free-lane] ${one.workType} ${one.workItemId} threw:`, (error as Error).message);
   }
   const transient = !ok && /^(model call failed|no JSON)/.test(ctx.why);
+  /*
+   * A provider that is busy or rate-limiting (HTTP 429/5xx, a timeout, a reset)
+   * said nothing about the work, however many times it says it. Production,
+   * 2026-11-04 02:32Z: in a run of 503/429s an approved goal's deep dive spent
+   * both of its screen's attempts on three provider failures each and parked
+   * for a person ("finished without recording anything"). So a provider
+   * failure always hands the item back with its attempt refunded, the cooldown
+   * growing to an hour; only an answer the model returned that held no JSON
+   * keeps the three-strike limit, because that one can be the work's fault.
+   */
+  const providerFailure = !ok && /^model call failed/.test(ctx.why) && PROVIDER_BUSY.test(ctx.why);
   const strikes = transient ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
   if (ok) {
     transientStrikes.delete(one.workItemId);
-  } else if (transient && strikes < 3) {
+  } else if (transient && (strikes < 3 || providerFailure)) {
     /*
      * The model or its provider failed, not the work: hand the item back with
      * its attempt refunded, and leave it alone for a while so a provider outage
      * cannot spend the item's attempt budget.
      */
     transientStrikes.set(one.workItemId, strikes);
-    cooldown.set(one.workItemId, Date.now() + 5 * 60_000 * strikes);
+    cooldown.set(one.workItemId, Date.now() + Math.min(60, 5 * strikes) * 60_000);
     try {
       await call(ctx, 'brain_release_work', { ...proof(ctx), detail: `free lane: ${ctx.why}`.slice(0, 300) });
     } catch {
@@ -1055,7 +1074,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     workerId: worker.workerId,
     sessionRef: session,
     workloadClass: one.workType,
-    outcome: ok ? 'SUBMITTED' : transient && strikes < 3 ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
+    outcome: ok ? 'SUBMITTED' : transient && (strikes < 3 || providerFailure) ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
     reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
