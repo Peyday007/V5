@@ -455,7 +455,12 @@ describe('under brain-only mode a goal’s own openings dive beside the operator
         ['cdr_goalfull', projectId, modeId, 'goal-wst_z-mx-ghi', 'GOAL_MECHANISM', 'rcn_goalfull', at, at, at],
       );
       const ids: string[] = [];
-      for (const title of ['Firms repeatedly pay for pooled solar purchases', 'Venues repeatedly pay for activity licences']) {
+      for (const title of [
+        'Firms repeatedly pay for pooled solar purchases',
+        'Venues repeatedly pay for activity licences',
+        'Studios repeatedly pay for outsourced in-between frames',
+        'Shops repeatedly pay for shared mailers',
+      ]) {
         const id = await opening(title);
         await getDb().run('UPDATE cash_opportunities SET discovery_round_id = ? WHERE id = ?', ['cdr_goalfull', id]);
         ids.push(id);
@@ -475,6 +480,9 @@ describe('under brain-only mode a goal’s own openings dive beside the operator
       const started = await startValidations({ projectId });
       expect(started.length).toBeGreaterThan(0);
       expect(started.every((one) => ids.includes(one.opportunityId))).toBe(true);
+      // Queued dives hold no launch, so they never keep another goal opening from queueing.
+      const next = await startValidations({ projectId });
+      expect(new Set([...started, ...next].map((one) => one.opportunityId))).toEqual(new Set(ids));
     } finally {
       await setBrainOnlyMode(false, 'test', null);
       if (saved === undefined) delete process.env['BRAIN_CASH_RESEARCH_MAX'];
