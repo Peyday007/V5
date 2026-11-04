@@ -440,4 +440,45 @@ describe('under brain-only mode a goal’s own openings dive beside the operator
       else process.env['BRAIN_CASH_RESEARCH_MAX'] = saved;
     }
   });
+
+  it('queues a goal dive while every grant slot is held, for Russell to launch goal-first when one frees', async () => {
+    const { setBrainOnlyMode } = await import('../server/services/bins/brainOnly.ts');
+    const { checkAuthority } = await import('../server/repos/russellAuthority.ts');
+    const { RESEARCH_WORK_CLASS } = await import('../server/services/russell/launch.ts');
+    const saved = process.env['BRAIN_CASH_RESEARCH_MAX'];
+    process.env['BRAIN_CASH_RESEARCH_MAX'] = '1';
+    try {
+      const at = new Date().toISOString();
+      await getDb().run(
+        `INSERT INTO cash_discovery_rounds (id, project_id, cash_mode_id, bucket_id, mechanism, round, candidate_id, state, opened_at, found, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, 'HARVESTED', ?, 2, ?, ?)`,
+        ['cdr_goalfull', projectId, modeId, 'goal-wst_z-mx-ghi', 'GOAL_MECHANISM', 'rcn_goalfull', at, at, at],
+      );
+      const ids: string[] = [];
+      for (const title of ['Firms repeatedly pay for pooled solar purchases', 'Venues repeatedly pay for activity licences']) {
+        const id = await opening(title);
+        await getDb().run('UPDATE cash_opportunities SET discovery_round_id = ? WHERE id = ?', ['cdr_goalfull', id]);
+        ids.push(id);
+      }
+      const authority = await checkAuthority({ projectId, workClass: RESEARCH_WORK_CLASS });
+      expect(authority.ok && authority.goal).toBeTruthy();
+      const goal = authority.ok ? authority.goal! : null;
+      const expires = new Date(Date.now() + 3_600_000).toISOString();
+      for (let i = 0; i < goal!.maxConcurrent; i += 1) {
+        await getDb().run(
+          `INSERT INTO russell_budget_reservations (id, goal_id, kind, amount, idempotency_key, state, expires_at, created_at)
+           VALUES (?, ?, 'MISSION', 1, ?, 'HELD', ?, ?)`,
+          [`rbr_full_${i}`, goal!.id, `full-${projectId}-${i}`, expires, at],
+        );
+      }
+      await setBrainOnlyMode(true, 'test', 'research is the free lane’s');
+      const started = await startValidations({ projectId });
+      expect(started.length).toBeGreaterThan(0);
+      expect(started.every((one) => ids.includes(one.opportunityId))).toBe(true);
+    } finally {
+      await setBrainOnlyMode(false, 'test', null);
+      if (saved === undefined) delete process.env['BRAIN_CASH_RESEARCH_MAX'];
+      else process.env['BRAIN_CASH_RESEARCH_MAX'] = saved;
+    }
+  });
 });
