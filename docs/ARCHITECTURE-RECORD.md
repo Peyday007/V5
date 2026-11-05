@@ -14298,6 +14298,14 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   returned no usable JSON over a brief of up to 60 000 characters. An audit
   whose first answer holds no JSON is asked once more over a 20 000-character
   brief with a JSON-only instruction; the submission is judged as before.
+- **An audit that failed was Brain's database, not the model.** After #521 the
+  audits still read 6/27 and the rows said "the model returned no usable JSON" —
+  the lane's default reason, because the step had *thrown*: production logs
+  showed "The database pool had no free connection … 593 caller(s) waiting"
+  while the audit brief was assembled. The thrown message is now the recorded
+  reason, and Brain's own database or gateway being unavailable
+  (`BRAIN_UNAVAILABLE`) hands the item back with its attempt refunded, as a
+  provider outage does, instead of spending it and parking the packet.
 ## 89. A goal's research is measured at its plan, and a search that does not reach the plan is asked differently.
 
 **Owner's order, 2026-11-05.** The RunPod GPU's research must advance the $10K

@@ -1083,6 +1083,9 @@ export interface TakeInput {
  * Brain accepted the answer.
  */
 /** A provider failure that says the provider was busy or unreachable, not that the work was wrong. */
+/** Brain's own database or gateway was unavailable: an outage, never the work's fault. */
+export const BRAIN_UNAVAILABLE = /database pool had no free connection|Connection terminated due to connection timeout|too many clients|Brain is temporarily busy|database did not answer in time/i;
+
 export const PROVIDER_BUSY = /\b(?:HTTP (?:408|409|425|429|5\d\d)|timed? ?out|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang up|fetch failed|overloaded|rate.?limit)/i;
 
 /**
@@ -1140,7 +1143,11 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
   try {
     ok = await answerItem(ctx);
   } catch (error) {
-    console.warn(`[free-lane] ${one.workType} ${one.workItemId} threw:`, (error as Error).message);
+    const message = String((error as Error)?.message ?? error).slice(0, 300);
+    console.warn(`[free-lane] ${one.workType} ${one.workItemId} threw:`, message);
+    // The failure is the exception, not the default "no usable JSON" (2026-11-05: every
+    // failed audit read that way and the cause was unreadable from the rows).
+    ctx.why = `threw: ${message}`;
   }
   const transient = !ok && /^(model call failed|no JSON)/.test(ctx.why);
   /*
@@ -1153,11 +1160,19 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
    * growing to an hour; only an answer the model returned that held no JSON
    * keeps the three-strike limit, because that one can be the work's fault.
    */
-  const providerFailure = !ok && /^model call failed/.test(ctx.why) && PROVIDER_BUSY.test(ctx.why);
-  const strikes = transient ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
+  /*
+   * Brain's own database being unavailable says nothing about the work either.
+   * Production, 2026-11-05 11:29–11:31Z: audit items threw "The database pool
+   * had no free connection … 593 caller(s) waiting", were failed retryably,
+   * spent their attempts, and six packets parked "an audit work item finished
+   * without recording anything". Treated as a provider outage: refunded, cooled.
+   */
+  const brainUnavailable = !ok && BRAIN_UNAVAILABLE.test(ctx.why);
+  const providerFailure = !ok && ((/^model call failed/.test(ctx.why) && PROVIDER_BUSY.test(ctx.why)) || brainUnavailable);
+  const strikes = transient || brainUnavailable ? (transientStrikes.get(one.workItemId) ?? 0) + 1 : 0;
   if (ok) {
     transientStrikes.delete(one.workItemId);
-  } else if (transient && (strikes < 3 || providerFailure)) {
+  } else if ((transient || brainUnavailable) && (strikes < 3 || providerFailure)) {
     /*
      * The model or its provider failed, not the work: hand the item back with
      * its attempt refunded, and leave it alone for a while so a provider outage
@@ -1191,7 +1206,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     workerId: worker.workerId,
     sessionRef: session,
     workloadClass: one.workType,
-    outcome: ok ? 'SUBMITTED' : transient && (strikes < 3 || providerFailure) ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
+    outcome: ok ? 'SUBMITTED' : (transient || brainUnavailable) && (strikes < 3 || providerFailure) ? 'RELEASED_TRANSIENT' : 'FAILED_RETRYABLE',
     reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
