@@ -14291,6 +14291,13 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   now refuses on BLOCKER, MAJOR or unknown-severity open findings; MINOR ones
   stay listed under the pull request's remaining limitations.
 
+- **With fragments clearing the gate, audit was the next stop.** 09:18–10:18Z
+  (`capabilities show 1`): VERIFICATION.GATE WORKING 10/19 (was 13/75),
+  providers answering 94/122, but ANALYSIS.AUDIT 5/25 and six packets parked
+  "an audit work item finished without recording anything" — the free model
+  returned no usable JSON over a brief of up to 60 000 characters. An audit
+  whose first answer holds no JSON is asked once more over a 20 000-character
+  brief with a JSON-only instruction; the submission is judged as before.
 ## 89. A goal's research is measured at its plan, and a search that does not reach the plan is asked differently.
 
 **Owner's order, 2026-11-05.** The RunPod GPU's research must advance the $10K

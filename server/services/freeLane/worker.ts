@@ -913,7 +913,23 @@ async function audit(ctx: Ctx, role: string): Promise<boolean> {
     `You are the ${role} auditor of a research packet. Audit brief (the document, its claim ledger and what ` +
     `it was asked to do):\n${JSON.stringify(brief).slice(0, 60_000)}\n\nJudge it strictly against the brief. ` +
     `Reply as {"${key}": <object>} where the object matches: ${JSON.stringify(schema)}`;
-  const raw = await askFor(ctx, prompt);
+  let raw = await askFor(ctx, prompt);
+  /*
+   * A long brief is where free models stop answering in JSON. Production,
+   * 2026-11-05 09:18–10:18Z: ANALYSIS.AUDIT 5/25 and six packets parked "an audit
+   * work item finished without recording anything", each attempt "the model
+   * returned no usable JSON" on a brief of up to 60 000 characters. Once, the
+   * same audit is asked over a compact brief with a JSON-only instruction; the
+   * submission is judged exactly as before.
+   */
+  if (!raw && /no usable JSON|no JSON/i.test(ctx.why)) {
+    const compact =
+      `You are the ${role} auditor of a research packet. Audit brief (shortened; the document, its claim ledger ` +
+      `and the assignment):\n${JSON.stringify(brief).slice(0, 20_000)}\n\nJudge it strictly against the brief. ` +
+      `Reply with ONLY one JSON object, no prose and no code fence: {"${key}": <object>} where the object matches: ` +
+      JSON.stringify(schema);
+    raw = await askFor(ctx, compact);
+  }
   if (!raw) return false;
   // Models often answer with the role's object itself rather than wrapped in it.
   const inner = raw[key] && typeof raw[key] === 'object' ? raw[key] : raw;

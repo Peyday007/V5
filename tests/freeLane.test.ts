@@ -543,6 +543,35 @@ describe('a restriction must name a replacement that is doing the work', () => {
     expect(reading.claimsSubmitted).toBe(1);
     expect(reading.outcomesLastDay['RESEARCH_FRAGMENT:SUBMITTED']).toBe(1);
   });
+  it('re-asks an audit over a compact brief when the model answers it without JSON', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await getDb().run("UPDATE research_orchestrations SET status = 'RESEARCHING' WHERE id = ?", [orchestration.id]);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    let longBriefs = 0;
+    let compactBriefs = 0;
+    for (let round = 0; round < 8; round += 1) {
+      const base = model();
+      const completer: Completer = async (config, name, system, prompt) => {
+        if (prompt.includes('Audit brief (the document')) {
+          longBriefs += 1;
+          return 'The packet looks reasonable overall, with a few gaps.';
+        }
+        if (prompt.includes('Audit brief (shortened')) {
+          compactBriefs += 1;
+          return base.completer(config, name, system, prompt.replace('Audit brief (shortened;', 'Audit brief (the document,'));
+        }
+        return base.completer(config, name, system, prompt);
+      };
+      const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
+      const { advancePacket } = await import('../server/services/research/packetRunner.ts');
+      await advancePacket(orchestration.id);
+      if (tick.claimed === 0 && round > 0) break;
+    }
+    const status = await getDb().get<{ status: string }>('SELECT status FROM research_orchestrations WHERE id = ?', [orchestration.id]);
+    expect(longBriefs).toBeGreaterThanOrEqual(3);
+    expect(compactBriefs).toBeGreaterThanOrEqual(3);
+    expect(status?.status).toBe('COMPLETE');
+  });
 });
 
 describe('the whole packet on the free lane', () => {
