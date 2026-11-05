@@ -702,6 +702,16 @@ export const MAX_INDUSTRY_LENSES = 60;
  */
 export const MAX_LIVE_GOAL_ROUNDS = 3;
 
+/**
+ * What a goal round looks for first (owner, 2026-11-05): work run remotely and
+ * fulfilled mostly by AI, sold to buyers who can be named, at prices buyers are
+ * shown paying, collected fast. A preference in the question, not a filter:
+ * the gate, harvest and plan judge every opening exactly as before.
+ */
+export const REMOTE_AI_FOCUS =
+  'Prefer work this operation can run entirely online and fulfil mostly with AI-produced digital output (documents, data, research, content, code, automations) that businesses already pay providers for. ' +
+  'For each such opening give: the kind of buyer and where they are found, a dated sign that buyers want it now, the price buyers are shown paying for it, how the work would be produced and delivered, the cost per sale, and how quickly the money is collected.';
+
 /** A barren goal lens waits longer each time, up to this, and is never retired. */
 export const GOAL_LENS_MAX_BACKOFF_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -754,6 +764,12 @@ export async function openGoalDiscovery(input: {
   bestReach: number | null;
   /** Openings Brain already holds for the goal, so a new round looks elsewhere. */
   heldTitles?: string[];
+  /**
+   * What the goal's plan found wrong with what research has produced so far,
+   * as instructions (`goals/researchYield.ts`): a search that keeps returning
+   * openings the plan cannot use is asked differently, not again.
+   */
+  diagnosis?: string;
   now?: string;
   /**
    * How many of this goal's rounds may be open at once. Defaults to
@@ -865,6 +881,8 @@ export async function openGoalDiscovery(input: {
       `Report only ways that could bring at least ${t.currency} ${Math.round((t.remainingCents / 100) * 0.1)} within that time — alone, or as a stream many buyers pay repeatedly — and leave out one-off small payments, contests, bounties and submissions that pay a few hundred at most. ` +
       'For each, name who pays, what buyers are published as actually paying, when the money would settle, ' +
       'what it needs up front, and what it would need that the operation does not have yet?' +
+      ` ${REMOTE_AI_FOCUS}` +
+      (input.diagnosis ? ` ${input.diagnosis}` : '') +
       (learned ? ` ${learned}` : '') +
       ' For each opening, say how it was found: the source and the search that led to it.',
     lens.id,

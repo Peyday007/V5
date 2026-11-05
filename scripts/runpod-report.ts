@@ -10,6 +10,13 @@
  * how many, what share passed source validation (`sourced`), and what share a
  * verifier later refuted. A fragment two models both answered counts for both.
  *
+ * Goals: for every live cash goal, the chain from research job to plan — the
+ * goal's research jobs and accepted claims by model, the openings its rounds
+ * harvested and which model's fragment each came from, how many the plan
+ * considers and models, how many have a buyer and a price it accepts, its
+ * reach against the 90% the owner requires, the plan's history, and why the
+ * research falls short (`goals/researchYield.ts`).
+ *
  * Cost: a pod bills by the hour whether it is busy or not, so the GPU's cost per
  * research job is its hourly price × the window ÷ the jobs it submitted. The price
  * is `BRAIN_RUNPOD_USD_PER_HOUR` (what RunPod charges for the pod); unset, the cost
@@ -18,6 +25,8 @@
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { runpodConfig } from '../server/services/cheap/runpod.ts';
+import { listReadings, planProgress, readGoalPlan } from '../server/services/goals/plan.ts';
+import { goalResearchProgress } from '../server/services/goals/researchYield.ts';
 
 const argv = process.argv.slice(2);
 const at = argv.indexOf('--hours');
@@ -78,7 +87,59 @@ async function main(): Promise<void> {
     console.log(`GPU COST $${spend.toFixed(2)} for ${hours}h at $${price}/h · ${gpuJobs ? `$${(spend / gpuJobs).toFixed(4)} per research job` : 'no GPU jobs yet'}`);
   } else console.log('GPU COST unknown (set BRAIN_RUNPOD_USD_PER_HOUR to the pod price)');
   console.log(`RUNPOD_SUBMITTED ${gpuJobs}`);
+  await goalSection(since, hours);
   console.log('RUNPOD-REPORT: OK');
+}
+
+/** The $10K-style goals: does research, and the GPU's in particular, reach the plan? */
+async function goalSection(since: string, hours: number): Promise<void> {
+  const goals = await getDb().all<{ id: string; title: string }>(
+    `SELECT id, title FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
+  );
+  let gpuOpenings = 0;
+  let gpuInPlan = 0;
+  for (const goal of goals) {
+    const reading = await readGoalPlan({ goalId: goal.id, persist: false });
+    if (!reading) continue;
+    const progress = await goalResearchProgress(reading.target.projectId, goal.id, since);
+    console.log(`GOAL ${goal.id} ${goal.title.slice(0, 80)}`);
+    const r = progress.rounds;
+    console.log(`  rounds (${hours}h)   opened ${r.opened} · harvested ${r.harvested} (${r.withOpenings} with openings) · abandoned ${r.abandoned} · open now ${r.open}`);
+    for (const [model, j] of Object.entries(progress.jobs)) {
+      const c = progress.claims[model];
+      console.log(`  jobs ${model.padEnd(28)} submitted ${j.submitted} · not accepted ${j.failed}${c ? ` · claims ${c.claims}, sourced ${c.sourced}, opening signals ${c.signalled}` : ''}`);
+    }
+    if (Object.keys(progress.jobs).length === 0) console.log('  jobs                 none on this goal');
+    const considered = new Map(reading.considered.map((one) => [one.opportunityId, one]));
+    const p = planProgress(reading);
+    for (const one of progress.openings) {
+      const judged = considered.get(one.id);
+      const left = reading.excluded.find((x) => x.opportunityId === one.id);
+      const where = judged ? (judged.modelled ? 'MODELLED' : 'CONSIDERED') : left ? `left out: ${left.reason.slice(0, 70)}` : 'not read by the plan';
+      if (one.model?.startsWith('runpod/')) {
+        gpuOpenings += 1;
+        if (judged) gpuInPlan += 1;
+      }
+      console.log(`  opening ${one.id} [${one.model ?? 'no fragment'}] payer ${one.payer ? 'yes' : 'no'} · price ${one.price ? 'yes' : 'no'} · ${where}${judged ? ` · missing ${judged.missing.join(',') || 'nothing'}` : ''} · ${one.title.slice(0, 70)}`);
+    }
+    console.log(`  new openings         ${progress.openings.length} in ${hours}h · ${progress.openings.filter((o) => o.payer && o.price).length} with payer and price on the card`);
+    console.log(`  plan                 ${reading.verdict} · considered ${p.considered} · modelled ${p.modelled} · buyer and price accepted by the plan ${p.evidencedBuyerAndPrice}`);
+    console.log(`  combined             reach ${p.reach === null ? 'n/a' : `${Math.round(p.reach * 100)}%`} of worlds (requirement 90%) · p50 settled ${p.settledP50 ?? 'n/a'} · best reach ${p.bestReach ?? 'n/a'} · basis ${reading.portfolio?.basis ?? 'n/a'}`);
+    const history = (await listReadings(goal.id)).slice(-6);
+    for (const row of history) {
+      let f: Record<string, unknown> = {};
+      try {
+        f = row.forecast ? (JSON.parse(row.forecast) as Record<string, unknown>) : {};
+      } catch {
+        f = {};
+      }
+      console.log(`  history ${row.created_at} ${row.verdict} reach ${f['reach'] ?? '-'} p50 ${f['settledP50'] ?? '-'} considered ${f['considered'] ?? '-'} modelled ${f['modelled'] ?? '-'} causes ${Array.isArray(f['causes']) ? (f['causes'] as string[]).join(',') : '-'}`);
+    }
+    for (const d of reading.researchDiagnosis) console.log(`  why short ${d.cause}: ${d.evidence}`);
+    if (reading.researchDiagnosis.length === 0) console.log('  why short            nothing stands out');
+  }
+  console.log(`RUNPOD_GOAL_OPENINGS ${gpuOpenings}`);
+  console.log(`RUNPOD_GOAL_OPENINGS_IN_PLAN ${gpuInPlan}`);
 }
 
 main()

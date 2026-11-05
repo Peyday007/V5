@@ -62,3 +62,20 @@ Nothing to run by hand. Each hour `runpod-auto`:
    and fallbacks from the log; a changed secret (new pod) is reconnected.
 
 By hand: `runpod-test`, `runpod-connect`, `runpod-disconnect` (back to free only), `runpod-report`.
+
+## Does it reach the $10K plan?
+
+The hourly `runpod-report` also prints, for every live cash goal (§89):
+
+- `rounds` — the goal's research rounds opened, harvested (with openings), abandoned, open;
+- `jobs <model>` — the goal's research jobs on each model (`runpod/...` is the GPU), with
+  claims, sourced claims and opening signals on the fragments each submitted;
+- `opening <id> [<model>]` — each opening the goal's research filed, which model's fragment it
+  came from, payer and price on the card, and whether the plan MODELLED, CONSIDERED or left
+  it out (and why: a fresh signal waits for its validation dive to name who pays);
+- `plan` / `combined` — verdict, openings considered and modelled, those with a buyer and a
+  price the plan accepts, the best combination's reach against the 90% requirement and p50;
+- `history` — the plan's last readings (a row is written whenever those figures move);
+- `why short` — the causes the next goal round is told to fix;
+- `RUNPOD_GOAL_OPENINGS` / `RUNPOD_GOAL_OPENINGS_IN_PLAN` — GPU-made openings, and how many
+  the plan has read.

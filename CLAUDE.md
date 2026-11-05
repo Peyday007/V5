@@ -291,7 +291,7 @@ There must be no workflow where the user has to remember "now go update the data
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
 
-## 8–88. The architecture record
+## 8–89. The architecture record
 
 Sections 8 onward — why each subsystem is shaped as it is, and the production
 defects that shaped it — are in **`docs/ARCHITECTURE-RECORD.md`**, verbatim and
@@ -381,6 +381,7 @@ resolves. Read the section for the area you are changing before you change it
 - §86. The free lane's concurrency is a controller's output, and a quote is copied, never retyped.
 - §87. Brain improves itself through one loop, from a weakness in the rows to a measured decision.
 - §88. A complete system is mapped before it is debugged, and a gap is read from production, never from code.
+- §89. A goal's research is measured at its plan, and a search that does not reach the plan is asked differently.
 
 ## Conventions
 
