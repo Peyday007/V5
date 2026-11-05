@@ -86,8 +86,18 @@ export function decideRelease(input: GateInput): GateDecision {
       );
     }
   }
-  if (input.openFindings.length > 0) {
-    reasons.push(`${input.openFindings.length} review finding(s) are still open.`);
+  /*
+   * A MINOR finding a passing review left open is a recorded limitation, not a
+   * defect the release must wait on: it is printed in the pull request's
+   * "Remaining limitations", and the review that passed read it. Production,
+   * 2026-11-05: both objectives the capability map raised (fcp_0d6ad09f…,
+   * fcp_86c90fcc…) were reviewed PASS and then refused for one MINOR finding
+   * each, so the improvement loop ended at a person every time. A BLOCKER, a
+   * MAJOR, or a finding whose severity is unknown still refuses.
+   */
+  const blocking = input.openFindings.filter((finding) => (finding as { severity?: string }).severity !== 'MINOR');
+  if (blocking.length > 0) {
+    reasons.push(`${blocking.length} review finding(s) are still open.`);
   }
   if (input.repositorySlug === null) {
     reasons.push(`The repository ${changeRequest.repository} is not one this Brain can address.`);

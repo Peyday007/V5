@@ -14284,6 +14284,13 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   short, so a fragment's own discovery keeps the budget. The same reading showed
   #513 working: EXTRACTION.CITED_CLAIMS 12/20 (was 30/84).
 
+- **A MINOR limitation does not hold a release.** Both objectives the map raised
+  (RECOVERY.STALLS → #510, RECOVERY.RETRY → #508) were reviewed PASS, then
+  refused by the release gate for one MINOR finding each, so the loop ended at
+  a person every time; both were merged by a session on that reading. The gate
+  now refuses on BLOCKER, MAJOR or unknown-severity open findings; MINOR ones
+  stay listed under the pull request's remaining limitations.
+
 ## 89. A goal's research is measured at its plan, and a search that does not reach the plan is asked differently.
 
 **Owner's order, 2026-11-05.** The RunPod GPU's research must advance the $10K

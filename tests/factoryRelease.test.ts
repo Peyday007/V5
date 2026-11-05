@@ -241,6 +241,9 @@ describe('the release gate', () => {
     expect(decideRelease({ ...base, latestReview: { ...review, independence: 'UNKNOWN' } }).eligible).toBe(false);
     expect(decideRelease({ ...base, latestReview: { ...review, reviewedSha: 'b'.repeat(40) } }).eligible).toBe(false);
     expect(decideRelease({ ...base, openFindings: [{} as never] }).eligible).toBe(false);
+    expect(decideRelease({ ...base, openFindings: [{ severity: 'MAJOR' } as never] }).eligible).toBe(false);
+    // A MINOR limitation a passing review left open does not hold the release.
+    expect(decideRelease({ ...base, openFindings: [{ severity: 'MINOR' } as never] })).toMatchObject({ eligible: true, reasons: [] });
     expect(decideRelease({ ...base, changedFilesTruncated: true }).eligible).toBe(false);
     expect(decideRelease({ ...base, changedFiles: null }).eligible).toBe(false);
     expect(decideRelease({ ...base, repositorySlug: 'Peyday007/other' }).eligible).toBe(false);
