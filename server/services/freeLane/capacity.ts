@@ -316,6 +316,15 @@ export interface ControlReading {
   models: Array<{ model: string; target: number; running: number; busy: number; stableHigh: number; window: Window; reason: string }>;
 }
 
+/** Slots per connection the lane may hold across all its models. */
+export const SLOTS_PER_DB_CONNECTION = 3;
+
+/** One model's share of the slots the database pool can carry, or null when the pool is not measured. Pure in its inputs. */
+export function slotShare(models: number, poolMax: number | null = databasePoolReadings()?.workload.max ?? null): number | null {
+  if (!poolMax || poolMax <= 0 || models <= 0) return null;
+  return Math.max(MIN_TARGET, Math.floor((poolMax * SLOTS_PER_DB_CONNECTION) / models));
+}
+
 let lastReading: ControlReading | null = null;
 const IDLE_RECORD_MS = 10 * 60_000;
 const BOOT_GRACE_MS = 10 * 60_000;
@@ -351,6 +360,13 @@ export async function controlStep(): Promise<ControlReading | null> {
     // the lane stays at its starting size until it has been up BOOT_GRACE_MS.
     if (Date.now() - poolStartedAt < BOOT_GRACE_MS && decision.target > START_TARGET) {
       decision = { ...decision, target: START_TARGET, reason: 'starting up: held at its starting size for the first minutes', stable: false };
+    }
+    // Every slot reaches the same database pool. Production, 2026-11-05 11:29Z: three
+    // models' slots left 593 callers waiting on 8 connections, and audits threw. The
+    // lane's slots together stay within a multiple of the pool's own ceiling.
+    const share = slotShare(pools.size);
+    if (share !== null && decision.target > share) {
+      decision = { ...decision, target: share, reason: `held to its share of the database pool (${share} of ${share * pools.size} slots)`, stable: false };
     }
     if (decision.stable) pool.stableHigh = Math.max(pool.stableHigh, peak);
     pool.peakBusy = pool.busy;

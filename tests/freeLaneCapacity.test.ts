@@ -13,6 +13,8 @@ import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import {
   controlStep,
   decideTarget,
+  slotShare,
+  SLOTS_PER_DB_CONNECTION,
   readCapacity,
   startAdaptivePool,
   stopAdaptivePool,
@@ -157,3 +159,14 @@ describe('generation follows the free lane, not idle Claude surfaces', () => {
   });
 });
 
+describe('the lane stays within what the database pool can carry', () => {
+  it('splits a multiple of the pool ceiling across the models, and is unbounded only when the pool is not measured', () => {
+    // Production, 2026-11-05: three models, eight connections, 593 callers waiting.
+    expect(SLOTS_PER_DB_CONNECTION).toBe(3);
+    expect(slotShare(3, 8)).toBe(8);
+    expect(slotShare(2, 8)).toBe(12);
+    expect(slotShare(30, 8)).toBe(1);
+    expect(slotShare(3, null)).toBeNull();
+    expect(slotShare(3, 0)).toBeNull();
+  });
+});
