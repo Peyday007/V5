@@ -15,7 +15,7 @@ import { createUser } from '../server/repos/identity.ts';
 import { createGoal } from '../server/repos/russellAuthority.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, currentFragments, getOrchestration, updateFragment, updateOrchestration } from '../server/repos/research.ts';
-import { answerUnaskedParks, ROUTINE_DECISION_GRACE_MS } from '../server/services/russell/routineDecisions.ts';
+import { answerUnaskedParks, parkReadings, ROUTINE_DECISION_GRACE_MS } from '../server/services/russell/routineDecisions.ts';
 
 let projectId = '';
 let layerId = '';
@@ -54,7 +54,7 @@ describe('answerUnaskedParks', () => {
   it('files a card-less park with accepted evidence as RECORD_GAPS under the standing grant, once, and records who decided', async () => {
     await createGoal({ projectId, ownerUserId: userId, createdByUserId: userId, name: 'standing', allowedWork: ['RESEARCH'], maxMissions: 1, maxFragments: 1, maxConcurrent: 1, maxProbes: 1 });
     const id = await parkedPacket(true);
-    const first = await answerUnaskedParks({});
+    const first = await answerUnaskedParks({ ignoreBootGrace: true });
     expect(first.map((d) => [d.orchestrationId, d.decided])).toEqual([[id, true]]);
     const after = (await getOrchestration(id))!;
     expect(after.unresolvedGapPolicy).toBe('RECORD_GAPS');
@@ -62,20 +62,27 @@ describe('answerUnaskedParks', () => {
     const event = await getDb().get<{ payload: string }>("SELECT payload FROM project_events WHERE event_type = 'RUSSELL_ROUTINE_DECISION' ORDER BY created_at DESC LIMIT 1");
     expect(event!.payload).toMatch(/Decided by Brain under the standing research grant/);
     // Authorized once: the next pass does not decide it again.
-    expect((await answerUnaskedParks({})).filter((d) => d.decided)).toEqual([]);
+    expect((await answerUnaskedParks({ ignoreBootGrace: true })).filter((d) => d.decided)).toEqual([]);
   });
 
   it('leaves a park with nothing accepted, one inside the grace period, and one with no live grant', async () => {
     const nothing = await parkedPacket(false);
-    expect(await answerUnaskedParks({})).toEqual([]); // no grant yet either
+    expect(await answerUnaskedParks({ ignoreBootGrace: true })).toEqual([]); // no grant yet either
     await createGoal({ projectId, ownerUserId: userId, createdByUserId: userId, name: 'standing', allowedWork: ['RESEARCH'], maxMissions: 1, maxFragments: 1, maxConcurrent: 1, maxProbes: 1 });
-    expect((await answerUnaskedParks({})).map((d) => d.orchestrationId)).not.toContain(nothing);
+    expect((await answerUnaskedParks({ ignoreBootGrace: true })).map((d) => d.orchestrationId)).not.toContain(nothing);
     const fresh = await parkedPacket(true);
     await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [new Date().toISOString(), fresh]);
-    expect((await answerUnaskedParks({})).map((d) => d.orchestrationId)).not.toContain(fresh);
+    expect((await answerUnaskedParks({ ignoreBootGrace: true })).map((d) => d.orchestrationId)).not.toContain(fresh);
     await getDb().run(`UPDATE russell_goals SET state = 'REVOKED' WHERE project_id = ?`, [projectId]);
     const ungranted = await parkedPacket(true);
-    expect((await answerUnaskedParks({})).map((d) => d.orchestrationId)).not.toContain(ungranted);
+    expect((await answerUnaskedParks({ ignoreBootGrace: true })).map((d) => d.orchestrationId)).not.toContain(ungranted);
     expect((await getOrchestration(ungranted))!.unresolvedGapPolicy).not.toBe('RECORD_GAPS');
+  });
+
+  it('reads every parked packet with what decides it, for the admin read', async () => {
+    const id = await parkedPacket(true);
+    const rows = await parkReadings();
+    expect(rows.map((r) => r['id'])).toContain(id);
+    expect(rows.find((r) => r['id'] === id)).toMatchObject({ accepted: 1, standing_grants: 0 });
   });
 });
