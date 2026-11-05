@@ -240,8 +240,12 @@ export async function readProbe(probe: Probe, from: string, to: string): Promise
     }
     case 'METHOD_POOL': {
       const row = await db.get<{ total: number | string }>(
-        `SELECT COUNT(*) AS total FROM research_claims c JOIN projects p ON p.id = c.project_id
-          WHERE p.slug = ? AND c.accepted = 1`,
+        // The method pool's own joins (`readMethodRulePool`): a claim carries no project column.
+        `SELECT COUNT(*) AS total FROM research_claims c
+           JOIN research_orchestrations o ON o.id = c.orchestration_id
+           JOIN russell_goals g ON g.id = o.goal_id
+           JOIN projects p ON p.id = g.project_id
+          WHERE p.slug = ? AND g.purpose = 'RESEARCH_GOAL' AND c.accepted = 1`,
         [BRAIN_PROJECT_SLUG],
       );
       const total = n(row?.total);

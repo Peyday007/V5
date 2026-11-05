@@ -185,3 +185,15 @@ describe('the assessor reads production rows', () => {
     expect(Number(events[0]!.n)).toBe(1);
   });
 });
+
+describe('every probe reads on a real schema', () => {
+  beforeEach(async () => {
+    await freshProject();
+  });
+  it('answers each probe without an error (an unreadable probe is UNPROVEN for the wrong reason)', async () => {
+    const { readProbe } = await import('../server/services/selfmodel/capabilities.ts');
+    const to = new Date().toISOString();
+    const from = new Date(Date.now() - 86_400_000).toISOString();
+    for (const probe of PROBES) await expect(readProbe(probe, from, to), probe).resolves.toHaveProperty('total');
+  });
+});

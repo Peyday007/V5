@@ -261,15 +261,34 @@ function principalFor(worker: FreeWorker, projectIds: string[], sessionRef: stri
 /* ------------------------------------------------------------------------- */
 
 /** The newest bin owning an item, and its purpose. */
+/**
+ * A work item's owning purpose, cached ten minutes. The claim window pages past
+ * work the lane declines (`claimWork`), so an idle slot can ask about dozens of
+ * items every pass; on a saturated database that must not be a query each.
+ */
+const purposeCache = new Map<string, { at: number; purpose: string | null }>();
+const PURPOSE_TTL_MS = 10 * 60_000;
+
 async function owningPurpose(item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'>): Promise<string | null> {
   const key = item.bin_id ?? item.orchestration_id ?? null;
   if (!key) return null;
+  const cacheKey = `${item.bin_id ? 'b' : 'o'}:${key}`;
+  const hit = purposeCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < PURPOSE_TTL_MS) return hit.purpose;
   const owner = item.bin_id ? 'b.id = ?' : 'b.orchestration_id = ?';
   const row = await getDb().get<{ purpose: string | null }>(
     `SELECT b.purpose FROM bins b WHERE ${owner} ORDER BY b.created_at DESC LIMIT 1`,
     [key],
   );
-  return row?.purpose ?? null;
+  const purpose = row?.purpose ?? null;
+  if (purposeCache.size > 5000) purposeCache.clear();
+  // An item with no bin yet may get one: only a found purpose is remembered.
+  if (purpose !== null) purposeCache.set(cacheKey, { at: Date.now(), purpose });
+  return purpose;
+}
+
+export function resetPurposeCache(): void {
+  purposeCache.clear();
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   sameSite,
   searchStats,
   searchSuccessor,
+  setSearchRefusalRecorder,
   webSearch,
 } from '../server/services/sources/discover.ts';
 import { readSource, type AccessDeps } from '../server/services/sources/access.ts';
@@ -58,17 +59,35 @@ describe('a search result is a candidate page that exists', () => {
     expect(isSearchAnomaly(200, HTML)).toBe(false);
   });
 
-  it('searches, and after an anomaly pauses instead of hammering the endpoint', async () => {
+  it('searches, moves to the other endpoint on a refusal, and pauses only when both refuse', async () => {
     const seen: string[] = [];
     expect(await webSearch('sba size standards', { fetchImpl: fakeFetch(200, HTML, seen) })).toHaveLength(2);
-    expect(seen[0]).toContain('html.duckduckgo.com/html/?q=sba%20size%20standards');
+    expect(seen[0]).toContain('duckduckgo.com/');
+    expect(seen[0]).toContain('?q=sba%20size%20standards');
+    // The same query again is answered from memory.
+    expect(await webSearch('sba size standards', { fetchImpl: fakeFetch(200, HTML, seen) })).toHaveLength(2);
+    expect(seen).toHaveLength(1);
+    expect(searchStats.cached).toBe(1);
+
     resetSearchState();
-    expect(await webSearch('x y', { fetchImpl: fakeFetch(202, 'anomaly-modal', seen) })).toEqual([]);
-    expect(searchStats.refused).toBe(1);
+    const refusals: string[] = [];
+    setSearchRefusalRecorder((endpoint) => refusals.push(endpoint));
+    // One endpoint refuses, the other answers: results, and one refusal recorded.
+    let calls = 0;
+    const firstRefuses = (async (input: RequestInfo | URL) => {
+      seen.push(String(input));
+      calls += 1;
+      return calls === 1 ? new Response('anomaly-modal', { status: 202 }) : new Response(HTML, { status: 200 });
+    }) as typeof fetch;
+    expect(await webSearch('a b', { fetchImpl: firstRefuses })).toHaveLength(2);
+    expect(refusals).toHaveLength(1);
+    // The other now refuses too: nothing is open, so the next query is not sent.
+    expect(await webSearch('c d', { fetchImpl: fakeFetch(202, 'anomaly-modal', seen) })).toEqual([]);
     const before = seen.length;
-    expect(await webSearch('x y', { fetchImpl: fakeFetch(200, HTML, seen) })).toEqual([]);
+    expect(await webSearch('e f', { fetchImpl: fakeFetch(200, HTML, seen) })).toEqual([]);
     expect(seen.length).toBe(before);
     expect(searchStats.skipped).toBe(1);
+    setSearchRefusalRecorder(null);
   });
 
   it('never throws: a failed search is an empty candidate list', async () => {

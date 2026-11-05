@@ -25,25 +25,45 @@ export interface SearchDeps {
   nowMs?: () => number;
 }
 
-const ENDPOINT = 'https://html.duckduckgo.com/html/?q=';
-const SPACING_MS = 1200;
+/**
+ * Two front doors to the same index. Production and this sandbox both saw the
+ * html endpoint answer 202 (an anomaly page) after a few queries while lite
+ * still answered, so a refusal pauses only the endpoint that refused.
+ */
+const ENDPOINTS = [
+  { name: 'html', url: 'https://html.duckduckgo.com/html/?q=' },
+  { name: 'lite', url: 'https://lite.duckduckgo.com/lite/?q=' },
+] as const;
+const SPACING_MS = 1500;
 const MAX_WAITERS = 12;
 const PAUSE_AFTER_ANOMALY_MS = 10 * 60_000;
 const MAX_RESULTS = 8;
+/** The same query within ten minutes is answered from memory: dead links on one site repeat. */
+const RESULT_TTL_MS = 10 * 60_000;
 
 let chain: Promise<unknown> = Promise.resolve();
 let waiting = 0;
 let lastAt = 0;
-let pausedUntil = 0;
+let turn = 0;
+const pausedUntil = new Map<string, number>();
+const remembered = new Map<string, { at: number; urls: string[] }>();
 
-/** What the last searches did, for `sources show` and the capability map. */
-export const searchStats = { queries: 0, withResults: 0, empty: 0, refused: 0, skipped: 0 };
+/** What the last searches did, for tests and the capability map. */
+export const searchStats = { queries: 0, withResults: 0, empty: 0, refused: 0, skipped: 0, cached: 0 };
+
+/** Called once per refusal, so a blocked endpoint is a row and not a silence. */
+let onRefusal: ((endpoint: string, status: number) => void) | null = null;
+export function setSearchRefusalRecorder(fn: ((endpoint: string, status: number) => void) | null): void {
+  onRefusal = fn;
+}
 
 export function resetSearchState(): void {
   chain = Promise.resolve();
   waiting = 0;
   lastAt = 0;
-  pausedUntil = 0;
+  turn = 0;
+  pausedUntil.clear();
+  remembered.clear();
   for (const key of Object.keys(searchStats) as (keyof typeof searchStats)[]) searchStats[key] = 0;
 }
 
@@ -93,7 +113,19 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
   const now = deps.nowMs ?? Date.now;
   const q = query.replace(/\s+/g, ' ').trim().slice(0, 240);
   if (!q) return [];
-  if (now() < pausedUntil || waiting >= MAX_WAITERS) {
+  const known = remembered.get(q);
+  if (known && now() - known.at < RESULT_TTL_MS) {
+    searchStats.cached += 1;
+    return known.urls;
+  }
+  const open = (): (typeof ENDPOINTS)[number] | null => {
+    for (let i = 0; i < ENDPOINTS.length; i += 1) {
+      const one = ENDPOINTS[(turn + i) % ENDPOINTS.length]!;
+      if ((pausedUntil.get(one.name) ?? 0) <= now()) return one;
+    }
+    return null;
+  };
+  if (!open() || waiting >= MAX_WAITERS) {
     searchStats.skipped += 1;
     return [];
   }
@@ -101,27 +133,36 @@ export async function webSearch(query: string, deps: SearchDeps = {}): Promise<s
   const run = chain.then(async () => {
     const wait = lastAt + SPACING_MS - now();
     if (wait > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(wait, SPACING_MS)));
-    lastAt = now();
-    searchStats.queries += 1;
-    try {
-      const response = await fetchImpl(ENDPOINT + encodeURIComponent(q), {
-        headers: { 'user-agent': 'Mozilla/5.0 (compatible; BrainResearch/1.0; public research)', accept: 'text/html' },
-        signal: AbortSignal.timeout(12_000),
-      });
-      const html = await response.text();
-      if (isSearchAnomaly(response.status, html)) {
-        searchStats.refused += 1;
-        pausedUntil = now() + PAUSE_AFTER_ANOMALY_MS;
+    for (let tries = 0; tries < ENDPOINTS.length; tries += 1) {
+      const endpoint = open();
+      if (!endpoint) break;
+      turn += 1;
+      lastAt = now();
+      searchStats.queries += 1;
+      try {
+        const response = await fetchImpl(endpoint.url + encodeURIComponent(q), {
+          headers: { 'user-agent': 'Mozilla/5.0 (compatible; BrainResearch/1.0; public research)', accept: 'text/html' },
+          signal: AbortSignal.timeout(12_000),
+        });
+        const html = await response.text();
+        if (isSearchAnomaly(response.status, html)) {
+          searchStats.refused += 1;
+          pausedUntil.set(endpoint.name, now() + PAUSE_AFTER_ANOMALY_MS);
+          onRefusal?.(endpoint.name, response.status);
+          continue;
+        }
+        const urls = parseDuckDuckGo(html).slice(0, MAX_RESULTS);
+        if (urls.length > 0) searchStats.withResults += 1;
+        else searchStats.empty += 1;
+        remembered.set(q, { at: now(), urls });
+        if (remembered.size > 2000) remembered.clear();
+        return urls;
+      } catch {
+        searchStats.empty += 1;
         return [];
       }
-      const urls = parseDuckDuckGo(html).slice(0, MAX_RESULTS);
-      if (urls.length > 0) searchStats.withResults += 1;
-      else searchStats.empty += 1;
-      return urls;
-    } catch {
-      searchStats.empty += 1;
-      return [];
     }
+    return [];
   });
   chain = run.catch(() => undefined);
   try {

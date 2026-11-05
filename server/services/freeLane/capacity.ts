@@ -30,6 +30,7 @@ import { recentInfraFailures } from '../../db/infra.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import { readSource } from '../sources/access.ts';
+import { setSearchRefusalRecorder } from '../sources/discover.ts';
 import {
   closeFiledFreeLaneBins,
   ensureFreeWorkers,
@@ -380,6 +381,16 @@ export function startAdaptivePool(options: PoolOptions = {}, intervalMs = CONTRO
   if (controlTimer) return;
   poolOptions = options;
   stopped = false;
+  // A search endpoint that refuses is a row, not a silence (§88, DISCOVERY.SEARCH).
+  setSearchRefusalRecorder((endpoint, status) => {
+    void recordBinEvent({
+      eventType: 'SOURCE_SEARCH',
+      provider: endpoint,
+      outcome: 'REFUSED',
+      reason: `search endpoint ${endpoint} answered ${status}; paused ten minutes`,
+      evidenceClass: 'MEASURED',
+    }).catch(() => undefined);
+  });
   const tick = (): void => {
     void controlStep().catch((error) => console.warn('[free-lane] control step failed:', (error as Error).message));
   };

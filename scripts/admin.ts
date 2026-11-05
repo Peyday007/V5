@@ -1450,6 +1450,20 @@ async function main(): Promise<void> {
       for (const g of verdict.blocking) console.log(`    blocks  ${g.status.padEnd(8)} ${g.id.padEnd(26)} ${g.why}`);
       break;
     }
+    case 'sources search': {
+      // Runs one search from this machine: whether the endpoints answer here, and what they return.
+      const { webSearch, searchStats } = await import('../server/services/sources/discover.ts');
+      const query = rest.join(' ').trim() || 'small business size standards';
+      const urls = await webSearch(query);
+      console.log(`  query    ${query}`);
+      console.log(`  results  ${urls.length} ${JSON.stringify(searchStats)}`);
+      for (const u of urls) console.log(`    ${u}`);
+      const refused = await getDb().all<{ at: string; reason: string }>(
+        "SELECT at, reason FROM bin_events WHERE event_type = 'SOURCE_SEARCH' ORDER BY at DESC LIMIT 5",
+      );
+      for (const r of refused) console.log(`  refused  ${r.at} ${r.reason}`);
+      break;
+    }
     case 'sources compare': {
       const n = Math.min(Math.max(Number(rest[0] ?? '25') || 25, 1), 60);
       const urls = rest.slice(1).filter((u) => /^https?:\/\//.test(u));
