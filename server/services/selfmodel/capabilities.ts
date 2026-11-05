@@ -142,7 +142,13 @@ export async function readProbe(probe: Probe, from: string, to: string): Promise
           WHERE status IN ('ACCEPTED', 'BLOCKED') AND updated_at >= ? AND updated_at < ?`,
         [from, to],
       );
-      return { ok: n(row?.ok), total: n(row?.total), detail: 'fragments settled ACCEPTED of ACCEPTED+BLOCKED' };
+      const causes = await db.all<{ cause: string | null; n: number | string }>(
+        `SELECT block_cause AS cause, COUNT(*) AS n FROM research_fragments
+          WHERE status = 'BLOCKED' AND updated_at >= ? AND updated_at < ? GROUP BY block_cause ORDER BY n DESC`,
+        [from, to],
+      );
+      const why = causes.map((c) => `${c.cause ?? 'UNRECORDED'}:${n(c.n)}`).join(' ');
+      return { ok: n(row?.ok), total: n(row?.total), detail: `fragments settled ACCEPTED of ACCEPTED+BLOCKED; blocked by ${why || 'nothing'}` };
     }
     case 'VERIFY_ITEMS':
       return itemsOf('RESEARCH_VERIFY', from, to);
@@ -160,7 +166,15 @@ export async function readProbe(probe: Probe, from: string, to: string): Promise
     }
     case 'JOBS_SUCCEED': {
       const r = await readMetric('RESEARCH_JOB_SUCCESS_RATE', from, to);
-      return { ok: r.numerator, total: r.denominator, detail: `settled packets that completed (cancelled excluded: ${String(r.context?.['cancelled'] ?? 0)})` };
+      const ends = await db.all<{ status: string; reason: string | null; n: number | string }>(
+        `SELECT status, SUBSTR(COALESCE(failure_reason, cancel_reason, ''), 1, 90) AS reason, COUNT(*) AS n FROM research_orchestrations
+          WHERE status IN ('FAILED', 'NEEDS_HUMAN', 'CANCELLED')
+            AND COALESCE(completed_at, failed_at, cancelled_at, updated_at) >= ? AND COALESCE(completed_at, failed_at, cancelled_at, updated_at) < ?
+          GROUP BY status, SUBSTR(COALESCE(failure_reason, cancel_reason, ''), 1, 90) ORDER BY n DESC LIMIT 5`,
+        [from, to],
+      );
+      const why = ends.map((e) => `${e.status}×${n(e.n)} "${e.reason ?? ''}"`).join('; ');
+      return { ok: r.numerator, total: r.denominator, detail: `settled packets that completed (cancelled excluded: ${String(r.context?.['cancelled'] ?? 0)}); ended: ${why || 'none'}` };
     }
     case 'PARKS_DECIDED_BY_BRAIN': {
       const row = await db.get<{ total: number | string; ok: number | string | null }>(

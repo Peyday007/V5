@@ -14229,6 +14229,9 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   site's own page, cited at its own address. The free lane's brief now carries
   the repair reason and strategy and the guidance Brain computed (unreadable
   hosts, readable routes), which it had dropped.
+- **Unexplained rejections are counted on judged claims only.** That did not
+  change the week's 373: they are judged rejections without a reason from
+  earlier in the week; the post-release window reads every rejection explained.
 - `admin capabilities show [hours]` prints every requirement's answer and
   reading and the ranked gaps; `admin capabilities objective --text-b64 …`
   says whether an objective is substantial, which maps it needs and what
@@ -14251,3 +14254,14 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   pauses only the one that refused, remembers a query's results for ten
   minutes, records each refusal as a `SOURCE_SEARCH` row, and `admin sources
   search <words>` runs one query from the production machine.
+- **A park nobody is asked about is decided.** The three-hour reading after
+  release (2026-11-05 03:34Z) read DECISION.JOB_OUTCOME 0/6 and
+  ANALYSIS.FILED 0 while discovery, reading, verification, synthesis and audit
+  all worked: eight packets sat at NEEDS_HUMAN after two corrected judge rounds,
+  half with no Russell mission, so no Needs-You card existed for
+  `answerRoutineParks`. `answerUnaskedParks` (the same owner, the same
+  RECORD_GAPS rule: a live standing grant, accepted evidence, no open card, not
+  about to be corrected, past the grace period) records the decision against
+  the grant's owner and advances the packet, which re-derives its outcome.
+  The gate and job-outcome probes now print their block causes and final
+  reasons, so the next stop names itself.

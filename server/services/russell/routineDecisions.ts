@@ -196,3 +196,82 @@ async function decide(
   });
   return { ...base, choice: picked.choice, reason };
 }
+
+/**
+ * Parks with no card: the same decision, where nobody was ever asked (§80, §88).
+ *
+ * Production, 2026-11-05 (`packets judge-parks`): eight packets sat at
+ * NEEDS_HUMAN after two corrected judge rounds — "whether to file it short or
+ * stop it is a person's decision" — and four had no Russell mission at all, so
+ * no Needs-You card existed for `answerRoutineParks` to answer; the capability
+ * map read DECISION.JOB_OUTCOME 0/6 and ANALYSIS.FILED 0 over three hours. A
+ * park nobody is asked about is not waiting for a person: it is stuck.
+ *
+ * The decision is exactly `routineChoiceFor`'s RECORD_GAPS and nothing wider:
+ * only a packet whose project holds a live standing grant, that has evidence
+ * its gate accepted, that no open card already covers, and that Brain is not
+ * about to correct itself (`assessJudgeRound` RESUME). It files what was
+ * accepted with what it could not settle named beside it; it lowers no bar and
+ * spends nothing beyond the grant. A packet with nothing accepted is left for
+ * `concludeUnworkablePackets`, never filed.
+ */
+export interface UnaskedDecision {
+  orchestrationId: string;
+  decided: boolean;
+  reason: string;
+}
+
+export async function answerUnaskedParks(input: { limit?: number; nowMs?: number } = {}): Promise<UnaskedDecision[]> {
+  const nowMs = input.nowMs ?? Date.now();
+  const now = new Date(nowMs).toISOString();
+  const cutoff = new Date(nowMs - ROUTINE_DECISION_GRACE_MS).toISOString();
+  const rows = await getDb().all<{ id: string; project_id: string }>(
+    `SELECT o.id, o.project_id FROM research_orchestrations o
+      WHERE o.status = 'NEEDS_HUMAN' AND o.updated_at <= ?
+        AND (o.unresolved_gap_policy IS NULL OR o.unresolved_gap_policy <> 'RECORD_GAPS')
+        AND EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = o.id AND f.status = 'ACCEPTED')
+        AND NOT EXISTS (SELECT 1 FROM russell_missions m JOIN russell_human_requests r ON r.mission_id = m.id
+                         WHERE m.orchestration_id = o.id AND r.state IN ('OPEN', 'ANSWERED'))
+        AND EXISTS (SELECT 1 FROM russell_goals g
+                     WHERE g.project_id = o.project_id AND g.purpose = 'STANDING'
+                       AND g.state = 'ACTIVE' AND (g.expires_at IS NULL OR g.expires_at > ?))
+      ORDER BY o.updated_at ASC, o.id ASC LIMIT ?`,
+    [cutoff, now, input.limit ?? 50],
+  );
+  const out: UnaskedDecision[] = [];
+  for (const row of rows) {
+    const orchestration = await getOrchestration(row.id);
+    if (!orchestration || orchestration.status !== 'NEEDS_HUMAN') continue;
+    const { assessJudgeRound } = await import('../research/judgeRound.ts');
+    const assessment = await assessJudgeRound(orchestration);
+    if (assessment.kind === 'RESUME') {
+      out.push({ orchestrationId: row.id, decided: false, reason: 'Brain is about to run a corrected round on it' });
+      continue;
+    }
+    const grant = (await listGoals(row.project_id)).find((g) => g.state === 'ACTIVE' && (!g.expiresAt || g.expiresAt > now));
+    if (!grant) continue;
+    const { getUser } = await import('../../repos/identity.ts');
+    const owner = await getUser(grant.ownerUserId);
+    if (!owner) {
+      out.push({ orchestrationId: row.id, decided: false, reason: 'the grant owner cannot be resolved' });
+      continue;
+    }
+    const why =
+      'the packet has accepted evidence and nothing left Brain may attempt, so its audited report is filed with the ' +
+      'unresolved questions named rather than held for a person nobody asked';
+    const reason = `Decided by Brain under the standing research grant “${grant.name}” (${grant.id}): ${why}.`;
+    const { authorizeUnresolvedGaps } = await import('../research/gapPolicy.ts');
+    await authorizeUnresolvedGaps({ orchestrationId: row.id, authorizedBy: { id: owner.id, email: owner.email } });
+    await recordEvent({
+      projectId: row.project_id,
+      entityType: 'PROJECT',
+      entityId: row.project_id,
+      eventType: 'RUSSELL_ROUTINE_DECISION',
+      payload: { orchestrationId: row.id, missionId: null, choice: 'RECORD_GAPS', grantId: grant.id, decidedBy: 'BRAIN_UNDER_STANDING_AUTHORITY', reason },
+    });
+    const { advancePacket } = await import('../research/packetRunner.ts');
+    const advanced = await advancePacket(row.id).catch((error: unknown) => ({ status: `advance failed: ${String((error as Error)?.message ?? error).slice(0, 120)}` }));
+    out.push({ orchestrationId: row.id, decided: true, reason: `filed with gaps named; the packet is now ${advanced.status}` });
+  }
+  return out;
+}

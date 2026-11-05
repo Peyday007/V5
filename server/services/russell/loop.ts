@@ -2235,6 +2235,13 @@ async function tickOnce(owner: string): Promise<TickReport> {
         if (decision.choice) report.routineDecisions.push(decision);
       }
     });
+    // The same decision for a park no card was ever opened for (judge parks, packets with no mission).
+    await runPass(report, 'unasked-parks', async () => {
+      const { answerUnaskedParks } = await import('./routineDecisions.ts');
+      for (const decision of await answerUnaskedParks({ limit: 50 })) {
+        if (decision.decided) report.routineDecisions.push({ requestId: '', missionId: null, choice: 'RECORD_GAPS', reason: `${decision.orchestrationId}: ${decision.reason}` });
+      }
+    });
 
     await runPass(report, 'answered-requests', async () => {
       // The whole backlog, not one cycle's worth: an answer waiting for a
