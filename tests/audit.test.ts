@@ -19,7 +19,8 @@ import type {
   ResearchResponse,
 } from '../server/providers/types.ts';
 import { AuditFailure, runDynamicAudit } from '../server/services/audit/pipeline.ts';
-import { buildAuditContext } from '../server/services/audit/context.ts';
+import { buildAuditContext, MAX_AUDIT_SIBLINGS } from '../server/services/audit/context.ts';
+import { buildPrimaryPrompt } from '../server/services/audit/prompts.ts';
 import { extractDocument } from '../server/services/documents/extraction.ts';
 import { parseJudgePass, parsePrimaryPass } from '../server/services/audit/schema.ts';
 import { computeLayerState } from '../server/services/stateEngine.ts';
@@ -681,6 +682,15 @@ describe('the audit context', () => {
     expect(primaryPrompt).toContain('Qualification Logic');
     // And the global criteria travel with it.
     expect(primaryPrompt).toContain('G5');
+  });
+
+  it('lists at most the most recent siblings, counts the rest, and never reads a long layer history at once', async () => {
+    const target = await addDocument(fixture, 'Taxonomy', 'v1A');
+    for (let i = 0; i < MAX_AUDIT_SIBLINGS + 5; i += 1) await addDocument(fixture, 'Taxonomy', `v${i + 2}A`, { withFile: false });
+    const context = await buildAuditContext({ mode: 'SINGLE_DOCUMENT', layerId: (await fixture.layerByName('Taxonomy')).id, documentId: target.id });
+    expect(context.siblings).toHaveLength(MAX_AUDIT_SIBLINGS);
+    expect(context.siblingsOmitted).toBeGreaterThanOrEqual(5);
+    expect(buildPrimaryPrompt(context)).toMatch(/and \d+ earlier sibling document\(s\), not listed/);
   });
 
   it('marks oversized material for staged extraction instead of dropping it', async () => {

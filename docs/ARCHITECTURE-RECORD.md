@@ -14466,6 +14466,14 @@ Kept, because they are dependencies rather than waits: synthesis waits for
 every fragment (it synthesizes all of them); audit roles run one after another
 (independence, §71); launches per tick and the focus cap are owner-set bounds.
 
+- **An audit read the layer's whole history at once.** After release the
+  pool still filled, always beside a free-lane audit (20:30–20:34Z: 972 and
+  1 021 callers waiting): `buildAuditContext` read every other document in the
+  layer under audit — hundreds, for a research layer every packet files into —
+  in one `Promise.all`, only to list their names in the prompt. It now lists
+  the 25 most recent (`MAX_AUDIT_SIBLINGS`), read eight at a time, and counts
+  the rest.
+
 **Measured, not estimated.** `goalPipelineSpeed` (in `goals/researchYield.ts`,
 printed by `scripts/runpod-report.ts` for the last window and the equal window
 before it) reads from rows: time from the goal's filing to its first and its
