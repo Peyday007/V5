@@ -298,6 +298,25 @@ describe('the free research lane', () => {
     expect((await getWorkItem(itemId))?.state).toBe('SUCCEEDED');
   });
 
+  it('hands an item back with its attempt refunded when Brain\'s own database is unavailable', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const { completer } = model();
+    const busy = async (): Promise<SourceFetch> => {
+      throw new Error('The database pool had no free connection within 10000ms: 8/8 connection(s) in use, 593 caller(s) waiting');
+    };
+    await freeLaneTick({ config: CONFIG, completer, fetchSource: busy, search: async () => [] });
+    const item = await getWorkItem(itemId);
+    expect(item?.state).toBe('QUEUED');
+    expect(item?.attemptCount).toBe(0);
+    const event = await getDb().get<{ outcome: string; reason: string }>(
+      "SELECT outcome, reason FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND work_item_id = ? ORDER BY at DESC LIMIT 1",
+      [itemId],
+    );
+    expect(event).toMatchObject({ outcome: 'RELEASED_TRANSIENT' });
+    expect(event!.reason).toMatch(/threw: The database pool had no free connection/);
+  });
+
   it('drops a quote that is not in the fetched page, and fails the item retryably instead of discarding it', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
