@@ -87,11 +87,12 @@ async function main(): Promise<void> {
         : 'NOTE no research waited, so Brain rightly left the pod stopped; starting it here so the test does not leave the GPU off',
     );
     const start = await powerPod(config, 'start');
+    if (!start.ok) console.log(`  RunPod refused the start: HTTP ${start.status}${start.body ? `: ${start.body}` : ''}`);
     await recordBinEvent({
       eventType: 'RUNPOD_POD',
       provider: 'runpod',
       outcome: start.ok ? 'STARTED' : 'START_FAILED',
-      reason: 'runpod-cycle: restarted by the production test',
+      reason: `runpod-cycle: restarted by the production test${start.ok ? '' : ` (RunPod answered HTTP ${start.status}: ${start.body})`}`.slice(0, 400),
       measures: { podId: config.podId, test: true },
       evidenceClass: 'MEASURED',
     }).catch(() => undefined);

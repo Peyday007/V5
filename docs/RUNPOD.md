@@ -68,6 +68,14 @@ Nothing generates work to keep it busy — new research only comes from goals an
 - **Measured.** Every stop/start is a `RUNPOD_POD` event, and the pod's status and RunPod's own
   `costPerHr` are sampled every 5 minutes, so `runpod-report` prints running minutes and the
   measured cost per research job, beside jobs, accept rates, quality and fallbacks per model.
+- **Stopping can lose the GPU, so a refused start ends automatic stopping.** A stopped pod gives
+  its GPU back to RunPod and stays tied to its machine; if someone else takes that GPU the pod
+  cannot start until it frees ([RunPod: zero GPUs](https://docs.runpod.io/pods/troubleshooting/zero-gpus)).
+  Production, 2026-11-05 21:34Z: the `runpod-cycle` test stopped the pod and every start after it
+  was refused. So while RunPod's latest answer to a start (within 7 days) is a refusal, Brain
+  never stops the pod again; it keeps starting it for waiting research every 3 minutes, and
+  records RunPod's own words for each refusal (`runpod-report` prints the last five pod events).
+  A network volume or a pod on a host with spare GPUs is what makes stopping safe.
 - A stopped pod keeps its ID and proxy address. If RunPod has no GPU free on that host the start
   fails; it is recorded (`START_FAILED`) and retried after the gap, while the free models carry
   the work.
