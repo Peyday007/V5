@@ -1719,9 +1719,15 @@ export async function runValidations(projectId: string): Promise<ValidationProgr
   // A screen that settled without a payer is dormant with its reopen
   // conditions, rather than spending a full dive (§3.3(a)).
   await concludeScreens(projectId);
-  // Free models sort the openings first, so Claude's dives go to the best ones.
-  await screenNewOpenings(projectId).catch(() => 0);
+  /*
+   * Dives start before the cheap screen, not after it. The screen is up to
+   * forty serial free-model calls and only reorders; under a slow or erroring
+   * provider it held every start behind it. Production, 2026-11-05 16:30–20:00Z:
+   * two eligible goal openings and room beside the ceiling, and no dive started.
+   * The screen still orders the next pass.
+   */
   const started = await startValidations({ projectId });
+  await screenNewOpenings(projectId).catch(() => 0);
   return { started, settled };
 }
 
