@@ -133,6 +133,17 @@ export function modelOfReason(reason: string | null): string {
   return String(reason ?? '').replace(/^model /, '').split(':')[0]!.trim() || '(unknown)';
 }
 
+/** A free-lane failure reason without its model, counts, hosts and quotes, so like failures group. */
+export function failureClass(reason: string | null): string {
+  const why = String(reason ?? '').replace(/^model [^:]+:\s*/, '');
+  return why
+    .replace(/\{[^}]*\}/g, '{…}')
+    .replace(/\d+/g, 'N')
+    .replace(/(getaddrinfo \w+|attempted address:|answered) .*/, '$1 …')
+    .slice(0, 110)
+    .trim() || '(no reason)';
+}
+
 export interface GoalResearchProgress {
   since: string;
   rounds: { opened: number; harvested: number; withOpenings: number; abandoned: number; open: number };
@@ -140,6 +151,8 @@ export interface GoalResearchProgress {
   jobs: Record<string, { submitted: number; failed: number }>;
   /** Accepted (sourced) claims on fragments each model submitted for the goal. */
   claims: Record<string, { claims: number; sourced: number; signalled: number }>;
+  /** Why the goal's research jobs were not accepted, most frequent first (reason with ids stripped). */
+  failures: { reason: string; n: number }[];
   /** Openings harvested from the goal's research in the window. */
   openings: { id: string; title: string; model: string | null; payer: boolean; price: boolean }[];
 }
@@ -183,6 +196,18 @@ export async function goalResearchProgress(projectId: string, goalId: string, si
       GROUP BY e.reason`,
     [since, projectId, bucket],
   );
+  const failRows = await db.all<{ reason: string | null }>(
+    `SELECT e.reason FROM bin_events e JOIN work_items w ON w.id = e.work_item_id
+      WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome <> 'SUBMITTED' AND e.at >= ?
+        AND w.orchestration_id IN (${goalOrchestrations})`,
+    [since, projectId, bucket],
+  );
+  const failCounts = new Map<string, number>();
+  for (const row of failRows) {
+    const why = failureClass(row.reason);
+    failCounts.set(why, (failCounts.get(why) ?? 0) + 1);
+  }
+  const failures = [...failCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([reason, n]) => ({ reason, n }));
   const claims: GoalResearchProgress['claims'] = {};
   for (const row of claimRows) {
     const entry = (claims[modelOfReason(row.reason)] ??= { claims: 0, sourced: 0, signalled: 0 });
@@ -218,6 +243,7 @@ export async function goalResearchProgress(projectId: string, goalId: string, si
       open: rounds.filter((one) => one.state === 'OPEN').length,
     },
     jobs,
+    failures,
     claims,
     openings: openingRows.map((one) => ({
       id: one.id,

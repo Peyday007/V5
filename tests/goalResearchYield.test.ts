@@ -26,6 +26,7 @@ import {
   diagnosisInstructions,
   goalResearchProgress,
   modelOfReason,
+  failureClass,
 } from '../server/services/goals/researchYield.ts';
 import type { Layer } from '../server/domain/types.ts';
 
@@ -62,6 +63,13 @@ describe('why a goal’s research is not producing openings its plan can use', (
     });
     expect(diagnosis.map((one) => one.cause)).toEqual(['RESEARCH_NOT_FINISHING', 'NO_BUYER', 'NO_SUPPORTED_PRICE', 'TOO_SMALL', 'SETTLEMENT_UNKNOWN', 'OVER_LIMITS']);
     expect(diagnosisInstructions(diagnosis).split('. ').length).toBeLessThan(diagnosis.map((d) => d.instruction).join(' ').split('. ').length);
+  });
+
+  it('groups failure reasons without their model, counts and hosts', () => {
+    expect(failureClass('model runpod/Qwen/Qwen3-4B: no readable source among 6 candidate page(s): {"EMPTY":6} the site answered with a bot challenge')).toBe(
+      'no readable source among N candidate page(s): {…} the site answered …',
+    );
+    expect(failureClass('model brain-a: the model returned no usable JSON')).toBe('the model returned no usable JSON');
   });
 
   it('reads the model from a free-lane event’s reason', () => {
@@ -160,6 +168,17 @@ describe('a goal’s research reaches its plan, and the plan records its progres
     const forecast = JSON.parse(row!.forecast!) as ReturnType<typeof planProgress>;
     expect(forecast.considered).toBe(reading.considered.length);
     expect(forecast.causes).toEqual(reading.researchDiagnosis.map((one) => one.cause));
+  });
+
+  it('files a constructed round’s pattern only when it says buyers pay, never a definition in that lane', async () => {
+    const goalId = await goal();
+    const w = (await getWorkstream(goalId))!;
+    const round = await openConstructedRound({ goal: w, projectId, key: 'k2', title: 'Constructed: shared services', question: 'Which firms pay for shared-services setup?' });
+    await answeredBy(round!.candidateId, 'Shared services is the consolidation of business functions used across several parts of an organisation.', 'runpod/Qwen/Qwen3-4B');
+    expect(await harvest({ projectId })).toHaveLength(0);
+    const second = await openConstructedRound({ goal: w, projectId, key: 'k3', title: 'Constructed: bookkeeping', question: 'Which firms outsource bookkeeping?' });
+    await answeredBy(second!.candidateId, 'Dental practices routinely outsource monthly bookkeeping to remote firms for 300 to 600 USD a month.', 'runpod/Qwen/Qwen3-4B');
+    expect((await harvest({ projectId })).length).toBe(1);
   });
 
   it('asks the next goal round for remote, AI-fulfilled work and tells it what was wrong last time', async () => {
