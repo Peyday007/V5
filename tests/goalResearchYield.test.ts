@@ -15,7 +15,8 @@ import { createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { setTarget } from '../server/services/goals/target.ts';
 import { forgetGoalReadings, listReadings, planProgress, readGoalPlan } from '../server/services/goals/plan.ts';
-import { harvest, openConstructedRound, openGoalDiscovery, REMOTE_AI_FOCUS } from '../server/services/cash/discovery.ts';
+import { harvest, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, REMOTE_AI_FOCUS, roundsStillResearching } from '../server/services/cash/discovery.ts';
+import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { forgetKnowledge } from '../server/services/quant/knowledge.ts';
 import { enqueueWork } from '../server/repos/workQueue.ts';
 import { recordBinEvent } from '../server/repos/bins.ts';
@@ -27,6 +28,10 @@ import {
   goalResearchProgress,
   modelOfReason,
   failureClass,
+  overlap,
+  percentile,
+  waitsUntilNext,
+  goalPipelineSpeed,
 } from '../server/services/goals/researchYield.ts';
 import type { Layer } from '../server/domain/types.ts';
 
@@ -191,5 +196,60 @@ describe('a goal’s research reaches its plan, and the plan records its progres
     const row = await getDb().get<{ statement: string }>('SELECT statement FROM russell_candidates WHERE id = ?', [opened!.candidateId]);
     expect(row?.statement).toContain(REMOTE_AI_FOCUS.slice(0, 60));
     expect(row?.statement).toContain('name the kind of business that pays');
+  });
+
+  it('frees a goal round’s research slot when its research is done, while synthesis and audit still run', async () => {
+    const goalId = await goal();
+    const w = (await getWorkstream(goalId))!;
+    const target = (await readGoalPlan({ goalId, evaluations: 200 }))!.target;
+    const opened: string[] = [];
+    for (let i = 0; i < MAX_LIVE_GOAL_ROUNDS; i += 1) {
+      const one = await openGoalDiscovery({ goal: w, target, bestReach: null });
+      expect(one).not.toBeNull();
+      opened.push(one!.candidateId);
+    }
+    const mine = async () => (await listRounds(projectId)).filter((one) => one.bucketId.startsWith(`goal-${goalId}-`));
+    // Three rounds, each still researching: the cap holds.
+    expect(await roundsStillResearching(await mine())).toBe(MAX_LIVE_GOAL_ROUNDS);
+    expect(await openGoalDiscovery({ goal: w, target, bestReach: null })).toBeNull();
+    // One round's fragments are all done; its packet has not concluded, so the round stays OPEN…
+    await answeredBy(opened[0]!, 'Dental practices routinely outsource monthly bookkeeping to remote firms for 300 to 600 USD a month.', 'brain-a');
+    expect((await mine()).filter((one) => one.state === 'OPEN')).toHaveLength(MAX_LIVE_GOAL_ROUNDS);
+    // …but it no longer holds a research slot, so the next question is asked now.
+    expect(await roundsStillResearching(await mine())).toBe(MAX_LIVE_GOAL_ROUNDS - 1);
+    expect(await openGoalDiscovery({ goal: w, target, bestReach: null })).not.toBeNull();
+  });
+
+  it('measures the goal’s speed: jobs, accepted research, openings and the wait until the plan read them', async () => {
+    const goalId = await goal();
+    const w = (await getWorkstream(goalId))!;
+    const since = new Date(Date.now() - 60_000).toISOString();
+    const round = await openConstructedRound({ goal: w, projectId, key: 'k9', title: 'Constructed: bookkeeping', question: 'Which firms outsource bookkeeping?' });
+    await answeredBy(round!.candidateId, 'Dental practices routinely outsource monthly bookkeeping to remote firms for 300 to 600 USD a month.', 'runpod/Qwen/Qwen3-4B');
+    expect((await harvest({ projectId })).length).toBe(1);
+    let speed = await goalPipelineSpeed({ goalId, projectId, since });
+    expect(speed.jobs).toMatchObject({ total: 1, goal: 1, peak: 1, goalPeak: 1 });
+    expect(speed.goalAcceptedClaimsPerHour).toBeGreaterThan(0);
+    expect(speed.evidenceToPlan).toMatchObject({ openings: 1, unread: 1, medianMs: null });
+    await readGoalPlan({ goalId, evaluations: 200, persist: true });
+    speed = await goalPipelineSpeed({ goalId, projectId, since });
+    expect(speed.evidenceToPlan.unread).toBe(0);
+    expect(speed.evidenceToPlan.medianMs).toBeGreaterThanOrEqual(0);
+    expect(speed.firstReadingAt).not.toBeNull();
+  });
+});
+
+describe('pipeline speed is measured from rows (pure parts)', () => {
+  it('counts jobs in flight at once, peak and time-averaged, inside the window', () => {
+    const r = overlap([{ start: 0, end: 10 }, { start: 5, end: 15 }, { start: 10, end: 20 }, { start: 30, end: 50 }], 0, 40);
+    expect(r.peak).toBe(2);
+    expect(r.average).toBe(1); // (10 + 10 + 10 + 10) / 40
+    expect(overlap([{ start: 0, end: 10 }, { start: 10, end: 20 }], 0, 20).peak).toBe(1);
+  });
+
+  it('measures each opening’s wait for the next plan run, and names what nothing read yet', () => {
+    expect(waitsUntilNext([0, 50, 100], [10, 60])).toEqual([10, 10, null]);
+    expect(percentile([5, 1, 3], 50)).toBe(3);
+    expect(percentile([], 50)).toBeNull();
   });
 });

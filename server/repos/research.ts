@@ -686,8 +686,7 @@ export async function createFragments(inputs: CreateFragmentInput[]): Promise<Re
    * which handed a capped goal back every fragment it had already created.
    */
   for (const reservationId of charge.reservationIds) await settleReservation(reservationId);
-  const loaded = await Promise.all(ids.map((id) => getFragment(id)));
-  return loaded.filter((f): f is ResearchFragment => f !== null);
+  return (await rowsByIds<ResearchFragmentRow>('research_fragments', ids)).map(mapFragment);
 }
 
 export async function getFragment(id: string): Promise<ResearchFragment | null> {
@@ -1120,8 +1119,29 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
       );
     }
   });
-  const loaded = await Promise.all(ids.map((id) => getClaim(id)));
-  return loaded.filter((claim): claim is ResearchClaim => claim !== null);
+  return claimsByIds(ids);
+}
+
+/**
+ * Rows by id, in the ids' order, in one statement per 200 ids.
+ *
+ * Reading each new row back with its own query, all at once, was one pool
+ * checkout per row: a free-lane submission of forty claims queued forty
+ * callers, and with two dozen slots submitting, production read "8/8
+ * connection(s) in use, 468 caller(s) waiting" (2026-11-05 19:36Z) while
+ * health checks failed and every job's next statement timed out.
+ */
+async function rowsByIds<R extends { id: string }>(table: string, ids: readonly string[]): Promise<R[]> {
+  const byId = new Map<string, R>();
+  for (let at = 0; at < ids.length; at += 200) {
+    const chunk = ids.slice(at, at + 200);
+    for (const row of await getDb().all<R>(`SELECT * FROM ${table} WHERE id IN (${chunk.map(() => '?').join(', ')})`, chunk)) byId.set(row.id, row);
+  }
+  return ids.map((id) => byId.get(id)).filter((row): row is R => row !== undefined);
+}
+
+export async function claimsByIds(ids: readonly string[]): Promise<ResearchClaim[]> {
+  return (await rowsByIds<ResearchClaimRow>('research_claims', ids)).map(mapClaim);
 }
 
 /** The source URL of every claim a project's openings were filed from, in one statement. */

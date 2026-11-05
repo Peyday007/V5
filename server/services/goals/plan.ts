@@ -40,7 +40,7 @@ import { readCapabilities } from '../cash/capabilities.ts';
 import { checkCommercialAuthority } from '../cash/authority.ts';
 import { bestCaseReach, composeGoalModel, planTrace, dealsForGoal, OUTREACH_MULTIPLE, priceSupported, volumeEstablished, wilson, type ModelledOpportunity } from '../cash/goalScenario.ts';
 import { readTarget, type TargetReading } from './target.ts';
-import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery } from '../cash/discovery.ts';
+import { executionFrame, MAX_LIVE_GOAL_ROUNDS, openConstructedRound, openGoalDiscovery, roundsStillResearching } from '../cash/discovery.ts';
 import { constructArrangements } from '../cash/construct.ts';
 import { goalExclusions } from '../cash/exclusions.ts';
 import { listRounds } from '../../repos/cashDiscovery.ts';
@@ -1028,10 +1028,56 @@ const lastTopUp = new Map<string, number>();
 /** A top-up between refreshes at most this often per goal: rounds settle in minutes, not seconds. */
 export const GOAL_TOP_UP_MS = 5 * 60_000;
 
+/**
+ * A plan is re-read as soon as what it is composed from changes, not on the
+ * next half-hour (owner's order, 2026-11-05: "as soon as new evidence arrives,
+ * update the affected opportunity, recalculate its economics, update the
+ * combined plan"). Production read a harvested opening reaching its goal's plan
+ * a median of a quarter of an hour later, with the scenario slot idle meanwhile.
+ * The half-hour stays the backstop for what only the clock changes (days left).
+ * The floor bounds a burst of harvests to one scenario run every two minutes.
+ */
+export const PLAN_EVIDENCE_FLOOR_MS = 2 * 60_000;
+const lastInputs = new Map<string, string>();
+
+/**
+ * What a goal's plan is composed from, as one cheap reading: the project's
+ * openings (a harvest creates one; validation, pricing and reconsideration
+ * update one), their value layers, the money ledger and the goal's own terms.
+ */
+export async function planInputsFingerprint(projectId: string, goalId: string): Promise<string> {
+  const row = await getDb().get<{ o: number | string; ou: string | null; oc: string | null; v: number | string; vu: string | null; m: number | string; g: string | null }>(
+    `SELECT (SELECT COUNT(*) FROM cash_opportunities WHERE project_id = ?) AS o,
+            (SELECT MAX(updated_at) FROM cash_opportunities WHERE project_id = ?) AS ou,
+            (SELECT MAX(created_at) FROM cash_opportunities WHERE project_id = ?) AS oc,
+            (SELECT COUNT(*) FROM cash_value_layers WHERE project_id = ?) AS v,
+            (SELECT MAX(updated_at) FROM cash_value_layers WHERE project_id = ?) AS vu,
+            (SELECT COUNT(*) FROM cash_money_entries WHERE project_id = ?) AS m,
+            (SELECT updated_at FROM workstreams WHERE id = ?) AS g`,
+    [projectId, projectId, projectId, projectId, projectId, projectId, goalId],
+  );
+  return [row?.o, row?.ou, row?.oc, row?.v, row?.vu, row?.m, row?.g].map((one) => String(one ?? '')).join('|');
+}
+
+/**
+ * Whether a goal's plan is due now. Pure. Never read: due. Past the half-hour:
+ * due. Inside it: due once the floor has passed and the inputs differ from the
+ * ones the last reading was taken over (unknown after a restart counts as
+ * different, which costs one early read).
+ */
+export function planDue(input: { now: number; since: number; inputs: string | null; lastInputs: string | undefined }): 'FIRST' | 'REFRESH' | 'EVIDENCE' | null {
+  if (!input.since) return 'FIRST';
+  const age = input.now - input.since;
+  if (age >= PLAN_REFRESH_MS) return 'REFRESH';
+  if (age >= PLAN_EVIDENCE_FLOOR_MS && input.inputs !== null && input.inputs !== input.lastInputs) return 'EVIDENCE';
+  return null;
+}
+
 /** Tests. */
 export function forgetGoalReadings(): void {
   lastReadings.clear();
   lastTopUp.clear();
+  lastInputs.clear();
 }
 
 /**
@@ -1210,7 +1256,7 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
    * design to ask about, an unbounded share would take every slot and the
    * lenses would never run, so construction holds at most half of it.
    */
-  const room = Math.max(1, Math.floor(liveCap / 2)) - openMx.length;
+  const room = Math.max(1, Math.floor(liveCap / 2)) - (await roundsStillResearching(openMx));
   if (room <= 0) return [];
   max = Math.min(max, room);
   const askedBefore = (await listRounds(t.projectId)).filter((r) => r.bucketId.startsWith(`goal-${goal.id}-mx-`));
@@ -1230,16 +1276,18 @@ export async function askConstructedArrangements(goal: Workstream, reading: Plan
   return opened;
 }
 
-export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean }> {
-  const goals = await getDb().all<{ id: string }>(
-    `SELECT id FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
+export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: number; outcomes: number; asked: number; constructed: number; researched: number; busy: boolean; onEvidence: number }> {
+  const goals = await getDb().all<{ id: string; target_project_id: string | null }>(
+    `SELECT id, target_project_id FROM workstreams WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL`,
   );
   let read = 0;
   let outcomes = 0;
   let asked = 0;
   let constructed = 0;
   let researched = 0;
-  for (const { id } of goals) {
+  let busy = false;
+  let onEvidence = 0;
+  for (const { id, target_project_id: projectId } of goals) {
     if (await recordGoalOutcome(id, now)) outcomes += 1;
     const last = await getDb().get<{ at: string | null }>(
       `SELECT MAX(created_at) AS at FROM goal_plan_readings WHERE workstream_id = ?`,
@@ -1250,7 +1298,10 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       [id],
     );
     const since = [last?.at, lastRun?.at].filter((one): one is string => !!one).reduce((max, at) => Math.max(max, Date.parse(at)), 0);
-    if (since && now.getTime() - since < PLAN_REFRESH_MS) {
+    const fingerprint = async (): Promise<string | null> => (projectId ? planInputsFingerprint(projectId, id) : null);
+    const inputs = since && now.getTime() - since >= PLAN_EVIDENCE_FLOOR_MS && now.getTime() - since < PLAN_REFRESH_MS ? await fingerprint() : null;
+    const due = busy ? null : planDue({ now: now.getTime(), since, inputs, lastInputs: lastInputs.get(id) });
+    if (!due) {
       // Not due for a re-read; top the search up if the fleet has room for it.
       const held = lastReadings.get(id);
       const toppedUp = lastTopUp.get(id) ?? 0;
@@ -1270,8 +1321,14 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
     try {
       reading = await readGoalPlan({ goalId: id, now, persist: true });
       read += 1;
+      if (due === 'EVIDENCE') onEvidence += 1;
     } catch (error) {
-      if (error instanceof ScenarioBusyError) return { read, outcomes, asked, constructed, researched, busy: true };
+      // The process's one scenario slot is taken: this goal waits for the next
+      // pass, and every other goal still records outcomes and tops up its search.
+      if (error instanceof ScenarioBusyError) {
+        busy = true;
+        continue;
+      }
       throw error;
     }
     if (reading) lastReadings.set(id, reading);
@@ -1286,6 +1343,10 @@ export async function advanceGoalPlans(now: Date = new Date()): Promise<{ read: 
       constructed += more.constructed;
       researched += more.researched;
     }
+    // Taken after this pass's own writes (the research it started on openings
+    // touches their rows), so only what arrives from elsewhere reads as new.
+    const after = await fingerprint();
+    if (after !== null) lastInputs.set(id, after);
   }
-  return { read, outcomes, asked, constructed, researched, busy: false };
+  return { read, outcomes, asked, constructed, researched, busy, onEvidence };
 }

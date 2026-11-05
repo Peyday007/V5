@@ -222,6 +222,16 @@ export async function getWorkItemRow(id: string): Promise<WorkItemRow | null> {
   return row ?? null;
 }
 
+/** Rows by id, in the ids' order, in one statement per 200 ids (not one pool checkout each). */
+export async function getWorkItemRows(ids: readonly string[]): Promise<WorkItemRow[]> {
+  const byId = new Map<string, WorkItemRow>();
+  for (let at = 0; at < ids.length; at += 200) {
+    const chunk = ids.slice(at, at + 200);
+    for (const row of await getDb().all<WorkItemRow>(`SELECT * FROM work_items WHERE id IN (${chunk.map(() => '?').join(', ')})`, chunk)) byId.set(row.id, row);
+  }
+  return ids.map((id) => byId.get(id)).filter((row): row is WorkItemRow => row !== undefined);
+}
+
 export async function listWorkItems(
   projectId: string,
   options: { states?: WorkItemState[]; limit?: number } = {},

@@ -26,7 +26,7 @@ import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { runpodConfig } from '../server/services/cheap/runpod.ts';
 import { listReadings, planProgress, readGoalPlan } from '../server/services/goals/plan.ts';
-import { goalResearchProgress } from '../server/services/goals/researchYield.ts';
+import { goalPipelineSpeed, goalResearchProgress } from '../server/services/goals/researchYield.ts';
 
 const argv = process.argv.slice(2);
 const at = argv.indexOf('--hours');
@@ -159,6 +159,25 @@ async function goalSection(since: string, hours: number): Promise<void> {
       }
       console.log(`  history ${row.created_at} ${row.verdict} reach ${f['reach'] ?? '-'} p50 ${f['settledP50'] ?? '-'} considered ${f['considered'] ?? '-'} modelled ${f['modelled'] ?? '-'} causes ${Array.isArray(f['causes']) ? (f['causes'] as string[]).join(',') : '-'}`);
     }
+    const earlier = new Date(Date.parse(since) - hours * 3_600_000).toISOString();
+    const windows = [
+      { label: `last ${hours}h`, speed: await goalPipelineSpeed({ goalId: goal.id, projectId: reading.target.projectId, since }) },
+      { label: `the ${hours}h before`, speed: await goalPipelineSpeed({ goalId: goal.id, projectId: reading.target.projectId, since: earlier, until: since }) },
+    ];
+    for (const { label, speed } of windows) {
+    const min = (ms: number | null) => (ms === null ? 'n/a' : `${Math.round(ms / 6_000) / 10} min`);
+    const sec = (ms: number | null) => (ms === null ? 'n/a' : `${Math.round(ms / 100) / 10} s`);
+    const since0 = (at: string | null) => (at && speed.goalCreatedAt ? min(Date.parse(at) - Date.parse(speed.goalCreatedAt)) : 'not yet');
+    console.log(`  SPEED ${label}`);
+    console.log(`  speed submit→plan    first reading ${since0(speed.firstReadingAt)} after the goal was filed · complete plan (RECOMMENDABLE) ${since0(speed.firstRecommendableAt)}`);
+    console.log(`  speed concurrency    free-lane jobs at once: peak ${speed.jobs.peak}, average ${speed.jobs.average} (${speed.jobs.total} jobs) · this goal's: peak ${speed.jobs.goalPeak}, average ${speed.jobs.goalAverage} (${speed.jobs.goal} jobs)`);
+    console.log(`  speed throughput     accepted claims ${speed.acceptedClaimsPerHour}/h (this goal ${speed.goalAcceptedClaimsPerHour}/h) · openings filed ${speed.openingsPerHour}/h · plan evaluations ${speed.planRunsPerHour}/h`);
+    console.log(`  speed waiting        opening → next plan run: median ${min(speed.evidenceToPlan.medianMs)}, p90 ${min(speed.evidenceToPlan.p90Ms)}, max ${min(speed.evidenceToPlan.maxMs)} over ${speed.evidenceToPlan.openings} opening(s), ${speed.evidenceToPlan.unread} not yet read · free lane idle with work queued ~${speed.idleWithWorkMinutes} min`);
+    console.log(`  speed quant          plan run: median ${sec(speed.planRunMs.medianMs)}, max ${sec(speed.planRunMs.maxMs)} over ${speed.planRunMs.runs} run(s)`);
+    console.log(`  speed gpu            job time ${min(speed.gpu.jobMs)} over ${min(speed.gpu.runningMs)} running · ${speed.gpu.busySlots === null ? 'utilization unknown (no running samples)' : `${speed.gpu.busySlots} slot(s) busy on average while running`}`);
+    }
+    console.log(`SPEED_EVIDENCE_TO_PLAN_MEDIAN_MS ${windows[0]!.speed.evidenceToPlan.medianMs ?? 'n/a'} before ${windows[1]!.speed.evidenceToPlan.medianMs ?? 'n/a'}`);
+    console.log(`SPEED_JOBS_PEAK ${windows[0]!.speed.jobs.peak} before ${windows[1]!.speed.jobs.peak}`);
     for (const d of reading.researchDiagnosis) console.log(`  why short ${d.cause}: ${d.evidence}`);
     if (reading.researchDiagnosis.length === 0) console.log('  why short            nothing stands out');
   }
