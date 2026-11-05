@@ -14242,3 +14242,12 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   `FREE_LANE_IDLE` event (at most every ten minutes) whenever work waits and
   no slot is busy, with the reasons it declined what it was offered, and
   `RECOVERY.IDLE_CAPACITY` reads the same condition from the queue.
+- **The first production reading after release** (`capabilities show 24`,
+  2026-11-05 00:53Z): 9 WORKING, 10 BROKEN, 5 UNPROVEN, 0 MISSING; the lane
+  leased 7 jobs within minutes of the queue fix; source reads rose to 160 an
+  hour, but search fed 1 of 76 fragments and the SEARCH route never succeeded —
+  DuckDuckGo's html endpoint answers 202 (an anomaly page) after a few queries
+  while its lite endpoint still answers. Search now rotates the two endpoints,
+  pauses only the one that refused, remembers a query's results for ten
+  minutes, records each refusal as a `SOURCE_SEARCH` row, and `admin sources
+  search <words>` runs one query from the production machine.
