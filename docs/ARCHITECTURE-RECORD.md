@@ -14265,3 +14265,14 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   the grant's owner and advances the packet, which re-derives its outcome.
   The gate and job-outcome probes now print their block causes and final
   reasons, so the next stop names itself.
+- **The gate's largest block was work that faulted, not evidence that failed.**
+  Five hours after release (`capabilities show 5`, 04:48Z) the gate's blocks
+  read WORK_FAULTED 34, REQUIRED_LANE_EMPTY 20, NOTHING_SURVIVED 8, and 21
+  packets were cancelled because no fragment cleared its gate: free-lane
+  fragments spent their attempts on answers whose every citation Brain dropped,
+  and the model was never told why. When every claim is dropped the lane now
+  shows the model the drop reasons and a correct example and asks once more;
+  the second answer meets exactly the same checks. (The eight October judge
+  parks `packets parks` lists sit in projects with no standing grant — retired
+  cash projects and brain-architecture research goals — so `answerUnaskedParks`
+  correctly leaves them.)
