@@ -190,3 +190,11 @@ The pooled-solar, anime and EDDM openings all ended the same way. The stage-one 
 - the published channel that reaches more such buyers.
 
 The payer lane still takes a named instance, so no bar moves.
+
+### 2026-11-05 15:20Z: #522's ruled-out wording was read backwards
+
+After #522, the first recurring screen (`cop_779c9f02`, a directory of 3,720 corporate-gift suppliers) filed "Buyers can still buy it from a supplier like us." in the `ruled_out` lane.
+- **Cause:** the question said "whether buyers can still buy it … or a published rule excludes us; if so, submit that one fact in the ruled_out lane", which can be read as "if they can still buy it".
+- **Result:** Brain recorded the opening as DISQUALIFIED.
+- **Fix:** the question now asks only for the stopped-or-excluded fact, and says that "still bought" is not a ruled_out fact. A test holds both.
+- **Not recovered:** `cop_779c9f02` keeps its recorded disqualifier. A dive does not overwrite a published fact by asking again, and new evidence reaches it through discovery.
