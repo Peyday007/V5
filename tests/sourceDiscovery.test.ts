@@ -17,6 +17,7 @@ import {
   sameSite,
   searchStats,
   searchSuccessor,
+  searchSpacingMs,
   setSearchRefusalRecorder,
   webSearch,
 } from '../server/services/sources/discover.ts';
@@ -88,6 +89,25 @@ describe('a search result is a candidate page that exists', () => {
     expect(seen.length).toBe(before);
     expect(searchStats.skipped).toBe(1);
     setSearchRefusalRecorder(null);
+  });
+
+  it('slows itself after a refusal and speeds up again only on sustained answers', async () => {
+    let clock = 1_000_000;
+    const nowMs = () => clock;
+    const start = searchSpacingMs();
+    let calls = 0;
+    const refuseOnce = (async () => {
+      calls += 1;
+      return calls === 1 ? new Response('anomaly-modal', { status: 202 }) : new Response(HTML, { status: 200 });
+    }) as typeof fetch;
+    await webSearch('first query', { fetchImpl: refuseOnce, nowMs });
+    expect(searchSpacingMs()).toBe(start * 2);
+    for (let i = 0; i < 10; i += 1) {
+      clock += 60_000;
+      await webSearch(`query ${i}`, { fetchImpl: fakeFetch(200, HTML), nowMs });
+    }
+    expect(searchSpacingMs()).toBeLessThan(start * 2);
+    expect(searchSpacingMs()).toBeGreaterThanOrEqual(2_000);
   });
 
   it('never throws: a failed search is an empty candidate list', async () => {
