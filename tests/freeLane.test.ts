@@ -632,6 +632,34 @@ describe('a restriction must name a replacement that is doing the work', () => {
     expect(reading.claimsSubmitted).toBe(1);
     expect(reading.outcomesLastDay['RESEARCH_FRAGMENT:SUBMITTED']).toBe(1);
   });
+  it('asks an audit that already timed out over the compact brief, so it stops cycling', async () => {
+    const { endFreeLaneCooldowns } = await import('../server/services/freeLane/worker.ts');
+    const { orchestration, fragment } = await packet(play.project.id);
+    await getDb().run("UPDATE research_orchestrations SET status = 'RESEARCHING' WHERE id = ?", [orchestration.id]);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    let compactBriefs = 0;
+    for (let round = 0; round < 14; round += 1) {
+      const base = model();
+      const completer: Completer = async (config, name, system, prompt) => {
+        if (prompt.includes('Audit brief (the document')) throw new Error('cheap lane HTTP 504: upstream timed out');
+        if (prompt.includes('Audit brief (shortened')) {
+          compactBriefs += 1;
+          return base.completer(config, name, system, prompt.replace('Audit brief (shortened;', 'Audit brief (the document,'));
+        }
+        return base.completer(config, name, system, prompt);
+      };
+      const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
+      endFreeLaneCooldowns();
+      const { advancePacket } = await import('../server/services/research/packetRunner.ts');
+      await advancePacket(orchestration.id);
+      const st = await getDb().get<{ status: string }>('SELECT status FROM research_orchestrations WHERE id = ?', [orchestration.id]);
+      if (st?.status === 'COMPLETE' || (tick.claimed === 0 && round > 2)) break;
+    }
+    const status = await getDb().get<{ status: string }>('SELECT status FROM research_orchestrations WHERE id = ?', [orchestration.id]);
+    expect(compactBriefs).toBeGreaterThanOrEqual(3);
+    expect(status?.status).toBe('COMPLETE');
+  });
+
   it('re-asks an audit over a compact brief when the model answers it without JSON', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     await getDb().run("UPDATE research_orchestrations SET status = 'RESEARCHING' WHERE id = ?", [orchestration.id]);

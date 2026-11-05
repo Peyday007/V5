@@ -1001,7 +1001,14 @@ async function audit(ctx: Ctx, role: string): Promise<boolean> {
     `You are the ${role} auditor of a research packet. Audit brief (the document, its claim ledger and what ` +
     `it was asked to do):\n${JSON.stringify(brief).slice(0, 60_000)}\n\nJudge it strictly against the brief. ` +
     `Reply as {"${key}": <object>} where the object matches: ${JSON.stringify(schema)}`;
-  let raw = await askFor(ctx, prompt);
+  /*
+   * An audit that already came back transient (a timeout, a provider error) is
+   * not asked the long way again. Production, 2026-11-05 12:20–20:00Z: audit items
+   * reached lease generation 29–37, each attempt refunded as transient, so the
+   * packets sat in AUDITING for hours with every audit role still queued.
+   */
+  const struck = (transientStrikes.get(ctx.claimed.workItemId) ?? 0) > 0;
+  let raw = struck ? null : await askFor(ctx, prompt);
   /*
    * A long brief is where free models stop answering in JSON. Production,
    * 2026-11-05 09:18–10:18Z: ANALYSIS.AUDIT 5/25 and six packets parked "an audit
@@ -1010,7 +1017,7 @@ async function audit(ctx: Ctx, role: string): Promise<boolean> {
    * same audit is asked over a compact brief with a JSON-only instruction; the
    * submission is judged exactly as before.
    */
-  if (!raw && /no usable JSON|no JSON/i.test(ctx.why)) {
+  if (!raw && (struck || /no usable JSON|no JSON/i.test(ctx.why))) {
     const compact =
       `You are the ${role} auditor of a research packet. Audit brief (shortened; the document, its claim ledger ` +
       `and the assignment):\n${JSON.stringify(brief).slice(0, 20_000)}\n\nJudge it strictly against the brief. ` +

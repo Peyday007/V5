@@ -25,6 +25,8 @@
 #             stay as slot B and as the GPU's fallback.
 #   runpod-disconnect — back to free providers only (mode off).
 #   runpod-report — research jobs by model on production, and GPU fallbacks.
+#   runpod-cycle — the production test of automatic power: stop the pod, watch
+#             Brain start it again for waiting research, wait for vLLM to serve.
 #   runpod-auto — what the hourly schedule runs: nothing until the RUNPOD_*
 #             secrets exist; then probe and connect on its own; once connected,
 #             reconnect if the secrets change, and report the GPU's research jobs.
@@ -41,7 +43,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto'
+        description: 'deploy | status | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle'
         required: true
         default: deploy
 
@@ -139,6 +141,14 @@ jobs:
               ;;
             runpod-report)
               gpu_report
+              ;;
+            runpod-cycle)
+              # The production test of automatic power: stop the pod, watch the running
+              # Brain start it again for waiting research, wait for vLLM. Always leaves it started.
+              timeout --signal=TERM --kill-after=30 3000 \
+                flyctl ssh console --app "$brain" -C "sh /app/scripts/runpod-cycle.sh" | tee cycle.txt || true
+              grep -q '^RUNPOD-CYCLE: PASS' cycle.txt || { echo "::error title=runpod::The automatic stop/start test did not pass; the lines above say which step."; exit 1; }
+              echo "::notice title=runpod::Automatic power proven: stopped, started by Brain for waiting research, model served."
               ;;
             runpod-auto)
               if [ -z "$RUNPOD_VLLM_URL" ]; then

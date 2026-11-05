@@ -14311,6 +14311,14 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   could reach far past eight connections, and halving under saturation was
   undone by doubling thirty seconds later. Each model's slots are now held to
   its share of `SLOTS_PER_DB_CONNECTION` (3) × the pool's ceiling.
+- **An audit that keeps coming back transient is asked differently, not again.**
+  Six hours after the database fixes (`capabilities show 6`, 20:04Z) syntheses
+  and audits succeeded where they finished (13/13, 17/17), yet no packet filed:
+  seven packets sat in AUDITING with audit roles queued at lease generation
+  29–37 — each attempt refunded as transient (a timeout on a brief of up to
+  60 000 characters), so nothing ever spent and nothing ever finished. An
+  audit item that has already struck transient now starts from the compact
+  brief; `free-lane show` lists the reasons for transient releases.
 ## 89. A goal's research is measured at its plan, and a search that does not reach the plan is asked differently.
 
 **Owner's order, 2026-11-05.** The RunPod GPU's research must advance the $10K
@@ -14381,6 +14389,20 @@ planner, queue or monitor:
   as before. The report also prints the goal's top reasons its jobs were not
   accepted (`failureClass`), since all 11 of its settled rounds ended without a
   report.
+- **A case-insensitive lookup needs an index under the same collation.** The
+  release after the RunPod account key was set failed its hosted verification
+  (`EMAXCONNSESSION`, pool_size 15). The connection report read the cause:
+  `findDocumentByCanonicalName` (`canonical_name = ? COLLATE NOCASE`) ran 3 124
+  times in eleven minutes for ~10 000 s of database time, because the
+  `(project_id, canonical_name)` indexes are on the plain column and Postgres
+  cannot use them for a comparison under `nocase`. 924 checkouts timed out and
+  Brain shed load. Migration 137 / pg 128 indexes both canonical-name lookups
+  under `COLLATE NOCASE`; `EXPLAIN` on Postgres reads an Index Scan for each.
+  Neither table is write-hot, so the build is inside the boot path's bound.
+- **The pod's power ignores work no model may take.** The supervisor counts
+  queued research minus items every lane model is cooling down on
+  (`coolingForEveryModel`), so a queue nothing will run does not keep the GPU
+  billing.
 
 ## 90. Independent work does not wait for unrelated work, and evidence reaches the plan when it arrives.
 

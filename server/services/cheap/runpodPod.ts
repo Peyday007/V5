@@ -113,8 +113,14 @@ export async function readPod(config: PodConfig, fetchImpl: Fetch = fetch): Prom
   }
 }
 
+/** Stop or start the pod: the same call the supervisor makes. True when RunPod accepted it. */
+export async function powerPod(config: PodConfig, action: 'stop' | 'start', fetchImpl: Fetch = fetch): Promise<{ ok: boolean; status: number }> {
+  const response = await api(config, 'POST', `/${action}`, fetchImpl);
+  return { ok: response.ok, status: response.status };
+}
+
 /** Whether the pod's vLLM answers, with its key. */
-async function vllmReady(config: PodConfig, fetchImpl: Fetch): Promise<boolean> {
+export async function vllmReady(config: PodConfig, fetchImpl: Fetch): Promise<boolean> {
   const gpu = config.vllm;
   try {
     const response = await fetchImpl(`${gpu.url}/models`, {
