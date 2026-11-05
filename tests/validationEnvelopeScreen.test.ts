@@ -110,6 +110,22 @@ describe('the stage-one screen passes the same envelope', () => {
     expect(ownActionMatches(validationQuestion(opening, 'SCREEN'), envelope.forbiddenActions)).toEqual([]);
   });
 
+  it('asks a recurring arrangement for a named buyer who paid, not for the one payer it does not have', () => {
+    const recurring = {
+      ...opening,
+      title: 'Shared EDDM postcards',
+      buyingSignal: 'Local businesses repeatedly buy shared Every Door Direct Mail postcard campaigns.',
+      opportunitySignal: 'RECURRING_OUTSOURCED_WORK',
+    } as unknown as CashOpportunity;
+    const question = validationQuestion(recurring, 'SCREEN');
+    expect(ownActionMatches(question, envelope.forbiddenActions)).toEqual([]);
+    expect(question).toMatch(/names as having paid for this kind of work/);
+    expect(question).toMatch(/reaches more buyers of that kind/);
+    expect(question).not.toMatch(/this specific opening/);
+    // A one-off opening keeps its own question.
+    expect(validationQuestion(opening, 'SCREEN')).toMatch(/this specific opening/);
+  });
+
   it('asks only the kill lanes, each the full profile’s own lane object', () => {
     const full = profileFor('RUSSELL_CASH_VALIDATION_V1')!;
     const screen = validationScreenProfile('RUSSELL_CASH_VALIDATION_V1')!;

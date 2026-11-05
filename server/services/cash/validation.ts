@@ -593,6 +593,29 @@ export function validationQuestion(
     ? ` It was published or observed on ${opportunity.signalObservedAt}.`
     : '';
   const source = opportunity.source ? ` The source is ${opportunity.source}.` : '';
+  if (stage === 'SCREEN' && opportunity.opportunitySignal === 'RECURRING_OUTSOURCED_WORK') {
+    /*
+     * A recurring arrangement has many payers, not one, so "who pays for this
+     * specific opening" has no answer and every screen of one ended with the
+     * payer lane empty (production, 2026-11-04/05: pooled solar, three anime
+     * patterns and the EDDM postcard, each "no published source names the
+     * specific payer"). The payer lane still takes a named instance: here, a
+     * buyer a published source names as having paid for this kind of work.
+     */
+    return (
+      `Before anything else is asked about this recurring arrangement — "${signal}" — settle the ` +
+      `three questions that can each end it.${source}${observed} ` +
+      'First establish whether buyers can still buy it from a supplier like us, or a published ' +
+      'rule excludes us; if so, submit that one fact in the ruled_out lane with its source and ' +
+      'stop. Otherwise establish who pays for it: in the payer lane, name at least one buyer that ' +
+      'a published source (a case study, client list, testimonial, review, award or order record) ' +
+      'names as having paid for this kind of work, with its date, and the published way a ' +
+      'supplier reaches more buyers of that kind (a directory, association, marketplace category ' +
+      'or register). Then say whether anything published would disqualify it outright. Nothing ' +
+      'else is asked at this stage. Where no published source names any buyer who paid, say so ' +
+      'plainly with where you looked rather than describing a kind of buyer.'
+    );
+  }
   if (stage === 'SCREEN') {
     return (
       `Before anything else is asked about this specific opening — "${signal}" — settle the ` +

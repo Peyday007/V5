@@ -174,8 +174,19 @@ The constructed EDDM shared-postcard opening `cop_664cef8` has started its dive 
 - **First screen:** recorded nothing.
 - **Second gate:** queued.
 
-**Open defect.** At 22:30Z the grant showed 21 live holds against `maxConcurrent=13`.
-- **Before #497:** an overshoot was already visible (14–15 against 13 on 11-04).
-- **Readmission path:** a test shows the hold readmitted by #497 stays within the ceiling when other work takes its slot.
-- **Unknown:** the source of the overshoot is not yet identified. A concurrency question goes to whoever owns the grant's admission path; it is not settled here.
+**Not a defect: grant holds over 13.** At 22:30Z there were 21 live holds and at 06:45Z there were 26, both against `maxConcurrent=13`.
+- **Cause:** the grant's concurrency follows the research surfaces on record (`discoveryConcurrencyFor` = max(13, surfaces)). Holds admitted while it was higher outlast a fall back to 13. This is by design, not a ceiling bypass.
+- **#504:** proves that a hold readmitted under #497 never goes over the ceiling.
+- **10:46Z:** 11/13.
 
+### 2026-11-05 10:46Z: every constructed screen asked a question it could not answer
+
+The EDDM opening `cop_664cef8` settled BLOCKED in round 3. Its claim: "No published source names the specific payer for the 1Vision EDDM service; the source only describes the types of businesses."
+
+The pooled-solar, anime and EDDM openings all ended the same way. The stage-one screen asks "who actually pays for this specific opening, named in a published source", and it forbids naming a kind of buyer. A recurring arrangement has many payers, so that question has no answer.
+
+**Fix.** A `RECURRING_OUTSOURCED_WORK` opening is now screened by asking for:
+- at least one buyer that a published source names as having paid for this kind of work, with a date;
+- the published channel that reaches more such buyers.
+
+The payer lane still takes a named instance, so no bar moves.
