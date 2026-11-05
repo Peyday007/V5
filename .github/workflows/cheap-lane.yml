@@ -16,15 +16,32 @@
 #             questions at one at a time (BRAIN_CASH_RESEARCH_MAX=1) and stops
 #             broad discovery, so Routines work on what improves every job.
 #
+#   runpod-test — probe the RunPod GPU (repository secrets RUNPOD_VLLM_URL,
+#             RUNPOD_VLLM_KEY, optional RUNPOD_VLLM_MODEL) with Brain's own lane
+#             code: refuses no key, serves the model, real task, 4 in parallel,
+#             a research-sized prompt. Nothing on the Brain changes.
+#   runpod-connect — probe, and only if it passes put the GPU in slot A
+#             (BRAIN_RUNPOD_* on the Brain, mode primary). The free providers
+#             stay as slot B and as the GPU's fallback.
+#   runpod-disconnect — back to free providers only (mode off).
+#   runpod-report — research jobs by model on production, and GPU fallbacks.
+#   runpod-auto — what the hourly schedule runs: nothing until the RUNPOD_*
+#             secrets exist; then probe and connect on its own; once connected,
+#             reconnect if the secrets change, and report the GPU's research jobs.
+#
 # No key is printed. Free provider keys never pass through here: they are
 # entered in OmniRoute's own dashboard.
 name: Cheap lane
 
 on:
+  # The GPU connects itself: the first hourly run after the RUNPOD_* secrets
+  # exist probes it and, on a pass, connects it (runpod-auto).
+  schedule:
+    - cron: '41 * * * *'
   workflow_dispatch:
     inputs:
       action:
-        description: 'deploy | status | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus'
+        description: 'deploy | status | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto'
         required: true
         default: deploy
 
@@ -40,6 +57,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - uses: ./.github/actions/await-release
+      # Only the RunPod actions run Brain's own code here (the probe).
+      - uses: actions/setup-node@v4
+        if: startsWith(inputs.action || 'runpod-auto', 'runpod-')
+        with:
+          node-version: 22
+          cache: npm
+      - if: startsWith(inputs.action || 'runpod-auto', 'runpod-')
+        run: npm ci --no-audit --no-fund
       - name: Run
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -49,13 +74,74 @@ jobs:
           OMNIROUTE_PASSWORD: ${{ secrets.OMNIROUTE_PASSWORD }}
           OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
           OMNIROUTE_MODEL: ${{ secrets.OMNIROUTE_MODEL }}
-          ACTION: ${{ inputs.action }}
+          RUNPOD_VLLM_URL: ${{ secrets.RUNPOD_VLLM_URL }}
+          RUNPOD_VLLM_KEY: ${{ secrets.RUNPOD_VLLM_KEY }}
+          RUNPOD_VLLM_MODEL: ${{ secrets.RUNPOD_VLLM_MODEL }}
+          ACTION: ${{ inputs.action || 'runpod-auto' }}
         run: |
           set -eu
           exec > >(tee cheap.txt) 2>&1
           brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           cheap=northline-cheap
+          # The GPU's settings, fingerprinted so a changed secret is noticed without reading one back.
+          gpu_fp=$(printf '%s\n%s\n%s' "$RUNPOD_VLLM_URL" "$RUNPOD_VLLM_KEY" "$RUNPOD_VLLM_MODEL" | sha256sum | cut -c1-16)
+          probe() { rc=0; npx tsx scripts/runpod-probe.ts > probe.txt 2>&1 || rc=$?; cat probe.txt; return $rc; }
+          gpu_connect() {
+            model=$(grep '^MODEL ' probe.txt | cut -d' ' -f2-)
+            flyctl secrets set --app "$brain" \
+              BRAIN_RUNPOD_URL="$RUNPOD_VLLM_URL" \
+              BRAIN_RUNPOD_KEY="$RUNPOD_VLLM_KEY" \
+              BRAIN_RUNPOD_MODEL="$model" \
+              BRAIN_RUNPOD_FINGERPRINT="$gpu_fp" \
+              BRAIN_RUNPOD_MODE=primary >/dev/null
+            echo "::notice title=runpod::Connected. Slot A of the free lane is now the GPU ($model); free providers are slot B and its fallback."
+          }
+          gpu_report() {
+            flyctl ssh console --app "$brain" -C "sh /app/scripts/runpod-report.sh --hours ${HOURS:-6}" | tee report.txt || true
+            fb=$(flyctl logs --app "$brain" --no-tail 2>&1 | grep -c '\[runpod\] fallback' || true)
+            grep -q 'RUNPOD-REPORT: OK' report.txt || echo "::warning title=runpod::The report did not finish (no RUNPOD-REPORT: OK); its counts are partial."
+            echo "GPU fallbacks in the recent log: $fb"
+            n=$(grep '^RUNPOD_SUBMITTED ' report.txt | cut -d' ' -f2 || echo 0)
+            if [ "${n:-0}" -gt 0 ]; then
+              echo "::notice title=runpod::Research jobs on the GPU: ${n} submitted in the last ${HOURS:-6}h (fallbacks in log: $fb)."
+            else
+              echo "::warning title=runpod::No research job submitted on the GPU in the last ${HOURS:-6}h yet (fallbacks in log: $fb)."
+            fi
+          }
           case "$ACTION" in
+            runpod-test)
+              [ -n "$RUNPOD_VLLM_URL" ] || { echo "::error::Set the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
+              probe
+              ;;
+            runpod-connect)
+              [ -n "$RUNPOD_VLLM_URL" ] || { echo "::error::Set the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY repository secrets."; exit 1; }
+              probe || { echo "::error::The GPU did not pass the probe; nothing on the Brain changed."; exit 1; }
+              gpu_connect
+              ;;
+            runpod-disconnect)
+              flyctl secrets set --app "$brain" BRAIN_RUNPOD_MODE=off >/dev/null
+              echo "::notice title=runpod::The GPU is out of the lane; free providers only."
+              ;;
+            runpod-report)
+              gpu_report
+              ;;
+            runpod-auto)
+              if [ -z "$RUNPOD_VLLM_URL" ]; then
+                echo "::notice title=runpod::Waiting for the RUNPOD_VLLM_URL and RUNPOD_VLLM_KEY secrets. Free providers only."
+                exit 0
+              fi
+              # What the Brain runs now: its mode and the fingerprint of the settings it was given (never a key).
+              state=$(flyctl ssh console --app "$brain" -C 'printenv BRAIN_RUNPOD_MODE BRAIN_RUNPOD_FINGERPRINT' 2>/dev/null | tr -d '\r' | tr '\n' ' ' || true)
+              if echo "$state" | grep -qw primary && echo "$state" | grep -qw "$gpu_fp"; then
+                if probe; then gpu_report
+                else echo "::warning title=runpod::The GPU failed its probe; the Brain is answering on the free providers meanwhile (automatic fallback)."; fi
+              elif echo "$state" | grep -qw off; then
+                echo "::notice title=runpod::The GPU was disconnected on purpose (mode off); run runpod-connect to bring it back."
+              else
+                if probe; then gpu_connect
+                else echo "::warning title=runpod::The GPU is not ready yet; nothing on the Brain changed. The next hourly run tries again."; fi
+              fi
+              ;;
             deploy)
               [ -n "$FLY_ORG_TOKEN" ] || { echo "::error::Set the FLY_ORG_TOKEN repository secret: an organization token from the Fly dashboard (Tokens). The Brain's own deploy token cannot create another app."; exit 1; }
               # The Brain's own organization, read with the Brain's token, so the

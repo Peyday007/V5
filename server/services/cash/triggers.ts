@@ -24,7 +24,9 @@ export function triggersEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const flag = env['BRAIN_TRIGGERS']?.trim().toLowerCase();
   if (flag === 'on') return true;
   if (flag === 'off') return false;
-  return Boolean(env['BRAIN_CHEAP_LLM_URL']?.trim());
+  // The lane is on with either address: OmniRoute, or the RunPod GPU in primary mode (`cheap/runpod.ts`).
+  if (env['BRAIN_CHEAP_LLM_URL']?.trim()) return true;
+  return Boolean(env['BRAIN_RUNPOD_URL']?.trim()) && env['BRAIN_RUNPOD_MODE']?.trim().toLowerCase() === 'primary';
 }
 
 const ASK =

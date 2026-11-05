@@ -24,6 +24,7 @@ import { createHash } from 'node:crypto';
 import { getDb } from '../../db/database.ts';
 import { newId, nowIso } from '../../repos/util.ts';
 import { DELIVERABLE_KINDS, type DeliverableKind } from '../cash/deliverables/spec.ts';
+import { isRunpodSlot, routeRunpod, runpodConfig, type RunpodConfig } from './runpod.ts';
 
 export interface LaneConfig {
   url: string;
@@ -32,24 +33,40 @@ export interface LaneConfig {
   models: string[];
   dailyBudget: number;
   timeoutMs: number;
+  /** The RunPod GPU, when switched to primary: it holds slot A (`runpod.ts`). */
+  runpod?: RunpodConfig | null;
+  /** The free model a failed RunPod call is answered by; null when OmniRoute is not set. */
+  fallbackModel?: string | null;
 }
 
-/** Read per call, so setting or removing the secret needs no restart. */
+/**
+ * Read per call, so setting or removing the secret needs no restart.
+ *
+ * With the RunPod GPU in primary mode (`BRAIN_RUNPOD_MODE=primary`), its model
+ * takes slot A and the first free model moves to slot B, so a claim found on
+ * the GPU is still verified by a different model; the free model is also slot
+ * A's fallback. The lane is on when either address is set.
+ */
 export function laneConfig(env: NodeJS.ProcessEnv = process.env): LaneConfig | null {
-  const url = env['BRAIN_CHEAP_LLM_URL']?.trim();
-  if (!url) return null;
-  const models = (env['BRAIN_CHEAP_LLM_MODELS'] ?? 'auto')
+  const url = env['BRAIN_CHEAP_LLM_URL']?.trim() || null;
+  const runpod = runpodConfig(env);
+  if (!url && !runpod) return null;
+  const configured = (env['BRAIN_CHEAP_LLM_MODELS'] ?? 'auto')
     .split(',')
     .map((one) => one.trim())
     .filter(Boolean)
     .slice(0, 2);
+  const free = configured.length > 0 ? configured : ['auto'];
   const budget = Number(env['BRAIN_CHEAP_LLM_DAILY_BUDGET'] ?? 20000);
+  const models = runpod ? [runpod.label, ...(url ? [free[0]!] : [])] : free;
   return {
-    url: url.replace(/\/+$/, ''),
-    key: env['BRAIN_CHEAP_LLM_KEY']?.trim() || null,
-    models: models.length > 0 ? models : ['auto'],
+    url: (url ?? runpod!.url).replace(/\/+$/, ''),
+    key: (url ? env['BRAIN_CHEAP_LLM_KEY']?.trim() : runpod!.key) || null,
+    models,
     dailyBudget: Number.isFinite(budget) && budget > 0 ? Math.trunc(budget) : 20000,
     timeoutMs: 30_000,
+    runpod,
+    fallbackModel: runpod && url ? free[0]! : null,
   };
 }
 
@@ -256,6 +273,16 @@ export type Completer = (
 ) => Promise<string>;
 
 export const httpCompleter: Completer = async (config, model, system, prompt, options) => {
+  if (config.runpod && isRunpodSlot(model)) {
+    return routeRunpod(config, system, prompt, { maxTokens: options?.maxTokens ?? 2000 }, (backup) =>
+      openAiCompleter({ ...config, runpod: null }, backup, system, prompt, options),
+    );
+  }
+  return openAiCompleter(config, model, system, prompt, options);
+};
+
+/** The plain OpenAI-compatible call to OmniRoute (or anything like it). */
+const openAiCompleter: Completer = async (config, model, system, prompt, options) => {
   const response = await fetch(`${config.url}/chat/completions`, {
     method: 'POST',
     headers: {
