@@ -246,6 +246,13 @@ describe('waiting on the outside world without looping', () => {
 });
 
 describe('arming, cancelling and surviving a restart', () => {
+  it('a harness notice is not the owner: a subagent report with a list adds no requirement', () => {
+    assign(TEN_K);
+    const before = ledger().requirements.length;
+    assign('<task-notification>\n<result>Findings:\n- one finding\n- two finding\n- three finding</result>\n</task-notification>');
+    expect(ledger().requirements.length).toBe(before);
+  });
+
   it('a question does not arm it; "stop" from the owner ends it', () => {
     expect(assign('What does the plan read return right now?').out).toBe('');
     expect(fs.existsSync(path.join(work, `.claude/finish-job/${SID}.json`))).toBe(false);

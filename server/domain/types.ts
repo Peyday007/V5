@@ -506,6 +506,8 @@ export const EVENT_TYPES = [
   'WORK_ATTEMPTS_REGRANTED',
   /** A research park Brain answered under the standing grant (§80). */
   'RUSSELL_ROUTINE_DECISION',
+  /** A substantial goal checked against the capability maps; recorded when what blocks it changes (§88). */
+  'CAPABILITY_ASSESSED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

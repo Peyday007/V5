@@ -42,6 +42,7 @@ import {
   packetWeaknesses,
   ownerInterventionWeaknesses,
   rankCandidates,
+  riskForScope,
   type MetricKey,
   type MetricReading,
   type Stage,
@@ -58,6 +59,7 @@ import {
   type ImprovementCandidate,
 } from '../../repos/improvement.ts';
 import { BRAIN_PROJECT_SLUG, BRAIN_REPOSITORY_ID } from '../../domain/binPurpose.ts';
+import { RELEASE_EXCLUDED_PATHS } from '../../domain/factoryRelease.ts';
 import { claimRejections, freeLaneFailures, ownerInterventions, packetOutcomes, readMetric } from './scoreboard.ts';
 import { improvementPerson, improvementSwitch } from './authority.ts';
 
@@ -87,7 +89,12 @@ export interface ImprovementTickReport {
   errors: string[];
   /** The free-lane research activation after this pass's evaluation (`activation.ts`). */
   activation?: string;
+  /** Goals whose capability assessment changed this pass (§88). */
+  objectives?: string[];
 }
+
+const OBJECTIVE_CHECK_MS = 60 * 60_000;
+let lastObjectiveCheck = 0;
 
 /** The durable tick's call: at most every ten minutes. */
 export async function improvementTickIfDue(nowMs = Date.now()): Promise<ImprovementTickReport | null> {
@@ -98,6 +105,7 @@ export async function improvementTickIfDue(nowMs = Date.now()): Promise<Improvem
 
 export function resetImprovementTick(): void {
   lastTick = 0;
+  lastObjectiveCheck = 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -114,12 +122,21 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
   const claims = await claimRejections(week, to);
   const packets = await packetOutcomes(week, to);
   const asks = await ownerInterventions(week, to);
-  return [
+  const detected = [
     ...ownerInterventionWeaknesses(asks.causes, asks.total),
     ...freeLaneWeaknesses(lane.failures, lane.attempts, recentLane),
     ...claimRejectionWeaknesses(claims.rejections, claims.claims),
     ...packetWeaknesses(packets.causes, packets.settled),
   ];
+  // §88: a requirement the capability map reads BROKEN or MISSING, that no detector above
+  // already raised and no open candidate already owns, is a weakness like any other.
+  const open = (await listCandidates({ open: true })).map((c) => c.weaknessKey);
+  const { capabilityWeaknesses } = await import('../selfmodel/capabilities.ts');
+  const gaps = await capabilityWeaknesses(now, [...detected.map((w) => w.key), ...open]).catch((error: unknown) => {
+    console.warn(`capability assessment failed: ${String((error as Error)?.message ?? error)}`);
+    return [];
+  });
+  return [...detected, ...gaps];
 }
 
 /** The candidates of one weakness family (`KEY`, `KEY#2`, …), newest attempt last. */
@@ -371,6 +388,8 @@ export function composeObjective(candidate: ImprovementCandidate, link: Linked, 
        */
     ],
     mutationScope: scope,
+    // From the paths, not the prose: the prose says "production" (see riskForScope).
+    riskClass: riskForScope(scope, RELEASE_EXCLUDED_PATHS),
   };
 }
 
@@ -634,6 +653,17 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
   report.ran = true;
   const weaknesses = await detectWeaknesses(now);
   report.detected = weaknesses.length;
+  // §88: substantial live goals are checked against the capability maps, at most hourly.
+  if (now.getTime() - lastObjectiveCheck >= OBJECTIVE_CHECK_MS) {
+    lastObjectiveCheck = now.getTime();
+    try {
+      const { assessLiveObjectives } = await import('../selfmodel/objectives.ts');
+      const checked = await assessLiveObjectives({ now });
+      report.objectives = checked.filter((c) => c.recorded).map((c) => `${c.goalId}: ${c.assessment.ready ? 'ready' : c.assessment.blocking.map((g) => g.id).join(',')}`);
+    } catch (error) {
+      report.errors.push(`objectives: ${String((error as Error).message ?? error).slice(0, 200)}`);
+    }
+  }
   for (const weakness of weaknesses) {
     try {
       await register(weakness, now, report);
