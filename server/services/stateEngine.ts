@@ -49,6 +49,7 @@ import {
   checkRunDependencyRows,
   documentPresence,
   refreshProjectDependencies,
+  withNameLookups,
 } from './dependencies.ts';
 import { objectExistence, objectExists, prefetchExistence, storageKeyOf, withExistenceMemo } from './storage.ts';
 import { writeProjectState, writesRuntimeSnapshot } from './runtimeState.ts';
@@ -384,7 +385,13 @@ function deriveStatus(input: {
 }
 
 /** Everything `computeLayerState` needs, gathered from the database + disk. */
-async function deriveLayer(layerId: string): Promise<LayerDerivation> {
+function deriveLayer(layerId: string): Promise<LayerDerivation> {
+  // Each canonical name is read once for the whole derivation (and the whole
+  // project pass, when it runs inside one): see `withNameLookups`.
+  return withNameLookups(() => deriveLayerUnmemoized(layerId));
+}
+
+async function deriveLayerUnmemoized(layerId: string): Promise<LayerDerivation> {
   const layer = await getLayer(layerId);
   if (!layer) throw new Error(`Cannot compute layer state: unknown layer ${layerId}`);
   const project = await getProject(layer.projectId);
@@ -807,7 +814,7 @@ async function recomputeProjectWithin(projectId: string): Promise<LayerStateSnap
   recomputeDepth += 1;
   try {
     const db = getDb();
-    const steps = async (layersAtOnce: boolean): Promise<LayerStateSnapshot[]> => {
+    const steps = (layersAtOnce: boolean): Promise<LayerStateSnapshot[]> => withNameLookups(async () => {
       await recomputeDocumentFileState(projectId);
       await refreshProjectDependencies(projectId);
       await recomputeRunReadiness(projectId);
@@ -829,7 +836,7 @@ async function recomputeProjectWithin(projectId: string): Promise<LayerStateSnap
         if (project.currentWave !== wave) await updateProject(projectId, { currentWave: wave });
       }
       return results;
-    };
+    });
     /*
      * Inside a caller's transaction (a judge submission, a filing) the
      * recompute stays part of it, as before. Called on its own, it no longer

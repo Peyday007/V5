@@ -11,6 +11,7 @@
  * vanished is reported as *inconsistent* — never as present — so the user is
  * told what is actually wrong instead of being silently blocked.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type {
   Dependency,
   DependencyCheckItem,
@@ -101,6 +102,36 @@ async function inferRequiredLayerId(projectId: string, canonicalName: string): P
   return bestId;
 }
 
+/**
+ * One recompute asks for the same few canonical names over and over: every
+ * run not yet started, then every layer's active runs and unfinished
+ * documents. Production, 2026-11-05 21:23–22:20Z: `findDocumentByCanonicalName`
+ * ran 49 932 times in an hour (about 14 a second), the database's largest cost
+ * by ~700×, and Brain shed load. Inside `withNameLookups` each (project, name)
+ * is read once per pass; outside it every call reads current rows as before.
+ * Only these read-only checks use it; the paths that write dependency rows
+ * read the document themselves.
+ */
+const nameMemo = new AsyncLocalStorage<Map<string, Promise<Document | null>>>();
+
+export function withNameLookups<T>(fn: () => Promise<T>): Promise<T> {
+  if (nameMemo.getStore()) return fn();
+  return nameMemo.run(new Map(), fn);
+}
+
+function documentNamed(projectId: string, canonicalName: string): Promise<Document | null> {
+  const memo = nameMemo.getStore();
+  if (!memo) return findDocumentByCanonicalName(projectId, canonicalName);
+  const key = `${projectId}\n${canonicalName.trim().toLowerCase()}`;
+  let hit = memo.get(key);
+  if (!hit) {
+    hit = findDocumentByCanonicalName(projectId, canonicalName);
+    memo.set(key, hit);
+    hit.catch(() => memo.delete(key));
+  }
+  return hit;
+}
+
 async function evaluate(
   projectId: string,
   canonicalName: string,
@@ -111,7 +142,7 @@ async function evaluate(
   // The canonical name is authoritative; the stored link is only a cache of a
   // previous resolution and may point at a row that has since been renamed.
   const document =
-    await findDocumentByCanonicalName(projectId, canonicalName) ??
+    await documentNamed(projectId, canonicalName) ??
     (linkedDocumentId ? await getDocument(linkedDocumentId) : null);
   const presence = await documentPresence(document);
   return {
