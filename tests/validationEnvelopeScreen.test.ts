@@ -122,6 +122,11 @@ describe('the stage-one screen passes the same envelope', () => {
     expect(question).toMatch(/names as having paid for this kind of work/);
     expect(question).toMatch(/reaches more buyers of that kind/);
     expect(question).not.toMatch(/this specific opening/);
+    // Production, 2026-11-05: "whether buyers can still buy it …; if so, submit that one fact in the
+    // ruled_out lane" was read as "if they can", and a screen filed availability as a disqualifier.
+    expect(question).toMatch(/Only if it has stopped or excludes us/);
+    expect(question).toMatch(/still bought is not a ruled_out fact/);
+    expect(question).not.toMatch(/; if so,/);
     // A one-off opening keeps its own question.
     expect(validationQuestion(opening, 'SCREEN')).toMatch(/this specific opening/);
   });

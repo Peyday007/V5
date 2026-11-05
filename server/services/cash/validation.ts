@@ -605,9 +605,11 @@ export function validationQuestion(
     return (
       `Before anything else is asked about this recurring arrangement — "${signal}" — settle the ` +
       `three questions that can each end it.${source}${observed} ` +
-      'First establish whether buyers can still buy it from a supplier like us, or a published ' +
-      'rule excludes us; if so, submit that one fact in the ruled_out lane with its source and ' +
-      'stop. Otherwise establish who pays for it: in the payer lane, name at least one buyer that ' +
+      'First establish whether this kind of work has stopped being bought from suppliers like ' +
+      'us, or a published rule excludes us. Only if it has stopped or excludes us, submit that one ' +
+      'fact in the ruled_out lane with its source and stop; that it is still bought is not a ' +
+      'ruled_out fact and is not submitted there. Otherwise establish who pays for it: in the ' +
+      'payer lane, name at least one buyer that ' +
       'a published source (a case study, client list, testimonial, review, award or order record) ' +
       'names as having paid for this kind of work, with its date, and the published way a ' +
       'supplier reaches more buyers of that kind (a directory, association, marketplace category ' +
