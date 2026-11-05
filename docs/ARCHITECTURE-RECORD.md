@@ -14276,6 +14276,13 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   parks `packets parks` lists sit in projects with no standing grant — retired
   cash projects and brain-architecture research goals — so `answerUnaskedParks`
   correctly leaves them.)
+- **Search paces itself by what the endpoint tolerates.** 05:27–08:27Z search
+  fed 3 of 42 fragments: both endpoints refused together every ten minutes,
+  right after each pause lifted, because queued searches resumed 1.5 s apart.
+  A refusal now doubles the spacing (to 30 s) and ten answered searches take a
+  fifth off it (to 2 s); dead-link recovery searches only while the queue is
+  short, so a fragment's own discovery keeps the budget. The same reading showed
+  #513 working: EXTRACTION.CITED_CLAIMS 12/20 (was 30/84).
 
 ## 89. A goal's research is measured at its plan, and a search that does not reach the plan is asked differently.
 
@@ -14337,10 +14344,3 @@ planner, queue or monitor:
   idle GPU whose answers Brain refuses does not generate jobs to fill it.
   Improvement research keeps its `IMPROVEMENT_RESEARCH_SLOT_CAP` share (§87)
   at priority 5, below commercial work at 6–8 and goal work at +2.
-- **Search paces itself by what the endpoint tolerates.** 05:27–08:27Z search
-  fed 3 of 42 fragments: both endpoints refused together every ten minutes,
-  right after each pause lifted, because queued searches resumed 1.5 s apart.
-  A refusal now doubles the spacing (to 30 s) and ten answered searches take a
-  fifth off it (to 2 s); dead-link recovery searches only while the queue is
-  short, so a fragment's own discovery keeps the budget. The same reading showed
-  #513 working: EXTRACTION.CITED_CLAIMS 12/20 (was 30/84).
