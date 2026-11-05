@@ -197,3 +197,62 @@ describe('every probe reads on a real schema', () => {
     for (const probe of PROBES) await expect(readProbe(probe, from, to), probe).resolves.toHaveProperty('total');
   });
 });
+
+describe('the goal-plan map: the whole $10K chain, connections included', () => {
+  beforeEach(async () => {
+    await freshProject();
+  });
+
+  it('is whole: every stage, every reference resolves, owners on disk, no cycle', async () => {
+    const { GOAL_PLAN_MAP, GOAL_STAGES, CAPABILITY_MAPS } = await import('../server/domain/capabilityMap.ts');
+    expect(CAPABILITY_MAPS['GOAL_PLAN']).toBe(GOAL_PLAN_MAP);
+    const stages = new Set(GOAL_PLAN_MAP.requirements.map((r) => r.stage));
+    for (const stage of GOAL_STAGES) expect(stages.has(stage), stage).toBe(true);
+    const ids = new Set(GOAL_PLAN_MAP.requirements.map((r) => r.id));
+    expect(ids.size).toBe(GOAL_PLAN_MAP.requirements.length);
+    for (const r of GOAL_PLAN_MAP.requirements) {
+      for (const dep of r.dependsOn) expect(ids.has(dep), `${r.id} → ${dep}`).toBe(true);
+      expect(PROBES).toContain(r.proof.probe);
+      for (const owner of r.owner) expect(fs.existsSync(owner), `${r.id} owner ${owner}`).toBe(true);
+      expect(downstreamOf(GOAL_PLAN_MAP, r.id)).not.toContain(r.id);
+    }
+  });
+
+  it('is the map a money goal starts with, beside research', () => {
+    expect(mapsFor({ text: 'Collect 10000 dollars of settled cash within 30 days' }).map((m) => m.key)).toEqual(['RESEARCH', 'GOAL_PLAN']);
+    expect(mapsFor({ text: 'Produce a $10K plan' }).map((m) => m.key)).toEqual(['RESEARCH', 'GOAL_PLAN']);
+    expect(mapsFor({ text: 'Rename the settings button' })).toEqual([]);
+  });
+
+  it('reads a stalled planner, a dead GPU and a saturated database from the rows', async () => {
+    const { GOAL_PLAN_MAP } = await import('../server/domain/capabilityMap.ts');
+    const db = getDb();
+    const project = await db.get<{ id: string }>('SELECT id FROM projects LIMIT 1');
+    const now = new Date().toISOString();
+    await db.run(
+      `INSERT INTO workstreams (id, project_id, title, intent, purpose, created_at, updated_at, target_metric, target_project_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['wst_goalmap', project!.id, '$10K', 'Collect 10000 dollars of settled cash', 'REVENUE_DIRECT', now, now, 'SETTLED_CASH', project!.id],
+    );
+    const lane = (outcome: string, reason: string) =>
+      recordBinEvent({ eventType: 'FREE_LANE_ITEM', workloadClass: 'RESEARCH_FRAGMENT', outcome, reason, evidenceClass: 'MEASURED' } as Parameters<typeof recordBinEvent>[0]);
+    for (let i = 0; i < 6; i += 1) await lane('RELEASED_TRANSIENT', 'model runpod/Qwen/Qwen3-4B: model call failed: cheap lane HTTP 503');
+    await recordBinEvent({ eventType: 'RUNPOD_POD', outcome: 'START_FAILED', reason: 'not enough free GPUs', evidenceClass: 'MEASURED' } as Parameters<typeof recordBinEvent>[0]);
+    for (let i = 0; i < 15; i += 1) await lane('RELEASED_TRANSIENT', 'model brain-a: threw: The database pool had no free connection within 10000ms');
+    for (let i = 0; i < 10; i += 1) await lane('SUBMITTED', 'model brain-a');
+
+    const a = await assessMap(GOAL_PLAN_MAP, { hours: 2, now: new Date(Date.now() + 1000) });
+    const by = new Map(a.assessed.map((x) => [x.requirement.id, x]));
+    // A live goal and no scenario run in two hours: the planner has stopped.
+    expect(by.get('GOAL.PLAN_FRESH')).toMatchObject({ status: 'BROKEN', reading: { ok: 0, total: 1 } });
+    expect(by.get('COMPUTE.GPU')).toMatchObject({ status: 'BROKEN', reading: { ok: 0, total: 7 } });
+    expect(by.get('COMPUTE.DATABASE')).toMatchObject({ status: 'BROKEN', reading: { ok: 16, total: 31 } });
+    expect(by.get('COMPUTE.FREE_MODELS')).toMatchObject({ status: 'WORKING', reading: { ok: 10, total: 10 } });
+    // Nothing settled yet: unproven, not working.
+    expect(by.get('CONSTRUCTION.ROUNDS_FILE')!.status).toBe('UNPROVEN');
+    // The database sits under the plan: it ranks ahead of what depends on it.
+    const gaps = a.gaps.filter((g) => g.status === 'BROKEN').map((g) => g.id);
+    expect(gaps.indexOf('COMPUTE.DATABASE')).toBeLessThan(gaps.indexOf('GOAL.PLAN_FRESH'));
+    expect(formatAssessment(a).join('\n')).toContain('MAP GOAL_PLAN');
+  });
+});

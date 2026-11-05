@@ -45,6 +45,16 @@ export const RESEARCH_STAGES = [
 ] as const;
 export type ResearchStage = (typeof RESEARCH_STAGES)[number];
 
+/**
+ * The stages of a cash goal's planning chain: goal received → openings found
+ * and constructed → research establishing buyer, price and demand → the quant
+ * engine → the plan, on the compute and database it all runs on.
+ */
+export const GOAL_STAGES = ['GOAL', 'OPENINGS', 'CONSTRUCTION', 'EVIDENCE', 'QUANT', 'PLAN', 'COMPUTE'] as const;
+export type GoalStage = (typeof GOAL_STAGES)[number];
+export type CapabilityStage = ResearchStage | GoalStage;
+const STAGE_ORDER: readonly CapabilityStage[] = [...RESEARCH_STAGES, ...GOAL_STAGES];
+
 /** A probe the assessor knows how to read. Each is one SQL reading over a window. */
 export const PROBES = [
   'PLAN_APPROVED',
@@ -71,6 +81,20 @@ export const PROBES = [
   'WEAKNESSES_TRACKED',
   'IMPROVEMENTS_DELIVERED',
   'METHOD_POOL',
+  // The goal-plan map (GOAL_PLAN_MAP).
+  'GOAL_PLAN_EVALUATED',
+  'GOAL_PLAN_FRESH',
+  'GOAL_SEARCH_WIDENS',
+  'GOAL_ROUNDS_FILE',
+  'CONSTRUCTED_ROUNDS_FILE',
+  'GOAL_PACKETS_COMPLETE',
+  'PATH_QUESTIONS_ANSWERED',
+  'OPENINGS_BUYER_PRICE',
+  'OPENINGS_MODELLED',
+  'OPENINGS_REACH_PLAN',
+  'GPU_SERVES',
+  'FREE_MODELS_SERVE',
+  'DATABASE_AVAILABLE',
 ] as const;
 export type Probe = (typeof PROBES)[number];
 
@@ -102,7 +126,8 @@ export interface ImprovementRoute {
     | 'ACCEPTED_CLAIM_RATE'
     | 'RESEARCH_JOB_SUCCESS_RATE'
     | 'OWNER_INTERVENTIONS_PER_DAY'
-    | 'AUTO_RECOVERY_RATE';
+    | 'AUTO_RECOVERY_RATE'
+    | 'CONSTRUCTED_ROUND_YIELD';
   /** Files a fix may touch. */
   mutationScope: string[];
   /**
@@ -116,7 +141,7 @@ export interface ImprovementRoute {
 
 export interface CapabilityRequirement {
   id: string;
-  stage: ResearchStage;
+  stage: CapabilityStage;
   ability: string;
   /** Requirement ids this one cannot work without. */
   dependsOn: string[];
@@ -449,8 +474,174 @@ export const RESEARCH_MAP: CapabilityMap = {
   ],
 };
 
+
+/**
+ * A cash goal's planning chain, end to end (owner's order, 2026-11-05: test the
+ * whole $10K process, find every blocker rather than the first, and keep the
+ * test). Each requirement is a link a plan cannot be produced without, and the
+ * reading that shows it held in production — including the connections
+ * between stages, because a working stage whose output never reaches the next
+ * one is a broken chain. Read hourly with the research map, on every goal that
+ * starts (`assessLiveObjectives`), and after a release (`capabilities show`).
+ */
+export const GOAL_PLAN_MAP: CapabilityMap = {
+  key: 'GOAL_PLAN',
+  objective:
+    'Turn an approved cash goal into the strongest evidence-backed plan Brain can support — openings found and constructed, ' +
+    'buyers, prices and demand researched, every opening read by the quant engine, the plan re-read when evidence arrives, ' +
+    'and the search widened while the plan falls short — on compute and a database that keep answering.',
+  requirements: [
+    R({
+      id: 'GOAL.PLAN_EVALUATED',
+      stage: 'GOAL',
+      ability: 'Read every live targeted goal through the scenario engine, and finish the run',
+      dependsOn: ['COMPUTE.DATABASE'],
+      inputs: ['workstreams with a target'],
+      outputs: ['scenario_runs labelled "goal …" COMPLETE'],
+      failureConditions: ['scenario slot busy', 'run failed', 'database unavailable'],
+      owner: ['server/services/goals/plan.ts'],
+      proof: { probe: 'GOAL_PLAN_EVALUATED', what: 'goal scenario runs started in the window that completed', minSample: 3, workingAt: 0.9 },
+    }),
+    R({
+      id: 'GOAL.PLAN_FRESH',
+      stage: 'GOAL',
+      ability: 'Keep every live goal’s plan current: a run within the last two hours',
+      dependsOn: ['GOAL.PLAN_EVALUATED'],
+      inputs: ['live targeted goals'],
+      outputs: ['a recent goal scenario run per goal'],
+      failureConditions: ['goal tick stopped', 'every pass busy'],
+      owner: ['server/services/goals/tick.ts'],
+      proof: { probe: 'GOAL_PLAN_FRESH', what: 'live targeted goals with a scenario run in the last two hours (now)', minSample: 1, workingAt: 1 },
+    }),
+    R({
+      id: 'OPENINGS.SEARCH_WIDENS',
+      stage: 'OPENINGS',
+      ability: 'Keep searching while the plan falls short: a short goal opens new rounds',
+      dependsOn: ['GOAL.PLAN_FRESH'],
+      inputs: ['a reading that is not RECOMMENDABLE'],
+      outputs: ['goal discovery or constructed rounds opened in the window'],
+      failureConditions: ['live cap full of stalled rounds', 'cool-off', 'closed gate'],
+      owner: ['server/services/goals/plan.ts', 'server/services/cash/discovery.ts'],
+      proof: { probe: 'GOAL_SEARCH_WIDENS', what: 'live goals short of a recommendable plan that opened a round in the window', minSample: 1, workingAt: 1 },
+    }),
+    R({
+      id: 'OPENINGS.ROUNDS_FILE',
+      stage: 'OPENINGS',
+      ability: 'Turn a goal’s research rounds into filed openings',
+      dependsOn: ['OPENINGS.SEARCH_WIDENS', 'EVIDENCE.PACKETS_COMPLETE'],
+      inputs: ['goal discovery rounds'],
+      outputs: ['cash_opportunities filed from the round'],
+      failureConditions: ['round abandoned with nothing found', 'packet never finished'],
+      owner: ['server/services/cash/discovery.ts'],
+      proof: { probe: 'GOAL_ROUNDS_FILE', what: 'goal rounds settled in the window that filed at least one opening', minSample: 3, workingAt: 0.3 },
+    }),
+    R({
+      id: 'CONSTRUCTION.ROUNDS_FILE',
+      stage: 'CONSTRUCTION',
+      ability: 'Turn arrangements Brain constructed into openings that say a buyer pays',
+      dependsOn: ['OPENINGS.SEARCH_WIDENS', 'EVIDENCE.PACKETS_COMPLETE'],
+      inputs: ['constructed rounds (goal-…-mx-…)'],
+      outputs: ['openings filed by constructed rounds'],
+      failureConditions: ['pattern claims with no payer', 'round abandoned'],
+      owner: ['server/services/cash/construct.ts'],
+      proof: { probe: 'CONSTRUCTED_ROUNDS_FILE', what: 'constructed rounds settled in the window that filed at least one opening', minSample: 3, workingAt: 0.3 },
+      improvement: { metric: 'CONSTRUCTED_ROUND_YIELD', mutationScope: ['server/services/cash/construct.ts', 'server/services/cash/discovery.ts', 'tests/cash*.test.ts'], coveredBy: [] },
+    }),
+    R({
+      id: 'EVIDENCE.PACKETS_COMPLETE',
+      stage: 'EVIDENCE',
+      ability: 'Bring the research packets behind a goal’s rounds to a usable end',
+      dependsOn: ['COMPUTE.DATABASE', 'COMPUTE.FREE_MODELS'],
+      inputs: ['packets of goal rounds'],
+      outputs: ['COMPLETE / COMPLETE_WITH_GAPS'],
+      failureConditions: ['no fragment cleared its gate', 'audit work faulted', 'judge wanted more'],
+      owner: ['server/services/research/packetRunner.ts'],
+      proof: { probe: 'GOAL_PACKETS_COMPLETE', what: 'packets behind goal rounds settled in the window that completed', minSample: 3, workingAt: 0.4 },
+    }),
+    R({
+      id: 'EVIDENCE.PATH_ANSWERS',
+      stage: 'EVIDENCE',
+      ability: 'Answer the narrow questions on an opening’s path to money (price, payer, timing, costs, conversion)',
+      dependsOn: ['EVIDENCE.PACKETS_COMPLETE'],
+      inputs: ['cash_needs question:* on openings'],
+      outputs: ['needs RESOLVED with a card fact'],
+      failureConditions: ['research did not finish', 'sources do not settle it'],
+      owner: ['server/services/goals/pathResearch.ts'],
+      proof: { probe: 'PATH_QUESTIONS_ANSWERED', what: 'opening questions closed in the window that were resolved', minSample: 5, workingAt: 0.25 },
+    }),
+    R({
+      id: 'EVIDENCE.BUYER_PRICE',
+      stage: 'EVIDENCE',
+      ability: 'Establish a reachable buyer, current demand and a price buyers pay on the openings a goal considers',
+      dependsOn: ['EVIDENCE.PATH_ANSWERS'],
+      inputs: ['openings considered by the latest plan reading'],
+      outputs: ['openings with REACHABLE_BUYER, CURRENT_DEMAND and OFFER_AND_PRICE established'],
+      failureConditions: ['no payer', 'undated signal', 'price a guess'],
+      owner: ['server/services/goals/pathResearch.ts', 'server/services/goals/plan.ts'],
+      proof: { probe: 'OPENINGS_BUYER_PRICE', what: 'openings in each live goal’s latest reading with buyer, demand and price established', minSample: 3, workingAt: 0.2 },
+    }),
+    R({
+      id: 'QUANT.MODELLED',
+      stage: 'QUANT',
+      ability: 'Give the quant engine every opening the goal considers that it can model',
+      dependsOn: ['GOAL.PLAN_EVALUATED'],
+      inputs: ['considered openings'],
+      outputs: ['openings modelled in the portfolio'],
+      failureConditions: ['opening excluded for a missing input', 'over the limits'],
+      owner: ['server/services/goals/portfolio.ts'],
+      proof: { probe: 'OPENINGS_MODELLED', what: 'openings in each live goal’s latest reading that the quant engine modelled', minSample: 3, workingAt: 0.3 },
+    }),
+    R({
+      id: 'PLAN.READS_NEW_EVIDENCE',
+      stage: 'PLAN',
+      ability: 'Re-read the plan after an opening is filed, so new evidence reaches the plan',
+      dependsOn: ['GOAL.PLAN_EVALUATED', 'OPENINGS.ROUNDS_FILE'],
+      inputs: ['openings filed in the window'],
+      outputs: ['a goal scenario run started after the opening was filed'],
+      failureConditions: ['plan not re-read', 'opening in another project'],
+      owner: ['server/services/goals/plan.ts'],
+      proof: { probe: 'OPENINGS_REACH_PLAN', what: 'openings filed in the window (over 30 min old) followed by a goal plan run in their project', minSample: 1, workingAt: 0.9 },
+    }),
+    R({
+      id: 'COMPUTE.GPU',
+      stage: 'COMPUTE',
+      ability: 'Serve research on Brain’s own GPU (RunPod) when it is configured',
+      dependsOn: [],
+      inputs: ['free-lane items routed to runpod/…', 'pod starts'],
+      outputs: ['SUBMITTED by the GPU model'],
+      failureConditions: ['pod cannot start', 'vLLM 503', 'model output refused'],
+      owner: ['server/services/cheap/runpodPod.ts'],
+      proof: { probe: 'GPU_SERVES', what: 'GPU-model free-lane attempts that submitted, with every refused pod start a failure', minSample: 5, workingAt: 0.3 },
+      externalLimit: 'RunPod host capacity: a stopped pod cannot start while another tenant holds its GPU.',
+    }),
+    R({
+      id: 'COMPUTE.FREE_MODELS',
+      stage: 'COMPUTE',
+      ability: 'Keep research answering on the free models when the GPU is down',
+      dependsOn: [],
+      inputs: ['free-lane items routed to free providers'],
+      outputs: ['SUBMITTED by a free model'],
+      failureConditions: ['every provider exhausted', 'answers refused'],
+      owner: ['server/services/freeLane/worker.ts'],
+      proof: { probe: 'FREE_MODELS_SERVE', what: 'free-model free-lane attempts (provider releases excluded) that submitted', minSample: 10, workingAt: 0.3 },
+      externalLimit: 'Free providers’ own quotas and outages.',
+    }),
+    R({
+      id: 'COMPUTE.DATABASE',
+      stage: 'COMPUTE',
+      ability: 'Answer research work without Brain’s own database refusing it (pool, timeouts, dropped connections)',
+      dependsOn: [],
+      inputs: ['free-lane item attempts'],
+      outputs: ['attempts that did not fail on Brain’s database'],
+      failureConditions: ['pool exhausted', 'connection terminated', 'query timeout'],
+      owner: ['server/db/database.ts'],
+      proof: { probe: 'DATABASE_AVAILABLE', what: 'free-lane attempts that did not fail on Brain’s own database', minSample: 20, workingAt: 0.95 },
+    }),
+  ],
+};
+
 /** Every map Brain holds. A new objective kind adds one here, not a new mechanism. */
-export const CAPABILITY_MAPS: Record<string, CapabilityMap> = { RESEARCH: RESEARCH_MAP };
+export const CAPABILITY_MAPS: Record<string, CapabilityMap> = { RESEARCH: RESEARCH_MAP, GOAL_PLAN: GOAL_PLAN_MAP };
 
 /* ------------------------------------------------------------------------- */
 /* Classification                                                             */
@@ -483,7 +674,7 @@ export function classify(requirement: CapabilityRequirement, ownerExists: boolea
 export interface Gap {
   id: string;
   status: CapabilityStatus;
-  stage: ResearchStage;
+  stage: CapabilityStage;
   /** Failures the reading counted in the window — how many jobs the gap touched. */
   failures: number;
   /** Requirements that depend on this one, directly or not. */
@@ -566,7 +757,7 @@ export function connectedGaps(map: CapabilityMap, assessed: Assessed[]): Gap[] {
       externalLimit: a.requirement.externalLimit ?? null,
     });
   }
-  return gaps.sort((x, y) => y.rank - x.rank || RESEARCH_STAGES.indexOf(x.stage) - RESEARCH_STAGES.indexOf(y.stage));
+  return gaps.sort((x, y) => y.rank - x.rank || STAGE_ORDER.indexOf(x.stage) - STAGE_ORDER.indexOf(y.stage));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -582,6 +773,9 @@ export interface ObjectiveShape {
   /** Days until its deadline, when known. */
   horizonDays?: number | null;
 }
+
+/** Words that say an objective is a money goal, which runs through the goal-plan chain. */
+const NEEDS_GOAL_PLAN = /(\$\s?\d|\b\d[\d,.]*\s?(?:k|dollars?|usd|eur|gbp)\b|\b(?:revenue|settled cash|profit|income|sales)\b)/i;
 
 /** Words that say an objective needs the research process. */
 const NEEDS_RESEARCH = /\b(research|evidence|source|market|demand|buyer|price|competitor|plan|opportunit\w*|validate|investigat\w*|study|analy[sz]\w*)\b/i;
@@ -604,7 +798,8 @@ export function isSubstantial(objective: ObjectiveShape): boolean {
 /** The maps an objective depends on, by what it asks. Pure. */
 export function mapsFor(objective: ObjectiveShape): CapabilityMap[] {
   const out: CapabilityMap[] = [];
-  if (NEEDS_RESEARCH.test(objective.text)) out.push(RESEARCH_MAP);
+  if (NEEDS_RESEARCH.test(objective.text) || NEEDS_GOAL_PLAN.test(objective.text)) out.push(RESEARCH_MAP);
+  if (NEEDS_GOAL_PLAN.test(objective.text)) out.push(GOAL_PLAN_MAP);
   return out;
 }
 

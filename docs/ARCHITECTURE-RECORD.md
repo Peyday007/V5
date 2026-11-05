@@ -14319,6 +14319,22 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   60 000 characters), so nothing ever spent and nothing ever finished. An
   audit item that has already struck transient now starts from the compact
   brief; `free-lane show` lists the reasons for transient releases.
+**The goal-plan map (2026-11-05).** The owner asked for the whole $10K chain to
+be tested at once, with every blocker found rather than the first, and for the
+test to stay. It is a second map, `GOAL_PLAN_MAP`, beside the research map and
+read by the same assessor, so it reaches the improvement loop and every
+substantial money goal (`mapsFor`) without a new mechanism. Its requirements
+are the links a plan cannot be made without — plan evaluated and fresh, the
+search widening while the plan is short, rounds and constructed rounds filing
+openings, the packets behind them finishing, path questions answered, buyer
+and price established, openings modelled, a plan run after each new opening —
+and the three things everything runs on: the GPU, the free models and Brain's
+own database. Each is one bounded read. The first production reading of the
+chain (22:13–22:59Z) found the database saturated (1 029 callers waiting), the
+RunPod pod refused restarts by its host, every considered opening a one-off
+reaching 250 of 10 000, and the fix for the database held back by a duplicate
+migration number (#538).
+
 ## 89. A goal's research is measured at its plan, and a search that does not reach the plan is asked differently.
 
 **Owner's order, 2026-11-05.** The RunPod GPU's research must advance the $10K

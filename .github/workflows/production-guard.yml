@@ -58,7 +58,10 @@ jobs:
           probe() {
             local url=$1 code
             for attempt in 1 2 3 4; do
-              code=$(curl -s -m 30 -o /tmp/body -w '%{http_code}' "$url" || echo 000)
+              # curl prints 000 through -w on a timeout and also exits non-zero;
+              # `|| echo 000` appended a second one, the "000000" no case matched
+              # (2026-11-05 22:04Z: one slow answer read as a non-canonical build).
+              code=$(curl -s -m 30 -o /tmp/body -w '%{http_code}' "$url") || code=000
               case "$code" in 5??|000) sleep $((attempt * 10)) ;; *) break ;; esac
             done
             echo "$code"
@@ -104,13 +107,13 @@ jobs:
           # Liveness, and the gate still shut.
           health=000
           for attempt in 1 2 3 4; do
-            health=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$base/healthz" || echo 000)
+            health=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$base/healthz") || health=000
             [ "$health" = "200" ] && break
             sleep $((attempt * 10))
           done
           [ "$health" = "200" ] || { echo "::error::/healthz answered $health"; failed=1; }
 
-          anon=$(curl -s -o /dev/null -w '%{http_code}' "$base/api/projects" || echo 000)
+          anon=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$base/api/projects") || anon=000
           [ "$anon" = "401" ] || { echo "::error::/api/projects answered $anon to an anonymous caller; expected 401"; failed=1; }
 
           # The client bundle is the only unauthenticated evidence of what
