@@ -14474,6 +14474,14 @@ every fragment (it synthesizes all of them); audit roles run one after another
   the 25 most recent (`MAX_AUDIT_SIBLINGS`), read eight at a time, and counts
   the rest.
 
+- **Construction held the event loop.** The process readings after #535
+  (`connection report`, 23:42Z) showed both machines' worst event-loop stall,
+  11.6 s, inside `russell:goal-plans`, with the dispatch tick and an MCP call
+  stuck behind it; ten-second pool checkouts time out during such a stall.
+  `constructArrangements` composes up to `MAX_CONSTRUCTIONS` designs, each with
+  several reconstructions, synchronously. It now hands the loop back every
+  `YIELD_EVERY_MS` (25 ms); the result is unchanged.
+
 **Measured, not estimated.** `goalPipelineSpeed` (in `goals/researchYield.ts`,
 printed by `scripts/runpod-report.ts` for the last window and the equal window
 before it) reads from rows: time from the goal's filing to its first and its
