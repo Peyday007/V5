@@ -93,6 +93,17 @@ behind them.
   `https://www.sba.gov/document/support-table-size-standards` — the page the
   lane had been guessing at with invented deep links.
 
+**The hour after search rotation (#506), 01:31Z → 02:31Z** (`capabilities show 1`):
+
+| requirement | 24 h before | this hour |
+|---|---|---|
+| DISCOVERY.SEARCH | 1/76 (1%) | 18/27 (67%; bar 70%) |
+| DISCOVERY.READABLE | 36/76 (47%) | **25/27 (93%)** |
+| ACCESS.READ | 55/127 (43%) | **359/480 (75%)** |
+| VERIFICATION.ITEMS / ANALYSIS.SYNTHESIS / ANALYSIS.AUDIT | 51/51 · 37/37 · 102/108 | 11/11 · 5/5 · 12/15 |
+| RECOVERY.PROVIDERS | 130/760 | 41/174 — free providers failing three calls in four (external) |
+| RECOVERY.STALLS | 20/54 | 8/45; idle: RESEARCHING with work queued 27, QUEUED with nothing queued 7, PLANNING 2, INTERRUPTED 1 |
+
 **The reusable path, end to end on production** (`improvement show`, 02:0xZ):
 the map raised three gaps no detector covered — CAPABILITY:RESEARCH.RECOVERY.RETRY,
 .RECOVERY.STALLS and .RECOVERY.IDLE_CAPACITY (combined into RETRY, same
