@@ -26,6 +26,7 @@ import type {
 } from '../domain/types.ts';
 import {
   createDocument,
+  canonicalNamesStartingWith,
   findDocumentByCanonicalName,
   findDocumentByPath,
   listDocuments,
@@ -136,11 +137,15 @@ async function findDocumentByHash(projectId: string, hash: string): Promise<Docu
  * points forward at its replacement.
  */
 async function supersededNameFor(projectId: string, canonicalName: string): Promise<string> {
-  for (let attempt = 1; attempt < 500; attempt += 1) {
-    const candidate = `${canonicalName} (superseded ${attempt})`;
-    if (!await findDocumentByCanonicalName(projectId, candidate)) return candidate;
+  // One read, not one lookup per number: a layer re-filed hundreds of times
+  // made every import walk its whole superseded history (production, 2026-11-05).
+  const marker = `${canonicalName} (superseded `.toLowerCase();
+  let highest = 0;
+  for (const name of await canonicalNamesStartingWith(projectId, marker)) {
+    const n = /^ *(\d+)\)$/.exec(name.slice(marker.length))?.[1];
+    if (n && Number(n) < 1_000_000) highest = Math.max(highest, Number(n));
   }
-  return `${canonicalName} (superseded ${Date.now()})`;
+  return `${canonicalName} (superseded ${highest + 1})`;
 }
 
 function result(input: {

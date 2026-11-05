@@ -26,7 +26,7 @@ import { DATA_ROOT } from '../server/env.ts';
 import { importFile, importProjectSource } from '../server/services/importer.ts';
 import { ingestSource } from '../server/services/sources/ingest.ts';
 import { storeFile } from '../server/services/storage.ts';
-import { createDocument, getDocument, updateDocument } from '../server/repos/documents.ts';
+import { canonicalNamesStartingWith, createDocument, findDocumentByCanonicalName, getDocument, updateDocument } from '../server/repos/documents.ts';
 import { listEvents, listEventsByEntity } from '../server/repos/events.ts';
 import {
   createExtractionRun,
@@ -1192,6 +1192,23 @@ describe('a layer packet', () => {
     const superseded = (await getDocument(original.document.id))!;
     expect(fs.existsSync(path.resolve(DATA_ROOT, superseded.filesystemPath!))).toBe(true);
     expect((await getCurrentExtractionRun(superseded.id))!.status).toBe('READY');
+  });
+
+  it('numbers each superseded copy from one read of the names already taken', async () => {
+    const first = await importAndRead('World Model v1.pdf', multiPagePdf(1));
+    const ids = [first.document.id];
+    for (const pages of [2, 3, 4]) {
+      const next = await importFile({ projectId: fixture.project.id, originalFilename: 'World Model v1.pdf', contents: multiPagePdf(pages) });
+      ids.push(next.documentId!);
+    }
+    await whenExtractionIdle();
+    const names = await Promise.all(ids.map(async (id) => (await getDocument(id))!.canonicalName));
+    expect(names.slice(0, 3).map((n) => /\(superseded (\d+)\)$/.exec(n)?.[1])).toEqual(['1', '2', '3']);
+    expect(names[3]).not.toMatch(/superseded/);
+    // Found case-insensitively by the indexed lookup.
+    expect((await findDocumentByCanonicalName(fixture.project.id, names[3]!.toUpperCase()))?.id).toBe(ids[3]);
+    // A LIKE wildcard in a name is matched literally.
+    expect(await canonicalNamesStartingWith(fixture.project.id, '%')).toEqual([]);
   });
 });
 
