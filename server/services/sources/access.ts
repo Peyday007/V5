@@ -40,9 +40,10 @@ import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { browserMcpUrl, renderInBrowser } from './browserMcp.ts';
 import { connectorFor } from './connectors.ts';
+import { searchSuccessor } from './discover.ts';
 import { checkDestination, fetchForWorker, systemResolver, type Resolver, type SourceFetch } from './fetchForWorker.ts';
 
-export const ACCESS_METHODS = ['DIRECT', 'CONNECTOR', 'BROWSER', 'SITEMAP', 'ARCHIVE'] as const;
+export const ACCESS_METHODS = ['DIRECT', 'CONNECTOR', 'BROWSER', 'SITEMAP', 'ARCHIVE', 'SEARCH'] as const;
 export type AccessMethod = (typeof ACCESS_METHODS)[number];
 
 export interface AccessAttempt {
@@ -64,6 +65,12 @@ export interface AccessDeps {
   archive?: (url: string) => Promise<SourceFetch | null>;
   sitemap?: (url: string) => Promise<SourceFetch | null>;
   connector?: (url: string) => Promise<SourceFetch | null>;
+  /**
+   * The page a site has for what a dead link was about, found by a site search
+   * (`discover.ts`). Defaults on only when no reader was injected, so a caller
+   * that brings its own `direct` brings its own search too.
+   */
+  search?: ((url: string) => Promise<SourceFetch | null>) | null;
   learned?: (host: string) => Promise<AccessMethod | null>;
   record?: (read: SourceRead, caller: string, ms: number) => Promise<void>;
   /** Which part of Brain asked, for the event. */
@@ -440,6 +447,8 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   const archive = deps.archive ?? ((u: string) => archivedCopy(u, direct));
   const sitemap = deps.sitemap ?? ((u: string) => sitemapSuccessor(u, direct));
   const connector = deps.connector ?? ((u: string) => connectorFor(u)?.(u, direct) ?? Promise.resolve(null));
+  const search =
+    deps.search !== undefined ? deps.search : deps.direct ? null : (u: string) => searchSuccessor(u, direct);
   const learned = deps.learned ?? defaultLearned;
   const record = deps.record ?? defaultRecord;
   const attempts: AccessAttempt[] = [];
@@ -530,6 +539,12 @@ export async function readSource(url: string, deps: AccessDeps = {}): Promise<So
   if (!bestRead.readable || wantsBrowser(bestRead)) {
     const archived = await attempt('ARCHIVE', () => archive(url));
     if (archived && better(archived, bestRead)) return done(archived, 'ARCHIVE');
+  }
+  // A page that is gone and was never archived is usually one that never existed —
+  // a remembered deep link. The site's own page about the same thing is the successor.
+  if (search && wantsReplacement(first) && !first.readable && first.reason === 'HTTP_ERROR') {
+    const found = await attempt('SEARCH', () => search(url));
+    if (found?.readable) return done({ ...found, requestedUrl: url }, 'SEARCH');
   }
   return done(bestRead, bestMethod);
 }

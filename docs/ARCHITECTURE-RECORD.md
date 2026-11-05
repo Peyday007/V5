@@ -14169,3 +14169,76 @@ only worker with idle capacity, was barred from all of Brain's own work. Now:
   memberships and restarts its pool (`ACTIVATION_RECOVERY`).
 - `admin improvement show` prints the gate, each check and the loop's research
   with what the free lane did on it.
+
+## 88. A complete system is mapped before it is debugged, and a gap is read from production, never from code.
+
+**Owner's order, 2026-11-04.** Stop discovering predictable missing
+capabilities one production failure at a time; map what a complete research
+system needs, compare every requirement with what production shows, fix the
+connected gaps together, and make the approach reusable for every substantial
+objective without auditing small jobs.
+
+**What was wrong.** Brain knew which components exist (the self-model) and
+which failure classes recur (§87), and nothing said what a *complete* research
+process must be able to do. So a capability nobody had built showed up only as
+its symptoms. The free lane — the owner of commercial research since §85 —
+found sources by asking a model to remember URLs plus two Wikipedia titles;
+`sources show 24` (2026-11-04) read 12 of 37 pages, and the largest failure
+class was a 404 on an official deep link that never existed. §87's own
+engineering never reached production: every objective said "Measured in
+production", Factory's word check (`inferRisk`) read that as HIGH, and only
+LOW is released automatically, so each fix sat as an open PR until it was
+closed (decisions HELD).
+
+`domain/capabilityMap.ts` and `services/selfmodel/capabilities.ts` are the map
+and its reading. Nothing in them is a second loop, monitor or task manager:
+
+- **A map is requirements, not claims.** `RESEARCH_MAP` covers intake,
+  discovery, access, extraction, verification, analysis, decision, delivery,
+  recovery and learning — each requirement with its ability, dependencies,
+  inputs, outputs, failure conditions, existing owner module, and a probe: the
+  one SQL reading that proves it in production, with a minimum sample and a bar.
+- **Four answers and no fifth.** MISSING (the owner module is not in the
+  image), UNPROVEN (below the minimum sample, or unreadable), BROKEN (below the
+  bar), WORKING. Code that exists is never WORKING by existing (§37).
+- **Connected gaps.** `connectedGaps` weighs each gap by the jobs it failed and
+  everything downstream of it, and names the gaps it sits behind; a gap behind
+  another is not engineered on its own.
+- **One path to engineering.** `capabilityWeaknesses` is a detector inside
+  `detectWeaknesses`, so a gap becomes an `improvement_candidates` row and goes
+  through research, Factory and measurement exactly as §87 says. A gap that one
+  of §87's own detectors already sees (`coveredBy`) is always that detector's,
+  with its thresholds and recency test; the map raises only what no detector
+  can see. A gap whose cause is outside Brain (`externalLimit`: bot walls,
+  free-provider quotas) is reported, not engineered.
+- **Reusable, and not for small jobs.** `isSubstantial` (money ≥ $100, three
+  or more packets, a horizon of a week with a real brief, or four stated
+  outcomes) gates `assessObjective`; `mapsFor` picks the maps an objective
+  depends on. The improvement pass checks live goals at most hourly and records
+  `CAPABILITY_ASSESSED` on a goal only when what blocks it changes. A new kind
+  of objective adds a map to `CAPABILITY_MAPS`, not a mechanism.
+- **Risk from paths, not prose.** `riskForScope` derives an improvement's
+  class from its mutation scope: aimed inside a `RELEASE_EXCLUDED_PATHS` area,
+  or too broad to say, is HIGH; the queue, leases and dispatch are MEDIUM;
+  anything else LOW. The release gate still refuses any diff touching an
+  excluded path, so a scope that merely contains one is not raised by it.
+- **Discovery exists.** `sources/discover.ts` is a keyless DuckDuckGo HTML
+  search — paced, queue-bounded, paused ten minutes after an anomaly page —
+  whose results the free lane tries before remembered URLs, and a SEARCH route
+  in `readSource` answers a 404 that no sitemap or archive could with the same
+  site's own page, cited at its own address. The free lane's brief now carries
+  the repair reason and strategy and the guidance Brain computed (unreadable
+  hosts, readable routes), which it had dropped.
+- `admin capabilities show [hours]` prints every requirement's answer and
+  reading and the ranked gaps; `admin capabilities objective --text-b64 …`
+  says whether an objective is substantial, which maps it needs and what
+  blocks it.
+- **Waiting work is reachable.** The first full reading found the free lane
+  idle for three hours (20:56Z → 00:05Z, 2026-11-04) with 34 of its own items
+  queued: `claimWork` with an `admit` rule read the top eight rows by priority,
+  the lane declined all eight (another lane's work, cooldowns, audit
+  independence), and each round re-read the same eight. Each round now skips
+  the rows it saw and reads a page twice as large. The controller records a
+  `FREE_LANE_IDLE` event (at most every ten minutes) whenever work waits and
+  no slot is busy, with the reasons it declined what it was offered, and
+  `RECOVERY.IDLE_CAPACITY` reads the same condition from the queue.

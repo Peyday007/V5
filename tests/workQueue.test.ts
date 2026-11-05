@@ -104,6 +104,29 @@ beforeEach(async () => {
 // ---------------------------------------------------------------------------
 
 describe('atomic claiming', () => {
+  it('reaches claimable work behind a head of the queue its admit rule declines', async () => {
+    // Production, 2026-11-04 20:56Z → 00:05Z: the free lane claimed nothing for three hours
+    // with 34 of its own items queued, because the top eight by priority were work it must
+    // decline and each round re-read the same eight.
+    const declined = new Set<string>();
+    for (let i = 0; i < 20; i += 1) declined.add(await add(projectA, { priority: 90 }));
+    const mine = await add(projectA, { priority: 10 });
+    const skipped: string[] = [];
+    const claims = await claimWork({
+      workerId: workerOne,
+      scopes: scopesFor([projectA]),
+      limit: 1,
+      admit: async (item) => (declined.has(item.id) ? { ok: false, reason: 'not mine' } : { ok: true }),
+      onSkip: (item) => skipped.push(item.id),
+    });
+    expect(claims.map((c) => c.workItemId)).toEqual([mine]);
+    // It read past the first page (eight rows) to get there.
+    expect(new Set(skipped).size).toBeGreaterThan(8);
+    // Declined work is untouched: still queued, no attempt spent.
+    const row = await getDb().get<{ state: string; attempt_count: number }>('SELECT state, attempt_count FROM work_items WHERE id = ?', [[...declined][0]!]);
+    expect(row).toMatchObject({ state: 'QUEUED', attempt_count: 0 });
+  });
+
   it('gives one item to exactly one of two workers racing for it', async () => {
     await add(projectA);
     const [one, two] = await Promise.all([

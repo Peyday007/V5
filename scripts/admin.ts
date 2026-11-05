@@ -1373,6 +1373,10 @@ async function main(): Promise<void> {
       console.log(`  ready             ${c.ready ? 'yes' : 'NO'} — ${c.reason}`);
       console.log(`  displaced queued  ${JSON.stringify(c.displaced)}`);
       console.log(`  unsupported       ${JSON.stringify(c.unsupported)}`);
+      const idle = await getDb().get<{ at: string; reason: string; measures: string }>(
+        "SELECT at, reason, measures FROM bin_events WHERE event_type = 'FREE_LANE_IDLE' ORDER BY at DESC LIMIT 1",
+      );
+      if (idle) console.log(`  idle with work    ${idle.at} ${idle.reason} ${idle.measures}`);
       console.log(`  last hour         submitted=${c.submittedLastHour} failed=${c.failedLastHour}  last=${c.lastSubmittedAt ?? '—'}`);
       console.log(`  runner consumed   ${c.consumedLastDay} next-stage item(s) queued after free-lane work (24h)`);
       console.log(`  outcomes (24h)    ${JSON.stringify(reading.outcomesLastDay)}`);
@@ -1421,6 +1425,29 @@ async function main(): Promise<void> {
       };
       lanePrint('before', await laneWindow(before, since));
       lanePrint('after', await laneWindow(since, nowIso));
+      break;
+    }
+    /*
+     * §88: the capability maps read against production. `capabilities show [hours]`
+     * prints every requirement's WORKING/BROKEN/MISSING/UNPROVEN with its reading and
+     * the connected gaps; `capabilities objective --text-b64 …` says which maps a new
+     * objective needs, whether it is substantial enough to assess, and what blocks it.
+     */
+    case 'capabilities show':
+    case 'capabilities objective': {
+      const { assessAll, formatAssessment } = await import('../server/services/selfmodel/capabilities.ts');
+      const { assessObjective } = await import('../server/domain/capabilityMap.ts');
+      const hours = Math.min(Math.max(Number(rest[0] ?? '24') || 24, 1), 24 * 14);
+      const all = await assessAll({ hours });
+      if (command === 'show') {
+        for (const one of all) for (const line of formatAssessment(one)) console.log(line);
+        break;
+      }
+      const encoded = flag('text-b64') ?? fail('Pass --text-b64: the objective, base64.');
+      const text = Buffer.from(encoded, 'base64').toString('utf8');
+      const verdict = assessObjective({ text }, Object.fromEntries(all.map((a) => [a.map, a.assessed])));
+      console.log(`  substantial  ${verdict.substantial}  maps=${verdict.maps.join(',') || 'none'}  ready=${verdict.ready}`);
+      for (const g of verdict.blocking) console.log(`    blocks  ${g.status.padEnd(8)} ${g.id.padEnd(26)} ${g.why}`);
       break;
     }
     case 'sources compare': {

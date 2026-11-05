@@ -34,7 +34,8 @@ import {
   closeFiledFreeLaneBins,
   ensureFreeWorkers,
   takeOne,
-  wikipediaCandidates,
+  discoverCandidates,
+  freeLaneSkips,
   type FreeWorker,
 } from './worker.ts';
 
@@ -262,7 +263,7 @@ async function slot(pool: ModelPool, k: number, config: LaneConfig): Promise<voi
         index: pool.index,
         completer: poolOptions.completer ?? httpCompleter,
         fetchSource: poolOptions.fetchSource ?? ((url: string) => readSource(url, { caller: 'free-lane' })),
-        search: poolOptions.search ?? wikipediaCandidates,
+        search: poolOptions.search ?? discoverCandidates,
         config,
       };
       samplePools();
@@ -296,6 +297,8 @@ export interface ControlReading {
 }
 
 let lastReading: ControlReading | null = null;
+const IDLE_RECORD_MS = 10 * 60_000;
+let lastIdleRecord = 0;
 export function lastControlReading(): ControlReading | null {
   return lastReading;
 }
@@ -345,6 +348,18 @@ export async function controlStep(): Promise<ControlReading | null> {
       window,
       reason: decision.reason,
     });
+  }
+  // Work waits and no slot holds any: say why the lane declined what it was offered (rule 9).
+  const anyBusy = [...pools.values()].some((p) => p.busy > 0 || p.peakBusy > 0);
+  if (waiting > 0 && !anyBusy && Date.now() - lastIdleRecord >= IDLE_RECORD_MS) {
+    lastIdleRecord = Date.now();
+    await recordBinEvent({
+      eventType: 'FREE_LANE_IDLE',
+      outcome: 'IDLE_WITH_WORK',
+      reason: `${waiting} item(s) waiting and no slot busy`,
+      measures: { waiting, declined: freeLaneSkips() },
+      evidenceClass: 'MEASURED',
+    }).catch(() => undefined);
   }
   try {
     await closeFiledFreeLaneBins();

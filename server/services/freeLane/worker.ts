@@ -39,6 +39,7 @@ import { evaluateContract } from '../bins/contracts.ts';
 import { findTool } from '../../mcp/tools.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 import { auditAdmission } from '../research/auditAdmission.ts';
+import { webSearch } from '../sources/discover.ts';
 import { httpCompleter, laneConfig, type Completer, type LaneConfig } from '../cheap/lane.ts';
 import type { SourceFetch } from '../sources/fetchForWorker.ts';
 import { readSource } from '../sources/access.ts';
@@ -482,6 +483,19 @@ export function citationFailure(claim: Record<string, unknown>, numbered: { url:
   return found.ok ? 'cited' : found.why === 'out of range' ? 'cited sentences outside the page' : 'citation not readable as sentence numbers';
 }
 
+/**
+ * Candidate pages for a query: a real web search first (`sources/discover.ts`),
+ * then Wikipedia's API. Candidates only; Brain reads each page itself.
+ *
+ * Until 2026-11-04 the lane had only Wikipedia and whatever URLs the model
+ * remembered, and remembered deep links were the largest cause of "no
+ * readable source" (most 404s on official sites had never existed).
+ */
+export async function discoverCandidates(query: string): Promise<string[]> {
+  const [web, wiki] = await Promise.all([webSearch(query), wikipediaCandidates(query)]);
+  return [...web.slice(0, 6), ...wiki];
+}
+
 /** Free, keyless public search: Wikipedia's own API. Candidates only; Brain reads each page itself. */
 export async function wikipediaCandidates(query: string): Promise<string[]> {
   try {
@@ -517,6 +531,8 @@ interface Ctx {
   config: LaneConfig;
   /** Why the item was not answered, for its event. Never a payload or a credential. */
   why: string;
+  /** How sources were found for a fragment: search results, and which of the read pages came from them. */
+  discovery?: { searched: number; readFromSearch: number; readFromModel: number };
 }
 
 /** `ask` for one item, recording why on the item when the model gives nothing usable. */
@@ -579,6 +595,19 @@ async function complete(ctx: Ctx, summary: string): Promise<void> {
   }
 }
 
+/** The parts of an assignment's guidance a source search can act on, bounded. Pure. */
+export function guidanceBrief(guidance: unknown): Record<string, unknown> {
+  if (!guidance || typeof guidance !== 'object') return {};
+  const g = guidance as { unreachableHosts?: { host: string }[]; readableRoutes?: { host: string; lines: string[] }[]; searchStrategy?: string };
+  const out: Record<string, unknown> = {};
+  const hosts = (g.unreachableHosts ?? []).map((h) => h.host).filter(Boolean).slice(0, 10);
+  if (hosts.length) out['hostsBrainCannotRead'] = hosts;
+  const routes = (g.readableRoutes ?? []).slice(0, 4).map((r) => ({ host: r.host, routes: r.lines.slice(0, 3) }));
+  if (routes.length) out['readableRoutes'] = routes;
+  if (typeof g.searchStrategy === 'string' && g.searchStrategy.trim()) out['searchStrategy'] = g.searchStrategy.slice(0, 600);
+  return out;
+}
+
 async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<boolean> {
   const frag = (assignment['fragment'] ?? {}) as Record<string, unknown>;
   const lanes = ((frag['requiredEvidence'] as { id: string; description: string }[] | undefined) ?? []).map((lane) => ({
@@ -599,6 +628,11 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     acceptableSourceTypes: frag['acceptableSourceTypes'] ?? [],
     excludedSourceTypes: frag['excludedSourceTypes'] ?? [],
     prohibitedEvidence: frag['prohibitedEvidence'] ?? [],
+    // A repair attempt says why the last one failed and what to do differently (invariant 16);
+    // the guidance Brain computed for this fragment says which hosts it could not read and which
+    // routes it can. Both were dropped here until 2026-11-04, so a repair repeated its parent.
+    ...(frag['repairReason'] ? { repair: { reason: frag['repairReason'], strategy: frag['repairStrategy'] ?? null } } : {}),
+    ...guidanceBrief(assignment['guidance']),
   };
 
   const unreachableNote = (): string => {
@@ -651,7 +685,9 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
       }
     }
   };
-  await open([...urlsOf(plan), ...searched]);
+  // Search results first: they are pages that exist. A remembered URL is a guess.
+  const fromSearch = new Set(searched);
+  await open([...searched, ...urlsOf(plan)]);
   // A second round: show the model what Brain could not open and ask for other pages.
   if (readable.length < 2) {
     const retry = await askFor(
@@ -663,6 +699,8 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     );
     await open(urlsOf(retry));
   }
+  const readFromSearch = readable.filter((one) => fromSearch.has(one.url)).length;
+  ctx.discovery = { searched: fromSearch.size, readFromSearch, readFromModel: readable.length - readFromSearch };
   // A page skipped because its host is known shut was never a candidate Brain could have read.
   const candidates = [...tried].filter((u) => !skipped.has(u));
   if (readable.length === 0) {
@@ -982,6 +1020,15 @@ export interface TakeInput {
 /** A provider failure that says the provider was busy or unreachable, not that the work was wrong. */
 export const PROVIDER_BUSY = /\b(?:HTTP (?:408|409|425|429|5\d\d)|timed? ?out|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang up|fetch failed|overloaded|rate.?limit)/i;
 
+/**
+ * Why the lane declined work it was offered, since the process started: reason → count.
+ * A lane that claims nothing while work waits must say why (2026-11-04: three silent hours).
+ */
+const skipTally = new Map<string, number>();
+export function freeLaneSkips(): Record<string, number> {
+  return Object.fromEntries([...skipTally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10));
+}
+
 export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork | null; ok: boolean; ms: number }> {
   const { workers, worker, index, config } = input;
   const projectIds = await projectsFor(worker);
@@ -1003,6 +1050,10 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
         if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
         session = sessionFor(worker, item);
         return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
+      },
+      onSkip: (_item, reason) => {
+        const key = reason.slice(0, 80);
+        skipTally.set(key, (skipTally.get(key) ?? 0) + 1);
       },
     });
     one = claimed[0];
@@ -1079,6 +1130,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
     reason: ok ? `model ${worker.model}` : `model ${worker.model}: ${ctx.why}`.slice(0, 480),
     durationMs: ms,
     evidenceClass: 'MEASURED',
+    ...(ctx.discovery ? { measures: { discovery: ctx.discovery } } : {}),
   });
   return { claimed: one, ok, ms };
 }
@@ -1106,7 +1158,7 @@ export async function freeLaneTick(options: FreeLaneOptions = {}): Promise<FreeL
     await Promise.all(
       workers.flatMap((worker, index) => Array.from({ length: slots }, () => ({ worker, index }))).map(async ({ worker, index }) => {
         for (let n = 0; n < perWorker; n += 1) {
-          const result = await takeOne({ workers, worker, index, completer, fetchSource, search: options.search ?? wikipediaCandidates, config });
+          const result = await takeOne({ workers, worker, index, completer, fetchSource, search: options.search ?? discoverCandidates, config });
           if (!result.claimed) return;
           tick.claimed += 1;
           tick.byType[result.claimed.workType] = (tick.byType[result.claimed.workType] ?? 0) + 1;

@@ -705,6 +705,49 @@ export function dependencyCheckFor(weakness: Pick<Weakness, 'ownerComponent' | '
   };
 }
 
+/**
+ * An improvement's risk class, from the files it may touch — never from words.
+ *
+ * Production, 2026-11-04: every improvement objective said "Measured in
+ * production", and Factory's `inferRisk` reads `production` as HIGH, so every
+ * one of them was HIGH, none was released automatically, and each sat as an
+ * open pull request until it was closed unmerged (decisions HELD: "closed
+ * without merging"). The loop could notice, research and build but never
+ * deliver. What a change can break is a property of the paths it may write,
+ * and the release gate refuses a diff outside them, so the class is derived
+ * from them: anything overlapping `RELEASE_EXCLUDED_PATHS` (schema, identity,
+ * deployment, effects) is HIGH; the queue, leases and dispatch are MEDIUM;
+ * everything else is LOW. Nothing about the gate changes — only LOW is still
+ * released automatically.
+ */
+const MEDIUM_RISK_PREFIXES = ['server/services/queue/', 'server/services/dispatch/', 'server/services/bins/', 'server/services/fleet/', 'server/repos/queue'];
+
+function literalPrefix(pattern: string): string {
+  const star = pattern.search(/[*?[{]/);
+  return star === -1 ? pattern : pattern.slice(0, star);
+}
+
+/** Whether every path `scope` names lies inside `area`. Pure. */
+function inside(scope: string, area: string): boolean {
+  const areaPrefix = literalPrefix(area);
+  if (areaPrefix === area) return scope === area;
+  return literalPrefix(scope).startsWith(areaPrefix);
+}
+
+/**
+ * A scope that only *contains* an excluded file (`server/services/research/**`
+ * holds `approvalEnvelope.ts`) is not aimed at it: the release gate refuses any
+ * diff that touches an excluded path whatever the scope says. A scope aimed
+ * inside an excluded area, or too broad to say what it touches, is HIGH.
+ */
+export function riskForScope(scope: readonly string[], excluded: readonly string[]): 'LOW' | 'MEDIUM' | 'HIGH' {
+  if (scope.length === 0) return 'HIGH';
+  const tooBroad = (path: string): boolean => literalPrefix(path).split('/').filter(Boolean).length < 3 && !path.startsWith('tests/');
+  if (scope.some((path) => tooBroad(path) || excluded.some((ex) => inside(path, ex)))) return 'HIGH';
+  if (scope.some((path) => MEDIUM_RISK_PREFIXES.some((prefix) => literalPrefix(path).startsWith(prefix) || prefix.startsWith(literalPrefix(path))))) return 'MEDIUM';
+  return 'LOW';
+}
+
 /* ------------------------------------------------------------------------- */
 /* The decision after measurement                                             */
 /* ------------------------------------------------------------------------- */

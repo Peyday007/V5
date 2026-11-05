@@ -421,6 +421,9 @@ function hookUserPrompt(e) {
   const sid = e.session_id;
   const prompt = String(e.prompt ?? '');
   if (!sid || !prompt.trim()) return '';
+  // A harness notice (a finished background task or subagent, a reminder) arrives as a
+  // prompt but is not the owner's words: 2026-11-04 a subagent's report became R8-R72.
+  if (/^\s*<(task-notification|system-reminder|command-|local-command)/.test(prompt)) return isOpen(loadLedger(sid)) ? brief(loadLedger(sid)) : '';
   let l = loadLedger(sid);
   if (isOpen(l) && /^\s*(stop|cancel|abort|abandon)\b/i.test(prompt) && prompt.length < 120) {
     l.status = 'CANCELLED';

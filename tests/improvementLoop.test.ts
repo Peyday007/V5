@@ -31,7 +31,9 @@ import {
   MAX_ATTEMPTS,
   rankCandidates,
   reading,
+  riskForScope,
 } from '../server/domain/improvement.ts';
+import { RELEASE_EXCLUDED_PATHS } from '../server/domain/factoryRelease.ts';
 import { binLane, classifyBinPurpose } from '../server/domain/binPurpose.ts';
 import { composeObjective, improvementTick } from '../server/services/improvement/loop.ts';
 import { improvementGrant, setImprovementSwitch } from '../server/services/improvement/authority.ts';
@@ -158,6 +160,21 @@ describe('the engineering objective Factory receives', () => {
     const spec = composeObjective(candidate, { research: null, factory: null, archive: [] }, [], reading('RESEARCH_JOB_SUCCESS_RATE', FROM, TO, 298, 327));
     expect(spec.acceptanceConditions.every((c) => !/production|post-deploy|admin improvement/i.test(`${c.statement} ${c.verification}`))).toBe(true);
     expect(spec.expectedOutcome).toContain('no unit should wait for it');
+    // Production, 2026-11-04: the prose says "Measured in production", which Factory's word
+    // check reads as HIGH, so no improvement was ever released automatically. The class
+    // comes from the paths a fix may write.
+    expect(spec.objective).toMatch(/production/);
+    expect(spec.riskClass).toBe('LOW');
+  });
+
+  it('takes its risk class from the mutation scope, never from the words', () => {
+    expect(riskForScope(['server/services/freeLane/worker.ts', 'tests/freeLane*.test.ts'], RELEASE_EXCLUDED_PATHS)).toBe('LOW');
+    expect(riskForScope(['server/services/research/**'], RELEASE_EXCLUDED_PATHS)).toBe('LOW');
+    expect(riskForScope(['server/services/queue/workQueue.ts'], RELEASE_EXCLUDED_PATHS)).toBe('MEDIUM');
+    expect(riskForScope(['server/db/migrations/200_x.sql'], RELEASE_EXCLUDED_PATHS)).toBe('HIGH');
+    expect(riskForScope(['server/**'], RELEASE_EXCLUDED_PATHS)).toBe('HIGH');
+    expect(riskForScope(['server/services/identity/session.ts'], RELEASE_EXCLUDED_PATHS)).toBe('HIGH');
+    expect(riskForScope([], RELEASE_EXCLUDED_PATHS)).toBe('HIGH');
   });
 });
 

@@ -155,8 +155,12 @@ export async function claimRejections(from: string, to: string): Promise<{ claim
     'SELECT COUNT(*) AS n FROM research_claims WHERE created_at >= ? AND created_at < ?',
     [from, to],
   );
+  // Judged claims only. A claim whose fragment has no gate verdict yet carries accepted = 0 and no
+  // reason because nothing has judged it; counting it as "NO_REASON_RECORDED" (373 in a week,
+  // 2026-11-04) reported unjudged work as unexplained rejections.
   const rows = await getDb().all<{ rejection_reason: string | null }>(
-    'SELECT rejection_reason FROM research_claims WHERE accepted = 0 AND created_at >= ? AND created_at < ? LIMIT 5000',
+    `SELECT c.rejection_reason FROM research_claims c JOIN research_fragments f ON f.id = c.fragment_id
+      WHERE c.accepted = 0 AND f.status IN ('ACCEPTED', 'BLOCKED') AND c.created_at >= ? AND c.created_at < ? LIMIT 5000`,
     [from, to],
   );
   const byClass = new Map<string, FailureCount>();
