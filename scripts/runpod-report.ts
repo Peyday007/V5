@@ -100,6 +100,12 @@ async function main(): Promise<void> {
   })();
   if (pod.length > 0) {
     console.log(`POD stopped ${podCount('STOPPED')} · started ${podCount('STARTED')} · failed ${podCount('STOP_FAILED') + podCount('START_FAILED')} · running ~${Math.round(runningMs / 60_000)} min sampled · stopped ~${Math.round(Number(pod.find((r) => r.outcome === 'SAMPLE_EXITED')?.ms ?? 0) / 60_000)} min sampled`);
+    // What Brain last did to the pod, and RunPod's own words when it refused.
+    const recent = await getDb().all<{ at: string; outcome: string; reason: string | null }>(
+      `SELECT at, outcome, reason FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome NOT LIKE 'SAMPLE_%'
+        ORDER BY at DESC LIMIT 5`,
+    );
+    for (const row of recent) console.log(`  pod ${row.at} ${row.outcome} ${String(row.reason ?? '').slice(0, 220)}`);
   } else console.log('POD no supervision events (auto stop/start is off without BRAIN_RUNPOD_API_KEY)');
   const price = sampledCost ?? Number(process.env['BRAIN_RUNPOD_USD_PER_HOUR'] ?? '');
   if (sampledCost && runningMs > 0) {

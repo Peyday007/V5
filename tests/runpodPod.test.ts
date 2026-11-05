@@ -55,6 +55,10 @@ describe('the decision', () => {
   it('stops a pod only after it has been idle for the whole idle period', () => {
     expect(decidePod({ ...base, idleSince: base.now - DEFAULT_IDLE_STOP_MS + 60_000 }).action).toBe('NONE');
     expect(decidePod({ ...base, idleSince: base.now - DEFAULT_IDLE_STOP_MS }).action).toBe('STOP');
+    // RunPod refused a recent start of this pod: idle or not, it is not stopped again.
+    expect(decidePod({ ...base, idleSince: base.now - DEFAULT_IDLE_STOP_MS, startFailedRecently: true }).action).toBe('NONE');
+    // Starting a stopped pod for waiting research is never held back by it.
+    expect(decidePod({ ...base, status: 'EXITED', waiting: 2, startFailedRecently: true }).action).toBe('START');
   });
 
   it('starts a stopped pod when research arrives, and never one with nothing to do', () => {
@@ -99,11 +103,12 @@ describe('the supervisor', () => {
     const { calls, fetchImpl } = fakeRunpod(pod);
     let t = 10 * 3_600_000;
     const now = () => t;
-    const first = await superviseRunpodPod({ waiting: 0, inFlight: 0 }, { config, fetchImpl, now, force: true });
+    const lastStartFailed = async () => false;
+    const first = await superviseRunpodPod({ waiting: 0, inFlight: 0 }, { config, fetchImpl, now, force: true, lastStartFailed });
     expect(first?.decision.action).toBe('NONE');
     expect(runpodPaused()).toBeNull();
     t += DEFAULT_IDLE_STOP_MS;
-    const second = await superviseRunpodPod({ waiting: 0, inFlight: 0 }, { config, fetchImpl, now, force: true });
+    const second = await superviseRunpodPod({ waiting: 0, inFlight: 0 }, { config, fetchImpl, now, force: true, lastStartFailed });
     expect(second?.decision.action).toBe('STOP');
     expect(second?.acted).toBe(true);
     expect(pod.status).toBe('EXITED');
@@ -112,6 +117,19 @@ describe('the supervisor', () => {
     expect(stop).toMatchObject({ method: 'POST', url: 'https://rest.runpod.io/v1/pods/yxabw9083tp8hk/stop', auth: 'Bearer rp-account-key' });
     // vLLM is asked with its own key, never the account key.
     expect(calls.find((c) => c.url.endsWith('/v1/models'))?.auth).toBe('Bearer vllm-key');
+  });
+
+  it('never stops an idle pod again once RunPod refused to start it (its GPU may be gone)', async () => {
+    const pod = { status: 'RUNNING', vllm: true };
+    const { calls, fetchImpl } = fakeRunpod(pod);
+    let t = 10 * 3_600_000;
+    const lastStartFailed = async () => true;
+    await superviseRunpodPod({ waiting: 0, inFlight: 0 }, { config, fetchImpl, now: () => t, force: true, lastStartFailed });
+    t += 2 * DEFAULT_IDLE_STOP_MS;
+    const later = await superviseRunpodPod({ waiting: 0, inFlight: 0 }, { config, fetchImpl, now: () => t, force: true, lastStartFailed });
+    expect(later?.decision.reason).toMatch(/refused a recent start/);
+    expect(calls.some((c) => c.url.endsWith('/stop'))).toBe(false);
+    expect(pod.status).toBe('RUNNING');
   });
 
   it('never stops while research is waiting or in flight', async () => {

@@ -22,6 +22,7 @@
  * status and RunPod's own `costPerHr` are sampled into one every
  * `SAMPLE_MS`, so its running time and spend are measured, not assumed.
  */
+import { getDb } from '../../db/database.ts';
 import { recordBinEvent } from '../../repos/bins.ts';
 import { runpodConfig, setRunpodPaused, type Fetch } from './runpod.ts';
 
@@ -71,6 +72,14 @@ export function decidePod(input: {
   lastActionAt: number;
   now: number;
   idleStopMs: number;
+  /**
+   * RunPod refused to start this pod recently. A stopped pod gives its GPU back
+   * to RunPod, and when someone else takes it the pod cannot start again until
+   * that GPU frees (production 2026-11-05 21:34Z: stopped by the test, every
+   * start refused). Until a start succeeds again, an idle pod is left running:
+   * idle time costs cents, a lost GPU costs the research.
+   */
+  startFailedRecently?: boolean;
 }): PodDecision {
   const { status, waiting, inFlight, idleSince, lastActionAt, now, idleStopMs } = input;
   const settled = now - lastActionAt >= MIN_ACTION_GAP_MS;
@@ -85,6 +94,7 @@ export function decidePod(input: {
   const idleFor = idleSince === null ? 0 : now - idleSince;
   if (idleFor < idleStopMs) return { action: 'NONE', reason: `no research for ${Math.round(idleFor / 60_000)} min of ${Math.round(idleStopMs / 60_000)}` };
   if (!settled) return { action: 'NONE', reason: 'idle; just changed the pod, holding' };
+  if (input.startFailedRecently) return { action: 'NONE', reason: 'idle, but RunPod refused a recent start of this pod; not stopping it again' };
   return { action: 'STOP', reason: `no research waiting or in flight for ${Math.round(idleFor / 60_000)} min` };
 }
 
@@ -114,9 +124,10 @@ export async function readPod(config: PodConfig, fetchImpl: Fetch = fetch): Prom
 }
 
 /** Stop or start the pod: the same call the supervisor makes. True when RunPod accepted it. */
-export async function powerPod(config: PodConfig, action: 'stop' | 'start', fetchImpl: Fetch = fetch): Promise<{ ok: boolean; status: number }> {
+export async function powerPod(config: PodConfig, action: 'stop' | 'start', fetchImpl: Fetch = fetch): Promise<{ ok: boolean; status: number; body: string }> {
   const response = await api(config, 'POST', `/${action}`, fetchImpl);
-  return { ok: response.ok, status: response.status };
+  const body = response.ok ? '' : (await response.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 200);
+  return { ok: response.ok, status: response.status, body };
 }
 
 /** Whether the pod's vLLM answers, with its key. */
@@ -136,6 +147,24 @@ export async function vllmReady(config: PodConfig, fetchImpl: Fetch): Promise<bo
 /* ------------------------------------------------------------------------- */
 /* The supervisor                                                             */
 /* ------------------------------------------------------------------------- */
+
+/** How long a refused start keeps the pod from being stopped again, unless a start has succeeded since. */
+export const START_FAILURE_MEMORY_MS = 7 * 24 * 3_600_000;
+
+/** Whether RunPod's most recent answer to a start, in the memory window, was a refusal. */
+async function lastStartFailed(now: number): Promise<boolean> {
+  try {
+    const row = await getDb().get<{ outcome: string }>(
+      `SELECT outcome FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome IN ('STARTED', 'START_FAILED') AND at >= ?
+        ORDER BY at DESC LIMIT 1`,
+      [new Date(now - START_FAILURE_MEMORY_MS).toISOString()],
+    );
+    return row?.outcome === 'START_FAILED';
+  } catch {
+    // Unreadable: stopping is the step that can lose the GPU, so do not.
+    return true;
+  }
+}
 
 const state = { idleSince: null as number | null, lastActionAt: 0, lastRun: 0, lastSample: 0, running: false };
 
@@ -161,7 +190,7 @@ export interface SuperviseResult {
  */
 export async function superviseRunpodPod(
   input: { waiting: number; inFlight: number },
-  deps: { fetchImpl?: Fetch; now?: () => number; config?: PodConfig | null; force?: boolean } = {},
+  deps: { fetchImpl?: Fetch; now?: () => number; config?: PodConfig | null; force?: boolean; lastStartFailed?: (now: number) => Promise<boolean> } = {},
 ): Promise<SuperviseResult | null> {
   const config = deps.config === undefined ? podConfig() : deps.config;
   if (!config) return null;
@@ -179,7 +208,8 @@ export async function superviseRunpodPod(
     const ready = pod.status === 'RUNNING' && (await vllmReady(config, fetchImpl));
     setRunpodPaused(pod.status === 'RUNNING' ? (ready ? null : 'vLLM still loading') : pod.status === 'UNKNOWN' ? null : `pod ${pod.status.toLowerCase()}`);
 
-    const decision = decidePod({ status: pod.status, waiting: input.waiting, inFlight: input.inFlight, idleSince: state.idleSince, lastActionAt: state.lastActionAt, now, idleStopMs: config.idleStopMs });
+    const startFailedRecently = pod.status === 'RUNNING' && (await (deps.lastStartFailed ?? lastStartFailed)(now));
+    const decision = decidePod({ status: pod.status, waiting: input.waiting, inFlight: input.inFlight, idleSince: state.idleSince, lastActionAt: state.lastActionAt, now, idleStopMs: config.idleStopMs, startFailedRecently });
     let acted = false;
     if (decision.action !== 'NONE') {
       const path = decision.action === 'STOP' ? '/stop' : '/start';
@@ -189,7 +219,11 @@ export async function superviseRunpodPod(
         const response = await api(config, 'POST', path, fetchImpl);
         acted = response.ok;
         outcome = response.ok ? (decision.action === 'STOP' ? 'STOPPED' : 'STARTED') : `${decision.action}_FAILED`;
-        if (!response.ok) detail = ` (RunPod answered HTTP ${response.status})`;
+        if (!response.ok) {
+          // RunPod's own words say why (a GPU taken by someone else reads differently from a bad id).
+          const body = (await response.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 200);
+          detail = ` (RunPod answered HTTP ${response.status}${body ? `: ${body}` : ''})`;
+        }
       } catch (error) {
         outcome = `${decision.action}_FAILED`;
         detail = ` (${(error as Error).name})`;
