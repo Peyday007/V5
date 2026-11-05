@@ -144,3 +144,29 @@ Over 24 h the free lane filed **13 packets** with 130 of 196 claims accepted.
   restart once the boot load was bounded (#507, #509, #513);
 - gaps no detector saw → raised by the map, researched, and sent to Factory as
   LOW-risk auto-released objectives.
+
+## 6. After the database and audit fixes (2026-11-05 11:56Z → 13:56Z)
+
+`capabilities show 2`: `{"WORKING":12,"BROKEN":5,"MISSING":0,"UNPROVEN":7}`.
+
+| requirement | first reading (24 h to 00:53Z) | this window |
+|---|---|---|
+| DISCOVERY.SEARCH | BROKEN 1/76 | **WORKING 26/26** |
+| DISCOVERY.READABLE | BROKEN 36/76 | **WORKING 26/26** |
+| ACCESS.READ | BROKEN 55/127 | **WORKING 290/317** |
+| EXTRACTION.ACCEPTED | WORKING 79/132 | WORKING 39/50 |
+| EXTRACTION.CITED_CLAIMS | BROKEN 11/36 | BROKEN 10/26 (was 7/10 the hour before; the RunPod Qwen3-4B slot's answers drop citations most) |
+| VERIFICATION.GATE | BROKEN 39/141 | BROKEN 10/26 (38%, bar 40%; was 13/75 at its worst) |
+| VERIFICATION.ITEMS | WORKING 51/51 | WORKING 16/16 |
+| ANALYSIS.SYNTHESIS | WORKING 37/37 | WORKING 10/10 |
+| ANALYSIS.AUDIT | WORKING 102/108, then BROKEN 6/27 | **WORKING 21/21** |
+| RECOVERY.LEASES | WORKING 1268/1268 | WORKING 130/130 |
+| RECOVERY.PROVIDERS | BROKEN 130/760 | BROKEN 43/137 — external |
+| ANALYSIS.FILED / DECISION.JOB_OUTCOME | — | UNPROVEN (1 filed, 4 settled in the window) |
+
+What moved audit: production logs showed the audit step had thrown "The
+database pool had no free connection … 593 caller(s) waiting" (#523 makes that
+a refunded outage and records the real reason; #524 holds the lane's slots to
+three per database connection). Factory's own two improvements (#508 retries
+with a plan, #510 idle-packet sweep) were merged and released, and the release
+gate no longer holds an improvement for a MINOR note (#520).
