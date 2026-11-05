@@ -255,3 +255,152 @@ export async function goalResearchProgress(projectId: string, goalId: string, si
     })),
   };
 }
+
+/**
+ * How fast a goal's work moves, measured from rows (owner's order, 2026-11-05:
+ * "prove the speed improvement"). Nothing is estimated: each figure is a count
+ * or a difference of timestamps Brain wrote while doing the work.
+ *
+ *   - submission → plan: the goal's creation and target, its first plan
+ *     reading, and its first RECOMMENDABLE one (a complete plan), if any;
+ *   - concurrency: free-lane research jobs in flight at once (each event is a
+ *     finished job carrying its duration), peak and time-averaged, fleet-wide
+ *     and for this goal's own jobs;
+ *   - research accepted per hour, openings filed and plan reads per hour;
+ *   - waiting: for every opening filed in the window, the time until the goal's
+ *     plan next read it (a scenario run began, or a reading was written) — the time evidence sat beside an
+ *     idle plan — and the minutes the free lane sat idle with work queued;
+ *   - quantitative evaluation: each plan run's own elapsed time;
+ *   - GPU: busy job-time over the pod's measured running time.
+ */
+export interface GoalPipelineSpeed {
+  hours: number;
+  goalCreatedAt: string | null;
+  targetSetAt: string | null;
+  firstReadingAt: string | null;
+  firstRecommendableAt: string | null;
+  jobs: { total: number; goal: number; peak: number; average: number; goalPeak: number; goalAverage: number };
+  acceptedClaimsPerHour: number;
+  goalAcceptedClaimsPerHour: number;
+  openingsPerHour: number;
+  planRunsPerHour: number;
+  evidenceToPlan: { openings: number; unread: number; medianMs: number | null; p90Ms: number | null; maxMs: number | null };
+  idleWithWorkMinutes: number;
+  planRunMs: { runs: number; medianMs: number | null; maxMs: number | null };
+  gpu: { jobMs: number; runningMs: number; busySlots: number | null };
+}
+
+/** Peak and time-averaged overlap of [start, end] intervals inside [from, to]. Pure. */
+export function overlap(intervals: readonly { start: number; end: number }[], from: number, to: number): { peak: number; average: number } {
+  const edges: { at: number; d: number }[] = [];
+  let area = 0;
+  for (const one of intervals) {
+    const start = Math.max(from, one.start);
+    const end = Math.min(to, one.end);
+    if (end <= start) continue;
+    edges.push({ at: start, d: 1 }, { at: end, d: -1 });
+    area += end - start;
+  }
+  // An end before a start at the same instant: touching jobs do not overlap.
+  edges.sort((a, b) => a.at - b.at || a.d - b.d);
+  let now = 0;
+  let peak = 0;
+  for (const edge of edges) {
+    now += edge.d;
+    peak = Math.max(peak, now);
+  }
+  return { peak, average: to > from ? Math.round((100 * area) / (to - from)) / 100 : 0 };
+}
+
+/** For each event time, how long until the first start at or after it; null when none came. Pure. */
+export function waitsUntilNext(events: readonly number[], starts: readonly number[]): (number | null)[] {
+  const sorted = [...starts].sort((a, b) => a - b);
+  return events.map((at) => {
+    const next = sorted.find((one) => one >= at);
+    return next === undefined ? null : next - at;
+  });
+}
+
+export function percentile(values: readonly number[], p: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))]!;
+}
+
+export async function goalPipelineSpeed(input: { goalId: string; projectId: string; since: string; until?: string }): Promise<GoalPipelineSpeed> {
+  const db = getDb();
+  const from = Date.parse(input.since);
+  const until = input.until ?? new Date().toISOString();
+  const to = Date.parse(until);
+  const hours = Math.max(1 / 60, (to - from) / 3_600_000);
+  const perHour = (n: number) => Math.round((10 * n) / hours) / 10;
+  const bucket = `goal-${input.goalId}%`;
+  const goal = await db.get<{ created_at: string; target_set_at: string | null }>('SELECT created_at, target_set_at FROM workstreams WHERE id = ?', [input.goalId]);
+  const first = await db.get<{ at: string | null }>('SELECT MIN(created_at) AS at FROM goal_plan_readings WHERE workstream_id = ?', [input.goalId]);
+  const firstGood = await db.get<{ at: string | null }>(
+    `SELECT MIN(created_at) AS at FROM goal_plan_readings WHERE workstream_id = ? AND verdict = 'RECOMMENDABLE'`,
+    [input.goalId],
+  );
+  const goalOrchestrations = `SELECT m.orchestration_id FROM russell_missions m
+      JOIN cash_discovery_rounds r ON r.candidate_id = m.candidate_id
+     WHERE r.project_id = ? AND r.bucket_id LIKE ? AND m.orchestration_id IS NOT NULL`;
+  const jobs = await db.all<{ at: string; ms: number | string | null; reason: string | null; mine: number | string }>(
+    `SELECT e.at, e.duration_ms AS ms, e.reason,
+            CASE WHEN w.orchestration_id IN (${goalOrchestrations}) THEN 1 ELSE 0 END AS mine
+       FROM bin_events e LEFT JOIN work_items w ON w.id = e.work_item_id
+      WHERE e.event_type = 'FREE_LANE_ITEM' AND e.at >= ? AND e.at <= ?`,
+    [input.projectId, bucket, input.since, until],
+  );
+  const intervals = jobs.map((one) => ({ end: Date.parse(one.at), start: Date.parse(one.at) - Number(one.ms ?? 0), mine: Number(one.mine) === 1, gpu: modelOfReason(one.reason).startsWith('runpod/') }));
+  const all = overlap(intervals, from, to);
+  const mine = overlap(intervals.filter((one) => one.mine), from, to);
+  const claims = await db.get<{ n: number | string; g: number | string | null }>(
+    `SELECT COUNT(*) AS n, SUM(CASE WHEN c.orchestration_id IN (${goalOrchestrations}) THEN 1 ELSE 0 END) AS g
+       FROM research_claims c WHERE c.accepted = 1 AND c.created_at >= ? AND c.created_at <= ?`,
+    [input.projectId, bucket, input.since, until],
+  );
+  const openings = await db.all<{ created_at: string }>(
+    `SELECT created_at FROM cash_opportunities WHERE project_id = ? AND duplicate_of_id IS NULL AND created_at >= ? AND created_at <= ?`,
+    [input.projectId, input.since, until],
+  );
+  const runs = await db.all<{ started_at: string; elapsed_ms: number | string | null }>(
+    `SELECT started_at, elapsed_ms FROM scenario_runs WHERE project_id = ? AND label = ? AND started_at >= ?`,
+    [input.projectId, `goal ${input.goalId}`, input.since],
+  );
+  // A plan read is a scenario run, or a reading written without one (nothing modellable yet).
+  const readings = await db.all<{ created_at: string }>(
+    'SELECT created_at FROM goal_plan_readings WHERE workstream_id = ? AND created_at >= ?',
+    [input.goalId, input.since],
+  );
+  const reads = [...runs.map((one) => Date.parse(one.started_at)), ...readings.map((one) => Date.parse(one.created_at))];
+  const waits = waitsUntilNext(openings.map((one) => Date.parse(one.created_at)), reads);
+  const known = waits.filter((one): one is number => one !== null);
+  const idle = await db.get<{ n: number | string }>(
+    `SELECT COUNT(*) AS n FROM bin_events WHERE event_type = 'FREE_LANE_IDLE' AND at >= ? AND at <= ?`,
+    [input.since, until],
+  );
+  const elapsed = runs.map((one) => Number(one.elapsed_ms ?? NaN)).filter((one) => Number.isFinite(one));
+  const pod = await db.get<{ ms: number | string | null }>(
+    `SELECT SUM(duration_ms) AS ms FROM bin_events WHERE event_type = 'RUNPOD_POD' AND outcome = 'SAMPLE_RUNNING' AND at >= ? AND at <= ?`,
+    [input.since, until],
+  );
+  const gpuJobMs = intervals.filter((one) => one.gpu).reduce((sum, one) => sum + Math.max(0, one.end - one.start), 0);
+  const runningMs = Number(pod?.ms ?? 0);
+  return {
+    hours: Math.round(hours * 10) / 10,
+    goalCreatedAt: goal?.created_at ?? null,
+    targetSetAt: goal?.target_set_at ?? null,
+    firstReadingAt: first?.at ?? null,
+    firstRecommendableAt: firstGood?.at ?? null,
+    jobs: { total: intervals.length, goal: intervals.filter((one) => one.mine).length, peak: all.peak, average: all.average, goalPeak: mine.peak, goalAverage: mine.average },
+    acceptedClaimsPerHour: perHour(Number(claims?.n ?? 0)),
+    goalAcceptedClaimsPerHour: perHour(Number(claims?.g ?? 0)),
+    openingsPerHour: perHour(openings.length),
+    planRunsPerHour: perHour(runs.length),
+    evidenceToPlan: { openings: openings.length, unread: waits.length - known.length, medianMs: percentile(known, 50), p90Ms: percentile(known, 90), maxMs: known.length ? Math.max(...known) : null },
+    // The lane records an idle reading at most every ten minutes while it lasts.
+    idleWithWorkMinutes: Number(idle?.n ?? 0) * 10,
+    planRunMs: { runs: elapsed.length, medianMs: percentile(elapsed, 50), maxMs: elapsed.length ? Math.max(...elapsed) : null },
+    gpu: { jobMs: gpuJobMs, runningMs, busySlots: runningMs > 0 ? Math.round((100 * gpuJobMs) / runningMs) / 100 : null },
+  };
+}

@@ -63,6 +63,33 @@ export const FREE_LANE_PURPOSES = ['PLAY_RESEARCH', 'GRUNT'] as const;
 const WORKER_NAMES = ['free-lane-a', 'free-lane-b'] as const;
 const LEASE_MS = 20 * 60_000;
 const MAX_SOURCES = 6;
+
+/**
+ * The next pages to open at once: up to `limit`, at most one per host, in the
+ * queue's order. Removes them from the queue. A page on a host already in this
+ * wave waits for the next one, so a single site never sees a burst. Exported for tests.
+ */
+export function takeWave(queue: string[], limit: number): string[] {
+  const wave: string[] = [];
+  const hosts = new Set<string>();
+  for (let i = 0; i < queue.length && wave.length < Math.max(1, limit); ) {
+    const url = queue[i]!;
+    let host: string;
+    try {
+      host = new URL(url).host.toLowerCase();
+    } catch {
+      host = url;
+    }
+    if (hosts.has(host)) {
+      i += 1;
+      continue;
+    }
+    hosts.add(host);
+    wave.push(url);
+    queue.splice(i, 1);
+  }
+  return wave;
+}
 const SOURCE_CHARS = 7_000;
 
 /**
@@ -561,11 +588,45 @@ async function askFor(ctx: Ctx, prompt: string): Promise<Record<string, unknown>
   });
 }
 
+/**
+ * Failures that happen before any statement reaches the database: no pool
+ * connection, a connect that timed out, the server refusing another client.
+ * Nothing ran, so asking again cannot repeat an effect (invariant 26 — a
+ * statement timeout, whose outcome is unknown, is deliberately not here).
+ */
+export const BRAIN_NOT_REACHED = /database pool had no free connection|Connection terminated due to connection timeout|too many clients/i;
+/** Waits between attempts when Brain's database was not reached. Exported for tests. */
+export const NOT_REACHED_BACKOFF_MS = [1_000, 3_000, 9_000];
+
+/**
+ * A Brain tool, asked again when the database was not reached.
+ *
+ * Production, 2026-11-05 13:25–19:25Z: 46 of the $10K goal's free-lane jobs
+ * ended "threw: The database pool had no free connection" and two more had
+ * their submission refused the same way — each after minutes of model work
+ * the GPU or a free provider had already done. The answer was thrown away, a
+ * submission was sent back to the model as if it were wrong, and the item was
+ * cooled for up to an hour. A pool that is full for seconds is a reason to wait
+ * seconds, so the call waits and asks again; past the backoff it throws as before.
+ */
 async function call(ctx: Ctx, tool: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
   const found = findTool(tool);
   if (!found) throw new Error(`no tool ${tool}`);
-  const outcome = await found.run(args, { principal: ctx.principal, requestId: `req_${Math.random().toString(36).slice(2)}` });
+  const outcome = await retryNotReached(() => found.run(args, { principal: ctx.principal, requestId: `req_${Math.random().toString(36).slice(2)}` }));
   return outcome.value;
+}
+
+/** Run `fn`, waiting and running it again while Brain's database was not reached. Exported for tests. */
+export async function retryNotReached<T>(fn: () => Promise<T>, backoff: readonly number[] = NOT_REACHED_BACKOFF_MS): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      const wait = backoff[attempt];
+      if (wait === undefined || !BRAIN_NOT_REACHED.test(String((error as Error)?.message ?? error))) throw error;
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
 }
 
 function proof(ctx: Ctx): Record<string, unknown> {
@@ -616,7 +677,8 @@ async function submitWithRepair(
       return true;
     } catch (error) {
       ctx.why = `${tool} refused: ${String((error as Error).message ?? error).slice(0, 300)}`;
-      if (attempt === 1) return false;
+      // Brain's database, not the answer: nothing for the model to repair.
+      if (attempt === 1 || BRAIN_UNAVAILABLE.test(ctx.why)) return false;
       answer = await askFor(ctx, repairPrompt(String((error as Error).message ?? error).slice(0, 1500), answer));
     }
   }
@@ -688,36 +750,53 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
   );
   const urlsOf = (answer: Record<string, unknown> | null): string[] =>
     Array.isArray(answer?.['urls']) ? (answer!['urls'] as unknown[]).filter((u): u is string => typeof u === 'string') : [];
-  const searched = [
-    ...(await ctx.search(String(plan?.['search'] ?? question))),
-    ...(await ctx.search(question)),
-  ];
+  // Both queries at once: the search module paces its own queue, so this only
+  // stops the second waiting on the first's answer before it is even asked.
+  const [byPhrase, byQuestion] = await Promise.all([ctx.search(String(plan?.['search'] ?? question)), ctx.search(question)]);
+  const searched = [...byPhrase, ...byQuestion];
   const tried = new Set<string>();
   const skipped = new Set<string>();
   const failedUrls: string[] = [];
   const fetchReasons: string[] = [];
   const fetchDetails: string[] = [];
   const readable: { url: string; text: string }[] = [];
+  /*
+   * Pages are opened in waves rather than one after another: each wave opens as
+   * many as are still needed at once, one per host, and results are taken in
+   * the candidates' order, so search results still come before remembered URLs
+   * and no more pages are read than the job needs.
+   */
   const open = async (urls: string[]): Promise<void> => {
+    const queue: string[] = [];
     for (const url of urls) {
-      if (readable.length >= MAX_SOURCES) return;
-      if (!/^https?:\/\//i.test(url) || tried.has(url)) continue;
-      tried.add(url);
-      if (isRememberedUnreachable(url)) {
-        skipped.add(url);
-        fetchReasons.push('HOST_UNREACHABLE');
-        continue;
-      }
-      const fetched = await ctx.fetchSource(url);
-      const host = hostOf(url);
-      if (fetched.readable && host) forgiveHost(url);
-      if (!fetched.readable) rememberUnreachable(url, String(fetched.reason));
-      if (fetched.readable && fetched.text.trim().length > 200) {
-        readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
-      } else {
-        failedUrls.push(url);
-        fetchReasons.push(fetched.readable ? 'EMPTY' : String(fetched.reason));
-        if (!fetched.readable && fetchDetails.length < 2 && !fetchDetails.includes(fetched.detail)) fetchDetails.push(fetched.detail);
+      if (!/^https?:\/\//i.test(url) || tried.has(url) || queue.includes(url)) continue;
+      queue.push(url);
+    }
+    while (queue.length > 0 && readable.length < MAX_SOURCES) {
+      const wave = takeWave(queue, MAX_SOURCES - readable.length);
+      const results = await Promise.all(
+        wave.map(async (url) => {
+          tried.add(url);
+          if (isRememberedUnreachable(url)) return { url, fetched: null };
+          return { url, fetched: await ctx.fetchSource(url) };
+        }),
+      );
+      for (const { url, fetched } of results) {
+        if (!fetched) {
+          skipped.add(url);
+          fetchReasons.push('HOST_UNREACHABLE');
+          continue;
+        }
+        const host = hostOf(url);
+        if (fetched.readable && host) forgiveHost(url);
+        if (!fetched.readable) rememberUnreachable(url, String(fetched.reason));
+        if (fetched.readable && fetched.text.trim().length > 200 && readable.length < MAX_SOURCES) {
+          readable.push({ url: fetched.finalUrl, text: fetched.text.slice(0, SOURCE_CHARS) });
+        } else if (!(fetched.readable && fetched.text.trim().length > 200)) {
+          failedUrls.push(url);
+          fetchReasons.push(fetched.readable ? 'EMPTY' : String(fetched.reason));
+          if (!fetched.readable && fetchDetails.length < 2 && !fetchDetails.includes(fetched.detail)) fetchDetails.push(fetched.detail);
+        }
       }
     }
   };
@@ -834,12 +913,21 @@ async function verify(ctx: Ctx, assignment: Record<string, unknown>): Promise<bo
   const claims = (assignment['claimsToVerify'] as Record<string, unknown>[] | null) ?? [];
   if (claims.length === 0) return false;
   const pages = new Map<string, string>();
+  // Every cited page is needed, so all are opened at once, one per host per wave.
+  const queue = [...new Set(claims.map((claim) => (typeof claim['sourceUrl'] === 'string' ? claim['sourceUrl'] : null)).filter((url): url is string => !!url))];
+  while (queue.length > 0) {
+    const wave = takeWave(queue, queue.length);
+    const fetched = await Promise.all(wave.map(async (url) => ({ url, page: await ctx.fetchSource(url) })));
+    for (const { url, page } of fetched) pages.set(url, page.readable ? page.text.slice(0, SOURCE_CHARS) : `UNREADABLE: ${page.reason}`);
+  }
+  // Kept in the claims' own order for the prompt.
+  const ordered = new Map<string, string>();
   for (const claim of claims) {
     const url = typeof claim['sourceUrl'] === 'string' ? claim['sourceUrl'] : null;
-    if (!url || pages.has(url)) continue;
-    const fetched = await ctx.fetchSource(url);
-    pages.set(url, fetched.readable ? fetched.text.slice(0, SOURCE_CHARS) : `UNREADABLE: ${fetched.reason}`);
+    if (url && pages.has(url) && !ordered.has(url)) ordered.set(url, pages.get(url)!);
   }
+  pages.clear();
+  for (const [url, text] of ordered) pages.set(url, text);
   const frag = (assignment['fragment'] ?? {}) as Record<string, unknown>;
   const schema = schemaForModel('brain_submit_verification');
   const prompt =
@@ -1206,7 +1294,10 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
      * cannot spend the item's attempt budget.
      */
     transientStrikes.set(one.workItemId, strikes);
-    cooldown.set(cooldownKey(worker.model, one.workItemId), Date.now() + Math.min(60, 5 * strikes) * 60_000);
+    // Brain's own database being full clears in seconds, not the hour a provider
+    // outage can last: the item is offered again after a minute.
+    const coolMs = brainUnavailable && !/^model call failed/.test(ctx.why) ? 60_000 : Math.min(60, 5 * strikes) * 60_000;
+    cooldown.set(cooldownKey(worker.model, one.workItemId), Date.now() + coolMs);
     try {
       await call(ctx, 'brain_release_work', { ...proof(ctx), detail: `free lane: ${ctx.why}`.slice(0, 300) });
     } catch {

@@ -20,7 +20,7 @@ import { recordMoney } from '../server/repos/cashLedger.ts';
 import { createWorkstream, getWorkstream, listLinks } from '../server/repos/register.ts';
 import { setTerms } from '../server/services/goals/decide.ts';
 import { readTarget, setTarget } from '../server/services/goals/target.ts';
-import { advanceGoalPlans, listReadings, readGoalPlan, recordGoalOutcome } from '../server/services/goals/plan.ts';
+import { advanceGoalPlans, listReadings, PLAN_EVIDENCE_FLOOR_MS, PLAN_REFRESH_MS, planDue, readGoalPlan, recordGoalOutcome } from '../server/services/goals/plan.ts';
 import { MAX_MODEL_OPPORTUNITIES } from '../server/services/cash/goalScenario.ts';
 import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { getCandidate } from '../server/repos/russellCandidates.ts';
@@ -250,6 +250,36 @@ describe('the gate', () => {
     expect((await advanceGoalPlans(now)).read).toBe(1);
     expect((await advanceGoalPlans(new Date(now.getTime() + 60_000))).read).toBe(0);
     expect(await listReadings(id)).toHaveLength(1);
+  });
+
+  it('re-reads the plan as soon as an opening arrives, not on the next half-hour, and only when something changed', async () => {
+    await play({ title: 'Monthly owner reports', priceCents: 50_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    await goal(100_000);
+    const at = (minutes: number) => new Date(now.getTime() + minutes * 60_000);
+    expect((await advanceGoalPlans(now)).read).toBe(1);
+    // Past the floor, nothing new: no scenario run spent re-reading the same rows.
+    expect((await advanceGoalPlans(at(3))).read).toBe(0);
+    // New evidence: a harvested opening. Read on this pass, well inside the half-hour.
+    await play({ title: 'Quarterly tenant surveys', priceCents: 40_000, days: 7, capitalCents: 0, hours: 3, costCents: 2_000 });
+    const pass = await advanceGoalPlans(at(3));
+    expect(pass).toMatchObject({ read: 1, onEvidence: 1 });
+    // Read once for that evidence, not again until something else moves.
+    expect((await advanceGoalPlans(at(6))).read).toBe(0);
+  });
+});
+
+describe('when a plan is due (pure)', () => {
+  const base = { now: 10 * 60_000, lastInputs: 'a' };
+  it('reads a goal never read, and after the half-hour whatever changed', () => {
+    expect(planDue({ ...base, since: 0, inputs: null })).toBe('FIRST');
+    expect(planDue({ ...base, now: PLAN_REFRESH_MS + 1, since: 1, inputs: 'a' })).toBe('REFRESH');
+  });
+  it('reads early only past the floor and only on changed inputs', () => {
+    expect(planDue({ ...base, since: base.now - PLAN_EVIDENCE_FLOOR_MS + 1, inputs: 'b' })).toBeNull();
+    expect(planDue({ ...base, since: base.now - PLAN_EVIDENCE_FLOOR_MS, inputs: 'a' })).toBeNull();
+    expect(planDue({ ...base, since: base.now - PLAN_EVIDENCE_FLOOR_MS, inputs: 'b' })).toBe('EVIDENCE');
+    // Unknown after a restart counts as changed.
+    expect(planDue({ ...base, since: base.now - PLAN_EVIDENCE_FLOOR_MS, inputs: 'a', lastInputs: undefined })).toBe('EVIDENCE');
   });
 });
 

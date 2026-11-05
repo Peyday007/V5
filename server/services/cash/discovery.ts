@@ -811,7 +811,7 @@ export async function openGoalDiscovery(input: {
   const prefix = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
   const mine = (await listRounds(t.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
   const liveCap = Math.max(MAX_LIVE_GOAL_ROUNDS, Math.trunc(input.liveCap ?? MAX_LIVE_GOAL_ROUNDS));
-  if (mine.filter((one) => one.state === 'OPEN').length >= liveCap) return null;
+  if ((await roundsStillResearching(mine)) >= liveCap) return null;
   /*
    * The fixed angles are a starting point, not the whole map: Brain's own
    * industry map (`industry_nodes`, filled from classification systems and
@@ -936,7 +936,7 @@ export async function openConstructedRound(input: {
   const prefix = `${GOAL_BUCKET_PREFIX}${input.goal.id}`;
   const mine = (await listRounds(input.projectId)).filter((one) => one.bucketId === prefix || one.bucketId.startsWith(`${prefix}-`));
   const liveCap = Math.max(MAX_LIVE_GOAL_ROUNDS, Math.trunc(input.liveCap ?? MAX_LIVE_GOAL_ROUNDS));
-  if (mine.filter((one) => one.state === 'OPEN').length >= liveCap) return null;
+  if ((await roundsStillResearching(mine)) >= liveCap) return null;
   /*
    * Focus keeps exactly this search (§83): an approved goal's constructed
    * arrangements, inside an ACTIVE sprint (the gate above), at most
@@ -975,6 +975,35 @@ export async function openConstructedRound(input: {
 }
 
 const TERMINAL_MISSION = new Set(['DONE', 'FAILED', 'CANCELLED']);
+
+/**
+ * How many of these rounds still hold a research slot: OPEN rounds less those
+ * whose research has finished — every fragment of every mission the round's
+ * idea launched is terminal — while their synthesis and audit run on.
+ *
+ * A round's openings are harvested fragment by fragment as each one is gated
+ * (`signalledClaims` reads ACCEPTED and BLOCKED fragments), so a round whose
+ * fragments are all done has nothing left to discover. It stayed OPEN — and
+ * counted against the goal's live cap — until its packet's synthesis and audit
+ * ended, which on the free lane is often longer than the research was: the
+ * goal's next question waited for the previous one's paperwork. The round
+ * still closes, and still records what it found, exactly as before.
+ */
+export async function roundsStillResearching(rounds: readonly CashDiscoveryRound[]): Promise<number> {
+  const open = rounds.filter((one) => one.state === 'OPEN');
+  if (open.length === 0) return 0;
+  const ids = open.map((one) => one.candidateId);
+  const finished = await getDb().all<{ candidate_id: string }>(
+    `SELECT DISTINCT m.candidate_id FROM russell_missions m
+      WHERE m.candidate_id IN (${ids.map(() => '?').join(', ')}) AND m.orchestration_id IS NOT NULL
+        AND EXISTS (SELECT 1 FROM research_fragments f WHERE f.orchestration_id = m.orchestration_id)
+        AND NOT EXISTS (
+          SELECT 1 FROM russell_missions m2 JOIN research_fragments f2 ON f2.orchestration_id = m2.orchestration_id
+           WHERE m2.candidate_id = m.candidate_id AND f2.status NOT IN ('ACCEPTED', 'BLOCKED', 'REJECTED', 'CANCELLED'))`,
+    ids,
+  );
+  return open.length - finished.length;
+}
 
 /**
  * Constructed research live among these rounds: OPEN ones, plus closed ones

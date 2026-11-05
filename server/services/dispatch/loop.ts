@@ -1165,15 +1165,13 @@ async function auditFitFor(
   bin: Bin,
   candidates: Awaited<ReturnType<typeof fleetSnapshot>>['candidates'],
 ) {
-  const { listWorkItemsForBin, getWorkItemRow } = await import('../../repos/workQueue.ts');
+  const { listWorkItemsForBin, getWorkItemRows } = await import('../../repos/workQueue.ts');
   const { confinementFor } = await import('../../repos/bins.ts');
   const { auditFireFit } = await import('../research/auditAdmission.ts');
   const items = await listWorkItemsForBin(confinementFor(bin));
   const open = items.filter((item) => item.state === 'QUEUED' || item.state === 'LEASED');
   if (open.length === 0) return null;
-  const rows = (await Promise.all(open.map((item) => getWorkItemRow(item.id)))).filter(
-    (row): row is NonNullable<typeof row> => row !== null,
-  );
+  const rows = await getWorkItemRows(open.map((item) => item.id));
   return await auditFireFit({
     items: rows,
     candidates: candidates.map((candidate) => ({

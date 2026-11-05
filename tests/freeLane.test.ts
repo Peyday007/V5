@@ -14,7 +14,7 @@ import { enqueueWork, getWorkItem } from '../server/repos/workQueue.ts';
 import { workType } from '../server/services/queue/workTypes.ts';
 import { setBrainOnlyMode } from '../server/services/bins/brainOnly.ts';
 import { checkIn } from '../server/services/bins/service.ts';
-import { ensureFreeWorkers, firstJson, freeLaneTick, quotedIn, resetFreeLaneMemberships } from '../server/services/freeLane/worker.ts';
+import { ensureFreeWorkers, firstJson, freeLaneTick, quotedIn, resetFreeLaneMemberships, retryNotReached, takeWave } from '../server/services/freeLane/worker.ts';
 import { freeLaneMayTakeImprovement, resetActivationCache } from '../server/services/improvement/activation.ts';
 import { createLayer } from '../server/repos/layers.ts';
 import { IMPROVEMENT_RESEARCH_SLOT_CAP } from '../server/domain/improvement.ts';
@@ -235,6 +235,58 @@ beforeEach(async () => {
 });
 
 describe('the free research lane', () => {
+  it('opens candidate pages at once, one per host, and still reads the page it needs', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    let inFlight = 0;
+    let peak = 0;
+    const hostsInFlight = new Map<string, number>();
+    let hostOverlap = false;
+    const slowFetch = async (url: string): Promise<SourceFetch> => {
+      const host = new URL(url).host;
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      hostsInFlight.set(host, (hostsInFlight.get(host) ?? 0) + 1);
+      if (hostsInFlight.get(host)! > 1) hostOverlap = true;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      hostsInFlight.set(host, hostsInFlight.get(host)! - 1);
+      inFlight -= 1;
+      return fetchSource(url);
+    };
+    const searched = ['https://a.example.test/1', 'https://a.example.test/2', 'https://b.example.test/1', 'https://c.example.test/1', PAGE_URL];
+    const { completer } = model();
+    const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource: slowFetch, search: async () => searched });
+    expect(tick.submitted).toBe(1);
+    expect(peak).toBeGreaterThan(1);
+    expect(hostOverlap).toBe(false);
+    expect((await listClaimsForFragment(fragment.id))[0]!.sourceUrl).toBe(PAGE_URL);
+  });
+
+  it('asks Brain again when its database was not reached, and never after an outcome it cannot know', async () => {
+    let calls = 0;
+    const full = async () => {
+      calls += 1;
+      if (calls < 3) throw new Error('The database pool had no free connection within 10000ms: 7/7 connection(s) in use, 0 idle, 12 caller(s) waiting.');
+      return 'submitted';
+    };
+    await expect(retryNotReached(full, [1, 1, 1])).resolves.toBe('submitted');
+    expect(calls).toBe(3);
+    // A statement that may have run is not asked again (invariant 26).
+    let timedOut = 0;
+    await expect(retryNotReached(async () => { timedOut += 1; throw new Error('The database did not answer in time.'); }, [1, 1])).rejects.toThrow(/did not answer/);
+    expect(timedOut).toBe(1);
+    // Past the backoff it throws as before.
+    await expect(retryNotReached(async () => { throw new Error('too many clients already'); }, [1])).rejects.toThrow(/too many clients/);
+  });
+
+  it('takes a wave of pages in order, at most one per host', () => {
+    const queue = ['https://a.test/1', 'https://a.test/2', 'https://b.test/1', 'https://c.test/1'];
+    expect(takeWave(queue, 2)).toEqual(['https://a.test/1', 'https://b.test/1']);
+    expect(queue).toEqual(['https://a.test/2', 'https://c.test/1']);
+    expect(takeWave(queue, 6)).toEqual(['https://a.test/2', 'https://c.test/1']);
+    expect(queue).toEqual([]);
+  });
+
   it('takes a parked play-research fragment, sources it through Brain, and the gate records the claim', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);

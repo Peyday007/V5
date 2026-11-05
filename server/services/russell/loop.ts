@@ -1317,11 +1317,7 @@ async function tickOnce(owner: string): Promise<TickReport> {
      * half hour per goal, deferred under database pressure, and it writes only
      * an append-only reading when the conclusion changed.
      */
-    if (!shedding(report, 'goal-plans')) {
-      await runPass(report, 'goal-plans', async () => {
-        await advanceGoalPlans();
-      });
-    }
+    if (!shedding(report, 'goal-plans')) startGoalPlans(report);
 
     /*
      * Rule 9 of the engineering policy: executable work beside idle capacity is
@@ -3375,6 +3371,44 @@ async function parkResearchedIdea(candidateId: string, refusal: string): Promise
     contradicting: candidate.contradicting,
   });
   return recorded ? reason : null;
+}
+
+/*
+ * The goal-plan pass runs beside the tick rather than inside it. A plan read is
+ * a scenario run of up to twenty seconds plus the searches it opens, and every
+ * pass after it — the per-project harvest, judgement, launches — waited for it
+ * on every tick, while the plan in turn waited for every pass before it. Both
+ * only read rows the other writes, so neither has to wait: the tick starts the
+ * pass when none is in flight and moves on, and a failure is recorded on the
+ * next tick's row exactly as an inline one was. One in flight per process, as
+ * the scenario slot already is.
+ */
+let goalPlansInFlight: Promise<void> | null = null;
+let goalPlansFailure: string | null = null;
+
+export function startGoalPlans(report: Pick<TickReport, 'passFailures' | 'deferred'>): void {
+  if (goalPlansFailure) {
+    report.passFailures.push({ pass: 'goal-plans', error: goalPlansFailure });
+    goalPlansFailure = null;
+  }
+  if (goalPlansInFlight) return;
+  const own: Pick<TickReport, 'passFailures' | 'deferred'> = { passFailures: [], deferred: [] };
+  goalPlansInFlight = runPass(own, 'goal-plans', async () => {
+    await advanceGoalPlans();
+  })
+    .then(() => {
+      const failure = own.passFailures[0];
+      if (failure) goalPlansFailure = failure.error;
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      goalPlansInFlight = null;
+    });
+}
+
+/** Tests, and a clean stop: the goal-plan pass this process started, settled. */
+export async function settleGoalPlans(): Promise<void> {
+  await goalPlansInFlight;
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;

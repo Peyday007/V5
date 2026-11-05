@@ -14403,3 +14403,74 @@ planner, queue or monitor:
   queued research minus items every lane model is cooling down on
   (`coolingForEveryModel`), so a queue nothing will run does not keep the GPU
   billing.
+
+## 90. Independent work does not wait for unrelated work, and evidence reaches the plan when it arrives.
+
+**Owner's order, 2026-11-05.** Make Brain run every independent part of an
+objective at the same time wherever that shortens the time to finish, starting
+downstream work as soon as its inputs exist, with the $10K plan as the
+production test and the change made in the general execution system.
+
+**What production showed (19:25Z, `runpod-report`, 6 h).** The free lane
+submitted 74 jobs and had 384 not accepted; of the $10K goal's 89 jobs, 53
+ended on Brain's own database — "The database pool had no free connection …
+8/8 in use, 468 caller(s) waiting" — after minutes of model work each. Health
+checks failed while the pool was full. The goal's plan read NOT_VIABLE over 17
+openings; new openings waited for a half-hour clock; a goal round held one of
+its three research slots until its packet's synthesis and audit ended.
+
+The waits, and what replaced each. No new scheduler, queue or worker: each is
+the existing owner doing its work without waiting for something it does not
+depend on.
+
+- **One pool checkout per row.** `insertClaims` and `createFragments` read
+  every new row back with its own query, all at once, and dispatch's audit fit
+  read each open item the same way: a forty-claim submission queued forty
+  callers, two dozen slots queued hundreds. Each is now one `IN (…)` statement
+  per 200 ids (`rowsByIds`, `getWorkItemRows`).
+- **Brain's database being full threw the answer away.** A call that never
+  reached the database (no pool connection, a connect timeout, too many
+  clients — nothing ran, so asking again repeats no effect, invariant 26) is
+  asked again after 1, 3 and 9 s (`retryNotReached`). A submission refused that
+  way is not sent back to the model as wrong, and such an item is offered again
+  after a minute, not after a provider outage's five to sixty.
+- **A plan read on a clock.** `advanceGoalPlans` re-reads a goal's plan as
+  soon as what it is composed from changes — the project's openings (a harvest
+  creates one; validation, pricing and reconsideration update one), their value
+  layers, the money ledger, the goal's terms (`planInputsFingerprint`) — with a
+  two-minute floor (`PLAN_EVIDENCE_FLOOR_MS`) so a burst of harvests costs one
+  scenario run, and the half-hour as the backstop for what only the clock
+  changes. The fingerprint is taken after the pass's own writes, so the
+  research a read starts on its openings does not read as new evidence.
+- **One busy scenario slot stopped every goal.** A `ScenarioBusyError` ended
+  the whole pass; now that goal waits for the next pass and every other goal
+  still records outcomes and tops up its search.
+- **The plan waited for the tick and the tick waited for the plan.** The
+  goal-plan pass (a scenario run of up to 20 s plus the rounds it opens) ran
+  inside Russell's sequential tick, ahead of the per-project harvest,
+  judgement and launch passes. It now runs beside the tick, one in flight per
+  process (`startGoalPlans`), its failure recorded on the next tick's row.
+- **A round's slot outlived its research.** Openings are harvested fragment by
+  fragment, so a round whose fragments are all terminal has nothing left to
+  discover. `roundsStillResearching` counts only OPEN rounds with research
+  still running against a goal's live cap; the round still closes, and records
+  what it found, when its mission ends.
+- **Pages were opened one at a time.** A free-lane research job ran its two
+  searches back to back and opened up to six candidate pages sequentially, and
+  verification fetched each cited page in turn. Both searches now run at once
+  (the search module paces its own queue), and pages open in waves of as many as
+  are still needed, one per host (`takeWave`), results taken in the candidates'
+  order so search results still come first.
+
+Kept, because they are dependencies rather than waits: synthesis waits for
+every fragment (it synthesizes all of them); audit roles run one after another
+(independence, §71); launches per tick and the focus cap are owner-set bounds.
+
+**Measured, not estimated.** `goalPipelineSpeed` (in `goals/researchYield.ts`,
+printed by `scripts/runpod-report.ts` for the last window and the equal window
+before it) reads from rows: time from the goal's filing to its first and its
+first RECOMMENDABLE reading; free-lane jobs in flight at once, peak and
+time-averaged, fleet-wide and the goal's own; accepted claims, openings filed
+and plan evaluations per hour; for every opening, the wait until the plan next
+read it; minutes the lane sat idle with work queued; each plan run's elapsed
+time; and the GPU's busy job-time over its measured running time.
