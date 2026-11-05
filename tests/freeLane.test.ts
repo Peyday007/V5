@@ -277,6 +277,27 @@ describe('the free research lane', () => {
     expect(claims[0]!.accepted).toBe(true);
   });
 
+  it('shows the model why every claim was dropped and takes its corrected answer, under the same checks', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const base = model();
+    const prompts: string[] = [];
+    const completer: Completer = async (config, name, system, prompt) => {
+      if (prompt.includes('Extract the material claims')) prompts.push(prompt);
+      // First claims answer cites a sentence that is not on the page.
+      if (prompt.includes('Extract the material claims') && !prompt.includes('Brain could not use your previous answer')) {
+        return JSON.stringify({ claims: [{ claim: 'The median wage was $17.39.', source: 1, sentences: [999], evidence_lane: 'wage' }] });
+      }
+      return base.completer(config, name, system, prompt);
+    };
+    const tick = await freeLaneTick({ config: CONFIG, completer, fetchSource, search: async () => [] });
+    expect(tick.submitted).toBe(1);
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toMatch(/cited sentences outside the page/);
+    expect(await listClaimsForFragment(fragment.id)).toHaveLength(1);
+    expect((await getWorkItem(itemId))?.state).toBe('SUCCEEDED');
+  });
+
   it('drops a quote that is not in the fetched page, and fails the item retryably instead of discarding it', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);

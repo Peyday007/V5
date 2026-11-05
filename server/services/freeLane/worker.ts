@@ -583,14 +583,31 @@ async function submitWithRepair(
   first: Record<string, unknown>,
   repairPrompt: (error: string, previous: Record<string, unknown>) => string,
   finalize?: (answer: Record<string, unknown>) => Record<string, unknown> | null,
+  /**
+   * When Brain's own checks drop every claim, show the model why and ask once more.
+   * Production, 2026-11-05: WORK_FAULTED was the largest gate block (34 of 65) —
+   * fragments whose attempts were spent on answers whose citations did not parse,
+   * with the model never told what was wrong. The second answer meets exactly the
+   * same checks; nothing about the evidence bar changes.
+   */
+  dropRepair?: (why: string, previous: Record<string, unknown>) => string,
 ): Promise<boolean> {
   let answer: Record<string, unknown> | null = first;
+  let repairedDrop = false;
   for (let attempt = 0; attempt < 2 && answer; attempt += 1) {
     const args = finalize ? finalize(answer) : answer;
     if (!args) {
       // A finalizer that said why keeps its reason.
       if (!ctx.why.startsWith('the answer did not survive')) {
         ctx.why = 'the answer did not survive Brain\'s own checks (unquoted, uncited or empty)';
+      }
+      if (dropRepair && !repairedDrop) {
+        repairedDrop = true;
+        const dropWhy = ctx.why;
+        answer = await askFor(ctx, dropRepair(dropWhy, answer));
+        if (!answer) return false;
+        attempt -= 1; // a dropped answer was never submitted, so it does not spend the refusal repair
+        continue;
       }
       return false;
     }
@@ -802,6 +819,12 @@ async function fragment(ctx: Ctx, assignment: Record<string, unknown>): Promise<
     answer,
     (error, previous) => `${prompt}\n\nYour previous answer was refused by Brain: ${error}\nPrevious: ${JSON.stringify(previous).slice(0, 4000)}\nCorrect it.`,
     finalize,
+    (why, previous) =>
+      `${prompt}\n\nBrain could not use your previous answer: ${why.replace(/^the answer did not survive Brain's own checks: /, '')}. ` +
+      'Every claim needs "source" as a SOURCE number and "sentences" as a list of the sentence numbers inside that ' +
+      'source that state it — for example {"claim":"…","source":2,"sentences":[4,5],"evidence_lane":"' +
+      (lanes[0]?.id ?? 'lane') + '"} for the sentences marked [S2.4] and [S2.5]. Offer only claims a sentence states; ' +
+      `if no sentence states anything the brief asks, reply {"claims":[]}.\nPrevious: ${JSON.stringify(previous).slice(0, 3000)}`,
   );
   if (ok) await complete(ctx, `free lane: claims submitted from ${readable.length} source(s)`);
   return ok;
