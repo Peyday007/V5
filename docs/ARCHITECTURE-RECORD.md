@@ -14229,6 +14229,9 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   site's own page, cited at its own address. The free lane's brief now carries
   the repair reason and strategy and the guidance Brain computed (unreadable
   hosts, readable routes), which it had dropped.
+- **Unexplained rejections are counted on judged claims only.** That did not
+  change the week's 373: they are judged rejections without a reason from
+  earlier in the week; the post-release window reads every rejection explained.
 - `admin capabilities show [hours]` prints every requirement's answer and
   reading and the ranked gaps; `admin capabilities objective --text-b64 …`
   says whether an objective is substantial, which maps it needs and what
