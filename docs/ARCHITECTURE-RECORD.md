@@ -14306,6 +14306,11 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   reason, and Brain's own database or gateway being unavailable
   (`BRAIN_UNAVAILABLE`) hands the item back with its attempt refunded, as a
   provider outage does, instead of spending it and parking the packet.
+- **The lane stays inside the pool.** The same logs showed why the pool was
+  empty: three models' slots (a RunPod GPU joined beside the two free models)
+  could reach far past eight connections, and halving under saturation was
+  undone by doubling thirty seconds later. Each model's slots are now held to
+  its share of `SLOTS_PER_DB_CONNECTION` (3) × the pool's ceiling.
 ## 89. A goal's research is measured at its plan, and a search that does not reach the plan is asked differently.
 
 **Owner's order, 2026-11-05.** The RunPod GPU's research must advance the $10K
