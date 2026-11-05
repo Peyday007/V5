@@ -56,3 +56,38 @@ Sources:
 | 6 | GPU cannot restart | RunPod host capacity | RunPod | External. Brain retries; the free fallback carries the work |
 | 7 | Research packets do not finish | Mostly #1: work faulted and audits refused on pool errors (routine decisions threw too) | packet runner, free lane | Re-read after #1 deployed (below) |
 | 8 | No repeatable opening reaches the plan | Repeatable needs a researched buyer volume. Path research goes only to considered openings, which are small one-offs below the materiality floor, so only constructed rounds can bring one. Those rounds sit behind #7 | `cash/goalScenario.ts`, `goals/pathResearch.ts` | Behind #7 |
+
+## 3. The $10K plan as Brain reads it (Goals `plan`, 42124715738, 22:59Z)
+
+- **Verdict: NOT_VIABLE under the current evidence.** The 17 openings held reach
+  at most 250 of the 10 000 USD at prices buyers are shown to pay.
+- **Quant engine.** 255 combinations were searched over 2 000 worlds. The best
+  reaches the target in 0.0% of worlds, settling p10 0 · p50 50 · p90 225 USD.
+  The basis is coverage of tested conditions: this Brain has no finished plans
+  to calibrate a probability against.
+- **Every limit is applied:**
+  - 3 000 USD in all;
+  - 375 USD per arrangement before proof;
+  - 750 USD a week tied up;
+  - no owner physical work;
+  - government, website-repair and domain plays left out.
+- **142 openings were left out by name**, mostly government contracts the goal
+  excludes. Openings that would need the owner's physical work were left out
+  too.
+- **What the 17 are:** one-off sales of 50–3 450 USD each. Several are not
+  openings at all, but competitors' published price points (Rev.com 1.99 USD a
+  minute, Verblio 0.06 USD a word).
+- **What nothing yet establishes:**
+  - for 15 of 17 openings, a price buyers pay;
+  - for 16 of 17, a reachable buyer with a dated need;
+  - for 13 of 17, settlement timing;
+  - for all of them, reply and close rates for this seller.
+- **The 404 arrangements Brain constructed** (245 with a SAFE worst case) carry
+  mechanism-reconstructed values but are not yet openings. Their buyer counts,
+  conversion, price and days to cash are "to establish". Only a research round
+  that finishes can establish them.
+- **Why 90% is not supported:** reaching 10 000 USD in 22 days from one
+  outreach pool of 10–60 contacts a day (220–1 320 contacts) needs a repeatable
+  offer priced in the high hundreds or more. Brain holds no such offer with an
+  evidenced buyer population, price or conversion rate. This is a gap in
+  evidence and research capacity, not a computation that came out against it.
