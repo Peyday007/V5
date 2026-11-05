@@ -281,7 +281,7 @@ export async function answerUnaskedParks(input: { limit?: number; nowMs?: number
   return out;
 }
 
-/** Every NEEDS_HUMAN packet and what decides whether Brain may file it: for `admin packets parks`. */
+/** The 60 most recent NEEDS_HUMAN packets and what decides whether Brain may file it: for `admin packets parks` (newest first, so today's parks are not hidden behind September's). */
 export async function parkReadings(): Promise<Array<Record<string, unknown>>> {
   return getDb().all(
     `SELECT o.id, o.verdict, p.slug AS project, o.updated_at,
@@ -292,6 +292,6 @@ export async function parkReadings(): Promise<Array<Record<string, unknown>>> {
             (SELECT r.state || ':' || COALESCE(r.answered_choice, '-') FROM russell_missions m JOIN russell_human_requests r ON r.mission_id = m.id
               WHERE m.orchestration_id = o.id ORDER BY r.created_at DESC LIMIT 1) AS card
        FROM research_orchestrations o JOIN projects p ON p.id = o.project_id
-      WHERE o.status = 'NEEDS_HUMAN' ORDER BY o.updated_at LIMIT 60`,
+      WHERE o.status = 'NEEDS_HUMAN' ORDER BY o.updated_at DESC LIMIT 60`,
   );
 }

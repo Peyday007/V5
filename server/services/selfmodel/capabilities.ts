@@ -276,6 +276,178 @@ export async function readProbe(probe: Probe, from: string, to: string): Promise
       const total = n(row?.total);
       return { ok: total, total: Math.max(total, 1), detail: 'accepted method claims Brain holds (lifetime)' };
     }
+    default:
+      return readGoalProbe(probe, from, to);
+  }
+}
+
+/** Live goals with a target, not yet due-passed: the goals a plan is owed to. */
+async function liveTargetGoals(to: string): Promise<{ id: string; projectId: string | null }[]> {
+  const rows = await getDb().all<{ id: string; target_project_id: string | null }>(
+    `SELECT id, target_project_id FROM workstreams
+      WHERE target_metric IS NOT NULL AND archived_at IS NULL AND cancelled_at IS NULL
+        AND (due_at IS NULL OR due_at > ?)
+      ORDER BY created_at DESC LIMIT 20`,
+    [to],
+  );
+  return rows.map((r) => ({ id: r.id, projectId: r.target_project_id }));
+}
+
+/** The latest reading of each live goal: its progress figures (`planProgress`), or null. */
+async function latestProgress(to: string): Promise<{ goalId: string; considered: number; modelled: number; evidenced: number; verdict: string }[]> {
+  const out: { goalId: string; considered: number; modelled: number; evidenced: number; verdict: string }[] = [];
+  for (const goal of await liveTargetGoals(to)) {
+    const row = await getDb().get<{ forecast: string | null; verdict: string }>(
+      `SELECT forecast, verdict FROM goal_plan_readings WHERE workstream_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT 1`,
+      [goal.id, to],
+    );
+    if (!row) continue;
+    let f: { considered?: unknown; modelled?: unknown; evidencedBuyerAndPrice?: unknown } = {};
+    try {
+      f = row.forecast ? (JSON.parse(row.forecast) as typeof f) : {};
+    } catch {
+      f = {};
+    }
+    out.push({ goalId: goal.id, considered: n(f.considered as number), modelled: n(f.modelled as number), evidenced: n(f.evidencedBuyerAndPrice as number), verdict: row.verdict });
+  }
+  return out;
+}
+
+/** Brain's own database refusing work, in the words the pool and the driver use. */
+const DATABASE_FAILURE_SQL = `(reason LIKE '%database pool%' OR reason LIKE '%Connection terminated%' OR reason LIKE '%not queryable%'
+  OR reason LIKE '%Query read timeout%' OR reason LIKE '%statement timeout%' OR reason LIKE '%Brain database%')`;
+
+/** The goal-plan map's probes (GOAL_PLAN_MAP). One bounded read each. */
+async function readGoalProbe(probe: Probe, from: string, to: string): Promise<ProbeReading> {
+  const db = getDb();
+  const window = `${from.slice(0, 16)}Z → ${to.slice(0, 16)}Z`;
+  const settled = (alias: string) => `${alias}.state <> 'OPEN' AND COALESCE(${alias}.harvested_at, ${alias}.updated_at) >= ? AND COALESCE(${alias}.harvested_at, ${alias}.updated_at) < ?`;
+  switch (probe) {
+    case 'GOAL_PLAN_EVALUATED': {
+      const row = await db.get<{ total: number | string; ok: number | string | null }>(
+        `SELECT COUNT(*) AS total, SUM(CASE WHEN state = 'COMPLETE' THEN 1 ELSE 0 END) AS ok FROM scenario_runs
+          WHERE label LIKE 'goal %' AND started_at >= ? AND started_at < ?`,
+        [from, to],
+      );
+      return { ok: n(row?.ok), total: n(row?.total), detail: `goal scenario runs started ${window}` };
+    }
+    case 'GOAL_PLAN_FRESH': {
+      const twoHours = new Date(Date.parse(to) - 2 * HOUR).toISOString();
+      const goals = await liveTargetGoals(to);
+      let ok = 0;
+      for (const goal of goals) {
+        const row = await db.get<{ n: number | string }>(
+          `SELECT COUNT(*) AS n FROM scenario_runs WHERE label = ? AND started_at >= ? AND started_at < ?`,
+          [`goal ${goal.id}`, twoHours, to],
+        );
+        if (n(row?.n) > 0) ok += 1;
+      }
+      return { ok, total: goals.length, detail: 'live targeted goals with a scenario run in the last two hours (now)' };
+    }
+    case 'GOAL_SEARCH_WIDENS': {
+      const short = (await latestProgress(to)).filter((p) => p.verdict !== 'RECOMMENDABLE');
+      let ok = 0;
+      for (const goal of short) {
+        const row = await db.get<{ n: number | string }>(
+          `SELECT COUNT(*) AS n FROM cash_discovery_rounds WHERE (bucket_id = ? OR bucket_id LIKE ?) AND opened_at >= ? AND opened_at < ?`,
+          [`goal-${goal.goalId}`, `goal-${goal.goalId}-%`, from, to],
+        );
+        if (n(row?.n) > 0) ok += 1;
+      }
+      return { ok, total: short.length, detail: `live goals short of a recommendable plan that opened a round ${window}` };
+    }
+    case 'GOAL_ROUNDS_FILE':
+    case 'CONSTRUCTED_ROUNDS_FILE': {
+      const constructed = probe === 'CONSTRUCTED_ROUNDS_FILE';
+      const row = await db.get<{ total: number | string; ok: number | string | null }>(
+        `SELECT COUNT(*) AS total, SUM(CASE WHEN r.found > 0 THEN 1 ELSE 0 END) AS ok FROM cash_discovery_rounds r
+          WHERE r.bucket_id LIKE ? ${constructed ? '' : "AND r.bucket_id NOT LIKE 'goal-%-mx-%'"} AND ${settled('r')}`,
+        [constructed ? 'goal-%-mx-%' : 'goal-%', from, to],
+      );
+      return { ok: n(row?.ok), total: n(row?.total), detail: `${constructed ? 'constructed' : 'goal discovery'} rounds settled ${window} that filed an opening` };
+    }
+    case 'GOAL_PACKETS_COMPLETE': {
+      const rows = await db.all<{ status: string; n: number | string }>(
+        `SELECT o.status, COUNT(DISTINCT o.id) AS n FROM cash_discovery_rounds r
+           JOIN russell_missions m ON m.candidate_id = r.candidate_id
+           JOIN research_orchestrations o ON o.id = m.orchestration_id
+          WHERE r.bucket_id LIKE 'goal-%' AND o.status IN ('COMPLETE', 'COMPLETE_WITH_GAPS', 'FAILED', 'NEEDS_HUMAN', 'CANCELLED')
+            AND o.updated_at >= ? AND o.updated_at < ?
+          GROUP BY o.status`,
+        [from, to],
+      );
+      const ok = rows.filter((r) => r.status.startsWith('COMPLETE')).reduce((a, r) => a + n(r.n), 0);
+      const total = rows.reduce((a, r) => a + n(r.n), 0);
+      return { ok, total, detail: `packets behind goal rounds settled ${window}: ${rows.map((r) => `${r.status}=${n(r.n)}`).join(' ') || 'none'}` };
+    }
+    case 'PATH_QUESTIONS_ANSWERED': {
+      const row = await db.get<{ total: number | string; ok: number | string | null }>(
+        `SELECT COUNT(*) AS total, SUM(CASE WHEN state = 'RESOLVED' THEN 1 ELSE 0 END) AS ok FROM cash_needs
+          WHERE request_key LIKE 'question:%' AND opportunity_id IS NOT NULL AND state IN ('RESOLVED', 'WITHDRAWN')
+            AND updated_at >= ? AND updated_at < ?`,
+        [from, to],
+      );
+      return { ok: n(row?.ok), total: n(row?.total), detail: `opening questions closed ${window} that were resolved` };
+    }
+    case 'OPENINGS_BUYER_PRICE':
+    case 'OPENINGS_MODELLED': {
+      const readings = await latestProgress(to);
+      const buyer = probe === 'OPENINGS_BUYER_PRICE';
+      const ok = readings.reduce((a, r) => a + (buyer ? r.evidenced : r.modelled), 0);
+      const total = readings.reduce((a, r) => a + r.considered, 0);
+      return { ok, total, detail: `openings in ${readings.length} live goal(s)' latest reading ${buyer ? 'with buyer, demand and price established' : 'modelled by the quant engine'} (now)` };
+    }
+    case 'OPENINGS_REACH_PLAN': {
+      const settledBy = new Date(Date.parse(to) - HOUR / 2).toISOString();
+      let ok = 0;
+      let total = 0;
+      for (const goal of await liveTargetGoals(to)) {
+        if (!goal.projectId) continue;
+        const row = await db.get<{ total: number | string; ok: number | string | null }>(
+          `SELECT COUNT(*) AS total,
+                  SUM(CASE WHEN EXISTS (SELECT 1 FROM scenario_runs s WHERE s.label = ? AND s.started_at > o.created_at) THEN 1 ELSE 0 END) AS ok
+             FROM cash_opportunities o WHERE o.project_id = ? AND o.created_at >= ? AND o.created_at < ?`,
+          [`goal ${goal.id}`, goal.projectId, from, settledBy],
+        );
+        ok += n(row?.ok);
+        total += n(row?.total);
+      }
+      return { ok, total, detail: `openings filed ${window} (over 30 min old) followed by a goal plan run` };
+    }
+    case 'GPU_SERVES': {
+      const row = await db.get<{ total: number | string; ok: number | string | null }>(
+        `SELECT COUNT(*) AS total, SUM(CASE WHEN outcome = 'SUBMITTED' THEN 1 ELSE 0 END) AS ok FROM bin_events
+          WHERE event_type = 'FREE_LANE_ITEM' AND reason LIKE 'model runpod/%' AND at >= ? AND at < ?`,
+        [from, to],
+      );
+      const pod = await db.get<{ refused: number | string | null }>(
+        `SELECT SUM(CASE WHEN outcome = 'START_FAILED' THEN 1 ELSE 0 END) AS refused FROM bin_events
+          WHERE event_type = 'RUNPOD_POD' AND at >= ? AND at < ?`,
+        [from, to],
+      );
+      const refused = n(pod?.refused);
+      return { ok: n(row?.ok), total: n(row?.total) + refused, detail: `GPU-model attempts ${window}; ${refused} pod start(s) refused` };
+    }
+    case 'FREE_MODELS_SERVE': {
+      const row = await db.get<{ total: number | string; ok: number | string | null }>(
+        `SELECT COUNT(*) AS total, SUM(CASE WHEN outcome = 'SUBMITTED' THEN 1 ELSE 0 END) AS ok FROM bin_events
+          WHERE event_type = 'FREE_LANE_ITEM' AND outcome IN ('SUBMITTED', 'FAILED_RETRYABLE')
+            AND reason NOT LIKE 'model runpod/%' AND at >= ? AND at < ?`,
+        [from, to],
+      );
+      return { ok: n(row?.ok), total: n(row?.total), detail: `free-model attempts ${window} (provider releases excluded)` };
+    }
+    case 'DATABASE_AVAILABLE': {
+      const row = await db.get<{ total: number | string; bad: number | string | null }>(
+        `SELECT COUNT(*) AS total, SUM(CASE WHEN ${DATABASE_FAILURE_SQL} THEN 1 ELSE 0 END) AS bad FROM bin_events
+          WHERE event_type = 'FREE_LANE_ITEM' AND at >= ? AND at < ?`,
+        [from, to],
+      );
+      const total = n(row?.total);
+      return { ok: total - n(row?.bad), total, detail: `free-lane attempts ${window} that did not fail on Brain's database` };
+    }
+    default:
+      return { ok: 0, total: 0, detail: `no reader for ${probe}` };
   }
 }
 
