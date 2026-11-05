@@ -14381,3 +14381,17 @@ planner, queue or monitor:
   as before. The report also prints the goal's top reasons its jobs were not
   accepted (`failureClass`), since all 11 of its settled rounds ended without a
   report.
+- **A case-insensitive lookup needs an index under the same collation.** The
+  release after the RunPod account key was set failed its hosted verification
+  (`EMAXCONNSESSION`, pool_size 15). The connection report read the cause:
+  `findDocumentByCanonicalName` (`canonical_name = ? COLLATE NOCASE`) ran 3 124
+  times in eleven minutes for ~10 000 s of database time, because the
+  `(project_id, canonical_name)` indexes are on the plain column and Postgres
+  cannot use them for a comparison under `nocase`. 924 checkouts timed out and
+  Brain shed load. Migration 137 / pg 128 indexes both canonical-name lookups
+  under `COLLATE NOCASE`; `EXPLAIN` on Postgres reads an Index Scan for each.
+  Neither table is write-hot, so the build is inside the boot path's bound.
+- **The pod's power ignores work no model may take.** The supervisor counts
+  queued research minus items every lane model is cooling down on
+  (`coolingForEveryModel`), so a queue nothing will run does not keep the GPU
+  billing.
