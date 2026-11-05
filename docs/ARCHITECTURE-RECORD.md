@@ -14283,3 +14283,64 @@ and its reading. Nothing in them is a second loop, monitor or task manager:
   fifth off it (to 2 s); dead-link recovery searches only while the queue is
   short, so a fragment's own discovery keeps the budget. The same reading showed
   #513 working: EXTRACTION.CITED_CLAIMS 12/20 (was 30/84).
+
+## 89. A goal's research is measured at its plan, and a search that does not reach the plan is asked differently.
+
+**Owner's order, 2026-11-05.** The RunPod GPU's research must advance the $10K
+objective, not produce volume: every job feeds the existing opportunity and
+planning systems, progress is measured where it counts — openings, buyers and
+prices with evidence, openings the quant model takes, the combined plan, the
+90% requirement — and research that yields nothing useful is diagnosed and
+changed automatically.
+
+**What production showed (08:10Z).** The GPU connected at 08:05Z (Qwen3-4B) and
+had done no research job. In the hour before, the free lane sat idle with 37
+items waiting: 29 149 claims were declined as "cooling down after a provider
+failure", because a busy free provider cooled an item for *every* model. The
+$10K plan read NOT_VIABLE over 17 openings (8 modelled): 0.0% of worlds reach
+the target, p50 $50. Most openings were a provider's own price page (Rev.com,
+Verblio, GitHub's bug bounty, ticket resale) — no buyer behind them — and
+nothing told the next round so; the goal's ideas parked "no fragment cleared
+its evidence gate" and the next round asked the same way.
+
+`services/goals/researchYield.ts` is the repair. Nothing in it is a second
+planner, queue or monitor:
+
+- **A cooldown belongs to the model that failed** (`freeLane/worker.ts`). A
+  provider failure cools the item for that model only, so the GPU takes an item
+  the free model could not, and the reverse when the pod is down. Attempts are
+  still refunded and the free providers stay slot B and the GPU's fallback.
+- **The plan names why the research falls short** (`diagnoseGoalResearch`,
+  pure). From the plan's own judgement of every opening it holds and the goal's
+  last rounds: research that does not finish, rounds that file nothing,
+  openings with no reachable buyer or dated demand, no price buyers are shown
+  paying, too small to matter, over the money limits, no settlement date —
+  each when it covers half the openings held (or two barren rounds). It is
+  `PlanReading.researchDiagnosis`, read every 30 minutes by the goal tick.
+- **The next round is asked differently.** `widenGoalSearch` passes the top
+  three instructions to `openGoalDiscovery`, whose question also always asks
+  first for work run online and fulfilled mostly by AI (`REMOTE_AI_FOCUS`):
+  buyer type and where they are found, dated demand, price buyers pay,
+  fulfilment, cost per sale, time to cash. A preference in the question, never
+  a filter: the gate, harvest and plan judge exactly as before, and a search
+  that worked (any round filed an opening) is not named a cause.
+- **Progress is a row.** `persistReading` writes a reading whenever the best
+  combination's reach (to 1%), its median (to $50), the best reach, the
+  openings considered and modelled, those with buyer and price the plan
+  accepts, the ladder or the causes change, with those figures in `forecast`
+  (`planProgress`). Before, the digest held the verdict only, so a plan moving
+  from 0% toward 90% under one NOT_VIABLE wrote nothing.
+- **The chain is measured from the job to the plan** (`goalResearchProgress`).
+  A goal's research is every mission whose idea one of its rounds asked; its
+  free-lane jobs and accepted claims by model, the openings its rounds
+  harvested and which model's fragment each came from, and — in
+  `scripts/runpod-report.ts`, run hourly by the Cheap lane workflow — whether
+  the plan modelled, considered or left out each one, and why.
+  `RUNPOD_GOAL_OPENINGS` and `RUNPOD_GOAL_OPENINGS_IN_PLAN` count the GPU's.
+  A fresh signal is left out ("nobody has shown who would pay us") until its
+  validation dive, itself goal work at +2 priority, names the payer.
+- **Generation stays tied to useful capacity.** New goal rounds are still
+  sized by `freeLaneSpareSurfaces` (§86): zero while answers mostly fail, so an
+  idle GPU whose answers Brain refuses does not generate jobs to fill it.
+  Improvement research keeps its `IMPROVEMENT_RESEARCH_SLOT_CAP` share (§87)
+  at priority 5, below commercial work at 6–8 and goal work at +2.

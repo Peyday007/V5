@@ -58,6 +58,7 @@ import type { ScenarioResult } from '../../domain/scenario.ts';
 import type { Workstream } from '../../domain/register.ts';
 import { decideResearch, type ResearchDecision } from '../quant/deadline.ts';
 import type { GoalPortfolio } from './portfolio.ts';
+import { diagnoseGoalResearch, diagnosisInstructions, recentGoalRounds, type ResearchDiagnosis } from './researchYield.ts';
 import type { EvidenceTier } from '../../domain/quant.ts';
 
 export const PLAN_VERDICTS = ['RECOMMENDABLE', 'NEEDS_EVIDENCE', 'NOT_VIABLE'] as const;
@@ -188,6 +189,12 @@ export interface PlanReading {
    * outreach counted as one risk. A probability only when its basis says so.
    */
   portfolio: GoalPortfolio | null;
+  /**
+   * Why the goal's research is not yet producing openings this plan can use,
+   * read from the openings it judged and the goal's recent rounds
+   * (`researchYield.ts`). The next goal round is asked differently for each.
+   */
+  researchDiagnosis: ResearchDiagnosis[];
 }
 
 export interface InferredInput {
@@ -543,6 +550,12 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
       ladder: emptyLadder(),
       marketTests: [],
       portfolio: model.portfolio,
+      researchDiagnosis: diagnoseGoalResearch({
+        considered: [],
+        excludedReasons: model.excluded.map((one) => one.reason),
+        rounds: await recentGoalRounds(target.projectId, goal.id),
+        remaining: target.remainingCents / 100,
+      }),
     };
     if (input.persist) await persistReading(goal, reading, null);
     return reading;
@@ -787,6 +800,12 @@ async function readGoalPlanUnscoped(input: { goalId: string; now?: Date; persist
     ladder: ladderOf(considered),
     marketTests,
     portfolio: model.portfolio,
+    researchDiagnosis: diagnoseGoalResearch({
+      considered,
+      excludedReasons: model.excluded.map((one) => one.reason),
+      rounds: await recentGoalRounds(target.projectId, goal.id),
+      remaining: target.remainingCents / 100,
+    }),
   };
   if (input.persist) await persistReading(goal, reading, chosen);
   return reading;
@@ -882,6 +901,35 @@ export async function listReadings(goalId: string): Promise<ReadingRow[]> {
   return await getDb().all<ReadingRow>('SELECT * FROM goal_plan_readings WHERE workstream_id = ? ORDER BY created_at ASC, id ASC', [goalId]);
 }
 
+/**
+ * What a reading says about progress toward the goal, rounded so noise in the
+ * simulation does not write a row: the best combination's share of worlds that
+ * reach the target (against the 90% the owner requires), its median settled,
+ * the openings considered and modelled, the ladder, and the research causes.
+ */
+export function planProgress(reading: PlanReading): {
+  reach: number | null;
+  settledP50: number | null;
+  bestReach: number | null;
+  considered: number;
+  modelled: number;
+  evidencedBuyerAndPrice: number;
+  ladder: Record<ValidationStage, number>;
+  causes: string[];
+} {
+  const best = reading.portfolio?.best ?? null;
+  return {
+    reach: best ? Math.round(best.reach * 100) / 100 : null,
+    settledP50: best ? Math.round(best.settledP50 / 50) * 50 : null,
+    bestReach: reading.bestReach === null ? null : Math.round(reading.bestReach / 50) * 50,
+    considered: reading.considered.length,
+    modelled: reading.considered.filter((one) => one.modelled).length,
+    evidencedBuyerAndPrice: reading.considered.filter((one) => !one.missing.some((link) => link === 'REACHABLE_BUYER' || link === 'CURRENT_DEMAND' || link === 'OFFER_AND_PRICE')).length,
+    ladder: reading.ladder,
+    causes: reading.researchDiagnosis.map((one) => one.cause),
+  };
+}
+
 /** Append a reading when its conclusion differs from the last; link a recommended plan's work to the goal. */
 async function persistReading(goal: Workstream, reading: PlanReading, chosen: StrategyReading | null): Promise<void> {
   const summary = {
@@ -890,13 +938,20 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
     strategies: reading.strategies.map((one) => ({ key: one.key, verdict: one.verdict, missing: one.links.filter((link) => !link.ok).map((link) => link.link), failed: one.constraintsFailed })),
     next: reading.nextTest,
     refusal: reading.refusal,
+    // Progress toward the goal is part of the conclusion: a reading whose
+    // combined reach, median or pool moved is a new row, so the plan's history
+    // shows whether research is improving it (owner, 2026-11-05).
+    progress: planProgress(reading),
   };
   const digest = sha256(canonicalJson(summary));
   const last = await latestReading(goal.id);
   if (last && last.digest === digest) return;
-  const forecast = chosen
-    ? { conservativeSettled: chosen.conservativeSettled, sweep: chosen.sweep, remainingCents: reading.target.remainingCents, daysLeft: reading.target.daysLeft }
-    : null;
+  const forecast = {
+    ...(chosen ? { conservativeSettled: chosen.conservativeSettled, sweep: chosen.sweep } : {}),
+    remainingCents: reading.target.remainingCents,
+    daysLeft: reading.target.daysLeft,
+    ...planProgress(reading),
+  };
   await getDb().run(
     `INSERT INTO goal_plan_readings (id, workstream_id, digest, scenario_model_id, scenario_run_id, verdict, chosen_strategy, strategies, next_test, forecast, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -910,7 +965,7 @@ async function persistReading(goal: Workstream, reading: PlanReading, chosen: St
       reading.chosen,
       JSON.stringify(reading.strategies),
       reading.nextTest ? JSON.stringify(reading.nextTest) : null,
-      forecast ? JSON.stringify(forecast) : null,
+      JSON.stringify(forecast),
       new Date().toISOString(),
     ],
   );
@@ -1012,6 +1067,7 @@ async function widenGoalSearch(goalId: string, reading: PlanReading, now: Date, 
       target: reading.target,
       bestReach: reading.bestReach,
       heldTitles: reading.considered.map((one) => one.title),
+      diagnosis: diagnosisInstructions(reading.researchDiagnosis),
       now: now.toISOString(),
       liveCap: MAX_LIVE_GOAL_ROUNDS + spare,
     });

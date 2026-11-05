@@ -984,8 +984,15 @@ export interface FreeLaneTick {
 }
 
 let running = false;
-/** Items handed back after a provider failure, and when they may be taken again. Process-local by design. */
+/**
+ * Items handed back after a provider failure, and when they may be taken again,
+ * per model: a busy free provider says nothing about the RunPod GPU, so the GPU
+ * may take an item the free model just failed on (production 2026-11-05: 29 149
+ * claims declined as cooling down while 37 items waited and the lane sat idle).
+ * Process-local by design.
+ */
 const cooldown = new Map<string, number>();
+const cooldownKey = (model: string, itemId: string) => `${model}\n${itemId}`;
 
 /** Tests: end every cooldown now, as if its time had passed. Strike counts are kept. */
 export function endFreeLaneCooldowns(): void {
@@ -1088,7 +1095,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
         if (!input.spillover && workerFor(workers, item) !== index) {
           return { ok: false, reason: 'the other free worker takes this role' };
         }
-        if ((cooldown.get(item.id) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
+        if ((cooldown.get(cooldownKey(worker.model, item.id)) ?? 0) > Date.now()) return { ok: false, reason: 'cooling down after a provider failure' };
         if (!(await freeLaneAdmits(item))) return { ok: false, reason: 'not free-lane work' };
         session = sessionFor(worker, item);
         return auditAdmission({ workerId: worker.workerId, routineId: null, accountId: null, sessionRef: session })(item);
@@ -1141,7 +1148,7 @@ export async function takeOne(input: TakeInput): Promise<{ claimed: ClaimedWork 
      * cannot spend the item's attempt budget.
      */
     transientStrikes.set(one.workItemId, strikes);
-    cooldown.set(one.workItemId, Date.now() + Math.min(60, 5 * strikes) * 60_000);
+    cooldown.set(cooldownKey(worker.model, one.workItemId), Date.now() + Math.min(60, 5 * strikes) * 60_000);
     try {
       await call(ctx, 'brain_release_work', { ...proof(ctx), detail: `free lane: ${ctx.why}`.slice(0, 300) });
     } catch {

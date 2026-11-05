@@ -326,6 +326,29 @@ describe('the free research lane', () => {
     expect(second.claimed).toBe(0);
   });
 
+  it('cools an item down for the model whose provider failed, not for the other model (RunPod GPU beside a free one)', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const { takeOne } = await import('../server/services/freeLane/worker.ts');
+    const workers = await ensureFreeWorkers(CONFIG);
+    const working = model().completer;
+    // brain-a's provider is busy; brain-b answers.
+    const completer: Completer = async (config, name, system, prompt, options) => {
+      if (name === 'brain-a') throw new Error('cheap lane HTTP 503');
+      return working(config, name, system, prompt, options);
+    };
+    const base = { workers, completer, fetchSource, search: async () => [], config: CONFIG };
+    const first = await takeOne({ ...base, worker: workers[0]!, index: 0 });
+    expect(first.claimed).not.toBeNull();
+    expect(first.ok).toBe(false);
+    // Cooling down for brain-a…
+    expect((await takeOne({ ...base, worker: workers[0]!, index: 0 })).claimed).toBeNull();
+    // …but the other model may take it at once.
+    const other = await takeOne({ ...base, worker: workers[1]!, index: 1, spillover: true });
+    expect(other.claimed?.workItemId).toBe(first.claimed!.workItemId);
+    expect(other.ok).toBe(true);
+  });
+
   it('never lets a provider that keeps answering 503/429 spend the item’s attempts', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
