@@ -96,6 +96,18 @@ export interface ImprovementTickReport {
 const OBJECTIVE_CHECK_MS = 60 * 60_000;
 let lastObjectiveCheck = 0;
 
+/** Capability work waits this long after the process starts, then runs at most hourly. */
+export const CAPABILITY_BOOT_GRACE_MS = 15 * 60_000;
+const CAPABILITY_EVERY_MS = 60 * 60_000;
+let lastCapabilityAt = 0;
+let lastCapabilityGaps: Weakness[] = [];
+let processStartedAt = Date.now();
+
+function capabilityDue(now: Date): boolean {
+  if (now.getTime() - processStartedAt < CAPABILITY_BOOT_GRACE_MS) return false;
+  return now.getTime() - lastCapabilityAt >= CAPABILITY_EVERY_MS;
+}
+
 /** The durable tick's call: at most every ten minutes. */
 export async function improvementTickIfDue(nowMs = Date.now()): Promise<ImprovementTickReport | null> {
   if (nowMs - lastTick < IMPROVEMENT_TICK_MS) return null;
@@ -106,6 +118,9 @@ export async function improvementTickIfDue(nowMs = Date.now()): Promise<Improvem
 export function resetImprovementTick(): void {
   lastTick = 0;
   lastObjectiveCheck = 0;
+  lastCapabilityAt = 0;
+  lastCapabilityGaps = [];
+  processStartedAt = Date.now() - CAPABILITY_BOOT_GRACE_MS;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -130,13 +145,18 @@ export async function detectWeaknesses(now: Date): Promise<Weakness[]> {
   ];
   // §88: a requirement the capability map reads BROKEN or MISSING, that no detector above
   // already raised and no open candidate already owns, is a weakness like any other.
+  // At most hourly, and never in the first minutes after boot: the assessment is ~25
+  // reads, and a restart is when the database is busiest (Deploy 41940346030 and
+  // 41945448533 timed out verifying right after the restart).
+  if (!capabilityDue(now)) return [...detected, ...lastCapabilityGaps];
+  lastCapabilityAt = now.getTime();
   const open = (await listCandidates({ open: true })).map((c) => c.weaknessKey);
   const { capabilityWeaknesses } = await import('../selfmodel/capabilities.ts');
-  const gaps = await capabilityWeaknesses(now, [...detected.map((w) => w.key), ...open]).catch((error: unknown) => {
+  lastCapabilityGaps = await capabilityWeaknesses(now, [...detected.map((w) => w.key), ...open]).catch((error: unknown) => {
     console.warn(`capability assessment failed: ${String((error as Error)?.message ?? error)}`);
     return [];
   });
-  return [...detected, ...gaps];
+  return [...detected, ...lastCapabilityGaps];
 }
 
 /** The candidates of one weakness family (`KEY`, `KEY#2`, …), newest attempt last. */
@@ -654,7 +674,7 @@ export async function improvementTick(now = new Date()): Promise<ImprovementTick
   const weaknesses = await detectWeaknesses(now);
   report.detected = weaknesses.length;
   // §88: substantial live goals are checked against the capability maps, at most hourly.
-  if (now.getTime() - lastObjectiveCheck >= OBJECTIVE_CHECK_MS) {
+  if (now.getTime() - processStartedAt >= CAPABILITY_BOOT_GRACE_MS && now.getTime() - lastObjectiveCheck >= OBJECTIVE_CHECK_MS) {
     lastObjectiveCheck = now.getTime();
     try {
       const { assessLiveObjectives } = await import('../selfmodel/objectives.ts');

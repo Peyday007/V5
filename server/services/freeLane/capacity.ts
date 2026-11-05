@@ -299,6 +299,8 @@ export interface ControlReading {
 
 let lastReading: ControlReading | null = null;
 const IDLE_RECORD_MS = 10 * 60_000;
+const BOOT_GRACE_MS = 10 * 60_000;
+let poolStartedAt = 0;
 let lastIdleRecord = 0;
 export function lastControlReading(): ControlReading | null {
   return lastReading;
@@ -324,7 +326,12 @@ export async function controlStep(): Promise<ControlReading | null> {
   for (const pool of pools.values()) {
     const window = await windowFor(pool.worker.model);
     const peak = Math.max(pool.peakBusy, pool.busy);
-    const decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure });
+    let decision = decideTarget({ target: pool.target, active: peak, waiting, window, pressure });
+    // Just after a restart the database is busiest (boot passes, a deploy's verification):
+    // the lane stays at its starting size until it has been up BOOT_GRACE_MS.
+    if (Date.now() - poolStartedAt < BOOT_GRACE_MS && decision.target > START_TARGET) {
+      decision = { ...decision, target: START_TARGET, reason: 'starting up: held at its starting size for the first minutes', stable: false };
+    }
     if (decision.stable) pool.stableHigh = Math.max(pool.stableHigh, peak);
     pool.peakBusy = pool.busy;
     if (decision.target !== pool.target) {
@@ -381,6 +388,7 @@ export function startAdaptivePool(options: PoolOptions = {}, intervalMs = CONTRO
   if (controlTimer) return;
   poolOptions = options;
   stopped = false;
+  poolStartedAt = options.pressure ? 0 : Date.now();
   // A search endpoint that refuses is a row, not a silence (§88, DISCOVERY.SEARCH).
   setSearchRefusalRecorder((endpoint, status) => {
     void recordBinEvent({
