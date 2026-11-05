@@ -31,7 +31,7 @@ import {
   dependenciesDrifted,
   resolveProjectDependencies,
 } from '../repos/dependencies.ts';
-import { findDocumentByCanonicalName, getDocument } from '../repos/documents.ts';
+import { findDocumentByCanonicalName, findDocumentsByCanonicalNames, getDocument } from '../repos/documents.ts';
 import { recordEvent } from '../repos/events.ts';
 import { listLayers } from '../repos/layers.ts';
 import { getRun } from '../repos/runs.ts';
@@ -119,17 +119,32 @@ export function withNameLookups<T>(fn: () => Promise<T>): Promise<T> {
   return nameMemo.run(new Map(), fn);
 }
 
-function documentNamed(projectId: string, canonicalName: string): Promise<Document | null> {
+function memoKey(projectId: string, canonicalName: string): string {
+  return `${projectId}\n${canonicalName.trim().toLowerCase()}`;
+}
+
+/**
+ * Put every name a check is about to evaluate into the memo with one
+ * statement, so the check's concurrent evaluations take one pooled connection
+ * instead of one each (§61). Names already in the memo are not read again.
+ */
+function prefetchNames(projectId: string, names: readonly string[]): void {
   const memo = nameMemo.getStore();
-  if (!memo) return findDocumentByCanonicalName(projectId, canonicalName);
-  const key = `${projectId}\n${canonicalName.trim().toLowerCase()}`;
-  let hit = memo.get(key);
-  if (!hit) {
-    hit = findDocumentByCanonicalName(projectId, canonicalName);
+  if (!memo) return;
+  const missing = [...new Set(names)].filter((name) => !memo.has(memoKey(projectId, name)));
+  if (missing.length === 0) return;
+  const batch = findDocumentsByCanonicalNames(projectId, missing);
+  for (const name of missing) {
+    const key = memoKey(projectId, name);
+    const hit = batch.then((found) => found.get(name) ?? null);
     memo.set(key, hit);
     hit.catch(() => memo.delete(key));
   }
-  return hit;
+}
+
+function documentNamed(projectId: string, canonicalName: string): Promise<Document | null> {
+  prefetchNames(projectId, [canonicalName]);
+  return nameMemo.getStore()!.get(memoKey(projectId, canonicalName))!;
 }
 
 async function evaluate(
@@ -184,6 +199,14 @@ async function checkDependencyRows(
   projectId: string,
   rows: Dependency[],
 ): Promise<DependencyCheckResult> {
+  return withNameLookups(() => checkDependencyRowsWithin(projectId, rows));
+}
+
+async function checkDependencyRowsWithin(
+  projectId: string,
+  rows: Dependency[],
+): Promise<DependencyCheckResult> {
+  prefetchNames(projectId, rows.map((row) => row.requiredCanonicalName));
   return summarize(
     await Promise.all(
       rows.map((row) =>
@@ -226,13 +249,13 @@ export async function checkCanonicalNames(
   projectId: string,
   requiredCanonicalNames: string[],
 ): Promise<DependencyCheckResult> {
-  return summarize(
-    await Promise.all(
-      uniqueNames(requiredCanonicalNames).map((name) =>
-        evaluate(projectId, name, true, 'SOURCE_PACKET', null),
-      ),
-    ),
-  );
+  const names = uniqueNames(requiredCanonicalNames);
+  return withNameLookups(async () => {
+    prefetchNames(projectId, names);
+    return summarize(
+      await Promise.all(names.map((name) => evaluate(projectId, name, true, 'SOURCE_PACKET', null))),
+    );
+  });
 }
 
 /**
