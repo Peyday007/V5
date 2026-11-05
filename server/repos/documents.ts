@@ -119,10 +119,24 @@ export async function getDocument(id: string): Promise<Document | null> {
 
 export async function findDocumentByCanonicalName(projectId: string, canonicalName: string): Promise<Document | null> {
   const row = await getDb().get<DocumentRow>(
-    'SELECT * FROM documents WHERE project_id = ? AND canonical_name = ? COLLATE NOCASE',
+    // lower() on both sides, not COLLATE NOCASE: Postgres cannot use an index
+    // for a nondeterministic collation, so the NOCASE form scanned every
+    // document in the project — 50 000 times an hour on production, 2026-11-05,
+    // at 13 s each. idx_documents_project_lower_name serves this one.
+    'SELECT * FROM documents WHERE project_id = ? AND lower(canonical_name) = lower(?)',
     [projectId, canonicalName],
   );
   return row ? mapDocument(row) : null;
+}
+
+/** Every canonical name in a project that starts with `prefix`, case-insensitively, in one read. */
+export async function canonicalNamesStartingWith(projectId: string, prefix: string): Promise<string[]> {
+  const escaped = prefix.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`);
+  const rows = await getDb().all<{ canonical_name: string }>(
+    "SELECT canonical_name FROM documents WHERE project_id = ? AND lower(canonical_name) LIKE ? ESCAPE '\\'",
+    [projectId, `${escaped}%`],
+  );
+  return rows.map((r) => r.canonical_name);
 }
 
 export async function findDocumentByPath(filesystemPath: string): Promise<Document | null> {
