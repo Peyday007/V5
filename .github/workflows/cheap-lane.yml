@@ -46,6 +46,10 @@ on:
         description: 'deploy | status | test | connect | disconnect | claude-discovery-off | claude-discovery-on | focus | unfocus | runpod-test | runpod-connect | runpod-disconnect | runpod-report | runpod-auto | runpod-cycle'
         required: true
         default: deploy
+      hours:
+        description: 'For runpod-report: the window in hours (1-48). The report also prints the equal window before it, for a before/after reading.'
+        required: false
+        default: '6'
 
 concurrency:
   group: cheap-lane
@@ -84,10 +88,15 @@ jobs:
           # The pod's hourly price (a repository variable, not a secret), for cost per research job.
           RUNPOD_USD_PER_HOUR: ${{ vars.RUNPOD_USD_PER_HOUR }}
           ACTION: ${{ inputs.action || 'runpod-auto' }}
+          HOURS_INPUT: ${{ inputs.hours || '6' }}
         run: |
           set -eu
           exec > >(tee cheap.txt) 2>&1
           brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # Digits only, bounded: it is spliced into a remote command line.
+          HOURS=$(printf '%s' "$HOURS_INPUT" | tr -cd '0-9')
+          case "$HOURS" in ''|0) HOURS=6 ;; esac
+          [ "$HOURS" -gt 48 ] && HOURS=48
           cheap=northline-cheap
           # The GPU's settings, fingerprinted so a changed secret is noticed without reading one back.
           gpu_fp=$(printf '%s\n%s\n%s\n%s' "$RUNPOD_VLLM_URL" "$RUNPOD_VLLM_KEY" "$RUNPOD_VLLM_MODEL" "${RUNPOD_API_KEY:-}" | sha256sum | cut -c1-16)
