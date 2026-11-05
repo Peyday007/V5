@@ -1479,6 +1479,25 @@ export async function claimedMethods(input: {
 /** The lane a goal round's repeating-buyer pattern is filed under (`compilerProfiles.ts`). */
 export const PATTERN_LANE = 'demand_pattern';
 
+/**
+ * Words a repeating-buyer pattern has to use: somebody paying, buying, hiring
+ * or outsourcing, or a price (§89). The lane names what a claim is meant to be,
+ * not what it says, and production's small GPU model filled it with
+ * definitions ("Shared services is the consolidation of business functions…",
+ * "HVAC Business is one of the largest wholesale distributors…"): four
+ * openings in six hours, none naming a buyer, each a validation dive spent on
+ * nothing. An untagged claim must say buyers pay before the lane makes it an
+ * opening; a claim the worker tagged itself is judged by its tag, as before.
+ */
+export const PATTERN_BUYING_WORDS = ['pay', 'purchas', 'buy', 'bought', 'hire', 'hiring', 'outsourc', 'contract', 'spend', 'subscri', 'retain', 'fee', 'pric', 'cost', 'usd', 'dollar', 'per hour', 'per month', 'per project'] as const;
+const PATTERN_STATES_BUYING_SQL = `(${PATTERN_BUYING_WORDS.map((word) => `LOWER(c.claim) LIKE '%${word}%'`).join(' OR ')})`;
+
+/** The same rule, for a reader holding a claim's text. */
+export function patternStatesBuying(text: string): boolean {
+  const lower = text.toLowerCase();
+  return PATTERN_BUYING_WORDS.some((word) => lower.includes(word));
+}
+
 export async function signalledClaims(input: {
   projectId: string;
   limit?: number;
@@ -1499,7 +1518,7 @@ export async function signalledClaims(input: {
            * tagged by the worker — so the harvest filed nothing from any of
            * them. The lane says what the claim is; the worker need not repeat it.
            */
-          OR (c.evidence_lane = ? AND EXISTS (
+          OR (c.evidence_lane = ? AND ${PATTERN_STATES_BUYING_SQL} AND EXISTS (
                 SELECT 1 FROM russell_missions pm
                   JOIN cash_discovery_rounds pr ON pr.candidate_id = pm.candidate_id
                  WHERE pm.orchestration_id = o.id AND pr.bucket_id LIKE ?))

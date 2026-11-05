@@ -133,6 +133,7 @@ async function goalSection(since: string, hours: number): Promise<void> {
       console.log(`  jobs ${model.padEnd(28)} submitted ${j.submitted} · not accepted ${j.failed}${c ? ` · claims ${c.claims}, sourced ${c.sourced}, opening signals ${c.signalled}` : ''}`);
     }
     if (Object.keys(progress.jobs).length === 0) console.log('  jobs                 none on this goal');
+    for (const f of progress.failures) console.log(`  not accepted ${String(f.n).padStart(4)} × ${f.reason}`);
     const considered = new Map(reading.considered.map((one) => [one.opportunityId, one]));
     const p = planProgress(reading);
     for (const one of progress.openings) {

@@ -14366,3 +14366,13 @@ planner, queue or monitor:
   idle GPU whose answers Brain refuses does not generate jobs to fill it.
   Improvement research keeps its `IMPROVEMENT_RESEARCH_SLOT_CAP` share (§87)
   at priority 5, below commercial work at 6–8 and goal work at +2.
+- **A pattern says buyers pay, or the lane does not make it an opening.** The
+  12:18Z reading: the GPU's goal work filed four openings in six hours, every
+  one a definition put in a constructed round's `demand_pattern` lane ("Shared
+  services is the consolidation of business functions…"), and each would cost a
+  validation dive. `signalledClaims` now files an untagged pattern claim only
+  when its text names paying, buying, hiring, outsourcing or a price
+  (`PATTERN_BUYING_WORDS`); a claim the worker tagged itself is judged by its tag
+  as before. The report also prints the goal's top reasons its jobs were not
+  accepted (`failureClass`), since all 11 of its settled rounds ended without a
+  report.
