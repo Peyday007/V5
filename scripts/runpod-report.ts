@@ -5,6 +5,15 @@
  * worker answered) in the last hours, split by the model slot and outcome, and the
  * GPU's own settings. Fallbacks from the GPU are logged by `cheap/runpod.ts` as
  * `[runpod] fallback`; the workflow counts those from the logs beside this.
+ *
+ * Quality, per model: the research claims on the fragments that model submitted —
+ * how many, what share passed source validation (`sourced`), and what share a
+ * verifier later refuted. A fragment two models both answered counts for both.
+ *
+ * Cost: a pod bills by the hour whether it is busy or not, so the GPU's cost per
+ * research job is its hourly price × the window ÷ the jobs it submitted. The price
+ * is `BRAIN_RUNPOD_USD_PER_HOUR` (what RunPod charges for the pod); unset, the cost
+ * is reported as unknown rather than guessed.
  */
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
@@ -41,8 +50,34 @@ async function main(): Promise<void> {
     const avg = e.ms.length ? Math.round(e.ms.reduce((a, b) => a + b, 0) / e.ms.length / 1000) : null;
     console.log(`  ${model.padEnd(40)} submitted ${e.submitted} · not accepted ${e.failed}${avg !== null ? ` · ~${avg}s each` : ''}${e.kinds.size ? ` · ${[...e.kinds].join(',')}` : ''}`);
   }
+  const quality = await getDb().all<{ reason: string | null; claims: number | string; sourced: number | string | null; refuted: number | string | null }>(
+    `SELECT e.reason AS reason, COUNT(c.id) AS claims,
+            SUM(CASE WHEN c.sourced = 1 THEN 1 ELSE 0 END) AS sourced,
+            SUM(CASE WHEN c.contradiction_state = 'REFUTED' THEN 1 ELSE 0 END) AS refuted
+       FROM bin_events e
+       JOIN work_items w ON w.id = e.work_item_id
+       JOIN research_claims c ON c.fragment_id = w.fragment_id
+      WHERE e.event_type = 'FREE_LANE_ITEM' AND e.outcome = 'SUBMITTED'
+        AND e.workload_class = 'RESEARCH_FRAGMENT' AND e.at >= ? AND w.fragment_id IS NOT NULL
+      GROUP BY e.reason`,
+    [since],
+  );
+  console.log('RESEARCH QUALITY (claims on fragments each model submitted)');
+  if (quality.length === 0) console.log('  none');
+  for (const row of quality) {
+    const model = String(row.reason ?? '').replace(/^model /, '').split(':')[0] || '(unknown)';
+    const claims = Number(row.claims);
+    const pct = (x: number | string | null) => (claims ? `${Math.round((100 * Number(x ?? 0)) / claims)}%` : '-');
+    console.log(`  ${model.padEnd(40)} claims ${claims} · sourced ${pct(row.sourced)} · refuted ${pct(row.refuted)}`);
+  }
   const gpuRow = [...table].find(([m]) => m.startsWith('runpod/'));
-  console.log(`RUNPOD_SUBMITTED ${gpuRow ? gpuRow[1].submitted : 0}`);
+  const gpuJobs = gpuRow ? gpuRow[1].submitted : 0;
+  const price = Number(process.env['BRAIN_RUNPOD_USD_PER_HOUR'] ?? '');
+  if (Number.isFinite(price) && price > 0) {
+    const spend = price * hours;
+    console.log(`GPU COST $${spend.toFixed(2)} for ${hours}h at $${price}/h · ${gpuJobs ? `$${(spend / gpuJobs).toFixed(4)} per research job` : 'no GPU jobs yet'}`);
+  } else console.log('GPU COST unknown (set BRAIN_RUNPOD_USD_PER_HOUR to the pod price)');
+  console.log(`RUNPOD_SUBMITTED ${gpuJobs}`);
   console.log('RUNPOD-REPORT: OK');
 }
 

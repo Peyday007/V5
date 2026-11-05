@@ -77,6 +77,8 @@ jobs:
           RUNPOD_VLLM_URL: ${{ secrets.RUNPOD_VLLM_URL }}
           RUNPOD_VLLM_KEY: ${{ secrets.RUNPOD_VLLM_KEY }}
           RUNPOD_VLLM_MODEL: ${{ secrets.RUNPOD_VLLM_MODEL }}
+          # The pod's hourly price (a repository variable, not a secret), for cost per research job.
+          RUNPOD_USD_PER_HOUR: ${{ vars.RUNPOD_USD_PER_HOUR }}
           ACTION: ${{ inputs.action || 'runpod-auto' }}
         run: |
           set -eu
@@ -97,10 +99,15 @@ jobs:
             echo "::notice title=runpod::Connected. Slot A of the free lane is now the GPU ($model); free providers are slot B and its fallback."
           }
           gpu_report() {
-            flyctl ssh console --app "$brain" -C "sh /app/scripts/runpod-report.sh --hours ${HOURS:-6}" | tee report.txt || true
+            price=$(printf '%s' "${RUNPOD_USD_PER_HOUR:-}" | tr -cd '0-9.')
+            flyctl ssh console --app "$brain" -C "env BRAIN_RUNPOD_USD_PER_HOUR=${price:-0} sh /app/scripts/runpod-report.sh --hours ${HOURS:-6}" | tee report.txt || true
             fb=$(flyctl logs --app "$brain" --no-tail 2>&1 | grep -c '\[runpod\] fallback' || true)
             grep -q 'RUNPOD-REPORT: OK' report.txt || echo "::warning title=runpod::The report did not finish (no RUNPOD-REPORT: OK); its counts are partial."
             echo "GPU fallbacks in the recent log: $fb"
+            q=$(grep -A20 '^RESEARCH QUALITY' report.txt | grep 'runpod/' | head -1 | sed 's/^ *//' || true)
+            [ -z "$q" ] || echo "::notice title=runpod quality::$q"
+            c=$(grep '^GPU COST' report.txt | head -1 || true)
+            [ -z "$c" ] || echo "::notice title=runpod cost::$c"
             n=$(grep '^RUNPOD_SUBMITTED ' report.txt | cut -d' ' -f2 || echo 0)
             if [ "${n:-0}" -gt 0 ]; then
               echo "::notice title=runpod::Research jobs on the GPU: ${n} submitted in the last ${HOURS:-6}h (fallbacks in log: $fb)."
