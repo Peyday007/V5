@@ -263,8 +263,14 @@ export interface BuildRepairPlanInput {
  */
 export function buildRepairPlan(input: BuildRepairPlanInput): RepairPlan {
   const { fragment, gate } = input;
+  /*
+   * What has been tried includes the attempt being repaired. Its own plan is
+   * the strategy it just ran under; a history that does not list it (the
+   * caller passes earlier attempts, or the failed row is not yet in it) would
+   * otherwise let the next plan re-offer the rung that just failed.
+   */
   const used = new Set<RepairStrategy>(
-    input.history.flatMap((attempt) => attempt.repairPlan?.strategies ?? []),
+    [...input.history, fragment].flatMap((attempt) => attempt.repairPlan?.strategies ?? []),
   );
 
   const unreadable = input.blockCause === 'SOURCES_UNREADABLE' || input.blockCause === 'SOURCE_ACCESS';

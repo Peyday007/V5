@@ -44,6 +44,7 @@ import {
   getFragment,
   getOrchestration,
   listClaimsForFragment,
+  listFragments,
   updateFragment,
   updateOrchestration,
 } from '../../repos/research.ts';
@@ -51,6 +52,8 @@ import { cancelWork, enqueueWork, getWorkItem, listWorkItemsForOrchestration } f
 import { recordEvent } from '../../repos/events.ts';
 import { workType } from '../queue/workTypes.ts';
 import { runIdempotent, type OperationNamespace } from '../effects/engine.ts';
+import { buildRepairPlan } from './repair.ts';
+import { blockCauseOf, type GateResult } from './gate.ts';
 import { advancePacket, researchItemRecorded, type AdvanceResult } from './packetRunner.ts';
 
 /**
@@ -568,6 +571,19 @@ export async function retryFragment(input: {
   }
 
   const attempt = previous.attempt + 1;
+  /*
+   * An attempt always records the strategy it was given.
+   *
+   * `buildRepairPlan` excludes every strategy an earlier attempt's stored
+   * `repairPlan` names. A retry made without a plan (an operator pressing
+   * retry, surface recovery) stored `null`, so the next plan saw nothing used
+   * and offered the same search again — a retry repeating the same strategy.
+   * Plan it here from the failed attempt's recorded decisions, with the same
+   * planner the runner uses. Not a second mechanism: the same function, called
+   * on the path that skipped it.
+   */
+  const repairPlan =
+    input.repairPlan ?? (await planForRetry(previous, orchestration.id, attempt));
   const outcome = await runIdempotent<{ fragmentId: string }>(
     {
       namespace: RETRY_NAMESPACE,
@@ -632,7 +648,7 @@ export async function retryFragment(input: {
             [previous.integrityVerdict, previous.sufficiencyVerdict]
               .filter((part) => part !== null)
               .join(' / ') || 'no verdict recorded',
-          repairPlan: input.repairPlan ?? null,
+          repairPlan,
           status: 'QUEUED',
         },
       ]);
@@ -726,4 +742,53 @@ export async function retryFragment(input: {
     attempt,
     advanced: input.advance === false ? null : await advancePacket(orchestration.id),
   };
+}
+
+/**
+ * The plan for a retry nobody planned, from the failed attempt's own rows.
+ *
+ * The gate is not re-run (§12: acceptance is decided once). The planner gets
+ * the recorded counts and the stored block cause; the conditions are left to
+ * the default ladder, which proposes more places to look rather than fewer.
+ */
+async function planForRetry(
+  previous: ResearchFragment,
+  orchestrationId: string,
+  attempt: number,
+): Promise<RepairPlan> {
+  const claims = await listClaimsForFragment(previous.id);
+  const accepted = claims.filter((claim) => claim.accepted);
+  const gate: GateResult = {
+    integrity: previous.integrityVerdict === 'PASS' ? 'PASS' : 'FAIL',
+    sufficiency: previous.sufficiencyVerdict === 'SUFFICIENT' ? 'SUFFICIENT' : 'INSUFFICIENT',
+    unresolvedRetrieval: claims
+      .filter((claim) => claim.retrievalState !== 'RETRIEVED')
+      .map((claim) => ({
+        claimId: claim.id,
+        claim: claim.claim,
+        sourceUrl: claim.sourceUrl,
+        state: claim.retrievalState,
+      })),
+    claims: [],
+    acceptedClaims: accepted.length,
+    rejectedClaims: claims.length - accepted.length,
+    independentSources: new Set(accepted.map((claim) => claim.sourceUrl ?? claim.id)).size,
+    coverage: [],
+    duplicateSourceGroups: [],
+    failedConditions: [],
+    reasons: previous.blockedReason ? [previous.blockedReason] : [],
+    unresolvedGaps: [],
+  };
+  const history = (await listFragments(orchestrationId)).filter(
+    (entry) => entry.fragmentKey === previous.fragmentKey,
+  );
+  return buildRepairPlan({
+    fragment: previous,
+    gate,
+    history,
+    claims,
+    splitRequired: false,
+    remainingBudget: Math.max(0, previous.maxRepairs - attempt + 1),
+    blockCause: blockCauseOf(previous),
+  });
 }
