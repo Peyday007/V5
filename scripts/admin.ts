@@ -1384,6 +1384,12 @@ async function main(): Promise<void> {
       console.log(`  claims            ${reading.claimsAccepted} accepted of ${reading.claimsSubmitted} submitted by free workers`);
       console.log(`  packets filed     ${reading.documentsFiled}`);
       for (const failure of reading.recentFailures) console.log(`  failed            ${failure}`);
+      // What hands work back without spending it: invisible above, and what kept audits cycling.
+      const released = await getDb().all<{ at: string; workload_class: string; reason: string }>(
+        `SELECT at, workload_class, reason FROM bin_events WHERE event_type = 'FREE_LANE_ITEM' AND outcome = 'RELEASED_TRANSIENT'
+          ORDER BY at DESC LIMIT 8`,
+      );
+      for (const r of released) console.log(`  released          ${r.at} ${r.workload_class} ${String(r.reason ?? '').slice(0, 200)}`);
       // §86: what the adaptive pool is doing, from rows.
       const t = await freeLaneThroughput();
       console.log(`  running now       ${t.runningNow} job(s) leased by free workers`);
