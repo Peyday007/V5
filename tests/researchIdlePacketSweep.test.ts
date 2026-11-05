@@ -9,18 +9,26 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createRun } from '../server/repos/runs.ts';
-import { createOrchestration, getOrchestration, updateOrchestration } from '../server/repos/research.ts';
+import {
+  createFragments,
+  createOrchestration,
+  getOrchestration,
+  updateFragment,
+  updateOrchestration,
+} from '../server/repos/research.ts';
 import { enqueueWork } from '../server/repos/workQueue.ts';
 import {
   advanceIdlePackets,
   concludeUnworkablePackets,
   PACKET_STALL_WINDOW_MS,
+  resetIdlePacketAttempts,
 } from '../server/services/research/packetRunner.ts';
 
 let projectId = '';
 let layerId = '';
 
 beforeEach(async () => {
+  resetIdlePacketAttempts();
   const fixture = await freshProject();
   projectId = fixture.project.id;
   layerId = (await fixture.layerByName('World Model')).id;
@@ -97,5 +105,40 @@ describe('advanceIdlePackets', () => {
       orchestrationId: id,
     });
     expect((await advanceIdlePackets(10)).map((e) => e.orchestrationId)).not.toContain(id);
+  });
+
+  it('does not let a packet that cannot advance crowd out one that can', async () => {
+    // A repair waiting on a scheduled retry is a packet advancePacket leaves as
+    // it is; it is older, so it is selected first.
+    const stuck = await packet('AWAITING_REPAIR', STALE + 3_600_000);
+    const [fragment] = await createFragments([{
+      orchestrationId: stuck,
+      projectId,
+      layerId,
+      fragmentIndex: 0,
+      fragmentKey: 'f0',
+      question: 'q',
+      requiredEvidence: [],
+      acceptableSourceTypes: [],
+      excludedSourceTypes: [],
+      completionCriteria: [],
+      dependsOn: [],
+      minIndependentSources: 1,
+    }]);
+    await updateFragment(fragment!.id, { nextRetryAt: new Date(Date.now() + 3_600_000).toISOString() });
+    await getDb().run('UPDATE research_orchestrations SET updated_at = ? WHERE id = ?', [
+      new Date(Date.now() - STALE - 3_600_000).toISOString(),
+      stuck,
+    ]);
+    const movable = await packet('SYNTHESIZING', STALE);
+    const stuckBefore = (await getOrchestration(stuck))!;
+
+    // limit 1: the first pass spends it on the stuck packet and moves nothing.
+    expect(await advanceIdlePackets(1)).toEqual([]);
+    expect((await getOrchestration(stuck))!.updatedAt).toBe(stuckBefore.updatedAt);
+
+    // the second pass skips it and reaches the packet behind it.
+    expect((await advanceIdlePackets(1)).map((e) => e.orchestrationId)).toEqual([movable]);
+    expect((await getOrchestration(stuck))!.updatedAt).toBe(stuckBefore.updatedAt);
   });
 });

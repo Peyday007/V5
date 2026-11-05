@@ -2573,6 +2573,21 @@ export async function reconcileArguedAuditRoles(
 export const PACKET_STALL_WINDOW_MS = 4 * 60 * 60 * 1000;
 
 /**
+ * How long a packet whose advance changed nothing is left alone before it is
+ * tried again. Its `updated_at` is deliberately not stamped (that would read as
+ * movement that did not happen), so without this it would be re-selected first,
+ * every tick, and — ordered oldest first — fill the `limit` ahead of packets that
+ * could still move. Held in memory: a restart only means one extra attempt.
+ */
+export const PACKET_NOOP_RETRY_MS = 60 * 60 * 1000;
+const idleNoopAt = new Map<string, number>();
+
+/** Test hook: forget which packets were tried without effect. */
+export function resetIdlePacketAttempts(): void {
+  idleNoopAt.clear();
+}
+
+/**
  * Advance a live packet that has no outstanding work and has not changed for
  * `PACKET_STALL_WINDOW_MS`.
  *
@@ -2592,17 +2607,21 @@ export async function advanceIdlePackets(
   limit: number,
 ): Promise<{ orchestrationId: string; from: string; to: string }[]> {
   const live = ['PLANNING', 'RESEARCHING', 'VERIFYING', 'SYNTHESIZING', 'AUDITING', 'AWAITING_REPAIR'];
-  const cutoff = new Date(Date.parse(queueNow()) - PACKET_STALL_WINDOW_MS).toISOString();
+  const nowMs = Date.parse(queueNow());
+  const cutoff = new Date(nowMs - PACKET_STALL_WINDOW_MS).toISOString();
+  for (const [id, at] of idleNoopAt) if (nowMs - at >= PACKET_NOOP_RETRY_MS) idleNoopAt.delete(id);
+  const skip = [...idleNoopAt.keys()];
   const rows = await getDb().all<{ id: string }>(
     `SELECT o.id AS id
        FROM research_orchestrations o
       WHERE o.status IN (${live.map(() => '?').join(', ')})
         AND o.updated_at < ?
+        ${skip.length ? `AND o.id NOT IN (${skip.map(() => '?').join(', ')})` : ''}
         AND NOT EXISTS (SELECT 1 FROM work_items w
                          WHERE w.orchestration_id = o.id AND w.state IN ('QUEUED','LEASED'))
       ORDER BY o.updated_at, o.id
       LIMIT ?`,
-    [...live, cutoff, Math.max(1, limit)],
+    [...live, cutoff, ...skip, Math.max(1, limit)],
   );
   const out: { orchestrationId: string; from: string; to: string }[] = [];
   for (const row of rows) {
@@ -2613,7 +2632,10 @@ export async function advanceIdlePackets(
     const minted = (await listWorkItemsForOrchestration(row.id)).some((item) =>
       LIVE_ITEM.has(item.state),
     );
-    if (!after || (after.status === before.status && !minted && after.updatedAt === before.updatedAt)) continue;
+    if (!after || (after.status === before.status && !minted && after.updatedAt === before.updatedAt)) {
+      idleNoopAt.set(row.id, nowMs);
+      continue;
+    }
     if (after.updatedAt === before.updatedAt) await beat(row.id);
     out.push({ orchestrationId: row.id, from: before.status, to: result.status });
   }
