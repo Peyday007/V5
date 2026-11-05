@@ -206,7 +206,18 @@ export async function readProbe(probe: Probe, from: string, to: string): Promise
           WHERE status NOT IN ('COMPLETE', 'COMPLETE_WITH_GAPS', 'FAILED', 'NEEDS_HUMAN', 'CANCELLED')`,
         [sixHours],
       );
-      return { ok: n(row?.ok), total: n(row?.total), detail: 'live packets updated within six hours (now)' };
+      // Why the idle ones are idle: by status, and whether any of their work is still waiting.
+      const idle = await db.all<{ status: string; waiting: number | string; n: number | string }>(
+        `SELECT o.status,
+                CASE WHEN EXISTS (SELECT 1 FROM work_items w WHERE w.orchestration_id = o.id AND w.state IN ('QUEUED', 'LEASED')) THEN 1 ELSE 0 END AS waiting,
+                COUNT(*) AS n
+           FROM research_orchestrations o
+          WHERE o.status NOT IN ('COMPLETE', 'COMPLETE_WITH_GAPS', 'FAILED', 'NEEDS_HUMAN', 'CANCELLED') AND o.updated_at < ?
+          GROUP BY o.status, waiting`,
+        [sixHours],
+      );
+      const why = idle.map((r) => `${r.status}${n(r.waiting) ? '+work' : '+nothing queued'}:${n(r.n)}`).join(' ');
+      return { ok: n(row?.ok), total: n(row?.total), detail: `live packets updated within six hours (now); idle: ${why || 'none'}` };
     }
     case 'WORK_CLAIMED_PROMPTLY': {
       const hourAgo = new Date(Date.parse(to) - HOUR).toISOString();
@@ -330,7 +341,7 @@ export function formatAssessment(a: MapAssessment): string[] {
       stage = one.requirement.stage;
       lines.push(`    ${stage}`);
     }
-    lines.push(`      ${one.status.padEnd(8)} ${one.requirement.id.padEnd(26)} ${one.why}`);
+    lines.push(`      ${one.status.padEnd(8)} ${one.requirement.id.padEnd(26)} ${one.why}${one.status === 'BROKEN' && one.reading ? ` — ${one.reading.detail}` : ''}`);
   }
   lines.push('    CONNECTED GAPS (most consequential first)');
   for (const g of a.gaps) {
