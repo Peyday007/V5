@@ -111,3 +111,36 @@ owner). Each went DIAGNOSE → RESEARCHING (method research settled) → ENGINEE
 Factory, submitted `risk: LOW, release: automatic release granted (LOW risk)`
 (fcr_7295c8a1…, fcr_e4e0550d…). Before the risk fix no improvement objective had
 ever been released automatically.
+
+## 5. Later readings (2026-11-05 03:34Z – 06:25Z)
+
+**5 h window to 04:48Z** (`capabilities show 5`, probes now print causes):
+`{"WORKING":14,"BROKEN":7,"MISSING":0,"UNPROVEN":3}`. Gate blocks: WORK_FAULTED
+34, REQUIRED_LANE_EMPTY 20, NOTHING_SURVIVED 8; packets ended CANCELLED×21 "No
+fragment cleared its evidence gate". Fragments were spending their attempts on
+answers whose every citation Brain dropped, with the model never told why —
+fixed in #513 (one repair prompt naming the drop reasons; the same checks).
+`packets parks` showed the eight October judge parks sit in projects with no
+standing grant, so `answerUnaskedParks` (#511/#512) correctly leaves them.
+
+**Search refusals are rows now** (`sources search`, 05:0xZ): both DuckDuckGo
+endpoints answered 202 every 10–20 min (04:14, 04:29, 04:33, 04:39Z), each a
+ten-minute pause — the public endpoint's rate limit, not a Brain defect.
+
+**The hour after #513, 05:24Z → 06:24Z** (`capabilities show 1`,
+`free-lane show`): the free providers failed **178 of 184** calls; the lane
+recorded `FREE_LANE_IDLE` — 35 items waiting, declined because "cooling down
+after a provider failure" — and then grew itself back (brain-b 1 → 32 slots,
+06:20–06:24Z) as errors fell. Too little research ran to measure #513.
+Over 24 h the free lane filed **13 packets** with 130 of 196 claims accepted.
+
+**Recovery without the owner, observed on production:**
+- head-of-line starvation (3 h idle) → the lane leased again within minutes of #505;
+- dead deep links → a readable source for 83–93% of fragments (was 47%);
+- provider outage → attempts refunded, items cooled down, capacity shrank to 1
+  and regrew to 32 by itself, nothing failed for the outage;
+- expired leases → 630/630 ended and reclaimed (5 h);
+- restarts → three releases passed hosted verification on both sides of the
+  restart once the boot load was bounded (#507, #509, #513);
+- gaps no detector saw → raised by the map, researched, and sent to Factory as
+  LOW-risk auto-released objectives.
