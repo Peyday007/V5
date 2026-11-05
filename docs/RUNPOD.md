@@ -39,6 +39,34 @@ context. The probe fails a smaller one.
 | `RUNPOD_VLLM_URL` | the pod (or serverless) address above |
 | `RUNPOD_VLLM_KEY` | the `--api-key` value (or RunPod API key for serverless) |
 | `RUNPOD_VLLM_MODEL` | optional; otherwise the first model the server lists |
+| `RUNPOD_API_KEY` | optional but recommended: the RunPod **account** API key (RunPod → Settings → API Keys), so Brain can stop the idle pod and start it again |
+
+Repository variable (not a secret): `RUNPOD_USD_PER_HOUR`, used for cost only until the pod's own
+price has been sampled from RunPod.
+
+## Keeping the GPU supplied, and stopping it when there is nothing to do
+
+The GPU is one model in the free lane's capacity controller (§86), so it is fed the way every
+lane model is: from the research queue, highest priority first, growing while useful research
+waits and shrinking when it overloads; an idle slot takes another model's roles (spillover).
+Nothing generates work to keep it busy — new research only comes from goals and packets.
+
+- **Sized by the GPU's own calls.** A failed GPU call is answered by the free model, so the item
+  window would read an overloaded GPU as healthy; the GPU slot is sized from its own recent calls
+  instead, with a runaway guard of `BRAIN_RUNPOD_MAX_SLOTS` (default 32).
+- **Stopped when idle.** With `RUNPOD_API_KEY` set, Brain checks every minute (`runpodPod.ts`):
+  no research waiting and none in flight for 15 minutes (`BRAIN_RUNPOD_IDLE_STOP_MINUTES`) →
+  `POST /v1/pods/{id}/stop`. Research waiting on a stopped pod → `POST /v1/pods/{id}/start`.
+  No two changes within 3 minutes. `BRAIN_RUNPOD_AUTOSTOP=off` turns it off.
+- **Never interrupts research.** While the pod is stopped, starting, or vLLM is still loading,
+  the GPU slot is paused: its calls go straight to the free model, with no timeout and no GPU
+  failure counted. The slot returns to the GPU when `/v1/models` answers with the key.
+- **Measured.** Every stop/start is a `RUNPOD_POD` event, and the pod's status and RunPod's own
+  `costPerHr` are sampled every 5 minutes, so `runpod-report` prints running minutes and the
+  measured cost per research job, beside jobs, accept rates, quality and fallbacks per model.
+- A stopped pod keeps its ID and proxy address. If RunPod has no GPU free on that host the start
+  fails; it is recorded (`START_FAILED`) and retried after the gap, while the free models carry
+  the work.
 
 ## How it routes
 

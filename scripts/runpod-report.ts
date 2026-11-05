@@ -72,8 +72,31 @@ async function main(): Promise<void> {
   }
   const gpuRow = [...table].find(([m]) => m.startsWith('runpod/'));
   const gpuJobs = gpuRow ? gpuRow[1].submitted : 0;
-  const price = Number(process.env['BRAIN_RUNPOD_USD_PER_HOUR'] ?? '');
-  if (Number.isFinite(price) && price > 0) {
+  // The pod's own power history: what Brain stopped and started, and RunPod's
+  // price sampled while it ran (runpodPod.ts), so running time is measured.
+  const pod = await getDb().all<{ outcome: string; n: number | string; ms: number | string | null; measures: string | null }>(
+    `SELECT outcome, COUNT(*) AS n, SUM(duration_ms) AS ms, MAX(measures) AS measures FROM bin_events
+      WHERE event_type = 'RUNPOD_POD' AND at >= ? GROUP BY outcome`,
+    [since],
+  );
+  const podCount = (o: string) => Number(pod.find((r) => r.outcome === o)?.n ?? 0);
+  const runningMs = Number(pod.find((r) => r.outcome === 'SAMPLE_RUNNING')?.ms ?? 0);
+  const sampledCost = (() => {
+    try {
+      const m = JSON.parse(String(pod.find((r) => r.outcome === 'SAMPLE_RUNNING')?.measures ?? '{}')) as { costPerHr?: number | null };
+      return typeof m.costPerHr === 'number' && m.costPerHr > 0 ? m.costPerHr : null;
+    } catch {
+      return null;
+    }
+  })();
+  if (pod.length > 0) {
+    console.log(`POD stopped ${podCount('STOPPED')} · started ${podCount('STARTED')} · failed ${podCount('STOP_FAILED') + podCount('START_FAILED')} · running ~${Math.round(runningMs / 60_000)} min sampled · stopped ~${Math.round(Number(pod.find((r) => r.outcome === 'SAMPLE_EXITED')?.ms ?? 0) / 60_000)} min sampled`);
+  } else console.log('POD no supervision events (auto stop/start is off without BRAIN_RUNPOD_API_KEY)');
+  const price = sampledCost ?? Number(process.env['BRAIN_RUNPOD_USD_PER_HOUR'] ?? '');
+  if (sampledCost && runningMs > 0) {
+    const spend = (sampledCost * runningMs) / 3_600_000;
+    console.log(`GPU COST $${spend.toFixed(2)} measured: ${Math.round(runningMs / 60_000)} min running at RunPod's $${sampledCost}/h · ${gpuJobs ? `$${(spend / gpuJobs).toFixed(4)} per research job` : 'no GPU jobs yet'}`);
+  } else if (Number.isFinite(price) && price > 0) {
     const spend = price * hours;
     console.log(`GPU COST $${spend.toFixed(2)} for ${hours}h at $${price}/h · ${gpuJobs ? `$${(spend / gpuJobs).toFixed(4)} per research job` : 'no GPU jobs yet'}`);
   } else console.log('GPU COST unknown (set BRAIN_RUNPOD_USD_PER_HOUR to the pod price)');

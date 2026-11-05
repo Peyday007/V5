@@ -77,6 +77,8 @@ jobs:
           RUNPOD_VLLM_URL: ${{ secrets.RUNPOD_VLLM_URL }}
           RUNPOD_VLLM_KEY: ${{ secrets.RUNPOD_VLLM_KEY }}
           RUNPOD_VLLM_MODEL: ${{ secrets.RUNPOD_VLLM_MODEL }}
+          # The RunPod account key (not vLLM's --api-key): lets Brain stop an idle pod and start it for new work.
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
           # The pod's hourly price (a repository variable, not a secret), for cost per research job.
           RUNPOD_USD_PER_HOUR: ${{ vars.RUNPOD_USD_PER_HOUR }}
           ACTION: ${{ inputs.action || 'runpod-auto' }}
@@ -86,7 +88,7 @@ jobs:
           brain=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           cheap=northline-cheap
           # The GPU's settings, fingerprinted so a changed secret is noticed without reading one back.
-          gpu_fp=$(printf '%s\n%s\n%s' "$RUNPOD_VLLM_URL" "$RUNPOD_VLLM_KEY" "$RUNPOD_VLLM_MODEL" | sha256sum | cut -c1-16)
+          gpu_fp=$(printf '%s\n%s\n%s\n%s' "$RUNPOD_VLLM_URL" "$RUNPOD_VLLM_KEY" "$RUNPOD_VLLM_MODEL" "${RUNPOD_API_KEY:-}" | sha256sum | cut -c1-16)
           probe() { rc=0; npx tsx scripts/runpod-probe.ts > probe.txt 2>&1 || rc=$?; cat probe.txt; return $rc; }
           gpu_connect() {
             model=$(grep '^MODEL ' probe.txt | cut -d' ' -f2-)
@@ -96,6 +98,12 @@ jobs:
               BRAIN_RUNPOD_MODEL="$model" \
               BRAIN_RUNPOD_FINGERPRINT="$gpu_fp" \
               BRAIN_RUNPOD_MODE=primary >/dev/null
+            if [ -n "${RUNPOD_API_KEY:-}" ]; then
+              flyctl secrets set --app "$brain" BRAIN_RUNPOD_API_KEY="$RUNPOD_API_KEY" >/dev/null
+              echo "::notice title=runpod::Auto stop/start on: Brain stops the pod after 15 idle minutes and starts it when research arrives."
+            else
+              echo "::warning title=runpod::No RUNPOD_API_KEY secret: the pod is never stopped automatically, and bills while idle."
+            fi
             echo "::notice title=runpod::Connected. Slot A of the free lane is now the GPU ($model); free providers are slot B and its fallback."
           }
           gpu_report() {
