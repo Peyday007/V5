@@ -35,6 +35,7 @@ import { readSource } from '../sources/access.ts';
 import { setSearchRefusalRecorder } from '../sources/discover.ts';
 import {
   closeFiledFreeLaneBins,
+  coolingForEveryModel,
   ensureFreeWorkers,
   takeOne,
   discoverCandidates,
@@ -396,7 +397,9 @@ export async function controlStep(): Promise<ControlReading | null> {
   // The pod's power follows the same reading: stopped when nothing is left, started when work arrives.
   if (config.runpod) {
     const inFlight = [...pools.values()].reduce((sum, p) => sum + p.busy, 0);
-    void superviseRunpodPod({ waiting, inFlight }).catch(() => undefined);
+    // An item every model is waiting out keeps nothing busy: the pod is not kept on for it.
+    const takeable = Math.max(0, waiting - coolingForEveryModel([...pools.values()].map((p) => p.worker.model)));
+    void superviseRunpodPod({ waiting: takeable, inFlight }).catch(() => undefined);
   }
   // Work waits and no slot holds any: say why the lane declined what it was offered (rule 9).
   const anyBusy = [...pools.values()].some((p) => p.busy > 0 || p.peakBusy > 0);

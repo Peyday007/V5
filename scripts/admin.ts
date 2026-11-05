@@ -1395,7 +1395,12 @@ async function main(): Promise<void> {
       console.log(`  last hour         completed=${h.completed} accepted=${h.accepted} failed=${h.failed} providerErrors=${h.providerErrors}`);
       console.log(`  last hour output  claimsAccepted=${h.claimsAccepted} documents=${h.documents} nextStageItems=${h.nextStage}`);
       console.log(`  last 10 min       completed=${t.last10Min.completed} accepted/min=${t.last10Min.perMinute}`);
-      console.log(`  cost              $0 (free providers only; no paid call is made from the lane)`);
+      // The free providers cost nothing; a RunPod GPU in the lane bills by the hour, measured in runpod-report.
+      console.log(
+        process.env['BRAIN_RUNPOD_MODE']?.trim() === 'primary'
+          ? `  cost              free providers $0; the RunPod GPU bills by the hour — measured by the Cheap lane workflow's runpod-report`
+          : `  cost              $0 (free providers only; no paid call is made from the lane)`,
+      );
       for (const line of t.recentScaling) console.log(`  scaling           ${line}`);
       break;
     }
