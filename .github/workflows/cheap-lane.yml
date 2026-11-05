@@ -148,8 +148,11 @@ jobs:
               # What the Brain runs now: its mode and the fingerprint of the settings it was given (never a key).
               state=$(flyctl ssh console --app "$brain" -C 'printenv BRAIN_RUNPOD_MODE BRAIN_RUNPOD_FINGERPRINT' 2>/dev/null | tr -d '\r' | tr '\n' ' ' || true)
               if echo "$state" | grep -qw primary && echo "$state" | grep -qw "$gpu_fp"; then
-                if probe; then gpu_report
-                else echo "::warning title=runpod::The GPU failed its probe; the Brain is answering on the free providers meanwhile (automatic fallback)."; fi
+                # A pod Brain stopped for idleness fails the probe by design; the report
+                # still runs, so stopped time and the money it saved are measured too.
+                if probe; then :
+                else echo "::notice title=runpod::The GPU did not answer its probe (stopped while idle, or down); the Brain answers on the free providers meanwhile and starts the pod when research arrives."; fi
+                gpu_report
               elif echo "$state" | grep -qw off; then
                 echo "::notice title=runpod::The GPU was disconnected on purpose (mode off); run runpod-connect to bring it back."
               else

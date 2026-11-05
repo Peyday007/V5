@@ -368,6 +368,24 @@ describe('the free research lane', () => {
     expect(other.ok).toBe(true);
   });
 
+  it('counts an item as untakeable only while every model is cooling down on it (the GPU is not kept on for it)', async () => {
+    const { orchestration, fragment } = await packet(play.project.id);
+    await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);
+    const { takeOne, coolingForEveryModel, endFreeLaneCooldowns } = await import('../server/services/freeLane/worker.ts');
+    endFreeLaneCooldowns();
+    const workers = await ensureFreeWorkers(CONFIG);
+    const down: Completer = async () => {
+      throw new Error('cheap lane HTTP 503');
+    };
+    const base = { workers, completer: down, fetchSource, search: async () => [], config: CONFIG };
+    await takeOne({ ...base, worker: workers[0]!, index: 0 });
+    expect(coolingForEveryModel(['brain-a', 'brain-b'])).toBe(0);
+    await takeOne({ ...base, worker: workers[1]!, index: 1, spillover: true });
+    expect(coolingForEveryModel(['brain-a', 'brain-b'])).toBe(1);
+    endFreeLaneCooldowns();
+    expect(coolingForEveryModel(['brain-a', 'brain-b'])).toBe(0);
+  });
+
   it('never lets a provider that keeps answering 503/429 spend the item’s attempts', async () => {
     const { orchestration, fragment } = await packet(play.project.id);
     const itemId = await enqueue(play.project.id, 'RESEARCH_FRAGMENT', orchestration, fragment);

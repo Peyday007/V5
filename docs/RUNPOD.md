@@ -57,7 +57,11 @@ Nothing generates work to keep it busy — new research only comes from goals an
 - **Stopped when idle.** With `RUNPOD_API_KEY` set, Brain checks every minute (`runpodPod.ts`):
   no research waiting and none in flight for 15 minutes (`BRAIN_RUNPOD_IDLE_STOP_MINUTES`) →
   `POST /v1/pods/{id}/stop`. Research waiting on a stopped pod → `POST /v1/pods/{id}/start`.
-  No two changes within 3 minutes. `BRAIN_RUNPOD_AUTOSTOP=off` turns it off.
+  No two changes within 3 minutes. `BRAIN_RUNPOD_AUTOSTOP=off` turns it off. An item every
+  lane model is cooling down on after a provider failure is not counted as waiting: nothing
+  would run it, so it does not keep the pod billing (2026-11-05: 14 such items, no slot busy).
+- **Reported while stopped.** The hourly `runpod-auto` still runs the report when the probe fails
+  because Brain stopped the pod, so stopped time is measured too.
 - **Never interrupts research.** While the pod is stopped, starting, or vLLM is still loading,
   the GPU slot is paused: its calls go straight to the free model, with no timeout and no GPU
   failure counted. The slot returns to the GPU when `/v1/models` answers with the key.

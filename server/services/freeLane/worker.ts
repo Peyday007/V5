@@ -1010,6 +1010,26 @@ let running = false;
 const cooldown = new Map<string, number>();
 const cooldownKey = (model: string, itemId: string) => `${model}\n${itemId}`;
 
+/**
+ * Items no model in the lane may take yet: each is cooling down for every one
+ * of `models`. They wait in the queue but nothing will run them, so they are
+ * not a reason to keep a paid GPU on (`runpodPod.ts`).
+ */
+export function coolingForEveryModel(models: string[], now: number = Date.now()): number {
+  if (models.length === 0) return 0;
+  const byItem = new Map<string, Set<string>>();
+  for (const [key, until] of cooldown) {
+    if (until <= now) continue;
+    const cut = key.indexOf('\n');
+    const model = key.slice(0, cut);
+    const item = key.slice(cut + 1);
+    byItem.set(item, (byItem.get(item) ?? new Set()).add(model));
+  }
+  let n = 0;
+  for (const cooled of byItem.values()) if (models.every((model) => cooled.has(model))) n += 1;
+  return n;
+}
+
 /** Tests: end every cooldown now, as if its time had passed. Strike counts are kept. */
 export function endFreeLaneCooldowns(): void {
   cooldown.clear();
